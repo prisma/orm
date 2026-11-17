@@ -52,8 +52,12 @@ function notConnected(message: string) {
 }
 
 /** Runs `request` on `client` in one round trip and returns its result: its `?N` placeholders written as `?`, and its values handed to the package, which writes them into the statement. Throws the package's error as it is. */
-async function run(client: PoolConnection, request: SqlExecuteRequest): Promise<unknown> {
-  const { sql, values } = statementFor(client, request.sql, request.params ?? []);
+async function run(
+  client: PoolConnection,
+  request: SqlExecuteRequest,
+  displayName: string,
+): Promise<unknown> {
+  const { sql, values } = statementFor(client, request.sql, request.params ?? [], displayName);
   return client.query(sql, values);
 }
 
@@ -62,12 +66,13 @@ function startStream(
   client: PoolConnection,
   request: SqlExecuteRequest,
   outcome: Outcome,
+  displayName: string,
 ): Readable {
   try {
-    const { sql, values } = statementFor(client, request.sql, request.params ?? []);
+    const { sql, values } = statementFor(client, request.sql, request.params ?? [], displayName);
     return client.queryStream(sql, values);
   } catch (error) {
-    settle(error, outcome);
+    settle(error, outcome, displayName);
   }
 }
 
@@ -90,9 +95,9 @@ interface Outcome {
 }
 
 /** The error to report for `error`, after noting in `outcome` whether it left the client unusable. */
-function settle(error: unknown, outcome: Outcome): never {
+function settle(error: unknown, outcome: Outcome, displayName: string): never {
   if (isFatal(error)) outcome.destroy = true;
-  throw normalizeMysqlError(error);
+  throw normalizeMysqlError(error, displayName);
 }
 
 /**
@@ -120,19 +125,19 @@ async function dropRest(rows: Readable & { close?: () => void }): Promise<void> 
   }
 }
 
-function cancelNotConfirmed() {
+function cancelNotConfirmed(displayName: string) {
   return errorRuntime(
     'DRIVER.NOT_CONNECTED',
-    'A cancel on this MySQL connection could not be confirmed, so the connection can no longer be used',
+    `A cancel on this ${displayName} connection could not be confirmed, so the connection can no longer be used`,
     {
-      why: 'The driver cancelled a stream the caller stopped early, and MySQL did not answer the KILL QUERY in time. It may still arrive and would interrupt whatever statement the connection runs then.',
-      fix: 'Release the connection, which closes it; MySQL rolls back an open transaction on it. Acquire another connection and run the work again.',
+      why: `The driver cancelled a stream the caller stopped early, and ${displayName} did not answer the KILL QUERY in time. It may still arrive and would interrupt whatever statement the connection runs then.`,
+      fix: `Release the connection, which closes it; ${displayName} rolls back an open transaction on it. Acquire another connection and run the work again.`,
     },
   );
 }
 
-function connectionReleased() {
-  return errorRuntime('DRIVER.NOT_CONNECTED', 'MySQL connection was released', {
+function connectionReleased(displayName: string) {
+  return errorRuntime('DRIVER.NOT_CONNECTED', `${displayName} connection was released`, {
     fix: 'Send statements on a connection only until you release it, and await each one before release().',
   });
 }
@@ -157,7 +162,10 @@ abstract class MysqlQueryable implements SqlQueryable {
   protected abstract readonly holdsClient: boolean;
   protected abstract readonly cancelStatement: CancelStatement;
 
-  constructor(protected readonly streams: boolean) {}
+  constructor(
+    protected readonly streams: boolean,
+    protected readonly displayName: string,
+  ) {}
 
   /** Records a stream that is open, and returns the call that records its end. */
   protected streamOpened(_rows: Readable): () => void {
@@ -203,12 +211,12 @@ abstract class MysqlQueryable implements SqlQueryable {
     try {
       const releaseLock = await this.lockClient(client);
       try {
-        return await this.runStatement(() => run(client, request));
+        return await this.runStatement(() => run(client, request, this.displayName));
       } finally {
         releaseLock();
       }
     } catch (error) {
-      settle(error, outcome);
+      settle(error, outcome, this.displayName);
     } finally {
       await this.releaseClient(client, outcome);
     }
@@ -228,7 +236,7 @@ abstract class MysqlQueryable implements SqlQueryable {
       throw error;
     }
     try {
-      const rows = startStream(client, request, outcome);
+      const rows = startStream(client, request, outcome, this.displayName);
       rows.on('error', ignoreAfterStop);
       const streamClosed = this.streamOpened(rows);
       let settled = false;
@@ -242,7 +250,7 @@ abstract class MysqlQueryable implements SqlQueryable {
         settled = true;
       } catch (error) {
         settled = true;
-        settle(error, outcome);
+        settle(error, outcome, this.displayName);
       } finally {
         if (!settled && !this.handedBack) await this.#stopEarly(client, rows, outcome);
         if (outcome.destroy) rows.destroy();
@@ -284,14 +292,16 @@ interface HeldState {
   /** The statements that are not streams and hold the client's lock, which a release lets finish. */
   readonly running: Set<Promise<unknown>>;
   readonly cancel: CancelStatement;
+  /** The database's name as messages show it. */
+  readonly displayName: string;
   /** Settles once the connection is released or destroyed, which refuses every statement sent or still waiting for the client's lock. */
   readonly handedBack: { done: boolean; readonly signal: Promise<never>; refuse(): void };
 }
 
-function handedBackState(): HeldState['handedBack'] {
+function handedBackState(displayName: string): HeldState['handedBack'] {
   let refuse: () => void = () => {};
   const signal = new Promise<never>((_, reject) => {
-    refuse = () => reject(connectionReleased());
+    refuse = () => reject(connectionReleased(displayName));
   });
   signal.catch(() => undefined);
   const state = {
@@ -340,13 +350,13 @@ abstract class MysqlHeldQueryable extends MysqlQueryable {
       void locking.then((releaseLock) => releaseLock());
     }
     this.#refuseIfUnusable();
-    throw connectionReleased();
+    throw connectionReleased(this.displayName);
   }
 
   /** Refuses a statement on a connection that was handed back, or whose cancel went out without an answer: a late `KILL QUERY` would interrupt it. */
   #refuseIfUnusable(): void {
-    if (this.held.handedBack.done) throw connectionReleased();
-    if (this.held.cancelUnconfirmed) throw cancelNotConfirmed();
+    if (this.held.handedBack.done) throw connectionReleased(this.displayName);
+    if (this.held.cancelUnconfirmed) throw cancelNotConfirmed(this.displayName);
   }
 
   protected override runStatement<T>(work: () => Promise<T>): Promise<T> {
@@ -364,7 +374,7 @@ abstract class MysqlHeldQueryable extends MysqlQueryable {
     protected readonly held: HeldState,
     streams: boolean,
   ) {
-    super(streams);
+    super(streams, held.displayName);
   }
 
   protected async acquireClient(): Promise<PoolConnection> {
@@ -381,7 +391,7 @@ abstract class MysqlHeldQueryable extends MysqlQueryable {
     try {
       await this.runStatement(call);
     } catch (error) {
-      throw normalizeMysqlError(error);
+      throw normalizeMysqlError(error, this.displayName);
     } finally {
       releaseLock();
     }
@@ -396,6 +406,7 @@ class MysqlConnectionImpl extends MysqlHeldQueryable implements SqlConnection {
     streams: boolean,
     cancel: CancelStatement,
     onRelease: () => void,
+    displayName: string,
   ) {
     super(
       client,
@@ -404,7 +415,8 @@ class MysqlConnectionImpl extends MysqlHeldQueryable implements SqlConnection {
         cancelUnconfirmed: false,
         running: new Set(),
         cancel,
-        handedBack: handedBackState(),
+        displayName,
+        handedBack: handedBackState(displayName),
       },
       streams,
     );
@@ -601,8 +613,8 @@ export class MysqlDriver<TargetId extends string = 'mysql'>
   readonly #options: MysqlDriverCreateOptions;
   readonly #sessionSettings: SessionSettingsGuard;
 
-  constructor(options: MysqlDriverCreateOptions, targetId: TargetId) {
-    super(options.stream ?? false);
+  constructor(options: MysqlDriverCreateOptions, targetId: TargetId, displayName: string) {
+    super(options.stream ?? false, displayName);
     this.targetId = targetId;
     this.#options = options;
     this.#sessionSettings = new SessionSettingsGuard(options.sessionSettings ?? {});
@@ -614,13 +626,17 @@ export class MysqlDriver<TargetId extends string = 'mysql'>
 
   async connect(binding: MysqlBinding): Promise<void> {
     if (this.#state.kind === 'connected') {
-      throw errorRuntime('DRIVER.ALREADY_CONNECTED', 'MySQL driver already connected', {
-        fix: 'Call close() before connecting again.',
-      });
+      throw errorRuntime(
+        'DRIVER.ALREADY_CONNECTED',
+        `${this.displayName} driver already connected`,
+        {
+          fix: 'Call close() before connecting again.',
+        },
+      );
     }
     const waiting = new WaitingForConnection();
     const pool = createPool({
-      ...mysqlPoolOptions(binding.url, this.#options.poolOptions),
+      ...mysqlPoolOptions(binding.url, this.displayName, this.#options.poolOptions),
       logger: { error: (error) => waiting.reported(error) },
     });
     if (pool instanceof EventEmitter) pool.on('error', ignoreConnectionFailure);
@@ -628,13 +644,18 @@ export class MysqlDriver<TargetId extends string = 'mysql'>
     this.#canceller = new Canceller(
       binding.url,
       mysqlPoolIdleTimeoutMillis(this.#options.poolOptions),
+      this.displayName,
     );
   }
 
   async acquireConnection(): Promise<SqlConnection> {
     const client = await this.acquireClient();
-    return new MysqlConnectionImpl(client, this.streams, this.cancelStatement, () =>
-      this.#inUse.released(),
+    return new MysqlConnectionImpl(
+      client,
+      this.streams,
+      this.cancelStatement,
+      () => this.#inUse.released(),
+      this.displayName,
     );
   }
 
@@ -651,7 +672,9 @@ export class MysqlDriver<TargetId extends string = 'mysql'>
   protected async acquireClient(): Promise<PoolConnection> {
     if (this.#state.kind !== 'connected') {
       throw notConnected(
-        this.#state.kind === 'closed' ? 'MySQL driver is closed' : 'MySQL driver not connected',
+        this.#state.kind === 'closed'
+          ? `${this.displayName} driver is closed`
+          : `${this.displayName} driver not connected`,
       );
     }
     const { pool, waiting } = this.#state;
@@ -663,14 +686,14 @@ export class MysqlDriver<TargetId extends string = 'mysql'>
     } catch (error) {
       releaseLate(getting);
       this.#inUse.released();
-      throw normalizeMysqlError(error);
+      throw normalizeMysqlError(error, this.displayName);
     }
     try {
       await this.#sessionSettings.ensure(client);
     } catch (error) {
       client.destroy();
       this.#inUse.released();
-      throw normalizeMysqlError(error);
+      throw normalizeMysqlError(error, this.displayName);
     }
     return client;
   }

@@ -48,6 +48,23 @@ import { assertPlaceholdersMatchParams } from './placeholders';
 
 export type MysqlContract = Contract<SqlStorage>;
 
+/** The database a renderer writes SQL for: its target id, which errors carry, and its name as messages show it. */
+export interface RenderedDatabase {
+  readonly targetId: string;
+  readonly displayName: string;
+}
+
+/** A statement that can carry `RETURNING`. */
+export type ReturningStatement = 'insert' | 'update' | 'delete';
+
+const ARTICLED_STATEMENT: Readonly<Record<ReturningStatement, string>> = {
+  insert: 'an insert',
+  update: 'an update',
+  delete: 'a delete',
+};
+
+const MYSQL: RenderedDatabase = { targetId: 'mysql', displayName: 'MySQL' };
+
 interface RenderContext {
   readonly contract: MysqlContract | undefined;
   readonly codecs: MysqlCodecDescriptorRegistry;
@@ -100,10 +117,6 @@ function nodeKind(value: unknown): string {
     : 'unknown';
 }
 
-function unsupported(feature: string, message: string): Error {
-  return mysqlError('RUNTIME.AST_UNSUPPORTED', message, { meta: { target: 'mysql', feature } });
-}
-
 function invalid(node: string, message: string): Error {
   return mysqlError('RUNTIME.AST_INVALID', message, { meta: { node } });
 }
@@ -142,7 +155,10 @@ function needsGrouping(expr: AnyExpression): boolean {
  * Lowers a query AST to MySQL SQL. Each param is written as `?N`, N being its position in `collectOrderedParamRefs`, the order the runtime encodes and middleware edits params in; a param written twice is bound once. The driver fills the placeholders. A database that extends MySQL subclasses it and overrides the protected methods, where its SQL differs.
  */
 export class MysqlSqlRenderer {
-  constructor(private readonly codecs: MysqlCodecDescriptorRegistry) {}
+  constructor(
+    private readonly codecs: MysqlCodecDescriptorRegistry,
+    protected readonly database: RenderedDatabase = MYSQL,
+  ) {}
 
   render(ast: AnyQueryAst, contract: MysqlContract | undefined): LoweredStatement {
     const placeholderNumbers = new Map<AnyParamRef, number>();
@@ -177,9 +193,9 @@ export class MysqlSqlRenderer {
   /** Puts `GROUP_CONCAT_HINT` on the outermost `SELECT`; a statement without one would leave `GROUP_CONCAT` at the session's limit, which can cut an array after an element and still read as JSON, so it is refused. */
   private withGroupConcatHint(ast: AnyQueryAst, rendered: string): string {
     if (ast.kind !== 'select' || !rendered.startsWith('SELECT ')) {
-      throw unsupported(
+      throw this.unsupported(
         'ordered-array-outside-select',
-        'MySQL can build an ordered JSON array only in a SELECT statement, whose outermost SELECT carries the hint that raises group_concat_max_len',
+        `${this.database.displayName} can build an ordered JSON array only in a SELECT statement, whose outermost SELECT carries the hint that raises group_concat_max_len`,
       );
     }
     return `SELECT ${GROUP_CONCAT_HINT} ${rendered.slice('SELECT '.length)}`;
@@ -202,15 +218,21 @@ export class MysqlSqlRenderer {
     }
   }
 
-  /** MySQL has no `RETURNING`: the SQL family's ORM reads written rows back with a select when the contract does not report `returning`. */
-  private refuseReturning(
+  private unsupported(feature: string, message: string): Error {
+    return mysqlError('RUNTIME.AST_UNSUPPORTED', message, {
+      meta: { target: this.database.targetId, feature },
+    });
+  }
+
+  /** Refuses `RETURNING` on `statement`, which MySQL does not have: the SQL family's ORM reads written rows back with a select when the contract does not report `returning`. */
+  protected refuseReturning(
     returning: ReadonlyArray<ProjectionItem> | undefined,
-    what: string,
+    statement: ReturningStatement,
   ): void {
     if (returning !== undefined && returning.length > 0) {
-      throw unsupported(
+      throw this.unsupported(
         'returning',
-        `MySQL cannot return the rows ${what} writes; it has no RETURNING`,
+        `${this.database.displayName} cannot return the rows ${ARTICLED_STATEMENT[statement]} writes; it has no RETURNING`,
       );
     }
   }
@@ -224,7 +246,7 @@ export class MysqlSqlRenderer {
    * An insert, with the bare table name: MySQL's `INSERT` takes no alias, so a column of the table is qualified by its name. A row without a value for a column gets `DEFAULT`. An upsert names its proposed row `new` and updates the existing row on any duplicate key. MySQL cannot limit `ON DUPLICATE KEY UPDATE` to named conflict columns, so the adapter does not report `insertOnConflictTarget` and an upsert that names them is refused. Skipping a conflicting row is refused: `INSERT IGNORE` also hides foreign-key and `NOT NULL` errors.
    */
   private renderInsert(ast: InsertAst, ctx: RenderContext): string {
-    this.refuseReturning(ast.returning, 'an insert');
+    this.refuseReturning(ast.returning, 'insert');
     if (ast.rows.length === 0) throw invalid('insert', 'INSERT requires at least one row');
     const table = this.qualifyTable(ast.table, ctx);
     const insertCtx: RenderContext = {
@@ -244,15 +266,15 @@ export class MysqlSqlRenderer {
     const action = conflict.action;
     switch (action.kind) {
       case 'do-nothing':
-        throw unsupported(
+        throw this.unsupported(
           'insert-on-conflict-skip',
-          'MySQL cannot skip a conflicting row without also hiding other errors: INSERT IGNORE turns foreign-key and NOT NULL errors into warnings',
+          `${this.database.displayName} cannot skip a conflicting row without also hiding other errors: INSERT IGNORE turns foreign-key and NOT NULL errors into warnings`,
         );
       case 'do-update-set': {
         if (conflict.columns.length > 0) {
-          throw unsupported(
+          throw this.unsupported(
             'insert-on-conflict-target',
-            'MySQL cannot limit ON DUPLICATE KEY UPDATE to named conflict columns: it fires on any unique key',
+            `${this.database.displayName} cannot limit ON DUPLICATE KEY UPDATE to named conflict columns: it fires on any unique key`,
           );
         }
         const assignments = Object.entries(action.set);
@@ -273,7 +295,7 @@ export class MysqlSqlRenderer {
   }
 
   private renderUpdate(ast: UpdateAst, ctx: RenderContext): string {
-    this.refuseReturning(ast.returning, 'an update');
+    this.refuseReturning(ast.returning, 'update');
     const assignments = Object.entries(ast.set);
     if (assignments.length === 0)
       throw invalid('update', 'UPDATE requires at least one column to set');
@@ -285,7 +307,7 @@ export class MysqlSqlRenderer {
   }
 
   private renderDelete(ast: DeleteAst, ctx: RenderContext): string {
-    this.refuseReturning(ast.returning, 'a delete');
+    this.refuseReturning(ast.returning, 'delete');
     const where = ast.where ? ` WHERE ${this.renderExpr(ast.where, ctx)}` : '';
     return `DELETE FROM ${this.renderTableSource(ast.table, ctx)}${where}`;
   }
@@ -306,13 +328,13 @@ export class MysqlSqlRenderer {
 
   private renderSelect(ast: SelectAst, ctx: RenderContext): string {
     if (ast.locking !== undefined && ast.locking.length > 0) {
-      throw unsupported(
+      throw this.unsupported(
         'locking-clause',
-        'Row locks are not supported on MySQL yet, so a select cannot carry a locking clause such as FOR UPDATE',
+        `Row locks are not supported on ${this.database.displayName} yet, so a select cannot carry a locking clause such as FOR UPDATE`,
       );
     }
     if (ast.distinctOn !== undefined && ast.distinctOn.length > 0) {
-      throw unsupported('distinct-on', 'MySQL has no DISTINCT ON');
+      throw this.unsupported('distinct-on', `${this.database.displayName} has no DISTINCT ON`);
     }
     return [
       `SELECT ${ast.distinct ? 'DISTINCT ' : ''}${this.renderProjection(ast.projection, ctx)}`,
@@ -378,9 +400,9 @@ export class MysqlSqlRenderer {
       case 'derived-table-source':
         return `(${this.renderSelect(source.query, ctx)}) AS ${quoteIdentifier(source.alias)}`;
       case 'function-source':
-        throw unsupported(
+        throw this.unsupported(
           'function-source',
-          `MySQL cannot select from the set-returning function ${source.fn}`,
+          `${this.database.displayName} cannot select from the set-returning function ${source.fn}`,
         );
       default:
         return assertNever(source, `Unsupported source node kind: ${nodeKind(source)}`);
@@ -451,7 +473,7 @@ export class MysqlSqlRenderer {
       if (isParam && typeof next === 'string' && /^\d/.test(next)) {
         throw structuredError(
           'RUNTIME.PARAM_PLACEHOLDER_MISMATCH',
-          "Raw SQL puts a digit right after an interpolated value, which MySQL lowering would read as part of the value's placeholder",
+          `Raw SQL puts a digit right after an interpolated value, which ${this.database.displayName} lowering would read as part of the value's placeholder`,
           {
             why: 'Each value is written as a numbered placeholder, ?N, so a digit that follows it in the SQL text makes a different placeholder: ?1 followed by 0 reads as ?10.',
             fix: 'Put a space or an operator between the interpolated value and the digit.',
@@ -503,15 +525,18 @@ export class MysqlSqlRenderer {
     if (value === null || value === undefined) return 'NULL';
     if (typeof value === 'number') {
       if (!Number.isFinite(value)) {
-        throw unsupported('non-finite-number', `MySQL has no literal for ${value}`);
+        throw this.unsupported(
+          'non-finite-number',
+          `${this.database.displayName} has no literal for ${value}`,
+        );
       }
       return String(value);
     }
     if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
     if (typeof value === 'bigint') return String(value);
-    throw unsupported(
+    throw this.unsupported(
       'value-literal',
-      `MySQL lowering writes only numbers, booleans and NULL as literals; a ${value instanceof Date ? 'date' : Array.isArray(value) ? 'array' : typeof value} value must be a param`,
+      `${this.database.displayName} lowering writes only numbers, booleans and NULL as literals; a ${value instanceof Date ? 'date' : Array.isArray(value) ? 'array' : typeof value} value must be a param`,
     );
   }
 
@@ -608,7 +633,7 @@ export class MysqlSqlRenderer {
     if (descriptor === undefined) {
       throw structuredError(
         'RUNTIME.PARAM_REF_MISSING_CODEC',
-        `MySQL lowering: ${use} carries codecId "${codec.codecId}" but the MySQL codec registry has no entry for it. Register the extension pack that contributes this codec.`,
+        `${this.database.displayName} lowering: ${use} carries codecId "${codec.codecId}" but the codec registry has no entry for it. Register the extension pack that contributes this codec.`,
         { meta: { codecId: codec.codecId } },
       );
     }
@@ -692,10 +717,13 @@ export class MysqlSqlRenderer {
 
   private renderJoin(join: JoinAst, ctx: RenderContext): string {
     if (join.joinType === 'full') {
-      throw unsupported('full-join', 'MySQL has no FULL JOIN');
+      throw this.unsupported('full-join', `${this.database.displayName} has no FULL JOIN`);
     }
     if (join.lateral) {
-      throw unsupported('lateral-join', 'LATERAL joins are not supported on MySQL yet');
+      throw this.unsupported(
+        'lateral-join',
+        `LATERAL joins are not supported on ${this.database.displayName} yet`,
+      );
     }
     return `${join.joinType.toUpperCase()} JOIN ${this.renderSource(join.source, ctx)} ON ${this.renderJoinOn(join.on, ctx)}`;
   }

@@ -60,7 +60,7 @@ afterEach(() => {
 
 describe('Canceller', () => {
   it('sends KILL QUERY on one connection of its own, opened on first need and kept for later cancels', async () => {
-    const canceller = new Canceller(url, 30_000);
+    const canceller = new Canceller(url, 30_000, 'MySQL');
     expect([
       await canceller.cancel(41),
       await canceller.cancel(42),
@@ -79,7 +79,7 @@ describe('Canceller', () => {
   });
 
   it('reports no cancel when its connection cannot be opened, and tries again next time', async () => {
-    const canceller = new Canceller(url, 30_000);
+    const canceller = new Canceller(url, 30_000, 'MySQL');
     state.connectFails = true;
     const first = await canceller.cancel(1);
     state.connectFails = false;
@@ -91,7 +91,7 @@ describe('Canceller', () => {
   });
 
   it('reports no cancel when MySQL refuses it, and keeps the connection', async () => {
-    const canceller = new Canceller(url, 30_000);
+    const canceller = new Canceller(url, 30_000, 'MySQL');
     state.answer = () => Promise.reject(new Error('Unknown thread id'));
     const refused = await canceller.cancel(1);
     state.answer = () => Promise.resolve({});
@@ -103,7 +103,7 @@ describe('Canceller', () => {
   });
 
   it('sets a connection aside when it is lost or no longer valid, and opens another', async () => {
-    const canceller = new Canceller(url, 30_000);
+    const canceller = new Canceller(url, 30_000, 'MySQL');
     state.answer = () => Promise.reject(Object.assign(new Error('socket closed'), { fatal: true }));
     const lost = await canceller.cancel(1);
     state.answer = () => Promise.resolve({});
@@ -119,7 +119,7 @@ describe('Canceller', () => {
 
   it('reports no cancel when KILL QUERY does not answer within two seconds, ends that connection without destroying it, and opens another next time', async () => {
     vi.useFakeTimers();
-    const canceller = new Canceller(url, 30_000);
+    const canceller = new Canceller(url, 30_000, 'MySQL');
     state.answer = () => new Promise(() => {});
     const cancelling = canceller.cancel(1);
     await vi.advanceTimersByTimeAsync(2000);
@@ -136,11 +136,11 @@ describe('Canceller', () => {
   });
 
   it('ends its connection on close, without waiting for a KILL QUERY that does not answer, and cancels nothing after', async () => {
-    const canceller = new Canceller(url, 30_000);
+    const canceller = new Canceller(url, 30_000, 'MySQL');
     await canceller.cancel(1);
     await canceller.close();
     const idle = opened(0).end.mock.calls.length;
-    const hanging = new Canceller(url, 30_000);
+    const hanging = new Canceller(url, 30_000, 'MySQL');
     state.answer = () => new Promise(() => {});
     void hanging.cancel(1);
     await vi.waitFor(() => expect(state.opened.length).toBe(2));
@@ -153,7 +153,7 @@ describe('Canceller', () => {
   });
 
   it('opens a new connection at most once when the one it kept is no longer valid', async () => {
-    const canceller = new Canceller(url, 30_000);
+    const canceller = new Canceller(url, 30_000, 'MySQL');
     await canceller.cancel(1);
     opened(0).valid = false;
     state.openInvalid = true;
@@ -165,7 +165,7 @@ describe('Canceller', () => {
 
   it('ends its idle connection after the idle timeout without a cancel, and opens another on the next need', async () => {
     vi.useFakeTimers();
-    const canceller = new Canceller(url, 1000);
+    const canceller = new Canceller(url, 1000, 'MySQL');
     await canceller.cancel(1);
     await vi.advanceTimersByTimeAsync(999);
     const before = opened(0).end.mock.calls.length;
@@ -183,7 +183,7 @@ describe('Canceller', () => {
 
   it('ends the connection that replaced one whose KILL QUERY never answered once it has been idle, and waits for it on close', async () => {
     vi.useFakeTimers();
-    const canceller = new Canceller(url, 1000);
+    const canceller = new Canceller(url, 1000, 'MySQL');
     state.answer = () => new Promise(() => {});
     const unanswered = canceller.cancel(1);
     await vi.advanceTimersByTimeAsync(2000);
@@ -208,7 +208,7 @@ describe('Canceller', () => {
 
   it('keeps its idle connection open when the idle timeout is 0, as the pool keeps its own', async () => {
     vi.useFakeTimers();
-    const canceller = new Canceller(url, 0);
+    const canceller = new Canceller(url, 0, 'MySQL');
     await canceller.cancel(1);
     await vi.advanceTimersByTimeAsync(60_000);
     expect({

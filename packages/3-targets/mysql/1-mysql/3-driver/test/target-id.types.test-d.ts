@@ -17,10 +17,10 @@ import mysqlRuntimeDriver, {
 } from '../src/core/runtime/runtime-driver';
 
 test('the driver descriptors carry the target id they are built for, and MySQL by default', () => {
-  expectTypeOf(createMysqlControlDriverDescriptor('mariadb')).toEqualTypeOf<
+  expectTypeOf(createMysqlControlDriverDescriptor('mariadb', 'MariaDB')).toEqualTypeOf<
     ControlDriverDescriptor<'sql', 'mariadb', SqlControlDriverInstance<'mariadb'>>
   >();
-  expectTypeOf(createMysqlRuntimeDriverDescriptor('mariadb')).toEqualTypeOf<
+  expectTypeOf(createMysqlRuntimeDriverDescriptor('mariadb', 'MariaDB')).toEqualTypeOf<
     RuntimeDriverDescriptor<
       'sql',
       'mariadb',

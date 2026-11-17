@@ -25,7 +25,7 @@ describe('normalizeMysqlError', () => {
       fatal: false,
       sqlMessage: "Table 'x' doesn't exist",
     });
-    expect(normalizeMysqlError(error)).toEqual(
+    expect(normalizeMysqlError(error, 'MySQL')).toEqual(
       expect.objectContaining({
         kind: 'sql_query',
         sqlState: '42S02',
@@ -43,7 +43,7 @@ describe('normalizeMysqlError', () => {
         fatal: true,
         sqlMessage: 'socket has unexpectedly been closed',
       });
-      expect(normalizeMysqlError(error)).toEqual(
+      expect(normalizeMysqlError(error, 'MySQL')).toEqual(
         expect.objectContaining({
           kind: 'sql_connection',
           transient: true,
@@ -71,7 +71,7 @@ describe('normalizeMysqlError', () => {
       }),
       { cause },
     );
-    expect(normalizeMysqlError(error)).toEqual(
+    expect(normalizeMysqlError(error, 'MySQL')).toEqual(
       expect.objectContaining({
         kind: 'sql_connection',
         transient: true,
@@ -111,8 +111,8 @@ describe('normalizeMysqlError', () => {
     ];
     expect(
       cases.map((error) => {
-        const direct = Object(normalizeMysqlError(error));
-        const pooled = Object(normalizeMysqlError(timedOut(error)));
+        const direct = Object(normalizeMysqlError(error, 'MySQL'));
+        const pooled = Object(normalizeMysqlError(timedOut(error), 'MySQL'));
         return {
           direct: {
             kind: direct.kind,
@@ -168,8 +168,8 @@ describe('normalizeMysqlError', () => {
         cause: refused,
       });
       expect({
-        direct: normalizeMysqlError(refused),
-        pooled: normalizeMysqlError(timedOut),
+        direct: normalizeMysqlError(refused, 'MySQL'),
+        pooled: normalizeMysqlError(timedOut, 'MySQL'),
       }).toEqual({ direct: expected, pooled: expected });
     }
   });
@@ -181,7 +181,7 @@ describe('normalizeMysqlError', () => {
       fatal: true,
       sqlMessage: 'Error executing initial sql command: Unknown system variable',
     });
-    expect(normalizeMysqlError(error)).toEqual(
+    expect(normalizeMysqlError(error, 'MySQL')).toEqual(
       expect.objectContaining({
         kind: 'sql_connection',
         transient: false,
@@ -193,7 +193,7 @@ describe('normalizeMysqlError', () => {
 
   it('leaves any other error as it is', () => {
     const error = new Error('socket hang up');
-    expect(normalizeMysqlError(error)).toBe(error);
+    expect(normalizeMysqlError(error, 'MySQL')).toBe(error);
   });
 });
 
@@ -210,7 +210,7 @@ describe('normalizeMysqlError for errors MySQL reports about a statement', () =>
     ];
     for (const fields of cases) {
       const error = sqlError({ ...fields, fatal: false });
-      const normalized = normalizeMysqlError(error);
+      const normalized = normalizeMysqlError(error, 'MySQL');
       expect({ normalized, hasDetail: Object(normalized).detail !== undefined }).toEqual({
         normalized: expect.objectContaining({
           kind: 'sql_query',
@@ -239,6 +239,7 @@ describe('normalizeMysqlError for errors MySQL reports about a statement', () =>
       cases.map(([errno, sqlState]) => {
         const normalized = normalizeMysqlError(
           sqlError({ errno, sqlState, fatal: false, sqlMessage: 'violated' }),
+          'MySQL',
         );
         return {
           sqlState: Object(normalized).sqlState,
@@ -265,7 +266,10 @@ describe('normalizeMysqlError for errors MySQL reports about a statement', () =>
       }),
       { cause: error },
     );
-    expect({ direct: normalizeMysqlError(error), pooled: normalizeMysqlError(timedOut) }).toEqual({
+    expect({
+      direct: normalizeMysqlError(error, 'MySQL'),
+      pooled: normalizeMysqlError(timedOut, 'MySQL'),
+    }).toEqual({
       direct: expect.objectContaining({
         kind: 'sql_connection',
         transient: false,

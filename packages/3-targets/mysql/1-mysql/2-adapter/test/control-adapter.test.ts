@@ -216,8 +216,8 @@ describe('MysqlControlAdapter', () => {
     const adapter: SqlControlAdapter<'mysql'> = createAdapter();
     const queryLoweringRefusal = {
       code: 'RUNTIME.AST_UNSUPPORTED',
-      message: 'Lowering queries is not yet supported on MySQL.',
-      meta: { target: 'mysql', feature: 'Lowering queries' },
+      message: 'Lowering queries is not yet supported on MySQL and MariaDB.',
+      meta: { feature: 'Lowering queries' },
     };
     await expect(adapter.lowerToExecuteRequest({} as never)).rejects.toMatchObject(
       queryLoweringRefusal,

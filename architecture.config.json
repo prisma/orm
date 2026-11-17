@@ -1519,6 +1519,18 @@
       "plane": "shared"
     },
     {
+      "glob": "packages/3-targets/mysql/2-mariadb/1-target/src/core/runtime/**",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "runtime"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/1-target/src/exports/runtime.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "runtime"
+    },
+    {
       "glob": "packages/3-targets/mysql/2-mariadb/2-adapter/src/core/*.ts",
       "domain": "targets",
       "layer": "adapters",
@@ -1541,6 +1553,18 @@
       "domain": "targets",
       "layer": "adapters",
       "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/2-adapter/src/core/runtime/**",
+      "domain": "targets",
+      "layer": "adapters",
+      "plane": "runtime"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/2-adapter/src/exports/runtime.ts",
+      "domain": "targets",
+      "layer": "adapters",
+      "plane": "runtime"
     },
     {
       "glob": "packages/3-targets/mysql/2-mariadb/3-driver/src/core/migrations/**",
@@ -1595,6 +1619,30 @@
       "domain": "extensions",
       "layer": "adapters",
       "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/9-facade/src/exports/runtime.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "runtime"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/9-facade/src/exports/static.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "runtime"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/9-facade/src/runtime/**",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "runtime"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/9-facade/src/static/**",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "runtime"
     },
     {
       "glob": "packages/3-targets/mongo/1-target/src/core/*.ts",

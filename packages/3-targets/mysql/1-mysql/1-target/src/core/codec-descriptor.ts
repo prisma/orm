@@ -216,7 +216,7 @@ export function buildMysqlCodecDescriptorRegistry(
         {
           why: 'Each codecId must resolve to exactly one MySQL descriptor during registry composition.',
           fix: 'Remove the duplicate target, adapter, or extension contribution.',
-          meta: { codecId: descriptor.codecId, target: 'mysql' },
+          meta: { codecId: descriptor.codecId },
         },
       );
     }

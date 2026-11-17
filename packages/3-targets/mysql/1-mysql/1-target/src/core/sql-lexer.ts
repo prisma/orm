@@ -105,11 +105,11 @@ export function tokenizeMysqlSql(sql: string): MysqlSqlToken[] {
       kind = 'quoted';
       end = endOfQuoted(sql, index, char);
     } else if (char === '#' || opensDashComment(sql, index) || sql.startsWith('/*', index)) {
-      if (sql.startsWith('/*!', index)) {
+      if (sql.startsWith('/*!', index) || sql.startsWith('/*M!', index)) {
         throw mysqlError(
           'RUNTIME.AST_INVALID',
-          'A MySQL statement may not contain an executable /*! comment, whose content MySQL runs as SQL',
-          { meta: { target: 'mysql', position: index } },
+          'A statement may not contain an executable comment, /*! or /*M!, whose content MySQL or MariaDB runs as SQL',
+          { meta: { position: index } },
         );
       }
       kind = 'comment';

@@ -23,8 +23,8 @@ function fieldsOf(descriptor: { readonly targetId: string; readonly id: string }
 
 describe('the driver descriptors of a target that extends MySQL', () => {
   it('build control and runtime drivers that carry its target id', async () => {
-    const control = createMysqlControlDriverDescriptor('mariadb');
-    const runtime = createMysqlRuntimeDriverDescriptor('mariadb');
+    const control = createMysqlControlDriverDescriptor('mariadb', 'MariaDB');
+    const runtime = createMysqlRuntimeDriverDescriptor('mariadb', 'MariaDB');
     const driver = await control.create('mysql://root@localhost/db');
     expect({
       control: fieldsOf(control),

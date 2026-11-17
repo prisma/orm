@@ -53,7 +53,7 @@ async function lockIsFree(url: string): Promise<boolean> {
 describe('the MariaDB control adapter against a MariaDB server', {
   timeout: timeouts.databaseOperation,
 }, () => {
-  it('runs its session in UTC and at READ COMMITTED through tx_isolation, which MariaDB 10.11 has instead of transaction_isolation', async (test) => {
+  it('runs its session in UTC and sets no isolation level of its own, as on MySQL', async (test) => {
     await withMysqlDatabase(
       test,
       async ({ url }) => {
@@ -62,7 +62,7 @@ describe('the MariaDB control adapter against a MariaDB server', {
           const { rows } = await driver.query<{ zone: string; isolation: string }>(
             'SELECT @@session.time_zone AS zone, @@session.tx_isolation AS isolation',
           );
-          expect(rows).toEqual([{ zone: '+00:00', isolation: 'READ-COMMITTED' }]);
+          expect(rows).toEqual([{ zone: '+00:00', isolation: 'REPEATABLE-READ' }]);
         } finally {
           await driver.close();
         }

@@ -1,1 +1,6 @@
-export { type MysqlContract, MysqlSqlRenderer } from '../core/sql-renderer';
+export {
+  type MysqlContract,
+  MysqlSqlRenderer,
+  type RenderedDatabase,
+  type ReturningStatement,
+} from '../core/sql-renderer';

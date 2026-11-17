@@ -25,6 +25,7 @@ class MysqlControlDriverFor<TargetId extends string> implements SqlControlDriver
   constructor(
     private readonly connection: Connection,
     readonly targetId: TargetId,
+    private readonly displayName: string,
   ) {
     connection.on('error', (error: Error) => {
       this.#lost = error;
@@ -39,7 +40,7 @@ class MysqlControlDriverFor<TargetId extends string> implements SqlControlDriver
     const releaseLock = await acquireClientQueryLock(this.connection);
     try {
       if (this.#lost !== undefined) throw connectionLost(this.#lost);
-      const statement = statementFor(this.connection, sql, params ?? []);
+      const statement = statementFor(this.connection, sql, params ?? [], this.displayName);
       const result: unknown = await this.connection.query(statement.sql, statement.values);
       return {
         rows: Array.isArray(result)
@@ -53,7 +54,7 @@ class MysqlControlDriverFor<TargetId extends string> implements SqlControlDriver
         this.#lost = error;
         throw connectionLost(error);
       }
-      throw normalizeMysqlError(error);
+      throw normalizeMysqlError(error, this.displayName);
     } finally {
       releaseLock();
     }
@@ -73,13 +74,14 @@ class MysqlControlDriverFor<TargetId extends string> implements SqlControlDriver
 /** A MySQL connection for the control plane. */
 export class MysqlControlDriver extends MysqlControlDriverFor<'mysql'> {
   constructor(connection: Connection) {
-    super(connection, 'mysql');
+    super(connection, 'mysql', 'MySQL');
   }
 }
 
 /** The control driver descriptor of MySQL, or of a target that extends it, whose drivers carry `targetId`. */
 export function createMysqlControlDriverDescriptor<TargetId extends string>(
   targetId: TargetId,
+  displayName: string,
 ): ControlDriverDescriptor<'sql', TargetId, SqlControlDriverInstance<TargetId>> {
   return {
     ...mysqlDriverDescriptorMetaFor(targetId),
@@ -87,7 +89,8 @@ export function createMysqlControlDriverDescriptor<TargetId extends string>(
       connectControlDriver(
         url,
         options,
-        (connection) => new MysqlControlDriverFor(connection, targetId),
+        displayName,
+        (connection) => new MysqlControlDriverFor(connection, targetId, displayName),
       ),
   };
 }
@@ -95,10 +98,12 @@ export function createMysqlControlDriverDescriptor<TargetId extends string>(
 async function connectControlDriver<Driver>(
   url: string,
   options: ControlDriverConnectOptions | undefined,
+  displayName: string,
   driverFor: (connection: Connection) => Driver,
 ): Promise<Driver> {
   const connectionOptions = mysqlConnectionOptions(url, {
     connectTimeoutMs: options?.connectTimeoutMs,
+    displayName,
   });
   const settings = sessionSettingsStatement(options?.sessionSettings ?? {});
   try {
@@ -111,7 +116,7 @@ async function connectControlDriver<Driver>(
     }
     return driverFor(connection);
   } catch (error) {
-    const normalized = normalizeMysqlError(error);
+    const normalized = normalizeMysqlError(error, displayName);
     throw errorRuntime('DRIVER.CONNECTION_FAILED', 'Database connection failed', {
       why: normalized instanceof Error ? normalized.message : String(normalized),
       fix:
@@ -126,7 +131,7 @@ async function connectControlDriver<Driver>(
 const mysqlDriverDescriptor: ControlDriverDescriptor<'sql', 'mysql', MysqlControlDriver> = {
   ...mysqlDriverDescriptorMetaFor('mysql'),
   create: (url, options) =>
-    connectControlDriver(url, options, (connection) => new MysqlControlDriver(connection)),
+    connectControlDriver(url, options, 'MySQL', (connection) => new MysqlControlDriver(connection)),
 };
 
 export default mysqlDriverDescriptor;

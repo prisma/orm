@@ -7,11 +7,18 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { createSqlExecutionStack } from '@internal/sql-runtime';
 import { MysqlCreateTable } from '@internal/target-mysql/ddl';
-import mysqlRuntimeTarget from '@internal/target-mysql/runtime';
+import mysqlRuntimeTarget, {
+  createMysqlRuntimeTargetDescriptor,
+  mysqlTargetDescriptorMetaRuntime,
+} from '@internal/target-mysql/runtime';
 import { describe, expect, it } from 'vitest';
 import { mysqlAdapterCapabilities } from '../src/core/capabilities';
+import { mysqlAdapterDescriptorMeta } from '../src/core/descriptor-meta';
 import { mysqlRawCodecInferer } from '../src/core/raw-codec-inferer';
-import mysqlRuntimeAdapter from '../src/core/runtime/runtime-adapter';
+import mysqlRuntimeAdapter, {
+  createMysqlRuntimeAdapterDescriptor,
+} from '../src/core/runtime/runtime-adapter';
+import { MysqlSqlRenderer } from '../src/core/sql-renderer';
 
 const markerRow = {
   space: 'app',
@@ -69,6 +76,38 @@ describe('the MySQL runtime adapter', () => {
         sql: 'SELECT `user`.`id` AS `id` FROM `user`',
         params: [],
       },
+    });
+  });
+
+  it('builds the adapter of a database that extends MySQL, whose profile names its target', () => {
+    const descriptor = createMysqlRuntimeAdapterDescriptor({
+      meta: { ...mysqlAdapterDescriptorMeta, targetId: 'other', id: 'other', capabilities: {} },
+      profileId: 'other/default@1',
+      renderer: (codecs) =>
+        new MysqlSqlRenderer(codecs, { targetId: 'other', displayName: 'Other' }),
+    });
+    const adapter = descriptor.create(
+      createSqlExecutionStack({
+        target: createMysqlRuntimeTargetDescriptor({
+          ...mysqlTargetDescriptorMetaRuntime,
+          targetId: 'other',
+          id: 'other',
+          displayName: 'Other',
+        }),
+        adapter: descriptor,
+        extensions: [],
+      }),
+    );
+    expect({
+      targetId: adapter.targetId,
+      profile: {
+        id: adapter.profile.id,
+        target: adapter.profile.target,
+        capabilities: adapter.profile.capabilities,
+      },
+    }).toEqual({
+      targetId: 'other',
+      profile: { id: 'other/default@1', target: 'other', capabilities: {} },
     });
   });
 

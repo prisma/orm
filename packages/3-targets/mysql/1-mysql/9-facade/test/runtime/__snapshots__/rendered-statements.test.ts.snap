@@ -433,6 +433,59 @@ exports[`the statements MySQL live tests send > runs raw SQL 1`] = `
 }
 `;
 
+exports[`the statements MySQL live tests send > runs work in transactions 1`] = `
+{
+  "connectionIdentity": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [],
+        "sql": "SELECT CONNECTION_ID() AS id",
+      },
+      {
+        "params": [
+          1,
+        ],
+        "sql": "SELECT \`User\`.\`id\` AS \`id\`, \`User\`.\`email\` AS \`email\`, \`User\`.\`role\` AS \`role\` FROM \`User\` WHERE \`User\`.\`id\` = ?1",
+      },
+    ],
+  },
+  "implicitAndExplicit": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          10,
+          "implicit@example.com",
+          "USER",
+        ],
+        "sql": "INSERT INTO \`User\` (\`id\`, \`email\`, \`role\`) VALUES (?1, ?2, ?3)",
+      },
+      {
+        "params": [
+          10,
+        ],
+        "sql": "SELECT \`User\`.\`id\` AS \`id\`, \`User\`.\`email\` AS \`email\`, \`User\`.\`role\` AS \`role\` FROM \`User\` WHERE \`User\`.\`id\` = ?1",
+      },
+      {
+        "params": [
+          11,
+          "explicit@example.com",
+          "ADMIN",
+        ],
+        "sql": "INSERT INTO \`User\` (\`id\`, \`email\`, \`role\`) VALUES (?1, ?2, ?3)",
+      },
+      {
+        "params": [
+          11,
+        ],
+        "sql": "SELECT \`User\`.\`id\` AS \`id\`, \`User\`.\`email\` AS \`email\`, \`User\`.\`role\` AS \`role\` FROM \`User\` WHERE \`User\`.\`id\` = ?1",
+      },
+    ],
+  },
+}
+`;
+
 exports[`the statements MySQL live tests send > writes through the ORM 1`] = `
 {
   "create": {

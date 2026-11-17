@@ -37,7 +37,7 @@ afterEach(() => {
 });
 
 /**
- * The SQL of every query in MySQL's live tests (`orm-reads`, `orm-includes`, `orm-writes` and `raw-lane`), rendered without a database, so a change to the SQL MySQL is sent shows here first.
+ * The SQL of every query in MySQL's live tests (`orm-reads`, `orm-includes`, `orm-writes`, `raw-lane` and `transaction-isolation`), rendered without a database, so a change to the SQL MySQL is sent shows here first.
  */
 describe('the statements MySQL live tests send', () => {
   it('reads through the ORM and the SQL builder', async () => {
@@ -479,6 +479,36 @@ describe('the statements MySQL live tests send', () => {
             .where((f, fns) => fns.gt(f.id, 10))
             .orderBy('id')
             .build(),
+        );
+      }),
+    }).toMatchSnapshot();
+  });
+
+  it('runs work in transactions', async () => {
+    const client = () => mysql({ contract, url, verifyMarker: false });
+    expect({
+      implicitAndExplicit: await sends(async () => {
+        await using db = client();
+        await db.orm.User.select('id', 'email', 'role').create({
+          id: 10,
+          email: 'implicit@example.com',
+          role: 'USER',
+        });
+        await db.transaction(async (tx) =>
+          tx.orm.User.select('id', 'email', 'role').create({
+            id: 11,
+            email: 'explicit@example.com',
+            role: 'ADMIN',
+          }),
+        );
+      }, storedRows),
+      connectionIdentity: await sends(async () => {
+        await using db = client();
+        await db.query(
+          db.raw.sql`SELECT CONNECTION_ID() AS id`.returnsRow({ id: 'mysql/bigint@1' }).build(),
+        );
+        await db.transaction(async (tx) =>
+          tx.orm.User.select('id', 'email', 'role').where({ id: 1 }).all(),
         );
       }),
     }).toMatchSnapshot();

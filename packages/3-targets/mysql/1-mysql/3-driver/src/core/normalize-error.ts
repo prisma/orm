@@ -94,20 +94,20 @@ export function connectionFix(error: unknown): string | undefined {
     : undefined;
 }
 
-function publicKeyNeeded(error: MariadbError): SqlConnectionError {
+function publicKeyNeeded(error: MariadbError, displayName: string): SqlConnectionError {
   return new SqlConnectionError(
-    `MySQL sign-in needs the server's public key: the account signs in with caching_sha2_password or sha256_password over a connection without TLS. ${PUBLIC_KEY_FIX}`,
+    `${displayName} sign-in needs the server's public key: the account signs in with caching_sha2_password or sha256_password over a connection without TLS. ${PUBLIC_KEY_FIX}`,
     { cause: error, transient: false },
   );
 }
 
-function poolTimedOut(error: MariadbError): unknown {
+function poolTimedOut(error: MariadbError, displayName: string): unknown {
   const cause = error.cause;
-  if (connectingCannotSucceed(cause)) return normalizeMysqlError(cause);
+  if (connectingCannotSucceed(cause)) return normalizeMysqlError(cause, displayName);
   return new SqlConnectionError(
     cause instanceof Error
-      ? `Timed out waiting for a pooled MySQL connection; the pool could not open one: ${serverMessage(cause)}`
-      : 'Timed out waiting for a pooled MySQL connection; every connection in the pool was in use.',
+      ? `Timed out waiting for a pooled ${displayName} connection; the pool could not open one: ${serverMessage(cause)}`
+      : `Timed out waiting for a pooled ${displayName} connection; every connection in the pool was in use.`,
     { cause: error, transient: true },
   );
 }
@@ -115,18 +115,18 @@ function poolTimedOut(error: MariadbError): unknown {
 /**
  * An error from the `mariadb` package as the driver reports it, in the family's types as the Postgres driver reports its own: a Node socket or DNS error as a `SqlConnectionError`, transient as the Postgres driver's table says; a lost connection and a pool that gave no connection in time as a transient `SqlConnectionError`; a sign-in that needs the server's public key, and session setup that fails, as a `SqlConnectionError` that is not transient; a sign-in MySQL refuses, as Postgres's 28P01, and an error MySQL reported about a statement as `SqlQueryError` with its SQLSTATE, a constraint violation with the SQLSTATE Postgres sends; and any other error unchanged. A pool that timed out because it could not connect in a way no retry can get past reports that error.
  */
-export function normalizeMysqlError(error: unknown): unknown {
+export function normalizeMysqlError(error: unknown, displayName: string): unknown {
   const transient = nodeConnectionTransience(error);
   if (transient !== undefined && error instanceof Error) {
     return new SqlConnectionError(error.message, { cause: error, transient });
   }
   if (!isMariadbError(error)) return error;
-  if (error.errno === ER_CANNOT_RETRIEVE_RSA_KEY) return publicKeyNeeded(error);
+  if (error.errno === ER_CANNOT_RETRIEVE_RSA_KEY) return publicKeyNeeded(error, displayName);
   if (error.errno === ER_INITIAL_SQL_ERROR) {
     return new SqlConnectionError(serverMessage(error), { cause: error, transient: false });
   }
   if (isFatal(error) && !SIGN_IN_REFUSED.has(error.errno)) return connectionLost(error);
-  if (error.errno === ER_GET_CONNECTION_TIMEOUT) return poolTimedOut(error);
+  if (error.errno === ER_GET_CONNECTION_TIMEOUT) return poolTimedOut(error, displayName);
   if (typeof error.sqlState !== 'string') return error;
   return new SqlQueryError(error.sqlMessage ?? error.message, {
     cause: error,

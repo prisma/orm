@@ -48,6 +48,7 @@
     "./control": "./dist/control.mjs",
     "./migration": "./dist/migration.mjs",
     "./pack": "./dist/pack.mjs",
+    "./runtime": "./dist/runtime.mjs",
     "./package.json": "./package.json"
   },
   "engines": {

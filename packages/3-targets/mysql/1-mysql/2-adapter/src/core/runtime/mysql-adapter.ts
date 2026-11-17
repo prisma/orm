@@ -8,11 +8,9 @@ import {
   type LowererContext,
   type SqlQueryable,
 } from '@internal/sql-relational-core/ast';
-import type { MysqlCodecRegistry } from '@internal/target-mysql/codecs';
 import { structuredError } from '@internal/utils/structured-error';
-import { mysqlAdapterCapabilities } from '../capabilities';
 import { type MarkerQuery, readMarkerResult } from '../marker-read';
-import { type MysqlContract, MysqlSqlRenderer } from '../sql-renderer';
+import type { MysqlContract, MysqlSqlRenderer } from '../sql-renderer';
 
 function markerQuery(queryable: SqlQueryable): MarkerQuery {
   return {
@@ -29,18 +27,29 @@ function markerQuery(queryable: SqlQueryable): MarkerQuery {
   };
 }
 
-class MysqlAdapterImpl implements Adapter<AnyQueryAst, MysqlContract, LoweredStatement> {
+/** What a database that extends MySQL changes in the runtime adapter: its target id, its profile id and capabilities, and the renderer that writes its SQL. */
+export interface MysqlAdapterOptions<TargetId extends string> {
+  readonly targetId: TargetId;
+  readonly profileId: string;
+  readonly capabilities: AdapterProfile<TargetId>['capabilities'];
+  readonly renderer: MysqlSqlRenderer;
+}
+
+class MysqlAdapterImpl<TargetId extends string>
+  implements Adapter<AnyQueryAst, MysqlContract, LoweredStatement>
+{
   readonly familyId = 'sql' as const;
-  readonly targetId = 'mysql' as const;
-  readonly profile: AdapterProfile<'mysql'>;
+  readonly targetId: TargetId;
+  readonly profile: AdapterProfile<TargetId>;
   readonly #renderer: MysqlSqlRenderer;
 
-  constructor(codecs: MysqlCodecRegistry) {
-    this.#renderer = new MysqlSqlRenderer(codecs);
+  constructor(options: MysqlAdapterOptions<TargetId>) {
+    this.targetId = options.targetId;
+    this.#renderer = options.renderer;
     this.profile = Object.freeze({
-      id: 'mysql/default@1',
-      target: 'mysql',
-      capabilities: mysqlAdapterCapabilities,
+      id: options.profileId,
+      target: options.targetId,
+      capabilities: options.capabilities,
       readMarker: (queryable: SqlQueryable) =>
         readMarkerResult(markerQuery(queryable), APP_SPACE_ID),
     });
@@ -58,7 +67,9 @@ class MysqlAdapterImpl implements Adapter<AnyQueryAst, MysqlContract, LoweredSta
   }
 }
 
-/** The MySQL runtime adapter: it lowers queries with the MySQL renderer and reads the marker 2b's control tables hold. */
-export function createMysqlAdapter(codecs: MysqlCodecRegistry) {
-  return Object.freeze(new MysqlAdapterImpl(codecs));
+/** The runtime adapter of MySQL, or of a database that extends it: it lowers queries with the renderer it is given and reads the marker the control tables hold. */
+export function createMysqlAdapter<TargetId extends string>(
+  options: MysqlAdapterOptions<TargetId>,
+) {
+  return Object.freeze(new MysqlAdapterImpl(options));
 }
