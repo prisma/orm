@@ -29,7 +29,7 @@ Columns: the PSL name, the TypeScript builder helper (inside the `defineContract
 | `Bson` | `field.scalar(type.Bson())` | `mongo/bson@1` | any BSON type; the validator does not constrain it (a list field must still be an array) | `BsonValue` |
 | `Vector(length?)` | `field.scalar(type.Vector(length?))` | `mongo/vector@1` | `array` | `readonly number[]`; `length` types the field as a vector of that many numbers; a value written in the contract, such as a default, must have that length, and a value the application writes or reads is not checked |
 
-MongoDB has convenience types for its other scalars. Each is a type choice ([ADR 279](../architecture%20docs/adrs/ADR%20279%20-%20Convenience%20types%20choose%20an%20explicit%20type%20from%20their%20arguments.md)): its `storage` and `as` arguments choose one explicit type above, and the contract stores only that type. `storage` names the BSON type ([ADR 322](../architecture%20docs/adrs/ADR%20322%20-%20Scalar%20convenience%20types%20on%20the%20targets%20other%20than%20PostgreSQL.md)).
+MongoDB has convenience types for its other scalars. Each is a type choice ([ADR 279](../architecture%20docs/adrs/ADR%20279%20-%20Convenience%20types%20choose%20an%20explicit%20type%20from%20their%20arguments.md)): its `storage` and `as` arguments choose one explicit type above, and the contract stores only that type. `storage` names the BSON type ([ADR 322](../architecture%20docs/adrs/ADR%20322%20-%20Each%20target%20declares%20the%20scalar%20convenience%20types%20over%20its%20own%20explicit%20types.md)).
 
 | Convenience type | `as` | `storage` | Becomes |
 | --- | --- | --- | --- |

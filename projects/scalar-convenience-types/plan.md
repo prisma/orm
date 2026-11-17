@@ -42,3 +42,7 @@ The architect and principal engineer design reviews of 2026-11-17 are in `review
 - A ticket for clearer errors where a PostgreSQL `json` field hits a limit.
 - Correct the closing comment on prisma/orm#30966 and the description of TML-3789, which say `Json` gets no convenience type.
 - Branch `tml-3789-json-stays-explicit` holds a handover and a decision record that this spec replaces. It is not merged.
+
+## Follow-ups to file at close-out
+
+- The deprecation warner exists in both the SQL and MongoDB PSL interpreters (`deprecated-type-names.ts` in each) because a shared home would be the framework; move it to `@internal/psl-parser/interpret` when a framework change is allowed.
