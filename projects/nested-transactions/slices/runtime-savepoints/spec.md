@@ -23,12 +23,12 @@ await tx.commit()                              // COMMIT
 
 All production changes are in `packages/2-sql-family/5-runtime/src` (`sql-runtime.ts`, `activity-handle.ts`, `transaction-state.ts`, and a new file if the savepoint code reads better on its own).
 
-**One wrapper for the transaction and every savepoint** (project spec decision 4). The driver gives a transaction and a savepoint the same shape, `SqlTransaction`, so the runtime wraps both with the same code. One function builds the `RuntimeTransaction` for a transaction or savepoint from its driver `SqlTransaction`, and its `commit()`, `rollback()`, `savepoint()` and statement members serve the outer transaction and every savepoint. Only the real differences between the outer transaction and a savepoint branch inside it:
+**Two classes on one base** (project spec decision 4). The driver gives a transaction and a savepoint the same shape, `SqlTransaction`, so what is the same for both is written once, in a base class that implements `RuntimeTransaction`: the statement members (`execute`, `query`, the prepared-statement members, `startActivity`), `savepoint()`, and the stack and stack entry. Two subclasses implement `commit()`, `rollback()` and the check before work, each as straight-line code with no condition on which kind it is:
 
-- the settlement of a successful `commit()`: `{ by: 'commit' }` on the outer transaction, `{ by: 'release' }` on a savepoint;
-- a failed `commit()`: the outer transaction ends its activity `failed`, a savepoint stays open (rule 8);
-- a failed `rollback()`: a savepoint invalidates the stack (rule 7);
-- what only the outer transaction has: the deadline and timeout, the connection's open-transaction bookkeeping, and the settlement `withTransaction` reads.
+- `OuterTransaction`: `COMMIT` and `ROLLBACK`; a failed commit ends the activity `failed`; it owns what only the outer transaction has: the deadline and timeout, the connection's open-transaction bookkeeping, the cleanup when the connection is released or destroyed, and the settlement `withTransaction` reads. Once closed, it reports main's codes.
+- `Savepoint`: `RELEASE` and `ROLLBACK TO`; a failed `RELEASE` leaves it open (rule 8); a failed `ROLLBACK TO` invalidates the stack (rule 7).
+
+The classes reach the runtime's internals (statement execution, in-flight tracking, middleware, context) through one small object the runtime passes in. No boolean saying which kind a transaction is, and no callbacks that do nothing for one of the kinds.
 
 1. **`RuntimeTransaction.savepoint(): Promise<RuntimeTransaction>`** (project spec decision 8). Required, no options. The returned savepoint is a `RuntimeTransaction` itself, so `savepoint()` on it stacks another savepoint.
    - It calls the driver's `SqlTransaction.savepoint(name)` (slice 1) on the driver transaction it is called on.
@@ -68,14 +68,16 @@ A stack entry carries the savepoint name (`undefined` for the outer transaction)
 ```ts
 type TransactionState =
   | 'open'
-  | 'committing'      // COMMIT or RELEASE sent, no answer yet
-  | 'release-failed'  // RELEASE failed; the savepoint is still open (rule 8)
-  | 'rolling-back'
+  | 'commit-failed'   // COMMIT or RELEASE failed; a savepoint is still open (rule 8)
   | 'committed'
   | 'rolled-back';
 ```
 
-`commitAttempted` in an activity's settlement is read from the state at the time `rollback()` starts. What only the outer transaction has (the deadline, the open-transaction bookkeeping, the settlement `withTransaction` reads) is built where the transaction begins, outside the wrapper, so the wrapper branches only on the differences listed above. `rollback()` after a successful commit keeps main's behaviour: it sends nothing, waits for the commit's finalization and resolves.
+`commitAttempted` in an activity's settlement is read from the state at the time `rollback()` starts. `rollback()` after a successful commit keeps main's behaviour: it sends nothing, waits for the commit's finalization and resolves.
+
+**Callers await.** The runtime does not guard a second `commit()` or `rollback()` sent before the first one settles: it sends the second command, and the database's answer is the result. `withTransaction` and the nested callback always await. The one concurrent case the runtime does guard is two `savepoint()` calls (decision 3): the savepoint's entry is pushed before the first `await`.
+
+**Only an entry removes itself from the stack.** A savepoint is pushed by `savepoint()` on the top of the stack and popped by its own `commit()` or `rollback()`. Nothing else pops entries, so no operation has to check whether its entry was removed while it was waiting.
 
 5. **The guard** (decision 3). A transaction or savepoint has at most one open savepoint directly above it on the stack.
    - `savepoint()` on a transaction or savepoint that is not the top rejects with `RUNTIME.TRANSACTION_ALREADY_OPEN`. The message names the top of the stack (`sp_<n>`). No `SAVEPOINT` is sent and no activity is started.
@@ -83,7 +85,7 @@ type TransactionState =
    - A statement sent on the connection while its transaction is open counts as a statement on the outer transaction, so it is refused the same way. Otherwise it would run inside the savepoint on the database while being parented to the outer activity.
    - Once a transaction or savepoint is closed (settled, invalidated or timed out), work on it reports that, not `RUNTIME.TRANSACTION_SUSPENDED`.
    - `rollback()` on a transaction or savepoint that has an open savepoint above it rejects with `RUNTIME.TRANSACTION_SUSPENDED`, like a statement, and nothing is sent. Every savepoint settles before the transaction or savepoint below it settles.
-   - Two exceptions, where the outer transaction is closed without its caller's choice: after its timeout has fired, its `rollback()` is allowed, and so is ending it because its connection is released or destroyed while it is open. Then each open savepoint is popped and closed first, innermost first: its activity ends `{ by: 'rollback', outcome, commitAttempted: false }`, with the outcome of the outer rollback, and later work on it rejects with `RUNTIME.TRANSACTION_CLOSED`. This keeps `withTransaction`'s timeout path unchanged: it rolls back while the callback, and a savepoint the callback opened, may still be running.
+   - One exception: after its timeout has fired, the outer transaction's `rollback()` is allowed with savepoints open, and so is the cleanup when its connection is released or destroyed. It sends `ROLLBACK` and ends only its own activity; the open savepoints stay on the stack, refuse work because the transaction timed out (rule 6), and are settled by their owners. A savepoint's `rollback()` then sends nothing, ends its activity `failed` and rejects `RUNTIME.TRANSACTION_CLOSED`; the framework finalizes it with the outer outcome, because it ended after the outer transaction. This keeps `withTransaction`'s timeout path unchanged: it rolls back while the callback, and a savepoint the callback opened, may still be running.
 6. **Closed savepoints.** A savepoint refuses work with `RUNTIME.TRANSACTION_CLOSED` once it has settled, or once the transaction or a savepoint below it has settled, been invalidated, or been closed by the outer transaction's timeout. This covers the note slice 2 left for this slice: the framework accepts work beneath a savepoint after the outer `commit()` or `rollback()` has been called, so the runtime must refuse it.
 7. **A failed `ROLLBACK TO` invalidates the stack**, so every savepoint below it and the outer transaction are closed (decision 9).
    - The savepoint's `rollback()` rejects with the driver error.
@@ -125,7 +127,7 @@ Beyond CI, review and the project DoD. Each is a runtime test with the stub driv
 - [ ] A savepoint inside a savepoint gets the next name, and the next transaction on the connection starts at `sp_1` again.
 - [ ] `savepoint()` with an open sibling rejects `TRANSACTION_ALREADY_OPEN` naming it, with nothing sent.
 - [ ] A statement and `commit()` below the top of the stack reject `TRANSACTION_SUSPENDED` with the activity ID of the top; they work again once the savepoints above have settled.
-- [ ] `rollback()` with an open savepoint above it rejects `TRANSACTION_SUSPENDED` with nothing sent. After the outer timeout, the outer `rollback()` closes the open savepoints innermost first, and later work on them rejects `TRANSACTION_CLOSED`.
+- [ ] `rollback()` with an open savepoint above it rejects `TRANSACTION_SUSPENDED` with nothing sent. After the outer timeout, the outer `rollback()` sends `ROLLBACK` with a savepoint open; work on the savepoint then rejects `TRANSACTION_CLOSED`, its `rollback()` sends nothing, and it finalizes `rolled-back`.
 - [ ] `TransactionStack` has its own unit tests for push, pop, top, the counter and invalidation.
 - [ ] Work on a savepoint after the outer transaction settled rejects `TRANSACTION_CLOSED`.
 - [ ] A failed `ROLLBACK TO` closes the outer transaction and every savepoint; on an owned transaction (`runtime.transaction()`), the connection is destroyed when the outer rolls back.
@@ -137,7 +139,7 @@ Beyond CI, review and the project DoD. Each is a runtime test with the stub driv
 ## Edge cases investigated
 
 - **`RuntimeConnection.transaction()` with an open transaction** has no guard today (only the connection-route handle has one). Unchanged in this slice.
-- **The outer transaction's timeout** closes the outer transaction; rule 6 extends that to its savepoints. An outer `rollback()` from the timeout path closes open savepoints by the exception in rule 5.
+- **The outer transaction's timeout** closes the outer transaction; rule 6 extends that to its savepoints. An outer `rollback()` from the timeout path leaves open savepoints to their owners, by the exception in rule 5.
 
 ## Plan (one dispatch)
 
@@ -164,6 +166,7 @@ Beyond CI, review and the project DoD. Each is a runtime test with the stub driv
 - **After the PR opened: one wrapper for every level.** The first implementation had a separate savepoint wrapper with its own settle code, and a `TransactionLevel` class that kept a second copy of state the transaction wrapper already held. That did not use the single `SqlTransaction` shape decision 4 chose so the settle logic is written once. The operator asked for one wrapper; § Chosen design now requires it.
 - **After the PR opened: one stack per connection.** The per-level records with links to the enclosing level and the open child were replaced by one stack of open levels per connection, which the project plan described as "tracking of the innermost open level per connection". Requested by the operator.
 - **After the PR opened: a parent settles only after its savepoints.** `rollback()` on a transaction or savepoint with an open savepoint above it now rejects `TRANSACTION_SUSPENDED`, instead of closing the open savepoints. The outer transaction keeps that behaviour only after its timeout and when its connection is released or destroyed. Errors that name an open savepoint name the top of the stack. The stack becomes a class with push, pop and top, and one state field replaces the wrapper's flags. Requested by the operator; making `rollback()` reject after a commit is left to a follow-up PR, because the ORM's `runInTransaction` relies on main's behaviour.
+- **After the PR opened: two classes on one base, and a timeout that leaves open savepoints alone.** The single wrapper branched on whether it wrapped the outer transaction, through a boolean and callbacks that did nothing for savepoints. It becomes a base class with the shared members and two subclasses with their own `commit()`, `rollback()` and check. The outer transaction's timeout rollback no longer pops and ends the open savepoints, because the framework finalizes an activity that ends after its transaction with the transaction's outcome; so only an entry removes itself from the stack. The guards for a second `commit()` or `rollback()` sent before the first settles are dropped. Requested by the operator, to reduce branches.
 - **After the PR opened: a savepoint-name counter per transaction.** The counter per connection was replaced by one kept with the transaction's stack. Savepoints end with their transaction, so names do not need to be unique across transactions. The project spec and plan are amended to match. Requested by the operator.
 
 ## References
