@@ -95,6 +95,7 @@
     "./ts-render": "./dist/ts-render.mjs",
     "./type-implementations": "./dist/type-implementations.mjs",
     "./type-implementations/date": "./dist/type-implementations__date.mjs",
+    "./type-implementations/decimal": "./dist/type-implementations__decimal.mjs",
     "./type-implementations/duration": "./dist/type-implementations__duration.mjs",
     "./type-implementations/now": "./dist/type-implementations__now.mjs",
     "./type-implementations/temporal": "./dist/type-implementations__temporal.mjs",
