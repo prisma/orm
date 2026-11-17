@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   isPnpmIgnoredBuildsError,
   isRecognisedPnpmResolutionError,
-} from '../../../src/commands/init/pnpm-fallback';
+} from '../../../src/commands/init/pnpm-error-codes';
 
 describe('isRecognisedPnpmResolutionError', () => {
   it('recognises a leaked workspace specifier', () => {

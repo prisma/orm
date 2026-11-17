@@ -6,7 +6,7 @@ import { dirname, join } from 'pathe';
 import {
   isPnpmIgnoredBuildsError,
   isRecognisedPnpmResolutionError,
-} from '../commands/init/pnpm-fallback';
+} from '../commands/init/pnpm-error-codes';
 import { redactSecrets } from '../commands/init/redact-secrets';
 
 const ENGINE_PACKAGE = '@prisma/cli-engine';
