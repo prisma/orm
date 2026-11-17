@@ -302,6 +302,7 @@ export function withPlanRecording<T extends SqlRuntimeQueryable>(
   const transaction: unknown = Reflect.get(target, 'transaction');
   const preparedQuery: unknown = Reflect.get(target, preparedStatementQuery);
   const preparedExecute: unknown = Reflect.get(target, preparedStatementExecute);
+  const commit: unknown = Reflect.get(target, 'commit');
   const recording = {
     query<Row>(
       plan: (SqlExecutionPlan | SqlQueryPlan) & { readonly _row?: Row },
