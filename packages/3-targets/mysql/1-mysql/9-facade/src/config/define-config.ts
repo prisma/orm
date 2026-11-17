@@ -7,8 +7,6 @@ import {
   defineConfig as coreDefineConfig,
   defaultContractOutputPath,
 } from '@internal/config/config-types';
-import mysqlDriver from '@internal/driver-mysql/control';
-import sql from '@internal/family-sql/control';
 import type { TargetPackRef } from '@internal/framework-components/components';
 import type { ControlExtensionDescriptor } from '@internal/framework-components/control';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
@@ -19,7 +17,7 @@ import { mysqlCreateNamespace } from '@internal/target-mysql/types';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
 import { typescriptContractUnsupported } from '../errors';
-import { mysqlControlAdapter, mysqlTarget } from './components';
+import { controlComponents } from './components';
 import { moduleBase } from './module-base';
 
 export interface MysqlConfigOptions<TargetId extends string = 'mysql'> {
@@ -38,6 +36,7 @@ export interface MysqlConfigOptions<TargetId extends string = 'mysql'> {
 /** The components of MySQL, or of a target that extends it, that its `prisma.config.ts` wires together. The target and adapter are the ones the target package hands on, with their type declarations restated. */
 export interface MysqlConfigComponents<TargetId extends string> {
   readonly pack: TargetPackRef<'sql', TargetId>;
+  readonly family: PrismaNextConfig<'sql', TargetId>['family'];
   readonly target: PrismaNextConfig<'sql', TargetId>['target'];
   readonly adapter: PrismaNextConfig<'sql', TargetId>['adapter'];
   readonly driver: NonNullable<PrismaNextConfig<'sql', TargetId>['driver']>;
@@ -59,7 +58,7 @@ function buildConfig<TargetId extends string>(
   contract: ContractConfig,
 ): PrismaNextConfig<'sql', TargetId> {
   return coreDefineConfig({
-    family: sql,
+    family: components.family,
     target: components.target,
     adapter: components.adapter,
     driver: components.driver,
@@ -95,10 +94,8 @@ export function createMysqlDefineConfig<TargetId extends string>(
 }
 
 const mysqlComponents: MysqlConfigComponents<'mysql'> = {
+  ...controlComponents,
   pack: mysqlPackRef,
-  target: mysqlTarget,
-  adapter: mysqlControlAdapter,
-  driver: mysqlDriver,
   moduleBase,
 };
 

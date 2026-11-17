@@ -3,8 +3,6 @@ import {
   defineConfig as coreDefineConfig,
   defaultContractOutputPath,
 } from '@internal/config/config-types';
-import sqliteDriver from '@internal/driver-sqlite/control';
-import sql from '@internal/family-sql/control';
 import type { ControlExtensionDescriptor } from '@internal/framework-components/control';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import { typescriptContractFromPath } from '@internal/sql-contract-ts/config-types';
@@ -13,7 +11,7 @@ import sqlitePackRef from '@internal/target-sqlite/pack';
 import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
-import { generatedTypesModule, sqliteControlAdapter, sqliteTarget } from './components';
+import { controlComponents, generatedTypesModule } from './components';
 import { moduleBase } from './module-base';
 
 export interface SqliteConfigOptions {
@@ -48,10 +46,7 @@ export function defineConfig(options: SqliteConfigOptions): PrismaNextConfig<'sq
         });
 
   return coreDefineConfig({
-    family: sql,
-    target: sqliteTarget,
-    adapter: sqliteControlAdapter,
-    driver: sqliteDriver,
+    ...controlComponents,
     extensions,
     contract: { ...contractConfig, typesModule: generatedTypesModule },
     migrations: { ...options.migrations, module: `${moduleBase}/migration` },

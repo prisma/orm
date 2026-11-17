@@ -14,6 +14,7 @@ import { createMysqlDefineConfig } from '../../src/config/define-config';
 const mariadbMeta = { ...mysqlPackRef, targetId: 'mariadb', id: 'mariadb' } as const;
 
 const mariadbComponents = {
+  family: sql,
   pack: mariadbMeta satisfies TargetPackRef<'sql', 'mariadb'>,
   target: createMysqlControlTargetDescriptor({
     descriptorMeta: mariadbMeta,

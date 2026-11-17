@@ -12,10 +12,8 @@ import {
   type ControlClientOptions,
   createControlClient,
 } from '@internal/cli/control-api';
-import postgresDriver from '@internal/driver-postgres/control';
-import sql from '@internal/family-sql/control';
 import { ifDefined } from '@internal/utils/defined';
-import { postgresControlAdapter, postgresTarget } from '../config/components';
+import { controlComponents } from '../config/components';
 
 export interface PostgresControlClientOptions {
   /**
@@ -35,10 +33,7 @@ export function createPostgresControlClient(
   options: PostgresControlClientOptions = {},
 ): ControlClient {
   const clientOptions: ControlClientOptions = {
-    family: sql,
-    target: postgresTarget,
-    adapter: postgresControlAdapter,
-    driver: postgresDriver,
+    ...controlComponents,
     ...ifDefined('connection', options.connection),
     ...ifDefined('extensions', options.extensions),
   };

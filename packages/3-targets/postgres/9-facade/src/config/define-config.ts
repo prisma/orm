@@ -7,8 +7,6 @@ import {
   defineConfig as coreDefineConfig,
   defaultContractOutputPath,
 } from '@internal/config/config-types';
-import postgresDriver from '@internal/driver-postgres/control';
-import sql from '@internal/family-sql/control';
 import type { ControlExtensionDescriptor } from '@internal/framework-components/control';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import { typescriptContractFromPath } from '@internal/sql-contract-ts/config-types';
@@ -17,7 +15,7 @@ import postgresPackRef from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
-import { generatedTypesModule, postgresControlAdapter, postgresTarget } from './components';
+import { controlComponents, generatedTypesModule } from './components';
 import { moduleBase } from './module-base';
 
 export interface PostgresConfigOptions {
@@ -67,10 +65,7 @@ export function defineConfig(options: PostgresConfigOptions): PrismaNextConfig<'
   const contractConfig = resolveContractConfig(options);
 
   return coreDefineConfig({
-    family: sql,
-    target: postgresTarget,
-    adapter: postgresControlAdapter,
-    driver: postgresDriver,
+    ...controlComponents,
     extensions,
     contract: { ...contractConfig, typesModule: generatedTypesModule },
     migrations: { ...options.migrations, module: `${moduleBase}/migration` },

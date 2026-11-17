@@ -3,10 +3,8 @@ import {
   type ControlClientOptions,
   createControlClient,
 } from '@internal/cli/control-api';
-import mysqlDriver from '@internal/driver-mysql/control';
-import sql from '@internal/family-sql/control';
 import { ifDefined } from '@internal/utils/defined';
-import { mysqlControlAdapter, mysqlTarget } from '../config/components';
+import { controlComponents } from '../config/components';
 
 export interface MysqlControlClientOptions {
   readonly connection?: string;
@@ -16,10 +14,7 @@ export interface MysqlControlClientOptions {
 /** A control client for a MySQL database: migrations, verify, sign and introspection. */
 export function createMysqlControlClient(options: MysqlControlClientOptions = {}): ControlClient {
   return createControlClient({
-    family: sql,
-    target: mysqlTarget,
-    adapter: mysqlControlAdapter,
-    driver: mysqlDriver,
+    ...controlComponents,
     ...ifDefined('connection', options.connection),
     ...ifDefined('extensions', options.extensions),
   });
