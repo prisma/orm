@@ -16,8 +16,12 @@
  *
  * Needs a prior `pnpm build`: it imports the packages' `dist` output.
  *
+ * The declarations import the framework and family types from the module given
+ * by `--types-module`: the `contract.typesModule` of the config that owns the
+ * contract, such as `@prisma/orm-mongo/generated-types` for an example.
+ *
  * Usage:
- *   node scripts/regen-mongo-end-contract-dts.mjs <path/to/contract.json>...
+ *   node scripts/regen-mongo-end-contract-dts.mjs --types-module <module> <path/to/contract.json>...
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -52,9 +56,11 @@ const { contractSnapshotFiles } = await importFromRepo(
   'packages/1-framework/3-tooling/migration/dist/exports/contract-snapshot-store.mjs',
 );
 
-const args = process.argv.slice(2);
-if (args.length === 0) {
-  console.error('usage: node regen-mongo-end-contract-dts.mjs <path/to/contract.json>...');
+const [flag, typesModule, ...args] = process.argv.slice(2);
+if (flag !== '--types-module' || typesModule === undefined || args.length === 0) {
+  console.error(
+    'usage: node regen-mongo-end-contract-dts.mjs --types-module <module> <path/to/contract.json>...',
+  );
   process.exit(1);
 }
 
@@ -78,6 +84,7 @@ for (const jsonPath of args) {
     {
       serializeContract: (contract) => serializer.serializeContract(contract),
       deserializeContract: (contractJson) => family.deserializeContract(contractJson),
+      typesModule,
       ...(serializer.shouldPreserveEmpty
         ? { shouldPreserveEmpty: serializer.shouldPreserveEmpty }
         : {}),
