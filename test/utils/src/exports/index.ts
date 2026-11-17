@@ -6,6 +6,7 @@ export * from '../application-domain-of';
 export * from '../column-descriptors';
 export * from '../contract-factories';
 export * from '../lowered-params';
+export * from '../migration-modules';
 export * from '../operation-descriptors';
 export * from '../startup-parameters';
 export * from '../timeouts';
