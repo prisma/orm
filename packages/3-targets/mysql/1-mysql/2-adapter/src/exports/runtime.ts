@@ -1,7 +1,7 @@
 export {
   createMysqlRuntimeAdapterDescriptor,
   default,
+  type MysqlRuntimeAdapterDescriptor,
   type MysqlRuntimeAdapterInstance,
-  type MysqlRuntimeAdapterMeta,
   type MysqlRuntimeAdapterOptions,
 } from '../core/runtime/runtime-adapter';

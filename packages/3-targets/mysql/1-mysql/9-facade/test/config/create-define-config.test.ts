@@ -25,7 +25,9 @@ const mariadbComponents = {
     id: 'mariadb',
     create: (stack) => createMysqlControlAdapter(stack, { readCatalog: readMysqlCatalog }),
   } satisfies SqlControlAdapterDescriptor<'mariadb'>,
-  driver: createMysqlControlDriverDescriptor('mariadb', 'MariaDB'),
+  driver: createMysqlControlDriverDescriptor({
+    target: { targetId: 'mariadb', displayName: 'MariaDB' },
+  }),
 };
 
 describe('createMysqlDefineConfig', () => {

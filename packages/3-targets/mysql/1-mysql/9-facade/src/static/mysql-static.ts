@@ -21,7 +21,7 @@ import {
 import mysqlTarget, { type MysqlRuntimeTargetDescriptor } from '@internal/target-mysql/runtime';
 import { assertDefined } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
-import { mysqlContractValidation } from './contract-from-json';
+import { createMysqlContractValidation, type MysqlContractValidation } from './contract-from-json';
 
 type UnboundSql<TContract extends Contract<SqlStorage>> =
   Db<TContract>[typeof UNBOUND_NAMESPACE_ID];
@@ -61,7 +61,7 @@ export function buildMysqlStaticContext<
   return { context, contract, enums, sql: sqlDb, raw, toSql: createToSql(stack, contract) };
 }
 
-/** The components the static context of MySQL, or of a database that extends it, is built from. */
+/** The components the static context of MySQL, or of a target that extends it, is built from. */
 export interface MysqlStaticComponents<
   TargetId extends string,
   TAdapterInstance extends
@@ -71,24 +71,40 @@ export interface MysqlStaticComponents<
   readonly adapter: SqlRuntimeAdapterDescriptor<TargetId, TAdapterInstance>;
 }
 
-/** Builds the static-context function of MySQL, or of a database that extends it. `mysqlStatic()` is this applied to MySQL's components. */
+/** The query surfaces of a client of `TargetId` without a driver, for a contract. */
+export type MysqlStaticFactory<TargetId extends string> = <
+  TContract extends Contract<SqlStorage>,
+>(options: {
+  readonly contract: TContract;
+  readonly extensions?: readonly SqlRuntimeExtensionDescriptor<TargetId>[];
+}) => MysqlStaticContext<TContract>;
+
+/** The static entry of MySQL, or of a target that extends it: `contractFromJson` and the static context, validating contracts with one validator. */
+export interface MysqlStaticEntry<TargetId extends string> {
+  readonly contractFromJson: MysqlContractValidation['contractFromJson'];
+  readonly staticContext: MysqlStaticFactory<TargetId>;
+}
+
+/** Builds the static entry of MySQL, or of a target that extends it. `mysqlStatic()` is its static context applied to MySQL's components. */
 export function createMysqlStatic<
   TargetId extends string,
   TAdapterInstance extends SqlRuntimeAdapterInstance<TargetId>,
->(components: MysqlStaticComponents<TargetId, TAdapterInstance>) {
-  const { validateContract } = mysqlContractValidation(components.target.targetId);
-  return function staticContext<TContract extends Contract<SqlStorage>>(options: {
-    readonly contract: TContract;
-    readonly extensions?: readonly SqlRuntimeExtensionDescriptor<TargetId>[];
-  }): MysqlStaticContext<TContract> {
-    const contract = validateContract(options.contract);
-    const stack = createSqlExecutionStack({
-      target: components.target,
-      adapter: components.adapter,
-      extensions: options.extensions ?? [],
-    });
-    const context = createExecutionContext({ contract, stack });
-    return buildMysqlStaticContext(contract, context, stack);
+>(components: MysqlStaticComponents<TargetId, TAdapterInstance>): MysqlStaticEntry<TargetId> {
+  const { contractFromJson, validateContract } = createMysqlContractValidation(
+    components.target.targetId,
+  );
+  return {
+    contractFromJson,
+    staticContext: (options) => {
+      const contract = validateContract(options.contract);
+      const stack = createSqlExecutionStack({
+        target: components.target,
+        adapter: components.adapter,
+        extensions: options.extensions ?? [],
+      });
+      const context = createExecutionContext({ contract, stack });
+      return buildMysqlStaticContext(contract, context, stack);
+    },
   };
 }
 
@@ -101,6 +117,9 @@ export function createMysqlStatic<
  * const { enums } = mysqlStatic({ contract: contractFromJson<Contract>(contractJson) });
  * ```
  */
-const mysqlStatic = createMysqlStatic({ target: mysqlTarget, adapter: mysqlAdapter });
+const mysqlStatic: MysqlStaticFactory<'mysql'> = createMysqlStatic({
+  target: mysqlTarget,
+  adapter: mysqlAdapter,
+}).staticContext;
 
 export default mysqlStatic;

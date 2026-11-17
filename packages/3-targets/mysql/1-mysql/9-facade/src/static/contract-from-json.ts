@@ -6,8 +6,13 @@ import { version } from '../../package.json' with { type: 'json' };
 
 const serializer = new MysqlContractSerializer();
 
-/** Validates contracts for MySQL, or a database that extends it, once per contract and target. */
-export function mysqlContractValidation(targetId: string) {
+export interface MysqlContractValidation {
+  contractFromJson<TContract extends Contract<SqlStorage>>(json: unknown): TContract;
+  validateContract<TContract extends Contract<SqlStorage>>(contract: TContract): TContract;
+}
+
+/** Validates the contracts of MySQL, or of a target that extends it, once per contract and target. */
+export function createMysqlContractValidation(targetId: string): MysqlContractValidation {
   const validator = `${targetId}@${version}`;
   return {
     contractFromJson<TContract extends Contract<SqlStorage>>(json: unknown): TContract {
@@ -23,7 +28,7 @@ export function mysqlContractValidation(targetId: string) {
   };
 }
 
-const mysqlValidation = mysqlContractValidation(mysqlTarget.targetId);
+const mysqlValidation = createMysqlContractValidation(mysqlTarget.targetId);
 
 /**
  * Validates an emitted MySQL `contract.json` and returns it as the contract type the application

@@ -148,6 +148,7 @@
     "./target/data-types": "./dist/target__data-types.mjs",
     "./target/ddl": "./dist/target__ddl.mjs",
     "./target/default-normalizer": "./dist/target__default-normalizer.mjs",
+    "./target/descriptor-meta-runtime": "./dist/target__descriptor-meta-runtime.mjs",
     "./target/errors": "./dist/target__errors.mjs",
     "./target/marker-lock": "./dist/target__marker-lock.mjs",
     "./target/migration": "./dist/target__migration.mjs",

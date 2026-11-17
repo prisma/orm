@@ -6,19 +6,24 @@ import {
   DeleteAst,
   InsertAst,
   InsertOnConflict,
+  JsonArrayAggExpr,
+  NativeJsonValueProjection,
+  OrderByItem,
   ParamRef,
   ProjectionItem,
   SelectAst,
   TableSource,
   UpdateAst,
 } from '@internal/sql-relational-core/ast';
+import { mariadbTargetDescriptorMetaRuntime } from '@internal/target-mariadb/descriptor-meta-runtime';
 import { createMysqlBuiltinCodecLookup } from '@internal/target-mysql/codecs';
+import { mysqlTargetDescriptorMetaRuntime } from '@internal/target-mysql/descriptor-meta-runtime';
 import { describe, expect, it } from 'vitest';
 import { MariadbSqlRenderer } from '../src/core/sql-renderer';
 
 const codecs = createMysqlBuiltinCodecLookup();
-const mariadb = new MariadbSqlRenderer(codecs);
-const mysql = new MysqlSqlRenderer(codecs);
+const mariadb = new MariadbSqlRenderer(codecs, mariadbTargetDescriptorMetaRuntime);
+const mysql = new MysqlSqlRenderer(codecs, mysqlTargetDescriptorMetaRuntime);
 const sqlOf = (ast: AnyQueryAst) => mariadb.render(ast, undefined).sql;
 
 const upsertInto = (rows: number) =>
@@ -122,7 +127,8 @@ describe('MariaDB refusals', () => {
         meta: { target: 'mariadb', feature: 'returning' },
       },
       update: {
-        message: 'MariaDB cannot return the rows an update writes; it has no RETURNING',
+        message:
+          'MariaDB has no UPDATE … RETURNING, so the ORM reads updated rows back with a select',
         meta: { target: 'mariadb', feature: 'returning' },
       },
       delete: {
@@ -143,6 +149,23 @@ describe('MariaDB refusals', () => {
     ).toEqual({
       message: 'MariaDB has no DISTINCT ON',
       meta: { target: 'mariadb', feature: 'distinct-on' },
+    });
+  });
+
+  it('refuses an ordered JSON array, which it would write with a hint MariaDB ignores and a cast MariaDB lacks', () => {
+    const titles = ColumnRef.of('rows', 'title');
+    const ordered = SelectAst.from(TableSource.named('rows')).withProjection([
+      ProjectionItem.of(
+        'v',
+        JsonArrayAggExpr.of(new NativeJsonValueProjection(titles), 'null', [
+          OrderByItem.asc(titles),
+        ]),
+      ),
+    ]);
+    expect(refusalOf(ordered)).toEqual({
+      message:
+        'The MariaDB adapter does not build an ordered JSON array in SQL; the ORM loads includes with one query per relation',
+      meta: { target: 'mariadb', feature: 'ordered-json-array' },
     });
   });
 });

@@ -6,6 +6,7 @@ export {
   default,
   type MysqlClient,
   type MysqlClientComponents,
+  type MysqlClientFactory,
   type MysqlOptions,
   type MysqlOptionsBase,
   type MysqlOrm,

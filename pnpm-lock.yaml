@@ -4437,6 +4437,9 @@ importers:
       '@internal/sql-runtime':
         specifier: workspace:8.0.0-rc.24
         version: link:../../../../2-sql-family/5-runtime
+      '@internal/target-mariadb':
+        specifier: workspace:8.0.0-rc.24
+        version: link:../1-target
       '@internal/target-mysql':
         specifier: workspace:8.0.0-rc.24
         version: link:../../1-mysql/1-target
@@ -4450,9 +4453,6 @@ importers:
       '@internal/sql-schema-ir':
         specifier: workspace:8.0.0-rc.24
         version: link:../../../../2-sql-family/1-core/schema-ir
-      '@internal/target-mariadb':
-        specifier: workspace:8.0.0-rc.24
-        version: link:../1-target
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.24
         version: link:../../../../../test/utils
@@ -4480,6 +4480,9 @@ importers:
       '@internal/framework-components':
         specifier: workspace:8.0.0-rc.24
         version: link:../../../../1-framework/1-core/framework-components
+      '@internal/target-mariadb':
+        specifier: workspace:8.0.0-rc.24
+        version: link:../1-target
     devDependencies:
       '@internal/sql-contract':
         specifier: workspace:8.0.0-rc.24

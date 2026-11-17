@@ -27,10 +27,9 @@ function markerQuery(queryable: SqlQueryable): MarkerQuery {
   };
 }
 
-/** What a database that extends MySQL changes in the runtime adapter: its target id, its profile id and capabilities, and the renderer that writes its SQL. */
+/** What a target that extends MySQL changes in the runtime adapter: its target id, its capabilities, and the renderer that writes its SQL. The profile id is `<targetId>/default@1`. */
 export interface MysqlAdapterOptions<TargetId extends string> {
   readonly targetId: TargetId;
-  readonly profileId: string;
   readonly capabilities: AdapterProfile<TargetId>['capabilities'];
   readonly renderer: MysqlSqlRenderer;
 }
@@ -47,7 +46,7 @@ class MysqlAdapterImpl<TargetId extends string>
     this.targetId = options.targetId;
     this.#renderer = options.renderer;
     this.profile = Object.freeze({
-      id: options.profileId,
+      id: `${options.targetId}/default@1`,
       target: options.targetId,
       capabilities: options.capabilities,
       readMarker: (queryable: SqlQueryable) =>
@@ -67,7 +66,7 @@ class MysqlAdapterImpl<TargetId extends string>
   }
 }
 
-/** The runtime adapter of MySQL, or of a database that extends it: it lowers queries with the renderer it is given and reads the marker the control tables hold. */
+/** The runtime adapter of MySQL, or of a target that extends it: it lowers queries with the renderer it is given and reads the marker the control tables hold. */
 export function createMysqlAdapter<TargetId extends string>(
   options: MysqlAdapterOptions<TargetId>,
 ) {

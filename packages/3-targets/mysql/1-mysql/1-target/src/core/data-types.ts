@@ -307,7 +307,7 @@ export function renderMysqlEnumType(values: readonly string[] | undefined): stri
   if (values === undefined || values.length === 0) {
     throw mysqlError(
       'CONTRACT.TYPE_PARAMS_INVALID',
-      'A MySQL enum column type needs at least one member.',
+      'An enum column type on MySQL or MariaDB needs at least one member.',
       {
         why: 'A native enum column is written with its members, and this column has none.',
         fix: 'Type the column with a PSL enum or an enumType() that declares its members.',

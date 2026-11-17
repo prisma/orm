@@ -1231,6 +1231,12 @@
       "plane": "shared"
     },
     {
+      "glob": "packages/3-targets/mysql/1-mysql/1-target/src/exports/descriptor-meta-runtime.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-targets/mysql/1-mysql/1-target/src/exports/codec-descriptor.ts",
       "domain": "extensions",
       "layer": "targets",
@@ -1505,6 +1511,12 @@
       "domain": "extensions",
       "layer": "targets",
       "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/1-target/src/exports/descriptor-meta-runtime.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "shared"
     },
     {
       "glob": "packages/3-targets/mysql/2-mariadb/1-target/src/exports/migration.ts",

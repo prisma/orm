@@ -5,35 +5,38 @@ import { mysqlTargetDescriptorMetaRuntime } from '../descriptor-meta-runtime';
 export interface MysqlRuntimeTargetInstance<TargetId extends string = 'mysql'>
   extends RuntimeTargetInstance<'sql', TargetId> {}
 
-/** The runtime metadata of MySQL, or of a database that extends it: MySQL's, under its own target id and display name. */
-export type MysqlRuntimeTargetMeta<TargetId extends string> = Omit<
-  typeof mysqlTargetDescriptorMetaRuntime,
-  'targetId' | 'id' | 'displayName'
-> & {
-  readonly targetId: TargetId;
-  readonly id: string;
-  readonly displayName: string;
-};
-
+/** The runtime target descriptor of MySQL, or of a target that extends it, with the name its messages show. */
 export type MysqlRuntimeTargetDescriptor<TargetId extends string = 'mysql'> =
-  SqlRuntimeTargetDescriptor<TargetId, MysqlRuntimeTargetInstance<TargetId>> &
-    MysqlRuntimeTargetMeta<TargetId>;
+  SqlRuntimeTargetDescriptor<TargetId, MysqlRuntimeTargetInstance<TargetId>> & {
+    readonly displayName: string;
+  };
 
-/** The runtime target descriptor of MySQL, or of a database that extends it, built from its metadata. */
+/** What the runtime target descriptor is built from: everything but what the factory supplies. */
+export type MysqlRuntimeTargetMeta<TargetId extends string> = Omit<
+  MysqlRuntimeTargetDescriptor<TargetId>,
+  'codecs' | 'create'
+>;
+
+export interface MysqlRuntimeTargetOptions<TargetId extends string> {
+  readonly descriptorMeta: MysqlRuntimeTargetMeta<TargetId>;
+}
+
+/** The runtime target descriptor of MySQL, or of a target that extends it. */
 export function createMysqlRuntimeTargetDescriptor<TargetId extends string>(
-  meta: MysqlRuntimeTargetMeta<TargetId>,
+  options: MysqlRuntimeTargetOptions<TargetId>,
 ): MysqlRuntimeTargetDescriptor<TargetId> {
+  const { descriptorMeta } = options;
   return {
-    ...meta,
+    ...descriptorMeta,
     codecs: () => [],
     create(): MysqlRuntimeTargetInstance<TargetId> {
-      return { familyId: 'sql', targetId: meta.targetId };
+      return { familyId: 'sql', targetId: descriptorMeta.targetId };
     },
   };
 }
 
-const mysqlRuntimeTargetDescriptor = createMysqlRuntimeTargetDescriptor(
-  mysqlTargetDescriptorMetaRuntime,
-);
+const mysqlRuntimeTargetDescriptor = createMysqlRuntimeTargetDescriptor({
+  descriptorMeta: mysqlTargetDescriptorMetaRuntime,
+});
 
 export default mysqlRuntimeTargetDescriptor;

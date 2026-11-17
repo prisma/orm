@@ -1,6 +1,5 @@
 export {
-  type MysqlContract,
   MysqlSqlRenderer,
-  type RenderedDatabase,
+  type ProposedRow,
   type ReturningStatement,
 } from '../core/sql-renderer';

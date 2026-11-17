@@ -7,7 +7,8 @@ import {
   type MysqlCodecRegistry,
   mysqlCodecDescriptorRegistry,
 } from '@internal/target-mysql/codecs';
-import { mysqlNowGenerators } from '@internal/target-mysql/runtime';
+import { mysqlTargetDescriptorMetaRuntime } from '@internal/target-mysql/descriptor-meta-runtime';
+import { type MysqlRuntimeTargetMeta, mysqlNowGenerators } from '@internal/target-mysql/runtime';
 import { mysqlAdapterDescriptorMeta } from '../descriptor-meta';
 import { mysqlRawCodecInferer } from '../raw-codec-inferer';
 import { MysqlSqlRenderer } from '../sql-renderer';
@@ -33,58 +34,52 @@ export type MysqlRuntimeAdapterInstance<TargetId extends string = 'mysql'> = Run
 > &
   ReturnType<typeof createMysqlAdapter<TargetId>>;
 
-type MysqlAdapterTypes = (typeof mysqlAdapterDescriptorMeta)['types'];
+export type MysqlRuntimeAdapterDescriptor<TargetId extends string = 'mysql'> =
+  SqlRuntimeAdapterDescriptor<TargetId, MysqlRuntimeAdapterInstance<TargetId>>;
 
-/** The adapter metadata of MySQL, or of a database that extends it: MySQL's, under its own target id, id, capabilities and codec-type import. */
-export type MysqlRuntimeAdapterMeta<TargetId extends string> = Omit<
-  typeof mysqlAdapterDescriptorMeta,
-  'targetId' | 'id' | 'capabilities' | 'types'
-> & {
-  readonly targetId: TargetId;
-  readonly id: string;
-  readonly capabilities: Record<string, Record<string, boolean>>;
-  readonly types: Omit<MysqlAdapterTypes, 'codecTypes'> & {
-    readonly codecTypes: Omit<MysqlAdapterTypes['codecTypes'], 'import'> & {
-      readonly import: { readonly package: string; readonly named: string; readonly alias: string };
-    };
-  };
-};
-
-/** What a database that extends MySQL changes in the runtime adapter descriptor. */
+/** What a target that extends MySQL changes in the runtime adapter descriptor. */
 export interface MysqlRuntimeAdapterOptions<TargetId extends string> {
-  /** The adapter metadata: its target id and the capabilities it reports. */
-  readonly meta: MysqlRuntimeAdapterMeta<TargetId>;
-  /** The id of the adapter profile, whose `target` is the target id. */
-  readonly profileId: string;
-  /** Builds the renderer that writes the database's SQL. */
-  readonly renderer: (codecs: MysqlCodecRegistry) => MysqlSqlRenderer;
+  /** The adapter's metadata: everything but what the factory supplies. */
+  readonly descriptorMeta: Omit<
+    MysqlRuntimeAdapterDescriptor<TargetId>,
+    'codecs' | 'mutationDefaultGenerators' | 'rawCodecInferer' | 'create'
+  >;
+  /** The target's runtime metadata, whose id and display name the renderer's errors show. */
+  readonly target: Pick<MysqlRuntimeTargetMeta<string>, 'targetId' | 'displayName'>;
+  /** Builds the renderer that writes the target's SQL. */
+  readonly renderer: (
+    codecs: MysqlCodecRegistry,
+    target: Pick<MysqlRuntimeTargetMeta<string>, 'targetId' | 'displayName'>,
+  ) => MysqlSqlRenderer;
 }
 
-/** The runtime adapter descriptor of MySQL, or of a database that extends it. */
+/** The runtime adapter descriptor of MySQL, or of a target that extends it. Its profile id is `<targetId>/default@1`. */
 export function createMysqlRuntimeAdapterDescriptor<TargetId extends string>(
   options: MysqlRuntimeAdapterOptions<TargetId>,
-): SqlRuntimeAdapterDescriptor<TargetId, MysqlRuntimeAdapterInstance<TargetId>> {
-  const { meta } = options;
+): MysqlRuntimeAdapterDescriptor<TargetId> {
+  const { descriptorMeta, target } = options;
   return {
-    ...meta,
+    ...descriptorMeta,
     codecs: () => Array.from(mysqlCodecDescriptorRegistry.values()),
     mutationDefaultGenerators: createMysqlMutationDefaultGenerators,
     rawCodecInferer: mysqlRawCodecInferer,
     create(stack): MysqlRuntimeAdapterInstance<TargetId> {
       return createMysqlAdapter({
-        targetId: meta.targetId,
-        profileId: options.profileId,
-        capabilities: meta.capabilities,
-        renderer: options.renderer(assembleMysqlCodecRegistry(stack.target, stack.extensions)),
+        targetId: descriptorMeta.targetId,
+        capabilities: descriptorMeta.capabilities ?? {},
+        renderer: options.renderer(
+          assembleMysqlCodecRegistry(stack.target, stack.extensions),
+          target,
+        ),
       });
     },
   };
 }
 
 const mysqlRuntimeAdapterDescriptor = createMysqlRuntimeAdapterDescriptor({
-  meta: mysqlAdapterDescriptorMeta,
-  profileId: 'mysql/default@1',
-  renderer: (codecs) => new MysqlSqlRenderer(codecs),
+  descriptorMeta: mysqlAdapterDescriptorMeta,
+  target: mysqlTargetDescriptorMetaRuntime,
+  renderer: (codecs, target) => new MysqlSqlRenderer(codecs, target),
 });
 
 export default mysqlRuntimeAdapterDescriptor;

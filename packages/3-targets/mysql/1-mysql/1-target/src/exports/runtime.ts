@@ -1,5 +1,4 @@
 export { mysqlNowGenerators } from '../core/date-time-now-generators';
-export { mysqlTargetDescriptorMetaRuntime } from '../core/descriptor-meta-runtime';
 export { MysqlContractSerializer } from '../core/mysql-contract-serializer';
 export {
   createMysqlRuntimeTargetDescriptor,
@@ -7,6 +6,7 @@ export {
   type MysqlRuntimeTargetDescriptor,
   type MysqlRuntimeTargetInstance,
   type MysqlRuntimeTargetMeta,
+  type MysqlRuntimeTargetOptions,
 } from '../core/runtime/runtime-target';
 export {
   type MysqlIsolationLevel,

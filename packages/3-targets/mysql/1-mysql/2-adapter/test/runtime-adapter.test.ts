@@ -1,15 +1,17 @@
 import type { SqlExecuteRequest, SqlQueryable } from '@internal/sql-relational-core/ast';
 import {
+  BinaryExpr,
   ColumnRef,
+  JoinAst,
   ProjectionItem,
   SelectAst,
   TableSource,
 } from '@internal/sql-relational-core/ast';
 import { createSqlExecutionStack } from '@internal/sql-runtime';
 import { MysqlCreateTable } from '@internal/target-mysql/ddl';
+import { mysqlTargetDescriptorMetaRuntime } from '@internal/target-mysql/descriptor-meta-runtime';
 import mysqlRuntimeTarget, {
   createMysqlRuntimeTargetDescriptor,
-  mysqlTargetDescriptorMetaRuntime,
 } from '@internal/target-mysql/runtime';
 import { describe, expect, it } from 'vitest';
 import { mysqlAdapterCapabilities } from '../src/core/capabilities';
@@ -79,25 +81,35 @@ describe('the MySQL runtime adapter', () => {
     });
   });
 
-  it('builds the adapter of a database that extends MySQL, whose profile names its target', () => {
+  it('builds the adapter of a target that extends MySQL, whose profile id and target and whose errors name it', () => {
+    const other = { targetId: 'other', displayName: 'Other' } as const;
     const descriptor = createMysqlRuntimeAdapterDescriptor({
-      meta: { ...mysqlAdapterDescriptorMeta, targetId: 'other', id: 'other', capabilities: {} },
-      profileId: 'other/default@1',
-      renderer: (codecs) =>
-        new MysqlSqlRenderer(codecs, { targetId: 'other', displayName: 'Other' }),
+      descriptorMeta: {
+        ...mysqlAdapterDescriptorMeta,
+        targetId: 'other',
+        id: 'other',
+        capabilities: {},
+      },
+      target: other,
+      renderer: (codecs, target) => new MysqlSqlRenderer(codecs, target),
     });
     const adapter = descriptor.create(
       createSqlExecutionStack({
         target: createMysqlRuntimeTargetDescriptor({
-          ...mysqlTargetDescriptorMetaRuntime,
-          targetId: 'other',
-          id: 'other',
-          displayName: 'Other',
+          descriptorMeta: { ...mysqlTargetDescriptorMetaRuntime, ...other, id: 'other' },
         }),
         adapter: descriptor,
         extensions: [],
       }),
     );
+    const fullJoin = SelectAst.from(TableSource.named('user'))
+      .withProjection([ProjectionItem.of('id', ColumnRef.of('user', 'id'))])
+      .withJoins([
+        JoinAst.full(
+          TableSource.named('post'),
+          BinaryExpr.eq(ColumnRef.of('user', 'id'), ColumnRef.of('post', 'userId')),
+        ),
+      ]);
     expect({
       targetId: adapter.targetId,
       profile: {
@@ -109,6 +121,12 @@ describe('the MySQL runtime adapter', () => {
       targetId: 'other',
       profile: { id: 'other/default@1', target: 'other', capabilities: {} },
     });
+    expect(() => adapter.lower(fullJoin, { contract: undefined as never })).toThrow(
+      expect.objectContaining({
+        message: 'Other has no FULL JOIN',
+        meta: { target: 'other', feature: 'full-join' },
+      }),
+    );
   });
 
   it('refuses to lower DDL, which belongs to the control adapter', () => {

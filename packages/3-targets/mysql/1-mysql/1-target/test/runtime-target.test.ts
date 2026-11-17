@@ -21,12 +21,14 @@ describe('the MySQL runtime target descriptor', () => {
     });
   });
 
-  it('builds the runtime target of a database that extends MySQL from its metadata', () => {
+  it('builds the runtime target of a target that extends MySQL from its metadata', () => {
     const target = createMysqlRuntimeTargetDescriptor({
-      ...mysqlTargetDescriptorMetaRuntime,
-      targetId: 'other',
-      id: 'other',
-      displayName: 'Other',
+      descriptorMeta: {
+        ...mysqlTargetDescriptorMetaRuntime,
+        targetId: 'other',
+        id: 'other',
+        displayName: 'Other',
+      },
     });
     expect({
       targetId: target.targetId,

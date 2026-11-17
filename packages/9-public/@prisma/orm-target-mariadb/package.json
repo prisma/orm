@@ -46,6 +46,7 @@
     "./driver/runtime": "./dist/driver__runtime.mjs",
     "./target": "./dist/target.mjs",
     "./target/control": "./dist/target__control.mjs",
+    "./target/descriptor-meta-runtime": "./dist/target__descriptor-meta-runtime.mjs",
     "./target/migration": "./dist/target__migration.mjs",
     "./target/pack": "./dist/target__pack.mjs",
     "./target/runtime": "./dist/target__runtime.mjs",

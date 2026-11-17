@@ -13,6 +13,7 @@ export default defineConfig({
     'src/exports/data-types.ts',
     'src/exports/ddl.ts',
     'src/exports/default-normalizer.ts',
+    'src/exports/descriptor-meta-runtime.ts',
     'src/exports/errors.ts',
     'src/exports/marker-lock.ts',
     'src/exports/migration.ts',

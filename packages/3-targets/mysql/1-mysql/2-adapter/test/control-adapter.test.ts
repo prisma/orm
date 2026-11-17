@@ -241,11 +241,11 @@ describe('MysqlControlAdapter', () => {
     const refusal = { code: 'RUNTIME.DDL_UNSUPPORTED', meta: { surface: 'control-adapter' } };
     await expect(adapter.lowerToExecuteRequest(new OtherDdl())).rejects.toMatchObject({
       ...refusal,
-      message: 'The MySQL control adapter cannot lower the DDL node "other".',
+      message: 'The MySQL and MariaDB control adapter cannot lower the DDL node "other".',
     });
     await expect(adapter.lowerToExecuteRequest(new ForeignDdl())).rejects.toMatchObject({
       ...refusal,
-      message: 'The MySQL control adapter cannot lower the DDL node "drop-type".',
+      message: 'The MySQL and MariaDB control adapter cannot lower the DDL node "drop-type".',
     });
   });
 

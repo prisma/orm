@@ -4,6 +4,8 @@ import type {
   ControlDriverDescriptor,
 } from '@internal/framework-components/control';
 import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
+import { mysqlTargetDescriptorMetaRuntime } from '@internal/target-mysql/descriptor-meta-runtime';
+import type { MysqlRuntimeTargetMeta } from '@internal/target-mysql/runtime';
 import { blindCast } from '@internal/utils/casts';
 import { redactDatabaseUrl } from '@internal/utils/redact-db-url';
 import { type Connection, createConnection } from 'mariadb';
@@ -74,15 +76,20 @@ class MysqlControlDriverFor<TargetId extends string> implements SqlControlDriver
 /** A MySQL connection for the control plane. */
 export class MysqlControlDriver extends MysqlControlDriverFor<'mysql'> {
   constructor(connection: Connection) {
-    super(connection, 'mysql', 'MySQL');
+    super(connection, 'mysql', mysqlTargetDescriptorMetaRuntime.displayName);
   }
 }
 
-/** The control driver descriptor of MySQL, or of a target that extends it, whose drivers carry `targetId`. */
+export interface MysqlControlDriverOptions<TargetId extends string> {
+  /** The target's runtime metadata: its drivers carry its id and name it by its display name in their errors. */
+  readonly target: Pick<MysqlRuntimeTargetMeta<TargetId>, 'targetId' | 'displayName'>;
+}
+
+/** The control driver descriptor of MySQL, or of a target that extends it. */
 export function createMysqlControlDriverDescriptor<TargetId extends string>(
-  targetId: TargetId,
-  displayName: string,
+  options: MysqlControlDriverOptions<TargetId>,
 ): ControlDriverDescriptor<'sql', TargetId, SqlControlDriverInstance<TargetId>> {
+  const { targetId, displayName } = options.target;
   return {
     ...mysqlDriverDescriptorMetaFor(targetId),
     create: (url, options) =>
@@ -131,7 +138,12 @@ async function connectControlDriver<Driver>(
 const mysqlDriverDescriptor: ControlDriverDescriptor<'sql', 'mysql', MysqlControlDriver> = {
   ...mysqlDriverDescriptorMetaFor('mysql'),
   create: (url, options) =>
-    connectControlDriver(url, options, 'MySQL', (connection) => new MysqlControlDriver(connection)),
+    connectControlDriver(
+      url,
+      options,
+      mysqlTargetDescriptorMetaRuntime.displayName,
+      (connection) => new MysqlControlDriver(connection),
+    ),
 };
 
 export default mysqlDriverDescriptor;

@@ -81,7 +81,7 @@ Resolved: MariaDB sessions no longer set an isolation level at all, as MySQL ses
 
 ## Errors from MySQL's shared code say `target: 'mysql'` on MariaDB (slice 6a, 2026-11-06) — resolved in slice 6b-2
 
-Resolved: errors raised by the codecs, the SQL lexer, the codec registry and the driver's parameter checks drop `meta.target`, and their messages name both databases or neither. The renderer's errors carry the target id and display name it is built with (`MysqlSqlRenderer` takes them; `MariadbSqlRenderer` passes MariaDB's), and the driver and facade messages take the display name they are built with.
+Resolved: errors raised by the codecs, the SQL lexer, the codec registry and the driver's parameter checks drop `meta.target`. Every error message in MySQL's target, adapter, driver and facade either takes the display name of the target it runs for (the renderer, the driver, the facade) or names both MySQL and MariaDB (the shared target and the control adapter); `1-target/test/messages-name-both-databases.test.ts` fails on an error in the target that names MySQL alone. The PSL type documentation (`type-constructors.ts`) still says, for example, "stored as MySQL int", which describes the type the column has on either server.
 
 ## A key column whose codec cannot reproduce the stored value (slice 6b-1 design review, 2026-11-14)
 

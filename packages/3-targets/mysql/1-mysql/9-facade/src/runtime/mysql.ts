@@ -53,7 +53,7 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { mysqlClientError } from '../errors';
-import { mysqlContractValidation } from '../static/contract-from-json';
+import { createMysqlContractValidation } from '../static/contract-from-json';
 import { buildMysqlStaticContext, type MysqlStaticContext } from '../static/mysql-static';
 import { resolveMysqlBinding, resolveOptionalMysqlBinding } from './binding';
 import {
@@ -216,10 +216,10 @@ export type MysqlOptions<
   readonly url?: string;
 };
 
-/** The URL schemes `mysql()` accepts, which a database that speaks MySQL's protocol accepts too. */
+/** The URL schemes `mysql()` accepts, which a target that extends MySQL accepts too. */
 export const mysqlUrlSchemes: readonly string[] = ['mysql'];
 
-/** The components a client of MySQL, or of a database that extends it, is built from, and the URL schemes it accepts. The client names the database by the target's display name. */
+/** The components a client of MySQL, or of a target that extends it, is built from, and the URL schemes it accepts. The client names the database by the target's display name. */
 export interface MysqlClientComponents<
   TargetId extends string,
   TAdapterInstance extends
@@ -237,29 +237,36 @@ export interface MysqlClientComponents<
   readonly urlSchemes: readonly string[];
 }
 
+/** A client function of `TargetId`: `mysql`, or the function of a target that extends MySQL. */
+export type MysqlClientFactory<TargetId extends string> = <
+  TContract extends Contract<SqlStorage>,
+  TCollections extends CollectionClasses = NoCollectionClasses,
+>(
+  options: MysqlOptions<TContract, TCollections, TargetId>,
+) => MysqlClient<TContract, TCollections, TargetId>;
+
 /**
- * Builds the client function of MySQL, or of a database that extends it, from its components. `mysql()` is this applied to MySQL's.
+ * Builds the client function of MySQL, or of a target that extends it, from its components. `mysql()` is this applied to MySQL's.
  */
 export function createMysqlClient<
   TargetId extends string,
   TAdapterInstance extends SqlRuntimeAdapterInstance<TargetId>,
->(components: MysqlClientComponents<TargetId, TAdapterInstance>) {
+>(components: MysqlClientComponents<TargetId, TAdapterInstance>): MysqlClientFactory<TargetId> {
   const { target, urlSchemes } = components;
-  const database = { targetId: target.targetId, displayName: target.displayName, urlSchemes };
-  const { validateContract } = mysqlContractValidation(target.targetId);
+  const { validateContract } = createMysqlContractValidation(target.targetId);
   return function createClient<
     TContract extends Contract<SqlStorage>,
     TCollections extends CollectionClasses = NoCollectionClasses,
   >(
     options: MysqlOptions<TContract, TCollections, TargetId>,
   ): MysqlClient<TContract, TCollections, TargetId> {
-    const stream = validateStreamOption(options.stream, database.targetId);
+    const stream = validateStreamOption(options.stream, target.targetId);
     const transactionOptions = validateTransactionOptions(
       options.transactionOptions,
-      database.targetId,
+      target.targetId,
     );
     const contract = validateContract(options.contract);
-    let binding = resolveOptionalMysqlBinding(options, database);
+    let binding = resolveOptionalMysqlBinding(options, target, urlSchemes);
 
     const stack = createSqlExecutionStack({
       target: components.target,
@@ -294,13 +301,13 @@ export function createMysqlClient<
     let ownedDispose: (() => Promise<void>) | undefined;
 
     const closedError = () =>
-      mysqlClientError('DRIVER.NOT_CONNECTED', `${database.displayName} client is closed`, {
-        meta: { extension: database.targetId },
+      mysqlClientError('DRIVER.NOT_CONNECTED', `${target.displayName} client is closed`, {
+        meta: { extension: target.targetId },
       });
 
     const connectDriver = async (resolvedBinding: MysqlBinding): Promise<void> => {
       if (driverConnected) return;
-      if (!runtimeDriver) throw new InternalError(`${database.displayName} runtime driver missing`);
+      if (!runtimeDriver) throw new InternalError(`${target.displayName} runtime driver missing`);
       if (connectPromise) return connectPromise;
       connectPromise = runtimeDriver
         .connect(resolvedBinding)
@@ -398,11 +405,11 @@ export function createMysqlClient<
           if (bindingInput !== undefined) {
             throw mysqlClientError(
               'DRIVER.ALREADY_CONNECTED',
-              `${database.displayName} client is already bound`,
+              `${target.displayName} client is already bound`,
               {
                 why: 'connect() was given options after the client was bound to a database.',
                 fix: 'Call connect() without options, or create a new client for another database.',
-                meta: { extension: database.targetId },
+                meta: { extension: target.targetId },
               },
             );
           }
@@ -415,14 +422,14 @@ export function createMysqlClient<
         backgroundConnectError = undefined;
 
         if (bindingInput !== undefined) {
-          binding = resolveMysqlBinding(bindingInput, database);
+          binding = resolveMysqlBinding(bindingInput, target, urlSchemes);
         }
 
         if (binding === undefined) {
           throw mysqlClientError(
             'RUNTIME.BINDING_MISSING',
-            `${database.displayName} binding not configured. Pass url to ${database.targetId}(...) or call db.connect({ url }).`,
-            { meta: { extension: database.targetId } },
+            `${target.displayName} binding not configured. Pass url to ${target.targetId}(...) or call db.connect({ url }).`,
+            { meta: { extension: target.targetId } },
           );
         }
 
@@ -444,7 +451,7 @@ export function createMysqlClient<
         fn: (tx: MysqlTransactionContext<TContract, TCollections>) => PromiseLike<R>,
         localOptions?: MysqlTransactionOptions,
       ): Promise<R> {
-        const local = validateTransactionOptions(localOptions, database.targetId);
+        const local = validateTransactionOptions(localOptions, target.targetId);
         const isolationLevel =
           local?.isolationLevel !== undefined
             ? local.isolationLevel
@@ -508,7 +515,7 @@ export function createMysqlClient<
  * export const db = mysql({ contract, url: process.env.DATABASE_URL });
  * ```
  */
-const mysql = createMysqlClient({
+const mysql: MysqlClientFactory<MysqlTargetId> = createMysqlClient({
   target: mysqlTarget,
   adapter: mysqlAdapter,
   driver: mysqlDriver,

@@ -42,10 +42,14 @@ import {
   WindowFuncExpr,
 } from '@internal/sql-relational-core/ast';
 import { createMysqlBuiltinCodecLookup } from '@internal/target-mysql/codecs';
+import { mysqlTargetDescriptorMetaRuntime } from '@internal/target-mysql/descriptor-meta-runtime';
 import { describe, expect, it } from 'vitest';
 import { MysqlSqlRenderer } from '../src/core/sql-renderer';
 
-const renderer = new MysqlSqlRenderer(createMysqlBuiltinCodecLookup());
+const renderer = new MysqlSqlRenderer(
+  createMysqlBuiltinCodecLookup(),
+  mysqlTargetDescriptorMetaRuntime,
+);
 /** Renders `ast` and records what it rendered as a snapshot, so every input below pins the SQL MySQL is sent. */
 const lower = (ast: AnyQueryAst) => {
   const lowered = renderer.render(ast, undefined);

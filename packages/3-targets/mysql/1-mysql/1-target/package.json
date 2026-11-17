@@ -66,6 +66,7 @@
     "./data-types": "./dist/data-types.mjs",
     "./ddl": "./dist/ddl.mjs",
     "./default-normalizer": "./dist/default-normalizer.mjs",
+    "./descriptor-meta-runtime": "./dist/descriptor-meta-runtime.mjs",
     "./errors": "./dist/errors.mjs",
     "./marker-lock": "./dist/marker-lock.mjs",
     "./migration": "./dist/migration.mjs",

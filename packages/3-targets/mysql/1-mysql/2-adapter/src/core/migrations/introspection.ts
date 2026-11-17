@@ -103,7 +103,7 @@ function referentialAction(rule: string): SqlReferentialAction | undefined {
   if (action === undefined) {
     throw structuredError(
       'CONTRACT.INTROSPECTION_UNSUPPORTED',
-      `Unknown MySQL referential action rule: "${rule}". Expected one of: NO ACTION, RESTRICT, CASCADE, SET NULL, SET DEFAULT.`,
+      `Unknown referential action rule in the MySQL or MariaDB catalog: "${rule}". Expected one of: NO ACTION, RESTRICT, CASCADE, SET NULL, SET DEFAULT.`,
       { meta: { rule } },
     );
   }

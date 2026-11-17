@@ -126,7 +126,7 @@ describe('MySQL codecs read the text MySQL sends', () => {
   });
 
   it('refuses text that names no date and time, and an invalid Date', () => {
-    expect(() => decodeMysqlDatetime('yesterday')).toThrow(/as MySQL prints it/);
+    expect(() => decodeMysqlDatetime('yesterday')).toThrow(/as MySQL and MariaDB print it/);
     expect(() => encodeMysqlDatetime(new Date('nope'))).toThrow(/valid Date/);
   });
 
@@ -177,11 +177,11 @@ describe('MySQL codec descriptors', () => {
   it('refuses a descriptor that is not a MySQL one, and a codec id given twice', () => {
     expect(isMysqlCodecDescriptor({ codecId: 'x' })).toBe(false);
     expect(() => buildMysqlCodecDescriptorRegistry([{ codecId: 'pg/int4@1' }])).toThrow(
-      /not a valid MySQL codec descriptor/,
+      /is not a codec descriptor of the MySQL and MariaDB targets/,
     );
     expect(() =>
       buildMysqlCodecDescriptorRegistry([mysqlIntDescriptor, mysqlIntDescriptor]),
-    ).toThrow(/Duplicate MySQL codec descriptor id 'mysql\/int@1'/);
+    ).toThrow(/Duplicate codec descriptor id 'mysql\/int@1'/);
   });
 });
 
