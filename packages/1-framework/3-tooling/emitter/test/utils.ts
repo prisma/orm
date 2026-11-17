@@ -48,7 +48,7 @@ const SQL_EMIT_HOOKS = {
   sortStorage: sqlSortStorage,
 } satisfies Pick<CanonicalizeContractOptions, 'shouldPreserveEmpty' | 'sortStorage'>;
 
-export const TEST_TYPES_MODULE = '@acme/orm-db/generated-types';
+export const TEST_TYPES_MODULE = '@acme/orm-db/contract-types';
 
 /**
  * Tests author JSON-clean contracts directly, so the canonicalisation

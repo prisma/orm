@@ -1,9 +1,9 @@
 export const workspaceTypesModule = {
-  postgres: '@internal/postgres/generated-types',
-  sqlite: '@internal/sqlite/generated-types',
-  mysql: '@internal/mysql/generated-types',
-  mariadb: '@internal/mariadb/generated-types',
-  mongo: '@internal/mongo/generated-types',
+  postgres: '@internal/postgres/contract-types',
+  sqlite: '@internal/sqlite/contract-types',
+  mysql: '@internal/mysql/contract-types',
+  mariadb: '@internal/mariadb/contract-types',
+  mongo: '@internal/mongo/contract-types',
 } as const;
 
 export function workspaceTypesModuleFor(targetId: string): string {

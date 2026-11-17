@@ -2,7 +2,7 @@
 changes:
   - id: contract-types-import-from-the-target-package
     summary: |
-      A generated `contract.d.ts` imports all its framework, family and target types from one module of the target package, such as `@prisma/orm-postgres/generated-types`, and `contract.json` no longer records where an extension's types are imported from. Run `prisma contract emit` to regenerate both files.
+      A generated `contract.d.ts` imports all its framework, family and target types from one module of the target package, such as `@prisma/orm-postgres/contract-types`, and `contract.json` no longer records where an extension's types are imported from. Run `prisma contract emit` to regenerate both files.
     detection:
       glob: "**/contract.d.ts"
       matches:
@@ -46,7 +46,7 @@ Run `prisma contract emit` and commit the regenerated `contract.json` and `contr
 The generated `contract.d.ts` now has one import statement for its framework, family and target types:
 
 ```ts
-import type { CodecTypes as PgTypes, Contract as ContractType, ContractWithTypeMaps } from '@prisma/orm-postgres/generated-types';
+import type { CodecTypes as PgTypes, Contract as ContractType, ContractWithTypeMaps } from '@prisma/orm-postgres/contract-types';
 ```
 
 where it had several, from `@prisma/orm-postgres/contract/types`, `@prisma/orm-postgres/family-contract/types` and `@prisma/orm-postgres/target/codec-types`. Each extension's types still come from the extension's own package.
@@ -69,7 +69,7 @@ defineConfig({
   target,
   adapter,
   driver,
-  contract: { ...contractSource, typesModule: '#generated-types' },
+  contract: { ...contractSource, typesModule: '#contract-types' },
   migrations: { module: '@prisma/orm-target-postgres/target/migration' },
 })
 ```
@@ -77,7 +77,7 @@ defineConfig({
 - `contract.typesModule` names a module that exports the framework's contract types, the family's contract types and the target's codec and operation types. Write one in the application that re-exports them:
 
   ```ts
-  // src/generated-types.ts
+  // src/contract-types.ts
   export type * from '@prisma/orm-framework/contract/types';
   export type * from '@prisma/orm-family-sql/contract/types';
   export type * from '@prisma/orm-target-postgres/target/codec-types';
@@ -87,11 +87,11 @@ defineConfig({
   and give it a name private to the application, in `package.json`:
 
   ```json
-  { "imports": { "#generated-types": "./src/generated-types.ts" } }
+  { "imports": { "#contract-types": "./src/contract-types.ts" } }
   ```
 
 - `migrations.module` names the module that exports the migration base class and the target's operation helpers. For Postgres that is `@prisma/orm-target-postgres/target/migration`.
-- Neither may be empty, a path or a URL. `'./generated-types'` is refused when the config is loaded, because generated files are written into more than one folder and a relative path is right for at most one of them.
+- Neither may be empty, a path or a URL. `'./contract-types'` is refused when the config is loaded, because generated files are written into more than one folder and a relative path is right for at most one of them.
 - The application must depend directly on every package these modules import from. The target's and adapter's own types are imported from the target's package, such as `@prisma/orm-target-postgres`, so the application depends on that too.
 
 ## `control-api-takes-types-module`
@@ -103,7 +103,7 @@ await client.emit({ contractConfig: { source, output, typesModule } });
 await client.renderContractDts({ contract, typesModule });
 ```
 
-Take the value from the config: `defineConfig(...).contract.typesModule`. For an application on a target package it is that package's `generated-types` entrypoint, such as `'@prisma/orm-postgres/generated-types'`.
+Take the value from the config: `defineConfig(...).contract.typesModule`. For an application on a target package it is that package's `contract-types` entrypoint, such as `'@prisma/orm-postgres/contract-types'`.
 
 A script that calls the control API's contract emit, `migration new` or `migration plan` operations directly, from `@prisma/orm-toolchain/cli/control-api`, removes the `projectDir` option. The operations read the module names from the config they are given.
 

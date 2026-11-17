@@ -27,7 +27,7 @@ describe('defineConfig for MariaDB', () => {
     }).toEqual({
       family: sql,
       target: mariadb,
-      adapter: restateTypeDeclarations(mariadbAdapter, '@internal/mariadb/generated-types'),
+      adapter: restateTypeDeclarations(mariadbAdapter, '@internal/mariadb/contract-types'),
       driver: mariadbDriver,
       extensions: [],
       output: './prisma/contract.json',
@@ -66,13 +66,13 @@ describe('defineConfig for MariaDB', () => {
     );
   });
 
-  it('emits a PSL contract for target mariadb, with no returning or one-query include capability and typed by its generated-types module', async () => {
+  it('emits a PSL contract for target mariadb, with no returning or one-query include capability and typed by its contract-types module', async () => {
     const { contract, contractDts } = await emitFixture('example');
     expect({
       target: contract.target,
       capabilities: contract.capabilities,
       codecTypes:
-        /^import type \{[^}]*\bCodecTypes as MariadbTypes\b[^}]*\} from '@internal\/mariadb\/generated-types';$/m.test(
+        /^import type \{[^}]*\bCodecTypes as MariadbTypes\b[^}]*\} from '@internal\/mariadb\/contract-types';$/m.test(
           contractDts,
         ),
     }).toEqual({
@@ -93,11 +93,11 @@ describe('defineConfig for MariaDB', () => {
 });
 
 describe('the modules generated files import from', () => {
-  it('names its own generated-types and migration modules', () => {
+  it('names its own contract-types and migration modules', () => {
     const config = defineConfig({ contract: './prisma/contract.prisma' });
 
     expect([config.contract?.typesModule, config.migrations]).toEqual([
-      '@internal/mariadb/generated-types',
+      '@internal/mariadb/contract-types',
       { module: '@internal/mariadb/migration' },
     ]);
   });

@@ -60,8 +60,8 @@
   ],
   "exports": {
     "./config": "./dist/config.mjs",
+    "./contract-types": "./dist/contract-types.mjs",
     "./control": "./dist/control.mjs",
-    "./generated-types": "./dist/generated-types.mjs",
     "./migration": "./dist/migration.mjs",
     "./package.json": "./package.json"
   },

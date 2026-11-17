@@ -7,7 +7,7 @@ import {
   namespacedMongoStorageFromCollections,
 } from './fixtures/create-mongo-contract';
 
-const TYPES_MODULE = '@acme/orm-db/generated-types';
+const TYPES_MODULE = '@acme/orm-db/contract-types';
 
 const codecTypeImports: TypesImportSpec[] = [
   { package: TYPES_MODULE, named: 'CodecTypes', alias: 'MongoCodecTypes' },

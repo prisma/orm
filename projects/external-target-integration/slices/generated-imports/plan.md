@@ -8,7 +8,7 @@ Known failure modes to check in every dispatch: destructive git operations are f
 
 ## 1. The mechanism, on Postgres
 
-- **Outcome:** the config type has `contract.typesModule` and `migrations.module`; a package can state its own name through a build-time constant; `@internal/postgres` has a `generated-types` entrypoint and its `defineConfig` names both modules, such that the workspace package yields `@internal/postgres/...` and the built published package yields `@prisma/orm-postgres/...`.
+- **Outcome:** the config type has `contract.typesModule` and `migrations.module`; a package can state its own name through a build-time constant; `@internal/postgres` has a `contract-types` entrypoint and its `defineConfig` names both modules, such that the workspace package yields `@internal/postgres/...` and the built published package yields `@prisma/orm-postgres/...`.
 - **Property it preserves:** the framework config type gains two optional strings in existing sections and nothing else; no new descriptor field, registry or runtime interface.
 - **Builds on:** the design record.
 - **Hands on:** the constant mechanism, the two members, and one target package using both, with a test of each build's value. Nothing reads the members yet.
@@ -16,7 +16,7 @@ Known failure modes to check in every dispatch: destructive git operations are f
 
 ## 2. Every other target package, and extensions
 
-- **Outcome:** MongoDB, SQLite, MySQL and MariaDB target packages each have a `generated-types` entrypoint and name both modules; every extension states the module for its types through the same constant.
+- **Outcome:** MongoDB, SQLite, MySQL and MariaDB target packages each have a `contract-types` entrypoint and name both modules; every extension states the module for its types through the same constant.
 - **Builds on:** dispatch 1's mechanism, unchanged.
 - **Hands on:** every config built by a target package names both modules.
 - **Amended 2026-11-17, during the dispatch:** the brief said nothing emitted would change. That is false for an application that loads an extension from its published package: the extension now states its published module, so the `package` string recorded beside its codec metadata in the emitted contract changes from `@internal/extension-<x>/...` to the published name. That is the design record's rule arriving here (a module name recorded in an emitted contract is the name the matching import line uses), so the regeneration is accepted in this dispatch, in its own commit. Import lines and hashes do not change. Dispatch 5 still decides whether the string is read at all and should be removed.
@@ -25,7 +25,7 @@ Known failure modes to check in every dispatch: destructive git operations are f
 
 Redesigned 2026-11-17 after the operator pointed out that a target and an extension are the same kind of thing, and that a declaration must never hold a workspace name. The design record's section "Every component states where its types are" is the contract. It runs as three dispatches.
 
-**Amended 2026-11-17, when the implementer stopped before 3a:** 3a cannot land alone. The translation function passes a published name through unchanged, so once a target or adapter states `@prisma/orm-target-<db>/...`, an application on a target package would get an import of a package it does not depend on directly. 3a and 3b therefore run as one dispatch. Its effect on what is emitted is accepted: for an application on a target package, the target's and adapter's types are imported from the package's `generated-types` module. The framework's and family's lines move there in 3c. The regenerated files are their own commit.
+**Amended 2026-11-17, when the implementer stopped before 3a:** 3a cannot land alone. The translation function passes a published name through unchanged, so once a target or adapter states `@prisma/orm-target-<db>/...`, an application on a target package would get an import of a package it does not depend on directly. 3a and 3b therefore run as one dispatch. Its effect on what is emitted is accepted: for an application on a target package, the target's and adapter's types are imported from the package's `contract-types` module. The framework's and family's lines move there in 3c. The regenerated files are their own commit.
 
 ### 3a. Targets and adapters state their own published module
 
@@ -36,7 +36,7 @@ Redesigned 2026-11-17 after the operator pointed out that a target and an extens
 
 ### 3b. A target package restates its components' declarations
 
-- **Outcome:** each target package's `defineConfig` hands the config copies of its target and adapter descriptors whose type declarations name the package's `generated-types` module. A pull-request check asserts that every declaration in a target package's config names one of that package's own exports.
+- **Outcome:** each target package's `defineConfig` hands the config copies of its target and adapter descriptors whose type declarations name the package's `contract-types` module. A pull-request check asserts that every declaration in a target package's config names one of that package's own exports.
 - **Builds on:** 3a.
 - **Hands on:** for an application on a target package, every declaration names a package the application depends on directly.
 

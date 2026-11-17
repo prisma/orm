@@ -4,7 +4,7 @@ export default defineConfig({
   entry: [
     'src/exports/config.ts',
     'src/exports/control.ts',
-    'src/exports/generated-types.ts',
+    'src/exports/contract-types.ts',
     'src/exports/migration.ts',
   ],
 });

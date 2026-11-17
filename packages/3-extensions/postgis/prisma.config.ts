@@ -28,7 +28,7 @@ export default definePrismaConfig({
     adapter: postgresAdapter,
     contract: {
       ...typescriptContract(contract, 'src/contract.json'),
-      typesModule: '#generated-types',
+      typesModule: '#contract-types',
     },
     migrations: {
       dir: 'migrations',

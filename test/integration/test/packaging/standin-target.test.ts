@@ -30,7 +30,7 @@ const cliEngineVersion = (
 ).peerDependencies['@prisma/cli-engine'];
 
 const STANDIN = 'prisma-orm-standin';
-const TYPES_MODULE = `${STANDIN}/generated-types`;
+const TYPES_MODULE = `${STANDIN}/contract-types`;
 const MIGRATION_MODULE = `${STANDIN}/migration`;
 const EXTENSION = '@prisma/orm-extension-pgvector';
 const TOOLCHAIN = '@prisma/orm-toolchain';

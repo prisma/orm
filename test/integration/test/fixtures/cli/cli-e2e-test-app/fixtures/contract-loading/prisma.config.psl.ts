@@ -20,7 +20,7 @@ export default definePrismaConfig({
         target: postgres,
         createNamespace: postgresCreateNamespace,
       }),
-      typesModule: '@internal/postgres/generated-types',
+      typesModule: '@internal/postgres/contract-types',
     },
     db: { connection: '{{DB_URL}}' },
     migrations: { dir: 'migrations', module: '@internal/postgres/migration' },

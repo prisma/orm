@@ -25,10 +25,10 @@ MariaDB support is early. The package covers contracts and migrations on MariaDB
 | Namespace | Surface |
 | --- | --- |
 | `/config` | `defineConfig` for `prisma.config.ts` |
-| `/generated-types` | the types a generated `contract.d.ts` imports |
+| `/contract-types` | the types a generated `contract.d.ts` imports |
 | `/migration`, `/control` | migration classes and the control client |
 
-A generated `contract.d.ts` imports every framework, family and target type it names from `/generated-types`, and a generated `migration.ts` imports from `/migration`: the modules this package's `defineConfig` sets as `contract.typesModule` and `migrations.module`. The facade also forwards the namespaces of the packages it is built from, so an application never has to depend on a package it did not install:
+A generated `contract.d.ts` imports every framework, family and target type it names from `/contract-types`, and a generated `migration.ts` imports from `/migration`: the modules this package's `defineConfig` sets as `contract.typesModule` and `migrations.module`. The facade also forwards the namespaces of the packages it is built from, so an application never has to depend on a package it did not install:
 
 | Namespace | Forwards |
 | --- | --- |

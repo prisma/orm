@@ -19,7 +19,7 @@ function outputDir(): string {
 beforeEach(() => {
   project = mkdtempSync(join(tmpdir(), 'cli-validate-contract-deps-'));
   writeFileSync(join(project, 'package.json'), JSON.stringify({ name: 'app' }));
-  installPackage('@acme/orm-db', { exports: { './generated-types': './generated-types.js' } });
+  installPackage('@acme/orm-db', { exports: { './contract-types': './contract-types.js' } });
   installPackage('prisma-orm-standin', {});
   mkdirSync(outputDir(), { recursive: true });
 });
@@ -31,7 +31,7 @@ afterEach(() => {
 describe('validateContractDeps', () => {
   it('finds the package of every module installed, whatever subpaths it exports', () => {
     const result = validateContractDeps(
-      ['@acme/orm-db/generated-types', '@acme/orm-db/not-exported', 'prisma-orm-standin/migration'],
+      ['@acme/orm-db/contract-types', '@acme/orm-db/not-exported', 'prisma-orm-standin/migration'],
       outputDir(),
     );
 
@@ -40,7 +40,7 @@ describe('validateContractDeps', () => {
 
   it('does not check # imports or relative modules', () => {
     const result = validateContractDeps(
-      ['#generated-types', './contract.json', '../shared/types'],
+      ['#contract-types', './contract.json', '../shared/types'],
       outputDir(),
     );
 
@@ -73,7 +73,7 @@ describe('validateContractDeps', () => {
 
   it('accepts a relative output directory', () => {
     const result = validateContractDeps(
-      ['@acme/orm-db/generated-types', 'unscoped-missing'],
+      ['@acme/orm-db/contract-types', 'unscoped-missing'],
       `./${relative(process.cwd(), outputDir())}`,
     );
 

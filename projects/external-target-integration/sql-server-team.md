@@ -39,7 +39,7 @@ export function defineConfig(options: MssqlConfigOptions) {
     driver: mssqlDriver,
     contract: {
       ...contractConfig,
-      typesModule: '@microsoft/prisma-orm-mssql/generated-types',
+      typesModule: '@microsoft/prisma-orm-mssql/contract-types',
     },
     migrations: {
       ...options.migrations,
@@ -58,7 +58,7 @@ import type {
   ContractWithTypeMaps,
   StorageHashBase,
   TypeMaps as TypeMapsType,
-} from '@microsoft/prisma-orm-mssql/generated-types';
+} from '@microsoft/prisma-orm-mssql/contract-types';
 ```
 
 and a migration file rendered by `prisma migration plan` imports its helpers from `@microsoft/prisma-orm-mssql/migration`.
@@ -70,7 +70,7 @@ Only names that would clash are imported under an alias:
 - `Contract` and `TypeMaps` are renamed by Prisma, because the generated file exports its own `Contract` and `TypeMaps`.
 - `CodecTypes` and `QueryOperationTypes` are renamed to the alias your target's descriptor declares, because the generated file exports its own `CodecTypes`, which combines yours with those of any extension.
 
-Your generated-types module exports every type under its original name. The renaming happens in the generated file.
+Your contract-types module exports every type under its original name. The renaming happens in the generated file.
 
 The two modules:
 
@@ -79,10 +79,10 @@ The two modules:
 | `contract.typesModule` | Every type a generated `contract.d.ts` uses: the framework's contract types, the SQL family's contract types, and your target's codec and operation types |
 | `migrations.module` | Whatever your migration renderer writes imports for: the migration base class, the CLI entry and your operation factories |
 
-Your generated-types module is four lines, because it only re-exports:
+Your contract-types module is four lines, because it only re-exports:
 
 ```ts
-// @microsoft/prisma-orm-mssql/generated-types
+// @microsoft/prisma-orm-mssql/contract-types
 export type * from '@prisma/orm-framework/contract/types';
 export type * from '@prisma/orm-family-sql/contract/types';
 export type * from './codec-types';
@@ -92,7 +92,7 @@ export type * from './operation-types';
 **Your target's and adapter's type declarations state your types module.** Each descriptor declares the types it contributes to `contract.d.ts` as a module, a name and an alias:
 
 ```ts
-{ package: '@microsoft/prisma-orm-mssql/generated-types', named: 'CodecTypes', alias: 'MssqlTypes' }
+{ package: '@microsoft/prisma-orm-mssql/contract-types', named: 'CodecTypes', alias: 'MssqlTypes' }
 ```
 
 Prisma writes each declaration from the module it states, so that module must be one an application on your package can import. An application can import only from packages it depends on directly, which is your package and not the ones it is built from.
@@ -103,8 +103,8 @@ Prisma writes each declaration from the module it states, so that module must be
   ```ts
   import { restateTypeDeclarations } from '@prisma/orm-framework/target-package-config/type-declarations';
 
-  export const target = restateTypeDeclarations(mssqlTarget, '@microsoft/prisma-orm-mssql/generated-types');
-  export const adapter = restateTypeDeclarations(mssqlAdapter, '@microsoft/prisma-orm-mssql/generated-types');
+  export const target = restateTypeDeclarations(mssqlTarget, '@microsoft/prisma-orm-mssql/contract-types');
+  export const adapter = restateTypeDeclarations(mssqlAdapter, '@microsoft/prisma-orm-mssql/contract-types');
   ```
 
 **Assemble your components in one file.** Put the family, target, adapter and driver in one module, and build both `defineConfig` and any control client you export from it. A command run through the CLI and a script that uses your control client are then given the same components.
@@ -213,7 +213,7 @@ Required by the design above:
 | Entrypoint | Holds | Needed for |
 | --- | --- | --- |
 | `/config` | `defineConfig` | Every command |
-| `/generated-types` (your choice of name) | The type re-exports | `contract emit` |
+| `/contract-types` (your choice of name) | The type re-exports | `contract emit` |
 | `/migration` (your choice of name) | Migration base class and operation factories | `migration plan` |
 | `/init` | The init contribution | `prisma orm init` |
 
@@ -264,7 +264,7 @@ We have not run this arrangement outside our repository. Please try it in a clea
 
 | Release | What you do | What your users do |
 | --- | --- | --- |
-| Generated imports | Add the generated-types module, name both modules in `defineConfig`, and state your types module in your target's and adapter's type declarations. **This is required in the same version:** that release removes the `package.json` lookup, so a config that names no module stops emitting | Upgrade your package, remove the two framework packages from their own dependencies, run `prisma contract emit` |
+| Generated imports | Add the contract-types module, name both modules in `defineConfig`, and state your types module in your target's and adapter's type declarations. **This is required in the same version:** that release removes the `package.json` lookup, so a config that names no module stops emitting | Upgrade your package, remove the two framework packages from their own dependencies, run `prisma contract emit` |
 | `init` | Add the `/init` entrypoint | New projects run `prisma orm init --target <your package>`. Existing projects change nothing |
 
 ## Alternatives considered

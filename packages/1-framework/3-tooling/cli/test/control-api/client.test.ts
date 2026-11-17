@@ -17,7 +17,7 @@ import { createControlClient } from '../../src/control-api/client';
 import type { ControlProgressEvent, EmitResult } from '../../src/control-api/types';
 import { createMockComponents, createSourceProvider, emittableContract } from './client-fixtures';
 
-const TYPES_MODULE = '@acme/orm-db/generated-types';
+const TYPES_MODULE = '@acme/orm-db/contract-types';
 
 const TEST_INVOCATION = { cwd: '/work/app', configPath: undefined, dbGiven: false };
 
@@ -1152,13 +1152,13 @@ describe('ControlClient progress emission', () => {
 
         const rendered = await client.renderContractDts({
           contract: emittableContract(),
-          typesModule: '@acme/orm-db/generated-types',
+          typesModule: '@acme/orm-db/contract-types',
         });
         await client.close();
 
         expect(rendered.ok).toBe(true);
         if (rendered.ok) {
-          expect(rendered.value.contractDts).toContain("from '@acme/orm-db/generated-types'");
+          expect(rendered.value.contractDts).toContain("from '@acme/orm-db/contract-types'");
           expect(rendered.value.contractDts).not.toContain('@internal/');
         }
       },

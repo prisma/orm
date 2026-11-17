@@ -11,6 +11,6 @@ export function packageCopiedConfig(config: PrismaConfig<'sql', 'postgres'>) {
     ...config,
     target: postgres,
     adapter: postgresAdapter,
-    contract: { ...config.contract, typesModule: '#fixture-generated-types' },
+    contract: { ...config.contract, typesModule: '#fixture-contract-types' },
   };
 }

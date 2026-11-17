@@ -33,10 +33,10 @@ describe('defineConfig facade', () => {
 
     expect(facadeConfig.family).toBe(manualConfig.family);
     expect(facadeConfig.target).toEqual(
-      restateTypeDeclarations(postgres, '@internal/postgres/generated-types'),
+      restateTypeDeclarations(postgres, '@internal/postgres/contract-types'),
     );
     expect(facadeConfig.adapter).toEqual(
-      restateTypeDeclarations(postgresAdapter, '@internal/postgres/generated-types'),
+      restateTypeDeclarations(postgresAdapter, '@internal/postgres/contract-types'),
     );
     expect(facadeConfig.driver).toBe(manualConfig.driver);
     expect(facadeConfig.extensions).toEqual(manualConfig.extensions);
@@ -148,7 +148,7 @@ describe('defineConfig facade', () => {
   it('names its own modules for generated files', () => {
     const config = defineConfig({ contract: './prisma/contract.prisma' });
 
-    expect(config.contract?.typesModule).toBe('@internal/postgres/generated-types');
+    expect(config.contract?.typesModule).toBe('@internal/postgres/contract-types');
     expect(config.migrations).toEqual({ module: '@internal/postgres/migration' });
   });
 
@@ -162,7 +162,7 @@ describe('defineConfig facade', () => {
       migrations: { dir: 'db' },
     });
 
-    expect(config.contract?.typesModule).toBe('@internal/postgres/generated-types');
+    expect(config.contract?.typesModule).toBe('@internal/postgres/contract-types');
     expect(config.migrations).toEqual({ dir: 'db', module: '@internal/postgres/migration' });
   });
 

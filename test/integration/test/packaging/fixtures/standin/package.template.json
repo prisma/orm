@@ -9,9 +9,9 @@
       "types": "./dist/config.d.ts",
       "default": "./dist/config.js"
     },
-    "./generated-types": {
-      "types": "./dist/generated-types.d.ts",
-      "default": "./dist/generated-types.js"
+    "./contract-types": {
+      "types": "./dist/contract-types.d.ts",
+      "default": "./dist/contract-types.js"
     },
     "./migration": {
       "types": "./dist/migration.d.ts",

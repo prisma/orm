@@ -358,7 +358,7 @@ import { contract } from './src/prisma/contract';
 export default defineConfig({
   contract: {
     ...typescriptContract(contract, 'src/prisma/contract.json'),
-    typesModule: '@internal/postgres/generated-types',
+    typesModule: '@internal/postgres/contract-types',
   },
   migrations: { module: '@internal/postgres/migration' },
 });

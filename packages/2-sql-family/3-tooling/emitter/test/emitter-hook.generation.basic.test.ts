@@ -12,7 +12,7 @@ import { sqlEmission } from '../src/index';
 import { createEmitterTestContract as createContract } from './create-emitter-test-contract';
 import { identityCodecLookup } from './value-set-codec-lookups';
 
-const TYPES_MODULE = '@acme/orm-db/generated-types';
+const TYPES_MODULE = '@acme/orm-db/contract-types';
 
 type TestDescriptor =
   | ControlTargetDescriptor<'sql', string>

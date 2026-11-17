@@ -151,7 +151,7 @@ describe('preflightRefAdvancement', () => {
   afterEach(async () => {
     await rm(projectDir, { recursive: true, force: true });
   });
-  const TYPES_MODULE = '@acme/orm-db/generated-types';
+  const TYPES_MODULE = '@acme/orm-db/contract-types';
   const config = { contract: { typesModule: TYPES_MODULE } };
   const RENDERED = '// rendered\nexport type Contract = { rendered: true };\n';
 

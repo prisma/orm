@@ -11,7 +11,7 @@ import type {
   StorageHashBase,
   TypeMaps,
   ValueObjectTypesFromStorage,
-} from '../src/exports/generated-types';
+} from '../src/exports/contract-types';
 
 export type {
   CodecTypes,

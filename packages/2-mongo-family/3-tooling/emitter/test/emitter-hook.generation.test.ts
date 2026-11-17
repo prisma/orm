@@ -8,7 +8,7 @@ import {
   namespacedMongoStorageFromCollections,
 } from './fixtures/create-mongo-contract';
 
-const TYPES_MODULE = '@acme/orm-db/generated-types';
+const TYPES_MODULE = '@acme/orm-db/contract-types';
 
 const testHashes = { storageHash: 'test-storage-hash', profileHash: 'test-profile-hash' };
 
@@ -55,7 +55,7 @@ describe('mongoEmission.generateContractTypes', () => {
   it('includes framework imports', () => {
     const contract = createMongoContract();
     const types = generateContractDts(contract, mongoEmission, [], testHashes, TYPES_MODULE);
-    expect(types).toContain("from '@acme/orm-db/generated-types'");
+    expect(types).toContain("from '@acme/orm-db/contract-types'");
     expect(types).not.toContain('@internal/');
     expect(types).toContain('MongoContractWithTypeMaps');
     expect(types).toContain('MongoTypeMaps');
@@ -838,9 +838,9 @@ describe('mongoEmission.generateContractTypes', () => {
 
 describe('mongoEmission.getFamilyImports', () => {
   it('imports the family types from the module it is given', () => {
-    expect(mongoEmission.getFamilyImports('@acme/orm-db/generated-types')).toEqual(
+    expect(mongoEmission.getFamilyImports('@acme/orm-db/contract-types')).toEqual(
       ['MongoCollection', 'MongoContractWithTypeMaps', 'MongoTypeMaps', 'RelationKeys'].map(
-        (symbol) => ({ moduleSpecifier: '@acme/orm-db/generated-types', symbol, typeOnly: true }),
+        (symbol) => ({ moduleSpecifier: '@acme/orm-db/contract-types', symbol, typeOnly: true }),
       ),
     );
   });

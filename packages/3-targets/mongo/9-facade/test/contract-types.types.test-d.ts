@@ -13,7 +13,7 @@ import type {
   RelationKeys,
   StorageHashBase,
   ValueObjectTypesFromStorage,
-} from '../src/exports/generated-types';
+} from '../src/exports/contract-types';
 
 export type {
   CodecTypes,

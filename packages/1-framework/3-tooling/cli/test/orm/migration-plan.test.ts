@@ -68,7 +68,7 @@ describe('migration plan --config naming a file in a subdirectory', () => {
                     load: async () => contractJson('unused'),
                   },
                   output: './output/contract.json',
-                  typesModule: '@acme/orm-db/generated-types',
+                  typesModule: '@acme/orm-db/contract-types',
                 },
                 migrations: { dir: './migrations', module: OFFLINE_MIGRATION_MODULE },
               },
@@ -1170,7 +1170,7 @@ describe('migration plan', () => {
         contract: {
           source: { format: 'typescript', inputs: [], load: async () => ({}) },
           output: join(project.dir, 'output', 'missing.json'),
-          typesModule: '@acme/orm-db/generated-types',
+          typesModule: '@acme/orm-db/contract-types',
         },
       },
     }).run(['migration', 'plan', '--json'], { cwd: project.dir });
@@ -1346,7 +1346,7 @@ describe('migration plan destination snapshot', () => {
     expect(run.exitCode).toBe(0);
     expect(renderContractDtsMock).toHaveBeenCalledWith({
       contract: contractJson(HASH_TO),
-      typesModule: '@acme/orm-db/generated-types',
+      typesModule: '@acme/orm-db/contract-types',
     });
     const storeDir = contractSnapshotDir(project.migrationsDir, HASH_TO);
     expect(JSON.parse(await readFile(join(storeDir, 'contract.json'), 'utf-8'))).toEqual(

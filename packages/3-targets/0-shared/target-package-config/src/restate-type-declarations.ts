@@ -48,7 +48,7 @@ function refuseNamesFromTwoModules(specs: readonly TypesImportSpec[], module: st
 }
 
 /**
- * A copy of `descriptor` whose type declarations all name `module`, each keeping its name and alias. A target package's `defineConfig` uses it to state that its target's and adapter's types come from its own `generated-types` module. A descriptor that declares no types is returned as it is. Two declarations of one name from different modules are refused, since both would import the same type.
+ * A copy of `descriptor` whose type declarations all name `module`, each keeping its name and alias. A target package's `defineConfig` uses it to state that its target's and adapter's types come from its own `contract-types` module. A descriptor that declares no types is returned as it is. Two declarations of one name from different modules are refused, since both would import the same type.
  */
 export function restateTypeDeclarations<Descriptor extends Pick<ComponentMetadata, 'types'>>(
   descriptor: Descriptor,

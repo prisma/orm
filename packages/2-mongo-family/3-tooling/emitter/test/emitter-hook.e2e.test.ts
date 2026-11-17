@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { mongoEmission } from '../src/index';
 import { blogContract } from './fixtures/blog-contract';
 
-const TYPES_MODULE = '@acme/orm-db/generated-types';
+const TYPES_MODULE = '@acme/orm-db/contract-types';
 
 const testHashes = { storageHash: 'blog-test', profileHash: 'blog-profile' };
 

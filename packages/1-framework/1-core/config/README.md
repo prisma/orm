@@ -44,7 +44,7 @@ const config = defineConfig({
       load: async (_context) =>
         /* Result<Contract, ContractSourceDiagnostics> */ null as never,
     },
-    typesModule: '@internal/postgres/generated-types',
+    typesModule: '@internal/postgres/contract-types',
   },
   migrations: { module: '@internal/postgres/migration' },
 });

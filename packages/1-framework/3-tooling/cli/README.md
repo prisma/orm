@@ -216,7 +216,7 @@ export default defineConfig({
   extensions: [],
   contract: {
     ...typescriptContract(contract, 'src/prisma/contract.json'),
-    typesModule: '@internal/postgres/generated-types',
+    typesModule: '@internal/postgres/contract-types',
   },
   migrations: { module: '@internal/postgres/migration' },
 });
@@ -309,7 +309,7 @@ export default defineConfig({
   extensions: [],
   contract: {
     ...typescriptContract(contract, 'src/prisma/contract.json'),
-    typesModule: '@internal/postgres/generated-types',
+    typesModule: '@internal/postgres/contract-types',
   },
   migrations: { module: '@internal/postgres/migration' },
   db: {
@@ -888,7 +888,7 @@ export default defineConfig({
   extensions: [],
   contract: {
     ...typescriptContract(contract, 'src/prisma/contract.json'),
-    typesModule: '@internal/postgres/generated-types',
+    typesModule: '@internal/postgres/contract-types',
   },
   migrations: { module: '@internal/postgres/migration' },
   db: {
@@ -1062,7 +1062,7 @@ export default defineConfig({
   extensions: [],
   contract: {
     ...typescriptContract(contract, 'src/prisma/contract.json'),
-    typesModule: '@internal/postgres/generated-types',
+    typesModule: '@internal/postgres/contract-types',
   },
   migrations: { module: '@internal/postgres/migration' },
 });

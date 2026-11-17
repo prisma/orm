@@ -5,7 +5,7 @@ import { sqlEmission } from '@internal/sql-contract-emitter';
 import { describe, expect, it } from 'vitest';
 import { defineContract, field, model } from '../../src/exports/contract-builder';
 
-const TYPES_MODULE = '@internal/postgres/generated-types';
+const TYPES_MODULE = '@internal/postgres/contract-types';
 
 const textColumn = {
   codecId: 'sql/char@1' as const,

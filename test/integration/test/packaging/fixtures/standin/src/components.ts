@@ -4,7 +4,7 @@ import postgresAdapter from '@prisma/orm-target-postgres/adapter/control';
 import postgresDriver from '@prisma/orm-target-postgres/driver/control';
 import postgres from '@prisma/orm-target-postgres/target/control';
 
-export const typesModule = 'prisma-orm-standin/generated-types';
+export const typesModule = 'prisma-orm-standin/contract-types';
 
 export const migrationModule = 'prisma-orm-standin/migration';
 

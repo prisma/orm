@@ -25,11 +25,11 @@ The driver is Node's built-in `node:sqlite`, so there is no native module to com
 | `/runtime` | `sqlite(path)` — the lazy query client |
 | `/static` | statically composed runtime for pre-wired deployments |
 | `/config` | `defineConfig` for `prisma.config.ts` |
-| `/generated-types` | the types a generated `contract.d.ts` imports |
+| `/contract-types` | the types a generated `contract.d.ts` imports |
 | `/contract-builder` | `defineContract` and SQLite contract authoring |
 | `/migration`, `/control` | migration planning and the control client |
 
-A generated `contract.d.ts` imports every framework, family and target type it names from `/generated-types`, and a generated `migration.ts` imports from `/migration`: the modules this package's `defineConfig` sets as `contract.typesModule` and `migrations.module`. The facade also forwards the namespaces of the packages it is built from, so an application never has to depend on a package it did not install:
+A generated `contract.d.ts` imports every framework, family and target type it names from `/contract-types`, and a generated `migration.ts` imports from `/migration`: the modules this package's `defineConfig` sets as `contract.typesModule` and `migrations.module`. The facade also forwards the namespaces of the packages it is built from, so an application never has to depend on a package it did not install:
 
 | Namespace | Forwards |
 | --- | --- |

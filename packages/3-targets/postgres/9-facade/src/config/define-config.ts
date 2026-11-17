@@ -11,7 +11,7 @@ import postgresPackRef from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
-import { controlComponents, generatedTypesModule } from './components';
+import { contractTypesModule, controlComponents } from './components';
 import { moduleBase } from './module-base';
 
 export interface PostgresConfigOptions {
@@ -63,7 +63,7 @@ export function defineConfig(options: PostgresConfigOptions): PrismaConfig<'sql'
   return coreDefineConfig({
     ...controlComponents,
     extensions,
-    contract: { ...contractConfig, typesModule: generatedTypesModule },
+    contract: { ...contractConfig, typesModule: contractTypesModule },
     migrations: { ...options.migrations, module: `${moduleBase}/migration` },
     ...ifDefined('db', options.db),
     ...ifDefined('formatter', options.formatter),

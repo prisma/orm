@@ -8,4 +8,4 @@ packages, packs it, and installs it into a scratch application.
 
 It reuses the published PostgreSQL target's descriptors behind its own name,
 so its codec and operation types are real, and restates their type
-declarations to name its own `generated-types` module.
+declarations to name its own `contract-types` module.

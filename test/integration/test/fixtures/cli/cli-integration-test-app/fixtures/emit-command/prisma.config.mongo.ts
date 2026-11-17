@@ -16,7 +16,7 @@ export default definePrismaConfig({
         target: mongoTargetPack,
         output: 'output/contract.json',
       }),
-      typesModule: '@internal/mongo/generated-types',
+      typesModule: '@internal/mongo/contract-types',
     },
   }),
 });

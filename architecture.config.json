@@ -823,7 +823,7 @@
       "plane": "runtime"
     },
     {
-      "glob": "packages/3-targets/postgres/9-facade/src/exports/generated-types.ts",
+      "glob": "packages/3-targets/postgres/9-facade/src/exports/contract-types.ts",
       "domain": "extensions",
       "layer": "adapters",
       "plane": "shared"
@@ -1183,7 +1183,7 @@
       "plane": "migration"
     },
     {
-      "glob": "packages/3-targets/sqlite/9-facade/src/exports/generated-types.ts",
+      "glob": "packages/3-targets/sqlite/9-facade/src/exports/contract-types.ts",
       "domain": "extensions",
       "layer": "adapters",
       "plane": "shared"
@@ -1459,7 +1459,7 @@
       "plane": "migration"
     },
     {
-      "glob": "packages/3-targets/mysql/1-mysql/9-facade/src/exports/generated-types.ts",
+      "glob": "packages/3-targets/mysql/1-mysql/9-facade/src/exports/contract-types.ts",
       "domain": "extensions",
       "layer": "adapters",
       "plane": "shared"
@@ -1603,7 +1603,7 @@
       "plane": "migration"
     },
     {
-      "glob": "packages/3-targets/mysql/2-mariadb/9-facade/src/exports/generated-types.ts",
+      "glob": "packages/3-targets/mysql/2-mariadb/9-facade/src/exports/contract-types.ts",
       "domain": "extensions",
       "layer": "adapters",
       "plane": "shared"
@@ -1819,7 +1819,7 @@
       "plane": "migration"
     },
     {
-      "glob": "packages/3-targets/mongo/9-facade/src/exports/generated-types.ts",
+      "glob": "packages/3-targets/mongo/9-facade/src/exports/contract-types.ts",
       "domain": "extensions",
       "layer": "adapters",
       "plane": "shared"
@@ -1921,7 +1921,7 @@
       "plane": "shared"
     },
     {
-      "glob": "packages/3-extensions/paradedb/src/generated-types.ts",
+      "glob": "packages/3-extensions/paradedb/src/contract-types.ts",
       "domain": "extensions",
       "layer": "adapters",
       "plane": "shared"
@@ -1969,7 +1969,7 @@
       "plane": "shared"
     },
     {
-      "glob": "packages/3-extensions/pgvector/src/generated-types.ts",
+      "glob": "packages/3-extensions/pgvector/src/contract-types.ts",
       "domain": "extensions",
       "layer": "adapters",
       "plane": "shared"
@@ -2023,7 +2023,7 @@
       "plane": "shared"
     },
     {
-      "glob": "packages/3-extensions/citext/src/generated-types.ts",
+      "glob": "packages/3-extensions/citext/src/contract-types.ts",
       "domain": "extensions",
       "layer": "adapters",
       "plane": "shared"
@@ -2059,7 +2059,7 @@
       "plane": "shared"
     },
     {
-      "glob": "packages/3-extensions/postgis/src/generated-types.ts",
+      "glob": "packages/3-extensions/postgis/src/contract-types.ts",
       "domain": "extensions",
       "layer": "adapters",
       "plane": "shared"

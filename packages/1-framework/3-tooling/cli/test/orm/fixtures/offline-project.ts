@@ -374,7 +374,7 @@ function deserializeIntoStorageInstance(json: unknown): unknown {
 
 export const OFFLINE_MIGRATION_MODULE = '@acme/orm-db/migration';
 
-export const OFFLINE_TYPES_MODULE = '@acme/orm-db/generated-types';
+export const OFFLINE_TYPES_MODULE = '@acme/orm-db/contract-types';
 
 export function offlineConfig(options: {
   readonly project: OfflineProject;

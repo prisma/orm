@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createMockSpi } from './mock-spi';
 import { createTestContract, emit } from './utils';
 
-const TYPES_MODULE = '@acme/orm-db/generated-types';
+const TYPES_MODULE = '@acme/orm-db/contract-types';
 
 function contract() {
   return createTestContract({

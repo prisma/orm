@@ -5,14 +5,14 @@ import mysql from '@internal/target-mysql/control';
 import { restateTypeDeclarations } from '@internal/target-package-config/type-declarations';
 import { moduleBase } from './module-base';
 
-export const generatedTypesModule = `${moduleBase}/generated-types`;
+export const contractTypesModule = `${moduleBase}/contract-types`;
 
 export const migrationModule = `${moduleBase}/migration`;
 
-export const mysqlTarget: typeof mysql = restateTypeDeclarations(mysql, generatedTypesModule);
+export const mysqlTarget: typeof mysql = restateTypeDeclarations(mysql, contractTypesModule);
 export const mysqlControlAdapter: typeof mysqlAdapter = restateTypeDeclarations(
   mysqlAdapter,
-  generatedTypesModule,
+  contractTypesModule,
 );
 
 export const controlComponents: {

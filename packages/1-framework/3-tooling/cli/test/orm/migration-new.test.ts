@@ -440,7 +440,7 @@ describe('migration new', () => {
         contract: {
           source: { format: 'typescript', inputs: [], load: async () => ({}) },
           output: join(project.dir, 'output', 'missing.json'),
-          typesModule: '@acme/orm-db/generated-types',
+          typesModule: '@acme/orm-db/contract-types',
         },
       },
     }).run(['migration', 'new', '--json'], { cwd: project.dir });

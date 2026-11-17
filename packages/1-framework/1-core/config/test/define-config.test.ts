@@ -115,13 +115,13 @@ describe('defineConfig', () => {
 
   it('preserves the module generated contract types import from', () => {
     const config = createValidConfig({
-      contract: { source: createSourceProvider(), typesModule: '@acme/orm-db/generated-types' },
+      contract: { source: createSourceProvider(), typesModule: '@acme/orm-db/contract-types' },
     });
 
     expect(defineConfig(config).contract).toEqual({
       source: config.contract?.source,
       output: 'src/prisma/contract.json',
-      typesModule: '@acme/orm-db/generated-types',
+      typesModule: '@acme/orm-db/contract-types',
     });
   });
 

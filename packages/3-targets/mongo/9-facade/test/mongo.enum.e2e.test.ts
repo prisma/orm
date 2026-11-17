@@ -30,7 +30,7 @@ import {
 } from '../src/exports/contract-builder';
 import mongo, { type MongoClient as MongoFacadeClient } from '../src/runtime/mongo';
 
-const TYPES_MODULE = '@internal/mongo/generated-types';
+const TYPES_MODULE = '@internal/mongo/contract-types';
 
 const Role = enumType(
   'Role',

@@ -32,7 +32,7 @@ $ prisma orm init --target @microsoft/prisma-orm-mssql
 ```
 
 ```ts
-import type { Contract as ContractType } from '@microsoft/prisma-orm-mssql/generated-types';
+import type { Contract as ContractType } from '@microsoft/prisma-orm-mssql/contract-types';
 ```
 
 `prisma orm init --target postgres` behaves as it does today, through the same mechanism. The package name and output text above are illustrations; the SQL Server team chooses their package name.
@@ -89,9 +89,9 @@ A target package exports an init contribution: its label, starter contract, `db.
 
 ## Adapter and target impact
 
-- **Postgres and MongoDB facades**: each gains a module for generated types, names it and its migration module in `defineConfig`, and gains an `init` entrypoint holding the templates that move out of the CLI.
-- **SQLite and MySQL facades**: each names its generated-types and migration modules in `defineConfig`, and gains an `init` entrypoint. Neither is in the list of known packages, so they are the first real users of `init` by package name: `prisma orm init --target @prisma/orm-sqlite`.
-- **MariaDB facade**: names its generated-types and migration modules in `defineConfig`. No init contribution, because it has no runtime client.
+- **Postgres and MongoDB facades**: each gains a contract types module, names it and its migration module in `defineConfig`, and gains an `init` entrypoint holding the templates that move out of the CLI.
+- **SQLite and MySQL facades**: each names its contract-types and migration modules in `defineConfig`, and gains an `init` entrypoint. Neither is in the list of known packages, so they are the first real users of `init` by package name: `prisma orm init --target @prisma/orm-sqlite`.
+- **MariaDB facade**: names its contract-types and migration modules in `defineConfig`. No init contribution, because it has no runtime client.
 - **Target renderers** stop naming a module themselves and use the one the config gives.
 - **Extensions** state the module their types come from as the published name.
 

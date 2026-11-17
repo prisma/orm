@@ -18,7 +18,7 @@ export default definePrismaConfig({
         load: async () => ok(contract as Contract),
       },
       output: 'output/contract.json',
-      typesModule: '@internal/mongo/generated-types',
+      typesModule: '@internal/mongo/contract-types',
     },
   }),
 });

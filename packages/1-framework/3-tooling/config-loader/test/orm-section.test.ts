@@ -110,7 +110,7 @@ describe('the orm section', () => {
     const raw = validRaw({
       contract: {
         source: { format: 'psl', load: () => ({}) },
-        typesModule: '@acme/orm-db/generated-types',
+        typesModule: '@acme/orm-db/contract-types',
       },
       migrations: { module: '@acme/orm-db/migration' },
     });
@@ -118,7 +118,7 @@ describe('the orm section', () => {
     const result = validateOrmSection(raw, provenanceFor(raw));
 
     expect(result.ok && result.value).toMatchObject({
-      contract: { typesModule: '@acme/orm-db/generated-types' },
+      contract: { typesModule: '@acme/orm-db/contract-types' },
       migrations: { dir: '/project/migrations', module: '@acme/orm-db/migration' },
     });
   });
@@ -300,18 +300,18 @@ describe('the orm section', () => {
       validRaw({ contract: { source, typesModule: module }, migrations: { module } });
 
     it.each([
-      './generated-types',
-      '../generated-types',
-      '/project/generated-types',
+      './contract-types',
+      '../contract-types',
+      '/project/contract-types',
       '.',
       '..',
-      '.\\generated-types',
-      '..\\generated-types',
-      '\\project\\generated-types',
-      'C:\\project\\generated-types',
-      'C:/project/generated-types',
-      'file:///project/generated-types.ts',
-      'https://example.com/generated-types.js',
+      '.\\contract-types',
+      '..\\contract-types',
+      '\\project\\contract-types',
+      'C:\\project\\contract-types',
+      'C:/project/contract-types',
+      'file:///project/contract-types.ts',
+      'https://example.com/contract-types.js',
       'node:module',
     ])('refuses %s for both modules, saying why and what to name instead', (module) => {
       const raw = withModules(module);
@@ -339,7 +339,7 @@ describe('the orm section', () => {
       );
     });
 
-    it.each(['#generated-types', '@acme/orm-db/generated-types', 'orm-db/migration', 'orm-db'])(
+    it.each(['#contract-types', '@acme/orm-db/contract-types', 'orm-db/migration', 'orm-db'])(
       'accepts %s',
       (module) => {
         expect(fields(withModules(module))).toEqual([]);

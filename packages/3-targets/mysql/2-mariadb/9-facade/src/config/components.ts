@@ -5,14 +5,14 @@ import mariadb from '@internal/target-mariadb/control';
 import { restateTypeDeclarations } from '@internal/target-package-config/type-declarations';
 import { moduleBase } from './module-base';
 
-export const generatedTypesModule = `${moduleBase}/generated-types`;
+export const contractTypesModule = `${moduleBase}/contract-types`;
 
 export const migrationModule = `${moduleBase}/migration`;
 
-export const mariadbTarget: typeof mariadb = restateTypeDeclarations(mariadb, generatedTypesModule);
+export const mariadbTarget: typeof mariadb = restateTypeDeclarations(mariadb, contractTypesModule);
 export const mariadbControlAdapter: typeof mariadbAdapter = restateTypeDeclarations(
   mariadbAdapter,
-  generatedTypesModule,
+  contractTypesModule,
 );
 
 export const controlComponents: {

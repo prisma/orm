@@ -60,7 +60,7 @@ describe('an application that installs only the Postgres facade', () => {
         './relational-core',
         './family-runtime',
         './family/control',
-        './generated-types',
+        './contract-types',
         './utils/casts',
         './vite-plugin-contract-emit',
       ]),
@@ -82,7 +82,7 @@ describe('an application that installs only the Postgres facade', () => {
       'console.log(JSON.stringify([config.contract.typesModule, config.migrations.module]));',
     ].join('\n');
     expect(JSON.parse(runInScratch(scratch, script))).toEqual([
-      '@prisma/orm-postgres/generated-types',
+      '@prisma/orm-postgres/contract-types',
       '@prisma/orm-postgres/migration',
     ]);
   });

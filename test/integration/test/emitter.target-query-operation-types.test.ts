@@ -9,7 +9,7 @@ import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 
-const TYPES_MODULE = '@internal/postgres/generated-types';
+const TYPES_MODULE = '@internal/postgres/contract-types';
 
 describe('emitter + postgres target descriptor', () => {
   it('surfaces target-declared queryOperationTypes.import in generated contract.d.ts', () => {

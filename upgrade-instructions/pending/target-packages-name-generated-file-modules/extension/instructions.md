@@ -84,7 +84,7 @@ This applies to a package that an application installs to use a target: one that
 **1. Export a module with the types a generated `contract.d.ts` imports.** It only re-exports: the framework's contract types, the family's, and the target's codec and operation types.
 
 ```ts
-// src/generated-types.ts, exported as <your package>/generated-types
+// src/contract-types.ts, exported as <your package>/contract-types
 export type * from '@prisma/orm-framework/contract/types';
 export type * from '@prisma/orm-family-sql/contract/types';
 export type * from './codec-types';
@@ -97,7 +97,7 @@ export type * from './operation-types';
 // src/components.ts
 import { restateTypeDeclarations } from '@prisma/orm-framework/target-package-config/type-declarations';
 
-export const typesModule = 'prisma-orm-acmedb/generated-types';
+export const typesModule = 'prisma-orm-acmedb/contract-types';
 export const migrationModule = 'prisma-orm-acmedb/migration';
 
 export const target = restateTypeDeclarations(dbTarget, typesModule);
@@ -146,15 +146,15 @@ This applies to an extension that has a contract of its own: it has a `prisma.co
 Name both modules in the object passed to that call, with a types module private to the extension package:
 
 ```ts
-contract: { ...contractSource, typesModule: '#generated-types' },
+contract: { ...contractSource, typesModule: '#contract-types' },
 migrations: { module: '@prisma/orm-target-postgres/target/migration' },
 ```
 
 ```json
-{ "imports": { "#generated-types": "./src/generated-types.ts" } }
+{ "imports": { "#contract-types": "./src/contract-types.ts" } }
 ```
 
-`src/generated-types.ts` exports the framework's contract types, the family's, and the target's codec and operation types, as in the first change above. A relative path such as `'./generated-types'` is refused: the copy of the contract kept beside each migration is written into another folder, where that path points at nothing.
+`src/contract-types.ts` exports the framework's contract types, the family's, and the target's codec and operation types, as in the first change above. A relative path such as `'./contract-types'` is refused: the copy of the contract kept beside each migration is written into another folder, where that path points at nothing.
 
 If your build inlines that module into a declaration file you publish, check that the built file still exports every type. A bundler can drop a whole-module `export type *` when it inlines the module; naming each type in the re-export avoids that.
 
@@ -209,7 +209,7 @@ export const defineConfig = createMysqlDefineConfig({
   target,
   adapter,
   driver,
-  typesModule: 'prisma-orm-acmedb/generated-types',
+  typesModule: 'prisma-orm-acmedb/contract-types',
   migrationModule: 'prisma-orm-acmedb/migration',
 });
 ```

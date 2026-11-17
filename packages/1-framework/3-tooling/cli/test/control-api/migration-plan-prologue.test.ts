@@ -24,7 +24,7 @@ vi.mock('../../src/utils/command-helpers', async (importOriginal) => {
 });
 
 const config = {
-  contract: { typesModule: '@acme/orm-db/generated-types' },
+  contract: { typesModule: '@acme/orm-db/contract-types' },
   migrations: { dir: 'migrations', module: '@acme/orm-db/migration' },
 } as unknown as PrismaConfig;
 

@@ -255,7 +255,7 @@ describe('all publish shells packed and installed together', () => {
     expect(problems).toEqual([]);
   });
 
-  it('names its own generated-types export in every type declaration of the config its defineConfig returns', () => {
+  it('names its own contract-types export in every type declaration of the config its defineConfig returns', () => {
     const script = [
       COLLECT_DECLARED_MODULES,
       `const names = ${JSON.stringify(namingGeneratedModules)};`,
@@ -274,7 +274,7 @@ describe('all publish shells packed and installed together', () => {
       const modules = stated[name] ?? [];
       if (modules.length === 0) problems.push(`${name} states no module for its types`);
       for (const module of modules) {
-        if (module !== `${name}/generated-types`) problems.push(`${name} states ${module}`);
+        if (module !== `${name}/contract-types`) problems.push(`${name} states ${module}`);
       }
     }
     expect(problems).toEqual([]);
@@ -325,7 +325,7 @@ describe('all publish shells packed and installed together', () => {
       if (modules.length === 0)
         problems.push(`${name} emitted no import of its target and adapter types`);
       for (const module of modules) {
-        if (module !== `${name}/generated-types`)
+        if (module !== `${name}/contract-types`)
           problems.push(`${name} emitted an import from ${module}`);
       }
     }

@@ -17,7 +17,7 @@ Wires the MariaDB target, adapter and driver together for a project's `prisma.co
 - **`defineConfig`** (`./config`): a MariaDB project's configuration, built with MySQL's `createMysqlDefineConfig`. The contract is a Prisma schema: a `.prisma` file, a folder of them, or a glob. `createMysqlDefineConfig` refuses a TypeScript contract (`.ts`, `.mts`, `.cts`, `.tsx`) with `CONFIG.VALIDATION_FAILED`.
 - **`createMariadbControlClient`** (`./control`): a control client for `migration plan`, `db migrate`, `db verify`, `db sign` and introspection.
 - **`./migration`**: what a MariaDB `migration.ts` imports: `Migration`, which is `MariadbMigration`, `MigrationCLI` and the rest of MySQL's migration module. `defineConfig` names it in `migrations.module`.
-- **`./generated-types`**: re-exports, as types only, the framework contract types, the SQL family contract types and the MariaDB codec types: everything a generated `contract.d.ts` imports. `defineConfig` names it in `contract.typesModule`.
+- **`./contract-types`**: re-exports, as types only, the framework contract types, the SQL family contract types and the MariaDB codec types: everything a generated `contract.d.ts` imports. `defineConfig` names it in `contract.typesModule`.
 
 There is no `mariadb()` runtime client yet.
 

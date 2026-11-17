@@ -160,7 +160,7 @@ describe('generateContractDts field type maps', () => {
       "export type FieldInputTypes = FieldTypesFromDomain<ContractBase['domain']['namespaces'], CodecTypes, ParameterizedOutputTypeFunctions, FieldTypeOverrides, \"input\", ContractBase['storage']['namespaces']>;",
     );
     expect(dts).toMatch(
-      /^import type \{[^}]*\bFieldTypesFromDomain\b[^}]*\} from '@acme\/orm-db\/generated-types';$/m,
+      /^import type \{[^}]*\bFieldTypesFromDomain\b[^}]*\} from '@acme\/orm-db\/contract-types';$/m,
     );
   });
 
@@ -192,7 +192,7 @@ describe('generateContractDts field type maps', () => {
       'export type AddressOutput = ValueObjectOutputTypes["shared"]["Address"];',
     );
     expect(dts).toMatch(
-      /^import type \{[^}]*\bValueObjectTypesFromStorage\b[^}]*\} from '@acme\/orm-db\/generated-types';$/m,
+      /^import type \{[^}]*\bValueObjectTypesFromStorage\b[^}]*\} from '@acme\/orm-db\/contract-types';$/m,
     );
   });
 

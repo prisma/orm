@@ -255,9 +255,9 @@ Also exports the `MongoBinding`, `MongoBindingInput`, `MongoClient`, `MongoOptio
 
 Re-exports everything from `@internal/target-mongo/migration`: what a MongoDB `migration.ts` imports. `defineConfig` names this module in `migrations.module`. Published as `@prisma/orm-mongo/migration`.
 
-### `@internal/mongo/generated-types`
+### `@internal/mongo/contract-types`
 
-Re-exports, as types only, the framework contract types, the MongoDB family contract types and the MongoDB codec types: everything a generated `contract.d.ts` imports. `defineConfig` names this module in `contract.typesModule`. Published as `@prisma/orm-mongo/generated-types`.
+Re-exports, as types only, the framework contract types, the MongoDB family contract types and the MongoDB codec types: everything a generated `contract.d.ts` imports. `defineConfig` names this module in `contract.typesModule`. Published as `@prisma/orm-mongo/contract-types`.
 
 ### `@internal/mongo/family`
 

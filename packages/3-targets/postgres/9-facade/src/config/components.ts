@@ -5,16 +5,13 @@ import { restateTypeDeclarations } from '@internal/target-package-config/type-de
 import postgres from '@internal/target-postgres/control';
 import { moduleBase } from './module-base';
 
-export const generatedTypesModule = `${moduleBase}/generated-types`;
+export const contractTypesModule = `${moduleBase}/contract-types`;
 
 export const postgresTarget: typeof postgres = restateTypeDeclarations(
   postgres,
-  generatedTypesModule,
+  contractTypesModule,
 );
-export const postgresControlAdapter = restateTypeDeclarations(
-  postgresAdapter,
-  generatedTypesModule,
-);
+export const postgresControlAdapter = restateTypeDeclarations(postgresAdapter, contractTypesModule);
 
 export const controlComponents: {
   readonly family: typeof sql;

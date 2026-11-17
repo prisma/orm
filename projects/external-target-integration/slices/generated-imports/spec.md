@@ -13,7 +13,7 @@ import type {
   Contract as ContractType,
   ContractWithTypeMaps,
   TypeMaps as TypeMapsType,
-} from '@prisma/orm-postgres/generated-types';
+} from '@prisma/orm-postgres/contract-types';
 ```
 
 because the config that package's `defineConfig` returned names that module. The same holds for a target package this repository has never heard of. The CLI no longer reads `package.json` to choose the name.
@@ -22,9 +22,9 @@ because the config that package's `defineConfig` returned names that module. The
 
 1. **Two config members.** `contract.typesModule` and `migrations.module`, both optional strings, in the existing `contract` and `migrations` sections of the config type in `packages/1-framework/1-core/config`.
 2. **A package knows its own name through a build-time constant.** The workspace build fills in the workspace package name; the build that produces a published package fills in the published name. Target packages and extensions use it to state their modules.
-3. **Each target package** (Postgres, MongoDB, SQLite, MySQL, MariaDB) gains a `generated-types` entrypoint that re-exports the framework contract types, its family's contract types and its target's codec and operation types, and names both modules in the config its `defineConfig` returns.
+3. **Each target package** (Postgres, MongoDB, SQLite, MySQL, MariaDB) gains a `contract-types` entrypoint that re-exports the framework contract types, its family's contract types and its target's codec and operation types, and names both modules in the config its `defineConfig` returns.
 4. **Every component states a module that can be imported from outside this repository.** A target and an adapter state their own published module through a per-package build constant, as extensions do. `TypesImportSpec` does not change.
-5. **A target package restates its components' declarations.** Its `defineConfig` hands the config copies of the target and adapter descriptors whose type declarations name the package's `generated-types` module.
+5. **A target package restates its components' declarations.** Its `defineConfig` hands the config copies of the target and adapter descriptors whose type declarations name the package's `contract-types` module.
 5a. **The contract-types emitters** (framework, SQL family, MongoDB family) write their own imports from `contract.typesModule`, and write every component's declaration from the module it states, one import line per module. They no longer translate names.
 6. **The migration renderers** of every target write their imports from `migrations.module`.
 7. **A missing member is an error.** A command that needs a module the config does not name stops with a structured error naming the member. No default, no lookup.

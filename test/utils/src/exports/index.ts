@@ -5,7 +5,7 @@ import { Client } from 'pg';
 export * from '../application-domain-of';
 export * from '../column-descriptors';
 export * from '../contract-factories';
-export * from '../generated-types-modules';
+export * from '../contract-types-modules';
 export * from '../lowered-params';
 export * from '../migration-modules';
 export * from '../operation-descriptors';

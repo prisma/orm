@@ -5,12 +5,12 @@ import { restateTypeDeclarations } from '@internal/target-package-config/type-de
 import sqlite from '@internal/target-sqlite/control';
 import { moduleBase } from './module-base';
 
-export const generatedTypesModule = `${moduleBase}/generated-types`;
+export const contractTypesModule = `${moduleBase}/contract-types`;
 
-export const sqliteTarget: typeof sqlite = restateTypeDeclarations(sqlite, generatedTypesModule);
+export const sqliteTarget: typeof sqlite = restateTypeDeclarations(sqlite, contractTypesModule);
 export const sqliteControlAdapter: typeof sqliteAdapter = restateTypeDeclarations(
   sqliteAdapter,
-  generatedTypesModule,
+  contractTypesModule,
 );
 
 export const controlComponents: {

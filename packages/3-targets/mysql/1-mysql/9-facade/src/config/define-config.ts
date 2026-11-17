@@ -13,7 +13,7 @@ import { mysqlCreateNamespace } from '@internal/target-mysql/types';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
 import { typescriptContractUnsupported } from '../errors';
-import { controlComponents, generatedTypesModule, migrationModule } from './components';
+import { contractTypesModule, controlComponents, migrationModule } from './components';
 
 export interface MysqlConfigOptions<TargetId extends string = 'mysql'> {
   readonly contract: string;
@@ -93,7 +93,7 @@ export function createMysqlDefineConfig<TargetId extends string>(
 const mysqlComponents: MysqlConfigComponents<'mysql'> = {
   ...controlComponents,
   pack: mysqlPackRef,
-  typesModule: generatedTypesModule,
+  typesModule: contractTypesModule,
   migrationModule,
 };
 

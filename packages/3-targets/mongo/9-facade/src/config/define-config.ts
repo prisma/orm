@@ -10,7 +10,7 @@ import { MONGO_INT32_CODEC_ID, MONGO_STRING_CODEC_ID } from '@internal/target-mo
 import mongoTargetPack from '@internal/target-mongo/pack';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
-import { controlComponents, generatedTypesModule } from './components';
+import { contractTypesModule, controlComponents } from './components';
 import { moduleBase } from './module-base';
 
 export interface MongoConfigOptions {
@@ -72,7 +72,7 @@ export function defineConfig(options: MongoConfigOptions): PrismaConfig<'mongo',
   return coreDefineConfig({
     ...controlComponents,
     extensions,
-    contract: { ...contractConfig, typesModule: generatedTypesModule },
+    contract: { ...contractConfig, typesModule: contractTypesModule },
     migrations: { ...options.migrations, module: `${moduleBase}/migration` },
     ...ifDefined('db', options.db),
     ...ifDefined('formatter', options.formatter),

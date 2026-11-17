@@ -59,7 +59,7 @@ function configDeclaringTypesFrom(output: string): configLoader.PrismaConfig {
         }),
       },
       output,
-      typesModule: '#generated-types',
+      typesModule: '#contract-types',
     },
   });
 }

@@ -42,7 +42,7 @@ import {
   pg,
 } from '../../src/exports/contract-builder';
 
-const TYPES_MODULE = '@internal/postgres/generated-types';
+const TYPES_MODULE = '@internal/postgres/contract-types';
 
 const intColumn = { codecId: 'pg/int4@1' } as const;
 const pgText = { codecId: 'pg/text@1' } as const;

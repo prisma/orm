@@ -8,7 +8,7 @@ import storedNamesContractJson from '../../../5-query-builders/orm/test/fixtures
 import migrationContractJson from '../../../9-family/test/fixtures/migration-contract.json';
 import { mongoEmission } from '../src/index';
 
-const TYPES_MODULE = '@acme/orm-db/generated-types';
+const TYPES_MODULE = '@acme/orm-db/contract-types';
 
 const targetCodecTypes = resolve(
   import.meta.dirname,

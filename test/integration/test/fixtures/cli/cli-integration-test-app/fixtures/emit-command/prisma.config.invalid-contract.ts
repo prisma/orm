@@ -16,7 +16,7 @@ export default definePrismaConfig({
     extensions: [],
     contract: {
       ...typescriptContract(contract, 'output/contract.json'),
-      typesModule: '@internal/postgres/generated-types',
+      typesModule: '@internal/postgres/contract-types',
     },
   }),
 });

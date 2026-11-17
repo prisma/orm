@@ -17,7 +17,7 @@ export default definePrismaConfig({
         createNamespace: postgresCreateNamespace,
         defaultControlPolicy: 'external',
       }),
-      typesModule: '#generated-types',
+      typesModule: '#contract-types',
     },
     migrations: {
       dir: 'migrations',

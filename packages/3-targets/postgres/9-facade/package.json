@@ -75,9 +75,9 @@
   "exports": {
     "./config": "./dist/config.mjs",
     "./contract-builder": "./dist/contract-builder.mjs",
+    "./contract-types": "./dist/contract-types.mjs",
     "./control": "./dist/control.mjs",
     "./family": "./dist/family.mjs",
-    "./generated-types": "./dist/generated-types.mjs",
     "./internal/options": "./dist/internal/options.mjs",
     "./internal/static-context": "./dist/internal/static-context.mjs",
     "./internal/transaction-members": "./dist/internal/transaction-members.mjs",
@@ -90,7 +90,7 @@
     "./package.json": "./package.json"
   },
   "imports": {
-    "#fixture-generated-types": "./test/fixtures/generated-types.ts"
+    "#fixture-contract-types": "./test/fixtures/contract-types.ts"
   },
   "engines": {
     "node": ">=24"

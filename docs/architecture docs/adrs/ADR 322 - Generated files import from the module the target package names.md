@@ -16,7 +16,7 @@ import type {
   ContractWithTypeMaps,
   StorageHashBase,
   TypeMaps as TypeMapsType,
-} from '@prisma/orm-postgres/generated-types';
+} from '@prisma/orm-postgres/contract-types';
 ```
 
 The emitter has to write a module name there, and it must be one the application can resolve. This record decides where that name comes from.
@@ -59,7 +59,7 @@ export function defineConfig(options: { contract: string; output: string }) {
         target: pack,
         createNamespace,
       }),
-      typesModule: 'prisma-orm-acmedb/generated-types',
+      typesModule: 'prisma-orm-acmedb/contract-types',
     },
     migrations: { module: 'prisma-orm-acmedb/migration' },
   });
@@ -75,7 +75,7 @@ Prisma generates two kinds of file that import from a package.
 **Contract types.** `contract.d.ts`, and the copy of it kept beside each migration, import only types. They come from three places: the framework (what a contract is), the family (what a SQL or a document contract adds) and the target (its codec and operation types). `contract.typesModule` names one module that exports all of them. That module only re-exports:
 
 ```ts
-// prisma-orm-acmedb/generated-types
+// prisma-orm-acmedb/contract-types
 export type * from '@prisma/orm-framework/contract/types';
 export type * from '@prisma/orm-family-sql/contract/types';
 export type * from './codec-types';
@@ -115,8 +115,8 @@ The emitter writes every declaration from the module it states and treats them a
 // prisma-orm-acmedb, the one file that assembles its components
 import { restateTypeDeclarations } from '@prisma/orm-framework/target-package-config/type-declarations';
 
-export const target = restateTypeDeclarations(dbTarget, 'prisma-orm-acmedb/generated-types');
-export const adapter = restateTypeDeclarations(dbAdapter, 'prisma-orm-acmedb/generated-types');
+export const target = restateTypeDeclarations(dbTarget, 'prisma-orm-acmedb/contract-types');
+export const adapter = restateTypeDeclarations(dbAdapter, 'prisma-orm-acmedb/contract-types');
 ```
 
 A target package assembles its family, target, adapter and driver in one place. Its `defineConfig` and its control client both build from that, so a command run through the CLI and a script that uses the control client are given the same components.
@@ -142,7 +142,7 @@ The same ordering applies to every list of names an emitter writes into a genera
 A config built through a target package always names them. A config assembled directly from the framework's `defineConfig` names them itself.
 
 - A command that must write a contract type file with no `contract.typesModule` stops before writing anything, with `CONFIG.CONTRACT_TYPES_MODULE_MISSING`. That is `contract emit`, and every command that writes the copy kept beside a migration: `migration plan`, `migration new`, `migrate`, `db init`, `db update` and `db sign`. A command that must write a migration file with no `migrations.module`, which is `migration plan` and `migration new`, stops with `CONFIG.MIGRATION_MODULE_MISSING`. The emitter never falls back to a default or works a name out.
-- A module is named the way a package is imported, such as `prisma-orm-acmedb/generated-types`, or by a name private to the package that holds the generated files, such as `#generated-types`. It is never empty, a path or a URL. Generated files are written into more than one folder, a contract's types beside the contract and a copy beside each migration, and a relative path is right for at most one of them. Each of these is refused when the config is validated.
+- A module is named the way a package is imported, such as `prisma-orm-acmedb/contract-types`, or by a name private to the package that holds the generated files, such as `#contract-types`. It is never empty, a path or a URL. Generated files are written into more than one folder, a contract's types beside the contract and a copy beside each migration, and a relative path is right for at most one of them. Each of these is refused when the config is validated.
 - An emitted contract holds no record of where a component's types are imported from. Nothing reads one, and an emitted artifact never holds a name the application cannot resolve.
 
 ## Why

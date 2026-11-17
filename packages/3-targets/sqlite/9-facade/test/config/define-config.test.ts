@@ -34,7 +34,7 @@ describe('defineConfig facade', () => {
     expect(facadeConfig.family).toBe(manualConfig.family);
     expect(facadeConfig.target).toBe(manualConfig.target);
     expect(facadeConfig.adapter).toEqual(
-      restateTypeDeclarations(sqliteAdapter, '@internal/sqlite/generated-types'),
+      restateTypeDeclarations(sqliteAdapter, '@internal/sqlite/contract-types'),
     );
     expect(facadeConfig.driver).toBe(manualConfig.driver);
     expect(facadeConfig.extensions).toEqual(manualConfig.extensions);
@@ -181,11 +181,11 @@ describe('defineConfig facade', () => {
 });
 
 describe('the modules generated files import from', () => {
-  it('names its own generated-types and migration modules', () => {
+  it('names its own contract-types and migration modules', () => {
     const config = defineConfig({ contract: './prisma/contract.prisma' });
 
     expect([config.contract?.typesModule, config.migrations]).toEqual([
-      '@internal/sqlite/generated-types',
+      '@internal/sqlite/contract-types',
       { module: '@internal/sqlite/migration' },
     ]);
   });

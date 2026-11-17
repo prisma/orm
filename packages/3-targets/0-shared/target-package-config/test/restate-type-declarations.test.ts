@@ -2,7 +2,7 @@ import type { ComponentMetadata } from '@internal/framework-components/component
 import { describe, expect, it } from 'vitest';
 import { restateTypeDeclarations } from '../src/restate-type-declarations';
 
-const MODULE = '@acme/orm-db/generated-types';
+const MODULE = '@acme/orm-db/contract-types';
 
 describe('restateTypeDeclarations', () => {
   it('names the given module in every type declaration, keeping each name and alias', () => {
@@ -116,7 +116,7 @@ describe('restateTypeDeclarations', () => {
       expect.objectContaining({
         code: 'CONFIG.VALIDATION_FAILED',
         message:
-          "Two type declarations import CodecTypes, from '@acme/target/codec-types' and from '@acme/adapter/codec-types'; restated to name '@acme/orm-db/generated-types', both would import the same type",
+          "Two type declarations import CodecTypes, from '@acme/target/codec-types' and from '@acme/adapter/codec-types'; restated to name '@acme/orm-db/contract-types', both would import the same type",
       }),
     );
   });

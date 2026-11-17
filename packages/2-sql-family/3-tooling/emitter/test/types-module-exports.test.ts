@@ -8,15 +8,15 @@ import { createEmitterTestContract as createContract } from './create-emitter-te
 const REPO_ROOT = join(import.meta.dirname, '../../../../..');
 
 const HAND_WRITTEN_TYPES_MODULES = [
-  'packages/3-extensions/citext/src/generated-types.ts',
-  'packages/3-extensions/paradedb/src/generated-types.ts',
-  'packages/3-extensions/pgvector/src/generated-types.ts',
-  'packages/3-extensions/postgis/src/generated-types.ts',
-  'packages/3-extensions/supabase/src/contract/generated-types.ts',
-  'packages/2-sql-family/4-lanes/sql-builder/test/fixtures/generated-types.ts',
-  'packages/3-extensions/sql-orm-client/test/fixtures/generated-types.ts',
-  'packages/3-targets/postgres/9-facade/test/fixtures/generated-types.ts',
-  'test/integration/test/fixtures/generated-types.ts',
+  'packages/3-extensions/citext/src/contract-types.ts',
+  'packages/3-extensions/paradedb/src/contract-types.ts',
+  'packages/3-extensions/pgvector/src/contract-types.ts',
+  'packages/3-extensions/postgis/src/contract-types.ts',
+  'packages/3-extensions/supabase/src/contract/contract-types.ts',
+  'packages/2-sql-family/4-lanes/sql-builder/test/fixtures/contract-types.ts',
+  'packages/3-extensions/sql-orm-client/test/fixtures/contract-types.ts',
+  'packages/3-targets/postgres/9-facade/test/fixtures/contract-types.ts',
+  'test/integration/test/fixtures/contract-types.ts',
 ];
 
 const TYPES_MODULE = 'types-module';

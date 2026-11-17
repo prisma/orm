@@ -23,7 +23,7 @@ import type {
   ValueObjectTypesFromStorage,
   VarBit,
   Varchar,
-} from '../src/exports/generated-types';
+} from '../src/exports/contract-types';
 
 export type {
   Bit,

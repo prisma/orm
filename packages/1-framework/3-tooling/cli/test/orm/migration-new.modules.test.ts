@@ -29,7 +29,7 @@ describe('migration new destination snapshot', () => {
     expect(run.exitCode).toBe(0);
     expect(renderContractDtsMock).toHaveBeenCalledWith({
       contract: contractJson(HASH_TO),
-      typesModule: '@acme/orm-db/generated-types',
+      typesModule: '@acme/orm-db/contract-types',
     });
     const storeDir = contractSnapshotDir(project.migrationsDir, HASH_TO);
     expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(SNAPSHOT_CONTRACT_DTS);

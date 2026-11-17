@@ -5,15 +5,15 @@ import { mongoTargetDescriptor } from '@internal/target-mongo/control';
 import { restateTypeDeclarations } from '@internal/target-package-config/type-declarations';
 import { moduleBase } from './module-base';
 
-export const generatedTypesModule = `${moduleBase}/generated-types`;
+export const contractTypesModule = `${moduleBase}/contract-types`;
 
 export const mongoTarget: typeof mongoTargetDescriptor = restateTypeDeclarations(
   mongoTargetDescriptor,
-  generatedTypesModule,
+  contractTypesModule,
 );
 export const mongoControlAdapter: typeof mongoAdapter = restateTypeDeclarations(
   mongoAdapter,
-  generatedTypesModule,
+  contractTypesModule,
 );
 
 export const controlComponents: {

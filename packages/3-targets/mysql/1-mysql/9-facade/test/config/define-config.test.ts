@@ -25,7 +25,7 @@ describe('defineConfig for MySQL', () => {
     }).toEqual({
       family: sql,
       target: mysql,
-      adapter: restateTypeDeclarations(mysqlAdapter, '@internal/mysql/generated-types'),
+      adapter: restateTypeDeclarations(mysqlAdapter, '@internal/mysql/contract-types'),
       driver: mysqlDriver,
       extensions: [],
       output: './prisma/contract.json',
@@ -70,11 +70,11 @@ describe('defineConfig for MySQL', () => {
 });
 
 describe('the modules generated files import from', () => {
-  it('names its own generated-types and migration modules', () => {
+  it('names its own contract-types and migration modules', () => {
     const config = defineConfig({ contract: './prisma/contract.prisma' });
 
     expect([config.contract?.typesModule, config.migrations]).toEqual([
-      '@internal/mysql/generated-types',
+      '@internal/mysql/contract-types',
       { module: '@internal/mysql/migration' },
     ]);
   });

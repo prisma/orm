@@ -21,7 +21,7 @@ export default definePrismaConfig({
         target: sqlitePackRef,
         createNamespace: sqliteCreateNamespace,
       }),
-      typesModule: '@internal/sqlite/generated-types',
+      typesModule: '@internal/sqlite/contract-types',
     },
     db: { connection: '{{DB_PATH}}' },
     migrations: { dir: 'migrations', module: '@internal/sqlite/migration' },

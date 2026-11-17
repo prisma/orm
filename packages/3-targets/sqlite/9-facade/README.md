@@ -97,9 +97,9 @@ Re-exports all migration operation helpers from `@internal/target-sqlite/migrati
 
 `defineConfig` names this module in `migrations.module`, the module rendered migration files import from.
 
-### `@internal/sqlite/generated-types`
+### `@internal/sqlite/contract-types`
 
-Re-exports, as types only, the framework contract types, the SQL family contract types and the SQLite codec types: everything a generated `contract.d.ts` imports. `JsonValue` is the SQLite codec types one. `defineConfig` names this module in `contract.typesModule`. Published as `@prisma/orm-sqlite/generated-types`.
+Re-exports, as types only, the framework contract types, the SQL family contract types and the SQLite codec types: everything a generated `contract.d.ts` imports. `JsonValue` is the SQLite codec types one. `defineConfig` names this module in `contract.typesModule`. Published as `@prisma/orm-sqlite/contract-types`.
 
 ### `@internal/sqlite/runtime`
 

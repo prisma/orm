@@ -117,7 +117,7 @@ export function ormConfig(overrides: Record<string, unknown> = {}): Record<strin
     contract: {
       source: { format: 'typescript', inputs: [], load: async () => ({}) },
       output: 'output/contract.json',
-      typesModule: '@acme/orm-db/generated-types',
+      typesModule: '@acme/orm-db/contract-types',
     },
     ...overrides,
   };
