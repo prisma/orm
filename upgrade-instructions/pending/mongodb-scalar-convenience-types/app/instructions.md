@@ -14,6 +14,13 @@ changes:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
         - '\.\s*Int64\s*\('
+  - id: psl-optional-mongo-convenience-names
+    summary: |
+      Optional: in a MongoDB schema, the explicit types `Int32`, `Double` and `Bool` may be written as the convenience types `Int`, `Float` and `Boolean`. The contract does not change.
+    detection:
+      glob: "**/*.prisma"
+      matches:
+        - '(?<![\s\S])(?=[\s\S]*\bObjectId\b)[\s\S]*(?<![\w.])(?:Int32|Double|Bool)(?![\w])'
 ---
 
 # MongoDB scalars get convenience types
@@ -43,4 +50,19 @@ In each matched file, replace every `Int64(` call on the `type` helpers with `Bi
 field.scalar(type.BigInt()); // was type.Int64()
 ```
 
-A helper taken out of `type` by destructuring, such as `const { Int64 } = type`, fails type-checking; rename it where the compiler reports it. The contract does not change.
+A helper taken out of `type` by destructuring, such as `const { Int64 } = type`, fails type-checking; rename it where the compiler reports it. The contract does not change. A file that matches only because a comment mentions `Int64(`, or because it calls another library's `Int64(`, such as Apache Arrow's `new arrow.Int64()`, needs no change.
+
+## `psl-optional-mongo-convenience-names`
+
+This change is optional. In a MongoDB schema, `Int`, `Float` and `Boolean` are now the names to write, and they give exactly the same codecs as `Int32`, `Double` and `Bool`. To use them, replace the type `Int32` with `Int`, `Double` with `Float` and `Bool` with `Boolean`, in fields, lists, value object members and `types {}` aliases:
+
+```prisma
+model Order {
+  id     ObjectId @id @map("_id")
+  amount Int      // was Int32
+  total  Float    // was Double
+  paid   Boolean  // was Bool
+}
+```
+
+The contract does not change. Do this only in a MongoDB schema: on other targets `Int32`, `Double` and `Bool` are different types or do not exist. Leave `Int32` in a codec id such as `mongo/int32@1`, and leave names that only start with these, such as a composite type named `DoubleValue`, as they are. Leave the `contract.prisma` copy inside each migration folder under `migrations/` as it is: it records the schema that migration was planned from.

@@ -43,4 +43,4 @@ In each matched file, replace every `Int64(` call on the `type` helpers with `Bi
 field.scalar(type.BigInt()); // was type.Int64()
 ```
 
-A helper taken out of `type` by destructuring, such as `const { Int64 } = type`, fails type-checking; rename it where the compiler reports it. The contract does not change.
+A helper taken out of `type` by destructuring, such as `const { Int64 } = type`, fails type-checking; rename it where the compiler reports it. The contract does not change. A file that matches only because a comment mentions `Int64(`, or because it calls another library's `Int64(`, such as Apache Arrow's `new arrow.Int64()`, needs no change.

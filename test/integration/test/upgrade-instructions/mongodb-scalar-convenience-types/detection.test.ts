@@ -63,4 +63,45 @@ describe.each(GUIDES)('the renamed MongoDB Int64 detections in %s', (guidePath) 
       int32: false,
     });
   });
+
+  it('also matches Int64 in a schema comment and an Int64 call of another library, which need no change', () => {
+    expect({
+      schemaComment: psl('model A {\n  views BigInt // was Int64\n}'),
+      otherLibraryCall: ts('const column = new arrow.Int64();'),
+    }).toEqual({ schemaComment: true, otherLibraryCall: true });
+  });
+});
+
+describe('the optional MongoDB convenience name detection in the app guide', () => {
+  const optional = (content: string) =>
+    detectionPatterns(
+      'upgrade-instructions/pending/mongodb-scalar-convenience-types/app/instructions.md',
+      'psl-optional-mongo-convenience-names',
+    ).some((pattern) => pattern.test(content));
+  const mongoModel = (type: string) =>
+    `model A {\n  id ObjectId @id @map("_id")\n  value ${type}\n}`;
+
+  it('matches Int32, Double and Bool in a MongoDB schema only', () => {
+    expect({
+      int32: optional(mongoModel('Int32')),
+      double: optional(mongoModel('Double[]?')),
+      bool: optional(mongoModel('Bool')),
+      alias: optional('types {\n  Count = Int32\n}\n\nmodel A {\n  id ObjectId @id\n}'),
+      convenience: optional(mongoModel('Int')),
+      longerName: optional(mongoModel('DoubleValue')),
+      codecId: optional(
+        'enum Big {\n  @@type("mongo/int32@1")\n  A = 1\n}\nmodel A {\n  id ObjectId @id\n}',
+      ),
+      noObjectId: optional('model A {\n  id Int4 @id\n  flag Bool\n}'),
+    }).toEqual({
+      int32: true,
+      double: true,
+      bool: true,
+      alias: true,
+      convenience: false,
+      longerName: false,
+      codecId: false,
+      noObjectId: false,
+    });
+  });
 });
