@@ -1,6 +1,6 @@
 # ADR 222 — Version support policy for Prisma Next
 
-**Status:** Accepted — PostgreSQL floor amended by [ADR 248](ADR%20248%20-%20PostgreSQL%20floor%20lowered%20to%2015.md); where the database server floors are declared superseded by [ADR 320](ADR%20320%20-%20Each%20target%20package%20exports%20its%20minimum%20server%20version.md)
+**Status:** Accepted — PostgreSQL floor amended by [ADR 248](ADR%20248%20-%20PostgreSQL%20floor%20lowered%20to%2015.md)
 **Date:** 2026-05-31
 **Linear:** TML-1810, TML-1809
 
@@ -16,8 +16,8 @@ The ratified floor table:
 |---|---|---|
 | Node.js | `>=24` | `engines.node` on every publishable package |
 | TypeScript | `>=5.9` | optional `peerDependencies.typescript` on every publishable package + source-of-truth constant + drift test |
-| PostgreSQL (server) | `15` (lowered from `17` by [ADR 248](ADR%20248%20-%20PostgreSQL%20floor%20lowered%20to%2015.md)) | `prismaNext.minServerVersion` on `@internal/target-postgres` + CLI mirror + `postgres:15` CI service containers + `docker-compose.yaml` |
-| MongoDB (server) | `8.0` | `prismaNext.minServerVersion` on `@internal/target-mongo` + CLI mirror; MMS 11.x downloads 8.2.x by default |
+| PostgreSQL (server) | `15` (lowered from `17` by [ADR 248](ADR%20248%20-%20PostgreSQL%20floor%20lowered%20to%2015.md)) | `POSTGRES_MIN_SERVER_VERSION` exported by `@internal/target-postgres/server-version` + CLI mirror + `postgres:15` CI service containers + `docker-compose.yaml` |
+| MongoDB (server) | `8.0` | `MONGO_MIN_SERVER_VERSION` exported by `@internal/target-mongo/server-version` + CLI mirror; MMS 11.x downloads 8.2.x by default |
 | Bun | `>=1.2` | documented; runtime detection already exists |
 | Deno | `>=2.0` | documented; runtime detection already exists |
 
@@ -74,14 +74,16 @@ The workspace-level source of truth is `MIN_TYPESCRIPT_PEER` in `scripts/validat
 
 ### DB server versions
 
-Each target package is the authoritative source of truth for its database server floor, stored at `package.json#prismaNext.minServerVersion`. The CLI mirrors these values in `packages/1-framework/3-tooling/cli/src/commands/init/templates/env.ts` as `MIN_SERVER_VERSION`. A test in `packages/1-framework/3-tooling/cli/test/commands/init/templates/tsconfig-env.test.ts` asserts that the CLI constant and the target package values never drift.
+Each target package is the authoritative source of truth for its database server floor: a constant in its `src/core/server-version.ts`, exported from its `server-version` entry point (`POSTGRES_MIN_SERVER_VERSION`, `MONGO_MIN_SERVER_VERSION`). A target's `package.json` carries no Prisma configuration or metadata; Prisma 8 reads configuration only from `prisma.config.ts`.
+
+The CLI mirrors these values in `packages/1-framework/3-tooling/cli/src/commands/init/templates/env.ts` as `MIN_SERVER_VERSION`. The framework may not name a target package, even in tests, so the drift check is the integration test `test/integration/test/cli.init-min-server-version.test.ts`, which imports both and asserts they are equal. The merge queue requires integration tests, so drift cannot merge.
 
 The correct sequence for raising a DB floor:
 
-1. Update `prismaNext.minServerVersion` in the target package's `package.json`.
+1. Update the constant in the target package's `src/core/server-version.ts`.
 2. Update `MIN_SERVER_VERSION` in `env.ts` to match.
 3. Update the test infrastructure — the Postgres service-container image tags in `.github/workflows/ci.yml` and the `docker-compose.yaml` image tag — to match the new floor.
-4. Run `pnpm --filter @internal/cli test` to verify the drift test passes.
+4. Run `pnpm test test/cli.init-min-server-version.test.ts` in `test/integration` to verify the drift test passes.
 
 ---
 
