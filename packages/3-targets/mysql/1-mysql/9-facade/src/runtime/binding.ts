@@ -19,7 +19,12 @@ export function validateMysqlUrl(url: string): string {
   try {
     parsed = new URL(trimmed);
   } catch {
-    throw invalidUrl('MySQL URL must be a valid URL', { reason: 'unparseable url' });
+    const withHost = trimmed.replace(/^([^:/?#]+:\/\/[^/?#]*@)(\/|$|\?|#)/, '$1localhost$2');
+    try {
+      parsed = new URL(withHost);
+    } catch {
+      throw invalidUrl('MySQL URL must be a valid URL', { reason: 'unparseable url' });
+    }
   }
   if (parsed.protocol !== 'mysql:') {
     throw invalidUrl('MySQL URL must use mysql://', {
