@@ -52,6 +52,7 @@ import {
 import { sqliteDataTypes } from '@internal/target-sqlite/data-types';
 import type { SqliteDdlNode } from '@internal/target-sqlite/ddl';
 import { escapeLiteral, quoteIdentifier } from '@internal/target-sqlite/sql-utils';
+import { isDate } from '@internal/type-implementations/date';
 import { assertNever, InternalError } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
 import { SqliteControlAdapter } from './control-adapter';
@@ -497,7 +498,7 @@ function renderLiteral(expr: LiteralExpr): string {
   if (expr.value === null || expr.value === undefined) {
     return 'NULL';
   }
-  if (expr.value instanceof Date) {
+  if (isDate(expr.value)) {
     return `'${escapeLiteral(expr.value.toISOString())}'`;
   }
   const json = JSON.stringify(expr.value);
