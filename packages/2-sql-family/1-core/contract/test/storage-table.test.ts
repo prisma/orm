@@ -5,7 +5,7 @@ import { StorageTable } from '../src/ir/storage-table';
 function makeValidTable(): StorageTable {
   return new StorageTable({
     columns: {
-      id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
+      id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
     },
     uniques: [],
     indexes: [],
