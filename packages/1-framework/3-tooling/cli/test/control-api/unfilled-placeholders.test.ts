@@ -48,7 +48,7 @@ describe('migrationWithUnfilledPlaceholders', () => {
         ]),
       ],
     ]);
-    expect(await migrationWithUnfilledPlaceholders(plans, ['app'], migrationsDir, MODULE)).toBe(
+    expect(await migrationWithUnfilledPlaceholders(plans, ['app'], migrationsDir)).toBe(
       join(migrationsDir, 'app', '2_country'),
     );
   });
@@ -67,9 +67,7 @@ describe('migrationWithUnfilledPlaceholders', () => {
         ]),
       ],
     ]);
-    expect(
-      await migrationWithUnfilledPlaceholders(plans, ['app'], migrationsDir, MODULE),
-    ).toBeUndefined();
+    expect(await migrationWithUnfilledPlaceholders(plans, ['app'], migrationsDir)).toBeUndefined();
   });
 
   describe('reads the code of migration.ts, not its text', () => {
@@ -79,7 +77,6 @@ describe('migrationWithUnfilledPlaceholders', () => {
         new Map([['app', plan([{ dirName: '1_country', operationCount: 0 }])]]),
         ['app'],
         migrationsDir,
-        MODULE,
       );
     }
     const named = join('app', '1_country');
@@ -124,21 +121,24 @@ export default class M extends m.Migration {
     });
   });
 
-  describe('finds the placeholder by the module the config names', () => {
-    const STANDIN = 'prisma-orm-standin/migration';
+  describe('finds a placeholder whatever package it is imported from', () => {
     const plans = new Map([['app', plan([{ dirName: '1_country', operationCount: 0 }])]]);
 
-    it('when that module is an unscoped package outside Prisma', async () => {
-      await migration('1_country', UNFILLED.replace(`'${MODULE}'`, `'${STANDIN}'`));
-      expect(await migrationWithUnfilledPlaceholders(plans, ['app'], migrationsDir, STANDIN)).toBe(
+    it.each([
+      ['a Prisma module', '@prisma/orm-mongo/migration'],
+      ['a module an earlier release wrote', '@prisma/orm-mongo/target/migration'],
+      ['an unscoped package outside Prisma', 'prisma-orm-standin/migration'],
+    ])('%s', async (_, module) => {
+      await migration('1_country', UNFILLED.replace(`'${MODULE}'`, `'${module}'`));
+      expect(await migrationWithUnfilledPlaceholders(plans, ['app'], migrationsDir)).toBe(
         join(migrationsDir, 'app', '1_country'),
       );
     });
 
-    it('and not by a placeholder imported from a module the config does not name', async () => {
-      await migration('1_country', UNFILLED);
+    it('but not one imported from a file of the migration', async () => {
+      await migration('1_country', UNFILLED.replace(`'${MODULE}'`, "'../helpers/migration'"));
       expect(
-        await migrationWithUnfilledPlaceholders(plans, ['app'], migrationsDir, STANDIN),
+        await migrationWithUnfilledPlaceholders(plans, ['app'], migrationsDir),
       ).toBeUndefined();
     });
   });

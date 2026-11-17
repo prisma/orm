@@ -118,7 +118,6 @@ function migrate(args: {
     >({}),
     frameworkComponents: [],
     migrationsDir: join(args.projectDir, 'migrations'),
-    migrationModule: '@acme/orm-db/migration',
     extensions: [],
     targetId: 'postgres',
     ...(args.refHash === undefined ? {} : { refHash: args.refHash }),

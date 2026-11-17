@@ -12,13 +12,12 @@ export async function migrationWithUnfilledPlaceholders(
   plans: ReadonlyMap<string, PerSpacePlan>,
   applyOrder: readonly string[],
   migrationsDir: string,
-  migrationModule: string,
 ): Promise<string | undefined> {
   for (const spaceId of applyOrder) {
     for (const edge of plans.get(spaceId)?.migrationEdges ?? []) {
       if (edge.operationCount !== 0) continue;
       const directory = join(migrationsDir, spaceId, edge.dirName);
-      if (callsPlaceholder(await migrationSource(directory), migrationModule)) return directory;
+      if (callsPlaceholder(await migrationSource(directory))) return directory;
     }
   }
   return undefined;
@@ -38,17 +37,21 @@ type Token =
   | { readonly kind: 'string'; readonly text: string }
   | { readonly kind: 'punctuation'; readonly text: string };
 
+function isPackageModule(module: string): boolean {
+  return !module.startsWith('./') && !module.startsWith('../') && !module.startsWith('/');
+}
+
 const NAME_START = /[A-Za-z_$]/;
 const NAME_PART = /[\w$]/;
 
 /**
- * Whether the source calls the `placeholder` it imports from the config's migration module, by the
+ * Whether the source calls a `placeholder` it imports from a package, by the
  * local name it imports it under or through a namespace import. Comments and the text of strings
  * are not code, so a `placeholder(` there is not a call.
  */
-function callsPlaceholder(source: string, migrationModule: string): boolean {
+function callsPlaceholder(source: string): boolean {
   const tokens = tokenize(source);
-  const { names, namespaces } = placeholderImports(tokens, migrationModule);
+  const { names, namespaces } = placeholderImports(tokens);
   return tokens.some((token, index) => {
     if (tokens[index + 1]?.text !== '(' || token.kind !== 'name') return false;
     const before = tokens[index - 1];
@@ -58,10 +61,7 @@ function callsPlaceholder(source: string, migrationModule: string): boolean {
   });
 }
 
-function placeholderImports(
-  tokens: readonly Token[],
-  migrationModule: string,
-): {
+function placeholderImports(tokens: readonly Token[]): {
   readonly names: ReadonlySet<string>;
   readonly namespaces: ReadonlySet<string>;
 } {
@@ -73,7 +73,7 @@ function placeholderImports(
       (each, at) => at > index && each.kind === 'name' && each.text === 'from',
     );
     const module = tokens[fromAt + 1];
-    if (fromAt < 0 || module?.kind !== 'string' || module.text !== migrationModule) {
+    if (fromAt < 0 || module?.kind !== 'string' || !isPackageModule(module.text)) {
       return;
     }
     const clause = tokens.slice(index + 1, fromAt);

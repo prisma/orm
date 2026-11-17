@@ -538,7 +538,6 @@ class ControlClientImpl implements ControlClient {
       migrations: this.options.target.migrations,
       frameworkComponents,
       migrationsDir: options.migrationsDir,
-      migrationModule: options.migrationModule,
       extensions: this.options.extensions ?? [],
       targetId: this.options.target.targetId,
       ...ifDefined('refHash', options.refHash),

@@ -205,7 +205,6 @@ function migrateOptions(args: {
     migrations: args.migrations,
     frameworkComponents: [],
     migrationsDir: args.migrationsDir,
-    migrationModule: '@acme/orm-db/migration',
     extensions: args.extensions ?? [],
     targetId: 'postgres' as const,
     ...(args.refHash === undefined ? {} : { refHash: args.refHash }),

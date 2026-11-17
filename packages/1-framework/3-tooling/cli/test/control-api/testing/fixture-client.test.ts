@@ -73,7 +73,6 @@ describe('createFixtureControlClient', () => {
       invocation: TEST_INVOCATION,
       contract: {},
       migrationsDir: 'migrations',
-      migrationModule: '@acme/orm-db/migration',
     });
     expect(migrate.assertOk().markerHash).toBe(FIXTURE_STORAGE_HASH);
 
@@ -208,12 +207,7 @@ describe('createFixtureControlClient', () => {
       [
         'migrate',
         (c) =>
-          c.migrate({
-            invocation: TEST_INVOCATION,
-            contract: {},
-            migrationsDir: 'migrations',
-            migrationModule: '@acme/orm-db/migration',
-          }),
+          c.migrate({ invocation: TEST_INVOCATION, contract: {}, migrationsDir: 'migrations' }),
       ],
       ['introspect', (c) => c.introspect()],
     ];

@@ -645,8 +645,6 @@ export interface MigrateOptions {
   readonly contract: unknown;
   /** Migrations root directory (`migrations/` under the project). */
   readonly migrationsDir: string;
-  /** The module the app's migrations import from: the config's `migrations.module`. */
-  readonly migrationModule: string;
   /**
    * Optional app-space ref override. When provided, the app space's
    * graph-walk targets this hash instead of `contract.storage.storageHash`.

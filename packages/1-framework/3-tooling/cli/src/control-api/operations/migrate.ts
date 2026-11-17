@@ -82,7 +82,6 @@ export interface ExecuteMigrateOptions<TFamilyId extends string, TTargetId exten
   >;
   readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<TFamilyId, TTargetId>>;
   readonly migrationsDir: string;
-  readonly migrationModule: string;
   readonly extensions: ReadonlyArray<ControlExtensionDescriptor<TFamilyId, TTargetId>>;
   readonly targetId: TTargetId;
   /** Content check for contract snapshots the aggregate loader resolves. */
@@ -149,7 +148,6 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     migrations,
     frameworkComponents,
     migrationsDir,
-    migrationModule,
     extensions,
     targetId,
     refHash,
@@ -290,7 +288,6 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     perSpacePlans,
     applyOrder,
     migrationsDir,
-    migrationModule,
   );
   if (unfilled !== undefined) {
     return notOk(errorMigrationHasUnfilledPlaceholders(unfilled, options.invocation));
