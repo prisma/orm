@@ -198,7 +198,6 @@ describe('generateModelsType', () => {
   });
 
   it('orders models by code unit, whatever the locale', () => {
-    // A locale orders `alpha` before `Beta`; code units put `B` (66) before `a` (97).
     const result = generateModelsType({ alpha: makeModel(), Beta: makeModel() }, noopStorage);
     expect(result.indexOf('readonly Beta:')).toBeLessThan(result.indexOf('readonly alpha:'));
   });

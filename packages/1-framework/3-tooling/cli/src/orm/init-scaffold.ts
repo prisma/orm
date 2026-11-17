@@ -131,7 +131,6 @@ export interface ScaffoldOutcome {
   readonly notes: readonly string[];
   /** The project already pins `@types/node` itself, so the install leaves it alone. */
   readonly hasTypesNode: boolean;
-  /** The package the scaffolded files import from, and that the install adds. */
   readonly targetPackage: string;
 }
 

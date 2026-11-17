@@ -712,9 +712,6 @@ async function executeMigrationPlanCommandInner(
         resolved,
       });
 
-  // The destination snapshot's declarations are rendered now, before the seed
-  // phase writes anything, and written with the planned package later. A plan whose source already is the
-  // destination writes no new snapshot, so it renders nothing.
   let destinationDeclarations: string | null = null;
   if (!destinationInStore && fromHash !== toStorageHash) {
     const rendered = await renderSnapshotDeclarations({

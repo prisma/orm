@@ -3,20 +3,10 @@ import { DEFAULT_CONTRACT_SOURCE_DIR } from '@internal/config/config-types';
 export type TargetId = 'postgres' | 'mongo';
 export type AuthoringId = 'psl' | 'typescript';
 
-/**
- * The published package a scaffolded project for `target` depends on and
- * imports from. A scaffold names only this package and its entrypoints, and
- * `init` installs the same name, so the files and the dependency agree.
- */
 export function targetPackageName(target: TargetId): string {
   return target === 'postgres' ? '@prisma/orm-postgres' : '@prisma/orm-mongo';
 }
 
-/**
- * The workspace package of `target`, which projects scaffolded by earlier
- * versions of `init` may still declare. Tests pass it to the templates to
- * typecheck a scaffold inside this repository.
- */
 export function workspaceTargetPackageName(target: TargetId): string {
   return target === 'postgres' ? '@internal/postgres' : '@internal/mongo';
 }

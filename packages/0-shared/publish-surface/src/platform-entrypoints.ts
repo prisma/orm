@@ -1,12 +1,5 @@
-/**
- * The published name of an internal workspace specifier, for the build of the
- * published packages. The mapping itself is `./shells`; nothing here
- * duplicates it.
- */
-
 import { publicShells, type ShellDefinition, type ShellName } from './shells';
 
-/** The shell table maps a package twice, or a specifier to no package. */
 export class ShellMappingError extends Error {}
 
 interface OwningShell {
@@ -14,12 +7,6 @@ interface OwningShell {
   readonly entry: string;
 }
 
-/**
- * Takes the shell map as an argument rather than closing over `publicShells`
- * so the duplicate-owner guard is reachable from a test: the real map is
- * valid by construction, and a guard nothing can exercise is a guard nobody
- * knows still works.
- */
 export function buildOwnerIndex(
   shells: ReadonlyMap<ShellName, ShellDefinition>,
 ): Map<string, OwningShell> {
@@ -41,11 +28,6 @@ export function buildOwnerIndex(
 
 const owners: ReadonlyMap<string, OwningShell> = buildOwnerIndex(publicShells);
 
-/**
- * The published entrypoint of an internal specifier, with the shell that owns
- * it. The shell build needs both: an import that stays inside the shell being
- * built is bundled rather than externalized.
- */
 export function platformEntrypointOf(specifier: string): { shell: ShellName; id: string } {
   const [scope, pkg, ...rest] = specifier.split('/');
   const owner = owners.get(`${scope}/${pkg}`);

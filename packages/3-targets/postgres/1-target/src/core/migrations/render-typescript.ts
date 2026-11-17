@@ -23,11 +23,9 @@ export interface RenderMigrationMeta {
   readonly to: string;
   /** POSIX-relative path from the migration package dir to `migrations/snapshots`, e.g. '../../snapshots'. */
   readonly snapshotsImportPath: string;
-  /** The module the rendered file imports its base class, its CLI entrypoint and every operation helper from: the config's `migrations.module`. */
   readonly migrationModule: string;
 }
 
-/** The base class and the CLI entrypoint every scaffold imports. */
 const BASE_IMPORTS: readonly ImportRequirement[] = [
   { moduleSpecifier: MIGRATION_MODULE, symbol: 'Migration' },
   { moduleSpecifier: MIGRATION_MODULE, symbol: 'MigrationCLI' },

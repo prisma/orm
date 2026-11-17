@@ -403,9 +403,6 @@ export function errorSpaceNotFound(
   });
 }
 
-/**
- * A command that writes a `contract.d.ts` was run with a config that names no module for its contract types.
- */
 export function errorContractTypesModuleMissing(): ActionableCliError {
   const fix =
     "A config assembled by hand sets `contract.typesModule` to a module that exports the framework's and family's contract types. If the config comes from a target package's `defineConfig`, that package is older than this requirement: upgrade it to a release that sets the member.";
@@ -420,9 +417,6 @@ export function errorContractTypesModuleMissing(): ActionableCliError {
   );
 }
 
-/**
- * A command that renders a `migration.ts` was run with a config that names no module for it to import from.
- */
 export function errorMigrationModuleMissing(): ActionableCliError {
   const fix =
     "A config assembled by hand sets `migrations.module` to the module that exports the target's migration helpers. If the config comes from a target package's `defineConfig`, that package is older than this requirement: upgrade it to a release that sets the member.";

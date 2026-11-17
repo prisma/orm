@@ -36,7 +36,6 @@ type ControlTargetKeysMysqlBuilds =
   | 'createPlanner'
   | 'createRunner';
 
-/** What a target that extends MySQL gives the control target factory: its descriptor meta, which carries its target id and session settings. */
 export interface MysqlControlTargetOptions<TargetId extends string> {
   readonly descriptorMeta: Omit<
     SqlControlTargetDescriptor<TargetId, MysqlPlanTargetDetails>,

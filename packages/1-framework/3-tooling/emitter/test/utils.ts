@@ -48,7 +48,6 @@ const SQL_EMIT_HOOKS = {
   sortStorage: sqlSortStorage,
 } satisfies Pick<CanonicalizeContractOptions, 'shouldPreserveEmpty' | 'sortStorage'>;
 
-/** The module generated test declarations import the framework and family types from. */
 export const TEST_TYPES_MODULE = '@acme/orm-db/generated-types';
 
 /**

@@ -106,7 +106,6 @@ export interface InstallOptions {
   readonly direct?: readonly string[];
   /** Extra `.npmrc` lines, e.g. `strict-peer-dependencies=true`. */
   readonly npmrc?: readonly string[];
-  /** Packages the scratch project declares from the registry, by name and version range. */
   readonly registryDependencies?: Readonly<Record<string, string>>;
 }
 
@@ -248,10 +247,6 @@ export function importSubpaths(installedPackageDir: string): string[] {
  * constants* (not import specifiers), recorded when the shells were first
  * published.
  *
- * They name internal packages inside diagnostics, config-validation messages,
- * the workspace defaults of templates and telemetry identifiers, and go away
- * with the `@internal/*` names themselves.
- *
  * This is a baseline lock, not an endorsement. Anything not listed fails
  * {@link findInternalNames}, so no *new* internal name can reach a
  * published dist while these are being worked through.
@@ -307,11 +302,9 @@ export const knownInternalNamesInDist: readonly string[] = [
  * Scan an installed shell's dist for internal workspace package names.
  *
  * Covers every quoted string in the runtime `.mjs` files, not just import
- * specifiers, because a string constant can land in a file a command writes
- * for the user. Declaration files
- * are scanned for import specifiers only — an internal name in JSDoc prose
- * is a documentation wart, not a resolution failure.
- *
+ * specifiers. Declaration files are scanned for import specifiers only — an
+ * internal name in JSDoc prose is a documentation wart, not a resolution
+ * failure.
  *
  * Returns offending `file: name` strings, excluding
  * {@link knownInternalNamesInDist}.

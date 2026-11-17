@@ -227,7 +227,6 @@ ${imports}
 ${body}`;
 }
 
-/** The framework's own contract types a generated file imports, from the config's module. */
 function frameworkImports(typesModule: string, hasValueObjects: boolean): ImportRequirement[] {
   const named = (symbol: string, alias?: string): ImportRequirement => ({
     moduleSpecifier: typesModule,

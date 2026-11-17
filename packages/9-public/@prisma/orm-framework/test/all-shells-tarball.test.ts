@@ -36,7 +36,6 @@ const uncoveredElsewhere = [
 const targetPackages = [...publicShells]
   .filter(([, shell]) => shell.kind === 'facade')
   .map(([name]) => name);
-/** Target packages whose `defineConfig` names `contract.typesModule` and `migrations.module`. */
 const namingGeneratedModules: readonly string[] = [
   '@prisma/orm-postgres',
   '@prisma/orm-sqlite',
@@ -47,7 +46,6 @@ const namingGeneratedModules: readonly string[] = [
 const targetPlatformPackages = [...publicShells.keys()].filter((name) =>
   name.startsWith('@prisma/orm-target-'),
 );
-/** A script fragment defining `collect(value, into)`, which gathers the module of every type declaration under `value`. */
 const COLLECT_DECLARED_MODULES = [
   'const collect = (value, into, seen = new Set()) => {',
   "  if (value === null || typeof value !== 'object' || seen.has(value)) return into;",
@@ -60,7 +58,6 @@ const COLLECT_DECLARED_MODULES = [
 const extensionPackages = [...publicShells]
   .filter(([, shell]) => shell.kind === 'extension')
   .map(([name]) => name);
-/** Extension packages whose control descriptors state the modules their types come from. */
 const statingTypeModules: readonly string[] = [
   '@prisma/orm-extension-postgis',
   '@prisma/orm-extension-pgvector',
@@ -354,9 +351,6 @@ describe('all publish shells packed and installed together', () => {
     expect(offenders).toEqual([]);
   });
 
-  // A `#` import is private to the package that declares it. A workspace
-  // package's own `#` names are inlined when a shell is built; one left in a
-  // shell's output resolves only if that shell's own manifest declares it.
   it('imports no # module in any built or declaration file that its own package does not declare', () => {
     const offenders: string[] = [];
     for (const name of allShells) {

@@ -28,19 +28,20 @@ function sortDeepTyped<T>(value: T): T {
   return sortDeep(value) as T;
 }
 
-/**
- * The keys of a pack's `types` metadata that a contract carries, each with the members it leaves out. The left-out members are the type-import declarations, which only the emitter reads and reads from the descriptor, and the codec members that hold functions. Any key not listed stays out of the contract, such as the `storage` list that a pack built for an earlier framework still declares.
- */
-const CONTRACT_TYPES_OMITTED_MEMBERS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+const TYPE_IMPORT_MEMBERS_THE_EMITTER_READS_FROM_THE_DESCRIPTOR = [
+  'import',
+  'typeImports',
+  'parameterizedOutputTypes',
+];
+const CODEC_MEMBERS_HOLDING_FUNCTIONS = ['controlPlaneHooks', 'codecDescriptors'];
+
+const CONTRACT_TYPES_KEYS_WITH_OMITTED_MEMBERS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ['aggregateDescriptors', new Set<string>()],
   [
     'codecTypes',
     new Set([
-      'import',
-      'typeImports',
-      'parameterizedOutputTypes',
-      'controlPlaneHooks',
-      'codecDescriptors',
+      ...TYPE_IMPORT_MEMBERS_THE_EMITTER_READS_FROM_THE_DESCRIPTOR,
+      ...CODEC_MEMBERS_HOLDING_FUNCTIONS,
     ]),
   ],
   ['operationTypes', new Set(['import'])],
@@ -48,7 +49,7 @@ const CONTRACT_TYPES_OMITTED_MEMBERS: ReadonlyMap<string, ReadonlySet<string>> =
 ]);
 
 function contractTypesEntry(key: string, value: unknown): [string, unknown] | undefined {
-  const omitted = CONTRACT_TYPES_OMITTED_MEMBERS.get(key);
+  const omitted = CONTRACT_TYPES_KEYS_WITH_OMITTED_MEMBERS.get(key);
   if (omitted === undefined) return undefined;
   if (!isPlainObject(value)) return [key, value];
   const kept = Object.entries(value).filter(([member]) => !omitted.has(member));

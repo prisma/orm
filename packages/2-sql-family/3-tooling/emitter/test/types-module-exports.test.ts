@@ -7,7 +7,6 @@ import { createEmitterTestContract as createContract } from './create-emitter-te
 
 const REPO_ROOT = join(import.meta.dirname, '../../../../..');
 
-/** Every module in this repository that a SQL config names in `contract.typesModule` and that is written by hand. */
 const HAND_WRITTEN_TYPES_MODULES = [
   'packages/3-extensions/citext/src/generated-types.ts',
   'packages/3-extensions/paradedb/src/generated-types.ts',
@@ -22,7 +21,6 @@ const HAND_WRITTEN_TYPES_MODULES = [
 
 const TYPES_MODULE = 'types-module';
 
-/** The names a generated SQL `contract.d.ts` imports from its types module, taken from the emitter's output. */
 function namesTheEmitterImports(): string[] {
   const contract = createContract({
     valueObjects: {

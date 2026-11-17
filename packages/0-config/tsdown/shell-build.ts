@@ -227,12 +227,8 @@ export async function defineShellConfig(shellName: ShellName): Promise<UserConfi
   });
 }
 
-/** The identifiers every package's published module base is defined under start with this. */
 export const PUBLISHED_MODULE_BASE_PREFIX = '__PRISMA_PUBLISHED_MODULE_BASE__';
 
-/**
- * The identifier the published module base of the internal package `name` is defined under, for example `__PRISMA_PUBLISHED_MODULE_BASE__TARGET_POSTGRES` for `@internal/target-postgres`.
- */
 export function publishedModuleBaseIdentifier(name: string): string {
   return `${PUBLISHED_MODULE_BASE_PREFIX}${name
     .replace(/^@internal\//, '')
@@ -240,9 +236,6 @@ export function publishedModuleBaseIdentifier(name: string): string {
     .replaceAll(/[^A-Z0-9]/g, '_')}`;
 }
 
-/**
- * Defines, for each internal package a shell bundles, its published module base under its own identifier: the shell's name plus the entry the package is published under.
- */
 function publishedModuleBaseDefine(
   shellName: ShellName,
   internals: readonly InternalPackage[],

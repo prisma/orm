@@ -9,9 +9,7 @@ import { postgresCreateNamespace } from '@prisma/orm-target-postgres/target/type
 import { adapter, driver, family, migrationModule, target, typesModule } from './components';
 
 export interface StandinConfigOptions {
-  /** The Prisma schema the contract is written in. */
   readonly contract: string;
-  /** Where `contract.json` and `contract.d.ts` are written. */
   readonly output: string;
   readonly extensions?: readonly ControlExtensionDescriptor<'sql', 'postgres'>[];
 }

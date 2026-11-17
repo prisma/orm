@@ -41,7 +41,6 @@ describe('renderImports', () => {
   });
 
   it('orders modules, default bindings and attributes by code unit, whatever the locale', () => {
-    // A locale orders `alpha` before `Beta`; code units put `B` (66) before `a` (97).
     const out = renderImports([
       { moduleSpecifier: '@acme/alpha', symbol: 'a' },
       { moduleSpecifier: '@acme/Beta', symbol: 'b' },

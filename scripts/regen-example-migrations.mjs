@@ -287,9 +287,6 @@ function rewriteContractSnapshotSpecifiers(source, snapshotsImportPath, toHash, 
  * — the same options the postgres `defineConfig` helper passes — so the emitted
  * contract is identical in shape to what the real config would produce.
  *
- * The real config's `contract.typesModule` is kept, so the declarations import
- * from the module the example's own config names.
- *
  * The result is passed through `defineConfig` so the export carries the
  * config-format version marker the loader requires. Spreading `realConfig`
  * drops that marker (it is non-enumerable), so re-stamping here is required.

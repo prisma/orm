@@ -31,7 +31,6 @@ describe('the modules Mongo contract types import from', () => {
 
 describe('the order of emitted Mongo storage', () => {
   it('orders collections by code unit, whatever the locale', () => {
-    // A locale orders `alpha` before `Beta`; code units put `B` (66) before `a` (97).
     const dts = generateContractDts(
       createMongoContract({
         storage: namespacedMongoStorageFromCollections({ alpha: {}, Beta: {} }),

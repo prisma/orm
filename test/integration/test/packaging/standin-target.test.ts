@@ -1,18 +1,3 @@
-/**
- * A target package under a name the CLI has never heard of gets correct
- * generated files.
- *
- * `prisma-orm-standin` (`./fixtures/standin`) plays a target package written
- * outside Prisma: it is in no list here, it is compiled with `tsc` against the
- * packed published packages only, and it is installed from its own tarball
- * into a scratch application outside the workspace. It reuses the Postgres
- * target, so what this proves is the package name, not a new target. The
- * application emits its contract and plans a migration with the published
- * CLI; every generated file must import only the modules its config names,
- * an extension's own package, or a relative path, typecheck with declaration
- * files checked, and the planned `migration.ts` must run under Node.
- */
-
 import { execFileSync } from 'node:child_process';
 import {
   cpSync,
@@ -83,7 +68,6 @@ const CLI_RUNNER = `import { runOrmBin } from '${TOOLCHAIN}/cli';
 await runOrmBin();
 `;
 
-/** Fails to compile if `Contract` is `any`, which an unresolved import would make it. */
 const CONTRACT_IS_TYPED = `import type { Contract } from './prisma/contract';
 
 type IsAny<T> = 0 extends 1 & T ? true : false;
@@ -98,7 +82,6 @@ function packShells(scratch: string): PackedShell[] {
   });
 }
 
-/** The stand-in's `package.json`, depending on the published packages at this workspace's version. */
 function standinManifest(): string {
   const manifest: { dependencies: Record<string, string> } = JSON.parse(
     readFileSync(join(fixtureDir, 'package.template.json'), 'utf8'),
@@ -109,7 +92,6 @@ function standinManifest(): string {
   return `${JSON.stringify(manifest, null, 2)}\n`;
 }
 
-/** Compiles the stand-in against the packed published packages and packs it, as its author would. */
 function buildStandin(scratch: string, packed: readonly PackedShell[]): PackedShell {
   const buildDir = join(scratch, 'standin-build');
   installShells(buildDir, packed, {
@@ -139,7 +121,6 @@ interface Application {
   run(...args: string[]): void;
   runNode(file: string): void;
   read(path: string): string;
-  /** Every generated contract type and migration file, relative to the application. */
   generatedFiles(): string[];
 }
 
@@ -227,7 +208,6 @@ function runNodeIn(dir: string, args: readonly string[]): void {
   }
 }
 
-/** Diagnostics in the application's own files, with declaration files checked. */
 function typecheck(app: Application): string[] {
   const roots = [...app.generatedFiles(), 'src/contract-is-typed.ts'].map((file) =>
     join(app.dir, file),

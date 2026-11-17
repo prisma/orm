@@ -39,9 +39,8 @@ export function computeRefAdvancementName(options: {
 /**
  * Everything `executeRefAdvancement` needs, produced before a command does the
  * work that precedes the ref write: the ref name is validated and the
- * declarations of the contract to snapshot are rendered from its JSON, importing
- * from the config's contract types module. Nothing is
- * read or rendered after the database is touched, so a contract that cannot
+ * declarations of the contract to snapshot are rendered from its JSON. Nothing
+ * is read or rendered after the database is touched, so a contract that cannot
  * be snapshotted refuses the command before it changes anything.
  */
 export async function preflightRefAdvancement(args: {

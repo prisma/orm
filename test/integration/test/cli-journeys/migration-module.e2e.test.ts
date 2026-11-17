@@ -1,11 +1,3 @@
-/**
- * A written `migration.ts` imports from the module the config names in `migrations.module`, and a command that would write one stops when the config names none.
- *
- * No database: `contract emit`, `migration new` and `migration plan` are all offline.
- *
- * Package names are built from constants: the import-root lints scan this file for import specifiers and cannot tell a string from an import.
- */
-
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -20,6 +12,7 @@ import {
   timeouts,
 } from '../utils/journey-test-helpers';
 
+// The import-root lints read any quoted package name after `from` as an import, so names are built from constants.
 const CONFIG_MODULE = '@acme/orm-db/migration';
 const WORKSPACE = '@internal/postgres';
 const WORKSPACE_MODULE = `module: '${WORKSPACE}/migration',`;

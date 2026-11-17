@@ -268,7 +268,6 @@ export function deduplicateImports(imports: TypesImportSpec[]): TypesImportSpec[
   return result;
 }
 
-/** The import requirements of type declarations, each from the module it states. */
 export function typesImportRequirements(
   imports: ReadonlyArray<TypesImportSpec>,
 ): ImportRequirement[] {

@@ -4,12 +4,8 @@
  * exactly one published `@prisma/orm-*` shell: the internal root export maps
  * to `@prisma/<shell>/<entry>` and each internal subpath `./x` maps to
  * `@prisma/<shell>/<entry>/x`.
- *
- * Consumed by the shell build (`@repo/tsdown/shell-build`, through
- * `./platform-entrypoints`) and the publish checks.
  */
 
-/** How an application acquires a shell. */
 export type ShellKind =
   /** Installed directly only by a decomposed application. */
   | 'platform'

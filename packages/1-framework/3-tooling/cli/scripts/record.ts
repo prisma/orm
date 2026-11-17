@@ -145,7 +145,6 @@ const MONOREPO_ROOT = findMonorepoRoot(CLI_ROOT);
  */
 const FIXTURE_APP_DIR = join(MONOREPO_ROOT, 'test/integration/test/fixtures/cli/cli-e2e-test-app');
 
-/** The workspace's `prisma.config.ts` template, kept with the fixture app's other configs. */
 const CONFIG_TEMPLATE_DIR = join(FIXTURE_APP_DIR, 'fixtures/recordings');
 
 // --- Test utils (loaded dynamically to avoid adding deps to CLI package) ---

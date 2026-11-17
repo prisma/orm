@@ -83,9 +83,6 @@ export interface CollModMeta {
   readonly checkDocuments?: boolean;
 }
 
-/**
- * Stands for the module a rendered `migration.ts` imports its base class, its CLI entrypoint and every operation factory from. `renderCallsToTypeScript` replaces it with the config's `migrations.module`.
- */
 export const MIGRATION_MODULE = '<migrations.module>';
 
 abstract class OpFactoryCallNode extends TsExpression implements FrameworkOpFactoryCall {

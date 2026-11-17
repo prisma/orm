@@ -99,9 +99,6 @@ import { buildTargetDetails } from './planner-target-details';
 
 type Op = SqlMigrationPlanOperation<SqlitePlanTargetDetails>;
 
-/**
- * Stands for the module a rendered `migration.ts` imports its base class, its CLI entrypoint and every operation helper from. `renderCallsToTypeScript` replaces it with the config's `migrations.module`.
- */
 export const MIGRATION_MODULE = '<migrations.module>';
 
 abstract class SqliteOpFactoryCallNode extends TsExpression implements FrameworkOpFactoryCall {

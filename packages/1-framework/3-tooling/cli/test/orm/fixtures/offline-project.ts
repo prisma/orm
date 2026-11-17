@@ -372,10 +372,8 @@ function deserializeIntoStorageInstance(json: unknown): unknown {
     : { ...json, storage: new HydratedFixtureStorage(storage) };
 }
 
-/** The module the offline config names for rendered migration files: not one of Prisma's, so a test that finds it proves the name came from the config. */
 export const OFFLINE_MIGRATION_MODULE = '@acme/orm-db/migration';
 
-/** The module the offline config names for generated contract types, for the same reason. */
 export const OFFLINE_TYPES_MODULE = '@acme/orm-db/generated-types';
 
 export function offlineConfig(options: {
@@ -418,7 +416,6 @@ export function offlineConfig(options: {
   };
 }
 
-/** The offline config's contract section without `typesModule`, as a config assembled by hand might leave it. */
 export function contractWithoutTypesModule(project: OfflineProject): Record<string, unknown> {
   const { typesModule: _omitted, ...contract } = blindCast<
     { readonly typesModule?: string },

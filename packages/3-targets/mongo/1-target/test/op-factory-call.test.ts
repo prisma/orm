@@ -4,7 +4,7 @@
  * - Every `*Call` class constructs with literal args, is frozen, computes its
  *   label + operationClass, lowers to the matching runtime op via `toOp()`,
  *   and emits the expected TypeScript expression + import requirements.
- * - Import requirements always reference `MIGRATION_MODULE`, which the renderer replaces with the config's module
+ * - Import requirements always reference `MIGRATION_MODULE`
  *   and the factory's own symbol — a regression guard against accidentally
  *   widening the import surface.
  * - Optional-args variants (`CreateIndexCall` with/without options,

@@ -30,9 +30,6 @@ import {
 } from './operations';
 import { buildTargetDetails } from './planner-target-details';
 
-/**
- * Stands for the module a rendered `migration.ts` imports its base class, its CLI entrypoint and every operation helper from. `renderCallsToTypeScript` replaces it with the config's `migrations.module`.
- */
 export const MIGRATION_MODULE = '<migrations.module>';
 
 /** The refusal of a `MysqlMigration` operation that needs the control adapter, on an instance built without a control stack. */

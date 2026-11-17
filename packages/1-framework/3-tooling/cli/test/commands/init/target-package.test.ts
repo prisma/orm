@@ -10,7 +10,6 @@ import {
 } from '../../../src/commands/init/templates/code-templates';
 import { quickReferenceMd } from '../../../src/commands/init/templates/quick-reference';
 
-/** Everything `init` writes into a user's project that can carry a package name. */
 function scaffold(target: TargetId, authoring: AuthoringId, targetPackage: string): string {
   return [
     starterSchema(target, authoring, targetPackage),
@@ -20,7 +19,6 @@ function scaffold(target: TargetId, authoring: AuthoringId, targetPackage: strin
   ].join('\n');
 }
 
-/** The scoped package names a source file imports from. */
 function importedPackages(source: string): string[] {
   return [...source.matchAll(/\bfrom\s+'(@[a-z0-9-]+\/[a-z0-9-]+)[^']*'/g)].map(
     ([, name]) => name ?? '',

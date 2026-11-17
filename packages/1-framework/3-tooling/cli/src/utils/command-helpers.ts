@@ -25,7 +25,6 @@ import {
 
 const PASSWORD_QUERY_KEY = /password/i;
 
-/** The module a generated `contract.d.ts` imports the framework and family types from: the config's `contract.typesModule`. */
 export function contractTypesModuleOf(config: {
   readonly contract?: { readonly typesModule?: string };
 }): Result<string, CliStructuredError> {
@@ -33,7 +32,6 @@ export function contractTypesModuleOf(config: {
   return module === undefined ? notOk(errorContractTypesModuleMissing()) : ok(module);
 }
 
-/** The module a rendered `migration.ts` imports from: the config's `migrations.module`. */
 export function migrationModuleOf(config: {
   readonly migrations?: { readonly module?: string };
 }): Result<string, CliStructuredError> {

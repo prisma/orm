@@ -5,17 +5,14 @@ import { restateTypeDeclarations } from '@internal/target-package-config/type-de
 import sqlite from '@internal/target-sqlite/control';
 import { moduleBase } from './module-base';
 
-/** The module the generated contract types of an application on this package import from. */
 export const generatedTypesModule = `${moduleBase}/generated-types`;
 
-/** The target and adapter descriptors this package hands on: their type declarations name its own generated-types module. */
 export const sqliteTarget: typeof sqlite = restateTypeDeclarations(sqlite, generatedTypesModule);
 export const sqliteControlAdapter: typeof sqliteAdapter = restateTypeDeclarations(
   sqliteAdapter,
   generatedTypesModule,
 );
 
-/** The control components every entrypoint of this package builds a control stack from: `defineConfig` and the control client are given the same ones. */
 export const controlComponents: {
   readonly family: typeof sql;
   readonly target: typeof sqliteTarget;

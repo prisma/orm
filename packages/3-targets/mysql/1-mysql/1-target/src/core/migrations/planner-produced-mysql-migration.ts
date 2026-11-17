@@ -9,7 +9,6 @@ import type { Op } from './operations';
 import { renderOps } from './render-ops';
 import { renderCallsToTypeScript } from './render-typescript';
 
-/** The target a planner plans for: the id its operations and migrations carry. */
 export interface MysqlMigrationTarget<TargetId extends string> {
   readonly targetId: TargetId;
 }
