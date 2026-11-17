@@ -10,7 +10,7 @@ import {
   RenameFieldCall,
   ReplaceStoredValueCall,
 } from '../src/core/migrations/op-factory-call';
-import { contract } from './mongo-statement-fixtures';
+import { contract, NS } from './mongo-statement-fixtures';
 
 const tasks = contract('tasks', { Task: { collection: 'tasks', fields: ['_id'] } }, { tasks: {} });
 const contracts = { fromContract: tasks, contract: tasks, statements: [] };
@@ -37,10 +37,13 @@ const replaceType = rewrite({
   discriminatorFilter: { kind: 'variant', field: 'w', value: 1 },
 });
 
+const FILTER_REASON =
+  'One of these operations finds its documents by what another changes, and the order the plan needs runs it on the wrong side of that change.';
+
 const filterRefusal = (earlier: OrderedRewrite, later: OrderedRewrite) => ({
   kind: 'unsupportedOperation',
   summary: `Cannot plan the migration: the filter of one of its operations reads what another changes (${earlier.call.label}; ${later.call.label})`,
-  why: `An operation selects its documents by its filter when it runs, so it must run after the operations that write what its filter reads and before those that empty it, and these operations need both. Make the change in two migrations: first only "${later.call.label}" and apply that; then the rest.`,
+  why: `${FILTER_REASON} Make the change in two migrations: first only "${later.call.label}" and apply that; then the rest.`,
 });
 
 describe('overlapRefusal', () => {
@@ -65,6 +68,27 @@ describe('overlapRefusal', () => {
       writerFirst: overlapRefusal([writesBug, renameOnBug], contracts),
       readerFirst: overlapRefusal([renameOnBug, writesBug], contracts),
     }).toEqual({ writerFirst: undefined, readerFirst: filterRefusal(renameOnBug, writesBug) });
+  });
+
+  it('leads with the changes no statement carries and the statements that keep their data, then says what to do if every answer is --delete', () => {
+    const users = (seed: string, field: string) =>
+      contract(seed, { User: { collection: 'users', fields: ['_id', field] } }, { users: {} });
+    const unanswered = {
+      ...renameZ,
+      unanswered: {
+        kind: 'removed' as const,
+        subject: { kind: 'field' as const, namespaceId: NS, model: 'User', field: 'a' },
+      },
+    };
+    expect(
+      overlapRefusal([unanswered, replaceType], {
+        fromContract: users('from', 'a'),
+        contract: users('to', 'c'),
+        statements: [],
+      })?.why,
+    ).toEqual(
+      `The plan holds changes that no --rename or --convert statement carries: field "User.a", which the plan removes. To keep their data, plan again with: --rename User.a:User.c. ${FILTER_REASON} If every answer is --delete, the plan stays as it is: make the change in two migrations: first only "${replaceType.call.label}" and apply that; then the rest.`,
+    );
   });
 
   it('refuses operations whose filters each need the other to run first', () => {

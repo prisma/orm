@@ -425,8 +425,8 @@ function refusal(
  * involved and lists the operations. It does not offer to leave the statements out and write the
  * operations by hand, since one hand-written migration would meet the same re-run. When an operation
  * involved makes a change no statement answers, and a statement could keep the data of a removal,
- * the refusal names the plan's unanswered changes and the statements that answer them instead of a
- * route that applies those changes.
+ * the refusal leads with the plan's unanswered changes and the statements that keep their data, and
+ * ends with the route that works when every answer is `--delete`, which the planner cannot see.
  */
 export function overlapRefusal(
   rewrites: readonly OrderedRewrite[],
@@ -438,13 +438,17 @@ export function overlapRefusal(
   },
 ): MigrationPlannerConflict | undefined {
   const accessed = rewrites.map((rewrite) => ({ rewrite, access: accessOf(rewrite) }));
-  const unansweredAdvice = (involved: readonly OrderedRewrite[]) =>
-    involved.some(({ unanswered }) => unanswered !== undefined)
+  const why = (involved: readonly OrderedRewrite[], reason: string, advice: string) => {
+    const unanswered = involved.some(({ unanswered }) => unanswered !== undefined)
       ? unansweredChangesAdvice(
           rewrites.flatMap(({ unanswered }) => (unanswered === undefined ? [] : [unanswered])),
           contracts,
         )
       : undefined;
+    return unanswered === undefined
+      ? `${reason} ${advice}`
+      : `${unanswered} ${reason} If every answer is --delete, the plan stays as it is: ${advice.charAt(0).toLowerCase()}${advice.slice(1)}`;
+  };
   const overlaps = overlapsOf(accessed);
   const [first] = overlaps;
   if (first !== undefined) {
@@ -455,12 +459,14 @@ export function overlapRefusal(
     );
     const noun = placeNoun(first.place);
     const operations = involved.map(({ call }) => call.label).join('; ');
-    const unanswered = unansweredAdvice(involved);
-    const advice = adviceOf(first);
     return refusal(
       involved,
       `the migration writes a ${noun} that another of its operations reads (${operations})`,
-      `${ONE_AT_A_TIME} An operation that reads a ${noun} another operation of the same migration writes acts on what that operation wrote: at once when it runs later, and when the migration runs again after a later operation stops. ${unanswered === undefined ? advice : `${unanswered} If every answer is --delete, the plan stays as it is: ${advice.charAt(0).toLowerCase()}${advice.slice(1)}`}`,
+      why(
+        involved,
+        `${ONE_AT_A_TIME} An operation that reads a ${noun} another operation of the same migration writes acts on what that operation wrote: at once when it runs later, and when the migration runs again after a later operation stops.`,
+        adviceOf(first),
+      ),
       contracts,
     );
   }
@@ -470,7 +476,11 @@ export function overlapRefusal(
   return refusal(
     involved,
     `the filter of one of its operations reads what another changes (${involved.map(({ call }) => call.label).join('; ')})`,
-    `An operation selects its documents by its filter when it runs, so it must run after the operations that write what its filter reads and before those that empty it, and these operations need both. ${unansweredAdvice(involved) ?? `Make the change in two migrations: first only "${conflict.later.rewrite.call.label}" and apply that; then the rest.`}`,
+    why(
+      involved,
+      'One of these operations finds its documents by what another changes, and the order the plan needs runs it on the wrong side of that change.',
+      `Make the change in two migrations: first only "${conflict.later.rewrite.call.label}" and apply that; then the rest.`,
+    ),
     contracts,
   );
 }

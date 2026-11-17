@@ -518,6 +518,22 @@ describe('MongoMigrationPlanner, a discriminator renamed without its statement',
   });
 });
 
+describe('MongoMigrationPlanner, a plan-wide refusal involving a removed variant', () => {
+  it('offers the rename to the one new variant of its base, as the question does', () => {
+    const why = refusal(
+      plan({
+        from: BEFORE,
+        to: tasks('to', { Defect: { ...BUG, value: 'defect' }, Epic: { ...EPIC, value: 'bug' } }),
+        schema: live,
+        statements: [convert('Epic')],
+      }),
+    ).map(({ why: text }) => text?.slice(0, text.indexOf(ONE_AT_A_TIME)));
+    expect(why).toEqual([
+      'The plan holds changes that no --rename or --convert statement carries: field "Bug.severity", which the plan removes; model "Bug", whose documents the plan deletes; new required field "Epic.scope", which the plan fills with a temporary value. To keep their data, plan again with: --rename \'Bug.severity:Bug.<new name>\'; --rename Bug:Defect. ',
+    ]);
+  });
+});
+
 describe('MongoMigrationPlanner, a variant field renamed with its base discriminator', () => {
   const renameType = renameField('Task', 'type', 'Task', 'kind');
   const renameSeverity = renameField('Bug', 'severity', 'Bug', 'level');

@@ -1,14 +1,18 @@
-import type { ContractWithDomain } from '@internal/contract/types';
+import { asNamespaceId, type ContractWithDomain, valueObjectAt } from '@internal/contract/types';
 import {
+  type EnumValueCoordinate,
   enumValueStatementText,
+  type FieldCoordinate,
   fieldStatementText,
   type MigrationSubject,
   type ModelCoordinate,
   migrationSubjectKey,
   modelStatementText,
   type ResolvedMigrationStatement,
+  type ValueObjectFieldCoordinate,
   valueObjectFieldStatementText,
 } from '@internal/framework-components/control';
+import { statementFlag } from './mongo-statement-flags';
 import { modelAt } from './mongo-statement-planning';
 
 interface Contracts {
@@ -25,12 +29,6 @@ interface Contracts {
 export interface UnansweredChange {
   readonly kind: 'removed' | 'newRequired';
   readonly subject: MigrationSubject;
-}
-
-const SHELL_SAFE = /^[A-Za-z0-9_.:/@%+,-]+$/;
-
-function flag(verb: string, text: string): string {
-  return `--${verb} ${SHELL_SAFE.test(text) ? text : `'${text.replaceAll("'", `'\\''`)}'`}`;
 }
 
 function subjectText(subject: MigrationSubject, contract: ContractWithDomain): string {
@@ -80,64 +78,143 @@ function destinationModelOf(
   return modelAt(contracts.contract, destination) === undefined ? undefined : destination;
 }
 
-/** The fields of the destination model a removed field can have been renamed to: those the origin model does not have and no rename names. */
-function renameCandidates(
-  subject: Extract<MigrationSubject, { readonly kind: 'field' }>,
-  contracts: Contracts,
+function membersOf(contract: ContractWithDomain, value: EnumValueCoordinate): readonly string[] {
+  return (contract.domain.namespaces[value.namespaceId]?.enum?.[value.enum]?.members ?? []).map(
+    ({ name }) => name,
+  );
+}
+
+function valueObjectFieldsOf(
+  contract: ContractWithDomain,
+  field: ValueObjectFieldCoordinate,
 ): readonly string[] {
+  const valueObject = valueObjectAt(contract.storage, {
+    plane: 'storage',
+    namespaceId: field.namespaceId,
+    entityKind: 'valueObject',
+    entityName: field.valueObject,
+  });
+  return Object.keys(valueObject?.fields ?? {});
+}
+
+/** The names of `destination` that `origin` does not have and no rename statement names. */
+function added(
+  destination: readonly string[],
+  origin: readonly string[],
+  renamedTo: readonly string[],
+): readonly string[] {
+  return destination.filter((name) => !origin.includes(name) && !renamedTo.includes(name));
+}
+
+/** The fields of the destination model a removed field can have been renamed to: those the origin model does not have and no rename names, as `newModelFields` in the CLI's `plan-questions.ts` finds them. */
+function newModelFields(subject: FieldCoordinate, contracts: Contracts): readonly string[] {
   const destination = destinationModelOf(subject, contracts);
   if (destination === undefined) return [];
-  const originFields = Object.keys(modelAt(contracts.fromContract, subject)?.fields ?? {});
-  const renamedTo = contracts.statements.flatMap((statement) =>
-    statement.kind === 'rename' &&
-    statement.entity === 'field' &&
-    statement.to.namespaceId === destination.namespaceId &&
-    statement.to.model === destination.model
-      ? [statement.to.field]
-      : [],
-  );
-  return Object.keys(modelAt(contracts.contract, destination)?.fields ?? {}).filter(
-    (name) => !originFields.includes(name) && !renamedTo.includes(name),
+  return added(
+    Object.keys(modelAt(contracts.contract, destination)?.fields ?? {}),
+    Object.keys(modelAt(contracts.fromContract, subject)?.fields ?? {}),
+    contracts.statements.flatMap((statement) =>
+      statement.kind === 'rename' &&
+      statement.entity === 'field' &&
+      statement.to.namespaceId === destination.namespaceId &&
+      statement.to.model === destination.model
+        ? [statement.to.field]
+        : [],
+    ),
   );
 }
 
-interface Answers {
+/** The members a removed enum value can have been renamed to, as `onlyNewMember` in the CLI's `plan-questions.ts` finds them. */
+function newMembers(subject: EnumValueCoordinate, contracts: Contracts): readonly string[] {
+  return added(
+    membersOf(contracts.contract, subject),
+    membersOf(contracts.fromContract, subject),
+    contracts.statements.flatMap((statement) =>
+      statement.kind === 'rename' && statement.entity === 'enumValue' ? [statement.to.member] : [],
+    ),
+  );
+}
+
+/** The fields a removed value object field can have been renamed to, as `newValueObjectFields` in the CLI's `plan-questions.ts` finds them. */
+function newValueObjectFields(
+  subject: ValueObjectFieldCoordinate,
+  contracts: Contracts,
+): readonly string[] {
+  return added(
+    valueObjectFieldsOf(contracts.contract, subject),
+    valueObjectFieldsOf(contracts.fromContract, subject),
+    contracts.statements.flatMap((statement) =>
+      statement.kind === 'rename' && statement.entity === 'valueObjectField'
+        ? [statement.to.field]
+        : [],
+    ),
+  );
+}
+
+/** The variants a removed variant can have been renamed to, as `newVariantsOfBase` in the CLI's `variants.ts` finds them. */
+function newVariants(subject: ModelCoordinate, contracts: Contracts): readonly ModelCoordinate[] {
+  const base = modelAt(contracts.fromContract, subject)?.base;
+  if (base === undefined) return [];
+  const coordinate = { namespaceId: asNamespaceId(base.namespace), model: base.model };
+  const variantsOf = (contract: ContractWithDomain) =>
+    Object.values(modelAt(contract, coordinate)?.variants ?? {}).map((variant) => ({
+      namespaceId: asNamespaceId(variant.namespace),
+      model: variant.model,
+    }));
+  const key = ({ namespaceId, model }: ModelCoordinate) => `${namespaceId}\0${model}`;
+  const renamedTo = contracts.statements.flatMap((statement) =>
+    statement.kind === 'rename' && statement.entity === 'model' ? [key(statement.to)] : [],
+  );
+  const before = variantsOf(contracts.fromContract).map(key);
+  return variantsOf(contracts.contract).filter(
+    (variant) => !before.includes(key(variant)) && !renamedTo.includes(key(variant)),
+  );
+}
+
+interface Answer {
   /** Whether the destination has a field or model a statement can keep the data in. */
   readonly canKeep: boolean;
-  /** The statements, in the order the question offers them: the one that keeps the data first, then `--delete`. */
-  readonly flags: readonly string[];
+  /** The statement that keeps the data, as the question offers it first. */
+  readonly keeping: string;
 }
 
-function answersOf(subject: MigrationSubject, text: string, contracts: Contracts): Answers {
+function only<T>(candidates: readonly T[]): T | undefined {
+  return candidates.length === 1 ? candidates[0] : undefined;
+}
+
+/** The statement the question offers first for a removal, and whether the destination can keep its data, as `renameForm` in the CLI's `plan-questions.ts` writes it. */
+function answerOf(subject: MigrationSubject, text: string, contracts: Contracts): Answer {
   const parent = text.slice(0, text.lastIndexOf('.'));
-  const deleting = flag('delete', text);
-  const renaming = (to: string) => flag('rename', `${text}:${parent}.${to}`);
+  const renaming = (to: string | undefined) =>
+    statementFlag('rename', `${text}:${parent}.${to ?? '<new name>'}`);
   switch (subject.kind) {
     case 'field': {
-      const candidates = renameCandidates(subject, contracts);
-      const [only] = candidates;
-      return {
-        canKeep: candidates.length > 0,
-        flags: [
-          renaming(candidates.length === 1 && only !== undefined ? only : '<new name>'),
-          deleting,
-        ],
-      };
+      const candidates = newModelFields(subject, contracts);
+      return { canKeep: candidates.length > 0, keeping: renaming(only(candidates)) };
     }
     case 'model': {
       const destination = destinationModelOf(subject, contracts);
-      return destination === undefined
-        ? { canKeep: false, flags: [deleting] }
-        : {
-            canKeep: true,
-            flags: [flag('convert', modelStatementText(contracts.contract, destination)), deleting],
-          };
+      if (destination !== undefined) {
+        return {
+          canKeep: true,
+          keeping: statementFlag('convert', modelStatementText(contracts.contract, destination)),
+        };
+      }
+      const variant = only(newVariants(subject, contracts));
+      return {
+        canKeep: variant !== undefined,
+        keeping: statementFlag(
+          'rename',
+          `${text}:${variant === undefined ? '<new name>' : modelStatementText(contracts.contract, variant)}`,
+        ),
+      };
     }
     case 'enumValue':
+      return { canKeep: false, keeping: renaming(only(newMembers(subject, contracts))) };
     case 'valueObjectField':
-      return { canKeep: false, flags: [renaming('<new name>'), deleting] };
+      return { canKeep: false, keeping: renaming(only(newValueObjectFields(subject, contracts))) };
     case 'storage':
-      return { canKeep: false, flags: [deleting] };
+      return { canKeep: false, keeping: statementFlag('rename', `${text}:<new name>`) };
   }
 }
 
@@ -150,10 +227,11 @@ const ORDER: Readonly<Record<MigrationSubject['kind'], number>> = {
 };
 
 /**
- * What a plan-wide refusal says when the plan holds changes no statement answers: those changes, as
- * their questions name them, and the statements that answer each, those that keep data first.
- * `undefined` when no removal has a field or model in the destination to keep its data in, so that
- * every answer is `--delete` and leaves the plan as it is.
+ * What a plan-wide refusal leads with when the plan holds changes no statement carries: those
+ * changes, as their questions name them, and the statements that keep their data, as the questions
+ * offer them first. The planner cannot tell an unanswered change from one answered with
+ * `--delete`, so it says only that no `--rename` or `--convert` carries them. `undefined` when no
+ * removal has a field or model in the destination to keep its data in.
  */
 export function unansweredChangesAdvice(
   changes: readonly UnansweredChange[],
@@ -174,10 +252,10 @@ export function unansweredChangesAdvice(
       const text = subjectText(subject, contracts.fromContract);
       return {
         description: removalText(subject, text),
-        answers: answersOf(subject, text, contracts),
+        answer: answerOf(subject, text, contracts),
       };
     });
-  if (!removed.some(({ answers }) => answers.canKeep)) return undefined;
+  if (!removed.some(({ answer }) => answer.canKeep)) return undefined;
   const filled = unique
     .filter((change) => change.kind === 'newRequired')
     .map(
@@ -185,6 +263,6 @@ export function unansweredChangesAdvice(
         `new required ${subject.kind === 'valueObjectField' ? 'value object field' : 'field'} "${subjectText(subject, contracts.contract)}", which the plan fills with a temporary value`,
     );
   const named = [...removed.map(({ description }) => description), ...filled];
-  const answers = removed.map(({ answers: { flags } }) => flags.join(' or '));
-  return `The plan holds changes that no statement answers yet: ${named.join('; ')}. Answer them and plan again: ${answers.join('; ')}.`;
+  const keeping = removed.map(({ answer }) => answer.keeping);
+  return `The plan holds changes that no --rename or --convert statement carries: ${named.join('; ')}. To keep their data, plan again with: ${keeping.join('; ')}.`;
 }

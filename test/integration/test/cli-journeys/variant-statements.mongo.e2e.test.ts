@@ -3,7 +3,7 @@
  *
  * `Task` is stored in collection `tasks` and discriminated by `type`. `Bug` (`bug`, with `severity`) and `Epic` (`epic`, with `scope`) are its variants.
  *
- * V1: the value of `Bug` becomes `defect`. Without a statement both commands ask, offering `--convert Bug` first and `--delete Bug` second; `--convert Bug` rewrites the documents. V2: `Bug` is renamed to `Defect`, whose value is `defect`: `--rename Bug:Defect` rewrites the documents. V3: `Bug` is removed: it is asked about as the model, and `--delete Bug` deletes its documents and keeps the others. V4: `Bug` is removed and `Epic` takes `bug`: the plan is refused with advice to use two migrations, and two migrations then delete the documents of `Bug` and move `Epic` to `bug`. V5: without a snapshot of the origin contract `db update` rewrites nothing, and the validator's document check stops it while documents hold `bug`. V6: the discriminator is renamed to `kind` and the value of `Bug` becomes `defect`: planned without statements, with `--convert Bug --delete Task.type`, or with `--delete Task.type --delete Bug`, and through `db update`, the plan is refused because a temporary value would name no variant, offering `--rename Task.type:Task.kind`, and nothing is applied; the plan with that rename and `--convert Bug` keeps every document's variant.
+ * V1: the value of `Bug` becomes `defect`. Without a statement both commands ask, offering `--convert Bug` first and `--delete Bug` second; `--convert Bug` rewrites the documents. V2: `Bug` is renamed to `Defect`, whose value is `defect`: `--rename Bug:Defect` rewrites the documents. V3: `Bug` is removed: it is asked about as the model, and `--delete Bug` deletes its documents and keeps the others. V4: `Bug` is removed and `Epic` takes `bug`: the plan is refused with advice to use two migrations, and two migrations then delete the documents of `Bug` and move `Epic` to `bug`. V5: without a snapshot of the origin contract `db update` rewrites nothing, and the validator's document check stops it while documents hold `bug`. V6: the discriminator is renamed to `kind` and the value of `Bug` becomes `defect`: planned without statements, with `--convert Bug --delete Task.type`, or with `--delete Task.type --delete Bug`, and through `db update`, the plan is refused because a temporary value would name no variant, offering `--rename Task.type:Task.kind`, and nothing is applied; the plan with that rename and `--convert Bug` keeps every document's variant. V7: the discriminator is renamed and `Bug` is renamed to `Defect`: the refusal offers the discriminator rename, the question that follows offers `--rename Bug:Defect` before `--delete Bug`, and following both keeps every document.
  *
  * Every journey that applies ends with an empty further plan, a clean `db verify --schema-only`, and every document accepting an update; each `migration.ts` written is run again and reproduces its `ops.json`.
  */
@@ -69,6 +69,7 @@ const RENAMED = tasksPsl([{ ...BUG, name: 'Defect', value: 'defect' }, EPIC]);
 const REMOVED = tasksPsl([EPIC]);
 const TAKEN = tasksPsl([{ ...EPIC, value: 'bug' }]);
 const KIND_CHANGED = tasksPsl([{ ...BUG, value: 'defect' }, EPIC], 'kind');
+const KIND_RENAMED = tasksPsl([{ ...BUG, name: 'Defect', value: 'defect' }, EPIC], 'kind');
 
 const DOCUMENTS: readonly Document[] = [
   { title: 'a', type: 'bug', severity: 'high' },
@@ -433,6 +434,49 @@ describe('Journeys (MongoDB): variant statements', {
       { title: 'c', kind: 'defect' },
     ]);
     await verifiedAndSettled(ctx, dbName, 'V6', furtherMigrationPlan(ctx));
+  });
+
+  it('V7: with the discriminator and Bug both renamed, following the offers keeps every document: the refusal offers the discriminator rename, and the question then offers --rename Bug:Defect first', async () => {
+    const dbName = 'mongo_v7_plan';
+    const { ctx, origin } = await migratedThenChanged(
+      dbName,
+      { before: BEFORE, after: KIND_RENAMED, statements: [] },
+      'V7',
+    );
+    const textOf = async (statements: readonly string[]) =>
+      JSON.stringify(
+        engineError(await runMigrationPlan(ctx, ['--from', origin, ...statements, '--json'])) ?? {},
+      );
+    const refused = await textOf([]);
+    const [rename] = [...refused.matchAll(/add (--rename \S+) to keep it/g)].map(
+      ([, flag]) => flag,
+    );
+    const renameStatements = (rename ?? '').split(' ');
+    const question = await textOf(renameStatements);
+    expect({
+      rename,
+      offersVariantRename: question.includes('--rename Bug:Defect'),
+      renameFirst: question.indexOf('--rename Bug:Defect') < question.indexOf('--delete Bug'),
+    }).toEqual({
+      rename: '--rename Task.type:Task.kind',
+      offersVariantRename: true,
+      renameFirst: true,
+    });
+
+    await planAndMigrate(
+      ctx,
+      origin,
+      'change',
+      [...renameStatements, '--rename', 'Bug:Defect'],
+      'V7',
+    );
+
+    expect(await documents(dbName)).toEqual([
+      { title: 'a', kind: 'defect', severity: 'high' },
+      { title: 'b', kind: 'epic', scope: 'all' },
+      { title: 'c', kind: 'defect' },
+    ]);
+    await verifiedAndSettled(ctx, dbName, 'V7', furtherMigrationPlan(ctx));
   });
 
   it('V5: without an origin contract nothing is rewritten, and the document check stops db update while documents hold the old value', async () => {

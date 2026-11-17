@@ -352,10 +352,52 @@ describe('MongoMigrationPlanner, a rename onto a name the origin also stores', (
         }),
       ).map(({ why: text }) => text),
     ).toEqual([
-      why(
-        'field',
-        `The plan holds changes that no statement answers yet: field "User.a", which the plan removes. Answer them and plan again: --rename User.a:User.c or --delete User.a. If every answer is --delete, the plan stays as it is: m${REMOVE_ADVICE('field').slice(1)}`,
-      ),
+      `The plan holds changes that no --rename or --convert statement carries: field "User.a", which the plan removes. To keep their data, plan again with: --rename User.a:User.c. ${ONE_AT_A_TIME} An operation that reads a field another operation of the same migration writes acts on what that operation wrote: at once when it runs later, and when the migration runs again after a later operation stops. If every answer is --delete, the plan stays as it is: m${REMOVE_ADVICE('field').slice(1)}`,
+    ]);
+  });
+
+  it('offers the only new enum member and value object field for their removals, as the questions do', () => {
+    const STATUS: FieldTypeSpec = { codecId: 'mongo/string@1', valueSet: 'Status', nullable: true };
+    const HOME: FieldTypeSpec = { codecId: '', valueObject: 'Address', nullable: true };
+    const withStatus = (
+      seed: string,
+      fields: Record<string, FieldTypeSpec>,
+      address: Record<string, FieldTypeSpec>,
+      members: Record<string, string>,
+    ) =>
+      contract(
+        seed,
+        {
+          User: {
+            collection: 'users',
+            fields: ['_id', ...Object.keys(fields), 'status', 'home'],
+            types: { _id: OBJECT_ID, ...fields, status: STATUS, home: HOME },
+          },
+        },
+        { users: {} },
+        { Address: address },
+        { Status: { members } },
+      );
+    const why = refused(
+      plan({
+        from: withStatus(
+          'from',
+          { a: OPTIONAL_STRING, b: OPTIONAL_STRING },
+          { line1: OPTIONAL_STRING },
+          { ACTIVE: 'active', ARCHIVED: 'archived' },
+        ),
+        to: withStatus(
+          'to',
+          { a: OPTIONAL_STRING, c: OPTIONAL_STRING },
+          { street: OPTIONAL_STRING },
+          { ACTIVE: 'active', RETIRED: 'retired' },
+        ),
+        schema: live,
+        statements: [renameUser('b', 'a')],
+      }),
+    ).map(({ why: text }) => text?.slice(0, text.indexOf(ONE_AT_A_TIME)));
+    expect(why).toEqual([
+      'The plan holds changes that no --rename or --convert statement carries: field "User.a", which the plan removes; value object field "Address.line1", which the plan removes; enum value "Status.ARCHIVED", which the plan removes from the data. To keep their data, plan again with: --rename User.a:User.c; --rename Address.line1:Address.street; --rename Status.ARCHIVED:Status.RETIRED. ',
     ]);
   });
 
