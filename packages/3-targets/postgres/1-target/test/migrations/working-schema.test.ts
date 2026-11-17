@@ -146,6 +146,7 @@ describe('renameTableInPostgresSchema', () => {
       dependsOn: [tableRef('userProfile')],
     });
     const schema = new PostgresDatabaseSchemaNode({
+      extensions: undefined,
       namespaces: {
         public: new PostgresNamespaceSchemaNode({
           schemaName: 'public',
@@ -236,6 +237,7 @@ describe('WorkingSchema.apply', () => {
       dependsOn: [[...tableRef('userProfile'), indexStep(oldIndex)]],
     });
     const schema = new PostgresDatabaseSchemaNode({
+      extensions: undefined,
       namespaces: {
         public: new PostgresNamespaceSchemaNode({
           schemaName: 'public',
@@ -275,6 +277,7 @@ describe('WorkingSchema.apply', () => {
         dependsOn,
       });
     const schema = new PostgresDatabaseSchemaNode({
+      extensions: undefined,
       namespaces: {
         public: new PostgresNamespaceSchemaNode({
           schemaName: 'public',
@@ -333,6 +336,7 @@ describe('moveTableInPostgresSchema', () => {
 
   it('keeps a foreign key of the moved table pointing at the table that stays, though the key names no schema', () => {
     const schema = new PostgresDatabaseSchemaNode({
+      extensions: undefined,
       namespaces: {
         billing: new PostgresNamespaceSchemaNode({
           schemaName: 'billing',

@@ -4,10 +4,12 @@
  * `prisma6Schema('./schema.prisma')` runs `contract emit`, `db sign`, and
  * `db verify` through the real command family against a database laid out the
  * way Prisma 6 `db push` lays it out: a collection per model, no validators,
- * and indexes under Prisma 6's names. Verify reports zero findings in both
- * modes, since it matches indexes by keys and options, not by name. An index
- * the contract does not declare is a warning in lenient mode and an issue in
- * strict mode.
+ * and indexes under Prisma 6's names, including a unique and a plain index on
+ * the same keys. The contract records those names, so verify reports zero
+ * findings in both modes, a name the database changed is drift, and
+ * `db init` against an empty database creates each index under its Prisma 6
+ * name. An index the contract does not declare is a warning in lenient mode
+ * and an issue in strict mode.
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { timeouts } from '@repo/test-utils';
@@ -20,6 +22,7 @@ import { withTempDir, writeProjectManifest } from '../utils/cli-test-helpers';
 import {
   type JourneyContext,
   runContractEmit,
+  runDbInit,
   runDbSign,
   runDbVerify,
 } from '../utils/journey-test-helpers';
@@ -40,6 +43,7 @@ function buildMongoUri(baseUri: string, dbName: string): string {
 async function pushLikePrisma6(db: Db): Promise<void> {
   await db.createCollection('User');
   await db.collection('User').createIndex({ email: 1 }, { unique: true, name: 'User_email_key' });
+  await db.collection('User').createIndex({ email: 1 }, { name: 'User_email_idx' });
   await db.createCollection('Post');
   await db.collection('Post').createIndex({ authorId: 1 }, { name: 'Post_authorId_idx' });
 }
@@ -144,12 +148,27 @@ withTempDir(({ createTempDir }) => {
         User: {
           kind: 'mongo-collection',
           indexes: [
-            expect.objectContaining({ keys: [{ field: 'email', direction: 1 }], unique: true }),
+            {
+              kind: 'mongo-index',
+              name: 'User_email_key',
+              keys: [{ field: 'email', direction: 1 }],
+              unique: true,
+            },
+            {
+              kind: 'mongo-index',
+              name: 'User_email_idx',
+              keys: [{ field: 'email', direction: 1 }],
+            },
           ],
         },
         Post: {
           kind: 'mongo-collection',
-          indexes: [expect.objectContaining({ keys: [{ field: 'authorId', direction: 1 }] })],
+          indexes: [
+            expect.objectContaining({
+              name: 'Post_authorId_idx',
+              keys: [{ field: 'authorId', direction: 1 }],
+            }),
+          ],
         },
       });
       const postFields = contract.domain.namespaces['__unbound__']?.models['Post']?.fields;
@@ -198,7 +217,7 @@ withTempDir(({ createTempDir }) => {
       expect(verify.exitCode, `db verify\n${output(verify)}`).toBe(0);
       expect(verify.presented?.data).toMatchObject({
         ok: true,
-        schema: { strict: false, warnings: ['User/index:legacy:1'] },
+        schema: { strict: false, warnings: ['User/index:User_legacy_key'] },
       });
 
       const strictVerify = await runDbVerify(ctx, ['--json', '--strict']);
@@ -206,8 +225,46 @@ withTempDir(({ createTempDir }) => {
       expect(strictVerify.presented?.data).toMatchObject({
         ok: false,
         code: 'CONTRACT.SCHEMA_VERIFICATION_FAILED',
-        schema: { issues: [{ path: ['User', 'index:legacy:1'] }] },
+        schema: { issues: [{ path: ['User', 'index:User_legacy_key'] }] },
       });
+    });
+
+    it('an index the database holds under another name than Prisma 6 gave it is drift', async () => {
+      const ctx = await emitAndSign();
+      const users = client.db(dbName).collection('User');
+      await users.dropIndex('User_email_idx');
+      await users.createIndex({ email: 1 }, { name: 'email_1' });
+
+      const verify = await runDbVerify(ctx, ['--json']);
+      expect(verify.exitCode, `db verify\n${output(verify)}`).toBe(4);
+      expect(verify.presented?.data).toMatchObject({
+        ok: false,
+        schema: { issues: [{ path: ['User', 'index:User_email_idx'] }] },
+      });
+    });
+
+    it('db init against an empty database creates each index under its Prisma 6 name', async () => {
+      const ctx = setupPrisma6Project(createTempDir, buildMongoUri(replSet.getUri(), dbName));
+      const emit = await runContractEmit(ctx, ['--json']);
+      expect(emit.exitCode, `contract emit\n${output(emit)}`).toBe(0);
+      await client.db(dbName).dropDatabase();
+
+      const init = await runDbInit(ctx, ['--json']);
+      expect(init.exitCode, `db init\n${output(init)}`).toBe(0);
+      const names = async (collection: string) =>
+        (await client.db(dbName).collection(collection).listIndexes().toArray())
+          .map((index) => [index['name'], index['key'], index['unique'] === true])
+          .filter(([name]) => name !== '_id_');
+      expect({ User: await names('User'), Post: await names('Post') }).toEqual({
+        User: [
+          ['User_email_key', { email: 1 }, true],
+          ['User_email_idx', { email: 1 }, false],
+        ],
+        Post: [['Post_authorId_idx', { authorId: 1 }, false]],
+      });
+
+      const verify = await runDbVerify(ctx, ['--json', '--strict']);
+      expect(verify.exitCode, `db verify --strict\n${output(verify)}`).toBe(0);
     });
   });
 });

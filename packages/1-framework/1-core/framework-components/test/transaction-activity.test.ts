@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { ActivityParent } from '../src/execution/activity-lifecycle';
 import type {
   Activity,
   ActivityContext,
@@ -8,9 +9,11 @@ import {
   startTransactionActivity,
   type TransactionSettlement,
 } from '../src/execution/transaction-activity';
+import { startCall } from './client-activity-fixtures';
 import {
   collect,
   contextFields,
+  exec,
   executeStatementWith,
   type MockExec,
   queryStatement,
@@ -463,6 +466,97 @@ describe('transaction activity', () => {
 
       expect(parent).toBe(transaction.ctx);
       expect(events).toContain('A:ended:statement:succeeded');
+    });
+  });
+  describe('a transaction beneath a transaction (a savepoint)', () => {
+    const released = { by: 'release', outcome: 'succeeded' } as const;
+    const committed = { by: 'commit', outcome: 'succeeded' } as const;
+    const rolledBack = (commitAttempted = false) =>
+      ({ by: 'rollback', outcome: 'succeeded', commitAttempted }) as const;
+
+    function finalizations() {
+      const events: string[] = [];
+      const names = new Map<string, string>();
+      const middleware: RuntimeMiddleware<MockExec>[] = [
+        {
+          name: 'trace',
+          async activityFinalized(activity, result) {
+            const name =
+              activity.kind === 'statement'
+                ? (activity.plan as MockExec).id
+                : (names.get(activity.id) ?? activity.kind);
+            events.push(`${name}:${result.outcome}`);
+          },
+        },
+      ];
+      return {
+        events,
+        middleware,
+        async open(name: string, parent: ActivityParent | undefined) {
+          const run = await startTransactionActivity({
+            middleware,
+            context: contextFields({ scope: 'transaction' }),
+            parent,
+            holdFinishedChildren: true,
+          });
+          names.set(run.activity.id, name);
+          return run;
+        },
+        statement(id: string, parent: ActivityParent, fails = false) {
+          const run = executeStatementWith(
+            middleware,
+            async () => {
+              if (fails) throw new Error(`${id} failed`);
+              return { affectedRows: 1 };
+            },
+            { parent, plan: { id, meta: exec.meta } },
+          );
+          return fails ? expect(run).rejects.toThrow(`${id} failed`) : run;
+        },
+      };
+    }
+
+    it.each([false, true])(
+      'finalizes a rolled-back savepoint and its children at once, not again when the outer transaction ends, and keeps their failure from the outer outcome (commitAttempted: %s)',
+      async (commitAttempted) => {
+        const { events, open, statement } = finalizations();
+        const outer = await open('outer', undefined);
+        await statement('s1', outer);
+        const savepoint = await open('savepoint', outer);
+        await statement('s2', savepoint, true);
+        await savepoint.end(rolledBack(commitAttempted));
+        const afterRollback = [...events];
+        await outer.end(committed);
+
+        expect(afterRollback).toEqual(['s2:rolled-back', 'savepoint:rolled-back']);
+        expect(events).toEqual([...afterRollback, 's1:committed', 'outer:committed']);
+      },
+    );
+
+    it('makes the resolved outer commit unknown after a failed statement beneath a released savepoint', async () => {
+      const { events, open, statement } = finalizations();
+      const outer = await open('outer', undefined);
+      const savepoint = await open('savepoint', outer);
+      await statement('s1', savepoint, true);
+      await savepoint.end(released);
+      await outer.end(committed);
+
+      expect(events).toEqual(['s1:unknown', 'savepoint:unknown', 'outer:unknown']);
+    });
+
+    it('finalizes a rolled-back savepoint beneath a client activity at once, and not again when the client activity is finalized', async () => {
+      const { events, middleware, open, statement } = finalizations();
+      const outer = await open('outer', undefined);
+      const call = await startCall(middleware, { parent: outer });
+      const savepoint = await open('savepoint', call);
+      await statement('s1', savepoint, true);
+      await savepoint.end(rolledBack());
+      const afterRollback = [...events];
+      await call.end({ outcome: 'succeeded' });
+      await outer.end(committed);
+
+      expect(afterRollback).toEqual(['s1:rolled-back', 'savepoint:rolled-back']);
+      expect(events).toEqual([...afterRollback, 'test-call:committed', 'outer:committed']);
     });
   });
 });

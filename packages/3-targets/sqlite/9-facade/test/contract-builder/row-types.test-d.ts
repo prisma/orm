@@ -10,19 +10,19 @@ const Level = enumType(
   member('High', 10n),
 );
 
-const contract = defineContract({ enums: { Level } }, ({ field, model, type }) => ({
+const contract = defineContract({ enums: { Level } }, ({ field, model, type, gen }) => ({
   models: {
     Reading: model('Reading', {
       fields: {
         id: field.column({ codecId: 'sqlite/integer@1' }).id(),
-        label: field.column(type.sql.String(50)),
-        note: field.column(type.sql.String(50)).optional(),
+        label: field.column(type.sql.Varchar(50)),
+        note: field.column(type.sql.Varchar(50)).optional(),
         count: field.column(type.BigIntNumber()),
-        seen: field.temporal.datetime(),
+        seen: field.column(type.DateTime()),
         score: field.column({ codecId: 'sqlite/real@1' }),
         at: field.column({ codecId: 'sqlite/datetime@1' }),
         level: field.namedType(Level),
-        uuid: field.id.uuidv4String(),
+        uuid: field.column(type.sql.Char(36)).id().onCreate(gen.uuid()),
       },
     }).sql({ table: 'readings' }),
   },

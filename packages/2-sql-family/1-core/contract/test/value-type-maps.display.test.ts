@@ -50,7 +50,7 @@ type Storage = {
   };
 };
 
-type Fields = FieldTypesFromDomain<Domain, CodecTypes, never, {}, 'output'>;
+type Fields = FieldTypesFromDomain<Domain, CodecTypes, never, {}, 'output', Storage['namespaces']>;
 type Columns = ColumnTypesFromStorage<Storage, CodecTypes, never, {}, 'output'>;
 
 declare const fields: Fields;

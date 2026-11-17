@@ -5,7 +5,7 @@ describe('names PSL writes as identifiers', () => {
   it('refuses a value object name that is not an identifier', () => {
     expect(
       printingWidget({
-        domain: { valueObjects: { 'Postal Address': { fields: { street: TEXT_FIELD } } } },
+        entries: { valueObject: { 'Postal Address': { fields: { street: TEXT_FIELD } } } },
       }),
     ).toThrow(refusal({ kind: 'value object', name: 'Postal Address' }));
   });
@@ -19,7 +19,7 @@ describe('names PSL writes as identifiers', () => {
   it('refuses a value-object field name that is not an identifier', () => {
     expect(
       printingWidget({
-        domain: { valueObjects: { Address: { fields: { 'street line': TEXT_FIELD } } } },
+        entries: { valueObject: { Address: { fields: { 'street line': TEXT_FIELD } } } },
       }),
     ).toThrow(refusal({ kind: 'field', name: 'street line' }));
   });
@@ -136,6 +136,22 @@ describe('row-level security entries the PSL source would file differently', () 
         }),
       }),
     ).toThrow(refusal({ namespaceId: '__unbound__', kind: 'role', name: 'app' }));
+  });
+
+  it('refuses an extension carrying its own control policy', () => {
+    expect(
+      printingWidget({
+        entries: {
+          extension: { vector: { kind: 'extension', name: 'vector', control: 'external' } },
+        },
+      }),
+    ).toThrow(refusal({ namespaceId: 'public', name: 'vector', control: 'external' }));
+  });
+
+  it('refuses an extension not keyed by its name', () => {
+    expect(
+      printingWidget({ entries: { extension: { trgm: { kind: 'extension', name: 'pg_trgm' } } } }),
+    ).toThrow(refusal({ namespaceId: 'public', kind: 'extension', name: 'trgm' }));
   });
 
   it('refuses a policy that records another namespace', () => {

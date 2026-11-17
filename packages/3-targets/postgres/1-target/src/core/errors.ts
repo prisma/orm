@@ -26,6 +26,7 @@ export type PostgresTargetErrorCode =
   | 'RUNTIME.DATE_STYLE_NOT_ISO'
   | 'RUNTIME.DECODE_FAILED'
   | 'RUNTIME.ENCODE_FAILED'
+  | 'RUNTIME.LC_MONETARY_NOT_C'
   | 'RUNTIME.TEMPORAL_UNAVAILABLE'
   | 'RUNTIME.TYPE_PARAMS_INVALID';
 
@@ -71,13 +72,16 @@ export function errorPostgresMigrationStackMissing(operation: string): CliStruct
   );
 }
 
+const TEMPORAL_UNAVAILABLE_FIX =
+  'Run on a runtime with Temporal available, install a Temporal polyfill before creating the client, or write the column as a convenience type at its default, which needs no Temporal: `DateTime` reads a JavaScript `Date`, and `Date`, `Time` and `Duration` read ISO 8601 strings.';
+
 export function errorTemporalUnavailable(codecId: string, operation: string): StructuredError {
   return postgresError(
     'RUNTIME.TEMPORAL_UNAVAILABLE',
     `Codec '${codecId}' cannot ${operation} a value because this runtime has no global Temporal implementation.`,
     {
       why: 'Temporal-backed codecs read and write their values through the global Temporal API, which this runtime does not provide.',
-      fix: 'Run on a runtime with Temporal available, install a Temporal polyfill before creating the client, or author the column with its *String type to read and write ISO 8601 text instead.',
+      fix: TEMPORAL_UNAVAILABLE_FIX,
       meta: { codecId, operation },
     },
   );
@@ -88,8 +92,8 @@ export function errorTemporalUnavailableForDefault(generatorId: string): Structu
     'RUNTIME.TEMPORAL_UNAVAILABLE',
     `Mutation default generator '${generatorId}' cannot produce a value because this runtime has no global Temporal implementation.`,
     {
-      why: 'The generator answers a Temporal-backed column, so the value it produces is a Temporal.Instant, which this runtime cannot construct.',
-      fix: 'Run on a runtime with Temporal available, install a Temporal polyfill before creating the client, or author the column with `temporal.createdAtString()` / `temporal.updatedAtString()` to store ISO 8601 text instead.',
+      why: 'The generator answers a Temporal-backed column, so the value it produces is a Temporal value, which this runtime cannot construct.',
+      fix: TEMPORAL_UNAVAILABLE_FIX,
       meta: { generatorId },
     },
   );
@@ -140,8 +144,21 @@ export function errorDateStyleNotIso(codecId: string, received: string): Structu
     'RUNTIME.DATE_STYLE_NOT_ISO',
     `Codec '${codecId}' read ${JSON.stringify(received)}, which PostgreSQL prints only when the connection's DateStyle is not ISO: the driver could not ensure the DateStyle=ISO the PostgreSQL target requires. Prisma reads dates and times only in DateStyle ISO.`,
     {
-      why: 'PostgreSQL prints a date or timestamp in the DateStyle of the connection. The PostgreSQL driver ensures DateStyle=ISO on every connection it uses: it starts each connection it opens with it, and sets it on a connection the application supplies before first use. A statement that sets DateStyle on a connection undoes that, and so does a connection pooler between Prisma and PostgreSQL that drops the startup option or runs each statement on another server connection.',
+      why: 'PostgreSQL prints a date or timestamp in the DateStyle of the connection. The PostgreSQL driver ensures DateStyle=ISO on every connection it uses: it starts each connection it opens with it, and sets it on a connection the application supplies before first use. A statement that sets DateStyle on a connection undoes that, and so does a connection pooler between Prisma and PostgreSQL that drops the startup option or runs each statement on another server connection. A write that returns its row, such as create(), gets the row from the same statement, and Prisma decodes it only after PostgreSQL has run the statement: a single statement outside a transaction is already committed when this error is raised, and a transaction that ends with this error is rolled back.',
       fix: "Do not change DateStyle on a connection Prisma uses. Behind a connection pooler, set DateStyle on the role or database (ALTER ROLE <role> SET DateStyle = 'ISO'), so every server connection holds it.",
+      meta: { codecId, received: received.slice(0, 100) },
+    },
+  );
+}
+
+/** A money codec read text PostgreSQL printed under an `lc_monetary` other than C, which no codec reads. */
+export function errorLcMonetaryNotC(codecId: string, received: string): StructuredError {
+  return postgresError(
+    'RUNTIME.LC_MONETARY_NOT_C',
+    `Codec '${codecId}' read ${JSON.stringify(received)}, which PostgreSQL prints only when the connection's lc_monetary is not C: the driver could not ensure the lc_monetary=C the PostgreSQL target requires. Prisma reads money only as PostgreSQL prints it under lc_monetary C, as in $1,234.56 and -$1,234.56.`,
+    {
+      why: "PostgreSQL prints a money value in the lc_monetary locale of the connection, with that locale's currency symbol, separators and sign. The PostgreSQL driver ensures lc_monetary=C on every connection it uses: it starts each connection it opens with it, and sets it on a connection the application supplies before first use. A statement that sets lc_monetary on a connection undoes that, and so does a connection pooler between Prisma and PostgreSQL that drops the startup option or runs each statement on another server connection. A write that returns its row, such as create(), gets the row from the same statement, and Prisma decodes it only after PostgreSQL has run the statement: a single statement outside a transaction is already committed when this error is raised, and a transaction that ends with this error is rolled back.",
+      fix: "Do not change lc_monetary on a connection Prisma uses. Behind a connection pooler, set lc_monetary on the role or database (ALTER ROLE <role> SET lc_monetary = 'C'), so every server connection holds it.",
       meta: { codecId, received: received.slice(0, 100) },
     },
   );

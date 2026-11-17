@@ -45,7 +45,11 @@ export function bindPslSchema(
   options: { readonly context: ContractSourceContext; readonly sourceId?: string },
 ): BoundPslSchema {
   const { context } = options;
-  const { document, sources } = parse(schema, options.sourceId ?? 'schema.prisma');
+  const {
+    document,
+    sources,
+    diagnostics: parseDiagnostics,
+  } = parse(schema, options.sourceId ?? 'schema.prisma');
   const documents = [document];
   const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
     documents,
@@ -63,6 +67,9 @@ export function bindPslSchema(
     symbolTable,
     binder,
     context,
-    seedDiagnostics: mapPslDiagnostics([...symbolTableDiagnostics, ...binderDiagnostics], sources),
+    seedDiagnostics: mapPslDiagnostics(
+      [...parseDiagnostics, ...symbolTableDiagnostics, ...binderDiagnostics],
+      sources,
+    ),
   };
 }

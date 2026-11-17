@@ -25,6 +25,20 @@ describe('integration: ilike (target operation)', { timeout: timeouts.databaseOp
     );
     expect(rows).toHaveLength(0);
   });
+
+  it('ilike takes a nullable column and skips the rows where it is null', async () => {
+    const rows = await runtime().query(
+      db()
+        .public.users.outerLeftJoin(db().public.profiles, (f, fns) =>
+          fns.eq(f.users.id, f.profiles.user_id),
+        )
+        .select('name')
+        .where((f, fns) => fns.ilike(f.profiles.bio, '%BIO%'))
+        .orderBy('name')
+        .build(),
+    );
+    expect(rows).toEqual([{ name: 'Alice' }, { name: 'Bob' }]);
+  });
 });
 
 describe('integration: extension functions', { timeout: timeouts.databaseOperation }, () => {
@@ -118,6 +132,20 @@ describe('integration: full-text search', { timeout: timeouts.databaseOperation 
 
   it('fullTextMatches accepts a non-default language', async () => {
     expect(await idsMatching('alice', 'german')).toEqual([101, 102, 106]);
+  });
+
+  it('fullTextMatches takes a nullable column and skips the rows where it is null', async () => {
+    const rows = await runtime().query(
+      db()
+        .public.users.outerLeftJoin(db().public.profiles, (f, fns) =>
+          fns.eq(f.users.id, f.profiles.user_id),
+        )
+        .select('name')
+        .where((f, fns) => fns.fullTextMatches(f.profiles.bio, fns.websearchToTsquery('bio')))
+        .orderBy('name')
+        .build(),
+    );
+    expect(rows).toEqual([{ name: 'Alice' }, { name: 'Bob' }]);
   });
 
   it('toTsquery takes a word:* prefix, which matches every word it starts', async () => {
@@ -325,6 +353,35 @@ describe('integration: full-text search', { timeout: timeouts.databaseOperation 
           .public.comments.select('id')
           .select('snippet', (f, fns) =>
             fns.fullTextHeadline(f.body, fns.websearchToTsquery('alice')),
+          )
+          .where((f, fns) => fns.eq(f.id, 101))
+          .build(),
+      )
+      .firstOrThrow();
+    expect(row.snippet).toBe('<b>alice</b> wrote the report');
+  });
+
+  it("fullTextHeadline rejects a minWords at Postgres's default maxWords before the query runs", () => {
+    expect(() =>
+      db()
+        .public.comments.select('id')
+        .select('snippet', (f, fns) =>
+          fns.fullTextHeadline(f.body, fns.websearchToTsquery('alice'), { minWords: 35 }),
+        )
+        .build(),
+    ).toThrow(expect.objectContaining({ code: 'RUNTIME.ARGUMENT_INVALID' }));
+  });
+
+  it('fullTextHeadline takes a maxWords below the default minWords under highlightAll', async () => {
+    const row = await runtime()
+      .query(
+        db()
+          .public.comments.select('id')
+          .select('snippet', (f, fns) =>
+            fns.fullTextHeadline(f.body, fns.websearchToTsquery('alice'), {
+              maxWords: 10,
+              highlightAll: true,
+            }),
           )
           .where((f, fns) => fns.eq(f.id, 101))
           .build(),

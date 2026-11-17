@@ -36,7 +36,7 @@ A definition is plain data with every name resolved. MongoDB's `ContractDefiniti
 
 - the target pack and the extension packs, which the contract records, and the default control policy;
 - models, each with its collection, owner, storage relations, control policy, collection options and indexes, in the order the source wrote them;
-- fields, each with its stored name, type, nullability, list shape, enum by name, the generated values its type gives, the generated values the source already resolved, the generator calls it writes, and what a field preset contributed;
+- fields, each with its stored name, type, nullability, list shape, enum by name, the generated values its type gives, the generated values the source already resolved, and the generator calls it writes;
 - relations, with cardinality and join fields;
 - polymorphism: the base's discriminator field and listed variants, and each variant's base and its value as the source wrote it;
 - value objects, enums, optional explicit roots, whether collections get validators, and the warnings the source collected.
@@ -57,17 +57,24 @@ The builder checks the assembled contract last. Those refusals (kind `validator`
 - **PSL.** The interpreter reads the schema into the definition. It keeps the rules about how a schema is written, such as attribute arguments, `@id` placement, back-relation pairing and unresolved references. It reports each refusal as a diagnostic at the place its key names, with PSL's codes and wording.
 - **Prisma 6.** The reader builds with `writesCollectionValidators: false`, because a Prisma 6 database has none. It reports each refusal in its own diagnostics.
 
+**The builder builds the definition it is given.** It checks the definition and refuses what is invalid, but it does not merge, drop or tidy what a source wrote. Tidying is a convenience of the authoring surface the user writes in. For example, Prisma 8 PSL and TypeScript `defineContract` merge an index the user wrote twice without a name to tell the two apart, and they do it before they call the builder. A source that reads an earlier Prisma version's schema exists to produce the contract of the database that version built, so `db sign` accepts it unchanged (ADR 252). It tidies nothing, and the builder keeps everything it describes, even an index the database holds that is redundant, such as an index on `[email, name]` beside one on `[email]`. Prisma 6 itself refuses two indexes of one model, of any kind, whose field paths are the same, in the same order, with the same written sort (an unwritten sort is not `sort: Asc`), so a Prisma 6 database never holds such a pair. The Prisma 6 reader refuses the same pairs, as Prisma 6 does, and merges nothing. SQL's builder still merges duplicate and redundant unnamed indexes itself, and the Prisma 7 reader escapes that only by naming every index; TML-3770 moves the merge into SQL's authoring sources.
+
 ## Consequences
 
 - One rule, one implementation. A rule added to the builder applies to every source.
 - A source can report every refusal at once, at its own position, because refusals are data, not thrown errors.
 - Sources cannot differ in what they accept. A parity suite writes each case in TypeScript and in PSL and checks that the two emitted `contract.json` files are byte-identical.
-- Index order is the source's own. The builder does not reorder indexes, because the storage hash depends on their order.
+- Index order is the source's own. The builder does not reorder indexes, because the storage hash depends on their order. MongoDB PSL and TypeScript `defineContract` name and merge indexes before they call the builder. `nameIndexes` names each index written without a name after its stored keys, such as `email_1` ([ADR 317](ADR%20317%20-%20MongoDB%20indexes%20carry%20their%20names.md)). `mergeRedundantIndexes` then merges two indexes in one collection that have the same name. It merges them when they are identical. It also merges them when one is a non-unique index and the other is a unique index on the same keys with otherwise identical options, because the unique index makes the non-unique one redundant. It removes one index and keeps the survivor where it was written. The builder takes each index's name from the definition. It refuses two identical indexes in one collection, and two indexes with one name in one collection. The Prisma 6 reader names each index as Prisma 6 did.
+
+SQL does not follow this ADR fully yet. Its builder throws its first refusal, so SQL PSL places only the errors it catches and matches. SQL PSL also adds polymorphism to the contract after the builder runs, instead of carrying it in the definition.
 
 ## Alternatives considered
 
-- **Each source keeps its assembly, and a shared function checks the built contract.** The contract has lost what the source wrote: the position of an index, the value a variant wrote, which preset made a field. Refusals could not be placed, and some rules could not be checked at all.
+- **Each source keeps its assembly, and a shared function checks the built contract.** The contract has lost what the source wrote: the position of an index, the value a variant wrote, which type alias typed a field. Refusals could not be placed, and some rules could not be checked at all.
 - **The builder throws its first refusal.** PSL would then report one problem per run, and could not place it without catching and parsing the error.
+- **One definition shared by every family.** A definition is a family-layer type in the three-layer IR pattern: MongoDB's names collections and indexes, SQL's names tables and columns. Each family has its own definition, built the same way.
+- **Copy SQL's definition exactly, and add polymorphism to the built contract afterwards.** MongoDB's `defineContract` already resolved polymorphism in its builder, and a step after the builder cannot place a refusal at a source position. A family's definition holds what the reference still lacks, and the reference catches up (TML-2228).
+- **Each source keeps its assembly and calls shared helpers,** as MongoDB did with `deriveCollectionValidators` and `buildMongoStorage`. Model assembly, polymorphism, generated values and enum checks were still written once per source, and each new rule needed another helper and a call in every source.
 
 ## Related ADRs
 

@@ -18,7 +18,6 @@ import {
   type SqlTableIR,
 } from '@internal/sql-schema-ir/types';
 import {
-  postgresAuthoringFieldPresets,
   postgresAuthoringPslBlockDescriptors,
   postgresAuthoringTypes,
 } from '../../src/core/authoring';
@@ -30,7 +29,7 @@ import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-da
 import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-namespace-schema-node';
 import { PostgresNativeEnumSchemaNode } from '../../src/core/schema-ir/postgres-native-enum-schema-node';
 import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
-import { postgresScalarAndNativeTypeConstructors } from '../../src/core/type-constructors';
+import { postgresScalarTypes } from '../../src/core/type-constructors';
 
 /** The native enums a fixture declares, by the type name a column is written with: bare or schema-qualified. */
 export type FixtureEnums = ReadonlyMap<string, { readonly schema: string; readonly name: string }>;
@@ -61,7 +60,7 @@ export function reportedFromWritten(
   const [resolved] = resolveWrittenSqlTypes(typeText, postgresDataTypes);
   const text =
     resolved !== undefined && resolved.dataType.sql.claimsKind === undefined
-      ? renderSqlCatalogText(resolved.dataType, resolved.typeParams)
+      ? renderSqlCatalogText(resolved.dataType, resolved.writtenTypeParams)
       : typeText;
   return { text, kind: undefined, schema: 'pg_catalog', name: undefined };
 }
@@ -146,7 +145,7 @@ export function inferFromFixtureTree(
 export function inferredColumnTypesOf(
   tables: Readonly<Record<string, SqlTableIR>>,
   enums: FixtureEnums = new Map(),
-): ColumnTypeOf {
+): Promise<ColumnTypeOf> {
   return inferColumnTypes({
     tables: Object.values(tables).map((table) => ({
       schemaName: 'public',
@@ -158,8 +157,10 @@ export function inferredColumnTypesOf(
       codecLookup: inferBuildContext.codecLookup,
       dataTypeLookup: inferBuildContext.dataTypes.lookup,
     }),
+    authoringTypes: inferBuildContext.authoringContributions.type,
     dataTypes: inferBuildContext.dataTypes,
     isEnumColumn: (column) => column.reportedType?.kind === 'enum',
+    readsDefault: undefined,
   });
 }
 
@@ -201,6 +202,7 @@ export function treeFromFlat(schemaIR: SqlSchemaIR): PostgresDatabaseSchemaNode 
     });
   }
   return new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces: {
       public: new PostgresNamespaceSchemaNode({
         schemaName: 'public',
@@ -214,6 +216,8 @@ export function treeFromFlat(schemaIR: SqlSchemaIR): PostgresDatabaseSchemaNode 
   });
 }
 
+const inferCodecLookup = createPostgresBuiltinCodecLookup();
+
 /**
  * The stack `contract emit` reads an inferred schema with: the type constructors the family and the
  * adapter contribute, the target's own, and the target's codecs and data types.
@@ -223,17 +227,16 @@ export const inferBuildContext: SqlPslBuildContext = {
     type: {
       ...sqlFamilyPack.authoring.type,
       ...postgresAuthoringTypes,
-      ...postgresScalarAndNativeTypeConstructors,
+      ...postgresScalarTypes,
     },
-    field: postgresAuthoringFieldPresets,
   },
   generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
   componentIdsByGenerator: new Map(),
-  codecLookup: createPostgresBuiltinCodecLookup(),
+  codecLookup: inferCodecLookup,
   dataTypes: {
     entries: postgresDataTypeEntries(),
     lookup: createDataTypeLookup(postgresDataTypes),
-    dataTypeOfCodec: () => undefined,
+    dataTypeOfCodec: (codecId) => inferCodecLookup.descriptorFor(codecId)?.dataType,
   },
 };
 

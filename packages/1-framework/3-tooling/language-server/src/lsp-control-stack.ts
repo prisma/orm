@@ -24,7 +24,6 @@ export interface LspControlStack {
 export function binderContextFromStack(stack: LspControlStack): BinderContext {
   return {
     authoringContributions: stack.authoringContributions ?? {
-      field: {},
       type: {},
       entityTypes: {},
       pslBlockDescriptors: stack.pslBlockDescriptors,

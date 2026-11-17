@@ -1,5 +1,6 @@
 import type { AuthoringContributions } from '@internal/framework-components/authoring';
 import type { ColumnTypeDescriptor } from '@internal/framework-components/codec';
+import type { CheckExpressionRenderer } from '@internal/sql-contract/check-expressions';
 import { ifDefined } from '@internal/utils/defined';
 import type { ContractDefinition } from './contract-definition';
 
@@ -62,31 +63,6 @@ function hasColumnTypeQualifier(
 }
 
 /**
- * A target's contract-construction-time check renderer, contributed through
- * `target.authoring.renderCheckExpressions`. Given one column's shape it
- * returns the checks that column needs, each as a kind, the column it
- * constrains, and an opaque predicate body (no surrounding `CHECK (…)`). The
- * target owns the SQL — quoting, escaping, predicate choice — and nothing
- * else: naming is composed here, so the family never depends on a property of
- * text it cannot read. `memberValues` is
- * supplied only for a domain enum authored through an `enumType()` handle, so
- * a target cannot accidentally write a membership check for a column whose
- * native type already enforces its member set. Targets without the hook write
- * no checks.
- */
-export type CheckExpressionRenderer = (input: {
-  readonly tableName: string;
-  readonly columnName: string;
-  readonly many: boolean;
-  readonly elementNullable: boolean;
-  readonly memberValues: readonly (string | number)[] | undefined;
-}) => ReadonlyArray<{
-  readonly kind: 'membership' | 'elementNotNull';
-  readonly columnName: string;
-  readonly expression: string;
-}>;
-
-/**
  * Structural check for a target that contributes a `renderCheckExpressions`
  * hook, duck-typed for the same reason {@link hasColumnTypeQualifier} is: the
  * SQL family stays blind to the target's predicate syntax.
@@ -101,6 +77,9 @@ function hasCheckExpressionRenderer(
   );
 }
 
+/**
+ * The target's check renderer, contributed through `target.authoring.renderCheckExpressions`. The target owns the SQL of each check and the family names it, so the family never depends on a property of text it cannot read. `memberValues` is supplied only for a domain enum authored through an `enumType()` handle and for a discriminator column, so a target cannot write a membership check for a column whose native type already enforces its member set. Targets without the hook write no checks.
+ */
 export function resolveCheckExpressionRenderer(
   target: ContractDefinition['target'],
 ): CheckExpressionRenderer | undefined {

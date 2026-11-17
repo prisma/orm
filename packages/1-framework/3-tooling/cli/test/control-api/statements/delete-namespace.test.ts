@@ -26,6 +26,7 @@ const dropModel = (model: string, operationIndex: number) => ({
 const plan: PlannedQuestions = {
   dataLoss: [dropModel('Invoice', 0), dropModel('Receipt', 1)],
   accessChanges: [],
+  temporaryValues: [],
   namespaces: { removed: ['billing'], added: [] },
 };
 
@@ -171,7 +172,11 @@ describe('--delete with a namespace of the origin contract', () => {
         field: 'nickname',
       },
     };
-    const keptPlan: PlannedQuestions = { dataLoss: [nickname], accessChanges: [] };
+    const keptPlan: PlannedQuestions = {
+      dataLoss: [nickname],
+      accessChanges: [],
+      temporaryValues: [],
+    };
     const asked: string[] = [];
 
     const outcome = await askPlanQuestions({
@@ -251,7 +256,7 @@ describe('a namespace answer typed at the prompt', () => {
       },
       replan: async (statements) => {
         replanned.push(statements.map(({ verb, text }) => `${verb} ${text}`));
-        return ok({ dataLoss: [], accessChanges: [] });
+        return ok({ dataLoss: [], accessChanges: [], temporaryValues: [] });
       },
     });
 
@@ -272,6 +277,7 @@ describe('a namespace rename answered at one question', () => {
     const left: PlannedQuestions = {
       dataLoss: [dropModel('Invoice', 0)],
       accessChanges: [],
+      temporaryValues: [],
       namespaces: { removed: ['billing'], added: ['finance'] },
     };
     const outcome = await askPlanQuestions({
@@ -296,7 +302,9 @@ describe('a namespace rename answered at one question', () => {
       },
       replan: async (statements) => {
         replanned.push(statements.map(({ text }) => text));
-        return ok(statements.length === 1 ? left : { dataLoss: [], accessChanges: [] });
+        return ok(
+          statements.length === 1 ? left : { dataLoss: [], accessChanges: [], temporaryValues: [] },
+        );
       },
     });
 
@@ -330,7 +338,11 @@ describe('a field of a model in a namespace the run renames', () => {
         field: 'note',
       },
     };
-    const notePlan: PlannedQuestions = { dataLoss: [dropNote], accessChanges: [] };
+    const notePlan: PlannedQuestions = {
+      dataLoss: [dropNote],
+      accessChanges: [],
+      temporaryValues: [],
+    };
     const asked: { subject: string; verbs: readonly string[]; renames: string | undefined }[] = [];
 
     await askPlanQuestions({
@@ -372,6 +384,7 @@ describe('a --delete of a subject beside a --delete of its namespace', () => {
     const onlyInvoice: PlannedQuestions = {
       dataLoss: [dropModel('Invoice', 0)],
       accessChanges: [],
+      temporaryValues: [],
       namespaces: { removed: ['billing'], added: [] },
     };
     const dryRun = refuseUnusedConsents({
@@ -418,6 +431,7 @@ describe('the namespaces the planner reports', () => {
     const notRemoved: PlannedQuestions = {
       dataLoss: [dropModel('Invoice', 0), dropModel('Receipt', 1)],
       accessChanges: [],
+      temporaryValues: [],
       namespaces: { removed: [], added: [] },
     };
     const questions: string[] = [];

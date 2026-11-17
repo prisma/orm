@@ -5,6 +5,8 @@ import { rowsResult } from './run-statement';
 type Inputs = { left: Rows; right: Rows };
 
 export class CrossJoin extends Node<Inputs> {
+  readonly slots = { left: 'one', right: 'one' } as const;
+
   constructor() {
     super();
     Object.freeze(this);

@@ -142,3 +142,35 @@ export async function rawQueryPromoteAndList(titleTerm: string, runtime?: Runtim
 
   return (runtime ?? db).query(plan);
 }
+
+export async function rawQueryCopyPosts(
+  fromEmail: string,
+  toEmail: string,
+  titlePrefix = 'Copy of ',
+  runtime?: Runtime,
+) {
+  const copies = post
+    .innerJoin(user, (f, fns) => fns.eq(f.user.id, f.post.userId))
+    .innerJoin(user.as('target'), (f, fns) => fns.eq(f.target.email, toEmail))
+    .select((f, fns) => ({
+      id: fns.raw`gen_random_uuid()`.returns('pg/uuid@1'),
+      title: fns.raw`${titlePrefix} || ${f.post.title}`.returns('pg/text@1'),
+      body: f.post.body,
+      userId: f.target.id,
+    }))
+    .where((f, fns) => fns.eq(f.user.email, fromEmail));
+
+  const plan = db.raw.sql`
+    INSERT INTO "post" (id, title, body, "userId")
+    ${copies}
+    RETURNING id, title, "userId"
+  `
+    .returnsRow({
+      id: post.columns.id,
+      title: post.columns.title,
+      userId: post.columns.userId,
+    })
+    .build();
+
+  return (runtime ?? db).query(plan);
+}

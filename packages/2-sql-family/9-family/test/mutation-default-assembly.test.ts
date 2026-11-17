@@ -18,18 +18,13 @@ describe('assembleAuthoringContributions', () => {
   it('collects authoring type helper contributions', () => {
     const first = createDescriptor('first', {
       authoring: {
-        field: {
-          text: {
-            kind: 'fieldPreset',
-            output: {
-              codecId: 'sql/text@1',
-            },
-          },
-        },
         type: {
           enum: {
             kind: 'typeConstructor',
-            args: [{ kind: 'option', values: ['a'] }, { kind: 'number' }],
+            args: [
+              { kind: 'value', dataType: 'sql/text' },
+              { kind: 'value', dataType: 'sql/int' },
+            ],
             output: {
               codecId: 'app/test-type@1',
               typeParams: {
@@ -46,7 +41,7 @@ describe('assembleAuthoringContributions', () => {
           pgvector: {
             Vector: {
               kind: 'typeConstructor',
-              args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, maximum: 2000 }],
+              args: [{ kind: 'value', dataType: 'sql/int', name: 'length' }],
               output: {
                 codecId: 'pg/vector@1',
                 typeParams: {
@@ -71,11 +66,6 @@ describe('assembleAuthoringContributions', () => {
         },
       },
     });
-    expect(contributions.field).toMatchObject({
-      text: {
-        kind: 'fieldPreset',
-      },
-    });
   });
 
   it('throws for duplicate authoring helper names', () => {
@@ -84,7 +74,10 @@ describe('assembleAuthoringContributions', () => {
         type: {
           enum: {
             kind: 'typeConstructor',
-            args: [{ kind: 'option', values: ['a'] }, { kind: 'number' }],
+            args: [
+              { kind: 'value', dataType: 'sql/text' },
+              { kind: 'value', dataType: 'sql/int' },
+            ],
             output: {
               codecId: 'app/test-type@1',
             },
@@ -97,7 +90,10 @@ describe('assembleAuthoringContributions', () => {
         type: {
           enum: {
             kind: 'typeConstructor',
-            args: [{ kind: 'option', values: ['a'] }, { kind: 'number' }],
+            args: [
+              { kind: 'value', dataType: 'sql/text' },
+              { kind: 'value', dataType: 'sql/int' },
+            ],
             output: {
               codecId: 'conflict/enum@1',
             },
@@ -111,43 +107,12 @@ describe('assembleAuthoringContributions', () => {
     );
   });
 
-  it('throws for duplicate authoring field helper names', () => {
-    const first = createDescriptor('first', {
-      authoring: {
-        field: {
-          text: {
-            kind: 'fieldPreset',
-            output: {
-              codecId: 'sql/text@1',
-            },
-          },
-        },
-      },
-    });
-    const second = createDescriptor('second', {
-      authoring: {
-        field: {
-          text: {
-            kind: 'fieldPreset',
-            output: {
-              codecId: 'conflict/text@1',
-            },
-          },
-        },
-      },
-    });
-
-    expect(() => assembleAuthoringContributions([first, second])).toThrow(
-      /Duplicate authoring field helper "text"/,
-    );
-  });
-
   it('rejects dangerous authoring helper path segments', () => {
-    const maliciousFieldNamespace = JSON.parse(`
+    const maliciousTypeNamespace = JSON.parse(`
       {
         "__proto__": {
           "polluted": {
-            "kind": "fieldPreset",
+            "kind": "typeConstructor",
             "output": {
               "codecId": "conflict/text@1"
             }
@@ -158,13 +123,13 @@ describe('assembleAuthoringContributions', () => {
 
     const descriptor = createDescriptor('malicious', {
       authoring: {
-        field: maliciousFieldNamespace,
+        type: maliciousTypeNamespace,
       },
     });
 
     try {
       expect(() => assembleAuthoringContributions([descriptor])).toThrow(
-        /Invalid authoring field helper "__proto__"/,
+        /Invalid authoring type helper "__proto__"/,
       );
     } finally {
       delete (Object.prototype as Record<string, unknown>)['polluted'];

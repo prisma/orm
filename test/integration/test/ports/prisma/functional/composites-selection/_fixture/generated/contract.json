@@ -25,8 +25,11 @@
               "profile": {
                 "nullable": false,
                 "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "Profile",
                   "kind": "valueObject",
-                  "name": "Profile"
+                  "namespaceId": "__unbound__",
+                  "plane": "storage"
                 }
               }
             },
@@ -39,72 +42,6 @@
                 },
                 "profile": {
                   "field": "profile"
-                }
-              }
-            }
-          }
-        },
-        "valueObjects": {
-          "Name": {
-            "fields": {
-              "firstName": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              },
-              "lastName": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              }
-            }
-          },
-          "Profile": {
-            "fields": {
-              "alternateName": {
-                "nullable": true,
-                "type": {
-                  "kind": "valueObject",
-                  "name": "Name"
-                }
-              },
-              "favoriteThings": {
-                "many": {
-                  "elementNullable": false
-                },
-                "nullable": false,
-                "type": {
-                  "kind": "valueObject",
-                  "name": "Thing"
-                }
-              },
-              "name": {
-                "nullable": false,
-                "type": {
-                  "kind": "valueObject",
-                  "name": "Name"
-                }
-              },
-              "url": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              }
-            }
-          },
-          "Thing": {
-            "fields": {
-              "name": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
                 }
               }
             }
@@ -207,13 +144,88 @@
                 "validationLevel": "strict"
               }
             }
+          },
+          "valueObject": {
+            "Name": {
+              "fields": {
+                "firstName": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                },
+                "lastName": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                }
+              }
+            },
+            "Profile": {
+              "fields": {
+                "alternateName": {
+                  "nullable": true,
+                  "type": {
+                    "entityKind": "valueObject",
+                    "entityName": "Name",
+                    "kind": "valueObject",
+                    "namespaceId": "__unbound__",
+                    "plane": "storage"
+                  }
+                },
+                "favoriteThings": {
+                  "many": {
+                    "elementNullable": false
+                  },
+                  "nullable": false,
+                  "type": {
+                    "entityKind": "valueObject",
+                    "entityName": "Thing",
+                    "kind": "valueObject",
+                    "namespaceId": "__unbound__",
+                    "plane": "storage"
+                  }
+                },
+                "name": {
+                  "nullable": false,
+                  "type": {
+                    "entityKind": "valueObject",
+                    "entityName": "Name",
+                    "kind": "valueObject",
+                    "namespaceId": "__unbound__",
+                    "plane": "storage"
+                  }
+                },
+                "url": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                }
+              }
+            },
+            "Thing": {
+              "fields": {
+                "name": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                }
+              }
+            }
           }
         },
         "id": "__unbound__",
         "kind": "mongo-database"
       }
     },
-    "storageHash": "50c7e480b0d0d6850a19a52ebe53ad54ca00fe4ffc1d9149172bc774c7b1d3b0"
+    "storageHash": "089550830c023543ff80ad5464449ea5f0b073a9f07a57b487a184b44e991cbb"
   },
   "capabilities": {},
   "extensions": {},

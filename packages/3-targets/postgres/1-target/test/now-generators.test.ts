@@ -1,9 +1,8 @@
 import { timestampNowRuntimeGenerator } from '@internal/family-sql/runtime';
 import { TIMESTAMP_NOW_GENERATOR_ID } from '@internal/framework-components/authoring';
+import { dateStringNow } from '@internal/type-implementations/now';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { postgresAuthoringFieldPresets } from '../src/core/authoring';
 import {
-  dateStringNow,
   instantNow,
   plainDateNow,
   plainDateTimeNow,
@@ -26,14 +25,6 @@ const generate: Readonly<Record<string, () => unknown>> = {
   [TIMESTAMP_NOW_GENERATOR_ID]: () => timestampNowRuntimeGenerator().generate(),
   ...Object.fromEntries(postgresNowGenerators.map(({ id, generate }) => [id, () => generate()])),
 };
-
-function presetGeneratorIds(output: object): string[] {
-  if (!('executionDefaults' in output)) return [];
-  return Object.values(output.executionDefaults as object).map((phase: unknown) => {
-    const { id, cases } = phase as { id?: string; cases?: { now: { id: string } } };
-    return id ?? cases?.now.id ?? '';
-  });
-}
 
 const DATE_AND_TIME_CODEC_IDS = [
   'pg/date-temporal@1',
@@ -109,23 +100,6 @@ describe('the "now" generator for each codec', () => {
       'pg/timestamp-instant@1': 'instantNow',
     });
   });
-
-  it('gives every temporal preset the generator the lookup gives its codec', () => {
-    const presets = Object.entries(postgresAuthoringFieldPresets.temporal).flatMap(
-      ([name, preset]) =>
-        presetGeneratorIds(preset.output).map((generatorId) => ({
-          name,
-          codecId: preset.output.codecId,
-          generatorId,
-        })),
-    );
-    expect(presets.map(({ name }) => name)).toContain('updatedAtJsDate');
-    expect(
-      presets.filter(
-        ({ codecId, generatorId }) => postgresNowGeneratorIdFor(codecId) !== generatorId,
-      ),
-    ).toEqual([]);
-  });
 });
 
 describe('the text "now" generators', () => {
@@ -170,6 +144,11 @@ describe('the text "now" generators', () => {
     expect(postgresNowGeneratorTakesPrecision).toMatchObject({
       'pg/timestamp-string@1': true,
       'pg/timestamptz-string@1': true,
+      'pg/timestamptz-date@1': true,
+      'pg/timestamp-date@1': true,
+      'pg/timestamptz-temporal@1': true,
+      'pg/timestamp-temporal@1': true,
+      'pg/timestamp-instant@1': true,
     });
   });
 
@@ -204,6 +183,31 @@ describe('the time "now" generators', () => {
       time,
     ]);
   });
+});
+
+describe('the Temporal timestamp "now" generators', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it.each([
+    [0, '2024-01-02T23:59:59'],
+    [1, '2024-01-02T23:59:59.9'],
+    [2, '2024-01-02T23:59:59.99'],
+    [3, '2024-01-02T23:59:59.999'],
+    [6, '2024-01-02T23:59:59.999'],
+    [undefined, '2024-01-02T23:59:59.999'],
+  ])(
+    'round down to precision %s, so the column stores the value the client holds',
+    (precision, text) => {
+      vi.useFakeTimers({ now: new Date('2024-01-02T23:59:59.999Z') });
+      const params = precision === undefined ? undefined : { precision };
+      expect([instantNow(params).toString(), plainDateTimeNow(params).toString()]).toEqual([
+        `${text}Z`,
+        text,
+      ]);
+    },
+  );
 });
 
 describe('the Temporal date and time "now" generators', () => {

@@ -18,7 +18,7 @@ import {
   type DataTypeComponent,
   enforceDataTypeAssemblyInvariants,
 } from '../src/shared/data-type-support';
-import type { AuthoringFieldPresetDescriptor } from '../src/shared/framework-authoring';
+import type { AuthoringTypeConstructorDescriptor } from '../src/shared/framework-authoring';
 import { isRuntimeError } from '../src/shared/runtime-error';
 
 const int2 = dataType('demo/int2', { read: (json) => json });
@@ -68,19 +68,13 @@ const constructorNamed = (
     ...(options.typeParamKey === undefined
       ? { output: { codecId } }
       : {
-          args: [{ kind: 'number' as const, name: 'n', optional: true }],
+          args: [{ kind: 'value' as const, dataType: 'demo/int2', name: 'n', optional: true }],
           output: {
             codecId,
             typeParams: { [options.typeParamKey]: { kind: 'arg' as const, index: 0 } },
           },
         }),
   },
-});
-
-const presetNamed = (path: string, codecId: string) => ({
-  path,
-  contributedBy: 'x-pack',
-  descriptor: { kind: 'fieldPreset' as const, output: { codecId } },
 });
 
 const contributor = (id: string, dataTypes: readonly DataType[]) => ({ id, dataTypes });
@@ -269,7 +263,7 @@ describe('enforceDataTypeAssemblyInvariants', () => {
   });
 });
 
-describe('enforceHelperCodecInvariants on type constructors and field presets', () => {
+describe('enforceHelperCodecInvariants on type constructors', () => {
   const check = (helpers: readonly ContributedHelper[]) => () =>
     enforceHelperCodecInvariants({ lookup: demoLookup, helpers, codecDescriptorFor });
 
@@ -280,16 +274,8 @@ describe('enforceHelperCodecInvariants on type constructors and field presets', 
     );
   });
 
-  it('refuses a field preset naming a codec nobody registered', () => {
-    expect(check([presetNamed('id.gone', 'demo/gone@1')])).toThrow(
-      /x-pack.*demo\/gone@1|demo\/gone@1.*x-pack/s,
-    );
-  });
-
-  it('passes constructors and presets whose codecs are registered', () => {
-    expect(
-      check([constructorNamed('Text', 'demo/text@1'), presetNamed('id.text', 'demo/text@1')]),
-    ).not.toThrow();
+  it('passes constructors whose codecs are registered', () => {
+    expect(check([constructorNamed('Text', 'demo/text@1')])).not.toThrow();
   });
 
   it('refuses a constructor mapping an argument onto a key neither the data type nor the codec declares', () => {
@@ -353,10 +339,6 @@ describe('assembleDataTypeSupport', () => {
       codecId: 'demo/sized@1',
       typeParams: { length: { kind: 'arg' as const, index: 0 } },
     },
-  });
-  const sizedPreset = (dataTypeOfArgument: string): AuthoringFieldPresetDescriptor => ({
-    ...sizedConstructor(dataTypeOfArgument),
-    kind: 'fieldPreset',
   });
   const demo: DataTypeComponent = {
     id: 'demo',
@@ -473,13 +455,13 @@ describe('assembleDataTypeSupport', () => {
 
   it('refuses a type constructor argument that is not a value argument, saying how to declare it', () => {
     const numberArgument = {
-      kind: 'typeConstructor' as const,
-      args: [{ kind: 'number' as const, name: 'size', integer: true }],
+      kind: 'typeConstructor',
+      args: [{ kind: 'number', name: 'size', integer: true }],
       output: {
         codecId: 'demo/sized@1',
-        typeParams: { length: { kind: 'arg' as const, index: 0 } },
+        typeParams: { length: { kind: 'arg', index: 0 } },
       },
-    };
+    } as unknown as AuthoringTypeConstructorDescriptor;
     expect(
       thrownBy(
         assemble({
@@ -507,7 +489,7 @@ describe('assembleDataTypeSupport', () => {
             kind: 'typeConstructor',
             args: [{ kind: 'option', values: ['a'] }],
             output: { codecId: 'demo/sized@1' },
-          },
+          } as unknown as AuthoringTypeConstructorDescriptor,
         },
       },
     });
@@ -526,23 +508,6 @@ describe('assembleDataTypeSupport', () => {
     );
   });
 
-  it('accepts a field preset argument of another kind, which field presets keep for now', () => {
-    expect(
-      assemble({
-        id: 'x-pack',
-        authoring: {
-          field: {
-            sized: {
-              kind: 'fieldPreset',
-              args: [{ kind: 'number', name: 'size' }],
-              output: { codecId: 'demo/sized@1' },
-            },
-          },
-        },
-      }),
-    ).not.toThrow();
-  });
-
   it('refuses a value argument of a data type nothing in the components writes', () => {
     expect(
       thrownBy(
@@ -552,16 +517,6 @@ describe('assembleDataTypeSupport', () => {
       code: 'CONTRACT.DATA_TYPE_NOT_WRITABLE',
       message:
         'Argument "length" of type constructor "Sized" contributed by "x-pack" takes a value of data type "demo/text", which no contract source can write.',
-    });
-  });
-
-  it('checks the value arguments of a field preset too', () => {
-    expect(
-      thrownBy(assemble({ id: 'x-pack', authoring: { field: { sized: sizedPreset(text.id) } } })),
-    ).toEqual({
-      code: 'CONTRACT.DATA_TYPE_NOT_WRITABLE',
-      message:
-        'Argument "length" of field preset "sized" contributed by "x-pack" takes a value of data type "demo/text", which no contract source can write.',
     });
   });
 

@@ -14,8 +14,8 @@ import type { PgIntegrationRuntime } from './runtime-helpers';
 /**
  * End-to-end proof of the integer-representation types on PostgreSQL, driven
  * through the real emitted fixture (`fixtures/integer-representation/generated/`):
- * `Meter.peak` is `BigIntNumber` (`pg/int8number@1`, int8 read as a JS number)
- * and `Meter.lifetime` is `UnboundedInt` (`pg/unboundedint@1`, unconstrained
+ * `Meter.peak` is `Int8Number` (`pg/int8number@1`, int8 read as a JS number)
+ * and `Meter.lifetime` is `NumericBigInt` (`pg/unboundedint@1`, unconstrained
  * numeric read as a bigint). Boundary values only — a value inside the safe
  * range proves nothing about the guard.
  */
@@ -98,7 +98,7 @@ describe('integration/integer representation types', () => {
   // number rather than decimal text — the boundary value proves that
   // projection survives the nested-document path exactly.
   it(
-    'carries a BigIntNumber column through an include at the safe-range boundary',
+    'carries an Int8Number column through an include at the safe-range boundary',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         await setupTables(runtime);
@@ -130,7 +130,7 @@ describe('integration/integer representation types', () => {
   );
 
   it(
-    'reading a stored value past the safe range through BigIntNumber raises RUNTIME.DECODE_FAILED',
+    'reading a stored value past the safe range through Int8Number raises RUNTIME.DECODE_FAILED',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         await setupTables(runtime);
@@ -206,7 +206,7 @@ describe('integration/integer representation types', () => {
   );
 
   it(
-    'writing past the safe range through BigIntNumber raises RUNTIME.ENCODE_FAILED',
+    'writing past the safe range through Int8Number raises RUNTIME.ENCODE_FAILED',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         await setupTables(runtime);
@@ -227,7 +227,7 @@ describe('integration/integer representation types', () => {
   );
 
   it(
-    'writing a non-integral number through BigIntNumber raises RUNTIME.ENCODE_FAILED',
+    'writing a non-integral number through Int8Number raises RUNTIME.ENCODE_FAILED',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         await setupTables(runtime);
@@ -254,7 +254,7 @@ describe('integration/integer representation types', () => {
   // `pg/unboundedint@1` stays unbounded, since that column's author chose the
   // exact representation. `min`/`max` resolve to the input codec itself.
   it(
-    'reduces BigIntNumber and UnboundedInt columns through their declared result codecs',
+    'reduces Int8Number and NumericBigInt columns through their declared result codecs',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         await setupTables(runtime);

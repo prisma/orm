@@ -86,7 +86,7 @@
               "createdAt": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "typeParams": {
                     "precision": 3
                   }
@@ -97,7 +97,7 @@
               "createdAtTz": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamptz-string@1",
+                  "codecId": "pg/timestamptz-date@1",
                   "typeParams": {
                     "precision": 6
                   }
@@ -168,7 +168,7 @@
               "dateTimeLiteral": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "typeParams": {
                     "precision": 3
                   }
@@ -250,7 +250,7 @@
     }
   },
   "execution": {
-    "executionHash": "34724d7f5b296e0eee40a5a82495ef0ff3eb4bcb7428d1261cf475fb29be215b",
+    "executionHash": "16f44213037f9551e1ff3ab95c43a8ff95c77b0332ce526f45df70bea0c4c416",
     "mutations": {
       "defaults": [
         {
@@ -261,7 +261,7 @@
           },
           "onCreate": {
             "kind": "generator",
-            "id": "timestampStringNow",
+            "id": "timestampNow",
             "params": {
               "precision": 3
             }
@@ -275,7 +275,7 @@
           },
           "onCreate": {
             "kind": "generator",
-            "id": "timestamptzStringNow",
+            "id": "timestampNow",
             "params": {
               "precision": 6
             }
@@ -289,7 +289,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "df40eca2aa7086780f4e2e2bb1ad623cc60b7c5253a32cd076be318e8ae69c27",
+    "storageHash": "3866a5e224af9199d6b8ae227ff30109a72405c2d23a1209458c2d3f63596324",
     "namespaces": {
       "public": {
         "id": "public",
@@ -320,7 +320,7 @@
                 },
                 "createdAt": {
                   "dataType": "pg/timestamp",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "nullable": false,
                   "many": false,
                   "typeParams": {
@@ -333,7 +333,7 @@
                 },
                 "createdAtTz": {
                   "dataType": "pg/timestamptz",
-                  "codecId": "pg/timestamptz-string@1",
+                  "codecId": "pg/timestamptz-date@1",
                   "nullable": false,
                   "many": false,
                   "typeParams": {
@@ -420,7 +420,7 @@
                 },
                 "dateTimeLiteral": {
                   "dataType": "pg/timestamp",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "nullable": false,
                   "many": false,
                   "typeParams": {

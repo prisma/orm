@@ -13,6 +13,7 @@ import {
   type DataTypeId,
   validateCodecTypeParams,
 } from '@internal/framework-components/codec';
+import { isJsonType, type JsonType } from '@internal/sql-contract/codec-json-type';
 import {
   CaseExpr,
   ColumnRef,
@@ -41,6 +42,8 @@ const ARRAY_ORDINALITY_COLUMN = 'ordinality';
 
 export interface AnyPostgresCodecDescriptor extends AnyCodecDescriptor {
   readonly descriptorKind: typeof POSTGRES_CODEC_DESCRIPTOR_KIND;
+  /** The JSON type the codec's value is written as inside a JSON document. `PostgresCodecDescriptor` and `postgresCodec` require it; a registry may still hold a descriptor built without it. */
+  readonly jsonType?: JsonType;
   projectJson(expression: ProjectionExpr, ref: CodecRef): ProjectionExpr;
 }
 
@@ -49,6 +52,7 @@ export abstract class PostgresCodecDescriptor<P = void>
   implements AnyPostgresCodecDescriptor
 {
   readonly descriptorKind = POSTGRES_CODEC_DESCRIPTOR_KIND;
+  abstract readonly jsonType: JsonType;
 
   protected abstract jsonProjection(expression: ProjectionExpr, params: P): ProjectionExpr;
 
@@ -140,12 +144,15 @@ export type AdaptedPostgresCodecDescriptor<D extends AnyCodecDescriptorTemplate>
   keyof CodecDescriptorTemplate<DescriptorParams<D>>
 > &
   Pick<CodecDescriptor, 'dataType'> &
-  Pick<AnyPostgresCodecDescriptor, 'descriptorKind' | 'projectJson'>;
+  Pick<AnyPostgresCodecDescriptor, 'descriptorKind' | 'projectJson'> & {
+    readonly jsonType: JsonType;
+  };
 
 class PostgresCodecDescriptorAdapter<
-  D extends AnyCodecDescriptorTemplate,
+  D extends AnyCodecDescriptorTemplate & { readonly jsonType: JsonType },
 > extends PostgresCodecDescriptor<DescriptorParams<D>> {
   override readonly dataType: DataTypeId;
+  override readonly jsonType: JsonType;
   override readonly codecId: string;
   override readonly traits: readonly CodecTrait[];
   override readonly paramsSchema: StandardSchemaV1<DescriptorParams<D>> | undefined;
@@ -166,6 +173,7 @@ class PostgresCodecDescriptorAdapter<
   ) {
     super();
     this.dataType = options.dataType.id;
+    this.jsonType = descriptor.jsonType;
     this.codecId = descriptor.codecId;
     this.traits = descriptor.traits;
     this.paramsSchema = blindCast<
@@ -215,7 +223,9 @@ class PostgresCodecDescriptorAdapter<
   }
 }
 
-export function postgresCodec<D extends AnyCodecDescriptorTemplate>(
+export function postgresCodec<
+  D extends AnyCodecDescriptorTemplate & { readonly jsonType: JsonType },
+>(
   descriptor: D,
   options: PostgresCodecOptions<DescriptorParams<D>, DescriptorCodec<D>>,
 ): AdaptedPostgresCodecDescriptor<D> {
@@ -253,7 +263,8 @@ export function isPostgresCodecDescriptor(value: unknown): value is AnyPostgresC
     'factory' in value &&
     typeof value.factory === 'function' &&
     'projectJson' in value &&
-    typeof value.projectJson === 'function'
+    typeof value.projectJson === 'function' &&
+    (!('jsonType' in value) || isJsonType(value.jsonType))
   );
 }
 

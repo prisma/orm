@@ -1,6 +1,8 @@
 import type {
   ColumnDefault,
+  ContractDiscriminator,
   ControlPolicy,
+  CrossReference,
   ExecutionMutationDefaultPhases,
 } from '@internal/contract/types';
 import type { ForeignKeyDefaultsState } from '@internal/contract-authoring';
@@ -305,6 +307,12 @@ export interface ModelNode extends TableProperties {
    * table and a root for this model — the base owns both.
    */
   readonly sharesBaseTable?: boolean;
+  /** The field that names a row's variant, on a model that has variants. Its value set is written into storage before the storage hash (ADR 309). */
+  readonly discriminator?: ContractDiscriminator;
+  /** The variants of this model, keyed by the discriminator value as the column stores it. */
+  readonly variants?: Readonly<Record<string, CrossReference>>;
+  /** The model this one is a variant of. */
+  readonly base?: CrossReference;
 }
 
 /**

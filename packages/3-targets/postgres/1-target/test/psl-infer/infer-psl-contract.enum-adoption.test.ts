@@ -90,6 +90,7 @@ function namespaceNode(
 
 function tree(namespaces: Record<string, PostgresNamespaceSchemaNode>) {
   return new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces,
     roles: [],
     existingSchemas: Object.keys(namespaces),

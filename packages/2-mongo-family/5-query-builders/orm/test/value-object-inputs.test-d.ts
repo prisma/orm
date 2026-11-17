@@ -61,7 +61,13 @@ type VOContract = MongoContractWithTypeMaps<
                 readonly contactInfo: {
                   readonly nullable: true;
                   readonly many: false;
-                  readonly type: { readonly kind: 'valueObject'; readonly name: 'ContactInfo' };
+                  readonly type: {
+                    readonly kind: 'valueObject';
+                    readonly plane: 'storage';
+                    readonly namespaceId: '__unbound__';
+                    readonly entityKind: 'valueObject';
+                    readonly entityName: 'ContactInfo';
+                  };
                 };
                 readonly tags: {
                   readonly nullable: false;
@@ -81,22 +87,6 @@ type VOContract = MongoContractWithTypeMaps<
               };
             };
           };
-          readonly valueObjects: {
-            readonly ContactInfo: {
-              readonly fields: {
-                readonly phone: {
-                  readonly nullable: false;
-                  readonly many: false;
-                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-                };
-                readonly website: {
-                  readonly nullable: true;
-                  readonly many: false;
-                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-                };
-              };
-            };
-          };
         };
       };
     };
@@ -106,7 +96,25 @@ type VOContract = MongoContractWithTypeMaps<
         readonly __unbound__: {
           readonly id: '__unbound__';
           readonly kind: 'mongo-namespace';
-          readonly entries: { readonly collection: { readonly users: MongoCollection } };
+          readonly entries: {
+            readonly collection: { readonly users: MongoCollection };
+            readonly valueObject: {
+              readonly ContactInfo: {
+                readonly fields: {
+                  readonly phone: {
+                    readonly nullable: false;
+                    readonly many: false;
+                    readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+                  };
+                  readonly website: {
+                    readonly nullable: true;
+                    readonly many: false;
+                    readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+                  };
+                };
+              };
+            };
+          };
         };
       };
     };
@@ -232,7 +240,13 @@ type VOContractWithFieldTypes = MongoContractWithTypeMaps<
                 readonly contactInfo: {
                   readonly nullable: true;
                   readonly many: false;
-                  readonly type: { readonly kind: 'valueObject'; readonly name: 'ContactInfo' };
+                  readonly type: {
+                    readonly kind: 'valueObject';
+                    readonly plane: 'storage';
+                    readonly namespaceId: '__unbound__';
+                    readonly entityKind: 'valueObject';
+                    readonly entityName: 'ContactInfo';
+                  };
                 };
                 readonly tags: {
                   readonly nullable: false;
@@ -252,22 +266,6 @@ type VOContractWithFieldTypes = MongoContractWithTypeMaps<
               };
             };
           };
-          readonly valueObjects: {
-            readonly ContactInfo: {
-              readonly fields: {
-                readonly phone: {
-                  readonly nullable: false;
-                  readonly many: false;
-                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-                };
-                readonly website: {
-                  readonly nullable: true;
-                  readonly many: false;
-                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-                };
-              };
-            };
-          };
         };
       };
     };
@@ -277,7 +275,25 @@ type VOContractWithFieldTypes = MongoContractWithTypeMaps<
         readonly __unbound__: {
           readonly id: '__unbound__';
           readonly kind: 'mongo-namespace';
-          readonly entries: { readonly collection: { readonly users: MongoCollection } };
+          readonly entries: {
+            readonly collection: { readonly users: MongoCollection };
+            readonly valueObject: {
+              readonly ContactInfo: {
+                readonly fields: {
+                  readonly phone: {
+                    readonly nullable: false;
+                    readonly many: false;
+                    readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+                  };
+                  readonly website: {
+                    readonly nullable: true;
+                    readonly many: false;
+                    readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+                  };
+                };
+              };
+            };
+          };
         };
       };
     };

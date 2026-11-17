@@ -18,7 +18,7 @@ import {
 import { BSONRegExp, Double, Long, MongoClient, type ObjectId } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createMongoDriver, MongoDriverImpl } from '../src/mongo-driver';
+import { MongoDriverImpl } from '../src/mongo-driver';
 
 let replSet: MongoMemoryReplSet;
 let connectionUri: string;
@@ -52,7 +52,7 @@ describe('MongoDriver', () => {
     const col = 'driver_insert';
 
     it('inserts and returns insertedId', async () => {
-      const driver = await createMongoDriver(connectionUri, dbName);
+      const driver = await MongoDriverImpl.fromConnection(connectionUri, dbName);
       try {
         const cmd = new InsertOneWireCommand(col, { name: 'Dave', age: 28 });
         const rows = await collect(driver.execute(cmd));
@@ -73,7 +73,7 @@ describe('MongoDriver', () => {
     });
 
     it('is the written document with its _id, as a read with the client`s options returns it', async () => {
-      const driver = await createMongoDriver(connectionUri, dbName);
+      const driver = await MongoDriverImpl.fromConnection(connectionUri, dbName);
       try {
         const [one] = await collect(
           driver.execute(new InsertOneWireCommand('driver_returned', written())),
@@ -114,7 +114,7 @@ describe('MongoDriver', () => {
     const col = 'driver_update';
 
     it('updates and returns matched/modified counts', async () => {
-      const driver = await createMongoDriver(connectionUri, dbName);
+      const driver = await MongoDriverImpl.fromConnection(connectionUri, dbName);
       try {
         const db = seedClient.db(dbName);
         await db.collection(col).deleteMany({});
@@ -134,7 +134,7 @@ describe('MongoDriver', () => {
     const col = 'driver_delete';
 
     it('deletes and returns deletedCount', async () => {
-      const driver = await createMongoDriver(connectionUri, dbName);
+      const driver = await MongoDriverImpl.fromConnection(connectionUri, dbName);
       try {
         const db = seedClient.db(dbName);
         await db.collection(col).deleteMany({});
@@ -154,7 +154,7 @@ describe('MongoDriver', () => {
     const col = 'driver_insert_many';
 
     it('inserts multiple documents and returns ids', async () => {
-      const driver = await createMongoDriver(connectionUri, dbName);
+      const driver = await MongoDriverImpl.fromConnection(connectionUri, dbName);
       try {
         const cmd = new InsertManyWireCommand(col, [
           { name: 'Alice', age: 30 },
@@ -206,7 +206,7 @@ describe('MongoDriver', () => {
     });
 
     it('updates multiple documents and returns counts', async () => {
-      const driver = await createMongoDriver(connectionUri, dbName);
+      const driver = await MongoDriverImpl.fromConnection(connectionUri, dbName);
       try {
         const db = seedClient.db(dbName);
         await db.collection(col).deleteMany({});
@@ -234,7 +234,7 @@ describe('MongoDriver', () => {
     const col = 'driver_delete_many';
 
     it('deletes multiple documents and returns count', async () => {
-      const driver = await createMongoDriver(connectionUri, dbName);
+      const driver = await MongoDriverImpl.fromConnection(connectionUri, dbName);
       try {
         const db = seedClient.db(dbName);
         await db.collection(col).deleteMany({});
@@ -256,7 +256,7 @@ describe('MongoDriver', () => {
     const col = 'driver_find_update';
 
     it('updates and returns the modified document when returnDocument=after', async () => {
-      const driver = await createMongoDriver(connectionUri, dbName);
+      const driver = await MongoDriverImpl.fromConnection(connectionUri, dbName);
       try {
         const db = seedClient.db(dbName);
         await db.collection(col).deleteMany({});
@@ -279,7 +279,7 @@ describe('MongoDriver', () => {
     });
 
     it('upserts and returns the inserted document when returnDocument=after', async () => {
-      const driver = await createMongoDriver(connectionUri, dbName);
+      const driver = await MongoDriverImpl.fromConnection(connectionUri, dbName);
       try {
         const db = seedClient.db(dbName);
         await db.collection(col).deleteMany({});
@@ -301,7 +301,7 @@ describe('MongoDriver', () => {
     });
 
     it('yields nothing when no match and upsert is false', async () => {
-      const driver = await createMongoDriver(connectionUri, dbName);
+      const driver = await MongoDriverImpl.fromConnection(connectionUri, dbName);
       try {
         const db = seedClient.db(dbName);
         await db.collection(col).deleteMany({});
@@ -324,7 +324,7 @@ describe('MongoDriver', () => {
     const col = 'driver_find_delete';
 
     it('deletes and returns the removed document', async () => {
-      const driver = await createMongoDriver(connectionUri, dbName);
+      const driver = await MongoDriverImpl.fromConnection(connectionUri, dbName);
       try {
         const db = seedClient.db(dbName);
         await db.collection(col).deleteMany({});
@@ -340,7 +340,7 @@ describe('MongoDriver', () => {
     });
 
     it('yields nothing when no match', async () => {
-      const driver = await createMongoDriver(connectionUri, dbName);
+      const driver = await MongoDriverImpl.fromConnection(connectionUri, dbName);
       try {
         const db = seedClient.db(dbName);
         await db.collection(col).deleteMany({});
@@ -358,7 +358,7 @@ describe('MongoDriver', () => {
     const col = 'driver_aggregate';
 
     it('runs pipeline and returns results', async () => {
-      const driver = await createMongoDriver(connectionUri, dbName);
+      const driver = await MongoDriverImpl.fromConnection(connectionUri, dbName);
       try {
         const db = seedClient.db(dbName);
         await db.collection(col).deleteMany({});
@@ -384,7 +384,7 @@ describe('MongoDriver', () => {
 
   describe('close', () => {
     it('closes without error', async () => {
-      const driver = await createMongoDriver(connectionUri, dbName);
+      const driver = await MongoDriverImpl.fromConnection(connectionUri, dbName);
       await expect(driver.close()).resolves.toBeUndefined();
     });
   });

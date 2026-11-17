@@ -23,9 +23,9 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'e912a0ac1c484ed92ae8cb217638a889ad671c1f4a9bfb3e469ebfb14916c6dd'>;
+  StorageHashBase<'738a9bc34c15df72b535e7a13fcf0e72883a57d137b88ff175eeed75af13f33b'>;
 export type ExecutionHash =
-  ExecutionHashBase<'51be7e21b1611b41897bee6131dc8d5bfc6abd6380ca0bd6ba5a86d1c2f479c4'>;
+  ExecutionHashBase<'4eaa44c328b6ff71b05bc0c8397058c76293da5aad12e41c649f4c2f63fb67f6'>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
 
@@ -101,7 +101,9 @@ export type AggregateTypes = {
         readonly nullable: true;
       };
       readonly 'pg/interval@1': { readonly output: 'pg/interval@1'; readonly nullable: true };
+      readonly 'pg/money@1': { readonly output: 'pg/money@1'; readonly nullable: true };
       readonly 'pg/numeric@1': { readonly output: 'pg/numeric@1'; readonly nullable: true };
+      readonly 'pg/oid@1': { readonly output: 'pg/oid@1'; readonly nullable: true };
       readonly 'pg/text-array@1': { readonly output: 'pg/text-array@1'; readonly nullable: true };
       readonly 'pg/text@1': { readonly output: 'pg/text@1'; readonly nullable: true };
       readonly 'pg/time-string@1': { readonly output: 'pg/time-string@1'; readonly nullable: true };
@@ -173,7 +175,9 @@ export type AggregateTypes = {
         readonly nullable: true;
       };
       readonly 'pg/interval@1': { readonly output: 'pg/interval@1'; readonly nullable: true };
+      readonly 'pg/money@1': { readonly output: 'pg/money@1'; readonly nullable: true };
       readonly 'pg/numeric@1': { readonly output: 'pg/numeric@1'; readonly nullable: true };
+      readonly 'pg/oid@1': { readonly output: 'pg/oid@1'; readonly nullable: true };
       readonly 'pg/text-array@1': { readonly output: 'pg/text-array@1'; readonly nullable: true };
       readonly 'pg/text@1': { readonly output: 'pg/text@1'; readonly nullable: true };
       readonly 'pg/time-string@1': { readonly output: 'pg/time-string@1'; readonly nullable: true };
@@ -237,6 +241,7 @@ export type AggregateTypes = {
         readonly nullable: true;
       };
       readonly 'pg/interval@1': { readonly output: 'pg/interval@1'; readonly nullable: true };
+      readonly 'pg/money@1': { readonly output: 'pg/money@1'; readonly nullable: true };
       readonly 'pg/numeric@1': { readonly output: 'pg/numeric@1'; readonly nullable: true };
       readonly 'pg/time-string@1': { readonly output: 'pg/interval@1'; readonly nullable: true };
       readonly 'pg/time-temporal@1': { readonly output: 'pg/interval@1'; readonly nullable: true };
@@ -276,14 +281,16 @@ export type FieldOutputTypes = FieldTypesFromDomain<
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
-  'output'
+  'output',
+  ContractBase['storage']['namespaces']
 >;
 export type FieldInputTypes = FieldTypesFromDomain<
   ContractBase['domain']['namespaces'],
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
-  'input'
+  'input',
+  ContractBase['storage']['namespaces']
 >;
 type ColumnTypeOverrides = {};
 export type StorageColumnTypes = ColumnTypesFromStorage<
@@ -305,6 +312,7 @@ export namespace Models {
   export type public_Clock = {
     date: FieldOutputTypes['public']['Clock']['date'];
     dateString: FieldOutputTypes['public']['Clock']['dateString'];
+    dateTime0: FieldOutputTypes['public']['Clock']['dateTime0'];
     id: FieldOutputTypes['public']['Clock']['id'];
     label: FieldOutputTypes['public']['Clock']['label'];
     time0: FieldOutputTypes['public']['Clock']['time0'];
@@ -314,15 +322,24 @@ export namespace Models {
     timeString3: FieldOutputTypes['public']['Clock']['timeString3'];
     timeString6: FieldOutputTypes['public']['Clock']['timeString6'];
     timestamp0: FieldOutputTypes['public']['Clock']['timestamp0'];
+    timestamp1: FieldOutputTypes['public']['Clock']['timestamp1'];
     timestamp3: FieldOutputTypes['public']['Clock']['timestamp3'];
     timestamp6: FieldOutputTypes['public']['Clock']['timestamp6'];
+    timestampInstant0: FieldOutputTypes['public']['Clock']['timestampInstant0'];
+    timestampInstant2: FieldOutputTypes['public']['Clock']['timestampInstant2'];
+    timestampJsDate0: FieldOutputTypes['public']['Clock']['timestampJsDate0'];
+    timestampJsDate1: FieldOutputTypes['public']['Clock']['timestampJsDate1'];
+    timestampJsDate2: FieldOutputTypes['public']['Clock']['timestampJsDate2'];
     timestampString0: FieldOutputTypes['public']['Clock']['timestampString0'];
     timestampString3: FieldOutputTypes['public']['Clock']['timestampString3'];
     timestampString6: FieldOutputTypes['public']['Clock']['timestampString6'];
     timestamptz0: FieldOutputTypes['public']['Clock']['timestamptz0'];
+    timestamptz2: FieldOutputTypes['public']['Clock']['timestamptz2'];
     timestamptz3: FieldOutputTypes['public']['Clock']['timestamptz3'];
     timestamptz6: FieldOutputTypes['public']['Clock']['timestamptz6'];
     timestamptzJsDate0: FieldOutputTypes['public']['Clock']['timestamptzJsDate0'];
+    timestamptzJsDate1: FieldOutputTypes['public']['Clock']['timestamptzJsDate1'];
+    timestamptzJsDate2: FieldOutputTypes['public']['Clock']['timestamptzJsDate2'];
     timestamptzJsDate3: FieldOutputTypes['public']['Clock']['timestamptzJsDate3'];
     timestamptzJsDate6: FieldOutputTypes['public']['Clock']['timestamptzJsDate6'];
     timestamptzString0: FieldOutputTypes['public']['Clock']['timestamptzString0'];
@@ -373,6 +390,13 @@ type ContractBase = Omit<
                   readonly dataType: 'pg/date';
                   readonly codecId: 'pg/date-string@1';
                   readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly dateTime0: {
+                  readonly dataType: 'pg/timestamptz';
+                  readonly codecId: 'pg/timestamptz-date@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly precision: 0 };
                   readonly many: false;
                 };
                 readonly id: {
@@ -436,6 +460,13 @@ type ContractBase = Omit<
                   readonly typeParams: { readonly precision: 0 };
                   readonly many: false;
                 };
+                readonly timestamp1: {
+                  readonly dataType: 'pg/timestamp';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly precision: 1 };
+                  readonly many: false;
+                };
                 readonly timestamp3: {
                   readonly dataType: 'pg/timestamp';
                   readonly codecId: 'pg/timestamp-temporal@1';
@@ -448,6 +479,41 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/timestamp-temporal@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly precision: 6 };
+                  readonly many: false;
+                };
+                readonly timestampInstant0: {
+                  readonly dataType: 'pg/timestamp';
+                  readonly codecId: 'pg/timestamp-instant@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly precision: 0 };
+                  readonly many: false;
+                };
+                readonly timestampInstant2: {
+                  readonly dataType: 'pg/timestamp';
+                  readonly codecId: 'pg/timestamp-instant@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly precision: 2 };
+                  readonly many: false;
+                };
+                readonly timestampJsDate0: {
+                  readonly dataType: 'pg/timestamp';
+                  readonly codecId: 'pg/timestamp-date@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly precision: 0 };
+                  readonly many: false;
+                };
+                readonly timestampJsDate1: {
+                  readonly dataType: 'pg/timestamp';
+                  readonly codecId: 'pg/timestamp-date@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly precision: 1 };
+                  readonly many: false;
+                };
+                readonly timestampJsDate2: {
+                  readonly dataType: 'pg/timestamp';
+                  readonly codecId: 'pg/timestamp-date@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly precision: 2 };
                   readonly many: false;
                 };
                 readonly timestampString0: {
@@ -478,6 +544,13 @@ type ContractBase = Omit<
                   readonly typeParams: { readonly precision: 0 };
                   readonly many: false;
                 };
+                readonly timestamptz2: {
+                  readonly dataType: 'pg/timestamptz';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly precision: 2 };
+                  readonly many: false;
+                };
                 readonly timestamptz3: {
                   readonly dataType: 'pg/timestamptz';
                   readonly codecId: 'pg/timestamptz-temporal@1';
@@ -497,6 +570,20 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/timestamptz-date@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly precision: 0 };
+                  readonly many: false;
+                };
+                readonly timestamptzJsDate1: {
+                  readonly dataType: 'pg/timestamptz';
+                  readonly codecId: 'pg/timestamptz-date@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly precision: 1 };
+                  readonly many: false;
+                };
+                readonly timestamptzJsDate2: {
+                  readonly dataType: 'pg/timestamptz';
+                  readonly codecId: 'pg/timestamptz-date@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly precision: 2 };
                   readonly many: false;
                 };
                 readonly timestamptzJsDate3: {
@@ -602,6 +689,14 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/date-string@1' };
               };
+              readonly dateTime0: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamptz-date@1';
+                  readonly typeParams: { readonly precision: 0 };
+                };
+              };
               readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
@@ -666,6 +761,14 @@ type ContractBase = Omit<
                   readonly typeParams: { readonly precision: 0 };
                 };
               };
+              readonly timestamp1: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamp-temporal@1';
+                  readonly typeParams: { readonly precision: 1 };
+                };
+              };
               readonly timestamp3: {
                 readonly nullable: false;
                 readonly type: {
@@ -680,6 +783,46 @@ type ContractBase = Omit<
                   readonly kind: 'scalar';
                   readonly codecId: 'pg/timestamp-temporal@1';
                   readonly typeParams: { readonly precision: 6 };
+                };
+              };
+              readonly timestampInstant0: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamp-instant@1';
+                  readonly typeParams: { readonly precision: 0 };
+                };
+              };
+              readonly timestampInstant2: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamp-instant@1';
+                  readonly typeParams: { readonly precision: 2 };
+                };
+              };
+              readonly timestampJsDate0: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamp-date@1';
+                  readonly typeParams: { readonly precision: 0 };
+                };
+              };
+              readonly timestampJsDate1: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamp-date@1';
+                  readonly typeParams: { readonly precision: 1 };
+                };
+              };
+              readonly timestampJsDate2: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamp-date@1';
+                  readonly typeParams: { readonly precision: 2 };
                 };
               };
               readonly timestampString0: {
@@ -714,6 +857,14 @@ type ContractBase = Omit<
                   readonly typeParams: { readonly precision: 0 };
                 };
               };
+              readonly timestamptz2: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                  readonly typeParams: { readonly precision: 2 };
+                };
+              };
               readonly timestamptz3: {
                 readonly nullable: false;
                 readonly type: {
@@ -736,6 +887,22 @@ type ContractBase = Omit<
                   readonly kind: 'scalar';
                   readonly codecId: 'pg/timestamptz-date@1';
                   readonly typeParams: { readonly precision: 0 };
+                };
+              };
+              readonly timestamptzJsDate1: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamptz-date@1';
+                  readonly typeParams: { readonly precision: 1 };
+                };
+              };
+              readonly timestamptzJsDate2: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamptz-date@1';
+                  readonly typeParams: { readonly precision: 2 };
                 };
               };
               readonly timestamptzJsDate3: {
@@ -826,6 +993,7 @@ type ContractBase = Omit<
               readonly fields: {
                 readonly date: { readonly column: 'date' };
                 readonly dateString: { readonly column: 'dateString' };
+                readonly dateTime0: { readonly column: 'dateTime0' };
                 readonly id: { readonly column: 'id' };
                 readonly label: { readonly column: 'label' };
                 readonly time0: { readonly column: 'time0' };
@@ -835,15 +1003,24 @@ type ContractBase = Omit<
                 readonly timeString3: { readonly column: 'timeString3' };
                 readonly timeString6: { readonly column: 'timeString6' };
                 readonly timestamp0: { readonly column: 'timestamp0' };
+                readonly timestamp1: { readonly column: 'timestamp1' };
                 readonly timestamp3: { readonly column: 'timestamp3' };
                 readonly timestamp6: { readonly column: 'timestamp6' };
+                readonly timestampInstant0: { readonly column: 'timestampInstant0' };
+                readonly timestampInstant2: { readonly column: 'timestampInstant2' };
+                readonly timestampJsDate0: { readonly column: 'timestampJsDate0' };
+                readonly timestampJsDate1: { readonly column: 'timestampJsDate1' };
+                readonly timestampJsDate2: { readonly column: 'timestampJsDate2' };
                 readonly timestampString0: { readonly column: 'timestampString0' };
                 readonly timestampString3: { readonly column: 'timestampString3' };
                 readonly timestampString6: { readonly column: 'timestampString6' };
                 readonly timestamptz0: { readonly column: 'timestamptz0' };
+                readonly timestamptz2: { readonly column: 'timestamptz2' };
                 readonly timestamptz3: { readonly column: 'timestamptz3' };
                 readonly timestamptz6: { readonly column: 'timestamptz6' };
                 readonly timestamptzJsDate0: { readonly column: 'timestamptzJsDate0' };
+                readonly timestamptzJsDate1: { readonly column: 'timestamptzJsDate1' };
+                readonly timestamptzJsDate2: { readonly column: 'timestamptzJsDate2' };
                 readonly timestamptzJsDate3: { readonly column: 'timestamptzJsDate3' };
                 readonly timestamptzJsDate6: { readonly column: 'timestamptzJsDate6' };
                 readonly timestamptzString0: { readonly column: 'timestamptzString0' };
@@ -879,6 +1056,7 @@ type ContractBase = Omit<
       readonly forShare: true;
       readonly forUpdate: true;
       readonly insertOnConflictSkip: true;
+      readonly insertOnConflictTarget: true;
       readonly insertOnConflictWithoutTarget: true;
       readonly lateral: true;
       readonly lockNowait: true;
@@ -908,6 +1086,23 @@ type ContractBase = Omit<
           readonly ref: {
             readonly entry: 'clock';
             readonly field: 'dateString';
+            readonly namespace: 'public';
+          };
+        },
+        {
+          readonly onCreate: {
+            readonly id: 'timestampNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 0 };
+          };
+          readonly onUpdate: {
+            readonly id: 'timestampNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 0 };
+          };
+          readonly ref: {
+            readonly entry: 'clock';
+            readonly field: 'dateTime0';
             readonly namespace: 'public';
           };
         },
@@ -1014,8 +1209,16 @@ type ContractBase = Omit<
           };
         },
         {
-          readonly onCreate: { readonly id: 'plainDateTimeNow'; readonly kind: 'generator' };
-          readonly onUpdate: { readonly id: 'plainDateTimeNow'; readonly kind: 'generator' };
+          readonly onCreate: {
+            readonly id: 'plainDateTimeNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 0 };
+          };
+          readonly onUpdate: {
+            readonly id: 'plainDateTimeNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 0 };
+          };
           readonly ref: {
             readonly entry: 'clock';
             readonly field: 'timestamp0';
@@ -1023,8 +1226,33 @@ type ContractBase = Omit<
           };
         },
         {
-          readonly onCreate: { readonly id: 'plainDateTimeNow'; readonly kind: 'generator' };
-          readonly onUpdate: { readonly id: 'plainDateTimeNow'; readonly kind: 'generator' };
+          readonly onCreate: {
+            readonly id: 'plainDateTimeNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 1 };
+          };
+          readonly onUpdate: {
+            readonly id: 'plainDateTimeNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 1 };
+          };
+          readonly ref: {
+            readonly entry: 'clock';
+            readonly field: 'timestamp1';
+            readonly namespace: 'public';
+          };
+        },
+        {
+          readonly onCreate: {
+            readonly id: 'plainDateTimeNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 3 };
+          };
+          readonly onUpdate: {
+            readonly id: 'plainDateTimeNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 3 };
+          };
           readonly ref: {
             readonly entry: 'clock';
             readonly field: 'timestamp3';
@@ -1032,11 +1260,104 @@ type ContractBase = Omit<
           };
         },
         {
-          readonly onCreate: { readonly id: 'plainDateTimeNow'; readonly kind: 'generator' };
-          readonly onUpdate: { readonly id: 'plainDateTimeNow'; readonly kind: 'generator' };
+          readonly onCreate: {
+            readonly id: 'plainDateTimeNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 6 };
+          };
+          readonly onUpdate: {
+            readonly id: 'plainDateTimeNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 6 };
+          };
           readonly ref: {
             readonly entry: 'clock';
             readonly field: 'timestamp6';
+            readonly namespace: 'public';
+          };
+        },
+        {
+          readonly onCreate: {
+            readonly id: 'instantNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 0 };
+          };
+          readonly onUpdate: {
+            readonly id: 'instantNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 0 };
+          };
+          readonly ref: {
+            readonly entry: 'clock';
+            readonly field: 'timestampInstant0';
+            readonly namespace: 'public';
+          };
+        },
+        {
+          readonly onCreate: {
+            readonly id: 'instantNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 2 };
+          };
+          readonly onUpdate: {
+            readonly id: 'instantNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 2 };
+          };
+          readonly ref: {
+            readonly entry: 'clock';
+            readonly field: 'timestampInstant2';
+            readonly namespace: 'public';
+          };
+        },
+        {
+          readonly onCreate: {
+            readonly id: 'timestampNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 0 };
+          };
+          readonly onUpdate: {
+            readonly id: 'timestampNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 0 };
+          };
+          readonly ref: {
+            readonly entry: 'clock';
+            readonly field: 'timestampJsDate0';
+            readonly namespace: 'public';
+          };
+        },
+        {
+          readonly onCreate: {
+            readonly id: 'timestampNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 1 };
+          };
+          readonly onUpdate: {
+            readonly id: 'timestampNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 1 };
+          };
+          readonly ref: {
+            readonly entry: 'clock';
+            readonly field: 'timestampJsDate1';
+            readonly namespace: 'public';
+          };
+        },
+        {
+          readonly onCreate: {
+            readonly id: 'timestampNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 2 };
+          };
+          readonly onUpdate: {
+            readonly id: 'timestampNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 2 };
+          };
+          readonly ref: {
+            readonly entry: 'clock';
+            readonly field: 'timestampJsDate2';
             readonly namespace: 'public';
           };
         },
@@ -1092,8 +1413,16 @@ type ContractBase = Omit<
           };
         },
         {
-          readonly onCreate: { readonly id: 'instantNow'; readonly kind: 'generator' };
-          readonly onUpdate: { readonly id: 'instantNow'; readonly kind: 'generator' };
+          readonly onCreate: {
+            readonly id: 'instantNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 0 };
+          };
+          readonly onUpdate: {
+            readonly id: 'instantNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 0 };
+          };
           readonly ref: {
             readonly entry: 'clock';
             readonly field: 'timestamptz0';
@@ -1101,8 +1430,33 @@ type ContractBase = Omit<
           };
         },
         {
-          readonly onCreate: { readonly id: 'instantNow'; readonly kind: 'generator' };
-          readonly onUpdate: { readonly id: 'instantNow'; readonly kind: 'generator' };
+          readonly onCreate: {
+            readonly id: 'instantNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 2 };
+          };
+          readonly onUpdate: {
+            readonly id: 'instantNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 2 };
+          };
+          readonly ref: {
+            readonly entry: 'clock';
+            readonly field: 'timestamptz2';
+            readonly namespace: 'public';
+          };
+        },
+        {
+          readonly onCreate: {
+            readonly id: 'instantNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 3 };
+          };
+          readonly onUpdate: {
+            readonly id: 'instantNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 3 };
+          };
           readonly ref: {
             readonly entry: 'clock';
             readonly field: 'timestamptz3';
@@ -1110,8 +1464,16 @@ type ContractBase = Omit<
           };
         },
         {
-          readonly onCreate: { readonly id: 'instantNow'; readonly kind: 'generator' };
-          readonly onUpdate: { readonly id: 'instantNow'; readonly kind: 'generator' };
+          readonly onCreate: {
+            readonly id: 'instantNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 6 };
+          };
+          readonly onUpdate: {
+            readonly id: 'instantNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 6 };
+          };
           readonly ref: {
             readonly entry: 'clock';
             readonly field: 'timestamptz6';
@@ -1119,8 +1481,16 @@ type ContractBase = Omit<
           };
         },
         {
-          readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
-          readonly onUpdate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly onCreate: {
+            readonly id: 'timestampNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 0 };
+          };
+          readonly onUpdate: {
+            readonly id: 'timestampNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 0 };
+          };
           readonly ref: {
             readonly entry: 'clock';
             readonly field: 'timestamptzJsDate0';
@@ -1128,8 +1498,50 @@ type ContractBase = Omit<
           };
         },
         {
-          readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
-          readonly onUpdate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly onCreate: {
+            readonly id: 'timestampNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 1 };
+          };
+          readonly onUpdate: {
+            readonly id: 'timestampNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 1 };
+          };
+          readonly ref: {
+            readonly entry: 'clock';
+            readonly field: 'timestamptzJsDate1';
+            readonly namespace: 'public';
+          };
+        },
+        {
+          readonly onCreate: {
+            readonly id: 'timestampNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 2 };
+          };
+          readonly onUpdate: {
+            readonly id: 'timestampNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 2 };
+          };
+          readonly ref: {
+            readonly entry: 'clock';
+            readonly field: 'timestamptzJsDate2';
+            readonly namespace: 'public';
+          };
+        },
+        {
+          readonly onCreate: {
+            readonly id: 'timestampNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 3 };
+          };
+          readonly onUpdate: {
+            readonly id: 'timestampNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 3 };
+          };
           readonly ref: {
             readonly entry: 'clock';
             readonly field: 'timestamptzJsDate3';
@@ -1137,8 +1549,16 @@ type ContractBase = Omit<
           };
         },
         {
-          readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
-          readonly onUpdate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly onCreate: {
+            readonly id: 'timestampNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 6 };
+          };
+          readonly onUpdate: {
+            readonly id: 'timestampNow';
+            readonly kind: 'generator';
+            readonly params: { readonly precision: 6 };
+          };
           readonly ref: {
             readonly entry: 'clock';
             readonly field: 'timestamptzJsDate6';
@@ -1285,7 +1705,6 @@ type ContractBase = Omit<
     };
   };
   readonly meta: {};
-
   readonly profileHash: ProfileHash;
 };
 

@@ -5,6 +5,7 @@ import type {
 } from '@internal/config/config-types';
 import type {
   Contract,
+  ContractDiscriminator,
   ContractModel,
   ControlPolicy,
   CrossReference,
@@ -47,7 +48,8 @@ import type {
   ControlMutationDefaultRegistry,
   ControlMutationDefaults,
 } from '@internal/framework-components/control';
-import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { elementCoordinates, UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { UNBOUND_PSL_NAMESPACE_NAME } from '@internal/framework-components/psl-ast';
 import type { Binder, ParsedWrittenScalar } from '@internal/psl-parser';
 import {
   type AttributeSpecContext,
@@ -88,6 +90,7 @@ import {
   type LoweredPackEntity,
   providesPslEntityPlacement,
   type ResolvedPslModelRefs,
+  requiresNameUniqueAcrossNamespaces,
 } from '@internal/sql-contract/entity-handle-lowering-hook';
 import { FOREIGN_KEY_INDEX_UNRESOLVED } from '@internal/sql-contract/foreign-key-materialization';
 import { isAuthoredIndexInput } from '@internal/sql-contract/index-naming';
@@ -101,6 +104,7 @@ import { deriveValueSetFromEntity } from '@internal/sql-contract/value-set-deriv
 import {
   buildSqlContractFromDefinition,
   type CheckNode,
+  composedExtensionPackRefs,
   type EnumTypeHandle,
   type FieldNode,
   type ForeignKeyNode,
@@ -120,12 +124,16 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { isStructuredError } from '@internal/utils/structured-error';
+import { compareStrings } from './compare-strings';
 import { contractError } from './contract-errors';
 import { defaultTableName } from './default-table-name';
+import { type DeprecatedTypeNameWarner, deprecatedTypeNameWarner } from './deprecated-type-names';
 import {
   getAttribute,
   getNamedArgument,
   mapFieldNamesToColumns,
+  renamedTypeConstructorsOf,
+  reportFieldDbAttributes,
   storageName,
 } from './psl-attribute-parsing';
 import type { ColumnDescriptor } from './psl-column-resolution';
@@ -193,42 +201,8 @@ export interface InterpretPslDocumentToSqlContractInput {
   /** The target's default codec ids for an `enum` block that omits `@@type`. */
   readonly enumInferenceCodecs?: { readonly text: string; readonly int: string };
   readonly capabilities: CapabilityMatrix;
-}
-
-function buildComposedExtensionPackRefs(
-  target: TargetPackRef<'sql', string>,
-  extensionIds: readonly string[],
-  extensionPackRefs: readonly ExtensionPackRef<'sql', string>[] = [],
-): Record<string, ExtensionPackRef<'sql', string>> | undefined {
-  if (extensionIds.length === 0) {
-    return undefined;
-  }
-
-  const extensionPackRefById = new Map(extensionPackRefs.map((packRef) => [packRef.id, packRef]));
-
-  return Object.fromEntries(
-    extensionIds.map((extensionId) => [
-      extensionId,
-      extensionPackRefById.get(extensionId) ??
-        ({
-          kind: 'extension',
-          id: extensionId,
-          familyId: target.familyId,
-          targetId: target.targetId,
-          version: '0.0.1',
-        } satisfies ExtensionPackRef<'sql', string>),
-    ]),
-  );
-}
-
-function compareStrings(left: string, right: string): -1 | 0 | 1 {
-  if (left < right) {
-    return -1;
-  }
-  if (left > right) {
-    return 1;
-  }
-  return 0;
+  /** Receives a warning for each field or type alias typed with a deprecated type name. */
+  readonly reportWarning?: (diagnostic: ContractSourceDiagnostic) => void;
 }
 
 function declarationsHoldingModels(namespace: NamespaceSymbol): ReadonlySet<SyntaxNode> {
@@ -287,6 +261,11 @@ function validateNamespaceBlocksForSqlTarget(input: {
       });
     }
   }
+}
+
+/** How PSL writes a namespace: the unbound namespace is `unbound`. */
+function pslNamespaceName(namespaceId: string): string {
+  return namespaceId === UNBOUND_NAMESPACE_ID ? UNBOUND_PSL_NAMESPACE_NAME : namespaceId;
 }
 
 /**
@@ -520,6 +499,7 @@ function processEnumDeclarations(input: ProcessEnumDeclarationsInput): {
 
 interface BuildModelNodeInput {
   readonly model: ModelSymbol;
+  readonly droppedFields: Set<FieldSymbol>;
   readonly physicalNames: ReadonlyMap<ModelSymbol | FieldSymbol, string>;
   readonly namespaceId: string;
   /** The value objects the composite types declare, by name. */
@@ -554,6 +534,7 @@ interface BuildModelNodeInput {
   >;
   /** Codec-id-keyed descriptor lookup — forwarded to `collectResolvedFields` for entity-ref type-constructor resolution (e.g. `pg.enum(Ref)`). */
   readonly codecLookup: CodecLookupWithDescriptors;
+  readonly warnDeprecated: DeprecatedTypeNameWarner;
   /** Contributed model-attribute descriptors keyed by bare `@@` attribute name (the exact shape `buildModelAttributesByName` produces). */
   readonly modelAttributesByName: ReadonlyMap<string, AuthoringModelAttributeDescriptor>;
   readonly contributedModelAttributeSpecs: Readonly<Record<string, ModelAttributeSpecFactory>>;
@@ -657,6 +638,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     generatorFunctions: input.generatorFunctions,
     dataTypes: input.dataTypes,
     diagnostics,
+    droppedFields: input.droppedFields,
     sources: input.sources,
     binder: input.binder,
     scalarColumnDescriptors: input.scalarColumnDescriptors,
@@ -665,6 +647,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     namespaceId: modelNamespaceId,
     ...ifDefined('namespaceExtensionEntities', input.namespaceExtensionEntities),
     codecLookup: input.codecLookup,
+    warnDeprecated: input.warnDeprecated,
   });
 
   const inlineIdFields = resolvedFields.filter((field) => field.isId);
@@ -1463,6 +1446,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
 
 interface BuildValueObjectNodesInput {
   readonly compositeTypes: readonly CompositeTypeSymbol[];
+  readonly droppedFields: Set<FieldSymbol>;
   readonly enumTypeDescriptors: ReadonlyMap<BlockSymbol, ColumnDescriptor>;
   readonly enumHandles: ReadonlyMap<BlockSymbol, EnumTypeHandle>;
   readonly typeAliases: ResolvedTypeAliases;
@@ -1477,6 +1461,7 @@ interface BuildValueObjectNodesInput {
   >;
   readonly codecLookup: CodecLookupWithDescriptors;
   readonly binder: Binder;
+  readonly warnDeprecated: DeprecatedTypeNameWarner;
 }
 
 function buildValueObjectNodes(input: BuildValueObjectNodesInput): ValueObjectNode[] {
@@ -1525,8 +1510,10 @@ function buildValueObjectNodes(input: BuildValueObjectNodesInput): ValueObjectNo
         binder,
         codecLookup: input.codecLookup,
         dataTypes: input.dataTypes,
+        warnDeprecated: input.warnDeprecated,
       });
       if (!resolved.ok) {
+        input.droppedFields.add(field);
         continue;
       }
       const { descriptor } = resolved;
@@ -1781,31 +1768,35 @@ function modelLabel(namespaceId: string, modelName: string, qualified: boolean):
   return qualified ? `${namespaceId}.${modelName}` : modelName;
 }
 
-function resolvePolymorphism(
-  models: Record<string, ContractModel>,
-  physicalNames: ReadonlyMap<ModelSymbol | FieldSymbol, string>,
+/** What `@@discriminator` and `@@base` declare, by model key, as the build writes it into the domain models and the storage. */
+type ResolvedPolymorphism = {
+  readonly discriminators: ReadonlyMap<
+    string,
+    {
+      readonly discriminator: ContractDiscriminator;
+      readonly variants: Record<string, CrossReference>;
+    }
+  >;
+  readonly bases: ReadonlyMap<string, CrossReference>;
+};
+
+/**
+ * Pairs each `@@discriminator` with the variants that declare `@@base` on it, before the build, so the build writes the discriminator's value set before it computes the storage hash (ADR 309). Reports a model with both attributes, a discriminator no variant names, a duplicate value, and a base with no discriminator.
+ */
+function resolveVariants(
+  modelKeys: ReadonlySet<string>,
   discriminatorDeclarations: Map<string, DiscriminatorDeclaration>,
   baseDeclarations: Map<string, BaseDeclaration>,
   reported: ReportedPolymorphism,
-  syntheticPkFieldsByVariant: ReadonlyMap<string, readonly string[]>,
-  stiBaseFieldsByBase: ReadonlyMap<string, readonly string[]>,
   diagnostics: PslDiagnosticCollector,
-): Record<string, ContractModel> {
-  let patched = models;
-
-  // STI variant columns were materialised onto the base storage table so the
-  // variants' `storage.fields` resolve. They are storage-only on the base — the
-  // domain field belongs to the variant — so strip them from the base model's
-  // domain + storage field maps (the table column, built upstream, stays).
-  for (const [baseKey, fieldNames] of stiBaseFieldsByBase) {
-    const baseModel = patched[baseKey];
-    if (!baseModel || fieldNames.length === 0) continue;
-    patched = {
-      ...patched,
-      [baseKey]: stripStorageOnlyDomainFields(baseModel, fieldNames),
-    };
-  }
-
+): ResolvedPolymorphism {
+  const discriminators = new Map<
+    string,
+    {
+      readonly discriminator: ContractDiscriminator;
+      readonly variants: Record<string, CrossReference>;
+    }
+  >();
   for (const [modelKey, decl] of discriminatorDeclarations) {
     const modelName = decl.model.name;
     if (baseDeclarations.has(modelKey)) {
@@ -1816,16 +1807,12 @@ function resolvePolymorphism(
       });
       continue;
     }
-
-    const model = patched[modelKey];
-    if (!model) continue;
+    if (!modelKeys.has(modelKey)) continue;
 
     const variants: Record<string, CrossReference> = {};
-
     for (const baseDecl of baseDeclarations.values()) {
       if (baseDecl.base.key !== modelKey || baseDecl.value === undefined) continue;
       const variantName = baseDecl.model.name;
-
       const existingVariant = variants[baseDecl.value];
       if (existingVariant) {
         const qualified =
@@ -1853,20 +1840,16 @@ function resolvePolymorphism(
       });
       continue;
     }
-
-    patched = {
-      ...patched,
-      [modelKey]: { ...model, discriminator: { field: decl.fieldName }, variants },
-    };
+    discriminators.set(modelKey, { discriminator: { field: decl.fieldName }, variants });
   }
 
+  const bases = new Map<string, CrossReference>();
   for (const [variantKey, baseDecl] of baseDeclarations) {
-    const baseName = baseDecl.base.model.name;
     if (!discriminatorDeclarations.has(baseDecl.base.key)) {
       if (reported.discriminators.has(baseDecl.base.key)) continue;
       const qualified = baseDecl.namespaceId !== baseDecl.base.namespaceId;
       const variantLabel = modelLabel(baseDecl.namespaceId, baseDecl.model.name, qualified);
-      const baseLabel = modelLabel(baseDecl.base.namespaceId, baseName, qualified);
+      const baseLabel = modelLabel(baseDecl.base.namespaceId, baseDecl.base.model.name, qualified);
       diagnostics.push({
         code: 'PSL_ORPHANED_BASE',
         message: `Model "${variantLabel}" declares @@base(${baseLabel}, ...) but "${baseLabel}" has no @@discriminator`,
@@ -1874,13 +1857,56 @@ function resolvePolymorphism(
       });
       continue;
     }
+    if (discriminatorDeclarations.has(variantKey) || !modelKeys.has(variantKey)) continue;
+    bases.set(variantKey, crossRef(baseDecl.base.model.name, baseDecl.base.namespaceId));
+  }
+  return { discriminators, bases };
+}
 
-    if (discriminatorDeclarations.has(variantKey)) {
-      continue;
-    }
+/** The model nodes with the discriminator, variants and base the build writes. */
+function withPolymorphism(
+  modelNodes: readonly ModelNode[],
+  polymorphism: ResolvedPolymorphism,
+  defaultNamespaceId: string,
+): ModelNode[] {
+  return modelNodes.map((node) => {
+    const key = modelCoordinateKey(node.namespaceId ?? defaultNamespaceId, node.modelName);
+    const discriminator = polymorphism.discriminators.get(key);
+    const base = polymorphism.bases.get(key);
+    return {
+      ...node,
+      ...(discriminator ?? {}),
+      ...ifDefined('base', base),
+    };
+  });
+}
 
+/**
+ * Points each variant without `@@map` at its base table, and strips from the domain the columns a variant's or a base's model only stores: STI columns on the base, and the link column of an MTI variant. The discriminator, the variants and the base are written by the build.
+ */
+function resolveVariantStorage(
+  models: Record<string, ContractModel>,
+  physicalNames: ReadonlyMap<ModelSymbol | FieldSymbol, string>,
+  baseDeclarations: Map<string, BaseDeclaration>,
+  polymorphism: ResolvedPolymorphism,
+  syntheticPkFieldsByVariant: ReadonlyMap<string, readonly string[]>,
+  stiBaseFieldsByBase: ReadonlyMap<string, readonly string[]>,
+): Record<string, ContractModel> {
+  let patched = models;
+
+  for (const [baseKey, fieldNames] of stiBaseFieldsByBase) {
+    const baseModel = patched[baseKey];
+    if (!baseModel || fieldNames.length === 0) continue;
+    patched = {
+      ...patched,
+      [baseKey]: stripStorageOnlyDomainFields(baseModel, fieldNames),
+    };
+  }
+
+  for (const variantKey of polymorphism.bases.keys()) {
+    const baseDecl = baseDeclarations.get(variantKey);
     const variantModel = patched[variantKey];
-    if (!variantModel) continue;
+    if (!baseDecl || !variantModel) continue;
 
     const hasExplicitMap = getAttribute(baseDecl.model.attributes, 'map') !== undefined;
     const resolvedTable = storageName(
@@ -1890,7 +1916,6 @@ function resolvePolymorphism(
 
     const patchedVariant: ContractModel = {
       ...variantModel,
-      base: crossRef(baseName, baseDecl.base.namespaceId),
       ...(resolvedTable ? { storage: { ...variantModel.storage, table: resolvedTable } } : {}),
     };
 
@@ -2157,6 +2182,17 @@ export function interpretPslDocumentToSqlContract(
   assertDefined(anchorDocument, 'interpretPslDocumentToSqlContract requires at least one document');
   const source = diagnosticSource(input.sources, anchorDocument.syntax);
   const diagnostics = createPslDiagnosticCollector(input.sources);
+  const renamedTypeConstructors = renamedTypeConstructorsOf(input.target.authoring);
+  const warnDeprecated = deprecatedTypeNameWarner({
+    sources: input.sources,
+    reportWarning: input.reportWarning,
+  });
+  reportFieldDbAttributes({
+    symbolTable: input.symbolTable,
+    sources: input.sources,
+    diagnostics,
+    renamedTypeConstructors,
+  });
   const modelAttributesByName = buildModelAttributesByName(input.authoringContributions);
   const contributedModelSpecs = modelAttributeSpecsFrom(modelAttributesByName);
   const composedPslBlockDescriptors = input.authoringContributions?.pslBlockDescriptors ?? {};
@@ -2199,13 +2235,26 @@ export function interpretPslDocumentToSqlContract(
   const models: ModelSymbol[] = [];
   const modelEntries: ModelNamespaceEntry[] = [];
   const compositeTypes: CompositeTypeSymbol[] = [];
+  const compositeTypeNamespaces = new Map<string, string>();
 
   for (const namespace of namespaceSymbols) {
     for (const model of Object.values(namespace.models)) {
       models.push(model);
       modelEntries.push({ model, namespaceId: namespace.id });
     }
-    compositeTypes.push(...Object.values(namespace.compositeTypes));
+    for (const compositeType of Object.values(namespace.compositeTypes)) {
+      const firstNamespaceId = compositeTypeNamespaces.get(compositeType.name);
+      if (firstNamespaceId !== undefined) {
+        diagnostics.push({
+          code: 'PSL_DUPLICATE_DECLARATION',
+          message: `Composite type "${compositeType.name}" is declared in namespace "${firstNamespaceId}" and in namespace "${namespace.id}". Every composite type is stored in the default storage namespace, so composite type names must differ across namespaces. Rename one of them.`,
+          ...diagnosticSource(input.sources, compositeType.node.syntax).at(),
+        });
+        continue;
+      }
+      compositeTypeNamespaces.set(compositeType.name, namespace.id);
+      compositeTypes.push(compositeType);
+    }
   }
   const physicalNames = new Map<ModelSymbol | FieldSymbol, string>();
   for (const model of models) {
@@ -2403,6 +2452,52 @@ export function interpretPslDocumentToSqlContract(
       extensionBlocks,
     );
   }
+  for (const descriptor of entityTypesByDiscriminator.values()) {
+    if (!requiresNameUniqueAcrossNamespaces(descriptor.output)) continue;
+    const namespacesByName = new Map<string, string[]>();
+    for (const [namespaceId, entities] of namespaceExtensionEntities) {
+      for (const name of Object.keys(entities[descriptor.discriminator] ?? {})) {
+        namespacesByName.set(name, [...(namespacesByName.get(name) ?? []), namespaceId]);
+      }
+    }
+    const blockDeclaring = (name: string, namespaceId: string) => {
+      const block = [...extensionBlocksByNamespace]
+        .filter(([namespace]) => namespace.id === namespaceId)
+        .flatMap(([, blocks]) => Object.values(blocks))
+        .find((candidate) => candidate.name === name);
+      invariant(block !== undefined, 'A lowered entity has an owning block');
+      return block;
+    };
+    for (const [name, namespaceIds] of namespacesByName) {
+      if (namespaceIds.length < 2) continue;
+      const sorted = [...namespaceIds].sort();
+      const block = blockDeclaring(name, sorted[sorted.length - 1] ?? defaultNamespaceId);
+      diagnostics.pushUnlocated({
+        code: 'PSL_ENTITY_DECLARED_IN_MANY_NAMESPACES',
+        message: `${descriptor.discriminator} "${name}" is declared in namespaces ${sorted
+          .map(pslNamespaceName)
+          .sort()
+          .map((namespaceName) => `"${namespaceName}"`)
+          .join(' and ')}; declare it in one namespace only.`,
+        ...diagnosticSource(input.sources, block.node.syntax).at(),
+      });
+    }
+    for (const [spaceId, packContract] of composedExtensionContracts) {
+      for (const coordinate of elementCoordinates(packContract.storage)) {
+        if (coordinate.entityKind !== descriptor.discriminator) continue;
+        for (const namespaceId of namespacesByName.get(coordinate.entityName) ?? []) {
+          diagnostics.pushUnlocated({
+            code: 'PSL_ENTITY_DECLARED_BY_PACK',
+            message: `${descriptor.discriminator} "${coordinate.entityName}" is declared in namespace "${pslNamespaceName(namespaceId)}", and extension pack "${spaceId}" declares it in namespace "${pslNamespaceName(coordinate.namespaceId)}". Remove this declaration; the pack installs the ${descriptor.discriminator}.`,
+            ...diagnosticSource(
+              input.sources,
+              blockDeclaring(coordinate.entityName, namespaceId).node.syntax,
+            ).at(),
+          });
+        }
+      }
+    }
+  }
 
   // A domain `enum` and an extension-derived value-set (e.g. from a
   // `native_enum`) that share a name in one namespace would both target the
@@ -2443,6 +2538,8 @@ export function interpretPslDocumentToSqlContract(
     dataTypes,
     diagnostics,
     authoringTypes: input.authoringContributions?.type,
+    renamedTypeConstructors,
+    warnDeprecated,
   });
 
   const modelNodes = new Map<ModelSymbol, ModelNode>();
@@ -2459,8 +2556,10 @@ export function interpretPslDocumentToSqlContract(
     Record<string, Record<string, unknown>>
   >();
 
+  const droppedFields = new Set<FieldSymbol>();
   const valueObjects = buildValueObjectNodes({
     compositeTypes,
+    droppedFields,
     enumTypeDescriptors: allEnumTypeDescriptors,
     enumHandles,
     typeAliases,
@@ -2471,6 +2570,7 @@ export function interpretPslDocumentToSqlContract(
     codecLookup: input.codecLookup,
     dataTypes: input.dataTypes,
     binder,
+    warnDeprecated,
   });
   const valueObjectTypes: ValueObjectTypes = {
     nodes: new Map(valueObjects.map((valueObject) => [valueObject.name, valueObject])),
@@ -2485,6 +2585,7 @@ export function interpretPslDocumentToSqlContract(
   for (const { model, namespaceId } of modelEntries) {
     const result = buildModelNodeFromPsl({
       model,
+      droppedFields,
       physicalNames,
       namespaceId,
       valueObjectTypes,
@@ -2506,6 +2607,7 @@ export function interpretPslDocumentToSqlContract(
       capabilities: input.capabilities,
       ...(namespaceExtensionEntities.size > 0 ? { namespaceExtensionEntities } : {}),
       codecLookup: input.codecLookup,
+      warnDeprecated,
       modelAttributesByName,
       contributedModelAttributeSpecs: contributedModelSpecs,
       parsedBlocks,
@@ -2696,10 +2798,33 @@ export function interpretPslDocumentToSqlContract(
       defaultNamespaceId,
     );
 
-  if (diagnostics.length > 0 || (input.seedDiagnostics?.length ?? 0) > 0) {
+  if (
+    diagnostics.length > 0 ||
+    (input.seedDiagnostics?.length ?? 0) > 0 ||
+    droppedFields.size > 0
+  ) {
     return notOk({
       summary: 'PSL to SQL contract interpretation failed',
       diagnostics: [...(input.seedDiagnostics ?? []), ...diagnostics.toExternal()],
+    });
+  }
+
+  const polyDiagnostics = createPslDiagnosticCollector(input.sources);
+  const polymorphism = resolveVariants(
+    new Set(
+      stiColumnModelNodes.map((node) =>
+        modelCoordinateKey(node.namespaceId ?? defaultNamespaceId, node.modelName),
+      ),
+    ),
+    discriminatorDeclarations,
+    baseDeclarations,
+    reported,
+    polyDiagnostics,
+  );
+  if (polyDiagnostics.length > 0) {
+    return notOk({
+      summary: 'PSL to SQL contract interpretation failed',
+      diagnostics: polyDiagnostics.toExternal(),
     });
   }
 
@@ -2753,9 +2878,9 @@ export function interpretPslDocumentToSqlContract(
         warnings: authoringWarnings.length > 0 ? authoringWarnings : undefined,
         ...ifDefined(
           'extensions',
-          buildComposedExtensionPackRefs(
+          composedExtensionPackRefs(
             input.target,
-            [...composedExtensions].sort(compareStrings),
+            composedExtensions,
             input.composedExtensionPackRefs,
           ),
         ),
@@ -2769,7 +2894,7 @@ export function interpretPslDocumentToSqlContract(
           : {}),
         createNamespace: createNamespaceWithExtensions,
         ...ifDefined('valueObjects', valueObjects.length > 0 ? valueObjects : undefined),
-        models: stiColumnModelNodes,
+        models: withPolymorphism(stiColumnModelNodes, polymorphism, defaultNamespaceId),
       },
       input.codecLookup,
       input.dataTypes.lookup,
@@ -2802,24 +2927,14 @@ export function interpretPslDocumentToSqlContract(
     }
   }
 
-  const polyDiagnostics = createPslDiagnosticCollector(input.sources);
-  const polymorphicModels = resolvePolymorphism(
+  const polymorphicModels = resolveVariantStorage(
     modelsByCoordinate,
     physicalNames,
-    discriminatorDeclarations,
     baseDeclarations,
-    reported,
+    polymorphism,
     syntheticPkFieldsByVariant,
     stiBaseFieldsByBase,
-    polyDiagnostics,
   );
-
-  if (polyDiagnostics.length > 0) {
-    return notOk({
-      summary: 'PSL to SQL contract interpretation failed',
-      diagnostics: polyDiagnostics.toExternal(),
-    });
-  }
 
   const filteredRoots = Object.fromEntries(
     Object.entries(contract.roots).filter(
@@ -2843,7 +2958,6 @@ export function interpretPslDocumentToSqlContract(
               ]),
             ),
             ...ifDefined('enum', namespaceSlice.enum),
-            ...ifDefined('valueObjects', namespaceSlice.valueObjects),
           },
         ]),
       ),

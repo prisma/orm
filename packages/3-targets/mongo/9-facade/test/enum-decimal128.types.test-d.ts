@@ -1,7 +1,14 @@
 // Type-level only: defineContract refuses a mongo/decimal128 enum when it runs, because a collection validator cannot list BSON decimals. The builder's types still follow the shared member rule.
 import type { ExtractMongoFieldOutputTypes } from '@internal/mongo-contract';
 import { expectTypeOf, test } from 'vitest';
-import { defineContract, enumType, field, member, model } from '../src/exports/contract-builder';
+import {
+  defineContract,
+  enumType,
+  field,
+  member,
+  model,
+  type,
+} from '../src/exports/contract-builder';
 import mongoStatic, { contractFromJson } from '../src/exports/static';
 
 const Ratio = enumType(
@@ -18,7 +25,7 @@ const contract = defineContract({
     Reading: model('Reading', {
       collection: 'readings',
       fields: {
-        _id: field.objectId(),
+        _id: field.scalar(type.ObjectId()),
         ratio: field.namedType(Ratio),
         level: field.namedType(Level),
       },

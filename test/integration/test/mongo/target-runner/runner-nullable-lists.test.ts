@@ -69,7 +69,7 @@ beforeAll(async () => {
   const contract = interpreted.value as unknown as MongoContract;
   const planned = new MongoMigrationPlanner().plan({
     contract,
-    schema: new MongoSchemaIR([]),
+    schema: new MongoSchemaIR([], { fromDatabase: false }),
     policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
     fromContract: null,
     origin: null,

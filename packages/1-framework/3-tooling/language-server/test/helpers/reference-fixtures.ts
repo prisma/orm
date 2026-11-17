@@ -26,7 +26,12 @@ import {
   structBlock,
 } from '@internal/psl-parser';
 import { type ResolvedFormatOptions, resolveFormatOptions } from '@internal/psl-parser/format';
-import { type DocumentAst, parse, type SourceFile } from '@internal/psl-parser/syntax';
+import {
+  type DocumentAst,
+  type PslSources,
+  parse,
+  type SourceFile,
+} from '@internal/psl-parser/syntax';
 import type { Position } from 'vscode-languageserver';
 import type { ReferencesDocument } from '../../src/references';
 import { testBinder } from './binder';
@@ -260,7 +265,7 @@ function project(files: Files, stack: FixtureStack) {
       sourceFile: file.sources.sourceFileFor(file.document.syntax),
     }),
   );
-  return { documents, binder, symbolTable };
+  return { documents, binder, symbolTable, sources };
 }
 
 export interface FixtureCursorInput extends FixtureStack {
@@ -274,6 +279,7 @@ export interface FixtureCursorInput extends FixtureStack {
   readonly generatorFunctions: GeneratorFunctionRegistry;
   readonly formatOptions: ResolvedFormatOptions;
   readonly dataTypes: DataTypeSupport;
+  readonly sources: PslSources;
 }
 
 export function cursorInput(
@@ -282,7 +288,7 @@ export function cursorInput(
   marked: string,
   stack: FixtureStack = fixtureStack,
 ): FixtureCursorInput {
-  const { documents, binder, symbolTable } = project(files, stack);
+  const { documents, binder, symbolTable, sources } = project(files, stack);
   const current = documents.find((document) => document.sourceFile.filename === name);
   if (current === undefined) throw new Error(`no file ${name}`);
   const needle = marked.replace('|', '');
@@ -303,5 +309,6 @@ export function cursorInput(
     generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
     formatOptions: resolveFormatOptions(undefined),
     dataTypes: EMPTY_DATA_TYPES,
+    sources,
   };
 }

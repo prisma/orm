@@ -22,7 +22,7 @@ const lookups = {
   dataTypeLookup,
 };
 
-const { gen, field: packField } = createComposedAuthoringHelpers({
+const { gen, type } = createComposedAuthoringHelpers({
   ...lookups,
   family: sqlFamilyPack,
   target: postgresPack,
@@ -58,10 +58,13 @@ const ShadowThing = model('ShadowThing', {
 const Stamp = model('Stamp', {
   fields: {
     id: field.column(int4Column).id(),
-    updatedOnly: packField.temporal.timestamptz(undefined, undefined, 'now'),
-    createdSkippingPrecision: packField.temporal.timestamptz(undefined, 'now'),
-    createdAndUpdated: packField.temporal.timestamptz(undefined, 'now', 'now'),
-    createdWithPrecision: packField.temporal.timestamptz(3, 'now'),
+    updatedOnly: field.column(type.TimestamptzTemporal()).onUpdate(gen.now()),
+    createdOnly: field.column(type.TimestamptzTemporal()).onCreate(gen.now()),
+    createdAndUpdated: field
+      .column(type.TimestamptzTemporal())
+      .onCreate(gen.now())
+      .onUpdate(gen.now()),
+    createdWithPrecision: field.column(type.TimestamptzTemporal(3)).onCreate(gen.now()),
   },
 }).sql({ table: 'stamp' });
 
@@ -129,17 +132,17 @@ describe('insert row of a contract-bound table', () => {
   });
 });
 
-describe('insert row with temporal presets', () => {
-  test('requires a preset column that generates only on update, and no other preset column', () => {
+describe('insert row with generated timestamp columns', () => {
+  test('requires a timestamp column that generates only on update, and no other generated column', () => {
     expectTypeOf<RequiredKeys<StampRow>>().toEqualTypeOf<'id' | 'updatedOnly'>();
   });
 
-  test('rejects a row that leaves out the preset column that generates only on update', () => {
+  test('rejects a row that leaves out the timestamp column that generates only on update', () => {
     // @ts-expect-error updatedOnly has no create default
     db.public.stamp.insert([{ id: 1 }]);
   });
 
-  test('accepts a row that leaves out every preset column that generates on create', () => {
+  test('accepts a row that leaves out every timestamp column that generates on create', () => {
     db.public.stamp.insert([{ id: 1, updatedOnly: instant }]);
   });
 });

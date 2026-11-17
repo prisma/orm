@@ -321,6 +321,7 @@ function mapTables(
       ]),
     ),
     roles: schema.roles,
+    extensions: schema.extensions,
     existingSchemas: schema.existingSchemas,
     pgVersion: schema.pgVersion,
   });
@@ -434,6 +435,7 @@ export function moveTableInPostgresSchema(
       }),
     },
     roles: rewritten.roles,
+    extensions: rewritten.extensions,
     existingSchemas: rewritten.existingSchemas,
     pgVersion: rewritten.pgVersion,
   });
@@ -490,6 +492,7 @@ export function renameSchemaInPostgresSchema(
         ),
     ),
     roles: rewritten.roles,
+    extensions: rewritten.extensions,
     existingSchemas: rewritten.existingSchemas.map((name) => (name === from ? to : name)),
     pgVersion: rewritten.pgVersion,
   });
@@ -503,6 +506,7 @@ function withSchema(
   return new PostgresDatabaseSchemaNode({
     namespaces: schema.namespaces,
     roles: schema.roles,
+    extensions: schema.extensions,
     existingSchemas: [...schema.existingSchemas, schemaName],
     pgVersion: schema.pgVersion,
   });

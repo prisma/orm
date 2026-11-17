@@ -104,9 +104,10 @@ import { postgresError } from '@internal/target-postgres/errors';
 import { MARKER_LOCK_KEY, MARKER_LOCK_SQL } from '@internal/target-postgres/marker-lock';
 import { introspectedTypeText } from '@internal/target-postgres/native-type-normalizer';
 import { POLICY_COMMAND_SQL, policyRoleList } from '@internal/target-postgres/rls-canonicalize';
-import { escapeLiteral, quoteIdentifier } from '@internal/target-postgres/sql-utils';
+import { escapeLiteral, inlineLiteral, quoteIdentifier } from '@internal/target-postgres/sql-utils';
 import {
   PostgresDatabaseSchemaNode,
+  PostgresExtensionSchemaNode,
   PostgresNamespaceSchemaNode,
   PostgresNativeEnumSchemaNode,
   PostgresPolicySchemaNode,
@@ -716,10 +717,12 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
       }
 
       const roles = await this.introspectRoles(driver);
+      const extensions = await this.introspectExtensions(driver);
       const existingSchemas = await this.listExistingSchemas(driver);
       return new PostgresDatabaseSchemaNode({
         namespaces,
         roles,
+        extensions,
         existingSchemas,
         pgVersion,
       });
@@ -743,6 +746,39 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     return rolesResult.rows.map(
       (row) => new PostgresRoleSchemaNode({ name: row.rolname, namespaceId: UNBOUND_NAMESPACE_ID }),
     );
+  }
+
+  /** Reads every installed extension with the schema that holds its objects and the connection's search path, which locates an extension the contract declares in the unbound namespace. */
+  private async introspectExtensions(
+    driver: SqlControlDriverInstance<'postgres'>,
+  ): Promise<readonly PostgresExtensionSchemaNode[]> {
+    const result = await driver.query<{ extname: string; nspname: string }>(
+      `SELECT e.extname, n.nspname
+       FROM pg_catalog.pg_extension e
+       JOIN pg_catalog.pg_namespace n ON n.oid = e.extnamespace
+       ORDER BY e.extname`,
+    );
+    const searchPath = await this.readSearchPath(driver);
+    return result.rows.map(
+      (row) =>
+        new PostgresExtensionSchemaNode({
+          name: row.extname,
+          location: { kind: 'installed', schemaName: row.nspname, searchPath },
+          control: undefined,
+        }),
+    );
+  }
+
+  /** The schemas the connection resolves unqualified names in, in order, including the implicit `pg_catalog`. */
+  private async readSearchPath(
+    driver: SqlControlDriverInstance<'postgres'>,
+  ): Promise<readonly string[]> {
+    const result = await driver.query<{ schema_name: string }>(
+      `SELECT s.schema_name
+       FROM pg_catalog.unnest(pg_catalog.current_schemas(true)) WITH ORDINALITY AS s(schema_name, position)
+       ORDER BY s.position`,
+    );
+    return result.rows.map((row) => row.schema_name);
   }
 
   /**
@@ -1720,20 +1756,6 @@ function groupBy<T, K extends keyof T>(items: readonly T[], key: K): Map<T[K], T
 // pgRenderDdlExecuteRequest — independent DDL walker for lowerToExecuteRequest
 // ---------------------------------------------------------------------------
 
-function pgIsTextLikeNativeType(typeText: string): boolean {
-  return (
-    typeText === 'text' ||
-    typeText === 'varchar' ||
-    typeText.startsWith('varchar(') ||
-    typeText === 'character varying' ||
-    typeText.startsWith('character varying(') ||
-    typeText === 'char' ||
-    typeText.startsWith('char(') ||
-    typeText === 'character' ||
-    typeText.startsWith('character(')
-  );
-}
-
 interface OutputSettings {
   readonly timeZone: string;
   readonly dateStyle: string;
@@ -1816,52 +1838,22 @@ async function readWithDefaultOutputSettings<T>(
   return result;
 }
 
-/**
- * A value as DDL writes it: `ARRAY[...]` of each element's literal, cast to the list type, for a list written to a list type, and otherwise the value's literal, cast to the column type where PostgreSQL would read it as another type.
- */
+/** A value as DDL writes it, with a `Date` written as its ISO 8601 text, which an invalid `Date` has none of. */
 function pgInlineLiteral(wire: unknown, typeText: string, where: LiteralDefaultColumn): string {
-  if (Array.isArray(wire) && typeText.endsWith('[]')) {
-    if (wire.length === 0) return "'{}'";
-    return `ARRAY[${wire.map((element) => pgLiteralText(element, where)).join(', ')}]::${typeText}`;
-  }
-  const text = pgLiteralText(wire, where);
-  return pgLiteralNeedsCast(wire, typeText) ? `${text}::${typeText}` : text;
-}
-
-function pgLiteralNeedsCast(wire: unknown, typeText: string): boolean {
-  if (typeof wire === 'number') return !Number.isFinite(wire);
-  if (typeof wire === 'string' || wire instanceof Date) return !pgIsTextLikeNativeType(typeText);
-  return typeof wire === 'object' && wire !== null;
-}
-
-/** A value's literal without a cast: SQL NULL, a bare number or boolean, or quoted text. */
-function pgLiteralText(wire: unknown, where: LiteralDefaultColumn): string {
-  if (wire === null) return 'NULL';
-  if (typeof wire === 'boolean') return wire ? 'true' : 'false';
-  if (typeof wire === 'number') return Number.isFinite(wire) ? String(wire) : `'${String(wire)}'`;
-  if (typeof wire === 'bigint') return String(wire);
-  if (wire instanceof Date) {
-    if (Number.isNaN(wire.getTime())) {
+  const dateAsText = (value: unknown) => {
+    if (!(value instanceof Date)) return value;
+    if (Number.isNaN(value.getTime())) {
       throw adapterError(
         'CONTRACT.DEFAULT_INVALID',
         `Column "${where.table}"."${where.column}" has an invalid Date default`,
         { meta: { table: where.table, column: where.column, reason: 'invalid-date-default' } },
       );
     }
-    return `'${escapeLiteral(wire.toISOString())}'`;
-  }
-  if (typeof wire === 'string') return `'${escapeLiteral(wire)}'`;
-  if (wire instanceof Uint8Array) {
-    const hex = Array.from(wire)
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('');
-    return `'\\x${hex}'`;
-  }
-  if (typeof wire === 'object') return `'${escapeLiteral(JSON.stringify(wire))}'`;
-  throw adapterError(
-    'CONTRACT.PACK_CONTRIBUTION_INVALID',
-    `pgRenderDdlExecuteRequest: unexpected wire type "${typeof wire}"`,
-    { meta: { wireType: typeof wire } },
+    return value.toISOString();
+  };
+  return inlineLiteral(
+    Array.isArray(wire) && typeText.endsWith('[]') ? wire.map(dateAsText) : dateAsText(wire),
+    typeText,
   );
 }
 

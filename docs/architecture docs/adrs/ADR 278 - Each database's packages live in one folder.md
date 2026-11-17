@@ -4,6 +4,7 @@
 **Date:** 2026-10-22
 **Domain:** Repository layout, Adapters / Targets
 **Amends:** [ADR 140 — Package Layering & Target-Family Namespacing](ADR%20140%20-%20Package%20Layering%20&%20Target-Family%20Namespacing.md)
+**Amended by:** [ADR 314 — Code shared by several targets' type implementations lives in one package](ADR%20314%20-%20Code%20shared%20by%20several%20targets'%20type%20implementations%20lives%20in%20one%20package.md) (2026-10-30): `packages/3-targets/` also holds `0-shared/`, for packages several databases' packages share. The ordering check skips it.
 
 ---
 
@@ -28,6 +29,9 @@ packages/
       2-adapter/               @internal/adapter-mongo
       3-driver/                @internal/driver-mongo
       9-facade/                @internal/mongo
+    mysql/
+      1-mysql/                 1-target, 2-adapter, 3-driver, 9-facade of MySQL
+      2-mariadb/               1-target, 2-adapter, 3-driver, 9-facade of MariaDB
   3-extensions/                extension packs
 ```
 
@@ -36,7 +40,7 @@ A new database adds one folder under `3-targets/`.
 ## Decision
 
 1. **A database's target, adapter, driver, codec testkit and facade live in `packages/3-targets/<db>/`.** Each is its own package, as before.
-2. **Folders inside a database folder are numbered by dependency order.** A package may depend only on lower-numbered packages in its own folder, and never on another database's packages: the adapter imports the target, the facade imports the target, adapter and driver, and the driver imports none of them. `scripts/lint-target-layering.mjs`, run by `pnpm lint:deps`, walks every database folder and checks this, so a new database is covered without a new check. A database that has no codec testkit skips `4-`.
+2. **Folders inside a database folder are numbered by dependency order. A package imports only from lower-numbered folders.** Numbers compare only between folders in the same parent. The order prevents cycles between packages, as an adaptation of Clean Architecture ([Package Layering](../Package-Layering.md)). The adapter imports the target, the facade imports the target, adapter and driver, and the driver imports none of them. `scripts/lint-target-layering.mjs`, run by `pnpm lint:deps`, walks every database folder and checks this, so a new database is covered without a new check. A database that has no codec testkit skips `4-`.
 3. **Family folders are named `2-<family>-family`.** `2-sql` became `2-sql-family`, matching `2-mongo-family`.
 4. **Extension packs stay in `packages/3-extensions/`,** including packs that only work with one database, such as pgvector.
 5. **Every package under `3-targets/<db>/` registers the same globs in `architecture.config.json`,** the recipe in `docs/onboarding/Repo-Map-and-Layering.md`, and `pnpm lint:deps` fails when a source file matches no glob or more than one.
@@ -60,7 +64,7 @@ A facade composes one database's target, adapter and driver into the client an a
 ## Consequences
 
 - A developer working on one database opens one folder.
-- Adding MySQL and MariaDB adds `3-targets/mysql/` and `3-targets/mariadb/`. The ordering check and the upgrade-coverage check (a facade counts as extension code) pick up a new folder without changes; `architecture.config.json`, `shells.ts` and `coverage.config.json` still need its entries.
+- Adding MySQL and MariaDB adds `3-targets/mysql/`, with `1-mysql/` and `2-mariadb/` inside it. The ordering check picks it up without changes. The upgrade-coverage check (a facade counts as extension code) also matches `3-targets/*/*/9-facade/`. `architecture.config.json`, `shells.ts` and `coverage.config.json` still need its entries.
 - Folder paths also appear in package scripts, tests and fixtures, which use relative paths; moving a package means recomputing them (`.agents/rules/moving-packages.mdc`).
 - The registration does not yet match the folder: the target pack and facade are in the `extensions` domain and the adapter and driver in the `targets` domain. And `pnpm lint:deps` does not yet see imports between workspace packages, only imports inside one. Both are known gaps to close; until then, the ordering check is what checks the folder numbers.
 

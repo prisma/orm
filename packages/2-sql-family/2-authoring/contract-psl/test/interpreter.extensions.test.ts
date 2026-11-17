@@ -142,7 +142,7 @@ model Document {
   it('instantiates family-owned and extension-owned constructor expressions from shared authoring contributions', () => {
     const result = interpretSqlContract(
       `types {
-  ShortName = sql.String(length: 35)
+  ShortName = sql.Varchar(length: 35)
   Embedding1536 = pgvector.Vector(1536)
 }
 
@@ -158,9 +158,9 @@ model Document {
         authoringContributions: {
           type: {
             sql: {
-              String: {
+              Varchar: {
                 kind: 'typeConstructor',
-                args: [{ kind: 'number', name: 'length', integer: true, minimum: 1 }],
+                args: [{ kind: 'value', dataType: 'pg/int4', name: 'length' }],
                 output: {
                   codecId: 'custom/varchar@1',
                   typeParams: {
@@ -172,9 +172,7 @@ model Document {
             pgvector: {
               Vector: {
                 kind: 'typeConstructor',
-                args: [
-                  { kind: 'number', name: 'length', integer: true, minimum: 1, maximum: 2000 },
-                ],
+                args: [{ kind: 'value', dataType: 'pg/int4', name: 'length' }],
                 output: {
                   codecId: 'custom/vector@1',
                   typeParams: {
@@ -201,7 +199,7 @@ model Document {
     const result = interpretSqlContract(
       `model Document {
   id Int @id
-  shortName sql.String(length: 35)
+  shortName sql.Varchar(length: 35)
   embedding pgvector.Vector(length: 1536)?
 }
 `,
@@ -211,9 +209,9 @@ model Document {
         authoringContributions: {
           type: {
             sql: {
-              String: {
+              Varchar: {
                 kind: 'typeConstructor',
-                args: [{ kind: 'number', name: 'length', integer: true, minimum: 1 }],
+                args: [{ kind: 'value', dataType: 'pg/int4', name: 'length' }],
                 output: {
                   codecId: 'custom/varchar@1',
                   typeParams: {
@@ -225,9 +223,7 @@ model Document {
             pgvector: {
               Vector: {
                 kind: 'typeConstructor',
-                args: [
-                  { kind: 'number', name: 'length', integer: true, minimum: 1, maximum: 2000 },
-                ],
+                args: [{ kind: 'value', dataType: 'pg/int4', name: 'length' }],
                 output: {
                   codecId: 'custom/vector@1',
                   typeParams: {
@@ -267,195 +263,6 @@ model Document {
           },
         },
       },
-    });
-  });
-
-  it('instantiates constructor expressions with JS-like object literal arguments', () => {
-    const result = interpretSqlContract(
-      `types {
-  ShortName = sql.String({ length: 35, label: 'short' })
-}
-
-model Document {
-  id Int @id
-  shortName ShortName
-}
-`,
-      {
-        ...baseInput,
-        authoringContributions: {
-          type: {
-            sql: {
-              String: {
-                kind: 'typeConstructor',
-                args: [
-                  {
-                    kind: 'object',
-                    properties: {
-                      length: { kind: 'number', integer: true, minimum: 1 },
-                      label: { kind: 'option', values: ['short'], optional: true },
-                    },
-                  },
-                ],
-                output: {
-                  codecId: 'custom/varchar@1',
-                  typeParams: {
-                    length: { kind: 'arg', index: 0, path: ['length'] },
-                    label: { kind: 'arg', index: 0, path: ['label'] },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    );
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(columnsOf(result.value, 'Document')?.['shortName']).toMatchObject({
-      codecId: 'custom/varchar@1',
-      typeParams: { length: 35, label: 'short' },
-    });
-  });
-
-  describe('object literal constructor arguments', () => {
-    const objectArgContributions = {
-      type: {
-        sql: {
-          String: {
-            kind: 'typeConstructor' as const,
-            args: [
-              {
-                kind: 'object' as const,
-                properties: {
-                  length: { kind: 'number' as const, integer: true, minimum: 1 },
-                  label: { kind: 'option' as const, values: ['short'], optional: true },
-                },
-              },
-            ],
-            output: {
-              codecId: 'custom/varchar@1',
-              typeParams: {
-                length: { kind: 'arg' as const, index: 0, path: ['length'] },
-                label: { kind: 'arg' as const, index: 0, path: ['label'] },
-              },
-            },
-          },
-        },
-      },
-    };
-
-    const interpretWith = (schema: string) =>
-      interpretSqlContract(schema, {
-        ...baseInput,
-        authoringContributions: objectArgContributions,
-      });
-
-    it('accepts strict JSON with double-quoted keys', () => {
-      const result = interpretWith(`types {
-  Short = sql.String({ "length": 35, "label": "short" })
-}
-
-model Doc {
-  id Int @id
-  s Short
-}
-`);
-      expect(result.ok).toBe(true);
-      if (!result.ok) return;
-      expect(columnsOf(result.value, 'Doc')?.['s']).toMatchObject({
-        typeParams: { length: 35, label: 'short' },
-      });
-    });
-
-    it('rejects an object literal that is missing a required property', () => {
-      const result = interpretWith(`types {
-  Short = sql.String({ label: 'short' })
-}
-
-model Doc {
-  id Int @id
-  s Short
-}
-`);
-      expect(result.ok).toBe(false);
-      if (result.ok) return;
-      expect(result.failure.diagnostics).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT' }),
-        ]),
-      );
-    });
-
-    it('rejects an object literal with an unknown property', () => {
-      const result = interpretWith(`types {
-  Short = sql.String({ length: 35, bogus: 'x' })
-}
-
-model Doc {
-  id Int @id
-  s Short
-}
-`);
-      expect(result.ok).toBe(false);
-      if (result.ok) return;
-      expect(result.failure.diagnostics).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT' }),
-        ]),
-      );
-    });
-
-    it('rejects an object literal with a wrong-typed property', () => {
-      const result = interpretWith(`types {
-  Short = sql.String({ length: 'not a number' })
-}
-
-model Doc {
-  id Int @id
-  s Short
-}
-`);
-      expect(result.ok).toBe(false);
-      if (result.ok) return;
-      expect(result.failure.diagnostics).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT' }),
-        ]),
-      );
-    });
-
-    it('rejects malformed object literal syntax (unclosed brace)', () => {
-      const result = interpretWith(`types {
-  Short = sql.String({ length: 35 )
-}
-
-model Doc {
-  id Int @id
-  s Short
-}
-`);
-      expect(result.ok).toBe(false);
-    });
-
-    it('rejects a top-level non-object literal', () => {
-      const result = interpretWith(`types {
-  Short = sql.String([1, 2, 3])
-}
-
-model Doc {
-  id Int @id
-  s Short
-}
-`);
-      expect(result.ok).toBe(false);
-      if (result.ok) return;
-      expect(result.failure.diagnostics).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT' }),
-        ]),
-      );
     });
   });
 

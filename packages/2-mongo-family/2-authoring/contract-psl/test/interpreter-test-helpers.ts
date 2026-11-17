@@ -39,6 +39,8 @@ type InterpretOptionsWithDefaultLookups = Omit<
   | 'generatorFunctions'
   | 'target'
 > & {
+  /** Scalar type names and the codec each stores, contributed as type constructors. */
+  readonly scalarTypes?: ReadonlyMap<string, string>;
   readonly codecLookup?: CodecLookupWithDescriptors;
   readonly dataTypes?: DataTypeSupport;
   readonly generatorFunctions?: GeneratorFunctionRegistry;
@@ -49,7 +51,7 @@ function contextForInterpretOptions(
 ): ContractSourceContext {
   const authoring = options.authoringContributions;
   const scalarsFromCodecIds: Record<string, AuthoringTypeConstructorDescriptor> = {};
-  for (const [name, codecId] of options.scalarTypeCodecIds ?? []) {
+  for (const [name, codecId] of options.scalarTypes ?? []) {
     scalarsFromCodecIds[name] = {
       kind: 'typeConstructor',
       output: { codecId },
@@ -61,7 +63,6 @@ function contextForInterpretOptions(
     composedExtensionContracts: new Map(),
     authoringContributions: {
       type: { ...scalarsFromCodecIds, ...authoring?.type },
-      field: authoring?.field ?? {},
       entityTypes: authoring?.entityTypes ?? {},
       pslBlockDescriptors: authoring?.pslBlockDescriptors ?? {},
       modelAttributes: authoring?.modelAttributes ?? {},

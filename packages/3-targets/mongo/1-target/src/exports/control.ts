@@ -14,7 +14,11 @@ export {
   type MongoMigrationRunnerResult,
 } from '../core/migrations/mongo-runner';
 export { MongoTargetSchemaVerifier } from '../core/migrations/mongo-target-schema-verifier';
-export type { CollModMeta, OpFactoryCall } from '../core/migrations/op-factory-call';
+export type {
+  CollModMeta,
+  IndexCallOptions,
+  OpFactoryCall,
+} from '../core/migrations/op-factory-call';
 export {
   CollModCall,
   CreateCollectionCall,

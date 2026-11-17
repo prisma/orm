@@ -6,8 +6,13 @@ import { ifDefined } from '@internal/utils/defined';
 import { contractError } from './contract-errors';
 import { CheckConstraint } from './ir/check-constraint';
 import { Index } from './ir/sql-index';
-import { StorageTableSchema, StorageValueSetSchema } from './ir/storage-entry-schemas';
+import {
+  SqlStorageValueObjectSchema,
+  StorageTableSchema,
+  StorageValueSetSchema,
+} from './ir/storage-entry-schemas';
 import { StorageTable, type StorageTableInput } from './ir/storage-table';
+import { StorageValueObject, type StorageValueObjectInput } from './ir/storage-value-object';
 import { StorageValueSet, type StorageValueSetInput } from './ir/storage-value-set';
 import {
   checkConstraintInputFromSerialized,
@@ -47,9 +52,18 @@ export const valueSetEntityKind: EntityKindDescriptor<StorageValueSetInput, Stor
   construct: (input) => new StorageValueSet(input),
 };
 
+export const valueObjectEntityKind: EntityKindDescriptor<
+  StorageValueObjectInput,
+  StorageValueObject
+> = {
+  kind: 'valueObject',
+  schema: SqlStorageValueObjectSchema,
+  construct: (input) => new StorageValueObject(input),
+};
+
 /**
  * Assembles the `kind → descriptor` registry for SQL namespaces: the built-in
- * `table` and `valueSet` kinds plus any target `packKinds`. This builds the
+ * `table`, `valueSet` and `valueObject` kinds plus any target `packKinds`. This builds the
  * lookup table — it does not touch contract data. `hydrateNamespaceEntities`
  * later consumes this registry to turn a namespace's raw entries into IR
  * instances, and `createSqlContractSchema` derives validation from the same
@@ -61,6 +75,7 @@ export function composeSqlEntityKinds(
   const kinds = new Map<string, AnyEntityKindDescriptor>([
     ['table', tableEntityKind],
     ['valueSet', valueSetEntityKind],
+    ['valueObject', valueObjectEntityKind],
   ]);
   for (const descriptor of packKinds) {
     if (kinds.has(descriptor.kind)) {

@@ -4,10 +4,13 @@ import { vector } from '../src/exports/column-types';
 import pgvector from '../src/exports/pack';
 
 function buildWithEmbedding(length: number) {
-  return defineContract({ extensions: { pgvector } }, ({ field, model }) => ({
+  return defineContract({ extensions: { pgvector } }, ({ field, model, gen, type }) => ({
     models: {
       Doc: model('Doc', {
-        fields: { id: field.id.uuidv4String(), embedding: field.column(vector(length)) },
+        fields: {
+          id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+          embedding: field.column(vector(length)),
+        },
       }),
     },
   }));

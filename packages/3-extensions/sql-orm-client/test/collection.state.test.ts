@@ -329,13 +329,9 @@ describe('Collection', () => {
       await expect(collection.createAndCount([])).resolves.toBe(0);
     });
 
-    it('create() nested mutation throws when reload by primary key returns no row', async () => {
+    it('create() nested mutation throws when the insert of the parent returns no row', async () => {
       const { collection, runtime } = createReturningCollectionFor('User');
-      runtime.setNextResults([
-        [{ id: 1, name: 'Alice', email: 'alice@example.com' }],
-        [{ id: 10, title: 'Post', user_id: 1, views: 1 }],
-        [],
-      ]);
+      runtime.setNextResults([[]]);
 
       await expect(
         collection.create({

@@ -19,7 +19,7 @@ const schema = `model Note {
   id       Int     @id
   title    String
   token    String? @onCreate(uuid())
-  editedAt temporal.timestamptzString(onCreate: now, onUpdate: now)?
+  editedAt TimestamptzString? @onCreate(now()) @onUpdate(now())
 }`;
 
 function pslContract() {

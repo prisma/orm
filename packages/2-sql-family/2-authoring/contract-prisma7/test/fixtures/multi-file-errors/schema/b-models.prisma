@@ -1,4 +1,4 @@
 model User {
-  id      Int     @id
-  balance Decimal @db.Money
+  id    Int    @id
+  email String @shardKey
 }

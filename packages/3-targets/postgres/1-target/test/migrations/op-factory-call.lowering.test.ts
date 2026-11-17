@@ -37,6 +37,7 @@ import {
   DisableRowLevelSecurityCall,
   DropColumnCall,
   DropDefaultCall,
+  DropExtensionCall,
   DropIndexCall,
   DropNativeEnumTypeCall,
   DropNotNullCall,
@@ -47,6 +48,7 @@ import {
   RenameIndexCall,
   RenamePostgresRlsPolicyCall,
   SetDefaultCall,
+  SetExtensionSchemaCall,
   SetNotNullCall,
 } from '../../src/core/migrations/op-factory-call';
 import { PostgresRlsPolicy } from '../../src/core/postgres-rls-policy';
@@ -1118,33 +1120,83 @@ describe('DropIndexCall', () => {
   });
 });
 
-describe('CreateExtensionCall', () => {
-  it('toOp() builds the op synchronously with no lowerer required', () => {
-    const call = new CreateExtensionCall('pgcrypto');
-    const op = call.toOp();
-    expect(op).toEqual({
-      id: 'extension.pgcrypto',
-      label: 'Create extension "pgcrypto"',
+describe('extension calls', () => {
+  it('CreateExtensionCall installs the extension in its schema, checked absent before and present after', async () => {
+    const { lowerer } = recordingCheckLowerer();
+    const call = new CreateExtensionCall('extensions', 'postgis');
+    const op = await call.toOp(lowerer);
+    expect({
+      id: op.id,
+      operationClass: op.operationClass,
+      target: op.target,
+      precheck: op.precheck.map((step) => step.description),
+      execute: op.execute.map((step) => step.sql),
+      postcheck: op.postcheck.map((step) => step.description),
+    }).toEqual({
+      id: 'extension.postgis',
       operationClass: 'additive',
-      target: { id: 'postgres' },
-      precheck: [],
-      execute: [
-        {
-          description: 'Create extension "pgcrypto"',
-          sql: 'CREATE EXTENSION IF NOT EXISTS "pgcrypto"',
-        },
-      ],
-      postcheck: [],
+      target: {
+        id: 'postgres',
+        details: { schema: 'extensions', objectType: 'dependency', name: 'postgis' },
+      },
+      precheck: ['verify extension "postgis" is not installed'],
+      execute: ['CREATE EXTENSION IF NOT EXISTS "postgis" WITH SCHEMA "extensions"'],
+      postcheck: ['confirm extension "postgis" is installed'],
     });
-    expect(call.label).toBe('Create extension "pgcrypto"');
+    expect(call.renderTypeScript()).toBe(
+      'this.createExtension({ schema: "extensions", extension: "postgis" })',
+    );
+    expect(call.importRequirements()).toEqual([]);
   });
 
-  it('renders createExtension(...) and requires the facade factory import', () => {
-    const call = new CreateExtensionCall('pgcrypto');
-    expect(call.renderTypeScript()).toBe('createExtension("pgcrypto")');
-    expect(call.importRequirements()).toEqual([
-      { moduleSpecifier: '@internal/postgres/migration', symbol: 'createExtension' },
-    ]);
+  it('DropExtensionCall drops the extension without CASCADE as a destructive operation', async () => {
+    const { lowerer } = recordingCheckLowerer();
+    const call = new DropExtensionCall('public', 'pg_trgm');
+    const op = await call.toOp(lowerer);
+    expect({
+      operationClass: op.operationClass,
+      execute: op.execute.map((step) => step.sql),
+      precheck: op.precheck.map((step) => step.description),
+      postcheck: op.postcheck.map((step) => step.description),
+    }).toEqual({
+      operationClass: 'destructive',
+      execute: ['DROP EXTENSION "pg_trgm"'],
+      precheck: ['verify extension "pg_trgm" is installed'],
+      postcheck: ['confirm extension "pg_trgm" is dropped'],
+    });
+    expect(call.renderTypeScript()).toBe(
+      'this.dropExtension({ schema: "public", extension: "pg_trgm" })',
+    );
+  });
+
+  it('SetExtensionSchemaCall moves the extension and checks it landed in the schema', async () => {
+    const { lowerer } = recordingCheckLowerer();
+    const call = new SetExtensionSchemaCall('postgis', 'extensions');
+    const op = await call.toOp(lowerer);
+    expect({
+      operationClass: op.operationClass,
+      execute: op.execute.map((step) => step.sql),
+      postcheck: op.postcheck.map((step) => step.description),
+    }).toEqual({
+      operationClass: 'widening',
+      execute: ['ALTER EXTENSION "postgis" SET SCHEMA "extensions"'],
+      postcheck: ['confirm extension "postgis" is in schema "extensions"'],
+    });
+    expect(call.renderTypeScript()).toBe(
+      'this.setExtensionSchema({ extension: "postgis", schema: "extensions" })',
+    );
+  });
+
+  it('each extension call refuses to build without a lowerer', async () => {
+    await expect(new CreateExtensionCall('public', 'citext').toOp()).rejects.toThrow(
+      /a lowerer is required/,
+    );
+    await expect(new DropExtensionCall('public', 'citext').toOp()).rejects.toThrow(
+      /a lowerer is required/,
+    );
+    await expect(new SetExtensionSchemaCall('citext', 'public').toOp()).rejects.toThrow(
+      /a lowerer is required/,
+    );
   });
 });
 

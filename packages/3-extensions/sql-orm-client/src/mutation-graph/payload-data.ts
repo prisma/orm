@@ -1,11 +1,11 @@
 import { ParamRef } from '@internal/sql-relational-core/ast';
 import { ifDefined } from '@internal/utils/defined';
-import { type ColumnPair, Edge, type NodeId, type StorageRow } from './edge';
+import { type ColumnMapping, DataEdge, type NodeId, type StorageRow } from './edge';
 
-export type Payload = Readonly<Record<string, ParamRef>>;
+type Payload = Readonly<Record<string, ParamRef>>;
 
-export class PayloadData extends Edge<Payload> {
-  constructor(from: NodeId, columns: readonly ColumnPair[]) {
+export class PayloadData extends DataEdge<Payload> {
+  constructor(from: NodeId, columns: readonly ColumnMapping[]) {
     super(from, columns);
     Object.freeze(this);
   }

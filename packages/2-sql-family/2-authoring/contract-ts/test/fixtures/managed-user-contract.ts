@@ -1,4 +1,5 @@
 import type { FamilyPackRef } from '@internal/framework-components/components';
+import type { CheckExpressionInput } from '@internal/sql-contract/check-expressions';
 import { createTestSqlNamespace } from '../../../../1-core/contract/test/test-support';
 import { testTypeLookups } from '../../../../1-core/contract/test/test-type-lookups';
 import { defineContract } from '../../src/contract-builder';
@@ -9,23 +10,9 @@ const sqlFamilyPack = {
   id: 'sql',
   familyId: 'sql',
   version: '0.0.1',
-  authoring: {
-    field: {
-      text: {
-        kind: 'fieldPreset',
-        output: { codecId: 'pg/text@1' },
-      },
-    },
-  },
 } as const satisfies FamilyPackRef<'sql'>;
 
-export function renderCheckExpressions(input: {
-  readonly tableName: string;
-  readonly columnName: string;
-  readonly many: boolean;
-  readonly elementNullable: boolean;
-  readonly memberValues: readonly string[] | undefined;
-}): ReadonlyArray<{
+export function renderCheckExpressions(input: CheckExpressionInput): ReadonlyArray<{
   readonly kind: 'membership' | 'elementNotNull';
   readonly columnName: string;
   readonly expression: string;
@@ -47,7 +34,7 @@ export function renderCheckExpressions(input: {
         : `${column} IN (${members})`,
     });
   }
-  if (input.many && !input.elementNullable) {
+  if (input.many !== false && !input.many.elementNullable) {
     candidates.push({
       kind: 'elementNotNull',
       columnName: input.columnName,
@@ -64,7 +51,7 @@ const postgresTargetPack = {
   targetId: 'postgres',
   version: '0.0.1',
   defaultNamespaceId: 'public',
-  authoring: { field: {}, renderCheckExpressions },
+  authoring: { type: {}, renderCheckExpressions },
 } as const;
 
 const pgText = { codecId: 'pg/text@1' as const } as const;
@@ -82,7 +69,11 @@ export default defineContract(
     ({
       models: {
         User: m('User', {
-          fields: { id: f.text().id(), role: f.namedType(Role), tags: f.text().many() },
+          fields: {
+            id: f.column(pgText).id(),
+            role: f.namedType(Role),
+            tags: f.column(pgText).many(),
+          },
         }),
       },
     }) as const,

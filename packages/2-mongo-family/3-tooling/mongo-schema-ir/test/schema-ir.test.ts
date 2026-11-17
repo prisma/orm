@@ -1,6 +1,5 @@
+import { indexLookupKey } from '@internal/mongo-contract';
 import { describe, expect, it } from 'vitest';
-import { canonicalize } from '../src/canonicalize';
-import { indexLookupKey } from '../src/index-equivalence';
 import { MongoSchemaCollection } from '../src/schema-collection';
 import { MongoSchemaCollectionOptions } from '../src/schema-collection-options';
 import { MongoSchemaIndex } from '../src/schema-index';
@@ -11,6 +10,7 @@ import type { MongoSchemaVisitor } from '../src/visitor';
 describe('MongoSchemaIndex', () => {
   it('constructs with required fields', () => {
     const index = new MongoSchemaIndex({
+      name: 'email_1',
       keys: [{ field: 'email', direction: 1 }],
     });
     expect(index.nodeKind).toBe('index');
@@ -23,6 +23,7 @@ describe('MongoSchemaIndex', () => {
 
   it('constructs with all options', () => {
     const index = new MongoSchemaIndex({
+      name: 'status_1',
       keys: [{ field: 'status', direction: 1 }],
       unique: true,
       sparse: true,
@@ -37,6 +38,7 @@ describe('MongoSchemaIndex', () => {
 
   it('constructs with M2 index options', () => {
     const index = new MongoSchemaIndex({
+      name: 'bio_text',
       keys: [{ field: 'bio', direction: 'text' }],
       weights: { bio: 10 },
       default_language: 'english',
@@ -51,14 +53,27 @@ describe('MongoSchemaIndex', () => {
 
   it('constructs with wildcardProjection', () => {
     const index = new MongoSchemaIndex({
+      name: '$**_1',
       keys: [{ field: '$**', direction: 1 }],
       wildcardProjection: { name: 1, email: 1 },
     });
     expect(index.wildcardProjection).toEqual({ name: 1, email: 1 });
   });
 
+  it('is identified by its name, so two indexes on the same keys have different ids', () => {
+    const keys = [{ field: 'email', direction: 1 as const }];
+    const unique = new MongoSchemaIndex({ name: 'User_email_key', keys, unique: true });
+    const plain = new MongoSchemaIndex({ name: 'User_email_idx', keys });
+    expect([unique.id, unique.name, plain.id]).toEqual([
+      'User_email_key',
+      'User_email_key',
+      'User_email_idx',
+    ]);
+  });
+
   it('is frozen after construction', () => {
     const index = new MongoSchemaIndex({
+      name: 'email_1',
       keys: [{ field: 'email', direction: 1 }],
     });
     expect(Object.isFrozen(index)).toBe(true);
@@ -66,6 +81,7 @@ describe('MongoSchemaIndex', () => {
 
   it('dispatches via visitor', () => {
     const index = new MongoSchemaIndex({
+      name: 'email_1',
       keys: [{ field: 'email', direction: 1 }],
     });
     const visitor: MongoSchemaVisitor<string> = {
@@ -79,6 +95,15 @@ describe('MongoSchemaIndex', () => {
   });
 });
 
+describe('MongoSchemaIR origin', () => {
+  it('records whether it was read from a database', () => {
+    expect([
+      new MongoSchemaIR([], { fromDatabase: false }).fromDatabase,
+      new MongoSchemaIR([], { fromDatabase: true }).fromDatabase,
+    ]).toEqual([false, true]);
+  });
+});
+
 describe('MongoSchemaCollection', () => {
   it('constructs with name only', () => {
     const coll = new MongoSchemaCollection({ name: 'users' });
@@ -89,6 +114,7 @@ describe('MongoSchemaCollection', () => {
 
   it('constructs with indexes', () => {
     const index = new MongoSchemaIndex({
+      name: 'email_1',
       keys: [{ field: 'email', direction: 1 }],
       unique: true,
     });
@@ -237,10 +263,12 @@ function sameIndex(a: MongoSchemaIndex, b: MongoSchemaIndex): boolean {
 describe('indexLookupKey identifies an index', () => {
   it('returns true for identical indexes', () => {
     const a = new MongoSchemaIndex({
+      name: 'email_1',
       keys: [{ field: 'email', direction: 1 }],
       unique: true,
     });
     const b = new MongoSchemaIndex({
+      name: 'email_1',
       keys: [{ field: 'email', direction: 1 }],
       unique: true,
     });
@@ -249,9 +277,11 @@ describe('indexLookupKey identifies an index', () => {
 
   it('returns false for different keys', () => {
     const a = new MongoSchemaIndex({
+      name: 'email_1',
       keys: [{ field: 'email', direction: 1 }],
     });
     const b = new MongoSchemaIndex({
+      name: 'name_1',
       keys: [{ field: 'name', direction: 1 }],
     });
     expect(sameIndex(a, b)).toBe(false);
@@ -259,9 +289,11 @@ describe('indexLookupKey identifies an index', () => {
 
   it('returns false for different directions', () => {
     const a = new MongoSchemaIndex({
+      name: 'email_1',
       keys: [{ field: 'email', direction: 1 }],
     });
     const b = new MongoSchemaIndex({
+      name: 'email_-1',
       keys: [{ field: 'email', direction: -1 }],
     });
     expect(sameIndex(a, b)).toBe(false);
@@ -269,12 +301,14 @@ describe('indexLookupKey identifies an index', () => {
 
   it('returns false for different key order in compound index', () => {
     const a = new MongoSchemaIndex({
+      name: 'a_1_b_1',
       keys: [
         { field: 'a', direction: 1 },
         { field: 'b', direction: 1 },
       ],
     });
     const b = new MongoSchemaIndex({
+      name: 'b_1_a_1',
       keys: [
         { field: 'b', direction: 1 },
         { field: 'a', direction: 1 },
@@ -285,9 +319,11 @@ describe('indexLookupKey identifies an index', () => {
 
   it('returns false for different key counts', () => {
     const a = new MongoSchemaIndex({
+      name: 'a_1',
       keys: [{ field: 'a', direction: 1 }],
     });
     const b = new MongoSchemaIndex({
+      name: 'a_1_b_1',
       keys: [
         { field: 'a', direction: 1 },
         { field: 'b', direction: 1 },
@@ -298,10 +334,12 @@ describe('indexLookupKey identifies an index', () => {
 
   it('returns false for different unique', () => {
     const a = new MongoSchemaIndex({
+      name: 'email_1',
       keys: [{ field: 'email', direction: 1 }],
       unique: true,
     });
     const b = new MongoSchemaIndex({
+      name: 'email_1',
       keys: [{ field: 'email', direction: 1 }],
     });
     expect(sameIndex(a, b)).toBe(false);
@@ -309,10 +347,12 @@ describe('indexLookupKey identifies an index', () => {
 
   it('returns false for different sparse', () => {
     const a = new MongoSchemaIndex({
+      name: 'email_1',
       keys: [{ field: 'email', direction: 1 }],
       sparse: true,
     });
     const b = new MongoSchemaIndex({
+      name: 'email_1',
       keys: [{ field: 'email', direction: 1 }],
     });
     expect(sameIndex(a, b)).toBe(false);
@@ -320,10 +360,12 @@ describe('indexLookupKey identifies an index', () => {
 
   it('returns false for different expireAfterSeconds', () => {
     const a = new MongoSchemaIndex({
+      name: 'ts_1',
       keys: [{ field: 'ts', direction: 1 }],
       expireAfterSeconds: 3600,
     });
     const b = new MongoSchemaIndex({
+      name: 'ts_1',
       keys: [{ field: 'ts', direction: 1 }],
       expireAfterSeconds: 7200,
     });
@@ -332,10 +374,12 @@ describe('indexLookupKey identifies an index', () => {
 
   it('returns false for different partialFilterExpression', () => {
     const a = new MongoSchemaIndex({
+      name: 'status_1',
       keys: [{ field: 'status', direction: 1 }],
       partialFilterExpression: { active: true },
     });
     const b = new MongoSchemaIndex({
+      name: 'status_1',
       keys: [{ field: 'status', direction: 1 }],
       partialFilterExpression: { active: false },
     });
@@ -344,9 +388,11 @@ describe('indexLookupKey identifies an index', () => {
 
   it('treats two indexes without partialFilterExpression as equivalent', () => {
     const a = new MongoSchemaIndex({
+      name: 'email_1',
       keys: [{ field: 'email', direction: 1 }],
     });
     const b = new MongoSchemaIndex({
+      name: 'email_1',
       keys: [{ field: 'email', direction: 1 }],
     });
     expect(sameIndex(a, b)).toBe(true);
@@ -355,10 +401,12 @@ describe('indexLookupKey identifies an index', () => {
   it('compares nested partialFilterExpression deeply', () => {
     const filter = { $and: [{ status: 'active' }, { age: { $gte: 18 } }] };
     const a = new MongoSchemaIndex({
+      name: 'status_1',
       keys: [{ field: 'status', direction: 1 }],
       partialFilterExpression: filter,
     });
     const b = new MongoSchemaIndex({
+      name: 'status_1',
       keys: [{ field: 'status', direction: 1 }],
       partialFilterExpression: { ...filter },
     });
@@ -367,10 +415,12 @@ describe('indexLookupKey identifies an index', () => {
 
   it('returns false for different wildcardProjection', () => {
     const a = new MongoSchemaIndex({
+      name: '$**_1',
       keys: [{ field: '$**', direction: 1 }],
       wildcardProjection: { name: 1 },
     });
     const b = new MongoSchemaIndex({
+      name: '$**_1',
       keys: [{ field: '$**', direction: 1 }],
       wildcardProjection: { email: 1 },
     });
@@ -379,10 +429,12 @@ describe('indexLookupKey identifies an index', () => {
 
   it('returns true for same wildcardProjection', () => {
     const a = new MongoSchemaIndex({
+      name: '$**_1',
       keys: [{ field: '$**', direction: 1 }],
       wildcardProjection: { name: 1, email: 1 },
     });
     const b = new MongoSchemaIndex({
+      name: '$**_1',
       keys: [{ field: '$**', direction: 1 }],
       wildcardProjection: { name: 1, email: 1 },
     });
@@ -391,10 +443,12 @@ describe('indexLookupKey identifies an index', () => {
 
   it('returns false for different collation', () => {
     const a = new MongoSchemaIndex({
+      name: 'name_1',
       keys: [{ field: 'name', direction: 1 }],
       collation: { locale: 'en', strength: 2 },
     });
     const b = new MongoSchemaIndex({
+      name: 'name_1',
       keys: [{ field: 'name', direction: 1 }],
       collation: { locale: 'fr', strength: 2 },
     });
@@ -403,10 +457,12 @@ describe('indexLookupKey identifies an index', () => {
 
   it('returns true for same collation', () => {
     const a = new MongoSchemaIndex({
+      name: 'name_1',
       keys: [{ field: 'name', direction: 1 }],
       collation: { locale: 'en', strength: 2 },
     });
     const b = new MongoSchemaIndex({
+      name: 'name_1',
       keys: [{ field: 'name', direction: 1 }],
       collation: { locale: 'en', strength: 2 },
     });
@@ -415,10 +471,12 @@ describe('indexLookupKey identifies an index', () => {
 
   it('returns false for different weights', () => {
     const a = new MongoSchemaIndex({
+      name: 'bio_text',
       keys: [{ field: 'bio', direction: 'text' }],
       weights: { bio: 10 },
     });
     const b = new MongoSchemaIndex({
+      name: 'bio_text',
       keys: [{ field: 'bio', direction: 'text' }],
       weights: { bio: 5 },
     });
@@ -427,10 +485,12 @@ describe('indexLookupKey identifies an index', () => {
 
   it('returns false for different default_language', () => {
     const a = new MongoSchemaIndex({
+      name: 'bio_text',
       keys: [{ field: 'bio', direction: 'text' }],
       default_language: 'english',
     });
     const b = new MongoSchemaIndex({
+      name: 'bio_text',
       keys: [{ field: 'bio', direction: 'text' }],
       default_language: 'french',
     });
@@ -439,10 +499,12 @@ describe('indexLookupKey identifies an index', () => {
 
   it('returns false for different language_override', () => {
     const a = new MongoSchemaIndex({
+      name: 'bio_text',
       keys: [{ field: 'bio', direction: 'text' }],
       language_override: 'lang',
     });
     const b = new MongoSchemaIndex({
+      name: 'bio_text',
       keys: [{ field: 'bio', direction: 'text' }],
       language_override: 'language',
     });
@@ -451,6 +513,7 @@ describe('indexLookupKey identifies an index', () => {
 
   it('treats object-valued options with different key order as equivalent', () => {
     const a = new MongoSchemaIndex({
+      name: 'status_1',
       keys: [{ field: 'status', direction: 1 }],
       partialFilterExpression: { status: 'active', age: { $gte: 18 } },
       collation: { locale: 'en', strength: 2 },
@@ -458,6 +521,7 @@ describe('indexLookupKey identifies an index', () => {
       wildcardProjection: { name: 1, email: 1 },
     });
     const b = new MongoSchemaIndex({
+      name: 'status_1',
       keys: [{ field: 'status', direction: 1 }],
       partialFilterExpression: { age: { $gte: 18 }, status: 'active' },
       collation: { strength: 2, locale: 'en' },
@@ -470,7 +534,7 @@ describe('indexLookupKey identifies an index', () => {
 
 describe('MongoSchemaIR', () => {
   it('constructs with empty collections', () => {
-    const ir = new MongoSchemaIR([]);
+    const ir = new MongoSchemaIR([], { fromDatabase: false });
     expect(ir.nodeKind).toBe('schema');
     expect(ir.collections).toEqual([]);
   });
@@ -478,19 +542,21 @@ describe('MongoSchemaIR', () => {
   it('constructs with collections sorted by name', () => {
     const users = new MongoSchemaCollection({ name: 'users' });
     const posts = new MongoSchemaCollection({ name: 'posts' });
-    const ir = new MongoSchemaIR([users, posts]);
+    const ir = new MongoSchemaIR([users, posts], { fromDatabase: false });
     expect(ir.collections).toHaveLength(2);
     expect(ir.collections[0]).toBe(posts);
     expect(ir.collections[1]).toBe(users);
   });
 
   it('is frozen after construction', () => {
-    const ir = new MongoSchemaIR([]);
+    const ir = new MongoSchemaIR([], { fromDatabase: false });
     expect(Object.isFrozen(ir)).toBe(true);
   });
 
   it('dispatches via visitor', () => {
-    const ir = new MongoSchemaIR([new MongoSchemaCollection({ name: 'users' })]);
+    const ir = new MongoSchemaIR([new MongoSchemaCollection({ name: 'users' })], {
+      fromDatabase: false,
+    });
     const visitor: MongoSchemaVisitor<string> = {
       schema: (node) => `schema:${node.collections.length}`,
       collection: () => 'collection',
@@ -504,53 +570,17 @@ describe('MongoSchemaIR', () => {
   it('looks up collection by name', () => {
     const users = new MongoSchemaCollection({ name: 'users' });
     const posts = new MongoSchemaCollection({ name: 'posts' });
-    const ir = new MongoSchemaIR([users, posts]);
+    const ir = new MongoSchemaIR([users, posts], { fromDatabase: false });
     expect(ir.collection('users')).toBe(users);
     expect(ir.collection('posts')).toBe(posts);
     expect(ir.collection('missing')).toBeUndefined();
   });
 
   it('exposes sorted collection names', () => {
-    const ir = new MongoSchemaIR([
-      new MongoSchemaCollection({ name: 'zebra' }),
-      new MongoSchemaCollection({ name: 'alpha' }),
-    ]);
+    const ir = new MongoSchemaIR(
+      [new MongoSchemaCollection({ name: 'zebra' }), new MongoSchemaCollection({ name: 'alpha' })],
+      { fromDatabase: false },
+    );
     expect(ir.collectionNames).toEqual(['alpha', 'zebra']);
-  });
-});
-
-describe('canonicalize', () => {
-  it('produces same string for objects with different key order', () => {
-    expect(canonicalize({ b: 1, a: 2 })).toBe(canonicalize({ a: 2, b: 1 }));
-  });
-
-  it('handles nested objects with different key order', () => {
-    expect(canonicalize({ outer: { b: 1, a: 2 } })).toBe(canonicalize({ outer: { a: 2, b: 1 } }));
-  });
-
-  it('preserves array order', () => {
-    expect(canonicalize([1, 2, 3])).not.toBe(canonicalize([3, 2, 1]));
-  });
-
-  it('handles primitives', () => {
-    expect(canonicalize(42)).toBe('42');
-    expect(canonicalize('hello')).toBe('"hello"');
-    expect(canonicalize(true)).toBe('true');
-  });
-
-  it('handles null and undefined', () => {
-    expect(canonicalize(null)).toBe('null');
-    expect(canonicalize(undefined)).toBe('undefined');
-  });
-
-  it('handles empty objects and arrays', () => {
-    expect(canonicalize({})).toBe('{}');
-    expect(canonicalize([])).toBe('[]');
-  });
-
-  it('produces deterministic output for complex nested structures', () => {
-    const a = { z: [1, { y: 2, x: 3 }], a: { c: 1, b: 2 } };
-    const b = { a: { b: 2, c: 1 }, z: [1, { x: 3, y: 2 }] };
-    expect(canonicalize(a)).toBe(canonicalize(b));
   });
 });

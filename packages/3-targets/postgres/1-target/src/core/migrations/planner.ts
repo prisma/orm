@@ -17,14 +17,13 @@ import {
   otherSpaceDeclaring,
   partitionCallsByControlPolicy,
   partitionIssuesByControlPolicy,
-  planEnumValueRewrites,
   planFieldEventCalls,
   plannerFailure,
   planStatements,
+  planStoredRewrites,
   sqlTypeLookupsOf,
   subjectsOfCalls,
   type TargetRefusal,
-  withEnumValueOperations,
 } from '@internal/family-sql/control';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
@@ -45,6 +44,7 @@ import type {
 } from '@internal/framework-components/control';
 import { isRenameStatement, issueOutcome } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { UNBOUND_PSL_NAMESPACE_NAME } from '@internal/framework-components/psl-ast';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { namingOf, parseWireName } from '@internal/sql-schema-ir/naming';
 import type { SqlSchemaIR } from '@internal/sql-schema-ir/types';
@@ -56,6 +56,7 @@ import { DEFAULT_NAMESPACE_ID } from '../namespace-ids';
 import { PostgresRlsPolicy } from '../postgres-rls-policy';
 import { postgresNodeStorageCoordinate } from '../schema-ir/node-storage-coordinate';
 import { PostgresDatabaseSchemaNode } from '../schema-ir/postgres-database-schema-node';
+import { PostgresExtensionSchemaNode } from '../schema-ir/postgres-extension-schema-node';
 import { PostgresPolicySchemaNode } from '../schema-ir/postgres-policy-schema-node';
 import { PostgresTableSchemaNode } from '../schema-ir/postgres-table-schema-node';
 import { PostgresSchemaNodeKind, type SqlSchemaDiffNode } from '../schema-ir/schema-node-kinds';
@@ -76,7 +77,7 @@ import {
   issueSchemaName,
   planIssues,
 } from './issue-planner';
-import type { PostgresOpFactoryCall } from './op-factory-call';
+import type { PostgresOpFactoryCall, RemoveStoredValueCall } from './op-factory-call';
 import {
   AlterColumnTypeCall,
   CreatePostgresRlsPolicyCall,
@@ -106,10 +107,12 @@ import {
 } from './resolve-ddl-schema';
 import { postgresSchemaTables } from './schema-tables';
 import {
+  postgresStoredKeyCalls,
+  postgresStoredKeyFillCalls,
+  postgresStoredValueCallClasses,
   postgresStoredValueCalls,
+  postgresVariantRowCalls,
   storedValueCallsStrategy,
-  storedValueOperationIndexes,
-  storedValueSubjects,
 } from './stored-value-calls';
 import {
   postgresColumnRenameCall,
@@ -268,6 +271,10 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     if (policyResult) {
       return policyResult;
     }
+    const packExtensions = extensionsDeclaredByPacks(options);
+    if (packExtensions.length > 0) {
+      return plannerFailure(packExtensions);
+    }
 
     // The one combined tree diff drives the whole plan: relational findings
     // become structural DDL via `planIssues`, policy findings become RLS ops
@@ -286,6 +293,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       actualSchema: schema,
       frameworkComponents: options.frameworkComponents,
       originSchemas: originSchemaNames(options.fromContract),
+      originExtensions: originExtensionNames(options.fromContract),
     });
     const droppedTables = rawIssues.filter(
       (issue) =>
@@ -366,21 +374,26 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
 
     const codecHooks = extractCodecControlHooks(options.frameworkComponents);
     const types = sqlTypeLookupsOf(options.frameworkComponents);
-    const rewrites = planEnumValueRewrites({
+    const storedRewrites = planStoredRewrites<PostgresOpFactoryCall, RemoveStoredValueCall>({
       statements: options.statements,
       fromContract: options.fromContract,
       contract: options.contract,
       tables: postgresSchemaTables(schema, options.contract),
-      codecs: types.codecLookup,
+      types,
+      policy: options.policy,
+      calls: {
+        storedKeyCalls: (rewrites) => postgresStoredKeyCalls(rewrites, options.contract),
+        storedKeyFillCalls: (fills) => postgresStoredKeyFillCalls(fills, options.contract),
+        storedValueCalls: (rewrites) =>
+          postgresStoredValueCalls(rewrites, options.contract, types.codecLookup),
+        variantRowCalls: (rewrites) =>
+          postgresVariantRowCalls(rewrites, options.contract, types.codecLookup),
+        storedValueClasses: postgresStoredValueCallClasses,
+      },
     });
-    if (!rewrites.ok) {
-      return plannerFailure([rewrites.failure]);
+    if (!storedRewrites.ok) {
+      return plannerFailure([storedRewrites.failure]);
     }
-    const storedValueCalls = postgresStoredValueCalls(
-      rewrites.value,
-      options.contract,
-      types.codecLookup,
-    );
     // Strategies get two views of the start state. `schema` is one namespace node, for probes by bare table name in the planned namespace (shared-temp-default safety, FK/unique probes); a flat merge of every namespace would collide same-named tables. `startTree` and `endTree` are the whole trees, for decisions that cross tables and namespaces, such as the foreign keys that depend on a primary key.
     const relationalSchema = relationalNamespaceNode(schema, schemaName);
 
@@ -473,7 +486,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
         dropRemovedSchemasStrategy(
           removedSchemas.filter((schemaName) => !keptSchema(options, schemaName)),
         ),
-        storedValueCallsStrategy([...storedValueCalls.keys()]),
+        storedValueCallsStrategy(storedRewrites.value.calls),
       ],
     });
 
@@ -573,21 +586,25 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
         options.snapshotsImportPath,
         this.#lowerer,
       ),
-      appliedStatements: withEnumValueOperations(
-        appliedStatementsInOrder(options.statements, statements.value.appliedStatements),
-        (statement) => storedValueOperationIndexes(calls, storedValueCalls, statement),
+      appliedStatements: appliedStatementsInOrder(
+        options.statements,
+        statements.value.plannedStatements,
+        (statement) => storedRewrites.value.operationIndexes(calls, statement),
       ),
       ...subjectsOfCalls(
         postgresCallSubjects(calls, {
           contract: options.fromContract ?? options.contract,
           fieldEvents: new Map(fieldEventCalls.map((fieldEvent) => [fieldEvent.call, fieldEvent])),
-          storedValues: storedValueSubjects(storedValueCalls),
+          storedValues: storedRewrites.value.storedValues,
+          storedKeys: storedRewrites.value.storedKeys,
+          variantRows: storedRewrites.value.variantRows,
         }),
         {
           fromContract: options.fromContract,
           contract: options.contract,
           origins: statements.value.origins,
           byHand: postgresTableRenameByHand(options.contract),
+          removedVariants: storedRewrites.value.removedVariants,
         },
       ),
       namespaces: {
@@ -938,6 +955,14 @@ function originSchemaNames(fromContract: Contract<SqlStorage> | null): readonly 
     .map(([namespaceId]) => resolveDdlSchemaForNamespaceStorage(fromContract.storage, namespaceId));
 }
 
+/** The extensions the origin contract declares, in any namespace; none without an origin contract. */
+function originExtensionNames(fromContract: Contract<SqlStorage> | null): readonly string[] {
+  if (fromContract === null) return [];
+  return Object.values(fromContract.storage.namespaces).flatMap((namespace) =>
+    Object.keys(namespace.entries['extension'] ?? {}),
+  );
+}
+
 /**
  * The namespaces the destination declares and the origin does not, other than `public` and those a
  * statement renames a namespace to: the new names a rename of a removed namespace may give it.
@@ -1144,10 +1169,49 @@ function retainUnownedExtras(
     if (node === undefined) return true;
     const coordinate = postgresNodeStorageCoordinate(node);
     if (coordinate === undefined) return true;
+    if (PostgresExtensionSchemaNode.is(node)) {
+      if (ownership.declaresEntity({ namespaceId: UNBOUND_NAMESPACE_ID, ...coordinate })) {
+        return false;
+      }
+      if (node.location.kind === 'searchPath') return true;
+      return !ownership.declaresEntity({
+        namespaceId: namespaceIdOf(node.location.schemaName),
+        ...coordinate,
+      });
+    }
     const ddlSchemaName = issueSchemaName(issue);
     if (ddlSchemaName === undefined) return true;
     return !ownership.declaresEntity({ namespaceId: namespaceIdOf(ddlSchemaName), ...coordinate });
   });
+}
+
+/**
+ * Refuses each extension this contract declares in a named namespace that another contract space declares in the unbound namespace: an extension is declared once, and the pack that declares it installs it.
+ */
+function extensionsDeclaredByPacks(
+  options: SqlMigrationPlannerPlanOptions,
+): readonly SqlPlannerConflict[] {
+  const { ownership } = options;
+  if (ownership === undefined) return [];
+  return Object.values(options.contract.storage.namespaces).flatMap((namespace) =>
+    namespace.id === UNBOUND_NAMESPACE_ID
+      ? []
+      : Object.keys(namespace.entries['extension'] ?? {})
+          .filter((name) =>
+            ownership.declaresEntity({
+              namespaceId: UNBOUND_NAMESPACE_ID,
+              entityKind: 'extension',
+              entityName: name,
+            }),
+          )
+          .map(
+            (name): SqlPlannerConflict => ({
+              kind: 'unsupportedOperation',
+              summary: `Extension "${name}" is declared in namespace "${namespace.id}" by this contract, and an extension pack declares it in namespace "${UNBOUND_PSL_NAMESPACE_NAME}".`,
+              why: 'Remove this declaration from the contract; the pack installs the extension.',
+            }),
+          ),
+  );
 }
 
 /**

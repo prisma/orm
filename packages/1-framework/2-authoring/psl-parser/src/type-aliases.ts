@@ -10,6 +10,10 @@ import type { GeneratorFunctionRegistry } from '@internal/framework-components/c
 import type { ControlMutationDefaultRegistry } from '@internal/framework-components/control';
 import type { TypeAttributeSpecContext } from './attribute-spec/spec-context';
 import { type Binder, contributedTypeOf, type Resolution, typeReferenceNode } from './binder';
+import {
+  type ContributedTypeChoiceSymbol,
+  isContributedTypeChoice,
+} from './contributed-type-scope';
 import { diagnosticSource, type PslDiagnosticCollector } from './diagnostic';
 import type { PslSources } from './source-file';
 import type {
@@ -38,6 +42,12 @@ export type TypeAliasBase =
       readonly kind: 'typeConstructor';
       readonly descriptor: AuthoringTypeConstructorDescriptor;
       /** `undefined` when the constructor is written bare. */
+      readonly call: ResolvedTypeConstructorCall | undefined;
+    }
+  | {
+      readonly kind: 'typeChoice';
+      readonly symbol: ContributedTypeChoiceSymbol;
+      /** `undefined` when the type choice is written bare. */
       readonly call: ResolvedTypeConstructorCall | undefined;
     }
   | { readonly kind: 'block'; readonly symbol: BlockSymbol };
@@ -184,6 +194,9 @@ function baseOf(
     return { kind: 'block', symbol: resolution.symbol };
   }
   if (resolution?.kind !== 'contributedType') return undefined;
+  if (isContributedTypeChoice(resolution.symbol)) {
+    return { kind: 'typeChoice', symbol: resolution.symbol, call: declaration.typeConstructor };
+  }
   const { descriptor } = resolution.symbol;
   if (descriptor.kind !== 'typeConstructor') return undefined;
   if (declaration.isConstructor) {
@@ -204,7 +217,7 @@ function fieldOnlyAttributeMessage(
 }
 
 /**
- * Reads each `types {}` declaration as a type alias. A base must be a type constructor or a block; another alias, a field preset or anything else is refused, as is an alias with no base. Of the attributes, those the family accepts are kept and every other one is refused and dropped, keeping the alias, so its fields are not refused for it too.
+ * Reads each `types {}` declaration as a type alias. A base must be a type constructor or a block; another alias or anything else is refused, as is an alias with no base. Of the attributes, those the family accepts are kept and every other one is refused and dropped, keeping the alias, so its fields are not refused for it too.
  */
 export function resolveTypeAliases(input: {
   readonly declarations: readonly NamedTypeSymbol[];
@@ -343,7 +356,11 @@ export function typeAliasSpecContext(
     list: false,
     typeName: alias.baseName,
     typeResolution: alias.baseResolution,
-    typeConstructor: contributedTypeOf(alias.baseResolution, input.binder),
+    contributedType: contributedTypeOf(
+      alias.baseResolution,
+      input.binder,
+      alias.symbol.typeConstructor,
+    ),
   };
 }
 

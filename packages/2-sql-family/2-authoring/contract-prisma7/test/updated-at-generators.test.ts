@@ -27,7 +27,7 @@ describe('@updatedAt on Postgres', () => {
   ] as const;
 
   it.each(mappings)('resolves now() for the codec %s maps to', (_type, mapping) => {
-    const codecId = getAuthoringTypeConstructor(authoringContributions, [mapping.constructorName])
+    const codecId = getAuthoringTypeConstructor(authoringContributions, mapping.constructorPath)
       ?.output.codecId;
     expect(codecId).toBeDefined();
     expect(
@@ -61,13 +61,13 @@ model Clock {
       },
       {
         ref: ref('stampedAt'),
-        onCreate: now('timestampStringNow', { precision: 0 }),
-        onUpdate: now('timestampStringNow', { precision: 0 }),
+        onCreate: now('timestampNow', { precision: 0 }),
+        onUpdate: now('timestampNow', { precision: 0 }),
       },
       {
         ref: ref('updatedAt'),
-        onCreate: now('timestampStringNow', { precision: 3 }),
-        onUpdate: now('timestampStringNow', { precision: 3 }),
+        onCreate: now('timestampNow', { precision: 3 }),
+        onUpdate: now('timestampNow', { precision: 3 }),
       },
     ]);
   });

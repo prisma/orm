@@ -139,6 +139,7 @@ function liveSchema(
   schemaName = 'public',
 ): PostgresDatabaseSchemaNode {
   return new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces: {
       [schemaName]: new PostgresNamespaceSchemaNode({
         schemaName,

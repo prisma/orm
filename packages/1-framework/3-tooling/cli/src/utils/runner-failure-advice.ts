@@ -1,6 +1,5 @@
 import type {
   BlockingObject,
-  KeepDataEdit,
   MigrationRunnerFailure,
 } from '@internal/framework-components/control';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
@@ -9,6 +8,7 @@ import { basename, join } from 'pathe';
 import { statementFlag } from '../control-api/statements/statement-flag';
 import type {
   FailedTypeChangeReport,
+  RowsFailingCheckReport,
   RowsHoldingValueReport,
   RowsWithoutValueReport,
   RunnerFailureFacts,
@@ -80,6 +80,17 @@ function backfillFlags(reports: readonly RowsWithoutValueReport[]): readonly str
   ];
 }
 
+/** The way out of a cast that met a value it cannot cast without changing the migration: change that value, then `rerun`. */
+function changeValueAdvice(change: FailedTypeChangeReport, rerun: string): RunnerAdvice {
+  return change.by === 'cast' && change.reason === 'value'
+    ? [
+        chooseAction(
+          `Change the value the failure names so the database's cast accepts it, then re-run ${rerun}`,
+        ),
+      ]
+    : [];
+}
+
 /** The way out of a failed cast for `db update`, which plans and applies in one step. */
 export function dbUpdateFailedTypeChangeAdvice(
   change: FailedTypeChangeReport,
@@ -92,6 +103,10 @@ export function dbUpdateFailedTypeChangeAdvice(
   return [
     chooseAction(
       `${failedTypeChangeText(change)} Plan the change with ${quoted(plan)}, write the conversion in the migration.ts it writes, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateCommand(invocation)}`,
+    ),
+    ...changeValueAdvice(
+      change,
+      quoted(cliCommand(invocation, 'db update', invocation.rerunArgs ?? [])),
     ),
   ];
 }
@@ -113,94 +128,226 @@ export function dbUpdateRowsWithoutValueAdvice(
         ];
   const [first] = reports;
   if (first?.reason === 'nullValues') {
+    const keep = optionalFields([first], 'the field');
     return [
       chooseAction(`Set a value in ${theRows(first.rows)}`),
-      editFileAction('Keep the field optional in the contract source'),
+      ...(keep === undefined
+        ? []
+        : [editFileAction(`Keep ${keep.text} optional in the contract source`)]),
       ...planned,
     ];
   }
-  return [...planned, editFileAction('Make the field optional in the contract source')];
+  const optional = optionalFields(reports, theFields(reports));
+  return [
+    ...planned,
+    ...(optional === undefined
+      ? []
+      : [editFileAction(`Make ${optional.text} optional in the contract source`)]),
+  ];
 }
 
-function renameToNewMember(report: RowsHoldingValueReport): string {
-  return statementFlag({
-    verb: 'rename',
-    text: `${report.enumValue}:${report.enumName}.<new member>`,
-  });
+/**
+ * The fields of the reports the contract can make optional, which leaves out discriminators: in the words the caller
+ * gives for all of them, or by name when a discriminator is left out. Undefined when every field is a discriminator.
+ */
+function optionalFields(
+  reports: readonly RowsWithoutValueReport[],
+  allOfThem: string,
+): { readonly text: string; readonly one: boolean } | undefined {
+  const optional = reports.filter(({ discriminator }) => !discriminator);
+  if (optional.length === 0) {
+    return undefined;
+  }
+  const named = distinct(optional.flatMap(({ field }) => (field === undefined ? [] : [field])));
+  if (optional.length === reports.length || named.length === 0) {
+    return { text: allOfThem, one: reports.length === 1 };
+  }
+  const [only] = named;
+  return named.length === 1 && only !== undefined
+    ? { text: `field "${only}"`, one: true }
+    : { text: `fields ${named.map((field) => `"${field}"`).join(', ')}`, one: false };
 }
 
-function newMember(report: RowsHoldingValueReport, invocation: CliInvocation): string {
-  return `To keep that data under a new enum value, add a member to enum "${report.enumName}" in the contract source, run ${quoted(cliCommand(invocation, 'contract emit'))}`;
+function theFields(reports: readonly RowsWithoutValueReport[]): string {
+  const named = new Set(reports.flatMap(({ field }) => (field === undefined ? [] : [field])));
+  return named.size > 1 ? 'the fields' : 'the field';
 }
 
-/** The edit the target gives that keeps the data, as the advice writes it. */
-function swapCalls(edit: KeepDataEdit): string {
-  return `replace ${edit.remove} with ${edit.replaceWith}`;
+function distinct(values: readonly string[]): readonly string[] {
+  return [...new Set(values)];
 }
 
-const KEPT_VALUE = 'where "<stored value>" is a stored value the enum keeps';
-
-/** The run's statements, without the delete of `enumValue` that failed. */
-function otherStatements(invocation: CliInvocation, enumValue: string): readonly string[] {
-  const failed = statementFlag({ verb: 'delete', text: enumValue });
-  return (invocation.statementArgs ?? []).filter((flag) => flag !== failed);
+/** The first report of each enum value, in the order the reports name them. */
+function onePerEnumValue(
+  reports: readonly RowsHoldingValueReport[],
+): readonly RowsHoldingValueReport[] {
+  return reports.filter(
+    (report, index) =>
+      reports.findIndex(({ enumValue }) => enumValue === report.enumValue) === index,
+  );
 }
 
-/** The way out when a required column's data holds a stored value `db update` removes. */
+function renameFlags(reports: readonly RowsHoldingValueReport[]): readonly string[] {
+  return onePerEnumValue(reports).map(({ enumValue, enumName }) =>
+    statementFlag({ verb: 'rename', text: `${enumValue}:${enumName}.<new member>` }),
+  );
+}
+
+function deleteFlags(reports: readonly RowsHoldingValueReport[]): readonly string[] {
+  return onePerEnumValue(reports).map(({ enumValue }) =>
+    statementFlag({ verb: 'delete', text: enumValue }),
+  );
+}
+
+function newMember(reports: readonly RowsHoldingValueReport[], invocation: CliInvocation): string {
+  const enumNames = distinct(reports.map(({ enumName }) => `"${enumName}"`));
+  const enums =
+    enumNames.length === 1 ? `enum ${enumNames[0]}` : `each of enums ${enumNames.join(', ')}`;
+  return `To keep that data under a new enum value, add a member to ${enums} in the contract source, run ${quoted(cliCommand(invocation, 'contract emit'))}`;
+}
+
+/** The edits the target gives that keep the data, each call on its own lines as the migration.ts holds it; undefined when it gives none. */
+function swapCalls(reports: readonly RowsHoldingValueReport[]): string | undefined {
+  const swaps = reports.flatMap(({ keepDataEdit }) =>
+    keepDataEdit === undefined
+      ? []
+      : [`Replace:\n${keepDataEdit.remove}\nwith:\n${keepDataEdit.replaceWith}`],
+  );
+  return swaps.length === 0 ? undefined : swaps.join('\n');
+}
+
+const KEPT_VALUE = 'where <stored value> is a stored value the enum keeps';
+
+/** The run's statements, without the deletes of the enum values that failed. */
+function otherStatements(
+  invocation: CliInvocation,
+  reports: readonly RowsHoldingValueReport[],
+): readonly string[] {
+  const failed = deleteFlags(reports);
+  return (invocation.statementArgs ?? []).filter((flag) => !failed.includes(flag));
+}
+
+function storedValuesText(reports: readonly RowsHoldingValueReport[]): string {
+  const values = distinct(reports.map(({ value }) => JSON.stringify(value)));
+  return values.length === 1
+    ? `the stored value ${values[0]} to one the enum keeps`
+    : `each of the stored values ${values.join(', ')} to one its enum keeps`;
+}
+
+/** The way out when the data of required columns holds stored values `db update` removes. */
 export function dbUpdateRowsHoldingValueAdvice(
-  report: RowsHoldingValueReport,
+  reports: readonly RowsHoldingValueReport[],
   databaseStorageHash: string | undefined,
   invocation: CliInvocation,
 ): RunnerAdvice {
-  const others = otherStatements(invocation, report.enumValue);
-  const deleteFlag = statementFlag({ verb: 'delete', text: report.enumValue });
+  const others = otherStatements(invocation, reports);
+  const deletes = deleteFlags(reports);
   const rename = chooseAction(
-    `${newMember(report, invocation)}, then run ${quoted(cliCommand(invocation, 'db update', [...others, renameToNewMember(report)]))}`,
+    `${newMember(reports, invocation)}, then run ${quoted(cliCommand(invocation, 'db update', [...others, ...renameFlags(reports)]))}`,
   );
   if (databaseStorageHash === undefined) {
     return [
       rename,
       chooseAction(
-        `To keep that data under another stored value, change the stored value ${JSON.stringify(report.value)} to one the enum keeps in the database yourself, then re-run ${quoted(cliCommand(invocation, 'db update', [...others, deleteFlag]))}`,
+        `To keep that data under another stored value, change ${storedValuesText(reports)} in the database yourself, then re-run ${quoted(cliCommand(invocation, 'db update', [...others, ...deletes]))}`,
       ),
     ];
   }
-  const { keepDataEdit } = report;
-  if (keepDataEdit === undefined) return [rename];
-  const plan = printedPlanCommand(invocation, databaseStorageHash, [...others, deleteFlag]);
+  const swaps = swapCalls(reports);
+  if (swaps === undefined) return [rename];
+  const plan = printedPlanCommand(invocation, databaseStorageHash, [...others, ...deletes]);
   return [
     rename,
     chooseAction(
-      `To keep that data by hand, plan the change with ${quoted(plan)}, ${swapCalls(keepDataEdit)} in the migration.ts it writes, ${KEPT_VALUE}, ${runWrittenFile(invocation)}`,
+      `To keep that data by hand, plan the change with ${quoted(plan)}, make the edits below in the migration.ts it writes, ${KEPT_VALUE}, ${runWrittenFile(invocation)}.\n${swaps}`,
     ),
   ];
 }
 
 function migrateRowsHoldingValueAdvice(
-  report: RowsHoldingValueReport,
+  reports: readonly RowsHoldingValueReport[],
   failedMigration: FailedMigrationText | undefined,
   invocation: CliInvocation,
 ): RunnerAdvice {
   const { file, run } = failedMigrationFile(failedMigration);
-  const { keepDataEdit } = report;
+  const swaps = swapCalls(reports);
   const byHand =
-    keepDataEdit === undefined
+    swaps === undefined
       ? []
       : [
           editFileAction(
-            `To keep that data by hand, ${swapCalls(keepDataEdit)} in ${file}, ${KEPT_VALUE}, ${run}, and re-run ${dbMigrateCommand(invocation)}`,
+            `To keep that data by hand, make the edits below in ${file}, ${KEPT_VALUE}, ${run}, and re-run ${dbMigrateCommand(invocation)}.\n${swaps}`,
           ),
         ];
   if (failedMigration === undefined) return byHand;
   return [
     replan(
-      `${newMember(report, invocation)}, delete`,
-      [renameToNewMember(report)],
+      `${newMember(reports, invocation)}, delete`,
+      renameFlags(reports),
       failedMigration,
-      `\`${statementFlag({ verb: 'delete', text: report.enumValue })}\``,
+      deleteFlags(reports)
+        .map((flag) => `\`${flag}\``)
+        .join(' or '),
       `put any code you copied into the migration.ts it writes, ${runWrittenFile(invocation)}`,
     ),
     ...byHand,
+  ];
+}
+
+/** Where the operation that updates the rows goes among the operations of a migration.ts that replaces a check. */
+function betweenTheChecks(report: RowsFailingCheckReport, replacedCheck: string): string {
+  return `after the operation that drops check "${replacedCheck}" and before the operation that adds check "${report.check}"`;
+}
+
+function updateOperation(report: RowsFailingCheckReport): string {
+  return `an operation that updates those rows to fit check "${report.check}"`;
+}
+
+function fixRowsFirst(report: RowsFailingCheckReport, rerun: string): NextAction {
+  return chooseAction(
+    `Update or delete those rows so they fit check "${report.check}", then re-run ${quoted(rerun)}`,
+  );
+}
+
+/** The way out when existing rows fail a check `db update` adds: it cannot keep the data while the check it replaces holds. */
+export function dbUpdateRowsFailingCheckAdvice(
+  report: RowsFailingCheckReport,
+  databaseStorageHash: string | undefined,
+  invocation: CliInvocation,
+): RunnerAdvice {
+  const update = cliCommand(invocation, 'db update', invocation.rerunArgs ?? []);
+  const { replacedCheck } = report;
+  if (replacedCheck === undefined) return [fixRowsFirst(report, update)];
+  const cannotKeep = `${quoted(cliCommand(invocation, 'db update'))} cannot keep this data`;
+  if (databaseStorageHash === undefined) {
+    return [
+      chooseAction(
+        `${cannotKeep}, and no migration ends at the contract the database is at, so ${quoted(cliCommand(invocation, 'migration plan'))} cannot plan from it. Drop check "${replacedCheck}" in the database yourself, update those rows to fit check "${report.check}", then re-run ${quoted(update)}`,
+      ),
+    ];
+  }
+  const plan = printedPlanCommand(invocation, databaseStorageHash, invocation.statementArgs ?? []);
+  return [
+    chooseAction(
+      `${cannotKeep}. Plan the change with ${quoted(plan)}, add ${updateOperation(report)} to the migration.ts it writes, ${betweenTheChecks(report, replacedCheck)}, ${runWrittenFile(invocation)}`,
+    ),
+  ];
+}
+
+function migrateRowsFailingCheckAdvice(
+  report: RowsFailingCheckReport,
+  failedMigration: FailedMigrationText | undefined,
+  invocation: CliInvocation,
+): RunnerAdvice {
+  const { replacedCheck } = report;
+  if (replacedCheck === undefined) {
+    return [fixRowsFirst(report, cliCommand(invocation, 'db migrate', invocation.rerunArgs ?? []))];
+  }
+  const { file, run } = failedMigrationFile(failedMigration);
+  return [
+    editFileAction(
+      `To keep the data, add ${updateOperation(report)} to ${file}, ${betweenTheChecks(report, replacedCheck)}, ${run}, and re-run ${dbMigrateCommand(invocation)}`,
+    ),
   ];
 }
 
@@ -310,13 +457,19 @@ function migrateFailedTypeChangeAdvice(
       chooseAction(
         `${changeText} Plan the type change again with ${quoted(printedPlanCommand(invocation, undefined, [convert]))}, write the conversion in the migration.ts it writes, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateCommand(invocation)}`,
       ),
+      ...changeValueAdvice(change, dbMigrateCommand(invocation)),
     ];
   }
   const deleted = `\`${statementFlag({ verb: 'delete', text: change.field })}\``;
   return [
     editFileAction(
-      `${changeText} ${file} has no conversion for field "${change.field}": write one there, ${run}, and re-run ${dbMigrateCommand(invocation)}`,
+      `${changeText} ${file} changes field "${change.field}" ${
+        change.reason === 'noCast'
+          ? 'with a cast the database does not have between these types: replace it'
+          : "with the database's cast, which met a value it cannot cast: replace that cast"
+      } with your own conversion of the values there, ${run}, and re-run ${dbMigrateCommand(invocation)}`,
     ),
+    ...changeValueAdvice(change, dbMigrateCommand(invocation)),
     replan('Delete', [convert], failedMigration, deleted),
   ];
 }
@@ -352,37 +505,66 @@ function migrateRowsWithoutValueAdvice(
         : `Set a value in the rows that hold NULL in each of ${fieldList(reports)} and re-run ${dbMigrateCommand(invocation)}`,
     );
     const backfill = again('Delete');
-    const fields = one ? 'the field' : 'those fields';
+    const fields = optionalFields(reports, one ? 'the field' : 'those fields');
     const keep =
-      failedMigration === undefined
-        ? editFileAction(
-            `Keep ${fields} optional in the contract source, and plan the migration again`,
-          )
-        : keepOptional(fields, one ? 'it' : 'them', failedMigration, invocation);
-    return [rerun, ...(backfill === undefined ? [] : [backfill]), keep];
+      fields === undefined
+        ? []
+        : [
+            failedMigration === undefined
+              ? editFileAction(
+                  `Keep ${fields.text} optional in the contract source, and plan the migration again`,
+                )
+              : keepOptional(fields.text, fields.one ? 'it' : 'them', failedMigration, invocation),
+          ];
+    return [rerun, ...(backfill === undefined ? [] : [backfill]), ...keep];
   }
   if (first?.reason === 'nullValues') {
     const notEnough =
       'The migration also adds a required field the existing rows have no value for, so setting values is not enough.';
     const backfill = again(`${notEnough} Delete`);
+    if (backfill !== undefined) {
+      return [backfill];
+    }
+    const newFields = optionalFields(
+      reports.filter(({ reason }) => reason === 'newField'),
+      'the new fields',
+    );
+    return newFields === undefined
+      ? [resolveTheCause(invocation)]
+      : [
+          editFileAction(
+            `${notEnough} Make ${newFields.text} optional in the contract source, and plan the migration again`,
+          ),
+        ];
+  }
+  const fields = theFields(reports);
+  const required = again(`To keep ${fields} required, delete`);
+  const optional = optionalFields(reports, fields);
+  if (required === undefined) {
     return [
-      backfill ??
-        editFileAction(
-          `${notEnough} Make the new fields optional in the contract source, and plan the migration again`,
-        ),
+      optional === undefined
+        ? resolveTheCause(invocation)
+        : editFileAction(
+            `Make ${optional.text} optional in the contract source, and plan the migration again`,
+          ),
     ];
   }
-  const required = again('To keep the field required, delete');
-  return required === undefined
-    ? [
-        editFileAction(
-          'Make the field optional in the contract source, and plan the migration again',
-        ),
-      ]
-    : [
-        required,
-        editFileAction('Make the field optional in the contract source, and plan it again'),
-      ];
+  return [
+    required,
+    ...(optional === undefined
+      ? []
+      : [
+          editFileAction(
+            `Make ${optional.text} optional in the contract source, and plan it again`,
+          ),
+        ]),
+  ];
+}
+
+function resolveTheCause(invocation: CliInvocation): NextAction {
+  return chooseAction(
+    `Resolve the cause the failure names, then re-run \`${cliCommand(invocation, 'db migrate', invocation.rerunArgs ?? [])}\``,
+  );
 }
 
 function keepOptional(
@@ -477,15 +659,14 @@ export function migrateAdvice(
   if (facts.rowsHoldingValue !== undefined) {
     return migrateRowsHoldingValueAdvice(facts.rowsHoldingValue, failedMigration, invocation);
   }
+  if (facts.rowsFailingCheck !== undefined) {
+    return migrateRowsFailingCheckAdvice(facts.rowsFailingCheck, failedMigration, invocation);
+  }
   if (schemaCheckIssues(failure) !== undefined) {
     return migrateSchemaCheckAdvice(failedMigration, invocation);
   }
   if (facts.failedPrecheck !== undefined) {
     return migrateFailedPrecheckAdvice(facts.failedPrecheck, invocation);
   }
-  return [
-    chooseAction(
-      `Fix the issue and re-run \`${cliCommand(invocation, 'db migrate', ['--to', '<contract>'])}\``,
-    ),
-  ];
+  return [resolveTheCause(invocation)];
 }

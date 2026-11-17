@@ -14,14 +14,23 @@ interface ModelSpec {
   readonly fields?: readonly string[];
   readonly relations?: readonly string[];
   readonly base?: string;
-  /** The field's codec and whether it is optional, for a field `fields` lists; text and required otherwise. */
+  /** The model whose data embeds this one's. */
+  readonly owner?: string;
+  /** The discriminator field of a base model, and each variant by its discriminator value. */
+  readonly discriminator?: string;
+  readonly variants?: Readonly<Record<string, string>>;
+  /** The field's codec or the value object of its namespace it holds, and whether it is optional, for a field `fields` lists; text and required otherwise. */
   readonly fieldTypes?: Readonly<
-    Record<string, { readonly codecId?: string; readonly nullable?: boolean }>
+    Record<
+      string,
+      { readonly codecId?: string; readonly valueObject?: string; readonly nullable?: boolean }
+    >
   >;
 }
 
 interface NamespaceSpec {
   readonly models?: Record<string, ModelSpec>;
+  /** Each value object's field names; a name ending in `?` is an optional field. */
   readonly valueObjects?: Record<string, readonly string[]>;
   /** Each enum's member names; a member stores its name in lower case. */
   readonly enums?: Record<string, readonly string[]>;
@@ -33,6 +42,7 @@ const textField: ContractField = {
 };
 
 function fieldsOf(
+  namespaceId: string,
   names: readonly string[],
   types: ModelSpec['fieldTypes'] = {},
 ): Record<string, ContractField> {
@@ -45,46 +55,69 @@ function fieldsOf(
           ? textField
           : {
               nullable: type.nullable ?? false,
-              type: { kind: 'scalar', codecId: type.codecId ?? 'test/text@1' },
+              type:
+                type.valueObject === undefined
+                  ? { kind: 'scalar', codecId: type.codecId ?? 'test/text@1' }
+                  : {
+                      kind: 'valueObject',
+                      plane: 'storage',
+                      namespaceId,
+                      entityKind: 'valueObject',
+                      entityName: type.valueObject,
+                    },
             },
       ];
     }),
   );
 }
 
-function modelOf(spec: ModelSpec): ContractModelBase {
+function modelOf(namespaceId: string, spec: ModelSpec): ContractModelBase {
   const relation: ContractRelation = {
     to: crossRef('Other'),
     cardinality: '1:N',
     on: { localFields: ['id'], targetFields: ['ownerId'] },
   };
   return {
-    fields: fieldsOf(spec.fields ?? [], spec.fieldTypes),
+    fields: fieldsOf(namespaceId, spec.fields ?? [], spec.fieldTypes),
     relations: Object.fromEntries((spec.relations ?? []).map((name) => [name, relation])),
     storage: {},
-    ...(spec.base !== undefined ? { base: crossRef(spec.base) } : {}),
+    ...(spec.base !== undefined ? { base: crossRef(spec.base, namespaceId) } : {}),
+    ...(spec.owner !== undefined ? { owner: spec.owner } : {}),
+    ...(spec.discriminator !== undefined ? { discriminator: { field: spec.discriminator } } : {}),
+    ...(spec.variants !== undefined
+      ? {
+          variants: Object.fromEntries(
+            Object.entries(spec.variants).map(([value, model]) => [
+              value,
+              crossRef(model, namespaceId),
+            ]),
+          ),
+        }
+      : {}),
   };
 }
 
 function valueObjectOf(fields: readonly string[]): ContractValueObject {
-  return { fields: fieldsOf(fields) };
+  return {
+    fields: Object.fromEntries(
+      fields.map((name) => [
+        name.replace(/\?$/, ''),
+        { nullable: name.endsWith('?'), type: { kind: 'scalar', codecId: 'test/text@1' } },
+      ]),
+    ),
+  };
 }
 
 export function contractOf(namespaces: Record<string, NamespaceSpec>): ContractWithDomain {
+  const entries = Object.entries(namespaces);
   return {
     domain: {
       namespaces: Object.fromEntries(
-        Object.entries(namespaces).map(([id, ns]) => [
+        entries.map(([id, ns]) => [
           id,
           {
             models: Object.fromEntries(
-              Object.entries(ns.models ?? {}).map(([name, spec]) => [name, modelOf(spec)]),
-            ),
-            valueObjects: Object.fromEntries(
-              Object.entries(ns.valueObjects ?? {}).map(([name, fields]) => [
-                name,
-                valueObjectOf(fields),
-              ]),
+              Object.entries(ns.models ?? {}).map(([name, spec]) => [name, modelOf(id, spec)]),
             ),
             ...(ns.enums === undefined
               ? {}
@@ -102,6 +135,24 @@ export function contractOf(namespaces: Record<string, NamespaceSpec>): ContractW
                     ]),
                   ),
                 }),
+          },
+        ]),
+      ),
+    },
+    storage: {
+      namespaces: Object.fromEntries(
+        entries.map(([id, ns]) => [
+          id,
+          {
+            id,
+            entries: {
+              valueObject: Object.fromEntries(
+                Object.entries(ns.valueObjects ?? {}).map(([name, fields]) => [
+                  name,
+                  valueObjectOf(fields),
+                ]),
+              ),
+            },
           },
         ]),
       ),

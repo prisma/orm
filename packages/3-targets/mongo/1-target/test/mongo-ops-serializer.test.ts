@@ -13,6 +13,7 @@ import {
   type MongoMigrationPlanOperation,
   MongoOrExpr,
 } from '@internal/mongo-query-ast/control';
+import { RawAggregateCommand } from '@internal/mongo-query-ast/execution';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
 import { renameCollection } from '../src/core/migrations/migration-factories';
@@ -107,7 +108,7 @@ describe('serializeMongoOps / deserializeMongoOps', () => {
     expect(op.operationClass).toBe('additive');
 
     expect(op.precheck).toHaveLength(1);
-    expect(op.precheck[0]!.source.kind).toBe('listIndexes');
+    expect(op.precheck[0]!.source).toBeInstanceOf(ListIndexesCommand);
     expect(op.precheck[0]!.expect).toBe('notExists');
 
     expect(op.execute).toHaveLength(1);
@@ -670,6 +671,42 @@ describe('serializeMongoOps / deserializeMongoOps', () => {
     expect(cmd.validationLevel).toBe('strict');
     expect(cmd.validationAction).toBe('error');
     expect(cmd.changeStreamPreAndPostImages).toEqual({ enabled: true });
+  });
+
+  it('round-trips a DDL check that reads documents with an aggregate', () => {
+    const op: MongoMigrationPlanOperation = {
+      id: 'validator.users.update',
+      label: 'Update validator on users',
+      operationClass: 'widening',
+      precheck: [
+        {
+          description: 'every document in users fits the new validator',
+          source: {
+            collection: 'users',
+            command: new RawAggregateCommand('users', [
+              { $match: { $nor: [{ $jsonSchema: { bsonType: 'object' } }] } },
+              { $limit: 1 },
+            ]),
+            meta: { target: 'mongo', storageHash: '', lane: 'mongo-raw' },
+          },
+          filter: MongoExistsExpr.exists('_id'),
+          expect: 'notExists',
+        },
+      ],
+      execute: [
+        {
+          description: 'update validator on users',
+          command: new CollModCommand('users', {
+            validator: { $jsonSchema: { bsonType: 'object' } },
+          }),
+        },
+      ],
+      postcheck: [],
+    };
+
+    const deserialized = deserializeMongoOps(JSON.parse(serializeMongoOps([op])) as unknown[]);
+
+    expect(deserialized).toEqual([op]);
   });
 
   it('rejects and filter with non-array exprs', () => {

@@ -112,7 +112,7 @@ export interface LookupBuilder<
 /**
  * Type of the `from` callable passed to `PipelineChain.lookup`'s outer
  * callback. The generic argument is inferred from a string-literal
- * argument (the same pattern as `mongoQuery({ contract }).from('orders')`),
+ * argument (the same pattern as `mongoQuery({ context }).from('orders')`),
  * which grounds `RootName` into the returned `LookupBuilder` *before*
  * the inner `on(...)` callback is type-checked. This sequential
  * inference is what makes `foreign` resolve narrowly to the foreign

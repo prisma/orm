@@ -553,7 +553,7 @@ describe('mongoEmission.generateContractTypes', () => {
       expect(types).not.toMatch(/export type Address =/);
     });
 
-    it('emits valueObjects descriptor on ContractBase', () => {
+    it('emits value objects in the storage namespace entries, and nowhere else', () => {
       const contract = createMongoContract({
         valueObjects: {
           Address: {
@@ -568,8 +568,10 @@ describe('mongoEmission.generateContractTypes', () => {
         },
       });
       const types = generateContractDts(contract, mongoEmission, [], testHashes);
-      expect(types).toContain('readonly valueObjects:');
-      expect(types).toContain('readonly Address: { readonly fields:');
+      expect(types).toContain(
+        'readonly entries: { readonly collection: Record<string, never>; readonly valueObject: { readonly Address: { readonly fields: { readonly street: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "mongo/string@1" } } } } } }',
+      );
+      expect(types).not.toContain('readonly valueObjects:');
     });
 
     it('emits model field with valueObject kind', () => {
@@ -585,7 +587,13 @@ describe('mongoEmission.generateContractTypes', () => {
               homeAddress: {
                 nullable: true,
                 many: false,
-                type: { kind: 'valueObject', name: 'Address' },
+                type: {
+                  kind: 'valueObject',
+                  plane: 'storage',
+                  namespaceId: '__unbound__',
+                  entityKind: 'valueObject',
+                  entityName: 'Address',
+                },
               },
             },
             relations: {},
@@ -610,7 +618,7 @@ describe('mongoEmission.generateContractTypes', () => {
       });
       const types = generateContractDts(contract, mongoEmission, [], testHashes);
       expect(types).toContain(
-        'readonly homeAddress: { readonly nullable: true; readonly type: { readonly kind: "valueObject"; readonly name: "Address" } }',
+        'readonly homeAddress: { readonly nullable: true; readonly type: { readonly kind: "valueObject"; readonly plane: "storage"; readonly namespaceId: "__unbound__"; readonly entityKind: "valueObject"; readonly entityName: "Address" } }',
       );
     });
 
@@ -626,7 +634,13 @@ describe('mongoEmission.generateContractTypes', () => {
               },
               previousAddresses: {
                 nullable: false,
-                type: { kind: 'valueObject', name: 'Address' },
+                type: {
+                  kind: 'valueObject',
+                  plane: 'storage',
+                  namespaceId: '__unbound__',
+                  entityKind: 'valueObject',
+                  entityName: 'Address',
+                },
                 many: { elementNullable: false },
               },
             },
@@ -652,7 +666,7 @@ describe('mongoEmission.generateContractTypes', () => {
       });
       const types = generateContractDts(contract, mongoEmission, [], testHashes);
       expect(types).toContain(
-        'readonly previousAddresses: { readonly nullable: false; readonly type: { readonly kind: "valueObject"; readonly name: "Address" }; readonly many: { readonly elementNullable: false } }',
+        'readonly previousAddresses: { readonly nullable: false; readonly type: { readonly kind: "valueObject"; readonly plane: "storage"; readonly namespaceId: "__unbound__"; readonly entityKind: "valueObject"; readonly entityName: "Address" }; readonly many: { readonly elementNullable: false } }',
       );
     });
 
@@ -668,7 +682,13 @@ describe('mongoEmission.generateContractTypes', () => {
               },
               children: {
                 nullable: false,
-                type: { kind: 'valueObject', name: 'NavItem' },
+                type: {
+                  kind: 'valueObject',
+                  plane: 'storage',
+                  namespaceId: '__unbound__',
+                  entityKind: 'valueObject',
+                  entityName: 'NavItem',
+                },
                 many: { elementNullable: false },
               },
             },
@@ -682,14 +702,58 @@ describe('mongoEmission.generateContractTypes', () => {
         'export type NavItemOutput = ValueObjectOutputTypes["__unbound__"]["NavItem"];',
       );
       expect(types).toContain(
-        'readonly children: { readonly nullable: false; readonly type: { readonly kind: "valueObject"; readonly name: "NavItem" }; readonly many: { readonly elementNullable: false } }',
+        'readonly children: { readonly nullable: false; readonly type: { readonly kind: "valueObject"; readonly plane: "storage"; readonly namespaceId: "__unbound__"; readonly entityKind: "valueObject"; readonly entityName: "NavItem" }; readonly many: { readonly elementNullable: false } }',
       );
     });
 
-    it('omits valueObjects when none exist', () => {
+    it('omits value objects when none exist', () => {
       const contract = createMongoContract();
       const types = generateContractDts(contract, mongoEmission, [], testHashes);
-      expect(types).not.toContain('valueObjects');
+      expect(types).not.toMatch(/valueObject/i);
+    });
+
+    it('types an enum member of a value object by the storage value set it names', () => {
+      const storage = namespacedMongoStorageFromCollections({});
+      const contract = createMongoContract({
+        storage: {
+          ...storage,
+          namespaces: {
+            __unbound__: {
+              id: '__unbound__',
+              entries: {
+                collection: {},
+                valueSet: { Kind: { kind: 'valueSet', values: ['home', 'work'] } },
+              },
+            },
+          },
+        },
+        valueObjects: {
+          Address: {
+            fields: {
+              kind: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                valueSet: {
+                  plane: 'storage',
+                  entityKind: 'valueSet',
+                  namespaceId: '__unbound__',
+                  entityName: 'Kind',
+                },
+              },
+            },
+          },
+        },
+      });
+      const types = generateContractDts(contract, mongoEmission, [], testHashes, undefined, {
+        get: () => undefined,
+        renderOutputTypeFor: () => undefined,
+        renderValueLiteralFor: (_id, value) =>
+          typeof value === 'string' ? JSON.stringify(value) : undefined,
+      });
+      expect(types).toContain(
+        'type FieldTypeOverrides = { readonly __unbound__: { readonly valueObjects: { readonly Address: { readonly kind: { readonly output: "home" | "work"; readonly input: "home" | "work" } } } } };',
+      );
     });
 
     it('emits nullable value object type alias field', () => {
@@ -742,10 +806,10 @@ describe('mongoEmission.generateContractTypes', () => {
       });
       const types = generateContractDts(contract, mongoEmission, [], testHashes);
       expect(types).toContain(
-        "export type FieldOutputTypes = FieldTypesFromDomain<ContractBase['domain']['namespaces'], CodecTypes, ParameterizedOutputTypeFunctions, FieldTypeOverrides, \"output\">;",
+        "export type FieldOutputTypes = FieldTypesFromDomain<ContractBase['domain']['namespaces'], CodecTypes, ParameterizedOutputTypeFunctions, FieldTypeOverrides, \"output\", ContractBase['storage']['namespaces']>;",
       );
       expect(types).toContain(
-        "export type FieldInputTypes = FieldTypesFromDomain<ContractBase['domain']['namespaces'], CodecTypes, ParameterizedOutputTypeFunctions, FieldTypeOverrides, \"input\">;",
+        "export type FieldInputTypes = FieldTypesFromDomain<ContractBase['domain']['namespaces'], CodecTypes, ParameterizedOutputTypeFunctions, FieldTypeOverrides, \"input\", ContractBase['storage']['namespaces']>;",
       );
     });
   });

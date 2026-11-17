@@ -23,7 +23,7 @@ const postgresTargetDescriptorMetaRuntimeBase = {
   version: '0.0.1',
   capabilities: {},
   dataTypes: postgresDataTypes,
-  sessionSettings: { DateStyle: 'ISO' },
+  sessionSettings: { DateStyle: 'ISO', lc_monetary: 'C' },
 } as const;
 
 export const postgresTargetDescriptorMetaRuntime: typeof postgresTargetDescriptorMetaRuntimeBase & {

@@ -4,6 +4,7 @@ import {
   field,
   member,
   model,
+  type,
   valueObject,
 } from '@internal/mongo/contract-builder';
 
@@ -16,7 +17,10 @@ export function buildContract() {
     models: {
       Doc: model('Doc', {
         collection: 'docs',
-        fields: { id: field.objectId().mongo({ field: '_id' }), badge: field.valueObject(Badge) },
+        fields: {
+          id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
+          badge: field.valueObject(Badge),
+        },
       }),
     },
   });

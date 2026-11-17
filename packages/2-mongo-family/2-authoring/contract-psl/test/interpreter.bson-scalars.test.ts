@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { interpretMongoContract } from './interpreter-test-helpers';
 import { mongoDataTypeSupport } from './mongo-type-lookups';
 
-const scalarTypeCodecIds: ReadonlyMap<string, string> = new Map([
+const scalarTypes: ReadonlyMap<string, string> = new Map([
   ['ObjectId', 'mongo/objectId@1'],
   ['Int64', 'mongo/int64@1'],
   ['Decimal128', 'mongo/decimal128@1'],
@@ -26,7 +26,7 @@ function interpretPost() {
   const result = interpretMongoContract(
     SCHEMA,
     {
-      scalarTypeCodecIds,
+      scalarTypes,
       defaultFunctionRegistry: new Map(),
       codecLookup: mongoCodecLookup,
       dataTypes: mongoDataTypeSupport,

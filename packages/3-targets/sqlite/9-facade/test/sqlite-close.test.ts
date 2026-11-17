@@ -1,7 +1,7 @@
 import type { Contract } from '@internal/contract/types';
 import { coreHash } from '@internal/contract/types';
 import { SqlStorage } from '@internal/sql-contract/types';
-import { sqliteCreateNamespace } from '@internal/target-sqlite/control';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { createContract } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 
@@ -45,11 +45,10 @@ describe('sqlite close()', () => {
     // (DatabaseSync), so this tests the close-while-connected path.
     const db = sqlite({ contract, path: ':memory:' });
 
-    // Trigger lazy connect
-    void db.connect({ path: ':memory:' });
+    const connected = db.connect({ path: ':memory:' });
 
-    // close() must resolve even though a connect is in flight
     await expect(db.close()).resolves.toBeUndefined();
+    await expect(connected).rejects.toMatchObject({ code: 'DRIVER.NOT_CONNECTED' });
   });
 
   it('before any connect is a no-op', async () => {

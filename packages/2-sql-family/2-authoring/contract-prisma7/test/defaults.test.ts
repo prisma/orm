@@ -52,7 +52,7 @@ describe('Bytes[] and DateTime[] list defaults', () => {
       datel: { kind: 'literal', value: ['2024-01-02'] },
       timel: { kind: 'literal', value: ['12:34:56'] },
       timetzl: { kind: 'literal', value: ['12:34:56Z'] },
-      ts6l: { kind: 'literal', value: ['2024-01-02T03:04:05.123456'] },
+      ts6l: { kind: 'function', expression: "ARRAY['2024-01-02T03:04:05.123456']::timestamp(6)[]" },
     });
   });
 });

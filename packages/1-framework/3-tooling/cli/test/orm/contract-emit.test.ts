@@ -33,6 +33,7 @@ function emitResult(overrides: Record<string, unknown> = {}): ContractEmitResult
       json: join(OUTPUT_DIR, 'contract.json'),
       dts: join(OUTPUT_DIR, 'contract.d.ts'),
     },
+    pinnedFiles: [],
     ...overrides,
   } as ContractEmitResult;
 }
@@ -125,6 +126,7 @@ describe('contract emit', () => {
         json: join(OUTPUT_DIR, 'contract.json'),
         dts: join(OUTPUT_DIR, 'contract.d.ts'),
       },
+      pinnedFiles: [],
       timings: { total: expect.any(Number) },
     });
   });
@@ -267,6 +269,61 @@ describe('contract emit', () => {
     expect(storage).toBeDefined();
     expect(profile).toBeDefined();
     expect(storage?.indexOf('storage-hash')).toBe(profile?.indexOf('profile-hash'));
+  });
+
+  describe('a pack space it writes under migrations/', () => {
+    const pinnedFiles = [
+      {
+        spaceId: 'pgvector',
+        path: join(PROJECT_DIR, 'migrations', 'pgvector', 'refs', 'head.json'),
+      },
+      {
+        spaceId: 'pgvector',
+        path: join(PROJECT_DIR, 'migrations', 'pgvector', '20261029T0000_declare_vector'),
+      },
+    ];
+
+    beforeEach(() => {
+      executeContractEmit.mockResolvedValue(emitResult({ pinnedFiles }));
+    });
+
+    it('lists each written path after the hashes', async () => {
+      const run = await harness().run(['contract', 'emit'], {
+        cwd: PROJECT_DIR,
+        isTty: { stdout: true },
+      });
+
+      expect(run.presented?.presentation.human.at(-1)).toEqual({
+        kind: 'fields',
+        rows: [
+          { label: 'space pgvector', value: 'migrations/pgvector/refs/head.json' },
+          {
+            label: 'space pgvector',
+            value: 'migrations/pgvector/20261029T0000_declare_vector',
+          },
+        ],
+      });
+    });
+
+    it('writes each written path to stdout after the contract files', async () => {
+      const run = await harness().run(['contract', 'emit'], { cwd: PROJECT_DIR });
+
+      expect(run.stdout).toBe(
+        [
+          'generated/contract.json',
+          'generated/contract.d.ts',
+          'migrations/pgvector/refs/head.json',
+          'migrations/pgvector/20261029T0000_declare_vector',
+          '',
+        ].join('\n'),
+      );
+    });
+
+    it('carries the written paths in the JSON document', async () => {
+      const run = await harness().run(['contract', 'emit', '--json'], { cwd: PROJECT_DIR });
+
+      expect(run.presented?.data).toMatchObject({ pinnedFiles });
+    });
   });
 
   it('omits the execution hash the emitter did not produce', async () => {

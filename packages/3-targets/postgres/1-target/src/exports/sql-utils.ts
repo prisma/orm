@@ -1,6 +1,7 @@
 export { renderFullTextIndexDocument } from '../core/full-text-search-document';
 export {
   escapeLiteral,
+  inlineLiteral,
   qualifyName,
   quoteIdentifier,
   quoteQualifiedName,

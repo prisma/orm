@@ -91,6 +91,7 @@ function ordersTableNode(): PostgresTableSchemaNode {
 
 function liveTree(actualMembers: readonly string[]): PostgresDatabaseSchemaNode {
   return new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces: {
       sales: new PostgresNamespaceSchemaNode({
         schemaName: 'sales',

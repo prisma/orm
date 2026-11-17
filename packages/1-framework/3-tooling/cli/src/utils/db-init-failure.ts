@@ -98,7 +98,7 @@ export function dbInitRunnerFailureError(
           ? dbInitFailedPrecheckAdvice(invocation)
           : [
               chooseAction(
-                `Fix the schema mismatch (db init is additive-only), or drop/reset the database and re-run \`${init}\``,
+                `Fix the schema mismatch (db init is additive-only), or bring the database to the contract with \`${cliCommand(invocation, 'db update')}\`, which moves the database without a reset and asks before losing data`,
               ),
             ];
   return runnerFailureError(failure, advice);

@@ -1,4 +1,29 @@
 export type {
+  AuthoringTypeChoiceArgument,
+  AuthoringTypeChoiceDescriptor,
+  AuthoringTypeChoiceOption,
+  AuthoringTypeChoicePassedArgument,
+  AuthoringTypeChoiceRow,
+  ResolvedAuthoringTypeChoice,
+} from '../shared/authoring-type-choice';
+export {
+  assertTypeChoicesValid,
+  collectScalarTypeConstructors,
+  getAuthoringTypeChoice,
+  instantiateAuthoringTypeCall,
+  isAuthoringTypeChoiceOption,
+  resolveAuthoringTypeChoice,
+  typeChoiceArgumentsFromObject,
+  typeChoiceCombinationText,
+  typeConstructorLookup,
+  unknownTypeChoiceArgumentMessage,
+} from '../shared/authoring-type-choice';
+export type {
+  AuthoringTypeChoiceCall,
+  AuthoringTypeChoiceCallArgument,
+} from '../shared/authoring-type-choice-call';
+export { findAuthoringTypeChoiceCall } from '../shared/authoring-type-choice-call';
+export type {
   AuthoringTypeConstructorCall,
   AuthoringTypeConstructorOutput,
 } from '../shared/authoring-type-constructor-call';
@@ -7,6 +32,13 @@ export {
   authoringTypeConstructors,
   findAuthoringTypeConstructorCall,
 } from '../shared/authoring-type-constructor-call';
+export {
+  type TypedLiteralOptions,
+  writeDataTypeValue,
+  writeTypedLiteral,
+  writtenTypeArguments,
+  writtenTypeConstructorCall,
+} from '../shared/data-type-literal';
 export type {
   AssembledDataTypeSupport,
   DataTypeComponent,
@@ -44,15 +76,10 @@ export {
   duplicateStoredMembers,
   type StoredEnumMember,
 } from '../shared/enum-stored-members';
-export {
-  fieldPresetSpellings,
-  getAuthoringFieldPreset,
-} from '../shared/field-preset-resolution';
 export type {
   AuthoringArgRef,
   AuthoringArgumentDescriptor,
   AuthoringAttributeSpecContributions,
-  AuthoringColumnDefaultTemplate,
   AuthoringContributions,
   AuthoringDescriptorKinds,
   AuthoringDiagnosticSink,
@@ -61,9 +88,6 @@ export type {
   AuthoringEntityTypeFactoryOutput,
   AuthoringEntityTypeNamespace,
   AuthoringEntityTypeTemplateOutput,
-  AuthoringFieldNamespace,
-  AuthoringFieldPresetDescriptor,
-  AuthoringFieldPresetOutput,
   AuthoringModelAttributeContext,
   AuthoringModelAttributeDescriptor,
   AuthoringModelAttributeDescriptorNamespace,
@@ -72,7 +96,6 @@ export type {
   AuthoringModelAttributeLoweringOutput,
   AuthoringPslBlockDescriptor,
   AuthoringPslBlockDescriptorNamespace,
-  AuthoringSelectRef,
   AuthoringStorageTypeTemplate,
   AuthoringTemplateValue,
   AuthoringTypeAliasDescriptor,
@@ -80,8 +103,8 @@ export type {
   AuthoringTypeConstructorDescriptor,
   AuthoringTypeConstructorEntityRef,
   AuthoringTypeNamespace,
+  AuthoringTypeNamespaceMember,
   AuthoringTypeParamsIssue,
-  AuthoringValueArgument,
   AuthoringWarning,
   AuthoringWarningSink,
   DataTypeAuthoringEntry,
@@ -90,25 +113,23 @@ export type {
 } from '../shared/framework-authoring';
 export {
   AUTHORING_TYPE_DESCRIPTOR_KINDS,
+  assertNoAuthoringFieldNamespace,
   assertNoCrossRegistryCollisions,
   assertResolvableTypeConstructorTemplates,
   assertTypeAliasesValid,
   classifyEnumMemberType,
-  collectScalarTypeConstructors,
   flushAuthoringWarnings,
   getAuthoringTypeConstructor,
   instantiateAuthoringEntityType,
-  instantiateAuthoringFieldPreset,
   instantiateAuthoringTypeAlias,
   instantiateAuthoringTypeConstructor,
   instantiateAuthoringTypeConstructorFromValues,
   isAuthoringArgRef,
   isAuthoringEntityTypeDescriptor,
-  isAuthoringFieldPresetDescriptor,
   isAuthoringModelAttributeDescriptor,
   isAuthoringPslBlockDescriptor,
-  isAuthoringSelectRef,
   isAuthoringTypeAliasDescriptor,
+  isAuthoringTypeChoiceDescriptor,
   isAuthoringTypeConstructorDescriptor,
   isAuthoringTypeDescriptor,
   mergeAuthoringNamespaces,
@@ -116,9 +137,9 @@ export {
   resolveEnumCodecId,
   resolveTypeAliasGenerators,
   validateAuthoringHelperArguments,
+  validateAuthoringTypeChoiceParams,
   validateAuthoringTypeParams,
 } from '../shared/framework-authoring';
-export type { AuthoringOption } from '../shared/option-descriptor';
 export type {
   ParsedPslExtensionBlock,
   PslExtensionBlock,
@@ -134,17 +155,10 @@ export {
   resolveTemplateTagEscapes,
   tsTaggedTemplateSource,
 } from '../shared/tagged-literal';
-export type { PresetStorageTemplate } from '../shared/temporal-presets';
 export {
-  TEMPORAL_ON_CREATE_ARG,
-  TEMPORAL_ON_UPDATE_ARG,
   TIMESTAMP_NOW_GENERATOR_ID,
-  temporalAuthoringPresets,
-  temporalCodecPreset,
-  temporalPhaseTemplate,
-  temporalPhaseTemplateWithParams,
   temporalTypeAliases,
-} from '../shared/temporal-presets';
+} from '../shared/temporal-type-aliases';
 export type {
   CastRefusal,
   DataTypeSupport,

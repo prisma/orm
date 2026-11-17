@@ -17,7 +17,7 @@ import {
 } from '@internal/mongo-query-ast/execution';
 import { MongoParamRef } from '@internal/mongo-value';
 import { describe, expect, it } from 'vitest';
-import { _unstable_createMongoAdapterWithCodecs } from '../src/mongo-adapter';
+import { createMongoAdapter } from '../src/mongo-adapter';
 
 const textType = dataType('test/text', { read: (json) => readJsonString('test/text', json) });
 
@@ -48,7 +48,7 @@ function recordingRegistry(observed: (CodecCallContext | undefined)[]) {
 describe('MongoAdapter — CodecCallContext threading', () => {
   it('forwards the same ctx instance from lower(plan, ctx) into resolveValue (insertOne)', async () => {
     const observed: (CodecCallContext | undefined)[] = [];
-    const adapter = _unstable_createMongoAdapterWithCodecs(recordingRegistry(observed));
+    const adapter = createMongoAdapter(recordingRegistry(observed));
     const ctx: CodecCallContext = { signal: new AbortController().signal };
 
     await adapter.lower(
@@ -68,7 +68,7 @@ describe('MongoAdapter — CodecCallContext threading', () => {
 
   it('preserves ctx identity across all insertMany leaves (every doc + every leaf)', async () => {
     const observed: (CodecCallContext | undefined)[] = [];
-    const adapter = _unstable_createMongoAdapterWithCodecs(recordingRegistry(observed));
+    const adapter = createMongoAdapter(recordingRegistry(observed));
     const ctx: CodecCallContext = { signal: new AbortController().signal };
 
     await adapter.lower(
@@ -91,7 +91,7 @@ describe('MongoAdapter — CodecCallContext threading', () => {
 
   it('threads ctx through both lowerFilter and #lowerUpdate (updateOne)', async () => {
     const observed: (CodecCallContext | undefined)[] = [];
-    const adapter = _unstable_createMongoAdapterWithCodecs(recordingRegistry(observed));
+    const adapter = createMongoAdapter(recordingRegistry(observed));
     const ctx: CodecCallContext = { signal: new AbortController().signal };
 
     await adapter.lower(
@@ -115,7 +115,7 @@ describe('MongoAdapter — CodecCallContext threading', () => {
 
   it('threads ctx through deleteOne lowerFilter', async () => {
     const observed: (CodecCallContext | undefined)[] = [];
-    const adapter = _unstable_createMongoAdapterWithCodecs(recordingRegistry(observed));
+    const adapter = createMongoAdapter(recordingRegistry(observed));
     const ctx: CodecCallContext = { signal: new AbortController().signal };
 
     await adapter.lower(
@@ -135,7 +135,7 @@ describe('MongoAdapter — CodecCallContext threading', () => {
 
   it('threads ctx through findOneAndUpdate (filter + update)', async () => {
     const observed: (CodecCallContext | undefined)[] = [];
-    const adapter = _unstable_createMongoAdapterWithCodecs(recordingRegistry(observed));
+    const adapter = createMongoAdapter(recordingRegistry(observed));
     const ctx: CodecCallContext = { signal: new AbortController().signal };
 
     await adapter.lower(
@@ -159,7 +159,7 @@ describe('MongoAdapter — CodecCallContext threading', () => {
 
   it('threads ctx through aggregate $match stages (lowerPipeline → lowerStage → lowerFilter)', async () => {
     const observed: (CodecCallContext | undefined)[] = [];
-    const adapter = _unstable_createMongoAdapterWithCodecs(recordingRegistry(observed));
+    const adapter = createMongoAdapter(recordingRegistry(observed));
     const ctx: CodecCallContext = { signal: new AbortController().signal };
 
     await adapter.lower(
@@ -180,7 +180,7 @@ describe('MongoAdapter — CodecCallContext threading', () => {
 
   it('threading an empty ctx forwards that same empty ctx to the codec', async () => {
     const observed: (CodecCallContext | undefined)[] = [];
-    const adapter = _unstable_createMongoAdapterWithCodecs(recordingRegistry(observed));
+    const adapter = createMongoAdapter(recordingRegistry(observed));
     const ctx: CodecCallContext = {};
 
     await adapter.lower(
@@ -199,7 +199,7 @@ describe('MongoAdapter — CodecCallContext threading', () => {
 
   it('already-aborted ctx surfaces RUNTIME.ABORTED { phase: encode } from inside resolveValue (no codec call)', async () => {
     let callCount = 0;
-    const adapter = _unstable_createMongoAdapterWithCodecs(
+    const adapter = createMongoAdapter(
       (() => {
         const reg = newMongoCodecRegistry();
         reg.register(

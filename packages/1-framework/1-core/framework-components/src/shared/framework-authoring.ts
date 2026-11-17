@@ -1,12 +1,7 @@
 import type {
-  ColumnDefault,
   ExecutionMutationDefaultPhases,
   ExecutionMutationDefaultValue,
   JsonValue,
-} from '@internal/contract/types';
-import {
-  isColumnDefaultLiteralInputValue,
-  isExecutionMutationDefaultValue,
 } from '@internal/contract/types';
 import { invariant } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
@@ -15,6 +10,10 @@ import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import type { Type } from 'arktype';
+import type {
+  AuthoringTypeChoiceDescriptor,
+  AuthoringTypeChoiceOption,
+} from './authoring-type-choice';
 import type { CodecLookupWithDescriptors } from './codec-types';
 import type { DataTypeId } from './data-type';
 import type {
@@ -22,7 +21,6 @@ import type {
   GeneratorFunctionField,
   GeneratorFunctionRegistry,
 } from './generator-functions';
-import type { AuthoringOption } from './option-descriptor';
 import type { ParsedPslExtensionBlock, PslSpan } from './psl-extension-block';
 import { runtimeError } from './runtime-error';
 import type { DataTypeSupport } from './written-value';
@@ -32,30 +30,7 @@ export type EnumInferredMemberType = 'text' | 'int';
 export type AuthoringArgRef = {
   readonly kind: 'arg';
   readonly index: number;
-  readonly path?: readonly string[];
-  readonly default?: AuthoringTemplateValue;
 };
-
-/**
- * Selects among `cases` by the value of the referenced argument: the resolved
- * value must be one of the case keys, and the node resolves to that case's
- * recursively resolved template. An absent argument resolves to `undefined`,
- * which the enclosing object template omits entirely.
- *
- * Case coverage is validated against the referenced option argument's
- * `values` at pack-registration time, so the runtime miss-throw is an
- * assertion for type-bypassing callers, not a user-facing diagnostic.
- *
- * Must not be used in the `codecId`/`nullable`/`id`/`unique` positions of a
- * preset output: the type-level `ResolveTemplateValue` does not implement
- * select, and those fields feed TS builder-state inference. See ADR 246.
- */
-export interface AuthoringSelectRef {
-  readonly kind: 'select';
-  readonly index: number;
-  readonly path?: readonly string[];
-  readonly cases: Readonly<Record<string, AuthoringTemplateValue>>;
-}
 
 export type AuthoringTemplateValue =
   | string
@@ -63,44 +38,19 @@ export type AuthoringTemplateValue =
   | boolean
   | null
   | AuthoringArgRef
-  | AuthoringSelectRef
   | readonly AuthoringTemplateValue[]
   | { readonly [key: string]: AuthoringTemplateValue };
 
-interface AuthoringArgumentDescriptorCommon {
+/** An argument that is a value of the data type `dataType`, read and cast as attribute arguments are. ADR 254. */
+export interface AuthoringArgumentDescriptor {
+  readonly kind: 'value';
+  readonly dataType: string;
   readonly name?: string;
   readonly optional?: boolean;
 }
 
-interface ValueArgumentKind {
-  readonly kind: 'value';
-  readonly dataType: string;
-}
-
-export type AuthoringArgumentDescriptor = AuthoringArgumentDescriptorCommon &
-  (
-    | ValueArgumentKind
-    | {
-        readonly kind: 'number';
-        readonly integer?: boolean;
-        readonly minimum?: number;
-        readonly maximum?: number;
-      }
-    | {
-        readonly kind: 'object';
-        readonly properties: Record<string, AuthoringArgumentDescriptor>;
-      }
-    | AuthoringOption
-  );
-
-/** An argument that is a value of the data type `dataType`, read and cast as attribute arguments are. ADR 254. */
-export type AuthoringValueArgument = Extract<
-  AuthoringArgumentDescriptor,
-  { readonly kind: 'value' }
->;
-
 /**
- * What a type constructor or field preset produces: a codec and its parameters. The database type
+ * What a type constructor produces: a codec and its parameters. The database type
  * is the codec's data type's, named by the family that writes the contract.
  */
 export interface AuthoringStorageTypeTemplate {
@@ -139,42 +89,8 @@ export interface AuthoringTypeConstructorDescriptor {
   readonly entityRefArg?: AuthoringTypeConstructorEntityRef;
   /** Present when this name is kept only as an alias of `replacement` and will be removed; it resolves as before, and a source may warn. */
   readonly deprecated?: { readonly replacement: string };
-  /** Marks the constructor written for a column of its codec's data type when no schema names one: `contract infer` writes it, and the Prisma 7 reader will. `contract print` writes it when it produces the column's codec, and otherwise the first constructor in the stack that does, so a `timestamptz` column with the `Temporal` codec prints `DateTime`. At most one per data type. */
+  /** Marks the constructor written for a column of its codec's data type when no schema names one: `contract infer` and the reader of an earlier Prisma version's schema pick it. `contract print` picks it when it produces the column's codec, and otherwise the first constructor in the stack that does; either writes a type choice that becomes it instead, where one does. At most one per data type. */
   readonly inferred?: true;
-}
-
-export interface AuthoringColumnDefaultTemplateLiteral {
-  readonly kind: 'literal';
-  readonly value: AuthoringTemplateValue;
-}
-
-export interface AuthoringColumnDefaultTemplateFunction {
-  readonly kind: 'function';
-  readonly expression: AuthoringTemplateValue;
-}
-
-export type AuthoringColumnDefaultTemplate =
-  | AuthoringColumnDefaultTemplateLiteral
-  | AuthoringColumnDefaultTemplateFunction;
-
-export interface AuthoringExecutionDefaultsTemplate {
-  readonly onCreate?: AuthoringTemplateValue;
-  readonly onUpdate?: AuthoringTemplateValue;
-}
-
-export interface AuthoringFieldPresetOutput extends AuthoringStorageTypeTemplate {
-  /** Makes the column nullable without `?`. A preset cannot make a column not nullable: `?` always does. */
-  readonly nullable?: true;
-  readonly default?: AuthoringColumnDefaultTemplate;
-  readonly executionDefaults?: AuthoringExecutionDefaultsTemplate;
-  readonly id?: boolean;
-  readonly unique?: boolean;
-}
-
-export interface AuthoringFieldPresetDescriptor {
-  readonly kind: 'fieldPreset';
-  readonly args?: readonly AuthoringArgumentDescriptor[];
-  readonly output: AuthoringFieldPresetOutput;
 }
 
 /**
@@ -193,18 +109,22 @@ export interface AuthoringTypeAliasDescriptor {
 }
 
 export type AuthoringTypeNamespace = {
-  readonly [name: string]:
-    | AuthoringTypeConstructorDescriptor
-    | AuthoringTypeAliasDescriptor
-    | AuthoringTypeNamespace;
+  readonly [name: string]: AuthoringTypeNamespaceMember;
 };
+
+/** A leaf of a `type` namespace, or a sub-namespace. */
+export type AuthoringTypeNamespaceMember =
+  | AuthoringTypeConstructorDescriptor
+  | AuthoringTypeAliasDescriptor
+  | AuthoringTypeChoiceDescriptor
+  | AuthoringTypeNamespace;
 
 /** The descriptor kinds a `type` namespace holds as leaves. */
-export const AUTHORING_TYPE_DESCRIPTOR_KINDS = ['typeConstructor', 'typeAlias'] as const;
-
-export type AuthoringFieldNamespace = {
-  readonly [name: string]: AuthoringFieldPresetDescriptor | AuthoringFieldNamespace;
-};
+export const AUTHORING_TYPE_DESCRIPTOR_KINDS = [
+  'typeConstructor',
+  'typeAlias',
+  'typeChoice',
+] as const;
 
 /**
  * Context surfaced to entity-type factories at call time. Currently a
@@ -620,7 +540,6 @@ export interface DataTypeAuthoringEntry {
 
 export interface AuthoringContributions {
   readonly type?: AuthoringTypeNamespace;
-  readonly field?: AuthoringFieldNamespace;
   readonly entityTypes?: AuthoringEntityTypeNamespace;
   /**
    * Registry of declarative block descriptors this contribution registers,
@@ -664,72 +583,60 @@ export interface AuthoringContributions {
   readonly textDataTypes?: readonly DataTypeId[];
 }
 
+/** Refuses the `authoring.field` key, which held field presets before Prisma 8 removed them. A component built against the old types would otherwise lose its presets silently. */
+export function assertNoAuthoringFieldNamespace(
+  componentId: string,
+  authoring: object | undefined,
+): void {
+  if (authoring === undefined || !Object.hasOwn(authoring, 'field')) return;
+  throw runtimeError(
+    'CONTRACT.PACK_CONTRIBUTION_INVALID',
+    `Component "${componentId}" contributes authoring.field, which Prisma 8 removed with field presets. Contribute a type alias (kind: 'typeAlias') or a type constructor in authoring.type.`,
+  );
+}
+
 export function isAuthoringArgRef(value: unknown): value is AuthoringArgRef {
   if (typeof value !== 'object' || value === null || (value as { kind?: unknown }).kind !== 'arg') {
     return false;
   }
-  const { index, path } = value as { index?: unknown; path?: unknown };
-  if (typeof index !== 'number' || !Number.isInteger(index) || index < 0) {
-    return false;
-  }
-  if (path !== undefined && (!Array.isArray(path) || path.some((s) => typeof s !== 'string'))) {
-    return false;
-  }
-  return true;
-}
-
-export function isAuthoringSelectRef(value: unknown): value is AuthoringSelectRef {
-  if (!isAuthoringTemplateRecord(value) || value['kind'] !== 'select') {
-    return false;
-  }
-  const index = value['index'];
-  const path = value['path'];
-  const cases = value['cases'];
-  if (typeof index !== 'number' || !Number.isInteger(index) || index < 0) {
-    return false;
-  }
-  if (path !== undefined && (!Array.isArray(path) || path.some((s) => typeof s !== 'string'))) {
-    return false;
-  }
-  return typeof cases === 'object' && cases !== null && !Array.isArray(cases);
+  const { index } = value as { index?: unknown };
+  return typeof index === 'number' && Number.isInteger(index) && index >= 0;
 }
 
 function isAuthoringTemplateRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function readTemplateArgumentValue(
-  args: readonly unknown[],
-  index: number,
-  path: readonly string[] | undefined,
-): unknown {
-  let value = args[index];
-  for (const segment of path ?? []) {
-    if (!isAuthoringTemplateRecord(value) || !Object.hasOwn(value, segment)) {
-      return undefined;
-    }
-    value = value[segment];
-  }
-  return value;
-}
-
 export function isAuthoringTypeConstructorDescriptor(
-  value: AuthoringTypeConstructorDescriptor | AuthoringTypeAliasDescriptor | AuthoringTypeNamespace,
+  value: object,
 ): value is AuthoringTypeConstructorDescriptor {
   return 'kind' in value && value.kind === 'typeConstructor';
 }
 
 export function isAuthoringTypeAliasDescriptor(
-  value: AuthoringTypeConstructorDescriptor | AuthoringTypeAliasDescriptor | AuthoringTypeNamespace,
+  value: AuthoringTypeNamespaceMember,
 ): value is AuthoringTypeAliasDescriptor {
   return 'kind' in value && value.kind === 'typeAlias';
 }
 
-/** Whether `value` is a leaf of a `type` namespace: a type constructor or a type alias. */
+export function isAuthoringTypeChoiceDescriptor(
+  value: AuthoringTypeNamespaceMember,
+): value is AuthoringTypeChoiceDescriptor {
+  return 'kind' in value && value.kind === 'typeChoice';
+}
+
+/** Whether `value` is a leaf of a `type` namespace: a type constructor, a type alias or a type choice. */
 export function isAuthoringTypeDescriptor(
-  value: AuthoringTypeConstructorDescriptor | AuthoringTypeAliasDescriptor | AuthoringTypeNamespace,
-): value is AuthoringTypeConstructorDescriptor | AuthoringTypeAliasDescriptor {
-  return isAuthoringTypeConstructorDescriptor(value) || isAuthoringTypeAliasDescriptor(value);
+  value: AuthoringTypeNamespaceMember,
+): value is
+  | AuthoringTypeConstructorDescriptor
+  | AuthoringTypeAliasDescriptor
+  | AuthoringTypeChoiceDescriptor {
+  return (
+    isAuthoringTypeConstructorDescriptor(value) ||
+    isAuthoringTypeAliasDescriptor(value) ||
+    isAuthoringTypeChoiceDescriptor(value)
+  );
 }
 
 /** The type constructor at `path` in the contributions' type namespace, or `undefined` when none is there. */
@@ -737,11 +644,7 @@ export function getAuthoringTypeConstructor(
   contributions: { readonly type?: AuthoringTypeNamespace } | undefined,
   path: readonly string[],
 ): AuthoringTypeConstructorDescriptor | undefined {
-  let current:
-    | AuthoringTypeConstructorDescriptor
-    | AuthoringTypeAliasDescriptor
-    | AuthoringTypeNamespace
-    | undefined = contributions?.type;
+  let current: AuthoringTypeNamespaceMember | undefined = contributions?.type;
   for (const segment of path) {
     if (typeof current !== 'object' || current === null || 'kind' in current) {
       return undefined;
@@ -751,12 +654,6 @@ export function getAuthoringTypeConstructor(
   return current !== undefined && isAuthoringTypeConstructorDescriptor(current)
     ? current
     : undefined;
-}
-
-export function isAuthoringFieldPresetDescriptor(
-  value: AuthoringFieldPresetDescriptor | AuthoringFieldNamespace,
-): value is AuthoringFieldPresetDescriptor {
-  return 'kind' in value && value.kind === 'fieldPreset';
 }
 
 export function isAuthoringEntityTypeDescriptor(
@@ -808,12 +705,18 @@ function isWellFormedDescriptor(
   const kinds = typeof descriptorKinds === 'string' ? [descriptorKinds] : descriptorKinds;
   if (typeof kind !== 'string' || !kinds.includes(kind)) return false;
   switch (kind) {
-    case 'typeConstructor':
-    case 'fieldPreset': {
+    case 'typeConstructor': {
       if (!('output' in value)) return false;
       const output = value.output;
       return typeof output === 'object' && output !== null;
     }
+    case 'typeChoice':
+      return (
+        'args' in value &&
+        Array.isArray(value.args) &&
+        'choices' in value &&
+        Array.isArray(value.choices)
+      );
     case 'typeAlias': {
       if (!('output' in value)) return false;
       const output = value.output;
@@ -890,7 +793,7 @@ function deepCopyNamespace(
 /**
  * Merges `source` into `target` recursively at the descriptor-namespace
  * level. `descriptorKind` is the `kind` value, or values, ('typeConstructor'
- * and 'typeAlias', 'fieldPreset', 'entity', or 'pslBlock') that identifies a descriptor
+ * and 'typeAlias', 'entity', or 'pslBlock') that identifies a descriptor
  * (terminal merge point; same-path registrations across components are
  * reported as duplicates) as opposed to a sub-namespace (recursion target).
  *
@@ -1048,34 +951,6 @@ export interface ScalarTypeConstructorOutput {
   readonly typeParams?: Record<string, unknown>;
 }
 
-/**
- * Derives the scalar view of an assembled authoring type namespace: every
- * **top-level** type constructor that is instantiable with an empty argument
- * list — all declared args optional and no entity-ref argument. A bare type
- * name `T` in a schema is semantically the zero-arg instantiation `T()`, so
- * each entry is exactly what that call produces (defaulted template values
- * applied, absent optional-arg typeParams keys omitted). Constructors
- * registered under a namespace segment, constructors with required args, and
- * entity-ref constructors are not scalars and are excluded.
- *
- * Eligibility needs no template inspection: templates that cannot resolve
- * for their legal call shapes are rejected at the composition boundary by
- * {@link assertResolvableTypeConstructorTemplates}, so the zero-arg
- * instantiation below cannot fail for an eligible constructor.
- */
-export function collectScalarTypeConstructors(
-  namespace: AuthoringTypeNamespace,
-): ReadonlyMap<string, ScalarTypeConstructorOutput> {
-  const result = new Map<string, ScalarTypeConstructorOutput>();
-  for (const [name, value] of Object.entries(namespace)) {
-    if (!isAuthoringTypeConstructorDescriptor(value)) continue;
-    if (value.entityRefArg !== undefined) continue;
-    if (value.args?.some((arg) => arg.optional !== true)) continue;
-    result.set(name, instantiateAuthoringTypeConstructor(value, []));
-  }
-  return result;
-}
-
 function visitTemplateArgRefs(
   template: AuthoringTemplateValue | undefined,
   visit: (ref: AuthoringArgRef) => void,
@@ -1083,9 +958,6 @@ function visitTemplateArgRefs(
   if (template === undefined) return;
   if (isAuthoringArgRef(template)) {
     visit(template);
-    // A reference's fallback is a template of its own; its references are
-    // checked too.
-    visitTemplateArgRefs(template.default, visit);
     return;
   }
   if (Array.isArray(template)) {
@@ -1106,8 +978,8 @@ function visitTemplateArgRefs(
  * per contributing component at assembly (which supplies `contributedBy`
  * for attribution). Rejects what the types cannot express — entity-ref
  * constructors are skipped (their output derives from the referenced
- * entity): every `typeParams` arg-ref (including refs inside arg-ref
- * defaults) must point at a declared argument index.
+ * entity): every `typeParams` arg-ref must point at a declared argument
+ * index.
  */
 export function assertResolvableTypeConstructorTemplates(
   namespace: AuthoringTypeNamespace,
@@ -1127,6 +999,7 @@ export function assertResolvableTypeConstructorTemplates(
       }
       continue;
     }
+    if (isAuthoringTypeChoiceDescriptor(value)) continue;
     if (!isAuthoringTypeConstructorDescriptor(value)) {
       assertResolvableTypeConstructorTemplates(value, contributedBy, currentPath);
       continue;
@@ -1427,45 +1300,30 @@ function assertUniqueModelAttributeNames(entries: readonly DescriptorEntry[]): v
 
 export function assertNoCrossRegistryCollisions(
   typeNamespace: AuthoringTypeNamespace,
-  fieldNamespace: AuthoringFieldNamespace,
   entityTypeNamespace: AuthoringEntityTypeNamespace = {},
   pslBlockNamespace: AuthoringPslBlockDescriptorNamespace = {},
   modelAttributeNamespace: AuthoringModelAttributeDescriptorNamespace = {},
 ): void {
   const typePaths = new Set(collectDescriptorPaths(typeNamespace, isAuthoringTypeDescriptor));
-  const fieldPaths = new Set(
-    collectDescriptorPaths(fieldNamespace, isAuthoringFieldPresetDescriptor),
-  );
   const entityPaths = new Set(
     collectDescriptorPaths(entityTypeNamespace, isAuthoringEntityTypeDescriptor),
   );
   // Within-registry duplicates are caught upstream by the merge walkers; this
   // checks only cross-registry collisions, and only among the user-facing
-  // `type`/`field`/`entityTypes` paths. `pslBlockDescriptors` is an internal
+  // `type`/`entityTypes` paths. `pslBlockDescriptors` is an internal
   // index — its block→factory link is checked by discriminator in
   // `assertPslBlocksHaveFactories`, not by path.
-  const ambiguityHint =
-    'Register each path in only one of authoringContributions.field / authoringContributions.type / authoringContributions.entityTypes.';
-  for (const fieldPath of fieldPaths) {
-    if (typePaths.has(fieldPath)) {
-      throw runtimeError(
-        'CONTRACT.PACK_CONTRIBUTION_INVALID',
-        `Ambiguous authoring registry path "${fieldPath}". The same path is registered as both a type constructor or type alias and a field preset; PSL resolution would be ambiguous. ${ambiguityHint}`,
-      );
-    }
-  }
   for (const entityPath of entityPaths) {
-    if (typePaths.has(entityPath) || fieldPaths.has(entityPath)) {
+    if (typePaths.has(entityPath)) {
       throw runtimeError(
         'CONTRACT.PACK_CONTRIBUTION_INVALID',
-        `Ambiguous authoring registry path "${entityPath}". The same path is registered as an entity contribution AND as a type constructor, type alias or field preset; PSL resolution would be ambiguous. ${ambiguityHint}`,
+        `Ambiguous authoring registry path "${entityPath}". The same path is registered as an entity contribution AND as a type constructor or type alias; PSL resolution would be ambiguous. Register each path in only one of authoringContributions.type / authoringContributions.entityTypes.`,
       );
     }
   }
 
   assertPslBlocksHaveFactories(entityTypeNamespace, pslBlockNamespace);
   assertUniqueModelAttributeNames(collectModelAttributeEntries(modelAttributeNamespace));
-  assertSelectTemplatesMatchOptionArgs(typeNamespace, fieldNamespace, entityTypeNamespace);
 }
 
 function collectDescriptorNodes<D>(
@@ -1487,125 +1345,6 @@ function collectDescriptorNodes<D>(
   return nodes;
 }
 
-function collectSelectRefs(value: unknown, found: AuthoringSelectRef[]): void {
-  if (typeof value !== 'object' || value === null) {
-    return;
-  }
-  if (isAuthoringSelectRef(value)) {
-    found.push(value);
-    for (const caseTemplate of Object.values(value.cases)) {
-      collectSelectRefs(caseTemplate, found);
-    }
-    return;
-  }
-  if (isAuthoringArgRef(value)) {
-    collectSelectRefs(value.default, found);
-    return;
-  }
-  if (Array.isArray(value)) {
-    for (const entry of value) {
-      collectSelectRefs(entry, found);
-    }
-    return;
-  }
-  for (const entry of Object.values(value)) {
-    collectSelectRefs(entry, found);
-  }
-}
-
-function validateSelectRefsAgainstArgs(
-  label: string,
-  helperPath: string,
-  args: readonly AuthoringArgumentDescriptor[] | undefined,
-  templateRoot: unknown,
-): void {
-  const selects: AuthoringSelectRef[] = [];
-  collectSelectRefs(templateRoot, selects);
-
-  for (const select of selects) {
-    const position = `#${select.index + 1}`;
-    let descriptor: AuthoringArgumentDescriptor | undefined = args?.[select.index];
-    if (descriptor === undefined) {
-      throw runtimeError(
-        'CONTRACT.PACK_CONTRIBUTION_INVALID',
-        `Authoring ${label} helper "${helperPath}" select template references argument ${position}, but the helper declares no argument at that position.`,
-      );
-    }
-    for (const segment of select.path ?? []) {
-      descriptor = descriptor.kind === 'object' ? descriptor.properties[segment] : undefined;
-      if (descriptor === undefined) {
-        throw runtimeError(
-          'CONTRACT.PACK_CONTRIBUTION_INVALID',
-          `Authoring ${label} helper "${helperPath}" select template references argument ${position} at path "${(select.path ?? []).join('.')}", which does not resolve to a declared argument property.`,
-        );
-      }
-    }
-    if (descriptor.kind !== 'option') {
-      throw runtimeError(
-        'CONTRACT.PACK_CONTRIBUTION_INVALID',
-        `Authoring ${label} helper "${helperPath}" select template references argument ${position}, which is kind "${descriptor.kind}"; select requires an option argument.`,
-      );
-    }
-
-    const argumentLabel = descriptor.name !== undefined ? `"${descriptor.name}"` : position;
-    const missing = descriptor.values.filter((value) => !Object.hasOwn(select.cases, value));
-    if (missing.length > 0) {
-      throw runtimeError(
-        'CONTRACT.PACK_CONTRIBUTION_INVALID',
-        `Authoring ${label} helper "${helperPath}" option argument ${argumentLabel} allows [${descriptor.values.join(', ')}] but the select template has no case for: ${missing.join(', ')}.`,
-      );
-    }
-    const values = descriptor.values;
-    const unreachable = Object.keys(select.cases).filter((key) => !values.includes(key));
-    if (unreachable.length > 0) {
-      throw runtimeError(
-        'CONTRACT.PACK_CONTRIBUTION_INVALID',
-        `Authoring ${label} helper "${helperPath}" select template has case(s) not allowed by option argument ${argumentLabel}: ${unreachable.join(', ')}. Allowed values: [${values.join(', ')}].`,
-      );
-    }
-  }
-}
-
-/**
- * Every `select` template node must target an option argument whose `values`
- * exactly cover the node's `cases` — a legal token with no case and a case no
- * token can reach are both declaration bugs, caught here at pack-registration
- * time rather than at first resolution.
- */
-function assertSelectTemplatesMatchOptionArgs(
-  typeNamespace: AuthoringTypeNamespace,
-  fieldNamespace: AuthoringFieldNamespace,
-  entityTypeNamespace: AuthoringEntityTypeNamespace,
-): void {
-  for (const [helperPath, descriptor] of collectDescriptorNodes(
-    fieldNamespace,
-    isAuthoringFieldPresetDescriptor,
-  )) {
-    validateSelectRefsAgainstArgs('field', helperPath, descriptor.args, descriptor.output);
-  }
-  for (const [helperPath, descriptor] of collectDescriptorNodes(
-    typeNamespace,
-    isAuthoringTypeDescriptor,
-  )) {
-    if (isAuthoringTypeConstructorDescriptor(descriptor)) {
-      validateSelectRefsAgainstArgs('type', helperPath, descriptor.args, descriptor.output);
-    }
-  }
-  for (const [helperPath, descriptor] of collectDescriptorNodes(
-    entityTypeNamespace,
-    isAuthoringEntityTypeDescriptor,
-  )) {
-    if ('template' in descriptor.output) {
-      validateSelectRefsAgainstArgs(
-        'entityType',
-        helperPath,
-        descriptor.args,
-        descriptor.output.template,
-      );
-    }
-  }
-}
-
 export function resolveAuthoringTemplateValue(
   template: AuthoringTemplateValue | undefined,
   args: readonly unknown[],
@@ -1614,24 +1353,7 @@ export function resolveAuthoringTemplateValue(
     return undefined;
   }
   if (isAuthoringArgRef(template)) {
-    const value = readTemplateArgumentValue(args, template.index, template.path);
-
-    if (value === undefined && template.default !== undefined) {
-      return resolveAuthoringTemplateValue(template.default, args);
-    }
-
-    return value;
-  }
-  if (isAuthoringSelectRef(template)) {
-    const value = readTemplateArgumentValue(args, template.index, template.path);
-
-    if (value === undefined) {
-      return undefined;
-    }
-    if (typeof value !== 'string' || !Object.hasOwn(template.cases, value)) {
-      throw new InternalError(`Authoring template select has no case for value "${String(value)}"`);
-    }
-    return resolveAuthoringTemplateValue(template.cases[value], args);
+    return args[template.index];
   }
   if (Array.isArray(template)) {
     return template.map((value) => resolveAuthoringTemplateValue(value, args));
@@ -1649,85 +1371,9 @@ export function resolveAuthoringTemplateValue(
   return template;
 }
 
-function validateAuthoringArgument(
-  descriptor: AuthoringArgumentDescriptor,
-  value: unknown,
-  path: string,
-): void {
-  if (value === undefined) {
-    if (descriptor.optional) {
-      return;
-    }
-    throw runtimeError('CONTRACT.ARGUMENT_INVALID', `${path} is missing`);
-  }
-
-  if (descriptor.kind === 'value') {
-    return;
-  }
-
-  if (descriptor.kind === 'object') {
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-      throw runtimeError('CONTRACT.ARGUMENT_INVALID', `${path} must be an object`);
-    }
-
-    const input = value as Record<string, unknown>;
-    const expectedKeys = new Set(Object.keys(descriptor.properties));
-
-    for (const key of Object.keys(input)) {
-      if (!expectedKeys.has(key)) {
-        throw runtimeError(
-          'CONTRACT.ARGUMENT_INVALID',
-          `${path} contains unknown property "${key}"`,
-        );
-      }
-    }
-
-    for (const [key, propertyDescriptor] of Object.entries(descriptor.properties)) {
-      validateAuthoringArgument(propertyDescriptor, input[key], `${path}.${key}`);
-    }
-
-    return;
-  }
-
-  if (descriptor.kind === 'option') {
-    if (typeof value !== 'string' || !descriptor.values.includes(value)) {
-      const quoted = descriptor.values.map((option) => JSON.stringify(option));
-      const rule =
-        quoted.length === 0
-          ? 'takes no value'
-          : `must be ${quoted.length === 1 ? quoted.join('') : `one of ${quoted.join(', ')}`}`;
-      throw runtimeError(
-        'CONTRACT.ARGUMENT_INVALID',
-        `${path} ${rule}; received ${describeReceivedArgument(value)}`,
-      );
-    }
-    return;
-  }
-
-  if (typeof value !== 'number' || Number.isNaN(value)) {
-    throw runtimeError('CONTRACT.ARGUMENT_INVALID', `${path} must be a number`);
-  }
-
-  if (descriptor.integer && !Number.isInteger(value)) {
-    throw runtimeError('CONTRACT.ARGUMENT_INVALID', `${path} must be an integer`);
-  }
-  if (descriptor.minimum !== undefined && value < descriptor.minimum) {
-    throw runtimeError(
-      'CONTRACT.ARGUMENT_INVALID',
-      `${path} must be >= ${descriptor.minimum}, received ${value}`,
-    );
-  }
-  if (descriptor.maximum !== undefined && value > descriptor.maximum) {
-    throw runtimeError(
-      'CONTRACT.ARGUMENT_INVALID',
-      `${path} must be <= ${descriptor.maximum}, received ${value}`,
-    );
-  }
-}
-
 export function validateAuthoringHelperArguments(
   helperPath: string,
-  descriptors: readonly AuthoringArgumentDescriptor[] | undefined,
+  descriptors: readonly HelperArgumentDescriptor[] | undefined,
   args: readonly unknown[],
 ): void {
   const expected = descriptors ?? [];
@@ -1743,26 +1389,26 @@ export function validateAuthoringHelperArguments(
   }
 
   expected.forEach((descriptor, index) => {
-    validateAuthoringArgument(
-      descriptor,
-      args[index],
-      argumentLabel(helperPath, descriptor, index),
-    );
+    if (args[index] === undefined && !descriptor.optional) {
+      throw runtimeError(
+        'CONTRACT.ARGUMENT_INVALID',
+        `${argumentLabel(helperPath, descriptor, index)} is missing`,
+      );
+    }
   });
 }
 
+/** An argument of a type constructor, or of a type choice, whose call a helper checks. */
+type HelperArgumentDescriptor = AuthoringArgumentDescriptor | AuthoringTypeChoiceOption;
+
 function argumentLabel(
   helperPath: string,
-  descriptor: AuthoringArgumentDescriptor,
+  descriptor: HelperArgumentDescriptor,
   index: number,
 ): string {
   return descriptor.name === undefined
     ? `Authoring helper argument at ${helperPath}[${index}]`
     : `Argument "${descriptor.name}" of ${helperPath}`;
-}
-
-function describeReceivedArgument(value: unknown): string {
-  return typeof value === 'string' ? JSON.stringify(value) : String(value);
 }
 
 function argumentIndexOf(template: AuthoringTemplateValue | undefined): number | undefined {
@@ -1779,7 +1425,7 @@ function issueKey(issue: StandardSchemaV1.Issue): string | undefined {
   return typeof key === 'string' ? key : undefined;
 }
 
-/** Why a constructor's or preset's type parameters fail its codec's parameter schema, and the argument the failing parameter came from. */
+/** Why a constructor's type parameters fail its codec's parameter schema, and the argument the failing parameter came from. */
 export interface AuthoringTypeParamsIssue {
   readonly message: string;
   readonly argumentIndex: number | undefined;
@@ -1807,7 +1453,7 @@ function authoringTypeParamsIssue(
 }
 
 /**
- * Checks the type parameters a constructor or preset produced against its codec's parameter schema, which is where the bounds of a data type's parameters are written. A failure names the argument the failing parameter came from.
+ * Checks the type parameters a constructor produced against its codec's parameter schema, which is where the bounds of a data type's parameters are written. A failure names the argument the failing parameter came from.
  */
 export function validateAuthoringTypeParams(
   helperPath: string,
@@ -1824,6 +1470,31 @@ export function validateAuthoringTypeParams(
       ? `The type parameters of ${helperPath} are invalid: ${issue.message}`
       : `Authoring helper argument at ${helperPath}[${argumentIndex}] is invalid: ${issue.message}`,
     { helperPath, ...ifDefined('argumentIndex', argumentIndex) },
+  );
+}
+
+/**
+ * {@link validateAuthoringTypeParams} for a call of the type choice `choice` that chose `chosen`: a failure names the choice's own argument the failing parameter came from, by its name and its index in the choice's arguments.
+ */
+export function validateAuthoringTypeChoiceParams(
+  helperPath: string,
+  choice: AuthoringTypeChoiceDescriptor,
+  chosen: AuthoringTypeConstructorDescriptor,
+  typeParams: Record<string, unknown> | undefined,
+  paramsSchema: StandardSchemaV1<unknown> | undefined,
+): void {
+  const issue = authoringTypeParamsIssue(chosen.output, typeParams, paramsSchema);
+  if (issue === undefined) return;
+  const name =
+    issue.argumentIndex === undefined ? undefined : chosen.args?.[issue.argumentIndex]?.name;
+  const argumentIndex =
+    name === undefined ? -1 : choice.args.findIndex((argument) => argument.name === name);
+  throw runtimeError(
+    'CONTRACT.ARGUMENT_INVALID',
+    argumentIndex < 0
+      ? `The type parameters of ${helperPath} are invalid: ${issue.message}`
+      : `Argument "${name}" of ${helperPath} is invalid: ${issue.message}`,
+    { helperPath, ...ifDefined('argumentIndex', argumentIndex < 0 ? undefined : argumentIndex) },
   );
 }
 
@@ -1848,86 +1519,6 @@ function resolveAuthoringStorageTypeTemplate(
     codecId: template.codecId,
     ...ifDefined('typeParams', normalizedTypeParams),
   };
-}
-
-function resolveAuthoringColumnDefaultTemplate(
-  template: AuthoringColumnDefaultTemplate,
-  args: readonly unknown[],
-): ColumnDefault {
-  if (template.kind === 'literal') {
-    const value = resolveAuthoringTemplateValue(template.value, args);
-    if (value === undefined) {
-      throw runtimeError(
-        'CONTRACT.PACK_CONTRIBUTION_INVALID',
-        'Resolved authoring literal default must not be undefined',
-      );
-    }
-    if (!isColumnDefaultLiteralInputValue(value)) {
-      throw runtimeError(
-        'CONTRACT.PACK_CONTRIBUTION_INVALID',
-        `Resolved authoring literal default must be a JSON-serializable value or Date, received ${String(value)}`,
-      );
-    }
-    return {
-      kind: 'literal',
-      value,
-    };
-  }
-
-  const expression = resolveAuthoringTemplateValue(template.expression, args);
-  if (expression === undefined || (typeof expression === 'object' && expression !== null)) {
-    throw runtimeError(
-      'CONTRACT.PACK_CONTRIBUTION_INVALID',
-      `Resolved authoring function default expression must resolve to a primitive, received ${String(expression)}`,
-    );
-  }
-  return {
-    kind: 'function',
-    expression: String(expression),
-  };
-}
-
-function resolveExecutionMutationDefaultPhase(
-  phase: 'onCreate' | 'onUpdate',
-  template: AuthoringTemplateValue,
-  args: readonly unknown[],
-): ExecutionMutationDefaultValue | undefined {
-  const value = resolveAuthoringTemplateValue(template, args);
-  if (value === undefined) {
-    return undefined;
-  }
-  if (!isExecutionMutationDefaultValue(value)) {
-    throw runtimeError(
-      'CONTRACT.PACK_CONTRIBUTION_INVALID',
-      `Authoring preset executionDefaults.${phase} did not resolve to a valid generator descriptor (kind: 'generator', id: string).`,
-    );
-  }
-  if (value.params !== undefined && Object.keys(value.params).length === 0) {
-    const { params: _unfilled, ...generator } = value;
-    return generator;
-  }
-  return value;
-}
-
-function resolveAuthoringExecutionDefaultsTemplate(
-  template: AuthoringExecutionDefaultsTemplate,
-  args: readonly unknown[],
-): ExecutionMutationDefaultPhases | undefined {
-  const phases: ExecutionMutationDefaultPhases = {
-    ...ifDefined(
-      'onCreate',
-      template.onCreate !== undefined
-        ? resolveExecutionMutationDefaultPhase('onCreate', template.onCreate, args)
-        : undefined,
-    ),
-    ...ifDefined(
-      'onUpdate',
-      template.onUpdate !== undefined
-        ? resolveExecutionMutationDefaultPhase('onUpdate', template.onUpdate, args)
-        : undefined,
-    ),
-  };
-  return Object.keys(phases).length === 0 ? undefined : phases;
 }
 
 export function instantiateAuthoringTypeConstructor(
@@ -2057,7 +1648,7 @@ export function instantiateAuthoringEntityType<TOutput = unknown>(
   // `EntityHelperFunction`'s extracted `input` parameter, and the factory
   // is free to do its own runtime validation (e.g. arktype Type). The
   // descriptor-level `args` validator is reserved for template-output
-  // entities (which mirror field/type's declarative argument shape).
+  // entities (which mirror a type constructor's declarative argument shape).
   if ('factory' in descriptor.output) {
     const input = args[0];
     // The base `AuthoringEntityTypeDescriptor`'s factory is typed
@@ -2076,35 +1667,4 @@ export function instantiateAuthoringEntityType<TOutput = unknown>(
   return blindCast<TOutput, 'template-output resolves to the declared TOutput by convention'>(
     resolveAuthoringTemplateValue(descriptor.output.template, args),
   );
-}
-
-export function instantiateAuthoringFieldPreset(
-  descriptor: AuthoringFieldPresetDescriptor,
-  args: readonly unknown[],
-): {
-  readonly descriptor: ScalarTypeConstructorOutput;
-  readonly nullable: boolean;
-  readonly default?: ColumnDefault;
-  readonly executionDefaults?: ExecutionMutationDefaultPhases;
-  readonly id: boolean;
-  readonly unique: boolean;
-} {
-  return {
-    descriptor: resolveAuthoringStorageTypeTemplate(descriptor.output, args),
-    nullable: descriptor.output.nullable ?? false,
-    ...ifDefined(
-      'default',
-      descriptor.output.default !== undefined
-        ? resolveAuthoringColumnDefaultTemplate(descriptor.output.default, args)
-        : undefined,
-    ),
-    ...ifDefined(
-      'executionDefaults',
-      descriptor.output.executionDefaults !== undefined
-        ? resolveAuthoringExecutionDefaultsTemplate(descriptor.output.executionDefaults, args)
-        : undefined,
-    ),
-    id: descriptor.output.id ?? false,
-    unique: descriptor.output.unique ?? false,
-  };
 }

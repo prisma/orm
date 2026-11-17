@@ -66,6 +66,10 @@ flowchart TD
     AST --> ORM
 ```
 
+## Transaction start SPI
+
+`SqlTransactionOptions` carries only `{ readonly isolationLevel?: string | undefined }` to `SqlConnection.beginTransaction(options?)`. Callers resolve policy before invoking the driver; target validators and drivers decide supported levels and SQL. An omitted level preserves database/session defaults. Drivers do not distinguish ORM-owned transactions from callback or manual transactions. See [ownership and forwarding requirements](../../5-runtime/README.md#resolved-transaction-options).
+
 ## Components
 
 ### Schema Builder (`schema.ts`)
@@ -120,6 +124,7 @@ class PgTextCodec extends CodecImpl<'pg/text@1', readonly ['equality'], string, 
 
 class PgTextDescriptor extends PostgresCodecDescriptor<void> {
   override readonly dataType = pgText.id;
+  override readonly jsonType = 'string' as const;
   override readonly codecId = 'pg/text@1';
   override readonly traits = ['equality'] as const;
   override readonly paramsSchema = undefined;

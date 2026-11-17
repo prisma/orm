@@ -31,7 +31,9 @@ describe('a model moved to another namespace', () => {
 
     expect(planned(result)).toMatchObject({
       calls: ['move app.Invoice -> billing'],
-      appliedStatements: [{ statement: moveInvoice, operationIndexes: [0] }],
+      plannedStatements: [
+        { statement: moveInvoice, operations: { kind: 'planned', operationIndexes: [0] } },
+      ],
     });
     expect(target.tables().hasTable('billing', 'Invoice')).toBe(true);
     expect(target.tables().hasTable('app', 'Invoice')).toBe(false);
@@ -48,7 +50,9 @@ describe('a model moved to another namespace', () => {
 
     expect(planned(result)).toMatchObject({
       calls: ['namespace billing', 'move app.Invoice -> billing'],
-      appliedStatements: [{ statement: moveInvoice, operationIndexes: [1] }],
+      plannedStatements: [
+        { statement: moveInvoice, operations: { kind: 'planned', operationIndexes: [1] } },
+      ],
     });
   });
 
@@ -66,7 +70,9 @@ describe('a model moved to another namespace', () => {
     expect(planned(result)).toMatchObject({
       calls: ['move app.Invoice -> billing', 'table billing.Invoice -> Bill'],
       tableRenames: [{ namespaceId: 'billing', from: 'Invoice', to: 'Bill' }],
-      appliedStatements: [{ statement, operationIndexes: [0, 1, 2] }],
+      plannedStatements: [
+        { statement, operations: { kind: 'planned', operationIndexes: [0, 1, 2] } },
+      ],
     });
   });
 

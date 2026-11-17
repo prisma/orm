@@ -63,9 +63,11 @@ const origin = {
       },
     },
   },
+  storage: { namespaces: {} },
 };
 const destination = {
   domain: { namespaces: { app: { models: { User: { fields: {}, relations: {}, storage: {} } } } } },
+  storage: { namespaces: {} },
 };
 const contracts = {
   origin,
@@ -73,6 +75,7 @@ const contracts = {
   statements: [],
   canConvert: false,
   originKnown: true,
+  temporaryValues: [],
 };
 
 /** One question of each kind, across two spaces: an extension's recorded drop is a storage subject. */
@@ -173,6 +176,7 @@ function applySuccess(mode: 'plan' | 'apply'): Record<string, unknown> {
     appliedStatements: [],
     dataLoss: [],
     accessChanges: [],
+    temporaryValues: [],
     summary: 'Database updated',
   };
 }
@@ -322,7 +326,7 @@ describe('db update questions', () => {
     expect(mocks.dbUpdate).not.toHaveBeenCalled();
   });
 
-  it('refuses --convert and --backfill before it plans anything, naming migration plan', async () => {
+  it('refuses --backfill before it plans anything, naming migration plan and keeping a two-name --convert for the control API to resolve', async () => {
     mocks.readMarker.mockResolvedValueOnce({ storageHash: 'c'.repeat(64) });
     const run = await harness().run(
       [
@@ -352,12 +356,7 @@ describe('db update questions', () => {
           }),
           expect.anything(),
         ],
-        meta: {
-          statements: [
-            { verb: 'convert', text: 'User.age' },
-            { verb: 'backfill', text: 'User.email' },
-          ],
-        },
+        meta: { statements: [{ verb: 'backfill', text: 'User.email' }] },
       },
     });
     expect(mocks.dbUpdate).not.toHaveBeenCalled();
@@ -412,6 +411,37 @@ describe('db update questions', () => {
     });
 
     expect(envelopeOf(run.json)).toMatchObject({ error: { code: 'CLI.CONSENT_UNUSED' } });
+  });
+
+  it('hands a --convert with one or two names to the control API, which tells a variant from a field', async () => {
+    const run = await harness().run(
+      ['db', 'update', '--dry-run', '--convert', 'Bug', '--convert', 'app.Epic', '--json'],
+      { cwd: projectDir },
+    );
+
+    expect(run.exitCode).toBe(0);
+    expect(mocks.dbUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statements: [
+          { verb: 'convert', text: 'Bug' },
+          { verb: 'convert', text: 'app.Epic' },
+        ],
+      }),
+    );
+  });
+
+  it('refuses a --convert with three names before it plans anything, since it names a field', async () => {
+    const run = await harness().run(['db', 'update', '--convert', 'app.User.age', '--json'], {
+      cwd: projectDir,
+    });
+
+    expect(envelopeOf(run.json)).toMatchObject({
+      error: {
+        code: 'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
+        meta: { statements: [{ verb: 'convert', text: 'app.User.age' }] },
+      },
+    });
+    expect(mocks.dbUpdate).not.toHaveBeenCalled();
   });
 
   it('asks nothing on a dry run, and hands it the delete and allow flags to check', async () => {

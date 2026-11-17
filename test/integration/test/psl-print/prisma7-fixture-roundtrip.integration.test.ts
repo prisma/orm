@@ -1,12 +1,15 @@
 import { existsSync, readdirSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { prisma7Contract } from '@internal/sql-contract-prisma7/provider';
 import { prisma7PostgresBinding } from '@internal/target-postgres/prisma7-binding';
 import { blindCast } from '@internal/utils/casts';
-import { dirname, join } from 'pathe';
+import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
+import {
+  fixtureExtensionPacks,
+  prisma7FixturesDir,
+} from '../prisma7-source/fixture-extension-packs';
 import {
   composePostgresStack,
   printAndReadBack,
@@ -15,10 +18,7 @@ import {
   sourceContext,
 } from './print-and-read-back';
 
-const fixturesDir = join(
-  dirname(fileURLToPath(import.meta.url)),
-  '../../../../packages/2-sql-family/2-authoring/contract-prisma7/test/fixtures',
-);
+const fixturesDir = prisma7FixturesDir;
 
 const cases = readdirSync(fixturesDir, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
@@ -84,7 +84,9 @@ async function loadPrisma7Fixture(
 ): Promise<Contract<SqlStorage>> {
   const result = await prisma7Contract(schemaPath, {
     binding: prisma7PostgresBinding,
-  }).source.load(sourceContext(composePostgresStack(), [schemaPath]));
+  }).source.load(
+    sourceContext(composePostgresStack(fixtureExtensionPacks(caseName)), [schemaPath]),
+  );
   if (!result.ok) {
     throw new Error(
       `Prisma 7 fixture "${caseName}" did not load: ${JSON.stringify(result.failure.diagnostics)}`,
@@ -96,7 +98,9 @@ async function loadPrisma7Fixture(
 async function roundTrip(caseName: string): Promise<void> {
   const schemaPath = prisma7SchemaPath(caseName);
   const prisma7 = await loadPrisma7Fixture(schemaPath, caseName);
-  const printedContract = await printAndReadBack(prisma7);
+  const printedContract = await printAndReadBack(prisma7, {
+    stack: composePostgresStack(fixtureExtensionPacks(caseName)),
+  });
 
   expect(serializedWithoutCapabilities(printedContract)).toEqual(
     serializedWithoutCapabilities(prisma7),

@@ -139,6 +139,8 @@ The contract has three levels, each serving a different consumer:
 2. **Model storage bridge** (`model.storage`) — how domain fields connect to persistence. Sits on the model to preserve co-location. SQL carries field-to-column mappings because field names and column names can differ; Mongo carries the collection name and, in `model.storage.fields`, the key each field is stored under (`{ "field": "<stored name>" }`, an entry for every field), because field names and stored names can differ too (`id` → `_id`, `createdAt` → `_created_at`).
 3. **Top-level storage** (`storage`) — the database schema itself. SQL: every table, every column with its native type, nullability constraint, default, plus indexes and foreign keys. Mongo: collection metadata (indexes, validators). Consumed by migration tooling, schema introspection, and DDL generation.
 
+**Note:** value objects are not at the domain level. They live in storage, at `storage.namespaces.<ns>.entries.valueObject`, and a domain field that holds one refers to it by its storage coordinate, because their fields are the keys every row stores ([ADR 309](ADR%20309%20-%20Value%20objects%20are%20storage%20entities%2C%20and%20a%20discriminator%20column%20names%20a%20value%20set.md)).
+
 `model.storage` sits on the model (not in a separate section) to preserve co-location. In SQL, field-to-column mappings like `"name": { "column": "display_name" }` need their table context nearby — separating them would leave column references dangling. For a consumer that only cares about the domain, `model.storage` is a clearly scoped block to skip. The separation is logical, not physical.
 
 ### Redundancy between levels

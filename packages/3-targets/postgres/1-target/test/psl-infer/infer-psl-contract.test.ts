@@ -305,6 +305,7 @@ describe('inferPostgresPslContract', () => {
         },
       });
     const tree = new PostgresDatabaseSchemaNode({
+      extensions: undefined,
       namespaces: { public: thingNode('public'), auth: thingNode('auth') },
       roles: [],
       existingSchemas: ['public', 'auth'],

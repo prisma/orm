@@ -5,8 +5,27 @@ import {
   profileHash,
   UNBOUND_DOMAIN_NAMESPACE_ID,
 } from '@internal/contract/types';
+import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { applicationDomainOf } from '@repo/test-utils';
 import { normalizeRootSqlStorage } from './sql-storage-fixture';
+
+function withValueObjects(
+  storage: Contract['storage'],
+  valueObjects: Record<string, ContractValueObject>,
+): Contract['storage'] {
+  const namespace = storage.namespaces[UNBOUND_NAMESPACE_ID];
+  return {
+    ...storage,
+    namespaces: {
+      ...storage.namespaces,
+      [UNBOUND_NAMESPACE_ID]: {
+        id: UNBOUND_NAMESPACE_ID,
+        ...namespace,
+        entries: { ...namespace?.entries, valueObject: valueObjects },
+      },
+    },
+  };
+}
 
 export function createEmitterTestContract(
   overrides: Partial<Omit<Contract, 'storage'>> & {
@@ -16,9 +35,13 @@ export function createEmitterTestContract(
   } = {},
 ): Contract {
   const { models, domain, storage, valueObjects, ...rest } = overrides;
-  const resolvedStorage = Object.hasOwn(overrides, 'storage')
+  const normalizedStorage = Object.hasOwn(overrides, 'storage')
     ? normalizeRootSqlStorage(storage)
     : normalizeRootSqlStorage({ tables: {} });
+  const resolvedStorage =
+    valueObjects === undefined || normalizedStorage === undefined
+      ? normalizedStorage
+      : withValueObjects(normalizedStorage, valueObjects);
   const contract: Contract = {
     targetFamily: 'sql',
     target: 'test-db',
@@ -27,7 +50,6 @@ export function createEmitterTestContract(
       domain ??
       applicationDomainOf({
         models: models ?? {},
-        ...(valueObjects !== undefined ? { valueObjects } : {}),
         namespaceId: UNBOUND_DOMAIN_NAMESPACE_ID,
       }),
     extensions: {},

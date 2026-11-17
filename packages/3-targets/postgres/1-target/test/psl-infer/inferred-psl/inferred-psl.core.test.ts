@@ -75,7 +75,7 @@ describe('printPsl', () => {
       // WARNING: This table has no primary key in the database
       model AuditLog {
         event     String
-        timestamp TimestamptzString
+        timestamp DateTime(precision: 6)
 
         @@map("audit_log")
       }

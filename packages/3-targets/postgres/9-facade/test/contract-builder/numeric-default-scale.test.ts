@@ -1,14 +1,14 @@
-import { numericColumn } from '@internal/adapter-postgres/column-types';
+import { numericStringColumn } from '@internal/adapter-postgres/column-types';
 import { describe, expect, it } from 'vitest';
 import { defineContract } from '../../src/exports/contract-builder';
 
 function storedDefault(value: string) {
-  const contract = defineContract({}, ({ field, model }) => ({
+  const contract = defineContract({}, ({ field, model, gen, type }) => ({
     models: {
       Price: model('Price', {
         fields: {
-          id: field.id.uuidv4String(),
-          amount: field.column(numericColumn(10, 2)).default(value),
+          id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+          amount: field.column(numericStringColumn(10, 2)).default(value),
         },
       }),
     },

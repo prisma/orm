@@ -1,4 +1,5 @@
 import type { ContractModel, ContractRelation } from '@internal/contract/types';
+import { validateStorageValueObjects } from '@internal/contract/validate-storage';
 import { structuredError } from '@internal/utils/structured-error';
 import { collectionRootModelsOf } from './collection-root-models';
 import { lookupFreeRefusalsOf } from './contract-refusals';
@@ -162,6 +163,7 @@ function bothStoredAs(
 }
 
 export function validateMongoStorage(contract: MongoContract): void {
+  validateStorageValueObjects(contract.storage);
   const errors: string[] = [];
   let fieldStorageComplete = true;
 

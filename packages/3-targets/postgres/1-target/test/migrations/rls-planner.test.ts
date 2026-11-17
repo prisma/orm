@@ -159,6 +159,7 @@ function schemaWith(
   options?: { readonly rlsEnabled?: boolean; readonly roleNames?: readonly string[] },
 ): PostgresDatabaseSchemaNode {
   return new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces: {
       public: new PostgresNamespaceSchemaNode({
         schemaName: 'public',
@@ -187,6 +188,7 @@ function schemaWith(
 }
 
 const emptySchema = new PostgresDatabaseSchemaNode({
+  extensions: undefined,
   namespaces: {},
   roles: [],
   existingSchemas: ['public'],

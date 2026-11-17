@@ -47,7 +47,6 @@ function mongoContext(seen: BlockSpecContext[]): ContractSourceContext {
     composedExtensionContracts: new Map(),
     authoringContributions: {
       dataTypes: {},
-      field: {},
       type: {},
       entityTypes: {
         audit_rule: {

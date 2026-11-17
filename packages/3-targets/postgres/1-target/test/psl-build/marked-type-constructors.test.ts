@@ -5,11 +5,11 @@ import { describe, expect, it } from 'vitest';
 import { postgresAuthoringTypes } from '../../src/core/authoring';
 import { createPostgresBuiltinCodecLookup } from '../../src/core/codec-registry';
 import { postgresDataTypes } from '../../src/core/data-types';
-import { postgresScalarAndNativeTypeConstructors } from '../../src/core/type-constructors';
+import { postgresScalarTypes } from '../../src/core/type-constructors';
 
 const authoringTypes: AuthoringTypeNamespace = {
   ...postgresAuthoringTypes,
-  ...postgresScalarAndNativeTypeConstructors,
+  ...postgresScalarTypes,
 };
 const dataTypeLookup = createDataTypeLookup(postgresDataTypes);
 const constructors = inferredTypeConstructors({
@@ -33,9 +33,9 @@ describe('inferredTypeConstructors', () => {
         ]),
       ),
     ).toEqual({
-      'pg/text': ['String'],
-      'pg/numeric': ['Numeric'],
-      'pg/timestamptz': ['TimestamptzString'],
+      'pg/text': ['Text'],
+      'pg/numeric': ['NumericString'],
+      'pg/timestamptz': ['TimestamptzJsDate'],
       'pg/bit': ['Bit'],
       'pg/enum': ['pg', 'enum'],
     });
@@ -62,15 +62,15 @@ describe('fewestArgumentsCall', () => {
       timestamptz3: call('pg/timestamptz', { precision: 3 }),
       text: call('pg/text', {}),
     }).toEqual({
-      numeric10: { path: ['Numeric'], args: [10] },
-      numeric10_2: { path: ['Numeric'], args: [10, 2] },
-      numeric: { path: ['Numeric'], args: [] },
+      numeric10: { path: ['NumericString'], args: [10] },
+      numeric10_2: { path: ['NumericString'], args: [10, 2] },
+      numeric: { path: ['NumericString'], args: [] },
       char1: { path: ['Char'], args: [] },
       char5: { path: ['Char'], args: [5] },
       bit1: { path: ['Bit'], args: [] },
-      varbit: { path: ['VarBit'], args: [] },
-      timestamptz3: { path: ['TimestamptzString'], args: [3] },
-      text: { path: ['String'], args: [] },
+      varbit: { path: ['Varbit'], args: [] },
+      timestamptz3: { path: ['TimestamptzJsDate'], args: [3] },
+      text: { path: ['Text'], args: [] },
     });
   });
 

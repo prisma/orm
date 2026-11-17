@@ -54,9 +54,10 @@ import { sqlFamilyError } from '../errors';
  */
 export type DefaultResolver = (def: ColumnDefault, column: DefaultResolverColumn) => ColumnDefault;
 
-/** The column a {@link DefaultResolver} names a default for: its type as written, and whether it is a list. */
+/** The column a {@link DefaultResolver} names a default for: its type as written, the data type its codec represents, and whether it is a list. */
 export interface DefaultResolverColumn {
   readonly typeText: string;
+  readonly dataTypeId: string;
   readonly many: boolean;
 }
 
@@ -75,7 +76,7 @@ function convertColumn(
   const rawColumnDefault = column.default ?? undefined;
   const resolvedColumnDefault =
     rawColumnDefault !== undefined && hooks.resolveDefault
-      ? hooks.resolveDefault(rawColumnDefault, { typeText, many })
+      ? hooks.resolveDefault(rawColumnDefault, { typeText, dataTypeId: dataType.id, many })
       : rawColumnDefault;
   return {
     name,
@@ -158,8 +159,7 @@ function contractDefaultValue(
 }
 
 /**
- * The column's type as the database reports it, from the type it is stored as: the written name with its normal-form parameters (`character(1)` for a bare `character`), or for a
- * type that claims a kind (an enum), its type name as stored.
+ * The column's type as the database reports it, from the type it is stored as: the written name with the parameters the catalog prints for those written (`character(1)` for a bare `character`, `timestamptz` for a bare `timestamptz`), or for a type that claims a kind (an enum), its type name as stored.
  */
 function schemaTypeText(
   type: SqlDataType,
@@ -167,7 +167,7 @@ function schemaTypeText(
 ): string {
   const params = dataTypeParams(type, typeParams);
   return type.sql.claimsKind === undefined
-    ? renderSqlTypeName(type, type.sql.normalize(params))
+    ? renderSqlTypeName(type, type.sql.catalogParams(params))
     : unquotedSqlBaseName(type, params);
 }
 

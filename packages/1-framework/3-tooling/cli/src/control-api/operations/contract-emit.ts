@@ -7,8 +7,10 @@ import { abortable } from '@internal/utils/abortable';
 import { ifDefined } from '@internal/utils/defined';
 import type { JsonObject } from '@internal/utils/json';
 import { dirname, join } from 'pathe';
+import { migrationsDirFor } from '../../orm/migration/paths';
 import { errorContractConfigMissing } from '../../utils/cli-errors';
 import { queueEmitByOutput } from '../../utils/emit-queue';
+import { toExtensionInputs } from '../../utils/extension-pack-inputs';
 import { createProjectSpecifierResolver } from '../../utils/project-import-root';
 import { publishContractArtifactPair } from '../../utils/publish-contract-artifact-pair';
 import { validateContractDeps } from '../../utils/validate-contract-deps';
@@ -18,6 +20,7 @@ import type {
   ControlActionName,
   OnControlProgress,
 } from '../types';
+import { runContractSpaceSeedPhase } from './contract-space-seed-phase';
 import {
   loadContractSourceWithStack,
   requireContractConfig,
@@ -53,6 +56,12 @@ function endSpan(
  * (`prisma contract emit`) and the Vite plugin
  * (`@internal/vite-plugin-contract-emit`). New callers must go through this
  * function rather than re-implementing load → emit → publish.
+ *
+ * Before publishing, it writes each composed extension pack's pinned files
+ * under `migrations/<space-id>/`, as `migration plan` does, so a project
+ * that never plans a migration can still sign its database, and returns
+ * each path it wrote there. An `outputPath` writes the contract somewhere
+ * other than the project, so it writes no pinned files.
  *
  * The whole flow (load config → resolve source → emit bytes → atomic publish)
  * is serialized per output JSON path via `queueEmitByOutput`. Concurrent calls
@@ -165,6 +174,22 @@ export async function executeContractEmit(
     }
     endSpan(onProgress, 'emit', 'ok');
 
+    signal.throwIfAborted();
+    const pinnedFiles =
+      outputPath === undefined
+        ? (
+            await unlessAborted(
+              runContractSpaceSeedPhase({
+                migrationsDir: migrationsDirFor(config, cwd),
+                extensions: toExtensionInputs(config.extensions ?? []),
+                signal,
+              }),
+            )
+          ).seeded.flatMap(({ spaceId, writtenPaths }) =>
+            writtenPaths.map((path) => ({ spaceId, path })),
+          )
+        : [];
+
     await unlessAborted(mkdir(dirname(outputJsonPath), { recursive: true }));
     await publishContractArtifactPair({
       outputJsonPath,
@@ -187,6 +212,7 @@ export async function executeContractEmit(
         json: outputJsonPath,
         dts: outputDtsPath,
       },
+      pinnedFiles,
       ...ifDefined('validationWarning', validationWarning),
       ...ifDefined('sourceWarnings', sourceWarnings.length > 0 ? sourceWarnings : undefined),
     };

@@ -106,7 +106,7 @@ export function lookupFreeRefusalsOf(
 }
 
 /**
- * The enums a collection validator lists: those stored by a model in a managed collection, by one of its variants or embedded models, or by a value object any of them holds.
+ * The enums a collection validator lists: those stored by a model in a managed collection, by one of its variants or embedded models, or by a value object any of them holds. A model field refers to its domain enum and a value object member to the enum's storage value set; both carry the enum's name.
  */
 function validatedEnumNames(input: MongoContractRefusalsInput): ReadonlySet<string> {
   const { models, valueObjects, controlPolicies } = input;
@@ -119,10 +119,10 @@ function validatedEnumNames(input: MongoContractRefusalsInput): ReadonlySet<stri
   const enums = new Set<string>();
   const visitFields = (fields: Record<string, ContractField>) => {
     for (const field of Object.values(fields)) {
-      if (field.valueSet?.entityKind === 'enum') enums.add(field.valueSet.entityName);
-      if (field.type.kind === 'valueObject' && !visitedValueObjects.has(field.type.name)) {
-        visitedValueObjects.add(field.type.name);
-        visitFields(valueObjects[field.type.name]?.fields ?? {});
+      if (field.valueSet !== undefined) enums.add(field.valueSet.entityName);
+      if (field.type.kind === 'valueObject' && !visitedValueObjects.has(field.type.entityName)) {
+        visitedValueObjects.add(field.type.entityName);
+        visitFields(valueObjects[field.type.entityName]?.fields ?? {});
       }
     }
   };

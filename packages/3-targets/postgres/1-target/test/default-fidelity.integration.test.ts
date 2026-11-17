@@ -16,7 +16,7 @@ import { parsePostgresListText } from '../src/core/list-decoder';
 import { type CatalogColumnType, introspectedTypeText } from '../src/core/native-type-normalizer';
 import { readDefaultWithCodec } from '../src/core/psl-infer/infer-read-defaults';
 import { postgresCodecDescriptorRegistry } from '../src/core/registry';
-import { postgresScalarAndNativeTypeConstructors } from '../src/core/type-constructors';
+import { postgresScalarTypes } from '../src/core/type-constructors';
 import { toContractJson } from './contract-json';
 import { enumTypes, type FidelityRow, rows } from './default-fidelity.rows';
 
@@ -51,7 +51,7 @@ interface FidelityColumn {
 
 const enumNames: ReadonlySet<string> = new Set(enumTypes.map((enumType) => enumType.name));
 const constructors = inferredTypeConstructors({
-  authoringTypes: postgresScalarAndNativeTypeConstructors,
+  authoringTypes: postgresScalarTypes,
   codecLookup: postgresCodecDescriptorRegistry,
   dataTypeLookup: createDataTypeLookup(postgresDataTypes),
 });

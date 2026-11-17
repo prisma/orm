@@ -14,13 +14,12 @@ import {
   detectTableNameCaseChanges,
   extractCodecControlHooks,
   fieldStatementColumns,
-  planEnumValueRewrites,
   planFieldEventCalls,
   plannerFailure,
   planStatements,
+  planStoredRewrites,
   sqlTypeLookupsOf,
   subjectsOfCalls,
-  withEnumValueOperations,
 } from '@internal/family-sql/control';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
@@ -52,7 +51,12 @@ import {
   issueNode,
   planIssues,
 } from './issue-planner';
-import type { RenameColumnCall, RenameTableCall } from './op-factory-call';
+import type {
+  RemoveStoredValueCall,
+  RenameColumnCall,
+  RenameTableCall,
+  SqliteOpFactoryCall,
+} from './op-factory-call';
 import { sqliteCallSubjects } from './operation-subjects';
 import {
   type SqliteMigrationDestinationInfo,
@@ -62,9 +66,11 @@ import { sqlitePlannerStrategies } from './planner-strategies';
 import type { SqlitePlanTargetDetails } from './planner-target-details';
 import { sqliteSchemaTables } from './schema-tables';
 import {
+  sqliteStoredKeyCalls,
+  sqliteStoredKeyFillCalls,
+  sqliteStoredValueCallClasses,
   sqliteStoredValueCalls,
-  storedValueOperationIndexes,
-  storedValueSubjects,
+  sqliteVariantRowCalls,
 } from './stored-value-calls';
 import {
   renameTableByHandStatements,
@@ -219,17 +225,25 @@ export class SqliteMigrationPlanner
       return plannerFailure([defaultedBackfill]);
     }
     const codecHooks = extractCodecControlHooks(options.frameworkComponents);
-    const { codecLookup } = sqlTypeLookupsOf(options.frameworkComponents);
-    const rewrites = planEnumValueRewrites({
+    const types = sqlTypeLookupsOf(options.frameworkComponents);
+    const { codecLookup } = types;
+    const storedRewrites = planStoredRewrites<SqliteOpFactoryCall, RemoveStoredValueCall>({
       statements: options.statements,
       fromContract: options.fromContract,
       contract: options.contract,
       tables: sqliteSchemaTables(statements.value.schema),
-      codecs: codecLookup,
+      types,
+      policy: options.policy,
+      calls: {
+        storedKeyCalls: sqliteStoredKeyCalls,
+        storedKeyFillCalls: (fills) => sqliteStoredKeyFillCalls(fills),
+        storedValueCalls: (rewrites) => sqliteStoredValueCalls(rewrites, codecLookup),
+        variantRowCalls: (rewrites) => sqliteVariantRowCalls(rewrites, codecLookup),
+        storedValueClasses: sqliteStoredValueCallClasses,
+      },
     });
-    if (!rewrites.ok) return plannerFailure([rewrites.failure]);
-    const storedValueCalls = sqliteStoredValueCalls(rewrites.value, codecLookup);
-    const disallowedStoredValueCalls = [...storedValueCalls.keys()].filter(
+    if (!storedRewrites.ok) return plannerFailure([storedRewrites.failure]);
+    const disallowedStoredValueCalls = storedRewrites.value.calls.filter(
       (call) => !options.policy.allowedOperationClasses.includes(call.operationClass),
     );
     if (disallowedStoredValueCalls.length > 0) {
@@ -284,7 +298,7 @@ export class SqliteMigrationPlanner
       ...statements.value.calls,
       ...replacedIndexes.calls,
       ...result.value.calls,
-      ...storedValueCalls.keys(),
+      ...storedRewrites.value.calls,
       ...fieldEventOps,
     ];
 
@@ -308,21 +322,26 @@ export class SqliteMigrationPlanner
         destination,
         this.#lowerer,
       ),
-      appliedStatements: withEnumValueOperations(
-        appliedStatementsInOrder(options.statements, statements.value.appliedStatements),
-        (statement) => storedValueOperationIndexes(calls, storedValueCalls, statement),
+      appliedStatements: appliedStatementsInOrder(
+        options.statements,
+        statements.value.plannedStatements,
+        (statement) => storedRewrites.value.operationIndexes(calls, statement),
       ),
       ...subjectsOfCalls(
         sqliteCallSubjects(
           calls,
           new Map(fieldEventCalls.map((fieldEvent) => [fieldEvent.call, fieldEvent])),
-          storedValueSubjects(storedValueCalls),
+          storedRewrites.value.storedValues,
+          storedRewrites.value.storedKeys,
+          storedRewrites.value.variantRows,
+          (table) => tablesReferencing(options.contract, table),
         ),
         {
           fromContract: options.fromContract,
           contract: options.contract,
           origins: statements.value.origins,
           byHand: sqliteTableRenameByHand,
+          removedVariants: storedRewrites.value.removedVariants,
         },
       ),
     };
@@ -482,4 +501,15 @@ function retainUnownedExtras(
       })
     );
   });
+}
+
+/** The tables of `contract` with a foreign key to `table`. */
+function tablesReferencing(
+  contract: SqlMigrationPlannerPlanOptions['contract'],
+  table: string,
+): readonly string[] {
+  const tables = contract.storage.namespaces[UNBOUND_NAMESPACE_ID]?.entries.table ?? {};
+  return Object.entries(tables).flatMap(([name, candidate]) =>
+    candidate.foreignKeys.some(({ target }) => target.tableName === table) ? [name] : [],
+  );
 }

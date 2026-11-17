@@ -653,22 +653,34 @@ describe('generateContractFieldDescriptor', () => {
     );
   });
 
-  it('generates value object field descriptor', () => {
+  it('renders a value object field type as the coordinate of its storage value object', () => {
     const field: ContractField = {
       nullable: true,
-      type: { kind: 'valueObject', name: 'Address' },
+      type: {
+        kind: 'valueObject',
+        plane: 'storage',
+        namespaceId: 'public',
+        entityKind: 'valueObject',
+        entityName: 'Address',
+      },
       many: false,
     };
     const result = generateContractFieldDescriptor('homeAddress', field);
     expect(result).toBe(
-      'readonly homeAddress: { readonly nullable: true; readonly type: { readonly kind: "valueObject"; readonly name: "Address" } }',
+      'readonly homeAddress: { readonly nullable: true; readonly type: { readonly kind: "valueObject"; readonly plane: "storage"; readonly namespaceId: "public"; readonly entityKind: "valueObject"; readonly entityName: "Address" } }',
     );
   });
 
   it('includes the non-nullable list descriptor', () => {
     const field: ContractField = {
       nullable: false,
-      type: { kind: 'valueObject', name: 'Address' },
+      type: {
+        kind: 'valueObject',
+        plane: 'storage',
+        namespaceId: 'public',
+        entityKind: 'valueObject',
+        entityName: 'Address',
+      },
       many: { elementNullable: false },
     };
     const result = generateContractFieldDescriptor('addresses', field);
@@ -678,11 +690,17 @@ describe('generateContractFieldDescriptor', () => {
   it('includes element nullability inside the list descriptor', () => {
     const field: ContractField = {
       nullable: false,
-      type: { kind: 'valueObject', name: 'Address' },
+      type: {
+        kind: 'valueObject',
+        plane: 'storage',
+        namespaceId: 'public',
+        entityKind: 'valueObject',
+        entityName: 'Address',
+      },
       many: { elementNullable: true },
     };
     expect(generateContractFieldDescriptor('addresses', field)).toBe(
-      'readonly addresses: { readonly nullable: false; readonly type: { readonly kind: "valueObject"; readonly name: "Address" }; readonly many: { readonly elementNullable: true } }',
+      'readonly addresses: { readonly nullable: false; readonly type: { readonly kind: "valueObject"; readonly plane: "storage"; readonly namespaceId: "public"; readonly entityKind: "valueObject"; readonly entityName: "Address" }; readonly many: { readonly elementNullable: true } }',
     );
   });
 
@@ -741,15 +759,15 @@ describe('generateValueObjectTypeAliases', () => {
     expect(generateValueObjectTypeAliases([])).toBe('');
   });
 
-  it('reads each value object from the shared generic at the namespace that declares it', () => {
+  it('reads each value object from the shared generic at the storage namespace that holds it', () => {
     expect(
       generateValueObjectTypeAliases([
         ['Address', 'public'],
         ['Point', '__unbound__'],
       ]).split('\n'),
     ).toEqual([
-      "type ValueObjectOutputTypes = ValueObjectTypesFromDomain<ContractBase['domain']['namespaces'], CodecTypes, ParameterizedOutputTypeFunctions, FieldTypeOverrides, \"output\">;",
-      "type ValueObjectInputTypes = ValueObjectTypesFromDomain<ContractBase['domain']['namespaces'], CodecTypes, ParameterizedOutputTypeFunctions, FieldTypeOverrides, \"input\">;",
+      "type ValueObjectOutputTypes = ValueObjectTypesFromStorage<ContractBase['storage']['namespaces'], CodecTypes, ParameterizedOutputTypeFunctions, FieldTypeOverrides, \"output\">;",
+      "type ValueObjectInputTypes = ValueObjectTypesFromStorage<ContractBase['storage']['namespaces'], CodecTypes, ParameterizedOutputTypeFunctions, FieldTypeOverrides, \"input\">;",
       'export type AddressOutput = ValueObjectOutputTypes["public"]["Address"];',
       'export type AddressInput = ValueObjectInputTypes["public"]["Address"];',
       'export type PointOutput = ValueObjectOutputTypes["__unbound__"]["Point"];',

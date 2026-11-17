@@ -26,12 +26,14 @@ import {
   resolveTypeAliases,
   typeAliasSpecContext,
 } from '@internal/psl-parser';
+import { instantiatePslTypeChoice } from '@internal/psl-parser/interpret';
 import type { FieldAttributeAst, PslSources } from '@internal/psl-parser/syntax';
 import { sqlCodecColumnLength } from '@internal/sql-contract/data-type';
 import type {
   AuthoredColumnDefault,
   EnumTypeHandle,
 } from '@internal/sql-contract-ts/contract-builder';
+import type { DeprecatedTypeNameWarner } from './deprecated-type-names';
 import { formatDbAttributeMigrationMessage } from './psl-attribute-parsing';
 import {
   type ColumnDescriptor,
@@ -75,13 +77,16 @@ export interface ResolveNamedTypeDeclarationsInput {
   readonly dataTypes: DataTypeSupport;
   readonly diagnostics: PslDiagnosticCollector;
   readonly authoringTypes: AuthoringTypeNamespace | undefined;
+  readonly renamedTypeConstructors: Readonly<Record<string, string>> | undefined;
+  readonly warnDeprecated: DeprecatedTypeNameWarner;
 }
 
 function describeUnsupportedSqlAliasAttribute(
   attribute: ResolvedAttribute<FieldAttributeAst>,
+  renamedTypeConstructors: Readonly<Record<string, string>> | undefined,
 ): string | undefined {
   return attribute.name.startsWith('db.')
-    ? formatDbAttributeMigrationMessage(attribute)
+    ? formatDbAttributeMigrationMessage(attribute, renamedTypeConstructors)
     : undefined;
 }
 
@@ -91,7 +96,20 @@ function aliasDescriptor(
 ): ColumnDescriptor | undefined {
   const { base, symbol } = alias;
   const source = diagnosticSource(input.sources, symbol.node.syntax);
+  if (base.kind === 'typeChoice') {
+    return instantiatePslTypeChoice({
+      symbol: base.symbol,
+      call: base.call,
+      span: symbol.span,
+      codecLookup: input.codecLookup,
+      diagnostics: input.diagnostics,
+      source,
+      entityLabel: `Type alias "${symbol.name}"`,
+      dataTypes: input.dataTypes,
+    });
+  }
   if (base.kind === 'typeConstructor') {
+    input.warnDeprecated(symbol, alias.baseName, base.descriptor);
     if (base.call === undefined) return instantiateAuthoringTypeConstructor(base.descriptor, []);
     return instantiatePslTypeConstructor({
       call: base.call,
@@ -170,7 +188,8 @@ function resolveDeclaredTypeAliases(
     sources: input.sources,
     diagnostics: input.diagnostics,
     authoringTypes: input.authoringTypes,
-    describeUnsupportedAttribute: describeUnsupportedSqlAliasAttribute,
+    describeUnsupportedAttribute: (attribute) =>
+      describeUnsupportedSqlAliasAttribute(attribute, input.renamedTypeConstructors),
   });
   const resolved = new Map<NamedTypeSymbol, ResolvedTypeAlias>();
   for (const alias of aliases.values()) {

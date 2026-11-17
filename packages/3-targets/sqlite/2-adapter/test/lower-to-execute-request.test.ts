@@ -14,8 +14,8 @@ import {
   createSqliteCodecRegistryWithBuiltins,
 } from '@internal/target-sqlite/codecs';
 import { jsonText, sqliteTable, text } from '@internal/target-sqlite/contract-free';
-import { sqliteCreateNamespace } from '@internal/target-sqlite/control';
 import { SqliteCreateTable } from '@internal/target-sqlite/ddl';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { createContract } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { encodeControlQueryParams } from '../src/core/control-codecs';

@@ -8,11 +8,11 @@ import {
   charColumn,
   float8Column,
   int4Column,
-  int8Column,
+  int8BigIntColumn,
   intervalPartsColumn,
   jsonbColumn,
-  jsonColumn,
-  numericColumn,
+  numericStringColumn,
+  plainJsonColumn,
   textColumn,
   timestamptzStringColumn,
   timestamptzTemporalColumn,
@@ -41,7 +41,7 @@ const profileSchema = type({
 
 export const contract = defineContract(
   { codecLookup: postgresCodecLookup, dataTypeLookup: postgresDataTypeLookup },
-  ({ field, model, rel }) => {
+  ({ field, model, rel, gen, type }) => {
     const UserBase = model('User', {
       fields: {
         id: field.column(int4Column).default(autoincrement()).id(),
@@ -60,7 +60,7 @@ export const contract = defineContract(
         createdAt: field.column(timestamptzTemporalColumn).default(now()).column('created_at'),
         updatedAt: field.column(timestamptzTemporalColumn).optional().column('update_at'),
         published: field.column(boolColumn),
-        meta: field.column(jsonColumn).optional(),
+        meta: field.column(plainJsonColumn).optional(),
       },
     });
 
@@ -97,7 +97,7 @@ export const contract = defineContract(
             id: field.column(int4Column).default(autoincrement()).id(),
             name: field.column(varcharColumn(255)).optional(),
             code: field.column(charColumn(16)).optional(),
-            price: field.column(numericColumn(10, 2)).optional(),
+            price: field.column(numericStringColumn(10, 2)).optional(),
             flags: field.column(bitColumn(8)).optional(),
             bits: field.column(varbitColumn(12)).optional(),
             createdAt: field
@@ -112,7 +112,7 @@ export const contract = defineContract(
 
         Event: model('Event', {
           fields: {
-            id: field.id.uuidv7String(),
+            id: field.column(type.Char(36)).id().onCreate(gen.uuid(7)),
             name: field.column(textColumn),
             scheduledAt: field
               .column(timestamptzStringColumn)
@@ -129,7 +129,7 @@ export const contract = defineContract(
             score: field.column(int4Column).default(0),
             rating: field.column(float8Column).default(3.14),
             active: field.column(boolColumn).default(true),
-            bigCount: field.column(int8Column).default(9007199254740991n).column('big_count'),
+            bigCount: field.column(int8BigIntColumn).default(9007199254740991n).column('big_count'),
             metadata: field.column(jsonbColumn).default({ key: 'default' }),
             tags: field.column(jsonbColumn).default(['alpha', 'beta']),
           },

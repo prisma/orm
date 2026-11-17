@@ -11,12 +11,14 @@ import {
 import {
   char,
   character,
+  datetime,
   enumType,
   geometry,
   int4,
   numeric,
   textArray,
   timestamp,
+  timestamptz,
   vector,
 } from './sql-data-type-fixtures';
 
@@ -147,6 +149,26 @@ describe('renderSqlCatalogText', () => {
       'timestamp(3) without time zone',
     );
     expect(renderSqlCatalogText(timestamp, {})).toBe('timestamp without time zone');
+  });
+
+  it('prints the normal form of the parameters for a type that declares no catalog parameters', () => {
+    expect([
+      renderSqlCatalogText(datetime, { precision: 0 }),
+      renderSqlCatalogText(datetime, {}),
+      renderSqlCatalogText(datetime, { precision: 3 }),
+    ]).toEqual(['datetime', 'datetime', 'datetime(3)']);
+  });
+
+  it('prints the parameters a type declares its catalog prints for those written', () => {
+    expect([
+      renderSqlCatalogText(timestamptz, {}),
+      renderSqlCatalogText(timestamptz, { precision: 6 }),
+      renderSqlCatalogText(timestamptz, { precision: 3 }),
+    ]).toEqual([
+      'timestamp with time zone',
+      'timestamp(6) with time zone',
+      'timestamp(3) with time zone',
+    ]);
   });
 
   it('prints the display when the text has one', () => {

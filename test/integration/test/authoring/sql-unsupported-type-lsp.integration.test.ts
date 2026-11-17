@@ -7,7 +7,7 @@ import { ProjectArtifacts } from '../../../../packages/1-framework/3-tooling/lan
 
 const fixtureDir = join(
   import.meta.dirname,
-  '../fixtures/cli/cli-test-app/fixtures/lsp-emit-parity',
+  '../fixtures/cli/cli-test-app/fixtures/lsp-workspace-packages',
 );
 const configPath = join(fixtureDir, 'prisma.config.ts');
 const schemaPath = join(fixtureDir, 'contract.prisma');

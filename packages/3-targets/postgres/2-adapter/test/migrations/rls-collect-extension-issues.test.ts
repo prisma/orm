@@ -70,6 +70,7 @@ function toPolicyNode(p: PostgresRlsPolicy): PostgresPolicySchemaNode {
 
 function schemaWithPolicies(policies: PostgresRlsPolicy[]): PostgresDatabaseSchemaNode {
   return new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces: {
       [SCHEMA_NAME]: new PostgresNamespaceSchemaNode({
         schemaName: SCHEMA_NAME,

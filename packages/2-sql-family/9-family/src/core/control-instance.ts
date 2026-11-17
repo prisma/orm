@@ -1,4 +1,8 @@
 import type { Contract, ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
+import {
+  type AuthoringEntityTypeNamespace,
+  isAuthoringEntityTypeDescriptor,
+} from '@internal/framework-components/authoring';
 import type {
   TargetBoundComponentDescriptor,
   TargetDescriptor,
@@ -31,10 +35,14 @@ import {
   VERIFY_CODE_TARGET_MISMATCH,
 } from '@internal/framework-components/control';
 import type { TypesImportSpec } from '@internal/framework-components/emission';
-import { isPlainRecord } from '@internal/framework-components/ir';
-import type { PslDocumentAst } from '@internal/framework-components/psl-ast';
+import { isPlainRecord, UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import {
+  type PslDocumentAst,
+  UNBOUND_PSL_NAMESPACE_NAME,
+} from '@internal/framework-components/psl-ast';
 import { assertDescriptorSelfConsistency } from '@internal/migration-tools/spaces';
 import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { requiresNameUniqueAcrossNamespaces } from '@internal/sql-contract/entity-handle-lowering-hook';
 import type { SqlControlDriverInstance, SqlStorage } from '@internal/sql-contract/types';
 import type {
   AnyQueryAst,
@@ -332,7 +340,8 @@ export interface SqlControlFamilyInstance
 
 export type SqlFamilyInstance = SqlControlFamilyInstance;
 
-interface CrossSpaceFkView {
+/** A composed extension pack's id and the JSON of its contract space, as the configuration-load checks read them. */
+interface ComposedPackView {
   readonly id: string;
   readonly contractSpace?: {
     readonly contractJson?: {
@@ -350,7 +359,7 @@ interface CrossSpaceFkView {
  * `buildExtensionLoadOrder` in control-stack uses.
  */
 function buildTransitiveDependsOnMap(
-  extensions: readonly CrossSpaceFkView[],
+  extensions: readonly ComposedPackView[],
 ): Map<string, Set<string>> {
   const directDeps = new Map<string, readonly string[]>();
   for (const ext of extensions) {
@@ -401,7 +410,7 @@ function isObjectRecord(v: unknown): v is Record<string, unknown> {
 }
 
 export function assertNoCrossSpaceFkReverseReferences(
-  extensions: readonly CrossSpaceFkView[],
+  extensions: readonly ComposedPackView[],
 ): void {
   const dependsOnMap = buildTransitiveDependsOnMap(extensions);
 
@@ -439,6 +448,53 @@ export function assertNoCrossSpaceFkReverseReferences(
               );
             }
           }
+        }
+      }
+    }
+  }
+}
+
+/** The discriminators of the composed entity types whose names are unique across namespaces. */
+function entityKindsNamedOnce(entityTypes: AuthoringEntityTypeNamespace): readonly string[] {
+  return Object.values(entityTypes).flatMap((value) => {
+    if (!isAuthoringEntityTypeDescriptor(value)) return entityKindsNamedOnce(value);
+    return requiresNameUniqueAcrossNamespaces(value.output) ? [value.discriminator] : [];
+  });
+}
+
+/**
+ * Checks the packs' entities of a kind whose names are unique across namespaces, such as a Postgres extension: each must be in the unbound namespace, and no two packs may declare the same one.
+ */
+export function assertPackEntitiesDeclaredOnce(
+  extensions: readonly ComposedPackView[],
+  entityTypes: AuthoringEntityTypeNamespace,
+): void {
+  for (const kind of entityKindsNamedOnce(entityTypes)) {
+    const declaringPack = new Map<string, string>();
+    for (const ext of extensions) {
+      const namespaces = ext.contractSpace?.contractJson?.storage?.namespaces;
+      if (!isObjectRecord(namespaces)) continue;
+      for (const [namespaceId, ns] of Object.entries(namespaces)) {
+        if (!isObjectRecord(ns) || !isObjectRecord(ns['entries'])) continue;
+        const declared = ns['entries'][kind];
+        if (!isObjectRecord(declared)) continue;
+        for (const name of Object.keys(declared)) {
+          if (namespaceId !== UNBOUND_NAMESPACE_ID) {
+            throw sqlFamilyError(
+              'CONTRACT.PACK_CONTRIBUTION_INVALID',
+              `Extension pack "${ext.id}" declares ${kind} "${name}" in namespace "${namespaceId}". A pack declares each ${kind} in namespace "${UNBOUND_PSL_NAMESPACE_NAME}", so the connection's search path finds it.`,
+              { meta: { entityKind: kind, entityName: name, packId: ext.id, namespaceId } },
+            );
+          }
+          const earlier = declaringPack.get(name);
+          if (earlier !== undefined && earlier !== ext.id) {
+            throw sqlFamilyError(
+              'CONTRACT.PACK_CONTRIBUTION_INVALID',
+              `Extension packs "${earlier}" and "${ext.id}" both declare ${kind} "${name}". Each ${kind} can be declared by one contract space only; compose only one of these packs.`,
+              { meta: { entityKind: kind, entityName: name, packIds: [earlier, ext.id] } },
+            );
+          }
+          declaringPack.set(name, ext.id);
         }
       }
     }
@@ -491,6 +547,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
   }
 
   assertNoCrossSpaceFkReverseReferences(extensions);
+  assertPackEntitiesDeclaredOnce(extensions, stack.authoringContributions.entityTypes);
 
   const { codecTypeImports, extensionIds } = stack;
 

@@ -1,5 +1,5 @@
 import mongoAdapter from '@internal/adapter-mongo/control';
-import type { ContractConfig, PrismaNextConfig } from '@internal/config/config-types';
+import type { ContractConfig, FormatterConfig, PrismaConfig } from '@internal/config/config-types';
 import {
   defineConfig as coreDefineConfig,
   defaultContractOutputPath,
@@ -26,6 +26,7 @@ export interface MongoConfigOptions {
   readonly migrations?: {
     readonly dir?: string;
   };
+  readonly formatter?: FormatterConfig;
 }
 
 function contractConfigFromPath(
@@ -66,7 +67,7 @@ function resolveContractConfig(
   return { ...options.contract, ...ifDefined('output', output) };
 }
 
-export function defineConfig(options: MongoConfigOptions): PrismaNextConfig<'mongo', 'mongo'> {
+export function defineConfig(options: MongoConfigOptions): PrismaConfig<'mongo', 'mongo'> {
   const extensions = options.extensions ?? [];
   const contractConfig = resolveContractConfig(options, extensions);
 
@@ -79,5 +80,6 @@ export function defineConfig(options: MongoConfigOptions): PrismaNextConfig<'mon
     contract: contractConfig,
     ...ifDefined('db', options.db),
     ...ifDefined('migrations', options.migrations),
+    ...ifDefined('formatter', options.formatter),
   });
 }

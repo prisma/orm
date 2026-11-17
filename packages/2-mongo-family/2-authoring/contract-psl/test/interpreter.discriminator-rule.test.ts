@@ -14,7 +14,7 @@ const kindEnum = enumType(
 
 function interpret(schema: string) {
   return interpretMongoContract(schema, {
-    scalarTypeCodecIds: new Map([
+    scalarTypes: new Map([
       ['ObjectId', 'mongo/objectId@1'],
       ['String', 'mongo/string@1'],
       ['Int32', 'mongo/int32@1'],
@@ -23,7 +23,6 @@ function interpret(schema: string) {
     codecLookup: mongoCodecLookup,
     dataTypes: mongoDataTypeSupport,
     authoringContributions: {
-      field: {},
       type: {},
       modelAttributes: {},
       entityTypes: {

@@ -4,7 +4,6 @@ import {
   createReturningTagsCollection,
   createReturningUsersCollection,
   createUsersCollection,
-  createUsersCollectionWithoutReturning,
   timeouts,
   withCollectionRuntime,
 } from './integration-helpers';
@@ -283,36 +282,6 @@ describe('integration/create', () => {
           await runtime.query('drop trigger if exists users_skip_flagged on users');
           await runtime.query('drop function if exists skip_flagged_user()');
         }
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-
-  it(
-    'create() and createAll() reject when returning capability is disabled',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollectionWithoutReturning(runtime);
-
-        await expect(
-          users.create({
-            id: 30,
-            name: 'NoReturn',
-            email: 'noreturn@example.com',
-            invitedById: null,
-          }),
-        ).rejects.toThrow(/requires contract capability "returning"/);
-
-        expect(() =>
-          users.createAll([
-            {
-              id: 31,
-              name: 'NoReturn2',
-              email: 'noreturn2@example.com',
-              invitedById: null,
-            },
-          ]),
-        ).toThrow(/requires contract capability "returning"/);
       });
     },
     timeouts.spinUpPpgDev,

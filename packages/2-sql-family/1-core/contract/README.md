@@ -12,6 +12,7 @@ This package provides TypeScript type definitions, Arktype validators, and facto
 - **Contract Validation**: Provides Arktype-based structural validators that the per-target `contractSerializer` SPI consumes for runtime-safe contract validation
 - **IR Factories**: Provides pure factory functions for constructing contract IR structures in tests and authoring
 - **Shared Plane Access**: Enables both migration-plane and runtime-plane packages to import SQL contract types without violating plane boundaries
+- **Shared Authoring Definitions**: Holds authoring definitions that both the SQL family pack and the PSL and TypeScript authoring packages read: `@internal/sql-contract/generated-id-column-aliases` defines the generated id column aliases (`UuidString`, `Ulid`, `Nanoid`, `Cuid2`, `Ksuid`) and the order a rewrite looks them up in (ADR 310)
 
 ## StorageColumn Structure
 

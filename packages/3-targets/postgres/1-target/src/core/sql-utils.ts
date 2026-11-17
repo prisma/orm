@@ -117,3 +117,57 @@ export const POSTGRES_QUOTING = [
   { open: "'", close: "'", doubledCloseEscapes: true, backslashEscapes: false },
   { open: '"', close: '"', doubledCloseEscapes: true, backslashEscapes: false },
 ] as const;
+
+function isTextLikeTypeText(typeText: string): boolean {
+  return (
+    typeText === 'text' ||
+    typeText === 'varchar' ||
+    typeText.startsWith('varchar(') ||
+    typeText === 'character varying' ||
+    typeText.startsWith('character varying(') ||
+    typeText === 'char' ||
+    typeText.startsWith('char(') ||
+    typeText === 'character' ||
+    typeText.startsWith('character(')
+  );
+}
+
+function literalNeedsCast(value: unknown, typeText: string): boolean {
+  if (typeof value === 'number') return !Number.isFinite(value);
+  if (typeof value === 'string') return !isTextLikeTypeText(typeText);
+  return typeof value === 'object' && value !== null;
+}
+
+/** A value's literal without a cast: SQL NULL, a bare number or boolean, or quoted text. */
+function literalText(value: unknown): string {
+  if (value === null) return 'NULL';
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  if (typeof value === 'number')
+    return Number.isFinite(value) ? String(value) : `'${String(value)}'`;
+  if (typeof value === 'bigint') return String(value);
+  if (typeof value === 'string') return `'${escapeLiteral(value)}'`;
+  if (value instanceof Uint8Array) {
+    const hex = Array.from(value)
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+    return `'\\x${hex}'`;
+  }
+  if (typeof value === 'object') return `'${escapeLiteral(JSON.stringify(value))}'`;
+  throw postgresError(
+    'CONTRACT.PACK_CONTRIBUTION_INVALID',
+    `pgRenderDdlExecuteRequest: unexpected wire type "${typeof value}"`,
+    { meta: { wireType: typeof value } },
+  );
+}
+
+/**
+ * A value as DDL writes it for a column of `typeText`: `ARRAY[...]` of each element's literal, cast to the list type, for a list written to a list type, and otherwise the value's literal, cast to the column type where PostgreSQL would read it as another type. `value` is what the driver exchanges for the column, with a `Date` already written as text.
+ */
+export function inlineLiteral(value: unknown, typeText: string): string {
+  if (Array.isArray(value) && typeText.endsWith('[]')) {
+    if (value.length === 0) return "'{}'";
+    return `ARRAY[${value.map(literalText).join(', ')}]::${typeText}`;
+  }
+  const text = literalText(value);
+  return literalNeedsCast(value, typeText) ? `${text}::${typeText}` : text;
+}

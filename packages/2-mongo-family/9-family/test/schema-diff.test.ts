@@ -1,4 +1,5 @@
 import type { ControlPolicy } from '@internal/contract/types';
+import { defaultMongoIndexName } from '@internal/mongo-contract';
 import {
   MongoSchemaCollection,
   MongoSchemaCollectionOptions,
@@ -9,7 +10,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import { diffMongoSchemas } from '../src/core/schema-diff';
 
-const emptyIR = new MongoSchemaIR([]);
+const emptyIR = new MongoSchemaIR([], { fromDatabase: false });
 
 const managedCollectionControlPolicy = (): ControlPolicy => 'managed';
 
@@ -18,7 +19,7 @@ function diffMongoSchemasManaged(live: MongoSchemaIR, expected: MongoSchemaIR, s
 }
 
 function ir(collections: Record<string, MongoSchemaCollection>): MongoSchemaIR {
-  return new MongoSchemaIR(Object.values(collections));
+  return new MongoSchemaIR(Object.values(collections), { fromDatabase: false });
 }
 
 function coll(
@@ -39,9 +40,9 @@ function coll(
 
 function idx(
   keys: Array<{ field: string; direction: 1 | -1 }>,
-  opts?: { unique?: boolean; sparse?: boolean; expireAfterSeconds?: number },
+  opts?: { name?: string; unique?: boolean; sparse?: boolean; expireAfterSeconds?: number },
 ): MongoSchemaIndex {
-  return new MongoSchemaIndex({ keys, ...opts });
+  return new MongoSchemaIndex({ name: defaultMongoIndexName(keys), keys, ...opts });
 }
 
 function validator(
@@ -121,7 +122,7 @@ describe('diffMongoSchemas', () => {
       const result = diffMongoSchemasManaged(live, expected, false);
 
       expect(result.failures).toEqual([
-        expect.objectContaining({ path: ['users', 'index:email:1'] }),
+        expect.objectContaining({ path: ['users', 'index:email_1'] }),
       ]);
     });
 
@@ -134,7 +135,7 @@ describe('diffMongoSchemas', () => {
 
       expect(result.failures).toEqual([]);
       expect(result.warnings).toEqual([
-        expect.objectContaining({ path: ['users', 'index:email:1'] }),
+        expect.objectContaining({ path: ['users', 'index:email_1'] }),
       ]);
     });
 
@@ -146,7 +147,7 @@ describe('diffMongoSchemas', () => {
       const result = diffMongoSchemasManaged(live, expected, true);
 
       expect(result.failures).toEqual([
-        expect.objectContaining({ path: ['users', 'index:email:1'] }),
+        expect.objectContaining({ path: ['users', 'index:email_1'] }),
       ]);
     });
   });
@@ -269,6 +270,7 @@ describe('diffMongoSchemas', () => {
     // wildcard-projection settings match by their composed lookup key.
     it('matches indexes that share sparse, TTL, partial filter and wildcard projection', () => {
       const richIndex = new MongoSchemaIndex({
+        name: 'createdAt_1',
         keys: [{ field: 'createdAt', direction: 1 }],
         unique: true,
         sparse: true,
@@ -289,6 +291,7 @@ describe('diffMongoSchemas', () => {
         events: coll('events', {
           indexes: [
             new MongoSchemaIndex({
+              name: 'createdAt_1',
               keys: [{ field: 'createdAt', direction: 1 }],
               sparse: true,
               expireAfterSeconds: 60,
@@ -300,7 +303,12 @@ describe('diffMongoSchemas', () => {
       });
       const expected = ir({
         events: coll('events', {
-          indexes: [new MongoSchemaIndex({ keys: [{ field: 'createdAt', direction: 1 }] })],
+          indexes: [
+            new MongoSchemaIndex({
+              name: 'createdAt_1',
+              keys: [{ field: 'createdAt', direction: 1 }],
+            }),
+          ],
         }),
       });
 
@@ -311,9 +319,9 @@ describe('diffMongoSchemas', () => {
       expect(result.failures.length).toBeGreaterThanOrEqual(1);
       expect(result.failures).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ path: ['events', 'index:createdAt:1'] }),
+          expect.objectContaining({ path: ['events', 'index:createdAt_1'] }),
           expect.objectContaining({
-            path: ['events', 'index:createdAt:1'],
+            path: ['events', 'index:createdAt_1'],
           }),
         ]),
       );

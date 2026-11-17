@@ -187,6 +187,7 @@ describe('resolveStatements, field renames', () => {
         resolve(['User.name:User.fullName'], origin, destination),
         UNRESOLVED,
         'field "fullName" already exists on the origin model "app.User"',
+        'If another field holds the name "fullName" in the origin and this change renames or removes it, make the change in two migrations: first change the contract so that field has its new name or is gone, and plan only that; then give "name" the name "fullName" and plan it with --rename User.name:User.fullName.',
       );
     });
 
@@ -199,6 +200,7 @@ describe('resolveStatements, field renames', () => {
         resolve(['User.name:User.fullName'], origin, destination),
         UNRESOLVED,
         'field "name" still exists on the destination model "app.User"',
+        'If "name" in the destination is another field that takes the name, make the change in two migrations: first change the contract so that "name" is renamed to "fullName" and no field has the name "name", and plan it with --rename User.name:User.fullName; then add or rename the field that takes the name "name" and plan that.',
       );
     });
 
@@ -237,14 +239,12 @@ describe('resolveStatements, field renames', () => {
       expect(expectValue(resolve(['Dog.bark:Dog.woof'], origin, destination))).toHaveLength(1);
     });
 
-    it('refuses a field of a value object, saying value object renames are not supported', () => {
+    it('reads a field of a value object as a value object field, not a model field', () => {
       const origin = contractOf({ app: { valueObjects: { Address: ['street'] } } });
       const destination = contractOf({ app: { valueObjects: { Address: ['road'] } } });
-      expectFailure(
-        resolve(['app.Address.street:app.Address.road'], origin, destination),
-        UNRESOLVED,
-        'value object renames are not supported in this release',
-      );
+      expect(
+        expectValue(resolve(['app.Address.street:app.Address.road'], origin, destination)),
+      ).toMatchObject([{ kind: 'rename', entity: 'valueObjectField' }]);
     });
   });
 

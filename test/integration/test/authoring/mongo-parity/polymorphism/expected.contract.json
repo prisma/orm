@@ -170,7 +170,8 @@
                       "field": "title"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "title_1"
                 },
                 {
                   "keys": [
@@ -180,6 +181,7 @@
                     }
                   ],
                   "kind": "mongo-index",
+                  "name": "severity_1",
                   "partialFilterExpression": {
                     "type": "bug"
                   }
@@ -192,6 +194,7 @@
                     }
                   ],
                   "kind": "mongo-index",
+                  "name": "priority_1",
                   "partialFilterExpression": {
                     "type": "feature"
                   }
@@ -293,7 +296,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "79b9706fabe9ebac899db0740efff03ed2954599bbf8e26b7c204da27b17c813"
+    "storageHash": "1ca867843c1e7f1fda10fbab2c6fbfe8340ba6534fa4a58ed013c9057958c4a8"
   },
   "capabilities": {},
   "extensions": {},

@@ -53,11 +53,11 @@ describe('printPsl', () => {
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
       model Post {
-        id          Int               @id @default(autoincrement())
-        title       String            @default("Untitled")
-        isPublished Boolean           @default(false) @map("is_published")
-        viewCount   Int               @default(0) @map("view_count")
-        createdAt   TimestamptzString @default(now()) @map("created_at")
+        id          Int                    @id @default(autoincrement())
+        title       String                 @default("Untitled")
+        isPublished Boolean                @default(false) @map("is_published")
+        viewCount   Int                    @default(0) @map("view_count")
+        createdAt   DateTime(precision: 6) @default(now()) @map("created_at")
 
         @@map("post")
       }
@@ -96,9 +96,9 @@ describe('printPsl', () => {
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
       model Contact {
-        id    Int          @id
-        email VarChar(255) @unique
-        phone Char(20)?
+        id    Int                                   @id
+        email String(storage: varchar, length: 255) @unique
+        phone String(storage: char, length: 20)?
 
         @@map("contact")
       }
@@ -147,15 +147,15 @@ describe('printPsl', () => {
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
       model Price {
-        id    Int            @id
-        value Numeric(10, 2)
+        id    Int                              @id
+        value Decimal(precision: 10, scale: 2)
 
         @@map("price")
       }
 
       model Setting {
-        id    Int          @id
-        value VarChar(255)
+        id    Int                                   @id
+        value String(storage: varchar, length: 255)
 
         @@map("setting")
       }
@@ -205,15 +205,15 @@ describe('printPsl', () => {
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
       model Account {
-        id    Int          @id
-        email VarChar(255)
+        id    Int                                   @id
+        email String(storage: varchar, length: 255)
 
         @@map("account")
       }
 
       model Profile {
-        id    Int          @id
-        email VarChar(255)
+        id    Int                                   @id
+        email String(storage: varchar, length: 255)
 
         @@map("profile")
       }
@@ -253,9 +253,9 @@ describe('printPsl', () => {
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
       model User {
-        id     Int          @id
-        user   VarChar(255)
-        string VarChar(64)
+        id     Int                                   @id
+        user   String(storage: varchar, length: 255)
+        string String(storage: varchar, length: 64)
 
         @@map("user")
       }
@@ -374,10 +374,10 @@ describe('printPsl', () => {
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
       model Schedule {
-        id       Uuid          @id
-        bookedOn DateString    @map("booked_on")
-        slot     TimeString(3)
-        rating   SmallInt
+        id       Uuid               @id
+        bookedOn Date               @map("booked_on")
+        slot     Time(precision: 3)
+        rating   Int(storage: int2)
         payload  Json
 
         @@map("schedule")
@@ -425,10 +425,10 @@ describe('printPsl', () => {
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
       model Data {
-        id        Int               @id
-        computed  String            @default(sql\`my_custom_func()\`)
-        payload   Jsonb             @default(json\`{}\`)
-        touchedAt TimestamptzString @default(sql\`clock_timestamp()\`) @map("touched_at")
+        id        Int                    @id
+        computed  String                 @default(sql\`my_custom_func()\`)
+        payload   Json(storage: jsonb)   @default(json\`{}\`)
+        touchedAt DateTime(precision: 6) @default(sql\`clock_timestamp()\`) @map("touched_at")
 
         @@map("data")
       }
