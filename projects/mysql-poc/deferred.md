@@ -102,3 +102,7 @@ The MySQL target and adapter contribute no aggregate definitions. `db.orm.User.i
 ## `deleteAll()` on a table with no row identity deletes by the caller's condition after reading (slice 6b-1, 2026-11-17)
 
 Where `deleteAll()` must read the rows before deleting them (rows returned on a database without `RETURNING`, or with includes under the one-query include), and the table has no primary key and no unique key of `NOT NULL` columns, it runs a `SELECT` and then a `DELETE` on the same condition. A matching row committed between the two is deleted and not returned. This is `main`'s deliberate behaviour for such tables (`sql-orm-client/test/statement-graph/table-without-identity.test.ts`), and slice 6b-1 did not change it. Slice 6b-1 does widen who meets it: a unique key with a nullable column no longer counts as an identity. With an identity, the `DELETE` is keyed by the rows read.
+
+## A stored column whose name starts with `__prisma_` can clash with an internal alias
+
+The ORM client names its internal projection aliases with the prefix `__prisma_` (`__prisma_page_rn`, `__prisma_parent_key_<n>`, `__prisma_aggregate`, and on `main` before this project `__prisma_distinct_rn` and `__prisma_polymorphic_discriminator`). Nothing rejects a stored column with such a name, so a table that has one can return a wrong value for it. The fix is one check where contract column names are validated, covering every alias. Raised by the automated review of prisma/orm#31058; not fixed there because it is not specific to per-relation includes.
