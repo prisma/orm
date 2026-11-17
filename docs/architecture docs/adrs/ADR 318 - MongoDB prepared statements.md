@@ -81,7 +81,7 @@ It does no I/O. It is `async`, so a future async `beforeCompile` fits without an
 3. Binds the draft. Each placeholder becomes one `MongoParamRef(value, { name, codecId, nullable })`, placed at every position the placeholder holds. A placeholder used twice is one parameter in two places, so `beforeEncode`'s `entries()` lists it twice and one `replaceValue` changes both.
 4. Continues as an ad-hoc run does after structural lowering: the statement activity, `beforeEncode`, a check of every `$limit` and `$skip` value, `resolveParams`, the driver, and row decoding with the result shape kept from `prepare`. Ad-hoc and prepared runs share this code.
 
-The activity's `plan` is the handle, as on SQL. `intercept.onQuery`, `onRow` and `contentHash` receive the execution plan built for each run, so a prepared run has the same content hash as the same query run ad hoc with the same values.
+The activity's `plan` is the handle, as on SQL. `intercept.onQuery`, `onRow` and `contentHash` receive the execution plan built for each run, so a prepared run has the same content hash as an ad-hoc run that sends the same command. The hash covers the command after encoding. An ad-hoc query-builder literal is sent as written, with no codec, so its hash equals the prepared run's only when the declared codec leaves the value unchanged.
 
 Steps 1 to 3 happen before the activity starts: on the first iteration for `query`, and as a rejected promise for `execute`. SQL checks params inside the activity. A MongoDB run on a closed runtime fails with `DRIVER.NOT_CONNECTED` (`'Runtime is closed'`) in the driver step, after `beforeEncode`, which is where an ad-hoc MongoDB run fails.
 
@@ -149,9 +149,9 @@ The handle and declaration types, and `MongoPreparedParamRef` as a type, are exp
 
 ## `null` values
 
-A `null` binds to `MongoParamRef(null, { name, codecId, nullable })`, so middleware sees it like any other value. `resolveValue` sends `null` without calling the codec only when the parameter holds `null` and is marked nullable. Every other `null` still goes to the codec, which refuses it with `RUNTIME.ENCODE_FAILED`.
+A `null` binds to `MongoParamRef(null, { name, codecId, nullable })`, so middleware sees it like any other value. `resolveValue` sends `null` without calling the codec only when the parameter holds `null` and is marked nullable. Every other `null` still goes to the codec. A codec that cannot encode `null` refuses it with `RUNTIME.ENCODE_FAILED`; a codec whose values include `null`, such as `mongo/json@1`, encodes it.
 
-SQL skips the codec for every `null`. MongoDB cannot: the ORM wraps a `null` element written to a list whose elements are not nullable as `MongoParamRef(null, { codecId })` so the codec refuses it. A non-nullable placeholder given `null` at run time is refused the same way, which matches its type.
+SQL skips the codec for every `null`. MongoDB cannot: the ORM wraps a `null` element written to a list whose elements are not nullable as `MongoParamRef(null, { codecId })` so the codec decides. A non-nullable placeholder given `null` at run time goes to its codec the same way, which matches its type: `null` is accepted only where the codec's input type includes it.
 
 ## Codec ids are checked at `prepare`
 
