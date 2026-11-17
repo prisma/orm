@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * The old `prisma-next` name does not come back.
+ * The old `prisma-next` name does not come back, in any spelling: `Prisma Next`,
+ * `PrismaNext`, `prismaNext`, `PRISMA_NEXT` and the rest.
  *
  * Prisma 8 publishes 17 packages under `@prisma/*`, its repository is
  * `prisma/orm`, and its examples read `prisma-8-*`. The working name survives
@@ -24,6 +25,20 @@ import { join } from 'node:path';
 const GIT_ROOT = process.cwd();
 
 const LEGACY = 'prisma-next';
+
+/**
+ * Any case, joined by nothing, a space, a hyphen or an underscore. Not after a
+ * dot, so `contract.prisma next to` is a file name followed by a word, and not
+ * before `js`, so `Prisma Next.js` is the framework.
+ */
+const LEGACY_PATTERN = /(?<!\.)prisma[ _-]?next(?!\.?js\b)/gi;
+
+function occurrences(line) {
+  return [...line.matchAll(LEGACY_PATTERN)].map((match) => ({
+    at: match.index,
+    length: match[0].length,
+  }));
+}
 
 /** Files that carry the retired name only to prove it stays gone, this check included. */
 const RETIREMENT_PROOFS = new Set([
@@ -82,6 +97,11 @@ const ALLOWED = [
       /adrs\/ADR(?:%20| )\d+(?:%20| )-(?:%20| )$/.test(before),
   },
   {
+    why: 'the Prisma 8 skill’s description naming its former name once, so an agent matches a user who still says it',
+    matches: (relPath, line, before) =>
+      relPath === 'skills/prisma-8/SKILL.md' && /formerly $/.test(before),
+  },
+  {
     why: 'a third party’s package name — `@cipherstash/prisma-next` is published under that name and only that name',
     matches: (relPath, line, before) => /@cipherstash\/$/.test(before),
   },
@@ -116,9 +136,10 @@ export function trackedFiles(scanDir) {
  * `at` is the index of the occurrence within `line`; it defaults to the first,
  * which is what a caller checking a single-occurrence string wants.
  */
-export function allowanceFor(relPath, line, at = line.indexOf(LEGACY)) {
+export function allowanceFor(relPath, line, at = occurrences(line)[0]?.at ?? -1) {
+  const length = occurrences(line).find((occurrence) => occurrence.at === at)?.length ?? 0;
   const before = line.slice(0, at);
-  const after = line.slice(at + LEGACY.length);
+  const after = line.slice(at + length);
   return ALLOWED.find((allowance) => allowance.matches(relPath, line, before, after));
 }
 
@@ -132,9 +153,10 @@ export function findViolations(scanDir, files = trackedFiles(scanDir)) {
     } catch {
       continue;
     }
-    if (!content.includes(LEGACY)) continue;
+    if (!LEGACY_PATTERN.test(content)) continue;
+    LEGACY_PATTERN.lastIndex = 0;
     content.split('\n').forEach((line, index) => {
-      for (let at = line.indexOf(LEGACY); at !== -1; at = line.indexOf(LEGACY, at + 1)) {
+      for (const { at } of occurrences(line)) {
         if (allowanceFor(relPath, line, at) !== undefined) continue;
         violations.push({ file: relPath, line: index + 1, column: at + 1, text: line.trim() });
         return;
@@ -147,11 +169,11 @@ export function findViolations(scanDir, files = trackedFiles(scanDir)) {
 export function main(scanDir = GIT_ROOT) {
   const violations = findViolations(scanDir);
   if (violations.length === 0) {
-    console.log(`No disallowed \`${LEGACY}\` occurrence.`);
+    console.log(`No disallowed \`${LEGACY}\` occurrence, in any spelling.`);
     return 0;
   }
 
-  console.error(`${violations.length} disallowed \`${LEGACY}\` occurrence(s):\n`);
+  console.error(`${violations.length} disallowed \`${LEGACY}\` occurrence(s), in any spelling:\n`);
   for (const violation of violations.slice(0, 40)) {
     console.error(`  ${violation.file}:${violation.line}: ${violation.text.slice(0, 140)}`);
   }
