@@ -190,6 +190,9 @@ export interface RuntimeConnection extends RuntimeQueryable {
   destroy(reason?: unknown): Promise<void>;
 }
 
+/**
+ * A transaction on a runtime connection. Once `commit()` or `rollback()` is called it refuses statements, including one started earlier that has not reached the driver yet.
+ */
 export interface RuntimeTransaction extends RuntimeQueryable {
   readonly signal: AbortSignal;
   commit(): Promise<void>;
@@ -1425,7 +1428,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   }
 
   /**
-   * Begins a transaction on `connection`, which `owner` wraps, as a transaction activity. When the transaction's `activityStarted` hooks refuse the start, no `BEGIN` is sent, `owner` is recorded as clean, and `withTransaction` releases it; after any other start failure it destroys it. The transaction's `activityStarted` hooks run before `BEGIN`. Every statement sent on the transaction, or on `connection`, from the end of `BEGIN` until `commit()` or `rollback()` is called is the transaction's child, and is finalized when the transaction ends, with its outcome. `commit()` and `rollback()` resolve after every finalization hook has run. A subclass that holds its own connection begins its transactions here.
+   * Begins a transaction on `connection`, which `owner` wraps, as a transaction activity. When the transaction's `activityStarted` hooks refuse the start, no `BEGIN` is sent, `owner` is recorded as clean, and `withTransaction` releases it; after any other start failure it destroys it. The transaction's `activityStarted` hooks run before `BEGIN`. Every statement sent on the transaction, or on `connection`, from the end of `BEGIN` until `commit()` or `rollback()` is called is the transaction's child, and is finalized when the transaction ends, with its outcome. Once `commit()` or `rollback()` is called, a statement sent on the transaction is refused when it starts, and one started earlier that has not reached the driver yet is refused with `RUNTIME.TRANSACTION_CLOSED`, so neither runs after the `COMMIT` or `ROLLBACK`. `commit()` and `rollback()` resolve after every finalization hook has run. A subclass that holds its own connection begins its transactions here.
    */
   protected async beginTransactionOn(
     connection: SqlConnection,
@@ -1477,10 +1480,8 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     this.#openTransactions.set(connection, activity);
     const stopAcceptingChildren = (): void => {
       activity.stopAcceptingChildren();
-      for (const queryable of timeout === undefined ? [driverTx, connection] : [connection]) {
-        if (this.#openTransactions.get(queryable) === activity) {
-          this.#openTransactions.delete(queryable);
-        }
+      if (this.#openTransactions.get(connection) === activity) {
+        this.#openTransactions.delete(connection);
       }
     };
     let commitAttempted = false;
@@ -1500,14 +1501,14 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     const deadline = performance.now() + (timeout ?? Number.POSITIVE_INFINITY);
     let closed = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const stopDeadline = () => {
+    const markClosed = () => {
       clearTimeout(timer);
       timer = undefined;
       closed = true;
     };
     const expire = () => {
       if (closed) return;
-      stopDeadline();
+      markClosed();
       activity.stopAcceptingChildren();
       controller.abort(
         runtimeError('RUNTIME.TRANSACTION_TIMEOUT', 'Transaction callback exceeded its timeout', {
@@ -1516,16 +1517,15 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       );
     };
     const check = () => {
-      if (timeout === undefined) return;
       if (!closed && performance.now() >= deadline) expire();
       controller.signal.throwIfAborted();
       if (closed) throw transactionClosedError();
     };
+    this.#transactionChecks.set(driverTx, check);
     if (timeout !== undefined) {
       timer = setTimeout(expire, timeout);
-      this.#transactionChecks.set(driverTx, check);
       this.#transactionWorkOn.set(connection, async () => {
-        stopDeadline();
+        markClosed();
         stopAcceptingChildren();
         try {
           if (!settlement.committed && !settlement.rolledBack) {
@@ -1548,8 +1548,8 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       [transactionSettlement]: settlement,
       signal: controller.signal,
       async commit(): Promise<void> {
-        check();
-        stopDeadline();
+        if (timeout !== undefined) check();
+        markClosed();
         commitAttempted = true;
         stopAcceptingChildren();
         try {
@@ -1568,7 +1568,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
         }
       },
       async rollback(): Promise<void> {
-        stopDeadline();
+        markClosed();
         stopAcceptingChildren();
         if (settlement.committed) {
           await commitEnding?.catch(() => undefined);
@@ -1916,6 +1916,9 @@ export async function withTransaction<R>(
       throw transactionClosedError();
     }
     for await (const row of open()) {
+      if (invalidated) {
+        throw transactionClosedError();
+      }
       yield row;
       if (invalidated) {
         throw transactionClosedError();
@@ -2024,6 +2027,7 @@ export async function withTransaction<R>(
     }
     if (!commitRequested) {
       const selected = error;
+      invalidated = true;
       try {
         await transaction.rollback();
       } catch (rollbackError) {
