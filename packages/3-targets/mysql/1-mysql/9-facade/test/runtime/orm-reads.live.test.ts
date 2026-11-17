@@ -101,6 +101,55 @@ describe('MySQL reads through the ORM and the SQL builder', {
     });
   });
 
+  it('aggregates a collection, and answers an empty one with a zero count and nulls', async (test) => {
+    await withSeededDatabase(test, exampleDatabase, async (url) => {
+      await using db = mysql({ contract, url, verifyMarker: false });
+      const stats = (minId: number) =>
+        db.orm.Post.where((p) => p.id.gte(minId)).aggregate((a) => ({
+          count: a.count(),
+          total: a.sum('authorId'),
+          mean: a.avg('authorId'),
+          first: a.min('title'),
+          last: a.max('title'),
+        }));
+      expect({ some: await stats(2), none: await stats(99) }).toEqual({
+        some: { count: 3, total: 4, mean: 4 / 3, first: 'Beta', last: 'Gamma' },
+        none: { count: 0, total: null, mean: null, first: null, last: null },
+      });
+    });
+  });
+
+  it('takes the least and greatest enum member by its text, where ORDER BY and PostgreSQL follow the declared order', async (test) => {
+    await withSeededDatabase(test, exampleDatabase, async (url) => {
+      await using db = mysql({ contract, url, verifyMarker: false });
+      const extremes = await db.orm.User.aggregate((a) => ({
+        least: a.min('role'),
+        greatest: a.max('role'),
+      }));
+      const first = await db.orm.User.select('role')
+        .orderBy((u) => u.role.asc())
+        .first();
+      expect({ extremes, first }).toEqual({
+        extremes: { least: 'ADMIN', greatest: 'USER' },
+        first: { role: 'USER' },
+      });
+    });
+  });
+
+  it('groups a collection and counts each group', async (test) => {
+    await withSeededDatabase(test, exampleDatabase, async (url) => {
+      await using db = mysql({ contract, url, verifyMarker: false });
+      const groups = await db.orm.Post.groupBy('authorId').aggregate((a) => ({
+        posts: a.count(),
+        newest: a.max('id'),
+      }));
+      expect([...groups].sort((a, b) => a.authorId - b.authorId)).toEqual([
+        { authorId: 1, posts: 3, newest: 3 },
+        { authorId: 2, posts: 1, newest: 4 },
+      ]);
+    });
+  });
+
   it('runs a SQL builder select', async (test) => {
     await withSeededDatabase(test, exampleDatabase, async (url) => {
       await using db = mysql({ contract, url, verifyMarker: false });

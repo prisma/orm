@@ -26,6 +26,7 @@ describe('MySQL data types', () => {
       'mysql/char',
       'mysql/date',
       'mysql/datetime',
+      'mysql/double',
       'mysql/duration',
       'mysql/enum',
       'mysql/int',
@@ -60,6 +61,7 @@ describe('MySQL data types', () => {
     ['text', 'mysql/text', {}],
     ['datetime', 'mysql/datetime', {}],
     ['datetime(3)', 'mysql/datetime', { precision: 3 }],
+    ['double', 'mysql/double', {}],
   ])('reads the reported type %s as %s', (text, id, typeParams) => {
     const resolved = resolveReportedSqlType(reported(text), mysqlDataTypes);
     expect({ id: resolved?.dataType.id, typeParams: resolved?.typeParams }).toEqual({

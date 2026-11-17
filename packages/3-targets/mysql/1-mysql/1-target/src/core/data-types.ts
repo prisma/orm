@@ -90,6 +90,16 @@ export const mysqlBigint = sqlDataType('mysql/bigint', {
   casts: { [mysqlInt.id]: asNumeralText },
 });
 
+/** A finite IEEE 754 double, stored as a JSON number: MySQL holds no NaN or infinity. */
+export const mysqlDouble = sqlDataType('mysql/double', {
+  texts: [{ text: 'double', written: true, catalog: true }],
+  read: (json) =>
+    typeof json === 'number' && Number.isFinite(json)
+      ? json
+      : refuseJsonValue('mysql/double', 'a finite number', json),
+  casts: {},
+});
+
 /** The length of `varchar`, which MySQL requires, up to the largest it accepts. */
 export const mysqlVarcharParams = arktype({
   length: 'number.integer >= 1 & number.integer <= 65535',
@@ -331,6 +341,7 @@ export const mysqlDataTypes: readonly DataType[] = [
   mysqlText,
   mysqlInt,
   mysqlBigint,
+  mysqlDouble,
   mysqlVarchar,
   mysqlChar,
   mysqlDatetime,

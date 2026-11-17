@@ -272,6 +272,106 @@ describe('MySQL includes through the ORM', { timeout: timeouts.databaseOperation
     });
   });
 
+  it('reduces a to-many include to count, sum, avg, min and max', async (test) => {
+    await withSeededDatabase(test, exampleDatabase, async (url) => {
+      await using db = mysql({ contract, url, verifyMarker: false });
+      const reduced = async (user: number) => ({
+        count: await db.orm.User.include('posts', (p) => p.count()).first({ id: user }),
+        sum: await db.orm.User.include('posts', (p) => p.sum('id')).first({ id: user }),
+        avg: await db.orm.User.include('posts', (p) => p.avg('id')).first({ id: user }),
+        min: await db.orm.User.include('posts', (p) => p.min('title')).first({ id: user }),
+        max: await db.orm.User.include('posts', (p) => p.max('title')).first({ id: user }),
+      });
+      const posts = async (user: number) =>
+        Object.fromEntries(
+          Object.entries(await reduced(user)).map(([name, row]) => [name, row?.posts]),
+        );
+      expect({ withPosts: await posts(1), without: await posts(3) }).toEqual({
+        withPosts: { count: 3, sum: 6, avg: 2, min: 'Alpha', max: 'Gamma' },
+        without: { count: 0, sum: null, avg: null, min: null, max: null },
+      });
+    });
+  });
+
+  it('reads the mean of integers exactly, where MySQL prints its decimal average to four places', async (test) => {
+    await withSeededDatabase(
+      test,
+      [
+        ...exampleDatabase,
+        "INSERT INTO `Post` (`id`, `title`, `authorId`) VALUES (5, 'Epsilon', 2), (7, 'Eta', 2)",
+      ],
+      async (url, driver) => {
+        await using db = mysql({ contract, url, verifyMarker: false });
+        const user = await db.orm.User.select('id')
+          .include('posts', (p) => p.avg('id'))
+          .first({ id: 2 });
+        const printed = await driver.query<{ mean: string }>(
+          'SELECT CAST(AVG(`id`) AS CHAR) AS `mean` FROM `Post` WHERE `authorId` = 2',
+        );
+        expect({ user, printed: printed.rows }).toEqual({
+          user: { id: 2, posts: 16 / 3 },
+          printed: [{ mean: '5.3333' }],
+        });
+      },
+    );
+  });
+
+  it('reads a sum past 2^53 exactly through sumBigInt, and refuses it as a number rather than round it', async (test) => {
+    await withSeededDatabase(test, eventsDatabase, async (url) => {
+      await using db = mysql({ contract: eventsContract, url, verifyMarker: false });
+      const exact = await db.orm.Account.select('id')
+        .include('events', (events) => events.sumBigInt('id'))
+        .first({ id: 1 });
+      expect(exact).toEqual({ id: 1, events: 9007199254740995n });
+      await expect(
+        db.orm.Account.select('id')
+          .include('events', (events) => events.sum('id'))
+          .first({ id: 1 }),
+      ).rejects.toMatchObject({ code: 'RUNTIME.DECODE_FAILED' });
+    });
+  });
+
+  it('combines the rows of a to-many include with a count of them', async (test) => {
+    await withSeededDatabase(test, exampleDatabase, async (url) => {
+      await using db = mysql({ contract, url, verifyMarker: false });
+      const users = await db.orm.User.select('id')
+        .include('posts', (posts) =>
+          posts.combine({
+            rows: posts
+              .select('title')
+              .orderBy((p) => p.title.asc())
+              .limit(2),
+            count: posts.count(),
+          }),
+        )
+        .where((u) => u.id.lte(3))
+        .orderBy((u) => u.id.asc())
+        .all();
+      expect(users).toEqual([
+        { id: 1, posts: { rows: [{ title: 'Alpha' }, { title: 'Beta' }], count: 3 } },
+        { id: 2, posts: { rows: [{ title: 'Delta' }], count: 1 } },
+        { id: 3, posts: { rows: [], count: 0 } },
+      ]);
+    });
+  });
+
+  it('counts the posts of the author of each post, two levels deep', async (test) => {
+    await withSeededDatabase(test, exampleDatabase, async (url) => {
+      await using db = mysql({ contract, url, verifyMarker: false });
+      const posts = await db.orm.Post.select('id')
+        .include('author', (author) =>
+          author.select('email').include('posts', (again) => again.count()),
+        )
+        .where((p) => p.id.gte(3))
+        .orderBy((p) => p.id.asc())
+        .all();
+      expect(posts).toEqual([
+        { id: 3, author: { email: 'b@example.com', posts: 3 } },
+        { id: 4, author: { email: 'a@example.com', posts: 1 } },
+      ]);
+    });
+  });
+
   it('keeps a bigint past 2^53 and a datetime(3) exact inside an include', async (test) => {
     await withSeededDatabase(test, eventsDatabase, async (url) => {
       await using db = mysql({ contract: eventsContract, url, verifyMarker: false });

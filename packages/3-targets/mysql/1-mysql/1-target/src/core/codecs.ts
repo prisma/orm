@@ -9,8 +9,12 @@ import {
   type CodecInstanceContext,
   type DataTypeValue,
   decimalTextBigintLiteral,
+  decimalTextNumberLiteral,
+  floatNumberLiteral,
+  readJsonIntegerText,
   refuseJsonValue,
   renderTsLiteral,
+  SAFE_INTEGER_BIGINT_RANGE,
 } from '@internal/framework-components/codec';
 import { sqlRawDataType } from '@internal/sql-contract/data-type';
 import {
@@ -27,7 +31,9 @@ import { hasDigitsBelowAMillisecond } from '@internal/type-implementations/date'
 import { identityJsonProjection, MysqlCodecDescriptor, mysqlCodec } from './codec-descriptor';
 import {
   MYSQL_BIGINT_CODEC_ID,
+  MYSQL_BIGINT_NUMBER_CODEC_ID,
   MYSQL_DATETIME_CODEC_ID,
+  MYSQL_DOUBLE_CODEC_ID,
   MYSQL_ENUM_CODEC_ID,
   MYSQL_INT_CODEC_ID,
   MYSQL_TEXT_CODEC_ID,
@@ -38,6 +44,7 @@ import {
   mysqlDatetime,
   mysqlDatetimeParams,
   mysqlDatetimeText,
+  mysqlDouble,
   mysqlEnum,
   mysqlEnumParams,
   mysqlInt,
@@ -242,6 +249,126 @@ export class MysqlBigintDescriptor extends MysqlCodecDescriptor<void> {
 
 export const mysqlBigintDescriptor = new MysqlBigintDescriptor();
 
+function safeInteger(
+  code: 'RUNTIME.ENCODE_FAILED' | 'RUNTIME.DECODE_FAILED',
+  value: number,
+): number {
+  if (!Number.isSafeInteger(value)) {
+    throw mysqlError(
+      code,
+      `${MYSQL_BIGINT_NUMBER_CODEC_ID} value must be an integer within the safe integer range, got ${String(value)}`,
+      { meta: { codecId: MYSQL_BIGINT_NUMBER_CODEC_ID, received: String(value) } },
+    );
+  }
+  return value;
+}
+
+/** A MySQL `bigint`, or an integral `DECIMAL` such as a `SUM` of integers, as a JavaScript number. Both directions refuse a value outside ±(2^53 − 1) rather than round it. A row and an include's JSON carry it as decimal text, so the range is checked before any digit is lost. */
+export class MysqlBigintNumberCodec extends CodecImpl<
+  typeof MYSQL_BIGINT_NUMBER_CODEC_ID,
+  readonly ['equality', 'order', 'numeric'],
+  string | number,
+  number
+> {
+  async toWire(value: number, _ctx: CodecCallContext): Promise<number> {
+    return safeInteger('RUNTIME.ENCODE_FAILED', value);
+  }
+  async fromWire(wire: string | number, _ctx: CodecCallContext): Promise<number> {
+    if (typeof wire === 'number') return safeInteger('RUNTIME.DECODE_FAILED', wire);
+    if (!DECIMAL_INTEGER.test(wire)) {
+      return decodeFailed(MYSQL_BIGINT_NUMBER_CODEC_ID, 'the decimal text of an integer', wire);
+    }
+    const value = BigInt(wire);
+    if (value < SAFE_INTEGER_BIGINT_RANGE.min || value > SAFE_INTEGER_BIGINT_RANGE.max) {
+      return decodeFailed(
+        MYSQL_BIGINT_NUMBER_CODEC_ID,
+        'an integer within the safe integer range',
+        wire,
+      );
+    }
+    return Number(value);
+  }
+  fromDataTypeValue(value: DataTypeValue<string>): number {
+    return Number(
+      readJsonIntegerText(MYSQL_BIGINT_NUMBER_CODEC_ID, value.value, SAFE_INTEGER_BIGINT_RANGE),
+    );
+  }
+  toDataTypeValue(input: number): DataTypeValue {
+    return this.dataTypeValueOf(String(safeInteger('RUNTIME.ENCODE_FAILED', input)));
+  }
+}
+
+export class MysqlBigintNumberDescriptor extends MysqlCodecDescriptor<void> {
+  override readonly dataType = mysqlBigint.id;
+  override readonly codecId = MYSQL_BIGINT_NUMBER_CODEC_ID;
+  override readonly traits = ['equality', 'order', 'numeric'] as const;
+  override readonly paramsSchema = undefined;
+  override renderValueLiteral(value: JsonValue): string | undefined {
+    return decimalTextNumberLiteral(value);
+  }
+  protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
+    return textJsonProjection(expression);
+  }
+  override factory(): (ctx: CodecInstanceContext) => MysqlBigintNumberCodec {
+    return () => new MysqlBigintNumberCodec(this, mysqlBigint);
+  }
+}
+
+export const mysqlBigintNumberDescriptor = new MysqlBigintNumberDescriptor();
+
+function finiteDouble(
+  code: 'RUNTIME.ENCODE_FAILED' | 'RUNTIME.DECODE_FAILED',
+  value: number,
+  received: unknown,
+): number {
+  if (!Number.isFinite(value)) {
+    throw mysqlError(code, `${MYSQL_DOUBLE_CODEC_ID} value must be a finite number`, {
+      meta: { codecId: MYSQL_DOUBLE_CODEC_ID, received: String(received) },
+    });
+  }
+  return value;
+}
+
+/** A MySQL `double` as a JavaScript number. A row carries it as the text MySQL prints, `1.5` or `9.007199254740992e15`, and an include's JSON as a number. MySQL holds no NaN or infinity. */
+export class MysqlDoubleCodec extends CodecImpl<
+  typeof MYSQL_DOUBLE_CODEC_ID,
+  readonly ['equality', 'order', 'numeric'],
+  string | number,
+  number
+> {
+  async toWire(value: number, _ctx: CodecCallContext): Promise<number> {
+    return finiteDouble('RUNTIME.ENCODE_FAILED', value, value);
+  }
+  async fromWire(wire: string | number, _ctx: CodecCallContext): Promise<number> {
+    const value = typeof wire === 'number' ? wire : wire.trim() === '' ? Number.NaN : Number(wire);
+    return finiteDouble('RUNTIME.DECODE_FAILED', value, wire);
+  }
+  fromDataTypeValue(value: DataTypeValue<number>): number {
+    return value.value;
+  }
+  toDataTypeValue(input: number): DataTypeValue {
+    return this.dataTypeValueOf(finiteDouble('RUNTIME.ENCODE_FAILED', input, input));
+  }
+}
+
+export class MysqlDoubleDescriptor extends MysqlCodecDescriptor<void> {
+  override readonly dataType = mysqlDouble.id;
+  override readonly codecId = MYSQL_DOUBLE_CODEC_ID;
+  override readonly traits = ['equality', 'order', 'numeric'] as const;
+  override readonly paramsSchema = undefined;
+  override renderValueLiteral(value: JsonValue): string | undefined {
+    return floatNumberLiteral(value);
+  }
+  protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
+    return identityJsonProjection(expression);
+  }
+  override factory(): (ctx: CodecInstanceContext) => MysqlDoubleCodec {
+    return () => new MysqlDoubleCodec(this, mysqlDouble);
+  }
+}
+
+export const mysqlDoubleDescriptor = new MysqlDoubleDescriptor();
+
 /**
  * Reads the text MySQL sends for a `datetime` as the instant it names in UTC: the codec writes every value in UTC, so the column holds no time zone of its own.
  */
@@ -349,6 +476,8 @@ export const codecDescriptors = [
   mysqlTextDescriptor,
   mysqlIntDescriptor,
   mysqlBigintDescriptor,
+  mysqlBigintNumberDescriptor,
+  mysqlDoubleDescriptor,
   mysqlDatetimeDescriptor,
   mysqlDatetimeTemporalDescriptor,
   mysqlDatetimeStringDescriptor,

@@ -1225,6 +1225,12 @@
       "plane": "runtime"
     },
     {
+      "glob": "packages/3-targets/mysql/1-mysql/1-target/src/exports/aggregates.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-targets/mysql/1-mysql/1-target/src/exports/codec-descriptor.ts",
       "domain": "extensions",
       "layer": "targets",

@@ -14,13 +14,21 @@ import {
   decodeMysqlDatetime,
   encodeMysqlDatetime,
   mysqlBigintDescriptor,
+  mysqlBigintNumberDescriptor,
   mysqlDatetimeDescriptor,
+  mysqlDoubleDescriptor,
   mysqlEnumDescriptor,
   mysqlIntDescriptor,
   mysqlSqlVarcharDescriptor,
   mysqlTextDescriptor,
 } from '../src/core/codecs';
-import { mysqlBigint, mysqlDatetime, mysqlEnum, mysqlInt } from '../src/core/data-types';
+import {
+  mysqlBigint,
+  mysqlDatetime,
+  mysqlDouble,
+  mysqlEnum,
+  mysqlInt,
+} from '../src/core/data-types';
 
 const ctx = {};
 const instance = { name: 'test' };
@@ -50,6 +58,46 @@ describe('MySQL codecs read the text MySQL sends', () => {
     await expect(codec.fromWire('x', ctx)).rejects.toThrow(/decimal text/);
     expect(codec.toDataTypeValue(12n)).toEqual(value(mysqlBigint, '12'));
     expect(codec.fromDataTypeValue(value(mysqlBigint, '12'))).toBe(12n);
+  });
+
+  it('reads a bigint as a number within the safe integer range, and refuses one outside it rather than round it', async () => {
+    const codec = mysqlBigintNumberDescriptor.factory()(instance);
+    expect([
+      await codec.fromWire('9007199254740991', ctx),
+      await codec.fromWire(-7, ctx),
+      await codec.toWire(5, ctx),
+    ]).toEqual([9007199254740991, -7, 5]);
+    for (const wire of ['9007199254740992', '-9007199254740992', 2 ** 53, '1.5', 'x']) {
+      await expect(codec.fromWire(wire, ctx)).rejects.toMatchObject({
+        code: 'RUNTIME.DECODE_FAILED',
+      });
+    }
+    await expect(codec.toWire(2 ** 53, ctx)).rejects.toMatchObject({
+      code: 'RUNTIME.ENCODE_FAILED',
+    });
+    expect(codec.toDataTypeValue(12)).toEqual(value(mysqlBigint, '12'));
+    expect(codec.fromDataTypeValue(value(mysqlBigint, '12'))).toBe(12);
+    expect(() => codec.fromDataTypeValue(value(mysqlBigint, '9007199254740993'))).toThrow();
+  });
+
+  it('reads a double from the text MySQL prints for it, exponent included, and refuses a value MySQL cannot hold', async () => {
+    const codec = mysqlDoubleDescriptor.factory()(instance);
+    expect([
+      await codec.fromWire('1.6666666666666667', ctx),
+      await codec.fromWire('9.007199254740992e15', ctx),
+      await codec.fromWire(2.5, ctx),
+      await codec.toWire(0.1, ctx),
+    ]).toEqual([5 / 3, 9007199254740992, 2.5, 0.1]);
+    for (const wire of ['', 'NaN', 'x', Number.POSITIVE_INFINITY]) {
+      await expect(codec.fromWire(wire, ctx)).rejects.toMatchObject({
+        code: 'RUNTIME.DECODE_FAILED',
+      });
+    }
+    await expect(codec.toWire(Number.NaN, ctx)).rejects.toMatchObject({
+      code: 'RUNTIME.ENCODE_FAILED',
+    });
+    expect(codec.toDataTypeValue(1.5)).toEqual(value(mysqlDouble, 1.5));
+    expect(codec.fromDataTypeValue(value(mysqlDouble, 1.5))).toBe(1.5);
   });
 
   it('refuses a stored datetime with digits below a millisecond, and reads a row with them at the millisecond', async () => {
