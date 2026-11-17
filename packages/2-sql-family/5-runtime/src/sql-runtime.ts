@@ -304,9 +304,9 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   // Connections and transactions this runtime handed out. When the first query of the runtime runs on one of them, the runtime-wide marker read runs on it too, so it works while close() waits for their release, and concurrent first queries share its result. Other queryables, such as a subclass's raw connection, read the marker through the driver.
   readonly #heldQueryables = new WeakSet<SqlQueryable>();
   readonly #preparedStatementHandles = new WeakMap<object, unknown>();
-  // Each open transaction this runtime began, keyed by its driver transaction and its connection, until its commit() or rollback() is called. A statement sent on either is the transaction's child.
   // Decided once when the runtime is created: a transaction keeps its finished statements to finalize them only when some middleware implements activityFinalized.
   readonly #holdFinishedChildren: boolean;
+  // Each transaction this runtime began, keyed by its driver transaction and by its connection. A statement sent on either is the transaction's child. The connection's entry is removed when commit() or rollback() is called. The driver transaction's entry is kept, so a later statement on the transaction is refused.
   readonly #openTransactions = new WeakMap<
     SqlQueryable,
     TransactionActivityRun<SqlMiddlewareContext>
@@ -894,8 +894,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     return activityParent;
   }
 
-  // A statement is checked against the transaction it was admitted beneath, whichever queryable it was sent on.
-  private checkAdmittingTransaction(ctx: ActivityContext | undefined): void {
+  private checkEnclosingTransaction(ctx: ActivityContext | undefined): void {
     for (let ancestor = ctx; ancestor !== undefined; ancestor = ancestor.parent) {
       const check = this.#transactionChecks.get(ancestor);
       if (check !== undefined) {
@@ -919,7 +918,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     onDriverAnswered: () => void,
   ): AsyncGenerator<Row, void, unknown> {
     const rowDecodeContext = createDecodeContext();
-    this.checkAdmittingTransaction(run.ctx);
+    this.checkEnclosingTransaction(run.ctx);
     await this.setupDriverExecution(exec, queryable);
 
     const startedAt = Date.now();
@@ -927,7 +926,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
 
     try {
       const stream = run.runQuery(exec, () => {
-        this.checkAdmittingTransaction(run.ctx);
+        this.checkEnclosingTransaction(run.ctx);
         return driverCall();
       });
 
@@ -1110,7 +1109,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     codecCtx: SqlCodecCallContext,
     driverCall: () => Promise<SqlStatementStats>,
   ): Promise<SqlStatementStats> {
-    this.checkAdmittingTransaction(run.ctx);
+    this.checkEnclosingTransaction(run.ctx);
     await this.setupDriverExecution(exec, queryable);
     checkAborted(codecCtx, 'stream');
 
@@ -1118,7 +1117,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     let telemetryOutcome: TelemetryOutcome = 'success';
     try {
       return await run.runExecute(exec, () => {
-        this.checkAdmittingTransaction(run.ctx);
+        this.checkEnclosingTransaction(run.ctx);
         return driverCall();
       });
     } catch (error) {
