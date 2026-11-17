@@ -1,8 +1,9 @@
-import type {
-  DiffableNode,
-  DiffSubjectGranularity,
-  SchemaDiffIssue,
-  VerifyDatabaseSchemaResult,
+import {
+  type DiffableNode,
+  type DiffSubjectGranularity,
+  type SchemaDiffIssue,
+  VERIFY_CODE_SCHEMA_FAILURE,
+  type VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { ifDefined } from '@internal/utils/defined';
@@ -87,7 +88,7 @@ function makeResult(args: {
 }): VerifyDatabaseSchemaResult {
   return {
     ok: args.ok,
-    ...(args.ok ? {} : { code: 'CONTRACT.MARKER_REQUIRED' }),
+    ...(args.ok ? {} : { code: VERIFY_CODE_SCHEMA_FAILURE }),
     summary: args.ok ? 'Database schema satisfies contract' : 'does not satisfy',
     contract: { storageHash: 'x' },
     target: { expected: 'postgres' },
@@ -143,6 +144,21 @@ describe('stripExtraFindings', () => {
 
     expect(stripped.ok).toBe(false);
     expect(stripped.schema.issues).toEqual([missingColumn]);
+  });
+
+  it('reports a surviving failure that carried no code under the schema-verification code', () => {
+    const missingColumn: SchemaDiffIssue = {
+      path: ['database', 'public', 'user', 'column:email'],
+      expected: diffNode('column:email', 'column'),
+    };
+    const { code: _code, ...withoutCode } = makeResult({
+      ok: false,
+      issues: [missingColumn, extraTableIssue('legacy')],
+    });
+
+    const stripped = stripExtraFindings(withoutCode, classify);
+
+    expect(stripped).toMatchObject({ ok: false, code: VERIFY_CODE_SCHEMA_FAILURE });
   });
 
   it('keeps an extra column on a declared table as the space’s own drift', () => {

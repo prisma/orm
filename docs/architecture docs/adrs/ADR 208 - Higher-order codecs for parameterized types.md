@@ -37,7 +37,6 @@ Every codec is described by a single descriptor type. The consumer surface is th
 export interface CodecDescriptor<P = void> {
   readonly codecId: string;
   readonly traits: readonly CodecTrait[];
-  readonly targetTypes: readonly string[];
   readonly meta?: CodecMeta;
   readonly paramsSchema: StandardSchemaV1<P> | undefined; // undefined when P = void
   readonly isParameterized: boolean; // paramsSchema !== undefined
@@ -49,7 +48,6 @@ export interface CodecDescriptor<P = void> {
 export abstract class CodecDescriptorImpl<P = void> implements CodecDescriptor<P> {
   abstract readonly codecId: string;
   abstract readonly traits: readonly CodecTrait[];
-  abstract readonly targetTypes: readonly string[];
   readonly meta?: CodecMeta;
   abstract readonly paramsSchema: StandardSchemaV1<P> | undefined; // undefined when P = void
   readonly isParameterized: boolean; // derived from `paramsSchema !== undefined`
@@ -76,7 +74,6 @@ class VectorCodec<N extends number> extends CodecImpl<
 class PgVectorDescriptor extends CodecDescriptorImpl<{ readonly length: number }> {
   override readonly codecId = 'pg/vector@1' as const;
   override readonly traits = ['equality'] as const;
-  override readonly targetTypes = ['vector'] as const;
   override readonly paramsSchema = type({ length: 'number > 0' });
   override renderOutputType({ length }: { length: number }) { return `Vector<${length}>`; }
   override factory<N extends number>(
@@ -95,7 +92,7 @@ export const vector = <N extends number>(length: N) =>
 vector satisfies ColumnHelperFor<PgVectorDescriptor>;
 ```
 
-The descriptor registers the codec id with the framework and carries the codec-id-keyed metadata the framework consults without the runtime instance in scope: traits and target types for trait gating; `paramsSchema` for JSON-boundary validation; `renderOutputType` for `contract.d.ts`; the curried `factory` for runtime materialization. The `satisfies ColumnHelperFor<PgVectorDescriptor>` clause ties the helper to its descriptor at compile time, catching wiring mistakes (wrong `codecId`, wrong factory wired in, mismatched typeParams shape).
+The descriptor registers the codec id with the framework and carries the codec-id-keyed metadata the framework consults without the runtime instance in scope: traits for trait gating; `paramsSchema` for JSON-boundary validation; `renderOutputType` for `contract.d.ts`; the curried `factory` for runtime materialization. The `satisfies ColumnHelperFor<PgVectorDescriptor>` clause ties the helper to its descriptor at compile time, catching wiring mistakes (wrong `codecId`, wrong factory wired in, mismatched typeParams shape).
 
 **Non-parameterized codecs are the degenerate case.** A non-parameterized codec uses `P = void` and a constant factory that returns the same shared codec instance for every column:
 
@@ -108,7 +105,6 @@ class PgTextCodec extends CodecImpl<'pg/text@1', readonly ['equality', 'order', 
 class PgTextDescriptor extends CodecDescriptorImpl<void> {
   override readonly codecId = 'pg/text@1' as const;
   override readonly traits = ['equality', 'order', 'textual'] as const;
-  override readonly targetTypes = ['text'] as const;
   override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => PgTextCodec {
     const shared = new PgTextCodec(this);
@@ -133,7 +129,7 @@ export interface CodecInstanceContext {
   readonly name: string;
 }
 
-// packages/2-sql/4-lanes/relational-core/src/ast/codec-types.ts
+// packages/2-sql-family/4-lanes/relational-core/src/ast/codec-types.ts
 export interface SqlCodecInstanceContext extends CodecInstanceContext {
   readonly usedAt: ReadonlyArray<{ readonly table: string; readonly column: string }>;
 }
@@ -141,7 +137,11 @@ export interface SqlCodecInstanceContext extends CodecInstanceContext {
 
 Pack authors never construct it. The runtime synthesizes it at contract-load time: `name` is the family-agnostic instance identity (in SQL, the `storage.types` entry name, a `<col:t.c>` for inline-`typeParams` columns, a `<codec:codecId>` sentinel for non-parameterized codecs, or the canonical cache key for ad-hoc refs the contract walk did not pre-populate); the SQL-extended `usedAt` is plural so a `storage.types` entry shared across multiple columns can derive shared per-instance state from the aggregated set (e.g. a column-scoped encryption codec deriving one key for every column referencing the entry). SQL extensions that consume `usedAt` author against `SqlCodecInstanceContext`; extensions that don't read it stay on the family-agnostic base.
 
+> **Amended by [ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md) (2026-10-21).** Contracts no longer store type aliases, so no column has a `typeRef` and a `storage.types` entry is never the unit of a shared codec instance. Every parameterized column is materialized from its own inline `typeParams`. Columns with the same codec id and canonical params share one instance, named `<col:Table.column>` after the first such column, and its `usedAt` lists every column that shares it. A codec that needs state shared by a chosen set of columns must put what identifies that set in its type parameters. "How it composes" §2 to §4 below describe the alias paths as they were before this change: today `FieldOutputType` and the emitter read the column's own `typeParams`, and the contract walk has no `typeRef` step.
+
 The split mirrors PR #400's `CodecCallContext` / `SqlCodecCallContext` precedent for the per-call context: SQL-domain vocabulary lives in `sql-relational-core`; framework-components stays family-agnostic.
+
+> **Update — a data type's parameters are an arktype schema** ([ADR 254 — Data types and casts](ADR%20254%20-%20Data%20types%20and%20casts.md)). A data type declares its parameters in `params`, an arktype object schema, which is the one place their bounds are written. A codec's `paramsSchema` is that schema, referenced rather than restated (or `params.and(ownKeys)` for a codec with keys of its own). The runtime still consumes `paramsSchema` through Standard Schema as described below. `DataType.params` is typed as arktype's `Type`, so `framework-components` now depends on arktype.
 
 `paramsSchema` is typed as **Standard Schema** (`StandardSchemaV1<P>`), not arktype-specific. The arktype `Type` already implements Standard Schema via its `~standard` getter, so existing arktype-typed descriptors satisfy the new shape transparently while `framework-components` itself takes no dependency on arktype. The runtime calls `paramsSchema['~standard'].validate(typeParams)` synchronously and rejects Promise-returning validators with `RUNTIME.TYPE_PARAMS_INVALID`.
 
@@ -151,7 +151,7 @@ The same `vector(1536)` participates in four code paths. Each reads a different 
 
 ### 1. Column authoring
 
-`vector(1536)` returns a `ColumnTypeDescriptor` carrying both the data the contract IR needs (`codecId: 'pg/vector@1'`, `nativeType: 'vector'`, `typeParams: { length: 1536 }`) and, for codecs that need it, the curried factory itself, threaded through a first-class `type: (ctx: CodecInstanceContext) => Codec<…>` slot. The contract-authoring builder consumes the data part for the IR; the `type` slot is authoring-time only and is never serialized to `contract.json`.
+`vector(1536)` returns a `ColumnTypeDescriptor` carrying both the data the contract IR needs (`codecId: 'pg/vector@1'`, `typeParams: { length: 1536 }`; the contract's type name comes from the data type the codec represents) and, for codecs that need it, the curried factory itself, threaded through a first-class `type: (ctx: CodecInstanceContext) => Codec<…>` slot. The contract-authoring builder consumes the data part for the IR; the `type` slot is authoring-time only and is never serialized to `contract.json`.
 
 ### 2. No-emit type resolution
 
@@ -161,7 +161,7 @@ The same `vector(1536)` participates in four code paths. Each reads a different 
 
 `pnpm emit` walks the contract IR's models. For each scalar field, it looks up the codec by `codecId` and consults `renderOutputType(typeParams)`. The result is stamped into `FieldOutputTypes[Model][Field]` in `contract.d.ts`. If the codec has no renderer, the emitter falls through to the codec's base output type.
 
-For columns that reference a named storage type via `typeRef` (rather than carrying inline `typeParams`), the SQL emitter implements an `EmissionSpi.resolveFieldTypeParams(modelName, fieldName, model, contract)` callback that walks `storage.fields → storage.tables → storage.types` and returns the named instance's `typeParams`. The framework consults this resolver before falling back to inline params, so typeRef-based columns render with the same fidelity as inline-`typeParams` columns. Mongo and other families that don't use named storage types simply don't implement the optional hook.
+A field reads its type parameters from its domain type only. A SQL column that references a named storage type via `typeRef` carries no parameters of its own, so the SQL contract builder copies the named type's `typeParams` into the field's domain type when it builds the contract. A field typed by a named type therefore renders exactly as the same type written inline, and the emitter never looks into storage for a field's parameters. The storage column types in `contract.d.ts` (`StorageColumnTypes`) read the column's own `typeParams`, or else its named type's.
 
 ### 4. Runtime materialization and dispatch
 
@@ -234,7 +234,7 @@ The legacy `defineCodec({...})` factory and the family-side `mkCodec({...})` ins
 
 ## Resolves
 
-- **Parameterized columns (no-emit and emit).** `vector(1536)`, `arktypeJson(schema)`, and other parameterized columns resolve correctly in the no-emit path AND through the emit path (typeRef columns included, via `EmissionSpi.resolveFieldTypeParams`).
+- **Parameterized columns (no-emit and emit).** `vector(1536)`, `arktypeJson(schema)`, and other parameterized columns resolve correctly in the no-emit path AND through the emit path (typeRef columns included, through the named type's parameters that the SQL contract builder copies into the field's domain type).
 - **The deferred no-emit fix from [ADR 186](ADR%20186%20-%20Codec-dispatched%20type%20rendering.md).** The `renderOutputType` it introduced moves to its long-term home on the descriptor; the no-emit path now resolves through the factory's return type without consulting it.
 
 ## References

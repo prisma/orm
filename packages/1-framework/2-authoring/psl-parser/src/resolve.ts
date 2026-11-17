@@ -5,7 +5,7 @@ import type {
   FieldAttributeAst,
   ModelAttributeAst,
 } from './syntax/ast/attributes';
-import type { ExpressionAst } from './syntax/ast/expressions';
+import type { AttributeArgAst, ExpressionAst } from './syntax/ast/expressions';
 import type { QualifiedNameAst } from './syntax/ast/qualified-name';
 import type { TypeAnnotationAst } from './syntax/ast/type-annotation';
 import { printSyntax } from './syntax/ast-helpers';
@@ -17,12 +17,17 @@ export interface ResolvedAttributeArg {
   readonly value: string;
   readonly expression?: ExpressionAst;
   readonly span: PslSpan;
+  /** The argument as the schema writes it; absent for an argument a reader builds. */
+  readonly node?: AttributeArgAst;
 }
 
-export interface ResolvedAttribute {
+export interface ResolvedAttribute<
+  TNode extends FieldAttributeAst | ModelAttributeAst = FieldAttributeAst | ModelAttributeAst,
+> {
   readonly name: string;
   readonly args: readonly ResolvedAttributeArg[];
   readonly span: PslSpan;
+  readonly node: TNode;
 }
 
 export interface ResolvedTypeConstructorCall {
@@ -31,21 +36,22 @@ export interface ResolvedTypeConstructorCall {
   readonly span: PslSpan;
 }
 
-export function readResolvedAttribute(
-  attribute: FieldAttributeAst | ModelAttributeAst,
+export function readResolvedAttribute<TNode extends FieldAttributeAst | ModelAttributeAst>(
+  attribute: TNode,
   sources: PslSources,
-): ResolvedAttribute {
+): ResolvedAttribute<TNode> {
   return {
     name: attributeName(attribute.name()),
     args: readResolvedArgList(attribute.argList(), sources),
     span: nodePslSpan(attribute.syntax, sources),
+    node: attribute,
   };
 }
 
-export function readResolvedAttributes(
-  attributes: Iterable<FieldAttributeAst | ModelAttributeAst>,
+export function readResolvedAttributes<TNode extends FieldAttributeAst | ModelAttributeAst>(
+  attributes: Iterable<TNode>,
   sources: PslSources,
-): readonly ResolvedAttribute[] {
+): readonly ResolvedAttribute<TNode>[] {
   return Array.from(attributes, (attribute) => readResolvedAttribute(attribute, sources));
 }
 
@@ -77,6 +83,7 @@ function readResolvedArgList(
       value: renderExpression(expression),
       ...(expression !== undefined ? { expression } : {}),
       span: nodePslSpan(arg.syntax, sources),
+      node: arg,
     });
   }
   return args;

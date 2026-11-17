@@ -1,18 +1,37 @@
 import type { PrismaNextConfig } from '@internal/config-loader';
 import * as configLoader from '@internal/config-loader';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import {
   assembleAuthoringContributions,
   assembleControlMutationDefaults,
 } from '@internal/framework-components/control';
 import type { AttributeSpecContext, AttributeSpecNamespace } from '@internal/psl-parser';
-import { assembleAttributeSpecs, fieldAttribute, modelAttribute } from '@internal/psl-parser';
+import {
+  assembleAttributeSpecs,
+  buildSymbolTable,
+  EMPTY_DATA_TYPES,
+  fieldAttribute,
+  modelAttribute,
+} from '@internal/psl-parser';
 import { ok } from '@internal/utils/result';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resolveConfigInputs } from '../src/config-resolution';
-import { runPipeline } from '../src/pipeline';
+import { DocumentSnapshot } from '../src/document-snapshot';
 import { providePslSignatureHelp } from '../src/signature-help';
+import { testBinder } from './helpers/binder';
 
 vi.mock('@internal/config-loader', { spy: true });
+
+function pipelineWithSymbolTable(filename: string, text: string) {
+  const snapshot = new DocumentSnapshot(filename, text);
+  const pipeline = snapshot.parse();
+  const { symbolTable } = buildSymbolTable({
+    documents: [pipeline.document],
+    sources: pipeline.sources,
+    defaultNamespaceId: 'public',
+  });
+  return { ...pipeline, sourceFile: snapshot.sourceFile, symbolTable };
+}
 
 const rlsSpec = modelAttribute('rls', {
   documentation: 'Enables row-level security on the model.',
@@ -89,21 +108,15 @@ describe('assembled attribute specs are consumable from a resolved project', () 
     ]);
     const controlMutationDefaults = assembleControlMutationDefaults([]);
     const source = 'model Variant {\n @@base(Missing, "v")\n}\nmodel Base { id Int }';
-    const pipeline = runPipeline('schema.prisma', source, {
-      scalarTypes: ['Int'],
-      pslBlockDescriptors: {},
-      authoringContributions,
-      controlMutationDefaults,
-    });
-    const model = pipeline.symbolTable.topLevel.models['Variant'];
+    const pipeline = pipelineWithSymbolTable('schema.prisma', source);
+    const model = pipeline.symbolTable.defaultNamespace.models['Variant'];
     if (!model) throw new Error('missing variant');
     const spec = assembleAttributeSpecs(authoringContributions).model['base']?.({
       symbols: pipeline.symbolTable,
       model,
-      controlMutationDefaults: {
-        defaultFunctionRegistry: controlMutationDefaults.defaultFunctionRegistry,
-        dataTypeEntries: {},
-      },
+      defaultFunctionRegistry: controlMutationDefaults.defaultFunctionRegistry,
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
+      dataTypes: EMPTY_DATA_TYPES,
     });
     expect(spec).toMatchObject({
       name: 'base',
@@ -122,8 +135,10 @@ describe('assembled attribute specs are consumable from a resolved project', () 
       position: pipeline.sourceFile.positionAt(source.indexOf('Missing')),
       clientSupportsLabelOffsets: true,
       candidates: {
+        binder: testBinder(pipeline),
         symbolTable: pipeline.symbolTable,
         pslBlockDescriptors: {},
+        generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
         authoringContributions,
         controlMutationDefaults,
       },
@@ -134,7 +149,7 @@ describe('assembled attribute specs are consumable from a resolved project', () 
   it('provides signature help from the SQL @@base spec factory', async () => {
     expectBaseSpecSignatureHelp(
       await importAttributeSpecs(
-        '../../../../2-sql/2-authoring/contract-psl/src/sql-attribute-specs.ts',
+        '../../../../2-sql-family/2-authoring/contract-psl/src/sql-attribute-specs.ts',
         'sqlAttributeSpecs',
       ),
     );
@@ -149,39 +164,21 @@ describe('assembled attribute specs are consumable from a resolved project', () 
     );
   });
 
-  it('enumerates a contributed model attribute by its claimed name', async () => {
-    vi.spyOn(configLoader, 'loadConfig').mockResolvedValue(
-      ok({ config: pslProjectConfig(), diagnostics: [] }),
-    );
-
-    const result = await resolveConfigInputs('/abs/prisma.config.ts');
-
-    const contributions = result.interpretation?.context.authoringContributions;
-    expect(contributions).toBeDefined();
-    if (contributions === undefined) return;
-
-    const specs = assembleAttributeSpecs(contributions);
-
-    expect('rls' in specs.model).toBe(true);
-    expect(Object.keys(contributions.modelAttributes)).toEqual(['security']);
-  });
-
   it('enumerates a family-registered field attribute and invokes its factory', async () => {
     vi.spyOn(configLoader, 'loadConfig').mockResolvedValue(
       ok({ config: pslProjectConfig(), diagnostics: [] }),
     );
 
-    const result = await resolveConfigInputs('/abs/prisma.config.ts');
+    const result = await resolveConfigInputs('/abs/prisma.config.ts', () => '// use prisma-8\n');
     const interpretation = result.interpretation;
     expect(interpretation).toBeDefined();
     if (interpretation === undefined) return;
 
-    const pipeline = runPipeline(
+    const pipeline = pipelineWithSymbolTable(
       'attribute-spec-consumability.psl',
       'model Widget {\n  id Int @id\n}\n',
-      result.controlStack,
     );
-    const model = pipeline.symbolTable.topLevel.models['Widget'];
+    const model = pipeline.symbolTable.defaultNamespace.models['Widget'];
     const field = model?.fields['id'];
     expect(field).toBeDefined();
     if (model === undefined || field === undefined) return;
@@ -193,10 +190,12 @@ describe('assembled attribute specs are consumable from a resolved project', () 
       symbols: pipeline.symbolTable,
       model,
       field,
-      controlMutationDefaults: {
-        ...interpretation.context.controlMutationDefaults,
-        dataTypeEntries: interpretation.context.authoringContributions.dataTypes,
-      },
+      typeResolution: undefined,
+      contributedType: undefined,
+      defaultFunctionRegistry:
+        interpretation.context.controlMutationDefaults.defaultFunctionRegistry,
+      generatorFunctions: interpretation.context.generatorFunctions,
+      dataTypes: interpretation.context.dataTypes,
     });
     expect(spec).toMatchObject({
       name: 'marker',
@@ -210,27 +209,26 @@ describe('assembled attribute specs are consumable from a resolved project', () 
       ok({ config: pslProjectConfig(), diagnostics: [] }),
     );
 
-    const result = await resolveConfigInputs('/abs/prisma.config.ts');
+    const result = await resolveConfigInputs('/abs/prisma.config.ts', () => '// use prisma-8\n');
     const interpretation = result.interpretation;
     expect(interpretation).toBeDefined();
     if (interpretation === undefined) return;
 
-    const pipeline = runPipeline(
+    const pipeline = pipelineWithSymbolTable(
       'attribute-spec-consumability.psl',
       'model Widget {\n  id Int @id\n}\n',
-      result.controlStack,
     );
-    const model = pipeline.symbolTable.topLevel.models['Widget'];
+    const model = pipeline.symbolTable.defaultNamespace.models['Widget'];
     expect(model).toBeDefined();
     if (model === undefined) return;
 
     const ctx: AttributeSpecContext = {
       symbols: pipeline.symbolTable,
       model,
-      controlMutationDefaults: {
-        ...interpretation.context.controlMutationDefaults,
-        dataTypeEntries: interpretation.context.authoringContributions.dataTypes,
-      },
+      defaultFunctionRegistry:
+        interpretation.context.controlMutationDefaults.defaultFunctionRegistry,
+      generatorFunctions: interpretation.context.generatorFunctions,
+      dataTypes: interpretation.context.dataTypes,
     };
 
     const spec = assembleAttributeSpecs(interpretation.context.authoringContributions).model[

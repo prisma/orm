@@ -16,7 +16,10 @@ class PassThroughSerializer extends MongoContractSerializerBase<MongoContract> {
   }
 }
 
-const objectId = { type: { kind: 'scalar' as const, codecId: 'mongo/objectId@1' } };
+const objectId = {
+  many: false as const,
+  type: { kind: 'scalar' as const, codecId: 'mongo/objectId@1' },
+};
 
 /** A to-one relation as an rc.9 `contract.json` wrote it: no `nullable` key unless given. */
 function toOne(input: {
@@ -48,12 +51,18 @@ function contractJson(input: {
       Post: {
         fields: postFields,
         relations: { author: input.relation },
-        storage: { collection: 'posts' },
+        storage: {
+          fields: { _id: { field: '_id' }, authorId: { field: 'authorId' } },
+          collection: 'posts',
+        },
       },
       User: {
         fields: { _id: { ...objectId, nullable: false }, postId: { ...objectId, nullable: false } },
         relations: {},
-        storage: { collection: 'users' },
+        storage: {
+          fields: { _id: { field: '_id' }, postId: { field: 'postId' } },
+          collection: 'users',
+        },
       },
     },
     storageCollections: { posts: {}, users: {} },

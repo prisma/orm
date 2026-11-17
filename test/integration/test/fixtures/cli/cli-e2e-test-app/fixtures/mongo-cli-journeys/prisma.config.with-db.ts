@@ -15,6 +15,7 @@ export default definePrismaConfig({
     extensions: [],
     contract: {
       source: {
+        format: 'typescript',
         load: async () => ({ ok: true as const, value: contract }),
       },
       output: 'output/contract.json',

@@ -2,6 +2,6 @@
 
 model User {
   id Int @id
-  cuidValue String @default(cuid())
+  cuidValue String @onCreate(cuid())
   @@map("user")
 }

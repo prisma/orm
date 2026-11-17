@@ -6,10 +6,9 @@ import {
   VERIFY_CODE_TARGET_MISMATCH,
 } from '@internal/framework-components/control';
 import { ifDefined } from '@internal/utils/defined';
-import { isInternalError } from '@internal/utils/internal-error';
 import type { Block, Presentations } from '@prisma/cli-engine';
-import { flag } from '@prisma/cli-engine';
-import type { Diagnostic, NextAction, Result } from '@prisma/cli-engine/protocol';
+import { flag, noDataLines } from '@prisma/cli-engine';
+import type { Diagnostic, Result } from '@prisma/cli-engine/protocol';
 import { CliStructuredError, notOk, ok } from '@prisma/cli-engine/protocol';
 import { createControlClient } from '../../control-api/client';
 import type { DbVerifyMode } from '../../control-api/types';
@@ -25,7 +24,6 @@ import {
 } from '../../utils/combine-verify-results';
 import { closeQuietly, maskConnectionUrl } from '../../utils/command-helpers';
 import type { DbVerifyReport } from '../../utils/formatters/verify';
-import { runCommandAction } from '../../utils/next-actions';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
 import { migrationsDirFor } from '../migration/paths';
@@ -34,6 +32,7 @@ import { controlProgressReporter } from '../progress';
 import {
   readEmittedContract,
   requireVerifyConnection,
+  schemaDriftNextActions,
   schemaFindingBlocks,
   schemaVerdictDiagnostic,
   verificationThrow,
@@ -58,12 +57,6 @@ type DbVerifyDocument = DbVerifyReport & {
 /** The schema-verify document `--schema-only` and the drift branch report. */
 type SchemaVerifyDocument = CombinedVerifyResult['result'] & {
   readonly unclaimed: readonly string[];
-};
-
-const PUSH_THE_CONTRACT = runCommandAction('Push the contract to the database', '{bin} db update');
-const RECONCILE_BY_HAND: NextAction = {
-  kind: 'user-choice',
-  label: 'Or reconcile the differences by hand and verify again',
 };
 
 function errorInvalidVerifyMode(options: {
@@ -116,7 +109,7 @@ function modeLabel(mode: DbVerifyMode, strict: boolean): string {
     : `full (marker + schema, ${strictness})`;
 }
 
-function invocation(mode: DbVerifyMode, strict: boolean): string {
+function commandLine(mode: DbVerifyMode, strict: boolean): string {
   return [
     'db verify',
     ...(mode === 'marker-only' ? ['--marker-only'] : []),
@@ -237,7 +230,9 @@ function verifyPresentations(inputs: {
   const warnings = document.schema?.warnings ?? [];
   const unclaimed = document.unclaimed ?? [];
   return {
-    stdout: () => [],
+    stdout: noDataLines(
+      'The exit code is the result of a verification; --json carries the findings.',
+    ),
     next: () => [],
     human: (): readonly Block[] => [
       inputs.header,
@@ -302,7 +297,9 @@ function schemaPresentations(inputs: {
   readonly strict: boolean;
 }): Presentations {
   return {
-    stdout: () => [],
+    stdout: noDataLines(
+      'The exit code is the result of a verification; --json carries the findings.',
+    ),
     next: () => [],
     human: (): readonly Block[] => [
       inputs.header,
@@ -335,7 +332,11 @@ function driftDiagnostics(inputs: {
       schemaVerdictDiagnostic({
         result,
         space,
-        nextActions: [PUSH_THE_CONTRACT, RECONCILE_BY_HAND],
+        nextActions: schemaDriftNextActions({
+          verb: 'verify',
+          contractRef: undefined,
+          issues: result.schema.issues,
+        }),
       }),
     );
   if (perSpace.length > 0) {
@@ -411,12 +412,12 @@ export function createDbVerifyCommand(
         return notOk(resolved.failure);
       }
       const mode = resolved.value;
-      const commandInvocation = invocation(mode, strict);
+      const command = commandLine(mode, strict);
 
       const emitted = await readEmittedContract({
         config: ctx.config,
         cwd: ctx.cwd,
-        commandName: commandInvocation,
+        commandName: command,
       });
       if (!emitted.ok) {
         return notOk(emitted.failure);
@@ -425,7 +426,7 @@ export function createDbVerifyCommand(
       const connection = requireVerifyConnection({
         config: ctx.config,
         db: args.flags.db,
-        invocation: commandInvocation,
+        commandLine: command,
       });
       if (!connection.ok) {
         return notOk(connection.failure);
@@ -640,12 +641,7 @@ export function createDbVerifyCommand(
           ctx.present({ data: document, exitCode: 0 }, verifyPresentations({ document, header })),
         );
       } catch (error) {
-        if (isInternalError(error)) {
-          throw error;
-        }
-        return notOk(
-          verificationThrow({ error, invocation: commandInvocation, connection: dbConnection }),
-        );
+        return notOk(verificationThrow({ error, commandLine: command, connection: dbConnection }));
       } finally {
         await closeQuietly(client);
       }

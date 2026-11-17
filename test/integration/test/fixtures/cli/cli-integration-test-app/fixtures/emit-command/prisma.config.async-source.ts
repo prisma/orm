@@ -15,6 +15,7 @@ export default definePrismaConfig({
     extensions: [],
     contract: {
       source: {
+        format: 'typescript',
         inputs: ['./contract.ts'],
         load: async () => {
           const { contract } = await import('./contract');

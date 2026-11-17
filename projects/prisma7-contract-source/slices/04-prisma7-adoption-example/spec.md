@@ -9,7 +9,7 @@ Source: [Prisma ORM 7 to 8 (PostgreSQL)](https://www.prisma.io/docs/guides/upgra
 1. Prepare Prisma 7 for side-by-side operation: the `prisma` dev dependency becomes `@prisma/prisma7` (binary `prisma7`), `prisma.config.ts` becomes `prisma7.config.ts` importing `defineConfig` from `@prisma/prisma7/config`, scripts call `prisma7 generate`, `prisma7 migrate dev`, `prisma7 migrate status`. `@prisma/client@^7.10.0` and `@prisma/adapter-pg@^7.10.0` stay.
 2. Add Prisma 8: `prisma@latest` as a dev dependency (binary `prisma`) and `@prisma/orm-postgres` as a dependency; `prisma.config.ts` with `definePrismaConfig` from `prisma/config` wrapping `defineConfig` from `@prisma/orm-postgres/config` with `contract`, `output`, and `db.connection`. Today the guide then runs `prisma contract infer`, deletes the `PrismaMigrations` model by hand, adds `@@map` to every model by hand, and runs `prisma contract emit`. **This example replaces that step with `contract: prisma7Schema('prisma/schema.prisma')` and no hand edits.**
 3. Migrate one route: both clients instantiated, routes moved one at a time to `db.orm.public.<Model>`.
-4. Transfer migration ownership: `prisma migration plan --name baseline`, `prisma db sign`, `prisma migration ref set db <timestamp>_baseline`; from then on Prisma 8 owns migrations.
+4. Transfer migration ownership: `prisma migration plan --name baseline`, `prisma db sign`, `prisma migration ref set db <timestamp>_baseline`; from then on Prisma 8 owns migrations. (That three-command baseline turned out to be unnecessary: see slice 5.)
 5. Remove Prisma 7.
 
 During phases 1 to 3, Prisma 7 owns migrations; after each `prisma7 migrate dev` the Prisma 8 contract is refreshed and `db sign` re-run. There is no binary collision: Prisma 7 is `prisma7`, Prisma 8 is `prisma`.
@@ -36,7 +36,7 @@ pnpm test         # the whole story as one vitest run, including the second migr
 - **Schema.** The guide's own `User` and `Post` models, extended enough to exercise what the source handles: `User` gains `role Role @default(USER)`, `createdAt DateTime @default(now())`, `updatedAt DateTime @updatedAt`; `Post` gains `content String?` and `tags Tag[]`; `Tag` (`id`, `name @unique`, `posts Post[]`); enum `Role`. The implicit many-to-many is deliberate.
 - **Queries.** `src/main.ts` uses the Prisma 8 ORM client (`db.orm.public.User`, the guide's spelling): list users with posts and their tags through `_PostToTag`, create a post connected to existing tags, update a post and show `updatedAt` advanced by the Prisma 8 generator. `src/v7-read.ts` reads the same rows through the Prisma 7 client.
 - **Test.** `test/adoption.test.ts` runs the story in order on a fresh dev database: `prisma7 migrate deploy`, `contract emit`, `db sign`, `db verify` with zero findings, seed through Prisma 7, read through Prisma 8, second `prisma7 migrate deploy`, `contract emit` and `db sign` again, `db verify` zero findings. Wired into the CI job that runs the other examples' tests.
-- **Phase 4 is out of scope.** The cutover (`migration plan --name baseline`, `migration ref set`) belongs with slice 3's converter; the README ends by pointing at the guide's phase 4.
+- **Phase 4 is out of scope.** Slice 5 covers it: on a `prisma7Schema` source the handover needs no baseline step and no converter.
 
 ## Edge cases
 

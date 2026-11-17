@@ -3,11 +3,7 @@
  * `prisma.config.ts` points `defineConfig` from the Postgres config entry at
  * `prisma7Schema('./schema.prisma')` runs `contract emit`, `db sign`, and
  * `db verify` through the real command family against a database built by the
- * SQL Prisma 7.10.0 generated, with exit 0 and zero findings. `db verify
- * --strict` reports only what Prisma 7 creates for `@ignore` and `@@ignore`
- * constructs, and the column default left behind by the `@default(now())`
- * removed beside `@updatedAt`. A schema with a `view` fails `contract emit` with one diagnostic
- * and writes nothing.
+ * SQL Prisma 7.10.0 generated, with exit 0 and zero findings. Prisma 7 creates no check on a list column, so a `String[]` column reads as a list whose elements may be null, and verifies with no migration. The contract keeps the columns of `@ignore` fields and the tables of `@@ignore` models, so `db verify --strict` reports no findings either. A schema with a `view` fails `contract emit` with one diagnostic and writes nothing.
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { withClient } from '@repo/test-utils';
@@ -20,6 +16,7 @@ import {
   runContractEmit,
   runDbSign,
   runDbVerify,
+  runFormat,
   timeouts,
   useDevDatabase,
 } from '../utils/journey-test-helpers';
@@ -84,7 +81,7 @@ withTempDir(({ createTempDir }) => {
       'contract emit, db sign, and db verify succeed against the database Prisma 7 built',
       async () => {
         const ctx = setupPrisma7Project(createTempDir, db.connectionString, {
-          copyFrom: join(PRISMA7_FIXTURES, 'supported-verify/schema.prisma'),
+          copyFrom: join(PRISMA7_FIXTURES, 'supported/schema.prisma'),
         });
 
         const emit = await runContractEmit(ctx, ['--json']);
@@ -93,6 +90,9 @@ withTempDir(({ createTempDir }) => {
         const contractDtsPath = join(ctx.testDir, 'contract.d.ts');
         expect(existsSync(contractJsonPath)).toBe(true);
         expect(existsSync(contractDtsPath)).toBe(true);
+        const contractDts = readFileSync(contractDtsPath, 'utf-8');
+        expect(contractDts).toContain("['public']['Post']['title']");
+        expect(contractDts).not.toContain("['public']['Post']['search']");
         expect(emit.presented?.data).toMatchObject({
           ok: true,
           storageHash: expect.any(String),
@@ -136,6 +136,7 @@ withTempDir(({ createTempDir }) => {
           public: {
             tables: [
               'Defaults',
+              'LegacyThing',
               'ListDefaults',
               'NativeTypes',
               'NumberDefaults',
@@ -175,6 +176,22 @@ withTempDir(({ createTempDir }) => {
           ]),
         });
 
+        const scalars = publicTables?.['Scalars'] as
+          | { readonly columns: Record<string, unknown>; readonly checks?: readonly unknown[] }
+          | undefined;
+        expect({
+          stringList: scalars?.columns['stringList'],
+          checks: scalars?.checks ?? [],
+        }).toEqual({
+          stringList: {
+            dataType: 'pg/text',
+            codecId: 'pg/text@1',
+            nullable: true,
+            many: { elementNullable: true },
+          },
+          checks: [],
+        });
+
         const sign = await runDbSign(ctx, ['--json']);
         expect(sign.exitCode, `db sign\n${output(sign)}`).toBe(0);
 
@@ -187,23 +204,35 @@ withTempDir(({ createTempDir }) => {
         });
 
         const strictVerify = await runDbVerify(ctx, ['--json', '--strict']);
-        expect(strictVerify.exitCode, `db verify --strict\n${output(strictVerify)}`).toBe(4);
-        const strictResult = strictVerify.presented?.data as {
-          readonly schema: { readonly issues: readonly { readonly path: readonly string[] }[] };
-          readonly unclaimed: readonly string[];
-        };
-        expect({
-          issues: strictResult.schema.issues.map((issue) => issue.path).sort(),
-          unclaimed: strictResult.unclaimed,
-        }).toEqual({
-          issues: [
-            ['database', 'public', 'Post', 'column:legacyOwnerId'],
-            ['database', 'public', 'Post', 'foreign-key:legacyOwnerId->public.User(id)'],
-            ['database', 'public', 'Timestamps', 'column:updatedAtNow', 'default'],
-            ['database', 'public', 'User', 'column:legacy'],
-          ],
-          unclaimed: ['LegacyThing'],
+        expect(strictVerify.exitCode, `db verify --strict\n${output(strictVerify)}`).toBe(0);
+        expect(strictVerify.presented?.data).toMatchObject({
+          ok: true,
+          mode: 'full',
+          schema: { strict: true, warnings: [] },
         });
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'contract format aligns the fields of a view, attributes included',
+      async () => {
+        const schema = (view: string) =>
+          `datasource db {\n  provider = "postgresql"\n}\n\nmodel User {\n  id Int @id\n}\n\n${view}`;
+        const ctx = setupPrisma7Project(createTempDir, db.connectionString, {
+          text: schema(
+            'view ActiveUsers {\nid Int @unique\nemail   String @map("user_email")\n}\n',
+          ),
+        });
+
+        const format = await runFormat(ctx);
+
+        expect(format.exitCode, `contract format\n${output(format)}`).toBe(0);
+        expect(readFileSync(join(ctx.testDir, 'schema.prisma'), 'utf-8')).toBe(
+          schema(
+            'view ActiveUsers {\n  id    Int    @unique\n  email String @map("user_email")\n}\n',
+          ),
+        );
       },
       timeouts.spinUpPpgDev,
     );

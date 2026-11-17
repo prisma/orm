@@ -14,7 +14,7 @@
 // MongoDB PSL `type` blocks become value objects in the contract.
 
 type ListNode {
-  value Int
+  value Int32
   next  ListNode?
 }
 

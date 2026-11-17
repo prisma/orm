@@ -1,8 +1,9 @@
 export type { PrismaNextConfig } from '@internal/config/config-types';
-export { expandContractInputs } from '../expand-contract-inputs';
+export { expandContractInputs, globContractInputMatching } from '../expand-contract-inputs';
 export type { ConfigFile, ConfigFiles, LoadedConfig } from '../load';
 export {
   buildLoadedConfig,
+  CONFIG_FILENAME,
   evaluateConfigModule,
   findNearestConfigPathForFile,
   loadConfig,

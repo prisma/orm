@@ -21,7 +21,7 @@ import {
   targetEntrypoint,
   targetPackageName,
 } from '../commands/init/templates/code-templates';
-import { loadContractSource } from '../control-api/operations/contract-emit';
+import { loadContractSource } from '../control-api/operations/load-contract-source';
 import { chooseAction } from '../utils/next-actions';
 import { installProjectDependencies } from './init-packages';
 import { normalizeError } from './normalize-error';

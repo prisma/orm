@@ -161,7 +161,7 @@ describe('init installs', () => {
     async () => {
       script = [{ exitCode: 1, stderr: 'ENOTFOUND registry.npmjs.org' }];
 
-      const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
+      const run = await harness().run([...scaffoldArgv(), '--json'], { cwd: projectDir });
 
       expect(run.exitCode).toBe(4);
       expect(envelopeOf(run)).toMatchObject({
@@ -180,7 +180,7 @@ describe('init installs', () => {
     async () => {
       script = [{ exitCode: 1, stderr: 'ENOTFOUND registry.npmjs.org' }];
 
-      const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
+      const run = await harness().run([...scaffoldArgv(), '--json'], { cwd: projectDir });
 
       expect(run.presented?.data).toMatchObject({
         ok: true,
@@ -201,7 +201,7 @@ describe('init installs', () => {
     async () => {
       emit.mockRejectedValue(new Error('contract source is not readable'));
 
-      const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
+      const run = await harness().run([...scaffoldArgv(), '--json'], { cwd: projectDir });
 
       expect(run.exitCode).toBe(5);
       expect(envelopeOf(run)).toMatchObject({
@@ -218,7 +218,7 @@ describe('init installs', () => {
   it(
     'runs no skills command — the family-level `prisma init` owns skills setup',
     async () => {
-      const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
+      const run = await harness().run([...scaffoldArgv(), '--json'], { cwd: projectDir });
 
       expect(run.exitCode).toBe(0);
       expect(skillCalls()).toEqual([]);
@@ -284,7 +284,7 @@ describe('init installs', () => {
           { exitCode: 1, stderr: 'npm ERR! 404 Not Found' },
         ];
 
-        const run = await harness('pnpm').run(scaffoldArgv(), { cwd: projectDir });
+        const run = await harness('pnpm').run([...scaffoldArgv(), '--json'], { cwd: projectDir });
 
         expect(run.exitCode).toBe(4);
         expect(envelopeOf(run)).toMatchObject({
@@ -304,7 +304,7 @@ describe('init installs', () => {
       async () => {
         script = [{ exitCode: 1, stderr: 'EACCES: permission denied' }];
 
-        const run = await harness('pnpm').run(scaffoldArgv(), { cwd: projectDir });
+        const run = await harness('pnpm').run([...scaffoldArgv(), '--json'], { cwd: projectDir });
 
         expect(run.exitCode).toBe(4);
         expect(calls).toHaveLength(1);
@@ -325,6 +325,24 @@ describe('init installs', () => {
       timeouts.coldTransformImport,
     );
   });
+
+  it(
+    'installs the driver the Mongo package declares as a peer dependency',
+    async () => {
+      const run = await harness().run(
+        ['orm', 'init', '--target', 'mongodb', '--authoring', 'psl'],
+        { cwd: projectDir },
+      );
+
+      expect(run.exitCode).toBe(0);
+      expect(calls[0]).toEqual({
+        file: expect.any(String),
+        args: ['add', '@prisma/orm-mongo', 'dotenv', 'mongodb'],
+        cwd: projectDir,
+      });
+    },
+    timeouts.coldTransformImport,
+  );
 
   describe('--skip-install', () => {
     it(
@@ -456,7 +474,7 @@ describe('init installs', () => {
     it(
       'reports the install failure rather than pretending it installed',
       async () => {
-        const run = await createTestCli({ commands, groups }).run(scaffoldArgv(), {
+        const run = await createTestCli({ commands, groups }).run([...scaffoldArgv(), '--json'], {
           cwd: projectDir,
         });
 

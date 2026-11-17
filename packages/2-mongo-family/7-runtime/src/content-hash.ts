@@ -9,7 +9,7 @@ export const RUNTIME_CONTENT_HASH_REQUIRES_RESOLVED_COMMAND =
 
 /**
  * Resolved wire commands are frozen class instances (`InsertOneWireCommand`, …);
- * pre-resolve `beforeExecute` plans hold a plain-object `MongoLoweredDraft` in the
+ * pre-resolve `beforeEncode` plans hold a plain-object `MongoLoweredDraft` in the
  * command slot. O(1) prototype check — no tree walk on the hot path.
  */
 function isResolvedMongoWireCommand(command: unknown): boolean {
@@ -27,7 +27,7 @@ function assertContentHashOnResolvedCommand(command: unknown): void {
   throw runtimeError(
     RUNTIME_CONTENT_HASH_REQUIRES_RESOLVED_COMMAND,
     'contentHash and computeMongoContentHash are only valid on a resolved wire command after parameter resolution. During a before hook, plan.command holds an unresolved MongoLoweredDraft — use params.entries() and the param mutator instead of contentHash or structural reads of plan.command.',
-    { phase: 'beforeExecute' },
+    { phase: 'beforeEncode' },
   );
 }
 
@@ -67,7 +67,7 @@ function assertContentHashOnResolvedCommand(command: unknown): void {
  *
  * @throws {RuntimeErrorEnvelope} {@link RUNTIME_CONTENT_HASH_REQUIRES_RESOLVED_COMMAND}
  * when `exec.command` is still a pre-resolve draft (plain object), e.g. when
- * `contentHash` is called from `beforeExecute`.
+ * `contentHash` is called from `beforeEncode`.
  *
  * @internal
  */

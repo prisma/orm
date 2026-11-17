@@ -37,13 +37,23 @@ export function mapInterpreterDiagnostics(
   diagnostics: readonly ContractSourceDiagnostic[],
   sourceFile: SourceFile,
 ): readonly LspDiagnostic[] {
-  return diagnostics.map((diagnostic) => ({
+  return diagnostics.map((diagnostic) => mapInterpreterDiagnostic(diagnostic, sourceFile));
+}
+
+export function mapInterpreterDiagnostic(
+  diagnostic: ContractSourceDiagnostic,
+  sourceFile: SourceFile,
+): LspDiagnostic {
+  return {
     range:
       diagnostic.span === undefined
         ? documentStartRange
         : sourceFile.pslSpanToRange(diagnostic.span),
     message: diagnostic.message,
     code: diagnostic.code,
-    severity: ParseDiagnosticSeverity.Error,
-  }));
+    severity:
+      diagnostic.severity === 'warning'
+        ? ParseDiagnosticSeverity.Warning
+        : ParseDiagnosticSeverity.Error,
+  };
 }

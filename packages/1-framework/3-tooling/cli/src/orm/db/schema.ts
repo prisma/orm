@@ -1,17 +1,19 @@
 import { ormConfigSection } from '@internal/config-loader';
-import type { CoreSchemaView, SchemaTreeNode } from '@internal/framework-components/control';
+import type {
+  CoreSchemaView,
+  SchemaLabelPart,
+  SchemaLabelPartRole,
+  SchemaTreeNode,
+} from '@internal/framework-components/control';
 import { ifDefined } from '@internal/utils/defined';
 import type { Block, Presentations, Span, TreeNode } from '@prisma/cli-engine';
+import { noDataLines } from '@prisma/cli-engine';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import { createControlClient } from '../../control-api/client';
+import { errorFromCaught } from '../../control-api/operations/caught-errors';
 import type { CreateControlClient } from '../../control-api/types';
-import {
-  CliStructuredError,
-  errorDatabaseConnectionRequired,
-  errorDriverRequired,
-  errorUnexpected,
-} from '../../utils/cli-errors';
-import { closeQuietly, maskConnectionUrl, sanitizeErrorMessage } from '../../utils/command-helpers';
+import { errorDatabaseConnectionRequired, errorDriverRequired } from '../../utils/cli-errors';
+import { closeQuietly, maskConnectionUrl } from '../../utils/command-helpers';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
 import { normalizeError } from '../normalize-error';
@@ -28,81 +30,22 @@ interface SchemaDocument {
 
 const SUMMARY = 'Schema read successfully';
 
-/**
- * A leading keyword and the name it introduces: `<keyword> <name>`, or
- * `<keyword>: <name>`. The keyword recedes and the name is the identifier.
- */
-function keywordThenName(label: string): readonly Span[] | undefined {
-  const colon = label.match(/^(.+?):\s*(\S.*)$/);
-  if (colon?.[1] !== undefined && colon[2] !== undefined) {
-    return [
-      { text: colon[1], tone: 'muted' },
-      { text: ': ' },
-      { text: colon[2], tone: 'identifier' },
-    ];
-  }
-  const spaced = label.match(/^(\S.*\S|\S+)\s+(\S+)$/);
-  if (spaced?.[1] !== undefined && spaced[2] !== undefined) {
-    return [
-      { text: spaced[1], tone: 'muted' },
-      { text: ' ' },
-      { text: spaced[2], tone: 'identifier' },
-    ];
-  }
-  return undefined;
+const PART_TONES = {
+  title: 'emphasis',
+  keyword: 'muted',
+  name: 'identifier',
+  detail: 'muted',
+} as const satisfies Record<SchemaLabelPartRole, Span['tone']>;
+
+function partSpan(part: SchemaLabelPart): Span {
+  return part.role === undefined
+    ? { text: part.text }
+    : { text: part.text, tone: PART_TONES[part.role] };
 }
 
-/** `<name>: <detail> (<qualifier>)` — the name leads and the qualifier recedes. */
-function namedDetail(label: string): readonly Span[] | undefined {
-  const parts = label.match(/^([^:]+):\s*(.+)$/);
-  if (parts?.[1] === undefined || parts[2] === undefined) {
-    return undefined;
-  }
-  const [, name, rest] = parts;
-  const qualified = rest.match(/^([^\s(]+)\s*(\([^)]+\))$/);
-  if (qualified?.[1] !== undefined && qualified[2] !== undefined) {
-    return [
-      { text: name, tone: 'identifier' },
-      { text: `: ${qualified[1]} ` },
-      { text: qualified[2], tone: 'muted' },
-    ];
-  }
-  return [{ text: name, tone: 'identifier' }, { text: `: ${rest}` }];
-}
-
-/** `<name> <rest>` — the name leads and the prose behind it recedes. */
-function nameThenProse(label: string): readonly Span[] | undefined {
-  const parts = label.match(/^(\S+)\s+(\S.*)$/);
-  if (parts?.[1] === undefined || parts[2] === undefined) {
-    return undefined;
-  }
-  return [{ text: parts[1], tone: 'identifier' }, { text: ' ' }, { text: parts[2], tone: 'muted' }];
-}
-
-/**
- * What a schema node's label means, said in tones.
- *
- * The families phrase these labels themselves, so the shapes recognised here
- * are positional (`<keyword> <name>`, `<name>: <detail>`) rather than a list of
- * words: a family that renames a keyword keeps its colouring, and no family's
- * vocabulary is written down in the framework layer.
- */
+/** A node's label in tones, taken from the parts its family marked. */
 function labelSpans(node: SchemaTreeNode): readonly Span[] {
-  switch (node.kind) {
-    case 'root':
-      return [{ text: node.label, tone: 'emphasis' }];
-    case 'collection':
-      return [{ text: node.label, tone: 'muted' }];
-    case 'entity':
-    case 'index':
-      return keywordThenName(node.label) ?? [{ text: node.label, tone: 'identifier' }];
-    case 'field':
-      return namedDetail(node.label) ?? [{ text: node.label }];
-    case 'dependency':
-      return nameThenProse(node.label) ?? [{ text: node.label, tone: 'identifier' }];
-    default:
-      return [{ text: node.label }];
-  }
+  return node.labelParts.map(partSpan);
 }
 
 function treeNode(node: SchemaTreeNode): TreeNode {
@@ -124,7 +67,9 @@ function schemaPresentations(inputs: {
 }): Presentations {
   const { document, schemaView, database } = inputs;
   return {
-    stdout: () => [],
+    stdout: noDataLines(
+      'Data lines are not defined: the schema is a tree whose shape depends on the database family. --json carries it.',
+    ),
     next: () => [],
     human: (): readonly Block[] => [
       ...(database === undefined
@@ -193,17 +138,10 @@ export function createDbSchemaCommand(createClient: CreateControlClient) {
         });
         schemaView = client.toSchemaView(schema);
       } catch (error) {
-        if (CliStructuredError.is(error)) {
-          return notOk(normalizeError(error));
-        }
-        const safeMessage = sanitizeErrorMessage(
-          error instanceof Error ? error.message : String(error),
-          typeof dbConnection === 'string' ? dbConnection : undefined,
-        );
         return notOk(
           normalizeError(
-            errorUnexpected(safeMessage, {
-              why: `Unexpected error during db schema: ${safeMessage}`,
+            errorFromCaught(error, (message) => `Unexpected error during db schema: ${message}`, {
+              connection: typeof dbConnection === 'string' ? dbConnection : undefined,
             }),
           ),
         );

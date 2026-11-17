@@ -4,6 +4,12 @@
 
 Accepted (TML-2397). Companion mechanism to [ADR 212 — Contract spaces](./ADR%20212%20-%20Contract%20spaces.md).
 
+## The CipherStash example is historical
+
+This ADR's motivating example is CipherStash on version 2 of its Encrypt Query Language (EQL v2), which registered each searchable column in the `eql_v2_configuration` table. The CipherStash extension was built in this repository and later handed over to CipherStash, who maintain it in their own repository. Its current version, `@cipherstash/stack-prisma`, uses EQL v3. It has no configuration table and uses no codec lifecycle hook.
+
+No codec in this repository, and no known external codec, implements `onFieldEvent` today. The hook stays: it is the seam for per-column work that depends on the application's schema, and the planners in the Postgres and SQLite targets already call it.
+
 ## At a glance
 
 Some schema-driven extension behaviour is *not* a function of the extension version but of the consuming application's schema. Cipherstash is the canonical example: when a user adds an `Encrypted<String>` column with `searchable: true`, the database needs `INSERT INTO eql_v2_configuration (...) VALUES (...)` (registering the column for search). That work is per-`(table, column)`, not per-cipherstash-version, and ADR 212's contract-space mechanism on its own can't express it — cipherstash's contract space is a pure function of the cipherstash *package*, not of the consuming app's schema.
@@ -36,7 +42,7 @@ Codecs may declare an optional **plan-time** `onFieldEvent` hook. The framework'
 ### Hook contract
 
 ```ts
-// packages/2-sql/9-family/src/core/migrations/types.ts
+// packages/2-sql-family/9-family/src/core/migrations/types.ts
 export type FieldEvent = 'added' | 'dropped' | 'altered';
 
 export interface FieldEventContext {
@@ -49,7 +55,7 @@ export interface FieldEventContext {
 }
 
 export interface CodecControlHooks<TTargetDetails = unknown> {
-  // … existing hooks (expandNativeType, resolveIdentityValue, etc.) …
+  // … existing hooks (resolveIdentityValue, etc.) …
   readonly onFieldEvent?: (
     event: FieldEvent,
     ctx: FieldEventContext,
@@ -124,8 +130,6 @@ This mirrors the broader `migrate` (persist) vs `db init`/`db update` (apply-and
 
 ```ts
 const cipherstashStringCodecHooks: CodecControlHooks = {
-  expandNativeType: ({ nativeType }) => nativeType,
-
   onFieldEvent: (event, { tableName, fieldName, newField, priorField }) => {
     const searchable = newField?.typeParams?.['searchable'] === true;
     const wasSearchable = priorField?.typeParams?.['searchable'] === true;

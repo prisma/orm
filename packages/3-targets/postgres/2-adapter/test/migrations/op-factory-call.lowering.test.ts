@@ -1,0 +1,438 @@
+import { type as arktype } from 'arktype';
+/**
+ * Op-lowering coverage for the Postgres migration IR call classes:
+ *
+ * - `renderOps` lowers each variant via its pure factory and pins the
+ *   id/operationClass/target.details shape exposed to runners.
+ * - `DataTransformCall` lowers to an operation that rejects with MIGRATION.UNFILLED_PLACEHOLDER,
+ *   because the planner can only emit unfilled stubs; the other operations still lower.
+ * - `TypeScriptRenderablePostgresMigration` routes `operations` through
+ *   `renderOps` and `renderTypeScript()` through `renderCallsToTypeScript`.
+ * - `AddColumnWithTemporaryDefaultCall` pins the exact `ADD COLUMN` SQL
+ *   for a codec-typed, parameterized column resolved via `codecHooks`
+ *   (type token + temp-default backfill via `resolveIdentityValue`).
+ *
+ * Construction-side checks live in op-factory-call.construction.test.ts;
+ * TypeScript rendering of individual calls and the `renderCallsToTypeScript`
+ * aggregator are covered in op-factory-call.rendering.test.ts.
+ */
+
+import type { CodecControlHooks } from '@internal/family-sql/control';
+import {
+  type AnyCodecDescriptor,
+  createDataTypeLookup,
+  type TypeLookups,
+} from '@internal/framework-components/codec';
+import { APP_SPACE_ID } from '@internal/framework-components/control';
+import { keepInternalSpecifiers } from '@internal/framework-components/emission';
+import { sqlDataType } from '@internal/sql-contract/data-type';
+import type { StorageColumn } from '@internal/sql-contract/types';
+import { col, fn } from '@internal/sql-relational-core/contract-free';
+import {
+  createPostgresBuiltinCodecLookup,
+  postgresCodecDescriptorRegistry,
+} from '@internal/target-postgres/codecs';
+import {
+  createPostgresBuiltinDataTypeLookup,
+  postgresDataTypes,
+} from '@internal/target-postgres/data-types';
+import {
+  AddColumnCall,
+  AddColumnWithTemporaryDefaultCall,
+  AddForeignKeyCall,
+  AddPrimaryKeyCall,
+  AddUniqueCall,
+  AlterColumnTypeCall,
+  CreateExtensionCall,
+  CreateIndexCall,
+  CreateSchemaCall,
+  CreateTableCall,
+  DataTransformCall,
+  DropColumnCall,
+  DropConstraintCall,
+  DropDefaultCall,
+  DropIndexCall,
+  DropNotNullCall,
+  DropTableCall,
+  RawSqlCall,
+  SetDefaultCall,
+  SetNotNullCall,
+} from '@internal/target-postgres/op-factory-call';
+import { resolveIdentityValue } from '@internal/target-postgres/planner-identity-values';
+import { TypeScriptRenderablePostgresMigration } from '@internal/target-postgres/planner-produced-postgres-migration';
+import { renderOps } from '@internal/target-postgres/render-ops';
+import { ifDefined } from '@internal/utils/defined';
+import { describe, expect, it } from 'vitest';
+import { createTestPostgresControlAdapter } from '../helpers/test-control-adapter';
+
+const SNAPSHOTS_IMPORT_PATH = '../../snapshots';
+const META = {
+  from: 'a'.repeat(64),
+  to: 'b'.repeat(64),
+} as const;
+const testAdapter = createTestPostgresControlAdapter(
+  createPostgresBuiltinCodecLookup(),
+  createPostgresBuiltinDataTypeLookup(),
+);
+
+describe('renderOps', () => {
+  it('lowers each variant via its pure factory, pinning id/operationClass/target.details', async () => {
+    const liftedOp = {
+      id: 'custom.op.1',
+      label: 'Custom raw op',
+      operationClass: 'additive' as const,
+      target: { id: 'postgres' as const },
+      precheck: [],
+      execute: [{ description: 'run', sql: 'SELECT 1' }],
+      postcheck: [],
+    };
+    const calls = [
+      new CreateTableCall('public', 'user', [col('id', 'text', { notNull: true })]),
+      new DropTableCall('public', 'stale'),
+      new AddColumnCall('public', 'user', col('email', 'text'), postgresDataTypes),
+      new DropColumnCall('public', 'user', 'legacy'),
+      new AlterColumnTypeCall({
+        ownsAutoincrementSequence: false,
+        schemaName: 'public',
+        tableName: 'user',
+        columnName: 'age',
+        type: 'integer',
+        dataTypes: postgresDataTypes,
+      }),
+      new SetNotNullCall('public', 'user', 'email'),
+      new DropNotNullCall('public', 'user', 'nickname'),
+      new SetDefaultCall(
+        'public',
+        'user',
+        col('created_at', 'timestamptz', { default: fn('now()') }),
+        'additive',
+      ),
+      new DropDefaultCall('public', 'user', 'updated_at'),
+      new AddPrimaryKeyCall('public', 'user', 'user_pkey', ['id']),
+      new AddUniqueCall('public', 'user', 'user_email_key', ['email']),
+      new AddForeignKeyCall('public', 'user', {
+        name: 'user_org_fk',
+        columns: ['org_id'],
+        references: { schema: 'public', table: 'org', columns: ['id'] },
+        onDelete: 'cascade',
+        onUpdate: 'cascade',
+      }),
+      new DropConstraintCall('public', 'user', 'user_email_key'),
+      new CreateIndexCall('public', 'user', 'user_email_idx', { columns: ['email'] }),
+      new DropIndexCall('public', 'user', 'stale_idx'),
+      new RawSqlCall(liftedOp),
+      new CreateExtensionCall('public', 'citext'),
+      new CreateSchemaCall('app'),
+    ];
+
+    const ops = await Promise.all(renderOps(calls, testAdapter));
+
+    const schemaObject = (objectType: string, name: string, table?: string) => ({
+      schema: 'public',
+      objectType,
+      name,
+      ...ifDefined('table', table),
+    });
+    const expectations: Array<{
+      id: string;
+      operationClass: string;
+      details: Record<string, unknown> | undefined;
+    }> = [
+      { id: 'table.user', operationClass: 'additive', details: schemaObject('table', 'user') },
+      {
+        id: 'dropTable.stale',
+        operationClass: 'destructive',
+        details: schemaObject('table', 'stale'),
+      },
+      {
+        id: 'column.public.user.email',
+        operationClass: 'additive',
+        details: schemaObject('column', 'email', 'user'),
+      },
+      {
+        id: 'dropColumn.user.legacy',
+        operationClass: 'destructive',
+        details: schemaObject('column', 'legacy', 'user'),
+      },
+      {
+        id: 'alterType.user.age',
+        operationClass: 'destructive',
+        details: schemaObject('column', 'age', 'user'),
+      },
+      {
+        id: 'alterNullability.setNotNull.user.email',
+        operationClass: 'widening',
+        details: schemaObject('column', 'email', 'user'),
+      },
+      {
+        id: 'alterNullability.dropNotNull.user.nickname',
+        operationClass: 'widening',
+        details: schemaObject('column', 'nickname', 'user'),
+      },
+      {
+        id: 'setDefault.user.created_at',
+        operationClass: 'additive',
+        details: schemaObject('column', 'created_at', 'user'),
+      },
+      {
+        id: 'dropDefault.user.updated_at',
+        operationClass: 'widening',
+        details: schemaObject('column', 'updated_at', 'user'),
+      },
+      {
+        id: 'primaryKey.user.user_pkey',
+        operationClass: 'additive',
+        details: schemaObject('primaryKey', 'user_pkey', 'user'),
+      },
+      {
+        id: 'unique.user.user_email_key',
+        operationClass: 'additive',
+        details: schemaObject('unique', 'user_email_key', 'user'),
+      },
+      {
+        id: 'foreignKey.user.user_org_fk',
+        operationClass: 'additive',
+        details: schemaObject('foreignKey', 'user_org_fk', 'user'),
+      },
+      {
+        id: 'dropConstraint.user.user_email_key',
+        operationClass: 'widening',
+        details: schemaObject('unique', 'user_email_key', 'user'),
+      },
+      {
+        id: 'index.user.user_email_idx',
+        operationClass: 'additive',
+        details: schemaObject('index', 'user_email_idx', 'user'),
+      },
+      {
+        id: 'dropIndex.user.stale_idx',
+        operationClass: 'widening',
+        details: schemaObject('index', 'stale_idx', 'user'),
+      },
+      { id: 'custom.op.1', operationClass: 'additive', details: undefined },
+      {
+        id: 'extension.citext',
+        operationClass: 'additive',
+        details: schemaObject('dependency', 'citext'),
+      },
+      { id: 'schema.app', operationClass: 'additive', details: undefined },
+    ];
+
+    expect(ops).toHaveLength(expectations.length);
+    for (const [i, expected] of expectations.entries()) {
+      const op = ops[i];
+      expect(op, `ops[${i}]`).toMatchObject({
+        id: expected.id,
+        operationClass: expected.operationClass,
+        target: {
+          id: 'postgres',
+          ...ifDefined('details', expected.details),
+        },
+      });
+    }
+  });
+
+  it('lowers a DataTransformCall to an operation that rejects with MIGRATION.UNFILLED_PLACEHOLDER, beside the others', async () => {
+    const [dropped, stub] = renderOps(
+      [new DropTableCall('public', 'stale'), new DataTransformCall('Backfill', 'check', 'run')],
+      testAdapter,
+    );
+
+    expect(await dropped).toMatchObject({ id: 'dropTable.stale' });
+    await expect(stub).rejects.toThrow(/Unfilled migration placeholder/);
+  });
+});
+
+describe('TypeScriptRenderablePostgresMigration', () => {
+  it('identifies as postgres, derives destination from meta.to, and materializes operations via renderOps', async () => {
+    const calls = [new DropTableCall('public', 'stale')];
+    const migration = new TypeScriptRenderablePostgresMigration(
+      calls,
+      META,
+      APP_SPACE_ID,
+      SNAPSHOTS_IMPORT_PATH,
+      testAdapter,
+    );
+
+    expect(migration.targetId).toBe('postgres');
+    expect(migration.destination).toEqual({ storageHash: META.to });
+    expect(migration.describe()).toEqual(META);
+
+    const operations = await Promise.all(migration.operations);
+    expect(operations).toHaveLength(1);
+    expect(operations[0]).toMatchObject({ id: 'dropTable.stale' });
+  });
+
+  it('renders TypeScript source mirroring renderCallsToTypeScript output', () => {
+    const calls = [new DropTableCall('public', 'stale')];
+    const migration = new TypeScriptRenderablePostgresMigration(
+      calls,
+      META,
+      APP_SPACE_ID,
+      SNAPSHOTS_IMPORT_PATH,
+    );
+
+    const source = migration.renderTypeScript(keepInternalSpecifiers);
+    expect(source).toContain(
+      "import { Migration, MigrationCLI } from '@internal/postgres/migration';",
+    );
+    expect(source).toContain('this.dropTable({ schema: "public", table: "stale" })');
+  });
+});
+
+describe('AddColumnWithTemporaryDefaultCall', () => {
+  it('renders the exact ADD COLUMN SQL for a parameterized codec type with its temp-default backfill', async () => {
+    const vectorType = sqlDataType('test/vector', {
+      read: (json) => json,
+      params: arktype({ length: 'number.integer > 0' }),
+      texts: [{ text: 'vector({length})', written: true }],
+    });
+    const types: TypeLookups = {
+      codecLookup: {
+        descriptorFor: (codecId) =>
+          codecId === 'pg/vector@1'
+            ? ({ codecId, dataType: vectorType.id } as AnyCodecDescriptor)
+            : postgresCodecDescriptorRegistry.descriptorFor(codecId),
+      },
+      dataTypeLookup: createDataTypeLookup([vectorType]),
+    };
+    const codecHooks = new Map<string, CodecControlHooks>([
+      ['pg/vector@1', { resolveIdentityValue: () => "'[0,0,0]'" }],
+    ]);
+    const column: StorageColumn = {
+      many: false,
+      dataType: 'pgvector/vector',
+      codecId: 'pg/vector@1',
+      nullable: false,
+      typeParams: { length: 3 },
+    };
+
+    const temporaryDefault = resolveIdentityValue(column, codecHooks, types);
+    if (temporaryDefault === null) {
+      throw new Error('expected the pg/vector@1 codec hook to resolve an identity value');
+    }
+    expect(temporaryDefault).toBe("'[0,0,0]'");
+
+    const call = new AddColumnWithTemporaryDefaultCall(
+      'public',
+      'doc',
+      'embedding',
+      'vector(3)',
+      temporaryDefault,
+      postgresDataTypes,
+    );
+    const op = await call.toOp(testAdapter);
+
+    expect(op.execute[0]?.sql).toBe(
+      `ALTER TABLE "public"."doc" ADD COLUMN "embedding" vector(3) DEFAULT ('[0,0,0]') NOT NULL`,
+    );
+  });
+});
+
+const postSerialSequence = `pg_get_serial_sequence('"public"."Post"', 'serial')::regclass`;
+
+describe('SetDefaultCall', () => {
+  it('refuses a column with no default, which SET DEFAULT has nothing to write for', async () => {
+    await expect(
+      new SetDefaultCall('public', 'user', col('name', 'text'), 'additive').toOp(testAdapter),
+    ).rejects.toMatchObject({
+      code: 'CONTRACT.DEFAULT_INVALID',
+      message:
+        'setDefault on column "name" of table "user" has no default. Pass the column with its default, as in col(name, type, { default: lit(value) }) or col(name, type, { default: fn(expression) }).',
+      meta: { table: 'user', column: 'name', reason: 'set-default-without-default' },
+    });
+  });
+
+  it('gives an existing integer column a sequence default that starts past its largest value', async () => {
+    const op = await new SetDefaultCall(
+      'public',
+      'Post',
+      col('serial', 'int4', { default: fn('autoincrement()') }),
+      'additive',
+    ).toOp(testAdapter);
+
+    expect(op).toMatchObject({
+      id: 'setDefault.Post.serial',
+      label: 'Set default on "Post"."serial"',
+      operationClass: 'additive',
+      execute: [
+        {
+          description:
+            'create sequence "Post_serial_seq" owned by "serial" unless the column owns one',
+          sql: `DO $prisma$ BEGIN IF ${postSerialSequence} IS NULL THEN CREATE SEQUENCE "public"."Post_serial_seq" AS integer; ALTER SEQUENCE "public"."Post_serial_seq" OWNED BY "public"."Post"."serial"; END IF; END $prisma$`,
+        },
+        {
+          description: 'change the sequence column "serial" owns to integer',
+          sql: `DO $prisma$ BEGIN EXECUTE format('ALTER SEQUENCE %s AS integer', ${postSerialSequence}); END $prisma$`,
+        },
+        {
+          description: 'set default on "serial" to the sequence it owns',
+          sql: `DO $prisma$ BEGIN EXECUTE format('ALTER TABLE %s ALTER COLUMN %I SET DEFAULT nextval(%L::regclass)', '"public"."Post"', 'serial', ${postSerialSequence}::text); END $prisma$`,
+        },
+        {
+          description: 'start the sequence column "serial" owns past the largest "serial"',
+          sql: `SELECT setval(${postSerialSequence}, GREATEST(COALESCE(MAX("serial"), 0), 0) + 1, false) FROM "public"."Post"`,
+        },
+      ],
+    });
+    expect(op.precheck.map((check) => check.description)).toEqual([
+      'ensure column "serial" exists',
+      'ensure column "serial" owns a sequence or no relation is named "public"."Post_serial_seq" (rename that relation, or write this migration with migration new)',
+    ]);
+    expect(op.postcheck.map((check) => check.description)).toEqual([
+      'verify column "serial" takes its default from an attached sequence',
+      'verify column "serial" owns a sequence of type integer',
+    ]);
+  });
+
+  it.each([
+    { type: 'int2', sequenceType: 'smallint' },
+    { type: 'int8', sequenceType: 'bigint' },
+    { type: 'bigint', sequenceType: 'bigint' },
+  ])('creates the sequence as $sequenceType for a $type column', async ({ type, sequenceType }) => {
+    const op = await new SetDefaultCall(
+      'public',
+      'Post',
+      col('serial', type, { default: fn('autoincrement()') }),
+      'additive',
+    ).toOp(testAdapter);
+
+    expect(op.execute.slice(0, 2).map((step) => step.sql)).toEqual([
+      `DO $prisma$ BEGIN IF ${postSerialSequence} IS NULL THEN CREATE SEQUENCE "public"."Post_serial_seq" AS ${sequenceType}; ALTER SEQUENCE "public"."Post_serial_seq" OWNED BY "public"."Post"."serial"; END IF; END $prisma$`,
+      `DO $prisma$ BEGIN EXECUTE format('ALTER SEQUENCE %s AS ${sequenceType}', ${postSerialSequence}); END $prisma$`,
+    ]);
+  });
+
+  it('checks for the attached sequence when an autoincrement default replaces another default', async () => {
+    const op = await new SetDefaultCall(
+      'public',
+      'Post',
+      col('serial', 'int4', { default: fn('autoincrement()') }),
+      'widening',
+    ).toOp(testAdapter);
+
+    expect(op).toMatchObject({ operationClass: 'widening' });
+    expect(op.postcheck.map((check) => check.description)).toEqual([
+      'verify column "serial" takes its default from an attached sequence',
+      'verify column "serial" owns a sequence of type integer',
+    ]);
+  });
+
+  it.each(['serial', 'text', 'int4[]'])(
+    'refuses an autoincrement() default on a %s column, which is not an integer column',
+    async (type) => {
+      await expect(
+        new SetDefaultCall(
+          'public',
+          'user',
+          col('id', type, { default: fn('autoincrement()') }),
+          'additive',
+        ).toOp(testAdapter),
+      ).rejects.toMatchObject({
+        code: 'CONTRACT.DEFAULT_INVALID',
+        message: `setDefault can give the column "id" of table "user" an autoincrement() default only when its type is smallint, integer or bigint (int2, int4 or int8); its type is "${type}".`,
+        meta: { table: 'user', column: 'id', reason: 'set-default-autoincrement' },
+      });
+    },
+  );
+});

@@ -1,6 +1,17 @@
-export type { CachePayload } from '../cache-annotation';
-export { cacheAnnotation } from '../cache-annotation';
-export type { CacheMiddlewareOptions } from '../cache-middleware';
-export { createCacheMiddleware } from '../cache-middleware';
-export type { CachedEntry, CacheStore, InMemoryCacheStoreOptions } from '../cache-store';
+export type {
+  CacheAnnotationHandle,
+  CacheAnnotationOptions,
+  InvalidateAnnotationHandle,
+  InvalidationTarget,
+} from '../cache-annotation';
+export { cacheAnnotation, invalidateAnnotation } from '../cache-annotation';
+export type { CacheMiddleware, CacheMiddlewareOptions } from '../cache-middleware';
+export { createCacheMiddleware, deriveKeyFromContentHash } from '../cache-middleware';
+export type {
+  CachedRows,
+  CachedValue,
+  CacheEntry,
+  CacheStore,
+  InMemoryCacheStoreOptions,
+} from '../cache-store';
 export { createInMemoryCacheStore } from '../cache-store';

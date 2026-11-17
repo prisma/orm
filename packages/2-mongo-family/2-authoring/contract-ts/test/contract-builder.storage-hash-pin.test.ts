@@ -1,22 +1,6 @@
-import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
 import { describe, expect, it } from 'vitest';
 import { defineContract, field, index, model } from '../src/contract-builder';
-
-const mongoFamilyPack = {
-  kind: 'family',
-  id: 'mongo',
-  familyId: 'mongo',
-  version: '0.0.1',
-} as const satisfies FamilyPackRef<'mongo'>;
-
-const mongoTargetPack = {
-  kind: 'target',
-  id: 'mongo',
-  familyId: 'mongo',
-  targetId: 'mongo',
-  version: '0.0.1',
-  defaultNamespaceId: '__unbound__',
-} as const satisfies TargetPackRef<'mongo', 'mongo'>;
+import { mongoFamilyPack, mongoTargetPack, type } from './mongo-test-packs';
 
 // Pins the storageHash computed for a representative authored contract.
 // The hash fingerprints the constructed storage body the builder feeds
@@ -28,8 +12,8 @@ describe('mongo builder storageHash pin', () => {
     const User = model('User', {
       collection: 'users',
       fields: {
-        _id: field.objectId(),
-        email: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        email: field.scalar(type.String()),
       },
       indexes: [index({ email: 1 }, { unique: true })],
     });
@@ -37,9 +21,9 @@ describe('mongo builder storageHash pin', () => {
     const Post = model('Post', {
       collection: 'posts',
       fields: {
-        _id: field.objectId(),
-        authorId: field.objectId(),
-        title: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        authorId: field.scalar(type.ObjectId()),
+        title: field.scalar(type.String()),
       },
     });
 
@@ -50,7 +34,7 @@ describe('mongo builder storageHash pin', () => {
     });
 
     expect(String(contract.storage.storageHash)).toBe(
-      'cf17fca6237ec7fc1703fb8bbfea0856e08b769868b3275b72ace8b8cdf0fb38',
+      'fa0d1f7630ce87eb9bd3f7250d2ed8fd2322ef400c0b8727cb56ec046fd26e54',
     );
   });
 });

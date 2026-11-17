@@ -9,7 +9,14 @@
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
-import { parseJsonOutput, runContractEmit, setupJourney } from '../utils/journey-test-helpers';
+import { runContractEmit, setupJourney } from '../utils/journey-test-helpers';
+
+function stdoutFrames(stdout: string): unknown[] {
+  return stdout
+    .split('\n')
+    .filter((line) => line.length > 0)
+    .map((line) => JSON.parse(line));
+}
 
 withTempDir(({ createTempDir }) => {
   describe('Journey Y: Global Flags', () => {
@@ -73,36 +80,38 @@ withTempDir(({ createTempDir }) => {
       timeouts.typeScriptCompilation,
     );
 
-    // Y.04: auto-JSON when stdout is piped (not a TTY)
     it(
-      'Y.04: auto-enables JSON output when stdout is piped',
+      'Y.04: a piped stdout receives the emitted file paths relative to the working directory, not JSON',
       async () => {
         const ctx = setupJourney({ createTempDir });
 
-        // Simulate piped stdout (isTTY=false) — no explicit --json flag
         const result = await runContractEmit(ctx, [], { isTTY: false });
         expect(result.exitCode, 'Y.04: emit succeeds').toBe(0);
 
-        // When piped, output should be valid JSON on stdout
-        const json = parseJsonOutput(result);
-        expect(json, 'Y.04: outputs valid JSON object').toBeDefined();
-        expect(typeof json, 'Y.04: JSON is an object').toBe('object');
+        expect(result.stdout.trimEnd().split('\n')).toEqual([
+          expect.stringMatching(/^[^/].*contract\.json$/),
+          expect.stringMatching(/^[^/].*contract\.d\.ts$/),
+        ]);
       },
       timeouts.typeScriptCompilation,
     );
 
-    // Y.05: explicit --json flag still works in interactive mode
     it(
       'Y.05: explicit --json flag produces JSON in interactive mode',
       async () => {
         const ctx = setupJourney({ createTempDir });
 
+        const human = await runContractEmit(ctx);
+        expect(human.exitCode, 'Y.05: interactive emit succeeds').toBe(0);
+        expect(human.stdout, 'Y.05: interactive run without --json prints no JSON').toBe('');
+
         const result = await runContractEmit(ctx, ['--json']);
         expect(result.exitCode, 'Y.05: emit succeeds').toBe(0);
 
-        const json = parseJsonOutput(result);
-        expect(json, 'Y.05: outputs valid JSON object').toBeDefined();
-        expect(typeof json, 'Y.05: JSON is an object').toBe('object');
+        expect(stdoutFrames(result.stdout).at(-1)).toMatchObject({
+          kind: 'result',
+          envelope: { ok: true, result: { storageHash: expect.any(String) } },
+        });
       },
       timeouts.typeScriptCompilation,
     );

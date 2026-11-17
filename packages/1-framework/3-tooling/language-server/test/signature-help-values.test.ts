@@ -1,3 +1,4 @@
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import {
   assembleAuthoringContributions,
   assembleControlMutationDefaults,
@@ -16,6 +17,7 @@ import { parse } from '@internal/psl-parser/syntax';
 import { expect, it, vi } from 'vitest';
 import { MarkupKind } from 'vscode-languageserver';
 import { providePslSignatureHelp } from '../src/signature-help';
+import { testBinder } from './helpers/binder';
 
 const referenceRule = entityRef({ kind: 'model' });
 const parseReference = vi.fn(referenceRule.parse);
@@ -35,8 +37,9 @@ it.each([
   {
     type: optional(list(oneOf(reference, identifier()))),
     args: '|',
-    label: '@probe(((model reference | identifier)[])?)',
+    label: '@probe((model reference | identifier)[]?)',
   },
+  { type: optional(oneOf(asc, desc)), args: '|', label: '@probe((Asc | Desc)?)' },
   { type: oneOf(asc, desc), args: '|', label: '@probe(Asc | Desc)' },
   { type: optional(asc), args: '|', label: '@probe(Asc?)' },
   { type: oneOf(asc, nested), args: 'sort(|)', label: 'sort(Desc)' },
@@ -54,7 +57,7 @@ it.each([
     const { symbolTable } = buildSymbolTable({
       documents: [document],
       sources,
-      pslBlockDescriptors: {},
+      defaultNamespaceId: 'public',
     });
     parseIdentifier.mockClear();
     const result = providePslSignatureHelp({
@@ -63,9 +66,11 @@ it.each([
       position: sourceFile.positionAt(offset),
       clientSupportsLabelOffsets: true,
       candidates: {
+        binder: testBinder({ sources, symbolTable }),
         symbolTable,
         pslBlockDescriptors: {},
         controlMutationDefaults: assembleControlMutationDefaults([]),
+        generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
         authoringContributions: assembleAuthoringContributions([
           {
             id: 'values',

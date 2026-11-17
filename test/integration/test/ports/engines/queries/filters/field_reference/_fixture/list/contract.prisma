@@ -27,8 +27,8 @@ model TestModel {
   bool_list  Boolean[]
   bool_list2 Boolean[]
 
-  dt       DateTime?
-  dt_list  DateTime[]
-  dt_list2 DateTime[]
+  dt       TimestamptzTemporal?
+  dt_list  TimestamptzTemporal[]
+  dt_list2 TimestamptzTemporal[]
   @@map("testModel")
 }

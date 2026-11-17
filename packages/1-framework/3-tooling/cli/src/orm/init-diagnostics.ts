@@ -5,6 +5,8 @@ import { chooseAction, runCommandAction } from '../utils/next-actions';
 /** The invocation that finishes what a failed `init` phase started. */
 export const EMIT_COMMAND = 'prisma contract emit';
 
+export const DB_SIGN_COMMAND = 'prisma db sign';
+
 /**
  * The command's own record of a phase that failed after the scaffold was
  * written. The scaffold is on disk and the run has a result to report, so each

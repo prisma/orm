@@ -22,17 +22,17 @@ import {
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { join } from 'pathe';
 import {
-  CliStructuredError,
+  type CliStructuredError,
   errorFileNotFound,
   errorRefSetBundleNotFound,
   errorRefSetEmptySentinel,
   errorRefSetHashNotInGraph,
   errorRuntime,
-  errorUnexpected,
   mapRefResolutionError,
 } from '../../utils/cli-errors';
 import { resolveMigrationPaths } from '../../utils/command-helpers';
 import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
+import { errorFromCaught } from './caught-errors';
 import { buildReadAggregate } from './contract-space-aggregate-loader';
 
 export interface RefSetResult {
@@ -51,13 +51,6 @@ export interface RefDeleteResult {
 export interface RefListResult {
   readonly ok: true;
   readonly refs: Record<string, RefEntry>;
-}
-
-function mapError(error: unknown): CliStructuredError {
-  if (MigrationToolsError.is(error)) {
-    return error;
-  }
-  return errorUnexpected(error instanceof Error ? error.message : String(error));
 }
 
 export interface RefOperationOptions {
@@ -141,8 +134,7 @@ export async function executeRefSetCommand(
     await writeRef(refsDir, name, entry);
     return ok({ ok: true as const, ref: name, hash: resolvedHash, invariants: [] });
   } catch (error) {
-    if (error instanceof CliStructuredError) return notOk(error);
-    return notOk(mapError(error));
+    return notOk(errorFromCaught(error, (message) => message));
   }
 }
 
@@ -155,8 +147,7 @@ export async function executeRefDeleteCommand(
     await deleteRef(refsDir, name);
     return ok({ ok: true as const, ref: name, deleted: true as const });
   } catch (error) {
-    if (error instanceof CliStructuredError) return notOk(error);
-    return notOk(mapError(error));
+    return notOk(errorFromCaught(error, (message) => message));
   }
 }
 
@@ -168,7 +159,6 @@ export async function executeRefListCommand(
     const refs = await readRefs(refsDir);
     return ok({ ok: true as const, refs });
   } catch (error) {
-    if (error instanceof CliStructuredError) return notOk(error);
-    return notOk(mapError(error));
+    return notOk(errorFromCaught(error, (message) => message));
   }
 }

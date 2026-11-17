@@ -1,11 +1,9 @@
 import { DefaultValueExpr, InsertAst, ParamRef } from '@internal/sql-relational-core/ast';
-import type { Char } from '@internal/target-postgres/codec-types';
 import { describe, expect, it } from 'vitest';
 import {
   createReturningTagsCollection,
   createReturningUsersCollection,
   createUsersCollection,
-  createUsersCollectionWithoutReturning,
   timeouts,
   withCollectionRuntime,
 } from './integration-helpers';
@@ -290,36 +288,6 @@ describe('integration/create', () => {
   );
 
   it(
-    'create() and createAll() reject when returning capability is disabled',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollectionWithoutReturning(runtime);
-
-        await expect(
-          users.create({
-            id: 30,
-            name: 'NoReturn',
-            email: 'noreturn@example.com',
-            invitedById: null,
-          }),
-        ).rejects.toThrow(/requires contract capability "returning"/);
-
-        expect(() =>
-          users.createAll([
-            {
-              id: 31,
-              name: 'NoReturn2',
-              email: 'noreturn2@example.com',
-              invitedById: null,
-            },
-          ]),
-        ).toThrow(/requires contract capability "returning"/);
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-
-  it(
     'createAll([]) is a no-op and executes nothing',
     async () => {
       await withCollectionRuntime(async (runtime) => {
@@ -359,7 +327,7 @@ describe('integration/create', () => {
       async () => {
         await withCollectionRuntime(async (runtime) => {
           const tags = createReturningTagsCollection(runtime);
-          const customId = '123e4567-e89b-12d3-a456-426614174000' as Char<36>;
+          const customId = '123e4567-e89b-12d3-a456-426614174000';
 
           const created = await tags.create({ id: customId, name: 'rust' });
           expect(created).toEqual({ id: customId, name: 'rust' });

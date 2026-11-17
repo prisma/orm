@@ -1,6 +1,7 @@
 import type { JsonValue } from '@internal/contract/types';
 import type { Codec } from './codec';
 import type { AnyCodecDescriptor } from './codec-descriptor';
+import type { DataTypeLookup } from './data-type';
 
 /** Every semantic trait a codec may advertise. The runtime tuple backs validation of trait-keyed contributions arriving from JavaScript. */
 export const CODEC_TRAITS = ['equality', 'order', 'boolean', 'numeric', 'textual'] as const;
@@ -47,13 +48,11 @@ export interface CodecCallContext {
 /**
  * Codec-id-keyed read surface threaded into emit and authoring paths.
  *
- * - `get(id)` returns a representative {@link Codec} instance for the codec id (used by `family.deserializeContract` for `decodeJson` of literal column defaults). For parameterized codecs whose factory requires concrete params, this may return `undefined` — use `CodecRegistry.forCodecRef` instead.
- * - `targetTypesFor(id)` exposes the codec-id-keyed `targetTypes` metadata the runtime instance no longer carries (TML-2357). Returns the same array `CodecDescriptor.targetTypes` would; for Mongo (whose registration doesn't yet resolve through the unified descriptor map — TML-2324) the family-side assembly populates this directly from the contributor's codec metadata.
+ * - `get(id)` returns a representative {@link Codec} instance for the codec id (used where a caller reads or encodes a value by codec id and the codec takes no type parameters). For parameterized codecs whose factory requires concrete params, this may return `undefined` — use `CodecRegistry.forCodecRef` instead.
  * - `renderOutputTypeFor(id, params)` exposes the codec-id-keyed `renderOutputType` renderer the runtime instance no longer carries. Returns `undefined` when the codec doesn't render a custom type or when the codec id is unknown.
  */
 export interface CodecLookup {
   get(id: string): Codec | undefined;
-  targetTypesFor(id: string): readonly string[] | undefined;
   renderOutputTypeFor(id: string, params: Record<string, unknown>): string | undefined;
   /** Codec-id-keyed `renderInputType` renderer for the `contract.d.ts` input position. Optional so existing lookups need not provide it; returns `undefined` when the codec renders no custom input type or the id is unknown. */
   renderInputTypeFor?(id: string, params: Record<string, unknown>): string | undefined;
@@ -63,16 +62,26 @@ export interface CodecLookup {
     value: JsonValue,
     side: 'output' | 'input',
   ): string | undefined;
+}
+
+/** A {@link CodecLookup} that resolves codec descriptors, which building a column's codec with its type parameters needs. */
+export interface CodecLookupWithDescriptors extends CodecLookup {
   /**
-   * Codec-id-keyed descriptor accessor. Returns the full registered
-   * {@link AnyCodecDescriptor} for `id`, or `undefined` if no descriptor is
-   * registered. Optional so existing lookups need not provide it; a consumer
-   * that needs more than the derived per-id readers above — e.g. an
-   * authoring-time hook a target-specific descriptor exposes but this
-   * framework interface does not model generically — fetches the descriptor
-   * itself and narrows it with its own structural predicate.
+   * The registered {@link AnyCodecDescriptor} for `id`, or `undefined` if none is registered. A consumer that needs more than the per-id readers above, such as a column's codec built with its type parameters or an authoring hook a target's descriptor exposes, fetches the descriptor itself. It answers from the same registrations as `get`.
    */
-  descriptorFor?(id: string): AnyCodecDescriptor | undefined;
+  descriptorFor(id: string): AnyCodecDescriptor | undefined;
+}
+
+/** The codecs and the data types of one stack, which together find the data type a codec represents. ADR 254. */
+export interface TypeLookups<
+  Codecs extends Pick<CodecLookupWithDescriptors, 'descriptorFor'> = Pick<
+    CodecLookupWithDescriptors,
+    'descriptorFor'
+  >,
+  DataTypes extends Pick<DataTypeLookup, 'get'> = Pick<DataTypeLookup, 'get'>,
+> {
+  readonly codecLookup: Codecs;
+  readonly dataTypeLookup: DataTypes;
 }
 
 /**
@@ -88,21 +97,21 @@ export interface CodecLookup {
  *   always returns `undefined` — the method exists so the object structurally satisfies the SQL
  *   `ContractCodecRegistry` interface.
  */
-export interface CodecRegistry extends CodecLookup {
+export interface CodecRegistry extends CodecLookupWithDescriptors {
   forCodecRef(ref: CodecRef): Codec;
   forColumn(namespaceId: string, table: string, column: string): Codec | undefined;
 }
 
+/** A lookup with no codecs. It has no `descriptorFor`, so a stub that adds codecs to it through `get` cannot pass for a lookup of descriptors that answers nothing. */
 export const emptyCodecLookup: CodecLookup = {
   get: () => undefined,
-  targetTypesFor: () => undefined,
   renderOutputTypeFor: () => undefined,
 };
 
 /**
  * Family-agnostic per-instance context supplied by the framework when applying a higher-order codec factory. Allows stateful codecs (e.g. column-scoped encryption) to derive per-instance state from the materialization site.
  *
- * - `name` — the family-agnostic instance identity. For SQL, the runtime populates this as the `storage.types` instance name (e.g. `Embedding1536`) for typeRef-shaped columns, an inline-column sentinel (`<col:Document.embedding>`) for inline-`typeParams` columns, a shared codec-id sentinel (`<codec:pg/text@1>`) for non-parameterized codec ids, or the canonical cache key (`<codecId>:<canonicalizeJson(typeParams)>`) for ad-hoc refs the contract walk did not pre-populate. Other families pick the analogous identity for their materialization sites.
+ * - `name` — the family-agnostic instance identity. For SQL, the runtime populates this as an inline-column sentinel (`<col:Document.embedding>`) for columns with `typeParams`, a shared codec-id sentinel (`<codec:pg/text@1>`) for non-parameterized codec ids, or the canonical cache key (`<codecId>:<canonicalizeJson(typeParams)>`) for ad-hoc refs the contract walk did not pre-populate. Other families pick the analogous identity for their materialization sites.
  *
  * Family-specific extensions (e.g. {@link import('@internal/sql-relational-core/ast').SqlCodecInstanceContext} in the SQL layer) augment this base with domain-shaped column-set metadata. Codec authors target the base when they don't read family-specific metadata; they target the family extension when they do.
  */

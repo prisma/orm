@@ -33,7 +33,12 @@
             },
             "relations": {},
             "storage": {
-              "collection": "posts"
+              "collection": "posts",
+              "fields": {
+                "summary": {
+                  "field": "summary"
+                }
+              }
             }
           },
           "Post": {
@@ -41,13 +46,6 @@
               "field": "kind"
             },
             "fields": {
-              "_id": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/objectId@1",
-                  "kind": "scalar"
-                }
-              },
               "authorId": {
                 "nullable": false,
                 "type": {
@@ -66,6 +64,13 @@
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/date@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
                   "kind": "scalar"
                 }
               },
@@ -93,7 +98,7 @@
                     "authorId"
                   ],
                   "targetFields": [
-                    "_id"
+                    "id"
                   ]
                 },
                 "to": {
@@ -103,14 +108,36 @@
               }
             },
             "storage": {
-              "collection": "posts"
+              "collection": "posts",
+              "fields": {
+                "authorId": {
+                  "field": "authorId"
+                },
+                "content": {
+                  "field": "content"
+                },
+                "createdAt": {
+                  "field": "createdAt"
+                },
+                "id": {
+                  "field": "_id"
+                },
+                "kind": {
+                  "field": "kind"
+                },
+                "title": {
+                  "field": "title"
+                }
+              }
             },
             "variants": {
-              "Article": {
-                "value": "article"
+              "article": {
+                "model": "Article",
+                "namespace": "__unbound__"
               },
-              "Tutorial": {
-                "value": "tutorial"
+              "tutorial": {
+                "model": "Tutorial",
+                "namespace": "__unbound__"
               }
             }
           },
@@ -137,23 +164,27 @@
             },
             "relations": {},
             "storage": {
-              "collection": "posts"
+              "collection": "posts",
+              "fields": {
+                "difficulty": {
+                  "field": "difficulty"
+                },
+                "duration": {
+                  "field": "duration"
+                }
+              }
             }
           },
           "User": {
             "fields": {
-              "_id": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/objectId@1",
-                  "kind": "scalar"
-                }
-              },
               "address": {
                 "nullable": true,
                 "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "Address",
                   "kind": "valueObject",
-                  "name": "Address"
+                  "namespaceId": "__unbound__",
+                  "plane": "storage"
                 }
               },
               "bio": {
@@ -170,6 +201,13 @@
                   "kind": "scalar"
                 }
               },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
               "name": {
                 "nullable": false,
                 "type": {
@@ -183,7 +221,7 @@
                 "cardinality": "1:N",
                 "on": {
                   "localFields": [
-                    "_id"
+                    "id"
                   ],
                   "targetFields": [
                     "authorId"
@@ -196,39 +234,22 @@
               }
             },
             "storage": {
-              "collection": "users"
-            }
-          }
-        },
-        "valueObjects": {
-          "Address": {
-            "fields": {
-              "city": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              },
-              "country": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              },
-              "street": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              },
-              "zip": {
-                "nullable": true,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
+              "collection": "users",
+              "fields": {
+                "address": {
+                  "field": "address"
+                },
+                "bio": {
+                  "field": "bio"
+                },
+                "email": {
+                  "field": "email"
+                },
+                "id": {
+                  "field": "_id"
+                },
+                "name": {
+                  "field": "name"
                 }
               }
             }
@@ -251,7 +272,8 @@
                       "field": "authorId"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "authorId_1"
                 },
                 {
                   "keys": [
@@ -260,7 +282,8 @@
                       "field": "createdAt"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "createdAt_-1"
                 }
               ],
               "kind": "mongo-collection",
@@ -438,13 +461,47 @@
                 "validationLevel": "strict"
               }
             }
+          },
+          "valueObject": {
+            "Address": {
+              "fields": {
+                "city": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                },
+                "country": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                },
+                "street": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                },
+                "zip": {
+                  "nullable": true,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                }
+              }
+            }
           }
         },
         "id": "__unbound__",
         "kind": "mongo-database"
       }
     },
-    "storageHash": "bd6f4b342df331f80b6e10550b5ee6d9a8b9dc3b279f3eec78b779d6871993d8"
+    "storageHash": "395d910a151cb498283db67859cb88f21bff6fc73aeb92e3840d0e981a515359"
   },
   "capabilities": {},
   "extensions": {},

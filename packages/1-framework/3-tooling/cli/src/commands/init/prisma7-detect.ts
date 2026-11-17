@@ -43,7 +43,13 @@ export type Prisma7ConfigDetection =
 export type Prisma7SchemaDetection =
   | { readonly kind: 'absent'; readonly path: string }
   | { readonly kind: 'no-datasource'; readonly path: string }
-  | { readonly kind: 'datasource'; readonly path: string; readonly provider: string | undefined };
+  | {
+      readonly kind: 'datasource';
+      readonly path: string;
+      readonly provider: string | undefined;
+      /** The variable `url = env("...")` names in the block; `undefined` when it names none. */
+      readonly urlEnv: string | undefined;
+    };
 
 /**
  * The `prisma` package the project declares. `earlier` is a major below 8,
@@ -65,7 +71,7 @@ export type Prisma7CliDetection =
 export interface Prisma7Detection {
   readonly config: Prisma7ConfigDetection;
   readonly schema: Prisma7SchemaDetection;
-  readonly schemaPathSource: 'flag' | 'config' | 'default';
+  readonly schemaPathSource: 'flag' | 'config' | 'package-json' | 'default';
   readonly cli: Prisma7CliDetection;
   readonly warnings: readonly string[];
 }
@@ -165,13 +171,16 @@ function stripLineComments(text: string): string {
   return text.replace(/\/\/[^\n]*/g, '');
 }
 
-function findProvider(text: string): { readonly provider: string | undefined } | undefined {
+function findProvider(
+  text: string,
+): { readonly provider: string | undefined; readonly urlEnv: string | undefined } | undefined {
   const block = /datasource\s+\w+\s*\{([^}]*)\}/.exec(stripLineComments(text));
   if (block === null) {
     return undefined;
   }
   const provider = /\bprovider\s*=\s*"([^"]*)"/.exec(block[1] ?? '');
-  return { provider: provider?.[1] };
+  const urlEnv = /\burl\s*=\s*env\(\s*"([^"]*)"\s*\)/.exec(block[1] ?? '');
+  return { provider: provider?.[1], urlEnv: urlEnv?.[1] };
 }
 
 function prismaFilesUnder(directory: string): string[] {
@@ -180,7 +189,7 @@ function prismaFilesUnder(directory: string): string[] {
     .map((entry) => join(entry.parentPath, entry.name));
 }
 
-function detectSchema(cwd: string, path: string): Prisma7SchemaDetection {
+export function detectSchema(cwd: string, path: string): Prisma7SchemaDetection {
   const absolute = resolve(cwd, path);
   if (!existsSync(absolute)) {
     return { kind: 'absent', path };
@@ -189,10 +198,29 @@ function detectSchema(cwd: string, path: string): Prisma7SchemaDetection {
   for (const file of files) {
     const found = findProvider(readFileSync(file, 'utf-8'));
     if (found !== undefined) {
-      return { kind: 'datasource', path, provider: found.provider };
+      return { kind: 'datasource', path, ...found };
     }
   }
   return { kind: 'no-datasource', path };
+}
+
+/** The schema locations an earlier Prisma CLI tries, in order, when neither a flag, a config nor package.json names one. */
+const CONVENTIONAL_SCHEMA_PATHS = ['prisma/schema.prisma', 'schema.prisma', 'prisma/schema'];
+
+/**
+ * The schema an earlier Prisma CLI reads when no flag or config names one: the `prisma.schema` field of package.json, else the first conventional location that exists, else the default path.
+ */
+export function conventionalSchemaPath(cwd: string): {
+  readonly path: string;
+  readonly source: 'package-json' | 'default';
+} {
+  const declared = readJsonRecord(join(cwd, 'package.json'))?.['prisma'];
+  const schema = isRecord(declared) ? declared['schema'] : undefined;
+  if (typeof schema === 'string') {
+    return { path: schema, source: 'package-json' };
+  }
+  const found = CONVENTIONAL_SCHEMA_PATHS.find((candidate) => existsSync(resolve(cwd, candidate)));
+  return { path: found ?? PRISMA7_DEFAULT_SCHEMA_PATH, source: 'default' };
 }
 
 function readJsonRecord(path: string): Record<string, unknown> | undefined {
@@ -290,12 +318,13 @@ export async function detectPrisma7Project(ctx: {
   const config = await detectConfig(ctx.cwd);
   const configSchema =
     config.kind === 'prisma7' || config.kind === 'unreadable' ? config.schema : undefined;
+  const conventional = conventionalSchemaPath(ctx.cwd);
   const [path, schemaPathSource]: [string, Prisma7Detection['schemaPathSource']] =
     ctx.schemaPath !== undefined
       ? [ctx.schemaPath, 'flag']
       : configSchema !== undefined
         ? [configSchema, 'config']
-        : [PRISMA7_DEFAULT_SCHEMA_PATH, 'default'];
+        : [conventional.path, conventional.source];
   return {
     config,
     schema: detectSchema(ctx.cwd, path),

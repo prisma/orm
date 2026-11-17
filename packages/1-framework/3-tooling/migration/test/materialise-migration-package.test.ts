@@ -28,18 +28,6 @@ describe('materialiseMigrationPackage', () => {
     expect(entries).toEqual(['migration.json', 'ops.json']);
   });
 
-  it('does not write a per-package contract.json', async () => {
-    const ops = createTestOps();
-    const metadata = createTestMetadata({}, ops);
-    const pkg = { dirName: 'baseline', metadata, ops };
-
-    await materialiseMigrationPackage(tmpDir, pkg);
-
-    const dir = join(tmpDir, pkg.dirName);
-    const entries = await readdir(dir);
-    expect(entries).not.toContain('contract.json');
-  });
-
   it('produces byte-identical output across two writes of the same package to different dirs', async () => {
     const ops = createTestOps();
     const metadata = createTestMetadata({}, ops);

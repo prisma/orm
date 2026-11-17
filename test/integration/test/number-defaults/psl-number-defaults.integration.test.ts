@@ -11,8 +11,9 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import postgres from '@internal/target-postgres/control';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
-import sqlite, { sqliteCreateNamespace } from '@internal/target-sqlite/control';
+import sqlite from '@internal/target-sqlite/control';
 import sqlitePackRef from '@internal/target-sqlite/pack';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { timeouts, withDevDatabase } from '@repo/test-utils';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
@@ -24,8 +25,8 @@ import {
 } from '../scalar-lists/psl-list-authoring';
 
 const schema = `types {
-  Money = Numeric(65, 30)
-  Price = Numeric(10, 2)
+  Money = NumericString(65, 30)
+  Price = NumericString(10, 2)
 }
 
 model NumberDefault {
@@ -68,11 +69,13 @@ async function authorSqliteContractFromPsl(pslSchema: string) {
     createNamespace: sqliteCreateNamespace,
   }).source.load({
     composedExtensions: [],
+    defaultNamespaceId: sqliteStack.target.defaultNamespaceId,
     composedExtensionContracts: new Map(),
     authoringContributions: sqliteStack.authoringContributions,
     codecLookup: sqliteStack.codecLookup,
-    dataTypeLookup: sqliteStack.dataTypeLookup,
+    dataTypes: sqliteStack.dataTypes,
     controlMutationDefaults: sqliteStack.controlMutationDefaults,
+    generatorFunctions: sqliteStack.generatorFunctions,
     resolvedInputs: [schemaPath],
     capabilities: sqliteStack.capabilities,
   });
@@ -87,6 +90,8 @@ async function applyContract(connectionString: string, contract: Contract<SqlSto
       schema: await familyInstance.introspect({ driver }),
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents: postgresFrameworkComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -153,10 +158,10 @@ describe('PSL number defaults keep every digit', () => {
         count: defaultOf('count'),
         ratio: defaultOf('ratio'),
       }).toEqual({
-        long: { kind: 'literal', value: '12345678901234567890.123456789' },
-        tiny: { kind: 'literal', value: '0.000000000000000001' },
-        negative: { kind: 'literal', value: '-1.25' },
-        whole: { kind: 'literal', value: '10' },
+        long: { kind: 'literal', value: '12345678901234567890.123456789000000000000000000000' },
+        tiny: { kind: 'literal', value: '0.000000000000000001000000000000' },
+        negative: { kind: 'literal', value: '-1.250000000000000000000000000000' },
+        whole: { kind: 'literal', value: '10.000000000000000000000000000000' },
         scaledTrailingZeros: { kind: 'literal', value: '1.50' },
         bareTrailingZeros: { kind: 'literal', value: '1.50' },
         bareLong: { kind: 'literal', value: '12345678901234567890.123456789' },
@@ -168,7 +173,11 @@ describe('PSL number defaults keep every digit', () => {
         safeBig: { kind: 'literal', value: '42' },
         decimals: {
           kind: 'literal',
-          value: ['12345678901234567890.123456789', '-0.000000000000000001', '1.50'],
+          value: [
+            '12345678901234567890.123456789000000000000000000000',
+            '-0.000000000000000001000000000000',
+            '1.500000000000000000000000000000',
+          ],
         },
         bareDecimals: { kind: 'literal', value: ['1.50', '0', '7'] },
         bigs: { kind: 'literal', value: ['9007199254740993', '-1'] },
@@ -221,23 +230,22 @@ describe('PSL number defaults on columns whose data type casts from no number', 
       ok: false,
       diagnostics: [
         expect.objectContaining({
-          code: 'PSL_DEFAULT_TYPE_INCOMPATIBLE',
-          message: 'Field "Payload.data": pg/bytea has no cast from pg/int2; it casts from pg/text',
+          code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
+          message: 'Field "Payload.data": Expected bytea`...`',
         }),
       ],
     });
   });
 
-  it('refuse a number on a SQLite datetime column, naming the cast it would need', async () => {
+  it('refuse a number on a SQLite datetime column, whose type casts from nothing', async () => {
     const result = await authorSqliteContractFromPsl(
       'model Event {\n  id Int @id\n  at DateTime @default(0)\n}',
     );
     expect(result.ok).toBe(false);
     expect(result.ok ? [] : result.failure.diagnostics).toEqual([
       expect.objectContaining({
-        code: 'PSL_DEFAULT_TYPE_INCOMPATIBLE',
-        message:
-          'Field "Event.at": sqlite/datetime has no cast from sqlite/integer; it casts from sqlite/text',
+        code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
+        message: 'Field "Event.at": Expected datetime`...`',
       }),
     ]);
   });

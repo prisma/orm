@@ -5,8 +5,13 @@ import type {
   EntitySelector,
   ResolvedEntityReference,
 } from '../../entity-reference';
-import { resolveEntityReference } from '../../entity-reference';
-import { IdentifierAst } from '../../syntax/ast/identifier';
+import {
+  describeResolution,
+  describeWrittenEntityReference,
+  entityReference,
+  matchesSelector,
+  writtenEntityReference,
+} from '../../entity-reference';
 import type { AttributeCtx, EntityRefArgType } from '../types';
 import { leafDiagnostic } from './diagnostic';
 
@@ -22,32 +27,24 @@ export function entityRef<const S extends EntitySelector>(
       arg,
       ctx,
     ): Result<ResolvedEntityReference<DeclarationFor<S>>, readonly PslDiagnostic[]> => {
-      const name = IdentifierAst.cast(arg.syntax)?.name();
-      if (name === undefined) {
+      const written = writtenEntityReference(arg.syntax);
+      if (written === undefined) {
         return notOk([leafDiagnostic(ctx, arg, `Expected ${label}`)]);
       }
-      const reference = resolveEntityReference(arg, name, ctx.symbols);
-      if (reference === undefined) {
-        return notOk([leafDiagnostic(ctx, arg, `Unknown ${label} "${name}"`)]);
-      }
-      if (!matchesSelector(reference, expected)) {
-        const actual = reference.declaration;
-        const kind = actual.kind === 'block' ? actual.keyword : actual.kind;
-        return notOk([leafDiagnostic(ctx, arg, `Expected ${label} "${name}", found ${kind}`)]);
+      const name = describeWrittenEntityReference(written);
+      const resolution = ctx.binder.symbolForNode(arg.syntax);
+      if (resolution === undefined || resolution.kind === 'unresolved') return notOk([]);
+      const reference = entityReference(resolution);
+      if (reference === undefined || !matchesSelector(reference, expected)) {
+        return notOk([
+          leafDiagnostic(
+            ctx,
+            arg,
+            `Expected ${label} "${name}", found ${describeResolution(resolution)}`,
+          ),
+        ]);
       }
       return ok(reference);
     },
   };
-}
-
-function matchesSelector<S extends EntitySelector>(
-  reference: ResolvedEntityReference,
-  expected: S,
-): reference is ResolvedEntityReference<DeclarationFor<S>> {
-  const declaration = reference.declaration;
-  return (
-    declaration.kind === expected.kind &&
-    (expected.kind !== 'block' ||
-      (declaration.kind === 'block' && declaration.keyword === expected.keyword))
-  );
 }

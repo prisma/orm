@@ -2,12 +2,12 @@ import { existsSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import type * as configLoader from '@internal/config-loader';
+import type { CliStructuredError } from '@internal/errors/control';
+import { structuredError } from '@internal/utils/structured-error';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import {
-  executeContractEmit,
-  loadContractSource,
-} from '../../src/control-api/operations/contract-emit';
+import { executeContractEmit } from '../../src/control-api/operations/contract-emit';
+import { loadContractSource } from '../../src/control-api/operations/load-contract-source';
 
 const VIEW_DIAGNOSTIC = {
   code: 'PSL.PRISMA7_VIEW_UNSUPPORTED',
@@ -34,7 +34,7 @@ function configWithSource(output: string, load: () => Promise<unknown>) {
       targetId: 'test-target',
     },
     extensions: [],
-    contract: { source: { load }, output },
+    contract: { source: { format: 'typescript', load }, output },
   } as unknown as configLoader.PrismaNextConfig;
 }
 
@@ -62,6 +62,7 @@ describe('loadContractSource', () => {
       summary: 'Prisma 7 schema interpretation failed',
       diagnostics: [VIEW_DIAGNOSTIC],
       meta: undefined,
+      warnings: [],
     });
     expect(existsSync(join(tmpDir, 'src'))).toBe(false);
   });
@@ -75,8 +76,94 @@ describe('loadContractSource', () => {
 
     const result = await loadContractSource(config);
 
-    expect(result.assertOk()).toBe(contract);
+    expect(result.assertOk()).toEqual({ contract, warnings: [] });
     expect(existsSync(join(tmpDir, 'src'))).toBe(false);
+  });
+
+  it('reports a structured error the source throws with its own code, message and meta', async () => {
+    const message =
+      'Field "Event.e": now() does not apply to codec "pg/text@1". Functions that apply: uuid().';
+    const meta = {
+      modelName: 'Event',
+      fieldName: 'e',
+      codecId: 'pg/text@1',
+      function: 'now',
+      reason: 'generator-not-applicable',
+    };
+    const config = configWithSource(join(tmpDir, 'contract.json'), async () => {
+      throw structuredError('CONTRACT.DEFAULT_INVALID', message, { meta });
+    });
+
+    const error = (await loadContractSource(config).catch(
+      (caught: unknown) => caught,
+    )) as CliStructuredError;
+
+    expect({ error, envelope: error.toEnvelope() }).toMatchObject({
+      error: { code: 'CONTRACT.DEFAULT_INVALID', message, meta },
+      envelope: { code: 'CONTRACT.DEFAULT_INVALID', summary: message, meta },
+    });
+  });
+
+  describe('a source that reports a warning', () => {
+    const warning = {
+      code: 'PSL_DEPRECATED_SCALAR_NAME',
+      message: 'Scalar type "Int" is deprecated and will be removed; use "Int32".',
+      sourceId: 'prisma/schema.prisma',
+      severity: 'warning' as const,
+    };
+    const warningThen =
+      (outcome: () => unknown) =>
+      async (context: { reportWarning?: (diagnostic: unknown) => void }) => {
+        context.reportWarning?.(warning);
+        return outcome();
+      };
+
+    it('returns it with the contract', async () => {
+      const contract = { capabilities: {}, extensions: {} };
+      const config = configWithSource(
+        join(tmpDir, 'contract.json'),
+        warningThen(() => ({ ok: true, value: contract })) as () => Promise<unknown>,
+      );
+
+      expect((await loadContractSource(config)).assertOk()).toEqual({
+        contract,
+        warnings: [warning],
+      });
+    });
+
+    it('returns it with the diagnostics of a source that then fails', async () => {
+      const config = configWithSource(
+        join(tmpDir, 'contract.json'),
+        warningThen(() => ({
+          ok: false,
+          failure: { summary: 'failed', diagnostics: [VIEW_DIAGNOSTIC] },
+        })) as () => Promise<unknown>,
+      );
+
+      expect((await loadContractSource(config)).assertNotOk()).toMatchObject({
+        diagnostics: [VIEW_DIAGNOSTIC],
+        warnings: [warning],
+      });
+    });
+
+    it('lists it after the findings of the error a source then throws', async () => {
+      const config = configWithSource(
+        join(tmpDir, 'contract.json'),
+        warningThen(() => {
+          throw structuredError('CONTRACT.DEFAULT_INVALID', 'Default refused');
+        }) as () => Promise<unknown>,
+      );
+
+      await expect(loadContractSource(config)).rejects.toMatchObject({
+        code: 'CONTRACT.DEFAULT_INVALID',
+        diagnostics: [
+          expect.objectContaining({
+            severity: 'warn',
+            summary: `prisma/schema.prisma PSL_DEPRECATED_SCALAR_NAME: ${warning.message}`,
+          }),
+        ],
+      });
+    });
   });
 
   it('throws the emit error for a malformed source result', async () => {

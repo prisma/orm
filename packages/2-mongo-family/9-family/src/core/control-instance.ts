@@ -5,16 +5,19 @@ import type {
   ControlFamilyInstance,
   ControlStack,
   CoreSchemaView,
+  MarkerHashes,
   MigrationPlanOperation,
   OperationPreview,
   OperationPreviewCapable,
   SchemaViewCapable,
-  SignDatabaseResult,
+  SpaceSignature,
+  SpaceToSign,
   VerifyDatabaseResult,
   VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
 import {
   APP_SPACE_ID,
+  sameMarkerHashes,
   VERIFY_CODE_HASH_MISMATCH,
   VERIFY_CODE_MARKER_MISSING,
   VERIFY_CODE_TARGET_MISMATCH,
@@ -23,13 +26,19 @@ import { assertDescriptorSelfConsistency } from '@internal/migration-tools/space
 import type { MongoContract } from '@internal/mongo-contract';
 import { mongoContractCanonicalizationHooks } from '@internal/mongo-contract/canonicalization-hooks';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
+import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
-import type { MongoControlAdapter, MongoControlAdapterDescriptor } from './control-adapter';
+import type {
+  MongoControlAdapter,
+  MongoControlAdapterDescriptor,
+  MongoRunnerDependencies,
+} from './control-adapter';
 import type { MongoControlExtensionDescriptor } from './control-types';
 import { MongoContractSerializer } from './ir/mongo-contract-serializer';
 import { mongoOperationsToPreview } from './operation-preview';
+import { mongoStorageNameOf } from './operation-storage-name';
 import { mongoSchemaToView } from './schema-to-view';
 import { verifyMongoSchema } from './schema-verify/verify-mongo-schema';
 
@@ -48,6 +57,13 @@ export interface MongoControlFamilyInstance
    * guarded by `pnpm lint:no-contract-cast`.
    */
   deserializeContract(contractJson: unknown): Contract;
+
+  /**
+   * Builds the migration runner's dependencies through the control adapter on the stack, so the target never names the adapter package (ADR 198).
+   */
+  createRunnerDependencies(options: {
+    readonly driver: ControlDriverInstance<'mongo', string>;
+  }): MongoRunnerDependencies;
 }
 
 function deserializeMongoContract(contractJson: unknown): MongoContract {
@@ -75,7 +91,10 @@ function deserializeMongoContract(contractJson: unknown): MongoContract {
  * shape with a single narrow cast.
  */
 function asValidatedMongoContract(contract: unknown): MongoContract {
-  return contract as MongoContract;
+  return blindCast<
+    MongoContract,
+    'the framework SPI passes the family its own validated contract as unknown'
+  >(contract);
 }
 
 function buildVerifyResult(opts: {
@@ -128,7 +147,10 @@ export function createMongoFamilyInstance(controlStack: ControlStack): MongoCont
   // inconsistent descriptor" into an explicit, actionable error
   // (`MIGRATION.DESCRIPTOR_HEAD_HASH_MISMATCH`) rather than a confusing
   // mismatch surfacing several layers downstream. Mirrors the SQL family.
-  const extensions = (controlStack.extensions ?? []) as readonly MongoControlExtensionDescriptor[];
+  const extensions = blindCast<
+    readonly MongoControlExtensionDescriptor[],
+    'a Mongo control stack composes only Mongo extension descriptors'
+  >(controlStack.extensions ?? []);
   for (const extension of extensions) {
     if (extension.contractSpace) {
       const { contractJson, headRef } = extension.contractSpace;
@@ -147,12 +169,20 @@ export function createMongoFamilyInstance(controlStack: ControlStack): MongoCont
   // the adapter resolved from the control stack; the family carries no
   // direct imports of target/adapter/driver internals. Mirrors the SQL
   // family's `getControlAdapter()` helper.
-  const adapter = controlStack.adapter as MongoControlAdapterDescriptor<'mongo'> | undefined;
+  const adapter = blindCast<
+    MongoControlAdapterDescriptor<'mongo'> | undefined,
+    'a Mongo control stack composes a Mongo adapter descriptor'
+  >(controlStack.adapter);
   const getControlAdapter = (): MongoControlAdapter<'mongo'> => {
     if (!adapter) {
       throw new InternalError('Mongo family requires an adapter descriptor in ControlStack');
     }
-    return adapter.create(controlStack as ControlStack<'mongo', 'mongo'>);
+    return adapter.create(
+      blindCast<
+        ControlStack<'mongo', 'mongo'>,
+        'this family instance was created for the Mongo target'
+      >(controlStack),
+    );
   };
 
   // The family-level driver type is `ControlDriverInstance<'mongo', string>`,
@@ -180,15 +210,59 @@ export function createMongoFamilyInstance(controlStack: ControlStack): MongoCont
     return driver;
   }
 
+  async function signSpaceMarker(
+    driver: ControlDriverInstance<'mongo', 'mongo'>,
+    { space, contract, expected }: SpaceToSign,
+  ): Promise<SpaceSignature> {
+    const storageHash = contract.storage.storageHash;
+    const profileHash = contract.profileHash;
+    const signed = { space, contract: { storageHash, profileHash } };
+    const controlAdapter = getControlAdapter();
+
+    const readHashes = async (): Promise<MarkerHashes | null> => {
+      const marker = await controlAdapter.readMarker(driver, space);
+      return marker === null
+        ? null
+        : { storageHash: marker.storageHash, profileHash: marker.profileHash };
+    };
+    const existing = await readHashes();
+    if (!sameMarkerHashes(existing, expected)) {
+      return { ...signed, status: 'conflict', expected, found: existing };
+    }
+    if (existing === null) {
+      await controlAdapter.initMarker(driver, space, { storageHash, profileHash });
+      return { ...signed, status: 'created' };
+    }
+    if (existing.storageHash === storageHash && existing.profileHash === profileHash) {
+      return { ...signed, status: 'unchanged' };
+    }
+    const updated = await controlAdapter.updateMarker(driver, space, existing.storageHash, {
+      storageHash,
+      profileHash,
+    });
+    if (!updated) {
+      return {
+        ...signed,
+        status: 'conflict',
+        expected,
+        found: await readHashes(),
+      };
+    }
+    return { ...signed, status: 'updated', previous: existing };
+  }
+
   return {
     familyId: 'mongo' as const,
 
+    get markerLocation(): string {
+      return getControlAdapter().markerLocation;
+    },
+
     deserializeContract(contractJson: unknown): Contract {
-      // The deserialized class form (MongoTargetContract, owned by
-      // target-mongo) and the framework Contract are structurally
-      // compatible — same fields, just a class instance on the storage
-      // envelope. The cast preserves the framework signature.
-      return deserializeMongoContract(contractJson) as unknown as Contract;
+      return blindCast<
+        Contract,
+        'a deserialized Mongo contract is a framework Contract whose storage is Mongo storage'
+      >(deserializeMongoContract(contractJson));
     },
 
     async verify(options): Promise<VerifyDatabaseResult> {
@@ -278,91 +352,13 @@ export function createMongoFamilyInstance(controlStack: ControlStack): MongoCont
       });
     },
 
-    async sign(options): Promise<SignDatabaseResult> {
-      const { driver, contract: rawContract, contractPath, configPath } = options;
-      const startTime = Date.now();
-
-      const contract = asValidatedMongoContract(rawContract);
-
-      const contractStorageHash = contract.storage.storageHash;
-      const contractProfileHash = contract.profileHash;
-
-      const controlAdapter = getControlAdapter();
-      const mongoDriver = asMongoDriver(driver);
-
-      const existingMarker = await controlAdapter.readMarker(mongoDriver, APP_SPACE_ID);
-
-      let markerCreated = false;
-      let markerUpdated = false;
-      let previousHashes: { storageHash?: string; profileHash?: string } | undefined;
-
-      if (!existingMarker) {
-        await controlAdapter.initMarker(mongoDriver, APP_SPACE_ID, {
-          storageHash: contractStorageHash,
-          profileHash: contractProfileHash,
-        });
-        markerCreated = true;
-      } else {
-        const storageHashMatches = existingMarker.storageHash === contractStorageHash;
-        const profileHashMatches = existingMarker.profileHash === contractProfileHash;
-
-        if (!storageHashMatches || !profileHashMatches) {
-          previousHashes = {
-            storageHash: existingMarker.storageHash,
-            profileHash: existingMarker.profileHash,
-          };
-          const updated = await controlAdapter.updateMarker(
-            mongoDriver,
-            APP_SPACE_ID,
-            existingMarker.storageHash,
-            {
-              storageHash: contractStorageHash,
-              profileHash: contractProfileHash,
-            },
-          );
-          if (!updated) {
-            throw structuredError(
-              'MIGRATION.MARKER_CAS_FAILURE',
-              'CAS conflict: marker was modified by another process during sign',
-            );
-          }
-          markerUpdated = true;
-        }
+    async signSpaces(options): Promise<readonly SpaceSignature[]> {
+      const mongoDriver = asMongoDriver(options.driver);
+      const signatures: SpaceSignature[] = [];
+      for (const space of options.spaces) {
+        signatures.push(await signSpaceMarker(mongoDriver, space));
       }
-
-      let summary: string;
-      if (markerCreated) {
-        summary = 'Database signed (marker created)';
-      } else if (markerUpdated) {
-        summary = `Database signed (marker updated from ${previousHashes?.storageHash ?? 'unknown'})`;
-      } else {
-        summary = 'Database already signed with this contract';
-      }
-
-      return {
-        ok: true,
-        summary,
-        contract: {
-          storageHash: contractStorageHash,
-          profileHash: contractProfileHash,
-        },
-        target: {
-          expected: contract.target,
-          actual: contract.target,
-        },
-        marker: {
-          created: markerCreated,
-          updated: markerUpdated,
-          ...ifDefined('previous', previousHashes),
-        },
-        meta: {
-          contractPath,
-          ...ifDefined('configPath', configPath),
-        },
-        timings: {
-          total: Date.now() - startTime,
-        },
-      };
+      return signatures;
     },
 
     async readMarker(options): Promise<ContractMarkerRecord | null> {
@@ -381,12 +377,20 @@ export function createMongoFamilyInstance(controlStack: ControlStack): MongoCont
       return getControlAdapter().introspectSchema(asMongoDriver(options.driver));
     },
 
+    createRunnerDependencies(options): MongoRunnerDependencies {
+      return getControlAdapter().createRunnerDependencies(asMongoDriver(options.driver));
+    },
+
     toSchemaView(schema: MongoSchemaIR): CoreSchemaView {
       return mongoSchemaToView(schema);
     },
 
     toOperationPreview(operations: readonly MigrationPlanOperation[]): OperationPreview {
       return mongoOperationsToPreview(operations);
+    },
+
+    storageNameOf(operation: MigrationPlanOperation): string {
+      return mongoStorageNameOf(operation);
     },
   };
 }

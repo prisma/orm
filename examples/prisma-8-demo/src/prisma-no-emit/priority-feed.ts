@@ -20,7 +20,7 @@ export async function getPostsByPriority(runtime: Runtime) {
 export function getPriorityEnum() {
   // The no-emit contract types its domain namespaces loosely (index
   // signature), so `enums['public']` is reached with bracket access and a
-  // runtime guard rather than a cast — the same shape `createOrmClient` uses.
+  // runtime guard rather than a cast — the same shape `connectClient` uses for the ORM namespace.
   const publicEnums = enums['public'];
   if (publicEnums === undefined) {
     throw new MissingNamespaceError('public', 'Contract enums');

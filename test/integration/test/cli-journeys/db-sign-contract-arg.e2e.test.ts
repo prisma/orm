@@ -72,8 +72,12 @@ withTempDir(({ createTempDir }) => {
         expect(signRef.exitCode, 'sign (--contract ref)').toBe(0);
         const markerRef = engineDocument(signRef);
 
-        const extractHash = (json: Record<string, unknown> | undefined) =>
-          (json?.['contract'] as Record<string, unknown> | undefined)?.['storageHash'];
+        const extractHash = (json: Record<string, unknown> | undefined) => {
+          const spaces = json?.['spaces'] as
+            | ReadonlyArray<{ readonly space: string; readonly contract: { storageHash: string } }>
+            | undefined;
+          return spaces?.find((entry) => entry.space === 'app')?.contract.storageHash;
+        };
 
         const h1 = extractHash(markerDefault);
         const h2 = extractHash(markerPositional);

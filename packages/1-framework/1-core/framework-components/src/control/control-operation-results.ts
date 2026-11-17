@@ -1,3 +1,4 @@
+import type { Contract } from '@internal/contract/types';
 import type { SchemaDiffIssue } from './schema-diff';
 
 export const VERIFY_CODE_MARKER_MISSING = 'CONTRACT.MARKER_MISSING';
@@ -103,30 +104,54 @@ export interface IntrospectSchemaResult<TSchemaIR> {
   };
 }
 
-export interface SignDatabaseResult {
-  readonly ok: boolean;
-  readonly summary: string;
-  readonly contract: {
-    readonly storageHash: string;
-    readonly profileHash?: string;
-  };
-  readonly target: {
-    readonly expected: string;
-    readonly actual?: string;
-  };
-  readonly marker: {
-    readonly created: boolean;
-    readonly updated: boolean;
-    readonly previous?: {
-      readonly storageHash?: string;
-      readonly profileHash?: string;
-    };
-  };
-  readonly meta?: {
-    readonly configPath?: string;
-    readonly contractPath: string;
-  };
-  readonly timings: {
-    readonly total: number;
-  };
+/** The two hashes a contract marker holds. */
+export interface MarkerHashes {
+  readonly storageHash: string;
+  readonly profileHash: string;
 }
+
+/** Whether two markers hold the same hashes, `null` standing for no marker. */
+export function sameMarkerHashes(a: MarkerHashes | null, b: MarkerHashes | null): boolean {
+  if (a === null || b === null) return a === b;
+  return a.storageHash === b.storageHash && a.profileHash === b.profileHash;
+}
+
+/** A contract space whose marker is to be written with its contract's hashes. */
+export interface SpaceToSign {
+  readonly space: string;
+  readonly contract: Contract;
+  /**
+   * The space's marker as the caller read it before verifying the space, or `null` when it had none. The marker is written only while it still holds these hashes.
+   */
+  readonly expected: MarkerHashes | null;
+}
+
+/**
+ * A space whose marker now holds its contract's hashes: `created` when it had no marker, `updated` when it held the hashes in `previous`, `unchanged` when it already held the contract's.
+ */
+export type SpaceSigned =
+  | {
+      readonly status: 'created' | 'unchanged';
+      readonly space: string;
+      readonly contract: MarkerHashes;
+    }
+  | {
+      readonly status: 'updated';
+      readonly space: string;
+      readonly contract: MarkerHashes;
+      readonly previous: MarkerHashes;
+    };
+
+/**
+ * A space whose marker did not hold `expected`, the hashes the caller read before it verified the space, when the family came to write it. `found` is what the marker held instead. The marker was left as it was.
+ */
+export interface SpaceMarkerConflict {
+  readonly status: 'conflict';
+  readonly space: string;
+  readonly contract: MarkerHashes;
+  readonly expected: MarkerHashes | null;
+  readonly found: MarkerHashes | null;
+}
+
+/** What signing did to one contract space's marker. */
+export type SpaceSignature = SpaceSigned | SpaceMarkerConflict;

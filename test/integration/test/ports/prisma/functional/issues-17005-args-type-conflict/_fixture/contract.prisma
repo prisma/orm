@@ -12,19 +12,19 @@
 // codegen naming conflicts.
 
 model Post {
-  id    String      @id @default(cuid(2))
+  id    String      @id @onCreate(cuid(2))
   media PostMedia[]
   @@map("post")
 }
 
 model Media {
-  id    String      @id @default(cuid(2))
+  id    String      @id @onCreate(cuid(2))
   posts PostMedia[]
   @@map("media")
 }
 
 model PostMedia {
-  id      String @id @default(cuid(2))
+  id      String @id @onCreate(cuid(2))
   post    Post   @relation(fields: [postId], references: [id])
   media   Media  @relation(fields: [mediaId], references: [id])
   postId  String

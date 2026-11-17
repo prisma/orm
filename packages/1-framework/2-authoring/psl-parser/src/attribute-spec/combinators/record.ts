@@ -1,4 +1,4 @@
-import { notOk, ok, type Result } from '@internal/utils/result';
+import { and, notOk, ok, okVoid, type Result } from '@internal/utils/result';
 import type { PslDiagnostic } from '../../diagnostic';
 import { ObjectLiteralExprAst } from '../../syntax/ast/expressions';
 import type { ArgType, AttributeCtx, RecordArgType } from '../types';
@@ -14,33 +14,36 @@ export function record<T, Ctx extends AttributeCtx>(of: ArgType<T, Ctx>): Record
       if (literal === undefined) {
         return notOk([leafDiagnostic(ctx, arg, 'Expected an object literal')]);
       }
-      const diagnostics: PslDiagnostic[] = [];
       const entries: [string, T][] = [];
       const keys = new Set<string>();
+      let outcome: Result<void, readonly PslDiagnostic[]> = okVoid();
       for (const field of Array.from(literal.fields())) {
         const key = field.keyName();
         if (key === undefined) {
-          diagnostics.push(leafDiagnostic(ctx, field, 'Expected a key'));
+          outcome = and(outcome, notOk([leafDiagnostic(ctx, field, 'Expected a key')]));
           continue;
         }
         const value = field.value();
         if (value === undefined) {
-          diagnostics.push(leafDiagnostic(ctx, field, `Expected a value for key "${key}"`));
+          outcome = and(
+            outcome,
+            notOk([leafDiagnostic(ctx, field, `Expected a value for key "${key}"`)]),
+          );
           continue;
         }
         const parsed = of.parse(value, ctx);
         if (!parsed.ok) {
-          diagnostics.push(...parsed.failure);
+          outcome = and(outcome, parsed);
           continue;
         }
         if (keys.has(key)) {
-          diagnostics.push(leafDiagnostic(ctx, field, `Duplicate key "${key}"`));
+          outcome = and(outcome, notOk([leafDiagnostic(ctx, field, `Duplicate key "${key}"`)]));
           continue;
         }
         keys.add(key);
         entries.push([key, parsed.value]);
       }
-      if (diagnostics.length > 0) return notOk(diagnostics);
+      if (!outcome.ok) return notOk(outcome.failure);
       return ok(Object.fromEntries(entries));
     },
   };

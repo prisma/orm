@@ -1,6 +1,8 @@
 import { ContractValidationError } from './contract-validation-error';
 import type { CrossReference } from './cross-reference';
 import type { ContractWithDomain } from './domain-envelope';
+import { fieldLike, fieldModifierProblems, valueObjectTypeProblems } from './field-problems';
+import { isPlainRecord } from './is-plain-record';
 import { asNamespaceId, type NamespaceId } from './namespace-id';
 
 export interface DomainRelationShape {
@@ -14,7 +16,7 @@ export interface DomainModelShape {
   readonly fields: Record<string, unknown>;
   readonly relations?: Record<string, DomainRelationShape>;
   readonly discriminator?: { readonly field: string };
-  readonly variants?: Record<string, unknown>;
+  readonly variants?: Record<string, CrossReference>;
   readonly base?: CrossReference;
   readonly owner?: string;
 }
@@ -59,8 +61,24 @@ function* iterateIndexedModels(index: ModelIndex): IterableIterator<IndexedModel
   }
 }
 
+/**
+ * The keys an older contract stores in its domain plane that a contract no longer has: value objects, which are storage entities since ADR 309. A family's structural validation reports these before anything else, so an old contract is refused with a message that says to re-emit it.
+ */
+export function removedDomainKeyProblems(contract: unknown): readonly string[] {
+  if (!isPlainRecord(contract) || !isPlainRecord(contract['domain'])) return [];
+  const namespaces = contract['domain']['namespaces'];
+  if (!isPlainRecord(namespaces)) return [];
+  return Object.entries(namespaces).flatMap(([namespaceId, namespace]) =>
+    isPlainRecord(namespace) && Object.hasOwn(namespace, 'valueObjects')
+      ? [
+          `domain.namespaces.${namespaceId}.valueObjects: contracts no longer store value objects in the domain plane; they are storage entities under storage.namespaces.<namespace>.entries.valueObject, so re-emit the contract from its source, or rewrite a stored contract such as a migration snapshot with value-objects-in-storage.ts, which ships in the value-objects-in-storage scripts of the Prisma 8 upgrade guide`,
+        ]
+      : [],
+  );
+}
+
 export function validateContractDomain(contract: DomainContractShape): void {
-  const errors: string[] = [];
+  const errors: string[] = [...removedDomainKeyProblems(contract)];
   const modelIndex = indexDomainModels(contract);
 
   validateRoots(contract, modelIndex, errors);
@@ -70,7 +88,7 @@ export function validateContractDomain(contract: DomainContractShape): void {
   validateDiscriminators(modelIndex, errors);
   validateOwnership(contract, modelIndex, errors);
   validateValueObjectReferences(contract, errors);
-  validateFieldModifiers(modelIndex, contract, errors);
+  validateFieldModifiers(modelIndex, errors);
 
   if (errors.length > 0) {
     throw new ContractValidationError(
@@ -110,19 +128,27 @@ function validateRoots(
 function validateVariantsAndBases(modelIndex: ModelIndex, errors: string[]): void {
   for (const { namespaceId, name: modelName, model } of iterateIndexedModels(modelIndex)) {
     if (model.variants) {
-      for (const variantName of Object.keys(model.variants)) {
-        const variantRef: CrossReference = { namespace: namespaceId, model: variantName };
+      const valuesByVariant = new Map<string, string>();
+      for (const [value, variantRef] of Object.entries(model.variants)) {
+        const variantKey = JSON.stringify([variantRef.namespace, variantRef.model]);
+        const earlierValue = valuesByVariant.get(variantKey);
+        if (earlierValue !== undefined) {
+          errors.push(
+            `Model "${namespaceId}:${modelName}" lists variant "${variantRef.namespace}:${variantRef.model}" under both discriminator values "${earlierValue}" and "${value}"`,
+          );
+        }
+        valuesByVariant.set(variantKey, value);
         const variantEntry = lookupModel(modelIndex, variantRef);
         if (!variantEntry) {
           errors.push(
-            `Model "${namespaceId}:${modelName}" lists variant "${variantName}" which does not exist at that namespace coordinate`,
+            `Model "${namespaceId}:${modelName}" lists variant "${variantRef.namespace}:${variantRef.model}" which does not exist in domain.namespaces`,
           );
           continue;
         }
         const variantBase = variantEntry.model.base;
         if (variantBase?.namespace !== namespaceId || variantBase?.model !== modelName) {
           errors.push(
-            `Variant "${namespaceId}:${variantName}" has base "${variantBase?.namespace ?? '?'}:${variantBase?.model ?? '(none)'}" but expected "${namespaceId}:${modelName}"`,
+            `Variant "${variantRef.namespace}:${variantRef.model}" has base "${variantBase?.namespace ?? '?'}:${variantBase?.model ?? '(none)'}" but expected "${namespaceId}:${modelName}"`,
           );
         }
       }
@@ -136,7 +162,8 @@ function validateVariantsAndBases(modelIndex: ModelIndex, errors: string[]): voi
         );
         continue;
       }
-      if (!baseEntry.model.variants || !Object.hasOwn(baseEntry.model.variants, modelName)) {
+      const listedVariants = Object.values(baseEntry.model.variants ?? {});
+      if (!listedVariants.some((ref) => ref.namespace === namespaceId && ref.model === modelName)) {
         errors.push(
           `Model "${namespaceId}:${modelName}" has base "${model.base.namespace}:${model.base.model}" which does not list it as a variant`,
         );
@@ -248,90 +275,29 @@ function validateOwnership(
   }
 }
 
-interface FieldTypeLike {
-  readonly kind?: string;
-  readonly name?: string;
-  readonly members?: readonly FieldTypeLike[];
-}
-
-interface FieldLike {
-  readonly type?: FieldTypeLike;
-  readonly many?: boolean;
-  readonly dict?: boolean;
-}
-
 function validateValueObjectReferences(contract: DomainContractShape, errors: string[]): void {
-  const voNamesByNamespace = new Map<NamespaceId, Set<string>>();
-  for (const [namespaceKey, namespace] of Object.entries(contract.domain.namespaces)) {
-    const namespaceId = asNamespaceId(namespaceKey);
-    voNamesByNamespace.set(namespaceId, new Set(Object.keys(namespace.valueObjects ?? {})));
-  }
-
-  function checkType(
-    type: FieldTypeLike | undefined,
-    location: string,
-    namespaceId: NamespaceId,
-  ): void {
-    if (!type) return;
-    const voNames = voNamesByNamespace.get(namespaceId) ?? new Set<string>();
-    if (type.kind === 'valueObject' && type.name && !voNames.has(type.name)) {
-      errors.push(
-        `${location} references value object "${namespaceId}:${type.name}" which does not exist in that namespace's valueObjects`,
-      );
-      return;
-    }
-    if (type.kind === 'union') {
-      for (const member of type.members ?? []) checkType(member, location, namespaceId);
-    }
-  }
-
   for (const [namespaceKey, namespace] of Object.entries(contract.domain.namespaces)) {
     const namespaceId = asNamespaceId(namespaceKey);
     for (const [modelName, model] of Object.entries(namespace.models)) {
       for (const [fieldName, field] of Object.entries(model.fields)) {
-        const f = field as FieldLike | undefined;
-        checkType(f?.type, `Model "${namespaceId}:${modelName}" field "${fieldName}"`, namespaceId);
-      }
-    }
-    for (const [voName, vo] of Object.entries(namespace.valueObjects ?? {})) {
-      for (const [fieldName, field] of Object.entries(vo.fields)) {
-        const f = field as FieldLike | undefined;
-        checkType(
-          f?.type,
-          `Value object "${namespaceId}:${voName}" field "${fieldName}"`,
-          namespaceId,
+        errors.push(
+          ...valueObjectTypeProblems(
+            contract.storage,
+            fieldLike(field)?.type,
+            `Model "${namespaceId}:${modelName}" field "${fieldName}"`,
+          ),
         );
       }
     }
   }
 }
 
-function validateFieldModifiers(
-  modelIndex: ModelIndex,
-  contract: DomainContractShape,
-  errors: string[],
-): void {
+function validateFieldModifiers(modelIndex: ModelIndex, errors: string[]): void {
   for (const { namespaceId, name: modelName, model } of iterateIndexedModels(modelIndex)) {
     for (const [fieldName, field] of Object.entries(model.fields)) {
-      const f = field as FieldLike | undefined;
-      if (f?.many && f?.dict) {
-        errors.push(
-          `Model "${namespaceId}:${modelName}" field "${fieldName}" cannot have both "many" and "dict" modifiers`,
-        );
-      }
-    }
-  }
-  for (const [namespaceKey, namespace] of Object.entries(contract.domain.namespaces)) {
-    const namespaceId = asNamespaceId(namespaceKey);
-    for (const [voName, vo] of Object.entries(namespace.valueObjects ?? {})) {
-      for (const [fieldName, field] of Object.entries(vo.fields)) {
-        const f = field as FieldLike | undefined;
-        if (f?.many && f?.dict) {
-          errors.push(
-            `Value object "${namespaceId}:${voName}" field "${fieldName}" cannot have both "many" and "dict" modifiers`,
-          );
-        }
-      }
+      errors.push(
+        ...fieldModifierProblems(`Model "${namespaceId}:${modelName}" field "${fieldName}"`, field),
+      );
     }
   }
 }

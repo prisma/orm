@@ -24,7 +24,7 @@
 //   }
 
 model User {
-  id         String              @id @default(cuid(2))
+  id         String              @id @onCreate(cuid(2))
   email      String              @unique
   workspaces UsersOnWorkspaces[]
   name       String?
@@ -32,7 +32,7 @@ model User {
 }
 
 model Workspace {
-  id    String              @id @default(cuid(2))
+  id    String              @id @onCreate(cuid(2))
   users UsersOnWorkspaces[]
   name  String
   @@map("workspace")

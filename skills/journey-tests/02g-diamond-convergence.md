@@ -20,7 +20,7 @@ The 5-step diamond-convergence procedure:
 - [ ] **2.** Identify the topic-branch migration directory under `migrations/` (e.g. `migrations/app/20241112-add-tags/`) and treat it as the stale plan. Leave it on disk: it is still an edge any database that already applied it needs. No `rm -rf`.
 - [ ] **3.** Run `contract emit` then `migration plan --from <main's head ref or hash> --name <slug>` to plan a fresh edge from the post-merge origin. The graph now has two edges off the old parent; that is a legal shape. If a database (e.g. the dev database) already applied the topic-branch migration, its marker sits at that tip and has no path to the new head: plan a second edge for it with `migration plan --from <topic tip hash> --name <slug>`, or reset that database.
 - [ ] **4.** Open the stale topic-branch `migration.ts`; port any custom data-transform logic into the new one.
-- [ ] **5.** Self-emit (`node migrations/app/<dir>/migration.ts`).
+- [ ] **5.** Self-emit (`node <package dir>/migration.ts`).
 
 ## Success criteria
 

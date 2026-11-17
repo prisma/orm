@@ -1,4 +1,4 @@
-export { assertHashIsGraphNode, isGraphNode } from '../graph-membership';
+export { assertHashIsGraphNode, isGraphNode, isInSpaceHistory } from '../graph-membership';
 export type { PathDecision } from '../migration-graph';
 export {
   detectCycles,

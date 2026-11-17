@@ -1,6 +1,7 @@
 # ADR 231 — Declarative attribute specifications: composable argument combinators with typed inference
 
-**Status:** Accepted
+**Status:** Accepted. Amended 2026-09-22: top-level extension-block member values are declared through this same combinator kit via block specs (`structBlock` / `mapBlock`), and the shared `jsonValue()` rule reads native JSON-compatible literals from the AST — see [ADR 262 — Block specs bind top-level block values](ADR%20262%20-%20Block%20specs%20bind%20top-level%20block%20values.md). Central spec discovery and language-server consumption, listed below as follow-up, are delivered by [ADR 249 — Central attribute-spec registry](ADR%20249%20-%20Central%20attribute-spec%20registry.md). Amended 2026-09-30: `dataTypeValue` types the arguments that take raw SQL (`@@index(where:)`, `@@index(expression:)`, `@@fullTextIndex(where:)`, `@@check(expression:)` and a policy's `using` and `withCheck`) — see [ADR 268 — Raw SQL is a value of the data type `sql/expression`](ADR%20268%20-%20Raw%20SQL%20is%20a%20value%20of%20the%20data%20type%20sql-expression.md). Amended 2026-10-20: a type-constructor argument that is a value, such as the length in `VarChar(255)`, is a database value, read by the same function as `dataTypeValue` — see ADR 254. Amended 2026-10-22: in both families an enum member is read with `enumMemberValue()` and a `@@base` value with `writtenScalar(str())`, and both are read into their codec by the cast rule — see the section "Enum members and discriminator values" of [ADR 254](ADR%20254%20-%20Data%20types%20and%20casts.md#enum-members-and-discriminator-values).
+Amended by [ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md): `@default` offers only the functions that lower to a database default, and `@onCreate(fn())` and `@onUpdate(fn())` are specs whose `funcCall` arms are the generator functions bound to the field's codec.
 **Date:** 2026-06-29
 **Accepted:** 2026-08-27
 
@@ -50,7 +51,7 @@ The SQL and Mongo family interpreters are the first consumers. They define their
 
 The kit consumes `ExpressionAst` directly. No intermediate argument representation is introduced, and no combinator reparses flattened source text except `json()`, the deliberate quoted-JSON-object exception.
 
-Attributes are a PSL authoring concern, so the kit is in `psl-parser` rather than framework core. Field, model, and block attributes are all constructed through it. A block descriptor declares which attributes its block accepts, and symbol-table construction interprets them after collecting all declarations.
+Attributes are a PSL authoring concern, so the kit is in `psl-parser` rather than framework core. Field, model, and block attributes are all constructed through it. A block descriptor declares which attributes its block accepts. Symbol-table construction collects declarations without interpreting blocks; consumers then bind references and interpret block values and attributes against the complete snapshot, as described in ADR 262.
 
 ---
 
@@ -83,9 +84,9 @@ A combinator declares what it reads. The contexts nest by what the site being pa
 
 ```ts
 interface AttributeCtx {
-  readonly sourceId: string;
-  readonly sourceFile: SourceFile;
+  readonly sources: PslSources;
   readonly symbols: SymbolTable;
+  readonly binder: Binder;
 }
 
 interface ModelAttributeCtx extends AttributeCtx {
@@ -94,11 +95,10 @@ interface ModelAttributeCtx extends AttributeCtx {
 
 interface FieldAttributeCtx extends ModelAttributeCtx {
   readonly field: FieldSymbol;
-  resolveReferencedModel(): ModelSymbol | undefined;
 }
 ```
 
-A block has no model, so a block attribute is parsed without a model context. A combinator is usable at any level that carries the facts it declares, and rejected where those facts do not exist. Checked references derive their lexical scope from the expression's syntax ancestry; the parse context carries no owner or scope field.
+A block has no model, so a block attribute is parsed without a model context. A combinator is usable at any level that carries the facts it declares, and rejected where those facts do not exist. Checked references read committed resolutions through `ctx.binder.symbolForNode`, rather than deriving scope from expression ancestry. The binder must use the same symbol table, sources, and registries as interpretation. It owns unresolved-reference diagnostics; combinators own expression-shape and entity-selector diagnostics and fail without additional diagnostics for absent or unresolved bindings.
 
 A spec fixes the attribute level and name, declares its arguments, and may refine the parsed result:
 
@@ -129,6 +129,18 @@ Positionals are fixed slots with an output key. Variadic positionals are not sup
 ---
 
 ## The combinator kit
+
+An attribute argument is one of two kinds, and the kit has a set of combinators for each.
+
+- **A database value** is a value of a data type ([ADR 254](ADR%20254%20-%20Data%20types%20and%20casts.md)): a value a column holds, such as the value of `@default(...)`, an expression the database evaluates, such as the raw SQL of `@@index(where:)`, a type-constructor argument, such as the `pg/int4` length in `VarChar(255)`, or a client generator's argument, such as the `8` in `nanoid(8)`, a value of the target's integer type followed by the function's own check. Its question is not "is this a string" but "which data type is this value, and does the receiving type take it", and the answer is the cast rule. `dataTypeValue(T)` reads a database value.
+- **Grammar** is everything else: a name (`@@map("users")`), a flag (`unique: true`), a keyword (`onDelete: Cascade`), a reference (`fields: [a, b]`), an index weight, and lists and records of these. Grammar is typed by its shape. A name reaches the database in DDL, but it is not a value of any data type, so the cast rule has nothing to say about it.
+
+| Kind | Combinators |
+| --- | --- |
+| Grammar | `str`, `num`, `int`, `bool`, `identifier`, `fieldRef`, `referencedFieldRef`, `entityRef`, `list`, `record`, `oneOf`, `funcCall`, `json` |
+| Database value | `dataTypeValue`; and the grammar-shaped readers `numLiteral`, `taggedLiteral` and `jsonValue`, which read a database value's syntax for the positions listed next and leave the type check to their interpreter |
+
+A table name is never `pg/text`, and asking which type casts into it would tie the family's grammar to a target's type registry; a column default is never "a string", because `"8"` and `8` are different values with different types. The two sets of combinators keep the two questions apart. Four database positions are still read through grammar-shaped readers, each for a reason: `@default`, because its receiving type comes from the column and the spec factory does not know it (see [SQL defaults](#sql-defaults)); a `@@base` value (`writtenScalar(str())`), in both families, for the same reason, which the interpreter then reads into the discriminator field's codec by the cast rule; an enum member's value (`enumMemberValue()`), in both families, because the receiving type is the enum codec's, which the spec factory does not know, and the member is then read into that codec by the cast rule; and Mongo's partial index filter (`json()`), because the Mongo family registers no data type for a filter expression.
 
 ### Scalars and pinned literals
 
@@ -192,15 +204,33 @@ record(int({ min: 1, max: 99_999 }))
 
 This is intentionally narrower than an arbitrary JSON value. Its shipped use is Mongo's partial index filter, whose nested document is passed through rather than interpreted as a typed PSL record.
 
+### Tagged literals and JSON values
+
+`taggedLiteral(tags, { documentation })` reads a tagged literal (`` tag`...` ``, `tag"..."` or `tag'...'`) and returns its tag, its canonicalization and its span. It accepts any tag; `tags` and `documentation` describe the registered tags for completion. `@default` uses it, wrapped in `writtenScalar`, for its tagged-literal arms, and lowering reads the tag through the stack's authoring entries ([ADR 129](ADR%20129%20-%20Template-Tagged%20Literals%20for%20Extensions.md)).
+
+`jsonValue()` reads a native JSON-compatible literal (a string, a finite number, a boolean, `null`, a list or a record of such values) and returns it as JSON. Block specs use it for members whose value is arbitrary JSON ([ADR 262](ADR%20262%20-%20Block%20specs%20bind%20top-level%20block%20values.md)).
+
+### Values of a data type
+
+`dataTypeValue(dataType, support)` takes a value of one data type ([ADR 254](ADR%20254%20-%20Data%20types%20and%20casts.md)). It applies the ADR 254 cast rule while parsing: it reads the written literal (a quoted string, a number, a boolean or a tagged literal) into a typed value through the stack's authoring entries, and admits it when that type is `dataType` or a type `dataType` casts from. It returns the canonical value with the type id and the span, so the interpreter stores it without a check of its own. It reports every refusal at the written value, with the general codes: `PSL_INVALID_ATTRIBUTE_SYNTAX` for an expression that is not a literal; `PSL_TAGGED_LITERAL_NUL` and `PSL_TAGGED_LITERAL_TOO_LARGE` for a tagged literal it cannot canonicalize; and `PSL_UNKNOWN_LITERAL_TAG`, `PSL_VALUE_TYPE_INCOMPATIBLE` and `PSL_INVALID_LITERAL` from the cast rule, worded by the framework's `describeRefusal`. A refusal starts with what to write, as in `Expected a number`; it names the receiving type and the value's type only when a value of an admitted form is still refused, as in `Expected a number that pg/int4 can hold; got pg/int8`. A quoted string refused by a type that has a tag also gets the literal to write, as in ``Expected sql`...`; write sql`now()` ``, when that literal reads back as the same text and the receiving type takes it. The label of a type with a tag is its tag, as in ``sql`...` ``; the label of a type without one is the forms it admits, as in `a number`. `support` is the spec context's `dataTypes` ([ADR 249](ADR%20249%20-%20Central%20attribute-spec%20registry.md)). An optional third argument, `{ suggestions, label }`, lists values the language server offers at the position and replaces the default label shown in hover and signature help, as in `uuid((4 | 7)?)`. `refineArg(arm, refine)` adds a check after the value is read, such as a generator's limit, keeping the argument type's details; unlike `mapArg`, its check can refuse.
+
+The body of `dataTypeValue` is `readExpressionAs(support, dataType, expression)`, and a type constructor's value arguments use the same function ([ADR 254](ADR%20254%20-%20Data%20types%20and%20casts.md), amendment 2026-10-20), so `VarChar(3000000000)` is refused with the same message as `nanoid(3000000000)`: `Expected a number that pg/int4 can hold; got pg/int8`.
+
+Building the argument never throws, because the language server builds every spec, including on stacks that lack the type. Parsing throws an internal error when the stack does not register `dataType`, or registers it with no written form: a spec that names a type its stack lacks, or one nothing writes, is a pack bug. The argument carries `tags` and `documentation` for completion.
+
+`dataTypeValue` is used as a named attribute argument, such as `@@index(where:)`, as a block parameter, such as a policy's `using`, or as a parameter in a `funcCall` signature. It is never a bare arm of `oneOf`, whose aggregate diagnostic would hide the message that says how to write the value; `oneOf` throws an `InternalError` when given one. The places that take raw SQL receive `sql/expression` through it, so only a `sql` literal is admitted there ([ADR 268 — Raw SQL is a value of the data type `sql/expression`](ADR%20268%20-%20Raw%20SQL%20is%20a%20value%20of%20the%20data%20type%20sql-expression.md)). It is not a replacement for `str()`, `num()` or `bool()`, and a position whose value is not of a data type keeps those.
+
+`writtenScalar(arm)` wraps a literal arm and yields the literal as a written scalar with its span; `writtenList(of)` does the same for a list of them. They are the reading step that `dataTypeValue` performs before it casts, for a position whose receiving type is known only at lowering, such as `@default`, which receives the column's type. They leave a tagged literal that cannot be canonicalized for lowering to report, because a parse failure inside `oneOf` would be replaced by `Expected one of: …`. Both are built on `mapArg(arm, map)`, which passes the value an arm parses through `map` and keeps the arm's `kind` and metadata, which describe the syntax it accepts, for tooling. An arm that needs a different output from the same syntax, such as the `@default` function-call and enum-member arms, uses `mapArg` too.
+
 ### Alternatives
 
-`oneOf(first, ...rest)` tries its alternatives in order and returns the first success. If every alternative fails, it discards the branch diagnostics and emits one aggregate `Expected one of: …` diagnostic assembled from the alternatives' labels.
+`oneOf(first, ...rest)` tries its alternatives in order and returns the first success. If every alternative fails, it discards the branch diagnostics and emits one aggregate `Expected one of: …` diagnostic assembled from the alternatives' labels. An alternative may claim an argument whose shape is its own (`ArgType.claims`). When exactly one alternative claims the argument, `oneOf` returns that alternative's result, success or failure, so its diagnostics about the argument are kept. `oneOf` knows nothing about which combinators claim; each combinator decides for its own shape. `funcCall` claims a call to its name whose callee is a plain identifier: the author named the function, so `@onCreate(nanoid("8"))` reports what is wrong with `"8"`, not the list of every default form.
 
 This trade-off keeps the leaf contract small and allows backtracking, at the cost of less specific diagnostics for malformed input that resembles one particular branch.
 
 ### Typed function calls
 
-`funcCall(name, signature)` matches one unqualified function name and parses its positional and named arguments through the same parameter-binding engine used by attributes:
+`funcCall(name, signature, { label })` matches one unqualified function name and parses its positional and named arguments through the same parameter-binding engine used by attributes. `label` is the phrase its binding diagnostics use; default functions use `Default function "<name>"` and generator functions `Generator function "<name>"`, where attributes say `Attribute "<name>"`:
 
 ```ts
 interface FuncCallSig {
@@ -216,7 +246,7 @@ interface TypedFuncCall {
 }
 ```
 
-Every function signature requires Markdown documentation, including zero-argument functions. Function parameter declarations carry their own documentation, independent of reusable argument types. Function arguments may use any combinator, including nested `funcCall` values. Namespaced names are rejected at the function-call boundary.
+Every function signature requires Markdown documentation, including zero-argument functions. Function parameter declarations carry their own documentation, independent of reusable argument types. Function arguments may use any combinator, including nested `funcCall` values. Namespaced names are rejected at the function-call boundary. A `funcCall` claims a call to its name (see Alternatives), so inside `oneOf` its argument diagnostics are reported instead of the alternatives list.
 
 The result is typed as a normalized function-call envelope, not as a name-literal-discriminated or signature-derived object. `funcCallFrom` and an unpinned raw function-call combinator are not part of the design.
 
@@ -228,11 +258,13 @@ A spec may be assembled from context known by the owning family before interpret
 
 ### SQL defaults
 
-SQL constructs `@default` specs per field. Scalar fields accept flexible string, number, and boolean literals plus one pinned `funcCall(name, signature)` arm for every active default-function registry entry. List fields accept a list of those scalar literals plus the registry calls. Enum fields use one pinned `identifier(member)` arm per enum member.
+SQL constructs `@default` specs per field. Scalar fields accept flexible string, number, and boolean literals plus one arm for every active default-function registry entry, built by `defaultFunctionCall(name, entry, dataTypes)`. List fields accept a list of those scalar literals plus the registry calls. Enum fields use one pinned `identifier(member)` arm per enum member.
+
+A registry entry's signature is either a `FuncCallSig` or a function from the stack's data types to one, because a component writes its registry before a stack exists and an argument that is a `dataTypeValue` needs the stack's types. Generator functions' signatures ([ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md)) take the same two forms, built with `generatorFunctionCall`. `defaultFunctionCall` builds the arm from either form:
 
 ```ts
 const functionArms = registryEntries.map(([name, entry]) =>
-  funcCall(name, entry.signature),
+  defaultFunctionCall(name, entry, dataTypes),
 );
 
 const scalarDefault = oneOf(str(), numLiteral(), bool(), ...functionArms);
@@ -241,7 +273,7 @@ const enumDefault = oneOf(...enumMembers.map(identifier));
 
 The number arm is `numLiteral()`, not `num()`. `num()` yields a JavaScript number, which rounds a literal past the safe integer range and drops trailing zeros; `numLiteral()` yields the literal's source text, so a `Decimal` or `BigInt` default keeps every digit as written. What to do with that text is the lowering concern below: the plain number goes to a codec that reads one, and the decimal text to a codec that does not.
 
-Literal-to-codec compatibility remains a lowering concern. A `matchingScalarLiteral` combinator is not implemented.
+`@default` reads a database value, but through the grammar combinators above, and applies the cast rule in lowering, because its receiving type comes from the column and the spec factory does not know it. A position whose receiving type is fixed uses `dataTypeValue` instead. Once the field spec context carries the column's resolved type, `@default` can become `dataTypeValue(columnType)` and the lowering check goes; that is follow-up work. A `matchingScalarLiteral` combinator is not implemented.
 
 ### Mongo index elements
 
@@ -334,7 +366,7 @@ The current implementation is sufficient for interpreter consumption but not yet
 
 - Add central spec discovery and traversable combinator metadata for language-tooling consumers.
 - Revisit signature-derived `TypedFuncCall` output types if downstream code needs statically discriminated call unions.
-- Decide whether literal-to-field-type compatibility should remain in lowering or gain a dedicated field-context combinator.
+- Literal-to-type compatibility is decided: a position with a fixed receiving type uses `dataTypeValue`, and `@default`, whose receiving type comes from the column, casts in lowering.
 
 ---
 

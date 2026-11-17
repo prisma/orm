@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL_UNSUPPORTED_TOP_LEVEL_BLOCK",
+    "file": "schema.prisma",
+    "line": 10,
+    "message": "Unsupported top-level block \"policy\""
+  }
+]

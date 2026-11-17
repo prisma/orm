@@ -21,7 +21,7 @@ const fixtureNamespace = buildMongoNamespace({
   entries: {
     collection: {
       fixture_box: {
-        indexes: [{ keys: [{ field: 'email', direction: 1 }], unique: true }],
+        indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }], unique: true }],
       },
     },
   },

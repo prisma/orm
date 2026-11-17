@@ -6,6 +6,8 @@ import {
   FieldDeclarationAst,
   GenericBlockDeclarationAst,
   KeyValuePairAst,
+  MixinDeclarationAst,
+  MixinInclusionAst,
   ModelDeclarationAst,
   NamedTypeDeclarationAst,
   NamespaceDeclarationAst,
@@ -103,7 +105,8 @@ class LineWriter {
   }
 }
 
-// Qualified-name separators hug; argument/object colons keep the usual value space.
+// Qualified-name separators hug. `[` hugs a type (`String[]`) but keeps the space before a list
+// value after `:`, `,` or `=`.
 function spaceBetween(
   prev: TokenKind | undefined,
   cur: TokenKind,
@@ -115,8 +118,9 @@ function spaceBetween(
   if (prev === 'Ident' && cur === 'StringLiteral') return false;
 
   switch (cur) {
-    case 'LParen':
     case 'LBracket':
+      return prev === 'Colon' || prev === 'Comma' || prev === 'Equals';
+    case 'LParen':
     case 'RParen':
     case 'RBracket':
     case 'Comma':
@@ -135,6 +139,7 @@ function spaceBetween(
     case 'Dot':
     case 'At':
     case 'DoubleAt':
+    case 'Plus':
       return false;
     default:
       return true;
@@ -236,24 +241,20 @@ type MemberCategory = 'regular' | 'blockAttribute' | 'nestedBlock';
 
 interface BlockMember {
   readonly category: MemberCategory;
-  /** Stays on the source line it shares with the member that follows it. */
-  readonly keepsSourceLine: boolean;
-  emit(trailing: string | undefined, endLine: boolean): number;
+  emit(trailing: string | undefined): number;
 }
 
 function leafMember(
   writer: LineWriter,
   category: MemberCategory,
   print: () => number,
-  keepsSourceLine = false,
 ): BlockMember {
   return {
     category,
-    keepsSourceLine,
-    emit(trailing, endLine) {
+    emit(trailing) {
       const continuation = print();
       if (trailing !== undefined) writer.comment(trailing);
-      else if (endLine) writer.newline();
+      else writer.newline();
       return continuation;
     },
   };
@@ -261,21 +262,45 @@ function leafMember(
 
 type MemberClassifier = (node: SyntaxNode) => BlockMember | undefined;
 
-function emitModel(
-  writer: LineWriter,
-  model: ModelDeclarationAst,
-  trailing: string | undefined,
-): void {
-  const alignmentColumns = alignmentMap(model.syntax);
-  emitBlockBody(writer, model.syntax, trailing, (node) => {
+function inclusionMember(writer: LineWriter, node: SyntaxNode): BlockMember | undefined {
+  const inclusion = MixinInclusionAst.cast(node);
+  if (inclusion === undefined) return undefined;
+  return leafMember(writer, 'regular', () => streamNode(writer, inclusion.syntax));
+}
+
+function fieldBodyMembers(writer: LineWriter, block: SyntaxNode): MemberClassifier {
+  const alignmentColumns = alignmentMap(block);
+  return (node) => {
     const field = FieldDeclarationAst.cast(node);
     if (field)
       return leafMember(writer, 'regular', () => emitField(writer, field, alignmentColumns));
     const attribute = ModelAttributeAst.cast(node);
     if (attribute)
       return leafMember(writer, 'blockAttribute', () => emitBlockAttribute(writer, attribute));
-    return undefined;
-  });
+    return inclusionMember(writer, node);
+  };
+}
+
+function entryBodyMembers(writer: LineWriter, block: SyntaxNode): MemberClassifier {
+  const alignment = alignmentMap(block);
+  return (node) => {
+    const field = FieldDeclarationAst.cast(node);
+    if (field) return leafMember(writer, 'regular', () => emitField(writer, field, alignment));
+    const entry = KeyValuePairAst.cast(node);
+    if (entry) return leafMember(writer, 'regular', () => emitKeyValue(writer, entry));
+    const attribute = ModelAttributeAst.cast(node);
+    if (attribute)
+      return leafMember(writer, 'blockAttribute', () => emitBlockAttribute(writer, attribute));
+    return inclusionMember(writer, node);
+  };
+}
+
+function emitModel(
+  writer: LineWriter,
+  model: ModelDeclarationAst,
+  trailing: string | undefined,
+): void {
+  emitBlockBody(writer, model.syntax, trailing, fieldBodyMembers(writer, model.syntax));
 }
 
 function emitCompositeType(
@@ -283,45 +308,28 @@ function emitCompositeType(
   composite: CompositeTypeDeclarationAst,
   trailing: string | undefined,
 ): void {
-  const alignmentColumns = alignmentMap(composite.syntax);
-  emitBlockBody(writer, composite.syntax, trailing, (node) => {
-    const field = FieldDeclarationAst.cast(node);
-    if (field)
-      return leafMember(writer, 'regular', () => emitField(writer, field, alignmentColumns));
-    const attribute = ModelAttributeAst.cast(node);
-    if (attribute)
-      return leafMember(writer, 'blockAttribute', () => emitBlockAttribute(writer, attribute));
-    return undefined;
-  });
+  emitBlockBody(writer, composite.syntax, trailing, fieldBodyMembers(writer, composite.syntax));
 }
 
-/**
- * With the `prisma7` grammar a `view` body holds `FieldDeclaration` members, so they print through
- * the model field path. With the `psl` grammar the same source line reads as several entries with
- * no `=`; those entries keep the source line they share, so `id Int` does not become two lines.
- */
 function emitGenericBlock(
   writer: LineWriter,
   block: GenericBlockDeclarationAst,
   trailing: string | undefined,
 ): void {
-  const alignment = alignmentMap(block.syntax);
-  emitBlockBody(writer, block.syntax, trailing, (node) => {
-    const field = FieldDeclarationAst.cast(node);
-    if (field) return leafMember(writer, 'regular', () => emitField(writer, field, alignment));
-    const entry = KeyValuePairAst.cast(node);
-    if (entry)
-      return leafMember(
-        writer,
-        'regular',
-        () => emitKeyValue(writer, entry),
-        entry.equals() === undefined,
-      );
-    const attribute = ModelAttributeAst.cast(node);
-    if (attribute)
-      return leafMember(writer, 'blockAttribute', () => emitBlockAttribute(writer, attribute));
-    return undefined;
-  });
+  emitBlockBody(writer, block.syntax, trailing, entryBodyMembers(writer, block.syntax));
+}
+
+const FIELD_BODY_KEYWORDS: ReadonlySet<string> = new Set(['model', 'type']);
+
+function emitMixinDeclaration(
+  writer: LineWriter,
+  mixin: MixinDeclarationAst,
+  trailing: string | undefined,
+): void {
+  const members = FIELD_BODY_KEYWORDS.has(mixin.keyword()?.text ?? '')
+    ? fieldBodyMembers(writer, mixin.syntax)
+    : entryBodyMembers(writer, mixin.syntax);
+  emitBlockBody(writer, mixin.syntax, trailing, members);
 }
 
 function emitNamespace(
@@ -361,7 +369,6 @@ type BlockEmitter = (writer: LineWriter, trailing: string | undefined) => void;
 function nestedBlockMember(writer: LineWriter, block: BlockEmitter): BlockMember {
   return {
     category: 'nestedBlock',
-    keepsSourceLine: false,
     emit(trailing) {
       block(writer, trailing);
       return 0;
@@ -376,6 +383,8 @@ function castBlockDeclaration(node: SyntaxNode): BlockEmitter | undefined {
   if (composite) return (writer, trailing) => emitCompositeType(writer, composite, trailing);
   const generic = GenericBlockDeclarationAst.cast(node);
   if (generic) return (writer, trailing) => emitGenericBlock(writer, generic, trailing);
+  const mixin = MixinDeclarationAst.cast(node);
+  if (mixin) return (writer, trailing) => emitMixinDeclaration(writer, mixin, trailing);
   return undefined;
 }
 
@@ -398,12 +407,15 @@ function emitBlockBody(
   const children = Array.from(node.children());
   const openIndex = children.findIndex((el) => !(el instanceof SyntaxNode) && el.kind === 'LBrace');
 
-  streamHeader(writer, node);
-  const headerComment = sameLineCommentAfter(children, openIndex);
-  if (headerComment !== undefined) writer.comment(headerComment);
+  const headerComments = streamHeader(writer, node);
+  const openingComment = sameLineCommentAfter(children, openIndex);
+  if (openingComment !== undefined) headerComments.push(openingComment);
+  const [firstComment, ...otherComments] = headerComments;
+  if (firstComment !== undefined) writer.comment(firstComment);
   else writer.newline();
 
   writer.indent();
+  for (const comment of otherComments) writer.comment(comment);
   walkRegion(writer, children, 'RBrace', classify);
   writer.unindent();
 
@@ -412,7 +424,9 @@ function emitBlockBody(
   else writer.newline();
 }
 
-function streamHeader(writer: LineWriter, node: SyntaxNode): void {
+/** Writes the block header through `{` and returns the source comments found before the `{`. */
+function streamHeader(writer: LineWriter, node: SyntaxNode): string[] {
+  const comments: string[] = [];
   let done = false;
   const walk = (parent: SyntaxNode): void => {
     for (const child of parent.children()) {
@@ -421,7 +435,11 @@ function streamHeader(writer: LineWriter, node: SyntaxNode): void {
         walk(child);
         continue;
       }
-      if (child.kind === 'Whitespace' || child.kind === 'Newline' || child.kind === 'Comment') {
+      if (child.kind === 'Comment') {
+        comments.push(child.text);
+        continue;
+      }
+      if (child.kind === 'Whitespace' || child.kind === 'Newline') {
         continue;
       }
       const space = spaceBetween(writer.prevKind(), child.kind, false);
@@ -433,6 +451,7 @@ function streamHeader(writer: LineWriter, node: SyntaxNode): void {
     }
   };
   walk(node);
+  return comments;
 }
 
 function walkRegion(
@@ -467,8 +486,7 @@ function walkRegion(
       }
 
       const trailing = sameLineTrailingComment(elements, i);
-      const endLine = !member.keepsSourceLine || !memberFollowsOnSameLine(elements, i);
-      closeContinuation(writer, member.emit(trailing.text, endLine));
+      closeContinuation(writer, member.emit(trailing.text));
       if (trailing.index !== undefined) i = trailing.index;
       sawContent = true;
       lastWasRegular = member.category !== 'blockAttribute';
@@ -506,17 +524,6 @@ function walkRegion(
       newlines = 0;
     }
   }
-}
-
-function memberFollowsOnSameLine(elements: readonly SyntaxElement[], memberIndex: number): boolean {
-  for (let i = memberIndex + 1; i < elements.length; i++) {
-    const element = elements[i];
-    if (element === undefined) continue;
-    if (element instanceof SyntaxNode) return true;
-    if (element.kind === 'Whitespace') continue;
-    return false;
-  }
-  return false;
 }
 
 function separationBlankWanted(

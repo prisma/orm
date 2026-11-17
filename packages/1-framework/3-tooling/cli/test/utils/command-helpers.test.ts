@@ -45,15 +45,56 @@ describe('maskConnectionUrl', () => {
   });
 
   it('masks password and user in libpq-style connection string', () => {
-    const url = 'host=localhost password=secret user=admin dbname=mydb';
-    const masked = maskConnectionUrl(url);
+    expect(maskConnectionUrl('host=localhost password=secret user=admin dbname=mydb')).toBe(
+      'host=localhost password=**** user=**** dbname=mydb',
+    );
+  });
 
-    expect(masked).not.toContain('secret');
-    expect(masked).not.toContain('admin');
-    expect(masked).toContain('password=****');
-    expect(masked).toContain('user=****');
-    expect(masked).toContain('host=localhost');
-    expect(masked).toContain('dbname=mydb');
+  it('masks the credentials of an SRV URL', () => {
+    expect(
+      maskConnectionUrl('mongodb+srv://admin:s3cret@cluster0.example.net/app?retryWrites=true'),
+    ).toBe('mongodb+srv://****:****@cluster0.example.net/app?retryWrites=true');
+  });
+
+  describe('a URL that new URL rejects', () => {
+    it('masks the credentials of a multi-host URL', () => {
+      expect(maskConnectionUrl('mongodb://admin:s3cret@h1:27017,h2:27017/app?replicaSet=rs')).toBe(
+        'mongodb://****:****@h1:27017,h2:27017/app?replicaSet=rs',
+      );
+    });
+
+    it('masks a password with percent-encoded @, : and /', () => {
+      expect(maskConnectionUrl('mongodb://admin:p%40ss%3Aw%2Frd@h1:27017,h2:27017/app')).toBe(
+        'mongodb://****:****@h1:27017,h2:27017/app',
+      );
+    });
+
+    it('masks everything up to the last @ of the authority', () => {
+      expect(maskConnectionUrl('mongodb://admin:p@ss@h1:27017,h2:27017/app')).toBe(
+        'mongodb://****:****@h1:27017,h2:27017/app',
+      );
+    });
+
+    it('masks the credentials of a multi-host Postgres URL', () => {
+      expect(
+        maskConnectionUrl(
+          'postgresql://admin:secret@h1:5432,h2:5432/mydb?target_session_attrs=read-write',
+        ),
+      ).toBe('postgresql://****:****@h1:5432,h2:5432/mydb?target_session_attrs=read-write');
+    });
+
+    it('masks a password query parameter', () => {
+      expect(
+        maskConnectionUrl(
+          'postgresql://admin@h1:5432,h2:5432/mydb?password=secret&sslmode=require',
+        ),
+      ).toBe('postgresql://****@h1:5432,h2:5432/mydb?password=****&sslmode=require');
+    });
+
+    it('returns a URL without credentials unchanged', () => {
+      const url = 'mongodb://h1:27017,h2:27017/app?replicaSet=rs';
+      expect(maskConnectionUrl(url)).toBe(url);
+    });
   });
 });
 
@@ -97,13 +138,69 @@ describe('sanitizeErrorMessage', () => {
     expect(sanitized).not.toContain('supersecret');
   });
 
+  it('masks a password query parameter value where the message names it on its own', () => {
+    const url = 'postgresql://admin:s3cret@localhost:5432/mydb?sslpassword=sslkey&sslmode=require';
+    const message = 'could not decrypt SSL key with password=sslkey (sslmode=require)';
+
+    expect(sanitizeErrorMessage(message, url)).toBe(
+      'could not decrypt SSL key with password=**** (sslmode=require)',
+    );
+  });
+
+  it('masks a secret whole when another secret is part of it', () => {
+    const url = 'postgresql://admin:secret@localhost:5432/mydb?sslpassword=sslsecret';
+
+    expect(sanitizeErrorMessage('bad SSL key sslsecret', url)).toBe('bad SSL key ****');
+  });
+
   it('handles libpq-style connection strings in messages', () => {
     const url = 'host=localhost password=secret user=admin dbname=mydb';
     const message = 'Failed to connect: host=localhost password=secret user=admin';
-    const sanitized = sanitizeErrorMessage(message, url);
 
-    expect(sanitized).not.toContain('password=secret');
-    expect(sanitized).not.toContain('user=admin');
+    expect(sanitizeErrorMessage(message, url)).toBe(
+      'Failed to connect: host=localhost password=**** user=****',
+    );
+  });
+
+  describe('a connection URL that new URL rejects', () => {
+    it('masks the URL where the message quotes it', () => {
+      const url = 'mongodb://admin:s3cret@h1:27017,h2:27017/app?replicaSet=rs';
+
+      expect(sanitizeErrorMessage(`connect failed: ${url}`, url)).toBe(
+        'connect failed: mongodb://****:****@h1:27017,h2:27017/app?replicaSet=rs',
+      );
+    });
+
+    it('masks a percent-encoded password where the message quotes the URL', () => {
+      const url = 'mongodb://admin:p%40ss%3Aw%2Frd@h1:27017,h2:27017/app';
+
+      expect(sanitizeErrorMessage(`bad auth for ${url}`, url)).toBe(
+        'bad auth for mongodb://****:****@h1:27017,h2:27017/app',
+      );
+    });
+
+    it('masks the user and password where the message names them on their own', () => {
+      const url = 'postgresql://admin:secret@h1:5432,h2:5432/mydb';
+
+      expect(sanitizeErrorMessage('auth failed for user "admin" with secret', url)).toBe(
+        'auth failed for user "****" with ****',
+      );
+    });
+
+    it('masks a password query parameter value where the message names it on its own', () => {
+      const url = 'postgresql://admin@h1:5432,h2:5432/mydb?sslpassword=sslsecret&sslmode=require';
+
+      expect(sanitizeErrorMessage(`bad SSL key sslsecret for ${url}`, url)).toBe(
+        'bad SSL key **** for postgresql://****@h1:5432,h2:5432/mydb?sslpassword=****&sslmode=require',
+      );
+    });
+
+    it('returns a message with a URL without credentials unchanged', () => {
+      const url = 'mongodb://h1:27017,h2:27017/app';
+      const message = `connect ECONNREFUSED ${url}`;
+
+      expect(sanitizeErrorMessage(message, url)).toBe(message);
+    });
   });
 });
 

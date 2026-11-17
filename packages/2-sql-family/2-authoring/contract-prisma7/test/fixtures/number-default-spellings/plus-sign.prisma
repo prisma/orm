@@ -1,0 +1,12 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model PlusSign {
+  id      Int       @id
+  count   Int       @default(+1)
+  ratio   Float     @default(+1.5)
+  price   Decimal   @default(+007.50)
+  balance BigInt    @default(+9007199254740993)
+  ints    Int[]     @default([+1, -2, 3])
+}

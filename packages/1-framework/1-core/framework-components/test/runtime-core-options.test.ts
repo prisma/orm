@@ -3,10 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { ExecutionPlan, QueryPlan } from '../src/execution/query-plan';
 import { RuntimeCore } from '../src/execution/runtime-core';
 import { isRuntimeError } from '../src/execution/runtime-error';
-import type {
-  RuntimeMiddleware,
-  RuntimeMiddlewareContext,
-} from '../src/execution/runtime-middleware';
+import type { ActivityContextFields, RuntimeMiddleware } from '../src/execution/runtime-middleware';
 import type { CodecCallContext } from '../src/shared/codec-types';
 
 const meta: PlanMeta = {
@@ -48,14 +45,13 @@ class CtxRecordingRuntime extends RuntimeCore<MockPlan, MockExec, RuntimeMiddlew
   override async close(): Promise<void> {}
 }
 
-const ctxValue: RuntimeMiddlewareContext = {
+const ctxValue: ActivityContextFields = {
   contract: {},
   mode: 'strict',
   now: () => Date.now(),
   log: { info: () => {}, warn: () => {}, error: () => {} },
   contentHash: async () => 'mock-hash',
   scope: 'runtime',
-  planExecutionId: 'test-fixture-plan-execution-id',
 };
 
 const plan: MockPlan = { draftId: 'd', meta };

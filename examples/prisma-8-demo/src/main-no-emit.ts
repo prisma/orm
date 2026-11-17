@@ -26,7 +26,7 @@
  */
 import 'dotenv/config';
 import { loadAppConfig } from './app-config';
-import { getRuntime } from './prisma-no-emit/runtime';
+import { connectClient } from './prisma-no-emit/runtime';
 import { enumDefaultDemoNoEmit } from './queries/enum-default-demo-no-emit';
 import { getUserById } from './queries/get-user-by-id-no-emit';
 import { getUserPosts } from './queries/get-user-posts-no-emit';
@@ -38,7 +38,7 @@ const [cmd, ...args] = argv;
 
 async function main() {
   const { databaseUrl } = loadAppConfig();
-  const runtime = await getRuntime(databaseUrl);
+  const { runtime, orm } = await connectClient(databaseUrl);
   try {
     if (cmd === 'users') {
       const parsedLimit = args[0] ? Number.parseInt(args[0], 10) : 10;
@@ -64,7 +64,7 @@ async function main() {
     } else if (cmd === 'users-with-posts') {
       const parsedLimit = args[0] ? Number.parseInt(args[0], 10) : 10;
       const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 10;
-      const usersWithPosts = await getUsersWithPosts(runtime, limit);
+      const usersWithPosts = await getUsersWithPosts(orm, limit);
       console.log(JSON.stringify(usersWithPosts, null, 2));
     } else if (cmd === 'enum-default-demo') {
       console.log(

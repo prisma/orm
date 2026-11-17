@@ -28,7 +28,7 @@ model Post {
 
   @@discriminator(kind)
   @@index([authorId])
-  @@index([createdAt(sort: Desc)])
+  @@index([sort(createdAt, Desc)])
   @@map("posts")
 }
 
@@ -39,6 +39,6 @@ model Article {
 
 model Tutorial {
   difficulty String
-  duration   Int
+  duration   Int32
   @@base(Post, "tutorial")
 }

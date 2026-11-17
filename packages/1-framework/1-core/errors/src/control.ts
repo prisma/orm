@@ -1,6 +1,12 @@
+import {
+  migrationStatementJson,
+  type ResolvedMigrationStatement,
+} from '@internal/framework-components/control';
+import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { ifDefined } from '@internal/utils/defined';
 import type { Diagnostic, NextAction, StructuredError } from '@internal/utils/structured-error';
 import { docsUrlFor } from '@internal/utils/structured-error';
+import { APP_UPGRADE_GUIDES_URL } from './upgrade-guides';
 
 /**
  * CLI error envelope for output formatting.
@@ -35,6 +41,12 @@ export interface CliErrorConflict {
   readonly kind: string;
   readonly summary: string;
   readonly why?: string;
+  /** The statement the conflict refuses, in domain coordinates. */
+  readonly refusedStatement?: ResolvedMigrationStatement;
+  /** The statements to leave out of a plan whose `migration.ts` the user finishes by hand. */
+  readonly leaveOut?: readonly ResolvedMigrationStatement[];
+  /** Where the conflict is; `namespaceId` is left out of JSON output for the unbound namespace. */
+  readonly location?: Readonly<Record<string, unknown>> & { readonly namespaceId?: string };
 }
 
 /**
@@ -214,13 +226,24 @@ export function errorContractValidationFailed(
   options?: {
     readonly where?: { readonly path?: string; readonly line?: number };
     readonly cause?: unknown;
+    /** What the refusal is about, such as the columns whose defaults were refused. */
+    readonly meta?: Record<string, unknown> | undefined;
   },
 ): CliStructuredError {
   return new CliStructuredError('CONTRACT.VALIDATION_FAILED', 'Contract validation failed', {
     why: reason,
-    fix: 'Re-run `{bin} contract emit`, or fix the contract file and try again',
+    fix: `If an earlier release emitted this contract, follow the app upgrade instructions of each release since, which rewrite the contract and its migration snapshots: ${APP_UPGRADE_GUIDES_URL}. If this release emitted it, re-run \`{bin} contract emit\`, or fix the contract file if you edited it, and try again`,
     nextActions: [
-      { kind: 'run-command', label: 'Re-emit the contract', command: '{bin} contract emit' },
+      {
+        kind: 'open-url',
+        label: 'If an earlier release emitted the contract, follow the app upgrade instructions',
+        url: APP_UPGRADE_GUIDES_URL,
+      },
+      {
+        kind: 'run-command',
+        label: 'If this release emitted the contract, re-emit it',
+        command: '{bin} contract emit',
+      },
       {
         kind: 'edit-file',
         label: 'Fix the contract file, then re-run the command',
@@ -230,6 +253,7 @@ export function errorContractValidationFailed(
     docsUrl: docsUrlFor('CONTRACT.VALIDATION_FAILED'),
     ...(options?.where ? { where: options.where } : {}),
     ...ifDefined('cause', options?.cause),
+    ...ifDefined('meta', options?.meta),
   });
 }
 
@@ -375,13 +399,32 @@ export function errorContractMissingExtensions(options: {
   );
 }
 
+function locationJson(location: NonNullable<CliErrorConflict['location']>) {
+  if (location.namespaceId !== UNBOUND_NAMESPACE_ID) return location;
+  const { namespaceId: _unbound, ...rest } = location;
+  return rest;
+}
+
+function conflictJson(conflict: CliErrorConflict): Record<string, unknown> {
+  return {
+    ...conflict,
+    ...(conflict.location === undefined ? {} : { location: locationJson(conflict.location) }),
+    ...(conflict.refusedStatement === undefined
+      ? {}
+      : { refusedStatement: migrationStatementJson(conflict.refusedStatement) }),
+    ...(conflict.leaveOut === undefined
+      ? {}
+      : { leaveOut: conflict.leaveOut.map(migrationStatementJson) }),
+  };
+}
+
 /**
  * Migration planning failed due to conflicts.
  */
 export function errorMigrationPlanningFailed(options: {
   readonly conflicts: readonly CliErrorConflict[];
   readonly why?: string;
-}): CliStructuredError {
+}): CliStructuredError & { readonly why: string } {
   const conflictSummaries = options.conflicts.map((c) => c.summary);
   const computedWhy = options.why ?? conflictSummaries.join('\n');
 
@@ -393,12 +436,13 @@ export function errorMigrationPlanningFailed(options: {
       ? conflictFixes.join('\n')
       : 'Use `db verify --schema-only` to inspect conflicts, or ensure the database is empty';
 
-  return new CliStructuredError('MIGRATION.PLANNING_FAILED', 'Migration planning failed', {
+  const error = new CliStructuredError('MIGRATION.PLANNING_FAILED', 'Migration planning failed', {
     why: computedWhy,
     fix: computedFix,
-    meta: { conflicts: options.conflicts },
+    meta: { conflicts: options.conflicts.map(conflictJson) },
     docsUrl: docsUrlFor('MIGRATION.PLANNING_FAILED'),
   });
+  return Object.assign(error, { why: computedWhy });
 }
 
 /**
@@ -414,6 +458,43 @@ export function errorTargetMigrationNotSupported(options?: {
       why: options?.why ?? 'The configured target does not provide migration planner/runner',
       fix: 'Select a target that provides migrations (it must export `target.migrations` for db init)',
       docsUrl: docsUrlFor('MIGRATION.TARGET_UNSUPPORTED'),
+    },
+  );
+}
+
+/** A config the migration-file CLI checked while looking for the one that owns the migration. */
+export interface CheckedMigrationConfig {
+  readonly configPath: string;
+  readonly migrationsDir?: string;
+  readonly loadFailure?: string;
+}
+
+/**
+ * Without `--config`, the migration-file CLI found no config whose migrations directory holds the migration.
+ */
+export function errorMigrationCliConfigNotFound(options: {
+  readonly migrationDir: string;
+  readonly checked: readonly CheckedMigrationConfig[];
+}): CliStructuredError {
+  const rule = `Without --config, a migration.ts uses the prisma.config.ts whose migrations directory holds it: the nearest one above ${options.migrationDir}, else the one in the working directory.`;
+  const found = options.checked.map(({ configPath, migrationsDir, loadFailure }) =>
+    loadFailure === undefined
+      ? `${configPath} keeps migrations in ${migrationsDir}`
+      : `${configPath} failed to load (${loadFailure})`,
+  );
+  return new CliStructuredError(
+    'CLI.MIGRATION_CONFIG_NOT_FOUND',
+    'No config found for this migration',
+    {
+      why:
+        found.length === 0
+          ? `${rule} There is neither.`
+          : `${rule} None of them does: ${found.join('; ')}.`,
+      fix: 'Run it again with `--config <path to the config of the project this migration belongs to>`.',
+      meta: {
+        migrationDir: options.migrationDir,
+        checked: options.checked.map(({ configPath }) => configPath),
+      },
     },
   );
 }
@@ -538,12 +619,14 @@ export function errorUnexpected(
   options?: {
     readonly why?: string;
     readonly fix?: string;
+    readonly meta?: Record<string, unknown>;
     readonly cause?: unknown;
   },
 ): CliStructuredError {
   return new CliStructuredError('CLI.UNEXPECTED', 'Unexpected error', {
     why: options?.why ?? message,
     fix: options?.fix ?? 'Check the error message and try again',
+    ...ifDefined('meta', options?.meta),
     ...ifDefined('cause', options?.cause),
   });
 }

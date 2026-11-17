@@ -1,0 +1,20 @@
+[
+  {
+    "code": "PSL.PRISMA6_MONGO_INDEX_NAME_DUPLICATE",
+    "file": "schema.prisma",
+    "line": 11,
+    "message": "@@index([name(sort: Asc)]) on model \"User\" is named \"User_name_idx\", as is @@index([name]) on model \"User\". Prisma 6 refuses this: \"The given constraint name `User_name_idx` has to be unique in the following namespace: on model `User` for indexes and unique constraints. Please provide a different name using the `map` argument.\""
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_INDEX_NAME_DUPLICATE",
+    "file": "schema.prisma",
+    "line": 12,
+    "message": "@@index([name]) on model \"User\" is named \"User_name_idx\", as is @@index([name(sort: Asc)]) on model \"User\". Prisma 6 refuses this: \"The given constraint name `User_name_idx` has to be unique in the following namespace: on model `User` for indexes and unique constraints. Please provide a different name using the `map` argument.\""
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_INDEX_NAME_DUPLICATE",
+    "file": "schema.prisma",
+    "line": 20,
+    "message": "@@index([phone]) on model \"Contact\" and @@index([email]) on model \"User\" are both named \"by_contact\" in collection \"User\". MongoDB cannot hold two indexes with one name in a collection. Give one of them another name with `map`."
+  }
+]

@@ -14,8 +14,8 @@ When moving packages to new locations, you must update all relative paths that r
 
 **Formula**: Count the directory depth from package to root (note: numbered prefixes like `1-framework` count as one directory):
 - From `packages/1-framework/1-core/shared/plan/` to root = 5 levels up (`../../../../../`)
-- From `packages/2-sql/3-tooling/emitter/` to root = 4 levels up (`../../../../`)
-- From `packages/3-targets/6-adapters/postgres/` to root = 4 levels up (`../../../../`)
+- From `packages/2-sql-family/3-tooling/emitter/` to root = 4 levels up (`../../../../`)
+- From `packages/3-targets/postgres/2-adapter/` to root = 4 levels up (`../../../../`)
 - From `packages/3-extensions/pgvector/` to root = 3 levels up (`../../../`)
 
 ### Common Paths to Update
@@ -37,8 +37,8 @@ const packs = loadExtensionPacks(join(__dirname, '../../sql/runtime/adapters/pos
 
 **After** (from `test/integration/test/`):
 ```typescript
-const packs = loadExtensionPacks(join(__dirname, '../../../packages/3-targets/6-adapters/postgres'), []);
-// Resolves to: packages/3-targets/6-adapters/postgres
+const packs = loadExtensionPacks(join(__dirname, '../../../packages/3-targets/postgres/2-adapter'), []);
+// Resolves to: packages/3-targets/postgres/2-adapter
 ```
 
 **Why?** From `test/integration/test/`:
@@ -82,8 +82,8 @@ const packs = loadExtensionPacks(join(__dirname, '../../sql/runtime/adapters/pos
 **✅ CORRECT: Update paths based on new location**
 ```typescript
 // Updated path after moving to test/
-const packs = loadExtensionPacks(join(__dirname, '../../../packages/3-targets/6-adapters/postgres'), []);
-// This resolves to packages/3-targets/6-adapters/postgres (correct!)
+const packs = loadExtensionPacks(join(__dirname, '../../../packages/3-targets/postgres/2-adapter'), []);
+// This resolves to packages/3-targets/postgres/2-adapter (correct!)
 ```
 
 ## Test Packages Special Case

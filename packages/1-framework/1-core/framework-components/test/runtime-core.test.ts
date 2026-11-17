@@ -3,8 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ExecutionPlan, QueryPlan } from '../src/execution/query-plan';
 import { RuntimeCore } from '../src/execution/runtime-core';
 import type {
+  ActivityContext,
+  ActivityContextFields,
   RuntimeMiddleware,
-  RuntimeMiddlewareContext,
 } from '../src/execution/runtime-middleware';
 
 const meta: PlanMeta = {
@@ -35,19 +36,20 @@ interface RecorderEntry {
     | 'lower'
     | 'runDriver'
     | 'runExecute'
-    | 'beforeQuery'
+    | 'activityStarted'
+    | 'beforeEncode'
     | 'onRow'
-    | 'afterQuery';
+    | 'activityEnded'
+    | 'activityFinalized';
   readonly label?: string;
 }
 
 class MockRuntime extends RuntimeCore<MockPlan, MockExec, RuntimeMiddleware<MockExec>> {
   readonly events: RecorderEntry[] = [];
-  closeCalls = 0;
 
   constructor(
     middleware: ReadonlyArray<RuntimeMiddleware<MockExec>>,
-    ctx: RuntimeMiddlewareContext,
+    ctx: ActivityContextFields,
     private readonly rows: ReadonlyArray<Record<string, unknown>>,
   ) {
     super({ middleware, ctx });
@@ -81,34 +83,37 @@ class MockRuntime extends RuntimeCore<MockPlan, MockExec, RuntimeMiddleware<Mock
     return { affectedRows: 3 };
   }
 
-  async close(): Promise<void> {
-    this.closeCalls++;
-  }
+  async close(): Promise<void> {}
 }
 
 function recorder(label: string, log: RecorderEntry[]): RuntimeMiddleware<MockExec> {
   return {
     name: label,
-    async beforeQuery() {
-      log.push({ stage: 'beforeQuery', label });
+    async activityStarted() {
+      log.push({ stage: 'activityStarted', label });
+    },
+    async beforeEncode() {
+      log.push({ stage: 'beforeEncode', label });
     },
     async onRow() {
       log.push({ stage: 'onRow', label });
     },
-    async afterQuery() {
-      log.push({ stage: 'afterQuery', label });
+    async activityEnded() {
+      log.push({ stage: 'activityEnded', label });
+    },
+    async activityFinalized() {
+      log.push({ stage: 'activityFinalized', label });
     },
   };
 }
 
-const ctx: RuntimeMiddlewareContext = {
+const ctx: ActivityContextFields = {
   contract: {},
   mode: 'strict',
   now: () => Date.now(),
   log: { info: () => {}, warn: () => {}, error: () => {} },
   contentHash: async () => 'mock-hash',
   scope: 'runtime',
-  planExecutionId: 'test-fixture-plan-execution-id',
 };
 
 describe('RuntimeCore', () => {
@@ -124,9 +129,11 @@ describe('RuntimeCore', () => {
       { stage: 'runBeforeCompile' },
       { stage: 'lower' },
       { stage: 'runDriver' },
-      { stage: 'beforeQuery', label: 'A' },
+      { stage: 'activityStarted', label: 'A' },
+      { stage: 'beforeEncode', label: 'A' },
       { stage: 'onRow', label: 'A' },
-      { stage: 'afterQuery', label: 'A' },
+      { stage: 'activityEnded', label: 'A' },
+      { stage: 'activityFinalized', label: 'A' },
     ]);
   });
 
@@ -143,18 +150,24 @@ describe('RuntimeCore', () => {
 
     const middlewareOrder = log.map((e) => `${e.stage}:${e.label ?? ''}`);
     expect(middlewareOrder).toEqual([
-      'beforeQuery:A',
-      'beforeQuery:B',
-      'beforeQuery:C',
+      'activityStarted:A',
+      'activityStarted:B',
+      'activityStarted:C',
+      'beforeEncode:A',
+      'beforeEncode:B',
+      'beforeEncode:C',
       'onRow:A',
       'onRow:B',
       'onRow:C',
       'onRow:A',
       'onRow:B',
       'onRow:C',
-      'afterQuery:A',
-      'afterQuery:B',
-      'afterQuery:C',
+      'activityEnded:A',
+      'activityEnded:B',
+      'activityEnded:C',
+      'activityFinalized:A',
+      'activityFinalized:B',
+      'activityFinalized:C',
     ]);
   });
 
@@ -211,7 +224,7 @@ describe('RuntimeCore', () => {
 
     const observer: RuntimeMiddleware<MockExec> = {
       name: 'observer',
-      async beforeQuery(exec) {
+      async beforeEncode(exec) {
         seenByMiddleware.push(exec);
       },
     };
@@ -230,25 +243,27 @@ describe('RuntimeCore', () => {
     const hooks: string[] = [];
     const middleware: RuntimeMiddleware<MockExec> = {
       name: 'observer',
-      async beforeQuery() {
-        hooks.push('beforeQuery');
+      async activityStarted(activity) {
+        hooks.push(`activityStarted:${activity.kind === 'statement' ? activity.returns : ''}`);
       },
-      async interceptQuery() {
-        hooks.push('interceptQuery');
-        return undefined;
+      async beforeEncode() {
+        hooks.push('beforeEncode');
       },
-      async afterQuery() {
-        hooks.push('afterQuery');
+      intercept: {
+        async onQuery() {
+          hooks.push('onQuery');
+          return undefined;
+        },
+        async onExecute() {
+          hooks.push('onExecute');
+          return undefined;
+        },
       },
-      async beforeExecute() {
-        hooks.push('beforeExecute');
+      async onRow() {
+        hooks.push('onRow');
       },
-      async interceptExecute() {
-        hooks.push('interceptExecute');
-        return undefined;
-      },
-      async afterExecute() {
-        hooks.push('afterExecute');
+      async activityEnded(_activity, result) {
+        hooks.push(`activityEnded:${result.kind === 'statement' ? result.returns : ''}`);
       },
     };
     const runtime = new MockRuntime([middleware], ctx, [{ id: 'not-a-statistic' }]);
@@ -262,42 +277,47 @@ describe('RuntimeCore', () => {
       { stage: 'lower' },
       { stage: 'runExecute' },
     ]);
-    expect(hooks).toEqual(['beforeExecute', 'interceptExecute', 'afterExecute']);
+    expect(hooks).toEqual([
+      'activityStarted:stats',
+      'beforeEncode',
+      'onExecute',
+      'activityEnded:stats',
+    ]);
   });
 
   it.each(['query', 'execute'] as const)(
-    'does not invoke completion after a %s before-hook failure',
+    'ends a %s failed and finalizes it unknown when beforeEncode throws',
     async (operation) => {
       const beforeError = new Error('before failed');
-      const afterQuery = vi.fn();
-      const afterExecute = vi.fn();
+      const ended = vi.fn(async () => {});
+      const finalized = vi.fn(async () => {});
       const middleware: RuntimeMiddleware<MockExec> = {
         name: 'observer',
-        beforeQuery() {
+        beforeEncode() {
           throw beforeError;
         },
-        beforeExecute() {
-          throw beforeError;
-        },
-        afterQuery,
-        afterExecute,
+        activityEnded: ended,
+        activityFinalized: finalized,
       };
       const runtime = new MockRuntime([middleware], ctx, []);
       const plan: MockPlan = { draftId: 'before-failure', meta };
 
       const pending = operation === 'query' ? runtime.query(plan).toArray() : runtime.execute(plan);
       await expect(pending).rejects.toBe(beforeError);
-      expect(afterQuery).not.toHaveBeenCalled();
-      expect(afterExecute).not.toHaveBeenCalled();
+      expect(runtime.events).not.toContainEqual({ stage: 'runDriver' });
+      expect(runtime.events).not.toContainEqual({ stage: 'runExecute' });
+      expect(ended).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: 'statement' }),
+        expect.objectContaining({ outcome: 'failed' }),
+        expect.any(Object),
+      );
+      expect(finalized).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: 'statement' }),
+        { outcome: 'unknown' },
+        expect.any(Object),
+      );
     },
   );
-
-  it('subclasses can implement close() and it is invoked', async () => {
-    const runtime = new MockRuntime([], ctx, []);
-    expect(runtime.closeCalls).toBe(0);
-    await runtime.close();
-    expect(runtime.closeCalls).toBe(1);
-  });
 
   describe('signal propagation', () => {
     it('exposes the query signal by identity to every middleware hook', async () => {
@@ -305,17 +325,19 @@ describe('RuntimeCore', () => {
       const observed: AbortSignal[] = [];
       const middleware: RuntimeMiddleware<MockExec> = {
         name: 'signal-observer',
-        beforeQuery(_plan, hookCtx) {
+        beforeEncode(_plan, hookCtx) {
           if (hookCtx.signal) observed.push(hookCtx.signal);
         },
-        async interceptQuery(_plan, hookCtx) {
-          if (hookCtx.signal) observed.push(hookCtx.signal);
-          return undefined;
+        intercept: {
+          async onQuery(_plan, hookCtx) {
+            if (hookCtx.signal) observed.push(hookCtx.signal);
+            return undefined;
+          },
         },
         async onRow(_row, _plan, hookCtx) {
           if (hookCtx.signal) observed.push(hookCtx.signal);
         },
-        async afterQuery(_plan, _result, hookCtx) {
+        async activityEnded(_activity, _result, hookCtx) {
           if (hookCtx.signal) observed.push(hookCtx.signal);
         },
       };
@@ -337,7 +359,7 @@ describe('RuntimeCore', () => {
       const observed: boolean[] = [];
       const middleware: RuntimeMiddleware<MockExec> = {
         name: 'signal-observer',
-        beforeQuery(_plan, hookCtx) {
+        beforeEncode(_plan, hookCtx) {
           observed.push('signal' in hookCtx);
         },
       };
@@ -348,12 +370,12 @@ describe('RuntimeCore', () => {
       expect(observed).toEqual([false]);
     });
 
-    it('aborts an in-flight query beforeQuery hook', async () => {
+    it('aborts an in-flight query beforeEncode hook', async () => {
       const controller = new AbortController();
       const entered = deferred();
       const middleware: RuntimeMiddleware<MockExec> = {
-        name: 'blocking-before-execute',
-        beforeQuery() {
+        name: 'blocking-before-encode',
+        beforeEncode() {
           entered.resolve();
           return new Promise<void>(() => {});
         },
@@ -368,60 +390,47 @@ describe('RuntimeCore', () => {
 
       await expect(pending).rejects.toMatchObject({
         code: 'RUNTIME.ABORTED',
-        details: { phase: 'beforeQuery' },
+        details: { phase: 'beforeEncode' },
         cause: controller.signal.reason,
       });
     });
   });
 
-  describe('planExecutionId', () => {
-    interface Observation {
-      readonly hook: 'beforeQuery' | 'afterQuery';
-      readonly planExecutionId: string;
-    }
-
-    function observer(log: Observation[]): RuntimeMiddleware<MockExec> {
-      return {
+  describe('activity identity', () => {
+    function observer(log: Array<{ readonly id: string; readonly ctx: ActivityContext }>) {
+      const middleware: RuntimeMiddleware<MockExec> = {
         name: 'observer',
-        async beforeQuery(_plan, hookCtx) {
-          log.push({ hook: 'beforeQuery', planExecutionId: hookCtx.planExecutionId });
+        async beforeEncode(_plan, hookCtx) {
+          log.push({ id: '', ctx: hookCtx });
         },
-        async afterQuery(_plan, _result, hookCtx) {
-          log.push({ hook: 'afterQuery', planExecutionId: hookCtx.planExecutionId });
+        async activityEnded(activity, _result, hookCtx) {
+          log.push({ id: activity.id, ctx: hookCtx });
         },
       };
+      return middleware;
     }
 
-    it('assigns the same planExecutionId to beforeQuery and afterQuery within one query call', async () => {
-      const log: Observation[] = [];
+    it('gives every hook of one query the same context', async () => {
+      const log: Array<{ readonly id: string; readonly ctx: ActivityContext }> = [];
       const runtime = new MockRuntime([observer(log)], ctx, [{ id: 1 }]);
-      const plan: MockPlan = { draftId: 'one-execute', meta };
 
-      await runtime.query(plan).toArray();
+      await runtime.query({ draftId: 'one-query', meta }).toArray();
 
       expect(log).toHaveLength(2);
-      expect(log[0]?.hook).toBe('beforeQuery');
-      expect(log[1]?.hook).toBe('afterQuery');
-      expect(log[0]?.planExecutionId).toBeTypeOf('string');
-      expect(log[0]?.planExecutionId).toBe(log[1]?.planExecutionId);
+      expect(log[0]?.ctx).toBe(log[1]?.ctx);
+      expect(log[1]?.id).toBeTypeOf('string');
     });
 
-    it('assigns distinct planExecutionIds to two queries of the same plan instance', async () => {
-      const log: Observation[] = [];
+    it('gives two queries of the same plan distinct activity ids', async () => {
+      const log: Array<{ readonly id: string; readonly ctx: ActivityContext }> = [];
       const runtime = new MockRuntime([observer(log)], ctx, [{ id: 1 }]);
       const plan: MockPlan = { draftId: 'shared-plan', meta };
 
       await runtime.query(plan).toArray();
       await runtime.query(plan).toArray();
 
-      expect(log).toHaveLength(4);
-      const firstQueryId = log[0]?.planExecutionId;
-      const secondQueryId = log[2]?.planExecutionId;
-      expect(firstQueryId).toBeTypeOf('string');
-      expect(secondQueryId).toBeTypeOf('string');
-      expect(log[0]?.planExecutionId).toBe(log[1]?.planExecutionId);
-      expect(log[2]?.planExecutionId).toBe(log[3]?.planExecutionId);
-      expect(firstQueryId).not.toBe(secondQueryId);
+      expect(log[1]?.id).not.toBe(log[3]?.id);
+      expect(log[1]?.ctx).not.toBe(log[3]?.ctx);
     });
   });
 });

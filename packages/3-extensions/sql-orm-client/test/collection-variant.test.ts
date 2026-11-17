@@ -1,22 +1,26 @@
 import {
+  AndExpr,
   type AnyExpression,
   BinaryExpr,
   ColumnRef,
   ExistsExpr,
   type InsertAst,
   LiteralExpr,
+  ParamRef,
   type SelectAst,
 } from '@internal/sql-relational-core/ast';
+import { activitySource } from '@internal/sql-runtime';
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it, vi } from 'vitest';
 import { Collection } from '../src/collection';
-import { withReturningCapability } from './collection-fixtures';
+import { withoutCapabilityKeys, withReturningCapability } from './collection-fixtures';
 import {
   buildMixedPolyContract,
   buildStiPolyContract,
   createMockRuntime,
   getTestContext,
   isSelectAst,
+  stubActivitySource,
 } from './helpers';
 
 function collectColumnRefs(expr: AnyExpression | undefined): ColumnRef[] {
@@ -63,16 +67,16 @@ function expectExistsWithFeatureJoin(expr: AnyExpression | undefined): ExistsExp
 
 // The mixed poly contract is patched in at runtime, so Project/tasks are
 // absent from the static Models type. This minimal surface lets the runtime
-// test drive include('tasks', t => t.variant('Bug')) and read the resulting
+// test drive include('tasks', t => t.variant('bug')) and read the resulting
 // nested state without a static contract for the patched models.
 interface PolyVariantRefinement {
-  variant(name: string): PolyVariantRefinement;
+  variant(value: string): PolyVariantRefinement;
 }
 interface PolyParent {
   include(
     relation: 'tasks',
     refine?: (collection: PolyVariantRefinement) => PolyVariantRefinement,
-  ): { state: { includes: { nested: { variantName?: string } }[] } };
+  ): { state: { includes: { nested: { variantValue?: string } }[] } };
 }
 
 interface FeaturePredicateField {
@@ -97,7 +101,7 @@ interface FeatureCountCollection {
 }
 
 interface MixedPolyCountCollection {
-  variant(name: 'Feature'): FeatureCountCollection;
+  variant(value: 'feature'): FeatureCountCollection;
 }
 
 function createPolyCollection() {
@@ -112,69 +116,105 @@ function createPolyCollection() {
 describe('Collection.variant()', () => {
   it('adds a discriminator filter to state', () => {
     const { collection } = createPolyCollection();
-    const narrowed = collection.variant('Admin' as never);
+    const narrowed = collection.variant('admin' as never);
     expect(narrowed.state.filters).toHaveLength(1);
     const filter = narrowed.state.filters[0];
     expect(filter).toBeInstanceOf(BinaryExpr);
     const binExpr = filter as BinaryExpr;
     expect(binExpr.left).toBeInstanceOf(ColumnRef);
     expect((binExpr.left as ColumnRef).column).toBe('kind');
-    expect(binExpr.right).toBeInstanceOf(LiteralExpr);
-    expect((binExpr.right as LiteralExpr).value).toBe('admin');
+    expect(binExpr.right).toEqual(ParamRef.of('admin', { codec: { codecId: 'pg/text@1' } }));
   });
 
-  it('sets variantName on state', () => {
+  it('sets variantValue on state', () => {
     const { collection } = createPolyCollection();
-    const narrowed = collection.variant('Regular' as never);
-    expect(narrowed.state.variantName).toBe('Regular');
+    const narrowed = collection.variant('regular' as never);
+    expect(narrowed.state.variantValue).toBe('regular');
   });
 
-  it('replaces previous variant filter when chaining', () => {
+  it('throws when a variant is already selected', () => {
     const { collection } = createPolyCollection();
-    const first = collection.variant('Admin' as never);
-    const second = first.variant('Regular' as never);
+    const admins = collection.variant('admin' as never);
 
-    expect(second.state.filters).toHaveLength(1);
-    const filter = second.state.filters[0] as BinaryExpr;
-    expect((filter.right as LiteralExpr).value).toBe('regular');
-    expect(second.state.variantName).toBe('Regular');
+    expect(() => admins.variant('regular' as never)).toThrow(
+      expect.objectContaining({
+        code: 'ORM.OPERATION_UNSUPPORTED',
+        message:
+          'variant("regular") cannot be called on model "User" because variant("admin") is already selected; call variant() on the base collection instead',
+        meta: {
+          method: 'variant',
+          model: 'User',
+          variant: 'Admin',
+          selectedValue: 'admin',
+          reason: 'variant-already-selected',
+        },
+      }),
+    );
   });
 
-  it('returns unchanged collection when model has no discriminator', () => {
+  it('throws when the model has no discriminator', () => {
     const baseContext = getTestContext();
     const runtime = createMockRuntime();
     const collection = new Collection({ runtime, context: baseContext }, 'User', {
       namespaceId: 'public',
     });
-    const result = collection.variant('Admin' as never);
-    expect(result.state.filters).toHaveLength(0);
+    expect(() => collection.variant('admin' as never)).toThrow(
+      expect.objectContaining({
+        code: 'ORM.ARGUMENT_INVALID',
+        message: 'variant("admin") cannot narrow model "User": it declares no discriminator values',
+        meta: {
+          method: 'variant',
+          argument: 'value',
+          model: 'User',
+          value: 'admin',
+          declaredValues: [],
+        },
+      }),
+    );
   });
 
-  it('returns unchanged collection for unknown variant name', () => {
+  it('throws for an undeclared discriminator value', () => {
     const { collection } = createPolyCollection();
-    const result = collection.variant('NonExistent' as never);
-    expect(result.state.filters).toHaveLength(0);
+    const variantModelName = 'Admin';
+    expect(() => collection.variant(variantModelName as never)).toThrow(
+      expect.objectContaining({
+        code: 'ORM.ARGUMENT_INVALID',
+        message:
+          'variant("Admin") cannot narrow model "User": the declared discriminator values are "admin", "regular"',
+        meta: {
+          method: 'variant',
+          argument: 'value',
+          model: 'User',
+          value: 'Admin',
+          declaredValues: ['admin', 'regular'],
+        },
+      }),
+    );
   });
 
   it('preserves non-variant filters when chaining variants', () => {
     const { collection } = createPolyCollection();
     const withWhere = collection.where({ name: 'Alice' } as never);
-    const narrowed = withWhere.variant('Admin' as never);
+    const narrowed = withWhere.variant('admin' as never);
 
     expect(narrowed.state.filters).toHaveLength(2);
     const variantFilter = narrowed.state.filters[1] as BinaryExpr;
     expect((variantFilter.left as ColumnRef).column).toBe('kind');
   });
 
-  it('preserves non-variant filters when re-narrowing', () => {
+  it('keeps a discriminator where() written before variant()', () => {
     const { collection } = createPolyCollection();
-    const withWhere = collection.where({ name: 'Alice' } as never);
-    const first = withWhere.variant('Admin' as never);
-    const second = first.variant('Regular' as never);
+    const withWhere = collection.where({ kind: 'regular' } as never);
+    const narrowed = withWhere.variant('admin' as never);
 
-    expect(second.state.filters).toHaveLength(2);
-    const variantFilter = second.state.filters[1] as BinaryExpr;
-    expect((variantFilter.right as LiteralExpr).value).toBe('regular');
+    expect(narrowed.state.filters).toEqual([
+      ...withWhere.state.filters,
+      BinaryExpr.eq(
+        ColumnRef.of('users', 'kind'),
+        ParamRef.of('admin', { codec: { codecId: 'pg/text@1' } }),
+      ),
+    ]);
+    expect(withWhere.state.filters).toHaveLength(1);
   });
 });
 
@@ -218,7 +258,7 @@ describe('STI polymorphic query pipeline', () => {
       [{ id: 1, name: 'Alice', email: 'a@x', kind: 'admin', role: 'superadmin', plan: null }],
     ]);
 
-    const rows = await (collection.variant('Admin' as never) as typeof collection).all().toArray();
+    const rows = await (collection.variant('admin' as never) as typeof collection).all().toArray();
 
     expect(rows).toHaveLength(1);
     expect(rows[0]).toEqual({
@@ -264,23 +304,23 @@ describe('Mixed STI+MTI polymorphic query pipeline', () => {
     expect(feature).not.toHaveProperty('severity');
   });
 
-  it('variant(Bug) query maps Bug STI rows only', async () => {
+  it('variant("bug") query maps Bug STI rows only', async () => {
     const { collection, runtime } = createMixedPolyCollection();
     runtime.setNextResults([[{ id: 1, title: 'Crash', type: 'bug', severity: 'critical' }]]);
 
-    const rows = await (collection.variant('Bug' as never) as typeof collection).all().toArray();
+    const rows = await (collection.variant('bug' as never) as typeof collection).all().toArray();
 
     expect(rows).toHaveLength(1);
     expect(rows[0]).toEqual({ id: 1, title: 'Crash', type: 'bug', severity: 'critical' });
   });
 
-  it('variant(Feature) query maps Feature MTI rows only', async () => {
+  it('variant("feature") query maps Feature MTI rows only', async () => {
     const { collection, runtime } = createMixedPolyCollection();
     runtime.setNextResults([
       [{ id: 2, title: 'Dark mode', type: 'feature', features__priority: 1 }],
     ]);
 
-    const rows = await (collection.variant('Feature' as never) as typeof collection)
+    const rows = await (collection.variant('feature' as never) as typeof collection)
       .all()
       .toArray();
 
@@ -288,17 +328,32 @@ describe('Mixed STI+MTI polymorphic query pipeline', () => {
     expect(rows[0]).toEqual({ id: 2, title: 'Dark mode', type: 'feature', priority: 1 });
   });
 
-  it('first() after variant(Feature) resolves the MTI variant field against the variant table', async () => {
+  it('where() binds an expression on an MTI variant table with the variant column codec', () => {
+    const { collection } = createMixedPolyCollection();
+
+    const filtered = collection.where(
+      BinaryExpr.gte(ColumnRef.of('features', 'priority'), LiteralExpr.of(3)),
+    );
+
+    expect(filtered.state.filters).toEqual([
+      BinaryExpr.gte(
+        ColumnRef.of('features', 'priority'),
+        ParamRef.of(3, { codec: { codecId: 'pg/int4@1' } }),
+      ),
+    ]);
+  });
+
+  it('first() after variant("feature") resolves the MTI variant field against the variant table', async () => {
     const { collection, runtime } = createMixedPolyCollection();
     runtime.setNextResults([
       [{ id: 2, title: 'Dark mode', type: 'feature', features__priority: 7 }],
     ]);
 
-    // first()'s predicate is variant-aware like where()'s: under variant(Feature)
+    // first()'s predicate is variant-aware like where()'s: under variant('feature')
     // the runtime accessor exposes the MTI variant field `priority`, resolved
     // against the `features` variant table. The patched Task model is absent
     // from the static type, so the predicate field is reached via `never`.
-    const narrowed = collection.variant('Feature' as never) as typeof collection;
+    const narrowed = collection.variant('feature' as never) as typeof collection;
     const row = await narrowed.first(((task: Record<string, { gte(value: number): unknown }>) =>
       task['priority']!.gte(3)) as never);
 
@@ -314,18 +369,18 @@ describe('Mixed STI+MTI polymorphic query pipeline', () => {
     expect(featurePriorityRefs).toHaveLength(1);
   });
 
-  it('orderBy after variant(Feature) resolves the MTI variant field against the variant table', async () => {
+  it('orderBy after variant("feature") resolves the MTI variant field against the variant table', async () => {
     const { collection, runtime } = createMixedPolyCollection();
     runtime.setNextResults([
       [{ id: 2, title: 'Dark mode', type: 'feature', features__priority: 7 }],
     ]);
 
     // orderBy's selector is variant-aware like where()'s/first()'s: under
-    // variant(Feature) the runtime accessor exposes the MTI variant field
+    // variant('feature') the runtime accessor exposes the MTI variant field
     // `priority`, resolved against the `features` variant table. The patched
     // Task model is absent from the static type, so the field is reached via
     // `never`.
-    const narrowed = collection.variant('Feature' as never) as typeof collection;
+    const narrowed = collection.variant('feature' as never) as typeof collection;
     await narrowed
       .orderBy(((task: Record<string, { desc(): unknown }>) => task['priority']!.desc()) as never)
       .all();
@@ -339,13 +394,13 @@ describe('Mixed STI+MTI polymorphic query pipeline', () => {
     expect(isSelectAst(ast) ? ast.orderBy?.[0]?.dir : undefined).toBe('desc');
   });
 
-  it('orderBy after variant(Feature) keeps base fields qualified against the base table', async () => {
+  it('orderBy after variant("feature") keeps base fields qualified against the base table', async () => {
     const { collection, runtime } = createMixedPolyCollection();
     runtime.setNextResults([
       [{ id: 2, title: 'Dark mode', type: 'feature', features__priority: 7 }],
     ]);
 
-    const narrowed = collection.variant('Feature' as never) as typeof collection;
+    const narrowed = collection.variant('feature' as never) as typeof collection;
     await narrowed
       .orderBy(((task: Record<string, { asc(): unknown }>) => task['title']!.asc()) as never)
       .all();
@@ -374,7 +429,7 @@ describe('Mixed STI+MTI polymorphic query pipeline', () => {
     expect(orderRefs).toEqual([ColumnRef.of('tasks', 'title')]);
   });
 
-  it('variant() on a polymorphic-target include refinement sets nested variantName', () => {
+  it('variant() on a polymorphic-target include refinement sets nested variantValue', () => {
     const contract = buildMixedPolyContract();
     const context = { ...getTestContext(), contract };
     const runtime = createMockRuntime();
@@ -382,12 +437,12 @@ describe('Mixed STI+MTI polymorphic query pipeline', () => {
       namespaceId: 'public',
     }) as unknown as PolyParent;
 
-    const refined = projects.include('tasks', (tasks) => tasks.variant('Bug'));
+    const refined = projects.include('tasks', (tasks) => tasks.variant('bug'));
 
-    expect(refined.state.includes[0]?.nested.variantName).toBe('Bug');
+    expect(refined.state.includes[0]?.nested.variantValue).toBe('bug');
   });
 
-  it('include of a polymorphic-target relation without refinement leaves variantName unset', () => {
+  it('include of a polymorphic-target relation without refinement leaves variantValue unset', () => {
     const contract = buildMixedPolyContract();
     const context = { ...getTestContext(), contract };
     const runtime = createMockRuntime();
@@ -397,10 +452,10 @@ describe('Mixed STI+MTI polymorphic query pipeline', () => {
 
     const included = projects.include('tasks');
 
-    expect(included.state.includes[0]?.nested.variantName).toBeUndefined();
+    expect(included.state.includes[0]?.nested.variantValue).toBeUndefined();
   });
 
-  it('updateAndCount after variant(Feature) scopes MTI scalar predicates through the write subquery', async () => {
+  it('updateAndCount after variant("feature") scopes MTI scalar predicates through the write subquery', async () => {
     const { collection, runtime } = createMixedPolyCollection();
     runtime.setNextStats([{ affectedRows: 1 }]);
 
@@ -409,7 +464,7 @@ describe('Mixed STI+MTI polymorphic query pipeline', () => {
       'mixed poly test contract patches Task variants outside the static fixture type'
     >(collection);
     const count = await mixedPoly
-      .variant('Feature')
+      .variant('feature')
       .where((task) => task.priority.gt(1))
       .updateAndCount({ title: 'Queued' });
 
@@ -430,7 +485,7 @@ describe('Mixed STI+MTI polymorphic query pipeline', () => {
     ).toHaveLength(1);
   });
 
-  it('deleteAndCount after variant(Feature) scopes MTI relation predicates through the write subquery', async () => {
+  it('deleteAndCount after variant("feature") scopes MTI relation predicates through the write subquery', async () => {
     const { collection, runtime } = createMixedPolyCollection();
     runtime.setNextStats([{ affectedRows: 1 }]);
 
@@ -439,7 +494,7 @@ describe('Mixed STI+MTI polymorphic query pipeline', () => {
       'mixed poly test contract patches Task variants outside the static fixture type'
     >(collection);
     const count = await mixedPoly
-      .variant('Feature')
+      .variant('feature')
       .where((task) => task.assignee.some())
       .deleteAndCount();
 
@@ -460,22 +515,22 @@ describe('Mixed STI+MTI polymorphic query pipeline', () => {
     ).toHaveLength(1);
   });
 
-  it('deleteAll with includes after variant(Feature) scopes MTI predicates through the write subquery', async () => {
+  it('deleteAll with includes after variant("feature") scopes MTI predicates through the write subquery', async () => {
     const { collection, runtime } = createReturningMixedPolyCollection();
-    runtime.setNextResults([[], []]);
+    runtime.setNextResults([[{ id: 1 }], []]);
 
     const mixedPoly = blindCast<
       MixedPolyCountCollection,
       'mixed poly test contract patches Task variants outside the static fixture type'
     >(collection);
     const rows = await mixedPoly
-      .variant('Feature')
+      .variant('feature')
       .where((task) => task.priority.gt(1))
       .include('assignee')
       .deleteAll()
       .toArray();
 
-    expect(rows).toEqual([]);
+    expect(rows).toEqual([{ id: 1, assignee: null }]);
     expect(runtime.executions).toHaveLength(2);
     expectSelectWithFeatureJoin(runtime.executions[0]!.plan.ast);
 
@@ -484,12 +539,16 @@ describe('Mixed STI+MTI polymorphic query pipeline', () => {
     if (writeAst.kind !== 'delete') {
       throw new Error('Expected a DELETE plan');
     }
-    const exists = expectExistsWithFeatureJoin(writeAst.where);
+    const { where } = writeAst;
+    expect(where).toBeInstanceOf(AndExpr);
+    const [condition, keys] = where instanceof AndExpr ? where.exprs : [];
+    const exists = expectExistsWithFeatureJoin(condition);
     expect(
       collectColumnRefs(exists.subquery.where).filter(
         (ref) => ref.table === 'features' && ref.column === 'priority',
       ),
     ).toHaveLength(1);
+    expect(keys).toBeDefined();
   });
 });
 
@@ -507,7 +566,7 @@ describe('STI variant create (discriminator auto-injection)', () => {
     const { collection, runtime } = createReturningMixedPolyCollection();
     runtime.setNextResults([[{ id: 1, title: 'Crash', type: 'bug', severity: 'critical' }]]);
 
-    const narrowed = collection.variant('Bug' as never) as typeof collection;
+    const narrowed = collection.variant('bug' as never) as typeof collection;
     await narrowed.createAll([{ title: 'Crash', severity: 'critical' } as never]).toArray();
 
     const execution = runtime.executions[0]!;
@@ -527,7 +586,7 @@ describe('STI variant create (discriminator auto-injection)', () => {
       [{ id: 1, title: 'Crash', type: 'bug', severity: 'critical', assignee_id: 7 }],
     ]);
 
-    const narrowed = collection.variant('Bug' as never) as typeof collection;
+    const narrowed = collection.variant('bug' as never) as typeof collection;
     const rows = await narrowed
       .createAll([{ title: 'Crash', severity: 'critical', assigneeId: 7 } as never])
       .toArray();
@@ -549,28 +608,64 @@ describe('STI variant create (discriminator auto-injection)', () => {
 describe('MTI variant mutation guards', () => {
   it('createAndCount() throws for MTI variants', async () => {
     const { collection } = createReturningMixedPolyCollection();
-    const narrowed = collection.variant('Feature' as never) as typeof collection;
+    const narrowed = collection.variant('feature' as never) as typeof collection;
     await expect(narrowed.createAndCount([{ title: 'X', priority: 1 } as never])).rejects.toThrow(
       /createAndCount\(\) is not supported for MTI variant/,
     );
   });
 
+  it('create() and createAll() of a variant stored in its own table name themselves without returning', async () => {
+    const contract = withoutCapabilityKeys(buildMixedPolyContract(), ['returning']);
+    const context = { ...getTestContext(), contract };
+    const features = new Collection({ runtime: createMockRuntime(), context }, 'Task', {
+      namespaceId: 'public',
+    }).variant('feature' as never);
+
+    await expect(features.create({ title: 'X', priority: 1 } as never)).rejects.toMatchObject({
+      code: 'ORM.CAPABILITY_MISSING',
+      message: 'create() requires contract capability "returning"',
+      meta: { capability: 'returning', action: 'create()' },
+    });
+    expect(() => features.createAll([{ title: 'X', priority: 1 } as never])).toThrow(
+      expect.objectContaining({
+        code: 'ORM.CAPABILITY_MISSING',
+        message: 'createAll() requires contract capability "returning"',
+        meta: { capability: 'returning', action: 'createAll()' },
+      }),
+    );
+  });
+
   it('createAll() with the skip option throws for MTI variants', async () => {
     const { collection } = createReturningMixedPolyCollection();
-    const narrowed = collection.variant('Feature' as never) as typeof collection;
+    const narrowed = collection.variant('feature' as never) as typeof collection;
     expect(() =>
       narrowed.createAll([{ title: 'X', priority: 1 } as never], { onConflict: 'skip' }),
     ).toThrow(
       expect.objectContaining({
         code: 'ORM.OPERATION_UNSUPPORTED',
-        message: expect.stringContaining('is not supported for MTI variant'),
+        message:
+          'The onConflict option is not supported on variant "Feature" of model "Task" because the variant is stored in its own table. Call createAll(rows) without the option; a duplicate row then makes the call fail.',
+      }),
+    );
+  });
+
+  it('createAndCount() with the skip option keeps the createAndCount() message for MTI variants', async () => {
+    const { collection } = createReturningMixedPolyCollection();
+    const narrowed = collection.variant('feature' as never) as typeof collection;
+    await expect(
+      narrowed.createAndCount([{ title: 'X', priority: 1 } as never], { onConflict: 'skip' }),
+    ).rejects.toThrow(
+      expect.objectContaining({
+        code: 'ORM.OPERATION_UNSUPPORTED',
+        message:
+          'createAndCount() is not supported for MTI variant "Feature" on model "Task". Use createAll() instead.',
       }),
     );
   });
 
   it('upsert() throws for MTI variants', async () => {
     const { collection } = createReturningMixedPolyCollection();
-    const narrowed = collection.variant('Feature' as never) as typeof collection;
+    const narrowed = collection.variant('feature' as never) as typeof collection;
     await expect(
       narrowed.upsert({
         create: { title: 'X', priority: 1 } as never,
@@ -585,7 +680,7 @@ describe('STI variant upsert (discriminator auto-injection)', () => {
     const { collection, runtime } = createReturningMixedPolyCollection();
     runtime.setNextResults([[{ id: 1, title: 'Crash', type: 'bug', severity: 'critical' }]]);
 
-    const narrowed = collection.variant('Bug' as never) as typeof collection;
+    const narrowed = collection.variant('bug' as never) as typeof collection;
     await narrowed.upsert({
       create: { title: 'Crash', severity: 'critical' } as never,
       update: { title: 'Updated' } as never,
@@ -612,7 +707,7 @@ describe('MTI variant create (two-INSERT orchestration)', () => {
     const context = { ...baseContext, contract, applyMutationDefaults };
     const runtime = createMockRuntime();
     const collection = new Collection({ runtime, context }, 'Task', { namespaceId: 'public' });
-    const narrowed = collection.variant('Feature' as never) as typeof collection;
+    const narrowed = collection.variant('feature' as never) as typeof collection;
     const input = Array.from({ length: count }, (_, index) => ({
       title: `Feature ${index}`,
       priority: index,
@@ -626,7 +721,7 @@ describe('MTI variant create (two-INSERT orchestration)', () => {
     await narrowed.createAll(input as never).toArray();
 
     const calls = applyMutationDefaults.mock.calls.map(([options]) => options);
-    expect(calls.map(({ table }) => table)).toEqual(input.flatMap(() => ['tasks', 'features']));
+    expect(calls.map(({ entry }) => entry)).toEqual(input.flatMap(() => ['tasks', 'features']));
     const cache = calls[0]!.defaultValueCache;
     expect(cache).toBeInstanceOf(Map);
     for (const call of calls) {
@@ -647,7 +742,7 @@ describe('MTI variant create (two-INSERT orchestration)', () => {
       [{ id: 10, priority: 1 }],
     ]);
 
-    const narrowed = collection.variant('Feature' as never) as typeof collection;
+    const narrowed = collection.variant('feature' as never) as typeof collection;
     await narrowed.createAll([{ title: 'Dark mode', priority: 1 } as never]).toArray();
 
     expect(runtime.executions).toHaveLength(2);
@@ -676,10 +771,10 @@ describe('MTI variant create (two-INSERT orchestration)', () => {
     const { collection, runtime } = createReturningMixedPolyCollection();
     runtime.setNextResults([
       [{ id: 10, title: 'Dark mode', type: 'feature' }],
-      [{ id: 10, priority: 99 }],
+      [{ features__priority: 99 }],
     ]);
 
-    const narrowed = collection.variant('Feature' as never) as typeof collection;
+    const narrowed = collection.variant('feature' as never) as typeof collection;
     const rows = await narrowed.createAll([{ title: 'Dark mode', priority: 1 } as never]).toArray();
 
     expect(rows).toHaveLength(1);
@@ -698,7 +793,7 @@ describe('MTI variant create (two-INSERT orchestration)', () => {
 
     const commit = vi.fn().mockResolvedValue(undefined);
     const rollback = vi.fn().mockResolvedValue(undefined);
-    const txRuntime = {
+    const withTransaction = {
       ...baseRuntime,
       transaction: vi.fn().mockResolvedValue({
         query: baseRuntime.query.bind(baseRuntime),
@@ -707,11 +802,12 @@ describe('MTI variant create (two-INSERT orchestration)', () => {
         rollback,
       }),
     };
+    const txRuntime = { ...withTransaction, [activitySource]: stubActivitySource(withTransaction) };
 
     const collection = new Collection({ runtime: txRuntime, context }, 'Task', {
       namespaceId: 'public',
     });
-    const narrowed = collection.variant('Feature' as never) as typeof collection;
+    const narrowed = collection.variant('feature' as never) as typeof collection;
     await narrowed.createAll([{ title: 'Dark mode', priority: 1 } as never]).toArray();
 
     expect(txRuntime.transaction).toHaveBeenCalledOnce();

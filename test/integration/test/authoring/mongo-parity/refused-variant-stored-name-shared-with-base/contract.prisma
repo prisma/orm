@@ -1,0 +1,15 @@
+// use prisma-8
+
+model Task {
+  id   ObjectId @id @map("_id")
+  type String
+
+  @@discriminator(type)
+  @@map("tasks")
+}
+
+model Bug {
+  sev String @map("type")
+
+  @@base(Task, "bug")
+}

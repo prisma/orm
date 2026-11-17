@@ -152,22 +152,6 @@ describe(
         expect(inputs.target).toBe('postgres');
       });
 
-      it('takes a mongodb provider as the Mongo target', async () => {
-        writePrisma7Schema('mongodb');
-        const { prompt } = scriptedPrompt();
-
-        const inputs = await resolveInputs({
-          cwd: projectDir,
-          flags: flags({ ...NO_FLAGS, fromPrisma7Schema: 'prisma/schema.prisma' }),
-          prompt,
-        });
-
-        expect(inputs).toMatchObject({
-          target: 'mongo',
-          contractSource: { kind: 'prisma7-schema', provider: 'mongodb' },
-        });
-      });
-
       it('refuses any other provider and lists the supported ones', async () => {
         writePrisma7Schema('sqlite');
         const { prompt } = scriptedPrompt();

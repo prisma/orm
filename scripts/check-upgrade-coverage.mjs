@@ -49,17 +49,38 @@ export function transitionLabel(prev, head) {
 const PENDING = 'upgrade-instructions/pending/';
 const PENDING_INSTRUCTIONS =
   /^upgrade-instructions\/pending\/[^/]+\/(app|extension)\/instructions\.md$/;
-const PUBLISHED_DIRECTORY = /^(skills\/prisma-8\/upgrading\/(?:app|extension)\/upgrades\/[^/]+)\//;
+const PUBLISHED_ROOT = 'skills/prisma-8/upgrading/';
+const PUBLISHED_DIRECTORY = new RegExp(`^(${PUBLISHED_ROOT}(?:app|extension)/upgrades/[^/]+)/`);
+function publishedGuide(audience, transition) {
+  return `${PUBLISHED_ROOT}${audience}/upgrades/${transition}/instructions.md`;
+}
 const COVERED_DIRECTORIES = [
-  { audience: 'app', directory: 'examples/' },
-  { audience: 'extension', directory: 'packages/3-extensions/' },
+  { audience: 'app', directories: ['examples/'] },
+  {
+    audience: 'extension',
+    directories: [
+      'packages/3-extensions/',
+      'packages/3-targets/*/9-facade/',
+      'packages/3-targets/*/*/9-facade/',
+    ],
+  },
 ];
-function git(repoRoot, ...args) {
+function directoryPattern(directory) {
+  return new RegExp(`^${directory.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replaceAll('*', '[^/]+')}`);
+}
+function isUnderDirectory(path, directory) {
+  return directoryPattern(directory).test(path);
+}
+function gitWith(options, repoRoot, ...args) {
   return execFileSync('git', args, {
     cwd: repoRoot,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
+    ...options,
   });
+}
+function git(repoRoot, ...args) {
+  return gitWith({}, repoRoot, ...args);
 }
 function tryGit(repoRoot, ...args) {
   try {
@@ -75,9 +96,10 @@ function readFile(repoRoot, ref, path) {
     return null;
   }
 }
+/** The files under the pending and published instruction directories, the only ones the check reads. */
 function tree(repoRoot, ref) {
   return new Map(
-    git(repoRoot, 'ls-tree', '-r', '-z', ref)
+    git(repoRoot, 'ls-tree', '-r', '-z', ref, '--', PENDING, PUBLISHED_ROOT)
       .split('\0')
       .filter(Boolean)
       .map((entry) => {
@@ -86,8 +108,27 @@ function tree(repoRoot, ref) {
       }),
   );
 }
+/**
+ * The changed files under the covered and published directories, the only ones the check reads.
+ * The listing grows with the change, so it is read without the default 1 MiB limit on output.
+ */
 function changedPaths(repoRoot, prev, head) {
-  return git(repoRoot, 'diff', '--no-renames', '--name-only', '-z', prev, head, '--')
+  const pathspecs = [
+    ...COVERED_DIRECTORIES.flatMap(({ directories }) => directories),
+    PUBLISHED_ROOT,
+  ].map((directory) => `:(glob)${directory}**`);
+  return gitWith(
+    { maxBuffer: Number.POSITIVE_INFINITY },
+    repoRoot,
+    'diff',
+    '--no-renames',
+    '--name-only',
+    '-z',
+    prev,
+    head,
+    '--',
+    ...pathspecs,
+  )
     .split('\0')
     .filter(Boolean);
 }
@@ -282,12 +323,13 @@ export function runCheck({ repoRoot, head = 'HEAD', prev, mode = 'pr' }) {
         reason: 'assemble and archive all pending files before release',
       });
     for (const { audience } of COVERED_DIRECTORIES)
-      validate.add(`skills/prisma-8/upgrading/${audience}/upgrades/${transition}/instructions.md`);
+      validate.add(publishedGuide(audience, transition));
   } else if (mode === 'pr') {
-    for (const { audience, directory } of COVERED_DIRECTORIES) {
+    for (const { audience, directories } of COVERED_DIRECTORIES) {
       const relevant = changed.filter(
         (path) =>
-          path.startsWith(directory) && !isTranslationIrrelevant(repoRoot, prev, head, path),
+          directories.some((directory) => isUnderDirectory(path, directory)) &&
+          !isTranslationIrrelevant(repoRoot, prev, head, path),
       );
       if (
         relevant.length &&
@@ -298,7 +340,7 @@ export function runCheck({ repoRoot, head = 'HEAD', prev, mode = 'pr' }) {
         violations.push({
           rule: 'per-pr-declaration',
           path: `${PENDING}<name>/${audience}/instructions.md`,
-          reason: `diff in ${directory} requires a new declaration relative to --prev; inherited or modified files do not count`,
+          reason: `diff in ${directories.join(', ')} requires a new declaration relative to --prev; inherited or modified files do not count`,
           sampleDiffPaths: relevant.slice(0, 5),
         });
       }

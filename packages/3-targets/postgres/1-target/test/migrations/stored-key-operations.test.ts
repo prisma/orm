@@ -1,0 +1,291 @@
+import type { JsonValue } from '@internal/contract/types';
+import { UnfilledValue } from '@internal/family-sql/control';
+import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { describe, expect, it } from 'vitest';
+import {
+  FillStoredKeyCall,
+  RemoveStoredKeyCall,
+  RenameStoredKeyCall,
+} from '../../src/core/migrations/op-factory-call';
+import { postgresTypeLookups } from '../postgres-type-lookups';
+import { placeContract } from './value-object-planner-fixtures';
+
+const REFUSED_PATHS = [
+  '$..lat',
+  '$.**',
+  '$[0]',
+  '$[-1]',
+  '$[0:2]',
+  '$[?@.lat]',
+  "$['a','b']",
+  'lat',
+  '$.9lat',
+] as const;
+
+describe('renameStoredKey', () => {
+  it('writes the rename only into the rows whose objects hold the key, with a typed strict path', () => {
+    const op = new RenameStoredKeyCall('app', 'place', 'history', '$[*].lat', 'latitude').toOp();
+
+    expect(op).toEqual({
+      id: 'renameStoredKey.place.history.$[*].lat',
+      label: 'Rename key "lat" to "latitude" at path "$[*]" in column "history" of "place"',
+      operationClass: 'widening',
+      target: {
+        id: 'postgres',
+        details: { schema: 'app', objectType: 'column', name: 'history', table: 'place' },
+      },
+      precheck: [
+        {
+          description:
+            'ensure no object at path "$[*]" in column "history" of "place" has both key "lat" and key "latitude"; remove one of the two keys from those objects',
+          sql: `SELECT NOT EXISTS (SELECT 1 FROM "app"."place" WHERE jsonb_path_exists(("history"::jsonb), 'strict $ ? (@.type() == "array" || @.type() == "object").**{1} ? (@.type() == "object" && exists(@.keyvalue() ? (@.key == "lat")) && exists(@.keyvalue() ? (@.key == "latitude")))')) AS result`,
+        },
+      ],
+      execute: [
+        {
+          description:
+            'rename key "lat" to "latitude" at path "$[*]" in column "history" of "place"',
+          sql: `UPDATE "app"."place" SET "history" = CASE jsonb_typeof(("history"::jsonb)) WHEN 'array' THEN (SELECT coalesce(jsonb_agg(CASE WHEN jsonb_typeof(e0.v) = 'object' AND e0.v ? 'lat' THEN (e0.v - 'lat') || jsonb_build_object('latitude', e0.v -> 'lat') ELSE e0.v END ORDER BY e0.i), '[]'::jsonb) FROM jsonb_array_elements(("history"::jsonb)) WITH ORDINALITY AS e0(v, i)) WHEN 'object' THEN (SELECT coalesce(jsonb_object_agg(e0.k, CASE WHEN jsonb_typeof(e0.v) = 'object' AND e0.v ? 'lat' THEN (e0.v - 'lat') || jsonb_build_object('latitude', e0.v -> 'lat') ELSE e0.v END), '{}'::jsonb) FROM jsonb_each(("history"::jsonb)) AS e0(k, v)) ELSE ("history"::jsonb) END WHERE jsonb_path_exists(("history"::jsonb), 'strict $ ? (@.type() == "array" || @.type() == "object").**{1} ? (@.type() == "object" && exists(@.keyvalue() ? (@.key == "lat")))')`,
+        },
+      ],
+      postcheck: [
+        {
+          description:
+            'verify no object at path "$[*]" in column "history" of "place" has key "lat"',
+          sql: `SELECT NOT EXISTS (SELECT 1 FROM "app"."place" WHERE jsonb_path_exists(("history"::jsonb), 'strict $ ? (@.type() == "array" || @.type() == "object").**{1} ? (@.type() == "object" && exists(@.keyvalue() ? (@.key == "lat")))')) AS result`,
+        },
+      ],
+    });
+  });
+
+  it('quotes a key with quotes in it in the SQL text and in the path', () => {
+    const op = new RenameStoredKeyCall('app', 'place', 'point', `$["it's \\"x\\""]`, 'y').toOp();
+
+    expect(op.execute[0]?.sql).toContain(`? 'it''s "x"'`);
+    expect(op.postcheck[0]?.sql).toContain(`(@.key == "it''s \\"x\\"")`);
+  });
+
+  it.each(REFUSED_PATHS)('refuses the path %j when it is built', (path) => {
+    expect(() => new RenameStoredKeyCall('app', 'place', 'point', path, 'b')).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.ARGUMENT_INVALID',
+        message: `renameStoredKey({ schema: "app", table: "place", column: "point" }): path ${JSON.stringify(path)} is not a JSONPath of member names (.name or ['name']) and wildcards ([*] or .*) from $`,
+      }),
+    );
+  });
+
+  it.each(['$', '$[*]', '$.a[*]'])('refuses the path %j, which does not end at a key', (path) => {
+    expect(
+      () => new RenameStoredKeyCall(UNBOUND_NAMESPACE_ID, 'place', 'point', path, 'b'),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.ARGUMENT_INVALID',
+        message: `renameStoredKey({ table: "place", column: "point" }): path ${JSON.stringify(path)} does not end at a member name, the key the operation acts on`,
+      }),
+    );
+  });
+
+  it('refuses a new key that is the key it renames', () => {
+    expect(() => new RenameStoredKeyCall('app', 'place', 'point', '$.lat', 'lat')).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.ARGUMENT_INVALID',
+        message:
+          'renameStoredKey({ schema: "app", table: "place", column: "point" }): to must be a key other than "lat"; got "lat"',
+      }),
+    );
+  });
+
+  it('names the path in its label and checks as it was written', () => {
+    const op = new RenameStoredKeyCall('app', 'place', 'byCountry', '$.*.lat', 'latitude').toOp();
+    expect([op.label, op.precheck[0]?.description]).toEqual([
+      'Rename key "lat" to "latitude" at path "$.*" in column "byCountry" of "place"',
+      'ensure no object at path "$.*" in column "byCountry" of "place" has both key "lat" and key "latitude"; remove one of the two keys from those objects',
+    ]);
+  });
+
+  it('renders the facade call with the path as written, and needs no import', () => {
+    const call = new RenameStoredKeyCall(
+      UNBOUND_NAMESPACE_ID,
+      'place',
+      'trips',
+      "$[*]['stops'][*].lat",
+      'latitude',
+    );
+
+    expect([call.renderTypeScript(), call.importRequirements(), call.operationClass]).toEqual([
+      `this.renameStoredKey({ table: "place", column: "trips", path: "$[*]['stops'][*].lat", to: "latitude" })`,
+      [],
+      'widening',
+    ]);
+  });
+});
+
+describe('removeStoredKey', () => {
+  it('removes the key only from the rows whose objects hold it', () => {
+    const op = new RemoveStoredKeyCall('app', 'place', 'point', '$.lat').toOp();
+    const holdsKey = `jsonb_path_exists(("point"::jsonb), 'strict $ ? (@.type() == "object" && exists(@.keyvalue() ? (@.key == "lat")))')`;
+
+    expect(op).toMatchObject({
+      id: 'removeStoredKey.place.point.$.lat',
+      label: 'Remove key "lat" at path "$" in column "point" of "place"',
+      operationClass: 'destructive',
+      precheck: [],
+      execute: [
+        {
+          sql: `UPDATE "app"."place" SET "point" = CASE WHEN jsonb_typeof(("point"::jsonb)) = 'object' THEN ("point"::jsonb) - 'lat' ELSE ("point"::jsonb) END WHERE ${holdsKey}`,
+        },
+      ],
+      postcheck: [
+        { sql: `SELECT NOT EXISTS (SELECT 1 FROM "app"."place" WHERE ${holdsKey}) AS result` },
+      ],
+    });
+  });
+
+  it.each([...REFUSED_PATHS, '$', '$[*]'])('refuses the path %j when it is built', (path) => {
+    expect(() => new RemoveStoredKeyCall('app', 'place', 'point', path)).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.ARGUMENT_INVALID',
+        message: expect.stringContaining(
+          'removeStoredKey({ schema: "app", table: "place", column: "point" }): path ',
+        ),
+      }),
+    );
+  });
+
+  it('renders the facade call', () => {
+    expect(new RemoveStoredKeyCall('app', 'place', 'point', '$.lat').renderTypeScript()).toBe(
+      'this.removeStoredKey({ schema: "app", table: "place", column: "point", path: "$.lat" })',
+    );
+  });
+});
+
+describe('fillStoredKey', () => {
+  it('fills the key only in the rows with an object that lacks it or holds JSON null there, passing the value as JSON text', () => {
+    const lacks = `jsonb_path_exists(("point"::jsonb), 'strict $ ? (@.type() == "object" && !(exists(@.keyvalue() ? (@.key == "country" && @.value.type() != "null"))))')`;
+
+    expect(
+      new FillStoredKeyCall('app', 'place', 'point', '$.country', { code: 'NZ' }).toOp(),
+    ).toMatchObject({
+      id: 'fillStoredKey.place.point.$.country',
+      label: 'Fill key "country" at path "$" in column "point" of "place"',
+      operationClass: 'widening',
+      precheck: [],
+      execute: [
+        {
+          sql: `UPDATE "app"."place" SET "point" = CASE WHEN jsonb_typeof(("point"::jsonb)) = 'object' AND coalesce(("point"::jsonb) -> 'country', 'null'::jsonb) = 'null'::jsonb THEN ("point"::jsonb) || jsonb_build_object('country', $1::jsonb) ELSE ("point"::jsonb) END WHERE ${lacks}`,
+          params: ['{"code":"NZ"}'],
+        },
+      ],
+      postcheck: [
+        { sql: `SELECT NOT EXISTS (SELECT 1 FROM "app"."place" WHERE ${lacks}) AS result` },
+      ],
+    });
+  });
+
+  it('refuses a path that does not end at a key, and a value that is not JSON', () => {
+    const missing: unknown = undefined;
+
+    expect(() => new FillStoredKeyCall('app', 'place', 'point', '$[*]', 1)).toThrow(
+      expect.objectContaining({ code: 'CONTRACT.ARGUMENT_INVALID' }),
+    );
+    expect(
+      () => new FillStoredKeyCall('app', 'place', 'point', '$.country', missing as JsonValue),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.ARGUMENT_INVALID',
+        message:
+          'fillStoredKey({ schema: "app", table: "place", column: "point" }): value must be a JSON value; got undefined',
+      }),
+    );
+  });
+
+  it('renders the facade call with the value as a literal', () => {
+    expect(
+      new FillStoredKeyCall('app', 'place', 'point', '$.country', {
+        code: 'NZ',
+        parts: [1, null],
+      }).renderTypeScript(),
+    ).toBe(
+      'this.fillStoredKey({ schema: "app", table: "place", column: "point", path: "$.country", value: { code: "NZ", parts: [1, null] } })',
+    );
+  });
+
+  describe('with the value object field it fills', () => {
+    const field = {
+      text: 'GeoPoint.country',
+      check: {
+        contract: placeContract(
+          { GeoPoint: { lat: 'scalar', country: 'scalar' } },
+          [{ field: 'point', valueObject: 'GeoPoint' }],
+          'fill-check',
+        ),
+        types: { ...postgresTypeLookups, scalarTypeName: () => 'String' },
+      },
+    };
+
+    it('refuses a value the field does not take, naming the field and its type', () => {
+      expect(() => new FillStoredKeyCall('app', 'place', 'point', '$.country', 12, field)).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.ARGUMENT_INVALID',
+          message:
+            'fillStoredKey({ schema: "app", table: "place", column: "point" }): value 12 for field "GeoPoint.country" is not a String',
+        }),
+      );
+    });
+
+    it('refuses a field that does not name the key the path ends at', () => {
+      expect(() => new FillStoredKeyCall('app', 'place', 'point', '$.city', 'NZ', field)).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.ARGUMENT_INVALID',
+          message:
+            'fillStoredKey({ schema: "app", table: "place", column: "point" }): field "GeoPoint.country" does not name key "city", the key path "$.city" ends at',
+        }),
+      );
+    });
+
+    it('takes a value the field takes, or a placeholder, and renders the field', () => {
+      expect([
+        new FillStoredKeyCall('app', 'place', 'point', '$.country', 'NZ', field).renderTypeScript(),
+        new FillStoredKeyCall(
+          'app',
+          'place',
+          'point',
+          '$.country',
+          new UnfilledValue('GeoPoint.country:value'),
+          field,
+        ).renderTypeScript(),
+      ]).toEqual([
+        'this.fillStoredKey({ schema: "app", table: "place", column: "point", path: "$.country", value: "NZ", field: "GeoPoint.country" })',
+        'this.fillStoredKey({ schema: "app", table: "place", column: "point", path: "$.country", value: placeholder("GeoPoint.country:value"), field: "GeoPoint.country" })',
+      ]);
+    });
+  });
+
+  it('takes an unfilled value, which its migration.ts writes as a placeholder and its operation refuses', async () => {
+    const call = new FillStoredKeyCall(
+      'app',
+      'place',
+      'point',
+      '$.country',
+      new UnfilledValue('GeoPoint.country:value'),
+    );
+
+    expect(call.renderTypeScript()).toBe(
+      'this.fillStoredKey({ schema: "app", table: "place", column: "point", path: "$.country", value: placeholder("GeoPoint.country:value") })',
+    );
+    expect(call.importRequirements()).toEqual([
+      { moduleSpecifier: '@internal/postgres/migration', symbol: 'placeholder' },
+    ]);
+    await expect(call.toOp()).rejects.toMatchObject({
+      code: 'MIGRATION.UNFILLED_PLACEHOLDER',
+      meta: {
+        slot: 'GeoPoint.country:value',
+        operation: {
+          id: 'fillStoredKey.place.point.$.country',
+          label: 'Fill key "country" at path "$" in column "point" of "place"',
+          operationClass: 'widening',
+        },
+      },
+    });
+  });
+});

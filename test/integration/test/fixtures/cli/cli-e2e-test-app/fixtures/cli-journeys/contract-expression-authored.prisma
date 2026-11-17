@@ -5,9 +5,9 @@ model User {
   email      String
   archivedAt String? @map("archived_at")
 
-  @@index(expression: "eql_v3.eq_term(email)", name: "users_email_eq", type: "btree")
-  @@index([email], where: "(archived_at IS NULL)", name: "users_email_active")
-  @@index(expression: "lower(email)", unique: true, name: "users_email_lower_key")
+  @@index(expression: sql`eql_v3.eq_term(email)`, name: "users_email_eq", type: "btree")
+  @@index([email], where: sql`(archived_at IS NULL)`, name: "users_email_active")
+  @@index(expression: sql`lower(email)`, unique: true, name: "users_email_lower_key")
   @@index([email], type: "hash", name: "users_email_hash")
   @@map("user")
 }

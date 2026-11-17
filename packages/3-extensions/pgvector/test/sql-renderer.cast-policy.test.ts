@@ -10,7 +10,7 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import { TestSqlContractSerializer as SqlContractSerializer } from '../../../2-sql/9-family/test/test-sql-contract-serializer';
+import { TestSqlContractSerializer as SqlContractSerializer } from '../../../2-sql-family/9-family/test/test-sql-contract-serializer';
 import { createComposedPostgresAdapter } from './helpers/composed-adapter';
 
 describe('pgvector cast policy', () => {
@@ -37,8 +37,8 @@ describe('pgvector cast policy', () => {
               table: {
                 user: {
                   columns: {
-                    id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-                    vec: { codecId: 'pg/vector@1', nativeType: 'vector', nullable: false },
+                    id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+                    vec: { codecId: 'pg/vector@1', dataType: 'pgvector/vector', nullable: false },
                   },
                   uniques: [],
                   indexes: [],

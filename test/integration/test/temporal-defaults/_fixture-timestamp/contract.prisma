@@ -3,7 +3,7 @@
 model Stamp {
   id          Int    @id
   label       String
-  updatedAt   temporal.timestamp(3, onCreate: now, onUpdate: now)
-  updatedAtTz temporal.timestamptz(3, onCreate: now, onUpdate: now)
+  updatedAt   TimestampTemporal(3) @onCreate(now()) @onUpdate(now())
+  updatedAtTz TimestamptzTemporal(3) @onCreate(now()) @onUpdate(now())
   @@map("stamp")
 }

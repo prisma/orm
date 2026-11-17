@@ -1,5 +1,7 @@
 # ADR 160 — Plan grouping keys for multi-statement orchestration
 
+Status: **Superseded by [ADR 271](ADR%20271%20-%20The%20runtime%20middleware%20observes%20a%20tree%20of%20activities%2C%20each%20started%2C%20ended%20and%20finalized.md)**. `groupingKey` is replaced by the parent activity: the statements an operation sends are children of the activity that sent them.
+
 ```ts
 // ORM Client (conceptual)
 import type { ExecutionPlan } from '@internal/contract/types';

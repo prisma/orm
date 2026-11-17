@@ -1,8 +1,11 @@
 import postgresServerless from '@prisma/orm-postgres/serverless';
+import { contractFromJson } from '@prisma/orm-postgres/static';
 import type { Contract } from '../postgres/generated/contract.d';
 import contractJson from '../postgres/generated/contract.json' with { type: 'json' };
 
-const db = postgresServerless<Contract>({ contractJson });
+const contract = contractFromJson<Contract>(contractJson);
+
+const postgres = postgresServerless({ contract });
 
 interface Env {
   readonly DATABASE_URL: string;
@@ -10,8 +13,8 @@ interface Env {
 
 export default {
   async fetch(_request: Request, env: Env): Promise<Response> {
-    await using runtime = await db.connect({ url: env.DATABASE_URL });
-    const notes = await runtime.query(db.sql.public.Note.select('id').limit(10).build());
+    await using db = await postgres.connect({ url: env.DATABASE_URL });
+    const notes = await db.query(db.sql.public.Note.select('id').limit(10).build());
     return Response.json({ notes });
   },
 };

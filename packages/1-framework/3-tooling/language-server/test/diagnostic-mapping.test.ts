@@ -2,6 +2,7 @@ import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import { parse, SourceFile } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import {
+  mapInterpreterDiagnostic,
   mapInterpreterDiagnostics,
   mapParseDiagnostics,
   ParseDiagnosticSeverity,
@@ -35,6 +36,39 @@ describe('mapParseDiagnostics', () => {
 describe('mapInterpreterDiagnostics', () => {
   const text = 'model User {\n  id Int @id\n  posts Post[]\n}\n';
   const sourceFile = new SourceFile('diagnostic-mapping-test.psl', text);
+
+  it('maps single warnings and errors consistently with the array mapper', () => {
+    const warning: ContractSourceDiagnostic = {
+      code: 'WARN',
+      message: 'warning',
+      sourceId: sourceFile.filename,
+      severity: 'warning',
+    };
+    const error: ContractSourceDiagnostic = {
+      code: 'ERROR',
+      message: 'error',
+      sourceId: sourceFile.filename,
+    };
+    const mapped = [
+      mapInterpreterDiagnostic(warning, sourceFile),
+      mapInterpreterDiagnostic(error, sourceFile),
+    ];
+    expect(mapped).toEqual([
+      {
+        code: 'WARN',
+        message: 'warning',
+        severity: 2,
+        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
+      },
+      {
+        code: 'ERROR',
+        message: 'error',
+        severity: 1,
+        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
+      },
+    ]);
+    expect(mapInterpreterDiagnostics([warning, error], sourceFile)).toEqual(mapped);
+  });
 
   it('maps a span to a 0-based LSP range (hand-computed)', () => {
     // Offsets 28..33 sit on the third line ("  posts Post[]"), landing on

@@ -47,21 +47,21 @@ describe('TaggedLiteral parsing', () => {
     expect(literal.tag()?.path()).toEqual(['sql']);
     expect(literal.literal()?.quote()).toBe('`');
     expect(literal.literal()?.value()).toBe('gen_random_uuid()');
-    expect(literal.body()).toBe('gen_random_uuid()');
+    expect(literal.text()).toBe('gen_random_uuid()');
   });
 
   it('is a qualified name followed by a string literal expression', () => {
-    const { literal } = taggedDefault('pg.sql`now()`');
+    const { literal } = taggedDefault('postgis.geometry`POINT(0 0)`');
     expect(printTree(literal.syntax.green)).toMatchInlineSnapshot(`
       "TaggedLiteral
         QualifiedName
           Identifier
-            Ident "pg"
+            Ident "postgis"
           Dot "."
           Identifier
-            Ident "sql"
+            Ident "geometry"
         StringLiteralExpr
-          StringLiteral "\`now()\`""
+          StringLiteral "\`POINT(0 0)\`""
     `);
   });
 
@@ -71,25 +71,25 @@ describe('TaggedLiteral parsing', () => {
     );
     expect(result.diagnostics).toEqual([]);
     expect(literal.literal()?.value()).toBe("\n    (now()\n      + '00:03:00'::interval)\n  ");
-    expect(literal.body()).toBe("(now()\n  + '00:03:00'::interval)");
+    expect(literal.text()).toBe("(now()\n  + '00:03:00'::interval)");
   });
 
   it('passes a body containing a dollar-brace sequence through verbatim', () => {
     const { result, literal } = taggedDefault('sql`a $' + '{x} b`');
     expect(result.diagnostics).toEqual([]);
-    expect(literal.body()).toBe('a $' + '{x} b');
+    expect(literal.text()).toBe('a $' + '{x} b');
   });
 
   it.each([
     ['whitespace', 'sql `x`'],
     ['a newline', 'sql\n`x`'],
     ['a comment', 'sql // raw\n`x`'],
-    ['whitespace inside the qualified name', 'pg . sql"x"'],
+    ['whitespace inside the qualified name', 'postgis . geometry"x"'],
   ])('allows %s between the tag and the string', (_name, argument) => {
     const source = `model T {\n  id String @default(${argument})\n}\n`;
     const { result, literal } = taggedDefault(argument);
     expect(result.diagnostics).toEqual([]);
-    expect(literal.body()).toBe('x');
+    expect(literal.text()).toBe('x');
     expect(printSyntax(result.document.syntax)).toBe(source);
   });
 
@@ -101,19 +101,19 @@ describe('TaggedLiteral parsing', () => {
       '"',
       "'",
     ]);
-    expect(single.literal.body()).toBe('now()');
-    expect(double.literal.body()).toBe('now()');
+    expect(single.literal.text()).toBe('now()');
+    expect(double.literal.text()).toBe('now()');
   });
 
   it('resolves double-quoted string escapes in the body', () => {
     const { result, literal } = taggedDefault('sql"a\\"b `c`"');
     expect(result.diagnostics).toEqual([]);
-    expect(literal.body()).toBe('a"b `c`');
+    expect(literal.text()).toBe('a"b `c`');
   });
 
   it('gives the same body for a backtick and a double-quoted string', () => {
-    expect(taggedDefault('sql`gen_random_uuid()`').literal.body()).toBe(
-      taggedDefault('sql"gen_random_uuid()"').literal.body(),
+    expect(taggedDefault('sql`gen_random_uuid()`').literal.text()).toBe(
+      taggedDefault('sql"gen_random_uuid()"').literal.text(),
     );
   });
 
@@ -161,7 +161,7 @@ describe('TaggedLiteral parsing', () => {
 
   it('round-trips the source through printSyntax', () => {
     const source =
-      'model T {\n  a String @default(sql`\n    x\n  `)\n  b String @default(pg.sql"y")\n}\n';
+      'model T {\n  a String @default(sql`\n    x\n  `)\n  b String @default(postgis.geometry"y")\n}\n';
     const result = parse(source, 'test.psl');
     expect(result.diagnostics).toEqual([]);
     expect(printSyntax(result.document.syntax)).toBe(source);

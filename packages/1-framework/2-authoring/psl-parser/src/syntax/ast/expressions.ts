@@ -1,8 +1,8 @@
-import type { TaggedLiteralCanonicalization } from '@internal/framework-components/control';
 import {
   canonicalizeTaggedLiteralBody,
-  resolvePslBacktickEscapes,
-} from '@internal/framework-components/control';
+  type TaggedLiteralCanonicalization,
+} from '@internal/framework-components/authoring';
+import { resolvePslBacktickEscapes } from '@internal/framework-components/control';
 import { isTerminatedStringLiteral } from '../../tokenizer';
 import type { AstNode } from '../ast-helpers';
 import { filterChildren, findChildToken, findFirstChild } from '../ast-helpers';
@@ -17,24 +17,25 @@ export class FunctionCallAst implements AstNode {
     this.syntax = syntax;
   }
 
-  /** The qualified-name callee, or `undefined` when identifier segments sit directly under the node. */
+  /** The callee when it is a bare name, such as `now` in `now()`; `undefined` when the callee is dotted. */
   name(): QualifiedNameAst | undefined {
     return findFirstChild(this.syntax, QualifiedNameAst.cast);
   }
 
   /**
-   * The dotted call path, in source order. A bare `Vector(…)` yields
-   * `['Vector']`; a namespace-qualified `pgvector.Vector(…)` yields
-   * `['pgvector', 'Vector']`. Empty when the call carries no identifier.
+   * The callee's segments, in source order. A bare `Vector(…)` yields
+   * `['Vector']`; `pgvector.Vector(…)` yields `['pgvector', 'Vector']`;
+   * `address.geo.lat(…)` yields `['address', 'geo', 'lat']`. Empty when the
+   * call carries no identifier.
    */
   path(): readonly string[] {
-    const qualified = this.name();
-    const segments: string[] = [];
-    for (const segment of filterChildren(qualified?.syntax ?? this.syntax, IdentifierAst.cast)) {
-      const text = segment.token()?.text;
-      if (text !== undefined) segments.push(text);
-    }
-    return segments;
+    const callee = this.name() ?? this.memberPath();
+    return segmentNames(callee?.syntax ?? this.syntax);
+  }
+
+  /** The callee when it is dotted, such as `address.city` in `address.city(sort: Asc)`; `undefined` for a bare callee. */
+  memberPath(): PathExprAst | undefined {
+    return findFirstChild(this.syntax, PathExprAst.cast);
   }
 
   lparen(): SyntaxToken | undefined {
@@ -51,6 +52,41 @@ export class FunctionCallAst implements AstNode {
 
   static cast(node: SyntaxNode): FunctionCallAst | undefined {
     return node.kind === 'FunctionCall' ? new FunctionCallAst(node) : undefined;
+  }
+}
+
+function segmentNames(node: SyntaxNode): readonly string[] {
+  const segments: string[] = [];
+  for (const segment of filterChildren(node, IdentifierAst.cast)) {
+    const text = segment.token()?.text;
+    if (text !== undefined) segments.push(text);
+  }
+  return segments;
+}
+
+/** A dotted member path in expression position, such as `address.city` in `@@index([address.city])`. */
+export class PathExprAst implements AstNode {
+  readonly syntax: SyntaxNode;
+
+  constructor(syntax: SyntaxNode) {
+    this.syntax = syntax;
+  }
+
+  *segments(): Iterable<IdentifierAst> {
+    yield* filterChildren(this.syntax, IdentifierAst.cast);
+  }
+
+  /**
+   * The segment names, in source order: `['address', 'city']` for `address.city`. A path that ends
+   * in a `.` with no name after it, as in `address.`, ends in an empty name.
+   */
+  path(): readonly string[] {
+    const segments = segmentNames(this.syntax);
+    return this.syntax.lastToken?.kind === 'Dot' ? [...segments, ''] : segments;
+  }
+
+  static cast(node: SyntaxNode): PathExprAst | undefined {
+    return node.kind === 'PathExpr' ? new PathExprAst(node) : undefined;
   }
 }
 
@@ -99,6 +135,18 @@ function decodeStringLiteral(raw: string): string {
     }
     const next = raw.charAt(i + 1);
     switch (next) {
+      case '/':
+        out += '/';
+        i += 2;
+        continue;
+      case 'b':
+        out += '\b';
+        i += 2;
+        continue;
+      case 'f':
+        out += '\f';
+        i += 2;
+        continue;
       case 'n':
         out += '\n';
         i += 2;
@@ -200,7 +248,7 @@ export class TaggedLiteralExprAst implements AstNode {
     return findFirstChild(this.syntax, QualifiedNameAst.cast);
   }
 
-  /** The tag without trivia, e.g. `pg.sql`. */
+  /** The tag without trivia, e.g. `postgis.geometry`. */
   tagName(): string {
     const tag = this.tag();
     const space = tag?.space()?.name();
@@ -218,10 +266,10 @@ export class TaggedLiteralExprAst implements AstNode {
     return canonicalizeTaggedLiteralBody(this.literal()?.value() ?? '');
   }
 
-  /** The canonical body shared with the TypeScript `sql` tag, or `undefined` when canonicalization fails. */
-  body(): string | undefined {
+  /** The canonical text shared with the TypeScript `sql` tag, or `undefined` when canonicalization fails. */
+  text(): string | undefined {
     const result = this.canonicalization();
-    return result.ok ? result.body : undefined;
+    return result.ok ? result.text : undefined;
   }
 
   static cast(node: SyntaxNode): TaggedLiteralExprAst | undefined {
@@ -372,7 +420,18 @@ export type ExpressionAst =
   | NumberLiteralExprAst
   | BooleanLiteralExprAst
   | ObjectLiteralExprAst
+  | PathExprAst
   | IdentifierAst;
+
+/** Every dotted path in an expression: the expression itself, a dotted callee, or a path inside a list, record or call argument. */
+export function dottedPathsIn(expression: ExpressionAst): readonly PathExprAst[] {
+  const paths: PathExprAst[] = [];
+  for (const element of expression.syntax.descendants()) {
+    const path = element instanceof SyntaxNode ? PathExprAst.cast(element) : undefined;
+    if (path !== undefined) paths.push(path);
+  }
+  return paths;
+}
 
 export function castExpression(node: SyntaxNode): ExpressionAst | undefined {
   return (
@@ -383,6 +442,7 @@ export function castExpression(node: SyntaxNode): ExpressionAst | undefined {
     NumberLiteralExprAst.cast(node) ??
     BooleanLiteralExprAst.cast(node) ??
     ObjectLiteralExprAst.cast(node) ??
+    PathExprAst.cast(node) ??
     IdentifierAst.cast(node)
   );
 }

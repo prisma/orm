@@ -2,8 +2,8 @@
 
 model User {
   id Int @id
-  badUuid String @default(uuid(5))
-  badNanoid String @default(nanoid(1))
+  badUuid String @onCreate(uuid(5))
+  badNanoid String @onCreate(nanoid(1))
   unknownFn String @default(sequence())
   @@map("user")
 }

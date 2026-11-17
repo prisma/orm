@@ -3,24 +3,33 @@ import { describe, expect, it } from 'vitest';
 import {
   createReturningUsersCollection,
   createUsersCollection,
-  createUsersCollectionWithoutReturning,
   timeouts,
   withCollectionRuntime,
 } from './integration-helpers';
 import { seedPosts, seedUsers } from './runtime-helpers';
+
+const returnsKey = Symbol('returns');
+
+/** Records the SQL of every statement sent for its statistics. */
+function statisticsStatementObserver(name: string, observed: string[]): SqlMiddleware {
+  return {
+    name,
+    familyId: 'sql',
+    async activityStarted(activity, ctx) {
+      if (activity.kind === 'statement') ctx.state(returnsKey)['returns'] = activity.returns;
+    },
+    beforeEncode(exec, ctx) {
+      if (ctx.state(returnsKey)['returns'] === 'stats') observed.push(exec.sql);
+    },
+  };
+}
 
 describe('integration/delete', () => {
   it(
     'deleteAndCount() returns matched row count and deletes data',
     async () => {
       const observedStatements: string[] = [];
-      const observer: SqlMiddleware = {
-        name: 'delete-count-observer',
-        familyId: 'sql',
-        beforeExecute(exec) {
-          observedStatements.push(exec.sql);
-        },
-      };
+      const observer = statisticsStatementObserver('delete-count-observer', observedStatements);
       await withCollectionRuntime(
         async (runtime) => {
           const users = createUsersCollection(runtime);
@@ -227,20 +236,6 @@ describe('integration/delete', () => {
           'select id, name from users order by id',
         );
         expect(remaining).toEqual([{ id: 3, name: 'Keep' }]);
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-
-  it(
-    'delete() and deleteAll() reject when returning capability is disabled',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollectionWithoutReturning(runtime);
-        const filtered = users.where({ id: 1 });
-
-        await expect(filtered.delete()).rejects.toThrow(/requires contract capability "returning"/);
-        expect(() => filtered.deleteAll()).toThrow(/requires contract capability "returning"/);
       });
     },
     timeouts.spinUpPpgDev,

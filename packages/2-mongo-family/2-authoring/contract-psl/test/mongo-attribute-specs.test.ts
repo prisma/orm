@@ -1,62 +1,74 @@
+import type { ContractSourceContext } from '@internal/config/config-types';
+import { emptyCodecLookup } from '@internal/framework-components/codec';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import type {
   ArgType,
   AttributeCtx,
   AttributeSpecContext,
   FieldAttributeSpecContext,
-  FuncCallSig,
-  ModelAttributeCtx,
   ModelSymbol,
   Param,
+  ParsedWrittenScalar,
   ResolvedEntityReference,
+  SymbolTable,
 } from '@internal/psl-parser';
-import { buildSymbolTable, createPslDiagnosticCollector } from '@internal/psl-parser';
+import {
+  buildSymbolTable,
+  createBinder,
+  createPslDiagnosticCollector,
+  EMPTY_DATA_TYPES,
+} from '@internal/psl-parser';
+import type { PslSources } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
-  findModelAttributeNode,
+  describeUnsupportedMongoAttribute,
   interpretModelAttribute,
   mongoAttributeSpecs,
 } from '../src/mongo-attribute-specs';
 
-interface ListMetadata<T, Ctx extends AttributeCtx> extends ArgType<readonly T[], Ctx> {
-  readonly kind: 'list';
-  readonly of: ArgType<T, Ctx>;
-  readonly allowEmpty: boolean;
+function createBinderFor(symbolTable: SymbolTable, sources: PslSources) {
+  const context: ContractSourceContext = {
+    composedExtensions: [],
+    defaultNamespaceId: '__unbound__',
+    composedExtensionContracts: new Map(),
+    authoringContributions: {
+      type: {},
+      entityTypes: {},
+      pslBlockDescriptors: {},
+      modelAttributes: {},
+      attributeSpecs: mongoAttributeSpecs,
+      dataTypes: {},
+    },
+    pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
+    codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
+    controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
+    generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
+    dataTypes: EMPTY_DATA_TYPES,
+    resolvedInputs: [],
+    capabilities: {},
+  };
+  return createBinder({ symbolTable, sources, context }).binder;
 }
 
-interface RecordMetadata<T, Ctx extends AttributeCtx> extends ArgType<Record<string, T>, Ctx> {
-  readonly kind: 'record';
-  readonly of: ArgType<T, Ctx>;
-}
-
-interface OneOfMetadata<Ctx extends AttributeCtx> extends ArgType<unknown, Ctx> {
-  readonly kind: 'oneOf';
-  readonly alternatives: readonly ArgType<unknown, Ctx>[];
-}
-
-interface FuncCallMetadata<Ctx extends AttributeCtx> extends ArgType<unknown, Ctx> {
-  readonly kind: 'funcCall';
-  readonly name: string;
-  readonly signature: FuncCallSig;
-}
-
-function listMetadata<T, Ctx extends AttributeCtx>(
-  type: ArgType<unknown, Ctx>,
-): ListMetadata<T, Ctx> {
+function listMetadata<Ctx extends AttributeCtx>(type: ArgType<unknown, Ctx>) {
   if (type.kind !== 'list') throw new Error('argument is a list');
-  return type as unknown as ListMetadata<T, Ctx>;
+  return type;
 }
 
-function recordMetadata<T, Ctx extends AttributeCtx>(
-  type: ArgType<unknown, Ctx>,
-): RecordMetadata<T, Ctx> {
+function recordMetadata<Ctx extends AttributeCtx>(type: ArgType<unknown, Ctx>) {
   if (type.kind !== 'record') throw new Error('argument is a record');
-  return type as unknown as RecordMetadata<T, Ctx>;
+  return type;
 }
 
-function oneOfMetadata<Ctx extends AttributeCtx>(type: ArgType<unknown, Ctx>): OneOfMetadata<Ctx> {
+function oneOfMetadata<Ctx extends AttributeCtx>(type: ArgType<unknown, Ctx>) {
   if (type.kind !== 'oneOf') throw new Error('argument is oneOf');
-  return type as unknown as OneOfMetadata<Ctx>;
+  return type;
+}
+
+function funcCallMetadata<Ctx extends AttributeCtx>(type: ArgType<unknown, Ctx> | undefined) {
+  if (type?.kind !== 'funcCall') throw new Error('argument is a function call');
+  return type;
 }
 
 function positionalType<Ctx extends AttributeCtx>(spec: {
@@ -87,40 +99,42 @@ function contexts(): { model: AttributeSpecContext; field: FieldAttributeSpecCon
     'test.prisma',
   );
   const { symbolTable } = buildSymbolTable({
+    defaultNamespaceId: '__unbound__',
     documents: [document],
     sources,
-    pslBlockDescriptors: {},
   });
-  const model = symbolTable.topLevel.models['Widget'];
+  const model = symbolTable.defaultNamespace.models['Widget'];
   const field = model?.fields['name'];
   if (!model || !field) throw new Error('fixture declares Widget.name');
   const modelContext: AttributeSpecContext = {
     symbols: symbolTable,
     model,
-    controlMutationDefaults: {
-      dataTypeEntries: {},
-      defaultFunctionRegistry: new Map(),
-    },
+    defaultFunctionRegistry: new Map(),
+    generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
+    dataTypes: EMPTY_DATA_TYPES,
   };
-  return { model: modelContext, field: { ...modelContext, field } };
+  return {
+    model: modelContext,
+    field: { ...modelContext, field, typeResolution: undefined, contributedType: undefined },
+  };
 }
 
 describe('mongoAttributeSpecs', () => {
   it('returns the selected forward base declaration instead of a name', () => {
     const { document, sources } = parse(
       `model Variant { @@base(Base, "v") }
-model Other { id Int }
+model Other { id Int32 }
 model Base { id String }`,
       'test.prisma',
     );
     const { symbolTable } = buildSymbolTable({
+      defaultNamespaceId: '__unbound__',
       documents: [document],
       sources,
-      pslBlockDescriptors: {},
     });
-    const model = symbolTable.topLevel.models['Variant'];
+    const model = symbolTable.defaultNamespace.models['Variant'];
     if (!model) throw new Error('missing variant');
-    const node = findModelAttributeNode(model, 'base');
+    const node = model.attributes.find((attr) => attr.name === 'base')?.node;
     if (!node) throw new Error('missing base');
     const diagnostics = createPslDiagnosticCollector(sources);
     const value = interpretModelAttribute({
@@ -129,15 +143,16 @@ model Base { id String }`,
       spec: mongoAttributeSpecs.model.base(),
       model,
       sources,
+      binder: createBinderFor(symbolTable, sources),
       diagnostics,
     });
     expectTypeOf(value).toEqualTypeOf<
-      { base: ResolvedEntityReference<ModelSymbol>; value: string } | undefined
+      { base: ResolvedEntityReference<ModelSymbol>; value: ParsedWrittenScalar } | undefined
     >();
     expect(diagnostics.toExternal()).toEqual([]);
-    expect(value?.base.declaration).toBe(symbolTable.topLevel.models['Base']);
-    expect(value?.base.namespace).toBeUndefined();
-    expect(value?.value).toBe('v');
+    expect(value?.base.declaration).toBe(symbolTable.defaultNamespace.models['Base']);
+    expect(value?.base.namespace).toBe(symbolTable.defaultNamespace);
+    expect(value?.value.written).toEqual({ kind: 'string', text: 'v' });
   });
   it('registers every Mongo built-in at its level', () => {
     expect({
@@ -145,7 +160,7 @@ model Base { id String }`,
       field: Object.keys(mongoAttributeSpecs.field).sort(),
     }).toEqual({
       model: ['base', 'discriminator', 'index', 'map', 'textIndex', 'unique'],
-      field: ['id', 'map', 'relation', 'unique'],
+      field: ['id', 'map', 'onCreate', 'onUpdate', 'relation', 'unique'],
     });
   });
 
@@ -192,16 +207,14 @@ model Base { id String }`,
     });
   });
 
-  it('exposes model-specific index field alternatives from the actual factory', () => {
+  it('exposes stable index field alternatives from the actual factory', () => {
     const { model } = contexts();
-    const fields = listMetadata<string | unknown, ModelAttributeCtx>(
-      positionalType(mongoAttributeSpecs.model.index(model)),
-    );
+    const fields = listMetadata(positionalType(mongoAttributeSpecs.model.index(model)));
     const element = oneOfMetadata(fields.of);
 
     expect(fields).toMatchObject({ kind: 'list', allowEmpty: false });
     expect(element.alternatives[0]).toMatchObject({ kind: 'fieldRef' });
-    const wildcard = element.alternatives[1] as FuncCallMetadata<ModelAttributeCtx>;
+    const wildcard = funcCallMetadata(element.alternatives[1]);
     expect(wildcard).toMatchObject({ kind: 'funcCall', name: 'wildcard' });
     expect(wildcard.signature.positional?.[0]).toMatchObject({ key: 'scope' });
     expect(wildcard.signature.positional?.[0]?.type).toMatchObject({
@@ -209,14 +222,20 @@ model Base { id String }`,
       name: undefined,
       optional: true,
     });
-    expect(
-      element.alternatives.slice(2).map((alt) => (alt as FuncCallMetadata<ModelAttributeCtx>).name),
-    ).toEqual(['id', 'name']);
+    expect(element.alternatives.slice(2).map((alt) => funcCallMetadata(alt).name)).toEqual([
+      'sort',
+    ]);
 
-    const nameField = element.alternatives[3] as FuncCallMetadata<ModelAttributeCtx>;
-    const sort = nameField.signature.named?.['sort'];
-    if (sort === undefined) throw new Error('field sort argument is present');
-    expect(nameField.signature.documentation).toBe(
+    const sortFunction = funcCallMetadata(element.alternatives[2]);
+    expect(sortFunction.signature.positional?.[0]).toMatchObject({
+      key: 'field',
+      type: { kind: 'fieldRef' },
+    });
+    const sort = sortFunction.signature.positional?.[1];
+    if (sort === undefined) throw new Error('sort direction argument is present');
+    expect(sort.key).toBe('direction');
+    expect(sortFunction.signature.named).toBeUndefined();
+    expect(sortFunction.signature.documentation).toBe(
       'Selects an index field with an explicit sort direction.',
     );
     expect(sort.documentation).toBe('The index order for this field: `Asc` or `Desc`.');
@@ -239,13 +258,11 @@ model Base { id String }`,
       expect.objectContaining({ kind: 'str', value: 'hashed' }),
     ]);
 
-    const include = listMetadata<string, ModelAttributeCtx>(
-      namedType(mongoAttributeSpecs.model.index(model), 'include'),
-    );
+    const include = listMetadata(namedType(mongoAttributeSpecs.model.index(model), 'include'));
     expect(include).toMatchObject({ kind: 'list', optional: true });
     expect(include.of).toMatchObject({ kind: 'str', value: undefined });
 
-    const weights = recordMetadata<number, ModelAttributeCtx>(
+    const weights = recordMetadata(
       namedType(mongoAttributeSpecs.model.textIndex(model), 'weights'),
     );
     expect(weights).toMatchObject({ kind: 'record', optional: true });

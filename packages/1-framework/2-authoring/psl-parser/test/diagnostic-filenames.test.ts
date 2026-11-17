@@ -29,7 +29,7 @@ describe('diagnostic filenames', () => {
     const { diagnostics } = buildSymbolTable({
       documents: [first.document, second.document],
       sources,
-      pslBlockDescriptors: {},
+      defaultNamespaceId: 'public',
     });
     expect(diagnostics).toEqual([
       {

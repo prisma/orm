@@ -4,9 +4,9 @@ End-to-end example of Prisma 8 with MongoDB, demonstrating the full **authoring 
 
 ## What it shows
 
-- PSL schema (`prisma/contract.prisma`) as the authoring surface for MongoDB
+- PSL schema (`src/contract.prisma`) as the authoring surface for MongoDB
 - Contract emission via `prisma.config.ts` and the CLI (`prisma contract emit`)
-- Runtime query execution using `mongoOrm()` with the emitted contract
+- Runtime query execution through the `mongo()` client with the emitted contract
 - Reference relation resolution via `$lookup` (Post → User)
 - Integration tests against an in-memory MongoDB replica set
 
@@ -18,7 +18,7 @@ The demo uses a blog schema with two models and a reference relation:
 User (id, name, email, bio?) ←1:N→ Post (id, title, content, authorId, createdAt)
 ```
 
-See [`prisma/contract.prisma`](prisma/contract.prisma).
+See [`src/contract.prisma`](src/contract.prisma).
 
 ## Quick start
 
@@ -70,9 +70,9 @@ This creates the unique index on `users.email` and records the migration in the 
 
 ## Cross-family caching
 
-`src/db.ts` wires `@internal/middleware-cache` into the Mongo runtime — the same middleware used by `examples/prisma-8-demo` against Postgres. The package depends only on `@internal/framework-components/runtime`; cache keys come from `RuntimeMiddlewareContext.contentHash(exec)`, which `MongoRuntimeImpl` populates the same way `SqlRuntime` does, so the middleware works against Mongo out of the box.
+`src/db.ts` wires `@internal/middleware-cache` into the Mongo runtime — the same middleware used by `examples/prisma-8-demo` against Postgres. The package depends only on `@internal/framework-components/runtime`; cache keys come from `ActivityContext.contentHash(exec)`, which `MongoRuntimeImpl` populates the same way `SqlRuntime` does, so the middleware works against Mongo out of the box.
 
-The cache is **opt-in per query**: it acts only on plans whose `meta.annotations` carry a `cacheAnnotation` payload with a `ttl`. `scripts/cache-demo.ts` builds an aggregation plan with `mongoQuery`, attaches `cacheAnnotation({ ttl })` to `plan.meta.annotations.cache`, runs the same plan twice, and prints the per-call latency so the cache hit is visible:
+The cache is **opt-in per query**: it acts only on plans whose `meta.annotations` carry a `cacheAnnotation`, and the default store keeps entries for 60 seconds. `scripts/cache-demo.ts` builds an aggregation plan with `mongoQuery`, attaches `cacheAnnotation({})` to `plan.meta.annotations.cache`, runs the same plan twice, and prints the per-call latency so the cache hit is visible:
 
 ```bash
 pnpm cache-demo
@@ -93,31 +93,31 @@ The Mongo query builder doesn't yet expose a chainable `.annotate(...)` surface 
 
 ## How emission works
 
-`prisma.config.ts` wires the Mongo family, target, and adapter descriptors together with a `mongoContract()` provider. Running `pnpm emit` invokes the CLI's `contract emit` command, which:
+`prisma.config.ts` calls `defineConfig()` from `@prisma/orm-mongo/config` with the schema path and the connection string; it wires the Mongo family, target, adapter and driver and picks the PSL contract source from the `.prisma` extension. Running `pnpm emit` invokes the CLI's `contract emit` command, which:
 
 1. Loads `prisma.config.ts` and creates a control stack
-2. Reads and parses `prisma/contract.prisma` via the `mongoContract()` provider
+2. Reads and parses `src/contract.prisma` through the PSL contract source
 3. Interprets the parsed document into a `Contract`
 4. Emits `src/contract.json` and `src/contract.d.ts`
 
 ## How the runtime works
 
-`src/db.ts` composes the Mongo runtime stack:
+`src/db.ts` validates the emitted `contract.json` and types it with `Contract` from `src/contract.d.ts` through `contractFromJson<Contract>(contractJson)` from `@prisma/orm-mongo/static`. It then creates the client with `mongo({ contract, url, dbName, middleware })` from `@prisma/orm-mongo/runtime`, which:
 
-1. Validates the emitted contract with `validateMongoContract()`
-2. Creates a `MongoAdapter` and `MongoDriver`
-3. Creates a `MongoRuntime` for query execution
-4. Creates an ORM surface via `mongoOrm()` with typed collection accessors (`orm.users`, `orm.posts`)
+1. Builds the execution stack from the Mongo target, adapter and driver, and the runtime that executes queries (with the cache middleware)
+2. Exposes the ORM with typed collection accessors (`db.orm.users`, `db.orm.posts`), the query builder (`db.query`) and the enums (`db.enums`)
+
+`mongo()` also fills generated fields such as `temporal.CreatedAt` on write. If you build the ORM yourself with `mongoOrm()` rather than through `mongo()`, pass the execution context and the runtime, as with the SQL `orm()`: `mongoOrm({ context, runtime })`. The ORM fills generated fields such as `temporal.CreatedAt` through the context, and checks a written enum value against the contract's enums.
 
 ## Key files
 
 | File                            | Purpose                                            |
 | ------------------------------- | -------------------------------------------------- |
-| `prisma/contract.prisma`       | PSL schema (authoring surface)                     |
-| `prisma.config.ts`        | CLI config (family + target + adapter + driver + contract provider) |
+| `src/contract.prisma`          | PSL schema (authoring surface)                     |
+| `prisma.config.ts`             | CLI config (`defineConfig()` with the schema path and connection string) |
 | `src/contract.json`            | Emitted contract with hand-added indexes (see note above) |
 | `src/contract.d.ts`            | Emitted type definitions (generated, do not edit)   |
-| `src/db.ts`                    | Runtime composition (adapter → driver → runtime → ORM) |
+| `src/db.ts`                    | Client creation with `mongo()` and the cache middleware |
 | `.env.example`                 | Environment variable template (`MONGODB_URL`)       |
 | `test/blog.test.ts`            | Integration tests using `mongodb-memory-server`    |
 
@@ -128,6 +128,6 @@ The Mongo query builder doesn't yet expose a chainable `.annotate(...)` surface 
 | Target        | PostgreSQL                                  | MongoDB                                     |
 | Schema        | `schema.prisma` (PSL)                       | `contract.prisma` (PSL)                     |
 | Emission      | CLI (`prisma contract emit`)           | CLI (`prisma contract emit`)           |
-| Runtime       | `postgres()` one-liner                      | `createMongoAdapter()` + `createMongoDriver()` + `createMongoRuntime()` + `mongoOrm()` |
+| Runtime       | `postgres()` one-liner                      | `mongo()` one-liner                         |
 | Relations     | SQL joins                                   | `$lookup` aggregation pipeline              |
 | Tests         | Requires running PostgreSQL                 | Uses `mongodb-memory-server` (no external DB) |

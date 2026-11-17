@@ -6,7 +6,7 @@
 model User {
   id    ObjectId @id @map("_id")
   email String   @unique
-  age   Int
+  age   Int32
   name  String?
   posts Post[]
 
@@ -17,7 +17,7 @@ model Post {
   id        ObjectId @id @map("_id")
   createdAt DateTime
   updatedAt DateTime
-  published Boolean
+  published Bool
   title     String
   content   String?
   authorId  String?

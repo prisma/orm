@@ -5,6 +5,8 @@ const BASE_TIMEOUTS = {
   typeScriptCompilation: 8000,
   coldTransformImport: 30000,
   databaseOperation: 5000,
+  pslRoundTrip: 5000,
+  repeatedScriptRuns: 60000,
   default: 100,
   /**
    * Vitest `testTimeout` / `hookTimeout` when a package uses mostly local I/O
@@ -108,6 +110,22 @@ export const timeouts = {
    */
   get databaseOperation(): number {
     return Math.round(BASE_TIMEOUTS.databaseOperation * getMultiplier());
+  },
+
+  /**
+   * Timeout for a test that prints a contract as PSL, writes the file, and reads it back through the
+   * PSL contract source: several parses and a file round trip, which can pass the package default
+   * on a busy worker.
+   */
+  get pslRoundTrip(): number {
+    return Math.round(BASE_TIMEOUTS.pslRoundTrip * getMultiplier());
+  },
+  /**
+   * Timeout for a test that runs a script in a child process many times, for example once per
+   * point at which a run can be interrupted.
+   */
+  get repeatedScriptRuns(): number {
+    return Math.round(BASE_TIMEOUTS.repeatedScriptRuns * getMultiplier());
   },
 
   /**

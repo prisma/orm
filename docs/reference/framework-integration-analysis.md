@@ -92,7 +92,7 @@ HMR reloads application modules on file changes, re-executing the module that cr
 
 ```typescript
 const globalForDb = globalThis as unknown as { db: ReturnType<typeof createDb> };
-export const db = globalForDb.db ??= createDb({ contractJson, url: process.env['DATABASE_URL']! });
+export const db = globalForDb.db ??= createDb({ contract, url: process.env['DATABASE_URL']! });
 ```
 
 This is framework-agnostic — the same pattern works in every meta-framework.
@@ -126,7 +126,7 @@ Next.js (11.2M downloads/week) and Remix (1.1M) use React Server Components. Thi
 
 - The **ORM client** (`orm()`) is a Proxy that lazily caches Collection instances in a `Map` and holds a reference to the runtime. Each query execution goes through `acquireRuntimeScope()` which borrows a connection, executes, and releases.
 
-- **Mutations** are wrapped in transactions (`withMutationScope()`) — open transaction, execute statements, commit/rollback. Inherently stateful and connection-scoped.
+- **Mutations** of more than one statement run in a transaction that the mutation graph runner opens beneath the call's `orm-call` activity — open transaction, execute statements, commit/rollback. Inherently stateful and connection-scoped.
 
 ### How RSC exposes the statefulness
 
@@ -134,7 +134,7 @@ In RSC, multiple Server Components render **concurrently within the same request
 
 **Reads in parallel Server Components**: Multiple components calling `db.users.all()` and `db.posts.all()` concurrently should be fine — each `acquireRuntimeScope()` borrows and releases a connection independently. The statefulness is scoped to the connection lifetime, not the ORM client instance.
 
-**Server Actions (mutations)**: Run sequentially (one at a time per request in Next.js). Mutations go through `withMutationScope()` which handles transaction lifecycle automatically. Should work, but the runtime's state must be safe for concurrent reads happening alongside.
+**Server Actions (mutations)**: Run sequentially (one at a time per request in Next.js). The mutation graph runner handles the transaction lifecycle of a mutation automatically. Should work, but the runtime's state must be safe for concurrent reads happening alongside.
 
 **Transactions across components**: If a user wants a transaction spanning operations in different Server Components, the current API has no way to express this — and shouldn't. Transactions should be scoped to a single logical operation, not spread across UI components.
 
@@ -252,7 +252,7 @@ const globalForDb = globalThis as unknown as { db: ReturnType<typeof createDb>; 
 // (DRY up the following with a helper like createDevDb())
 const currentHash = contractJson.storageHash;
 if (globalForDb.hash !== currentHash) {
-  globalForDb.db = createDb({ contractJson, url: process.env['DATABASE_URL']! });
+  globalForDb.db = createDb({ contract, url: process.env['DATABASE_URL']! });
   globalForDb.hash = currentHash;
 }
 export const db = globalForDb.db;
@@ -402,7 +402,7 @@ NestJS is the only framework that structurally requires a wrapper package:
 
 ```typescript
 @Module({
-  imports: [PrismaNextModule.forRoot({ contractJson, url: process.env['DATABASE_URL']! })],
+  imports: [PrismaNextModule.forRoot({ contract, url: process.env['DATABASE_URL']! })],
 })
 export class AppModule {}
 
@@ -419,11 +419,12 @@ All non-DI backend frameworks (Express, Fastify, Koa, Hapi) use the same pattern
 
 ```typescript
 import postgres from '@internal/postgres/runtime';
-import type { Contract, TypeMaps } from './contract.d';
+import { contractFromJson } from '@internal/postgres/static';
+import type { Contract } from './contract.d';
 import contractJson from './contract.json' with { type: 'json' };
 
-export const db = postgres<Contract, TypeMaps>({
-  contractJson,
+export const db = postgres({
+  contract: contractFromJson<Contract>(contractJson),
   url: process.env['DATABASE_URL']!,
 });
 ```
@@ -434,7 +435,7 @@ All meta-frameworks in dev use the same `globalThis` pattern:
 
 ```typescript
 const globalForDb = globalThis as unknown as { db: ReturnType<typeof createDb> };
-export const db = globalForDb.db ??= createDb({ contractJson, url: process.env['DATABASE_URL']! });
+export const db = globalForDb.db ??= createDb({ contract, url: process.env['DATABASE_URL']! });
 ```
 
 ---

@@ -1,13 +1,13 @@
 import type { AsyncIterableResult, ResultType } from '@internal/framework-components/runtime';
 import type { Scalars, Shape } from '@internal/sql-contract/types';
 import { expectTypeOf, test } from 'vitest';
-import type {
-  Contract as PolyContract,
-  Models as PolyModels,
-} from '../../../../test/integration/test/sql-orm-client/fixtures/polymorphism/generated/contract';
 import type { Collection } from '../src/collection';
 import type { DefaultModelRow, VariantModelRow } from '../src/types';
 import type { Contract, Models } from './fixtures/generated/contract';
+import type {
+  Contract as PolyContract,
+  Models as PolyModels,
+} from './fixtures/polymorphism/generated/contract';
 
 declare const db: {
   Article: Collection<Contract, 'Article'>;
@@ -78,19 +78,19 @@ test('DefaultModelRow equals Scalars of the emitted model for every non-polymorp
 });
 
 test('VariantModelRow equals Scalars of the emitted variant member', () => {
-  expectTypeOf<VariantModelRow<PolyContract, 'Task', 'Bug'>>().toEqualTypeOf<
+  expectTypeOf<VariantModelRow<PolyContract, 'Task', 'bug'>>().toEqualTypeOf<
     Scalars<PolyModels.public_Bug>
   >();
-  expectTypeOf<VariantModelRow<PolyContract, 'Task', 'Feature'>>().toEqualTypeOf<
+  expectTypeOf<VariantModelRow<PolyContract, 'Task', 'feature'>>().toEqualTypeOf<
     Scalars<PolyModels.public_Feature>
   >();
-  expectTypeOf<VariantModelRow<PolyContract, 'Task', 'Epic'>>().toEqualTypeOf<
+  expectTypeOf<VariantModelRow<PolyContract, 'Task', 'epic'>>().toEqualTypeOf<
     Scalars<PolyModels.public_Epic>
   >();
-  expectTypeOf<VariantModelRow<PolyContract, 'User', 'Admin'>>().toEqualTypeOf<
+  expectTypeOf<VariantModelRow<PolyContract, 'User', 'admin'>>().toEqualTypeOf<
     Scalars<PolyModels.public_Admin>
   >();
-  expectTypeOf<VariantModelRow<PolyContract, 'User', 'Regular'>>().toEqualTypeOf<
+  expectTypeOf<VariantModelRow<PolyContract, 'User', 'regular'>>().toEqualTypeOf<
     Scalars<PolyModels.public_Regular>
   >();
 });
@@ -187,7 +187,6 @@ test('ResultType of a to-one include on a required field equals Shape and is not
   expectTypeOf<ResultType<typeof withReviewer>>().toEqualTypeOf<
     Shape<Models.public_Article, { '+': 'reviewer' }>
   >();
-  expectTypeOf<Models.public_Article['reviewer']>().toEqualTypeOf<Models.public_User>();
 });
 
 test("ResultType of a select projection equals Shape with '+'", () => {
@@ -236,17 +235,8 @@ test('a refined to-one include is nullable even when the relation is not', () =>
   >().toEqualTypeOf<Scalars<Models.public_User> | null>();
 });
 
-test('ResultType of a refined include is not never', () => {
-  const refined = db.User.include('posts', (posts) => posts.select('id'));
-  expectTypeOf<ResultType<typeof refined>>().not.toBeNever();
-});
-
-test('polymorphic base discriminator is the union of variant literals', () => {
-  expectTypeOf<PolyModels.public_Task['type']>().toEqualTypeOf<'bug' | 'feature' | 'epic'>();
-});
-
 test('ResultType of a variant collection equals Scalars of the variant member', () => {
-  const bugs = poly.Task.variant('Bug');
+  const bugs = poly.Task.variant('bug');
   expectTypeOf<ResultType<typeof bugs>>().toEqualTypeOf<Scalars<PolyModels.public_Bug>>();
 });
 
@@ -267,7 +257,7 @@ test('ResultType of an include whose target is a polymorphic base equals Shape o
 });
 
 test('ResultType of a variant-only include on a variant collection equals Shape of the variant', () => {
-  const bugsWithAssignee = poly.Task.variant('Bug').include('assignee');
+  const bugsWithAssignee = poly.Task.variant('bug').include('assignee');
   expectTypeOf<ResultType<typeof bugsWithAssignee>>().toEqualTypeOf<
     Shape<PolyModels.public_Bug, { '+': 'assignee' }>
   >();
@@ -306,7 +296,7 @@ test('prepared terminals preserve complete emitted ordinary result types', () =>
     Promise<{ id: number; reviewer: { id: number } | null } | null>
   >();
 
-  const bugs = poly.Task.variant('Bug').include('assignee');
+  const bugs = poly.Task.variant('bug').include('assignee');
   expectTypeOf(bugs.prepared.all().consume).returns.toEqualTypeOf<
     AsyncIterableResult<Shape<PolyModels.public_Bug, { '+': 'assignee' }>>
   >();

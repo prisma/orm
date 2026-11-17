@@ -46,12 +46,12 @@ export class SyntaxToken implements Token {
 
   /** The sibling element immediately after this token within its parent. */
   get nextSiblingOrToken(): SyntaxElement | undefined {
-    return childAt(this.parent, this.index + 1);
+    return this.parent.childAt(this.index + 1);
   }
 
   /** The sibling element immediately before this token within its parent. */
   get prevSiblingOrToken(): SyntaxElement | undefined {
-    return childAt(this.parent, this.index - 1);
+    return this.parent.childAt(this.index - 1);
   }
 
   /** The next token in document order, crossing node boundaries. */
@@ -143,12 +143,52 @@ export class SyntaxNode {
   readonly parent: SyntaxNode | undefined;
   /** Position within the parent's children, enabling O(1) sibling navigation without rescanning the green layer. */
   readonly index: number;
+  #childSlots: (SyntaxElement | undefined)[] | undefined;
+  #childOffsets: number[] | undefined;
 
   constructor(green: GreenNode, offset: number, parent: SyntaxNode | undefined, index: number) {
     this.green = green;
     this.offset = offset;
     this.parent = parent;
     this.index = index;
+  }
+
+  #slots(): (SyntaxElement | undefined)[] {
+    let slots = this.#childSlots;
+    if (slots === undefined) {
+      slots = new Array<SyntaxElement | undefined>(this.green.children.length).fill(undefined);
+      this.#childSlots = slots;
+    }
+    return slots;
+  }
+
+  #childOffset(index: number): number {
+    let offsets = this.#childOffsets;
+    if (offsets === undefined) {
+      offsets = [];
+      this.#childOffsets = offsets;
+    }
+    for (let known = offsets.length; known <= index; known++) {
+      const previousOffset = offsets[known - 1];
+      const previousChild = this.green.children[known - 1];
+      offsets.push(
+        previousOffset === undefined || previousChild === undefined
+          ? this.offset
+          : previousOffset + elementTextLength(previousChild),
+      );
+    }
+    return offsets[index] ?? this.offset;
+  }
+
+  childAt(index: number): SyntaxElement | undefined {
+    const green = this.green.children[index];
+    if (green === undefined) return undefined;
+    const slots = this.#slots();
+    const cached = slots[index];
+    if (cached !== undefined) return cached;
+    const created = wrapElement(green, this.#childOffset(index), this, index);
+    slots[index] = created;
+    return created;
   }
 
   get kind(): SyntaxKind {
@@ -173,21 +213,19 @@ export class SyntaxNode {
   }
 
   get firstChild(): SyntaxElement | undefined {
-    return childAt(this, 0);
+    return this.childAt(0);
   }
 
   get lastChild(): SyntaxElement | undefined {
-    const len = this.green.children.length;
-    if (len === 0) return undefined;
-    return childAt(this, len - 1);
+    return this.childAt(this.green.children.length - 1);
   }
 
   get nextSibling(): SyntaxElement | undefined {
-    return this.parent === undefined ? undefined : childAt(this.parent, this.index + 1);
+    return this.parent?.childAt(this.index + 1);
   }
 
   get prevSibling(): SyntaxElement | undefined {
-    return this.parent === undefined ? undefined : childAt(this.parent, this.index - 1);
+    return this.parent?.childAt(this.index - 1);
   }
 
   /** The sibling element immediately after this node within its parent. */
@@ -211,12 +249,10 @@ export class SyntaxNode {
   }
 
   *children(): Iterable<SyntaxElement> {
-    let offset = this.offset;
-    let index = 0;
-    for (const child of this.green.children) {
-      yield wrapElement(child, offset, this, index);
-      offset += elementTextLength(child);
-      index++;
+    const count = this.green.children.length;
+    for (let index = 0; index < count; index++) {
+      const child = this.childAt(index);
+      if (child !== undefined) yield child;
     }
   }
 
@@ -389,7 +425,7 @@ function climbingNext(el: SyntaxElement): SyntaxElement | undefined {
   for (;;) {
     const parent = current.parent;
     if (parent === undefined) return undefined;
-    const sibling = childAt(parent, current.index + 1);
+    const sibling = parent.childAt(current.index + 1);
     if (sibling !== undefined) return sibling;
     current = parent;
   }
@@ -400,7 +436,7 @@ function climbingPrev(el: SyntaxElement): SyntaxElement | undefined {
   for (;;) {
     const parent = current.parent;
     if (parent === undefined) return undefined;
-    const sibling = childAt(parent, current.index - 1);
+    const sibling = parent.childAt(current.index - 1);
     if (sibling !== undefined) return sibling;
     current = parent;
   }
@@ -416,20 +452,6 @@ function wrapElement(
     return new SyntaxToken(green, offset, parent, index);
   }
   return new SyntaxNode(green, offset, parent, index);
-}
-
-function childAt(node: SyntaxNode, index: number): SyntaxElement | undefined {
-  const children = node.green.children;
-  const target = children[index];
-  if (target === undefined) return undefined;
-  let offset = node.offset;
-  for (let i = 0; i < index; i++) {
-    const child = children[i];
-    if (child !== undefined) {
-      offset += elementTextLength(child);
-    }
-  }
-  return wrapElement(target, offset, node, index);
 }
 
 export function createSyntaxTree(green: GreenNode): SyntaxNode {

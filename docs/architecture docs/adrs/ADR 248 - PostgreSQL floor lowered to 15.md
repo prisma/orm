@@ -10,7 +10,7 @@
 
 The minimum supported PostgreSQL server version is **15** (previously 17).
 
-The policy in ADR 222 is unchanged: the floor is a hard floor, declared in `package.json#prismaNext.minServerVersion` on `@internal/target-postgres`, mirrored in the CLI's `MIN_SERVER_VERSION` constant, and guarded by a drift test. This ADR changes the value and corrects the record of how the floor is enforced.
+The policy in ADR 222 is unchanged: the floor is a hard floor, declared as `POSTGRES_MIN_SERVER_VERSION` in `@internal/target-postgres`, mirrored in the CLI's `MIN_SERVER_VERSION` constant, and guarded by a drift test. This ADR changes the value and corrects the record of how the floor is enforced.
 
 ## Context
 
@@ -56,8 +56,8 @@ If any of these becomes worth emitting, the path is per-server capability gating
 
 ## Enforcement
 
-- Source of truth: `packages/3-targets/3-targets/postgres/package.json` → `prismaNext.minServerVersion: "15"`.
-- CLI mirror: `MIN_SERVER_VERSION.postgres` in `packages/1-framework/3-tooling/cli/src/commands/init/templates/env.ts`; the drift test in `tsconfig-env.test.ts` asserts the two match.
+- Source of truth: `POSTGRES_MIN_SERVER_VERSION = '15'` in `packages/3-targets/postgres/1-target/src/core/server-version.ts`, exported from `@internal/target-postgres/server-version`.
+- CLI mirror: `MIN_SERVER_VERSION.postgres` in `packages/1-framework/3-tooling/cli/src/commands/init/templates/env.ts`; the integration test `test/integration/test/cli.init-min-server-version.test.ts` asserts the two match.
 - CI proves the floor: the `postgres:15` service containers in `.github/workflows/ci.yml`. **When bumping the floor, update these image tags** — this replaces ADR 222's step 3, which pointed only at `docker-compose.yaml`.
 - Local dev (`docker-compose.yaml`) also runs the floor version (`postgres:15-alpine`).
 - Newer majors get incidental coverage: PGlite embeds Postgres 17.5 (via `@prisma/dev`) and 18.3 (driver devDependency); the Supabase contract fixture pins `supabase/postgres:17.6`.

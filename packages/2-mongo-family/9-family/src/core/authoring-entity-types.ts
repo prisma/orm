@@ -1,22 +1,36 @@
-import type { JsonValue } from '@internal/contract/types';
 import {
   type AuthoringEntityContext,
   type AuthoringEntityTypeDescriptor,
   type AuthoringEntityTypeNamespace,
   type AuthoringPslBlockDescriptorNamespace,
-  type PslExtensionBlock,
+  type ParsedPslExtensionBlock,
+  readEnumBlockMembers,
   resolveEnumCodecId,
 } from '@internal/framework-components/authoring';
+import { enumRefusalOf } from '@internal/framework-components/codec';
 import { type EnumTypeHandle, enumType } from '@internal/mongo-contract-ts/contract-builder';
-import { blockAttribute, str } from '@internal/psl-parser';
-import { blindCast } from '@internal/utils/casts';
+import type { InferBlock, PslBlockSpecDescriptor } from '@internal/psl-parser';
+import { blockAttribute, enumMemberValue, mapBlock, str } from '@internal/psl-parser';
+
+export function mongoFamilyEnumSpec() {
+  return mapBlock({
+    value: {
+      type: enumMemberValue(),
+      documentation:
+        "The member's value, written as a value of the enum's data type; a bare member stores its own name.",
+    },
+    allowBare: true,
+  });
+}
+
+type EnumBlockValues = InferBlock<ReturnType<typeof mongoFamilyEnumSpec>>;
 
 export const mongoFamilyEnumEntityDescriptor = {
   kind: 'entity' as const,
   discriminator: 'enum',
   output: {
     factory: (
-      block: PslExtensionBlock,
+      block: ParsedPslExtensionBlock<EnumBlockValues>,
       ctx: AuthoringEntityContext,
     ): EnumTypeHandle | undefined => {
       const sourceId = ctx.sourceId ?? 'unknown';
@@ -28,8 +42,8 @@ export const mongoFamilyEnumEntityDescriptor = {
       }
       const { codecId, codecSpan } = resolved;
 
-      const nativeType = ctx.codecLookup?.targetTypesFor(codecId)?.[0];
-      if (nativeType === undefined) {
+      const descriptor = ctx.codecLookup.descriptorFor(codecId);
+      if (descriptor === undefined) {
         diagnostics?.push({
           code: 'PSL_EXTENSION_INVALID_VALUE',
           message: `enum "${block.name}" @@type references unknown codec "${codecId}"`,
@@ -38,102 +52,32 @@ export const mongoFamilyEnumEntityDescriptor = {
         });
         return undefined;
       }
-
-      const codec = ctx.codecLookup?.get(codecId);
-      if (codec === undefined) {
+      const enumRefusal = enumRefusalOf(descriptor);
+      if (enumRefusal !== undefined) {
         diagnostics?.push({
           code: 'PSL_EXTENSION_INVALID_VALUE',
-          message: `enum "${block.name}" @@type codec "${codecId}" resolves in targetTypesFor but is absent from codecLookup.get`,
+          message: `enum "${block.name}" cannot use the codec "${codecId}". ${enumRefusal}`,
           sourceId,
           span: codecSpan,
         });
         return undefined;
       }
 
-      const seenValues = new Set<string>();
-      const members: { name: string; value: unknown }[] = [];
-      let memberError = false;
-
-      for (const [memberName, paramValue] of Object.entries(block.parameters)) {
-        let value: unknown;
-        if (paramValue.kind === 'bare') {
-          try {
-            value = codec.decodeJson(memberName);
-          } catch {
-            diagnostics?.push({
-              code: 'PSL_ENUM_BARE_MEMBER_NON_STRING_CODEC',
-              message: `enum "${block.name}" member "${memberName}" has no value and codec "${codecId}" does not accept a bare name as input`,
-              sourceId,
-              span: paramValue.span,
-            });
-            memberError = true;
-            continue;
-          }
-        } else if (paramValue.kind === 'value') {
-          let jsonValue: unknown;
-          try {
-            jsonValue = JSON.parse(paramValue.raw);
-          } catch {
-            diagnostics?.push({
-              code: 'PSL_EXTENSION_INVALID_VALUE',
-              message: `enum "${block.name}" member "${memberName}" value "${paramValue.raw}" is not valid JSON`,
-              sourceId,
-              span: paramValue.span,
-            });
-            memberError = true;
-            continue;
-          }
-          try {
-            value = codec.decodeJson(
-              blindCast<JsonValue, 'JSON.parse returns a JsonValue-compatible value'>(jsonValue),
-            );
-          } catch (err) {
-            const reason = err instanceof Error ? err.message : String(err);
-            diagnostics?.push({
-              code: 'PSL_EXTENSION_INVALID_VALUE',
-              message: `enum "${block.name}" member "${memberName}" was rejected by codec "${codecId}": ${reason}`,
-              sourceId,
-              span: paramValue.span,
-            });
-            memberError = true;
-            continue;
-          }
-        } else {
-          continue;
-        }
-
-        const valueKey = String(value);
-        if (seenValues.has(valueKey)) {
-          diagnostics?.push({
-            code: 'PSL_ENUM_DUPLICATE_MEMBER_VALUE',
-            message: `enum "${block.name}": duplicate member value "${valueKey}"`,
-            sourceId,
-            span: paramValue.span,
-          });
-          memberError = true;
-          continue;
-        }
-        seenValues.add(valueKey);
-        members.push({ name: memberName, value });
-      }
-
-      if (memberError) return undefined;
-
-      if (members.length === 0) {
+      const codec = ctx.codecLookup.get(codecId);
+      if (codec === undefined) {
         diagnostics?.push({
-          code: 'PSL_ENUM_MISSING_TYPE',
-          message: `enum "${block.name}" must have at least one member`,
+          code: 'PSL_EXTENSION_INVALID_VALUE',
+          message: `enum "${block.name}" @@type codec "${codecId}" is registered but codecLookup.get has no codec for it`,
           sourceId,
-          span: block.span,
+          span: codecSpan,
         });
         return undefined;
       }
 
-      return enumType(
-        block.name,
-        { codecId, nativeType },
-        ...members.map((m) => ({ name: m.name, value: m.value })),
-      );
+      const members = readEnumBlockMembers(block, codecId, codec, ctx);
+      if (members === undefined) return undefined;
+
+      return enumType(block.name, { codecId }, ...members);
     },
   },
 } satisfies AuthoringEntityTypeDescriptor;
@@ -161,8 +105,7 @@ export const mongoFamilyPslBlockDescriptors = {
       'Defines an enum with named values and an inferred or explicitly selected storage codec.',
     discriminator: 'enum',
     name: { required: true },
-    parameters: {},
-    variadicParameters: true,
+    spec: mongoFamilyEnumSpec,
     attributes: { type: () => enumTypeBlockAttribute },
-  },
+  } satisfies PslBlockSpecDescriptor,
 } as const satisfies AuthoringPslBlockDescriptorNamespace;

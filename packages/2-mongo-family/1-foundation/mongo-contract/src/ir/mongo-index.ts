@@ -9,6 +9,7 @@ import type { MongoIndexKey } from '../contract-types';
  * straight to `new`.
  */
 export interface MongoIndexInput {
+  readonly name: string;
   readonly keys: ReadonlyArray<MongoIndexKey>;
   readonly unique?: boolean;
   readonly sparse?: boolean;
@@ -36,6 +37,8 @@ export interface MongoIndexInput {
  */
 export class MongoIndex extends IRNodeBase {
   readonly kind = 'mongo-index' as const;
+  /** The name MongoDB stores the index under. */
+  readonly name: string;
   readonly keys: ReadonlyArray<MongoIndexKey>;
   declare readonly unique?: boolean;
   declare readonly sparse?: boolean;
@@ -49,6 +52,7 @@ export class MongoIndex extends IRNodeBase {
 
   constructor(input: MongoIndexInput) {
     super();
+    this.name = input.name;
     this.keys = input.keys;
     if (input.unique !== undefined) this.unique = input.unique;
     if (input.sparse !== undefined) this.sparse = input.sparse;

@@ -1,4 +1,3 @@
-import type { Char } from '@internal/target-postgres/codec-types';
 import { describe, expect, it } from 'vitest';
 import { setupIntegrationTest, timeouts } from './setup';
 
@@ -22,7 +21,7 @@ describe('integration: mutation defaults', { timeout: timeouts.databaseOperation
   });
 
   it('INSERT respects user-provided value over execution default', async () => {
-    const explicitId = '00000000-0000-4000-8000-000000000001' as Char<36>;
+    const explicitId = '00000000-0000-4000-8000-000000000001';
     const row = await runtime()
       .query(
         db()

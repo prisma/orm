@@ -1,0 +1,141 @@
+import postgresAdapterDescriptor from '@internal/adapter-postgres/control';
+import { type Contract, coreHash, profileHash } from '@internal/contract/types';
+import type { SqlMigrationPlanOperation } from '@internal/family-sql/control';
+import type { DataType } from '@internal/framework-components/codec';
+import {
+  APP_SPACE_ID,
+  type MigrationOperationPolicy,
+} from '@internal/framework-components/control';
+import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { SqlStorage } from '@internal/sql-contract/types';
+import type { SqlColumnIRInput } from '@internal/sql-schema-ir/types';
+import postgresTargetDescriptor from '@internal/target-postgres/control';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
+import { createPostgresMigrationPlanner } from '@internal/target-postgres/planner';
+import type { PostgresPlanTargetDetails } from '@internal/target-postgres/planner-target-details';
+import {
+  PostgresDatabaseSchemaNode,
+  PostgresNamespaceSchemaNode,
+  PostgresTableSchemaNode,
+  postgresCreateNamespace,
+} from '@internal/target-postgres/types';
+import { applicationDomainOf } from '@repo/test-utils';
+import { describe, expect, it } from 'vitest';
+import { introspectedColumn as introspectedColumnOver } from '../../../../2-sql-family/1-core/contract/test/introspected-column';
+import { pgvectorDataTypes } from '../../src/core/data-types';
+import pgvectorDescriptor from '../../src/exports/control';
+import { createComposedPostgresControlAdapter } from '../helpers/composed-adapter';
+
+const introspectedColumn = (
+  column: SqlColumnIRInput,
+  dataTypes: readonly DataType[] = postgresDataTypes,
+) => introspectedColumnOver(column, dataTypes);
+
+const policy: MigrationOperationPolicy = { allowedOperationClasses: ['additive', 'widening'] };
+
+function contractWithEmbeddingDefault(value: number[]): Contract<SqlStorage> {
+  return {
+    target: 'postgres',
+    targetFamily: 'sql',
+    profileHash: profileHash('vector-default'),
+    storage: new SqlStorage({
+      storageHash: coreHash('vector-default'),
+      namespaces: {
+        [UNBOUND_NAMESPACE_ID]: postgresCreateNamespace({
+          id: UNBOUND_NAMESPACE_ID,
+          entries: {
+            table: {
+              doc: {
+                columns: {
+                  id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                  embedding: {
+                    dataType: 'pgvector/vector',
+                    codecId: 'pg/vector@1',
+                    nullable: true,
+                    typeParams: { length: 3 },
+                    default: { kind: 'literal', value },
+                  },
+                },
+                primaryKey: { columns: ['id'] },
+                uniques: [],
+                indexes: [],
+                foreignKeys: [],
+              },
+            },
+          },
+        }),
+      },
+    }),
+    roots: {},
+    domain: applicationDomainOf({ models: {} }),
+    capabilities: {},
+    extensions: {},
+    meta: {},
+  };
+}
+
+const liveSchema = new PostgresDatabaseSchemaNode({
+  extensions: undefined,
+  namespaces: {
+    public: new PostgresNamespaceSchemaNode({
+      schemaName: 'public',
+      tables: {
+        doc: new PostgresTableSchemaNode({
+          name: 'doc',
+          columns: {
+            id: introspectedColumn({ name: 'id', typeText: 'uuid', nullable: false }),
+            embedding: introspectedColumn(
+              { name: 'embedding', typeText: 'vector(3)', nullable: true },
+              [...postgresDataTypes, ...pgvectorDataTypes],
+            ),
+          },
+          primaryKey: { columns: ['id'] },
+          uniques: [],
+          foreignKeys: [],
+          indexes: [],
+          rlsEnabled: false,
+        }),
+      },
+    }),
+  },
+  roles: [],
+  existingSchemas: [],
+  pgVersion: '',
+});
+
+async function setDefaultStatement(value: number[]): Promise<string | undefined> {
+  const planner = createPostgresMigrationPlanner(
+    createComposedPostgresControlAdapter({ extensions: [pgvectorDescriptor] }),
+  );
+  const result = planner.plan({
+    contract: contractWithEmbeddingDefault(value),
+    schema: liveSchema,
+    policy,
+    fromContract: null,
+    origin: null,
+    statements: [],
+    frameworkComponents: [postgresTargetDescriptor, postgresAdapterDescriptor, pgvectorDescriptor],
+    spaceId: APP_SPACE_ID,
+    snapshotsImportPath: '../../snapshots',
+  });
+  if (result.kind !== 'success') throw new Error(JSON.stringify(result.conflicts, null, 2));
+  const operations = (await Promise.all(
+    result.plan.operations,
+  )) as SqlMigrationPlanOperation<PostgresPlanTargetDetails>[];
+  const setDefault = operations.find((operation) => operation.id === 'setDefault.doc.embedding');
+  return setDefault?.execute[0]?.sql;
+}
+
+describe('a vector default a migration sets on an existing column', () => {
+  it('is written through the pgvector codec of the stack', async () => {
+    expect(await setDefaultStatement([1, 2, 3])).toBe(
+      `ALTER TABLE "doc" ALTER COLUMN "embedding" SET DEFAULT '[1,2,3]'::vector(3)`,
+    );
+  });
+
+  it('is refused by the vector type when its length is not the length the column declares', async () => {
+    await expect(setDefaultStatement([1, 2])).rejects.toThrow(
+      'Column "doc"."embedding" has a default its codec pg/vector@1 refuses: pgvector/vector JSON value must be an array of 3 finite numbers',
+    );
+  });
+});

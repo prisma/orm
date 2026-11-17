@@ -1,0 +1,108 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "Generated": {
+            "storage": {
+              "table": "Generated",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "uuidOpt": {
+                  "column": "uuidOpt"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "uuidOpt": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": true,
+                "many": false
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "Generated": {
+      "namespace": "public",
+      "model": "Generated"
+    }
+  },
+  "execution": {
+    "executionHash": "83aeaafaaabbbaea935581c3428702e5de6fb974a8559b6011386150591ff61b",
+    "mutations": {
+      "defaults": [
+        {
+          "ref": {
+            "namespace": "public",
+            "entry": "Generated",
+            "field": "uuidOpt"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "uuidv4"
+          }
+        }
+      ]
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "c8f174956ea1eacab488e102587ca5b99cfd5bb7d14da52494c4c1846cbf4696",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "Generated": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "uuidOpt": {
+                  "dataType": "pg/text",
+                  "codecId": "pg/text@1",
+                  "nullable": true,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

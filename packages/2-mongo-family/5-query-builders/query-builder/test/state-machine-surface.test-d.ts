@@ -1,10 +1,11 @@
 import { MongoFieldFilter } from '@internal/mongo-query-ast/execution';
 import { describe, it } from 'vitest';
 import { mongoQuery } from '../src/query';
+import { contextOf } from './fixtures/test-context';
 import type { TContract } from './fixtures/test-contract';
 
-const contractJson = {} as unknown;
-const handle = () => mongoQuery<TContract>({ contractJson }).from('orders');
+declare const contract: TContract;
+const handle = () => mongoQuery({ context: contextOf(contract) }).from('orders');
 const filtered = () => handle().match(MongoFieldFilter.eq('status', 'new'));
 
 /**

@@ -4,79 +4,109 @@ Reusable PSL parser for Prisma 8.
 
 ## Overview
 
-`@internal/psl-parser` parses Prisma Schema Language (PSL) source into a deterministic CST with source spans and stable machine-readable diagnostics, then offers shared symbol-table resolution for the target-agnostic semantics every PSL interpreter needs. Normalization to contract IR and emit integration stay in downstream target packages. Source provenance is owned by the returned red syntax root; see [ADR 253 — PSL red-root source ownership](../../../../docs/architecture%20docs/adrs/ADR%20253%20-%20PSL%20red-root%20source%20ownership.md).
+`@internal/psl-parser` turns Prisma Schema Language (PSL) source text into the structures every PSL consumer needs: a lossless syntax tree, a symbol table of declarations, and a binder that resolves names. It is target-agnostic. Turning a schema into a contract is the job of the family packages (for example `@internal/sql-contract-psl`), which build on what this package returns.
 
-In the provider-based authoring model, PSL providers call `parse` to obtain the CST and then `buildSymbolTable` to obtain a scope-aware view, before returning `Result<Contract, ContractSourceDiagnostics>` to the framework emit pipeline.
+PSL contract sources, the CLI and the language server all use the same pipeline:
+
+1. `parse` reads one file into a syntax tree.
+2. `buildSymbolTable` collects the declarations of all files of a schema.
+3. `createBinder` resolves every name those files mention.
+4. A family interpreter reads the tree, the symbol table and the binder, and produces a contract.
+
+Each step returns its own diagnostics. The caller reports them.
 
 ## Responsibilities
 
-- Parse PSL source text with a required explicit filename and deterministic ordering.
-- Return AST nodes with source spans for models, fields, enums, and `types { ... }`.
-- Preserve raw PSL relation action tokens (for example `Cascade`) without semantic normalization.
-- Return PSL-owned parser, symbol, attribute-kit, and SQL/Mongo semantic diagnostics as `{ filename, code, message, range }`, with optional `data`, zero-based file-local ranges, and filenames derived from the owning syntax node through `PslSources`. No source object is retained in emitted diagnostics. `PslDiagnosticCollector.toExternal()` translates them at interpreter output boundaries, preserving order alongside untouched external contribution diagnostics. Existing unlocated public errors retain their envelope through `pushUnlocated`, while still carrying an owned range internally. Provider seeding uses the same `mapPslDiagnostics` conversion.
-- Enforce strict error behavior for unsupported syntax (no warning or best-effort mode).
-- Parse attributes generically (namespaced or not), including optional argument lists; target semantics live downstream.
-- Emit attribute nodes with explicit target (`field` / `model` / `namedType`), attribute name, and parsed argument list with spans.
-- Build a scope-aware symbol table from the CST, including duplicate-declaration diagnostics, named-type binding resolution, and descriptor-driven generic-block reconstruction.
+- Parse PSL source text into a lossless syntax tree with source positions.
+- Collect a schema's declarations into a symbol table and report duplicates.
+- Resolve the names a schema mentions and report the ones that do not resolve.
+- Provide the combinators that attribute and block specifications are built from, and interpret attributes and blocks against those specifications.
+- Format PSL source text.
 
-## Attributes (generic parsing boundary)
-
-`@internal/psl-parser` parses attributes **generically**:
-
-- Attributes may be **non-namespaced** (for example `@id`) or **namespaced** (for example `@vendor.option`).
-- Attributes may include an **optional argument list**.
-- Arguments are parsed into positional/named entries with preserved raw values and source spans.
-- The parser owns **syntax + structure + spans**, not semantics.
-- Example: `@default(uuid(7))` is preserved as a positional argument value `uuid(7)`; semantic lowering is handled downstream.
-
-Interpretation/validation (for example `@internal/sql-contract-psl`) is responsible for:
-
-- mapping attributes to existing contract authoring shapes,
-- enforcing strictness (unknown/unsupported attributes are errors),
-- enforcing pack composition (using `@<ns>.*` without composing the pack fails), and
-- ensuring parity with the TS authoring surface.
-
-## Public API
-
-- `parse(source, filename, options?)` in `src/parse.ts` (also at `@internal/psl-parser/syntax`) — the CST parser: returns the `DocumentAst`, a `PslSources` registry for resolving nodes to their named `SourceFile`, and syntactic diagnostics. The recursive-descent / lossless-CST path supersedes the legacy `parsePslDocument`.
-- `buildSymbolTable({ documents, sources, pslBlockDescriptors })` in `src/symbol-table.ts` — a pure, fault-tolerant pass over an ordered `readonly DocumentAst[]` that returns `{ symbolTable, diagnostics }`, with a scope-aware `SymbolTable` (top-level namespaces / named types / blocks / models / composite-types as keyed records discriminated by `kind`, namespace members and block fields nested under their owner, declaration symbols carrying their CST AST `node` plus declaration `span`, and namespace symbols retaining every authored node and span in `declarations`) plus its own source-associated diagnostics (the same `ParseDiagnostic` shape as parser errors: `filename`, `code`, `message`, and a file-local `range`). Duplicate names are first-wins across documents and kinds within one scope (`PSL_DUPLICATE_DECLARATION`); repeated namespaces reopen the same scope, retaining distinct members and diagnosing duplicate member names across declarations and documents. Every supplied document root must be registered in the shared `sources`, even for empty documents. An empty collection returns an empty scope. Single-file callers pass `documents: [document]`; no file discovery is performed. `pslBlockDescriptors` is supplied from authoring contributions so generic/extension blocks can be reconstructed once into `BlockSymbol.block`. The pass also **resolves** the field/named-type read set once: each `FieldSymbol` carries the split type (`typeName`/`typeNamespaceId`/`typeContractSpaceId`), `optional`/`list`, `typeConstructor?`, rendered `attributes`, and `malformedType?` (set, with a `PSL_INVALID_QUALIFIED_TYPE` diagnostic, when the type is over-qualified); `NamedTypeSymbol` carries the resolved binding (`baseType`/`typeConstructor`/`isConstructor`). Interpreters consume this resolved shape directly — there is no per-package field/attribute view layer.
-- `readResolvedAttribute(s)` / `readResolvedConstructorCall` + the span maps (`nodePslSpan`, `keywordPslSpan`) in `src/resolve.ts` — the shared CST read helpers `buildSymbolTable` uses and that consumers (e.g. enum-block reconstruction) reuse, with `PslSpan` spans derived from `PslSources`. Pure coordinate conversion lives on `SourceFile`: resolve the file with `sources.sourceFileFor(node.syntax)` and call `sourceFile.rangeToPslSpan(range)`, `sourceFile.offsetToPslPosition(offset)`, or `sourceFile.pslSpanToRange(span)`.
-- `reconstructExtensionBlock` / `findBlockDescriptor` /
-  `validateExtensionBlockFromSymbol` in `src/extension-block.ts` — reconstruct a
-  descriptor-driven `PslExtensionBlock` from a CST `GenericBlockDeclarationAst`
-  (a `BlockSymbol`) and run the framework's standalone `validateExtensionBlock`
-  over it, building the ref-resolution context from the symbol table.
-- `parseQuotedStringLiteral` / `getPositionalArgument` in `src/attribute-helpers.ts`.
-- Legacy AST/span types live in `@internal/framework-components/psl-ast` and are re-exported from this package's root entry. The attribute kit's `PslDiagnostic` lives in `src/diagnostic.ts`; framework contribution diagnostics retain their separate external contract.
-- Subpath exports:
-  - `@internal/psl-parser/syntax`
-  - `@internal/psl-parser/tokenizer`
-
-## Architecture
+## Pipeline
 
 ```mermaid
 flowchart LR
   PSL[PSL source text] --> Parse[parse]
   Parse --> CST[DocumentAst + PslSources]
   Parse --> ParseDiagnostics[Parser diagnostics]
-  CST --> SourceLookup[node -> SourceFile]
   CST --> Symbols[buildSymbolTable]
-  Descriptors[pslBlockDescriptors] --> Symbols
   Symbols --> SymbolTable[SymbolTable]
   Symbols --> SymbolDiagnostics[Symbol-table diagnostics]
-  SymbolTable --> Interpreter[Target PSL interpreter]
-  ParseDiagnostics --> Provider[Provider diagnostic seeding]
-  SymbolDiagnostics --> Provider
+  SymbolTable --> Binder[createBinder]
+  Context[BinderContext] --> Binder
+  Binder --> BinderQueries[Binder]
+  Binder --> BinderDiagnostics[Resolution diagnostics]
+  SymbolTable --> Blocks[interpretExtensionBlocks]
+  Descriptors[pslBlockDescriptors] --> Blocks
+  Blocks --> Interpreter[Family PSL interpreter]
+  SymbolTable --> Interpreter
+  BinderQueries --> Interpreter
 ```
 
-## Package Boundaries
+### Parsing
+
+`parse(source, filename, options)` returns a lossless syntax tree, a `PslSources` registry that maps any node back to its file, and syntax diagnostics. The tree keeps every token, including comments and whitespace, so the formatter and the language server work on the same tree as the interpreters. Unsupported syntax is an error; there is no best-effort mode.
+
+The parser reads structure only. Attributes, their arguments and block entries are parsed generically, whether or not anything defines them. Deciding what `@onCreate(uuid(7))` or `@vendor.option` means belongs to later steps.
+
+`options.grammar` selects the grammar a file is written in: `prisma-8` by default, or `prisma-7` for Prisma 7 and Prisma 6 schemas.
+
+Strongly typed AST classes wrap the tree for convenient reading. See [ADR 253](../../../../docs/architecture%20docs/adrs/ADR%20253%20-%20PSL%20red-root%20source%20ownership.md) for how nodes relate to their source files.
+
+### Symbol table
+
+`buildSymbolTable({ documents, sources, defaultNamespaceId })` collects the declarations of a schema's files: namespaces, models, composite types, named types, generic blocks and their fields. It reports duplicate declarations. It does not resolve references and does not interpret blocks.
+
+The default namespace's members, the named types and the names of the namespaces share one set of names, and the default namespace's own name is taken there whether or not a block is written. A top-level declaration therefore cannot be named `public` where that is the default, or `unbound` or `__unbound__` where the late-bound namespace is.
+
+Each symbol carries the members of its declaration. A model or composite type symbol has its fields and attributes; a generic block symbol has its entries and its attributes, both in source order, and a repeated entry key appears once per occurrence. Consumers read a declaration's members from its symbol, not from the symbol's syntax node.
+
+### Binder
+
+`createBinder({ sources, symbolTable, context })` resolves names. It decides which declaration a type reference, a field reference or an entity reference denotes, and it reports the ones it cannot resolve. Every consumer asks the binder instead of searching the symbol table, so the interpreters, the attribute specifications and the language server agree on what a name means, and an unresolved name is reported once. Creating a binder also completes the symbol table it is given: a block's member records are final only after `createBinder` returns, so read a block's members from the symbol table after creating the binder.
+
+An unqualified name is looked up in this order:
+
+1. the namespace the referring declaration is in;
+2. the document level: the members of the default namespace, the named types and the namespaces;
+3. the types the configured target and its extensions contribute (scalars, type constructors, type aliases).
+
+Other namespaces are never searched, apart from the default one, whose members are the document level. A nearer declaration hides an outer one of the same name. For `ns.Name`, `ns` must resolve to a namespace, and `Name` is looked up only inside it; the default namespace's name works as a qualifier even when no block is written for it. A resolved model, composite type or generic block always carries its namespace. The base of a named type is looked up without the named types in scope, so `Uuid = Uuid` in a `types` block refines the contributed `Uuid`.
+
+The binder also resolves what attribute and block specifications describe: attribute names, argument keys, function names, fixed identifier values, and the references inside argument values. Where a specification offers alternatives, the binder picks the first alternative the written value fits by its syntactic shape. Checking the value itself, such as a number range or an allowed string, is left to interpretation.
+
+A binder belongs to one snapshot of a schema. After an edit, the caller builds a new tree, symbol table and binder.
+
+The binder only resolves names. Whether a resolved name is used correctly is checked by interpretation: a type constructor written without a call that needs arguments, or a type the family cannot store. The binder's diagnostics are reported as they are, by whoever built the binder; an interpreter neither repeats nor filters them. Each family supplies the wording for an unsupported attribute and for an unresolved type.
+
+### Attribute and block specifications
+
+Attributes and generic blocks are described declaratively, as specifications built from combinators (`str`, `list`, `oneOf`, `entityRef`, `funcCall`, …). A specification states which arguments exist, what each accepts and what it means, with documentation. The same specification drives interpretation, diagnostics, completion, signature help and hover. See [ADR 231](../../../../docs/architecture%20docs/adrs/ADR%20231%20-%20Declarative%20attribute%20specifications.md), [ADR 249](../../../../docs/architecture%20docs/adrs/ADR%20249%20-%20Central%20attribute-spec%20registry.md) and [ADR 262](../../../../docs/architecture%20docs/adrs/ADR%20262%20-%20Block%20specs%20bind%20top-level%20block%20values.md).
+
+Diagnostics are divided between two owners. The binder reports names that do not resolve. Specifications report values of the wrong shape, wrong argument counts and references to the wrong kind of declaration. A schema error is reported by one of them, never both.
+
+## Entry points
+
+- `@internal/psl-parser` — the symbol table, the binder, the attribute and block specification combinators, and shared diagnostics types.
+- `@internal/psl-parser/syntax` — `parse`, the syntax tree and the typed AST classes.
+- `@internal/psl-parser/interpret` — the input type of a PSL interpreter and rules shared by the family interpreters.
+- `@internal/psl-parser/format` — the PSL formatter.
+- `@internal/psl-parser/tokenizer` — the tokenizer.
+- `@internal/psl-parser/test` — helpers for tests that need a parsed and bound schema.
+
+## Package boundaries
 
 - This package does not perform file I/O.
-- This package does not normalize to contract IR.
-- This package does not emit `contract.json` or `contract.d.ts`.
+- This package does not know any target or family. Targets and families contribute types, data types, attribute specifications and block descriptors through the binder's context.
+- This package does not produce contract IR, `contract.json` or `contract.d.ts`.
 
-## Related Docs
+## Related docs
 
 - `docs/Architecture Overview.md`
 - `docs/architecture docs/subsystems/2. Contract Emitter & Types.md`
 - `docs/architecture docs/adrs/ADR 163 - Provider-invoked source interpretation packages.md`
+- `docs/architecture docs/adrs/ADR 231 - Declarative attribute specifications.md`
+- `docs/architecture docs/adrs/ADR 249 - Central attribute-spec registry.md`
+- `docs/architecture docs/adrs/ADR 253 - PSL red-root source ownership.md`
+- `docs/architecture docs/adrs/ADR 262 - Block specs bind top-level block values.md`

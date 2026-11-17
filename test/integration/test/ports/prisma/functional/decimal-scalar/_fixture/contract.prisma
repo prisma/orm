@@ -8,7 +8,7 @@
 //     money Decimal
 //   }
 model User {
-  id    String  @id @default(cuid(2))
+  id    String  @id @onCreate(cuid(2))
   money Decimal
   @@map("user")
 }

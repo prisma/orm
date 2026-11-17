@@ -53,12 +53,6 @@ export function createUsersCollection(runtime: PgIntegrationRuntime) {
   return new Collection({ runtime, context: getTestContext() }, 'User', { namespaceId: 'public' });
 }
 
-export function createUsersCollectionWithoutReturning(runtime: PgIntegrationRuntime) {
-  const contract = { ...getTestContract(), capabilities: {} } as TestContract;
-  const context = { ...getTestContext(), contract } as ExecutionContext<TestContract>;
-  return new Collection({ runtime, context }, 'User', { namespaceId: 'public' });
-}
-
 export function createReturningUsersCollectionWithout(
   runtime: PgIntegrationRuntime,
   capabilityKeys: readonly string[],
@@ -103,7 +97,7 @@ export function createReturningTagsCollection(runtime: PgIntegrationRuntime) {
 
 export async function withPushedContractRuntime(
   contract: Contract<SqlStorage>,
-  fn: (runtime: PgIntegrationRuntime) => Promise<void>,
+  fn: (runtime: PgIntegrationRuntime, connectionString: string) => Promise<void>,
 ): Promise<void> {
   await withDevDatabase(async ({ connectionString }) => {
     const driver = await postgresDriverControl.create(connectionString);
@@ -115,6 +109,8 @@ export async function withPushedContractRuntime(
         schema,
         policy: INIT_ADDITIVE_POLICY,
         fromContract: null,
+        origin: null,
+        statements: [],
         frameworkComponents,
         spaceId: APP_SPACE_ID,
         snapshotsImportPath: '../../snapshots',
@@ -154,7 +150,7 @@ export async function withPushedContractRuntime(
 
     const runtime = await createPgIntegrationRuntime(connectionString, contract);
     try {
-      await fn(runtime);
+      await fn(runtime, connectionString);
     } finally {
       await runtime.close();
     }

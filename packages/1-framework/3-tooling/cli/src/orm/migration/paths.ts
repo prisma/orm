@@ -9,20 +9,27 @@ import { relative, resolve } from 'pathe';
  * engine validated it. Every command runs behind that validation, so its
  * absence here is a bug.
  */
-export function baseDirFor(config: PrismaNextConfig): string {
+export function baseDirFor(config: Pick<PrismaNextConfig, 'baseDir'>): string {
   if (config.baseDir === undefined) {
     throw new InternalError('the orm config section reached a command without baseDir');
   }
   return config.baseDir;
 }
 
-/** Where migrations live; the validated config carries it absolute and defaulted. */
-export function migrationsDirFor(config: PrismaNextConfig): string {
-  return config.migrations?.dir ?? resolve(baseDirFor(config), 'migrations');
+type MigrationsLocation = Pick<PrismaNextConfig, 'baseDir' | 'migrations'>;
+
+/**
+ * Where a config keeps its migrations: `migrations.dir`, default `migrations`, resolved against the config's `baseDir`. `base` stands in for `baseDir` when a config built in memory carries none.
+ */
+export function migrationsDirFor(config: MigrationsLocation, base?: string): string {
+  return resolve(
+    config.baseDir ?? base ?? baseDirFor(config),
+    config.migrations?.dir ?? 'migrations',
+  );
 }
 
 /** The app subspace under {@link migrationsDirFor}. */
-export function appMigrationsDirFor(config: PrismaNextConfig): string {
+export function appMigrationsDirFor(config: MigrationsLocation): string {
   return spaceMigrationDirectory(migrationsDirFor(config), APP_SPACE_ID);
 }
 

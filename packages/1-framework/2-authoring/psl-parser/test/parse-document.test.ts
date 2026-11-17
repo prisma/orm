@@ -941,7 +941,7 @@ describe('ordered-alternative parsers are no-ops on non-match', () => {
   });
 
   it('parseNamespace rejects a non-namespace keyword without consuming', () => {
-    expectNoOpReject('model User {', parseNamespace);
+    expectNoOpReject('model User {', (cursor) => parseNamespace(cursor, {}));
   });
 
   it('parseCompositeType rejects a non-type keyword without consuming', () => {
@@ -953,7 +953,7 @@ describe('ordered-alternative parsers are no-ops on non-match', () => {
   });
 
   it('parseGenericBlock rejects a reserved keyword so it falls through to recovery', () => {
-    expectNoOpReject('model {', parseGenericBlock);
+    expectNoOpReject('model {', (cursor) => parseGenericBlock(cursor, {}));
   });
 
   it('parseBlockAttribute rejects a single-at attribute, preserving the @@-vs-@ split', () => {

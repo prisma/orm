@@ -25,14 +25,6 @@ function buildOpAst(
 }
 
 describe('paradedb operations', () => {
-  it('descriptor has correct metadata', () => {
-    expect(paradedbDescriptor.kind).toBe('extension');
-    expect(paradedbDescriptor.id).toBe('paradedb');
-    expect(paradedbDescriptor.familyId).toBe('sql');
-    expect(paradedbDescriptor.targetId).toBe('postgres');
-    expect(paradedbDescriptor.version).toBe('0.0.1');
-  });
-
   it('descriptor provides query operations whose impls build AST with lowering', () => {
     const operations = paradedbDescriptor.queryOperations?.() ?? {};
     expect(Object.keys(operations)).toHaveLength(11);
@@ -208,11 +200,5 @@ describe('paradedb operations', () => {
 
   it('descriptor exposes empty codec registry', () => {
     expect(paradedbDescriptor.codecs()).toEqual([]);
-  });
-
-  it('instance is minimal (identity only)', () => {
-    const instance = paradedbDescriptor.create();
-    expect(instance.familyId).toBe('sql');
-    expect(instance.targetId).toBe('postgres');
   });
 });

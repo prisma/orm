@@ -20,6 +20,8 @@
  * - repo-admins [limit]        Admin users via custom collection scope
  * - repo-user <email>          Find a user by email via ORM client first()
  * - repo-posts <userId> [limit] Posts for a user via ORM client API
+ * - repo-lock-posts <userId>  Lock a user's posts with FOR UPDATE inside a transaction,
+ *                              through the custom `Post.forUser()` method
  * - orm-user-profile <id>      A user's profile as a `Shape`-declared response
  *                              type: every scalar but email, posts projected to
  *                              id/title/tags
@@ -27,14 +29,21 @@
  *                              Compound filters + select/include via ORM client
  * - repo-post-feed <postTitleTerm> [limit]
  *                              Posts with to-one include via ORM client
+ * - repo-recent-posts <since> [orderBy] [asc|desc] [limit]
+ *                              Posts created since an ISO instant, ordered by a
+ *                              field named on the command line (title or createdAt),
+ *                              shaped by a shared post summary fragment
+ * - repo-list-posts [userId|-] [before|-] [limit]
+ *                              Newest post summaries, filtered by author and by an
+ *                              ISO instant only when those are given (`-` skips either)
  * - repo-task-board [limit]    Users with their polymorphic `tasks` included —
  *                              each task comes back shaped per its variant
  *                              (Bug: severity/stepsToRepro, Feature: priority/targetRelease)
  * - repo-bug-triage [severity] [limit]
- *                              Users with a `.variant('Bug')`-narrowed include,
+ *                              Users with a `.variant('bug')`-narrowed include,
  *                              filtered by the Bug-only `severity` column
  * - repo-feature-roadmap <targetRelease> [limit]
- *                              Users with a `.variant('Feature')`-narrowed include,
+ *                              Users with a `.variant('feature')`-narrowed include,
  *                              filtered by the Feature-only `targetRelease` column
  * - repo-post-tags <postId>    Include a post's tags (N:M read through the junction)
  * - repo-tag-posts <tagId>     Include a tag's posts (N:M read, reverse direction)
@@ -67,9 +76,11 @@
  * - repo-similar-posts <postId> [limit]
  *                              Cosine-distance similarity search via ORM client
  * - repo-search-posts <embedding> <maxDistance> [limit]
- *                              Vector similarity search via ORM client
+ *                              Nearest posts to a 1536-number vector via ORM client (using.embedding_nearest)
  * - repo-search-posts-text <query> [limit]
  *                              Full-text search over post titles via ORM client
+ * - repo-search-posts-weighted <query> [limit]
+ *                              Weighted full-text search over post title and body via ORM client (using.post_search)
  * - users-paginate [cursor]    Cursor-based pagination
  * - similarity-search <vec>    Vector similarity search (pgvector)
  * - full-text-search <query> [limit]
@@ -87,6 +98,9 @@
  * - raw-query-promote <titleTerm>
  *                              A data-modifying CTE: `UPDATE … RETURNING` composed into an
  *                              outer query, which is what row-returning embeddability buys
+ * - raw-query-copy-posts <fromEmail> <toEmail> [titlePrefix]
+ *                              `INSERT … SELECT` whose SELECT is a typed builder query
+ *                              interpolated into the raw template
  * - cross-author-similarity [limit]
  *                              SQL DSL escape-hatch: closest post pairs across different
  *                              authors via a self-join on a non-relation predicate, with
@@ -107,8 +121,8 @@
  *                              `@default(Low)` in the emitted contract), read it back, and
  *                              confirm the database supplied 0 (Low)
  * - integer-representations [limit]
- *                              The three Post engagement counters side by side: `BigIntNumber`
- *                              reads as a JS number, `BigInt` as a bigint, and `UnboundedInt`
+ *                              The three Post engagement counters side by side: `BigInt(as: number)`
+ *                              reads as a JS number, `BigInt` as a bigint, and `BigInt(storage: numeric)`
  *                              as a bigint that stays exact past 2^63
  * - aggregate-precision        count/sum/avg beside countBigInt/sumBigInt/avgDecimal. Includes
  *                              the case the split exists for: a bare sum() whose total passes
@@ -123,6 +137,7 @@
  * - src/app/main.tsx: React browser app for visualizing contract.json
  */
 import 'dotenv/config';
+import 'temporal-polyfill/full/global';
 import { loadAppConfig } from './app-config';
 import { ormClientConnectPostTags } from './orm-client/connect-post-tags';
 import { ormClientCreatePostConnectTags } from './orm-client/create-post-connect-tags';
@@ -137,11 +152,13 @@ import { ormClientGetDashboardUsers } from './orm-client/get-dashboard-users';
 import { ormClientGetEngagementPrecision } from './orm-client/get-engagement-precision';
 import { ormClientGetEngagementSpread } from './orm-client/get-engagement-spread';
 import { ormClientGetFeatureRoadmap } from './orm-client/get-feature-roadmap';
+import { ormClientGetFilteredPosts } from './orm-client/get-filtered-posts';
 import { ormClientGetLatestUserPerKind } from './orm-client/get-latest-user-per-kind';
 import { ormClientGetPostEngagement } from './orm-client/get-post-engagement';
 import { ormClientGetPostFeed } from './orm-client/get-post-feed';
 import { ormClientGetPostTags } from './orm-client/get-post-tags';
 import { ormClientGetPostsByTagFilter } from './orm-client/get-posts-by-tag-filter';
+import { ormClientGetRecentPosts } from './orm-client/get-recent-posts';
 import { ormClientGetTagPosts } from './orm-client/get-tag-posts';
 import { ormClientGetBugs, ormClientGetFeatures, ormClientGetTasks } from './orm-client/get-tasks';
 import { ormClientGetUserBugTriage } from './orm-client/get-user-bug-triage';
@@ -154,6 +171,8 @@ import { ormClientGetUsers } from './orm-client/get-users';
 import { ormClientGetUsersBackwardCursor } from './orm-client/get-users-backward-cursor';
 import { ormClientGetUsersByIdCursor } from './orm-client/get-users-by-id-cursor';
 import { ormClientGetUsersCached } from './orm-client/get-users-cached';
+import { ormClientLockUserPosts } from './orm-client/lock-user-posts';
+import { ormClientSearchPosts } from './orm-client/search-posts';
 import { ormClientSearchPostsByEmbedding } from './orm-client/search-posts-by-embedding';
 import { ormClientSearchPostsByTitle } from './orm-client/search-posts-by-title';
 import { ormClientUpsertUser } from './orm-client/upsert-user';
@@ -172,6 +191,7 @@ import { getUsersCached } from './queries/get-users-cached';
 import {
   rawQueryActiveAuthors,
   rawQueryBumpViews,
+  rawQueryCopyPosts,
   rawQueryPromoteAndList,
   rawQueryReport,
 } from './queries/raw-query-demo';
@@ -198,6 +218,11 @@ function describe(value: unknown): string {
   return `${String(value)} (${typeof value})`;
 }
 
+const EMBEDDING_ARGUMENT_HELP = [
+  '  embedding: a JSON array of exactly 1536 numbers, the length of Post.embedding. For example, the embedding the seed gives "First Post":',
+  `    pnpm start -- repo-search-posts "$(node -e 'console.log(JSON.stringify(Array.from({ length: 1536 }, (_, i) => Math.sin(1 + i) * 0.1)))')" 0.5`,
+].join('\n');
+
 /**
  * `JSON.stringify` refuses a `bigint`, and a raw row spec naming an
  * `pg/int8@1` column decodes to one — so counts come back as bigints. Render
@@ -214,6 +239,7 @@ function toJson(value: unknown): string {
 async function main() {
   const { databaseUrl } = loadAppConfig();
   const runtime = await db.connect({ url: databaseUrl });
+  const orm = db.orm.public;
 
   try {
     if (cmd === 'users') {
@@ -249,12 +275,12 @@ async function main() {
       console.log(JSON.stringify(results, null, 2));
     } else if (cmd === 'repo-users') {
       const limit = args[0] ? Number.parseInt(args[0], 10) : 10;
-      const users = await ormClientGetUsers(limit, runtime);
+      const users = await ormClientGetUsers(limit, orm);
 
       console.log(JSON.stringify(users, null, 2));
     } else if (cmd === 'repo-admins') {
       const limit = args[0] ? Number.parseInt(args[0], 10) : 10;
-      const users = await ormClientGetAdminUsers(limit, runtime);
+      const users = await ormClientGetAdminUsers(limit, orm);
 
       console.log(JSON.stringify(users, null, 2));
     } else if (cmd === 'repo-user') {
@@ -263,7 +289,7 @@ async function main() {
         console.error('Usage: pnpm start -- repo-user <email>');
         process.exit(1);
       }
-      const user = await ormClientFindUserByEmail(email, runtime);
+      const user = await ormClientFindUserByEmail(email, orm);
 
       console.log(JSON.stringify(user, null, 2));
     } else if (cmd === 'repo-posts') {
@@ -273,7 +299,16 @@ async function main() {
         process.exit(1);
       }
       const limit = limitStr ? Number.parseInt(limitStr, 10) : 10;
-      const posts = await ormClientGetUserPosts(userIdStr, limit, runtime);
+      const posts = await ormClientGetUserPosts(userIdStr, limit, orm);
+
+      console.log(JSON.stringify(posts, null, 2));
+    } else if (cmd === 'repo-lock-posts') {
+      const [userIdStr] = args;
+      if (!userIdStr) {
+        console.error('Usage: pnpm start -- repo-lock-posts <userId>');
+        process.exit(1);
+      }
+      const posts = await db.transaction((tx) => ormClientLockUserPosts(userIdStr, tx.orm.public));
 
       console.log(JSON.stringify(posts, null, 2));
     } else if (cmd === 'orm-user-profile') {
@@ -282,7 +317,7 @@ async function main() {
         console.error('Usage: pnpm start -- orm-user-profile <id>');
         process.exit(1);
       }
-      const profile = await ormClientGetUserProfile(userId, runtime);
+      const profile = await ormClientGetUserProfile(userId, orm);
 
       console.log(JSON.stringify(profile, null, 2));
     } else if (cmd === 'repo-dashboard') {
@@ -300,7 +335,7 @@ async function main() {
         postTitleTerm,
         limit,
         postsPerUser,
-        runtime,
+        orm,
       );
 
       console.log(JSON.stringify(users, null, 2));
@@ -311,54 +346,86 @@ async function main() {
         process.exit(1);
       }
       const limit = limitStr ? Number.parseInt(limitStr, 10) : 10;
-      const posts = await ormClientGetPostFeed(postTitleTerm, limit, runtime);
+      const posts = await ormClientGetPostFeed(postTitleTerm, limit, orm);
+
+      console.log(JSON.stringify(posts, null, 2));
+    } else if (cmd === 'repo-recent-posts') {
+      const [sinceStr, orderBy = 'createdAt', directionStr, limitStr] = args;
+      if (!sinceStr) {
+        console.error(
+          'Usage: pnpm start -- repo-recent-posts <since> [orderBy] [asc|desc] [limit]',
+        );
+        process.exit(1);
+      }
+      const limit = limitStr ? Number.parseInt(limitStr, 10) : 10;
+      const posts = await ormClientGetRecentPosts(
+        Temporal.Instant.from(sinceStr),
+        orderBy,
+        directionStr ?? 'desc',
+        limit,
+        orm,
+      );
+
+      console.log(JSON.stringify(posts, null, 2));
+    } else if (cmd === 'repo-list-posts') {
+      const [userIdStr, beforeStr, limitStr] = args;
+      const given = (arg: string | undefined) => (arg && arg !== '-' ? arg : undefined);
+      const before = given(beforeStr);
+      const posts = await ormClientGetFilteredPosts(
+        {
+          userId: given(userIdStr),
+          before: before !== undefined ? Temporal.Instant.from(before) : undefined,
+        },
+        limitStr ? Number.parseInt(limitStr, 10) : 10,
+        orm,
+      );
 
       console.log(JSON.stringify(posts, null, 2));
     } else if (cmd === 'repo-users-cursor') {
       const [cursorStr, limitStr] = args;
       const cursor = cursorStr ?? null;
       const limit = limitStr ? Number.parseInt(limitStr, 10) : 10;
-      const users = await ormClientGetUsersByIdCursor(cursor, limit, runtime);
+      const users = await ormClientGetUsersByIdCursor(cursor, limit, orm);
 
       console.log(JSON.stringify(users, null, 2));
     } else if (cmd === 'repo-latest-per-kind') {
-      const users = await ormClientGetLatestUserPerKind(runtime);
+      const users = await ormClientGetLatestUserPerKind(orm);
 
       console.log(JSON.stringify(users, null, 2));
     } else if (cmd === 'repo-user-insights') {
       const limit = args[0] ? Number.parseInt(args[0], 10) : 10;
-      const users = await ormClientGetUserInsights(limit, runtime);
+      const users = await ormClientGetUserInsights(limit, orm);
 
       console.log(JSON.stringify(users, null, 2));
     } else if (cmd === 'repo-kind-breakdown') {
       const minUsers = args[0] ? Number.parseInt(args[0], 10) : 1;
-      const rows = await ormClientGetUserKindBreakdown(minUsers, runtime);
+      const rows = await ormClientGetUserKindBreakdown(minUsers, orm);
 
       console.log(JSON.stringify(rows, null, 2));
     } else if (cmd === 'repo-tasks') {
       const limit = args[0] ? Number.parseInt(args[0], 10) : 10;
-      const tasks = await ormClientGetTasks(limit, runtime);
+      const tasks = await ormClientGetTasks(limit, orm);
 
       console.log(JSON.stringify(tasks, null, 2));
     } else if (cmd === 'repo-bugs') {
       const limit = args[0] ? Number.parseInt(args[0], 10) : 10;
-      const bugs = await ormClientGetBugs(limit, runtime);
+      const bugs = await ormClientGetBugs(limit, orm);
 
       console.log(JSON.stringify(bugs, null, 2));
     } else if (cmd === 'repo-features') {
       const limit = args[0] ? Number.parseInt(args[0], 10) : 10;
-      const features = await ormClientGetFeatures(limit, runtime);
+      const features = await ormClientGetFeatures(limit, orm);
 
       console.log(JSON.stringify(features, null, 2));
     } else if (cmd === 'repo-task-board') {
       const limit = args[0] ? Number.parseInt(args[0], 10) : 10;
-      const board = await ormClientGetUserTaskBoard(limit, runtime);
+      const board = await ormClientGetUserTaskBoard(limit, orm);
 
       console.log(JSON.stringify(board, null, 2));
     } else if (cmd === 'repo-bug-triage') {
       const [severity, limitStr] = args;
       const limit = limitStr ? Number.parseInt(limitStr, 10) : 10;
-      const triage = await ormClientGetUserBugTriage(severity ?? 'critical', limit, runtime);
+      const triage = await ormClientGetUserBugTriage(severity ?? 'critical', limit, orm);
 
       console.log(JSON.stringify(triage, null, 2));
     } else if (cmd === 'repo-feature-roadmap') {
@@ -368,7 +435,7 @@ async function main() {
         process.exit(1);
       }
       const limit = limitStr ? Number.parseInt(limitStr, 10) : 10;
-      const roadmap = await ormClientGetFeatureRoadmap(targetRelease, limit, runtime);
+      const roadmap = await ormClientGetFeatureRoadmap(targetRelease, limit, orm);
 
       console.log(JSON.stringify(roadmap, null, 2));
     } else if (cmd === 'repo-post-tags') {
@@ -377,7 +444,7 @@ async function main() {
         console.error('Usage: pnpm start -- repo-post-tags <postId>');
         process.exit(1);
       }
-      const result = await ormClientGetPostTags(postId, runtime);
+      const result = await ormClientGetPostTags(postId, orm);
 
       console.log(JSON.stringify(result, null, 2));
     } else if (cmd === 'repo-tag-posts') {
@@ -386,7 +453,7 @@ async function main() {
         console.error('Usage: pnpm start -- repo-tag-posts <tagId>');
         process.exit(1);
       }
-      const result = await ormClientGetTagPosts(tagId, runtime);
+      const result = await ormClientGetTagPosts(tagId, orm);
 
       console.log(JSON.stringify(result, null, 2));
     } else if (
@@ -405,7 +472,7 @@ async function main() {
           : cmd === 'repo-posts-with-tag-none'
             ? 'none'
             : 'every';
-      const result = await ormClientGetPostsByTagFilter(mode, label, runtime);
+      const result = await ormClientGetPostsByTagFilter(mode, label, orm);
 
       console.log(JSON.stringify(result, null, 2));
     } else if (cmd === 'repo-connect-post-tags') {
@@ -414,7 +481,7 @@ async function main() {
         console.error('Usage: pnpm start -- repo-connect-post-tags <postId> <tagId...>');
         process.exit(1);
       }
-      const result = await ormClientConnectPostTags(postId, tagIds, runtime);
+      const result = await ormClientConnectPostTags(postId, tagIds, orm);
 
       console.log(JSON.stringify(result, null, 2));
     } else if (cmd === 'repo-disconnect-post-tags') {
@@ -423,7 +490,7 @@ async function main() {
         console.error('Usage: pnpm start -- repo-disconnect-post-tags <postId> <tagId...>');
         process.exit(1);
       }
-      const result = await ormClientDisconnectPostTags(postId, tagIds, runtime);
+      const result = await ormClientDisconnectPostTags(postId, tagIds, orm);
 
       console.log(JSON.stringify(result, null, 2));
     } else if (cmd === 'repo-create-post-with-tags') {
@@ -436,7 +503,7 @@ async function main() {
       }
       const result = await ormClientCreatePostWithTags(
         { id, userId, title, tags: labels.map((label) => ({ label })) },
-        runtime,
+        orm,
       );
 
       console.log(JSON.stringify(result, null, 2));
@@ -448,7 +515,7 @@ async function main() {
         );
         process.exit(1);
       }
-      const result = await ormClientCreatePostConnectTags({ id, userId, title, tagIds }, runtime);
+      const result = await ormClientCreatePostConnectTags({ id, userId, title, tagIds }, orm);
 
       console.log(JSON.stringify(result, null, 2));
     } else if (cmd === 'repo-upsert-user') {
@@ -463,7 +530,7 @@ async function main() {
       }
       const user = await ormClientUpsertUser(
         { id, email, displayName: displayNameFromEmail(email), kind },
-        runtime,
+        orm,
       );
 
       console.log(JSON.stringify(user, null, 2));
@@ -486,7 +553,7 @@ async function main() {
           createdAt: Temporal.Now.instant(),
           address: { street: '789 Elm Blvd', city: 'Austin', zip: '73301', country: 'US' },
         },
-        runtime,
+        orm,
       );
 
       console.log(JSON.stringify(user, null, 2));
@@ -497,14 +564,14 @@ async function main() {
         process.exit(1);
       }
       const limit = limitStr ? Number.parseInt(limitStr, 10) : 10;
-      const posts = await ormClientFindSimilarPosts(postId, limit, runtime);
+      const posts = await ormClientFindSimilarPosts(postId, limit, orm);
 
       console.log(JSON.stringify(posts, null, 2));
     } else if (cmd === 'repo-search-posts') {
       const [embeddingStr, maxDistanceStr, limitStr] = args;
       if (!embeddingStr || !maxDistanceStr) {
         console.error('Usage: pnpm start -- repo-search-posts <embedding> <maxDistance> [limit]');
-        console.error('  embedding: JSON array of numbers, e.g., "[0.1,0.2,0.3]"');
+        console.error(EMBEDDING_ARGUMENT_HELP);
         process.exit(1);
       }
       let searchEmbedding: number[];
@@ -521,19 +588,14 @@ async function main() {
           'Error parsing embedding:',
           error instanceof Error ? error.message : String(error),
         );
-        console.error('Expected JSON array of numbers, e.g., "[0.1,0.2,0.3]"');
+        console.error(EMBEDDING_ARGUMENT_HELP);
         process.exit(1);
       }
       const maxDistance = Number.parseFloat(maxDistanceStr);
       const limit = limitStr ? Number.parseInt(limitStr, 10) : 10;
-      const posts = await ormClientSearchPostsByEmbedding(
-        searchEmbedding,
-        maxDistance,
-        limit,
-        runtime,
-      );
+      const posts = await ormClientSearchPostsByEmbedding(searchEmbedding, maxDistance, limit, orm);
 
-      console.log(JSON.stringify(posts, null, 2));
+      console.log(toJson(posts));
     } else if (cmd === 'repo-search-posts-text') {
       const [query, limitStr] = args;
       if (!query) {
@@ -541,14 +603,24 @@ async function main() {
         process.exit(1);
       }
       const limit = limitStr ? Number.parseInt(limitStr, 10) : 10;
-      const posts = await ormClientSearchPostsByTitle(query, limit, runtime);
+      const posts = await ormClientSearchPostsByTitle(query, limit, orm);
+
+      console.log(JSON.stringify(posts, null, 2));
+    } else if (cmd === 'repo-search-posts-weighted') {
+      const [query, limitStr] = args;
+      if (!query) {
+        console.error('Usage: pnpm start -- repo-search-posts-weighted <query> [limit]');
+        process.exit(1);
+      }
+      const limit = limitStr ? Number.parseInt(limitStr, 10) : 10;
+      const posts = await ormClientSearchPosts(query, limit, orm);
 
       console.log(JSON.stringify(posts, null, 2));
     } else if (cmd === 'users-paginate') {
       const [cursorStr, limitStr] = args;
       const cursor = cursorStr ?? null;
       const limit = limitStr ? Number.parseInt(limitStr, 10) : 10;
-      const users = await ormClientGetUsersByIdCursor(cursor, limit, runtime);
+      const users = await ormClientGetUsersByIdCursor(cursor, limit, orm);
 
       console.log(JSON.stringify(users, null, 2));
     } else if (cmd === 'users-paginate-back') {
@@ -558,7 +630,7 @@ async function main() {
         process.exit(1);
       }
       const limit = limitStr ? Number.parseInt(limitStr, 10) : 10;
-      const users = await ormClientGetUsersBackwardCursor(cursorStr, limit, runtime);
+      const users = await ormClientGetUsersBackwardCursor(cursorStr, limit, orm);
 
       console.log(JSON.stringify(users, null, 2));
     } else if (cmd === 'similarity-search') {
@@ -618,6 +690,17 @@ async function main() {
       const results = await rawQueryPromoteAndList(titleTerm);
 
       console.log(toJson(results));
+    } else if (cmd === 'raw-query-copy-posts') {
+      const [fromEmail, toEmail, titlePrefix] = args;
+      if (!fromEmail || !toEmail) {
+        console.error(
+          'Usage: pnpm start -- raw-query-copy-posts <fromEmail> <toEmail> [titlePrefix]',
+        );
+        process.exit(1);
+      }
+      const results = await rawQueryCopyPosts(fromEmail, toEmail, titlePrefix);
+
+      console.log(toJson(results));
     } else if (cmd === 'full-text-search') {
       const [query, limitStr] = args;
       if (!query) {
@@ -646,11 +729,11 @@ async function main() {
       );
 
       const firstStart = performance.now();
-      const first = await ormClientFindUserByIdCached(userIdStr, runtime);
+      const first = await ormClientFindUserByIdCached(userIdStr, orm);
       const firstMs = performance.now() - firstStart;
 
       const secondStart = performance.now();
-      const second = await ormClientFindUserByIdCached(userIdStr, runtime);
+      const second = await ormClientFindUserByIdCached(userIdStr, orm);
       const secondMs = performance.now() - secondStart;
 
       console.log(`First call (cache miss):  ${firstMs.toFixed(2)}ms`);
@@ -665,11 +748,11 @@ async function main() {
       console.log(`Listing ${limit} users twice — second call should hit cache.\n`);
 
       const firstStart = performance.now();
-      const first = await ormClientGetUsersCached(limit, runtime);
+      const first = await ormClientGetUsersCached(limit, orm);
       const firstMs = performance.now() - firstStart;
 
       const secondStart = performance.now();
-      const second = await ormClientGetUsersCached(limit, runtime);
+      const second = await ormClientGetUsersCached(limit, orm);
       const secondMs = performance.now() - secondStart;
 
       console.log(`First call (cache miss):  ${firstMs.toFixed(2)}ms`);
@@ -749,13 +832,17 @@ async function main() {
       await enumDefaultDemo();
     } else if (cmd === 'integer-representations') {
       const limit = args[0] ? Number.parseInt(args[0], 10) : 10;
-      const posts = await ormClientGetPostEngagement(limit, runtime);
+      const posts = await ormClientGetPostEngagement(limit, orm);
 
       console.log('Post engagement counters, one column per integer representation:\n');
-      console.log('  viewCount        BigIntNumber   pg/int8number@1     int8 read as a number');
-      console.log('  impressionCount  BigInt         pg/int8@1           int8 read as a bigint');
       console.log(
-        '  reachScore       UnboundedInt   pg/unboundedint@1   numeric read as a bigint\n',
+        '  viewCount        BigInt(as: number)         pg/int8number@1     int8 read as a number',
+      );
+      console.log(
+        '  impressionCount  BigInt                     pg/int8@1           int8 read as a bigint',
+      );
+      console.log(
+        '  reachScore       BigInt(storage: numeric)   pg/unboundedint@1   numeric read as a bigint\n',
       );
       for (const post of posts) {
         console.log(post.title);
@@ -767,13 +854,13 @@ async function main() {
         '\nTwo reachScore values are past 2^63, where an int8 column would have overflowed.',
       );
     } else if (cmd === 'aggregate-precision') {
-      const report = await ormClientGetEngagementPrecision(runtime);
+      const report = await ormClientGetEngagementPrecision(orm);
 
       console.log('Counting posts:');
       console.log(`  count()                       ${describe(report.posts.count)}`);
       console.log(`  countBigInt()                 ${describe(report.posts.countBigInt)}\n`);
 
-      console.log('viewCount — BigIntNumber, and the total stays inside the safe range:');
+      console.log('viewCount — BigInt(as: number), and the total stays inside the safe range:');
       console.log(`  sum('viewCount')              ${describe(report.views.sum)}`);
       console.log(`  sumBigInt('viewCount')        ${describe(report.views.sumBigInt)}`);
       console.log(`  avg('viewCount')              ${describe(report.views.avg)}`);
@@ -792,11 +879,11 @@ async function main() {
       }
       console.log(`  sumBigInt('impressionCount')  ${describe(report.impressions.sumBigInt)}\n`);
 
-      console.log('reachScore — UnboundedInt, so even the bare sum is exact:');
+      console.log('reachScore — BigInt(storage: numeric), so even the bare sum is exact:');
       console.log(`  sum('reachScore')             ${describe(report.reach.sum)}`);
       console.log(`  sumBigInt('reachScore')       ${describe(report.reach.sumBigInt)}`);
     } else if (cmd === 'aggregate-stddev') {
-      const spread = await ormClientGetEngagementSpread(runtime);
+      const spread = await ormClientGetEngagementSpread(orm);
 
       console.log('`stddev` is contributed by src/extensions/engagement-stats.ts, not by the');
       console.log('PostgreSQL target — yet it is called like any built-in aggregate:\n');
@@ -828,11 +915,15 @@ async function main() {
     } else {
       console.log(
         'Usage: pnpm start -- [users [limit] | user <userId> | posts <userId> | ' +
-          'repo-search-posts-text <query> [limit] | full-text-search <query> [limit] | ' +
+          'repo-search-posts-text <query> [limit] | repo-search-posts-weighted <query> [limit] | ' +
+          'full-text-search <query> [limit] | ' +
           'repo-users [limit] | repo-admins [limit] | ' +
-          'repo-user <email> | repo-posts <userId> [limit] | orm-user-profile <id> | ' +
+          'repo-user <email> | repo-posts <userId> [limit] | repo-lock-posts <userId> | ' +
+          'orm-user-profile <id> | ' +
           'repo-dashboard <emailDomain> <postTitleTerm> [limit] [postsPerUser] | ' +
           'repo-post-feed <postTitleTerm> [limit] | repo-users-cursor [cursor] [limit] | ' +
+          'repo-recent-posts <since> [orderBy] [asc|desc] [limit] | ' +
+          'repo-list-posts [userId|-] [before|-] [limit] | ' +
           'repo-tasks [limit] | repo-bugs [limit] | repo-features [limit] | ' +
           'repo-task-board [limit] | repo-bug-triage [severity] [limit] | ' +
           'repo-feature-roadmap <targetRelease> [limit] | ' +
@@ -849,7 +940,7 @@ async function main() {
           'users-paginate [cursor] [limit] | users-paginate-back <cursor> [limit] | ' +
           'similarity-search <vec> [limit] | cross-author-similarity [limit] | raw-sql-demo [limit] | ' +
           'raw-query-report [limit] | raw-query-bump-views [kind] | raw-query-active-authors [minPosts] | ' +
-          'raw-query-promote <titleTerm> | ' +
+          'raw-query-promote <titleTerm> | raw-query-copy-posts <fromEmail> <toEmail> [titlePrefix] | ' +
           'cache-demo-user <userId> | cache-demo-users [limit] | cache-demo-sql [limit] | ' +
           'enum-priority [limit] | enum-priority-filter [member] [limit] | enum-default-demo | ' +
           'integer-representations [limit] | aggregate-precision | aggregate-stddev | ' +

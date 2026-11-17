@@ -1,5 +1,7 @@
 # ADR 014 — Runtime hook API v1 (lane-neutral)
 
+Status: **Superseded by [ADR 271](ADR%20271%20-%20The%20runtime%20middleware%20observes%20a%20tree%20of%20activities%2C%20each%20started%2C%20ended%20and%20finalized.md)**. ADR 271 replaces this hook API with lifecycle events and interceptors on a tree of activities. `beforeCompile` and `onRow` remain; `beforeExecute` and `afterExecute` are removed, and `onError` is not part of the middleware interface: a failed statement ends with the `activityEnded` outcome `failed`.
+
 ## Context
 
 We support multiple authoring lanes that all emit a Plan: SQL DSL, ORM over DSL, Raw SQL, future TypedSQL. Guardrails, budgets, telemetry, and vendor features must attach at runtime without lane coupling. We need a stable, minimal hook API that plugins can implement once and have it work for every lane.

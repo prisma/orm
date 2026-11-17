@@ -1,22 +1,59 @@
-import { MONGO_INT32_CODEC_ID, MONGO_STRING_CODEC_ID } from '@internal/adapter-mongo/codec-ids';
+import mongoAdapter from '@internal/adapter-mongo/control';
+import type { JsonValue } from '@internal/contract/types';
+import { mongoFamilyDescriptor } from '@internal/family-mongo/control';
 import {
   mongoFamilyEntityTypes,
   mongoFamilyPslBlockDescriptors,
 } from '@internal/family-mongo/pack';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
+import {
+  type Codec,
+  type CodecLookupWithDescriptors,
+  createDataTypeLookup,
+  type DataTypeValue,
+} from '@internal/framework-components/codec';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
+import { createControlStack } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
-  type InterpretPslDocumentToMongoContractInput,
+  describeUnsupportedMongoAttribute,
   interpretPslDocumentToMongoContract,
+  mongoAttributeSpecs,
 } from '@internal/mongo-contract-psl';
-import { buildSymbolTable } from '@internal/psl-parser';
-import { parse } from '@internal/psl-parser/syntax';
+import { mongoContextInput } from '@internal/mongo-contract-psl/test';
+import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
+import { bindPslSchema } from '@internal/psl-parser/test';
+import { MONGO_INT32_CODEC_ID, MONGO_STRING_CODEC_ID } from '@internal/target-mongo/codec-ids';
+import { mongoDescriptorById } from '@internal/target-mongo/codecs';
+import { mongoTargetDescriptor } from '@internal/target-mongo/control';
+import { mongoDataTypes } from '@internal/target-mongo/data-types';
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 
+const mongoDataTypeLookup = createDataTypeLookup(mongoDataTypes);
+
+const mongoStack = createControlStack({
+  family: mongoFamilyDescriptor,
+  target: mongoTargetDescriptor,
+  adapter: mongoAdapter,
+});
+
+function identityCodec(id: string): Codec | undefined {
+  const descriptor = mongoDescriptorById(id);
+  const type = descriptor === undefined ? undefined : mongoDataTypeLookup.get(descriptor.dataType);
+  if (type === undefined) return undefined;
+  return {
+    id,
+    dataType: type,
+    toWire: async (v: unknown) => v,
+    fromWire: async (w: unknown) => w,
+    toDataTypeValue: (v: unknown) => type.valueFrom(v as JsonValue, {}),
+    fromDataTypeValue: (value: DataTypeValue) => value.value,
+  };
+}
+
 const authoringContributions = {
   entityTypes: mongoFamilyEntityTypes,
-  field: {},
   type: {},
   pslBlockDescriptors: mongoFamilyPslBlockDescriptors,
 };
@@ -24,70 +61,70 @@ const authoringContributions = {
 const mongoScalarTypeDescriptors: ReadonlyMap<string, string> = new Map([
   ['ObjectId', 'mongo/objectId@1'],
   ['String', 'mongo/string@1'],
-  ['Int', 'mongo/int32@1'],
+  ['Int32', 'mongo/int32@1'],
 ]);
 
-const mongoTargetTypes: Record<string, readonly string[]> = {
-  'mongo/objectId@1': ['objectId'],
-  'mongo/string@1': ['string'],
-  'mongo/int32@1': ['int'],
-};
+const mongoCodecIds: ReadonlySet<string> = new Set(mongoScalarTypeDescriptors.values());
 
-const mongoCodecLookup: CodecLookup = {
+const mongoCodecLookup: CodecLookupWithDescriptors = {
   get(id: string) {
-    const targetTypes = mongoTargetTypes[id];
-    if (!targetTypes) return undefined;
-    return {
-      id,
-      encode: async (v: unknown) => v,
-      decode: async (w: unknown) => w,
-      encodeJson: (v: unknown) => v,
-      decodeJson: (j: unknown) => {
-        if (id === 'mongo/string@1' && typeof j !== 'string')
-          throw new Error(`expected string, got ${typeof j}`);
-        return j;
-      },
-    } as ReturnType<CodecLookup['get']>;
+    return mongoCodecIds.has(id) ? identityCodec(id) : undefined;
   },
-  targetTypesFor: (id: string) => mongoTargetTypes[id],
+  descriptorFor: (id: string) => (mongoCodecIds.has(id) ? mongoDescriptorById(id) : undefined),
   renderOutputTypeFor: () => undefined,
 };
 
+const scalarTypeConstructors: Record<string, AuthoringTypeConstructorDescriptor> =
+  Object.fromEntries(
+    [...mongoScalarTypeDescriptors].map(([name, codecId]) => [
+      name,
+      { kind: 'typeConstructor' as const, output: { codecId } },
+    ]),
+  );
+
 function interpret(
   schema: string,
-  overrides?: Partial<
-    Omit<InterpretPslDocumentToMongoContractInput, 'document' | 'symbolTable' | 'sources'>
-  >,
+  overrides?: { readonly codecLookup?: CodecLookupWithDescriptors },
 ) {
-  const contributions = overrides?.['authoringContributions'] ?? authoringContributions;
-  const descriptors = contributions?.pslBlockDescriptors;
-  const { document, sources } = parse(schema, 'mongo-enum-schema.prisma');
-  const { symbolTable } = buildSymbolTable({
-    documents: [document],
-    sources,
-    pslBlockDescriptors: descriptors ?? {},
-  });
-  return interpretPslDocumentToMongoContract({
-    documents: [document],
-    symbolTable,
-    sources,
-    scalarTypeCodecIds: mongoScalarTypeDescriptors,
-    controlMutationDefaults: {
-      dataTypeEntries: {},
-      defaultFunctionRegistry: new Map(),
+  const bound = bindPslSchema(schema, {
+    sourceId: 'mongo-enum-schema.prisma',
+    context: {
+      composedExtensions: [],
+      defaultNamespaceId: '__unbound__',
+      composedExtensionContracts: new Map(),
+      authoringContributions: {
+        type: { ...scalarTypeConstructors, ...authoringContributions.type },
+        entityTypes: authoringContributions.entityTypes ?? {},
+        pslBlockDescriptors: authoringContributions.pslBlockDescriptors ?? {},
+        modelAttributes: {},
+        attributeSpecs: mongoAttributeSpecs,
+        dataTypes: mongoStack.dataTypes.entries,
+      },
+      pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
+      codecLookup: overrides?.codecLookup ?? mongoCodecLookup,
+      controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
+      dataTypes: mongoStack.dataTypes,
+      resolvedInputs: [],
+      capabilities: {},
     },
-    codecLookup: mongoCodecLookup,
-    authoringContributions: contributions,
-    enumInferenceCodecs: { text: MONGO_STRING_CODEC_ID, int: MONGO_INT32_CODEC_ID },
-    ...overrides,
   });
+  return withSeedDiagnostics(
+    interpretPslDocumentToMongoContract({
+      documents: bound.documents,
+      sources: bound.sources,
+      symbolTable: bound.symbolTable,
+      binder: bound.binder,
+      ...mongoContextInput(bound.context),
+      enumInferenceCodecs: { text: MONGO_STRING_CODEC_ID, int: MONGO_INT32_CODEC_ID },
+    }),
+    bound.seedDiagnostics,
+  );
 }
 
 function interpretOk(
   schema: string,
-  overrides?: Partial<
-    Omit<InterpretPslDocumentToMongoContractInput, 'document' | 'symbolTable' | 'sources'>
-  >,
+  overrides?: { readonly codecLookup?: CodecLookupWithDescriptors },
 ) {
   const result = interpret(schema, overrides);
   expect(result.ok).toBe(true);
@@ -291,5 +328,151 @@ model Account {
     const nameField = ns?.models['Account']?.fields['name'];
     expect(nameField?.type).toEqual({ kind: 'scalar', codecId: 'mongo/string@1' });
     expect(nameField?.valueSet).toBeUndefined();
+  });
+});
+
+describe('PSL enum members read by the target codecs', {
+  timeout: timeouts.typeScriptCompilation,
+}, () => {
+  const { codecLookup } = mongoStack;
+
+  function enumDiagnostics(enumBlock: string) {
+    const result = interpret(enumBlock, { codecLookup });
+    if (result.ok) return [];
+    return result.failure.diagnostics.map(({ code, message }) => ({ code, message }));
+  }
+
+  it('an int32 enum takes integer members', () => {
+    const contract = interpretOk(
+      `
+enum Priority {
+  @@type("mongo/int32@1")
+  Low  = 1
+  High = 2
+}
+model Task {
+  id       ObjectId @id @map("_id")
+  priority Priority
+}
+`,
+      { codecLookup },
+    );
+
+    expect(contract.domain.namespaces[UNBOUND_NAMESPACE_ID]?.enum?.['Priority']).toEqual({
+      codecId: 'mongo/int32@1',
+      members: [
+        { name: 'Low', value: 1 },
+        { name: 'High', value: 2 },
+      ],
+    });
+  });
+
+  it('an int32 enum refuses a text member', () => {
+    expect(
+      enumDiagnostics(`
+enum Priority {
+  @@type("mongo/int32@1")
+  Low = "low"
+}`),
+    ).toEqual([
+      {
+        code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
+        message: 'enum "Priority" member "Low": Expected a number',
+      },
+    ]);
+  });
+
+  it('an int32 enum refuses a bare member', () => {
+    expect(
+      enumDiagnostics(`
+enum Priority {
+  @@type("mongo/int32@1")
+  Low
+}`),
+    ).toEqual([
+      {
+        code: 'PSL_ENUM_BARE_MEMBER_NON_STRING_CODEC',
+        message:
+          'enum "Priority" member "Low" has no value and codec "mongo/int32@1" does not accept a bare name as input',
+      },
+    ]);
+  });
+
+  it('a string enum refuses a number member', () => {
+    expect(
+      enumDiagnostics(`
+enum Priority {
+  @@type("mongo/string@1")
+  Low = 1
+}`),
+    ).toEqual([
+      {
+        code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
+        message: 'enum "Priority" member "Low": Expected a quoted string',
+      },
+    ]);
+  });
+
+  function enumMembers(enumBlock: string) {
+    const result = interpret(enumBlock, { codecLookup });
+    if (!result.ok) {
+      return result.failure.diagnostics.map(({ code, message }) => ({ code, message }));
+    }
+    return Object.values(result.value.domain.namespaces[UNBOUND_NAMESPACE_ID]?.enum ?? {}).map(
+      (entry) => entry.members,
+    );
+  }
+
+  it('stores a Double member written as NaN as its word, and refuses one quoted, with the number to write', () => {
+    expect({
+      unquoted: enumMembers(
+        'enum Ratio {\n  @@type("mongo/double@1")\n  Unknown = NaN\n  Half = 0.5\n}',
+      ),
+      quoted: enumMembers('enum Ratio {\n  @@type("mongo/double@1")\n  Unknown = "NaN"\n}'),
+    }).toEqual({
+      unquoted: [
+        [
+          { name: 'Unknown', value: 'NaN' },
+          { name: 'Half', value: 0.5 },
+        ],
+      ],
+      quoted: [
+        {
+          code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
+          message: 'enum "Ratio" member "Unknown": Expected a number; write NaN',
+        },
+      ],
+    });
+  });
+
+  it('refuses an Int32 member written with a fraction', () => {
+    expect(enumMembers('enum Level {\n  @@type("mongo/int32@1")\n  One = 1.0\n}')).toEqual([
+      {
+        code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
+        message:
+          'enum "Level" member "One": Expected a number that mongo/int32 can hold; got mongo/decimal128',
+      },
+    ]);
+  });
+
+  it('reads an unquoted Int64 member past 2^53 on an enum no field uses, keeping every digit', () => {
+    expect(
+      enumMembers('enum Big {\n  @@type("mongo/int64@1")\n  Huge = 9007199254740993\n}'),
+    ).toEqual([[{ name: 'Huge', value: '9007199254740993' }]]);
+  });
+
+  it('reads a vector member written as a list', () => {
+    expect(
+      enumMembers('enum Direction {\n  @@type("mongo/vector@1")\n  Up = [0, 1, -0.5]\n}'),
+    ).toEqual([[{ name: 'Up', value: [0, 1, -0.5] }]]);
+  });
+
+  it('refuses a quoted Decimal128 "-0" without offering -0, which stores zero without its sign', () => {
+    expect(enumMembers('enum Signed {\n  @@type("mongo/decimal128@1")\n  Zero = "-0"\n}')).toEqual([
+      {
+        code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
+        message: 'enum "Signed" member "Zero": Expected a number',
+      },
+    ]);
   });
 });
