@@ -2,7 +2,7 @@
 changes:
   - id: ts-renamed-postgres-json-column-helper
     summary: |
-      The PostgreSQL column helper `jsonColumn` is renamed `plainJsonColumn`, after the explicit type it gives (`PlainJson`, a `json` column). The old name is removed. The contract does not change. SQLite's `jsonColumn` is not renamed.
+      The PostgreSQL column helper `jsonColumn` is renamed `plainJsonColumn`, after the explicit type it gives (`PlainJson`, a `json` column). The old name is removed. The contract does not change. SQLite's `jsonColumn` has a rename of its own.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
@@ -49,7 +49,7 @@ import { plainJsonColumn } from '@prisma/orm-postgres/adapter/column-types';
 field.column(plainJsonColumn); // was jsonColumn
 ```
 
-`field.column(type.Json())` and `field.column(type.PlainJson())` give the same column. A file that imports `jsonColumn` from a SQLite package needs no change.
+`field.column(type.Json())` and `field.column(type.PlainJson())` give the same column. A file that imports `jsonColumn` from a SQLite package is covered by the SQLite rename, not this one.
 
 ## `ts-postgres-explicit-json-type`
 
