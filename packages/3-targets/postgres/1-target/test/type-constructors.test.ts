@@ -1,3 +1,4 @@
+import { scalarTypeNamesOf } from '@internal/family-sql/control';
 import {
   collectScalarTypeConstructors,
   findAuthoringTypeConstructorCall,
@@ -143,7 +144,7 @@ const INFERRED = [
   'Int8BigInt',
   'Float8',
   'NumericString',
-  'Json',
+  'PlainJson',
   'Jsonb',
   'Bytea',
   'Int2',
@@ -203,7 +204,7 @@ describe('the constructors contract infer prints', () => {
   });
 });
 
-describe('the integer, decimal, float, text, boolean and binary explicit types', () => {
+describe('the integer, decimal, float, text, boolean, binary and JSON explicit types', () => {
   const codecLookup = createPostgresBuiltinCodecLookup();
   const expected = [
     ['Int2', 'pg/int2@1', 'int2'],
@@ -219,6 +220,8 @@ describe('the integer, decimal, float, text, boolean and binary explicit types',
     ['Char', 'sql/char@1', 'character'],
     ['Bool', 'pg/bool@1', 'bool'],
     ['Bytea', 'pg/bytea@1', 'bytea'],
+    ['PlainJson', 'pg/json@1', 'json'],
+    ['Jsonb', 'pg/jsonb@1', 'jsonb'],
   ] as const;
 
   it.each(expected)('%s stores %s as %s', (_name, codecId, typeName) => {
@@ -228,6 +231,42 @@ describe('the integer, decimal, float, text, boolean and binary explicit types',
         dataTypeLookup: createDataTypeLookup(postgresDataTypes),
       }),
     ).toBe(typeName);
+  });
+});
+
+describe('the name a fill value problem gives a codec', () => {
+  const nameOf = scalarTypeNamesOf(postgresScalarTypes);
+
+  it.each([
+    ['pg/json@1', 'Json'],
+    ['pg/jsonb@1', 'Jsonb'],
+    ['pg/int4@1', 'Int'],
+    ['pg/int2@1', 'Int2'],
+  ])('is, for %s, %s', (codecId, name) => {
+    expect(nameOf({ codecId })).toBe(name);
+  });
+});
+
+describe('the Json convenience type', () => {
+  const call = (args: readonly unknown[]) =>
+    instantiateAuthoringTypeCall(postgresScalarTypes, 'Json', args);
+
+  it.each([
+    ['Json', [], 'pg/json@1'],
+    ['Json(storage: json)', ['json'], 'pg/json@1'],
+    ['Json(storage: jsonb)', ['jsonb'], 'pg/jsonb@1'],
+  ] as const)('%s stores %s', (_written, args, codecId) => {
+    expect(call(args)).toEqual({ codecId });
+  });
+
+  it('gives the codecs of PlainJson and Jsonb', () => {
+    expect({
+      json: call([]),
+      jsonb: call(['jsonb']),
+    }).toEqual({
+      json: instantiateAuthoringTypeConstructor(postgresExplicitTypes.PlainJson, []),
+      jsonb: instantiateAuthoringTypeConstructor(postgresExplicitTypes.Jsonb, []),
+    });
   });
 });
 
@@ -249,7 +288,7 @@ describe('postgresExplicitTypes', () => {
       Char: { codecId: 'sql/char@1' },
       Bool: { codecId: 'pg/bool@1' },
       Bytea: { codecId: 'pg/bytea@1' },
-      Json: { codecId: 'pg/json@1' },
+      PlainJson: { codecId: 'pg/json@1' },
       Jsonb: { codecId: 'pg/jsonb@1' },
       TimestampTemporal: { codecId: 'pg/timestamp-temporal@1' },
       TimestamptzTemporal: { codecId: 'pg/timestamptz-temporal@1' },
@@ -398,6 +437,14 @@ describe('postgresExplicitTypes', () => {
       Time: 'typeChoice',
       Duration: 'typeChoice',
     });
+  });
+
+  it('gives Json to the convenience type, and the json column to PlainJson', () => {
+    expect({
+      convenience: postgresScalarTypes.Json.kind,
+      explicit: Object.hasOwn(postgresExplicitTypes, 'Json'),
+      plain: postgresExplicitTypes.PlainJson.output.codecId,
+    }).toEqual({ convenience: 'typeChoice', explicit: false, plain: 'pg/json@1' });
   });
 
   it('offers only the precision-bearing TimestamptzJsDate for a Date-backed timestamptz', () => {

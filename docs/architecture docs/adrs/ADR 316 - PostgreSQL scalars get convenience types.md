@@ -1,6 +1,6 @@
 # ADR 316 — PostgreSQL scalars get convenience types
 
-**Status:** Accepted
+**Status:** Accepted, amended 2026-11-17: `Json` is a convenience type too
 **Amends:** [ADR 257 — Scalar types are named after the target on every surface](ADR%20257%20-%20Scalar%20types%20are%20named%20after%20the%20target%20on%20every%20surface.md), [ADR 279 — Convenience types choose an explicit type from their arguments](ADR%20279%20-%20Convenience%20types%20choose%20an%20explicit%20type%20from%20their%20arguments.md)
 
 ## At a glance
@@ -17,14 +17,16 @@ model Account {
   ratio   Float                                     // exactly Float8
   active  Boolean                                   // exactly Bool
   avatar  Bytes                                     // exactly Bytea
+  payload Json                                      // exactly PlainJson: a json column
+  fast    Json(storage: jsonb)                      // exactly Jsonb: a jsonb column
 }
 ```
 
-`Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean` and `Bytes` are names for what a field means. On PostgreSQL each is a convenience type, as `DateTime` is: its arguments choose one explicit type, and the contract stores only that type. The explicit types are named after the database type, so `Int(storage: int2)` and `Int2` emit the same contract.
+`Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean`, `Bytes` and `Json` are names for what a field means. On PostgreSQL each is a convenience type, as `DateTime` is: its arguments choose one explicit type, and the contract stores only that type. The explicit types are named after the database type, so `Int(storage: int2)` and `Int2` emit the same contract.
 
 ## Decision
 
-PostgreSQL's integer, decimal, floating-point, text, boolean and binary types get convenience types, built with the type choice mechanism of ADR 279. Every option is optional and has a default, so the bare name is a working type. An argument that is not an option is passed on to the explicit type the row names. Positional arguments fill the arguments in their declared order, and the options come first, so `Decimal(10, 2)` sets `storage` to `10` and is refused at `storage`. Precision, scale and length are therefore written by name, such as `Decimal(precision: 10, scale: 2)`.
+PostgreSQL's integer, decimal, floating-point, text, boolean, binary and JSON types get convenience types, built with the type choice mechanism of ADR 279. Every option is optional and has a default, so the bare name is a working type. An argument that is not an option is passed on to the explicit type the row names. Positional arguments fill the arguments in their declared order, and the options come first, so `Decimal(10, 2)` sets `storage` to `10` and is refused at `storage`. Precision, scale and length are therefore written by name, such as `Decimal(precision: 10, scale: 2)`.
 
 | Convenience type | `as` | `storage` | Becomes |
 | --- | --- | --- | --- |
@@ -41,6 +43,8 @@ PostgreSQL's integer, decimal, floating-point, text, boolean and binary types ge
 | | | `char` | `Char` |
 | `Boolean(storage?)` | | `bool` (default) | `Bool` |
 | `Bytes(storage?)` | | `bytea` (default) | `Bytea` |
+| `Json(storage?)` | | `json` (default) | `PlainJson` |
+| | | `jsonb` | `Jsonb` |
 
 Every convenience type has a `storage` option, even where PostgreSQL has one storage for it, as `Date(storage: date)` already does under ADR 279. A convenience type then has the same options on every target, and a target adds a storage value without changing them. The values of `storage` and `as` are each target's own, as [ADR 315](ADR%20315%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md) decided for the date and time types.
 
@@ -61,18 +65,32 @@ The PSL name of an explicit type is the database type, plus a suffix naming the 
 | `Char(n?)` | `sql/char@1` | `character` | `string` |
 | `Bool` | `pg/bool@1` | `bool` | `boolean` |
 | `Bytea` | `pg/bytea@1` | `bytea` | `Uint8Array` |
+| `PlainJson` | `pg/json@1` | `json` | a JSON value |
+| `Jsonb` | `pg/jsonb@1` | `jsonb` | a JSON value |
+
+A convenience type and an explicit type cannot share a name, because a type choice row names its explicit type in the same `type` namespace. Where the naming rule above would give an explicit type the name of a convenience type, the explicit type takes the first of these that applies:
+
+1. The database's own second name for the type, where it has one, such as MySQL's `INT4`, `NUMERIC` and `BOOL`.
+2. The application-value suffix of [ADR 315](ADR%20315%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md) (rule 5), where it gives a meaningful name, such as SQLite's `DecimalString`.
+3. A name recorded as an exception. The exceptions are `PlainJson`, the explicit type of a `json` column on every target that has one, and MongoDB's `BsonString`.
+
+PostgreSQL's `json` type has no second name, and the suffix rule would give `JsonJson`, which says nothing about the column. So the explicit type of a `json` column is `PlainJson`: plain JSON as opposed to `jsonb`. Users meet it in hover text, in the scalar type reference, and in the refusal of `@db.Json`, which names the explicit type as `@db.Integer` names `Int4`. `contract infer` and `contract print` write `Json`.
 
 The explicit names that disappear, `SmallInt`, `BigIntNumber`, `Numeric`, `UnboundedInt`, `Real`, `VarChar` and `VarBit`, stay for one release line as deprecated aliases of `Int2`, `Int8Number`, `NumericString`, `NumericBigInt`, `Float4`, `Varchar` and `Varbit`, under ADR 257's rule. `VarBit` is renamed only to follow the naming rule above, as `VarChar` is: the database type is `varbit`. The names that become convenience types need no alias: at their defaults they give the codec they gave before, so no existing schema or contract changes.
 
-A TypeScript column helper is named after the explicit type it gives: `int8Column` becomes `int8BigIntColumn` and `numericColumn` becomes `numericStringColumn`. The other helpers, such as `int2Column`, `textColumn` and `varcharColumn`, already match.
+A TypeScript column helper is named after the explicit type it gives: `int8Column` becomes `int8BigIntColumn`, `numericColumn` becomes `numericStringColumn` and `jsonColumn` becomes `plainJsonColumn`, with no alias. The other helpers, such as `int2Column`, `textColumn` and `varcharColumn`, already match.
 
 The family's `sql.String(n)` and `sql.Char(n)` stay as they are: they are family-wide explicit types for `varchar` and `char` with a required length, shared with SQLite and MySQL. `sql.String(12)` is `Varchar(12)`, not the `String` convenience type. They are reconsidered with the other targets in TML-3790.
 
-`Json` and `Jsonb` keep their names; a `Json` convenience type is decided separately. Types that already name one concept keep a single explicit name and get no convenience type: `Uuid`, `Inet`, `Bit`, `Varbit`, `Xml`, `Oid`, `Money`, `citext.Citext` and `pg.enum(...)`.
+`Json` means a `json` column, as it did before it was a convenience type, and `Jsonb` keeps its name as the explicit type of a `jsonb` column. Types that already name one concept keep a single explicit name and get no convenience type: `Uuid`, `Inet`, `Bit`, `Varbit`, `Xml`, `Oid`, `Money`, `citext.Citext` and `pg.enum(...)`.
 
 ## Why
 
 A name such as `Int` should mean "an integer", not "a PostgreSQL `int4`". ADR 257 names every explicit type after what the database stores, and ADR 279 adds names for application concepts on top, so a user writes what a field means and gets a working default. Applying both to the other scalars removes the last place where a concept name such as `String` was also the name of one column type.
+
+`Json` is a convenience type over both PostgreSQL JSON types, but its default stays `json`. `Json` is the exact name of a PostgreSQL type, so a bare `Json` must not mean a different one. Keeping the default also means no schema and no contract changes: a field written `Json` keeps the codec `pg/json@1`. A `json` column stores the text as written, and PostgreSQL has no equality operator and no index operator class for it, so it cannot be filtered by equality, indexed or made unique. A user who needs any of these writes `Json(storage: jsonb)`.
+
+`BigInt` stays a convenience type of its own, beside `Int`. An application developer thinks in the application's terms, and there a big integer is a separate concept from an ordinary integer: an id or a counter that may pass 32 bits is chosen as such, not as an `Int` with a larger column. The concept also has its own sensible default, an `int8` read as a `bigint`, which an ordinary integer does not share. A single `Int` with a size option was considered and rejected; see the alternatives below.
 
 The concepts are the ones other data tools use. Every tool that names concepts rather than column types has separate names for an integer and a big integer (SQLAlchemy `Integer` and `BigInteger`, Django `IntegerField` and `BigIntegerField`, Rails `:integer` and `:bigint`, Prisma 7 `Int` and `BigInt`), so `Int` covers integers within 32 bits and `BigInt` integers that may exceed them. Drizzle (`mode: 'bigint'`), MikroORM (`new DecimalType('number')`) and SQLAlchemy (`asdecimal=False`) choose the application value with an option, as `as:` does.
 
@@ -132,13 +150,18 @@ For each database type, the explicit type marked `inferred` is the one the conve
 | `float4` | `Float(storage: float4)` |
 | `varchar(12)` | `String(storage: varchar, length: 12)` |
 | `character(3)` | `String(storage: char, length: 3)` |
+| `json` | `Json` |
+| `jsonb` | `Json(storage: jsonb)` |
+
+The Prisma 7 reader gives Prisma 7's `Json`, which was a `jsonb` column, as `Json(storage: jsonb)`, and `Json @db.Json` as `Json`.
 
 ## Consequences
 
 - A user writes `Int`, `String` or `Decimal` and gets the usual column, as before. A different column or application value is an argument, and the explicit type says exactly what a column is.
 - Existing schemas and contracts do not change. A schema that names a deprecated alias emits the same contract and warns.
 - `contract infer` and `contract print` write different text for some columns, such as `Int(storage: int2)` where they wrote `SmallInt`. The contract they describe is the same.
-- In a TypeScript contract, `type.Int()`, `type.BigInt({ as: 'number' })` and so on are typed as the explicit type they choose, and a combination with no row does not compile.
+- In a TypeScript contract, `type.Int()`, `type.BigInt({ as: 'number' })`, `type.Json({ storage: 'jsonb' })` and so on are typed as the explicit type they choose, and a combination with no row does not compile.
+- A bare `Json` field cannot be filtered by equality, indexed or made unique, as before. The convenience type makes the fix one argument: `Json(storage: jsonb)`.
 - SQLite, MySQL and MongoDB use some of these names for explicit types today. They get the same convenience types over their own explicit types in a later change, decided on its own, as [ADR 315](ADR%20315%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md) did for the date and time types.
 - This ADR's `Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean` and `Bytes` are concepts, not representations, as in [ADR 315](ADR%20315%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md). SQLite's `Int` today is an explicit type: SQLite's `integer`, read as a `number`. Under ADR 315 an explicit type does not take a convenience name, so TML-3790 must rename it and declare SQLite's `Int` as a convenience type over it. That SQLite stores the integer in 64 bits is SQLite's representation and does not change the concept.
 
@@ -149,5 +172,9 @@ For each database type, the explicit type marked `inferred` is the one the conve
 **One `Int` convenience type covering `int2`, `int4` and `int8`.** Fewer names, but every surveyed tool separates an integer from a big integer, and an `int8` read as a `number` would sit beside one read as a `bigint` under one name, so the default application value would depend on the storage chosen.
 
 **An `as` option on every convenience type.** It would let every name grow application values without a new option later. An `as` option appears only where some target has a choice of application value, because adding one later renames nothing. `storage` differs: it is on every convenience type so the options are the same on every target, as the Decision says.
+
+**`Json` defaults to `jsonb`.** `jsonb` is the better default for most applications, because it supports equality filters, indexes and unique constraints. But `Json` is the name of the `json` type, so the bare name would mean a different PostgreSQL type than the one it names, and every existing schema with a `Json` field would change its contract and need a migration that rewrites the column.
+
+**Name the `json` explicit type `JsonJson`, by the suffix rule.** It follows the rule mechanically, but it repeats one word and does not tell `json` from `jsonb`. `PlainJson` is recorded as an exception instead.
 
 **Remove the old explicit names at once.** ADR 279 did this for the date and time types before the release candidate. These names are in released schemas, so ADR 257's one-release-line alias rule applies.
