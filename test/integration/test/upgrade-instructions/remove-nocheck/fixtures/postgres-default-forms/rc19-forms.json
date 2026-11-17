@@ -1,0 +1,220 @@
+{
+  "recordedWith": "the data types of @prisma/orm-postgres 8.0.0-rc.19: fromContract, and when it refuses, toContract(valueFrom(value, params))",
+  "list": {
+    "value": [
+      "2024-01-01T00:00:00.000Z",
+      null,
+      "2024-06-01T12:00:00+02:00"
+    ],
+    "stored": [
+      "2024-01-01T00:00:00Z",
+      null,
+      "2024-06-01T10:00:00Z"
+    ]
+  },
+  "named": {
+    "value": "1.5",
+    "stored": "1.50"
+  },
+  "columns": [
+    {
+      "dataType": "pg/numeric",
+      "typeParams": {
+        "precision": 10,
+        "scale": 2
+      },
+      "value": "1.5",
+      "stored": "1.50"
+    },
+    {
+      "dataType": "pg/numeric",
+      "typeParams": {
+        "precision": 10,
+        "scale": 2
+      },
+      "value": "2",
+      "stored": "2.00"
+    },
+    {
+      "dataType": "pg/numeric",
+      "typeParams": {
+        "precision": 10,
+        "scale": 0
+      },
+      "value": "3",
+      "stored": "3"
+    },
+    {
+      "dataType": "pg/numeric",
+      "typeParams": {
+        "precision": 5,
+        "scale": -1
+      },
+      "value": "120",
+      "stored": "120"
+    },
+    {
+      "dataType": "pg/numeric",
+      "value": "1.50",
+      "stored": "1.50"
+    },
+    {
+      "dataType": "pg/numeric",
+      "typeParams": {
+        "precision": 10,
+        "scale": 2
+      },
+      "value": "NaN",
+      "stored": "NaN"
+    },
+    {
+      "dataType": "pg/char",
+      "typeParams": {
+        "length": 3
+      },
+      "value": "ab ",
+      "stored": "ab"
+    },
+    {
+      "dataType": "pg/char",
+      "value": "a",
+      "stored": "a"
+    },
+    {
+      "dataType": "pg/timestamptz",
+      "value": "2024-01-01T00:00:00.000Z",
+      "stored": "2024-01-01T00:00:00Z"
+    },
+    {
+      "dataType": "pg/timestamptz",
+      "value": "2024-01-01T01:00:00+01:00",
+      "stored": "2024-01-01T00:00:00Z"
+    },
+    {
+      "dataType": "pg/timestamptz",
+      "typeParams": {
+        "precision": 3
+      },
+      "value": "2024-01-01 00:00:00.120Z",
+      "stored": "2024-01-01T00:00:00.12Z"
+    },
+    {
+      "dataType": "pg/timestamptz",
+      "value": "infinity",
+      "stored": "infinity"
+    },
+    {
+      "dataType": "pg/timestamp",
+      "value": "2024-01-01 12:34:56",
+      "stored": "2024-01-01T12:34:56"
+    },
+    {
+      "dataType": "pg/timestamp",
+      "value": "2024-01-01T12:34:56.500",
+      "stored": "2024-01-01T12:34:56.5"
+    },
+    {
+      "dataType": "pg/time",
+      "value": "12:34",
+      "stored": "12:34:00"
+    },
+    {
+      "dataType": "pg/time",
+      "typeParams": {
+        "precision": 3
+      },
+      "value": "12:34:56.100",
+      "stored": "12:34:56.1"
+    },
+    {
+      "dataType": "pg/timetz",
+      "value": "12:34+02",
+      "stored": "12:34:00+02:00"
+    },
+    {
+      "dataType": "pg/date",
+      "value": "2024-01-01",
+      "stored": "2024-01-01"
+    },
+    {
+      "dataType": "pg/date",
+      "value": "10000-01-01",
+      "stored": "+010000-01-01"
+    },
+    {
+      "dataType": "pg/date",
+      "value": "0044-03-15 BC",
+      "stored": "-000043-03-15"
+    },
+    {
+      "dataType": "pg/uuid",
+      "value": "A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11",
+      "stored": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
+    },
+    {
+      "dataType": "pg/uuid",
+      "value": "{a0eebc999c0b4ef8bb6d6bb9bd380a11}",
+      "stored": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
+    },
+    {
+      "dataType": "pg/inet",
+      "value": "2001:0DB8::0001",
+      "stored": "2001:db8::1"
+    },
+    {
+      "dataType": "pg/inet",
+      "value": "10.0.0.1/32",
+      "stored": "10.0.0.1"
+    },
+    {
+      "dataType": "pg/interval",
+      "value": "1 year 2 mons",
+      "stored": "P1Y2M"
+    },
+    {
+      "dataType": "pg/interval",
+      "value": "PT90M",
+      "stored": "PT1H30M"
+    },
+    {
+      "dataType": "pg/bytea",
+      "value": "aGVsbG9=",
+      "stored": "aGVsbG8="
+    },
+    {
+      "dataType": "pg/int4",
+      "value": 5,
+      "stored": 5
+    },
+    {
+      "dataType": "pg/int8",
+      "value": "7",
+      "stored": "7"
+    },
+    {
+      "dataType": "pg/text",
+      "value": "x",
+      "stored": "x"
+    },
+    {
+      "dataType": "pg/bool",
+      "value": true,
+      "stored": true
+    },
+    {
+      "dataType": "pg/jsonb",
+      "value": {
+        "b": 1,
+        "a": [
+          2
+        ]
+      },
+      "stored": {
+        "b": 1,
+        "a": [
+          2
+        ]
+      }
+    }
+  ]
+}

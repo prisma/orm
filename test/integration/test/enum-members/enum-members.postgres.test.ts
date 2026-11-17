@@ -1,3 +1,4 @@
+import type { Temporal as TemporalTypes } from 'temporal-spec';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { type PortContext, timeouts, withPostgresPort } from '../_harness/postgres';
 import type { Contract } from './_fixture-postgres/generated/contract';
@@ -125,8 +126,8 @@ describe('db.enums on a contract emitted from PSL, against Postgres', () => {
         ]);
         const refused = await Promise.all(
           [
-            { id: 3, hosts: ['10.0.0.1'], ratios: [], ratio: Ratio.members.Half },
-            { id: 4, hosts: ['10.0.0.0/16'], ratios: [], ratio: Ratio.members.Half },
+            { id: 3, hosts: ['10.0.0.1' as never], ratios: [], ratio: Ratio.members.Half },
+            { id: 4, hosts: ['10.0.0.0/16' as never], ratios: [], ratio: Ratio.members.Half },
             { id: 5, hosts: [], ratios: ['0.7'], ratio: Ratio.members.Half },
             { id: 6, hosts: [], ratios: [], ratio: '0.7' },
           ].map((row) =>
@@ -143,7 +144,8 @@ describe('db.enums on a contract emitted from PSL, against Postgres', () => {
           rows: rows.map((row) => ({
             ...row,
             hostsFound: row.hosts.map((host) => Host.has(host)),
-            ratiosFound: row.ratios.map((ratio) => Ratio.has(ratio)),
+            ratiosFound: row.ratios.map((ratio) => Ratio.nameOf(ratio)),
+            ratioFound: Ratio.nameOf(row.ratio),
           })),
           refused,
         }).toEqual({
@@ -154,7 +156,8 @@ describe('db.enums on a contract emitted from PSL, against Postgres', () => {
               ratios: ['0.5', '1.50'],
               ratio: '0.5',
               hostsFound: [true, true, true],
-              ratiosFound: [true, true],
+              ratiosFound: ['Half', 'Whole'],
+              ratioFound: 'Half',
             },
             {
               id: 2,
@@ -162,7 +165,8 @@ describe('db.enums on a contract emitted from PSL, against Postgres', () => {
               ratios: ['0.50'],
               ratio: '0.50',
               hostsFound: [],
-              ratiosFound: [false],
+              ratiosFound: ['Half'],
+              ratioFound: 'Half',
             },
           ],
           refused: [true, true, true, true],
@@ -212,14 +216,23 @@ describe('db.enums on a contract emitted from PSL, against Postgres', () => {
     timeouts.spinUpPpgDev,
   );
 
+  it('types a numeric enum column as the codec type, because a read can return a member with another scale', () => {
+    type Network = Awaited<ReturnType<PortContext<Contract>['db']['public']['Network']['first']>>;
+    expectTypeOf<NonNullable<Network>['ratio']>().toEqualTypeOf<string>();
+  });
+
   it('types each member as the value a query returns for it', () => {
     type Levels = PortContext<Contract>['client']['enums']['public'];
     expectTypeOf<Levels['TextLevel']['members']['Low']>().toEqualTypeOf<'low'>();
     expectTypeOf<Levels['Int4Level']['members']['Low']>().toEqualTypeOf<1>();
     expectTypeOf<Levels['Int8Level']['members']['Low']>().toEqualTypeOf<1n>();
     expectTypeOf<Levels['UuidLevel']['members']['First']>().toEqualTypeOf<typeof uuidA>();
-    expectTypeOf<Levels['StampLevel']['members']['Launch']>().toEqualTypeOf<Temporal.Instant>();
-    expectTypeOf<Levels['DayLevel']['members']['Launch']>().toEqualTypeOf<Temporal.PlainDate>();
+    expectTypeOf<
+      Levels['StampLevel']['members']['Launch']
+    >().toEqualTypeOf<TemporalTypes.Instant>();
+    expectTypeOf<
+      Levels['DayLevel']['members']['Launch']
+    >().toEqualTypeOf<TemporalTypes.PlainDate>();
     expectTypeOf<Levels['Float8Level']['members']['Half']>().toEqualTypeOf<1.5>();
     expectTypeOf<Levels['FloatSpecial']['members']['Nan']>().toEqualTypeOf<number>();
     expectTypeOf<Levels['Int8Level']['values']>().toEqualTypeOf<readonly [1n, 10n]>();

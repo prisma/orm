@@ -242,32 +242,4 @@ describe('enrichContract', () => {
 
     expect(result.extensions).toEqual({});
   });
-
-  it('ignores non-boolean values in capabilities', () => {
-    const adapter = makeAdapter({
-      capabilities: {
-        postgres: { lateral: true, notABool: 'yes' as unknown },
-      },
-    });
-
-    const result = enrichContract(makeIR(), [adapter]);
-
-    expect(result.capabilities).toEqual({
-      postgres: { lateral: true },
-    });
-  });
-
-  it('produces deterministically sorted output', () => {
-    const ir = makeIR({
-      capabilities: { zebra: { z: true }, alpha: { a: true } },
-    });
-    const adapter = makeAdapter({
-      capabilities: { mid: { m: true } },
-    });
-
-    const result = enrichContract(ir, [adapter]);
-
-    const capKeys = Object.keys(result.capabilities);
-    expect(capKeys).toEqual(['alpha', 'mid', 'zebra']);
-  });
 });

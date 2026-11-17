@@ -1,5 +1,6 @@
 # ADR 098 — Runtime accepts contract object or JSON
 
+**Status: Superseded by [ADR 274](ADR%20274%20-%20A%20client%20takes%20a%20typed%20contract%20value%2C%20so%20every%20other%20option%20is%20inferred.md).** A client now takes the contract only as a value, `{ contract }`. Emitted JSON becomes that value through `contractFromJson<Contract>(json)`, and the `contractJson` option is removed. The content below is kept as a historical record.
 
 ## Context
 

@@ -1,7 +1,10 @@
+import { DEFAULT_DATABASE_POLICIES } from '@internal/framework-components/control';
 import { writeRef } from '@internal/migration-tools/refs';
 import { notOk, ok } from '@internal/utils/result';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { CliStructuredError } from '../../src/utils/cli-errors';
+import { errorDatabasePoliciesMovedDuringSign } from '../../src/utils/policy-errors';
+import type { CliInvocation } from '../../src/utils/printed-command';
 import {
   CONNECTION,
   cleanupProjectDirs,
@@ -13,6 +16,7 @@ import {
   HASH_PREVIOUS,
   harness,
   MASKED_CONNECTION,
+  MISSING_COLUMN,
   mocks,
   ormConfig,
   PROFILE_HASH,
@@ -123,8 +127,26 @@ describe('db sign', () => {
           text: 'Left ref "db" untouched (--no-advance-ref)',
         },
       ]);
-      expect(run.presented?.presentation.stdout).toEqual([]);
-      expect(run.stdout).toBe('');
+    });
+
+    it('prints one data line per space: space, status and the contract storage hash', async () => {
+      const dir = await projectDir();
+      mocks.dbSign.mockResolvedValue(
+        ok({
+          spaces: [
+            signedSpace('app', HASH_A),
+            {
+              space: 'pgvector',
+              status: 'unchanged',
+              contract: { storageHash: HASH_EXT, profileHash: PROFILE_HASH },
+            },
+          ],
+        }),
+      );
+
+      const run = await harness(ormConfig()).run(['db', 'sign', '--no-advance-ref'], { cwd: dir });
+
+      expect(run.stdout).toBe(`app\tupdated\t${HASH_A}\npgvector\tunchanged\t${HASH_EXT}\n`);
     });
 
     it('says when a space had no marker before', async () => {
@@ -185,6 +207,15 @@ describe('db sign', () => {
       });
     });
 
+    it('prints a failed space with status failed', async () => {
+      const dir = await projectDir();
+      appFailsExtensionSigns();
+
+      const run = await harness(ormConfig()).run(['db', 'sign'], { cwd: dir });
+
+      expect(run.stdout).toBe(`app\tfailed\t${HASH_A}\npgvector\tupdated\t${HASH_EXT}\n`);
+    });
+
     it('says nothing was signed when no space verified', async () => {
       const dir = await projectDir();
       mocks.dbSign.mockResolvedValue(ok({ spaces: [failedSpace('app', HASH_A)] }));
@@ -209,14 +240,14 @@ describe('db sign', () => {
           code: entry.code,
           severity: entry.severity,
           summary: entry.summary,
-          space: entry.meta?.['space'],
+          meta: entry.meta,
         })),
       ).toEqual([
         {
           code: 'CONTRACT.SCHEMA_VERIFICATION_FAILED',
           severity: 'error',
           summary: 'Database schema does not satisfy contract',
-          space: 'app',
+          meta: { space: 'app', schemaIssues: [MISSING_COLUMN] },
         },
       ]);
       expect(diagnosticsOf(run)[0]?.nextActions).toEqual([
@@ -459,5 +490,39 @@ describe('db sign', () => {
 
     expect(run.exitCode).toBe(0);
     expect(envelopeOf(run)?.ok).toBe(true);
+  });
+});
+
+describe('db sign when the policies move while it runs', () => {
+  it('advises signing again with the contract and ref flags the user gave', async () => {
+    mocks.dbSign.mockImplementation(async (options: { invocation: CliInvocation }) =>
+      notOk(
+        errorDatabasePoliciesMovedDuringSign({
+          spaceId: 'app',
+          checked: DEFAULT_DATABASE_POLICIES,
+          found: { ...DEFAULT_DATABASE_POLICIES, change: ['migrate'] },
+          invocation: options.invocation,
+        }),
+      ),
+    );
+    const dir = await projectDir();
+    await writeRef(refsDirOf(dir), 'production', { hash: HASH_A, invariants: [] });
+
+    const run = await harness(ormConfig()).run(
+      ['db', 'sign', '--contract', 'production', '--no-advance-ref', '--json'],
+      { cwd: dir },
+    );
+
+    expect(run.exitCode).toBe(2);
+    expect(envelopeOf(run)?.error).toMatchObject({
+      code: 'MIGRATION.MARKER_CAS_FAILURE',
+      nextActions: [
+        {
+          kind: 'run-command',
+          label: 'Sign again',
+          command: 'prisma-test db sign --contract production --no-advance-ref',
+        },
+      ],
+    });
   });
 });

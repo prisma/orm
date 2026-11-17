@@ -69,6 +69,7 @@ Decided by Will on 2026-10-12: contracts written in either form must behave the 
 - `--delete` on an enum value: sets it to NULL where the field is optional, otherwise refuses.
 - `--delete` on a variant stored in its base's table: deletes its rows and drops its columns. The refusal says rows are deleted.
 - `--delete <namespace>` answers every question for the models in it.
+- The `allow` question and its types use family-neutral words (Will, 2026-10-19). The CLI asks "would widen who can read and write its data", not "its rows". The framework doc comments drop the row-level-security examples. `accessWidening` is renamed `accessChanges`, because it also lists changes that do not widen access, such as dropping a policy. This touches the framework, the CLI and the Postgres target.
 
 **Risk to settle in its spec:** a value object can contain itself (ADR 178's `NavItem.children`). Renaming a field inside it means rewriting to any depth, which a fixed SQL JSON expression or MongoDB update cannot do.
 

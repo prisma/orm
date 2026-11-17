@@ -507,7 +507,13 @@
                   "id"
                 ]
               },
-              "uniques": []
+              "uniques": [
+                {
+                  "columns": [
+                    "user_id"
+                  ]
+                }
+              ]
             },
             "typed_rows": {
               "columns": {
@@ -518,7 +524,7 @@
                 },
                 "created_at": {
                   "codecId": "sqlite/datetime@1",
-                  "dataType": "sqlite/text",
+                  "dataType": "sqlite/datetime",
                   "nullable": false
                 },
                 "id": {
@@ -533,7 +539,7 @@
                 },
                 "metadata": {
                   "codecId": "sqlite/json@1",
-                  "dataType": "sqlite/text",
+                  "dataType": "sqlite/json",
                   "nullable": true
                 }
               },
@@ -583,16 +589,19 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "510b859cf27e09d6b3daa5284cd5356d78b5c4d2e355a3241ea25395c8ba6b6d"
+    "storageHash": "348cfda3e550656d13ba752be2b612bafe9c9ec57529992a4fcdc49e543ff2f2"
   },
   "capabilities": {
     "sql": {
       "foreignKeys": true,
       "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
       "insertOnConflictWithoutTarget": true,
       "jsonAgg": true,
+      "jsonAggWithoutTruncation": true,
       "limit": true,
       "orderBy": true,
+      "outerReferencesInDerivedTables": true,
       "returning": true
     }
   },

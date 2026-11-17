@@ -34,7 +34,7 @@ Postgres now treats `$1` as `vector` directly. The same fix applies to several J
 
 Our SQL renderer is the thing assembling that string. **Where does the decision to emit `::vector` belong?**
 
-Today, in `packages/3-targets/6-adapters/postgres/src/core/sql-renderer.ts`:
+Today, in `packages/3-targets/postgres/2-adapter/src/core/sql-renderer.ts`:
 
 ```ts
 function getCodecParamCast(codecId: string | undefined): string | undefined {
@@ -141,7 +141,7 @@ Throwing on miss is a deliberate strengthening of the "bare factories can't see 
 
 ### Enum parameters (updated October 12, 2026)
 
-`pg/enum@1` has no static `meta.db.sql.postgres.nativeType`: the type name is per column, held in `typeParams.typeName`. The renderer (`renderTypedParam` in `packages/3-targets/6-adapters/postgres/src/core/sql-renderer.ts`) now decides casts by data type rather than by `nativeType`. A parameter is written as plain `$N` only when its data type is one whose type PostgreSQL infers reliably (`POSTGRES_INFERRABLE_DATA_TYPES`); every other parameter, enums included, is written as `$N::<name>`, where the name comes from the data type and the parameter's `typeParams`. So an enum parameter is cast to its own type, for example `$1::"ticket_status"`.
+`pg/enum@1` has no static `meta.db.sql.postgres.nativeType`: the type name is per column, held in `typeParams.typeName`. The renderer (`renderTypedParam` in `packages/3-targets/postgres/2-adapter/src/core/sql-renderer.ts`) now decides casts by data type rather than by `nativeType`. A parameter is written as plain `$N` only when its data type is one whose type PostgreSQL infers reliably (`POSTGRES_INFERRABLE_DATA_TYPES`); every other parameter, enums included, is written as `$N::<name>`, where the name comes from the data type and the parameter's `typeParams`. So an enum parameter is cast to its own type, for example `$1::"ticket_status"`.
 
 ## Consequences
 

@@ -1,6 +1,6 @@
 ---
 description: PostgreSQL LATERAL and json_agg rendering patterns
-globs: ["packages/3-targets/**", "packages/2-sql/**"]
+globs: ["packages/3-targets/**", "packages/2-sql-family/**"]
 alwaysApply: false
 ---
 

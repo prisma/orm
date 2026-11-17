@@ -40,6 +40,15 @@ test('prepared predicate positions preserve codec identity, scalar shape, nullab
   collection.where((user) => user.id.neq(params.optional));
   // @ts-expect-error nullable ordering operands remain unsupported
   collection.where((user) => user.id.gt(params.optional));
+  collection.where((user) => user.id.gt(user.invitedById));
+  collection.where((user) => user.id.gte(user.invitedById));
+  collection.where((user) => user.id.lt(user.invitedById));
+  collection.where((user) => user.invitedById.lte(user.invitedById));
+  collection.where((user) => user.posts.some((post) => post.views.lt(user.invitedById)));
+  // @ts-expect-error nullable column of a different codec
+  collection.where((user) => user.email.gt(user.invitedById));
+  // @ts-expect-error nullable prepared parameter on a nullable receiver
+  collection.where((user) => user.invitedById.lte(params.optional));
   // @ts-expect-error nullable list member
   collection.where((user) => user.id.in([params.id, params.optional]));
   // @ts-expect-error wrong codec in a fixed list
@@ -53,19 +62,6 @@ test('prepared predicate positions preserve codec identity, scalar shape, nullab
   // @ts-expect-error wrong terminal-filter codec
   collection.select('id').prepared.first({ id: params.email });
 });
-
-type InputContract = ContractWithTypeMaps<
-  Omit<TestContract, TypeMapsPhantomKey>,
-  {
-    codecTypes: Omit<ExtractCodecTypes<TestContract>, 'pg/int4@1'> & {
-      'pg/int4@1': {
-        input: number | `${number}`;
-        output: number;
-        traits: 'equality' | 'order' | 'numeric';
-      };
-    };
-  }
->;
 
 type NoEqualityContract = ContractWithTypeMaps<
   Omit<TestContract, TypeMapsPhantomKey>,
@@ -99,15 +95,12 @@ type RefinedInputContract = ContractWithTypeMaps<
   }
 >;
 
-test('ordinary predicate literals retain their existing field value types', () => {
-  type Contracts = InputContract | RefinedInputContract;
-  type Operand = Parameters<ModelAccessor<Contracts, 'User'>['id']['eq']>[0];
-  type Filter = ShorthandWhereFilter<Contracts, 'public', 'User'>;
-  expectTypeOf<number>().toExtend<Operand>();
-  expectTypeOf<'42'>().not.toExtend<Operand>();
-  expectTypeOf<{ id: number }>().toExtend<Filter>();
-  expectTypeOf<{ id: '42' }>().not.toExtend<Filter>();
-  expectTypeOf<typeof params.id>().toExtend<Operand>();
-  expectTypeOf<{ id: typeof params.optional }>().toExtend<Filter>();
-  expectTypeOf<typeof params.email>().not.toExtend<Operand>();
+test('predicate literals take the field input type', () => {
+  type FieldInputOperand = Parameters<ModelAccessor<RefinedInputContract, 'User'>['id']['eq']>[0];
+  type FieldInputFilter = ShorthandWhereFilter<RefinedInputContract, 'public', 'User'>;
+  expectTypeOf<'42'>().toExtend<FieldInputOperand>();
+  expectTypeOf<number>().not.toExtend<FieldInputOperand>();
+  expectTypeOf<{ id: '42' }>().toExtend<FieldInputFilter>();
+  expectTypeOf<{ id: 42 }>().not.toExtend<FieldInputFilter>();
+  expectTypeOf<{ id: typeof params.optional }>().toExtend<FieldInputFilter>();
 });

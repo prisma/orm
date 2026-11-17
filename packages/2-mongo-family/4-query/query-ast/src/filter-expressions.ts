@@ -4,7 +4,7 @@ import { MongoAstNode } from './ast-node';
 import { ormError } from './orm-errors';
 import type { MongoFilterRewriter, MongoFilterVisitor } from './visitors';
 
-const FILTER_EXPR_BRAND = '__prismaNextMongoFilter__';
+const FILTER_EXPR_BRAND = '__prismaMongoFilter__';
 
 export function isMongoFilterExpr(value: unknown): value is MongoFilterExpr {
   return typeof value === 'object' && value !== null && FILTER_EXPR_BRAND in value;

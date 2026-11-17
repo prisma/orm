@@ -302,13 +302,12 @@ model Doc { declared pgvector.Vector\n contributed postgis.Geometry\n model Doc.
     });
     const typeConstructor = {
       kind: 'typeConstructor',
-      output: { codecId: 'fixture/scalar', nativeType: 'fixture' },
+      output: { codecId: 'fixture/scalar' },
     } as const;
     const binder = testBinder({
       sources,
       symbolTable,
       authoringContributions: {
-        field: {},
         type: {
           pgvector: { Vector: typeConstructor },
           postgis: { Geometry: typeConstructor },

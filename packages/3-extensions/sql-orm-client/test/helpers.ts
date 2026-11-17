@@ -1,3 +1,4 @@
+import { postgresAdapterCapabilities } from '@internal/adapter-postgres/adapter';
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
 import postgresAdapter from '@internal/adapter-postgres/runtime';
 import {
@@ -11,13 +12,21 @@ import type {
   ColumnTypeDescriptor,
 } from '@internal/framework-components/codec';
 import { dataTypeId } from '@internal/framework-components/codec';
+import {
+  type ExtensionPackRef,
+  singleGeneratorBinding,
+} from '@internal/framework-components/components';
 import type { RuntimeMutationDefaultGenerator } from '@internal/framework-components/runtime';
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { Codec, SelectAst, SqlStatementStats } from '@internal/sql-relational-core/ast';
 import type { SqlExecutionPlan, SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
+import type { RuntimeScope } from '@internal/sql-relational-core/types';
 import {
+  type ActivityHandle,
+  type ActivitySource,
+  activitySource,
   createExecutionContext,
   createSqlExecutionStack,
   type RuntimeParameterizedCodecDescriptor,
@@ -217,8 +226,8 @@ const pgVectorCodecStubExtension: SqlRuntimeExtensionDescriptor<'postgres'> = ((
   const factory: (params: { length: number }) => (ctx: CodecInstanceContext) => Codec = () => () =>
     defineTestCodec({
       typeId: 'pg/vector@1',
-      encode: (value: number[]) => value,
-      decode: (wire: number[]) => wire,
+      toWire: (value: number[]) => value,
+      fromWire: (wire: number[]) => wire,
     });
 
   const vectorDescriptor: RuntimeParameterizedCodecDescriptor<{ length: number }> = {
@@ -265,10 +274,15 @@ export function buildTestContextFromContract<TContract extends FrameworkContract
   contract: TContract,
   options?: {
     readonly mutationDefaultGenerators?: ReadonlyArray<RuntimeMutationDefaultGenerator>;
+    readonly extensions?: ReadonlyArray<SqlRuntimeExtensionDescriptor<'postgres'>>;
+    readonly adapter?: typeof postgresAdapter;
   },
 ): ExecutionContext<TContract> {
   const generators = options?.mutationDefaultGenerators ?? [];
-  const extensions: SqlRuntimeExtensionDescriptor<'postgres'>[] = [pgVectorCodecStubExtension];
+  const extensions: SqlRuntimeExtensionDescriptor<'postgres'>[] = [
+    pgVectorCodecStubExtension,
+    ...(options?.extensions ?? []),
+  ];
   if (generators.length > 0) {
     extensions.push({
       kind: 'extension',
@@ -288,11 +302,24 @@ export function buildTestContextFromContract<TContract extends FrameworkContract
     contract,
     stack: createSqlExecutionStack({
       target: postgresTarget,
-      adapter: postgresAdapter,
+      adapter: options?.adapter ?? postgresAdapter,
       extensions,
     }),
   });
 }
+
+/** The Postgres adapter, reporting that the database cannot run the one-query include, so includes load with one query per relation. */
+export const perRelationPostgresAdapter: typeof postgresAdapter = {
+  ...postgresAdapter,
+  capabilities: {
+    ...postgresAdapterCapabilities,
+    sql: {
+      ...postgresAdapterCapabilities.sql,
+      outerReferencesInDerivedTables: false,
+      jsonAggWithoutTruncation: false,
+    },
+  },
+};
 
 const testContext: ExecutionContext<TestContract> = buildTestContextFromContract(baseTestContract);
 
@@ -787,53 +814,72 @@ export function buildManyToManyContractWithTargetRelation() {
  * Builds a User <-> Role M:N contract whose `user_roles` junction carries a
  * NOT NULL `level` payload column whose only default is an execution-time
  * onCreate generator (`test-level`) — no storage default. Authored through the
- * DSL: `field.generated` stamps the execution onCreate default and leaves the
- * column NOT NULL with no storage default, so the connect/create gate stays
- * open and `insertJunctionLink` must populate `level` before the INSERT.
+ * DSL: `.onCreate(gen.testLevel())` stamps the execution onCreate default and
+ * leaves the column NOT NULL with no storage default, so the connect/create gate
+ * stays open and `insertJunctionLink` must populate `level` before the INSERT.
  */
 export function buildExecutionDefaultJunctionContract() {
-  const User = model('User', {
-    fields: {
-      id: field.column(int4Column).id(),
-      name: field.column(textColumn),
-      email: field.column(textColumn).unique(),
+  return defineContract(
+    { extensions: { 'test-mutation-default-generators': testLevelGeneratorPack } },
+    ({ gen }) => {
+      const User = model('User', {
+        fields: {
+          id: field.column(int4Column).id(),
+          name: field.column(textColumn),
+          email: field.column(textColumn).unique(),
+        },
+      });
+
+      const Role = model('Role', {
+        fields: {
+          id: field.column(textColumn).id(),
+          name: field.column(textColumn).unique(),
+        },
+      }).sql({ table: 'roles' });
+
+      const UserRole = model('UserRole', {
+        fields: {
+          userId: field.column(int4Column).column('user_id'),
+          roleId: field.column(textColumn).column('role_id'),
+          level: field.column(int4Column).onCreate(gen.testLevel()),
+        },
+      })
+        .attributes(({ fields, constraints }) => ({
+          id: constraints.id([fields.userId, fields.roleId]),
+        }))
+        .sql({ table: 'user_roles' });
+
+      const UserWithRelation = User.relations({
+        roles: rel.manyToMany(() => Role, {
+          through: () => UserRole,
+          from: 'userId',
+          to: 'roleId',
+        }),
+      }).sql({ table: 'users' });
+
+      return { models: { User: UserWithRelation, Role, UserRole } };
     },
-  });
-
-  const Role = model('Role', {
-    fields: {
-      id: field.column(textColumn).id(),
-      name: field.column(textColumn).unique(),
-    },
-  }).sql({ table: 'roles' });
-
-  const UserRole = model('UserRole', {
-    fields: {
-      userId: field.column(int4Column).column('user_id'),
-      roleId: field.column(textColumn).column('role_id'),
-      level: field.generated({
-        type: int4Column,
-        generated: { kind: 'generator', id: 'test-level' },
-      }),
-    },
-  })
-    .attributes(({ fields, constraints }) => ({
-      id: constraints.id([fields.userId, fields.roleId]),
-    }))
-    .sql({ table: 'user_roles' });
-
-  const UserWithRelation = User.relations({
-    roles: rel.manyToMany(() => Role, {
-      through: () => UserRole,
-      from: 'userId',
-      to: 'roleId',
-    }),
-  }).sql({ table: 'users' });
-
-  return defineContract({
-    models: { User: UserWithRelation, Role, UserRole },
-  });
+  );
 }
+
+const testLevelGeneratorPack = {
+  kind: 'extension',
+  id: 'test-mutation-default-generators',
+  familyId: 'sql',
+  targetId: 'postgres',
+  version: '0.0.1',
+  controlMutationDefaults: {
+    defaultFunctionRegistry: new Map(),
+    generatorDescriptors: [{ id: 'test-level' }],
+  },
+  generatorFunctions: [
+    {
+      name: 'testLevel',
+      signature: { documentation: 'Generates the junction row level.' },
+      bindings: [singleGeneratorBinding({ codecIds: ['pg/int4@1'], generatorId: 'test-level' })],
+    },
+  ],
+} as const satisfies ExtensionPackRef<'sql', 'postgres'>;
 
 /**
  * Builds a contract whose `User` model (table `users`) keys on a custom
@@ -891,12 +937,36 @@ export function buildCompositeForeignKeyContract() {
   return defineContract({ models: { Customer, Order } });
 }
 
+/** An activity source for a test stub: each activity's handle sends its statements, and opens its transaction or connection, through `target` itself, and ends doing nothing. */
+export function stubActivitySource(target: RuntimeScope): ActivitySource {
+  const source: ActivitySource = {
+    async startActivity(start) {
+      const handle = Object.assign(Object.create(target), {
+        activity: {
+          id: 'stub-activity',
+          kind: start.kind,
+          contentHash: start.contentHash,
+          annotations: start.annotations ?? new Map(),
+        },
+        intercepted: undefined,
+        end: async () => {},
+        startActivity: source.startActivity,
+        planContentHash: source.planContentHash,
+        [activitySource]: source,
+      });
+      return handle as ActivityHandle<typeof start.kind>;
+    },
+    planContentHash: async () => 'stub-plan-hash',
+  };
+  return source;
+}
+
 export function createMockRuntime(): MockRuntime {
   const executions: MockExecution[] = [];
   let nextResults: Record<string, unknown>[][] = [];
   let nextStats: SqlStatementStats[] = [];
 
-  const runtime: MockRuntime = {
+  const base = {
     executions,
     setNextResults(results: Record<string, unknown>[][]) {
       nextResults = [...results];
@@ -926,6 +996,7 @@ export function createMockRuntime(): MockRuntime {
       return stats;
     },
   };
+  const runtime: MockRuntime = Object.assign(base, { [activitySource]: stubActivitySource(base) });
 
   return runtime;
 }

@@ -1,4 +1,5 @@
 import { buildEnumsMapForNamespace } from '@internal/contract/enum-accessor';
+import type { JsonValue } from '@internal/contract/types';
 import { type EnumTypeHandle, enumType } from '@internal/contract-authoring';
 import {
   type AnyCodecDescriptor,
@@ -8,23 +9,26 @@ import {
 } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { mongoDataType } from '@internal/mongo-contract/data-type';
+import { mongoCodecLookup } from '@internal/mongo-contract/test';
 import { jsonValue, mapBlock } from '@internal/psl-parser';
 import { describe, expect, it } from 'vitest';
-import { mongoCodecLookup } from './derive-json-schema-helpers';
 import { interpretMongoContract } from './interpreter-test-helpers';
+
+const textType = mongoDataType('test/text', { read: (json) => json, bsonTypes: ['string'] });
 
 function textCodec(
   id: string,
-  encodeJson: (v: unknown) => unknown,
-  decodeJson: (j: unknown) => unknown,
+  toStored: (value: unknown) => JsonValue,
+  fromStored: (json: JsonValue) => unknown,
 ): Codec {
   return {
     id,
-    encode: async (v: unknown) => v,
-    decode: async (w: unknown) => w,
-    encodeJson,
-    decodeJson,
-  } as unknown as Codec;
+    dataType: textType,
+    toWire: async (v: unknown) => v,
+    fromWire: async (w: unknown) => w,
+    toDataTypeValue: (value) => textType.valueFrom(toStored(value), {}),
+    fromDataTypeValue: (value) => fromStored(value.value),
+  };
 }
 
 const prefixedCodec = textCodec(
@@ -39,7 +43,7 @@ const testCodecs = [
     'test/refusing@1',
     (v) => {
       if (v === 'bad') throw new Error('bad is not allowed');
-      return v;
+      return String(v);
     },
     (j) => j,
   ),
@@ -64,8 +68,8 @@ const codecLookup: CodecLookupWithDescriptors = {
 };
 
 const dataTypeLookup = createDataTypeLookup([
-  mongoDataType('mongo/objectid', { bsonTypes: ['objectId'] }),
-  mongoDataType('test/text', { bsonTypes: ['string'] }),
+  mongoDataType('mongo/objectid', { read: (json) => json, bsonTypes: ['objectId'] }),
+  textType,
 ]);
 
 const SCHEMA = `enum Status {
@@ -82,12 +86,11 @@ model Job {
 /** Interprets `SCHEMA` with an enum factory that returns `handle`, as a factory that reads the block its own way would. */
 function interpretWithEnum(handle: EnumTypeHandle) {
   return interpretMongoContract(SCHEMA, {
-    scalarTypeCodecIds: new Map([['ObjectId', 'mongo/objectId@1']]),
+    scalarTypes: new Map([['ObjectId', 'mongo/objectId@1']]),
     defaultFunctionRegistry: new Map(),
     codecLookup,
-    dataTypes: { entries: {}, lookup: dataTypeLookup },
+    dataTypes: { entries: {}, lookup: dataTypeLookup, dataTypeOfCodec: () => undefined },
     authoringContributions: {
-      field: {},
       type: {},
       modelAttributes: {},
       entityTypes: {
@@ -137,7 +140,7 @@ function diagnosticsOf(handle: EnumTypeHandle) {
 }
 
 describe('Mongo PSL enum members', () => {
-  it('are written in their stored form, the codec encodeJson of each decoded value', () => {
+  it('are written in their stored form, the value the codec gives for each decoded value', () => {
     const contract = interpretPrefixedEnum();
     const storage = contract.storage as unknown as {
       namespaces: Record<

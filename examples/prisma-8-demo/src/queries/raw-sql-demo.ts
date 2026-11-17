@@ -33,5 +33,5 @@ export async function rawSqlDemo(limit = 10) {
     .orderBy('email')
     .limit(limit)
     .build();
-  return await db.runtime().query(plan);
+  return await db.query(plan);
 }

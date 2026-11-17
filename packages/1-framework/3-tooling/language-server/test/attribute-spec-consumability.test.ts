@@ -1,5 +1,6 @@
-import type { PrismaNextConfig } from '@internal/config-loader';
+import type { PrismaConfig } from '@internal/config-loader';
 import * as configLoader from '@internal/config-loader';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import {
   assembleAuthoringContributions,
   assembleControlMutationDefaults,
@@ -69,7 +70,7 @@ const targetPack = {
   },
 };
 
-function pslProjectConfig(): PrismaNextConfig {
+function pslProjectConfig(): PrismaConfig {
   return {
     family: familyPack,
     target: targetPack,
@@ -82,7 +83,7 @@ function pslProjectConfig(): PrismaNextConfig {
         interpret: () => ({}) as never,
       },
     },
-  } as unknown as PrismaNextConfig;
+  } as unknown as PrismaConfig;
 }
 
 describe('assembled attribute specs are consumable from a resolved project', () => {
@@ -114,6 +115,7 @@ describe('assembled attribute specs are consumable from a resolved project', () 
       symbols: pipeline.symbolTable,
       model,
       defaultFunctionRegistry: controlMutationDefaults.defaultFunctionRegistry,
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
       dataTypes: EMPTY_DATA_TYPES,
     });
     expect(spec).toMatchObject({
@@ -136,6 +138,7 @@ describe('assembled attribute specs are consumable from a resolved project', () 
         binder: testBinder(pipeline),
         symbolTable: pipeline.symbolTable,
         pslBlockDescriptors: {},
+        generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
         authoringContributions,
         controlMutationDefaults,
       },
@@ -146,7 +149,7 @@ describe('assembled attribute specs are consumable from a resolved project', () 
   it('provides signature help from the SQL @@base spec factory', async () => {
     expectBaseSpecSignatureHelp(
       await importAttributeSpecs(
-        '../../../../2-sql/2-authoring/contract-psl/src/sql-attribute-specs.ts',
+        '../../../../2-sql-family/2-authoring/contract-psl/src/sql-attribute-specs.ts',
         'sqlAttributeSpecs',
       ),
     );
@@ -159,23 +162,6 @@ describe('assembled attribute specs are consumable from a resolved project', () 
         'mongoAttributeSpecs',
       ),
     );
-  });
-
-  it('enumerates a contributed model attribute by its claimed name', async () => {
-    vi.spyOn(configLoader, 'loadConfig').mockResolvedValue(
-      ok({ config: pslProjectConfig(), diagnostics: [] }),
-    );
-
-    const result = await resolveConfigInputs('/abs/prisma.config.ts', () => '// use prisma-8\n');
-
-    const contributions = result.interpretation?.context.authoringContributions;
-    expect(contributions).toBeDefined();
-    if (contributions === undefined) return;
-
-    const specs = assembleAttributeSpecs(contributions);
-
-    expect('rls' in specs.model).toBe(true);
-    expect(Object.keys(contributions.modelAttributes)).toEqual(['security']);
   });
 
   it('enumerates a family-registered field attribute and invokes its factory', async () => {
@@ -205,8 +191,10 @@ describe('assembled attribute specs are consumable from a resolved project', () 
       model,
       field,
       typeResolution: undefined,
+      contributedType: undefined,
       defaultFunctionRegistry:
         interpretation.context.controlMutationDefaults.defaultFunctionRegistry,
+      generatorFunctions: interpretation.context.generatorFunctions,
       dataTypes: interpretation.context.dataTypes,
     });
     expect(spec).toMatchObject({
@@ -239,6 +227,7 @@ describe('assembled attribute specs are consumable from a resolved project', () 
       model,
       defaultFunctionRegistry:
         interpretation.context.controlMutationDefaults.defaultFunctionRegistry,
+      generatorFunctions: interpretation.context.generatorFunctions,
       dataTypes: interpretation.context.dataTypes,
     };
 

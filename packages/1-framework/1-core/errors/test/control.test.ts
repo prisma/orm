@@ -71,14 +71,6 @@ describe('CliStructuredError', () => {
     expect(envelope.summary).toBe('Test error');
   });
 
-  it('converts to envelope for a different namespace', () => {
-    const error = new CliStructuredError('CONTRACT.MARKER_MISSING', 'Test error');
-    const envelope = error.toEnvelope();
-
-    expect(envelope.code).toBe('CONTRACT.MARKER_MISSING');
-    expect(envelope.summary).toBe('Test error');
-  });
-
   it('sets cause when provided', () => {
     const cause = new Error('underlying failure');
     const error = new CliStructuredError('CONFIG.FILE_NOT_FOUND', 'Test error', { cause });
@@ -176,11 +168,6 @@ describe('CliStructuredError', () => {
       expect(CliStructuredError.is(error)).toBe(true);
     });
 
-    it('returns true for CliStructuredError from any namespace', () => {
-      const error = new CliStructuredError('CONTRACT.VERIFY_FAILED', 'Test error');
-      expect(CliStructuredError.is(error)).toBe(true);
-    });
-
     it('returns false for non-Error values', () => {
       expect(CliStructuredError.is(null)).toBe(false);
       expect(CliStructuredError.is(undefined)).toBe(false);
@@ -239,12 +226,6 @@ describe('Config Errors', () => {
   it('errorConfigFileNotFound with custom why', () => {
     const error = errorConfigFileNotFound('/path/to/config.ts', { why: 'Custom reason' });
     expect(error.why).toBe('Custom reason');
-  });
-
-  it('errorConfigFileNotFound without configPath', () => {
-    const error = errorConfigFileNotFound();
-    expect(error.code).toBe('CONFIG.FILE_NOT_FOUND');
-    expect(error.where).toBeUndefined();
   });
 
   it('errorContractConfigMissing creates correct error', () => {

@@ -16,7 +16,11 @@
       {
         "description": "ensure column \"expiresAt\" is missing",
         "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
-        "params": ["public", "post", "expiresAt"]
+        "params": ["public", "post", "expiresAt"],
+        "expectation": {
+          "expects": "absent",
+          "object": "column \"expiresAt\" on \"post\""
+        }
       }
     ],
     "execute": [
@@ -29,7 +33,21 @@
       {
         "description": "verify column \"expiresAt\" exists",
         "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
-        "params": ["public", "post", "expiresAt"]
+        "params": ["public", "post", "expiresAt"],
+        "expectation": {
+          "expects": "present",
+          "object": "column \"expiresAt\" on \"post\""
+        }
+      },
+      {
+        "description": "verify column \"expiresAt\" has type \"timestamp with time zone\"",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_attribute\" AS \"a\" INNER JOIN \"pg_class\" AS \"c\" ON \"c\".\"oid\" = \"a\".\"attrelid\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"relnamespace\" WHERE (\"n\".\"nspname\" = $1 AND \"c\".\"relname\" = $2 AND \"a\".\"attname\" = $3 AND (format_type(\"a\".\"atttypid\", \"a\".\"atttypmod\")) = $4 AND NOT (\"a\".\"attisdropped\"))) AS \"result\"",
+        "params": ["public", "post", "expiresAt", "timestamp with time zone"]
+      },
+      {
+        "description": "verify column \"expiresAt\" is NOT NULL",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3 AND \"is_nullable\" = $4)) AS \"result\"",
+        "params": ["public", "post", "expiresAt", "NO"]
       }
     ]
   }

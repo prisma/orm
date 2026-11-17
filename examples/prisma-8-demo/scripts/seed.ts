@@ -20,7 +20,6 @@ import 'dotenv/config';
 
 import { loadAppConfig } from '../src/app-config';
 import { NotFoundError } from '../src/errors';
-import { createOrmClient } from '../src/orm-client/client';
 import 'temporal-polyfill/full/global';
 import { db } from '../src/prisma/db';
 
@@ -97,14 +96,14 @@ async function main() {
     // The counters are chosen so the integer-representation demos have
     // something to say (`integer-representations`, `aggregate-precision`):
     //
-    // - viewCount is `BigIntNumber`, a JS `number`. Every row and the total
+    // - viewCount is `BigInt(as: number)`, a JS `number`. Every row and the total
     //   stay inside ±(2^53 − 1), so `sum('viewCount')` answers normally.
     // - impressionCount is `BigInt`, a `bigint`. No single row crosses the
     //   safe-integer range — 2^52 twice and a thousand — but their total is
     //   2^53 + 1000. That is what makes `sum('impressionCount')` throw and
     //   `sumBigInt('impressionCount')` answer: the guard is about the value
     //   the aggregate produces, not about the values it read.
-    // - reachScore is `UnboundedInt`, exact at any magnitude. Two rows sit
+    // - reachScore is `BigInt(storage: numeric)`, exact at any magnitude. Two rows sit
     //   past 2^63 — where a 64-bit column would already have overflowed —
     //   and one is small, because the same column holds ordinary values too.
     const firstPostRows = await runtime.query(
@@ -222,7 +221,7 @@ async function main() {
     // and, for the multi-table `Feature` variant, write the base + variant rows in one
     // transaction. These rows power the polymorphic-include demos (`repo-task-board`,
     // `repo-bug-triage`, `repo-feature-roadmap`).
-    const orm = createOrmClient(runtime);
+    const orm = db.orm.public;
 
     await orm.Task.bugs().create({
       title: 'Login crashes on Safari',

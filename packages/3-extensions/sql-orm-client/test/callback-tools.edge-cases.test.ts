@@ -4,7 +4,7 @@ import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import { websearchToTsquery } from '@internal/target-postgres/full-text';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import type { PostgresContract } from '../../../3-targets/6-adapters/postgres/src/core/types';
+import type { PostgresContract } from '../../../3-targets/postgres/2-adapter/src/core/types';
 import { Collection } from '../src/collection';
 import { orm } from '../src/orm';
 import { compileSelect } from '../src/query-plan-select';

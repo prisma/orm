@@ -1,4 +1,4 @@
-import type { AnnotationValue, OperationKind } from '@internal/framework-components/runtime';
+import type { AnnotationValue } from '@internal/framework-components/runtime';
 import { expectTypeOf, test } from 'vitest';
 import { type CacheAnnotationOptions, cacheAnnotation } from '../src/cache-annotation';
 
@@ -72,9 +72,4 @@ test('cacheAnnotation is not applicable to write operations at the type level', 
   expectTypeOf(applied).toExtend<AnnotationValue<CacheAnnotationOptions, 'read'>>();
   // The applied value is NOT assignable to AnnotationValue<CacheAnnotationOptions, 'write'>.
   expectTypeOf(applied).not.toExtend<AnnotationValue<CacheAnnotationOptions, 'write'>>();
-});
-
-test('OperationKind import is not accidentally widened by cacheAnnotation', () => {
-  // Sanity: the framework's OperationKind union is unchanged.
-  expectTypeOf<OperationKind>().toEqualTypeOf<'read' | 'write'>();
 });

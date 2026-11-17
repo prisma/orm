@@ -1,6 +1,7 @@
 import {
   type ArgType,
   type Binder,
+  EMPTY_DATA_TYPES,
   isNamespaceLike,
   memberEntries,
   type Scope,
@@ -148,7 +149,7 @@ function valueItems(
   if (syntax === 'functionName') return [];
   if (qualifier !== undefined) return qualifiedItems(input, type, qualifier);
   if (type.kind === 'taggedLiteral' || type.kind === 'dataTypeValue') {
-    return type.tags.map((tag) => ({
+    const tags = type.tags.map((tag) => ({
       ...completionItem(
         input,
         tag,
@@ -158,6 +159,9 @@ function valueItems(
       ),
       detail: type.documentation,
     }));
+    return type.kind === 'dataTypeValue'
+      ? [...scalarItems(input, type.suggestions), ...tags]
+      : tags;
   }
   switch (type.kind) {
     case 'identifier':
@@ -209,6 +213,7 @@ function entityItems(
   return scopeCompletionItems(
     entries,
     input.binder,
+    EMPTY_DATA_TYPES,
     {
       start: input.sourceFile.positionAt(input.context.replacementStartOffset),
       end: input.sourceFile.positionAt(input.context.replacementEndOffset),

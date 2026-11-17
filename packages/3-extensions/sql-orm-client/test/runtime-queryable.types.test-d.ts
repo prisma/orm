@@ -5,9 +5,14 @@ import type {
   RuntimeScope as CanonicalRuntimeScope,
   SqlOrmPlan,
 } from '@internal/sql-relational-core/types';
-import type { Runtime, RuntimeQueryable as SqlRuntimeQueryable } from '@internal/sql-runtime';
+import type {
+  ActivitySource,
+  activitySource,
+  Runtime,
+  RuntimeQueryable as SqlRuntimeQueryable,
+} from '@internal/sql-runtime';
 import { expectTypeOf, test } from 'vitest';
-import type { RuntimeConnection, RuntimeQueryable, RuntimeTransaction } from '../src/types';
+import type { RuntimeQueryable } from '../src/types';
 
 test('RuntimeScope from sql-relational-core is the canonical SQL runtime surface', () => {
   expectTypeOf<SqlOrmPlan>().toEqualTypeOf<SqlExecutionPlan | SqlQueryPlan>();
@@ -16,24 +21,6 @@ test('RuntimeScope from sql-relational-core is the canonical SQL runtime surface
 test('sql-runtime RuntimeQueryable extends the canonical RuntimeScope', () => {
   const runtimeQueryable = {} as SqlRuntimeQueryable;
   expectTypeOf(runtimeQueryable).toExtend<CanonicalRuntimeScope>();
-});
-
-test('RuntimeQueryable extends RuntimeScope with optional SQL-domain connection/transaction methods', () => {
-  const queryable = {} as RuntimeQueryable;
-  expectTypeOf(queryable).toExtend<CanonicalRuntimeScope>();
-  expectTypeOf<RuntimeQueryable['connection']>().toEqualTypeOf<
-    (() => Promise<RuntimeConnection>) | undefined
-  >();
-  expectTypeOf<RuntimeQueryable['transaction']>().toEqualTypeOf<
-    (() => Promise<RuntimeTransaction>) | undefined
-  >();
-});
-
-test('RuntimeConnection and RuntimeTransaction inherit the canonical execute surface', () => {
-  const connection = {} as RuntimeConnection;
-  const transaction = {} as RuntimeTransaction;
-  expectTypeOf(connection).toExtend<CanonicalRuntimeScope>();
-  expectTypeOf(transaction).toExtend<CanonicalRuntimeScope>();
 });
 
 test('SQL Runtime is structurally assignable to RuntimeQueryable', () => {
@@ -54,4 +41,13 @@ test('RuntimeScope query accepts a pre-lowered plan with a row binding', () => {
   const plan = {} as SqlExecutionPlan<Row>;
   const scope = {} as CanonicalRuntimeScope;
   expectTypeOf(scope.query(plan)).toEqualTypeOf<AsyncIterableResult<Row>>();
+});
+
+test('RuntimeQueryable may carry an activity source, but need not', () => {
+  expectTypeOf<Pick<RuntimeQueryable, 'query' | 'execute'>>().toExtend<RuntimeQueryable>();
+  expectTypeOf<RuntimeQueryable[typeof activitySource]>().toEqualTypeOf<
+    ActivitySource | undefined
+  >();
+  expectTypeOf<RuntimeQueryable>().not.toHaveProperty('startActivity');
+  expectTypeOf<RuntimeQueryable>().not.toHaveProperty('planContentHash');
 });

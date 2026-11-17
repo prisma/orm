@@ -152,7 +152,7 @@ describe('createCacheMiddleware — misses overlapping invalidate', () => {
         version: 7,
         data: { empty: true },
       },
-      [{ id: 1 }],
+      { kind: 'statement-rows', rows: [{ id: 1 }] },
     );
   });
 
@@ -165,7 +165,7 @@ describe('createCacheMiddleware — misses overlapping invalidate', () => {
     await mw.invalidate({ keys: ['B'] });
     await finishMiss(mw, exec, ctx);
 
-    expect(store.inner.get('A')).toEqual([{ id: 1 }]);
+    expect(store.rowsAt('A')).toEqual([{ id: 1 }]);
   });
 
   it('does not store a miss for key A that overlapped invalidate({ keys: ["A"] }), and logs the skip', async () => {
@@ -204,7 +204,7 @@ describe('createCacheMiddleware — misses overlapping invalidate', () => {
     await mw.invalidate({ meta: { tags: ['users'] } });
     await finishMiss(mw, exec, ctx);
 
-    expect(store.inner.get('A')).toEqual([{ id: 1 }]);
+    expect(store.rowsAt('A')).toEqual([{ id: 1 }]);
   });
 
   it('stores a miss with meta that started after an invalidate({ meta }) naming that meta', async () => {
@@ -215,7 +215,7 @@ describe('createCacheMiddleware — misses overlapping invalidate', () => {
     await mw.invalidate({ meta: { tags: ['users'] } });
     await finishMiss(mw, await startMiss(mw, ctx, 'A', { tags: ['users'] }), ctx);
 
-    expect(store.inner.get('A')).toEqual([{ id: 1 }]);
+    expect(store.rowsAt('A')).toEqual([{ id: 1 }]);
   });
 
   it('stores a miss that started after an invalidate', async () => {
@@ -226,7 +226,7 @@ describe('createCacheMiddleware — misses overlapping invalidate', () => {
     await mw.invalidate({ keys: ['A'] });
     await finishMiss(mw, await startMiss(mw, ctx, 'A'), ctx);
 
-    expect(store.inner.get('A')).toEqual([{ id: 1 }]);
+    expect(store.rowsAt('A')).toEqual([{ id: 1 }]);
   });
 
   it('logs the store when set returns true', async () => {

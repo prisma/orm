@@ -3,8 +3,9 @@ import { defineConfig as ormConfig } from '@internal/cli/config-types';
 import sqliteDriver from '@internal/driver-sqlite/control';
 import sql from '@internal/family-sql/control';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
-import sqlite, { sqliteCreateNamespace } from '@internal/target-sqlite/control';
+import sqlite from '@internal/target-sqlite/control';
 import sqlitePackRef from '@internal/target-sqlite/pack';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { definePrismaConfig } from '@prisma/cli-engine';
 import { extensions } from './packs';
 

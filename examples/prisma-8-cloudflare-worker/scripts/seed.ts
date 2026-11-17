@@ -35,7 +35,7 @@ async function seed(bulk: Client, url: string) {
 
   await bulk.query('TRUNCATE "post", "task", "user" RESTART IDENTITY CASCADE');
 
-  await db.runtime().execute(
+  await db.execute(
     db.sql.public.user
       .insert([
         {
@@ -49,7 +49,7 @@ async function seed(bulk: Client, url: string) {
       .build(),
   );
 
-  await db.runtime().execute(
+  await db.execute(
     db.sql.public.user
       .insert([
         {
@@ -63,14 +63,14 @@ async function seed(bulk: Client, url: string) {
       .build(),
   );
 
-  const aliceRows = await db.runtime().query(
+  const aliceRows = await db.query(
     db.sql.public.user
       .select('id', 'email')
       .where((f, fns) => fns.eq(f.email, 'alice@example.com'))
       .limit(1)
       .build(),
   );
-  const bobRows = await db.runtime().query(
+  const bobRows = await db.query(
     db.sql.public.user
       .select('id', 'email')
       .where((f, fns) => fns.eq(f.email, 'bob@example.com'))
@@ -84,7 +84,7 @@ async function seed(bulk: Client, url: string) {
   }
 
   for (let i = 0; i < 5; i++) {
-    await db.runtime().execute(
+    await db.execute(
       db.sql.public.post
         .insert([
           {
@@ -98,7 +98,7 @@ async function seed(bulk: Client, url: string) {
   }
 
   for (let i = 0; i < 3; i++) {
-    await db.runtime().execute(
+    await db.execute(
       db.sql.public.post
         .insert([
           {

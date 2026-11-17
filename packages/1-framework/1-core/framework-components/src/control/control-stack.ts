@@ -3,19 +3,28 @@ import { blindCast } from '@internal/utils/casts';
 import { InternalError, isInternalError } from '@internal/utils/internal-error';
 import type { AggregateDescriptor } from '../shared/aggregate-descriptor';
 import { aggregateDescriptorKey, isAggregateDescriptor } from '../shared/aggregate-descriptor';
+import {
+  assertTypeChoicesValid,
+  collectScalarTypeConstructors,
+} from '../shared/authoring-type-choice';
 import type { CapabilityMatrix } from '../shared/capabilities';
 import { mergeCapabilityMatrices } from '../shared/capabilities';
 import type { Codec } from '../shared/codec';
 import type { AnyCodecDescriptor } from '../shared/codec-descriptor';
 import type { CodecRef, CodecRegistry } from '../shared/codec-types';
-import type { DataType, DataTypeId, DataTypeLookup } from '../shared/data-type';
-import { assembleDataTypes, objectSchemaKeys } from '../shared/data-type';
+import type { DataType, DataTypeLookup } from '../shared/data-type';
+import { objectSchemaKeys } from '../shared/data-type';
+import {
+  assembleAuthoringDataTypes,
+  assembleDataTypeSupport,
+  type ContributedHelper,
+  contributedHelpers,
+} from '../shared/data-type-support';
 import type {
   AuthoringAttributeSpecContributions,
   AuthoringContributions,
+  AuthoringDescriptorKinds,
   AuthoringEntityTypeNamespace,
-  AuthoringFieldNamespace,
-  AuthoringFieldPresetDescriptor,
   AuthoringModelAttributeDescriptorNamespace,
   AuthoringPslBlockDescriptorNamespace,
   AuthoringTypeConstructorDescriptor,
@@ -23,24 +32,25 @@ import type {
   DataTypeAuthoringEntry,
 } from '../shared/framework-authoring';
 import {
+  AUTHORING_TYPE_DESCRIPTOR_KINDS,
+  assertNoAuthoringFieldNamespace,
   assertNoCrossRegistryCollisions,
   assertResolvableTypeConstructorTemplates,
-  authoringEntryType,
+  assertTypeAliasesValid,
   collectContributedDescriptorPaths,
-  collectScalarTypeConstructors,
   isAuthoringArgRef,
-  isAuthoringFieldPresetDescriptor,
-  isAuthoringTypeConstructorDescriptor,
-  isTagEntryKey,
   mergeAuthoringAttributeSpecs,
   mergeAuthoringNamespaces,
-  tagEntryKey,
 } from '../shared/framework-authoring';
-import type { ComponentMetadata } from '../shared/framework-components';
+import type { ComponentMetadata, SessionSettings } from '../shared/framework-components';
+import {
+  assembleGeneratorFunctions,
+  assembleGeneratorRegistrations,
+  type GeneratorFunctionRegistry,
+} from '../shared/generator-functions';
 import type {
+  AssembledControlMutationDefaults,
   ControlMutationDefaultEntry,
-  ControlMutationDefaults,
-  MutationDefaultGeneratorDescriptor,
 } from '../shared/mutation-default-types';
 import {
   CONTRACT_CODEC_DESCRIPTOR_MISSING,
@@ -59,7 +69,6 @@ import type {
 } from './control-descriptors';
 
 export interface AssembledAuthoringContributions {
-  readonly field: AuthoringFieldNamespace;
   readonly type: AuthoringTypeNamespace;
   readonly entityTypes: AuthoringEntityTypeNamespace;
   readonly pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace;
@@ -85,6 +94,7 @@ export interface ControlStack<
 
   readonly codecTypeImports: ReadonlyArray<TypesImportSpec>;
   readonly queryOperationTypeImports: ReadonlyArray<TypesImportSpec>;
+  readonly parameterizedOutputTypeImports: ReadonlyArray<TypesImportSpec>;
   readonly extensionIds: ReadonlyArray<string>;
   readonly codecLookup: CodecRegistry;
   /** Every codec descriptor the composed components contribute — the set an emitted type surface may resolve against, which is not always the set a target's own registry holds. */
@@ -101,7 +111,8 @@ export interface ControlStack<
   }>;
   /** Names of the top-level zero-arg type constructors in the assembled authoring namespace — the base scalars of the composed stack. */
   readonly scalarTypes: ReadonlyArray<string>;
-  readonly controlMutationDefaults: ControlMutationDefaults;
+  readonly controlMutationDefaults: AssembledControlMutationDefaults;
+  readonly generatorFunctions: GeneratorFunctionRegistry;
   readonly capabilities: CapabilityMatrix;
 }
 
@@ -158,6 +169,15 @@ export function extractCodecTypeImports(
   return imports;
 }
 
+export function extractParameterizedOutputTypeImports(
+  descriptors: ReadonlyArray<Pick<ComponentMetadata, 'types'>>,
+): ReadonlyArray<TypesImportSpec> {
+  return descriptors.flatMap((descriptor) => {
+    const typeFunction = descriptor.types?.codecTypes?.parameterizedOutputTypes;
+    return typeFunction === undefined ? [] : [typeFunction];
+  });
+}
+
 export function extractQueryOperationTypeImports(
   descriptors: ReadonlyArray<Pick<ComponentMetadata, 'types'>>,
 ): ReadonlyArray<TypesImportSpec> {
@@ -197,8 +217,10 @@ export function extractComponentIds(
 
 export function assembleAuthoringContributions(
   descriptors: ReadonlyArray<{ readonly id?: string; readonly authoring?: AuthoringContributions }>,
+  dataTypes: Readonly<Record<string, DataTypeAuthoringEntry>> = assembleAuthoringDataTypes(
+    descriptors,
+  ),
 ): AssembledAuthoringContributions {
-  const field = {} as Record<string, unknown>;
   const type = {} as Record<string, unknown>;
   const entityTypes = {} as Record<string, unknown>;
   const pslBlockDescriptors: Record<string, unknown> = {};
@@ -212,7 +234,7 @@ export function assembleAuthoringContributions(
   const pathOwners = new Map<string, string>();
   const claimContributedPaths = (
     namespace: Record<string, unknown>,
-    descriptorKind: string,
+    descriptorKind: AuthoringDescriptorKinds,
     label: string,
     descriptorId: string,
   ): void => {
@@ -235,6 +257,7 @@ export function assembleAuthoringContributions(
 
   for (const descriptor of descriptors) {
     const descriptorId = descriptor.id ?? '<unknown>';
+    assertNoAuthoringFieldNamespace(descriptorId, descriptor.authoring);
     const declaredValueObjectStorageType = descriptor.authoring?.valueObjectStorageType;
     if (declaredValueObjectStorageType !== undefined) {
       if (valueObjectStorageDeclaration !== undefined) {
@@ -249,14 +272,21 @@ export function assembleAuthoringContributions(
         ownerId: descriptorId,
       };
     }
-    if (descriptor.authoring?.field) {
-      claimContributedPaths(descriptor.authoring.field, 'fieldPreset', 'field', descriptorId);
-      mergeAuthoringNamespaces(field, descriptor.authoring.field, [], 'fieldPreset', 'field');
-    }
     if (descriptor.authoring?.type) {
-      claimContributedPaths(descriptor.authoring.type, 'typeConstructor', 'type', descriptorId);
+      claimContributedPaths(
+        descriptor.authoring.type,
+        AUTHORING_TYPE_DESCRIPTOR_KINDS,
+        'type',
+        descriptorId,
+      );
       assertResolvableTypeConstructorTemplates(descriptor.authoring.type, descriptorId);
-      mergeAuthoringNamespaces(type, descriptor.authoring.type, [], 'typeConstructor', 'type');
+      mergeAuthoringNamespaces(
+        type,
+        descriptor.authoring.type,
+        [],
+        AUTHORING_TYPE_DESCRIPTOR_KINDS,
+        'type',
+      );
     }
     if (descriptor.authoring?.entityTypes) {
       claimContributedPaths(descriptor.authoring.entityTypes, 'entity', 'entity', descriptorId);
@@ -302,7 +332,6 @@ export function assembleAuthoringContributions(
     }
   }
 
-  const fieldNamespace = field as AuthoringFieldNamespace;
   const typeNamespace = type as AuthoringTypeNamespace;
   const entityTypeNamespace = entityTypes as AuthoringEntityTypeNamespace;
   const pslBlockDescriptorNamespace = blindCast<
@@ -315,11 +344,14 @@ export function assembleAuthoringContributions(
   >(modelAttributes);
   assertNoCrossRegistryCollisions(
     typeNamespace,
-    fieldNamespace,
     entityTypeNamespace,
     pslBlockDescriptorNamespace,
     modelAttributeNamespace,
   );
+  for (const descriptor of descriptors) {
+    if (descriptor.authoring?.type === undefined) continue;
+    assertTypeChoicesValid(descriptor.authoring.type, descriptor.id ?? '<unknown>');
+  }
 
   if (
     valueObjectStorageDeclaration !== undefined &&
@@ -332,8 +364,7 @@ export function assembleAuthoringContributions(
   }
 
   return {
-    dataTypes: assembleAuthoringDataTypes(descriptors),
-    field: fieldNamespace,
+    dataTypes,
     type: typeNamespace,
     entityTypes: entityTypeNamespace,
     pslBlockDescriptors: pslBlockDescriptorNamespace,
@@ -345,109 +376,40 @@ export function assembleAuthoringContributions(
   };
 }
 
-/** Merge every component's PSL support for its data types, refusing two claims on one key. */
-export function assembleAuthoringDataTypes(
-  descriptors: ReadonlyArray<{ readonly id?: string; readonly authoring?: AuthoringContributions }>,
-): Readonly<Record<string, DataTypeAuthoringEntry>> {
-  const merged: Record<string, DataTypeAuthoringEntry> = {};
-  const owners = new Map<string, string>();
-
-  for (const descriptor of descriptors) {
-    const contributedBy = descriptor.id ?? '<unknown>';
-    for (const [key, entry] of Object.entries(descriptor.authoring?.dataTypes ?? {})) {
-      const existingOwner = owners.get(key);
-      if (existingOwner !== undefined) {
-        throw runtimeError(
-          'CONTRACT.DATA_TYPE_ENTRY_DUPLICATE',
-          `Duplicate authoring entry for "${key}". Component "${contributedBy}" conflicts with "${existingOwner}".`,
-          { key, contributedBy, owner: existingOwner },
-        );
-      }
-      owners.set(key, contributedBy);
-      merged[key] = entry;
-    }
-  }
-
-  return merged;
-}
-
-export interface DataTypeInvariantInput {
+export interface HelperCodecInvariantInput {
   readonly lookup: DataTypeLookup;
-  readonly declaredTypes: ReadonlyArray<{
-    readonly type: DataType;
-    readonly contributedBy: string;
-  }>;
-  readonly codecs: ReadonlyArray<{
-    readonly codecId: string;
-    readonly dataType: DataTypeId;
-    readonly contributedBy: string;
-  }>;
-  readonly authoringEntries: ReadonlyArray<{
-    readonly key: string;
-    readonly entry: DataTypeAuthoringEntry;
-    readonly contributedBy: string;
-  }>;
-  readonly constructors: ReadonlyArray<ContributedConstructor>;
+  readonly helpers: ReadonlyArray<ContributedHelper>;
   readonly codecDescriptorFor: (
     codecId: string,
   ) => Pick<AnyCodecDescriptor, 'dataType' | 'paramsSchema'> | undefined;
 }
 
-/** A type constructor or field preset, with the path it is registered under and who registered it. */
-export interface ContributedConstructor {
-  readonly path: string;
-  readonly descriptor: AuthoringTypeConstructorDescriptor | AuthoringFieldPresetDescriptor;
-  readonly contributedBy: string;
-}
-
-type AuthoringTree<D> = { readonly [name: string]: D | AuthoringTree<D> };
-
-function descriptorsIn<D>(
-  namespace: AuthoringTree<D> | undefined,
-  isLeaf: (value: D | AuthoringTree<D>) => value is D,
-  path: readonly string[] = [],
-): ReadonlyArray<{ readonly path: string; readonly descriptor: D }> {
-  return Object.entries(namespace ?? {}).flatMap(([key, value]) => {
-    const currentPath = [...path, key];
-    if (isLeaf(value)) return [{ path: currentPath.join('.'), descriptor: value }];
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) return [];
-    return descriptorsIn(value, isLeaf, currentPath);
-  });
-}
-
-/** Every type constructor and field preset a component contributes. */
-export function contributedConstructors(descriptor: {
-  readonly id: string;
-  readonly authoring?: AuthoringContributions;
-}): readonly ContributedConstructor[] {
-  return [
-    ...descriptorsIn(descriptor.authoring?.type, isAuthoringTypeConstructorDescriptor),
-    ...descriptorsIn(descriptor.authoring?.field, isAuthoringFieldPresetDescriptor),
-  ].map((entry) => ({ ...entry, contributedBy: descriptor.id }));
-}
-
-function argumentMappedKeys(
-  descriptor: AuthoringTypeConstructorDescriptor | AuthoringFieldPresetDescriptor,
-): readonly string[] {
+function argumentMappedKeys(descriptor: AuthoringTypeConstructorDescriptor): readonly string[] {
   return Object.entries(descriptor.output.typeParams ?? {}).flatMap(([key, template]) =>
     isAuthoringArgRef(template) ? [key] : [],
   );
 }
 
-function enforceConstructorInvariants(input: DataTypeInvariantInput): void {
-  const inferredBy = new Map<string, ContributedConstructor>();
-  for (const contributed of input.constructors) {
+/**
+ * The checks on type constructors that read the stack's codecs, each naming the component and the id at fault:
+ *
+ * 1. every type constructor names a registered codec;
+ * 2. a type constructor maps its arguments only onto parameters its data type or codec declares;
+ * 3. at most one type constructor per data type is marked inferred.
+ *
+ * {@link assembleDataTypeSupport} checks data types, their entries and casts, and the value arguments of type constructors.
+ */
+export function enforceHelperCodecInvariants(input: HelperCodecInvariantInput): void {
+  const inferredBy = new Map<string, ContributedHelper>();
+  for (const contributed of input.helpers) {
     const { path, descriptor, contributedBy } = contributed;
-    const kind = descriptor.kind === 'typeConstructor' ? 'Type constructor' : 'Field preset';
     const codecId = descriptor.output.codecId;
     const codec = input.codecDescriptorFor(codecId);
     if (codec === undefined) {
       throw new InternalError(
-        `${kind} "${path}" contributed by "${contributedBy}" names codec "${codecId}", which no component registers.`,
+        `Type constructor "${path}" contributed by "${contributedBy}" names codec "${codecId}", which no component registers.`,
       );
     }
-    if (descriptor.kind !== 'typeConstructor') continue;
-
     const codecKeys = codec.paramsSchema === undefined ? [] : objectSchemaKeys(codec.paramsSchema);
     if (codecKeys !== undefined) {
       const declared = new Set([
@@ -474,138 +436,19 @@ function enforceConstructorInvariants(input: DataTypeInvariantInput): void {
   }
 }
 
-/**
- * The things assembly checks across packs, each naming the component and the id at fault:
- *
- * 1. every codec names a registered data type;
- * 2. every authoring entry, and every type a cast takes values of, names a registered data type;
- * 3. no two entries claim one tag or one plain form;
- * 4. every type a cast takes values of can be written, because a cast from a type nobody can write
- *    is never exercised;
- * 5. every type constructor and field preset names a registered codec;
- * 6. a type constructor maps its arguments only onto parameters its data type or codec declares;
- * 7. at most one type constructor per data type is marked inferred.
- */
-export function enforceDataTypeInvariants(input: DataTypeInvariantInput): void {
-  const unregistered = (contributedBy: string, id: string, what: string): never => {
-    throw runtimeError(
-      'CONTRACT.DATA_TYPE_UNREGISTERED',
-      `${what} names data type "${id}", which no component registers. Contributed by "${contributedBy}".`,
-      { dataType: id, contributedBy },
-    );
-  };
-
-  for (const codec of input.codecs) {
-    if (!input.lookup.has(codec.dataType)) {
-      unregistered(codec.contributedBy, codec.dataType, `Codec "${codec.codecId}"`);
-    }
-  }
-
-  for (const { key, entry, contributedBy } of input.authoringEntries) {
-    const written = entry.written;
-    const tagType = written.kind === 'tag' && 'type' in written ? written.type : undefined;
-    if (isTagEntryKey(key) || tagType !== undefined) {
-      if (written.kind !== 'tag' || tagType === undefined || key !== tagEntryKey(written.tag)) {
-        throw runtimeError(
-          'CONTRACT.DATA_TYPE_ENTRY_KEY_INVALID',
-          `Authoring entry "${key}" contributed by "${contributedBy}" must sit under its tag's key and name the data type its body is, or sit under that data type's id and name none.`,
-          { key, contributedBy },
-        );
-      }
-      if (!input.lookup.has(tagType)) {
-        unregistered(contributedBy, tagType, `Authoring entry "${key}"`);
-      }
-      continue;
-    }
-    if (!input.lookup.has(key)) {
-      unregistered(contributedBy, key, 'Authoring entry');
-    }
-    if (entry.written.kind === 'plain' && entry.written.syntax === 'number') {
-      for (const classified of entry.written.types) {
-        if (!input.lookup.has(classified)) {
-          unregistered(contributedBy, classified, `The classifier of authoring entry "${key}"`);
-        }
-      }
-    }
-  }
-
-  // A type a classifier can return is written as a plain number, so it is writable even though the
-  // entry that reads it is keyed under another type.
-  const writable = new Set(
-    input.authoringEntries.flatMap(({ key, entry }) => [
-      authoringEntryType(key, entry),
-      ...(entry.written.kind === 'plain' && entry.written.syntax === 'number'
-        ? entry.written.types
-        : []),
-    ]),
-  );
-
-  for (const { type, contributedBy } of input.declaredTypes) {
-    const sources = [...Object.keys(type.casts), ...(type.listCast?.of ?? [])];
-    for (const source of sources) {
-      if (!input.lookup.has(source)) {
-        unregistered(contributedBy, source, `The casts of data type "${type.id}"`);
-      }
-      if (!writable.has(source)) {
-        throw runtimeError(
-          'CONTRACT.DATA_TYPE_NOT_WRITABLE',
-          `Data type "${type.id}" casts from "${source}", which no contract source can write, so the cast is never exercised. Contributed by "${contributedBy}".`,
-          { dataType: type.id, source, contributedBy },
-        );
-      }
-    }
-  }
-
-  const claimants = new Map<string, { readonly key: string; readonly contributedBy: string }>();
-  for (const { key, entry, contributedBy } of input.authoringEntries) {
-    const written = entry.written;
-    const claim = written.kind === 'tag' ? `tag "${written.tag}"` : `plain ${written.syntax}`;
-    const existing = claimants.get(claim);
-    if (existing !== undefined) {
-      throw runtimeError(
-        'CONTRACT.DATA_TYPE_WRITTEN_FORM_DUPLICATE',
-        `Two authoring entries claim the ${claim}: "${key}" from "${contributedBy}" conflicts with "${existing.key}" from "${existing.contributedBy}".`,
-        {
-          claim,
-          key,
-          contributedBy,
-          owner: existing.key,
-          ownerContributedBy: existing.contributedBy,
-        },
-      );
-    }
-    claimants.set(claim, { key, contributedBy });
-  }
-
-  enforceConstructorInvariants(input);
-}
-
 export function assembleControlMutationDefaults(
   descriptors: ReadonlyArray<
     Pick<ComponentMetadata, 'controlMutationDefaults'> & { readonly id?: string }
   >,
-): ControlMutationDefaults {
+): AssembledControlMutationDefaults {
   const defaultFunctionRegistry = new Map<string, ControlMutationDefaultEntry>();
   const functionOwners = new Map<string, string>();
-  const generatorMap = new Map<string, MutationDefaultGeneratorDescriptor>();
-  const generatorOwners = new Map<string, string>();
+  const registered = assembleGeneratorRegistrations(descriptors);
 
   for (const descriptor of descriptors) {
     const contributions = descriptor.controlMutationDefaults;
     if (!contributions) continue;
     const descriptorId = descriptor.id ?? '<unknown>';
-
-    for (const generatorDescriptor of contributions.generatorDescriptors) {
-      const existingOwner = generatorOwners.get(generatorDescriptor.id);
-      if (existingOwner !== undefined) {
-        throw new InternalError(
-          `Duplicate mutation default generator id "${generatorDescriptor.id}". ` +
-            `Descriptor "${descriptorId}" conflicts with "${existingOwner}".`,
-        );
-      }
-      generatorMap.set(generatorDescriptor.id, generatorDescriptor);
-      generatorOwners.set(generatorDescriptor.id, descriptorId);
-    }
 
     for (const [functionName, handler] of contributions.defaultFunctionRegistry) {
       const existingOwner = functionOwners.get(functionName);
@@ -622,7 +465,10 @@ export function assembleControlMutationDefaults(
 
   return {
     defaultFunctionRegistry,
-    generatorDescriptors: Array.from(generatorMap.values()),
+    generatorDescriptors: [...registered.values()].map(({ descriptor }) => descriptor),
+    componentIdsByGenerator: new Map(
+      [...registered].map(([id, { componentId }]) => [id, componentId] as const),
+    ),
   };
 }
 
@@ -645,8 +491,8 @@ export function collectAggregateDescriptors(
           'CONTRACT.AGGREGATE_DESCRIPTOR_INVALID',
           `Malformed aggregate descriptor contributed by "${descriptorId}". ` +
             'A descriptor declares a non-empty `operation`, an `input` match of kind `none`/`any`/`codec`/`trait`, ' +
-            'an `output` of kind `self`/`codec`, and a boolean `nullable` — plus `emptyResultJson`, ' +
-            "in the result codec's canonical JSON, where `nullable` is false; a `self` output needs an input to reuse.",
+            'an `output` of kind `self`/`codec`, and a boolean `nullable` — plus `emptyResultWire`, ' +
+            'a wire value of the result codec, where `nullable` is false; a `self` output needs an input to reuse.',
           { contributedBy: descriptorId, descriptor: contributed },
         );
       }
@@ -699,7 +545,7 @@ export function extractCodecLookup(
   for (const descriptor of descriptors) {
     const codecTypes = descriptor.types?.codecTypes;
     const descriptorId = descriptor.id;
-    // Descriptor-side metadata is the single source of truth for `renderOutputType`. A component contributes its codecs by listing `codecDescriptors` on `types.codecTypes`; each codecId has exactly one contributor across the stack.
+    // Descriptor-side metadata is the single source of truth for `renderOutputType` and `renderValueLiteral`. A component contributes its codecs by listing `codecDescriptors` on `types.codecTypes`; each codecId has exactly one contributor across the stack.
     for (const codecDescriptor of codecTypes?.codecDescriptors ?? []) {
       assertUniqueCodecOwner({
         codecId: codecDescriptor.codecId,
@@ -719,7 +565,7 @@ export function extractCodecLookup(
       if (typeof codecDescriptor.renderValueLiteral === 'function') {
         valueLiteralRenderersById.set(codecDescriptor.codecId, codecDescriptor.renderValueLiteral);
       }
-      // Materialize a representative `Codec` instance for `byId.get()` so consumers reading the lookup's instance side (e.g. SQL renderer's cast-policy lookup, or the contract emitter's literal-default `encodeJson` resolver) keep finding the codec.
+      // Materialize a representative `Codec` instance for `byId.get()` so consumers reading the lookup's instance side (e.g. SQL renderer's cast-policy lookup, or the contract emitter's literal-default resolver) keep finding the codec.
       //
       // Two cohorts:
       // - Non-parameterized descriptors: factory must succeed; any throw is a real bug and we let it propagate (no silent try/catch).
@@ -862,6 +708,19 @@ export function buildExtensionLoadOrder(
   return result;
 }
 
+/** The driver descriptor, connecting each driver with the session settings the target declares. */
+function withSessionSettings<TFamilyId extends string, TTargetId extends string>(
+  driver: ControlDriverDescriptor<TFamilyId, TTargetId> | undefined,
+  sessionSettings: SessionSettings | undefined,
+): ControlDriverDescriptor<TFamilyId, TTargetId> | undefined {
+  if (driver === undefined || sessionSettings === undefined) return driver;
+  const create = driver.create.bind(driver);
+  return {
+    ...driver,
+    create: (connection, options) => create(connection, { ...options, sessionSettings }),
+  };
+}
+
 export function createControlStack<TFamilyId extends string, TTargetId extends string>(
   input: CreateControlStackInput<TFamilyId, TTargetId>,
 ): ControlStack<TFamilyId, TTargetId> {
@@ -876,50 +735,51 @@ export function createControlStack<TFamilyId extends string, TTargetId extends s
   const allDescriptors = [family, target, ...(adapter ? [adapter] : []), ...orderedExtensions];
 
   const codecLookup = extractCodecLookup(allDescriptors);
-  const authoringContributions = assembleAuthoringContributions(allDescriptors);
+  const dataTypes = assembleDataTypeSupport(
+    allDescriptors,
+    (codecId) => codecLookup.descriptorFor?.(codecId)?.dataType,
+  );
+  const authoringContributions = assembleAuthoringContributions(
+    allDescriptors,
+    dataTypes.support.entries,
+  );
   const codecDescriptors = collectCodecDescriptors(allDescriptors);
-  const dataTypes = assembleDataTypes(allDescriptors);
 
-  enforceDataTypeInvariants({
-    lookup: dataTypes.lookup,
-    declaredTypes: dataTypes.declared,
-    codecs: allDescriptors.flatMap((descriptor) =>
-      (descriptor.types?.codecTypes?.codecDescriptors ?? []).map((codecDescriptor) => ({
-        codecId: codecDescriptor.codecId,
-        dataType: codecDescriptor.dataType,
-        contributedBy: descriptor.id,
-      })),
-    ),
-    authoringEntries: allDescriptors.flatMap((descriptor) =>
-      Object.entries(descriptor.authoring?.dataTypes ?? {}).map(([key, entry]) => ({
-        key,
-        entry,
-        contributedBy: descriptor.id,
-      })),
-    ),
-    constructors: allDescriptors.flatMap(contributedConstructors),
+  enforceHelperCodecInvariants({
+    lookup: dataTypes.support.lookup,
+    helpers: allDescriptors.flatMap(contributedHelpers),
     codecDescriptorFor: (codecId) => codecLookup.descriptorFor?.(codecId),
+  });
+
+  const controlMutationDefaults = assembleControlMutationDefaults(allDescriptors);
+  const generatorFunctions = assembleGeneratorFunctions(allDescriptors);
+  assertTypeAliasesValid(authoringContributions.type, {
+    generatorFunctions,
+    paramsSchemaOf: (codecId) => codecLookup.descriptorFor(codecId)?.paramsSchema,
+    fieldLength: (field) => family.fieldLength?.(field, dataTypes.support),
   });
 
   return {
     family,
     target,
     adapter,
-    driver,
+    driver: withSessionSettings(driver, target.sessionSettings),
     extensions: orderedExtensions,
     extensionContracts: assembleExtensionContracts(orderedExtensions),
 
     codecTypeImports: extractCodecTypeImports(allDescriptors),
     queryOperationTypeImports: extractQueryOperationTypeImports(allDescriptors),
+    parameterizedOutputTypeImports: extractParameterizedOutputTypeImports(allDescriptors),
     extensionIds: extractComponentIds(family, target, adapter, orderedExtensions),
     codecLookup,
     codecDescriptors,
-    dataTypes: { entries: authoringContributions.dataTypes, lookup: dataTypes.lookup },
+    dataTypes: dataTypes.support,
     declaredDataTypes: dataTypes.declared,
     aggregateDescriptors: collectAggregateDescriptors(allDescriptors),
     authoringContributions,
     scalarTypes: [...collectScalarTypeConstructors(authoringContributions.type).keys()],
-    controlMutationDefaults: assembleControlMutationDefaults(allDescriptors),
+    controlMutationDefaults,
+    generatorFunctions,
     capabilities: mergeCapabilityMatrices({}, [
       target,
       ...(adapter ? [adapter] : []),

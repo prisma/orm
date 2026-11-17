@@ -13,7 +13,7 @@
         "models": {
           "Post": {
             "fields": {
-              "_id": {
+              "id": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
@@ -52,7 +52,18 @@
             },
             "relations": {},
             "storage": {
-              "collection": "Post"
+              "collection": "Post",
+              "fields": {
+                "id": {
+                  "field": "_id"
+                },
+                "status": {
+                  "field": "status"
+                },
+                "role": {
+                  "field": "role"
+                }
+              }
             }
           }
         },

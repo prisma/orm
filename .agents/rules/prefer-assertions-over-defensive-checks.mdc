@@ -109,7 +109,7 @@ for (const [tableName, table] of Object.entries(storage.tables)) {
 **Responsibility separation:**
 
 - **Schema validators (Arktype)**: structural properties — required fields, types, shapes.
-- **Logical validators (`validateStructure`)**: logical consistency — references, relationships,
+- **Logical validators (`validateStorageSemantics`)**: logical consistency — references, relationships,
   constraint consistency (e.g. primary-key columns exist).
 
 So add validation checks for references (foreign keys, model references), relationships

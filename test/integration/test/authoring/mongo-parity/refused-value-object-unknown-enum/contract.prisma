@@ -1,0 +1,12 @@
+// use prisma-8
+
+type Badge {
+  level Level
+}
+
+model Doc {
+  id    ObjectId @id @map("_id")
+  badge Badge
+
+  @@map("docs")
+}

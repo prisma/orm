@@ -2,7 +2,7 @@
 
 ## Current status
 
-Accepted. The shipped runtime uses operation-specific query and execute middleware lifecycles. In the current SQL runtime, `query()` streams rows through `queryAgainstQueryable` and `execute()` returns statistics through `executeStatisticsAgainstQueryable`. The operation-specific lifecycle amendment below supersedes only the SPI lifecycle shape and terminology; the original May 2026 decision and its rationale remain preserved in the historical section.
+Status: **Amended by [ADR 271](ADR%20271%20-%20The%20runtime%20middleware%20observes%20a%20tree%20of%20activities%2C%20each%20started%2C%20ended%20and%20finalized.md)**. This ADR's decision stands: the hook that may change parameters runs after lowering and before encoding, and receives a parameter mutator over user-domain values. ADR 271 renames the hooks: `beforeQuery` and `beforeExecute` are now `beforeEncode`; `interceptQuery` and `interceptExecute` are `intercept.onQuery` and `intercept.onExecute`; `afterQuery` and `afterExecute` are `activityEnded`. The sections below use the names of their time: the August 2026 amendment, then the original May 2026 decision and its rationale.
 
 ## Amendment (August 12, 2026) — operation-specific lifecycle
 
@@ -114,7 +114,7 @@ The top-level runtime, checked-out connection, transaction, guarded transaction 
 
 ## Original decision (May 2026)
 
-> The following section preserves the accepted May 2026 decision and rationale. It describes the generic-hook lifecycle that was in force before the August 12, 2026 amendment; its historical `intercept`, `onRow`, and `afterExecute` vocabulary is not a description of the current operation-specific SPI.
+> The following section preserves the accepted May 2026 decision and rationale. It describes the generic-hook lifecycle that was in force before the August 12, 2026 amendment; its historical `intercept`, `onRow`, and `afterExecute` vocabulary is not a description of the operation-specific SPI that followed it.
 
 ### At a glance
 
@@ -280,8 +280,8 @@ The SQL and Mongo stacks differ in *where* the two lowering phases and the param
 
 | Concern | SQL | Mongo |
 |---|---|---|
-| Two-phase lowering API | `lowerToDraft` / `encodeDraftParams` are **private** methods on `SqlRuntimeBase` ([`packages/2-sql/5-runtime/src/sql-runtime.ts`](../../../packages/2-sql/5-runtime/src/sql-runtime.ts)); lowering walks the SQL adapter inside the runtime package. | `structuralLower` / `resolveParams` are **public** methods on the `MongoAdapter` SPI ([`packages/2-mongo-family/6-transport/mongo-lowering/src/adapter-types.ts`](../../../packages/2-mongo-family/6-transport/mongo-lowering/src/adapter-types.ts)); the target-owned implementation lives in [`@internal/adapter-mongo`](../../../packages/3-mongo-target/2-mongo-adapter/). |
-| Param mutator home | `SqlParamRefMutator` in [`packages/2-sql/4-lanes/relational-core`](../../../packages/2-sql/4-lanes/relational-core) (middleware module), composed by the SQL runtime. | `MongoParamRefMutator` in [`packages/2-mongo-family/7-runtime`](../../../packages/2-mongo-family/7-runtime/src/param-ref-mutator.ts) alongside `MongoMiddleware`, because Mongo has no `relational-core`-equivalent lanes layer — the runtime is the first layer that composes middleware and execute. |
+| Two-phase lowering API | `lowerToDraft` / `encodeDraftParams` are **private** methods on `SqlRuntimeBase` ([`packages/2-sql-family/5-runtime/src/sql-runtime.ts`](../../../packages/2-sql-family/5-runtime/src/sql-runtime.ts)); lowering walks the SQL adapter inside the runtime package. | `structuralLower` / `resolveParams` are **public** methods on the `MongoAdapter` SPI ([`packages/2-mongo-family/6-transport/mongo-lowering/src/adapter-types.ts`](../../../packages/2-mongo-family/6-transport/mongo-lowering/src/adapter-types.ts)); the target-owned implementation lives in [`@internal/adapter-mongo`](../../../packages/3-targets/mongo/2-adapter/). |
+| Param mutator home | `SqlParamRefMutator` in [`packages/2-sql-family/4-lanes/relational-core`](../../../packages/2-sql-family/4-lanes/relational-core) (middleware module), composed by the SQL runtime. | `MongoParamRefMutator` in [`packages/2-mongo-family/7-runtime`](../../../packages/2-mongo-family/7-runtime/src/param-ref-mutator.ts) alongside `MongoMiddleware`, because Mongo has no `relational-core`-equivalent lanes layer — the runtime is the first layer that composes middleware and execute. |
 | Pre-resolve draft type | Reuses `SqlExecutionPlan` for both the pre-encode draft and the post-encode exec (params slot mutates; same interface type). | The adapter exposes a distinct `MongoLoweredDraft` union for phase 1, but the runtime temporarily places that draft in `MongoExecutionPlan.command` through a narrow `blindCast` while running the selected before hook ([`mongo-runtime.ts`](../../../packages/2-mongo-family/7-runtime/src/mongo-runtime.ts)). The adapter boundary distinguishes the phases; the temporary middleware plan representation does not. |
 
 **Why the phase API is public on Mongo but private on SQL.** SQL structural lowering and param encoding are orchestrated entirely inside `@internal/sql-runtime` against the generic SQL `Adapter` surface. Mongo lowering is target-owned: the runtime invokes `MongoAdapter` on the execution stack, and the two-phase contract must be auditable at the adapter SPI so implementors (`adapter-mongo`) and reviewers can see exactly where `MongoParamRef` resolution is deferred relative to middleware. Exposing `structuralLower` / `resolveParams` on the SPI documents that contract; hiding them inside the runtime would obscure the target boundary.

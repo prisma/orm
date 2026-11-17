@@ -48,6 +48,7 @@ const frameworkComponents = [
 ] as const;
 
 const emptySchema = new PostgresDatabaseSchemaNode({
+  extensions: undefined,
   namespaces: {},
   roles: [],
   existingSchemas: ['public'],
@@ -65,8 +66,7 @@ function buildContract(withDefault: boolean): Contract<SqlStorage> {
     codecId: 'pg/vector@1',
     typeParams: { length: 3 },
     nullable: true,
-    many: { elementNullable: false },
-    noCheck: ['elementNotNull'],
+    many: { elementNullable: true },
     ...(withDefault ? { default: { kind: 'literal', value: embeddings } } : {}),
   };
   const hash = withDefault ? 'vector-list-default' : 'vector-list-without-default';

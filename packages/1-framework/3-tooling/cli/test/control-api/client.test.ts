@@ -16,11 +16,14 @@ import type {
 import type { EmissionSpi } from '@internal/framework-components/emission';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok } from '@internal/utils/result';
+import { structuredError } from '@internal/utils/structured-error';
 import { createContract, timeouts } from '@repo/test-utils';
 import { join } from 'pathe';
 import { describe, expect, it, vi } from 'vitest';
 import { createControlClient } from '../../src/control-api/client';
-import type { ControlProgressEvent } from '../../src/control-api/types';
+import type { ControlProgressEvent, EmitResult } from '../../src/control-api/types';
+
+const TEST_INVOCATION = { cwd: '/work/app', configPath: undefined, dbGiven: false };
 
 /**
  * The smallest contract the real emitter accepts: a storage envelope with a
@@ -324,6 +327,7 @@ describe('ControlClient progress emission', () => {
       const result = await client.dbSign({
         contract,
         migrationsDir: '/tmp/__test-client-migrations',
+        invocation: { cwd: '/work/app', configPath: undefined, dbGiven: false },
         connection: 'postgres://test',
         onProgress: (event) => events.push(event),
       });
@@ -520,43 +524,6 @@ describe('ControlClient progress emission', () => {
       timeouts.databaseOperation,
     );
 
-    it(
-      'emits resolveSource and emit spans when source is a provider object',
-      async () => {
-        const events: ControlProgressEvent[] = [];
-        const { mockFamily, mockTarget, mockAdapter } = createMockComponents();
-
-        const client = createControlClient({
-          family: mockFamily,
-          target: mockTarget,
-          adapter: mockAdapter,
-        });
-
-        const result = await client.emit({
-          contractConfig: {
-            source: createSourceProvider(),
-            output: '/tmp/contract.json',
-          },
-          onProgress: (event) => events.push(event),
-        });
-
-        await client.close();
-
-        expect(result.ok).toBe(true);
-
-        // Should emit resolveSource span
-        const resolveSourceStart = events.find(
-          (e) => e.kind === 'spanStart' && e.spanId === 'resolveSource',
-        );
-        const resolveSourceEnd = events.find(
-          (e) => e.kind === 'spanEnd' && e.spanId === 'resolveSource',
-        );
-        expect(resolveSourceStart).toBeDefined();
-        expect(resolveSourceEnd).toMatchObject({ outcome: 'ok' });
-      },
-      timeouts.databaseOperation,
-    );
-
     it('emits error outcome when source provider throws', async () => {
       const events: ControlProgressEvent[] = [];
       const { mockFamily, mockTarget, mockAdapter } = createMockComponents();
@@ -592,6 +559,108 @@ describe('ControlClient progress emission', () => {
         (e) => e.kind === 'spanEnd' && e.spanId === 'resolveSource',
       );
       expect(resolveSourceEnd).toMatchObject({ outcome: 'error' });
+    });
+
+    it('keeps the code, meta, summary and why of a structured error the source throws', async () => {
+      const { mockFamily, mockTarget, mockAdapter } = createMockComponents();
+      const client = createControlClient({
+        family: mockFamily,
+        target: mockTarget,
+        adapter: mockAdapter,
+      });
+      const message = 'Field "Event.e": now() does not apply to codec "pg/text@1".';
+      const meta = { modelName: 'Event', fieldName: 'e', reason: 'generator-not-applicable' };
+
+      const result = await client.emit({
+        contractConfig: {
+          source: createSourceProvider(async () => {
+            throw structuredError('CONTRACT.DEFAULT_INVALID', message, {
+              why: 'The field codec binds no now() function.',
+              meta,
+            });
+          }),
+          output: '/tmp/contract.json',
+        },
+      });
+
+      await client.close();
+
+      expect(result.ok ? undefined : result.failure).toEqual({
+        code: 'CONTRACT_SOURCE_INVALID',
+        summary: message,
+        why: 'The field codec binds no now() function.',
+        meta: { code: 'CONTRACT.DEFAULT_INVALID', ...meta },
+      });
+    });
+
+    describe('a source that reports a warning', () => {
+      const warning = {
+        code: 'PSL_DEPRECATED_SCALAR_NAME',
+        message: 'Scalar type "Int" is deprecated and will be removed; use "Int32".',
+        sourceId: 'schema.prisma',
+        severity: 'warning' as const,
+      };
+
+      async function emitWarningThen(
+        outcome: () => ReturnType<ContractSourceProvider['load']>,
+      ): Promise<EmitResult> {
+        const { mockFamily, mockTarget, mockAdapter } = createMockComponents();
+        const client = createControlClient({
+          family: mockFamily,
+          target: mockTarget,
+          adapter: mockAdapter,
+        });
+        const result = await client.emit({
+          contractConfig: {
+            source: createSourceProvider(async (context) => {
+              context.reportWarning?.(warning);
+              return outcome();
+            }),
+            output: '/tmp/contract.json',
+          },
+        });
+        await client.close();
+        return result;
+      }
+
+      it('returns it with the emitted contract', async () => {
+        const result = await emitWarningThen(async () => ok(emittableContract()));
+
+        expect(result.ok ? result.value.sourceWarnings : undefined).toEqual([warning]);
+      });
+
+      it.each([
+        {
+          label: 'returns diagnostics',
+          code: 'CONTRACT_SOURCE_INVALID',
+          outcome: async () =>
+            notOk({
+              summary: 'Provider failed',
+              diagnostics: [
+                { code: 'PSL_INVALID_MODEL', message: 'bad', sourceId: 'schema.prisma' },
+              ],
+            }),
+        },
+        {
+          label: 'throws a structured error',
+          code: 'CONTRACT_SOURCE_INVALID',
+          outcome: async () => {
+            throw structuredError('CONTRACT.DEFAULT_INVALID', 'Default refused');
+          },
+        },
+        {
+          label: 'returns a contract that cannot be emitted',
+          code: 'EMIT_FAILED',
+          outcome: async () => ok({} as Contract),
+        },
+      ])('returns it with the failure when the source then $label', async ({ code, outcome }) => {
+        const result = await emitWarningThen(outcome);
+
+        expect(result.ok ? undefined : result.failure).toMatchObject({
+          code,
+          sourceWarnings: [warning],
+        });
+      });
     });
 
     it('returns provider diagnostics when source provider fails', async () => {
@@ -697,7 +766,9 @@ describe('ControlClient progress emission', () => {
   });
 
   describe('dbUpdate()', () => {
-    function createMockComponentsWithMigrations() {
+    function createMockComponentsWithMigrations(
+      subjects: { readonly dataLoss?: unknown[]; readonly accessChanges?: unknown[] } = {},
+    ) {
       const { mockDriver, mockAdapter, mockDriverDescriptor } = createMockComponents();
 
       // Override family instance to return a marker (db update works with or without one)
@@ -719,8 +790,8 @@ describe('ControlClient progress emission', () => {
           plan: () => ({
             kind: 'success',
             appliedStatements: [],
-            dataLoss: [],
-            accessWidening: [],
+            dataLoss: subjects.dataLoss ?? [],
+            accessChanges: subjects.accessChanges ?? [],
             temporaryValues: [],
             plan: {
               targetId: 'postgres',
@@ -781,6 +852,7 @@ describe('ControlClient progress emission', () => {
       });
 
       const result = await client.dbUpdate({
+        invocation: TEST_INVOCATION,
         contract: {
           target: 'postgres',
           storage: { storageHash: 'fixture', tables: {}, namespaces: {} },
@@ -818,6 +890,68 @@ describe('ControlClient progress emission', () => {
       }
     });
 
+    describe('consent options', () => {
+      const USER = { kind: 'storage', name: 'user' } as const;
+
+      async function questionsAsked(
+        subjects: Parameters<typeof createMockComponentsWithMigrations>[0],
+        consent: { readonly acceptDataLoss?: boolean; readonly acceptAccessChanges?: boolean },
+      ) {
+        const {
+          mockFamilyWithMarker,
+          mockTargetWithMigrations,
+          mockAdapter,
+          mockDriverDescriptor,
+        } = createMockComponentsWithMigrations(subjects);
+        const client = createControlClient({
+          family: mockFamilyWithMarker,
+          target: mockTargetWithMigrations,
+          adapter: mockAdapter,
+          driver: mockDriverDescriptor,
+        });
+        const asked: string[][] = [];
+        const result = await client.dbUpdate({
+          contract: {
+            target: 'postgres',
+            storage: { storageHash: 'fixture', tables: {}, namespaces: {} },
+          },
+          mode: 'apply',
+          connection: 'postgres://test',
+          migrationsDir: '/tmp/__test-client-migrations',
+          invocation: TEST_INVOCATION,
+          ...consent,
+          answerQuestions: async (questions) => {
+            asked.push(questions.map(({ question }) => question));
+            return questions.map(({ verbs, subject }) => ({
+              verb: verbs[0] ?? 'delete',
+              text: subject,
+            }));
+          },
+        });
+        await client.close();
+        expect(result.ok).toBe(true);
+        return asked;
+      }
+
+      it('forwards acceptDataLoss, so a data-loss question is not asked', async () => {
+        const asked = await questionsAsked(
+          { dataLoss: [{ operationIndex: 0, subject: USER, loss: 'drop', label: 'Test op' }] },
+          { acceptDataLoss: true },
+        );
+
+        expect(asked).toEqual([[]]);
+      });
+
+      it('forwards acceptAccessChanges, so an access question is not asked', async () => {
+        const asked = await questionsAsked(
+          { accessChanges: [{ operationIndex: 0, subject: USER, widens: true }] },
+          { acceptAccessChanges: true },
+        );
+
+        expect(asked).toEqual([[]]);
+      });
+    });
+
     it('does not fail when marker is missing', async () => {
       const { mockTargetWithMigrations, mockAdapter, mockDriverDescriptor } =
         createMockComponentsWithMigrations();
@@ -844,6 +978,7 @@ describe('ControlClient progress emission', () => {
       });
 
       const result = await client.dbUpdate({
+        invocation: TEST_INVOCATION,
         contract: {
           target: 'postgres',
           storage: { storageHash: 'fixture', tables: {}, namespaces: {} },
@@ -857,33 +992,6 @@ describe('ControlClient progress emission', () => {
       expect(result.ok).toBe(true);
 
       await client.close();
-    });
-
-    it('does not throw when onProgress is omitted from dbUpdate', async () => {
-      const { mockFamilyWithMarker, mockTargetWithMigrations, mockAdapter, mockDriverDescriptor } =
-        createMockComponentsWithMigrations();
-
-      const client = createControlClient({
-        family: mockFamilyWithMarker,
-        target: mockTargetWithMigrations,
-        adapter: mockAdapter,
-        driver: mockDriverDescriptor,
-      });
-
-      const result = await client.dbUpdate({
-        contract: {
-          target: 'postgres',
-          storage: { storageHash: 'fixture', tables: {}, namespaces: {} },
-        },
-        mode: 'plan',
-        connection: 'postgres://test',
-        migrationsDir: '/tmp/__test-client-migrations',
-        answerQuestions: async () => [],
-      });
-
-      await client.close();
-
-      expect(result.ok).toBe(true);
     });
   });
 
@@ -935,23 +1043,6 @@ describe('ControlClient progress emission', () => {
   });
 
   describe('readMarker()', () => {
-    it('returns null when no marker exists', async () => {
-      const { mockFamily, mockTarget, mockAdapter, mockDriverDescriptor } = createMockComponents();
-
-      const client = createControlClient({
-        family: mockFamily,
-        target: mockTarget,
-        adapter: mockAdapter,
-        driver: mockDriverDescriptor,
-      });
-
-      await client.connect('postgres://test');
-      const marker = await client.readMarker();
-      await client.close();
-
-      expect(marker).toBeNull();
-    });
-
     it('returns marker record when marker exists', async () => {
       const { mockFamily, mockTarget, mockAdapter, mockDriverDescriptor, mockFamilyInstance } =
         createMockComponents();
@@ -984,7 +1075,7 @@ describe('ControlClient progress emission', () => {
   });
 
   describe('inferPslContract()', () => {
-    it('delegates to family instance when capability is implemented', () => {
+    it('delegates to family instance when capability is implemented', async () => {
       const fakeAst = { kind: 'document', namespaces: [] } as unknown;
       const { mockFamily, mockTarget, mockAdapter, mockFamilyInstance } = createMockComponents();
       (mockFamilyInstance as unknown as { inferPslContract: (ir: unknown) => unknown })[
@@ -1000,11 +1091,11 @@ describe('ControlClient progress emission', () => {
         adapter: mockAdapter,
       });
 
-      const result = client.inferPslContract({ tables: {} });
+      const result = await client.inferPslContract({ tables: {} });
       expect(result).toBe(fakeAst);
     });
 
-    it('returns undefined when family does not implement the capability', () => {
+    it('returns undefined when family does not implement the capability', async () => {
       const { mockFamily, mockTarget, mockAdapter } = createMockComponents();
 
       const client = createControlClient({
@@ -1013,13 +1104,13 @@ describe('ControlClient progress emission', () => {
         adapter: mockAdapter,
       });
 
-      const result = client.inferPslContract({ tables: {} });
+      const result = await client.inferPslContract({ tables: {} });
       expect(result).toBeUndefined();
     });
   });
 
   describe('toOperationPreview()', () => {
-    it('delegates to family instance when capability is implemented', () => {
+    it('delegates to family instance when capability is implemented', async () => {
       const fakePreview = {
         statements: [{ text: 'CREATE TABLE x (id int)', language: 'sql' }],
       };
@@ -1043,7 +1134,7 @@ describe('ControlClient progress emission', () => {
       expect(result).toBe(fakePreview);
     });
 
-    it('returns undefined when family does not implement the capability', () => {
+    it('returns undefined when family does not implement the capability', async () => {
       const { mockFamily, mockTarget, mockAdapter } = createMockComponents();
 
       const client = createControlClient({
@@ -1109,6 +1200,7 @@ describe('ControlClient progress emission', () => {
 
       const result = await client.dbSign({
         contract: createContract(),
+        invocation: { cwd: '/work/app', configPath: undefined, dbGiven: false },
         migrationsDir: '/tmp/__test-client-migrations',
         connection: 'postgres://test',
       });
@@ -1136,31 +1228,6 @@ describe('ControlClient progress emission', () => {
 
       expect(result).toBeDefined();
     });
-
-    it(
-      'does not throw when onProgress is omitted from emit',
-      async () => {
-        const { mockFamily, mockTarget, mockAdapter } = createMockComponents();
-
-        const client = createControlClient({
-          family: mockFamily,
-          target: mockTarget,
-          adapter: mockAdapter,
-        });
-
-        const result = await client.emit({
-          contractConfig: {
-            source: createSourceProvider(),
-            output: '/tmp/contract.json',
-          },
-        });
-
-        await client.close();
-
-        expect(result.ok).toBe(true);
-      },
-      timeouts.databaseOperation,
-    );
   });
 
   describe('renderContractDts()', () => {

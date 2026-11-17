@@ -1,4 +1,5 @@
 import type { ParsedPslExtensionBlock } from '@internal/framework-components/authoring';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import {
   makePslNamespace,
@@ -75,6 +76,7 @@ function parsePolicySelect(schema: string): ParsedPolicySelect {
         pslBlockDescriptors: assembled.pslBlockDescriptors,
       },
       controlMutationDefaults: { defaultFunctionRegistry: new Map() },
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
       dataTypes: EMPTY_DATA_TYPES,
     },
   });

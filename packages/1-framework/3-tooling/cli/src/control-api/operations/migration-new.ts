@@ -3,7 +3,7 @@
  */
 
 import { readFile } from 'node:fs/promises';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
 import { APP_SPACE_ID, createControlStack } from '@internal/framework-components/control';
 import { loadContractSpaceAggregate } from '@internal/migration-tools/aggregate';
@@ -29,6 +29,7 @@ import {
   resolveContractPath,
   resolveMigrationPaths,
 } from '../../utils/command-helpers';
+import { contractValidationMeta } from '../../utils/contract-validation-meta';
 import { assertFrameworkComponentsCompatible } from '../../utils/framework-components';
 import { createProjectSpecifierResolver } from '../../utils/project-import-root';
 import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
@@ -39,7 +40,7 @@ import { resolveDefaultOriginHash } from './plan-resolution';
 import { renderSnapshotDeclarations } from './snapshot-declarations';
 
 export interface MigrationNewOptions {
-  readonly config: PrismaNextConfig;
+  readonly config: PrismaConfig;
   /** Directory the command was invoked from. */
   readonly cwd: string;
   /** The project's directory, normally the validated config's `baseDir`; locates the project manifest. */
@@ -103,6 +104,7 @@ export async function executeMigrationNewCommand(
         why: `Failed to deserialize ${contractPathAbsolute}: ${error instanceof Error ? error.message : String(error)}`,
         fix: 'Run `{bin} contract emit` to regenerate the contract',
         cause: error,
+        ...ifDefined('meta', contractValidationMeta(error)),
       }),
     );
   }

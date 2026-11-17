@@ -176,6 +176,7 @@ describe('init on the Prisma 7 fixture, end to end', () => {
               'prisma/schema.prisma',
               '--confirm',
               basename(projectDir),
+              '--json',
             ],
             { cwd: projectDir },
           ),
@@ -232,6 +233,7 @@ describe('init on the Prisma 7 fixture, end to end', () => {
           'prisma/schema.prisma',
           '--confirm',
           basename(projectDir),
+          '--json',
         ],
         { cwd: projectDir },
       );

@@ -17,6 +17,7 @@
 // per-file test-count threshold documented in `./nested-includes-helpers.ts`.
 
 import { describe, expect, it } from 'vitest';
+import { includeStrategies } from './helpers';
 import { timeouts, withCollectionRuntime } from './integration-helpers';
 import {
   CORRELATED_CAPABILITIES,
@@ -25,16 +26,16 @@ import {
 } from './nested-includes-helpers';
 import { seedComments, seedPosts, seedUsers } from './runtime-helpers';
 
-describe('integration/nested-includes/distinct', () => {
+describe.each(includeStrategies)('integration/nested-includes/distinct (%s)', (strategy) => {
   // ===========================================================================
   // Single execution + canonical shape under both single-query capabilities.
   // Each variant exercises the post-CTE lowering for the most common shapes:
   // hasMany non-leaf + hasMany leaf, hasMany non-leaf + belongsTo leaf.
   // ===========================================================================
 
-  describe('single execution under single-query capabilities', () => {
+  describe('statement counts and shapes under single-query capabilities', () => {
     it(
-      'lateral: depth-2 hasMany + hasMany leaf — single execution + canonical shape',
+      'lateral: depth-2 hasMany + hasMany leaf — statement count + canonical shape',
       async () => {
         // Two posts share the title 'A' so `.distinct('title')` collapses
         // them to one representative. With orderBy [title.asc, id.asc] the
@@ -54,9 +55,10 @@ describe('integration/nested-includes/distinct', () => {
             { id: 103, body: 'b1', postId: 12 },
           ]);
 
-          const users = collectionWithCapabilities(runtime, 'User', LATERAL_CAPABILITIES);
+          const users = collectionWithCapabilities(runtime, 'User', LATERAL_CAPABILITIES, strategy);
           runtime.resetExecutions();
 
+          runtime.resetExecutions();
           const rows = await users
             .select('name')
             .orderBy((u) => u.id.asc())
@@ -69,7 +71,7 @@ describe('integration/nested-includes/distinct', () => {
             )
             .all();
 
-          expect(runtime.executions).toHaveLength(1);
+          expect(runtime.executions).toHaveLength(strategy === 'join' ? 1 : 3);
           expect(rows).toEqual([
             {
               name: 'Alice',
@@ -96,7 +98,7 @@ describe('integration/nested-includes/distinct', () => {
     );
 
     it(
-      'correlated: depth-2 hasMany + hasMany leaf — single execution + canonical shape',
+      'correlated: depth-2 hasMany + hasMany leaf — statement count + canonical shape',
       async () => {
         // Same setup as the lateral variant; only capabilities differ. The
         // correlated builder reaches into the same `buildIncludeChildRowsSelect`
@@ -116,9 +118,15 @@ describe('integration/nested-includes/distinct', () => {
             { id: 103, body: 'b1', postId: 12 },
           ]);
 
-          const users = collectionWithCapabilities(runtime, 'User', CORRELATED_CAPABILITIES);
+          const users = collectionWithCapabilities(
+            runtime,
+            'User',
+            CORRELATED_CAPABILITIES,
+            strategy,
+          );
           runtime.resetExecutions();
 
+          runtime.resetExecutions();
           const rows = await users
             .select('name')
             .orderBy((u) => u.id.asc())
@@ -131,7 +139,7 @@ describe('integration/nested-includes/distinct', () => {
             )
             .all();
 
-          expect(runtime.executions).toHaveLength(1);
+          expect(runtime.executions).toHaveLength(strategy === 'join' ? 1 : 3);
           expect(rows).toEqual([
             {
               name: 'Alice',
@@ -158,7 +166,7 @@ describe('integration/nested-includes/distinct', () => {
     );
 
     it(
-      'lateral: depth-2 hasMany + belongsTo leaf — single execution + canonical shape',
+      'lateral: depth-2 hasMany + belongsTo leaf — statement count + canonical shape',
       async () => {
         // Mixed cardinality at the leaf: the depth-2 grandchild is a
         // to-one belongsTo (post.author), which collapses to a single
@@ -179,9 +187,10 @@ describe('integration/nested-includes/distinct', () => {
             { id: 12, title: 'B', userId: 2, views: 3 },
           ]);
 
-          const users = collectionWithCapabilities(runtime, 'User', LATERAL_CAPABILITIES);
+          const users = collectionWithCapabilities(runtime, 'User', LATERAL_CAPABILITIES, strategy);
           runtime.resetExecutions();
 
+          runtime.resetExecutions();
           const rows = await users
             .select('id', 'name')
             .orderBy((u) => u.id.asc())
@@ -194,7 +203,7 @@ describe('integration/nested-includes/distinct', () => {
             )
             .all();
 
-          expect(runtime.executions).toHaveLength(1);
+          expect(runtime.executions).toHaveLength(strategy === 'join' ? 1 : 3);
           expect(rows).toEqual([
             {
               id: 1,
@@ -213,7 +222,7 @@ describe('integration/nested-includes/distinct', () => {
     );
 
     it(
-      'correlated: depth-2 hasMany + belongsTo leaf — single execution + canonical shape',
+      'correlated: depth-2 hasMany + belongsTo leaf — statement count + canonical shape',
       async () => {
         await withCollectionRuntime(async (runtime) => {
           await seedUsers(runtime, [
@@ -226,9 +235,15 @@ describe('integration/nested-includes/distinct', () => {
             { id: 12, title: 'B', userId: 2, views: 3 },
           ]);
 
-          const users = collectionWithCapabilities(runtime, 'User', CORRELATED_CAPABILITIES);
+          const users = collectionWithCapabilities(
+            runtime,
+            'User',
+            CORRELATED_CAPABILITIES,
+            strategy,
+          );
           runtime.resetExecutions();
 
+          runtime.resetExecutions();
           const rows = await users
             .select('id', 'name')
             .orderBy((u) => u.id.asc())
@@ -241,7 +256,7 @@ describe('integration/nested-includes/distinct', () => {
             )
             .all();
 
-          expect(runtime.executions).toHaveLength(1);
+          expect(runtime.executions).toHaveLength(strategy === 'join' ? 1 : 3);
           expect(rows).toEqual([
             {
               id: 1,
@@ -295,12 +310,13 @@ describe('integration/nested-includes/distinct', () => {
             { id: 102, body: 'b1', postId: 12 },
           ]);
 
-          const users = collectionWithCapabilities(runtime, 'User', LATERAL_CAPABILITIES);
+          const users = collectionWithCapabilities(runtime, 'User', LATERAL_CAPABILITIES, strategy);
           runtime.resetExecutions();
 
           // `.select('title')` on posts omits post.id, but the grandchild
           // `comments` include needs post.id for stitching. The dedup
           // subquery must force-include it and strip it from the visible row.
+          runtime.resetExecutions();
           const rows = await users
             .select('name')
             .include('posts', (posts) =>
@@ -312,7 +328,7 @@ describe('integration/nested-includes/distinct', () => {
             )
             .all();
 
-          expect(runtime.executions).toHaveLength(1);
+          expect(runtime.executions).toHaveLength(strategy === 'join' ? 1 : 3);
           expect(rows).toEqual([
             {
               name: 'Alice',
@@ -343,9 +359,15 @@ describe('integration/nested-includes/distinct', () => {
             { id: 102, body: 'b1', postId: 12 },
           ]);
 
-          const users = collectionWithCapabilities(runtime, 'User', CORRELATED_CAPABILITIES);
+          const users = collectionWithCapabilities(
+            runtime,
+            'User',
+            CORRELATED_CAPABILITIES,
+            strategy,
+          );
           runtime.resetExecutions();
 
+          runtime.resetExecutions();
           const rows = await users
             .select('name')
             .include('posts', (posts) =>
@@ -357,7 +379,7 @@ describe('integration/nested-includes/distinct', () => {
             )
             .all();
 
-          expect(runtime.executions).toHaveLength(1);
+          expect(runtime.executions).toHaveLength(strategy === 'join' ? 1 : 3);
           expect(rows).toEqual([
             {
               name: 'Alice',
@@ -380,7 +402,7 @@ describe('integration/nested-includes/distinct', () => {
 
   describe('nested distinct shapes', () => {
     it(
-      'distinct at depth 2 (nested under a depth-1 row include) — single execution + shape',
+      'distinct at depth 2 (nested under a depth-1 row include) — statement count + shape',
       async () => {
         // Depth-3 tree, with `distinct()` on the depth-2 level rather than
         // depth 1. The dedup wrapper must compose recursively: the outer
@@ -402,9 +424,10 @@ describe('integration/nested-includes/distinct', () => {
             { id: 102, body: 'b1', postId: 12 },
           ]);
 
-          const users = collectionWithCapabilities(runtime, 'User', LATERAL_CAPABILITIES);
+          const users = collectionWithCapabilities(runtime, 'User', LATERAL_CAPABILITIES, strategy);
           runtime.resetExecutions();
 
+          runtime.resetExecutions();
           const rows = await users
             .select('id', 'name')
             .orderBy((u) => u.id.asc())
@@ -422,7 +445,7 @@ describe('integration/nested-includes/distinct', () => {
             )
             .all();
 
-          expect(runtime.executions).toHaveLength(1);
+          expect(runtime.executions).toHaveLength(strategy === 'join' ? 1 : 4);
           expect(rows).toEqual([
             {
               id: 1,
@@ -450,7 +473,7 @@ describe('integration/nested-includes/distinct', () => {
     );
 
     it(
-      'distinct on a self-relation non-leaf — single execution + shape',
+      'distinct on a self-relation non-leaf — statement count + shape',
       async () => {
         // Self-relation aliasing must propagate through the recursion or
         // the dedup wrapper will reference the wrong physical table at
@@ -472,9 +495,10 @@ describe('integration/nested-includes/distinct', () => {
             { id: 12, title: 'bP', userId: 4, views: 3 },
           ]);
 
-          const users = collectionWithCapabilities(runtime, 'User', LATERAL_CAPABILITIES);
+          const users = collectionWithCapabilities(runtime, 'User', LATERAL_CAPABILITIES, strategy);
           runtime.resetExecutions();
 
+          runtime.resetExecutions();
           const rows = await users
             .select('id', 'name')
             .where((u) => u.id.eq(1))
@@ -487,7 +511,7 @@ describe('integration/nested-includes/distinct', () => {
             )
             .all();
 
-          expect(runtime.executions).toHaveLength(1);
+          expect(runtime.executions).toHaveLength(strategy === 'join' ? 1 : 3);
           expect(rows).toEqual([
             {
               id: 1,
@@ -504,7 +528,7 @@ describe('integration/nested-includes/distinct', () => {
     );
 
     it(
-      'distinct at depth 1 inside a depth-3 tree — single execution + shape',
+      'distinct at depth 1 inside a depth-3 tree — statement count + shape',
       async () => {
         // The load-bearing recursion case for the dedup wrapper: the
         // depth-1 include is distinct AND has nested grandchildren that
@@ -534,9 +558,10 @@ describe('integration/nested-includes/distinct', () => {
             { id: 102, body: 'bC', postId: 12 },
           ]);
 
-          const users = collectionWithCapabilities(runtime, 'User', LATERAL_CAPABILITIES);
+          const users = collectionWithCapabilities(runtime, 'User', LATERAL_CAPABILITIES, strategy);
           runtime.resetExecutions();
 
+          runtime.resetExecutions();
           const rows = await users
             .select('id', 'name')
             .where((u) => u.id.eq(1))
@@ -554,7 +579,7 @@ describe('integration/nested-includes/distinct', () => {
             )
             .all();
 
-          expect(runtime.executions).toHaveLength(1);
+          expect(runtime.executions).toHaveLength(strategy === 'join' ? 1 : 4);
           expect(rows).toEqual([
             {
               id: 1,
@@ -598,13 +623,14 @@ describe('integration/nested-includes/distinct', () => {
             { id: 11, title: 'a2P', userId: 3, views: 2 },
           ]);
 
-          const users = collectionWithCapabilities(runtime, 'User', LATERAL_CAPABILITIES);
+          const users = collectionWithCapabilities(runtime, 'User', LATERAL_CAPABILITIES, strategy);
           runtime.resetExecutions();
 
           // Both grandchild includes (`invitedUsers`, `posts`) need
           // `users.id` to correlate — same `localColumn`. Without the
           // dedupe, the wrapper widens the projection with a duplicate
           // `id` alias.
+          runtime.resetExecutions();
           const rows = await users
             .select('id', 'name')
             .where((u) => u.id.eq(1))
@@ -618,7 +644,7 @@ describe('integration/nested-includes/distinct', () => {
             )
             .all();
 
-          expect(runtime.executions).toHaveLength(1);
+          expect(runtime.executions).toHaveLength(strategy === 'join' ? 1 : 4);
           expect(rows).toEqual([
             {
               id: 1,

@@ -4,6 +4,7 @@
 import type { CodecTypes as SqliteTypes } from '@internal/adapter-sqlite/codec-types';
 
 import type {
+  ColumnTypesFromStorage,
   ContractWithTypeMaps,
   RelationKeys,
   TypeMaps as TypeMapsType,
@@ -11,13 +12,14 @@ import type {
 import type {
   Contract as ContractType,
   ExecutionHashBase,
+  FieldTypesFromDomain,
   NamespaceId,
   ProfileHashBase,
   StorageHashBase,
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'73aeab611cbe82524b5388c8f8db1981ef1415dbd49508f11ce6a7eb52ec00c7'>;
+  StorageHashBase<'d5cad1234972d613b97cf4c6b1469ee2273c23fc70fc8a07bc853c14ab00179b'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53'>;
@@ -61,6 +63,22 @@ export type AggregateTypes = {
         readonly nullable: true;
       };
       readonly 'sqlite/blob@1': { readonly output: 'sqlite/blob@1'; readonly nullable: true };
+      readonly 'sqlite/date-string@1': {
+        readonly output: 'sqlite/date-string@1';
+        readonly nullable: true;
+      };
+      readonly 'sqlite/date-temporal@1': {
+        readonly output: 'sqlite/date-temporal@1';
+        readonly nullable: true;
+      };
+      readonly 'sqlite/datetime-string@1': {
+        readonly output: 'sqlite/datetime-string@1';
+        readonly nullable: true;
+      };
+      readonly 'sqlite/datetime-temporal@1': {
+        readonly output: 'sqlite/datetime-temporal@1';
+        readonly nullable: true;
+      };
       readonly 'sqlite/datetime@1': {
         readonly output: 'sqlite/datetime@1';
         readonly nullable: true;
@@ -69,6 +87,14 @@ export type AggregateTypes = {
       readonly 'sqlite/json@1': { readonly output: 'sqlite/json@1'; readonly nullable: true };
       readonly 'sqlite/real@1': { readonly output: 'sqlite/real@1'; readonly nullable: true };
       readonly 'sqlite/text@1': { readonly output: 'sqlite/text@1'; readonly nullable: true };
+      readonly 'sqlite/time-string@1': {
+        readonly output: 'sqlite/time-string@1';
+        readonly nullable: true;
+      };
+      readonly 'sqlite/time-temporal@1': {
+        readonly output: 'sqlite/time-temporal@1';
+        readonly nullable: true;
+      };
     };
   };
   readonly min: {
@@ -83,6 +109,22 @@ export type AggregateTypes = {
         readonly nullable: true;
       };
       readonly 'sqlite/blob@1': { readonly output: 'sqlite/blob@1'; readonly nullable: true };
+      readonly 'sqlite/date-string@1': {
+        readonly output: 'sqlite/date-string@1';
+        readonly nullable: true;
+      };
+      readonly 'sqlite/date-temporal@1': {
+        readonly output: 'sqlite/date-temporal@1';
+        readonly nullable: true;
+      };
+      readonly 'sqlite/datetime-string@1': {
+        readonly output: 'sqlite/datetime-string@1';
+        readonly nullable: true;
+      };
+      readonly 'sqlite/datetime-temporal@1': {
+        readonly output: 'sqlite/datetime-temporal@1';
+        readonly nullable: true;
+      };
       readonly 'sqlite/datetime@1': {
         readonly output: 'sqlite/datetime@1';
         readonly nullable: true;
@@ -91,6 +133,14 @@ export type AggregateTypes = {
       readonly 'sqlite/json@1': { readonly output: 'sqlite/json@1'; readonly nullable: true };
       readonly 'sqlite/real@1': { readonly output: 'sqlite/real@1'; readonly nullable: true };
       readonly 'sqlite/text@1': { readonly output: 'sqlite/text@1'; readonly nullable: true };
+      readonly 'sqlite/time-string@1': {
+        readonly output: 'sqlite/time-string@1';
+        readonly nullable: true;
+      };
+      readonly 'sqlite/time-temporal@1': {
+        readonly output: 'sqlite/time-temporal@1';
+        readonly nullable: true;
+      };
     };
   };
   readonly sum: {
@@ -129,59 +179,64 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
     ? Encoded
     : CodecTypes[CodecId]['json']
   : Encoded;
+type ParameterizedOutputTypeFunctions = never;
 
-export type FieldOutputTypes = {
+type FieldTypeOverrides = {
   readonly __unbound__: {
-    readonly Reading: {
-      readonly big: CodecTypes['sqlite/bigint@1']['output'];
-      readonly id: CodecTypes['sqlite/integer@1']['output'];
-      readonly real: CodecTypes['sqlite/real@1']['output'];
-      readonly text: CodecTypes['sqlite/text@1']['output'];
-      readonly when: CodecTypes['sqlite/datetime@1']['output'];
+    readonly models: {
+      readonly Reading: {
+        readonly big: { readonly output: 1n | 10n; readonly input: 1n | 10n };
+        readonly text: { readonly output: 'low' | 'high'; readonly input: 'low' | 'high' };
+      };
     };
   };
 };
-export type FieldInputTypes = {
-  readonly __unbound__: {
-    readonly Reading: {
-      readonly big: CodecTypes['sqlite/bigint@1']['input'];
-      readonly id: CodecTypes['sqlite/integer@1']['input'];
-      readonly real: CodecTypes['sqlite/real@1']['input'];
-      readonly text: CodecTypes['sqlite/text@1']['input'];
-      readonly when: CodecTypes['sqlite/datetime@1']['input'];
-    };
-  };
-};
-export type StorageColumnTypes = {
-  readonly __unbound__: {
-    readonly readings: {
-      readonly big: CodecTypes['sqlite/bigint@1']['output'];
-      readonly id: CodecTypes['sqlite/integer@1']['output'];
-      readonly real: CodecTypes['sqlite/real@1']['output'];
-      readonly text: CodecTypes['sqlite/text@1']['output'];
-      readonly when: CodecTypes['sqlite/datetime@1']['output'];
-    };
-  };
-};
-export type StorageColumnInputTypes = {
+export type FieldOutputTypes = FieldTypesFromDomain<
+  ContractBase['domain']['namespaces'],
+  CodecTypes,
+  ParameterizedOutputTypeFunctions,
+  FieldTypeOverrides,
+  'output',
+  ContractBase['storage']['namespaces']
+>;
+export type FieldInputTypes = FieldTypesFromDomain<
+  ContractBase['domain']['namespaces'],
+  CodecTypes,
+  ParameterizedOutputTypeFunctions,
+  FieldTypeOverrides,
+  'input',
+  ContractBase['storage']['namespaces']
+>;
+type ColumnTypeOverrides = {
   readonly __unbound__: {
     readonly readings: {
-      readonly big: CodecTypes['sqlite/bigint@1']['input'];
-      readonly id: CodecTypes['sqlite/integer@1']['input'];
-      readonly real: CodecTypes['sqlite/real@1']['input'];
-      readonly text: CodecTypes['sqlite/text@1']['input'];
-      readonly when: CodecTypes['sqlite/datetime@1']['input'];
+      readonly big: { readonly output: 1n | 10n; readonly input: 1n | 10n };
+      readonly text: { readonly output: 'low' | 'high'; readonly input: 'low' | 'high' };
     };
   };
 };
+export type StorageColumnTypes = ColumnTypesFromStorage<
+  ContractBase['storage'],
+  CodecTypes,
+  ParameterizedOutputTypeFunctions,
+  ColumnTypeOverrides,
+  'output'
+>;
+export type StorageColumnInputTypes = ColumnTypesFromStorage<
+  ContractBase['storage'],
+  CodecTypes,
+  ParameterizedOutputTypeFunctions,
+  ColumnTypeOverrides,
+  'input'
+>;
 
 export namespace Models {
   export type Reading = {
-    big: CodecTypes['sqlite/bigint@1']['output'];
-    id: CodecTypes['sqlite/integer@1']['output'];
-    real: CodecTypes['sqlite/real@1']['output'];
-    text: CodecTypes['sqlite/text@1']['output'];
-    when: CodecTypes['sqlite/datetime@1']['output'];
+    big: FieldOutputTypes['__unbound__']['Reading']['big'];
+    id: FieldOutputTypes['__unbound__']['Reading']['id'];
+    real: FieldOutputTypes['__unbound__']['Reading']['real'];
+    text: FieldOutputTypes['__unbound__']['Reading']['text'];
+    when: FieldOutputTypes['__unbound__']['Reading']['when'];
     readonly [RelationKeys]?: never;
   };
 }
@@ -235,7 +290,7 @@ type ContractBase = Omit<
                   readonly many: false;
                 };
                 readonly when: {
-                  readonly dataType: 'sqlite/text';
+                  readonly dataType: 'sqlite/datetime';
                   readonly codecId: 'sqlite/datetime@1';
                   readonly nullable: false;
                   readonly many: false;
@@ -259,7 +314,7 @@ type ContractBase = Omit<
             };
             readonly WhenLevel: {
               readonly kind: 'valueSet';
-              readonly values: readonly ['2024-01-01T00:00:00Z', '2025-06-30T12:00:00Z'];
+              readonly values: readonly ['2024-01-01T00:00:00.000Z', '2025-06-30T12:00:00.000Z'];
             };
           };
         };
@@ -343,8 +398,8 @@ type ContractBase = Omit<
           readonly WhenLevel: {
             readonly codecId: 'sqlite/datetime@1';
             readonly members: readonly [
-              { readonly name: 'Launch'; readonly value: '2024-01-01T00:00:00Z' },
-              { readonly name: 'Sunset'; readonly value: '2025-06-30T12:00:00Z' },
+              { readonly name: 'Launch'; readonly value: '2024-01-01T00:00:00.000Z' },
+              { readonly name: 'Sunset'; readonly value: '2025-06-30T12:00:00.000Z' },
             ];
           };
         };
@@ -373,16 +428,18 @@ type ContractBase = Omit<
     readonly sql: {
       readonly foreignKeys: true;
       readonly insertOnConflictSkip: true;
+      readonly insertOnConflictTarget: true;
       readonly insertOnConflictWithoutTarget: true;
       readonly jsonAgg: true;
+      readonly jsonAggWithoutTruncation: true;
       readonly limit: true;
       readonly orderBy: true;
+      readonly outerReferencesInDerivedTables: true;
       readonly returning: true;
     };
   };
   readonly extensions: {};
   readonly meta: {};
-
   readonly profileHash: ProfileHash;
 };
 

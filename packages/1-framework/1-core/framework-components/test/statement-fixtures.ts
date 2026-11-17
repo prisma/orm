@@ -49,6 +49,7 @@ export interface StatementSetup {
   readonly context?: ActivityContextFields;
   readonly parent?: ActivityParent;
   readonly params?: ParamRefMutator;
+  readonly plan?: MockExec;
 }
 
 export function queryStatement<Row = Record<string, unknown>>(
@@ -78,7 +79,7 @@ export function executeStatementWith(
   return executeStatement(
     {
       middleware,
-      plan: exec,
+      plan: setup.plan ?? exec,
       context: setup.context ?? contextFields(),
       parent: setup.parent,
     },

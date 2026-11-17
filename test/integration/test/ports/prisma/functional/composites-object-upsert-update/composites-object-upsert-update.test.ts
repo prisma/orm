@@ -9,7 +9,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // update branch runs (the record already exists). The `create` arg is present but
 // unused. Upstream is matrix-parameterised on contentProperty (required/optional).
 //
-// Prisma 8: `.where({ _id }).upsert({ update: {...}, create: { _id, content: {...} } })`.
+// Prisma 8: `.where({ id }).upsert({ update: {...}, create: { id, content: {...} } })`.
 // `upsert()` returns the post-update document.
 //
 // Ported (both variants):
@@ -44,13 +44,13 @@ describe('ports/prisma/functional/composites/object/upsert-update', () => {
         withComposites(async ({ db }) => {
           const id = new ObjectId().toHexString();
           await db.comments_required.create({
-            _id: id,
+            id,
             country: 'France',
             content: { text: 'Hello World', upvotes: [{ vote: true, userId: '10' }] },
           });
 
-          const comment = await db.comments_required.where({ _id: id }).upsert({
-            create: { _id: id, country: null, content: { text: 'Hello World', upvotes: [] } },
+          const comment = await db.comments_required.where({ id }).upsert({
+            create: { id, country: null, content: { text: 'Hello World', upvotes: [] } },
             update: {
               country: 'Mars',
               content: { text: 'Goodbye World', upvotes: [{ vote: false, userId: '42' }] },
@@ -64,7 +64,7 @@ describe('ports/prisma/functional/composites/object/upsert-update', () => {
               upvotes: [{ userId: '42', vote: false }],
             },
           });
-          expect(comment._id).toEqual(expect.any(String));
+          expect(comment.id).toEqual(expect.any(String));
         }),
       timeouts.spinUpMongoMemoryServer,
     );
@@ -75,13 +75,13 @@ describe('ports/prisma/functional/composites/object/upsert-update', () => {
         withComposites(async ({ db }) => {
           const id = new ObjectId().toHexString();
           await db.comments_required.create({
-            _id: id,
+            id,
             country: 'France',
             content: { text: 'Hello World', upvotes: [{ vote: true, userId: '10' }] },
           });
 
-          const comment = await db.comments_required.where({ _id: id }).upsert({
-            create: { _id: id, country: null, content: { text: 'Hello World', upvotes: [] } },
+          const comment = await db.comments_required.where({ id }).upsert({
+            create: { id, country: null, content: { text: 'Hello World', upvotes: [] } },
             update: {
               country: 'Mars',
               content: { text: 'Goodbye World', upvotes: [{ vote: false, userId: '42' }] },
@@ -108,38 +108,14 @@ describe('ports/prisma/functional/composites/object/upsert-update', () => {
         withComposites(async ({ db }) => {
           const id = new ObjectId().toHexString();
           await db.comments_required.create({
-            _id: id,
+            id,
             country: 'France',
             content: { text: 'Hello World', upvotes: [{ vote: true, userId: '10' }] },
           });
 
           // @ts-expect-error required `content` cannot be null
-          const promise = db.comments_required.where({ _id: id }).upsert({
-            create: { _id: id, country: null, content: { text: 'Hello World', upvotes: [] } },
-            update: {
-              country: 'France',
-              content: null,
-            },
-          });
-          await expect(promise).rejects.toThrow();
-        }),
-      timeouts.spinUpMongoMemoryServer,
-    );
-
-    it(
-      'set null shorthand',
-      () =>
-        withComposites(async ({ db }) => {
-          const id = new ObjectId().toHexString();
-          await db.comments_required.create({
-            _id: id,
-            country: 'France',
-            content: { text: 'Hello World', upvotes: [{ vote: true, userId: '10' }] },
-          });
-
-          // @ts-expect-error required `content` cannot be null
-          const promise = db.comments_required.where({ _id: id }).upsert({
-            create: { _id: id, country: null, content: { text: 'Hello World', upvotes: [] } },
+          const promise = db.comments_required.where({ id }).upsert({
+            create: { id, country: null, content: { text: 'Hello World', upvotes: [] } },
             update: {
               country: 'France',
               content: null,
@@ -156,13 +132,13 @@ describe('ports/prisma/functional/composites/object/upsert-update', () => {
         withComposites(async ({ db }) => {
           const id = new ObjectId().toHexString();
           await db.comments_required.create({
-            _id: id,
+            id,
             country: 'France',
             content: { text: 'Hello World', upvotes: [{ vote: true, userId: '10' }] },
           });
 
-          const comment = await db.comments_required.where({ _id: id }).upsert({
-            create: { _id: id, country: null, content: { text: 'Hello World', upvotes: [] } },
+          const comment = await db.comments_required.where({ id }).upsert({
+            create: { id, country: null, content: { text: 'Hello World', upvotes: [] } },
             update: {
               country: 'Mars',
               content: {
@@ -197,13 +173,13 @@ describe('ports/prisma/functional/composites/object/upsert-update', () => {
         withComposites(async ({ db }) => {
           const id = new ObjectId().toHexString();
           await db.comments_optional.create({
-            _id: id,
+            id,
             country: 'France',
             content: { text: 'Hello World', upvotes: [{ vote: true, userId: '10' }] },
           });
 
-          const comment = await db.comments_optional.where({ _id: id }).upsert({
-            create: { _id: id, country: null, content: null },
+          const comment = await db.comments_optional.where({ id }).upsert({
+            create: { id, country: null, content: null },
             update: {
               country: 'Mars',
               content: { text: 'Goodbye World', upvotes: [{ vote: false, userId: '42' }] },
@@ -217,7 +193,7 @@ describe('ports/prisma/functional/composites/object/upsert-update', () => {
               upvotes: [{ userId: '42', vote: false }],
             },
           });
-          expect(comment._id).toEqual(expect.any(String));
+          expect(comment.id).toEqual(expect.any(String));
         }),
       timeouts.spinUpMongoMemoryServer,
     );
@@ -228,13 +204,13 @@ describe('ports/prisma/functional/composites/object/upsert-update', () => {
         withComposites(async ({ db }) => {
           const id = new ObjectId().toHexString();
           await db.comments_optional.create({
-            _id: id,
+            id,
             country: 'France',
             content: { text: 'Hello World', upvotes: [{ vote: true, userId: '10' }] },
           });
 
-          const comment = await db.comments_optional.where({ _id: id }).upsert({
-            create: { _id: id, country: null, content: null },
+          const comment = await db.comments_optional.where({ id }).upsert({
+            create: { id, country: null, content: null },
             update: {
               country: 'Mars',
               content: { text: 'Goodbye World', upvotes: [{ vote: false, userId: '42' }] },
@@ -258,13 +234,13 @@ describe('ports/prisma/functional/composites/object/upsert-update', () => {
         withComposites(async ({ db }) => {
           const id = new ObjectId().toHexString();
           await db.comments_optional.create({
-            _id: id,
+            id,
             country: 'France',
             content: { text: 'Hello World', upvotes: [{ vote: true, userId: '10' }] },
           });
 
-          const comment = await db.comments_optional.where({ _id: id }).upsert({
-            create: { _id: id, country: null, content: null },
+          const comment = await db.comments_optional.where({ id }).upsert({
+            create: { id, country: null, content: null },
             update: {
               country: 'France',
               content: null,
@@ -275,7 +251,7 @@ describe('ports/prisma/functional/composites/object/upsert-update', () => {
             content: null,
             country: 'France',
           });
-          expect(comment._id).toEqual(expect.any(String));
+          expect(comment.id).toEqual(expect.any(String));
         }),
       timeouts.spinUpMongoMemoryServer,
     );
@@ -286,13 +262,13 @@ describe('ports/prisma/functional/composites/object/upsert-update', () => {
         withComposites(async ({ db }) => {
           const id = new ObjectId().toHexString();
           await db.comments_optional.create({
-            _id: id,
+            id,
             country: 'France',
             content: { text: 'Hello World', upvotes: [{ vote: true, userId: '10' }] },
           });
 
-          const comment = await db.comments_optional.where({ _id: id }).upsert({
-            create: { _id: id, country: null, content: null },
+          const comment = await db.comments_optional.where({ id }).upsert({
+            create: { id, country: null, content: null },
             update: {
               country: 'France',
               content: null,
@@ -313,13 +289,13 @@ describe('ports/prisma/functional/composites/object/upsert-update', () => {
         withComposites(async ({ db }) => {
           const id = new ObjectId().toHexString();
           await db.comments_optional.create({
-            _id: id,
+            id,
             country: 'France',
             content: { text: 'Hello World', upvotes: [{ vote: true, userId: '10' }] },
           });
 
-          const comment = await db.comments_optional.where({ _id: id }).upsert({
-            create: { _id: id, country: null, content: null },
+          const comment = await db.comments_optional.where({ id }).upsert({
+            create: { id, country: null, content: null },
             update: {
               country: 'Mars',
               content: {
@@ -355,13 +331,13 @@ describe('ports/prisma/functional/composites/object/upsert-update', () => {
         withComposites(async ({ db }) => {
           const id = new ObjectId().toHexString();
           await db.comments_optional.create({
-            _id: id,
+            id,
             country: 'France',
             content: { text: 'Hello World', upvotes: [{ vote: true, userId: '10' }] },
           });
 
-          const comment = await db.comments_optional.where({ _id: id }).upsert({
-            create: { _id: id, country: null, content: null },
+          const comment = await db.comments_optional.where({ id }).upsert({
+            create: { id, country: null, content: null },
             update: (u) => [u.content.unset()],
           });
 
@@ -369,7 +345,7 @@ describe('ports/prisma/functional/composites/object/upsert-update', () => {
             content: null,
             country: 'France',
           });
-          expect(comment._id).toEqual(expect.any(String));
+          expect(comment.id).toEqual(expect.any(String));
         }),
       timeouts.spinUpMongoMemoryServer,
     );

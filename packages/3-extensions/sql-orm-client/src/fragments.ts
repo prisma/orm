@@ -59,7 +59,7 @@ type BuiltMultiplicity<Builder> = Builder extends { build(): infer Built }
   ? DeclaredMultiplicity<Built>
   : false;
 
-/** A field builder from the contract DSL, such as `field.text().optional()`, with the codec and nullability it declares. */
+/** A field builder from the contract DSL, such as `field.column(type.String()).optional()`, with the codec and nullability it declares. */
 export type DeclaredFieldsFragmentFieldBuilder<
   CodecId extends string = string,
   Nullable extends boolean = boolean,
@@ -267,7 +267,7 @@ function multiplicity(many: unknown): FieldMultiplicity {
 }
 
 const FIELD_DECLARATION_FIX =
-  'Declare each field with a field builder, such as field.temporal.timestamptz().optional(), or with { codecId, nullable }. Declare a list with .many() or many: { elementNullable: false }, or, when its elements may be null, with .many({ elementsNullable: true }) or many: { elementNullable: true }.';
+  'Declare each field with a field builder, such as field.column(type.TimestamptzTemporal()).optional(), or with { codecId, nullable }. Declare a list with .many() or many: { elementNullable: false }, or, when its elements may be null, with .many({ elementsNullable: true }) or many: { elementNullable: true }.';
 
 function declaredFieldSpec(name: string, declaration: unknown): FieldSpec {
   if (typeof declaration === 'object' && declaration !== null && isFieldBuilder(declaration)) {
@@ -292,7 +292,7 @@ function declaredFieldSpec(name: string, declaration: unknown): FieldSpec {
         `Cannot define the fragment: the field builder for ${name} names no column type`,
         {
           why: 'A fragment for any model matches each declared field by its codec and nullability, and this builder refers to a named type instead of a column type.',
-          fix: 'Declare the field with a builder that has a column type, such as field.text() or field.column(textColumn), or with { codecId, nullable }.',
+          fix: 'Declare the field with a builder that has a column type, such as field.column(type.String()) or field.column(textColumn), or with { codecId, nullable }.',
           meta: { field: name },
         },
       );
@@ -643,6 +643,7 @@ export function defineDeclaredFieldsFragment<
 }
 
 const NO_INDEXES = Object.freeze({});
+const NO_COLLECTION_METHODS = Object.freeze({});
 
 const collectionsBehindViews = new WeakMap<object, unknown>();
 
@@ -657,11 +658,12 @@ const BODY_CHAIN_METHODS: Readonly<
 > = { where: true, orderBy: true, limit: true, offset: true };
 
 /**
- * The collection as the body of a fragment for any model sees it: a `where` or `orderBy` callback receives `fns` and an `indexes` with no members, as the body does not know its model.
+ * The collection as the body of a fragment for any model sees it: a `where` or `orderBy` callback receives `fns` and an `indexes` with no members, and `using` has no members, as the body does not know its model.
  */
 function withoutIndexes(collection: object): object {
   const view = new Proxy(collection, {
     get(target, prop) {
+      if (prop === 'using') return NO_COLLECTION_METHODS;
       const member: unknown = Reflect.get(target, prop, target);
       if (typeof member !== 'function') return member;
       if (!Object.hasOwn(BODY_CHAIN_METHODS, prop)) return member.bind(target);

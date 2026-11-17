@@ -85,47 +85,6 @@ describe('printPslFromAst', () => {
       expect(out).toMatch(/user\s+supabase:User\?/);
     });
 
-    it('does not affect typeConstructor rendering', () => {
-      const ast: PslDocumentAst = {
-        kind: 'document',
-        sourceId: 't',
-        namespaces: [
-          makeNs(
-            UNSPECIFIED_PSL_NAMESPACE_ID,
-            [
-              {
-                kind: 'model',
-                name: 'Account',
-                fields: [
-                  {
-                    kind: 'field',
-                    name: 'balance',
-                    typeName: 'Decimal',
-                    typeConstructor: {
-                      kind: 'typeConstructor',
-                      path: ['Money'],
-                      args: [{ kind: 'positional', value: '2', span: span(0) }],
-                      span: span(0),
-                    },
-                    optional: false,
-                    list: false,
-                    attributes: [],
-                    span: span(0),
-                  },
-                ],
-                attributes: [],
-                span: span(0),
-              },
-            ],
-            [],
-            0,
-          ),
-        ],
-        span: span(0),
-      };
-      expect(printPslFromAst(ast)).toContain('balance Money(2)');
-    });
-
     it('prints a cross-space colon-prefix relation field with the qualifier intact', () => {
       const ast: PslDocumentAst = {
         kind: 'document',

@@ -3,9 +3,7 @@ import pgvector from '@internal/extension-pgvector/pack';
 import { autoincrement, defineContract, now, rel } from '@internal/postgres/contract-builder';
 
 export const contract = defineContract({ extensions: { pgvector } }, ({ field, model, type }) => {
-  const types = {
-    Embedding: type.pgvector.Vector(1536),
-  } as const;
+  const Embedding = field.column(type.pgvector.Vector(1536));
   const User = model('User', {
     fields: {
       id: field.column(pg.int4Column).default(autoincrement()).id(),
@@ -14,7 +12,7 @@ export const contract = defineContract({ extensions: { pgvector } }, ({ field, m
       isActive: field.column(pg.boolColumn).default(true),
       score: field.column(pg.float8Column).optional(),
       profile: field.column(pg.jsonbColumn).optional(),
-      embedding: field.namedType(types.Embedding).optional(),
+      embedding: Embedding.optional(),
       createdAt: field.column(pg.timestamptzTemporalColumn).default(now()),
     },
   }).sql({ table: 'user' });
@@ -31,5 +29,5 @@ export const contract = defineContract({ extensions: { pgvector } }, ({ field, m
         .sql({ fk: { onDelete: 'cascade', onUpdate: 'cascade' } }),
     },
   }).sql({ table: 'post' });
-  return { types, models: { User, Post } };
+  return { models: { User, Post } };
 });

@@ -15,8 +15,7 @@
  * digits under a different declared codec — a decimal string beside a bigint.
  */
 
-import { int4Column, int8Column } from '@internal/adapter-postgres/column-types';
-import postgresAdapter from '@internal/adapter-postgres/runtime';
+import { int4Column, int8BigIntColumn } from '@internal/adapter-postgres/column-types';
 import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
 import { type AggregateSpec, Collection } from '@internal/sql-orm-client';
 import type { SqlAggregateDescriptor } from '@internal/sql-relational-core/aggregate-descriptor-registry';
@@ -28,6 +27,7 @@ import {
 } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
+import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
 import { timeouts, withCollectionRuntime } from './integration-helpers';
 import type { PgIntegrationRuntime } from './runtime-helpers';
 
@@ -56,7 +56,7 @@ const contributedAggregateDescriptors: readonly SqlAggregateDescriptor[] = [
     input: { kind: 'none' },
     output: { kind: 'codec', codecId: 'pg/int8@1' },
     nullable: false,
-    emptyResultJson: '0',
+    emptyResultWire: '0',
     lower: () => new AggregateExpr('count', undefined),
   },
 ];
@@ -77,7 +77,7 @@ const contributedAggregates: SqlRuntimeExtensionDescriptor<'postgres'> = {
 const Reading = model('Reading', {
   fields: {
     id: field.column(int4Column).id(),
-    weight: field.column(int8Column).optional(),
+    weight: field.column(int8BigIntColumn).optional(),
   },
 }).sql({ table: 'contributed_readings' });
 
@@ -85,7 +85,7 @@ const Sample = model('Sample', {
   fields: {
     id: field.column(int4Column).id(),
     readingId: field.column(int4Column).column('reading_id'),
-    weight: field.column(int8Column).optional(),
+    weight: field.column(int8BigIntColumn).optional(),
   },
   relations: {
     reading: rel.belongsTo(Reading, { from: 'readingId', to: 'id' }),
@@ -97,19 +97,21 @@ const ReadingWithSamples = Reading.relations({
 }).sql({ table: 'contributed_readings' });
 
 const contract = defineContract({ models: { Reading: ReadingWithSamples, Sample } });
-const context = createExecutionContext({
-  contract,
-  stack: createSqlExecutionStack({
-    target: postgresTarget,
-    adapter: postgresAdapter,
-    extensions: [contributedAggregates],
-  }),
-});
+function contextOf(strategy: IncludeStrategy) {
+  return createExecutionContext({
+    contract,
+    stack: createSqlExecutionStack({
+      target: postgresTarget,
+      adapter: postgresAdapterFor(strategy),
+      extensions: [contributedAggregates],
+    }),
+  });
+}
 
 /** The same contract over a stack the extension is absent from — what the contributed operations are measured against. */
 const targetOnlyContext = createExecutionContext({
   contract,
-  stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),
+  stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapterFor('join') }),
 });
 
 async function setupTables(runtime: PgIntegrationRuntime): Promise<void> {
@@ -142,133 +144,138 @@ async function setupTables(runtime: PgIntegrationRuntime): Promise<void> {
   );
 }
 
-/** The contract is authored here, so its static aggregate map is unknown and the derived builder surface is empty; the contributed names dispatch dynamically. */
+/** The contributed operations come from the execution stack, not from the contract's packs, so the contract's aggregate types do not name them and they dispatch dynamically. */
 type DynamicAggregates = Record<string, (field?: string) => AggregateSpec[string]>;
 
-function readingsCollection(runtime: PgIntegrationRuntime) {
-  return new Collection({ runtime, context }, 'Reading', { namespaceId: 'public' });
+function readingsCollection(runtime: PgIntegrationRuntime, strategy: IncludeStrategy) {
+  return new Collection({ runtime, context: contextOf(strategy) }, 'Reading', {
+    namespaceId: 'public',
+  });
 }
 
-describe('integration/contributed aggregate operations', () => {
-  it(
-    'a contributed operation reaches the database and decodes through its declared codec',
-    async () => {
-      await withCollectionRuntime(
-        async (runtime) => {
-          await setupTables(runtime);
-          runtime.resetExecutions();
+describe.each(includeStrategies)(
+  'integration/contributed aggregate operations (%s)',
+  (strategy) => {
+    it(
+      'a contributed operation reaches the database and decodes through its declared codec',
+      async () => {
+        await withCollectionRuntime(
+          async (runtime) => {
+            await setupTables(runtime);
+            runtime.resetExecutions();
 
-          const stats = await readingsCollection(runtime).aggregate((aggregate) => {
-            const dynamic = aggregate as DynamicAggregates;
-            return {
-              bits: dynamic['bitOr']!('weight'),
-              rows: dynamic['tally']!(),
-              total: dynamic['sumBigInt']!('weight'),
-            };
-          });
-
-          // `bitOr` and `sumBigInt` fold the same rows to the same digits, and
-          // both carry them exactly: the contributed operation declares
-          // `pg/int8@1`, the target's lossless sum over a bigint declares
-          // `pg/unboundedint@1`. `tally` counts rows, so the weightless third
-          // reading counts too.
-          expect(stats).toEqual({
-            bits: COMBINED_BITS,
-            rows: 3n,
-            total: WIDE_WEIGHT + LOW_BITS,
-          });
-          expect(BigInt(Number(stats.bits))).not.toBe(COMBINED_BITS);
-
-          // The hook's function is what reached SQL — the alphabet has no name
-          // for it, and no lane or client source spells it out.
-          expect(runtime.executions).toHaveLength(1);
-          expect(runtime.executions[0]?.sql.toLowerCase()).toContain('bit_or(');
-        },
-        contract,
-        [contributedAggregates],
-      );
-    },
-    timeouts.spinUpPpgDev,
-  );
-
-  it(
-    'a contributed operation reduces an include, carried through the JSON envelope',
-    async () => {
-      await withCollectionRuntime(
-        async (runtime) => {
-          await setupTables(runtime);
-
-          const reduceToBits = (related: unknown): unknown =>
-            (related as DynamicAggregates)['bitOr']!('weight');
-          const rows = await readingsCollection(runtime)
-            .where((reading) => reading.id.eq(1))
-            .select('id')
-            .include('samples', (samples) => reduceToBits(samples) as never)
-            .all();
-
-          // The reducer's value crosses the boundary inside a JSON document,
-          // where its declared codec's projection is what keeps it exact.
-          expect(rows).toEqual([{ id: 1, samples: COMBINED_BITS }]);
-        },
-        contract,
-        [contributedAggregates],
-      );
-    },
-    timeouts.spinUpPpgDev,
-  );
-
-  it(
-    'an empty input set answers per the declared row: null where nullable, the zero otherwise',
-    async () => {
-      await withCollectionRuntime(
-        async (runtime) => {
-          await setupTables(runtime);
-
-          const overNoRows = await readingsCollection(runtime)
-            .where((reading) => reading.id.eq(404))
-            .aggregate((aggregate) => {
+            const stats = await readingsCollection(runtime, strategy).aggregate((aggregate) => {
               const dynamic = aggregate as DynamicAggregates;
-              return { bits: dynamic['bitOr']!('weight'), rows: dynamic['tally']!() };
+              return {
+                bits: dynamic['bitOr']!('weight'),
+                rows: dynamic['tally']!(),
+                total: dynamic['sumBigInt']!('weight'),
+              };
             });
 
-          expect(overNoRows).toEqual({ bits: null, rows: 0n });
+            // `bitOr` and `sumBigInt` fold the same rows to the same digits, and
+            // both carry them exactly: the contributed operation declares
+            // `pg/int8@1`, the target's lossless sum over a bigint declares
+            // `pg/unboundedint@1`. `tally` counts rows, so the weightless third
+            // reading counts too.
+            expect(stats).toEqual({
+              bits: COMBINED_BITS,
+              rows: 3n,
+              total: WIDE_WEIGHT + LOW_BITS,
+            });
+            expect(BigInt(Number(stats.bits))).not.toBe(COMBINED_BITS);
 
-          const reduceToTally = (related: unknown): unknown =>
-            (related as DynamicAggregates)['tally']!();
-          const rows = await readingsCollection(runtime)
-            .where((reading) => reading.id.eq(3))
-            .select('id')
-            .include('samples', (samples) => reduceToTally(samples) as never)
-            .all();
+            // The hook's function is what reached SQL — the alphabet has no name
+            // for it, and no lane or client source spells it out.
+            expect(runtime.executions).toHaveLength(1);
+            expect(runtime.executions[0]?.sql.toLowerCase()).toContain('bit_or(');
+          },
+          contract,
+          [contributedAggregates],
+        );
+      },
+      timeouts.spinUpPpgDev,
+    );
 
-          expect(rows).toEqual([{ id: 3, samples: 0n }]);
-        },
-        contract,
-        [contributedAggregates],
-      );
-    },
-    timeouts.spinUpPpgDev,
-  );
+    it(
+      'a contributed operation reduces an include exactly',
+      async () => {
+        await withCollectionRuntime(
+          async (runtime) => {
+            await setupTables(runtime);
 
-  it(
-    'the same query against a stack without the extension has no such operation',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        await setupTables(runtime);
+            const reduceToBits = (related: unknown): unknown =>
+              (related as DynamicAggregates)['bitOr']!('weight');
+            const rows = await readingsCollection(runtime, strategy)
+              .where((reading) => reading.id.eq(1))
+              .select('id')
+              .include('samples', (samples) => reduceToBits(samples) as never)
+              .all();
 
-        const readings = new Collection({ runtime, context: targetOnlyContext }, 'Reading', {
-          namespaceId: 'public',
-        });
-        const stats = await readings.aggregate((aggregate) => {
-          const dynamic = aggregate as DynamicAggregates & Record<string, unknown>;
-          expect(dynamic['bitOr']).toBeUndefined();
-          expect(dynamic['tally']).toBeUndefined();
-          return { total: dynamic['sumBigInt']!('weight') };
-        });
+            // Under the one-query include the value crosses the boundary inside a
+            // JSON document, where its declared codec's projection keeps it exact.
+            expect(rows).toEqual([{ id: 1, samples: COMBINED_BITS }]);
+          },
+          contract,
+          [contributedAggregates],
+        );
+      },
+      timeouts.spinUpPpgDev,
+    );
 
-        expect(stats).toEqual({ total: WIDE_WEIGHT + LOW_BITS });
-      }, contract);
-    },
-    timeouts.spinUpPpgDev,
-  );
-});
+    it(
+      'an empty input set answers per the declared row: null where nullable, the zero otherwise',
+      async () => {
+        await withCollectionRuntime(
+          async (runtime) => {
+            await setupTables(runtime);
+
+            const overNoRows = await readingsCollection(runtime, strategy)
+              .where((reading) => reading.id.eq(404))
+              .aggregate((aggregate) => {
+                const dynamic = aggregate as DynamicAggregates;
+                return { bits: dynamic['bitOr']!('weight'), rows: dynamic['tally']!() };
+              });
+
+            expect(overNoRows).toEqual({ bits: null, rows: 0n });
+
+            const reduceToTally = (related: unknown): unknown =>
+              (related as DynamicAggregates)['tally']!();
+            const rows = await readingsCollection(runtime, strategy)
+              .where((reading) => reading.id.eq(3))
+              .select('id')
+              .include('samples', (samples) => reduceToTally(samples) as never)
+              .all();
+
+            expect(rows).toEqual([{ id: 3, samples: 0n }]);
+          },
+          contract,
+          [contributedAggregates],
+        );
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'the same query against a stack without the extension has no such operation',
+      async () => {
+        await withCollectionRuntime(async (runtime) => {
+          await setupTables(runtime);
+
+          const readings = new Collection({ runtime, context: targetOnlyContext }, 'Reading', {
+            namespaceId: 'public',
+          });
+          const stats = await readings.aggregate((aggregate) => {
+            const dynamic = aggregate as DynamicAggregates & Record<string, unknown>;
+            expect(dynamic['bitOr']).toBeUndefined();
+            expect(dynamic['tally']).toBeUndefined();
+            return { total: dynamic['sumBigInt']!('weight') };
+          });
+
+          expect(stats).toEqual({ total: WIDE_WEIGHT + LOW_BITS });
+        }, contract);
+      },
+      timeouts.spinUpPpgDev,
+    );
+  },
+);

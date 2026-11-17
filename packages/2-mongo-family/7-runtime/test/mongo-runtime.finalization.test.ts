@@ -1,21 +1,24 @@
 import type { PlanMeta } from '@internal/contract/types';
-import { decodeJsonString } from '@internal/framework-components/codec';
+import { type DataTypeValue, dataType, readJsonString } from '@internal/framework-components/codec';
 import type {
   ActivityEndedResult,
   ActivityFinalizedResult,
 } from '@internal/framework-components/runtime';
 import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
+import type { MongoContract } from '@internal/mongo-contract';
 import type { MongoAdapter, MongoDriver, MongoLoweredDraft } from '@internal/mongo-lowering';
-import type { MongoQueryPlan } from '@internal/mongo-query-ast/execution';
+import type { MongoExecutionContext, MongoQueryPlan } from '@internal/mongo-query-ast/execution';
 import {
   AggregateWireCommand,
   type AnyMongoDmlWireCommand,
   DeleteOneWireCommand,
 } from '@internal/mongo-wire';
 import { describe, expect, it, vi } from 'vitest';
-import type { MongoExecutionContext } from '../src/mongo-execution-stack';
 import type { MongoMiddleware, MongoMiddlewareContext } from '../src/mongo-middleware';
 import { createMongoRuntime } from '../src/mongo-runtime';
+import { testContract } from './mongo-middleware-fixtures';
+
+const textType = dataType('test/text', { read: (json) => readJsonString('test/text', json) });
 
 interface HookEvent {
   readonly name: 'ended' | 'finalized';
@@ -50,20 +53,21 @@ function codecsWithFailingDecode() {
   registry.register(
     mongoCodec({
       typeId: 'test/failing-decode@1',
-      decode: (): string => {
+      fromWire: (): string => {
         throw new Error('decode failed');
       },
-      encode: (value: string) => value,
-      decodeJson: (json) => decodeJsonString('test/failing-decode@1', json),
+      toWire: (value: string) => value,
+      dataType: textType,
+      fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
     }),
   );
   return registry;
 }
 
-function makeContext(
+function makeExecution(
   wireCommand: AnyMongoDmlWireCommand,
   onResolveParams: () => void = () => {},
-): MongoExecutionContext {
+): { readonly context: MongoExecutionContext<MongoContract>; readonly adapter: MongoAdapter } {
   const adapter = {
     familyId: 'mongo',
     targetId: 'mongo',
@@ -81,32 +85,13 @@ function makeContext(
     }),
   } as unknown as MongoAdapter;
   return {
-    contract: {},
-    codecs: codecsWithFailingDecode(),
-    stack: {
-      target: {
-        kind: 'target',
-        id: 'mongo',
-        familyId: 'mongo',
-        targetId: 'mongo',
-        version: '0.0.1',
-        codecs: () => newMongoCodecRegistry(),
-        create: () => ({ familyId: 'mongo', targetId: 'mongo' }),
-      },
-      adapter: {
-        kind: 'adapter',
-        id: 'mongo',
-        familyId: 'mongo',
-        targetId: 'mongo',
-        version: '0.0.1',
-        codecs: () => newMongoCodecRegistry(),
-        create: () => adapter,
-      },
-      driver: undefined,
-      extensions: [],
+    context: {
+      contract: testContract,
+      codecs: codecsWithFailingDecode(),
+      applyMutationDefaults: () => [],
     },
-    applyMutationDefaults: () => [],
-  } as unknown as MongoExecutionContext;
+    adapter,
+  };
 }
 
 function createDriver(results: Record<string, unknown>[], failure?: Error): MongoDriver {
@@ -157,7 +142,7 @@ describe('MongoRuntime statement finalization', () => {
     it('finalizes a query committed right after it ends', async () => {
       const events: HookEvent[] = [];
       const runtime = createMongoRuntime({
-        context: makeContext(new AggregateWireCommand('users', [])),
+        ...makeExecution(new AggregateWireCommand('users', [])),
         driver: createDriver([{ _id: '1' }, { _id: '2' }]),
         middleware: [recorder(events)],
       });
@@ -170,7 +155,7 @@ describe('MongoRuntime statement finalization', () => {
     it('finalizes a query unknown right after it fails when the driver throws', async () => {
       const events: HookEvent[] = [];
       const runtime = createMongoRuntime({
-        context: makeContext(new AggregateWireCommand('users', [])),
+        ...makeExecution(new AggregateWireCommand('users', [])),
         driver: createDriver([{ _id: '1' }], new Error('driver failure')),
         middleware: [recorder(events)],
       });
@@ -183,7 +168,7 @@ describe('MongoRuntime statement finalization', () => {
     it('ends a query stopped and finalizes it unknown when the caller stops reading early', async () => {
       const events: HookEvent[] = [];
       const runtime = createMongoRuntime({
-        context: makeContext(new AggregateWireCommand('users', [])),
+        ...makeExecution(new AggregateWireCommand('users', [])),
         driver: createDriver([{ _id: '1' }, { _id: '2' }]),
         middleware: [recorder(events)],
       });
@@ -199,7 +184,7 @@ describe('MongoRuntime statement finalization', () => {
     it('finalizes a query unknown when a row fails to decode', async () => {
       const events: HookEvent[] = [];
       const runtime = createMongoRuntime({
-        context: makeContext(new AggregateWireCommand('users', [])),
+        ...makeExecution(new AggregateWireCommand('users', [])),
         driver: createDriver([{ name: 'alice' }]),
         middleware: [recorder(events)],
       });
@@ -214,7 +199,7 @@ describe('MongoRuntime statement finalization', () => {
     it('finalizes a query unknown when the signal aborts between rows', async () => {
       const events: HookEvent[] = [];
       const runtime = createMongoRuntime({
-        context: makeContext(new AggregateWireCommand('users', [])),
+        ...makeExecution(new AggregateWireCommand('users', [])),
         driver: createDriver([{ _id: '1' }, { _id: '2' }]),
         middleware: [recorder(events)],
       });
@@ -236,7 +221,7 @@ describe('MongoRuntime statement finalization', () => {
     it('finalizes an execute committed right after it ends', async () => {
       const events: HookEvent[] = [];
       const runtime = createMongoRuntime({
-        context: makeContext(new DeleteOneWireCommand('users', { id: 1 })),
+        ...makeExecution(new DeleteOneWireCommand('users', { id: 1 })),
         driver: createDriver([{ deletedCount: 1 }]),
         middleware: [recorder(events)],
       });
@@ -249,7 +234,7 @@ describe('MongoRuntime statement finalization', () => {
     it('finalizes an execute unknown when the driver throws', async () => {
       const events: HookEvent[] = [];
       const runtime = createMongoRuntime({
-        context: makeContext(new DeleteOneWireCommand('users', { id: 1 })),
+        ...makeExecution(new DeleteOneWireCommand('users', { id: 1 })),
         driver: createDriver([], new Error('driver failure')),
         middleware: [recorder(events)],
       });
@@ -263,9 +248,7 @@ describe('MongoRuntime statement finalization', () => {
       const events: HookEvent[] = [];
       const controller = new AbortController();
       const runtime = createMongoRuntime({
-        context: makeContext(new DeleteOneWireCommand('users', { id: 1 }), () =>
-          controller.abort(),
-        ),
+        ...makeExecution(new DeleteOneWireCommand('users', { id: 1 }), () => controller.abort()),
         driver: createDriver([{ deletedCount: 1 }]),
         middleware: [recorder(events)],
       });
@@ -290,7 +273,7 @@ describe('MongoRuntime statement finalization', () => {
       },
     };
     const runtime = createMongoRuntime({
-      context: makeContext(new DeleteOneWireCommand('users', { id: 1 })),
+      ...makeExecution(new DeleteOneWireCommand('users', { id: 1 })),
       driver: createDriver([{ deletedCount: 1 }]),
       middleware: [failingBeforeHook, recorder(events)],
     });

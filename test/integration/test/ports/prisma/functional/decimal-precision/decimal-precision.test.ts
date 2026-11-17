@@ -1,4 +1,3 @@
-import type { Numeric } from '@internal/target-postgres/codec-types';
 import { describe, expect, it } from 'vitest';
 import { timeouts, withPostgresPort } from '../../../../_harness/postgres';
 import type { Contract } from './_fixture/generated/contract';
@@ -11,7 +10,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // entry it generates in-range decimal strings, writes them via Prisma.Decimal,
 // and asserts `result.decimal.toFixed() === input` (no precision loss). The
 // postgres-applicable precisions are (10,0), (20,10) and (38,30) — each a
-// distinct `Numeric(p, s)` column here (see the fixture named types).
+// distinct `NumericString(p, s)` column here (see the fixture named types).
 //
 // The port replaces random generation with representative full-precision values
 // per column and asserts the same round-trip property. Prisma 8 returns
@@ -28,7 +27,7 @@ describe('ports/prisma/functional/decimal-precision', () => {
     () =>
       withDecimalPrecision(async ({ db }) => {
         const created = await db.public.TestModel.create({
-          d10_0: '123456789' as Numeric<10, 0>,
+          d10_0: '123456789',
         });
         expect(String(created.d10_0)).toBe('123456789');
       }),
@@ -39,7 +38,7 @@ describe('ports/prisma/functional/decimal-precision', () => {
     'numeric(10,0) round-trips a single digit',
     () =>
       withDecimalPrecision(async ({ db }) => {
-        const created = await db.public.TestModel.create({ d10_0: '1' as Numeric<10, 0> });
+        const created = await db.public.TestModel.create({ d10_0: '1' });
         expect(String(created.d10_0)).toBe('1');
       }),
     timeouts.spinUpPpgDev,
@@ -50,7 +49,7 @@ describe('ports/prisma/functional/decimal-precision', () => {
     () =>
       withDecimalPrecision(async ({ db }) => {
         const created = await db.public.TestModel.create({
-          d20_10: '1234567890.1234567890' as Numeric<20, 10>,
+          d20_10: '1234567890.1234567890',
         });
         expect(String(created.d20_10)).toBe('1234567890.1234567890');
       }),
@@ -62,7 +61,7 @@ describe('ports/prisma/functional/decimal-precision', () => {
     () =>
       withDecimalPrecision(async ({ db }) => {
         const created = await db.public.TestModel.create({
-          d20_10: '9.9999999999' as Numeric<20, 10>,
+          d20_10: '9.9999999999',
         });
         expect(String(created.d20_10)).toBe('9.9999999999');
       }),
@@ -74,7 +73,7 @@ describe('ports/prisma/functional/decimal-precision', () => {
     () =>
       withDecimalPrecision(async ({ db }) => {
         const created = await db.public.TestModel.create({
-          d38_30: '12345678.123456789012345678901234567890' as Numeric<38, 30>,
+          d38_30: '12345678.123456789012345678901234567890',
         });
         expect(String(created.d38_30)).toBe('12345678.123456789012345678901234567890');
       }),
@@ -86,7 +85,7 @@ describe('ports/prisma/functional/decimal-precision', () => {
     () =>
       withDecimalPrecision(async ({ db }) => {
         const created = await db.public.TestModel.create({
-          d38_30: '1.000000000000000000000000000001' as Numeric<38, 30>,
+          d38_30: '1.000000000000000000000000000001',
         });
         expect(String(created.d38_30)).toBe('1.000000000000000000000000000001');
       }),

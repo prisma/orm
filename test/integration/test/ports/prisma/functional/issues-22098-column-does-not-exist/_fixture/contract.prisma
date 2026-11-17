@@ -13,7 +13,7 @@
 // Subject: a query against a model with a @map column (non-ASCII mapped column name)
 // does not throw "column does not exist". The model name is lowercase `test`.
 model test {
-  id             String @id @default(cuid(2))
+  id             String @id @onCreate(cuid(2))
   TESTE_N_MERICO String @unique @map("TESTE_NÚMERICO")
   @@map("test")
 }

@@ -1,5 +1,5 @@
 /**
- * Structural invariant: no RLS-specific symbols in packages/1-framework or packages/2-sql.
+ * Structural invariant: no RLS-specific symbols in packages/1-framework or packages/2-sql-family.
  *
  * Generic differ utilities (diffSchemas, SchemaDiffIssue) are target-agnostic and live in
  * packages/1-framework. Postgres RLS types and identifiers live exclusively in packages/3-targets.
@@ -87,9 +87,9 @@ describe('RLS layer invariant', () => {
     expect(violations).toEqual([]);
   });
 
-  it('packages/2-sql production source contains no RLS-specific symbols', () => {
+  it('packages/2-sql-family production source contains no RLS-specific symbols', () => {
     const repoRoot = path.resolve(__dirname, '../../../../..');
-    const sqlDir = path.join(repoRoot, 'packages/2-sql');
+    const sqlDir = path.join(repoRoot, 'packages/2-sql-family');
     const files = collectSourceFiles(sqlDir);
 
     const violations: string[] = [];

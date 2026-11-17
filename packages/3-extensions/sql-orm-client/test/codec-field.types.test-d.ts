@@ -118,14 +118,13 @@ describe('a row fragment typed with CodecField', () => {
   });
 });
 
-describe('a CodecField fragment checks values against the codec, not the field', () => {
+describe('a CodecField fragment checks values against the codec input, as the field does', () => {
   const { plain } = createChainingOrm();
 
-  test('it accepts a value of the codec that the field refines away', () => {
+  test('both accept a plain string for a field read as Char<36>', () => {
     const tagIs = (row: { tagId: CodecField<TestContract, 'sql/char@1'> }) =>
       row.tagId.eq('plain-string');
     plain.UserTag.where(tagIs);
-    // @ts-expect-error the field's own type is Char<36>, and a plain string is not one
     plain.UserTag.where((row) => row.tagId.eq('plain-string'));
   });
 });

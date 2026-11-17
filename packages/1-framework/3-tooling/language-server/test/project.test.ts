@@ -1,4 +1,5 @@
 import { pathToFileURL } from 'node:url';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import { describe, expect, it, vi } from 'vitest';
 import type { Connection } from 'vscode-languageserver';
 import type { ConfigResolution } from '../src/config-resolution';
@@ -24,7 +25,12 @@ async function setup(pullDiagnostics = false) {
   const resolution: ConfigResolution = {
     inputs: await resolveSchemaInputs({}, () => undefined),
     schemaInputConfig: {},
-    controlStack: { scalarTypes: ['Int'], defaultNamespaceId: 'public', pslBlockDescriptors: {} },
+    controlStack: {
+      scalarTypes: ['Int'],
+      defaultNamespaceId: 'public',
+      pslBlockDescriptors: {},
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
+    },
   };
   load.mockReset().mockResolvedValue(resolution);
   const sendDiagnostics = vi.fn();
@@ -86,6 +92,7 @@ describe('Project lifecycle', () => {
         scalarTypes: ['String'],
         defaultNamespaceId: 'public',
         pslBlockDescriptors: {},
+        generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
       },
     });
     await project.reload();

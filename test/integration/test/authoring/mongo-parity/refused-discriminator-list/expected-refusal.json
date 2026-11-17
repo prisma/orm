@@ -1,0 +1,13 @@
+{
+  "ts": {
+    "code": "CONTRACT.ARGUMENT_INVALID",
+    "message": "Discriminator field \"Task.type\" must hold one value, but it is a list. Remove .many()."
+  },
+  "psl": [
+    {
+      "code": "PSL_INVALID_ATTRIBUTE_ARGUMENT",
+      "message": "Discriminator field \"type\" on model \"Task\" must hold one value, but it is a list. Remove the \"[]\"",
+      "spanText": "@@discriminator(type)"
+    }
+  ]
+}

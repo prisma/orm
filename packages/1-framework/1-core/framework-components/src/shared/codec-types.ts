@@ -1,6 +1,7 @@
 import type { JsonValue } from '@internal/contract/types';
 import type { Codec } from './codec';
 import type { AnyCodecDescriptor } from './codec-descriptor';
+import type { DataTypeLookup } from './data-type';
 
 /** Every semantic trait a codec may advertise. The runtime tuple backs validation of trait-keyed contributions arriving from JavaScript. */
 export const CODEC_TRAITS = ['equality', 'order', 'boolean', 'numeric', 'textual'] as const;
@@ -71,6 +72,18 @@ export interface CodecLookupWithDescriptors extends CodecLookup {
   descriptorFor(id: string): AnyCodecDescriptor | undefined;
 }
 
+/** The codecs and the data types of one stack, which together find the data type a codec represents. ADR 254. */
+export interface TypeLookups<
+  Codecs extends Pick<CodecLookupWithDescriptors, 'descriptorFor'> = Pick<
+    CodecLookupWithDescriptors,
+    'descriptorFor'
+  >,
+  DataTypes extends Pick<DataTypeLookup, 'get'> = Pick<DataTypeLookup, 'get'>,
+> {
+  readonly codecLookup: Codecs;
+  readonly dataTypeLookup: DataTypes;
+}
+
 /**
  * Full codec registry — the read surface of {@link CodecLookup} plus codec resolution by ref or
  * column coordinate. Built once by `extractCodecLookup` and passed by reference to adapters and
@@ -98,7 +111,7 @@ export const emptyCodecLookup: CodecLookup = {
 /**
  * Family-agnostic per-instance context supplied by the framework when applying a higher-order codec factory. Allows stateful codecs (e.g. column-scoped encryption) to derive per-instance state from the materialization site.
  *
- * - `name` — the family-agnostic instance identity. For SQL, the runtime populates this as the `storage.types` instance name (e.g. `Embedding1536`) for typeRef-shaped columns, an inline-column sentinel (`<col:Document.embedding>`) for inline-`typeParams` columns, a shared codec-id sentinel (`<codec:pg/text@1>`) for non-parameterized codec ids, or the canonical cache key (`<codecId>:<canonicalizeJson(typeParams)>`) for ad-hoc refs the contract walk did not pre-populate. Other families pick the analogous identity for their materialization sites.
+ * - `name` — the family-agnostic instance identity. For SQL, the runtime populates this as an inline-column sentinel (`<col:Document.embedding>`) for columns with `typeParams`, a shared codec-id sentinel (`<codec:pg/text@1>`) for non-parameterized codec ids, or the canonical cache key (`<codecId>:<canonicalizeJson(typeParams)>`) for ad-hoc refs the contract walk did not pre-populate. Other families pick the analogous identity for their materialization sites.
  *
  * Family-specific extensions (e.g. {@link import('@internal/sql-relational-core/ast').SqlCodecInstanceContext} in the SQL layer) augment this base with domain-shaped column-set metadata. Codec authors target the base when they don't read family-specific metadata; they target the family extension when they do.
  */

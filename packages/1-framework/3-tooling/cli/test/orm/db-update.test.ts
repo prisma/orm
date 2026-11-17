@@ -1,14 +1,23 @@
 import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
+import {
+  migrationRunnerFailure,
+  type SchemaDiffIssue,
+  schemaCheckWhy,
+} from '@internal/framework-components/control';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { notOk, ok } from '@internal/utils/result';
-import { structuredError } from '@internal/utils/structured-error';
+import { docsUrlFor, structuredError } from '@internal/utils/structured-error';
 import type { EngineEvent, StreamEvent } from '@prisma/cli-engine';
 import { join } from 'pathe';
 import stripAnsi from 'strip-ansi';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { runnerFailureFacts } from '../../src/control-api/operations/run-migration';
 import type { ControlClient } from '../../src/control-api/types';
 import { BIN_GROUPS, createBinCommands } from '../../src/orm/cli';
+import { errorMigrationPlanningFailed } from '../../src/utils/cli-errors';
+import { dbUpdateRunnerFailureError } from '../../src/utils/db-update-failure';
+import { stdoutErrorMeta, stdoutFrames } from '../helpers/json-frames';
 import { createOrmTestCli } from '../helpers/orm-test-cli';
 import { createTestProjectDir, writeProjectManifest } from '../utils/test-project-dir';
 
@@ -21,6 +30,13 @@ function refusedDefault(): Error {
   });
 }
 
+const MISSING_COLUMN: SchemaDiffIssue = {
+  path: ['public', 'event', 'id'],
+  expected: { id: 'id', nodeKind: 'sql-column', isEqualTo: () => false, children: () => [] },
+};
+
+const WARNING = { kind: 'suppressed', summary: 'control policy suppressed: table "auth.x"' };
+
 const mocks = {
   connect: vi.fn(),
   dbUpdate: vi.fn(),
@@ -28,6 +44,7 @@ const mocks = {
   close: vi.fn(),
 };
 const RENDERED_CONTRACT_DTS = '// rendered\nexport type Contract = { rendered: true };\n';
+const SNAPSHOT_CONTRACT_DTS = '/* rendered */ export type Contract = { rendered: true };\n';
 
 /** The command tree mounted over a control-client double instead of the real client. */
 const commands = createBinCommands(
@@ -98,7 +115,7 @@ function applySuccess(): Record<string, unknown> {
     mode: 'apply',
     appliedStatements: [],
     dataLoss: [],
-    accessWidening: [],
+    accessChanges: [],
     destination: { storageHash: DEST_HASH },
     plan: {
       operations: [
@@ -128,7 +145,7 @@ function planSuccess(): Record<string, unknown> {
     mode: 'plan',
     appliedStatements: [],
     dataLoss: [],
-    accessWidening: [],
+    accessChanges: [],
     destination: { storageHash: DEST_HASH },
     plan: {
       operations: [{ id: 'op-2', label: 'drop relation legacy', operationClass: 'destructive' }],
@@ -227,12 +244,12 @@ describe('db update --rename', () => {
     expect(dryRun.presented?.presentation.human).toContainEqual({
       kind: 'summary',
       status: 'warn',
-      text: `Existing rows would get '' in field "User.email". To choose the value, plan a migration with prisma-test migration plan --backfill User.email instead.`,
+      text: `Field "User.email" would get the temporary value '' where existing data has none. To choose the value, plan a migration with prisma-test migration plan --backfill User.email instead.`,
     });
     expect(applied.presented?.presentation.human).toContainEqual({
       kind: 'summary',
       status: 'warn',
-      text: `Existing rows got '' in field "User.email". To choose the value, plan a migration with prisma-test migration plan --backfill User.email instead.`,
+      text: `Field "User.email" got the temporary value '' where existing data has none. To choose the value, plan a migration with prisma-test migration plan --backfill User.email instead.`,
     });
     expect(applied.presented?.data).toMatchObject({ temporaryValues });
   });
@@ -253,7 +270,7 @@ describe('db update --rename', () => {
     expect(run.presented?.presentation.human).toContainEqual({
       kind: 'summary',
       status: 'warn',
-      text: `Existing rows would get '' in field "User.email". To choose the value, plan a migration with prisma-test migration plan --from ${MARKER_HASH} --backfill User.email instead.`,
+      text: `Field "User.email" would get the temporary value '' where existing data has none. To choose the value, plan a migration with prisma-test migration plan --from ${MARKER_HASH} --backfill User.email instead.`,
     });
     expect(run.presented?.data).not.toHaveProperty('databaseStorageHash');
   });
@@ -299,7 +316,70 @@ describe('db update --rename', () => {
           answered: false,
         },
       ],
-      accessWidening: [],
+      accessChanges: [],
+    });
+  });
+
+  it('lists one line per answer on a dry run, naming every operation it answers', async () => {
+    const archived = { kind: 'enumValue', namespaceId: 'app', enum: 'Status', member: 'ARCHIVED' };
+    const operations = [
+      {
+        id: 'op-1',
+        label: 'Remove value "archived" from column "status" of "task"',
+        operationClass: 'destructive',
+      },
+      {
+        id: 'op-2',
+        label: 'Remove value "archived" from column "tags" of "task"',
+        operationClass: 'destructive',
+      },
+    ];
+    mocks.dbUpdate.mockResolvedValue(
+      ok({
+        ...planSuccess(),
+        plan: { operations },
+        dataLoss: [
+          { operationIndex: 0, subject: archived, text: 'Status.ARCHIVED', loss: 'drop' },
+          { operationIndex: 1, subject: archived, text: 'Status.ARCHIVED', loss: 'drop' },
+        ],
+      }),
+    );
+    const human = await harness().run(['db', 'update', '--dry-run'], {
+      cwd: projectDir,
+      isTty: { stdout: true },
+    });
+
+    expect(human.presented?.presentation.human).toContainEqual({
+      kind: 'tree',
+      roots: [
+        {
+          label: 'An apply asks about',
+          children: [
+            {
+              label:
+                'Remove value "archived" from column "status" of "task" and remove value "archived" from column "tags" of "task": --delete Status.ARCHIVED',
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it('lists the access an apply would widen on a dry run, marked answered by an --allow', async () => {
+    const user = { kind: 'model', namespaceId: 'app', model: 'User' } as const;
+    mocks.dbUpdate.mockResolvedValue(
+      ok({
+        ...planSuccess(),
+        accessChanges: [{ operationIndex: 0, subject: user, text: 'User' }],
+      }),
+    );
+
+    const run = await harness().run(['db', 'update', '--dry-run', '--allow', 'User', '--json'], {
+      cwd: projectDir,
+    });
+
+    expect(run.presented?.data).toMatchObject({
+      accessChanges: [{ operationIndex: 0, subject: user, text: 'User', answered: true }],
     });
   });
 
@@ -339,6 +419,115 @@ describe('db update --rename', () => {
         command: 'prisma-test db update --rename Profile:User --delete Legacy',
       },
     ]);
+  });
+
+  it('marks every question about a model of a namespace a dry run --delete names as answered', async () => {
+    const invoice = { kind: 'model', namespaceId: 'billing', model: 'Invoice' } as const;
+    const receipt = { kind: 'model', namespaceId: 'billing', model: 'Receipt' } as const;
+    mocks.dbUpdate.mockResolvedValue(
+      ok({
+        ...planSuccess(),
+        dataLoss: [
+          {
+            operationIndex: 0,
+            subject: invoice,
+            text: 'billing.Invoice',
+            removedNamespace: 'billing',
+          },
+          {
+            operationIndex: 0,
+            subject: receipt,
+            text: 'billing.Receipt',
+            removedNamespace: 'billing',
+          },
+        ],
+        namespaces: { removed: ['billing'], added: [] },
+      }),
+    );
+    const args = ['db', 'update', '--dry-run', '--delete', 'billing'];
+
+    const human = await harness().run(args, { cwd: projectDir, isTty: { stdout: true } });
+    const json = await harness().run([...args, '--json'], { cwd: projectDir });
+
+    expect(human.presented?.presentation.human).toContainEqual({
+      kind: 'tree',
+      roots: [
+        {
+          label: 'An apply asks about',
+          children: [
+            { label: 'drop relation legacy: --delete billing.Invoice (answered)' },
+            { label: 'drop relation legacy: --delete billing.Receipt (answered)' },
+            { label: 'every question about namespace "billing": --delete billing (answered)' },
+          ],
+        },
+      ],
+    });
+    expect(json.presented?.data).toMatchObject({
+      dataLoss: [
+        {
+          answered: true,
+          answeredBy: { verb: 'delete', text: 'billing' },
+          removedNamespace: 'billing',
+        },
+        {
+          answered: true,
+          answeredBy: { verb: 'delete', text: 'billing' },
+          removedNamespace: 'billing',
+        },
+      ],
+      removedNamespaces: [
+        { namespaceId: 'billing', answeredBy: { verb: 'delete', text: 'billing' } },
+      ],
+      addedNamespaces: [],
+    });
+  });
+
+  it('lists the namespace answers of a removed namespace, with the rename to a namespace the destination adds', async () => {
+    const invoice = { kind: 'model', namespaceId: 'billing', model: 'Invoice' } as const;
+    mocks.dbUpdate.mockResolvedValue(
+      ok({
+        ...planSuccess(),
+        dataLoss: [
+          {
+            operationIndex: 0,
+            subject: invoice,
+            text: 'billing.Invoice',
+            removedNamespace: 'billing',
+          },
+        ],
+        namespaces: { removed: ['billing'], added: ['finance'] },
+      }),
+    );
+
+    const human = await harness().run(['db', 'update', '--dry-run'], {
+      cwd: projectDir,
+      isTty: { stdout: true },
+    });
+    const json = await harness().run(['db', 'update', '--dry-run', '--json'], { cwd: projectDir });
+
+    expect(json.presented?.data).toMatchObject({
+      removedNamespaces: [{ namespaceId: 'billing' }],
+      addedNamespaces: ['finance'],
+    });
+    expect(json.presented?.data).toMatchObject({
+      dataLoss: [expect.not.objectContaining({ addedNamespaces: expect.anything() })],
+    });
+
+    expect(human.presented?.presentation.human).toContainEqual({
+      kind: 'tree',
+      roots: [
+        {
+          label: 'An apply asks about',
+          children: [
+            { label: 'drop relation legacy: --delete billing.Invoice' },
+            {
+              label:
+                'every question about namespace "billing": --delete billing, or --rename billing:finance if it was renamed',
+            },
+          ],
+        },
+      ],
+    });
   });
 
   it('suggests the apply with the database as a placeholder and the ref it advances', async () => {
@@ -390,7 +579,7 @@ describe('db update --rename', () => {
         (block) =>
           block.kind === 'summary' &&
           typeof block.text === 'string' &&
-          block.text.startsWith('Existing rows'),
+          block.text.includes('the temporary value'),
       ),
     }).toEqual({
       next: [
@@ -404,7 +593,7 @@ describe('db update --rename', () => {
       temporaryValue: {
         kind: 'summary',
         status: 'warn',
-        text: `Existing rows would get '' in field "User.email". To choose the value, plan a migration with prisma-test migration plan --backfill User.email --config 'my app/prisma.config.ts' instead.`,
+        text: `Field "User.email" would get the temporary value '' where existing data has none. To choose the value, plan a migration with prisma-test migration plan --backfill User.email --config 'my app/prisma.config.ts' instead.`,
       },
     });
   });
@@ -488,6 +677,49 @@ describe('db update', () => {
     ]);
   });
 
+  describe('a run that records policies', () => {
+    const updated = [
+      { setting: 'change', declared: ['migrate'], inForce: ['migrate', 'reconcile'] },
+    ];
+
+    it('says the policies were updated when nothing else ran', async () => {
+      mocks.dbUpdate.mockResolvedValue(
+        ok({
+          ...applySuccess(),
+          plan: { operations: [] },
+          execution: { operationsPlanned: 0, operationsExecuted: 0 },
+          databasePoliciesUpdated: updated,
+        }),
+      );
+
+      const run = await harness().run(['db', 'update'], {
+        cwd: projectDir,
+        isTty: { stdout: true },
+      });
+
+      expect(run.presented?.presentation.human[1]).toEqual({
+        kind: 'summary',
+        status: 'ok',
+        text: 'Policies updated: change: migrate',
+      });
+    });
+
+    it('names the policies after the operations that ran', async () => {
+      mocks.dbUpdate.mockResolvedValue(ok({ ...applySuccess(), databasePoliciesUpdated: updated }));
+
+      const run = await harness().run(['db', 'update'], {
+        cwd: projectDir,
+        isTty: { stdout: true },
+      });
+
+      expect(run.presented?.presentation.human[1]).toEqual({
+        kind: 'summary',
+        status: 'ok',
+        text: 'Applied 2 operation(s) across 1 contract space; policies updated: change: migrate',
+      });
+    });
+  });
+
   it('heads the run with the contract and the masked database', async () => {
     const run = await harness().run(['db', 'update'], {
       cwd: projectDir,
@@ -554,12 +786,48 @@ describe('db update', () => {
     expect(run.stdout).toBe('');
   });
 
-  it('shows the planner`s warnings without failing the run', async () => {
+  it('shows each planner warning with its why as a warning, as migration plan does', async () => {
+    mocks.dbUpdate.mockImplementation(async (options: Parameters<ControlClient['dbUpdate']>[0]) => {
+      options.onPlannerWarnings?.([
+        {
+          kind: 'suppressed',
+          summary: 'Column user.legacy is dropped without a backfill',
+          why: 'Its values are lost.',
+        },
+      ]);
+      return ok(applySuccess());
+    });
+
+    const run = await harness().run(['db', 'update'], {
+      cwd: projectDir,
+      isTty: { stdout: true },
+    });
+
+    expect({
+      exitCode: run.exitCode,
+      messages: run.events.filter((event) => event.kind === 'message' && event.severity === 'warn'),
+      warnings: (run.presented?.presentation.human ?? []).filter(
+        (block) =>
+          block.kind === 'summary' &&
+          block.status === 'warn' &&
+          block.text !== 'This migration contains destructive operations that may cause data loss.',
+      ),
+    }).toEqual({
+      exitCode: 0,
+      messages: [],
+      warnings: [
+        {
+          kind: 'summary',
+          status: 'warn',
+          text: 'Column user.legacy is dropped without a backfill. Its values are lost.',
+        },
+      ],
+    });
+  });
+
+  it('says how many operations had nothing to do when fewer ran than were planned', async () => {
     mocks.dbUpdate.mockResolvedValue(
-      ok({
-        ...applySuccess(),
-        warnings: [{ summary: 'Column user.legacy is dropped without a backfill' }],
-      }),
+      ok({ ...applySuccess(), execution: { operationsPlanned: 2, operationsExecuted: 1 } }),
     );
 
     const run = await harness().run(['db', 'update'], {
@@ -567,13 +835,10 @@ describe('db update', () => {
       isTty: { stdout: true },
     });
 
-    const blocks = run.presented?.presentation.human ?? [];
-
-    expect(run.exitCode).toBe(0);
-    expect(blocks[2]).toEqual({ kind: 'summary', status: 'warn', text: 'Planner warnings' });
-    expect(blocks[3]).toEqual({
-      kind: 'list',
-      items: ['Column user.legacy is dropped without a backfill'],
+    expect((run.presented?.presentation.human ?? [])[1]).toEqual({
+      kind: 'summary',
+      status: 'ok',
+      text: 'Applied 1 of 2 operation(s) across 1 contract space; the other 1 had nothing to do, since their postchecks already held',
     });
   });
 
@@ -674,15 +939,7 @@ describe('db update', () => {
   });
 
   it('maps a planning failure to its migration code', async () => {
-    mocks.dbUpdate.mockResolvedValue(
-      notOk({
-        code: 'PLANNING_FAILED',
-        summary: 'planning failed',
-        why: undefined,
-        conflicts: [],
-        meta: undefined,
-      }),
-    );
+    mocks.dbUpdate.mockResolvedValue(notOk(errorMigrationPlanningFailed({ conflicts: [] })));
 
     const run = await harness().run(['db', 'update', '--json'], { cwd: projectDir });
 
@@ -726,16 +983,21 @@ describe('db update', () => {
   });
 
   it('reports the planner`s warnings even when the apply fails', async () => {
-    mocks.dbUpdate.mockResolvedValue(
-      notOk({
-        code: 'RUNNER_FAILED',
-        summary: 'runner failed',
-        why: undefined,
-        conflicts: undefined,
-        warnings: [{ kind: 'suppressed', summary: 'control policy suppressed: table "auth.x"' }],
-        meta: undefined,
-      }),
-    );
+    mocks.dbUpdate.mockImplementation(async (options: Parameters<ControlClient['dbUpdate']>[0]) => {
+      options.onPlannerWarnings?.([
+        { kind: 'suppressed', summary: 'control policy suppressed: table "auth.x"' },
+      ]);
+      return notOk(
+        dbUpdateRunnerFailureError(
+          migrationRunnerFailure('MIGRATION.EXECUTION_FAILED', 'runner failed'),
+          {},
+          {
+            databaseStorageHash: undefined,
+            invocation: { cwd: projectDir, configPath: undefined, dbGiven: false },
+          },
+        ),
+      );
+    });
 
     const run = await harness().run(['db', 'update'], {
       cwd: projectDir,
@@ -750,15 +1012,95 @@ describe('db update', () => {
     expect(stripAnsi(run.stderr)).toContain('control policy suppressed: table "auth.x"');
   });
 
-  it('maps a runner failure to its migration code', async () => {
-    mocks.dbUpdate.mockResolvedValue(
-      notOk({
-        code: 'RUNNER_FAILED',
-        summary: 'runner failed',
-        why: undefined,
-        conflicts: undefined,
-        meta: { runnerErrorCode: 'MIGRATION.LEGACY_MARKER_SHAPE' },
-      }),
+  it('repeats the statements of the run in the re-run it advises after a view blocks a drop', async () => {
+    mocks.dbUpdate.mockImplementation(async (options: Parameters<ControlClient['dbUpdate']>[0]) =>
+      notOk(
+        dbUpdateRunnerFailureError(
+          migrationRunnerFailure(
+            'MIGRATION.EXECUTION_FAILED',
+            'Table "billing"."Invoice" cannot be dropped while view billing.v_paid depends on it.',
+            { meta: { blockingObjects: [{ kind: 'view', name: 'billing.v_paid' }] } },
+          ),
+          {},
+          { databaseStorageHash: undefined, invocation: options.invocation },
+        ),
+      ),
+    );
+
+    const run = await harness().run(['db', 'update', '--delete', 'billing', '--json'], {
+      cwd: projectDir,
+    });
+
+    expect(envelopeOf(run.json)).toMatchObject({
+      ok: false,
+      error: {
+        code: 'MIGRATION.EXECUTION_FAILED',
+        nextActions: [
+          {
+            label:
+              'Drop or change view billing.v_paid in the database yourself, then re-run `prisma-test db update --delete billing`',
+          },
+        ],
+      },
+    });
+  });
+
+  it('lists the planner`s warnings in the --json result of a successful run as plannerWarnings', async () => {
+    mocks.dbUpdate.mockImplementation(async (options: Parameters<ControlClient['dbUpdate']>[0]) => {
+      options.onPlannerWarnings?.([WARNING]);
+      return ok(applySuccess());
+    });
+
+    const run = await harness().run(['db', 'update', '--json'], { cwd: projectDir });
+    const frames = stdoutFrames(run.stdout);
+
+    expect({
+      exitCode: run.exitCode,
+      messages: frames.filter((frame) => frame['kind'] === 'message'),
+      result: (frames.at(-1) as { envelope: { result: Record<string, unknown> } }).envelope.result,
+    }).toEqual({
+      exitCode: 0,
+      messages: [],
+      result: expect.not.objectContaining({ warnings: expect.anything() }),
+    });
+    expect(
+      (frames.at(-1) as { envelope: { result: { plannerWarnings: unknown } } }).envelope.result
+        .plannerWarnings,
+    ).toEqual([WARNING]);
+  });
+
+  it('writes the planner`s warnings of a failed run as warn frames before the --json error', async () => {
+    mocks.dbUpdate.mockImplementation(async (options: Parameters<ControlClient['dbUpdate']>[0]) => {
+      options.onPlannerWarnings?.([WARNING]);
+      return notOk(
+        dbUpdateRunnerFailureError(
+          migrationRunnerFailure('MIGRATION.EXECUTION_FAILED', 'runner failed'),
+          {},
+          {
+            databaseStorageHash: undefined,
+            invocation: { cwd: projectDir, configPath: undefined, dbGiven: false },
+          },
+        ),
+      );
+    });
+
+    const run = await harness().run(['db', 'update', '--json'], { cwd: projectDir });
+    const frames = stdoutFrames(run.stdout);
+
+    expect({
+      exitCode: run.exitCode,
+      kinds: frames.map((frame) => frame['kind']),
+      first: frames[0],
+    }).toEqual({
+      exitCode: 2,
+      kinds: ['message', 'result'],
+      first: expect.objectContaining({ kind: 'message', severity: 'warn', text: WARNING.summary }),
+    });
+  });
+
+  it('reports a contract the client refuses as a contract validation failure at the contract path', async () => {
+    mocks.dbUpdate.mockRejectedValue(
+      structuredError('CONTRACT.VALIDATION_FAILED', 'storage.storageHash is missing'),
     );
 
     const run = await harness().run(['db', 'update', '--json'], { cwd: projectDir });
@@ -766,8 +1108,85 @@ describe('db update', () => {
     expect(run.exitCode).toBe(2);
     expect(envelopeOf(run.json)).toMatchObject({
       ok: false,
-      error: { code: 'MIGRATION.RUNNER_FAILED' },
+      error: {
+        code: 'CONTRACT.VALIDATION_FAILED',
+        summary: 'Contract validation failed',
+        why: expect.stringContaining('storage.storageHash is missing'),
+      },
     });
+  });
+
+  it('links a runner failure to the reference entry of its code', async () => {
+    mocks.dbUpdate.mockResolvedValue(
+      notOk(
+        dbUpdateRunnerFailureError(
+          migrationRunnerFailure('MIGRATION.EXECUTION_FAILED', 'runner failed'),
+          {},
+          {
+            databaseStorageHash: undefined,
+            invocation: { cwd: projectDir, configPath: undefined, dbGiven: false },
+          },
+        ),
+      ),
+    );
+
+    const run = await harness().run(['db', 'update'], {
+      cwd: projectDir,
+      isTty: { stdout: true, stderr: true },
+    });
+
+    expect(stripAnsi(run.stderr)).toContain(`docs: ${docsUrlFor('MIGRATION.EXECUTION_FAILED')}`);
+  });
+
+  it('reports a runner failure with the runner code and meta, and the advice', async () => {
+    const runnerFailure = migrationRunnerFailure(
+      'MIGRATION.SCHEMA_VERIFY_FAILED',
+      'Database schema does not satisfy contract',
+      {
+        why: schemaCheckWhy([MISSING_COLUMN]),
+        meta: { schemaIssues: [MISSING_COLUMN], failingSpace: 'app' },
+      },
+    );
+    mocks.dbUpdate.mockResolvedValue(
+      notOk(
+        dbUpdateRunnerFailureError(runnerFailure, runnerFailureFacts(runnerFailure, []), {
+          databaseStorageHash: undefined,
+          invocation: { cwd: projectDir, configPath: undefined, dbGiven: false },
+        }),
+      ),
+    );
+
+    const run = await harness().run(['db', 'update', '--json'], { cwd: projectDir });
+
+    expect(run.exitCode).toBe(2);
+    expect(envelopeOf(run.json)).toMatchObject({
+      ok: false,
+      error: {
+        code: 'MIGRATION.SCHEMA_VERIFY_FAILED',
+        summary: 'Database schema does not satisfy contract',
+        why: 'The schema check after apply found: missing: public/event/id.',
+        nextActions: [
+          {
+            kind: 'edit-file',
+            label:
+              'Change the contract source to resolve the issues listed, re-run `prisma-test contract emit`, then re-run `prisma-test db update`',
+          },
+        ],
+        meta: { schemaIssues: [{ path: ['public', 'event', 'id'] }], failingSpace: 'app' },
+      },
+    });
+    expect(stdoutErrorMeta(run.stdout)).toEqual(JSON.parse(JSON.stringify(runnerFailure.meta)));
+    expect(mocks.dbUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        invocation: {
+          cwd: projectDir,
+          configPath: undefined,
+          dbGiven: false,
+          rerunArgs: [],
+          statementArgs: [],
+        },
+      }),
+    );
   });
 
   it('refuses a --to reference no migration package produces', async () => {
@@ -818,7 +1237,7 @@ describe('db update', () => {
         mocks.connect.mock.invocationCallOrder[0]!,
       );
       const storeDir = contractSnapshotDir(join(projectDir, 'migrations'), MARKER_HASH);
-      expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(RENDERED_CONTRACT_DTS);
+      expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(SNAPSHOT_CONTRACT_DTS);
     });
 
     it('refuses before connecting when the contract types cannot be rendered', async () => {

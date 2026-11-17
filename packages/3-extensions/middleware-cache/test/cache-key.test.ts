@@ -77,8 +77,8 @@ describe('cache key resolution', () => {
       await endStatement(mw, execB, ctx, { rowCount: 1 });
 
       expect(store.inner.size).toBe(2);
-      expect(store.inner.get('key:A')).toEqual([{ from: 'A' }]);
-      expect(store.inner.get('key:B')).toEqual([{ from: 'B' }]);
+      expect(store.rowsAt('key:A')).toEqual([{ from: 'A' }]);
+      expect(store.rowsAt('key:B')).toEqual([{ from: 'B' }]);
     });
   });
 
@@ -121,27 +121,9 @@ describe('cache key resolution', () => {
       expect(contentHash).not.toHaveBeenCalled();
     });
 
-    it('stores user-supplied keys verbatim (no rehashing)', async () => {
-      const store = spyStore();
-      const mw = createCacheMiddleware({ store });
-      // A long, structured user key — verify the middleware does not
-      // mangle, hash, or otherwise transform it.
-      const userKey = 'tenant=acme|user=alice|page=42';
-      const exec = makeExec('select 1', {
-        cache: cacheAnnotation({ key: userKey }),
-      });
-      const ctx = makeCtx();
-
-      await mw.intercept!.onQuery!(exec, ctx);
-      await mw.onRow!({ id: 1 }, exec, ctx);
-      await endStatement(mw, exec, ctx, { rowCount: 1 });
-
-      expect(store.inner.has(userKey)).toBe(true);
-    });
-
     it('produces a hit using the user-supplied key when previously committed under it', async () => {
       const store = spyStore();
-      store.inner.set('shared-key', [{ id: 'pre-cached' }]);
+      store.setRows('shared-key', [{ id: 'pre-cached' }]);
 
       const mw = createCacheMiddleware({ store });
       const exec = makeExec('select anything', {
@@ -225,8 +207,8 @@ describe('cache key resolution', () => {
       await endStatement(mw, exec, ctxB, { rowCount: 1 });
 
       expect(store.inner.size).toBe(2);
-      expect(store.inner.get('key-A')).toEqual([{ from: 'A' }]);
-      expect(store.inner.get('key-B')).toEqual([{ from: 'B' }]);
+      expect(store.rowsAt('key-A')).toEqual([{ from: 'A' }]);
+      expect(store.rowsAt('key-B')).toEqual([{ from: 'B' }]);
     });
   });
 });

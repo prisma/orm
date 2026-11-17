@@ -71,6 +71,7 @@ export function sourceContext(
     codecLookup: stack.codecLookup,
     dataTypes: stack.dataTypes,
     controlMutationDefaults: stack.controlMutationDefaults,
+    generatorFunctions: stack.generatorFunctions,
     resolvedInputs,
     capabilities: stack.capabilities,
   };

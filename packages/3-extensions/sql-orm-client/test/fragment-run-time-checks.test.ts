@@ -258,7 +258,7 @@ describe('update and delete change the row first() returns', () => {
     const { plain, runtime } = createFragmentsOrm();
     runtime.setNextResults([[{ id: 7 }], [{ id: 7, title: 'x' }]]);
     await thirdByViews(plain).delete();
-    await thirdByViews(plain).select('id').first();
+    await thirdByViews(plain).first();
     const [lookup, , first] = runtime.executions;
     expect(lookup?.plan.ast).toMatchObject({ offset: 2, limit: 1 });
     expect(lookup?.plan.ast).toEqual(first?.plan.ast);
@@ -274,9 +274,10 @@ describe('update and delete change the row first() returns', () => {
     await chain(plain).update({ title: 'x' });
     await chain(plain).delete();
     await chain(plain).select('id').first();
-    const [updateLookup, , deleteLookup, , first] = runtime.executions;
-    expect(first?.plan.ast).toBeDefined();
-    expect(updateLookup?.plan.ast).toEqual(first?.plan.ast);
+    await chain(plain).first();
+    const [updateLookup, , deleteLookup, , firstId, first] = runtime.executions;
+    expect(firstId?.plan.ast).toBeDefined();
+    expect(updateLookup?.plan.ast).toEqual(firstId?.plan.ast);
     expect(deleteLookup?.plan.ast).toEqual(first?.plan.ast);
   });
 
@@ -313,12 +314,17 @@ describe('update and delete change the row first() returns', () => {
     expect(runtime.executions).toEqual([]);
   });
 
-  it('delete with an include reads the row it deletes without the offset', async () => {
+  it('delete with an include reads the row first() returns with its include, then deletes it', async () => {
     const { plain, runtime } = createFragmentsOrm();
-    runtime.setNextResults([[{ id: 7 }], [{ id: 7, title: 'x', user: null }]]);
-    await thirdByViews(plain).include('user').delete();
-    const [, readBack] = runtime.executions;
-    expect(readBack?.plan.ast).toMatchObject({ offset: undefined });
+    runtime.setNextResults([[{ id: 7, title: 'x', user: null }]]);
+
+    const deleted = await thirdByViews(plain).select('id', 'title').include('user').delete();
+
+    expect(deleted).toEqual({ id: 7, title: 'x', user: null });
+    expect(runtime.executions.map((execution) => execution.plan.ast)).toMatchObject([
+      { kind: 'select', limit: 1, offset: 2 },
+      { kind: 'delete', where: { right: { value: 7 } } },
+    ]);
   });
 
   it.each([

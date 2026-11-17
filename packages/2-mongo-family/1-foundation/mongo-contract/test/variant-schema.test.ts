@@ -4,6 +4,7 @@ import { MongoContractSchema } from '../src/contract-schema';
 
 function contractWithVariant(entry: unknown) {
   return {
+    target: 'mongo',
     targetFamily: 'mongo',
     roots: {},
     domain: {
@@ -12,7 +13,7 @@ function contractWithVariant(entry: unknown) {
           models: {
             Task: {
               fields: {},
-              storage: {},
+              storage: { fields: {} },
               discriminator: { field: 'type' },
               variants: { bug: entry },
             },

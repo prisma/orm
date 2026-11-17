@@ -2,17 +2,13 @@ import type {
   ContractSourceDiagnostic,
   ContractSourceDiagnostics,
 } from '@internal/config/config-types';
-import { buildExecutionSection, computeProfileHash } from '@internal/contract/hashing';
 import {
   type Contract,
-  type ContractEnum,
   type ContractField,
   type ContractReferenceRelation,
-  type ContractValueObject,
-  type CrossReference,
   crossRef,
-  type ExecutionMutationDefault,
   type ExecutionMutationDefaultPhases,
+  type ExecutionMutationDefaultValue,
   type ValueSetRef,
 } from '@internal/contract/types';
 import { type EnumTypeHandle, resolveToOneRelationNullable } from '@internal/contract-authoring';
@@ -20,26 +16,27 @@ import {
   type AuthoringEntityContext,
   type DataTypeSupport,
   type EnumBlockSite,
-  encodeEnumMembers,
-  enumMemberProblemDiagnostic,
   instantiateAuthoringEntityType,
   isAuthoringEntityTypeDescriptor,
   type ParsedPslExtensionBlock,
+  type WrittenValue,
 } from '@internal/framework-components/authoring';
 import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
+import type { GeneratorFunctionRegistry } from '@internal/framework-components/components';
 import type { AssembledAuthoringContributions } from '@internal/framework-components/control';
-import {
-  buildMongoStorage,
-  type MongoCollectionInput,
-  MongoIndex,
-  type MongoIndexKeyDirection,
-  mongoValueSetsOf,
-} from '@internal/mongo-contract';
 import {
   type MongoBackRelationCandidate,
   type MongoForeignKeyRelation,
   pairMongoBackRelations,
 } from '@internal/mongo-contract-psl';
+import {
+  buildMongoContractFromDefinition,
+  type FieldNode,
+  type IndexNode,
+  type ModelNode,
+  type RelationNode,
+  type ValueObjectNode,
+} from '@internal/mongo-contract-ts/contract-builder';
 import {
   type BlockSymbol,
   buildSymbolTable,
@@ -77,10 +74,18 @@ import { basename } from 'pathe';
 import { prisma6Diagnostic } from './diagnostics';
 import {
   type IndexAttribute,
-  type IndexField,
+  type IndexDirection,
   parseFieldUnique,
   parseIndexAttribute,
+  prisma6IndexName,
+  prisma6IndexNameProblem,
 } from './indexes';
+import {
+  fieldSiteKey,
+  type IndexSite,
+  type Prisma6Sites,
+  refusalDiagnostic,
+} from './refusal-diagnostics';
 import type { Prisma6TargetBinding } from './target-binding';
 
 export interface Prisma6Document {
@@ -94,6 +99,7 @@ export interface InterpretPrisma6DocumentsInput {
   readonly documents: readonly Prisma6Document[];
   readonly seedDiagnostics: readonly ContractSourceDiagnostic[];
   readonly binding: Prisma6TargetBinding;
+  readonly generatorFunctions: GeneratorFunctionRegistry;
   readonly authoringContributions: AssembledAuthoringContributions;
   readonly codecLookup: CodecLookupWithDescriptors;
   readonly dataTypes: DataTypeSupport;
@@ -113,16 +119,14 @@ type Diagnostics = ContractSourceDiagnostic[];
 interface ModelBuild {
   readonly located: Located<ModelSymbol>;
   readonly collection: string;
-  /** Prisma 6 field name to stored field name, for every field that is not a relation field. */
+  /** Prisma 6 field name to stored name, for every field that is not a relation field. */
   readonly storedNames: Map<string, string>;
   readonly ignoredFields: Set<string>;
   readonly rejectedFields: Set<string>;
   readonly fields: Record<string, ContractField>;
   readonly relations: Record<string, ContractReferenceRelation>;
-  readonly executionDefaults: {
-    readonly field: string;
-    readonly phases: ExecutionMutationDefaultPhases;
-  }[];
+  /** The generators `@default(now())` and `@updatedAt` resolve to, by field name. */
+  readonly generatedValues: Map<string, ExecutionMutationDefaultPhases>;
   readonly uniqueFields: IndexAttribute[];
   readonly modelIndexes: IndexAttribute[];
   readonly relationFields: {
@@ -327,10 +331,13 @@ export function interpretPrisma6Documents(
     });
   }
 
-  const enums = new Map<string, ContractEnum>();
+  const enums = new Map<string, EnumTypeHandle>();
+  const enumSites = new Map<string, EnumBlockSite>();
   for (const located of enumBlocks) {
-    const built = buildEnum(located, input, diagnostics);
-    if (built !== undefined) enums.set(located.symbol.name, built);
+    const read = buildEnum(located, input, diagnostics);
+    if (read === undefined) continue;
+    enums.set(located.symbol.name, read.handle);
+    enumSites.set(located.symbol.name, read.site);
   }
 
   const modelNames = new Set([...models.map((m) => m.symbol.name), ...ignoredModels]);
@@ -338,6 +345,7 @@ export function interpretPrisma6Documents(
   const enumNames = new Set(enumBlocks.map((located) => located.symbol.name));
   const typeContext: TypeContext = {
     binding,
+    generatorFunctions: input.generatorFunctions,
     enums,
     enumNames,
     compositeTypeNames,
@@ -345,10 +353,12 @@ export function interpretPrisma6Documents(
     namespaceId: input.defaultNamespaceId,
   };
 
-  const valueObjects: Record<string, ContractValueObject> = {};
-  for (const located of compositeTypes) {
-    valueObjects[located.symbol.name] = { fields: readCompositeFields(located, typeContext) };
-  }
+  const valueObjects: ValueObjectNode[] = compositeTypes.map((located) => ({
+    name: located.symbol.name,
+    fields: Object.entries(readCompositeFields(located, typeContext)).map(([fieldName, field]) =>
+      fieldNodeOf(fieldName, field),
+    ),
+  }));
 
   const builds = new Map<string, ModelBuild>();
   for (const located of models) {
@@ -379,46 +389,102 @@ export function interpretPrisma6Documents(
     if (build !== undefined) build.relations[fieldName] = relation;
   }
 
-  const collections: Record<string, { indexes: MongoIndex[] }> = {};
-  const roots: Record<string, CrossReference> = {};
-  const executionDefaults: ExecutionMutationDefault[] = [];
+  const modelNodes: ModelNode[] = [];
+  const sites: Prisma6Sites = { fields: new Map(), indexes: new Map(), enums: enumSites };
   for (const [modelName, build] of builds) {
+    const { sourceId } = build.located;
     const indexes = buildIndexes(build, diagnostics);
-    const existing = collections[build.collection];
-    collections[build.collection] = { indexes: [...(existing?.indexes ?? []), ...indexes] };
-    roots[build.collection] = crossRef(modelName, input.defaultNamespaceId);
-    for (const { field, phases } of build.executionDefaults) {
-      executionDefaults.push({
-        ref: { namespace: input.defaultNamespaceId, entry: build.collection, field },
-        ...phases,
+    sites.indexes.set(modelName, indexes);
+    for (const fieldName of Object.keys(build.fields)) {
+      const symbol = build.located.symbol.fields[fieldName];
+      if (symbol === undefined) continue;
+      sites.fields.set(fieldSiteKey(modelName, fieldName), {
+        sourceId,
+        span: symbol.span,
+        storedName: build.storedNames.get(fieldName) ?? fieldName,
       });
     }
+    modelNodes.push({
+      modelName,
+      collection: build.collection,
+      fields: Object.entries(build.fields).map(([fieldName, field]) => ({
+        ...fieldNodeOf(fieldName, field),
+        ...storedNameOf(fieldName, build.storedNames),
+        ...ifDefined('generatedValues', build.generatedValues.get(fieldName)),
+      })),
+      relations: Object.entries(build.relations).map(([fieldName, relation]) =>
+        relationNodeOf(fieldName, relation),
+      ),
+      indexes: indexes.map(({ index }) => index),
+    });
     if (!build.hasId) {
       diagnostics.push({
         code: 'PSL_MISSING_ID_FIELD',
         message: `Model "${modelName}" has no field with @id attribute. Every model must have exactly one @id field.`,
-        sourceId: build.located.sourceId,
+        sourceId,
         span: build.located.symbol.span,
       });
     }
   }
 
-  if (diagnostics.length > 0) {
+  const built = buildMongoContractFromDefinition(
+    {
+      target: binding.target,
+      models: modelNodes,
+      valueObjects,
+      enums: Object.fromEntries(enums),
+      writesCollectionValidators: false,
+      warnings: undefined,
+    },
+    input.codecLookup,
+    input.dataTypes,
+  );
+  if (!built.ok) {
+    const fallbackSourceId = input.documents[0]?.sourceId ?? 'schema.prisma';
+    for (const refusal of built.failure.refusals) {
+      diagnostics.push(refusalDiagnostic(refusal, sites, fallbackSourceId));
+    }
+  }
+  if (!built.ok || diagnostics.length > 0) {
     return notOk({ summary: SUMMARY, diagnostics: inSourceOrder(diagnostics, input.documents) });
   }
+  return ok(built.value.contract);
+}
 
-  return ok(
-    assembleContract({
-      binding,
-      builds,
-      collections,
-      roots,
-      valueObjects,
-      enums,
-      executionDefaults,
-      namespaceId: input.defaultNamespaceId,
-    }),
-  );
+function fieldNodeOf(fieldName: string, field: ContractField): FieldNode {
+  return {
+    fieldName,
+    type: field.type,
+    nullable: field.nullable,
+    many: field.many ?? false,
+    ...ifDefined(
+      'enumName',
+      field.valueSet?.entityKind === 'enum' ? field.valueSet.entityName : undefined,
+    ),
+  };
+}
+
+function storedNameOf(
+  fieldName: string,
+  storedNames: ReadonlyMap<string, string>,
+): { readonly storedName?: string } {
+  const storedName = storedNames.get(fieldName);
+  return storedName === undefined || storedName === fieldName ? {} : { storedName };
+}
+
+function relationNodeOf(fieldName: string, relation: ContractReferenceRelation): RelationNode {
+  if (relation.cardinality === 'N:M') {
+    throw new InternalError(
+      'A Prisma 6 MongoDB relation is one-to-one, one-to-many or many-to-one.',
+    );
+  }
+  return {
+    relationName: fieldName,
+    toModel: relation.to.model,
+    cardinality: relation.cardinality,
+    on: relation.on,
+    nullable: 'nullable' in relation ? relation.nullable : undefined,
+  };
 }
 
 /**
@@ -493,11 +559,17 @@ function checkDatasource(
   );
 }
 
+interface ReadEnum {
+  readonly handle: EnumTypeHandle;
+  /** Where the enum and its members are written, for a refusal of a member. */
+  readonly site: EnumBlockSite;
+}
+
 function buildEnum(
   located: Located<BlockSymbol>,
   input: InterpretPrisma6DocumentsInput,
   diagnostics: Diagnostics,
-): ContractEnum | undefined {
+): ReadEnum | undefined {
   const { symbol: block, sourceId, sources } = located;
   for (const attribute of block.attributes) {
     if (attribute.name === 'map') continue;
@@ -508,6 +580,7 @@ function buildEnum(
     diagnostics.push(unknownAttribute(`Enum "${block.name}"`, attribute, '@@', sourceId));
   }
   const values: Record<string, string> = Object.create(null);
+  const writtenValues: Record<string, WrittenValue> = Object.create(null);
   const parameterSpans: Record<string, PslSpan> = Object.create(null);
   for (const entry of block.entries) {
     const name = entry.key()?.name();
@@ -526,6 +599,7 @@ function buildEnum(
       }
     }
     values[name] = value;
+    writtenValues[name] = { kind: 'string', text: value };
     parameterSpans[name] = nodePslSpan(entry.syntax, sources);
   }
   const descriptor = input.authoringContributions.entityTypes['enum'];
@@ -542,7 +616,7 @@ function buildEnum(
     family: input.binding.target.familyId,
     target: input.binding.target.targetId,
     codecLookup: input.codecLookup,
-    dataTypeLookup: input.dataTypes.lookup,
+    dataTypes: input.dataTypes,
     sourceId,
     enumInferenceCodecs: {
       text: input.binding.scalarCodecIds.String,
@@ -567,6 +641,7 @@ function buildEnum(
         keyword: 'enum',
         name: block.name,
         values,
+        writtenValues,
         parameterSpans,
         attributes: {},
         span: block.span,
@@ -575,21 +650,16 @@ function buildEnum(
     context,
   );
   if (handle === undefined || handle === null) return undefined;
-  const encoded = encodeEnumMembers(handle, input.codecLookup);
-  if (!encoded.ok) {
-    const site: EnumBlockSite = {
+  return {
+    handle,
+    site: {
       enumName: block.name,
       codecId: handle.codecId,
       sourceId,
       span: block.span,
       memberSpans: parameterSpans,
-    };
-    diagnostics.push(
-      ...encoded.failure.map((problem) => enumMemberProblemDiagnostic(problem, site)),
-    );
-    return undefined;
-  }
-  return { codecId: handle.codecId, members: encoded.value };
+    },
+  };
 }
 
 function schemaUnsupported(
@@ -607,7 +677,8 @@ function schemaUnsupported(
 
 interface TypeContext {
   readonly binding: Prisma6TargetBinding;
-  readonly enums: ReadonlyMap<string, ContractEnum>;
+  readonly generatorFunctions: GeneratorFunctionRegistry;
+  readonly enums: ReadonlyMap<string, EnumTypeHandle>;
   /** Every declared enum, including one that was refused and so is not in `enums`. */
   readonly enumNames: ReadonlySet<string>;
   readonly compositeTypeNames: ReadonlySet<string>;
@@ -736,7 +807,13 @@ function resolveFieldType(
   if (ctx.compositeTypeNames.has(field.typeName)) {
     if (nativeType !== undefined) return nativeTypeUnsupported(nativeType);
     return {
-      type: { kind: 'valueObject', name: field.typeName },
+      type: {
+        kind: 'valueObject',
+        plane: 'storage',
+        namespaceId: ctx.namespaceId,
+        entityKind: 'valueObject',
+        entityName: field.typeName,
+      },
       nullable: field.optional,
       ...many,
     };
@@ -804,7 +881,7 @@ function readCompositeFields(
         ctx.diagnostics.push(
           prisma6Diagnostic(
             'PSL.PRISMA6_MONGO_COMPOSITE_MAP_UNSUPPORTED',
-            `${label}: @map on a field of a composite type is not supported yet. The stored field keeps the name "${stringArgument(attribute) ?? field.name}", so removing @map renames it in storage; keep the schema as it is until Prisma 8 supports it.`,
+            `${label}: @map on a field of a composite type is not supported: Prisma 8 stores each field of a value object under its own name. Rename the field to "${stringArgument(attribute) ?? field.name}", the name it is stored under, and remove @map.`,
             sourceId,
             attribute.span,
           ),
@@ -884,7 +961,7 @@ function readModel(
     rejectedFields: new Set(),
     fields: {},
     relations: {},
-    executionDefaults: [],
+    generatedValues: new Map(),
     uniqueFields: [],
     modelIndexes: [],
     relationFields: [],
@@ -1054,7 +1131,7 @@ function readModelField(
       diagnostics.push(defaultUnsupported(label, defaultAttribute, owner, field, sourceId));
       return;
     }
-    build.fields[storedName] = resolved;
+    build.fields[field.name] = resolved;
     return;
   }
 
@@ -1075,13 +1152,18 @@ function readModelField(
     diagnostics.push(defaultUnsupported(label, defaultAttribute, owner, field, sourceId));
     return;
   }
-  const generator = { kind: 'generator' as const, id: binding.timestampGeneratorId };
+  const generator =
+    updatedAt !== undefined || defaultIsNow
+      ? dateTimeNowGenerator(ctx.generatorFunctions, binding.scalarCodecIds.DateTime)
+      : undefined;
   const phases: ExecutionMutationDefaultPhases | undefined =
-    updatedAt !== undefined
-      ? { onCreate: generator, onUpdate: generator }
-      : defaultIsNow
-        ? { onCreate: generator }
-        : undefined;
+    generator === undefined
+      ? undefined
+      : updatedAt !== undefined
+        ? { onCreate: generator, onUpdate: generator }
+        : defaultIsNow
+          ? { onCreate: generator }
+          : undefined;
   if (phases !== undefined && field.optional) {
     const written = updatedAt ?? defaultAttribute;
     const generator = written === undefined ? 'the generator' : attributeText(written);
@@ -1095,8 +1177,25 @@ function readModelField(
     );
     return;
   }
-  build.fields[storedName] = resolved;
-  if (phases !== undefined) build.executionDefaults.push({ field: storedName, phases });
+  build.fields[field.name] = resolved;
+  if (phases !== undefined) build.generatedValues.set(field.name, phases);
+}
+
+/** The generator `now()` resolves to on the DateTime codec, which `@default(now())` and `@updatedAt` write. */
+function dateTimeNowGenerator(
+  generatorFunctions: GeneratorFunctionRegistry,
+  codecId: string,
+): ExecutionMutationDefaultValue {
+  const now = generatorFunctions.resolve(
+    { name: 'now', args: {} },
+    { codecId, typeParams: undefined, length: undefined },
+  );
+  if (!now.ok) {
+    throw new InternalError(
+      `The stack binds no "now" generator function to codec "${codecId}", which the DateTime scalar maps to.`,
+    );
+  }
+  return now.generator;
 }
 
 interface RelationArguments {
@@ -1338,6 +1437,13 @@ function readRelationFields(
       reject();
       continue;
     }
+    if (
+      localNames.some((name) => build.rejectedFields.has(name)) ||
+      targetNames.some((name) => target.rejectedFields.has(name))
+    ) {
+      reject();
+      continue;
+    }
     const localFields = localNames.map((name) => build.storedNames.get(name));
     const targetFields = targetNames.map((name) => target.storedNames.get(name));
     if (
@@ -1372,36 +1478,58 @@ function readRelationFields(
       reject();
       continue;
     }
-    const local = localFields.filter((name): name is string => name !== undefined);
-    const referenced = targetFields.filter((name): name is string => name !== undefined);
     build.relations[field.name] = {
       to: crossRef(field.typeName, namespaceId),
       cardinality: 'N:1',
       nullable: field.optional,
-      on: { localFields: local, targetFields: referenced },
+      on: { localFields: localNames, targetFields: targetNames },
     };
     out.foreignKeys.push({
       declaringModel: symbol.name,
       targetModel: field.typeName,
       ...ifDefined('relationName', args?.name),
-      localFields: local,
-      targetFields: referenced,
+      localFields: localNames,
+      targetFields: targetNames,
     });
   }
 }
 
-function buildIndexes(build: ModelBuild, diagnostics: Diagnostics): MongoIndex[] {
+/**
+ * The indexes of one model that Prisma 6 refuses with "Index already exists in the model.": each index whose fields, in order, have the same names and the same written sort as another index of the model, whatever the kind of either index. An unwritten sort differs from `sort: Asc`.
+ */
+function clashingIndexes(
+  attributes: readonly IndexAttribute[],
+): ReadonlyMap<IndexAttribute, readonly IndexAttribute[]> {
+  const writtenKey = (attribute: IndexAttribute) =>
+    JSON.stringify(attribute.fields.map((field) => [field.name, field.direction ?? null]));
+  const clashes = new Map<IndexAttribute, readonly IndexAttribute[]>();
+  for (const attribute of attributes) {
+    const others = attributes.filter(
+      (other) => other !== attribute && writtenKey(other) === writtenKey(attribute),
+    );
+    if (others.length > 0) clashes.set(attribute, others);
+  }
+  return clashes;
+}
+
+/** A model's indexes as the builder takes them, with where each is written. */
+function buildIndexes(
+  build: ModelBuild,
+  diagnostics: Diagnostics,
+): (IndexSite & { readonly index: IndexNode })[] {
   const { symbol, sourceId } = build.located;
-  const indexes: MongoIndex[] = [];
+  const indexes: (IndexSite & { readonly index: IndexNode })[] = [];
   let textIndexes = 0;
-  const keyFor = (
-    field: IndexField,
-    text: boolean,
-  ): { readonly field: string; readonly direction: MongoIndexKeyDirection } => ({
-    field: build.storedNames.get(field.name) ?? field.name,
-    direction: field.direction ?? (text ? 'text' : 1),
-  });
-  for (const attribute of [...build.uniqueFields, ...build.modelIndexes]) {
+  const attributes = [...build.uniqueFields, ...build.modelIndexes];
+  const clashing = clashingIndexes(attributes);
+  const nameOf = (attribute: IndexAttribute) =>
+    attribute.map ??
+    prisma6IndexName(
+      build.collection,
+      attribute.fields.map((field) => build.storedNames.get(field.name) ?? field.name),
+      attribute.kind === 'unique',
+    );
+  for (const attribute of attributes) {
     const names = attribute.fields.map((field) => field.name);
     const usedBy: IgnoredFieldUse = {
       kind: 'index',
@@ -1427,93 +1555,94 @@ function buildIndexes(build: ModelBuild, diagnostics: Diagnostics): MongoIndex[]
       });
       continue;
     }
-    if (attribute.kind === 'fulltext') {
+    const clashesWith = clashing.get(attribute);
+    if (clashesWith !== undefined) {
+      const others = clashesWith.map((other) => indexLabel(build, other)).join(' and ');
+      diagnostics.push(
+        prisma6Diagnostic(
+          'PSL.PRISMA6_MONGO_INDEX_ALREADY_EXISTS',
+          `${indexLabel(build, attribute)} has the same fields, with the same sort, as ${others}. Prisma 6 refuses this: "Index already exists in the model." Remove one of them.`,
+          sourceId,
+          attribute.span,
+        ),
+      );
+      continue;
+    }
+    const name = nameOf(attribute);
+    const nameProblem = attribute.map === undefined ? undefined : prisma6IndexNameProblem(name);
+    if (nameProblem !== undefined) {
+      diagnostics.push(
+        prisma6Diagnostic(
+          'PSL.PRISMA6_MONGO_INDEX_NAME_INVALID',
+          `${indexLabel(build, attribute)}: Prisma 6 refuses this name: "${nameProblem}" Give the index another name with \`map\`.`,
+          sourceId,
+          attribute.span,
+        ),
+      );
+      continue;
+    }
+    const sameName = attributes.filter((other) => other !== attribute && nameOf(other) === name);
+    if (sameName.length > 0) {
+      const others = sameName.map((other) => indexLabel(build, other)).join(' and ');
+      diagnostics.push(
+        prisma6Diagnostic(
+          'PSL.PRISMA6_MONGO_INDEX_NAME_DUPLICATE',
+          `${indexLabel(build, attribute)} is named "${name}", as is ${others}. Prisma 6 refuses this: "The given constraint name \`${name}\` has to be unique in the following namespace: on model \`${symbol.name}\` for indexes and unique constraints. Please provide a different name using the \`map\` argument."`,
+          sourceId,
+          attribute.span,
+        ),
+      );
+      continue;
+    }
+    const text = attribute.kind === 'fulltext';
+    if (text) {
       textIndexes++;
       if (textIndexes > 1) {
-        diagnostics.push(
-          prisma6Diagnostic(
-            'PSL.PRISMA6_MONGO_TEXT_INDEX_LIMIT',
-            `Model "${symbol.name}" has more than one @@fulltext; MongoDB allows one text index per collection. Merge the fields into one @@fulltext.`,
-            sourceId,
-            attribute.span,
-          ),
-        );
+        diagnostics.push(textIndexLimitDiagnostic(symbol.name, sourceId, attribute.span));
         continue;
       }
     }
-    indexes.push(
-      new MongoIndex({
-        keys: attribute.fields.map((field) => keyFor(field, attribute.kind === 'fulltext')),
-        ...(attribute.kind === 'unique' ? { unique: true } : {}),
-      }),
-    );
+    const keys = attribute.fields.map((field) => [
+      field.name,
+      field.direction ?? (text ? 'text' : 1),
+    ]);
+    const index: IndexNode = {
+      fields: Object.fromEntries(keys),
+      options: { name, ...(attribute.kind === 'unique' ? { unique: true } : {}) },
+    };
+    indexes.push({ index, sourceId, span: attribute.span, label: indexLabel(build, attribute) });
   }
   return indexes;
 }
 
-function assembleContract(input: {
-  readonly binding: Prisma6TargetBinding;
-  readonly builds: ReadonlyMap<string, ModelBuild>;
-  readonly collections: Readonly<Record<string, { readonly indexes: readonly MongoIndex[] }>>;
-  readonly roots: Record<string, CrossReference>;
-  readonly valueObjects: Record<string, ContractValueObject>;
-  readonly enums: ReadonlyMap<string, ContractEnum>;
-  readonly executionDefaults: readonly ExecutionMutationDefault[];
-  readonly namespaceId: string;
-}): Contract {
-  const target = input.binding.target.targetId;
-  const targetFamily = input.binding.target.familyId;
-
-  const builtEnums: Record<string, ContractEnum> = Object.fromEntries(input.enums);
-
-  const collections: Record<string, MongoCollectionInput> = {};
-  for (const [name, collection] of Object.entries(input.collections)) {
-    collections[name] = collection.indexes.length > 0 ? { indexes: collection.indexes } : {};
+function sortOf(direction: IndexDirection | undefined): string {
+  if (direction === undefined) {
+    return '';
   }
-  const storage: Contract['storage'] = buildMongoStorage({
-    collections,
-    valueSets: mongoValueSetsOf(builtEnums),
-  });
+  return `(sort: ${direction === 1 ? 'Asc' : 'Desc'})`;
+}
 
-  const models: Record<string, unknown> = {};
-  for (const [modelName, build] of input.builds) {
-    models[modelName] = {
-      fields: build.fields,
-      relations: build.relations,
-      storage: { collection: build.collection },
-    };
+function indexLabel(build: ModelBuild, attribute: IndexAttribute): string {
+  const model = build.located.symbol.name;
+  if (build.uniqueFields.includes(attribute)) {
+    const [field] = attribute.fields;
+    return `@unique${sortOf(field?.direction)} on field "${model}.${field?.name ?? ''}"`;
   }
-  const capabilities: Record<string, Record<string, boolean>> = {};
-  const execution = buildExecutionSection({
-    target,
-    targetFamily,
-    defaults: input.executionDefaults,
-  });
-  return {
-    targetFamily,
-    target,
-    roots: input.roots,
-    domain: {
-      namespaces: {
-        [input.namespaceId]: {
-          models: blindCast<
-            Contract['domain']['namespaces'][string]['models'],
-            'Mongo model entries built above'
-          >(models),
-          ...(Object.keys(input.valueObjects).length > 0
-            ? { valueObjects: input.valueObjects }
-            : {}),
-          ...(Object.keys(builtEnums).length > 0 ? { enum: builtEnums } : {}),
-        },
-      },
-    },
-    storage,
-    extensions: {},
-    capabilities,
-    profileHash: computeProfileHash({ target, targetFamily, capabilities }),
-    meta: {},
-    ...(execution !== undefined ? { execution } : {}),
-  };
+  const fields = attribute.fields.map(({ name, direction }) => `${name}${sortOf(direction)}`);
+  return `@@${attribute.kind}([${fields.join(', ')}]) on model "${model}"`;
+}
+
+function textIndexLimitDiagnostic(
+  modelName: string,
+  sourceId: string,
+  span: PslSpan,
+): ContractSourceDiagnostic {
+  return prisma6Diagnostic(
+    'PSL.PRISMA6_MONGO_TEXT_INDEX_LIMIT',
+    `Model "${modelName}" has more than one @@fulltext; MongoDB allows one text index per collection. Merge the fields into one @@fulltext.`,
+    sourceId,
+    span,
+  );
 }
 
 function mergedSources(documents: readonly Prisma6Document[]): PslSources {

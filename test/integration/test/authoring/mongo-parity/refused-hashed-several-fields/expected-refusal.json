@@ -1,0 +1,13 @@
+{
+  "ts": {
+    "code": "CONTRACT.INDEX_INVALID",
+    "message": "Model \"Doc\" index {\"fields\":{\"a\":\"hashed\",\"b\":\"hashed\"}} is hashed on several fields; a hashed index has exactly one field."
+  },
+  "psl": [
+    {
+      "code": "PSL_INVALID_INDEX",
+      "message": "Hashed indexes must have exactly one field",
+      "spanText": "@@index([a, b], type: \"hashed\")"
+    }
+  ]
+}

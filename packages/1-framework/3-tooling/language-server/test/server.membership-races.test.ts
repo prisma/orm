@@ -2,6 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { PassThrough } from 'node:stream';
 import { pathToFileURL } from 'node:url';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -11,8 +12,10 @@ import {
   FileChangeType,
   type FileEvent,
   InitializeRequest,
+  RegistrationRequest,
   StreamMessageReader,
   StreamMessageWriter,
+  UnregistrationRequest,
 } from 'vscode-languageserver/node';
 import type { ConfigResolution } from '../src/config-resolution';
 import { DocumentStore } from '../src/document-store';
@@ -77,7 +80,12 @@ async function setup(pull: boolean) {
     return {
       schemaInputConfig,
       inputs: await resolveInputs(schemaInputConfig, () => text('Member')),
-      controlStack: { scalarTypes: ['Int'], defaultNamespaceId: 'public', pslBlockDescriptors: {} },
+      controlStack: {
+        scalarTypes: ['Int'],
+        defaultNamespaceId: 'public',
+        pslBlockDescriptors: {},
+        generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
+      },
     };
   }
   const initial = await resolution();
@@ -109,10 +117,14 @@ async function setup(pull: boolean) {
       }
     }),
   );
-  vi.spyOn(connection.client, 'register').mockResolvedValue({
-    dispose: vi.fn(),
-    disposeSingle: vi.fn(),
-  });
+  const sendRequest = connection.sendRequest;
+  vi.spyOn(connection, 'sendRequest').mockImplementation(((type: unknown, ...params: unknown[]) =>
+    type === RegistrationRequest.type || type === UnregistrationRequest.type
+      ? Promise.resolve(null)
+      : Reflect.apply(sendRequest, connection, [
+          type,
+          ...params,
+        ])) as typeof connection.sendRequest);
   const publish = vi.spyOn(connection, 'sendDiagnostics').mockResolvedValue(undefined);
   const diagnostics = connection.languages.diagnostics;
   vi.spyOn(connection.languages, 'diagnostics', 'get').mockReturnValue(diagnostics);

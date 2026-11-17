@@ -42,7 +42,7 @@ export function hasSchemaView<TFamilyId extends string, TSchemaIR>(
  * opaque introspected schema IR. Consumed by `prisma contract infer`.
  */
 export interface PslContractInferCapable<TSchemaIR = unknown> {
-  inferPslContract(schemaIR: TSchemaIR): PslDocumentAst;
+  inferPslContract(schemaIR: TSchemaIR): Promise<PslDocumentAst>;
 }
 
 export function hasPslContractInfer<TFamilyId extends string, TSchemaIR>(

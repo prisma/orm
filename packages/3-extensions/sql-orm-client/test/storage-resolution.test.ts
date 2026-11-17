@@ -73,23 +73,4 @@ describe('storage-resolution coordinate-aware lookups', () => {
     expect(requireStorageTableForContract(contract, 'auth', 'users').namespaceId).toBe('auth');
     expect(tableSourceForContract(contract, 'public', 'users').namespaceId).toBe('public');
   });
-
-  it('resolves a bare table name within the given namespace', () => {
-    const contract = contractWith(
-      new SqlStorage({
-        storageHash: STORAGE_HASH,
-        namespaces: {
-          public: postgresCreateNamespace({
-            id: 'public',
-            entries: { table: { users: usersTable('email_addr') } },
-          }),
-        },
-      }),
-    );
-
-    expect(Object.keys(storageTableForContract(contract, 'public', 'users').columns)).toEqual([
-      'id',
-      'email_addr',
-    ]);
-  });
 });

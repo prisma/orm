@@ -1,9 +1,9 @@
 /**
  * Codec descriptor interface (consumer surface) and abstract `CodecDescriptorImpl` base (codec-author surface).
  *
- * Consumers depend on the {@link CodecDescriptor} interface — it is the codec-id-keyed source of truth for static metadata (`traits`) and registration concerns (`paramsSchema`; optional `renderOutputType`). The runtime `Codec` instance returned by `factory(params)(ctx)` carries only the conversion behavior.
+ * Consumers depend on the {@link CodecDescriptor} interface — it is the codec-id-keyed source of truth for static metadata (`traits`) and registration concerns (`paramsSchema`; `renderOutputType` for the rare codec whose output type no type can compute from its params). The runtime `Codec` instance returned by `factory(params)(ctx)` carries only the conversion behavior.
  *
- * Codec authors `extend` the {@link CodecDescriptorImpl} abstract class to declare their codec id, traits, params schema, the `factory(params)` that materializes a typed `Codec<...>`, and (optionally) a `renderOutputType(params)` for the emit path.
+ * Codec authors `extend` the {@link CodecDescriptorImpl} abstract class to declare their codec id, traits, params schema, and the `factory(params)` that materializes a typed `Codec<...>`.
  *
  * The factory's method-level generic is the load-bearing piece for literal preservation: per-codec column helpers invoke `descriptor.factory(...)` *directly*, and the direct call binds the generic at its call site. Type extraction (`ReturnType<D['factory']>`, structural matching) widens method generics to their constraint — that's why the column-helper surface is per-codec, not polymorphic.
  */
@@ -12,12 +12,12 @@ import type { JsonValue } from '@internal/contract/types';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import type { Codec } from './codec';
 import type { CodecInstanceContext, CodecTrait } from './codec-types';
-import type { DataTypeId, DataTypeLookup, ToCanonicalForm } from './data-type';
+import type { DataTypeId } from './data-type';
 
 /**
  * Unified codec descriptor. Every codec in the framework registers through this shape — non-parameterized codecs use `P = void` and a constant factory that returns the same shared codec instance for every column; parameterized codecs use a non-empty `P` and a curried higher-order factory that returns a per-instance codec.
  *
- * The descriptor is the codec-id-keyed source of truth for static metadata (`traits`) and registration concerns (`paramsSchema` for JSON-boundary validation; optional `renderOutputType` for the `contract.d.ts` emit path). The runtime `Codec` instance returned by `factory(params)(ctx)` carries only the conversion behavior.
+ * The descriptor is the codec-id-keyed source of truth for static metadata (`traits`) and registration concerns (`paramsSchema` for JSON-boundary validation; `renderOutputType` for the rare codec whose `contract.d.ts` output type no type can compute from its params). The runtime `Codec` instance returned by `factory(params)(ctx)` carries only the conversion behavior.
  *
  * Whether a codec id "is parameterized" stops being a registration-time distinction — it's a property of `P` on the descriptor. The descriptor map indexes every descriptor by `codecId`; both `descriptorFor(codecId)` and `forColumn(table, column)` resolve through the same map without branching on parameterization.
  *
@@ -34,7 +34,9 @@ export interface CodecDescriptorTemplate<P = void> {
   readonly paramsSchema: StandardSchemaV1<P> | undefined;
   /** Whether this descriptor takes params, i.e. has a `paramsSchema`. Consumers that need to gate column-aware dispatch read this directly rather than threading a free-floating `(codecId) => boolean` callback. */
   readonly isParameterized: boolean;
-  /** Emit-path string renderer for `contract.d.ts`. Returns the TypeScript output type expression for given params (e.g. `Vector<1536>`). Optional; absent renderers cause the emitter to fall back to the codec's base output type. Non-parameterized codecs typically omit it. */
+  /**
+   * Emit-path string renderer for `contract.d.ts`: the TypeScript output type expression for given params. Only for a codec whose output type no type can compute from its params, such as `arktype/json@1`, whose type is its schema's expression text. A codec whose output type is a function of its params declares it as a type instead, in its pack's `ParameterizedOutputTypesFunction` (`types.codecTypes.parameterizedOutputTypes`), which both the emitted `contract.d.ts` and `defineContract` apply. Absent, the emitter uses that type function or the codec's base output type.
+   */
   readonly renderOutputType?: (params: P) => string | undefined;
   /** Emit-path string renderer for the `contract.d.ts` *input* position (create/update values). Returns the TypeScript input type expression for given params. Optional; absent renderers fall back to the codec's base input type. A codec supplies this when its write type is narrower than the generic codec input — e.g. an enum whose input should be the literal member union, not `string`. */
   readonly renderInputType?: (params: P) => string | undefined;
@@ -43,7 +45,7 @@ export interface CodecDescriptorTemplate<P = void> {
    * (e.g. `'low'`, `1`), or `undefined` if this codec's output isn't literal-expressible (e.g. a
    * Date-output codec).
    *
-   * `value` is the `encodeJson` form stored in the value set. `side` selects which type to print:
+   * `value` is the stored JSON of a value in the value set, as the codec's data type stores it. `side` selects which type to print:
    * `output` = the read/SELECT type; `input` = the create/update type. Most codecs render the same
    * literal for both, but a codec whose read and write types differ can render per side. Called once
    * per permitted value; the caller joins the results with `|`.
@@ -51,10 +53,8 @@ export interface CodecDescriptorTemplate<P = void> {
   readonly renderValueLiteral?: (value: JsonValue, side: 'output' | 'input') => string | undefined;
   /** Why an enum cannot use this codec, as sentences an enum's refusal quotes, ending with what to use instead. A codec with the `equality` trait sets it when no value a query reads back equals a member as the contract stores it. A codec without the trait may set it to give a more specific reason than the generic one. Read it through {@link enumRefusalOf}, which also refuses a codec without the `equality` trait. */
   readonly enumRefusal?: string;
-  /**
-   * Gives a value this codec reads its canonical form, for a codec whose data type stores several codecs' values in one form and so declares none for them: a SQLite datetime, which `sqlite/text` stores. Read it through {@link canonicalFormOf}, which takes it in place of the data type's. ADR 254.
-   */
-  readonly toCanonicalForm?: ToCanonicalForm;
+  /** `true` for a codec whose application value keeps the form a value was written in, so two values its data type's `equalityKey` holds equal can read back as different application values, as a decimal codec reads `0.50` and `0.5` as two strings. Such a codec renders no literal, its codec type map entry carries the same flag, and an enum on it is typed by the codec's output type on every type path. Only a codec whose data type declares an `equalityKey` sets it; each target's tests check this. */
+  readonly keepsWrittenForm?: true;
   /** The curried higher-order codec. For non-parameterized codecs, the factory is constant — every call returns the same shared codec instance. For parameterized codecs, the factory is called once per `storage.types` instance (or once per inline-`typeParams` column), with `ctx` carrying the column set the resulting codec serves. */
   readonly factory: (params: P) => (ctx: CodecInstanceContext) => Codec;
 }
@@ -63,22 +63,12 @@ export interface CodecDescriptorTemplate<P = void> {
  * A codec descriptor: a {@link CodecDescriptorTemplate} that names the data type it represents.
  *
  * Several codecs may represent one type, differing in the value they produce in memory; all of them
- * read and write that type's canonical form. A descriptor whose data type is not registered in the
+ * read and write that type's stored form. A descriptor whose data type is not registered in the
  * assembled stack is an assembly error. ADR 254.
  */
 export interface CodecDescriptor<P = void> extends CodecDescriptorTemplate<P> {
   /** The data type this codec is one representation of. */
   readonly dataType: DataTypeId;
-}
-
-/**
- * The canonical form of the values of a column whose codec is `codec` (ADR 254): the codec's own when it declares one, else its data type's. Whatever reads, compares or writes a stored value of a column takes its canonical form from here.
- */
-export function canonicalFormOf(
-  codec: Pick<CodecDescriptor, 'dataType' | 'toCanonicalForm'>,
-  dataTypes: Pick<DataTypeLookup, 'get'>,
-): ToCanonicalForm | undefined {
-  return codec.toCanonicalForm ?? dataTypes.get(codec.dataType)?.toCanonicalForm;
 }
 
 /**
@@ -110,7 +100,7 @@ export type AnyCodecDescriptor = CodecDescriptor<any>;
 /**
  * Abstract base class for concrete codec descriptors.
  *
- * Codec authors extend this class with their typed `TParams` and declare `codecId`, `traits`, `paramsSchema`, the curried `factory(params)`, and (optionally) `renderOutputType`.
+ * Codec authors extend this class with their typed `TParams` and declare `codecId`, `traits`, `paramsSchema`, and the curried `factory(params)`.
  *
  * Implements the {@link CodecDescriptor} interface so a concrete subclass instance is directly usable wherever the framework expects a `CodecDescriptor<P>`.
  */
@@ -126,7 +116,7 @@ export abstract class CodecDescriptorTemplateImpl<TParams = void>
     return this.paramsSchema !== undefined;
   }
 
-  /** Optional emit-path string renderer for `contract.d.ts`. Returns the TypeScript output type expression for the given params (e.g. `Vector<1536>`). Non-parameterized codecs typically omit it. */
+  /** Optional emit-path string renderer for `contract.d.ts`. See {@link CodecDescriptorTemplate.renderOutputType}: only for an output type that no type can compute from the params. */
   renderOutputType?(params: TParams): string | undefined;
 
   /** Optional emit-path string renderer for the `contract.d.ts` input position. Returns the TypeScript input type expression for the given params; supplied when the write type is narrower than the generic codec input (e.g. an enum's literal member union). */
@@ -137,8 +127,9 @@ export abstract class CodecDescriptorTemplateImpl<TParams = void>
 
   /** See {@link CodecDescriptorTemplate.enumRefusal}. */
   declare readonly enumRefusal?: string;
-  /** Optional canonical form of the codec's values. See {@link CodecDescriptorTemplate.toCanonicalForm}. */
-  readonly toCanonicalForm?: ToCanonicalForm;
+
+  /** See {@link CodecDescriptorTemplate.keepsWrittenForm}. */
+  declare readonly keepsWrittenForm?: true;
 
   /**
    * Materialize a curried codec factory for the given params. Concrete subclasses override with a typed return type (e.g. `factory<N>(params: { length: N }): (ctx) => VectorCodec<N>`); per-codec helpers read the typed return at the *direct* call site, which is what preserves method-level generics. Type extraction (e.g. `ReturnType<D['factory']>`) widens method generics to their constraint — that's why the column-helper surface is per-codec, not polymorphic.

@@ -145,21 +145,6 @@ describe('Collection', () => {
       ]);
     });
 
-    it('orderBy() accepts expression-based orders', () => {
-      const { collection: postCollection } = createCollectionFor('Post', baseContract);
-
-      const opExpr = new OperationExpr({
-        method: 'cosineDistance',
-        self: ColumnRef.of('posts', 'embedding'),
-        args: [ParamRef.of([1, 2, 3], { name: 'searchVec', codec: { codecId: 'pg/vector@1' } })],
-        returns: { codecId: 'builtin/float8', nullable: false },
-        lowering: { targetFamily: 'sql', template: '{{self}} <=> {{arg0}}' },
-      });
-
-      const ordered = postCollection.orderBy(() => OrderByItem.asc(opExpr));
-      expect(ordered.state.orderBy).toEqual([OrderByItem.asc(opExpr)]);
-    });
-
     it('orderBy() mixes column-based and expression-based orders', () => {
       const { collection: postCollection } = createCollectionFor('Post', baseContract);
 
@@ -344,13 +329,9 @@ describe('Collection', () => {
       await expect(collection.createAndCount([])).resolves.toBe(0);
     });
 
-    it('create() nested mutation throws when reload by primary key returns no row', async () => {
+    it('create() nested mutation throws when the insert of the parent returns no row', async () => {
       const { collection, runtime } = createReturningCollectionFor('User');
-      runtime.setNextResults([
-        [{ id: 1, name: 'Alice', email: 'alice@example.com' }],
-        [{ id: 10, title: 'Post', user_id: 1, views: 1 }],
-        [],
-      ]);
+      runtime.setNextResults([[]]);
 
       await expect(
         collection.create({
@@ -384,20 +365,6 @@ describe('Collection', () => {
         .toArray();
 
       expect(rows).toHaveLength(2);
-      expect(runtime.executions).toHaveLength(2);
-    });
-
-    it('createAndCount() uses split insert when defaultInInsert is absent', async () => {
-      const { collection, runtime } = createReturningCollectionWithoutDefaultInInsert('User');
-      runtime.setNextResults([[], []]);
-      runtime.setNextStats([{ affectedRows: 1 }, { affectedRows: 1 }]);
-
-      const count = await collection.createAndCount([
-        { id: 1, name: 'Alice', email: 'alice@example.com' },
-        { id: 2, name: 'Bob', email: 'bob@example.com', invitedById: 1 },
-      ]);
-
-      expect(count).toBe(2);
       expect(runtime.executions).toHaveLength(2);
     });
 

@@ -8,8 +8,8 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // (postgres matrix entry).
 //
 // Upstream schema (postgres):
-//   model User { id String @id @default(cuid()); email String @unique; name String?; posts Post[] }
-//   model Post { id String @id @default(cuid()); title String; user User @relation(fields:[userId], references:[id]); userId String }
+//   model User { id String @id @onCreate(cuid()); email String @unique; name String?; posts Post[] }
+//   model Post { id String @id @onCreate(cuid()); title String; user User @relation(fields:[userId], references:[id]); userId String }
 //
 // API mapping:
 //   prisma.user.createManyAndReturn({ data }) → db.public.User.createAll(data)

@@ -24,6 +24,7 @@ import {
 import { createToneMigrationListStyler } from '../../utils/formatters/migration-list-styler';
 import { toneDrawing } from '../../utils/formatters/tone-markup';
 import type { GlyphMode } from '../../utils/glyph-mode';
+import { dataLine } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
 import { displayPath, migrationsDirFor } from './paths';
@@ -54,7 +55,14 @@ function graphPresentations(inputs: {
 }): Presentations {
   const { tree, dot, legend } = inputs;
   return {
-    stdout: () => [],
+    stdout: () =>
+      dot === undefined
+        ? inputs.document.spaces.flatMap((space) =>
+            space.migrations.map((migration) =>
+              dataLine([space.space, migration.name, migration.fromContract, migration.toContract]),
+            ),
+          )
+        : dot.split('\n'),
     next: () => [],
     human: (): readonly Block[] => [
       {
@@ -69,7 +77,6 @@ function graphPresentations(inputs: {
       ...(dot === undefined ? [] : [{ kind: 'drawing' as const, lines: dot.split('\n') }]),
       ...(legend === undefined ? [] : [{ kind: 'drawing' as const, lines: toneDrawing(legend) }]),
     ],
-    ...(dot === undefined ? {} : { stdout: () => dot.split('\n') }),
     json: () => inputs.document,
   };
 }

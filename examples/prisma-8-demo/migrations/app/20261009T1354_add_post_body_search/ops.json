@@ -16,7 +16,11 @@
       {
         "description": "ensure column \"body\" is missing",
         "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
-        "params": ["public", "post", "body"]
+        "params": ["public", "post", "body"],
+        "expectation": {
+          "expects": "absent",
+          "object": "column \"body\" on \"post\""
+        }
       }
     ],
     "execute": [
@@ -29,7 +33,16 @@
       {
         "description": "verify column \"body\" exists",
         "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
-        "params": ["public", "post", "body"]
+        "params": ["public", "post", "body"],
+        "expectation": {
+          "expects": "present",
+          "object": "column \"body\" on \"post\""
+        }
+      },
+      {
+        "description": "verify column \"body\" has type \"text\"",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_attribute\" AS \"a\" INNER JOIN \"pg_class\" AS \"c\" ON \"c\".\"oid\" = \"a\".\"attrelid\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"relnamespace\" WHERE (\"n\".\"nspname\" = $1 AND \"c\".\"relname\" = $2 AND \"a\".\"attname\" = $3 AND (format_type(\"a\".\"atttypid\", \"a\".\"atttypmod\")) = $4 AND NOT (\"a\".\"attisdropped\"))) AS \"result\"",
+        "params": ["public", "post", "body", "text"]
       }
     ]
   },
@@ -50,7 +63,11 @@
       {
         "description": "ensure index \"post_search_f03270be\" does not exist",
         "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
-        "params": ["\"public\".\"post_search_f03270be\""]
+        "params": ["\"public\".\"post_search_f03270be\""],
+        "expectation": {
+          "expects": "absent",
+          "object": "index \"post_search_f03270be\""
+        }
       }
     ],
     "execute": [
@@ -62,9 +79,9 @@
     ],
     "postcheck": [
       {
-        "description": "verify index \"post_search_f03270be\" exists",
-        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
-        "params": ["\"public\".\"post_search_f03270be\""]
+        "description": "verify index \"post_search_f03270be\" exists on \"post\" with the planned definition",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" INNER JOIN \"pg_index\" AS \"i\" ON \"i\".\"indexrelid\" = \"c\".\"oid\" INNER JOIN \"pg_am\" AS \"m\" ON \"m\".\"oid\" = \"c\".\"relam\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3) AND \"i\".\"indrelid\" = to_regclass($4) AND NOT (\"i\".\"indisunique\") AND \"m\".\"amname\" = $5 AND \"i\".\"indpred\" IS NULL)) AS \"result\"",
+        "params": ["\"public\".\"post_search_f03270be\"", "i", "I", "\"public\".\"post\"", "gin"]
       }
     ]
   }

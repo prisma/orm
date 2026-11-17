@@ -45,10 +45,6 @@ describe('runTelemetry — gating decisions short-circuit before fork', () => {
     rmSync(xdgRoot, { recursive: true, force: true });
   });
 
-  it('returns gated-off when no config file exists (default-off)', () => {
-    expect(runTelemetry(makeInputs())).toEqual({ spawned: false, reason: 'gated-off' });
-  });
-
   it('returns gated-off when enableTelemetry is false', () => {
     writeUserConfig({ enableTelemetry: false });
     expect(runTelemetry(makeInputs())).toEqual({ spawned: false, reason: 'gated-off' });

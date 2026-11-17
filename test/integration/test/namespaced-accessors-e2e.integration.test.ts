@@ -20,6 +20,7 @@
 
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
 import postgres from '@internal/postgres/runtime';
+import { contractFromJson } from '@internal/postgres/static';
 import type { ForeignKey, SqlStorage } from '@internal/sql-contract/types';
 import type { Runtime } from '@internal/sql-runtime';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
@@ -94,7 +95,7 @@ describe('explicit namespaced accessors end-to-end (PGlite)', () => {
       await withDevDatabase(async ({ connectionString }) => {
         const client = new Client({ connectionString });
         await client.connect();
-        const db = postgres<Contract>({ contractJson });
+        const db = postgres({ contract: contractFromJson<Contract>(contractJson) });
         try {
           await client.query('create schema if not exists auth');
           await client.query(
@@ -207,6 +208,18 @@ describe('explicit namespaced accessors end-to-end (PGlite)', () => {
             id: 20,
             token: 'auth-tok',
           });
+
+          expect(await orm.public.User.select('email').first()).toEqual({ email: 'alice@x.io' });
+          expect(await orm.auth.User.select('token').first()).toEqual({ token: 'auth-tok' });
+          expect(await orm.auth.User.distinct('token').select('token').all()).toEqual([
+            { token: 'auth-tok' },
+          ]);
+          expect(
+            await orm.auth.User.orderBy((u) => u.token.asc())
+              .cursor({ token: 'a' })
+              .select('token')
+              .all(),
+          ).toEqual([{ token: 'auth-tok' }]);
 
           await orm.public.User.where({ id: 10 }).updateAndCount({ email: 'alice2@x.io' });
           await orm.auth.User.where({ id: 20 }).updateAndCount({ token: 'auth-tok-2' });

@@ -10,12 +10,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createConnection,
   DidChangeWatchedFilesNotification,
-  type Disposable,
   DocumentDiagnosticRequest,
   FileChangeType,
   InitializeRequest,
+  type RegistrationParams,
+  RegistrationRequest,
   StreamMessageReader,
   StreamMessageWriter,
+  UnregistrationRequest,
 } from 'vscode-languageserver/node';
 import { DocumentStore } from '../src/document-store';
 import * as schemaInputs from '../src/schema-inputs';
@@ -103,12 +105,18 @@ async function harness(watched = true) {
     new StreamMessageReader(outgoing),
     new StreamMessageWriter(incoming),
   );
-  const registrations: ReturnType<typeof deferred<Disposable>>[] = [];
-  vi.spyOn(connection.client, 'register').mockImplementation((() => {
-    const pending = deferred<Disposable>();
+  const registrations: (ReturnType<typeof deferred<void>> & {
+    readonly params: RegistrationParams;
+  })[] = [];
+  const unregistered: string[] = [];
+  client.onRequest(RegistrationRequest.type, (params) => {
+    const pending = { ...deferred<void>(), params };
     registrations.push(pending);
     return pending.promise;
-  }) as unknown as typeof connection.client.register);
+  });
+  client.onRequest(UnregistrationRequest.type, (params) => {
+    unregistered.push(...params.unregisterations.map(({ id }) => id));
+  });
   const coverage = vi.spyOn(DocumentStore.prototype, 'setWatchCoverage');
   const server = createServer(connection);
   client.listen();
@@ -128,7 +136,7 @@ async function harness(watched = true) {
   });
   return {
     registrations,
-    register: vi.mocked(connection.client.register),
+    unregistered,
     coverage,
     read: (uri: string) =>
       client.sendRequest(DocumentDiagnosticRequest.type, { textDocument: { uri } }),
@@ -137,12 +145,11 @@ async function harness(watched = true) {
         changes: [{ uri: pathToFileURL(path).toString(), type: FileChangeType.Changed }],
       }),
     async accept(index: number, config: string) {
-      const dispose = vi.fn();
-      registrations[index]?.resolve({ dispose });
+      registrations[index]?.resolve();
       await vi.waitFor(() =>
         expect(coverage).toHaveBeenCalledWith(config, expect.arrayContaining([expect.any(String)])),
       );
-      return dispose;
+      return registrations[index]?.params.registrations[0]?.id;
     },
   };
 }
@@ -167,10 +174,11 @@ describe('schema watcher disk caching', { timeout: timeouts.databaseOperation },
     inputOverrides.set(file.config, [file.path, pattern]);
     const h = await harness();
     await h.read(file.uri);
-    expect(h.register).toHaveBeenCalledWith(DidChangeWatchedFilesNotification.type, {
+    await vi.waitFor(() => expect(h.registrations).toHaveLength(1));
+    expect(h.registrations[0]?.params.registrations[0]?.registerOptions).toEqual({
       watchers: [{ globPattern: file.path }, { globPattern: pattern }],
     });
-    h.registrations[0]?.resolve({ dispose: vi.fn() });
+    h.registrations[0]?.resolve();
     await h.read(file.uri);
     vi.mocked(statSync).mockClear();
     await h.read(file.uri);
@@ -238,7 +246,7 @@ describe('schema watcher disk caching', { timeout: timeouts.databaseOperation },
     const h = await harness();
     await h.read(file.uri);
     expect(h.registrations).toHaveLength(1);
-    h.registrations[0]?.resolve({ dispose: vi.fn() });
+    h.registrations[0]?.resolve();
     await h.read(file.uri);
     vi.mocked(statSync).mockClear();
     await h.read(file.uri);
@@ -280,9 +288,9 @@ describe('schema watcher disk caching', { timeout: timeouts.databaseOperation },
     await h.read(file.uri);
     await h.changed(file.config);
     await vi.waitFor(() => expect(h.registrations).toHaveLength(2));
-    const dispose = vi.fn();
-    h.registrations[0]?.resolve({ dispose });
-    await vi.waitFor(() => expect(dispose).toHaveBeenCalledOnce());
+    h.registrations[0]?.resolve();
+    const stale = h.registrations[0]?.params.registrations[0]?.id;
+    await vi.waitFor(() => expect(h.unregistered).toEqual([stale]));
     vi.mocked(statSync).mockClear();
     await h.read(file.uri);
     expect(fileStats(file.path).length).toBeGreaterThan(0);
@@ -330,11 +338,11 @@ describe('schema watcher disk caching', { timeout: timeouts.databaseOperation },
     const file = await fixture();
     const h = await harness();
     await h.read(file.uri);
-    const dispose = await h.accept(0, file.config);
+    const id = await h.accept(0, file.config);
     h.coverage.mockClear();
     inputOverrides.set(file.config, []);
     await h.changed(file.config);
-    await vi.waitFor(() => expect(dispose).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(h.unregistered).toEqual([id]));
     expect(await h.read(file.uri)).toMatchObject({ items: [] });
     expect(h.registrations).toHaveLength(1);
     expect(h.coverage.mock.calls).toEqual([
@@ -347,11 +355,11 @@ describe('schema watcher disk caching', { timeout: timeouts.databaseOperation },
     const file = await fixture();
     const h = await harness();
     await h.read(file.uri);
-    const dispose = await h.accept(0, file.config);
+    const id = await h.accept(0, file.config);
     await h.read(file.uri);
     await h.changed(file.config);
     await vi.waitFor(() => expect(h.registrations).toHaveLength(2));
-    expect(dispose).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(h.unregistered).toEqual([id]));
     vi.mocked(statSync).mockClear();
     await h.read(file.uri);
     expect(fileStats(file.path).length).toBeGreaterThan(0);

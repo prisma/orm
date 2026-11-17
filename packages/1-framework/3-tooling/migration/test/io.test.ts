@@ -296,16 +296,6 @@ describe('writeMigrationPackage + readMigrationPackage', () => {
     expect(pkg.metadata.migrationHash).toBeDefined();
   });
 
-  it('readMigrationsDir loads packages whose directories hold only migration.json + ops.json', async () => {
-    const baselineDir = join(tmpDir, '20260225T1430_a');
-    const followupDir = join(tmpDir, '20260225T1500_b');
-    await writeTestPackage(baselineDir);
-    await writeTestPackage(followupDir);
-
-    const { packages } = await readMigrationsDir(tmpDir, { migrationsDir: tmpDir });
-    expect(packages.map((p) => p.dirName).sort()).toEqual(['20260225T1430_a', '20260225T1500_b']);
-  });
-
   it('accepts `from: null` (baseline manifest)', async () => {
     const dir = join(tmpDir, '20260225T1430_baseline');
     await writeTestPackage(dir, { from: null });

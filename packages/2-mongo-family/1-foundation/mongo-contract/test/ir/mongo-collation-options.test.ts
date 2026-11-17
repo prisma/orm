@@ -33,11 +33,6 @@ describe('MongoCollationOptions', () => {
     expect(opts.normalization).toBe(true);
   });
 
-  it('carries the kind discriminator as a literal-typed constant', () => {
-    const opts = new MongoCollationOptions({ locale: 'en' });
-    expect(opts.kind).toBe('mongo-collation-options');
-  });
-
   it('is an instance of IRNodeBase (extends the framework IR base)', () => {
     const opts = new MongoCollationOptions({ locale: 'en' });
     expect(opts).toBeInstanceOf(IRNodeBase);

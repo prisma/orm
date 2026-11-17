@@ -1,7 +1,7 @@
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
-import type { PrismaNextConfig } from '@internal/config-loader';
+import type { PrismaConfig } from '@internal/config-loader';
 import * as configLoader from '@internal/config-loader';
 import {
   type CliStructuredError,
@@ -10,6 +10,11 @@ import {
 } from '@internal/errors/control';
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
 import { createDataTypeLookup, dataType } from '@internal/framework-components/codec';
+import {
+  assembleGeneratorFunctions,
+  EMPTY_GENERATOR_FUNCTIONS,
+  singleGeneratorBinding,
+} from '@internal/framework-components/components';
 import type { ControlStack } from '@internal/framework-components/control';
 import * as control from '@internal/framework-components/control';
 import { jsonValue, mapBlock } from '@internal/psl-parser';
@@ -23,7 +28,7 @@ vi.mock('@internal/config-loader', { spy: true });
 vi.mock('@internal/framework-components/control', { spy: true });
 
 function mockLoadedConfig(
-  config: PrismaNextConfig,
+  config: PrismaConfig,
   diagnostics: readonly CliStructuredError[] = [],
 ): void {
   vi.spyOn(configLoader, 'loadConfig').mockResolvedValue(ok({ config, diagnostics }));
@@ -33,11 +38,11 @@ function mockLoadFailure(failure: CliStructuredError): void {
   vi.spyOn(configLoader, 'loadConfig').mockResolvedValue(notOk(failure));
 }
 
-function loadedConfig(format: string, inputs: readonly string[]): PrismaNextConfig {
-  return { contract: { source: { format, inputs } } } as unknown as PrismaNextConfig;
+function loadedConfig(format: string, inputs: readonly string[]): PrismaConfig {
+  return { contract: { source: { format, inputs } } } as unknown as PrismaConfig;
 }
 
-function interpretCapableConfig(inputs: readonly string[]): PrismaNextConfig {
+function interpretCapableConfig(inputs: readonly string[]): PrismaConfig {
   return {
     contract: {
       source: {
@@ -47,7 +52,7 @@ function interpretCapableConfig(inputs: readonly string[]): PrismaNextConfig {
         interpret: () => ({}) as never,
       },
     },
-  } as unknown as PrismaNextConfig;
+  } as unknown as PrismaConfig;
 }
 
 function stubStackWithContext(): ControlStack {
@@ -57,7 +62,6 @@ function stubStackWithContext(): ControlStack {
     extensionContracts: new Map([['ext-a', { targetFamily: 'demo' }]]),
     scalarTypes: ['Int'],
     authoringContributions: {
-      field: {},
       type: {
         Int: { kind: 'typeConstructor', output: { codecId: 'demo/int@1' } },
       },
@@ -71,11 +75,12 @@ function stubStackWithContext(): ControlStack {
       defaultFunctionRegistry: new Map(),
       generatorDescriptors: [],
     },
+    generatorFunctions: stubGeneratorFunctions,
     capabilities: { demo: { scalarList: true } },
   } as unknown as ControlStack;
 }
 
-const stubInt = dataType('demo/int', {});
+const stubInt = dataType('demo/int', { read: (json) => json });
 const stubDataTypeEntries = {
   [stubInt.id]: {
     written: {
@@ -93,6 +98,20 @@ const stubDataTypes = {
   lookup: createDataTypeLookup([stubInt]),
 };
 
+const stubGeneratorFunctions = assembleGeneratorFunctions([
+  {
+    id: 'demo',
+    generatorFunctions: [
+      {
+        name: 'uuid',
+        signature: { documentation: 'uuid' },
+        bindings: [singleGeneratorBinding({ codecIds: ['demo/text@1'], generatorId: 'uuidv4' })],
+      },
+    ],
+    controlMutationDefaults: { generatorDescriptors: [{ id: 'uuidv4' }] },
+  },
+]);
+
 function stubStack(
   scalarTypes: readonly string[],
   pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace,
@@ -102,6 +121,7 @@ function stubStack(
     scalarTypes,
     authoringContributions: { pslBlockDescriptors, dataTypes: stubDataTypeEntries },
     dataTypes: stubDataTypes,
+    generatorFunctions: stubGeneratorFunctions,
   } as unknown as ControlStack;
 }
 
@@ -154,6 +174,7 @@ describe('resolveConfigInputs', { timeout: timeouts.coldTransformImport }, () =>
       scalarTypes: [],
       defaultNamespaceId: '__unbound__',
       pslBlockDescriptors: {},
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
     });
   });
 
@@ -193,6 +214,7 @@ describe('resolveConfigInputs', { timeout: timeouts.coldTransformImport }, () =>
       scalarTypes: [],
       defaultNamespaceId: '__unbound__',
       pslBlockDescriptors: {},
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
     });
   });
 
@@ -240,8 +262,10 @@ describe('resolveConfigInputs', { timeout: timeouts.coldTransformImport }, () =>
       pslBlockDescriptors: {},
       authoringContributions: { pslBlockDescriptors: {}, dataTypes: stubDataTypeEntries },
       dataTypes: stubDataTypes,
+      generatorFunctions: stubGeneratorFunctions,
     });
     expect(result.controlStack.dataTypes).toBe(stubDataTypes);
+    expect(result.controlStack.generatorFunctions).toBe(stubGeneratorFunctions);
     expect(result.inputs.includes(pathToFileURL('/abs/schema.psl').toString())).toBe(true);
   });
 });
@@ -262,6 +286,7 @@ describe('control-stack input derivation', () => {
       scalarTypes: [],
       defaultNamespaceId: '__unbound__',
       pslBlockDescriptors: {},
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
     });
     expect(createControlStack).not.toHaveBeenCalled();
   });
@@ -293,6 +318,7 @@ describe('control-stack input derivation', () => {
       pslBlockDescriptors,
       authoringContributions: { pslBlockDescriptors, dataTypes: stubDataTypeEntries },
       dataTypes: stubDataTypes,
+      generatorFunctions: stubGeneratorFunctions,
     });
     expect(result.controlStack.dataTypes).toBe(stubDataTypes);
   });
@@ -301,7 +327,7 @@ describe('control-stack input derivation', () => {
     const parserOptions = { grammar: 'prisma-7' } as const;
     mockLoadedConfig({
       contract: { source: { format: 'psl', inputs: ['/abs/schema.prisma'], parserOptions } },
-    } as unknown as PrismaNextConfig);
+    } as unknown as PrismaConfig);
     vi.spyOn(control, 'createControlStack').mockReturnValue(stubStack(['Int'], {}));
 
     const result = await resolveConfigInputs('/abs/prisma.config.ts', () => '// use prisma-8\n');
@@ -343,6 +369,7 @@ describe('interpretation resolution', () => {
     expect(context?.authoringContributions).toBe(stack.authoringContributions);
     expect(context?.codecLookup).toBe(stack.codecLookup);
     expect(context?.controlMutationDefaults).toBe(stack.controlMutationDefaults);
+    expect(context?.generatorFunctions).toBe(stack.generatorFunctions);
     expect(context?.capabilities).toBe(stack.capabilities);
     expect(context?.resolvedInputs).toEqual([pathToFileURL('/abs/schema.prisma').toString()]);
     expect(context?.defaultNamespaceId).toBe('demo_default');
@@ -378,7 +405,7 @@ describe('interpretation resolution', () => {
   });
 
   it('carries no interpretation when the config has no contract', async () => {
-    mockLoadedConfig({} as unknown as PrismaNextConfig);
+    mockLoadedConfig({} as unknown as PrismaConfig);
 
     const result = await resolveConfigInputs('/abs/prisma.config.ts', () => '// use prisma-8\n');
 

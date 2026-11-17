@@ -1,6 +1,6 @@
 import { buildOperation, codecOf, toExpr } from '@internal/sql-relational-core/expression';
 import type { CodecTypes } from '../types/codec-types';
-import type { QueryOperationTypes } from '../types/operation-types';
+import type { QueryOperationTypes, QueryOperationTypesForCodecs } from '../types/operation-types';
 import { postgisAuthoringTypes } from './authoring';
 import { postgisDataTypes } from './data-types';
 import { postgisCodecRegistry } from './registry';
@@ -155,13 +155,6 @@ const postgisPackMetaBase = {
         named: 'CodecTypes',
         alias: 'PostgisTypes',
       },
-      typeImports: [
-        {
-          package: '@internal/extension-postgis/codec-types',
-          named: 'Geometry',
-          alias: 'Geometry',
-        },
-      ],
     },
     queryOperationTypes: {
       import: {
@@ -175,4 +168,5 @@ const postgisPackMetaBase = {
 
 export const postgisPackMeta: typeof postgisPackMetaBase & {
   readonly __codecTypes?: CodecTypes;
+  readonly __queryOperationTypes?: QueryOperationTypesForCodecs;
 } = postgisPackMetaBase;

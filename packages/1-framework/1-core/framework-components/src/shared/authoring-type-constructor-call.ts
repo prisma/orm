@@ -5,6 +5,7 @@ import {
   instantiateAuthoringTypeConstructor,
   isAuthoringArgRef,
   isAuthoringTypeConstructorDescriptor,
+  isAuthoringTypeDescriptor,
 } from './framework-authoring';
 
 /** What a type constructor call produces for a column. */
@@ -16,7 +17,8 @@ export interface AuthoringTypeConstructorCall {
   readonly args: readonly unknown[];
 }
 
-function* typeConstructors(
+/** Every type constructor of `namespace`, with its path, in namespace order. */
+export function* authoringTypeConstructors(
   namespace: AuthoringTypeNamespace,
   path: readonly string[] = [],
 ): Generator<{
@@ -26,13 +28,14 @@ function* typeConstructors(
   for (const [name, value] of Object.entries(namespace)) {
     if (isAuthoringTypeConstructorDescriptor(value)) {
       yield { path: [...path, name], descriptor: value };
-    } else {
-      yield* typeConstructors(value, [...path, name]);
+    } else if (!isAuthoringTypeDescriptor(value)) {
+      yield* authoringTypeConstructors(value, [...path, name]);
     }
   }
 }
 
-function produces(
+/** Whether `produced` is exactly `wanted`: the same codec and the same type parameters, an absent set of parameters counting as an empty one. */
+export function sameAuthoringTypeConstructorOutput(
   produced: AuthoringTypeConstructorOutput,
   wanted: AuthoringTypeConstructorOutput,
 ): boolean {
@@ -50,7 +53,7 @@ function produces(
  * comes straight from one argument; `undefined` when it cannot produce `output`, including when
  * `output` has no value for an argument the constructor requires.
  */
-function argumentsFor(
+export function authoringTypeConstructorArguments(
   descriptor: AuthoringTypeConstructorDescriptor,
   output: AuthoringTypeConstructorOutput,
 ): readonly unknown[] | undefined {
@@ -60,14 +63,17 @@ function argumentsFor(
   const args: unknown[] = [];
   for (const [key, template] of Object.entries(descriptor.output.typeParams ?? {})) {
     const value = output.typeParams?.[key];
-    if (value !== undefined && isAuthoringArgRef(template) && template.path === undefined) {
+    if (value !== undefined && isAuthoringArgRef(template)) {
       args[template.index] = value;
     }
   }
   const requiredArgs = (descriptor.args ?? []).filter((arg) => arg.optional !== true).length;
   if (args.length < requiredArgs || Array.from(args).includes(undefined)) return undefined;
   try {
-    return produces(instantiateAuthoringTypeConstructor(descriptor, args), output)
+    return sameAuthoringTypeConstructorOutput(
+      instantiateAuthoringTypeConstructor(descriptor, args),
+      output,
+    )
       ? args
       : undefined;
   } catch {
@@ -85,8 +91,8 @@ export function findAuthoringTypeConstructorCall(
   namespace: AuthoringTypeNamespace,
   output: AuthoringTypeConstructorOutput,
 ): AuthoringTypeConstructorCall | undefined {
-  for (const { path, descriptor } of typeConstructors(namespace)) {
-    const args = argumentsFor(descriptor, output);
+  for (const { path, descriptor } of authoringTypeConstructors(namespace)) {
+    const args = authoringTypeConstructorArguments(descriptor, output);
     if (args !== undefined) return { path, args };
   }
   return undefined;

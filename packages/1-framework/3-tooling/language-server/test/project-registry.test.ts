@@ -1,3 +1,4 @@
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import { describe, expect, it, vi } from 'vitest';
 import { type Connection, FileChangeType } from 'vscode-languageserver';
 import type { ConfigResolution } from '../src/config-resolution';
@@ -26,7 +27,12 @@ function setup() {
   mocks.load.mockReset().mockResolvedValue({
     inputs: { includes: () => false, uris: () => [] },
     schemaInputConfig: {},
-    controlStack: { scalarTypes: [], defaultNamespaceId: 'public', pslBlockDescriptors: {} },
+    controlStack: {
+      scalarTypes: [],
+      defaultNamespaceId: 'public',
+      pslBlockDescriptors: {},
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
+    },
   });
   const documents = new DocumentStore();
   const connection = {

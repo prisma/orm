@@ -21,11 +21,11 @@ import { binderContext, nullLiteral } from './support';
 const scalarTypes = {
   Int: {
     kind: 'typeConstructor' as const,
-    output: { codecId: 'fixture/int@1', nativeType: 'int' },
+    output: { codecId: 'fixture/int@1' },
   },
   String: {
     kind: 'typeConstructor' as const,
-    output: { codecId: 'fixture/string@1', nativeType: 'string' },
+    output: { codecId: 'fixture/string@1' },
   },
 };
 

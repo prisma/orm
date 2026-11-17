@@ -129,7 +129,7 @@ describe('SQLite Migration E2E - Destructive column changes', () => {
         policy: ALL,
       },
       async ({ schema }) => {
-        expect(schema.tables['Item']!.columns['value']!.nativeType).toBe('integer');
+        expect(schema.tables['Item']!.columns['value']!.typeText).toBe('integer');
       },
     );
   });
@@ -180,7 +180,7 @@ describe('SQLite Migration E2E - Destructive column changes', () => {
         },
       },
       async ({ driver, schema }) => {
-        expect(schema.tables['Item']!.columns['value']!.nativeType).toBe('integer');
+        expect(schema.tables['Item']!.columns['value']!.typeText).toBe('integer');
         const rows = await driver.query<{ id: number; value: number }>(
           'SELECT * FROM "Item" ORDER BY id',
         );
@@ -212,7 +212,7 @@ describe('SQLite Migration E2E - Destructive column changes', () => {
       },
       async ({ schema }) => {
         expect(schema.tables['Record']!.columns['old_field']).toBeUndefined();
-        expect(schema.tables['Record']!.columns['value']!.nativeType).toBe('integer');
+        expect(schema.tables['Record']!.columns['value']!.typeText).toBe('integer');
         expect(schema.tables['Record']!.columns['value']!.nullable).toBe(false);
       },
     );

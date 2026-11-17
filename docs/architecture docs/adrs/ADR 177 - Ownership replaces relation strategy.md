@@ -59,6 +59,8 @@ A User model with a referenced relation (Post) and an owned model (Address). Add
 }
 ```
 
+> Every model's `storage` now also records each field's stored name in `fields`, embedded models included (see [ADR 172](ADR%20172%20-%20Contract%20domain-storage%20separation.md)). This example predates that and leaves `fields` out.
+
 **SQL contract (same domain, different storage):**
 
 ```json

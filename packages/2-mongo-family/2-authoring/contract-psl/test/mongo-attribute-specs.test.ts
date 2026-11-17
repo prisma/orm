@@ -1,5 +1,6 @@
 import type { ContractSourceContext } from '@internal/config/config-types';
 import { emptyCodecLookup } from '@internal/framework-components/codec';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import type {
   ArgType,
   AttributeCtx,
@@ -7,6 +8,7 @@ import type {
   FieldAttributeSpecContext,
   ModelSymbol,
   Param,
+  ParsedWrittenScalar,
   ResolvedEntityReference,
   SymbolTable,
 } from '@internal/psl-parser';
@@ -32,7 +34,6 @@ function createBinderFor(symbolTable: SymbolTable, sources: PslSources) {
     composedExtensionContracts: new Map(),
     authoringContributions: {
       type: {},
-      field: {},
       entityTypes: {},
       pslBlockDescriptors: {},
       modelAttributes: {},
@@ -42,6 +43,7 @@ function createBinderFor(symbolTable: SymbolTable, sources: PslSources) {
     pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
     codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
     controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
+    generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
     dataTypes: EMPTY_DATA_TYPES,
     resolvedInputs: [],
     capabilities: {},
@@ -108,9 +110,13 @@ function contexts(): { model: AttributeSpecContext; field: FieldAttributeSpecCon
     symbols: symbolTable,
     model,
     defaultFunctionRegistry: new Map(),
+    generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
     dataTypes: EMPTY_DATA_TYPES,
   };
-  return { model: modelContext, field: { ...modelContext, field, typeResolution: undefined } };
+  return {
+    model: modelContext,
+    field: { ...modelContext, field, typeResolution: undefined, contributedType: undefined },
+  };
 }
 
 describe('mongoAttributeSpecs', () => {
@@ -141,12 +147,12 @@ model Base { id String }`,
       diagnostics,
     });
     expectTypeOf(value).toEqualTypeOf<
-      { base: ResolvedEntityReference<ModelSymbol>; value: string } | undefined
+      { base: ResolvedEntityReference<ModelSymbol>; value: ParsedWrittenScalar } | undefined
     >();
     expect(diagnostics.toExternal()).toEqual([]);
     expect(value?.base.declaration).toBe(symbolTable.defaultNamespace.models['Base']);
     expect(value?.base.namespace).toBe(symbolTable.defaultNamespace);
-    expect(value?.value).toBe('v');
+    expect(value?.value.written).toEqual({ kind: 'string', text: 'v' });
   });
   it('registers every Mongo built-in at its level', () => {
     expect({
@@ -154,7 +160,7 @@ model Base { id String }`,
       field: Object.keys(mongoAttributeSpecs.field).sort(),
     }).toEqual({
       model: ['base', 'discriminator', 'index', 'map', 'textIndex', 'unique'],
-      field: ['id', 'map', 'relation', 'unique'],
+      field: ['id', 'map', 'onCreate', 'onUpdate', 'relation', 'unique'],
     });
   });
 

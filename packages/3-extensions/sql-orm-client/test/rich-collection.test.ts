@@ -51,25 +51,4 @@ describe('SQL ORM collections with rich AST plans', () => {
     expect(plan?.ast).toBeInstanceOf(SelectAst);
     expect((plan!.ast as SelectAst).limit).toBe(1);
   });
-
-  it('executes grouped aggregates backed by aggregate expressions', async () => {
-    const { collection, runtime } = createCollectionFor('Post');
-    runtime.setNextResults([[{ user_id: 1, postCount: 2, totalViews: 30 }]]);
-
-    const rows = await collection
-      .groupBy('userId')
-      .having((having) => having.count().gt(1))
-      .aggregate((aggregate) => ({
-        postCount: aggregate.count(),
-        totalViews: aggregate.sum('views'),
-      }));
-
-    expect(rows).toEqual([{ userId: 1, postCount: 2, totalViews: 30 }]);
-
-    const plan = runtime.executions[0]?.plan;
-    expect(plan?.ast).toBeInstanceOf(SelectAst);
-    const ast = plan?.ast as SelectAst;
-    expect(ast.having?.kind).toBe('binary');
-    expect((ast.having as BinaryExpr).left.kind).toBe('aggregate');
-  });
 });

@@ -16,6 +16,7 @@ vi.mock('pg', async (importOriginal) => {
         connect: vi.fn().mockResolvedValue({
           query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
           release: vi.fn(),
+          on: vi.fn(),
         }),
         end: vi.fn().mockResolvedValue(undefined),
       });
@@ -35,12 +36,15 @@ beforeEach(() => {
 });
 
 describe('supabase() idle connection errors', () => {
-  it('the pool created from { url } survives an emitted idle-connection error', async () => {
-    await supabase({
+  it('the pool created from { url } on the first query survives an emitted idle-connection error', async () => {
+    const db = await supabase({
       contract,
       url: 'postgres://localhost:5432/db',
       jwtSecret: fixtureJwtSecret,
+      verifyMarker: false,
     });
+    const anon = db.asAnon();
+    await anon.execute(anon.raw.sql`SELECT 1`.affectedCount().build());
 
     const pool = poolInstances.at(-1);
     expect(pool).toBeDefined();

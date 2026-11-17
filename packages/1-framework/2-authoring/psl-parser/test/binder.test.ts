@@ -1037,6 +1037,20 @@ describe('createBinder — describeUnresolvedType', () => {
     ).toEqual([{ field: 'pet', owner: 'Cart', written: 'Dog' }]);
   });
 
+  it('tells the callback which names a declaration of the schema takes, apart from contributed types', () => {
+    const { seen, describe } = record();
+    bindWithUnresolvedTypeDescriber(
+      describe,
+      'model Cart {\n  pet Dog\n}\n\nmodel Toy {\n  id Int\n}',
+    );
+
+    expect(
+      seen.map(({ isDeclared }) =>
+        ['Toy', 'Cart', 'Int', 'Dog'].filter((name) => isDeclared(name)),
+      ),
+    ).toEqual([['Toy', 'Cart']]);
+  });
+
   it('uses the contributed message in place of the default', () => {
     const { diagnostics } = bindWithUnresolvedTypeDescriber(
       ({ written }) => `custom: cannot find "${written}"`,
@@ -1372,7 +1386,7 @@ describe('createBinder — one kind-blind scope chain', () => {
       symbol: app,
     });
     expect(diagnostics.map(({ message }) => message)).toEqual([
-      '"app" is a namespace; a type reference must name a model, composite type, enum, or named type',
+      '"app" is a namespace; a type reference must name a model, composite type, enum, or type alias',
     ]);
   });
 
@@ -1671,7 +1685,11 @@ describe('the binder calls the real spec factories', () => {
 
 describe('the binder gives spec factories the data types of the stack', () => {
   it('passes the same data types to model and field factories', () => {
-    const dataTypes = { entries: {}, lookup: createDataTypeLookup([]) };
+    const dataTypes = {
+      entries: {},
+      lookup: createDataTypeLookup([]),
+      dataTypeOfCodec: () => undefined,
+    };
     const seen: unknown[] = [];
     const { sources, symbolTable } = build(
       ['model User {', '  id Int', '  name String @contextual', '  @@index([id])', '}'].join('\n'),

@@ -1,14 +1,15 @@
 import { int4Column, textColumn, varcharColumn } from '@internal/adapter-postgres/column-types';
 import { vector } from '@internal/extension-pgvector/column-types';
 import pgvector from '@internal/extension-pgvector/pack';
-import { uuidv4 } from '@internal/ids';
 import {
   defineContract,
   field,
   fullTextIndex,
+  gen,
   model,
   rel,
   sql,
+  type,
 } from '@internal/postgres/contract-builder';
 
 const UserBase = model('User', {
@@ -76,14 +77,14 @@ const Document = DocumentBase.relations({
 const Profile = model('Profile', {
   fields: {
     id: field.column(int4Column).id(),
-    userId: field.column(int4Column).column('user_id'),
+    userId: field.column(int4Column).column('user_id').unique(),
     bio: field.column(textColumn),
   },
 }).sql({ table: 'profiles' });
 
 const Article = model('Article', {
   fields: {
-    id: field.generated(uuidv4()).id(),
+    id: field.column(type.Char(36)).onCreate(gen.uuid()).id(),
     title: field.column(textColumn),
   },
 }).sql({ table: 'articles' });

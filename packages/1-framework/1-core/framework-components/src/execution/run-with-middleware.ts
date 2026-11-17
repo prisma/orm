@@ -1,6 +1,7 @@
 import { blindCast } from '@internal/utils/casts';
 import { brandedAnnotations } from '../annotations';
 import {
+  type ActivityChildSlot,
   type ActivityParent,
   type ActivityRecord,
   createActivityRecord,
@@ -52,7 +53,7 @@ export interface StatementActivityRun<
 }
 
 /**
- * Runs one `query()` statement as an activity. The activity starts on the first `next()`: `activityStarted`, then `body`'s rows, then `activityEnded` and, with no parent, `activityFinalized`. Each fires exactly once, whether the body succeeds, throws (`failed`) or the caller stops reading (`stopped`).
+ * Runs one `query()` statement as an activity. The activity starts on the first `next()`: `activityStarted`, then `body`'s rows, then `activityEnded` and, unless a transaction holds it, `activityFinalized`. Each fires exactly once, whether the body succeeds, throws (`failed`) or the caller stops reading (`stopped`). When the parent no longer accepts work, the first `next()` rejects and no hook runs.
  */
 export function streamStatement<
   TExec extends ExecutionPlan,
@@ -94,6 +95,7 @@ async function* streamStatementRows<
   isThrownByCaller: (error: unknown) => boolean,
 ): AsyncGenerator<Row, void, unknown> {
   const statement = new StatementActivityRunImpl(options, 'rows');
+  statement.attach();
   let outcome: StatementEnded['outcome'] = 'stopped';
   try {
     await statement.start();
@@ -108,7 +110,7 @@ async function* streamStatementRows<
 }
 
 /**
- * Runs one `execute()` statement as an activity: `activityStarted`, then `body`, then `activityEnded` and, with no parent, `activityFinalized`, each exactly once.
+ * Runs one `execute()` statement as an activity: `activityStarted`, then `body`, then `activityEnded` and, unless a transaction holds it, `activityFinalized`, each exactly once. When the parent no longer accepts work, it rejects and no hook runs.
  */
 export async function executeStatement<
   TExec extends ExecutionPlan,
@@ -121,6 +123,7 @@ export async function executeStatement<
   ) => Promise<RuntimeStatementStats>,
 ): Promise<RuntimeStatementStats> {
   const statement = new StatementActivityRunImpl(options, 'stats');
+  statement.attach();
   let outcome: StatementEnded['outcome'] = 'failed';
   try {
     await statement.start();
@@ -143,7 +146,7 @@ class StatementActivityRunImpl<
   readonly #middleware: ReadonlyArray<RuntimeMiddleware<TExec, TMutator>>;
   readonly #parent: ActivityParent | undefined;
   readonly #record: ActivityRecord<TContext>;
-  #childEnded: ((outcome: StatementEnded['outcome']) => Promise<void>) | undefined;
+  #slot: ActivityChildSlot | undefined;
   #runStartedAt: number | undefined;
   #source: 'driver' | 'middleware' = 'driver';
   #rowCount = 0;
@@ -173,13 +176,24 @@ class StatementActivityRunImpl<
     this.ctx = this.#record.ctx;
   }
 
+  /** Adopts the statement into its parent; throws when the parent no longer accepts work. */
+  attach(): void {
+    this.#slot = this.#parent?.adopt(this.#record);
+  }
+
   start(): Promise<void> {
-    this.#childEnded = this.#parent?.adopt(this.#record);
     return this.#record.started();
   }
 
   end(outcome: StatementEnded['outcome']): Promise<void> {
-    return endActivity(this.#record, this.#endedResult(outcome), this.#childEnded);
+    if (outcome === 'failed') this.#slot?.statementFailed();
+    return endActivity(
+      this.#record,
+      this.#endedResult(outcome),
+      { outcome: outcome === 'succeeded' ? 'committed' : 'unknown' },
+      this.#slot,
+      this.#record.finalize,
+    );
   }
 
   async beforeEncode(draft: TExec, params?: TMutator): Promise<void> {

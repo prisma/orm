@@ -1,6 +1,5 @@
-// Runs a filtered relation-count order on SQLite, where parameters bind by
-// position: the WHERE parameter and the count predicate parameter must reach
-// their own `?` placeholders.
+// Runs a filtered relation-count order on SQLite: the WHERE parameter and the
+// count predicate parameter must reach their own numbered `?N` placeholders.
 //
 // Seed data (filtered = posts with more than 10 views):
 //

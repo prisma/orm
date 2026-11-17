@@ -1,0 +1,81 @@
+---
+changes:
+  - id: mongo-collection-has-prepared
+    summary: |
+      `MongoCollection`, from `@prisma/orm-mongo/orm`, has a `prepared` member (`all()`, `first()`, `firstOrThrow()`), and its `limit` and `offset` take a number or a prepared placeholder. An object you type as `MongoCollection` yourself, such as a test double, needs `prepared`, and its `limit` and `offset` must accept the wider argument.
+    detection:
+      glob: "**/*.{ts,mts,cts,tsx}"
+      matches:
+        - ':\s{0,20}MongoCollection<[^<>]{0,200}(?:<[^<>]{0,200}>[^<>]{0,200}){0,4}>\s{0,20}=\s{0,20}\{'
+        - '\bimplements\s{1,20}MongoCollection\b'
+  - id: mongo-prepare-member-moved
+    summary: |
+      `MongoPrepareMember` moved and changed meaning. It is no longer exported from `@prisma/orm-mongo/family-runtime`; it is exported from `@prisma/orm-mongo/runtime`, takes the contract as its type argument instead of codec types, and has the client's `prepare` method, which also takes an ORM read and returns `MongoPreparedFrom<Params, Q>`. `MongoRuntime` declares its own `prepare`, which takes plans only.
+    detection:
+      glob: "**/*.{ts,mts,cts,tsx}"
+      matches:
+        - '(?:import|export)\s{1,20}(?:type\s{1,20})?\{[^}]{0,300}\bMongoPrepareMember\b[^}]{0,300}\}\s{0,20}from\s{0,20}[''"]@prisma/orm-mongo/family-runtime[''"]'
+        - ':\s{0,20}MongoPrepareMember\b(?!\s{0,20}<)'
+  - id: mongo-where-filter-takes-placeholders
+    summary: |
+      `MongoWhereFilter`, from `@prisma/orm-mongo/orm`, lets each scalar field's value also be a `MongoPreparedParamRef`, the placeholder a `prepare` callback receives. Code that takes a `MongoWhereFilter` and reads a field's value as the field's type must handle the placeholder first.
+    detection:
+      glob: "**/*.{ts,mts,cts,tsx}"
+      matches:
+        - '\bMongoWhereFilter\b'
+  - id: compile-mongo-query-has-no-row-type
+    summary: |
+      `compileMongoQuery`, from `@prisma/orm-mongo/orm`, takes no type argument and returns `MongoQueryPlan<Record<string, unknown>>`. A call that passed a row type, `compileMongoQuery<Row>(...)`, no longer compiles.
+    detection:
+      glob: "**/*.{ts,mts,cts,tsx}"
+      matches:
+        - '\bcompileMongoQuery\s{0,20}<'
+---
+
+# MongoDB prepared ORM reads
+
+## `mongo-collection-has-prepared`
+
+Give a hand-written `MongoCollection` a `prepared` member, and widen `limit` and `offset`. A test double that never prepares can throw:
+
+```ts
+const users: MongoCollection<Contract, 'User'> = {
+  // ...
+  limit: (n) => users,
+  offset: (n) => users,
+  prepared: {
+    all: () => { throw new Error('not used in this test'); },
+    first: () => { throw new Error('not used in this test'); },
+    firstOrThrow: () => { throw new Error('not used in this test'); },
+  },
+};
+```
+
+## `mongo-prepare-member-moved`
+
+Import `MongoPrepareMember` from `@prisma/orm-mongo/runtime` and give it the contract: `MongoPrepareMember<Contract>` is an object type that has the `prepare` method of a `mongo()` client. Where you meant an object with the runtime's `prepare`, write `Pick<MongoRuntime, 'prepare'>`, or type the value as `MongoRuntime`:
+
+```ts
+import type { MongoRuntime } from '@prisma/orm-mongo/family-runtime';
+import type { MongoPrepareMember } from '@prisma/orm-mongo/runtime';
+
+const clientPrepare: MongoPrepareMember<Contract> = db;
+const runtimePrepare: Pick<MongoRuntime, 'prepare'> = await db.runtime();
+```
+
+## `mongo-where-filter-takes-placeholders`
+
+Where you read a value out of a `MongoWhereFilter`, check for a placeholder before using it as the field's type:
+
+```ts
+import { isMongoPreparedParamRef } from '@prisma/orm-mongo/value';
+
+const name = filter.name;
+const label = name === undefined || isMongoPreparedParamRef(name) ? undefined : name.toUpperCase();
+```
+
+A placeholder's value is known only when a prepared statement runs.
+
+## `compile-mongo-query-has-no-row-type`
+
+Drop the type argument from `compileMongoQuery(...)`. Where you need a row type, type the rows where you read them.

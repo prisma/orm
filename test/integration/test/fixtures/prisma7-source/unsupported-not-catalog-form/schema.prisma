@@ -1,0 +1,9 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Legacy {
+  id   Int                         @id
+  code Unsupported("INT4")
+  name Unsupported("varchar(10)")?
+}

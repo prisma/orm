@@ -27,7 +27,9 @@ function metaString(failure: CliStructuredError, key: string): string {
 /**
  * pnpm reported a specifier the published artifact leaked, which npm installs
  * happily. The engine redacts credentials out of the stderr it returns but
- * leaves error codes alone, which is what this reads.
+ * leaves error codes alone, which is what this reads. pnpm 10 prints its
+ * `ERR_PNPM_*` codes on stdout, though, and the engine returns only stderr, so
+ * this does not fire until the engine returns stdout as well.
  */
 function pnpmLeakedASpecifier(failure: CliStructuredError): boolean {
   return (

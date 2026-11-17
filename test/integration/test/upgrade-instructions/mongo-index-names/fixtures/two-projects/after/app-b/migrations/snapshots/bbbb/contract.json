@@ -1,0 +1,1 @@
+{"storage":{"namespaces":{"__unbound__":{"entries":{"collection":{"users":{"indexes":[{"keys":[{"direction":1,"field":"email"}],"kind":"mongo-index","name":"users_email_unique","unique":true}],"kind":"mongo-collection"}}},"id":"__unbound__","kind":"mongo-database"}},"storageHash":"bbbb"},"target":"mongo","targetFamily":"mongo"}

@@ -316,7 +316,7 @@ describe('createBinder — a mixin name in type position', () => {
       {
         code: 'PSL_UNRESOLVED_REFERENCE',
         message:
-          '"Timestamps" is a mixin; a type reference must name a model, composite type, enum, or named type',
+          '"Timestamps" is a mixin; a type reference must name a model, composite type, enum, or type alias',
         data: { reference: 'type', name: 'Timestamps', constructorCall: false },
         filename: '0.psl',
         range: rangeOf(source, 'Timestamps', 1),
@@ -342,7 +342,7 @@ describe('createBinder — a mixin name in type position', () => {
       {
         code: 'PSL_UNRESOLVED_REFERENCE',
         message:
-          '"auth.Timestamps" is a mixin; a type reference must name a model, composite type, enum, or named type',
+          '"auth.Timestamps" is a mixin; a type reference must name a model, composite type, enum, or type alias',
         range: rangeOf(source, 'auth.Timestamps'),
       },
     ]);
@@ -576,6 +576,37 @@ describe('createBinder — binding a mixin body once', () => {
       symbol: auth.models['User'],
       namespace: auth,
     });
+  });
+
+  it('gives a field attribute the type constructor of its type, through a named type', () => {
+    const fieldContexts: FieldAttributeSpecContext[] = [];
+    const { diagnostics } = bindWith(
+      {
+        fieldSpecs: {
+          contextual: (ctx) => {
+            fieldContexts.push(ctx);
+            return fieldAttribute('contextual', { documentation: 'fixture' });
+          },
+        },
+      },
+      lines(
+        'types {',
+        '  Count = Int',
+        '}',
+        'model A {',
+        '  direct Int @contextual',
+        '  aliased Count @contextual',
+        '  other A? @contextual',
+        '}',
+      ),
+    );
+
+    expect(diagnostics).toEqual([]);
+    expect(fieldContexts.map((ctx) => ctx.contributedType?.symbol.name)).toEqual([
+      'Int',
+      'Int',
+      undefined,
+    ]);
   });
 
   it('passes the mixin as the owner to the unsupported-attribute and unresolved-type callbacks, once', () => {

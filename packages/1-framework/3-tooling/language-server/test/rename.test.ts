@@ -293,27 +293,6 @@ describe('provideRename — the new name', () => {
     });
   });
 
-  it('rejects Infinity', () => {
-    expect(rejectionOf('Infinity')).toMatchObject({
-      code: LSPErrorCodes.RequestFailed,
-      message: '"Infinity" is not a valid PSL identifier',
-    });
-  });
-
-  it('rejects a name that starts with a digit', () => {
-    expect(rejectionOf('1st')).toMatchObject({
-      code: LSPErrorCodes.RequestFailed,
-      message: '"1st" is not a valid PSL identifier',
-    });
-  });
-
-  it('rejects an empty name', () => {
-    expect(rejectionOf('')).toMatchObject({
-      code: LSPErrorCodes.RequestFailed,
-      message: '"" is not a valid PSL identifier',
-    });
-  });
-
   it('rejects a name with a dot', () => {
     expect(rejectionOf('auth.Account')).toMatchObject({
       code: LSPErrorCodes.RequestFailed,

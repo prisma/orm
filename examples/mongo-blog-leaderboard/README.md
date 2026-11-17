@@ -81,11 +81,14 @@ Each link in the chain produces a precise downstream row type:
 
 ```ts
 import mongo from '@prisma/orm-mongo/runtime';
+import { contractFromJson } from '@prisma/orm-mongo/static';
 import contractJson from './contract.json' with { type: 'json' };
 import type { Contract } from './contract';
 
+export const contract = contractFromJson<Contract>(contractJson);
+
 export function createClient({ url, dbName }: { url: string; dbName?: string }) {
-  return mongo<Contract>({ contractJson, url, dbName });
+  return mongo({ contract, url, dbName });
 }
 ```
 

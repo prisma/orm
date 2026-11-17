@@ -50,9 +50,9 @@ The SPI module imports only types that exist at its layer or below. The caller i
 | Implementation | Path | Demonstrates |
 |---|---|---|
 | `EmissionSpi` interface | [`packages/1-framework/1-core/framework-components/src/control/emission-types.ts`](../../../packages/1-framework/1-core/framework-components/src/control/emission-types.ts), re-exported from [`exports/emission.ts`](../../../packages/1-framework/1-core/framework-components/src/exports/emission.ts) | The canonical example named in [ADR 185](../adrs/ADR%20185%20-%20SPI%20types%20live%20at%20the%20lowest%20consuming%20layer.md). Defined in the lowest layer that can host it (core, alongside `OperationRegistry`); not in foundation (where it would have nothing to bind to). |
-| `sqlEmission` implementer | [`packages/2-sql/3-tooling/emitter/src/index.ts`](../../../packages/2-sql/3-tooling/emitter/src/index.ts) | The SQL family's implementation; tooling-layer package, depends on the SPI. |
+| `sqlEmission` implementer | [`packages/2-sql-family/3-tooling/emitter/src/index.ts`](../../../packages/2-sql-family/3-tooling/emitter/src/index.ts) | The SQL family's implementation; tooling-layer package, depends on the SPI. |
 | `mongoEmission` implementer | [`packages/2-mongo-family/3-tooling/emitter/src/index.ts`](../../../packages/2-mongo-family/3-tooling/emitter/src/index.ts) | The Mongo family's implementation; symmetric to `sqlEmission`. |
-| Family registration site | [`packages/2-sql/9-family/src/core/control-descriptor.ts`](../../../packages/2-sql/9-family/src/core/control-descriptor.ts) | Where the family wires its `EmissionSpi` implementer into the family descriptor; the framework consumes via this descriptor. |
+| Family registration site | [`packages/2-sql-family/9-family/src/core/control-descriptor.ts`](../../../packages/2-sql-family/9-family/src/core/control-descriptor.ts) | Where the family wires its `EmissionSpi` implementer into the family descriptor; the framework consumes via this descriptor. |
 
 ## Related ADRs
 

@@ -6,6 +6,7 @@ import {
 } from '../src/polymorphic-index-scope';
 
 const baseIndexFields: MongoIndexInput = {
+  name: 'severity_1',
   keys: [{ field: 'severity', direction: 1 }],
   unique: true,
 };
@@ -32,6 +33,7 @@ describe('applyPolymorphicScopeToMongoIndex', () => {
         expect(result.index.partialFilterExpression).toEqual({ type: 'bug' });
         expect(result.index.keys).toBe(baseIndex.keys);
         expect(result.index.unique).toBe(true);
+        expect(result.index.name).toBe('severity_1');
       }
     });
 

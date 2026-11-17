@@ -1,17 +1,21 @@
 import postgresAdapterControl, {
   createPostgresBuiltinCodecLookup,
-  PostgresControlAdapter,
 } from '@internal/adapter-postgres/control';
 import { asNamespaceId, type Contract, coreHash, profileHash } from '@internal/contract/types';
 import { type FieldStatementColumns, sqlTypeLookupsOf } from '@internal/family-sql/control';
+import type { DataType } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
   SqlStorage,
   type SqlStorageInput,
   type StorageTableInput,
 } from '@internal/sql-contract/types';
+import type { SqlColumnIRInput } from '@internal/sql-schema-ir/types';
 import postgresTargetControl from '@internal/target-postgres/control';
-import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
+import {
+  createPostgresBuiltinDataTypeLookup,
+  postgresDataTypes,
+} from '@internal/target-postgres/data-types';
 import { buildPostgresPlanDiff } from '@internal/target-postgres/diff-database-schema';
 import { coalesceSubtreeIssues, planIssues } from '@internal/target-postgres/issue-planner';
 import type { CreateTableCall } from '@internal/target-postgres/op-factory-call';
@@ -27,8 +31,15 @@ import {
 } from '@internal/target-postgres/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
+import { introspectedColumn as introspectedColumnOver } from '../../../../packages/2-sql-family/1-core/contract/test/introspected-column';
+import { createTestPostgresControlAdapter } from '../../../../packages/3-targets/postgres/2-adapter/test/helpers/test-control-adapter';
 
-const testAdapter = new PostgresControlAdapter(
+const introspectedColumn = (
+  column: SqlColumnIRInput,
+  dataTypes: readonly DataType[] = postgresDataTypes,
+) => introspectedColumnOver(column, dataTypes);
+
+const testAdapter = createTestPostgresControlAdapter(
   createPostgresBuiltinCodecLookup(),
   createPostgresBuiltinDataTypeLookup(),
 );
@@ -64,6 +75,7 @@ function makeContract(
 
 /** An empty introspected tree — every table in `contract` surfaces as `not-found`. */
 const emptyRoot = new PostgresDatabaseSchemaNode({
+  extensions: undefined,
   namespaces: {},
   roles: [],
   existingSchemas: ['public'],
@@ -85,7 +97,7 @@ function planAgainst(
     readonly statementColumns?: FieldStatementColumns;
   } = {},
 ) {
-  const { issues } = buildPostgresPlanDiff({
+  const { issues, expected } = buildPostgresPlanDiff({
     contract,
     actualSchema: actual,
     frameworkComponents,
@@ -93,12 +105,14 @@ function planAgainst(
   const coalesced = coalesceSubtreeIssues(issues);
   return planIssues({
     issues: coalesced,
+    startTree: actual,
+    endTree: expected,
+    foreignKeyDropAuthority: () => 'allowed' as const,
     toContract: contract,
     fromContract: options.fromContract ?? null,
     schemaName: 'public',
     codecHooks: new Map(),
     types: sqlTypeLookupsOf(frameworkComponents),
-    storageTypes: contract.storage.types ?? {},
     frameworkComponents,
     ...(options.strategies !== undefined ? { strategies: options.strategies } : {}),
     ...(options.statementColumns !== undefined
@@ -177,6 +191,7 @@ describe('planIssues', () => {
 
     function actualWithoutStatus(): PostgresDatabaseSchemaNode {
       return new PostgresDatabaseSchemaNode({
+        extensions: undefined,
         namespaces: {
           public: new PostgresNamespaceSchemaNode({
             schemaName: 'public',
@@ -184,12 +199,11 @@ describe('planIssues', () => {
               user: new PostgresTableSchemaNode({
                 name: 'user',
                 columns: {
-                  id: {
+                  id: introspectedColumn({
                     name: 'id',
-                    nativeType: 'uuid',
+                    typeText: 'uuid',
                     nullable: false,
-                    resolvedNativeType: 'uuid',
-                  },
+                  }),
                 },
                 primaryKey: { columns: ['id'] },
                 foreignKeys: [],
@@ -253,6 +267,7 @@ describe('planIssues', () => {
         },
       });
       const actual = new PostgresDatabaseSchemaNode({
+        extensions: undefined,
         namespaces: {
           public: new PostgresNamespaceSchemaNode({
             schemaName: 'public',
@@ -260,18 +275,16 @@ describe('planIssues', () => {
               user: new PostgresTableSchemaNode({
                 name: 'user',
                 columns: {
-                  id: {
+                  id: introspectedColumn({
                     name: 'id',
-                    nativeType: 'uuid',
+                    typeText: 'uuid',
                     nullable: false,
-                    resolvedNativeType: 'uuid',
-                  },
-                  email: {
+                  }),
+                  email: introspectedColumn({
                     name: 'email',
-                    nativeType: 'text',
+                    typeText: 'text',
                     nullable: true,
-                    resolvedNativeType: 'text',
-                  },
+                  }),
                 },
                 primaryKey: { columns: ['id'] },
                 foreignKeys: [],
@@ -304,8 +317,9 @@ describe('planIssues', () => {
   });
 
   describe('typeChange call strategy', () => {
-    function actualWithAge(nativeType: string, codecId: string): PostgresDatabaseSchemaNode {
+    function actualWithAge(typeText: string, codecId: string): PostgresDatabaseSchemaNode {
       return new PostgresDatabaseSchemaNode({
+        extensions: undefined,
         namespaces: {
           public: new PostgresNamespaceSchemaNode({
             schemaName: 'public',
@@ -313,19 +327,17 @@ describe('planIssues', () => {
               user: new PostgresTableSchemaNode({
                 name: 'user',
                 columns: {
-                  id: {
+                  id: introspectedColumn({
                     name: 'id',
-                    nativeType: 'uuid',
+                    typeText: 'uuid',
                     nullable: false,
-                    resolvedNativeType: 'uuid',
-                  },
-                  age: {
+                  }),
+                  age: introspectedColumn({
                     name: 'age',
-                    nativeType,
+                    typeText,
                     nullable: false,
-                    resolvedNativeType: nativeType,
                     codecRef: { codecId },
-                  },
+                  }),
                 },
                 primaryKey: { columns: ['id'] },
                 foreignKeys: [],
@@ -437,6 +449,7 @@ describe('planIssues', () => {
   describe('index missing on an existing table', () => {
     function actualDocWithoutIndex(): PostgresDatabaseSchemaNode {
       return new PostgresDatabaseSchemaNode({
+        extensions: undefined,
         namespaces: {
           public: new PostgresNamespaceSchemaNode({
             schemaName: 'public',
@@ -444,18 +457,16 @@ describe('planIssues', () => {
               doc: new PostgresTableSchemaNode({
                 name: 'doc',
                 columns: {
-                  id: {
+                  id: introspectedColumn({
                     name: 'id',
-                    nativeType: 'uuid',
+                    typeText: 'uuid',
                     nullable: false,
-                    resolvedNativeType: 'uuid',
-                  },
-                  body: {
+                  }),
+                  body: introspectedColumn({
                     name: 'body',
-                    nativeType: 'text',
+                    typeText: 'text',
                     nullable: false,
-                    resolvedNativeType: 'text',
-                  },
+                  }),
                 },
                 primaryKey: { columns: ['id'] },
                 foreignKeys: [],
@@ -602,6 +613,7 @@ describe('planIssues', () => {
         },
       });
       const actual = new PostgresDatabaseSchemaNode({
+        extensions: undefined,
         namespaces: {
           public: new PostgresNamespaceSchemaNode({
             schemaName: 'public',
@@ -609,12 +621,11 @@ describe('planIssues', () => {
               user: new PostgresTableSchemaNode({
                 name: 'user',
                 columns: {
-                  id: {
+                  id: introspectedColumn({
                     name: 'id',
-                    nativeType: 'uuid',
+                    typeText: 'uuid',
                     nullable: false,
-                    resolvedNativeType: 'uuid',
-                  },
+                  }),
                 },
                 primaryKey: { columns: ['id'] },
                 foreignKeys: [],
@@ -662,6 +673,7 @@ describe('planIssues', () => {
         },
       });
       const actual = new PostgresDatabaseSchemaNode({
+        extensions: undefined,
         namespaces: {
           public: new PostgresNamespaceSchemaNode({
             schemaName: 'public',
@@ -669,12 +681,11 @@ describe('planIssues', () => {
               user: new PostgresTableSchemaNode({
                 name: 'user',
                 columns: {
-                  id: {
+                  id: introspectedColumn({
                     name: 'id',
-                    nativeType: 'uuid',
+                    typeText: 'uuid',
                     nullable: false,
-                    resolvedNativeType: 'uuid',
-                  },
+                  }),
                 },
                 primaryKey: { columns: ['id'] },
                 foreignKeys: [],
@@ -779,6 +790,7 @@ describe('planIssues', () => {
         auth: { entries: { table: { user: userTable } } },
       });
       const actual = new PostgresDatabaseSchemaNode({
+        extensions: undefined,
         namespaces: {},
         roles: [],
         existingSchemas: ['public'],
@@ -799,6 +811,7 @@ describe('planIssues', () => {
     it('emits a CREATE SCHEMA IF NOT EXISTS DDL statement', async () => {
       const toContract = makeNamespacedContract({ auth: { entries: { table: {} } } });
       const actual = new PostgresDatabaseSchemaNode({
+        extensions: undefined,
         namespaces: {},
         roles: [],
         existingSchemas: ['public'],
@@ -849,6 +862,7 @@ describe('planIssues', () => {
         meta: {},
       };
       const actual = new PostgresDatabaseSchemaNode({
+        extensions: undefined,
         namespaces: {},
         roles: [],
         existingSchemas: ['public', 'tenant_a', 'tenant_b'],

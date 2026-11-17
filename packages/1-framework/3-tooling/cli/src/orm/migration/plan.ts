@@ -9,6 +9,7 @@ import { createControlClient } from '../../control-api/client';
 import type { ContractSpaceSeedPhaseRecord } from '../../control-api/operations/contract-space-seed-phase';
 import type { MigrationPlanResult } from '../../control-api/operations/migration-plan';
 import { executeMigrationPlanCommand } from '../../control-api/operations/migration-plan';
+import { renamedAndDeleted } from '../../control-api/statements/resolve-statements';
 import { statementFlag } from '../../control-api/statements/statement-flag';
 import { convertAndDelete, isStatementVerb } from '../../control-api/statements/statement-text';
 import type { CreateControlClient } from '../../control-api/types';
@@ -19,12 +20,14 @@ import {
 } from '../../utils/contract-ref-forms';
 import { previewBlockHeader } from '../../utils/formatters/migrations';
 import { runCommandAction } from '../../utils/next-actions';
+import { plannerWarningText } from '../../utils/planner-warning-text';
 import {
   type CliInvocation,
   cliCommand,
   cliInvocation,
   selfEmitCommand,
 } from '../../utils/printed-command';
+import { valueLines } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
 import { promptPlanQuestions } from '../plan-question-prompt';
@@ -162,13 +165,16 @@ function temporaryValueBlocks(result: MigrationPlanResult): readonly Block[] {
     ({ field, value }): Block => ({
       kind: 'summary',
       status: 'warn',
-      text: `Existing rows get ${value} in field "${field}". To choose the value, plan again with ${statementFlag({ verb: 'backfill', text: field })}.`,
+      text: `Field "${field}" gets the temporary value ${value} where existing data has none. To choose the value, plan again with ${statementFlag({ verb: 'backfill', text: field })}.`,
     }),
   );
 }
 
 function warningBlocks(result: MigrationPlanResult): readonly Block[] {
-  return (result.warnings ?? []).map((text): Block => ({ kind: 'summary', status: 'warn', text }));
+  return [
+    ...(result.warnings ?? []),
+    ...(result.plannerWarnings ?? []).map(plannerWarningText),
+  ].map((text): Block => ({ kind: 'summary', status: 'warn', text }));
 }
 
 function planBlocks(result: MigrationPlanResult, migrationsRelative: string): readonly Block[] {
@@ -198,7 +204,11 @@ function planBlocks(result: MigrationPlanResult, migrationsRelative: string): re
   }
   return [
     ...warningBlocks(result),
-    { kind: 'summary', status: 'ok', text: result.summary },
+    {
+      kind: 'summary',
+      status: result.operations.length === 0 ? 'warn' : 'ok',
+      text: result.summary,
+    },
     ...originNoticeBlocks(result),
     ...operationBlocks(result),
     ...temporaryValueBlocks(result),
@@ -206,6 +216,17 @@ function planBlocks(result: MigrationPlanResult, migrationsRelative: string): re
     outcome,
     ...previewBlocks(result),
   ];
+}
+
+function writtenDirs(result: MigrationPlanResult, migrationsRelative: string): readonly string[] {
+  const dirs = [
+    ...(result.baselineDir === undefined ? [] : [result.baselineDir]),
+    ...(result.dir === undefined ? [] : [result.dir]),
+    ...result.emittedExtensionDirs.map((entry) =>
+      join(migrationsRelative, entry.spaceId, entry.dirName),
+    ),
+  ];
+  return [...new Set(dirs)];
 }
 
 function planNextActions(
@@ -227,13 +248,7 @@ function planNextActions(
       ),
     ];
   }
-  const written = [
-    ...(result.baselineDir === undefined ? [] : [result.baselineDir]),
-    ...(result.dir === undefined ? [] : [result.dir]),
-    ...result.emittedExtensionDirs.map((entry) =>
-      join(migrationsRelative, entry.spaceId, entry.dirName),
-    ),
-  ];
+  const written = writtenDirs(result, migrationsRelative);
   if (written.length === 0) {
     return [];
   }
@@ -254,7 +269,7 @@ function planPresentations(inputs: {
   readonly invocation: CliInvocation;
 }): Presentations {
   return {
-    stdout: () => [],
+    stdout: () => valueLines(writtenDirs(inputs.document, inputs.migrationsRelative)),
     human: (): readonly Block[] => [
       {
         kind: 'fields',
@@ -333,6 +348,12 @@ export function createMigrationPlanCommand(createClient: CreateControlClient) {
       if (conflicting !== undefined) {
         return notOk(normalizeError(errorConvertAndDelete(conflicting)));
       }
+      const contradicted = renamedAndDeleted(
+        ctx.statements
+          .values()
+          .flatMap(({ verb, text }) => (isStatementVerb(verb) ? [{ verb, text }] : [])),
+      );
+      if (contradicted !== undefined) return notOk(normalizeError(contradicted));
       const planned = await executeMigrationPlanCommand(
         {
           config: ctx.config,
@@ -345,7 +366,7 @@ export function createMigrationPlanCommand(createClient: CreateControlClient) {
           statements: (['rename', 'convert', 'backfill'] as const).flatMap((verb) =>
             ctx.statements.take(verb).map(({ text }) => ({ verb, text })),
           ),
-          answerQuestions: promptPlanQuestions(ctx.prompt),
+          answerQuestions: promptPlanQuestions(ctx.prompt, ctx.statements),
           client: createClient({
             family: ctx.config.family,
             target: ctx.config.target,

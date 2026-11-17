@@ -26,7 +26,7 @@ Legend:
 | `createAll` | ✅ | ✅ | — | `test/integration/test/sql-orm-client/create.test.ts`; `test/e2e/framework/test/sqlite/orm.test.ts` (`createAll`) |
 | `createAndCount` | ✅ | 🟡 | — | `test/integration/test/sql-orm-client/create.test.ts` (`createAndCount`) |
 | `update` | ✅ | ✅ | — | `test/integration/test/sql-orm-client/update.test.ts`; `test/e2e/framework/test/sqlite/orm.test.ts` (`update`) |
-| Empty-data `update` returns the matched row | ❌ | 🟡 | — | `test/integration/test/ports/prisma/functional/extended-where/extended-where.test.ts` (`update with where 1 unique (PK)`) |
+| Empty-data `update` returns the matched row | ✅ | 🟡 | — | `test/integration/test/ports/prisma/functional/extended-where/extended-where.test.ts` (`update with where 1 unique (PK)`) |
 | `updateAll` | ✅ | 🟡 | — | `test/integration/test/sql-orm-client/update.test.ts` (`updateAll`) |
 | `updateAndCount` | ✅ | ✅ | — | `test/integration/test/sql-orm-client/update.test.ts` (`updateAndCount`, one write statement); `test/integration/test/sql-orm-client/count-terminal-interleaving.test.ts` (SQLite real-driver write-derived count) |
 | `delete` | ✅ | 🟡 | — | `test/integration/test/sql-orm-client/delete.test.ts` (`delete`) |

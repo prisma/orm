@@ -185,6 +185,36 @@ namespace blog {
     expect(result.symbolTable.namespaces['blog']?.compositeTypes).toEqual({});
   });
 
+  it('merges the bindings of several types blocks', () => {
+    const result = build(`types {
+  Email = String
+}
+model User { id Int }
+types {
+  Slug = String
+}`);
+    expect(result.diagnostics).toEqual([]);
+    expect(Object.keys(result.symbolTable.namedTypes)).toEqual(['Email', 'Slug']);
+  });
+
+  it('keeps the first binding and diagnoses a name repeated in a later types block', () => {
+    const result = build(`types {
+  Email = String
+}
+types {
+  Email = Int
+}`);
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'PSL_DUPLICATE_DECLARATION',
+        message: 'Duplicate declaration of "Email"',
+        filename: 'test.psl',
+        range: { start: { line: 4, character: 2 }, end: { line: 4, character: 7 } },
+      },
+    ]);
+    expect(result.symbolTable.namedTypes['Email']?.baseType).toBe('String');
+  });
+
   it('retains every authored namespace node and span, including empty blocks', () => {
     const result = build(`namespace blog {}
 namespace auth {}
@@ -561,7 +591,7 @@ describe('buildSymbolTable() — resolved field shape', () => {
     const result = build(
       [
         'model M {',
-        '  id String @default(uuid(7))',
+        '  id String @onCreate(uuid(7))',
         '  @@index([firstName, lastName])',
         '  @@index([title], options: { tokenizer: "ngram" })',
         '}',
@@ -569,7 +599,7 @@ describe('buildSymbolTable() — resolved field shape', () => {
     );
     const model = result.symbolTable.defaultNamespace.models['M'];
 
-    const fnArg = model?.fields['id']?.attributes.find((a) => a.name === 'default')?.args[0];
+    const fnArg = model?.fields['id']?.attributes.find((a) => a.name === 'onCreate')?.args[0];
     expect(fnArg?.value).toBe('uuid(7)');
 
     const arrayArg = model?.attributes[0]?.args[0];

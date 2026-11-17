@@ -9,11 +9,18 @@ export type {
 export { assertAnnotationsApplicable, defineAnnotation } from '../annotations';
 export type {
   ActivityChild,
+  ActivityChildSlot,
   ActivityParent,
   ActivityStateStore,
 } from '../execution/activity-lifecycle';
-export { createStateStore } from '../execution/activity-lifecycle';
+export { createContextBeneath, createStateStore } from '../execution/activity-lifecycle';
 export { AsyncIterableResult } from '../execution/async-iterable-result';
+export type {
+  ClientActivityEnd,
+  ClientActivityOptions,
+  ClientActivityRun,
+} from '../execution/client-activity';
+export { startClientActivity } from '../execution/client-activity';
 export type {
   AppliedMutationDefault,
   GeneratorStability,
@@ -42,22 +49,30 @@ export {
   runtimeError,
 } from '../execution/runtime-error';
 export type {
+  Activity,
   ActivityBase,
   ActivityContext,
   ActivityContextFields,
   ActivityEndedResult,
   ActivityFinalizedResult,
+  ActivityInterceptResult,
   ActivityObserver,
+  ClientActivity,
+  ClientActivityEnded,
+  ClientActivityKind,
+  ClientActivityRegistry,
+  ClientActivityResult,
   CrossFamilyMiddleware,
   ExecuteInterceptResult,
   ParamRefMutator,
   QueryInterceptResult,
-  RuntimeActivity,
   RuntimeExecuteOptions,
   RuntimeExecutor,
   RuntimeLog,
   RuntimeMiddleware,
+  RuntimeMode,
   RuntimeStatementStats,
+  StartActivity,
   StatementActivity,
   StatementEnded,
   TransactionActivity,

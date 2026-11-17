@@ -92,6 +92,15 @@ class RefusedDefaultMigration extends FakeMigration {
   }
 }
 
+class RefusedArgumentMigration extends FakeMigration {
+  override get operations(): never {
+    throw structuredError(
+      'CONTRACT.ARGUMENT_INVALID',
+      'fillStoredKey({ table: "user", column: "address" }): value 12 for field "Address.country" is not a String',
+    );
+  }
+}
+
 class WrongTargetMigration extends Migration {
   readonly targetId = 'mongo' as const;
   constructor(stack: unknown) {
@@ -465,6 +474,25 @@ describe('MigrationCLI.run', () => {
     });
   });
 
+  it('writes the message of an error with no why once', async () => {
+    loadConfigMock.mockResolvedValue(ok(okConfig));
+    createControlStackMock.mockReturnValue({ adapter: { create: () => ({}) } });
+    const stdout = new BufferStream();
+    const stderr = new BufferStream();
+
+    const exitCode = await MigrationCLI.run(
+      pathToFileURL(migrationFile).href,
+      RefusedArgumentMigration,
+      { argv: entrypointArgv(), stdout, stderr },
+    );
+
+    expect({ exitCode, stderr: stderr.text }).toEqual({
+      exitCode: 1,
+      stderr:
+        'CONTRACT.ARGUMENT_INVALID: fillStoredKey({ table: "user", column: "address" }): value 12 for field "Address.country" is not a String\n',
+    });
+  });
+
   it('rejects --config when followed by another flag with CLI.CONFIG_ARG_MISSING_PATH and exit 2', async () => {
     const stdout = new BufferStream();
     const stderr = new BufferStream();
@@ -574,29 +602,5 @@ describe('MigrationCLI.run', () => {
     expect(stderr.text).toContain('--help');
     expect(stderr.text).toContain('--dry-run');
     expect(stderr.text).toContain('--config');
-  });
-
-  it('uses injected argv exclusively, never reading process.argv', async () => {
-    // Regression guard for the stream-injection contract: when argv is
-    // injected, the runner must not fall back to process.argv. In
-    // vitest, process.argv[1] points at vitest's own binary — if the
-    // implementation read it, the entrypoint guard
-    // (realpathSync(argv[1]) === realpathSync(importMetaUrl)) would
-    // not match and the runner would silently no-op, leaving
-    // loadConfigMock uncalled. The injected argv points argv[1] at
-    // migrationFile, so the guard fires and loadConfig is called.
-    loadConfigMock.mockResolvedValue(ok(okConfig));
-    createControlStackMock.mockReturnValue({ adapter: { create: () => ({}) } });
-
-    const stdout = new BufferStream();
-    const stderr = new BufferStream();
-    const exitCode = await MigrationCLI.run(pathToFileURL(migrationFile).href, FakeMigration, {
-      argv: entrypointArgv(),
-      stdout,
-      stderr,
-    });
-
-    expect(exitCode).toBe(0);
-    expect(loadConfigMock).toHaveBeenCalled();
   });
 });

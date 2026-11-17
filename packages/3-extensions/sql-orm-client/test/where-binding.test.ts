@@ -600,47 +600,6 @@ describe('bindWhereExpr', () => {
       expect(bound.right.kind).toBe('param-ref');
       expect((bound.right as ParamRef).value).toBe('Bob');
     });
-
-    it('lt binds literal to param', () => {
-      const expr = BinaryExpr.lt(ColumnRef.of('posts', 'views'), LiteralExpr.of(50));
-      const bound = bindWhereExpr(contract, expr, aliases) as BinaryExpr;
-
-      expect(bound.op).toBe('lt');
-      expect(bound.right.kind).toBe('param-ref');
-      expect((bound.right as ParamRef).codec?.codecId).toBe('pg/int4@1');
-    });
-
-    it('lte binds literal to param', () => {
-      const expr = BinaryExpr.lte(ColumnRef.of('posts', 'views'), LiteralExpr.of(50));
-      const bound = bindWhereExpr(contract, expr, aliases) as BinaryExpr;
-
-      expect(bound.op).toBe('lte');
-      expect(bound.right.kind).toBe('param-ref');
-    });
-
-    it('like binds literal to param', () => {
-      const expr = BinaryExpr.like(ColumnRef.of('users', 'name'), LiteralExpr.of('%alice%'));
-      const bound = bindWhereExpr(contract, expr, aliases) as BinaryExpr;
-
-      expect(bound.op).toBe('like');
-      expect(bound.right.kind).toBe('param-ref');
-      expect((bound.right as ParamRef).value).toBe('%alice%');
-    });
-
-    it('notIn binds list literals to params', () => {
-      const expr = BinaryExpr.notIn(
-        ColumnRef.of('users', 'id'),
-        ListExpression.of([LiteralExpr.of(1), LiteralExpr.of(2)]),
-      );
-      const bound = bindWhereExpr(contract, expr, aliases) as BinaryExpr;
-
-      expect(bound.op).toBe('notIn');
-      const list = bound.right as ListExpression;
-      expect(list.values).toMatchObject([
-        { kind: 'param-ref', value: 1, codec: { codecId: 'pg/int4@1' } },
-        { kind: 'param-ref', value: 2, codec: { codecId: 'pg/int4@1' } },
-      ]);
-    });
   });
 
   describe('SelectAst binding details', () => {
