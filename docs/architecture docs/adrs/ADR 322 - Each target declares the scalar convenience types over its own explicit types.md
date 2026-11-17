@@ -64,7 +64,7 @@ MongoDB's explicit types were already named after BSON types, so most rows only 
 
 - On MongoDB a user writes the same scalar names as on PostgreSQL and gets a working field. The explicit types say exactly which BSON type stores the value.
 - No MongoDB contract changes. A schema that writes `Int64` warns and emits the same contract. A TypeScript contract that calls `type.Int64()` stops compiling until it is rewritten.
-- Messages that name a type for the user now name the convenience type, such as `type.BigInt()` for the removed `field.int64()` helper and "declare the field `BigInt` or `Bson`" in a refused `Json` write.
+- The hints for the removed `field.*` helpers and the refusal of a `Json` write now name the convenience type, such as `type.BigInt()` for the removed `field.int64()` helper and "declare the field `BigInt` or `Bson`". A message about a deprecated name names its replacement, which is the explicit type.
 - `Int` on MongoDB is a 32-bit BSON int. Prisma 6 stored a MongoDB `Int` as a BSON long, so a field ported from a Prisma 6 schema by hand as `Int` holds longs, and the type for it is `BigInt(as: number)`. Before this change a hand-ported `Int` warned; now it is a recommended name and does not. The Prisma 6 schema reader already reads a Prisma 6 `Int` as `Int64Number`, the explicit type `BigInt(as: number)` becomes.
 - `BigInt`, `Bytes` and `Decimal`, which MongoDB refused before, now resolve, so the message that mapped them to `Int64`, `Binary` and `Decimal128` is removed.
 

@@ -910,7 +910,7 @@ An attribute or block argument is not written in a form its specification accept
 
 ### PSL_DEPRECATED_SCALAR_NAME
 
-A warning, not an error: a Mongo schema types a field with a deprecated scalar name, `Int`, `Float` or `Boolean`: `Scalar type "<old>" is deprecated and will be removed; use "<new>".` Reported at the type through the contract source's `reportWarning`; `prisma contract emit` prints it and still writes the contract, which is the same as the new name gives, and the language server shows it with warning severity. Rename the type to `Int32`, `Double` or `Bool`.
+A warning, not an error: a schema writes a deprecated type name: `Scalar type "<old>" is deprecated and will be removed; use "<new>".` It fires wherever the name is written: in a field, in a value object member and as the base of a `types {}` alias, with or without arguments. Reported at the type through the contract source's `reportWarning`; `prisma contract emit` prints it and still writes the contract, which is the same as the new name gives, and the language server shows it with warning severity. Write the name the message gives. On MongoDB the deprecated name is `Int64`; write `Int64BigInt`, or the convenience type `BigInt`. On the SQL targets the deprecated names are listed in the [scalar types reference](./scalar-types.md).
 
 ### PSL_UNRESOLVED_REFERENCE
 
