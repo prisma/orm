@@ -113,7 +113,11 @@ describe('restateTypeDeclarations', () => {
     };
 
     expect(() => restateTypeDeclarations(descriptor, MODULE)).toThrow(
-      "Two type declarations import CodecTypes, from '@acme/target/codec-types' and from '@acme/adapter/codec-types'; restated to name '@acme/orm-db/generated-types', both would import the same type",
+      expect.objectContaining({
+        code: 'CONFIG.VALIDATION_FAILED',
+        message:
+          "Two type declarations import CodecTypes, from '@acme/target/codec-types' and from '@acme/adapter/codec-types'; restated to name '@acme/orm-db/generated-types', both would import the same type",
+      }),
     );
   });
 

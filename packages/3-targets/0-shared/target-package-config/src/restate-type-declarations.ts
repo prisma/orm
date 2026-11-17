@@ -2,6 +2,7 @@ import type { ComponentMetadata } from '@internal/framework-components/component
 import type { TypesImportSpec } from '@internal/framework-components/emission';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
+import { structuredError } from '@internal/utils/structured-error';
 
 type ComponentTypes = NonNullable<ComponentMetadata['types']>;
 type CodecTypes = NonNullable<ComponentTypes['codecTypes']>;
@@ -34,8 +35,12 @@ function refuseNamesFromTwoModules(specs: readonly TypesImportSpec[], module: st
   for (const spec of specs) {
     const earlier = moduleByName.get(spec.named);
     if (earlier !== undefined && earlier !== spec.package) {
-      throw new Error(
+      throw structuredError(
+        'CONFIG.VALIDATION_FAILED',
         `Two type declarations import ${spec.named}, from '${earlier}' and from '${spec.package}'; restated to name '${module}', both would import the same type`,
+        {
+          fix: `Export the two types from '${module}' under different names, and name each declaration's type by its own name.`,
+        },
       );
     }
     moduleByName.set(spec.named, spec.package);
