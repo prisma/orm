@@ -149,22 +149,32 @@ describe('sameKindOfDocumentIn', () => {
     const before = validatorDocumentShapesOf({ bsonType: 'object', anyOf: [user, task] });
     const after = validatorDocumentShapesOf({ bsonType: 'object', anyOf: [user, task] });
 
-    expect(after.map((shape) => sameKindOfDocumentIn(before, shape)?.key)).toEqual([
-      '0',
-      '1:["type","bug"]',
+    expect(
+      after.map((shape) => {
+        const found = sameKindOfDocumentIn(before, shape);
+        return [found?.shape.key, found?.matchedBy];
+      }),
+    ).toEqual([
+      ['0', 'key'],
+      ['1:["type","bug"]', 'key'],
     ]);
   });
 
   it('finds the root a variant comes from when that root had no variants', () => {
     const [bug] = validatorDocumentShapesOf(task);
 
-    expect(sameKindOfDocumentIn(validatorDocumentShapesOf(plainTask), bug!)?.key).toEqual('0');
+    const found = sameKindOfDocumentIn(validatorDocumentShapesOf(plainTask), bug!);
+
+    expect([found?.shape.key, found?.matchedBy]).toEqual(['0', 'root']);
   });
 
   it('finds the variant of the same root with the same discriminator value when the discriminator field changes', () => {
-    expect(sameKindOfDocumentIn(validatorDocumentShapesOf(task), bugByKind!)?.key).toEqual(
+    const found = sameKindOfDocumentIn(validatorDocumentShapesOf(task), bugByKind!);
+
+    expect([found?.shape.key, found?.matchedBy]).toEqual([
       '0:["type","bug"]',
-    );
+      'discriminatorValue',
+    ]);
   });
 
   it('finds nothing for a variant whose value the root did not have', () => {

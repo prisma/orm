@@ -27,6 +27,7 @@ import {
   runDbVerify,
   runMigrate,
   runMigrationPlan,
+  selfEmitMigration,
 } from '../utils/journey-test-helpers';
 import { writeMongoPslConfig } from '../utils/journey-workspace-helpers';
 
@@ -74,6 +75,7 @@ const KIND_BESIDE_TYPE = BEFORE.replace(
   '  type String\n\n  @@discriminator(type)',
   '  type String\n  kind String\n\n  @@discriminator(kind)',
 );
+const SEVERITY_REQUIRED = BEFORE.replace('severity String?', 'severity String');
 const PLAIN = `// use prisma-8
 
 model Task {
@@ -579,6 +581,105 @@ describe('Journeys (MongoDB): variant statements', {
     rmSync(join(ctx.testDir, 'migrations/app', stoppedDir), { recursive: true, force: true });
     const replanned = await runMigrationPlan(ctx, (command ?? '').split(' '));
     expect(replanned.exitCode, `V10.07: ${replanned.stdout}\n${replanned.stderr}`).toBe(0);
+  });
+
+  /** Writes `update` into the slot of the backfill of `Task.type` in the latest migration, runs the file, and applies it with `db migrate`. */
+  async function fillTypeBackfillAndMigrate(ctx: JourneyContext, update: string, label: string) {
+    const migrationDir = join(ctx.testDir, 'migrations/app', latestMigrationDirName(ctx));
+    const path = join(migrationDir, 'migration.ts');
+    writeFileSync(
+      path,
+      readFileSync(path, 'utf-8').replace(/placeholder\(['"]Task\.type:update['"]\)/, update),
+    );
+    const emitted = await selfEmitMigration(ctx, [
+      '--dir',
+      migrationDir,
+      '--config',
+      ctx.configPath,
+    ]);
+    expect(emitted.exitCode, `${label}: node migration.ts: ${emitted.stderr}`).toBe(0);
+    await expectMigrationTsReproducesOps(ctx, migrationDir, label);
+    const applied = await runMigrate(ctx);
+    expect(applied.exitCode, `${label}: db migrate: ${applied.stdout}\n${applied.stderr}`).toBe(0);
+  }
+
+  const NEW_VARIANT_FIELD_ADVICE =
+    'The update you write for --backfill Task.type can also set \\"severity\\" in the documents it gives value \\"bug\\", such as { $set: { type: \\"bug\\", severity: <value> } }.';
+  const SET_BOTH = "{ $set: { type: 'bug', severity: 'low' } }";
+  const BUGS = [
+    { title: 'a', type: 'bug', severity: 'low' },
+    { title: 'b', type: 'bug', severity: 'low' },
+  ];
+
+  it('V11: a first discriminator whose new variant has a required field: the stop names --backfill Task.type only, and its update setting both fields applies, under db update and under db migrate', async () => {
+    const updated = setup('mongo_v11_update');
+    await emit(updated, PLAIN, 'V11.01');
+    expect((await runDbUpdate(updated, ['--no-interactive'])).exitCode, 'V11.02').toBe(0);
+    await client
+      .db('mongo_v11_update')
+      .collection('tasks')
+      .insertMany([{ title: 'a' }, { title: 'b' }]);
+    await emit(updated, SEVERITY_REQUIRED, 'V11.03');
+    const stopped = engineError(await runDbUpdate(updated, ['--no-interactive', '--json']));
+    const steps = stopped?.nextActions?.map(({ label }) => label) ?? [];
+    const command = /`[^`]*migration plan ([^`]*)`/.exec(steps[0] ?? '')?.[1];
+    expect({
+      code: stopped?.code,
+      advice: JSON.stringify(stopped ?? {}).includes(NEW_VARIANT_FIELD_ADVICE),
+      command,
+    }).toEqual({
+      code: 'MIGRATION.PRECHECK_FAILED',
+      advice: true,
+      command: expect.stringMatching(/^(--from \S+ )?--backfill Task\.type$/),
+    });
+    const planned = await runMigrationPlan(updated, (command ?? '').split(' '));
+    expect(planned.exitCode, `V11.04: ${planned.stdout}\n${planned.stderr}`).toBe(0);
+    await fillTypeBackfillAndMigrate(updated, SET_BOTH, 'V11.05');
+    expect(await documents('mongo_v11_update')).toEqual(BUGS);
+    await verifiedAndSettled(updated, 'mongo_v11_update', 'V11.06', async () => {
+      const further = await runDbUpdate(updated, ['--dry-run', '--no-interactive', '--json']);
+      return parseJsonOutput<{ plan: { operations: readonly unknown[] } }>(further).plan.operations;
+    });
+
+    const migrated = setup('mongo_v11_migrate');
+    await emit(migrated, PLAIN, 'V11.11');
+    expect((await runMigrationPlan(migrated, ['--name', 'initial'])).exitCode, 'V11.12').toBe(0);
+    expect((await runMigrate(migrated)).exitCode, 'V11.13').toBe(0);
+    const origin = latestMigrationDirName(migrated);
+    await client
+      .db('mongo_v11_migrate')
+      .collection('tasks')
+      .insertMany([{ title: 'a' }, { title: 'b' }]);
+    await emit(migrated, SEVERITY_REQUIRED, 'V11.14');
+    expect(
+      (await runMigrationPlan(migrated, ['--name', 'disc', '--from', origin])).exitCode,
+      'V11.15',
+    ).toBe(0);
+    const stoppedDir = latestMigrationDirName(migrated);
+    const failure = engineError(await runMigrate(migrated, ['--json']));
+    const replan = /`[^`]*migration plan (--from \S+ --name disc --backfill Task\.type)`/.exec(
+      failure?.nextActions?.map(({ label }) => label).join('\n') ?? '',
+    )?.[1];
+    expect({
+      code: failure?.code,
+      advice: JSON.stringify(failure ?? {}).includes(NEW_VARIANT_FIELD_ADVICE),
+      replan,
+    }).toEqual({
+      code: 'MIGRATION.PRECHECK_FAILED',
+      advice: true,
+      replan: expect.stringContaining('--backfill Task.type'),
+    });
+    rmSync(join(migrated.testDir, 'migrations/app', stoppedDir), { recursive: true, force: true });
+    const replanned = await runMigrationPlan(migrated, (replan ?? '').split(' '));
+    expect(replanned.exitCode, `V11.16: ${replanned.stdout}\n${replanned.stderr}`).toBe(0);
+    await fillTypeBackfillAndMigrate(migrated, SET_BOTH, 'V11.17');
+    expect(await documents('mongo_v11_migrate')).toEqual(BUGS);
+    await verifiedAndSettled(
+      migrated,
+      'mongo_v11_migrate',
+      'V11.18',
+      furtherMigrationPlan(migrated),
+    );
   });
 
   it('V9: a new discriminator beside the old one kept as a field is stopped by the document check, which names --backfill for the new one', async () => {

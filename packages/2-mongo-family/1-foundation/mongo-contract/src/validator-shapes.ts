@@ -125,6 +125,12 @@ export function validatorDocumentShapesOf(jsonSchema: unknown): readonly Validat
   });
 }
 
+/** A shape of another validator of the collection that describes the same kind of document, and which rule of `sameKindOfDocumentIn` found it. */
+export interface SameKindOfDocument {
+  readonly shape: ValidatorDocumentShape;
+  readonly matchedBy: 'key' | 'root' | 'discriminatorValue';
+}
+
 /**
  * The shape among `shapes`, from another validator of the collection, that describes the same kind
  * of document as `shape`: the one with the same key; for a variant, otherwise the root it comes
@@ -134,17 +140,30 @@ export function validatorDocumentShapesOf(jsonSchema: unknown): readonly Validat
 export function sameKindOfDocumentIn(
   shapes: readonly ValidatorDocumentShape[],
   shape: ValidatorDocumentShape,
-): ValidatorDocumentShape | undefined {
-  const sameKey = shapes.find(({ key }) => key === shape.key);
+): SameKindOfDocument | undefined {
+  const matched = (
+    found: ValidatorDocumentShape | undefined,
+    matchedBy: SameKindOfDocument['matchedBy'],
+  ) => (found === undefined ? undefined : { shape: found, matchedBy });
+  const sameKey = matched(
+    shapes.find(({ key }) => key === shape.key),
+    'key',
+  );
   if (sameKey !== undefined || shape.discriminator === undefined) return sameKey;
   const value = JSON.stringify(shape.discriminator.value);
   return (
-    shapes.find(({ key }) => key === rootKey(shape.rootIndex)) ??
-    shapes.find(
-      ({ rootIndex, discriminator }) =>
-        rootIndex === shape.rootIndex &&
-        discriminator !== undefined &&
-        JSON.stringify(discriminator.value) === value,
+    matched(
+      shapes.find(({ key }) => key === rootKey(shape.rootIndex)),
+      'root',
+    ) ??
+    matched(
+      shapes.find(
+        ({ rootIndex, discriminator }) =>
+          rootIndex === shape.rootIndex &&
+          discriminator !== undefined &&
+          JSON.stringify(discriminator.value) === value,
+      ),
+      'discriminatorValue',
     )
   );
 }

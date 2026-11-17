@@ -42,8 +42,10 @@ import {
   propertyBsonTypesOf,
   sameKindOfDocumentIn,
   selectedVariantOf,
+  type ValidatorDiscriminator,
   type ValidatorDocumentShape,
   validatorDocumentShapesOf,
+  validatorRootShapesOf,
 } from '@internal/mongo-contract';
 import type { MongoAdapter, MongoQueryable } from '@internal/mongo-lowering';
 import type {
@@ -403,23 +405,25 @@ function joinedList(items: readonly string[]): string {
  * The `--backfill` statements that let the user choose values for the fields a change makes
  * required, one for each field the planner would accept the statement for, as its rewrite refusals
  * and stored name rules say; and each such field as `rowsWithoutValue`, from which the caller gives
- * the steps that plan the change with them.
+ * the steps that plan the change with them. A field only new variants require gets its value in
+ * the update of the discriminator's backfill, or later by its own.
  */
 function backfillAdvice(
   contract: MongoContract,
   lacking: { readonly collection: string; readonly documents: ReadonlyMap<string, number> },
-  keys: ReadonlyMap<string, RequiredKey>,
+  touched: TouchedFields,
   rewriteCollection: RewriteCollection,
   operationIndex: number,
 ): {
   readonly sentences: readonly string[];
   readonly rowsWithoutValue: readonly RowsWithoutValue[];
 } {
+  const lackingFields = [...lacking.documents.keys()];
   const accepted = backfillStatements(
     contract,
     lacking.collection,
-    [...lacking.documents.keys()],
-    keys,
+    lackingFields.filter((field) => !touched.ofNewVariants.has(field)),
+    touched.keys,
     rewriteCollection,
   );
   if (accepted.length === 0) return { sentences: [], rowsWithoutValue: [] };
@@ -433,6 +437,15 @@ function backfillAdvice(
   return {
     sentences: [
       `To give ${quotedList(accepted.map(({ stored }) => stored))} values you choose, plan the change with ${statements.join(' ')}, as the steps to take describe.`,
+      ...newVariantFieldsAdvice(
+        contract,
+        lacking.collection,
+        lackingFields.flatMap((field) => {
+          const discriminator = touched.ofNewVariants.get(field);
+          return discriminator === undefined ? [] : [{ field, discriminator }];
+        }),
+        accepted,
+      ),
     ],
     rowsWithoutValue: [...subjects.values()].map(({ subject, documents }) => ({
       field: subject,
@@ -441,6 +454,42 @@ function backfillAdvice(
       operationIndex,
     })),
   };
+}
+
+/**
+ * How fields that only new variants require get values: the update of the discriminator's
+ * `--backfill` sets them where it gives a variant's value, or they stay optional until a later
+ * change, when their variant has documents, makes them required with their own `--backfill`.
+ */
+function newVariantFieldsAdvice(
+  contract: MongoContract,
+  collection: string,
+  fields: readonly { readonly field: string; readonly discriminator: ValidatorDiscriminator }[],
+  accepted: readonly { readonly stored: string; readonly statement: string }[],
+): readonly string[] {
+  const [first] = fields;
+  const discriminatorBackfill =
+    first === undefined
+      ? undefined
+      : accepted.find(({ stored }) => stored === first.discriminator.field);
+  if (first === undefined || discriminatorBackfill === undefined) return [];
+  const values = [...new Set(fields.map(({ discriminator }) => discriminator.value))];
+  const where = values.map((value) => {
+    const named = fields.filter(({ discriminator }) => discriminator.value === value);
+    return `${quotedList(named.map(({ field }) => field))} in the documents it gives value ${JSON.stringify(value)}`;
+  });
+  const example = fields
+    .filter(({ discriminator }) => discriminator.value === first.discriminator.value)
+    .map(({ field }) => `${field}: <value>`);
+  const later = fields.flatMap(({ field }) => {
+    const subject = fieldStoredAt(contract, collection, field);
+    return subject.kind === 'field' ? [`--backfill ${fieldStatementText(contract, subject)}`] : [];
+  });
+  const them = fields.length === 1 ? 'it' : 'them';
+  return [
+    `The update you write for --backfill ${discriminatorBackfill.statement} can also set ${joinedList(where)}, such as { $set: { ${first.discriminator.field}: ${JSON.stringify(first.discriminator.value)}, ${example.join(', ')} } }.`,
+    `Or keep ${quotedList(fields.map(({ field }) => field))} optional until a later change, which can make ${them} required${later.length === 0 ? '' : ` with ${later.join(' ')}`}.`,
+  ];
 }
 
 /** The `--backfill` statement of a nested key, by the field of a value object or an embedded model stored there, and that field, when the planner would accept it. */
@@ -567,6 +616,12 @@ interface TouchedFields {
   readonly retypes: readonly string[];
   /** Each nested key of `requires`, by its dotted path. */
   readonly keys: ReadonlyMap<string, RequiredKey>;
+  /**
+   * Each field of `requires` that only variants new to the collection require, with the
+   * discriminator of the first such variant. Its documents become that variant only when they get
+   * its discriminator value, so no `--backfill` of the field has documents to fill yet.
+   */
+  readonly ofNewVariants: ReadonlyMap<string, ValidatorDiscriminator>;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -649,14 +704,32 @@ function fieldsTouched(before: unknown, after: unknown): TouchedFields {
   const requires = new Set<string>();
   const retypes = new Set<string>();
   const keys = new Map<string, RequiredKey>();
+  const ofOldKinds = new Set<string>();
+  const ofNewVariants = new Map<string, ValidatorDiscriminator>();
+  const rootsAfter = validatorRootShapesOf(after);
   for (const shape of validatorDocumentShapesOf(after)) {
-    const previous: Pick<ValidatorDocumentShape, 'required' | 'properties'> | undefined =
-      shapesBefore.length === 0
-        ? { required: [], properties: {} }
-        : sameKindOfDocumentIn(shapesBefore, shape);
-    if (previous === undefined) continue;
+    const same = shapesBefore.length === 0 ? undefined : sameKindOfDocumentIn(shapesBefore, shape);
+    if (shapesBefore.length > 0 && same === undefined) continue;
+    const previous: Pick<ValidatorDocumentShape, 'required' | 'properties'> = same?.shape ?? {
+      required: [],
+      properties: {},
+    };
+    const ownedByRoot = new Set([
+      ...(rootsAfter[shape.rootIndex]?.required ?? []),
+      ...(shape.discriminator === undefined ? [] : [shape.discriminator.field]),
+    ]);
     for (const field of shape.required) {
-      if (field !== '_id' && !previous.required.includes(field)) requires.add(field);
+      if (field === '_id' || previous.required.includes(field)) continue;
+      requires.add(field);
+      if (
+        same?.matchedBy === 'root' &&
+        shape.discriminator !== undefined &&
+        !ownedByRoot.has(field)
+      ) {
+        if (!ofNewVariants.has(field)) ofNewVariants.set(field, shape.discriminator);
+      } else {
+        ofOldKinds.add(field);
+      }
     }
     for (const [field, schema] of Object.entries(shape.properties)) {
       if (!Object.hasOwn(previous.properties, field)) continue;
@@ -675,6 +748,7 @@ function fieldsTouched(before: unknown, after: unknown): TouchedFields {
     requires: [...requires].sort(),
     retypes: [...retypes].filter((field) => !requires.has(field)).sort(),
     keys,
+    ofNewVariants: new Map([...ofNewVariants].filter(([field]) => !ofOldKinds.has(field))),
   };
 }
 
@@ -1479,7 +1553,7 @@ export class MongoMigrationRunner {
               collection,
               documents: await this.documentsLacking(failed.source, collection, failing, touched),
             },
-            touched.keys,
+            touched,
             inPlace.rewrite,
             operationIndex,
           );

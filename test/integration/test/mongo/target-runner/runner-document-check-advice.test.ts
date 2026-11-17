@@ -1,6 +1,7 @@
 import { MongoCollection } from '@internal/mongo-contract';
 import { collMod } from '@internal/target-mongo/migration';
 import { timeouts } from '@repo/test-utils';
+import { ObjectId } from 'mongodb';
 import { describe, expect, it } from 'vitest';
 import { contract } from './runner-statements-fixtures';
 import { useUsersDatabase } from './runner-users-fixtures';
@@ -133,6 +134,84 @@ describe('MongoMigrationRunner, --backfill advice for a new discriminator beside
           'To give "kind" values you choose, plan the change with --backfill Task.kind, as the steps to take describe.',
         ),
       }).toEqual({ required: true, advice: true });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+});
+
+describe("MongoMigrationRunner, --backfill advice for a model's first discriminator", () => {
+  it(
+    "names --backfill for the discriminator only, and says how to give a new variant's required field its value",
+    async () => {
+      const plainTask = {
+        bsonType: 'object',
+        required: ['_id', 'title'],
+        properties: { _id: { bsonType: 'objectId' }, title: { bsonType: 'string' } },
+      };
+      const tasks = {
+        ...plainTask,
+        required: ['_id', 'title', 'type'],
+        properties: { ...plainTask.properties, type: { bsonType: 'string' } },
+        oneOf: [
+          {
+            required: ['type', 'severity'],
+            properties: { type: { enum: ['bug'] }, severity: { bsonType: 'string' } },
+          },
+          { required: ['type'], properties: { type: { enum: ['epic'] } } },
+        ],
+      };
+      await live.db().createCollection('tasks', { validator: { $jsonSchema: plainTask } });
+      await live
+        .db()
+        .collection('tasks')
+        .insertOne({ _id: new ObjectId('65f000000000000000000001'), title: 'a' });
+      const destination = contract(
+        'dest',
+        {
+          Task: {
+            collection: 'tasks',
+            fields: ['_id', 'title', 'type'],
+            variants: { Bug: 'bug', Epic: 'epic' },
+          },
+          Bug: { collection: 'tasks', fields: ['severity'], base: 'Task' },
+          Epic: { collection: 'tasks', fields: [], base: 'Task' },
+        },
+        { tasks: new MongoCollection({}) },
+      );
+
+      const result = await live.run(
+        [
+          collMod(
+            'tasks',
+            { validator: { $jsonSchema: tasks } },
+            { id: 'validator.tasks.update', checkDocuments: true },
+          ),
+        ],
+        destination,
+      );
+
+      if (result.ok) throw new Error('Expected the validator change to stop at its document check');
+      expect({
+        why: result.failure.why,
+        rowsWithoutValue: result.failure.meta.rowsWithoutValue,
+      }).toEqual({
+        why: [
+          'This validator change makes "severity" and "type" required. It has _id ObjectId("65f000000000000000000001"). That document has no "type".',
+          `Find them all with db.getCollection("tasks").find(${JSON.stringify({ $nor: [{ $jsonSchema: tasks }] })}) in mongosh.`,
+          'To give "type" values you choose, plan the change with --backfill Task.type, as the steps to take describe.',
+          'The update you write for --backfill Task.type can also set "severity" in the documents it gives value "bug", such as { $set: { type: "bug", severity: <value> } }.',
+          'Or keep "severity" optional until a later change, which can make it required with --backfill Bug.severity.',
+          'The old validator may reject a document changed to the new shape, so the update that fixes one can skip document validation: change them with a dataTransform in migration.ts, or in mongosh with an update command that sets bypassDocumentValidation: true, such as db.runCommand({ update: "tasks", updates: [{ q: { _id: <id> }, u: { $set: { <field>: <value> } } }], bypassDocumentValidation: true }). Under db migrate you can instead apply the validator over them: set checkDocuments to false on this operation in that migration.ts, run the file with node, and run db migrate again. db update writes no migration.ts, so there fix the documents first. This operation did not change the validator. Once the documents are fixed, run the command again; operations that already ran are skipped. The failed apply changed nothing.',
+        ].join(' '),
+        rowsWithoutValue: [
+          {
+            field: { kind: 'field', namespaceId: '__unbound__', model: 'Task', field: 'type' },
+            reason: 'newField',
+            rows: 1,
+            operationIndex: 0,
+          },
+        ],
+      });
     },
     timeouts.spinUpMongoMemoryServer,
   );

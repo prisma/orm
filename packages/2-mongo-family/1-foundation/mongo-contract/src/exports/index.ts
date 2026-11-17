@@ -157,6 +157,7 @@ export {
   validatorEnumRefusalOf,
 } from '../validator-enum-refusal';
 export type {
+  SameKindOfDocument,
   ValidatorDiscriminator,
   ValidatorDocumentShape,
   ValidatorRootShape,
