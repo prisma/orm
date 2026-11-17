@@ -602,15 +602,6 @@ export type KeepDataEditAdvice = (
   kept: readonly KeptSubject[],
 ) => KeepDataAdvice;
 
-/** Whether a command may say how to keep the subject's data: the target gives edits that keep it, or it is an enum value whose member keeps its name with a new stored value. */
-function keepsDataByCommand(
-  subject: MigrationSubject,
-  edits: readonly KeepDataEdit[],
-  contracts: StatementContracts & { readonly destination: ContractWithDomain },
-): boolean {
-  return edits.length > 0 || (subject.kind === 'enumValue' && inDestination(subject, contracts));
-}
-
 function enumMembers(
   contract: ContractWithDomain,
   value: EnumValueCoordinate,
@@ -618,35 +609,65 @@ function enumMembers(
   return contract.domain.namespaces[value.namespaceId]?.enum?.[value.enum]?.members ?? [];
 }
 
+function booleanEnum(contract: ContractWithDomain, value: EnumValueCoordinate): boolean {
+  return enumMembers(contract, value).some((member) => typeof member.value === 'boolean');
+}
+
 /**
- * Whether an enum member that keeps its name takes the stored value of another member that keeps
- * its name, so that a command's own route for the kept members changes both together. A boolean
- * value has no third value to pass through, so it never counts.
+ * Whether a command may say how to keep the subject's data: the target gives edits that keep it, or
+ * it is an enum value whose member keeps its name with a new stored value, in an enum whose values
+ * are not booleans, since a boolean enum has no unused value to pass through.
  */
-function swapsWithKeptMember(
+function keepsDataByCommand(
   subject: MigrationSubject,
-  kept: readonly KeptSubject[],
+  edits: readonly KeepDataEdit[],
+  contracts: StatementContracts & { readonly destination: ContractWithDomain },
+): boolean {
+  return (
+    edits.length > 0 ||
+    (subject.kind === 'enumValue' &&
+      inDestination(subject, contracts) &&
+      !booleanEnum(contracts.origin, subject))
+  );
+}
+
+function sameStoredValue(left: unknown, right: unknown): boolean {
+  return left !== undefined && JSON.stringify(left) === JSON.stringify(right);
+}
+
+/**
+ * Whether an enum member takes the stored value of another member the destination still has, under
+ * its name or the name a rename gives it, or gives its own stored value to one: the overlap for which
+ * a target advises two migrations, since one rewrite writes a value another reads. A command's own
+ * route for the members changes them all together.
+ */
+function sharesValueWithKeptMember(
+  subject: MigrationSubject,
   contracts: StatementContracts & { readonly destination: ContractWithDomain },
 ): boolean {
   if (subject.kind !== 'enumValue') return false;
-  const destinationValue = renamedEnumValue(subject, contracts) ?? subject;
-  const value = enumMembers(contracts.destination, destinationValue).find(
-    ({ name }) => name === subject.member,
-  )?.value;
-  if (value === undefined || typeof value === 'boolean') return false;
-  const holder = enumMembers(contracts.origin, subject).find(
-    (member) =>
-      member.name !== subject.member && JSON.stringify(member.value) === JSON.stringify(value),
+  const destinationEnum = renamedEnumValue(subject, contracts) ?? subject;
+  const renamedTo = new Map(
+    resolvedRenames(contracts).flatMap((statement) =>
+      statement.kind === 'rename' &&
+      statement.entity === 'enumValue' &&
+      statement.from.namespaceId === subject.namespaceId &&
+      statement.from.enum === subject.enum
+        ? [[statement.from.member, statement.to.member] as const]
+        : [],
+    ),
   );
-  return (
-    holder !== undefined &&
-    kept.some(
-      ({ subject: each }) =>
-        each.kind === 'enumValue' &&
-        each.namespaceId === subject.namespaceId &&
-        each.enum === subject.enum &&
-        each.member === holder.name,
-    )
+  const destinationMembers = enumMembers(contracts.destination, destinationEnum);
+  const newValue = (member: string) =>
+    destinationMembers.find(({ name }) => name === (renamedTo.get(member) ?? member))?.value;
+  const originMembers = enumMembers(contracts.origin, subject);
+  const oldValue = originMembers.find(({ name }) => name === subject.member)?.value;
+  return originMembers.some(
+    (other) =>
+      other.name !== subject.member &&
+      newValue(other.name) !== undefined &&
+      (sameStoredValue(newValue(subject.member), other.value) ||
+        sameStoredValue(oldValue, newValue(other.name))),
   );
 }
 
@@ -828,7 +849,7 @@ function quotedList(items: readonly string[]): string {
  * other renames, and its old name must be the subject. Anything else, and data no model stores,
  * can only be deleted. A field whose model the destination names differently can be renamed only
  * after a statement renames the model, so the question says to pass one. The question ends with
- * the planner's advice on keeping the data, when it gives any, except for enum members that swap
+ * the planner's advice on keeping the data, when it gives any, except for enum members that share
  * stored values when the command gives its own route for them.
  */
 export function dataLossQuestion(
@@ -849,17 +870,19 @@ export function dataLossQuestion(
           edits,
           contracts.keptSubjects ?? [{ subject: loss.subject, text: subject }],
         );
-  const commandRoutesSwap =
+  const commandRoutesSharedValues =
     keepData !== undefined &&
     keepData.ways.length > 0 &&
-    swapsWithKeptMember(loss.subject, contracts.keptSubjects ?? [], contracts);
+    sharesValueWithKeptMember(loss.subject, contracts);
   const lost = lossText(loss.subject, subject, contracts.originKnown, loss.loss);
   const operations = [...new Set(labels)];
   const advice = [
     ...typeChangeNote(loss, contracts.canConvert),
     ...changedVariantNote(loss.subject, contracts),
     ...(missingModel === undefined ? [] : [modelRenameAdvice(missingModel, contracts)]),
-    ...(loss.keepDataAdvice === undefined || commandRoutesSwap ? [] : [loss.keepDataAdvice]),
+    ...(loss.keepDataAdvice === undefined || commandRoutesSharedValues
+      ? []
+      : [loss.keepDataAdvice]),
     ...(keepData?.lead === undefined ? [] : [keepData.lead]),
     ...(keepData?.ways ?? []),
     ...newRequiredFieldNote(loss.subject, contracts),

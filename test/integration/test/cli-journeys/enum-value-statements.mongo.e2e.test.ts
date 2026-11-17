@@ -557,15 +557,25 @@ describe('Journeys (MongoDB): enum value statements', {
       '--no-interactive',
       '--json',
     ]);
-    expect(
-      (engineError(renamed)?.nextActions ?? [])
+    expect({
+      why: engineError(renamed)?.why,
+      twoRuns: (engineError(renamed)?.nextActions ?? [])
         .map(({ label }) => label)
         .filter((label) => label.startsWith('To keep it with db update')),
-    ).toEqual([
-      expect.stringContaining(
-        "db update --rename Status.ARCHIVED:Status.RETIRED --rename 'Status.ACTIVE:Status.<temporary member>'`",
-      ),
-    ]);
+    }).toEqual({
+      why: [
+        'These operations would lose enum value "Status.ACTIVE" from the data that holds it:',
+        '- Remove value "active" from field status of collection users',
+        '- Remove value "active" from field tags of collection users',
+        '- Remove value "active" at path "$.kind" in field home of collection users',
+        'db update cannot keep that data in one run, and --delete Status.ACTIVE removes it.',
+      ].join('\n'),
+      twoRuns: [
+        expect.stringContaining(
+          "db update --rename Status.ARCHIVED:Status.RETIRED --rename 'Status.ACTIVE:Status.<temporary member>'`",
+        ),
+      ],
+    });
 
     await emit(ctx, usersPsl('  ACTIVE_TMP = "active_tmp"\n  RETIRED = "retired"'), 'E7.04');
     const first = await runDbUpdate(ctx, [

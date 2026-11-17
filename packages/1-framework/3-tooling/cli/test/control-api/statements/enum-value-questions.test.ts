@@ -300,7 +300,7 @@ describe('a question about an enum value', () => {
 });
 
 describe("an enum member's planner advice beside the command's own route", () => {
-  const withValues = (members: Readonly<Record<string, string>>) => {
+  const withValues = (members: Readonly<Record<string, string | boolean>>) => {
     const contract = contractOf({
       app: { models: { Task: { fields: ['status'] } }, enums: { Status: Object.keys(members) } },
     });
@@ -328,7 +328,8 @@ describe("an enum member's planner advice beside the command's own route", () =>
   const member = (name: string) => ({ ...archived, member: name });
   const BEFORE = withValues({ ACTIVE: 'active', ARCHIVED: 'archived' });
 
-  async function waysOf(
+  async function askedOf(
+    origin: ReturnType<typeof withValues>,
     destination: ReturnType<typeof withValues>,
     members: readonly string[],
     commandWays: readonly string[],
@@ -351,7 +352,7 @@ describe("an enum member's planner advice beside the command's own route", () =>
       statements: [],
       preAnswers: [],
       consentAll: { delete: false, allow: false },
-      origin: BEFORE,
+      origin,
       originKnown: true,
       destination,
       keepDataEditAdvice: () => ({ lead: undefined, ways: commandWays }),
@@ -361,10 +362,17 @@ describe("an enum member's planner advice beside the command's own route", () =>
       },
       replan: async () => ok({ dataLoss: [], accessChanges: [], temporaryValues: [] }),
     });
-    return asked.map(({ subject, question }) => ({
-      subject,
-      planner: question.includes('Planner advice'),
-    }));
+    return asked;
+  }
+
+  async function waysOf(
+    destination: ReturnType<typeof withValues>,
+    members: readonly string[],
+    commandWays: readonly string[],
+  ) {
+    return (await askedOf(BEFORE, destination, members, commandWays)).map(
+      ({ subject, question }) => ({ subject, planner: question.includes('Planner advice') }),
+    );
   }
 
   it('leaves out the planner advice for members that swap stored values when the command gives its own route', async () => {
@@ -382,6 +390,38 @@ describe("an enum member's planner advice beside the command's own route", () =>
         { subject: 'Status.ARCHIVED', planner: true },
       ],
     });
+  });
+
+  it('leaves out the planner advice for every member of a chain when the command gives its own route', async () => {
+    expect(
+      await waysOf(
+        withValues({ ACTIVE: 'archived', ARCHIVED: 'gone' }),
+        ['ACTIVE', 'ARCHIVED'],
+        ['Two runs.'],
+      ),
+    ).toEqual([
+      { subject: 'Status.ACTIVE', planner: false },
+      { subject: 'Status.ARCHIVED', planner: false },
+    ]);
+  });
+
+  it('gives no command route for a boolean enum, which has no unused stored value, and keeps the planner advice', async () => {
+    const asked = await askedOf(
+      withValues({ ACTIVE: true, ARCHIVED: false }),
+      withValues({ ACTIVE: false, ARCHIVED: true }),
+      ['ACTIVE', 'ARCHIVED'],
+      ['Two runs.'],
+    );
+    expect(
+      asked.map(({ subject, question }) => ({
+        subject,
+        planner: question.includes('Planner advice'),
+        command: question.includes('Two runs.'),
+      })),
+    ).toEqual([
+      { subject: 'Status.ACTIVE', planner: true, command: false },
+      { subject: 'Status.ARCHIVED', planner: true, command: false },
+    ]);
   });
 
   it('keeps the planner advice for a member that takes the stored value of a member the destination no longer has', async () => {
