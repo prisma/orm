@@ -1,0 +1,10 @@
+# `@acme/orm-standin`
+
+A target package written the way someone outside Prisma would write one, for
+`test/packaging/standin-target.test.ts`. It appears in no list in this
+repository. The test builds it with `tsc` against the packed published
+packages, packs it, and installs it into a scratch application.
+
+It reuses the published PostgreSQL target's descriptors behind its own name,
+so its codec and operation types are real, and restates their type
+declarations to name its own `generated-types` module.

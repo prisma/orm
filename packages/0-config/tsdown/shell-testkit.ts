@@ -106,6 +106,8 @@ export interface InstallOptions {
   readonly direct?: readonly string[];
   /** Extra `.npmrc` lines, e.g. `strict-peer-dependencies=true`. */
   readonly npmrc?: readonly string[];
+  /** Packages the scratch project declares from the registry, by name and version range. */
+  readonly registryDependencies?: Readonly<Record<string, string>>;
 }
 
 export interface InstallResult {
@@ -134,7 +136,10 @@ export function tryInstallShells(
     name: 'shell-tarball-smoke',
     private: true,
     type: 'module',
-    dependencies: Object.fromEntries(direct.map((name) => [name, fileDeps[name]])),
+    dependencies: {
+      ...options.registryDependencies,
+      ...Object.fromEntries(direct.map((name) => [name, fileDeps[name]])),
+    },
   };
   writeFileSync(join(scratchDir, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
   // pnpm 10 reads overrides and its own settings from pnpm-workspace.yaml;
