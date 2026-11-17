@@ -965,6 +965,32 @@ model BotActor {
         }),
       ]);
     });
+
+    it('diagnoses an STI variant unique whose own column has a default', () => {
+      const result = interpretPostgresSchema(
+        `model Actor {
+  id   Int    @id
+  kind String
+
+  @@discriminator(kind)
+  @@map("actor")
+}
+
+model HumanActor {
+  email String? @unique @default("none")
+  @@base(Actor, "human")
+}`,
+        {
+          controlMutationDefaults: builtinControlMutationDefaults,
+        },
+      );
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.diagnostics).toEqual([
+        expect.objectContaining({ code: 'PSL_STI_VARIANT_UNIQUE_NOT_SCOPED' }),
+      ]);
+    });
   });
 
   describe('@@discriminator and @@base — diagnostics', () => {

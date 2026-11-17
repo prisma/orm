@@ -2095,6 +2095,7 @@ function materializeStiVariantStorageColumns(
     // Its unique is added to the base table unscoped, so it must cover a column the base's other rows leave NULL.
     const ownColumns = new Set(
       variantNode.fields
+        .filter((field) => field.default === undefined)
         .map((field) => field.columnName)
         .filter(
           (columnName) =>

@@ -197,7 +197,9 @@ function assertVariantUniquesOwnAColumn(
   variants: readonly VariantStorage[],
 ): void {
   const nullable = new Set(
-    table.columns.filter((column) => column.nullable).map((column) => column.columnName),
+    table.columns
+      .filter((column) => column.nullable && column.default === undefined)
+      .map((column) => column.columnName),
   );
   const siblingColumns = new Set(
     variants

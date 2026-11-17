@@ -122,7 +122,11 @@ describe('mergeTables', () => {
   });
 
   it('refuses a variant unique that would constrain the rows of other variants', () => {
-    const task = table('task', [column('Task', 'id', false), column('Task', 'email')]);
+    const task = table('task', [
+      column('Task', 'id', false),
+      column('Task', 'email'),
+      { ...column('Task', 'code'), default: { kind: 'literal', value: 'none' } },
+    ]);
 
     for (const storages of [
       [baseTable('Bug', 'task', [column('Bug', 'id')], { uniques: [{ columns: ['id'] }] })],
@@ -130,6 +134,7 @@ describe('mergeTables', () => {
         baseTable('Bug', 'task', [column('Bug', 'email')], { uniques: [{ columns: ['email'] }] }),
         baseTable('Feature', 'task', [column('Feature', 'email')]),
       ],
+      [baseTable('Bug', 'task', [column('Bug', 'code')], { uniques: [{ columns: ['code'] }] })],
     ]) {
       expect(() => mergeTables([ownTable(task), ...storages], [])).toThrow(
         expect.objectContaining({
