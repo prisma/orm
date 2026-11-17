@@ -351,7 +351,7 @@ describe('planStatements, storage that does not move whole', () => {
       kind: 'unsupportedOperation',
       summary:
         'Cannot rename table "users" to "app_users": the plan does not allow "widening" operations',
-      why: 'The table of model "app.User" changes from "users" to "app_users", and the rename produces a "widening" operation, which this command does not plan: it plans only "additive" operations. Make the change with a command that allows "widening" operations, such as migration plan.',
+      why: 'The table of model "app.User" changes from "users" to "app_users", and the rename produces a "widening" operation, which this command does not plan: it plans only "additive" operations. Make the change with a command that allows "widening" operations, such as db update or migration plan.',
       refusedOperationClass: 'widening',
       location: { namespaceId: 'app', entityKind: 'table', entityName: 'app_users' },
     });
@@ -381,7 +381,7 @@ describe('planStatements, statements on storage that does not move whole', () =>
       kind: 'statementRefused',
       summary:
         'Cannot rename table "tasks" to "defects": table "tasks" also stores model "app.Task"',
-      why: 'A table rename moves every row of the table, and the rows of model "app.Task" do not move to table "defects". Moving the rows of one model out of a table it shares with others is a data migration, which a plan does not write. Write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the rows of model "app.Bug" into table "defects" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
+      why: 'A table rename moves every row of the table, and the rows of model "app.Task" do not move to table "defects". Moving the rows of one model out of a table it shares with others is a data migration, which a plan does not write. Leave out this statement to plan the change without moving them: the plan then asks about the data it drops. To keep the data with migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the rows of model "app.Bug" into table "defects" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
       refusedStatement: statement,
       location: { namespaceId: 'app', entityKind: 'table', entityName: 'tasks' },
     });
@@ -407,7 +407,7 @@ describe('planStatements, statements on storage that does not move whole', () =>
       kind: 'statementRefused',
       summary:
         'Cannot rename column "tasks"."title" to "heading": column "title" also stores field "app.Task.title"',
-      why: 'A column rename moves the values of every row, and the values of field "app.Task.title" do not move to column "heading". Moving the values of one field out of a column it shares with others is a data migration, which a plan does not write. Write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the values of field "app.Bug.title" into column "heading" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
+      why: 'A column rename moves the values of every row, and the values of field "app.Task.title" do not move to column "heading". Moving the values of one field out of a column it shares with others is a data migration, which a plan does not write. Leave out this statement to plan the change without moving them: the plan then asks about the data it drops. To keep the data with migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the values of field "app.Bug.title" into column "heading" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
       refusedStatement: statement,
       location: { namespaceId: 'app', entityKind: 'table', entityName: 'tasks', column: 'title' },
     });

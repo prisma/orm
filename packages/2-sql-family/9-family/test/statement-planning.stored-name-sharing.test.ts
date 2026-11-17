@@ -204,7 +204,7 @@ describe('planStatements, storage that other storage joins', () => {
     ).toEqual({
       kind: 'statementRefused',
       summary: `Cannot rename table "members" to "${to}": table "${to}" also stores model "app.User", whose rows are not in table "members"`,
-      why: `A table rename moves the rows of one table, and table "${to}" would also store the rows of model "app.User". Moving the rows of two tables into one is a data migration, which a plan does not write. Write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the rows of model "app.User" and model "app.Member" into table "${to}" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.`,
+      why: `A table rename moves the rows of one table, and table "${to}" would also store the rows of model "app.User". Moving the rows of two tables into one is a data migration, which a plan does not write. Leave out this statement to plan the change without moving them: the plan then asks about the data it drops. To keep the data with migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the rows of model "app.User" and model "app.Member" into table "${to}" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.`,
       refusedStatement: statement,
       location: { namespaceId: 'app', entityKind: 'table', entityName: 'members' },
     });
@@ -224,7 +224,7 @@ describe('planStatements, storage that other storage joins', () => {
       kind: 'statementRefused',
       summary:
         'Cannot rename column "tasks"."y" to "z": column "z" also stores field "app.Task.a", whose values are not in column "y"',
-      why: 'A column rename moves the values of one column, and column "z" would also store the values of field "app.Task.a". Moving the values of two columns into one is a data migration, which a plan does not write. Write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the values of field "app.Task.a" and field "app.Bug.b" into column "z" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
+      why: 'A column rename moves the values of one column, and column "z" would also store the values of field "app.Task.a". Moving the values of two columns into one is a data migration, which a plan does not write. Leave out this statement to plan the change without moving them: the plan then asks about the data it drops. To keep the data with migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the values of field "app.Task.a" and field "app.Bug.b" into column "z" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
       refusedStatement: statement,
       location: { namespaceId: 'app', entityKind: 'table', entityName: 'tasks', column: 'y' },
     });

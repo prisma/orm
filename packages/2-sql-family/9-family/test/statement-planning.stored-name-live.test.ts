@@ -133,7 +133,7 @@ describe('planStatements against a database whose table already has its new name
       kind: 'unsupportedOperation',
       summary:
         'Cannot rename table "users" to "accounts": the schema being planned from already has a table "accounts"',
-      why: 'The table of model "app.User" changes from "users" to "accounts", and the schema being planned from already has table "accounts", the table of model "app.Account". Without the rename the plan would read the rows of table "accounts" as rows of model "app.User". Make the change in two plans: first remove table "accounts" or give it a name nothing uses, and plan and apply that; then make this change and plan again.',
+      why: 'The table of model "app.User" changes from "users" to "accounts", and the schema being planned from already has table "accounts", the table of model "app.Account". Without the rename the plan would read the rows of table "accounts" as rows of model "app.User". Make the change in two plans: first remove table "accounts" or give it a name nothing uses, such as "prisma_swap_accounts", and plan and apply that; then make this change and plan again.',
       location: { namespaceId: 'app', entityKind: 'table', entityName: 'users' },
     });
   });

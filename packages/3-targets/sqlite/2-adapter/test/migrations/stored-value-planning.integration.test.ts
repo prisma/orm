@@ -232,7 +232,7 @@ describe('SQLite planner, stored enum values', { timeout: timeouts.databaseOpera
 
     const result = await plan(from, to);
 
-    expect((await operationKinds(result))[0]).toBe('replaceStoredValue');
+    expect(await operationKinds(result)).toEqual(['replaceStoredValue']);
     expect(result.kind === 'success' && result.dataLoss).toEqual([]);
     expect(result.kind === 'success' && result.appliedStatements).toEqual([]);
     await apply(result, to);
@@ -249,7 +249,9 @@ describe('SQLite planner, stored enum values', { timeout: timeouts.databaseOpera
     const to = roleContract({ USER: 'guest', GUEST: 'visitor' });
     await start(from);
 
-    await apply(await plan(from, to), to);
+    const result = await plan(from, to);
+    expect(await operationKinds(result)).toEqual(['replaceStoredValue', 'replaceStoredValue']);
+    await apply(result, to);
 
     expect(await roles()).toEqual([
       { id: '1', role: 'visitor' },
@@ -263,7 +265,9 @@ describe('SQLite planner, stored enum values', { timeout: timeouts.databaseOpera
     const to = roleContract({ USER: 'user', GUEST: 'visitor', NEWBIE: 'guest' });
     await start(from);
 
-    await apply(await plan(from, to), to);
+    const result = await plan(from, to);
+    expect(await operationKinds(result)).toEqual(['replaceStoredValue']);
+    await apply(result, to);
 
     expect(await roles()).toEqual([
       { id: '1', role: 'visitor' },
@@ -277,7 +281,9 @@ describe('SQLite planner, stored enum values', { timeout: timeouts.databaseOpera
     const to = roleContract({ USER: 'user', GUEST: 'visitor' }, { default: 'visitor' });
     await start(from);
 
-    await apply(await plan(from, to), to);
+    const result = await plan(from, to);
+    expect(await operationKinds(result)).toEqual(['recreateTable', 'replaceStoredValue']);
+    await apply(result, to);
     await testDb.driver.query(`INSERT INTO "User" (id) VALUES ('4')`);
 
     expect(await roles()).toEqual([
@@ -301,7 +307,7 @@ describe('SQLite planner, stored enum values', { timeout: timeouts.databaseOpera
         kind: 'unsupportedOperation',
         summary:
           'Cannot change the stored values of enum "Role": enum values "Role.USER" and "Role.GUEST" move stored values in a cycle, "user" to "guest" and "guest" to "user", and a rewrite of one would overwrite the other before it is read',
-        why: 'The plan rewrites a changed stored value in every row that holds it, one value after another, and no order of the rewrites moves values in a cycle. Write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the values in each column the enum types through a value no member stores, "user" to "prisma_swap", then "guest" to "user", then "prisma_swap" to "guest", each with this.replaceStoredValue({ table, column, from, to }) yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
+        why: 'The plan rewrites a changed stored value in every row that holds it, one value after another, and no order of the rewrites moves values in a cycle. Make the change in two plans: first give "Role.USER" a stored value no member stores, such as "prisma_swap", and give "Role.GUEST" the stored value "user", and plan and apply that; then give "Role.USER" the stored value "guest", and plan again. With migration plan, you can instead write this change as a hand-written migration: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the values in each column the enum types through a value no member stores, "user" to "prisma_swap", then "guest" to "user", then "prisma_swap" to "guest", each with this.replaceStoredValue({ table, column, from, to }) yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
       },
     ]);
   });
@@ -318,8 +324,48 @@ describe('SQLite planner, stored enum values', { timeout: timeouts.databaseOpera
         kind: 'unsupportedOperation',
         summary:
           'Cannot change the stored value of enum value "Role.USER" from "user" to "guest": the origin enum stores "guest" as enum value "Role.GUEST"',
-        why: 'A changed stored value is rewritten in every row that holds it, so the rows of "Role.USER" would hold "guest" as the rows of "Role.GUEST" do, and their data would merge. To keep their data apart, give "Role.USER" a stored value no member of the origin enum stores, and plan again. To merge their data on purpose, write this change as a hand-written migration: run prisma migration new, and in the operations of the migration.ts it writes, rewrite "user" to "guest" in each column the enum types, with this.replaceStoredValue({ table, column, from, to }) yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
+        why: 'A changed stored value is rewritten in every row that holds it, so the rows of "Role.USER" would hold "guest" as the rows of "Role.GUEST" do, and their data would merge. To make the change without merging their data, make it in two plans: first remove enum value "Role.GUEST", and plan and apply that, which asks about its rows; then give "Role.USER" the stored value "guest", and plan again. To merge their data on purpose with migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite "user" to "guest" in each column the enum types, with this.replaceStoredValue({ table, column, from, to }) yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
       },
+    ]);
+  });
+
+  it('swaps stored values by the route of the refusal, through a value no member stores in two plans', async () => {
+    const from = roleContract({ USER: 'user', GUEST: 'guest' });
+    const between = roleContract({ USER: 'prisma_swap', GUEST: 'user' });
+    const to = roleContract({ USER: 'guest', GUEST: 'user' });
+    await start(from);
+
+    const first = await plan(from, between);
+    expect(await operationKinds(first)).toEqual(['replaceStoredValue', 'replaceStoredValue']);
+    await apply(first, between);
+    const second = await plan(between, to);
+    expect(await operationKinds(second)).toEqual(['replaceStoredValue']);
+    await apply(second, to);
+
+    expect(await roles()).toEqual([
+      { id: '1', role: 'user' },
+      { id: '2', role: 'guest' },
+      { id: '3', role: null },
+    ]);
+  });
+
+  it('gives a member the stored value of a removed member by the route of the refusal, in two plans', async () => {
+    const from = roleContract({ USER: 'user', GUEST: 'guest' });
+    const between = roleContract({ USER: 'user' });
+    const to = roleContract({ USER: 'guest' });
+    await start(from);
+
+    const first = await plan(from, between);
+    expect(await operationKinds(first)).toEqual(['removeStoredValue']);
+    await apply(first, between);
+    const second = await plan(between, to);
+    expect(await operationKinds(second)).toEqual(['replaceStoredValue']);
+    await apply(second, to);
+
+    expect(await roles()).toEqual([
+      { id: '1', role: null },
+      { id: '2', role: 'guest' },
+      { id: '3', role: null },
     ]);
   });
 
@@ -389,7 +435,9 @@ describe('SQLite planner, stored enum values', { timeout: timeouts.databaseOpera
       `INSERT INTO "User" (id, rank) VALUES ('1', 1), ('2', 3), ('3', NULL)`,
     );
 
-    await apply(await plan(from, to), to);
+    const result = await plan(from, to);
+    expect(await operationKinds(result)).toEqual(['replaceStoredValue']);
+    await apply(result, to);
 
     expect((await testDb.driver.query('SELECT id, rank FROM "User" ORDER BY id')).rows).toEqual([
       { id: '1', rank: 10 },

@@ -10,6 +10,7 @@ import {
   APP_SPACE_ID,
   type MigrationOperationPolicy,
   planOriginOf,
+  type ResolvedMigrationStatement,
 } from '@internal/framework-components/control';
 import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
@@ -162,18 +163,26 @@ function tasksContract(
   };
 }
 
-function plan(from: Contract<SqlStorage>, to: Contract<SqlStorage>) {
-  const result = createPostgresMigrationPlanner(stubLowerer).plan({
+function planWith(
+  from: Contract<SqlStorage>,
+  to: Contract<SqlStorage>,
+  statements: readonly ResolvedMigrationStatement[],
+) {
+  return createPostgresMigrationPlanner(stubLowerer).plan({
     contract: to,
     schema: postgresContractToSchema(from, postgresTypeComponents),
     policy: ALL_CLASSES,
     fromContract: from,
     origin: planOriginOf(from),
-    statements: [],
+    statements,
     frameworkComponents: postgresTypeComponents,
     spaceId: APP_SPACE_ID,
     snapshotsImportPath: '../../snapshots',
   });
+}
+
+function plan(from: Contract<SqlStorage>, to: Contract<SqlStorage>) {
+  const result = planWith(from, to, []);
   if (result.kind !== 'success') throw new Error(JSON.stringify(result.conflicts));
   return result;
 }
@@ -222,6 +231,45 @@ describe('Postgres planner, the table of a base and its variants', () => {
       'Drop table "tasks"',
       'Create table "work"',
       'Add foreign key "work_id_fkey" on "work"',
+    ]);
+  });
+
+  it('refuses a model rename statement that would move the rows of the base out of its table, and plans the change without it', async () => {
+    const from = tasksContract('tasks', { Bug: bug }, 'a');
+    const to = tasksContract('tasks', { Defect: { ...bug, table: 'defects' } }, 'b');
+    const statement: ResolvedMigrationStatement = {
+      kind: 'rename',
+      entity: 'model',
+      from: { namespaceId: publicId, model: 'Bug' },
+      to: { namespaceId: publicId, model: 'Defect' },
+    };
+
+    const refused = planWith(from, to, [statement]);
+    expect(refused.kind === 'failure' && refused.conflicts).toEqual([
+      {
+        kind: 'statementRefused',
+        summary:
+          'Cannot rename table "tasks" to "defects": table "tasks" also stores model "public.Task"',
+        why: 'A table rename moves every row of the table, and the rows of model "public.Task" do not move to table "defects". Moving the rows of one model out of a table it shares with others is a data migration, which a plan does not write. Leave out this statement to plan the change without moving them: the plan then asks about the data it drops. To keep the data with migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the rows of model "public.Bug" into table "defects" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
+        refusedStatement: statement,
+        location: { namespaceId: 'public', entityKind: 'table', entityName: 'tasks' },
+      },
+    ]);
+
+    const without = plan(from, to);
+    expect(await labelsOf(without)).toEqual([
+      'Drop check constraint "tasks_type_check_a" on "tasks"',
+      'Drop column "severity" from "tasks"',
+      'Create table "defects"',
+      'Delete the rows of "tasks" that hold value "bug" in column "type"',
+      'Add check constraint "tasks_type_check_b" on "tasks"',
+      'Add foreign key "defects_id_fkey" on "defects"',
+    ]);
+    expect(
+      without.dataLoss.map(({ operationIndex, subject }) => ({ operationIndex, subject })),
+    ).toEqual([
+      { operationIndex: 1, subject: { kind: 'model', namespaceId: publicId, model: 'Bug' } },
+      { operationIndex: 3, subject: { kind: 'model', namespaceId: publicId, model: 'Bug' } },
     ]);
   });
 });
