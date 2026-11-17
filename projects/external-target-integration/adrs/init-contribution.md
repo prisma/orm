@@ -108,7 +108,8 @@ The `--json` success document reports `package`, the package name that was insta
 ## Consequences
 
 - An outside database package gets `init` by exporting one entrypoint.
-- SQLite, MySQL and MariaDB get `init` when their facades add a contribution and an entry in the list.
+- A database package that is not in the list gets `init` by package name as soon as it exports a contribution. Prisma's SQLite and MySQL packages work this way: `prisma orm init --target @prisma/orm-sqlite`.
+- A package with no runtime client, such as Prisma's MariaDB package, cannot provide a contribution, because there is no `db.ts` to scaffold.
 - The Postgres and MongoDB templates, markdown files and probes move into their facades. The framework CLI's count of database-specific sites drops by all of them.
 - `init` needs the database package installed before it can write. A run with `--skip-install` in a project that does not have the package is refused.
 - The published CLI still depends on no database package.

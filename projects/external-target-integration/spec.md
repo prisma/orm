@@ -61,7 +61,8 @@ A database package exports an init contribution: its label, starter contract, da
 ## Non-goals
 
 - **Building the SQL Server target.** The Microsoft team builds it. This project gives them the two mechanisms and instructions.
-- **`init` support for SQLite, MySQL and MariaDB.** Their facades can add an init contribution once the mechanism exists. Writing those contributions is separate work.
+- **`init` for MariaDB.** Its package has a config, a control client and migrations but no runtime client, so there is no `db.ts` to scaffold. It gets an init contribution when it gets a client.
+- **Short names for SQLite and MySQL.** They are reached by package name. Adding them to the list is a separate decision about what Prisma vouches for.
 - **Rewriting files already generated.** Existing `contract.d.ts`, snapshot and `migration.ts` files keep their import lines, and the modules they name stay exported. A migration file's content is covered by its hash, so it must not be re-rendered.
 - **Changing how published packages are built.** The table that maps workspace packages to published packages stays as build configuration. It stops being read when a user's files are generated.
 - **Prisma 7 upgrades onto an unlisted package.** The Prisma 7 path of `init` maps a Prisma 7 provider to a package from the CLI's list only.
@@ -89,7 +90,8 @@ A database package exports an init contribution: its label, starter contract, da
 ## Adapter and target impact
 
 - **Postgres and MongoDB facades**: each gains a module for generated types, names it and its migration module in `defineConfig`, and gains an `init` entrypoint holding the templates that move out of the CLI.
-- **SQLite, MySQL and MariaDB facades**: each names its generated-types and migration modules in `defineConfig`. No init contribution.
+- **SQLite and MySQL facades**: each names its generated-types and migration modules in `defineConfig`, and gains an `init` entrypoint. Neither is in the list of known packages, so they are the first real users of `init` by package name: `prisma orm init --target @prisma/orm-sqlite`.
+- **MariaDB facade**: names its generated-types and migration modules in `defineConfig`. No init contribution, because it has no runtime client.
 - **Target renderers** stop naming a module themselves and use the one the config gives.
 - **Extension packs** state the module their types come from as the published name.
 
@@ -129,6 +131,7 @@ Every refusal `init` can predict is reported before the first file is written.
 - [ ] `git grep` finds no branch on a database name under `packages/1-framework/3-tooling/cli/src`, and the vocabulary threshold in `scripts/framework-vocabulary-thresholds.json` is lowered by every site removed.
 - [ ] The CLI does not read `package.json` to choose import names: `project-import-root.ts` is gone.
 - [ ] The init journey tests pass for Postgres and MongoDB in both authoring modes.
+- [ ] `prisma orm init --target @prisma/orm-sqlite` and `--target @prisma/orm-mysql` each scaffold a project that emits and typechecks, and the SQLite project runs a query. Neither package is in the list of known packages.
 - [ ] Both design records are in `docs/architecture docs/adrs/` as accepted, the public npm packages record carries a supersession note for the manifest read, and the subsystem doc and CLI Style Guide sections on `init` describe the shipped flow.
 - [ ] The SQL Server team has confirmed, in their repository, that their package works with `init` and `contract emit` from a published release.
 - [ ] TML-3143 and TML-3702 are closed by the slices that deliver them.

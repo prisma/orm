@@ -33,7 +33,7 @@ Nothing below starts until the two design records are approved.
 
 [TML-3831](https://linear.app/prisma-company/issue/TML-3831).
 
-- **Outcome:** `prisma orm init --target <any package>` works. The guide for authors of database packages exists.
+- **Outcome:** `prisma orm init --target <any package>` works. Prisma's SQLite and MySQL packages export an init contribution and are scaffolded by package name, as the first real test of the mechanism. The guide for authors of database packages exists.
 - **Builds on:** pull requests 1 and 2. Its end-to-end test needs both: `init` on an unlisted package, then an emit that compiles.
 - **Hands on:** the project's definition of done.
 
