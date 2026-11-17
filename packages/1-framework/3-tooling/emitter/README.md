@@ -92,7 +92,7 @@ flowchart TD
   - `generateModelsType` (optional): Override default domain model type generation
   - `getFamilyImports`: The family's type imports, as `ImportRequirement` data from the module it is given
   - `getFamilyTypeAliases`, `getTypeMapsExpression`, `getContractWrapper`: Family-specific template fragments
-- Imports the framework's and family's types from `typesModule`, the config's `contract.typesModule`, and each codec or operation type declaration from the module it states. All of them go through `renderImports` from `@internal/ts-render`, which writes one statement per module, sorted by module, with each name once
+- Imports the framework's and family's types from `typesModule`, the config's `contract.typesModule`, and each codec or operation type declaration from the module it states. All of them go through `renderImports` from `@internal/ts-render`, which writes one statement per module, modules and names in code-unit order, with each name once. The module is a package name or a `#` import private to the package that holds the generated files, never a path
 
 ### EmissionSpi (defined in `@internal/framework-components/emission`)
 - Focused interface for family-specific parts of contract type emission
