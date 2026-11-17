@@ -4,9 +4,7 @@ The ORM live test suites of MySQL and MariaDB, run against MySQL 8.4 and MariaDB
 
 ## Package Classification
 
-- **Domain**: targets
-- **Layer**: tests
-- **Plane**: runtime
+The package has no source files, only tests, so it has no layer or plane in `architecture.config.json`. It sits in the targets domain, after `1-mysql` and `2-mariadb`, because it depends on both.
 
 ## Purpose
 
