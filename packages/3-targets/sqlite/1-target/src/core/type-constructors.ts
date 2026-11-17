@@ -17,9 +17,6 @@ import {
   SQLITE_TIME_TEMPORAL_CODEC_ID,
 } from './codec-ids';
 
-/**
- * The explicit SQLite scalar types, each named after the SQLite column type that stores it, plus the value it reads where that column type has more than one codec. `DecimalString` is named after its data type, because SQLite has no decimal column type. PSL writes them as field types and the TypeScript builder calls them as `type.X()`. ADR 315, ADR 322.
- */
 const integerNumber = {
   kind: 'typeConstructor',
   documentation:
@@ -27,6 +24,9 @@ const integerNumber = {
   output: { codecId: SQLITE_INTEGER_CODEC_ID },
 } as const;
 
+/**
+ * The explicit SQLite scalar types, each named after the SQLite column type that stores it, plus the value it reads where that column type has more than one codec. `DecimalString` is named after its data type, because SQLite has no decimal column type. PSL writes them as field types and the TypeScript builder calls them as `type.X()`. ADR 315, ADR 322.
+ */
 export const sqliteExplicitScalarTypes = {
   IntegerNumber: integerNumber,
   IntegerBigInt: {

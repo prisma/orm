@@ -26,65 +26,16 @@ import {
   timeouts,
 } from '../utils/journey-test-helpers';
 
-const OLD_CONTRACT_TS = `import { integerNumberColumn, textColumn } from '@internal/adapter-sqlite/column-types';
-import { SQLITE_BIGINT_NUMBER_CODEC_ID } from '@internal/target-sqlite/codec-ids';
-import { defineContract } from '@internal/sqlite/contract-builder';
-
-export const contract = defineContract({}, ({ field, model }) => ({
-  models: {
-    Invoice: model('Invoice', {
-      fields: {
-        id: field.column(integerNumberColumn).id(),
-        total: field.column(textColumn),
-        visits: field.column({ codecId: SQLITE_BIGINT_NUMBER_CODEC_ID }),
-      },
-    }).sql({ table: 'invoice' }),
-  },
-}));
-`;
-
-const NEW_CONTRACT_TS = `import { defineContract } from '@internal/sqlite/contract-builder';
-
-export const contract = defineContract({}, ({ field, model, type }) => ({
-  models: {
-    Invoice: model('Invoice', {
-      fields: {
-        id: field.column(type.Int()).id(),
-        total: field.column(type.Decimal()),
-        visits: field.column(type.BigIntNumber()),
-      },
-    }).sql({ table: 'invoice' }),
-  },
-}));
-`;
-
-function typescriptConfig(dbPath: string): string {
-  return `import sqliteAdapter from '@internal/adapter-sqlite/control';
-import { defineConfig as ormConfig } from '@internal/cli/config-types';
-import sqliteDriver from '@internal/driver-sqlite/control';
-import sql from '@internal/family-sql/control';
-import sqlite from '@internal/target-sqlite/control';
-import { definePrismaConfig } from '@prisma/cli-engine';
-import { contract } from './contract';
-
-export default definePrismaConfig({
-  orm: ormConfig({
-    family: sql,
-    target: sqlite,
-    adapter: sqliteAdapter,
-    driver: sqliteDriver,
-    extensions: [],
-    contract: {
-      source: { format: 'typescript', load: async () => ({ ok: true as const, value: contract }) },
-      output: 'contract.json',
-      types: 'contract.d.ts',
-    },
-    db: { connection: ${JSON.stringify(dbPath)} },
-    migrations: { dir: 'migrations' },
-  }),
-});
-`;
-}
+const FIXTURES = join(__dirname, '../fixtures/cli/cli-e2e-test-app/fixtures/cli-journeys');
+const OLD_CONTRACT_TS = readFileSync(
+  join(FIXTURES, 'contract-sqlite-decimal-upgrade-old.ts'),
+  'utf-8',
+);
+const NEW_CONTRACT_TS = readFileSync(
+  join(FIXTURES, 'contract-sqlite-decimal-upgrade-new.ts'),
+  'utf-8',
+);
+const SQLITE_TS_CONFIG = readFileSync(join(FIXTURES, 'prisma.config.sqlite.ts'), 'utf-8');
 
 const FROM_PSL = `// use prisma-8
 
@@ -104,7 +55,11 @@ function setupTypescriptJourney(createTempDir: () => string): SqliteJourney {
   const testDir = createTempDir();
   const dbPath = join(testDir, 'journey.db');
   const configPath = join(testDir, 'prisma.config.ts');
-  writeFileSync(configPath, typescriptConfig(dbPath), 'utf-8');
+  writeFileSync(
+    configPath,
+    SQLITE_TS_CONFIG.replace('{{DB_PATH}}', () => dbPath),
+    'utf-8',
+  );
   writeProjectManifest(testDir);
   return { testDir, configPath, outputDir: testDir, dbPath };
 }
