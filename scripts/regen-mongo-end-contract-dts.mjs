@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
  * Regenerates a Mongo contract's `.d.ts` file from its adjacent `.json` the
- * way `prisma contract emit` does: the contract is hydrated by the Mongo
- * family and passed to the emitter's `emit` with the Mongo control stack, so
- * the codec lookup, type imports and namespace kinds match a real emit. The
- * `.json` file is left untouched so historical storage hashes stay stable —
- * only the `.d.ts` is rewritten.
+ * way `prisma contract emit` does: the contract is hydrated by the family of
+ * the config given by `--config` and passed to the emitter's `emit` with that
+ * config's control stack, so the codec lookup, type imports and namespace
+ * kinds match a real emit. The `.json` file is left untouched so historical
+ * storage hashes stay stable; only the `.d.ts` is rewritten.
  *
  * It writes `<arg with .json replaced by .d.ts>` beside each argument,
  * whether the argument is a migrations-root-wide store entry
@@ -16,12 +16,11 @@
  *
  * Needs a prior `pnpm build`: it imports the packages' `dist` output.
  *
- * The declarations import the framework and family types from the module given
- * by `--types-module`: the `contract.typesModule` of the config that owns the
- * contract, such as `@prisma/orm-mongo/generated-types` for an example.
+ * The declarations import the framework and family types from that config's
+ * `contract.typesModule`.
  *
  * Usage:
- *   node scripts/regen-mongo-end-contract-dts.mjs --types-module <module> <path/to/contract.json>...
+ *   node scripts/regen-mongo-end-contract-dts.mjs --config <path/to/prisma.config.ts> <path/to/contract.json>...
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -40,38 +39,42 @@ const { emit } = await importFromRepo(
 const { createControlStack } = await importFromRepo(
   'packages/1-framework/1-core/framework-components/dist/control.mjs',
 );
-const { mongoFamilyDescriptor } = await importFromRepo(
-  'packages/2-mongo-family/9-family/dist/control.mjs',
-);
-const { mongoTargetDescriptor } = await importFromRepo(
-  'packages/3-targets/mongo/1-target/dist/control.mjs',
-);
-const { default: mongoAdapter } = await importFromRepo(
-  'packages/3-targets/mongo/2-adapter/dist/control.mjs',
-);
-const { default: mongoDriver } = await importFromRepo(
-  'packages/3-targets/mongo/3-driver/dist/control.mjs',
-);
 const { contractSnapshotFiles } = await importFromRepo(
   'packages/1-framework/3-tooling/migration/dist/exports/contract-snapshot-store.mjs',
 );
+const { loadConfig } = await importFromRepo(
+  'packages/1-framework/3-tooling/config-loader/dist/exports/index.mjs',
+);
 
-const [flag, typesModule, ...args] = process.argv.slice(2);
-if (flag !== '--types-module' || typesModule === undefined || args.length === 0) {
+const [flag, configPath, ...args] = process.argv.slice(2);
+if (flag !== '--config' || configPath === undefined || args.length === 0) {
   console.error(
-    'usage: node regen-mongo-end-contract-dts.mjs --types-module <module> <path/to/contract.json>...',
+    'usage: node regen-mongo-end-contract-dts.mjs --config <path/to/prisma.config.ts> <path/to/contract.json>...',
   );
   process.exit(1);
 }
 
+const loaded = await loadConfig(resolve(configPath));
+if (!loaded.ok) {
+  console.error(loaded.failure.message);
+  process.exit(1);
+}
+const config = loaded.value.config;
+const typesModule = config.contract?.typesModule;
+if (typesModule === undefined) {
+  console.error(`${configPath} names no contract.typesModule`);
+  process.exit(1);
+}
+
 const stack = createControlStack({
-  family: mongoFamilyDescriptor,
-  target: mongoTargetDescriptor,
-  adapter: mongoAdapter,
-  driver: mongoDriver,
+  family: config.family,
+  target: config.target,
+  adapter: config.adapter,
+  driver: config.driver,
+  extensions: config.extensions ?? [],
 });
-const family = mongoFamilyDescriptor.create(stack);
-const serializer = mongoTargetDescriptor.contractSerializer;
+const family = config.family.create(stack);
+const serializer = config.target.contractSerializer;
 
 for (const jsonPath of args) {
   const json = JSON.parse(readFileSync(jsonPath, 'utf8'));
@@ -80,7 +83,7 @@ for (const jsonPath of args) {
   const { contractDts } = await emit(
     family.deserializeContract(json),
     stack,
-    mongoFamilyDescriptor.emission,
+    config.family.emission,
     {
       serializeContract: (contract) => serializer.serializeContract(contract),
       deserializeContract: (contractJson) => family.deserializeContract(contractJson),
