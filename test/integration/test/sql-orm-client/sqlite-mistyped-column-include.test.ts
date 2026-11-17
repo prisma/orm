@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
-import { blobColumn, integerColumn } from '@internal/adapter-sqlite/column-types';
+import { blobColumn, integerNumberColumn } from '@internal/adapter-sqlite/column-types';
 import sqliteAdapter from '@internal/adapter-sqlite/runtime';
 import { soleDomainNamespaceId } from '@internal/contract/types';
 import sqliteDriver from '@internal/driver-sqlite/runtime';
@@ -19,16 +19,16 @@ const sqlInt = { codecId: 'sql/int@1' } as const;
 
 const Cell = model('Cell', {
   fields: {
-    id: field.column(integerColumn).id(),
-    sheetId: field.column(integerColumn).column('sheet_id'),
-    integer: field.column(integerColumn).optional(),
+    id: field.column(integerNumberColumn).id(),
+    sheetId: field.column(integerNumberColumn).column('sheet_id'),
+    integer: field.column(integerNumberColumn).optional(),
     sqlInt: field.column(sqlInt).column('sql_int').optional(),
     blob: field.column(blobColumn).optional(),
   },
 }).sql({ table: 'mistyped_cells' });
 
 const Sheet = model('Sheet', {
-  fields: { id: field.column(integerColumn).id() },
+  fields: { id: field.column(integerNumberColumn).id() },
   relations: { cells: rel.hasMany(() => Cell, { by: 'sheetId' }) },
 }).sql({ table: 'mistyped_sheets' });
 

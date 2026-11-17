@@ -1,4 +1,8 @@
-import { bigintColumn, datetimeColumn, textColumn } from '@prisma/orm-sqlite/adapter/column-types';
+import {
+  datetimeColumn,
+  integerBigIntColumn,
+  textColumn,
+} from '@prisma/orm-sqlite/adapter/column-types';
 import { defineContract, now, rel } from '@prisma/orm-sqlite/contract-builder';
 
 export const contract = defineContract({}, ({ field, model, type, gen }) => {
@@ -28,7 +32,7 @@ export const contract = defineContract({}, ({ field, model, type, gen }) => {
       // back as a different JavaScript type. They are optional because the
       // analytics pipeline backfills them.
       viewCount: BigIntNumber.optional(),
-      impressionCount: field.column(bigintColumn).optional(),
+      impressionCount: field.column(integerBigIntColumn).optional(),
     },
   });
 

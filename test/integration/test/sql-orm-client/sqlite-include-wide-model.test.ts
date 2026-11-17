@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
-import { integerColumn, textColumn } from '@internal/adapter-sqlite/column-types';
+import { integerNumberColumn, textColumn } from '@internal/adapter-sqlite/column-types';
 import sqliteAdapter from '@internal/adapter-sqlite/runtime';
 import { soleDomainNamespaceId } from '@internal/contract/types';
 import sqliteDriver from '@internal/driver-sqlite/runtime';
@@ -19,14 +19,14 @@ const wideColumns = Array.from({ length: 598 }, (_, index) => `c${598 - index}`)
 
 const Comment = model('Comment', {
   fields: {
-    id: field.column(integerColumn).id(),
-    postId: field.column(integerColumn).column('post_id'),
+    id: field.column(integerNumberColumn).id(),
+    postId: field.column(integerNumberColumn).column('post_id'),
     ...Object.fromEntries(wideColumns.map((name) => [name, field.column(textColumn)])),
   },
 }).sql({ table: 'wide_comments' });
 
 const Post = model('Post', {
-  fields: { id: field.column(integerColumn).id() },
+  fields: { id: field.column(integerNumberColumn).id() },
   relations: { comments: rel.hasMany(() => Comment, { by: 'postId' }) },
 }).sql({ table: 'wide_posts' });
 

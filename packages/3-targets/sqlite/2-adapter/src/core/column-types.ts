@@ -22,7 +22,7 @@ export const textColumn = {
   codecId: SQLITE_TEXT_CODEC_ID,
 } as const;
 
-export const integerColumn = {
+export const integerNumberColumn = {
   codecId: SQLITE_INTEGER_CODEC_ID,
 } as const;
 
@@ -66,11 +66,11 @@ export const durationStringColumn = {
   codecId: SQLITE_DURATION_STRING_CODEC_ID,
 } as const;
 
-export const jsonColumn = {
+export const plainJsonColumn = {
   codecId: SQLITE_JSON_CODEC_ID,
 } as const;
 
-export const bigintColumn = {
+export const integerBigIntColumn = {
   codecId: SQLITE_BIGINT_CODEC_ID,
 } as const;
 

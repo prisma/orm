@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
-import { integerColumn, textColumn } from '@internal/adapter-sqlite/column-types';
+import { integerNumberColumn, textColumn } from '@internal/adapter-sqlite/column-types';
 import sqliteAdapter from '@internal/adapter-sqlite/runtime';
 import { soleDomainNamespaceId } from '@internal/contract/types';
 import sqliteDriver from '@internal/driver-sqlite/runtime';
@@ -18,8 +18,8 @@ import { describe, expect, it } from 'vitest';
 
 const UserTag = model('UserTag', {
   fields: {
-    userId: field.column(integerColumn).column('user_id'),
-    tagId: field.column(integerColumn).column('tag_id'),
+    userId: field.column(integerNumberColumn).column('user_id'),
+    tagId: field.column(integerNumberColumn).column('tag_id'),
   },
 })
   .attributes(({ fields, constraints }) => ({
@@ -27,22 +27,22 @@ const UserTag = model('UserTag', {
   }))
   .sql({ table: 'user_tags' });
 const Tag = model('Tag', {
-  fields: { id: field.column(integerColumn).id(), name: field.column(textColumn).unique() },
+  fields: { id: field.column(integerNumberColumn).id(), name: field.column(textColumn).unique() },
 }).sql({ table: 'tags' });
 const UserBase = model('User', {
-  fields: { id: field.column(integerColumn).id(), name: field.column(textColumn) },
+  fields: { id: field.column(integerNumberColumn).id(), name: field.column(textColumn) },
 }).sql({ table: 'users' });
 const Comment = model('Comment', {
   fields: {
-    id: field.column(integerColumn).id(),
-    postId: field.column(integerColumn).column('post_id'),
+    id: field.column(integerNumberColumn).id(),
+    postId: field.column(integerNumberColumn).column('post_id'),
     body: field.column(textColumn),
   },
 }).sql({ table: 'comments' });
 const PostBase = model('Post', {
   fields: {
-    id: field.column(integerColumn).id(),
-    userId: field.column(integerColumn).column('user_id').optional(),
+    id: field.column(integerNumberColumn).id(),
+    userId: field.column(integerNumberColumn).column('user_id').optional(),
     title: field.column(textColumn),
   },
   relations: { author: rel.belongsTo(UserBase, { from: 'userId', to: 'id' }).sql({ fk: {} }) },

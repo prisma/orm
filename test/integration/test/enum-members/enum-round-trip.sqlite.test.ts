@@ -1,6 +1,6 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { integerColumn } from '@internal/adapter-sqlite/column-types';
+import { integerNumberColumn } from '@internal/adapter-sqlite/column-types';
 import sqliteAdapterControl from '@internal/adapter-sqlite/control';
 import type { Contract, JsonValue } from '@internal/contract/types';
 import sqliteDriverControl from '@internal/driver-sqlite/control';
@@ -57,7 +57,7 @@ function contractWith(enums: Record<string, EnumTypeHandle>) {
       Object.entries(enums).map(([name, handle]) => [
         name,
         model(name, {
-          fields: { id: field.column(integerColumn).id(), value: field.namedType(handle) },
+          fields: { id: field.column(integerNumberColumn).id(), value: field.namedType(handle) },
         }).sql({ table: tableNameOf(name) }),
       ]),
     ),

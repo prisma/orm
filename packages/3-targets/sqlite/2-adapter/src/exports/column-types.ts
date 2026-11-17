@@ -1,9 +1,9 @@
 export {
-  bigintColumn,
   blobColumn,
   datetimeColumn,
-  integerColumn,
-  jsonColumn,
+  integerBigIntColumn,
+  integerNumberColumn,
+  plainJsonColumn,
   rawColumn,
   realColumn,
   textColumn,

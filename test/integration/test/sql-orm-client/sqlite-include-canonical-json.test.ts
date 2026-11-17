@@ -2,10 +2,10 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import {
-  bigintColumn,
   blobColumn,
-  integerColumn,
-  jsonColumn,
+  integerBigIntColumn,
+  integerNumberColumn,
+  plainJsonColumn,
   textColumn,
 } from '@internal/adapter-sqlite/column-types';
 import sqliteAdapter from '@internal/adapter-sqlite/runtime';
@@ -45,21 +45,21 @@ const STRING_CONTAINING_JSON = '{"not":"a document"}';
 
 const Reading = model('Reading', {
   fields: {
-    id: field.column(integerColumn).id(),
-    counter: field.column(bigintColumn).optional(),
+    id: field.column(integerNumberColumn).id(),
+    counter: field.column(integerBigIntColumn).optional(),
     payload: field.column(blobColumn).optional(),
-    document: field.column(jsonColumn).optional(),
+    document: field.column(plainJsonColumn).optional(),
     label: field.column(textColumn).optional(),
   },
 }).sql({ table: 'canon_readings' });
 
 const Station = model('Station', {
   fields: {
-    id: field.column(integerColumn).id(),
-    readingId: field.column(integerColumn).column('reading_id'),
+    id: field.column(integerNumberColumn).id(),
+    readingId: field.column(integerNumberColumn).column('reading_id'),
     // A per-station tally past a double's integers, so an aggregate over it has
     // something to lose.
-    weight: field.column(bigintColumn).optional(),
+    weight: field.column(integerBigIntColumn).optional(),
   },
   relations: {
     reading: rel.belongsTo(Reading, { from: 'readingId', to: 'id' }).sql({ fk: {} }),

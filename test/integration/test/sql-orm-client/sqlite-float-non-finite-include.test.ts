@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
-import { integerColumn, realColumn } from '@internal/adapter-sqlite/column-types';
+import { integerNumberColumn, realColumn } from '@internal/adapter-sqlite/column-types';
 import sqliteAdapter from '@internal/adapter-sqlite/runtime';
 import { soleDomainNamespaceId } from '@internal/contract/types';
 import sqliteDriver from '@internal/driver-sqlite/runtime';
@@ -19,15 +19,15 @@ const sqlFloat = { codecId: 'sql/float@1' } as const;
 
 const PointBase = model('Point', {
   fields: {
-    id: field.column(integerColumn).id(),
-    seriesId: field.column(integerColumn).column('series_id'),
+    id: field.column(integerNumberColumn).id(),
+    seriesId: field.column(integerNumberColumn).column('series_id'),
     real: field.column(realColumn),
     sqlFloat: field.column(sqlFloat).column('sql_float'),
   },
 }).sql({ table: 'float_points' });
 
 const Series = model('Series', {
-  fields: { id: field.column(integerColumn).id() },
+  fields: { id: field.column(integerNumberColumn).id() },
   relations: { points: rel.hasMany(() => PointBase, { by: 'seriesId' }) },
 }).sql({ table: 'float_series' });
 
