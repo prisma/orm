@@ -139,7 +139,7 @@ The derived tables contain no reference to an outer query, so a database without
 
 ### 5. Keys
 
-The parent key in a child row and the identity in the parent row are the same column, read through the same codec, so they decode to equal JavaScript values. `NestJoin` matches them through `stitchKey(value)`, which turns a decoded key into a string for a `Map`: a `bigint` as its decimal text, a `Uint8Array` as hex, a `Date` or Temporal value as its ISO 8601 text, a number or string as itself; a composite identity as the JSON array of those parts. A key that decodes to any other kind of value fails the read with `ORM.ROW_IDENTITY_MISSING`.
+The parent key in a child row and the identity in the parent row are the same column, read through the same codec, so they decode to equal JavaScript values. `NestJoin` matches them through `stitchKey(value)`, which turns a decoded key into a string for a `Map`: a `bigint` as its decimal text, a `Uint8Array` as hex, a `Date` or Temporal value as its ISO 8601 text, a number, string or boolean as its text; a composite identity as the JSON array of those parts. A key that decodes to any other kind of value fails the read with `ORM.ROW_IDENTITY_MISSING`.
 
 The keys a `FindRelated` sends are the decoded values, encoded through the column's codec like any other parameter, so the database compares them with the column's own type and collation. A single-column identity is written as an `IN` list. A composite identity is written as an `OR` of `AND`s (`anyOf` in `filtered-statement.ts`); the SQL AST has no row-value expression, and this design adds none.
 

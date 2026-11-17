@@ -9,6 +9,7 @@ describe('stitchKey', () => {
   it.each([
     ['a number', 42, '42'],
     ['a string', 'ada', 'ada'],
+    ['a boolean', true, 'true'],
     ['a bigint as its decimal text', 9007199254740993n, '9007199254740993'],
     ['a Uint8Array as hex', new Uint8Array([0, 15, 255]), '000fff'],
     ['a Date as ISO 8601 text', new Date('2026-01-02T03:04:05.006Z'), '2026-01-02T03:04:05.006Z'],
@@ -31,7 +32,6 @@ describe('stitchKey', () => {
   });
 
   it.each([
-    ['a boolean', true],
     ['null', null],
     ['an object', { id: 1 }],
     ['an array', [1]],

@@ -145,7 +145,7 @@ export function relatedReadsOf(include: IncludeExpr): readonly RelatedRead[] {
     return [{ name: include.relationName, include }];
   }
   return Object.entries(include.combine).map(([branchName, branch]) => ({
-    name: `__prisma_combine__${include.relationName}__${branchName}`,
+    name: `__prisma_combine__${JSON.stringify([include.relationName, branchName])}`,
     include: {
       ...include,
       nested: branch.kind === 'rows' ? branch.state : branch.selector.state,

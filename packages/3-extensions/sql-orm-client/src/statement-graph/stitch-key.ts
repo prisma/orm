@@ -11,7 +11,9 @@ export function stitchKey(parts: readonly unknown[]): string {
 
 function partText(value: unknown): string {
   if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'bigint') return String(value);
+  if (typeof value === 'number' || typeof value === 'bigint' || typeof value === 'boolean') {
+    return String(value);
+  }
   if (value instanceof Uint8Array) {
     return Array.from(value, (byte) => byte.toString(16).padStart(2, '0')).join('');
   }
@@ -19,7 +21,7 @@ function partText(value: unknown): string {
   if (isTemporal(value)) return String(value);
   throw ormError(
     'ORM.ROW_IDENTITY_MISSING',
-    `An include matches child rows to their parents by key, and a key value of kind "${kindOf(value)}" cannot be matched. Key a relation by columns that decode to a number, string, bigint, byte array, date or Temporal value.`,
+    `An include matches child rows to their parents by key, and a key value of kind "${kindOf(value)}" cannot be matched. Key a relation by columns that decode to a number, string, bigint, boolean, byte array, date or Temporal value.`,
     { meta: { kind: kindOf(value) } },
   );
 }
