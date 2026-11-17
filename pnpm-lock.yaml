@@ -4441,6 +4441,9 @@ importers:
       '@internal/framework-components':
         specifier: workspace:8.0.0-rc.24
         version: link:../../../../1-framework/1-core/framework-components
+      '@internal/sql-relational-core':
+        specifier: workspace:8.0.0-rc.24
+        version: link:../../../../2-sql-family/4-lanes/relational-core
       '@internal/sql-schema-ir':
         specifier: workspace:8.0.0-rc.24
         version: link:../../../../2-sql-family/1-core/schema-ir

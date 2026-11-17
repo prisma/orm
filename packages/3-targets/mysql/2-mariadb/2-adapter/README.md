@@ -21,6 +21,7 @@ Builds MySQL's control adapter ([`@internal/adapter-mysql`](../../1-mysql/2-adap
   - an unquoted number, such as `0` or `1.50`, stays a literal;
   - any other default, such as `current_timestamp(3)` or `curdate()`, is a function, marked `DEFAULT_GENERATED` as MySQL marks it.
 - **Capabilities** (`src/core/capabilities.ts`): MySQL's, with `returning` off. MariaDB 10.11 has `INSERT … RETURNING` and `DELETE … RETURNING` but no `UPDATE … RETURNING`, and the capability covers every statement kind.
+- **SQL renderer** (`src/core/sql-renderer.ts`): `MariadbSqlRenderer` subclasses MySQL's `MysqlSqlRenderer` and overrides only the upsert. MariaDB takes no row alias on an insert, so the upsert writes none and reads the proposed row's column as `VALUES(column)` where MySQL writes `` `new`.`column` ``. No runtime adapter uses it yet.
 - **Codec types**: `contract.d.ts` imports `CodecTypes` from `@internal/adapter-mariadb/codec-types`, which is MySQL's.
 
 The marker upsert binds its values twice instead of naming a row alias, which MariaDB does not accept, so it is MySQL's statement unchanged. There is no runtime adapter yet.
