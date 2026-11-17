@@ -23,7 +23,7 @@ const r = await handle.transaction((tx) => work(tx), options)   // the transacti
 2. **`withTransaction` takes a parent activity**, so the transaction activity starts beneath the handle's activity, as it does today. How the parent reaches `beginTransactionOn` is the implementer's choice, with the smallest change; the facades' `db.transaction(cb)` does not gain a parameter.
 3. **Where the connection comes from**, per handle scope. In every case, giving the connection back is `withTransaction`'s `release()` / `destroy()`:
    - **On the runtime:** a new connection opened beneath the handle's activity, as `beginOwnedTransactionBeneath` does today.
-   - **On a connection the caller holds:** that connection, with `release()` and `destroy()` doing nothing, so `withTransaction` leaves it held whatever the outcome, as on main; its holder releases or destroys it. The guard that rejects a second transaction on the connection (`RUNTIME.TRANSACTION_ALREADY_OPEN`) stays. The operator chose this as the smallest change; these handles are not public API.
+   - **On a connection the caller holds:** that connection, with `release()` doing nothing, so `withTransaction` leaves it held after a commit or a rollback. `destroy()` is passed through, so after a failed `BEGIN`, a failed `ROLLBACK` or a timeout the connection is destroyed and never returns to the pool. A runtime connection remembers that it was destroyed, and a later `release()` on it resolves without calling the driver, so the code that took the connection can still release it. The guard that rejects a second transaction on the connection (`RUNTIME.TRANSACTION_ALREADY_OPEN`) stays. The operator chose this as the smallest change; these handles are not public API.
    - **Supabase `forRole`:** the role session from `openRoleConnection(binding, { activityParent })`. Its `release()` already resets the role and releases the connection.
 4. **The owned transaction is removed:** `owned-transaction.ts`, `beginOwnedTransactionBeneath`, `ownTransaction` (and its mention in the runtime README), and the `self` reference in `runtime-transaction.ts` that the `Object.create` wrapper needed.
 5. **`rollback()` after a commit rejects `RUNTIME.TRANSACTION_CLOSED`**, on `OuterTransaction` and `Savepoint`, whether the commit resolved or rejected with a hook error after the database committed. It sends nothing. `withTransaction` never calls `rollback()` after a commit, and `runInTransaction` is gone. Main's three tests for this case (two in `with-transaction.failures.test.ts`, one in `transaction-activity.inside.test.ts`) are changed to expect the rejection.
@@ -59,7 +59,7 @@ Beyond CI, review and the project DoD:
 
 - [ ] `owned-transaction.ts`, `beginOwnedTransactionBeneath`, `ownTransaction` and the `self` reference no longer exist; `grep` finds no references outside `projects/`.
 - [ ] A handle's `transaction(fn)` on the runtime starts its transaction activity beneath the handle's activity, commits and releases the connection; when `fn` throws it rolls back, releases, and rethrows.
-- [ ] On a held connection, `transaction(fn)` leaves the connection held after commit, after rollback and after a failed `ROLLBACK`, and a second one while the first is open rejects `TRANSACTION_ALREADY_OPEN`.
+- [ ] On a held connection, `transaction(fn)` leaves the connection held after commit and after rollback, destroys it after a failed `ROLLBACK` with a later `release()` resolving without reaching the driver, and a second one while the first is open rejects `TRANSACTION_ALREADY_OPEN`.
 - [ ] Supabase `forRole` transactions run through the callback, and the role session is released (role reset) after they settle.
 - [ ] `rollback()` after a resolved commit and after a commit that rejected with a hook error rejects `TRANSACTION_CLOSED` and sends nothing.
 - [ ] A run-graph test shows a failed `COMMIT` in the ORM's implicit transaction rejecting `RUNTIME.TRANSACTION_COMMIT_FAILED` with the driver error as `cause`.
@@ -85,7 +85,7 @@ About 700 changed lines, over the 500-line cap; the operator accepted it as one 
 
 ## Amendments
 
-- **D1 review R1: a held connection is never destroyed by the handle's transaction.** The first version passed `destroy()` through, so a failed `BEGIN`, a failed `ROLLBACK` or a timeout destroyed a connection the caller still held, and the holder's later `release()` rejected on Postgres. `destroy()` now does nothing on a held connection, which keeps main's behaviour. Decided by the orchestrator under the operator's "smallest change" instruction.
+- **D1 review R1: `release()` after `destroy()` resolves.** The first version passed `destroy()` through on a held connection, so the later `release()` by the code that took the connection rejected on Postgres. Leaving the connection alone instead would return a connection in an unknown state to the pool. The operator chose to keep `destroy()` and make a runtime connection's `release()` after `destroy()` resolve without calling the driver.
 - **D1 R1: the parent reaches `beginTransactionOn` through the connection.** A route's `transaction` returns a `ConnectionProvider` whose connection begins transactions beneath the handle's activity; `withTransaction`'s signature does not change.
 
 ## References
