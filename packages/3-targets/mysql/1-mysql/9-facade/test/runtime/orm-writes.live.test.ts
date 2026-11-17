@@ -1,12 +1,12 @@
 import type { SqlMiddleware } from '@internal/sql-runtime';
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import { defineContract } from '../../src/exports/contract-builder';
 import mysql from '../../src/runtime/mysql';
 import { contractFromJson } from '../../src/static/contract-from-json';
 import { exampleTablesDdl } from '../example-contract';
 import type { Contract } from '../fixtures/generated/contract.d';
 import contractJson from '../fixtures/generated/contract.json' with { type: 'json' };
+import { ticksContract } from './live-contracts';
 import { exampleDatabase, withSeededDatabase } from './live-database';
 
 const contract = contractFromJson<Contract>(contractJson);
@@ -98,18 +98,11 @@ describe('MySQL writes through the ORM', { timeout: timeouts.databaseOperation }
   });
 
   it('createAll returns rows keyed by a DATETIME(3) with milliseconds, in any order', async (test) => {
-    const ticks = defineContract({}, ({ field, model, type }) => ({
-      models: {
-        Tick: model('Tick', {
-          fields: { at: field.column(type.DateTime()).id(), label: field.column(type.String()) },
-        }),
-      },
-    }));
     const seeded = [
       'CREATE TABLE `Tick` (`at` datetime(3) NOT NULL, `label` varchar(191) NOT NULL, PRIMARY KEY (`at`))',
     ];
     await withSeededDatabase(test, seeded, async (url) => {
-      await using db = mysql({ contract: ticks, url, verifyMarker: false });
+      await using db = mysql({ contract: ticksContract, url, verifyMarker: false });
       const later = new Date('2024-01-02T03:04:05.678Z');
       const earlier = new Date('2024-01-02T03:04:05.123Z');
       const created = await db.orm.Tick.createAll([

@@ -46,7 +46,12 @@ import { describe, expect, it } from 'vitest';
 import { renderMysqlSql } from '../src/core/sql-renderer';
 
 const codecs = createMysqlBuiltinCodecLookup();
-const lower = (ast: AnyQueryAst) => renderMysqlSql(ast, undefined, codecs);
+/** Renders `ast` and records what it rendered as a snapshot, so every input below pins the SQL MySQL is sent. */
+const lower = (ast: AnyQueryAst) => {
+  const lowered = renderMysqlSql(ast, undefined, codecs);
+  expect(lowered).toMatchSnapshot();
+  return lowered;
+};
 const sqlOf = (ast: AnyQueryAst) => lower(ast).sql;
 
 const id = ColumnRef.of('user', 'id');

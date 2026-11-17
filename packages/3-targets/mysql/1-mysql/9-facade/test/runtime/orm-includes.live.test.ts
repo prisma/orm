@@ -1,52 +1,13 @@
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import { defineContract, rel } from '../../src/exports/contract-builder';
 import mysql from '../../src/runtime/mysql';
 import { contractFromJson } from '../../src/static/contract-from-json';
 import type { Contract } from '../fixtures/generated/contract.d';
 import contractJson from '../fixtures/generated/contract.json' with { type: 'json' };
+import { eventsContract, notesContract } from './live-contracts';
 import { exampleDatabase, withSeededDatabase } from './live-database';
 
 const contract = contractFromJson<Contract>(contractJson);
-
-const eventsContract = defineContract({}, ({ field, model, type }) => {
-  const Account = model('Account', {
-    fields: { id: field.column(type.Int()).id(), name: field.column(type.String()) },
-  });
-  const Event = model('Event', {
-    fields: {
-      id: field.column(type.BigInt()).id(),
-      at: field.column(type.DateTime()),
-      accountId: field.column(type.Int()),
-    },
-  });
-  return {
-    models: {
-      Account: Account.relations({ events: rel.hasMany(Event, { by: 'accountId' }) }),
-      Event: Event.relations({
-        account: rel.belongsTo(Account, { from: 'accountId', to: 'id' }),
-      }),
-    },
-  };
-});
-
-const notesContract = defineContract({}, ({ field, model, type }) => {
-  const Author = model('Author', { fields: { id: field.column(type.Int()).id() } });
-  const Note = model('Note', {
-    fields: {
-      id: field.column(type.Int()).id(),
-      body: field.column(type.String()),
-      summary: field.column(type.String()).optional(),
-      authorId: field.column(type.Int()),
-    },
-  });
-  return {
-    models: {
-      Author: Author.relations({ notes: rel.hasMany(Note, { by: 'authorId' }) }),
-      Note: Note.relations({ author: rel.belongsTo(Author, { from: 'authorId', to: 'id' }) }),
-    },
-  };
-});
 
 const awkwardText = 'it\'s "quoted", a \\ backslash, ünïcödé and 🙂';
 

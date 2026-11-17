@@ -5,22 +5,14 @@ import { createControlStack } from '@internal/framework-components/control';
 import mysqlTarget from '@internal/target-mysql/control';
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it, vi } from 'vitest';
-import { defineContract } from '../../src/exports/contract-builder';
 import mysql from '../../src/runtime/mysql';
 import { contractFromJson } from '../../src/static/contract-from-json';
 import type { Contract } from '../fixtures/generated/contract.d';
 import contractJson from '../fixtures/generated/contract.json' with { type: 'json' };
+import { countersContract } from './live-contracts';
 import { exampleDatabase, withSeededDatabase } from './live-database';
 
 const contract = contractFromJson<Contract>(contractJson);
-
-const countersContract = defineContract({}, ({ field, model, type }) => ({
-  models: {
-    Counter: model('Counter', {
-      fields: { id: field.column(type.Int()).id(), big: field.column(type.BigInt()) },
-    }),
-  },
-}));
 
 const countersDatabase = [
   'CREATE TABLE `Counter` (`id` int NOT NULL, `big` bigint NOT NULL, PRIMARY KEY (`id`))',
