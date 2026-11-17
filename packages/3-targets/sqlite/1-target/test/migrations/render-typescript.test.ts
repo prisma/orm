@@ -275,6 +275,20 @@ describe('renderCallsToTypeScript (sqlite) — the sql import', () => {
     expect(allCallClasses.filter((cls) => !covered.has(cls)).map((cls) => cls.name)).toEqual([]);
   });
 
+  it('imports every package name from the module the config names, for every op-factory-call class', () => {
+    const output = renderTypeScript([...oneCallPerClass, ...templateCalls, ...fallbackOnlyCalls], {
+      from: FROM_HASH,
+      to: TO_HASH,
+      snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+      migrationModule: '@acme/orm-db/migration',
+    });
+    const packageImports = [...output.matchAll(/from '([^']+)'/g)]
+      .map(([, module]) => module ?? '')
+      .filter((module) => !module.startsWith('.'));
+
+    expect(packageImports).toEqual(['@acme/orm-db/migration']);
+  });
+
   it.each(
     [...oneCallPerClass, ...templateCalls, ...fallbackOnlyCalls].map((call) => ({
       name: call.constructor.name,

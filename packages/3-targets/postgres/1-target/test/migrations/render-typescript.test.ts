@@ -300,6 +300,20 @@ describe('renderCallsToTypeScript (postgres) — facade import surface', () => {
     expect(missing).toEqual([]);
   });
 
+  it('imports every package name from the module the config names, for every op-factory-call class', () => {
+    const output = renderTypeScript([...oneCallPerClass, ...sqlTextCalls, ...fallbackOnlyCalls], {
+      from: FROM_HASH,
+      to: TO_HASH,
+      snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+      migrationModule: '@acme/orm-db/migration',
+    });
+    const packageImports = [...output.matchAll(/from '([^']+)'/g)]
+      .map(([, module]) => module ?? '')
+      .filter((module) => !module.startsWith('.'));
+
+    expect(packageImports).toEqual(['@acme/orm-db/migration']);
+  });
+
   it('every symbol a rendered migration imports from the facade is actually exported by it', () => {
     const output = renderTypeScript(oneCallPerClass, {
       from: FROM_HASH,
