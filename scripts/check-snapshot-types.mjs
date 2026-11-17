@@ -14,7 +14,9 @@
  * written by earlier versions of the emitter, and inputs frozen for upgrade
  * tests, which are not expected to typecheck against today's packages.
  *
- * Needs a prior `pnpm build`: snapshots import the packages' built types.
+ * Needs a prior `pnpm build`: snapshots import the packages' built types. The
+ * CI lint job runs it through `scripts/check-snapshot-types.test.mjs` in
+ * `pnpm test:scripts`, after its build step. Finding no snapshot is a failure.
  *
  * Usage: node scripts/check-snapshot-types.mjs [<repo root>] [<folder under it>]
  */
@@ -65,8 +67,12 @@ function compilerOptionsOf(folder) {
 
 /** Every diagnostic in a snapshot file under `root`, formatted one per line. */
 export function snapshotDiagnostics(root, under = 'packages') {
+  const files = snapshotFiles(root, under);
+  if (files.length === 0) {
+    return [`${under}/: no snapshot declaration files found, so nothing was checked`];
+  }
   const byProject = new Map();
-  for (const file of snapshotFiles(root, under)) {
+  for (const file of files) {
     const absolute = resolve(root, file);
     const folder = projectFolderOf(absolute);
     byProject.set(folder, [...(byProject.get(folder) ?? []), absolute]);

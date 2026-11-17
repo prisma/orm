@@ -4,8 +4,11 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, it } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
-import { snapshotDiagnostics } from './check-snapshot-types.mjs';
+import { snapshotDiagnostics, snapshotFiles } from './check-snapshot-types.mjs';
+
+const REPO_ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 
 const SNAPSHOT = 'packages/app/migrations/snapshots/abc/contract.d.ts';
 
@@ -61,8 +64,23 @@ describe('check-snapshot-types', () => {
 
   it('ignores a contract.d.ts outside a snapshot folder', () => {
     write('packages/app/src/contract.d.ts', "import type { Id } from './missing';\n");
+    write(SNAPSHOT, 'export type Contract = { id: string };\n');
     commitAll();
 
     assert.deepEqual(snapshotDiagnostics(repo), []);
+  });
+
+  it('fails when it finds no snapshot to check', () => {
+    commitAll();
+
+    assert.equal(snapshotDiagnostics(repo).length, 1);
+    assert.match(snapshotDiagnostics(repo)[0], /no snapshot declaration files found/);
+  });
+});
+
+describe('the snapshot declarations under packages/ in this repository', () => {
+  it('typecheck with their imports resolved', () => {
+    assert.ok(snapshotFiles(REPO_ROOT).length > 0);
+    assert.deepEqual(snapshotDiagnostics(REPO_ROOT), []);
   });
 });
