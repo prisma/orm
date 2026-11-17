@@ -204,6 +204,14 @@ describe('what the check allows', () => {
     assert.match(allowanceFor(archived, `// use ${LEGACY}`).why, /dated record/);
   });
 
+  it('allows a pending upgrade fragment to name what it renames from', () => {
+    const fragment = 'upgrade-instructions/pending/some-rename/app/instructions.md';
+    const oldType = ['Prisma', 'Next', 'Config'].join('');
+    write(fragment, `Rename \`${oldType}\` to \`PrismaConfig\`.\n`);
+    const result = run();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+  });
+
   it('allows the Prisma 8 skill to say once that it was formerly called by the old name', () => {
     const skill = 'skills/prisma-8/SKILL.md';
     const formerName = ['Prisma', 'Next'].join(' ');

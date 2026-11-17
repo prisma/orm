@@ -80,9 +80,9 @@ const COMPATIBILITY_SITES = new Set([
  */
 const ALLOWED = [
   {
-    why: 'a dated record of past work — the changelog, the release notes, the ADRs, the shipped upgrade instructions and their archived sources, the gotcha logs, the framework-gaps review, the `projects/` and `drive/` write-ups, and committed migration steps and their content-addressed contract snapshots. Each says what was true, decided, or observed at a time when the old name was the name; rewriting one would misreport it (or break its hash)',
+    why: 'a dated record of past work — the changelog, the release notes, the ADRs, the upgrade instructions, pending or shipped, and their archived sources (each names what it renames from), the gotcha logs, the framework-gaps review, the `projects/` and `drive/` write-ups, and committed migration steps and their content-addressed contract snapshots. Each says what was true, decided, or observed at a time when the old name was the name; rewriting one would misreport it (or break its hash)',
     matches: (relPath) =>
-      /^(CHANGELOG\.md|docs\/releases\/v[^/]*\.md|docs\/architecture docs\/adrs\/|docs\/reference\/framework-gaps\.md|skills\/prisma-8\/upgrading\/|upgrade-instructions\/releases\/|projects\/|drive\/)/.test(
+      /^(CHANGELOG\.md|docs\/releases\/v[^/]*\.md|docs\/architecture docs\/adrs\/|docs\/reference\/framework-gaps\.md|skills\/prisma-8\/upgrading\/|upgrade-instructions\/(?:releases|pending)\/|projects\/|drive\/)/.test(
         relPath,
       ) ||
       /(^|\/)gotchas\.md$/.test(relPath) ||
