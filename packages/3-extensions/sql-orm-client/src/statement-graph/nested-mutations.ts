@@ -90,6 +90,7 @@ import {
   createRowOf,
   modelOf,
   mtiCreateContextOf,
+  updateDefaultsOf,
   updateValuesOf,
   withCreateDefaults,
 } from './storage-rows';
@@ -379,7 +380,8 @@ function addConditionalUnlink(
     criteria.length === 0
       ? [variantWhere(contract, mutation.state, undefined)]
       : criteria.map((criterion) => requiredCriterion(context, related, name, mutation, criterion));
-  const unlink = Object.fromEntries(localColumns.map((column) => [column, null]));
+  const nulls = Object.fromEntries(localColumns.map((column) => [column, null]));
+  const unlink = { ...nulls, ...updateDefaultsOf(context, model, nulls) };
   for (const where of wheres) {
     const target = SelectAst.from(related.tables.root.tableSource(contract)).withProjection(
       targets,

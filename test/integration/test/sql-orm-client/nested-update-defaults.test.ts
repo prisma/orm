@@ -101,4 +101,18 @@ describe('integration/update() with a relation the parent holds the key for', ()
     },
     timeouts.spinUpPpgDev,
   );
+  it(
+    'advances the update default when the only change is a disconnect whose criteria match the linked row',
+    async () => {
+      await withArticles(async (articles) => {
+        const updated = await articles
+          .select('id', 'authorId', 'updatedAt')
+          .where({ id: 10 })
+          .update({ author: (author) => author.disconnect([{ id: 1 }]) });
+
+        await expectAdvanced(articles, updated, null);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
 });

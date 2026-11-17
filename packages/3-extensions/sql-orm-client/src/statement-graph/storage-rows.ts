@@ -261,14 +261,23 @@ export function withUpdateDefaults(
   if (Object.keys(written).length === 0) {
     return values;
   }
-  const { namespaceId, tableName } = collection.state.tables.root.storage;
-  for (const applied of collection.context.applyMutationDefaults({
-    op: 'update',
-    entry: tableName,
-    namespace: namespaceId,
-    values: written,
-  })) {
-    values[applied.field] = applied.value;
-  }
-  return values;
+  return { ...values, ...updateDefaultsOf(collection.context, modelOf(collection), written) };
+}
+
+export function updateDefaultsOf(
+  context: ExecutionContext,
+  model: Model,
+  written: Readonly<Record<string, unknown>>,
+): Record<string, unknown> {
+  const { namespaceId, tableName } = model.tables.root.storage;
+  return Object.fromEntries(
+    context
+      .applyMutationDefaults({
+        op: 'update',
+        entry: tableName,
+        namespace: namespaceId,
+        values: written,
+      })
+      .map((applied) => [applied.field, applied.value]),
+  );
 }
