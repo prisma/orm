@@ -21,6 +21,6 @@ export default definePrismaConfig({
       createNamespace: sqliteCreateNamespace,
     }),
     db: { connection: '{{DB_PATH}}' },
-    migrations: { dir: 'migrations' },
+    migrations: { dir: 'migrations', module: '@internal/sqlite/migration' },
   }),
 });

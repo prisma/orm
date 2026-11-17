@@ -14,48 +14,23 @@ import {
   contractSnapshotTypesSpecifier,
   type OpFactoryCall,
 } from '@internal/framework-components/control';
-import {
-  type ImportSpecifierResolver,
-  resolveRequirementSpecifiers,
-} from '@internal/framework-components/emission';
 import { detectScaffoldRuntime, shebangLineFor } from '@internal/migration-tools/migration-ts';
 import { type ImportRequirement, renderImports } from '@internal/ts-render';
+import { MIGRATION_MODULE } from './op-factory-call';
 
 export interface RenderMigrationMeta {
   readonly from: string | null;
   readonly to: string;
   /** POSIX-relative path from the migration package dir to `migrations/snapshots`, e.g. '../../snapshots'. */
   readonly snapshotsImportPath: string;
-  /**
-   * Rewrites the package names the scaffold imports from, for the import root
-   * the consuming application installed. Applied once to the assembled
-   * requirement list rather than at each `OpFactoryCall`, so a new operation
-   * cannot forget it. Defaults to leaving specifiers as authored.
-   */
-  readonly resolveImportSpecifier?: ImportSpecifierResolver;
+  /** The module the rendered file imports its base class, its CLI entrypoint and every operation helper from: the config's `migrations.module`. */
+  readonly migrationModule: string;
 }
 
-/**
- * Always-present base imports for the rendered scaffold. Both come from
- * `@internal/postgres/migration` so an authored Postgres
- * `migration.ts` only needs a single dependency for its base class and
- * its CLI entrypoint:
- *
- * - `Migration` — the facade re-export fixes the `SqlMigration`
- *   generic to `PostgresPlanTargetDetails` and the abstract `targetId`
- *   to `'postgres'`, so user-authored migrations don't need to thread
- *   target-details or redeclare `targetId`.
- * - `MigrationCLI` — the migration-file CLI entrypoint, re-exported from
- *   `@internal/cli/migration-cli`. Loads `prisma.config.ts`,
- *   assembles a `ControlStack`, and instantiates the migration class.
- *   The migration file owns this dependency directly: pulling CLI
- *   machinery in at script run time is acceptable because the script's
- *   whole purpose is to be invoked from the project that owns the
- *   config.
- */
+/** The base class and the CLI entrypoint every scaffold imports. */
 const BASE_IMPORTS: readonly ImportRequirement[] = [
-  { moduleSpecifier: '@internal/postgres/migration', symbol: 'Migration' },
-  { moduleSpecifier: '@internal/postgres/migration', symbol: 'MigrationCLI' },
+  { moduleSpecifier: MIGRATION_MODULE, symbol: 'Migration' },
+  { moduleSpecifier: MIGRATION_MODULE, symbol: 'MigrationCLI' },
 ];
 
 export function renderCallsToTypeScript(
@@ -98,7 +73,13 @@ function buildImports(calls: ReadonlyArray<OpFactoryCall>, meta: RenderMigration
       requirements.push(req);
     }
   }
-  return renderImports(resolveRequirementSpecifiers(requirements, meta.resolveImportSpecifier));
+  return renderImports(
+    requirements.map((requirement) =>
+      requirement.moduleSpecifier === MIGRATION_MODULE
+        ? { ...requirement, moduleSpecifier: meta.migrationModule }
+        : requirement,
+    ),
+  );
 }
 
 /**

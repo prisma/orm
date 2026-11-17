@@ -16,22 +16,3 @@ export type ImportSpecifierResolver = (specifier: string) => string;
  * repository imports published names instead.
  */
 export const keepInternalSpecifiers: ImportSpecifierResolver = (specifier) => specifier;
-
-/**
- * Applies a resolver to an assembled import-requirement list, once, after
- * every contributor has added its requirements.
- *
- * Each target's migration renderer does exactly this, and doing it here rather
- * than per renderer is what makes "applied once to the whole list" a property
- * of the emission surface instead of three coincidences. Omitting the resolver
- * means {@link keepInternalSpecifiers}.
- */
-export function resolveRequirementSpecifiers<T extends { readonly moduleSpecifier: string }>(
-  requirements: readonly T[],
-  resolve: ImportSpecifierResolver = keepInternalSpecifiers,
-): Array<Omit<T, 'moduleSpecifier'> & { readonly moduleSpecifier: string }> {
-  return requirements.map((requirement) => ({
-    ...requirement,
-    moduleSpecifier: resolve(requirement.moduleSpecifier),
-  }));
-}

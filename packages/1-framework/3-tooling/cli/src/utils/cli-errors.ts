@@ -404,6 +404,23 @@ export function errorSpaceNotFound(
 }
 
 /**
+ * A command that renders a `migration.ts` was run with a config that names no module for it to import from.
+ */
+export function errorMigrationModuleMissing(): ActionableCliError {
+  const fix =
+    "Build the config with your target package's `defineConfig`, such as the one from `@prisma/orm-postgres/config`, which sets `migrations.module`; a config assembled by hand sets `migrations.module` itself.";
+  return new ActionableCliError(
+    'CONFIG.MIGRATION_MODULE_MISSING',
+    'Config names no migration module',
+    {
+      why: 'Config.migrations.module is not set, so a rendered migration.ts has no module to import Migration, MigrationCLI and the operation helpers from.',
+      fix,
+      nextActions: [editFileAction(fix)],
+    },
+  );
+}
+
+/**
  * A `migration show` target resolved to a directory or a graph node, but no
  * on-disk package was loaded for it.
  */

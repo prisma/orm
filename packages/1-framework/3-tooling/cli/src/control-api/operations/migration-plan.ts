@@ -26,7 +26,6 @@ import { deriveProvidedInvariants } from '@internal/migration-tools/invariants';
 import { formatMigrationDirName, writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
 import { writeMigrationTs } from '@internal/migration-tools/migration-ts';
-import type { ImportSpecifierResolver } from '@internal/publish-surface/import-roots';
 import { castAs } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
@@ -44,6 +43,7 @@ import {
 } from '../../utils/cli-errors';
 import {
   getTargetMigrations,
+  migrationModuleOf,
   resolveContractPath,
   resolveMigrationPaths,
 } from '../../utils/command-helpers';
@@ -182,7 +182,7 @@ async function runPlannerLeg(
   spaceId: string,
   ownership: SchemaOwnership,
   snapshotsImportPath: string,
-  resolveImportSpecifier: ImportSpecifierResolver,
+  migrationModule: string,
   refused: (conflicts: readonly MigrationPlannerConflict[]) => CliStructuredError = (conflicts) =>
     errorMigrationPlanningFailed({ conflicts: castAs<readonly CliErrorConflict[]>(conflicts) }),
 ): Promise<Result<PlannerSuccess, CliStructuredError>> {
@@ -251,7 +251,7 @@ async function runPlannerLeg(
   return ok({
     plannedOps,
     listedOps: listed.filter((op): op is OperationSummary => op !== undefined),
-    migrationTsContent: plannerResult.plan.renderTypeScript(resolveImportSpecifier),
+    migrationTsContent: plannerResult.plan.renderTypeScript(migrationModule),
     hasPlaceholders,
     dataLoss: plannerResult.dataLoss.map(
       ({ operationIndex, subject, loss, label, keepDataAdvice, keepDataEdit }) => ({
@@ -526,6 +526,10 @@ async function executeMigrationPlanCommandInner(
 ): Promise<Result<MigrationPlanResult, CliStructuredError>> {
   const config = options.config;
   const cwd = options.cwd;
+  const migrationModule = migrationModuleOf(config);
+  if (!migrationModule.ok) {
+    return migrationModule;
+  }
   const { configPath, migrationsDir, appMigrationsDir, appMigrationsRelative } =
     resolveMigrationPaths(config, cwd);
 
@@ -862,7 +866,7 @@ async function executeMigrationPlanCommandInner(
         aggregate.app.spaceId,
         aggregate,
         snapshotsImportPathFrom(baselinePackageDir, migrationsDir),
-        resolveImportSpecifier,
+        migrationModule.value,
       );
       if (!baselineLeg.ok) {
         return baselineLeg;
@@ -883,7 +887,7 @@ async function executeMigrationPlanCommandInner(
           aggregate.app.spaceId,
           aggregate,
           snapshotsImportPathFrom(deltaPackageDir, migrationsDir),
-          resolveImportSpecifier,
+          migrationModule.value,
           refusedWith(texts, resolved),
         );
       const plannedDelta =
@@ -1084,7 +1088,7 @@ async function executeMigrationPlanCommandInner(
         aggregate.app.spaceId,
         aggregate,
         snapshotsImportPathFrom(packageDir, migrationsDir),
-        resolveImportSpecifier,
+        migrationModule.value,
         refusedWith(texts, resolved),
       );
     const plannedDelta = await planDelta(statementTexts, statements);

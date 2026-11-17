@@ -2,50 +2,23 @@ import {
   contractSnapshotJsonSpecifier,
   contractSnapshotTypesSpecifier,
 } from '@internal/framework-components/control';
-import {
-  type ImportSpecifierResolver,
-  resolveRequirementSpecifiers,
-} from '@internal/framework-components/emission';
 import { detectScaffoldRuntime, shebangLineFor } from '@internal/migration-tools/migration-ts';
 import { type ImportRequirement, renderImports } from '@internal/ts-render';
-import { type OpFactoryCall, TARGET_MIGRATION_MODULE } from './op-factory-call';
+import { MIGRATION_MODULE, type OpFactoryCall } from './op-factory-call';
 
 export interface RenderMigrationMeta {
   readonly from: string | null;
   readonly to: string;
   /** POSIX-relative path from the migration package dir to `migrations/snapshots`, e.g. '../../snapshots'. */
   readonly snapshotsImportPath: string;
-  /**
-   * Rewrites the package names the scaffold imports from, for the import root
-   * the consuming application installed. Applied once to the assembled
-   * requirement list rather than at each `OpFactoryCall`, so a new operation
-   * cannot forget it. Defaults to leaving specifiers as authored.
-   */
-  readonly resolveImportSpecifier?: ImportSpecifierResolver;
+  /** The module the rendered file imports its base class, its CLI entrypoint and every operation helper from: the config's `migrations.module`. */
+  readonly migrationModule: string;
 }
 
-/**
- * Always-present base imports for the rendered scaffold, both from the
- * target's own `migration` entry:
- *
- * - `Migration` — the user-facing Mongo `Migration` base, forwarded from
- *   `@internal/family-mongo`; subclasses don't need to redeclare
- *   `targetId` or thread family/target generics.
- * - `MigrationCLI` — the migration-file CLI entrypoint that loads
- *   `prisma.config.ts`, assembles a `ControlStack`, and instantiates
- *   the migration class. The migration file owns this dependency directly:
- *   pulling CLI machinery in at script run time is acceptable because the
- *   script's whole purpose is to be invoked from the project that owns the
- *   config.
- *
- * Naming one package rather than three is what lets an application that
- * installed only `@prisma/orm-mongo` run a scaffolded migration: emitted
- * code may name only a direct dependency (ADR 242), and the facade carries
- * the target's `migration` entry but neither the family base nor the CLI.
- */
+/** The base class and the CLI entrypoint every scaffold imports. */
 const BASE_IMPORTS: readonly ImportRequirement[] = [
-  { moduleSpecifier: TARGET_MIGRATION_MODULE, symbol: 'Migration' },
-  { moduleSpecifier: TARGET_MIGRATION_MODULE, symbol: 'MigrationCLI' },
+  { moduleSpecifier: MIGRATION_MODULE, symbol: 'Migration' },
+  { moduleSpecifier: MIGRATION_MODULE, symbol: 'MigrationCLI' },
 ];
 
 /**
@@ -53,8 +26,7 @@ const BASE_IMPORTS: readonly ImportRequirement[] = [
  * The result is shebanged, imports the contract JSON from the shared
  * snapshot store (the destination contract, plus the source contract for a
  * non-baseline migration), extends `Migration<Start, End>` (or
- * `Migration<never, End>` for a baseline) from
- * `@internal/target-mongo/migration`,
+ * `Migration<never, End>` for a baseline) from the config's migration module,
  * assigns the JSON to `endContractJson` / `startContractJson`, and implements
  * `operations`. The `Migration` base derives `describe()` from those fields.
  *
@@ -102,7 +74,13 @@ function buildImports(calls: ReadonlyArray<OpFactoryCall>, meta: RenderMigration
       requirements.push(req);
     }
   }
-  return renderImports(resolveRequirementSpecifiers(requirements, meta.resolveImportSpecifier));
+  return renderImports(
+    requirements.map((requirement) =>
+      requirement.moduleSpecifier === MIGRATION_MODULE
+        ? { ...requirement, moduleSpecifier: meta.migrationModule }
+        : requirement,
+    ),
+  );
 }
 
 /**

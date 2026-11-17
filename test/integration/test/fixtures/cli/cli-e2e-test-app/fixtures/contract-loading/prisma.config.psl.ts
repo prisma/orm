@@ -20,6 +20,6 @@ export default definePrismaConfig({
       createNamespace: postgresCreateNamespace,
     }),
     db: { connection: '{{DB_URL}}' },
-    migrations: { dir: 'migrations' },
+    migrations: { dir: 'migrations', module: '@internal/postgres/migration' },
   }),
 });

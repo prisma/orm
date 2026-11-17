@@ -9,6 +9,7 @@ import {
 } from '@internal/sql-relational-core/contract-free';
 import { parseNaming } from '@internal/sql-schema-ir/naming';
 import { TsExpression } from '@internal/ts-render';
+import { workspaceMigrationModule } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { postgresDataTypes } from '../../src/core/data-types';
 import * as opFactoryCalls from '../../src/core/migrations/op-factory-call';
@@ -81,6 +82,7 @@ describe('renderCallsToTypeScript (postgres)', () => {
       from: FROM_HASH,
       to: TO_HASH,
       snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+      migrationModule: workspaceMigrationModule.postgres,
     });
 
     expect(output).toContain(
@@ -110,6 +112,7 @@ describe('renderCallsToTypeScript (postgres)', () => {
       from: FROM_HASH,
       to: TO_HASH,
       snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+      migrationModule: workspaceMigrationModule.postgres,
     });
 
     expect(output).not.toContain('describe()');
@@ -124,6 +127,7 @@ describe('renderCallsToTypeScript (postgres)', () => {
       from: null,
       to: TO_HASH,
       snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+      migrationModule: workspaceMigrationModule.postgres,
     });
 
     expect(output).toContain('export default class M extends Migration<never, End> {');
@@ -144,6 +148,7 @@ describe('renderCallsToTypeScript (postgres)', () => {
       from: null,
       to: TO_HASH,
       snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+      migrationModule: workspaceMigrationModule.postgres,
     });
     expect(output).toContain('this.createSchema({ schema: "app" })');
   });
@@ -153,6 +158,7 @@ describe('renderCallsToTypeScript (postgres)', () => {
       from: TO_HASH,
       to: TO_HASH,
       snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+      migrationModule: workspaceMigrationModule.postgres,
     });
 
     expect(output).toContain(
@@ -299,6 +305,7 @@ describe('renderCallsToTypeScript (postgres) — facade import surface', () => {
       from: FROM_HASH,
       to: TO_HASH,
       snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+      migrationModule: workspaceMigrationModule.postgres,
     });
 
     const facadeImport = output.match(
@@ -377,6 +384,7 @@ describe('renderCallsToTypeScript (postgres) — facade import surface', () => {
       from: null,
       to: TO_HASH,
       snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+      migrationModule: workspaceMigrationModule.postgres,
     });
     const body = output.slice(output.indexOf('export default class'));
 
@@ -391,6 +399,7 @@ describe('renderCallsToTypeScript (postgres) — facade import surface', () => {
             from: null,
             to: TO_HASH,
             snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+            migrationModule: workspaceMigrationModule.postgres,
           }),
         ),
     );
@@ -411,6 +420,7 @@ describe('renderCallsToTypeScript (postgres) — facade import surface', () => {
       from: FROM_HASH,
       to: TO_HASH,
       snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+      migrationModule: workspaceMigrationModule.postgres,
     });
 
     const endContractImportLines = output
@@ -430,7 +440,12 @@ describe('renderCallsToTypeScript (postgres) — facade import surface', () => {
         new DropPostgresRlsPolicyCall('public', 'note', 'p_stale'),
         new DisableRowLevelSecurityCall('public', 'note'),
       ],
-      { from: null, to: TO_HASH, snapshotsImportPath: SNAPSHOTS_IMPORT_PATH },
+      {
+        from: null,
+        to: TO_HASH,
+        snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+        migrationModule: workspaceMigrationModule.postgres,
+      },
     );
 
     expect(output).toContain('this.enableRowLevelSecurity({ schema: "public", table: "note" })');

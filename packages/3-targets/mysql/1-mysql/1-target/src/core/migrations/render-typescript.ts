@@ -3,35 +3,23 @@ import {
   contractSnapshotTypesSpecifier,
   type OpFactoryCall,
 } from '@internal/framework-components/control';
-import {
-  type ImportSpecifierResolver,
-  keepInternalSpecifiers,
-  resolveRequirementSpecifiers,
-} from '@internal/framework-components/emission';
 import { detectScaffoldRuntime, shebangLineFor } from '@internal/migration-tools/migration-ts';
 import { type ImportRequirement, renderImports } from '@internal/ts-render';
-import { MIGRATION_MODULE_PLACEHOLDER } from './op-factory-call';
+import { MIGRATION_MODULE } from './op-factory-call';
 
 export interface RenderMigrationMeta {
   readonly from: string | null;
   readonly to: string;
   /** POSIX-relative path from the migration package dir to `migrations/snapshots`, e.g. '../../snapshots'. */
   readonly snapshotsImportPath: string;
-  /**
-   * Rewrites the package names the scaffold imports from, for the import root
-   * the consuming application installed. Applied once to the assembled
-   * requirement list rather than at each `OpFactoryCall`, so a new operation
-   * cannot forget it. Defaults to leaving specifiers as authored.
-   */
-  readonly resolveImportSpecifier?: ImportSpecifierResolver;
-  /** The facade `migration` module of the target the scaffold is for, which replaces `MIGRATION_MODULE_PLACEHOLDER` in every import. */
+  /** The module the rendered file imports its base class, its CLI entrypoint and every operation helper from: the config's `migrations.module`. */
   readonly migrationModule: string;
 }
 
 /** The base class and the CLI entrypoint every scaffold imports, both from the facade's `migration` module. */
 const BASE_IMPORTS: readonly ImportRequirement[] = [
-  { moduleSpecifier: MIGRATION_MODULE_PLACEHOLDER, symbol: 'Migration' },
-  { moduleSpecifier: MIGRATION_MODULE_PLACEHOLDER, symbol: 'MigrationCLI' },
+  { moduleSpecifier: MIGRATION_MODULE, symbol: 'Migration' },
+  { moduleSpecifier: MIGRATION_MODULE, symbol: 'MigrationCLI' },
 ];
 
 export function renderCallsToTypeScript(
@@ -70,10 +58,11 @@ function buildImports(calls: ReadonlyArray<OpFactoryCall>, meta: RenderMigration
       requirements.push(req);
     }
   }
-  const resolve = meta.resolveImportSpecifier ?? keepInternalSpecifiers;
   return renderImports(
-    resolveRequirementSpecifiers(requirements, (specifier) =>
-      resolve(specifier === MIGRATION_MODULE_PLACEHOLDER ? meta.migrationModule : specifier),
+    requirements.map((requirement) =>
+      requirement.moduleSpecifier === MIGRATION_MODULE
+        ? { ...requirement, moduleSpecifier: meta.migrationModule }
+        : requirement,
     ),
   );
 }

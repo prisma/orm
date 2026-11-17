@@ -99,10 +99,10 @@ import { buildTargetDetails } from './planner-target-details';
 
 type Op = SqlMigrationPlanOperation<SqlitePlanTargetDetails>;
 
-// The authored name. `render-typescript.ts` maps it to whatever the consuming
-// application's import root calls it, once over the whole assembled import
-// list.
-const TARGET_MIGRATION_MODULE = '@internal/sqlite/migration';
+/**
+ * Stands for the module a rendered `migration.ts` imports its base class, its CLI entrypoint and every operation helper from. `renderCallsToTypeScript` replaces it with the config's `migrations.module`.
+ */
+export const MIGRATION_MODULE = '<migrations.module>';
 
 abstract class SqliteOpFactoryCallNode extends TsExpression implements FrameworkOpFactoryCall {
   abstract readonly factoryName: string;
@@ -116,7 +116,7 @@ abstract class SqliteOpFactoryCallNode extends TsExpression implements Framework
   }
 
   importRequirements(): readonly ImportRequirement[] {
-    return [{ moduleSpecifier: TARGET_MIGRATION_MODULE, symbol: this.factoryName }];
+    return [{ moduleSpecifier: MIGRATION_MODULE, symbol: this.factoryName }];
   }
 
   protected freeze(): void {
@@ -313,7 +313,7 @@ export class CreateTableCall extends SqliteOpFactoryCallNode {
   }
 
   #written(): WrittenCall {
-    const sql = createSqlTextSources(TARGET_MIGRATION_MODULE);
+    const sql = createSqlTextSources(MIGRATION_MODULE);
     const columnsList = this.columns
       .map((column) => renderDdlColumnAsTsCall(column, sql))
       .join(', ');
@@ -332,13 +332,13 @@ export class CreateTableCall extends SqliteOpFactoryCallNode {
   override importRequirements(): readonly ImportRequirement[] {
     const req: ImportRequirement[] = [];
     if (this.columns.length > 0) {
-      req.push({ moduleSpecifier: TARGET_MIGRATION_MODULE, symbol: 'col' });
+      req.push({ moduleSpecifier: MIGRATION_MODULE, symbol: 'col' });
       for (const sym of defaultImportSymbols(this.columns)) {
-        req.push({ moduleSpecifier: TARGET_MIGRATION_MODULE, symbol: sym });
+        req.push({ moduleSpecifier: MIGRATION_MODULE, symbol: sym });
       }
     }
     for (const sym of constraintImportSymbols(this.constraints)) {
-      req.push({ moduleSpecifier: TARGET_MIGRATION_MODULE, symbol: sym });
+      req.push({ moduleSpecifier: MIGRATION_MODULE, symbol: sym });
     }
     req.push(...this.#written().imports);
     return req;
@@ -806,14 +806,14 @@ export class RecreateTableCall extends SqliteOpFactoryCallNode {
   override importRequirements(): readonly ImportRequirement[] {
     return [
       ...(Object.values(this.copyExpressions).some(isUnfilledSlot)
-        ? [{ moduleSpecifier: TARGET_MIGRATION_MODULE, symbol: 'placeholder' }]
+        ? [{ moduleSpecifier: MIGRATION_MODULE, symbol: 'placeholder' }]
         : []),
       ...this.#written().imports,
     ];
   }
 
   #written(): WrittenCall {
-    const sql = createSqlTextSources(TARGET_MIGRATION_MODULE);
+    const sql = createSqlTextSources(MIGRATION_MODULE);
     const args = tsObjectSource([
       ['tableName', jsonToTsSource(this.tableName)],
       ['contractTable', renderTableSpec(this.contractTable, sql)],
@@ -883,7 +883,7 @@ export class AddColumnCall extends SqliteOpFactoryCallNode {
   }
 
   #written(): WrittenCall {
-    const sql = createSqlTextSources(TARGET_MIGRATION_MODULE);
+    const sql = createSqlTextSources(MIGRATION_MODULE);
     const source = `this.addColumn({ table: ${jsonToTsSource(this.tableName)}, column: ${renderColumnSpec(this.column, sql)} })`;
     return { source, imports: sql.imports() };
   }
@@ -1669,7 +1669,7 @@ export class FillStoredKeyCall extends SqliteOpFactoryCallNode {
 
   override importRequirements(): readonly ImportRequirement[] {
     return this.value instanceof UnfilledValue
-      ? [{ moduleSpecifier: TARGET_MIGRATION_MODULE, symbol: 'placeholder' }]
+      ? [{ moduleSpecifier: MIGRATION_MODULE, symbol: 'placeholder' }]
       : [];
   }
 }
@@ -1729,8 +1729,8 @@ export class DataTransformCall extends SqliteOpFactoryCallNode {
 
   override importRequirements(): readonly ImportRequirement[] {
     return [
-      { moduleSpecifier: TARGET_MIGRATION_MODULE, symbol: this.factoryName },
-      { moduleSpecifier: TARGET_MIGRATION_MODULE, symbol: 'placeholder' },
+      { moduleSpecifier: MIGRATION_MODULE, symbol: this.factoryName },
+      { moduleSpecifier: MIGRATION_MODULE, symbol: 'placeholder' },
     ];
   }
 }

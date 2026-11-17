@@ -1,7 +1,6 @@
 import { coreHash, type JsonValue } from '@internal/contract/types';
 import type { MigrationOperationPolicy } from '@internal/framework-components/control';
 import { planOriginOf } from '@internal/framework-components/control';
-import { keepInternalSpecifiers } from '@internal/framework-components/emission';
 import {
   buildMongoNamespace,
   MongoCollection,
@@ -31,6 +30,7 @@ import {
   MongoSchemaIR,
   MongoSchemaValidator,
 } from '@internal/mongo-schema-ir';
+import { workspaceMigrationModule } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { MongoMigrationPlanner } from '../src/core/migrations/mongo-planner';
 import { CollModCall, CreateIndexCall } from '../src/core/migrations/op-factory-call';
@@ -2271,10 +2271,10 @@ describe('MongoMigrationPlanner', () => {
         snapshotsImportPath: '../../snapshots',
       });
 
-      const source = empty.renderTypeScript(keepInternalSpecifiers);
+      const source = empty.renderTypeScript(workspaceMigrationModule.mongo);
 
       expect(source).toContain(
-        "import { Migration, MigrationCLI } from '@internal/target-mongo/migration';",
+        "import { Migration, MigrationCLI } from '@internal/mongo/migration';",
       );
       expect(source).toContain('class M extends Migration<Start, End>');
       expect(source).toContain('MigrationCLI.run(import.meta.url, M);');

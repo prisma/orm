@@ -30,11 +30,10 @@ import {
 } from './operations';
 import { buildTargetDetails } from './planner-target-details';
 
-/** The module every MySQL `migration.ts` imports its base class and helpers from. */
-export const MYSQL_MIGRATION_MODULE = '@internal/mysql/migration';
-
-/** The module call nodes name in their import requirements. `renderCallsToTypeScript` replaces it with the migration module of the target the scaffold is for. */
-export const MIGRATION_MODULE_PLACEHOLDER = MYSQL_MIGRATION_MODULE;
+/**
+ * Stands for the module a rendered `migration.ts` imports its base class, its CLI entrypoint and every operation helper from. `renderCallsToTypeScript` replaces it with the config's `migrations.module`.
+ */
+export const MIGRATION_MODULE = '<migrations.module>';
 
 /** The refusal of a `MysqlMigration` operation that needs the control adapter, on an instance built without a control stack. */
 export function mysqlMigrationStackMissing(operation: string) {
@@ -127,7 +126,7 @@ function columnImports(columns: readonly DdlColumn[]): ImportRequirement[] {
     if (column.default?.kind === 'literal') symbols.add('lit');
     if (column.default?.kind === 'function') symbols.add('fn');
   }
-  return [...symbols].map((symbol) => ({ moduleSpecifier: MIGRATION_MODULE_PLACEHOLDER, symbol }));
+  return [...symbols].map((symbol) => ({ moduleSpecifier: MIGRATION_MODULE, symbol }));
 }
 
 interface WrittenCall {
@@ -183,13 +182,13 @@ export class CreateTableCall extends MysqlOpFactoryCallNode {
   }
 
   #written(): WrittenCall {
-    const sql = createSqlTextSources(MIGRATION_MODULE_PLACEHOLDER);
+    const sql = createSqlTextSources(MIGRATION_MODULE);
     const columns = this.columns.map((column) => renderColumn(column, sql)).join(', ');
     const constraints = this.constraints.map(renderConstraint);
     const source = `this.createTable({ table: ${jsonToTsSource(this.tableName)}, columns: [${columns}]${constraints.length > 0 ? `, constraints: [${constraints.join(', ')}]` : ''} })`;
     const constraintImports = [
       ...new Set(this.constraints.map((c) => (c.kind === 'primary-key' ? 'primaryKey' : 'unique'))),
-    ].map((symbol) => ({ moduleSpecifier: MIGRATION_MODULE_PLACEHOLDER, symbol }));
+    ].map((symbol) => ({ moduleSpecifier: MIGRATION_MODULE, symbol }));
     return {
       source,
       imports: [...columnImports(this.columns), ...constraintImports, ...sql.imports()],
@@ -289,7 +288,7 @@ export class AddColumnCall extends MysqlOpFactoryCallNode {
   }
 
   #written(): WrittenCall {
-    const sql = createSqlTextSources(MIGRATION_MODULE_PLACEHOLDER);
+    const sql = createSqlTextSources(MIGRATION_MODULE);
     const source = `this.addColumn({ table: ${jsonToTsSource(this.tableName)}, column: ${renderColumn(this.column, sql)} })`;
     return { source, imports: [...columnImports([this.column]), ...sql.imports()] };
   }
@@ -630,7 +629,7 @@ export class RawSqlCall extends MysqlOpFactoryCallNode {
   }
 
   override importRequirements(): readonly ImportRequirement[] {
-    return [{ moduleSpecifier: MIGRATION_MODULE_PLACEHOLDER, symbol: 'rawSql' }];
+    return [{ moduleSpecifier: MIGRATION_MODULE, symbol: 'rawSql' }];
   }
 }
 

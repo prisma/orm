@@ -28,6 +28,6 @@ export default definePrismaConfig({
       output: 'output/contract.json',
     },
     db: { connection: '{{DB_URL}}' },
-    migrations: { dir: 'migrations' },
+    migrations: { dir: 'migrations', module: '@internal/postgres/migration' },
   }),
 });

@@ -25,6 +25,7 @@ export default definePrismaConfig({
     },
     migrations: {
       dir: 'migrations',
+      module: '@internal/target-mongo/migration',
     },
   }),
 });

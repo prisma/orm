@@ -14,7 +14,6 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { APP_SPACE_ID, storageHashHex } from '@internal/framework-components/control';
-import { keepInternalSpecifiers } from '@internal/framework-components/emission';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { formatMigrationTs } from '@internal/migration-tools/migration-ts';
 import { checkExpression, col, fn, primaryKey } from '@internal/sql-relational-core/contract-free';
@@ -53,7 +52,7 @@ import {
 import { TypeScriptRenderablePostgresMigration } from '@internal/target-postgres/planner-produced-postgres-migration';
 import { renderOps } from '@internal/target-postgres/render-ops';
 import { PostgresRlsPolicy } from '@internal/target-postgres/types';
-import { timeouts } from '@repo/test-utils';
+import { timeouts, workspaceMigrationModule } from '@repo/test-utils';
 import { join, resolve } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -268,7 +267,7 @@ describe('TypeScriptRenderablePostgresMigration round-trip', () => {
       testAdapter,
     );
 
-    const tsSource = rewriteImports(migration.renderTypeScript(keepInternalSpecifiers));
+    const tsSource = rewriteImports(migration.renderTypeScript(workspaceMigrationModule.postgres));
     expect(tsSource).toContain('checkExpression("user_email_check", sql`"email" <> \'\'`)');
     expect(tsSource).toContain('checkExpression("user_email_length", sql`\n');
     expect(tsSource).toContain('expression: "  lower(email)"');
@@ -323,7 +322,9 @@ describe('TypeScriptRenderablePostgresMigration round-trip', () => {
       testAdapter,
     );
 
-    const written = await formatMigrationTs(migration.renderTypeScript(keepInternalSpecifiers));
+    const written = await formatMigrationTs(
+      migration.renderTypeScript(workspaceMigrationModule.postgres),
+    );
     expect(written).toContain('sql`\n');
     await writeFile(join(tmpDir, 'migration.ts'), rewriteImports(written));
 
@@ -347,7 +348,7 @@ describe('TypeScriptRenderablePostgresMigration round-trip', () => {
       SNAPSHOTS_IMPORT_PATH,
     );
 
-    const tsSource = rewriteImports(migration.renderTypeScript(keepInternalSpecifiers));
+    const tsSource = rewriteImports(migration.renderTypeScript(workspaceMigrationModule.postgres));
     await writeFile(join(tmpDir, 'migration.ts'), tsSource);
 
     const { stderr } = await execFileAsync(tsxPath, [join(tmpDir, 'migration.ts')], {
@@ -406,7 +407,7 @@ describe('TypeScriptRenderablePostgresMigration round-trip', () => {
       testAdapter,
     );
 
-    await writeTypecheckDir(tmpDir, migration.renderTypeScript(keepInternalSpecifiers));
+    await writeTypecheckDir(tmpDir, migration.renderTypeScript(workspaceMigrationModule.postgres));
     // Non-zero exit (a type error in the rendered source) rejects.
     await execFileAsync(tscPath, ['--project', tmpDir]);
   });
@@ -440,7 +441,7 @@ describe('TypeScriptRenderablePostgresMigration round-trip', () => {
     // Delete the policy's required `naming` key from the rendered source —
     // the compile must fail on the missing property, proving the green run of
     // the sibling test is a real typecheck and not a vacuous pass.
-    const rendered = migration.renderTypeScript(keepInternalSpecifiers);
+    const rendered = migration.renderTypeScript(workspaceMigrationModule.postgres);
     expect(rendered).toContain('naming: { kind: "exact", name: "Tenant members can read" },');
     const brokenSource = rendered.replace(
       '        naming: { kind: "exact", name: "Tenant members can read" },\n',
@@ -480,7 +481,7 @@ describe('TypeScriptRenderablePostgresMigration round-trip', () => {
       SNAPSHOTS_IMPORT_PATH,
     );
 
-    const tsSource = rewriteImports(migration.renderTypeScript(keepInternalSpecifiers));
+    const tsSource = rewriteImports(migration.renderTypeScript(workspaceMigrationModule.postgres));
     await writeFile(join(tmpDir, 'migration.ts'), tsSource);
 
     await execFileAsync(tsxPath, [join(tmpDir, 'migration.ts')], {
@@ -547,7 +548,7 @@ function handWrittenMigration(write: (text: string) => string): string {
     META,
     APP_SPACE_ID,
     SNAPSHOTS_IMPORT_PATH,
-  ).renderTypeScript(keepInternalSpecifiers);
+  ).renderTypeScript(workspaceMigrationModule.postgres);
   const source = scaffold
     .replace(
       'import { Migration, MigrationCLI }',

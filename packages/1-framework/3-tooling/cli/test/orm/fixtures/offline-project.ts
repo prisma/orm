@@ -342,12 +342,16 @@ function fakePlanner(script: FakePlannerScript): Record<string, unknown> {
                 for (const other of others) other.catch(() => undefined);
                 return [...resolved.slice(0, at), placeholder, ...others, ...resolved.slice(at)];
               },
-              renderTypeScript: () => '// planned migration\n',
+              renderTypeScript: (migrationModule: string) =>
+                `// planned migration importing ${migrationModule}\n`,
             },
           }
         : { kind: 'failure', conflicts: script.conflicts };
     },
-    emptyMigration: () => ({ renderTypeScript: () => '// empty migration\n' }),
+    emptyMigration: () => ({
+      renderTypeScript: (migrationModule: string) =>
+        `// empty migration importing ${migrationModule}\n`,
+    }),
   };
 }
 
@@ -367,6 +371,9 @@ function deserializeIntoStorageInstance(json: unknown): unknown {
     ? json
     : { ...json, storage: new HydratedFixtureStorage(storage) };
 }
+
+/** The module the offline config names for rendered migration files: not one of Prisma's, so a test that finds it proves the name came from the config. */
+export const OFFLINE_MIGRATION_MODULE = '@acme/orm-db/migration';
 
 export function offlineConfig(options: {
   readonly project: OfflineProject;
@@ -403,6 +410,7 @@ export function offlineConfig(options: {
       source: { format: 'typescript', inputs: [], load: async () => contractJson('unused') },
       output: options.project.contractPath,
     },
+    migrations: { module: OFFLINE_MIGRATION_MODULE },
   };
 }
 

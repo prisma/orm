@@ -10,6 +10,7 @@ import {
   contractJson,
   createOfflineProject,
   OFFLINE_COMMANDS,
+  OFFLINE_MIGRATION_MODULE,
   type OfflineProject,
   offlineConfig,
   removeOfflineProjects,
@@ -85,7 +86,9 @@ describe('migration new', () => {
     const packageDir = join(project.appMigrationsDir, dirName ?? '');
 
     expect(dirName).toMatch(/_migration$/);
-    expect(await readFile(join(packageDir, 'migration.ts'), 'utf-8')).toBe('// empty migration\n');
+    expect(await readFile(join(packageDir, 'migration.ts'), 'utf-8')).toBe(
+      `// empty migration importing ${OFFLINE_MIGRATION_MODULE}\n`,
+    );
     expect(JSON.parse(await readFile(join(packageDir, 'ops.json'), 'utf-8'))).toEqual([]);
     expect(
       await readFile(join(project.migrationsDir, 'snapshots', HASH_TO, 'contract.json'), 'utf-8'),
@@ -532,6 +535,25 @@ describe('migration new destination snapshot', () => {
     expect(run.json.at(-1)).toMatchObject({
       kind: 'result',
       envelope: { ok: false, error: { code: 'CONTRACT.TYPES_RENDER_FAILED' } },
+    });
+    expect(existsSync(project.appMigrationsDir)).toBe(false);
+    expect(existsSync(contractSnapshotDir(project.migrationsDir, HASH_TO))).toBe(false);
+  });
+});
+
+describe('migration new without a migration module', () => {
+  it('refuses before writing anything, naming the missing member', async () => {
+    const project = await createOfflineProject({ storageHash: HASH_TO });
+
+    const run = await harness(project, { migrations: {} }).run(
+      ['migration', 'new', '--name', 'refused', '--json'],
+      { cwd: project.dir },
+    );
+
+    expect(run.exitCode).toBe(2);
+    expect(run.json.at(-1)).toMatchObject({
+      kind: 'result',
+      envelope: { ok: false, error: { code: 'CONFIG.MIGRATION_MODULE_MISSING' } },
     });
     expect(existsSync(project.appMigrationsDir)).toBe(false);
     expect(existsSync(contractSnapshotDir(project.migrationsDir, HASH_TO))).toBe(false);

@@ -22,6 +22,7 @@ import {
   DESTRUCTIVE_OP,
   type FakePlannerScript,
   OFFLINE_COMMANDS,
+  OFFLINE_MIGRATION_MODULE,
   type OfflineProject,
   offlineConfig,
   removeOfflineProjects,
@@ -113,7 +114,7 @@ describe('migration plan --config naming a file in a subdirectory', () => {
                   },
                   output: './output/contract.json',
                 },
-                migrations: { dir: './migrations' },
+                migrations: { dir: './migrations', module: OFFLINE_MIGRATION_MODULE },
               },
             },
           },
@@ -1116,7 +1117,7 @@ describe('migration plan', () => {
 
     const run = await harness(project, {
       overrides: {
-        migrations: { dir: 'db-migrations' },
+        migrations: { dir: 'db-migrations', module: OFFLINE_MIGRATION_MODULE },
         extensions: [
           {
             kind: 'extension',
@@ -1417,6 +1418,46 @@ describe('migration plan destination snapshot', () => {
       envelope: { ok: false, error: { code: 'CONTRACT.TYPES_RENDER_FAILED' } },
     });
     expect(await plannedDirs(project)).toEqual(['20260101T0000_initial']);
+    expect(existsSync(contractSnapshotDir(project.migrationsDir, HASH_TO))).toBe(false);
+  });
+});
+
+describe('migration plan and the module migration files import from', () => {
+  it('writes a migration file that imports from the module the config names', async () => {
+    const project = await plannableProject();
+
+    const run = await harness(project).run(['migration', 'plan', '--name', 'add-users'], {
+      cwd: project.dir,
+    });
+    const dir = join(project.appMigrationsDir, (await plannedDirs(project)).at(-1) ?? '');
+
+    expect(run.exitCode).toBe(0);
+    expect(await readFile(join(dir, 'migration.ts'), 'utf-8')).toBe(
+      `// planned migration importing ${OFFLINE_MIGRATION_MODULE}\n`,
+    );
+  });
+
+  it('refuses before writing anything when the config names no migration module', async () => {
+    const project = await plannableProject();
+    const before = await plannedDirs(project);
+
+    const run = await harness(project, { overrides: { migrations: {} } }).run(
+      ['migration', 'plan', '--name', 'add-users', '--json'],
+      { cwd: project.dir },
+    );
+
+    expect(run.exitCode).toBe(2);
+    expect(run.json.at(-1)).toMatchObject({
+      kind: 'result',
+      envelope: {
+        ok: false,
+        error: {
+          code: 'CONFIG.MIGRATION_MODULE_MISSING',
+          why: expect.stringContaining('migrations.module'),
+        },
+      },
+    });
+    expect(await plannedDirs(project)).toEqual(before);
     expect(existsSync(contractSnapshotDir(project.migrationsDir, HASH_TO))).toBe(false);
   });
 });

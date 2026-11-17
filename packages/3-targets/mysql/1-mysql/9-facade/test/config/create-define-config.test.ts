@@ -17,7 +17,6 @@ const mariadbComponents = {
   pack: mariadbMeta satisfies TargetPackRef<'sql', 'mariadb'>,
   target: createMysqlControlTargetDescriptor({
     descriptorMeta: mariadbMeta,
-    migrationModule: '@internal/mariadb/migration',
   }),
   adapter: {
     ...mysqlAdapter,

@@ -65,13 +65,9 @@ export interface CollModMeta {
 }
 
 /**
- * The single module a scaffolded Mongo `migration.ts` imports from: the
- * operation factories below, plus the `Migration` base and `MigrationCLI`
- * that `render-typescript.ts` adds. The authored name; `render-typescript.ts`
- * maps it to whatever the consuming application's import root calls it,
- * once over the whole assembled import list.
+ * Stands for the module a rendered `migration.ts` imports its base class, its CLI entrypoint and every operation factory from. `renderCallsToTypeScript` replaces it with the config's `migrations.module`.
  */
-export const TARGET_MIGRATION_MODULE = '@internal/target-mongo/migration';
+export const MIGRATION_MODULE = '<migrations.module>';
 
 abstract class OpFactoryCallNode extends TsExpression implements FrameworkOpFactoryCall {
   abstract readonly factoryName: string;
@@ -80,7 +76,7 @@ abstract class OpFactoryCallNode extends TsExpression implements FrameworkOpFact
   abstract toOp(): AnyMongoMigrationOperation | Promise<AnyMongoMigrationOperation>;
 
   importRequirements(): readonly ImportRequirement[] {
-    return [{ moduleSpecifier: TARGET_MIGRATION_MODULE, symbol: this.factoryName }];
+    return [{ moduleSpecifier: MIGRATION_MODULE, symbol: this.factoryName }];
   }
 
   protected freeze(): void {
@@ -365,7 +361,7 @@ export class DataTransformCall extends OpFactoryCallNode {
 
   override importRequirements(): readonly ImportRequirement[] {
     return ['dataTransform', 'rawAggregate', 'rawUpdateMany', 'placeholder'].map((symbol) => ({
-      moduleSpecifier: TARGET_MIGRATION_MODULE,
+      moduleSpecifier: MIGRATION_MODULE,
       symbol,
     }));
   }

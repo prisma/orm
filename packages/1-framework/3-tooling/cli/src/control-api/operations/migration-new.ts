@@ -26,6 +26,7 @@ import {
 } from '../../utils/cli-errors';
 import {
   getTargetMigrations,
+  migrationModuleOf,
   resolveContractPath,
   resolveMigrationPaths,
 } from '../../utils/command-helpers';
@@ -64,6 +65,10 @@ export async function executeMigrationNewCommand(
 ): Promise<Result<MigrationNewResult, CliStructuredError>> {
   const config = options.config;
   const cwd = options.cwd;
+  const migrationModule = migrationModuleOf(config);
+  if (!migrationModule.ok) {
+    return migrationModule;
+  }
   const { migrationsDir, appMigrationsDir, appMigrationsRelative } = resolveMigrationPaths(
     config,
     cwd,
@@ -262,7 +267,7 @@ export async function executeMigrationNewCommand(
       },
       APP_SPACE_ID,
     );
-    await writeMigrationTs(packageDir, emptyPlan.renderTypeScript(resolveSpecifier));
+    await writeMigrationTs(packageDir, emptyPlan.renderTypeScript(migrationModule.value));
 
     return ok({
       ok: true as const,

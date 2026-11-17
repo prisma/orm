@@ -57,6 +57,10 @@ Reserved: `db verify` needs the family package to export `verify.readMarker()` a
 
 No `prisma.config.ts` (or the explicitly passed config path) could be found when loading configuration, raised by the config loader for any command that needs config. The fix is to run `prisma orm init` to create one. The path, when known, is carried in `where.path`. Payload: none.
 
+### CONFIG.MIGRATION_MODULE_MISSING
+
+`migration new` or `migration plan` was run with a config that has no `migrations.module`, the module a written `migration.ts` imports `Migration`, `MigrationCLI` and the operation helpers from. Raised before anything is written. A target package's `defineConfig`, such as the one from `@prisma/orm-postgres/config`, sets it; a config assembled by hand sets `migrations.module` itself. Payload: none.
+
 ### CONFIG.MISSING_EXTENSION_PACKS
 
 The contract declares extension packs that the CLI config does not provide matching descriptors for; raised when resolving framework components for any command that loads the contract. The fix is to add the missing extension descriptors to `extensions` in `prisma.config.ts`. Payload: `missingExtensionPacks`, `providedComponentIds`.

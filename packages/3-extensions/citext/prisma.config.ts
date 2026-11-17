@@ -14,6 +14,7 @@ export default definePrismaConfig({
     contract: typescriptContract(contract, 'src/contract.json'),
     migrations: {
       dir: 'migrations',
+      module: '@internal/postgres/migration',
     },
   }),
 });

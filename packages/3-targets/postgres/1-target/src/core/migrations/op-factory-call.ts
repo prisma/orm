@@ -160,22 +160,10 @@ import type { PostgresPlanTargetDetails } from './planner-target-details';
 
 type Op = SqlMigrationPlanOperation<PostgresPlanTargetDetails>;
 
-// Single module specifier emitted in user-edited `migration.ts` imports. The
-// Postgres migration facade re-exports both the `*Call` factory names
-// (createTable / addColumn / …) and the contract-free DDL builders
-// (col / lit / fn / primaryKey / foreignKey / unique) from
-// sql-relational-core/contract-free. We emit imports against the facade,
-// not against the underlying sql-relational-core subpath, because user
-// projects depend on `@internal/postgres` (a runtime dep of every
-// init-scaffolded project) — they do not depend on the internal
-// `@internal/sql-relational-core` package, so an emitted
-// `import … from '@internal/sql-relational-core/contract-free'` fails
-// ESM resolution at runtime in user migrations even though pnpm has the
-// transitive package on disk.
-// This is the authored name. `render-typescript.ts` maps it to whatever the
-// consuming application's import root calls it, once over the whole assembled
-// import list.
-const POSTGRES_MIGRATION_FACADE = '@internal/postgres/migration';
+/**
+ * Stands for the module a rendered `migration.ts` imports its base class, its CLI entrypoint and every operation helper from. `renderCallsToTypeScript` replaces it with the config's `migrations.module`.
+ */
+export const MIGRATION_MODULE = '<migrations.module>';
 
 abstract class PostgresOpFactoryCallNode extends TsExpression implements FrameworkOpFactoryCall {
   abstract readonly factoryName: string;
@@ -189,7 +177,7 @@ abstract class PostgresOpFactoryCallNode extends TsExpression implements Framewo
   }
 
   importRequirements(): readonly ImportRequirement[] {
-    return [{ moduleSpecifier: POSTGRES_MIGRATION_FACADE, symbol: this.factoryName }];
+    return [{ moduleSpecifier: MIGRATION_MODULE, symbol: this.factoryName }];
   }
 
   protected freeze(): void {
@@ -396,7 +384,7 @@ export class CreateTableCall extends PostgresOpFactoryCallNode {
   }
 
   #written(): WrittenCall {
-    const sql = createSqlTextSources(POSTGRES_MIGRATION_FACADE);
+    const sql = createSqlTextSources(MIGRATION_MODULE);
     const columnsList = this.columns
       .map((column) => renderDdlColumnAsTsCall(column, sql))
       .join(', ');
@@ -420,13 +408,13 @@ export class CreateTableCall extends PostgresOpFactoryCallNode {
   override importRequirements(): readonly ImportRequirement[] {
     const req: ImportRequirement[] = [];
     if (needsColOrConstraintImport(this.columns)) {
-      req.push({ moduleSpecifier: POSTGRES_MIGRATION_FACADE, symbol: 'col' });
+      req.push({ moduleSpecifier: MIGRATION_MODULE, symbol: 'col' });
       for (const sym of defaultImportSymbols(this.columns)) {
-        req.push({ moduleSpecifier: POSTGRES_MIGRATION_FACADE, symbol: sym });
+        req.push({ moduleSpecifier: MIGRATION_MODULE, symbol: sym });
       }
     }
     for (const sym of constraintImportSymbols(this.constraints)) {
-      req.push({ moduleSpecifier: POSTGRES_MIGRATION_FACADE, symbol: sym });
+      req.push({ moduleSpecifier: MIGRATION_MODULE, symbol: sym });
     }
     req.push(...this.#written().imports);
     return req;
@@ -639,7 +627,7 @@ export class AddColumnCall extends PostgresOpFactoryCallNode {
   }
 
   #written(): WrittenCall {
-    const sql = createSqlTextSources(POSTGRES_MIGRATION_FACADE);
+    const sql = createSqlTextSources(MIGRATION_MODULE);
     const opts: string[] = [];
     if (this.schemaName !== UNBOUND_NAMESPACE_ID) {
       opts.push(`schema: ${jsonToTsSource(this.schemaName)}`);
@@ -650,11 +638,9 @@ export class AddColumnCall extends PostgresOpFactoryCallNode {
   }
 
   override importRequirements(): readonly ImportRequirement[] {
-    const req: ImportRequirement[] = [
-      { moduleSpecifier: POSTGRES_MIGRATION_FACADE, symbol: 'col' },
-    ];
+    const req: ImportRequirement[] = [{ moduleSpecifier: MIGRATION_MODULE, symbol: 'col' }];
     for (const sym of defaultImportSymbols([this.column])) {
-      req.push({ moduleSpecifier: POSTGRES_MIGRATION_FACADE, symbol: sym });
+      req.push({ moduleSpecifier: MIGRATION_MODULE, symbol: sym });
     }
     req.push(...this.#written().imports);
     return req;
@@ -889,14 +875,14 @@ export class AlterColumnTypeCall extends PostgresOpFactoryCallNode {
   override importRequirements(): readonly ImportRequirement[] {
     return [
       ...(isUnfilledSlot(this.using)
-        ? [{ moduleSpecifier: POSTGRES_MIGRATION_FACADE, symbol: 'placeholder' }]
+        ? [{ moduleSpecifier: MIGRATION_MODULE, symbol: 'placeholder' }]
         : []),
       ...this.#written().imports,
     ];
   }
 
   #written(): WrittenCall {
-    const sql = createSqlTextSources(POSTGRES_MIGRATION_FACADE);
+    const sql = createSqlTextSources(MIGRATION_MODULE);
     const using = this.using === undefined ? [] : [`using: ${slotSource(this.using, sql)}`];
     const opts = [
       ...columnCallLocation(this.schemaName, this.tableName, this.columnName),
@@ -1037,7 +1023,7 @@ export class SetDefaultCall extends PostgresOpFactoryCallNode {
   }
 
   #written(): WrittenCall {
-    const sql = createSqlTextSources(POSTGRES_MIGRATION_FACADE);
+    const sql = createSqlTextSources(MIGRATION_MODULE);
     const opts: string[] = [];
     if (this.schemaName !== UNBOUND_NAMESPACE_ID) {
       opts.push(`schema: ${jsonToTsSource(this.schemaName)}`);
@@ -1049,9 +1035,9 @@ export class SetDefaultCall extends PostgresOpFactoryCallNode {
 
   override importRequirements(): readonly ImportRequirement[] {
     return [
-      { moduleSpecifier: POSTGRES_MIGRATION_FACADE, symbol: 'col' },
+      { moduleSpecifier: MIGRATION_MODULE, symbol: 'col' },
       ...defaultImportSymbols([this.column]).map((symbol) => ({
-        moduleSpecifier: POSTGRES_MIGRATION_FACADE,
+        moduleSpecifier: MIGRATION_MODULE,
         symbol,
       })),
       ...this.#written().imports,
@@ -1254,7 +1240,7 @@ export class AddColumnWithTemporaryDefaultCall extends PostgresOpFactoryCallNode
   }
 
   #written(): WrittenCall {
-    const sql = createSqlTextSources(POSTGRES_MIGRATION_FACADE);
+    const sql = createSqlTextSources(MIGRATION_MODULE);
     const source = `this.addColumnWithTemporaryDefault({ ${[
       ...columnCallLocation(this.schemaName, this.tableName, this.columnName),
       `type: ${jsonToTsSource(this.type)}`,
@@ -1575,7 +1561,7 @@ export class AddCheckConstraintCall extends PostgresOpFactoryCallNode {
   }
 
   #written(): WrittenCall {
-    const sql = createSqlTextSources(POSTGRES_MIGRATION_FACADE);
+    const sql = createSqlTextSources(MIGRATION_MODULE);
     const source = `this.addCheckConstraint({ ${constraintCallOptions(this.schemaName, this.tableName, this.constraintName)}, expression: ${sql.source(this.expression)} })`;
     return { source, imports: sql.imports() };
   }
@@ -1700,7 +1686,7 @@ export class CreateIndexCall extends PostgresOpFactoryCallNode {
   }
 
   #written(): WrittenCall {
-    const sql = createSqlTextSources(POSTGRES_MIGRATION_FACADE);
+    const sql = createSqlTextSources(MIGRATION_MODULE);
     const opts: string[] = [];
     if (this.schemaName !== UNBOUND_NAMESPACE_ID) {
       opts.push(`schema: ${jsonToTsSource(this.schemaName)}`);
@@ -2895,7 +2881,7 @@ export class FillStoredKeyCall extends PostgresOpFactoryCallNode {
 
   override importRequirements(): readonly ImportRequirement[] {
     return this.value instanceof UnfilledValue
-      ? [{ moduleSpecifier: POSTGRES_MIGRATION_FACADE, symbol: 'placeholder' }]
+      ? [{ moduleSpecifier: MIGRATION_MODULE, symbol: 'placeholder' }]
       : [];
   }
 }
@@ -2953,7 +2939,7 @@ export class DataTransformCall extends PostgresOpFactoryCallNode {
 
   override importRequirements(): readonly ImportRequirement[] {
     return [
-      { moduleSpecifier: POSTGRES_MIGRATION_FACADE, symbol: 'placeholder' },
+      { moduleSpecifier: MIGRATION_MODULE, symbol: 'placeholder' },
       // endContract is imported by the migration scaffold's contractImports; an op never renders outside it.
     ];
   }
@@ -2996,7 +2982,7 @@ export class CreatePostgresRlsPolicyCall extends PostgresOpFactoryCallNode {
   }
 
   #written(): WrittenCall {
-    const sql = createSqlTextSources(POSTGRES_MIGRATION_FACADE);
+    const sql = createSqlTextSources(MIGRATION_MODULE);
     const p = this.policy;
     // `input` and `sources` are typed against the parameter `createRlsPolicy`
     // accepts, so a drift between the renderer and the API, including a field

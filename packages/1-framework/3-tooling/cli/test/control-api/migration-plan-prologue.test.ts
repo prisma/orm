@@ -23,7 +23,9 @@ vi.mock('../../src/utils/command-helpers', async (importOriginal) => {
   return { ...actual, resolveMigrationPaths: mocks.resolveMigrationPaths };
 });
 
-const config = { migrations: { dir: 'migrations' } } as unknown as PrismaNextConfig;
+const config = {
+  migrations: { dir: 'migrations', module: '@acme/orm-db/migration' },
+} as unknown as PrismaNextConfig;
 
 describe('executeMigrationPlanCommand — mutation-prologue guard', () => {
   afterAll(() => {
