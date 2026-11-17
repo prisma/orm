@@ -73,16 +73,17 @@ The entrypoint imports no framework runtime module. It is loaded from the projec
 ## Order of steps
 
 1. Resolve the package from `--target` or the picker.
-2. For a package not in the list, ask for consent before installing, through the CLI engine's consent mechanism: `ctx.prompt.consent(question, { token })`, with the package name as the token. The question says that `init` will install the package and run code from it. Interactively the user types the package name; non-interactively `--confirm <package name>` grants it. `--yes` does not.
-3. Install the database package, unless it is already installed.
-4. Load its contribution.
-5. Ask the remaining questions: authoring mode from the contribution's modes, schema path, then consent to replace files on a re-init, then the `.env` question.
-6. Write the files.
-7. Install the remaining packages: the contribution's peer packages, `dotenv`, the CLI and types.
-8. Emit the contract.
-9. Probe the database, when asked to and the contribution has a probe.
+2. Install the database package, unless it is already installed.
+3. Load its contribution.
+4. Ask the remaining questions: authoring mode from the contribution's modes, schema path, then consent to replace files on a re-init, then the `.env` question.
+5. Write the files.
+6. Install the remaining packages: the contribution's peer packages, `dotenv`, the CLI and types.
+7. Emit the contract.
+8. Probe the database, when asked to and the contribution has a probe.
 
 The database package is installed before any file is written because the files come from it.
+
+`init` asks nothing before installing a package the user named, listed or not. The user typed the name, and installing it is what they asked for, as with a package manager's own install command.
 
 With `--skip-install`, nothing is installed. The database package must already be installed; if it is not, `init` stops before changing anything and prints the install command.
 
@@ -131,6 +132,10 @@ Rejected because the contribution is loaded as code moments before the config is
 ### No list: package names only
 
 `prisma orm init --target @prisma/orm-postgres` for everyone. Rejected because a first-time user has no way to discover the package name, and the interactive picker would be empty.
+
+### A prompt before installing an unlisted package
+
+A yes/no question, or a typed consent, before `init` installs and runs a package that is not in the list. Rejected because it interrupts every run for a name the user has just typed, and it would make an unlisted package behave differently from a listed one.
 
 ### The list lives outside the framework CLI
 
