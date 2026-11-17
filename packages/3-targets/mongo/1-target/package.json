@@ -75,6 +75,7 @@
     "./pack": "./dist/pack.mjs",
     "./prisma6-binding": "./dist/prisma6-binding.mjs",
     "./runtime": "./dist/runtime.mjs",
+    "./server-version": "./dist/server-version.mjs",
     "./package.json": "./package.json"
   },
   "engines": {
@@ -84,8 +85,5 @@
     "type": "git",
     "url": "https://github.com/prisma/orm.git",
     "directory": "packages/3-targets/mongo/1-target"
-  },
-  "prismaNext": {
-    "minServerVersion": "8.0"
   }
 }
