@@ -51,7 +51,7 @@ describe('@internal/driver-postgres control', () => {
     });
     await descriptor.create('postgres://localhost/test');
 
-    const connection = { host: 'localhost', database: 'test', user: '', password: '', port: '' };
+    const connection = { host: 'localhost', database: 'test', password: '', port: '' };
     expect(configs).toEqual([
       { ...connection, connectionTimeoutMillis: 3000, options: '-c DateStyle=ISO' },
       connection,

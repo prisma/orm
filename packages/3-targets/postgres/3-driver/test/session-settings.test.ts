@@ -109,6 +109,41 @@ describe('a pg client built from the settings of a URL', () => {
   });
 });
 
+describe('a connection string that leaves the user or host blank', () => {
+  it('leaves the user unset, so pg falls back to the operating-system user', () => {
+    const config = fromUrl('postgres://:secret@localhost/db');
+    expect(config).not.toHaveProperty('user');
+    expect(config.password).toBe('secret');
+    expect(config.database).toBe('db');
+  });
+
+  it('leaves the host unset, so pg falls back to the local host', () => {
+    const config = fromUrl('postgres://u:p@/db');
+    expect(config).not.toHaveProperty('host');
+    expect(config.user).toBe('u');
+    expect(config.database).toBe('db');
+  });
+
+  it('leaves both unset when the URL names neither', () => {
+    const config = fromUrl('postgres:///db');
+    expect(config).not.toHaveProperty('user');
+    expect(config).not.toHaveProperty('host');
+    expect(config.database).toBe('db');
+  });
+
+  it('connects as a client given no user or host at all', () => {
+    const fromBlank = connectsWith(new pg.Client(fromUrl('postgres://:secret@localhost/db')));
+    const fromNone = connectsWith(
+      new pg.Client({ password: 'secret', host: 'localhost', database: 'db' }),
+    );
+    expect(fromBlank['user']).toBe(fromNone['user']);
+
+    const fromBlankHost = connectsWith(new pg.Client(fromUrl('postgres://u:p@/db')));
+    const fromLocalHost = connectsWith(new pg.Client({ user: 'u', password: 'p', database: 'db' }));
+    expect(fromBlankHost['host']).toBe(fromLocalHost['host']);
+  });
+});
+
 describe('the connection settings of a connection Prisma opens', () => {
   it('send each session setting as a startup option, escaping spaces and backslashes', () => {
     expect(
