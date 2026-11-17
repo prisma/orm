@@ -6,11 +6,11 @@ function makePlan(sql: string, annotations?: Record<string, unknown>) {
     sql,
     meta: {
       target: 'postgres',
-      storageHash: 'test-hash' as never,
+      storageHash: 'test-hash',
       lane: 'raw',
       ...(annotations ? { annotations } : {}),
     },
-  } as never;
+  };
 }
 
 describe('evaluateRawGuardrails — statement classification', () => {
@@ -57,10 +57,7 @@ describe('evaluateRawGuardrails — read-only mutation lint', () => {
   });
 
   it('does not flag a mutation statement when annotations are entirely absent', () => {
-    const result = evaluateRawGuardrails({
-      sql: 'DELETE FROM users WHERE id = 1',
-      meta: { target: 'postgres', storageHash: 'test-hash' as never, lane: 'raw' },
-    } as never);
+    const result = evaluateRawGuardrails(makePlan('DELETE FROM users WHERE id = 1'));
     expect(result.lints).not.toContainEqual(
       expect.objectContaining({ code: 'LINT.READ_ONLY_MUTATION' }),
     );
