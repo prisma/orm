@@ -60,6 +60,7 @@ export interface TransactionRuntime {
   startTransactionActivity(parent: ActivityParent): Promise<TransactionRun>;
   trackInFlight<T>(operation: () => Promise<T>): Promise<T>;
   register(queryable: SqlQueryable, transaction: OpenTransaction): void;
+  unregister(queryable: SqlQueryable, transaction: OpenTransaction): void;
   markHeld(driverTx: SqlTransaction, driverSavepoint: SqlTransaction): void;
   onConnectionReleased(connection: SqlConnection, teardown: () => Promise<void>): void;
 }
@@ -195,7 +196,7 @@ export class OuterTransaction extends TransactionBase implements SettledTransact
   readonly signal: AbortSignal;
   readonly [transactionSettlement]: TransactionSettlementState;
   private readonly controller = new AbortController();
-  private readonly onConnection: OpenTransaction;
+  private readonly connection: SqlConnection;
   private readonly endTransactionWork: () => void;
   private readonly timeout: number | undefined;
   private readonly deadline: number;
@@ -219,12 +220,8 @@ export class OuterTransaction extends TransactionBase implements SettledTransact
     this.endTransactionWork = endTransactionWork;
     this.timeout = timeout;
     this.deadline = performance.now() + (timeout ?? Number.POSITIVE_INFINITY);
-    this.onConnection = {
-      activity,
-      assertAcceptsStatements: () => this.assertAcceptsStatements(),
-      assertBeforeDeadline: undefined,
-    };
-    runtime.register(connection, this.onConnection);
+    this.connection = connection;
+    runtime.register(connection, this.openTransaction);
     this[transactionSettlement] = {
       get committed() {
         return entry.state === 'committed';
@@ -369,12 +366,8 @@ export class OuterTransaction extends TransactionBase implements SettledTransact
 
   private stopAcceptingChildren(): void {
     this.activity.stopAcceptingChildren();
-    const records =
-      this.timeout === undefined ? [this.openTransaction, this.onConnection] : [this.onConnection];
-    for (const record of records) {
-      if (record.activity === this.activity) record.activity = undefined;
-    }
-    this.onConnection.assertAcceptsStatements = undefined;
+    if (this.timeout === undefined) this.openTransaction.activity = undefined;
+    this.runtime.unregister(this.connection, this.openTransaction);
   }
 
   private logDroppedError(error: unknown): void {

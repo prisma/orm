@@ -327,6 +327,9 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     register: (queryable, transaction) => {
       this.#transactions.set(queryable, transaction);
     },
+    unregister: (queryable, transaction) => {
+      if (this.#transactions.get(queryable) === transaction) this.#transactions.delete(queryable);
+    },
     markHeld: (driverTx, driverSavepoint) => {
       if (this.#heldQueryables.has(driverTx)) this.#heldQueryables.add(driverSavepoint);
     },
