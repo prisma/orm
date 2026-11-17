@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   propertyBsonTypesOf,
+  sameKindOfDocumentIn,
   validatorDocumentShapesOf,
   validatorFieldNamesOf,
   validatorRootShapesOf,
@@ -121,6 +122,59 @@ describe('validatorDocumentShapesOf, a base field with a one-value enum', () => 
       { key: '0:["type","bug"]', discriminator: { field: 'type', value: 'bug' } },
       { key: '0:["type","feature"]', discriminator: { field: 'type', value: 'feature' } },
     ]);
+  });
+});
+
+describe('sameKindOfDocumentIn', () => {
+  const plainTask = {
+    bsonType: 'object',
+    required: ['_id'],
+    properties: { _id: { bsonType: 'objectId' } },
+  };
+  const taskByKind = {
+    ...task,
+    required: ['_id', 'kind', 'type'],
+    properties: { ...task.properties, kind: { bsonType: 'string' } },
+    oneOf: [
+      {
+        required: ['kind', 'severity'],
+        properties: { kind: { enum: ['bug'] }, severity: { bsonType: 'int' } },
+        additionalProperties: false,
+      },
+    ],
+  };
+  const [bugByKind] = validatorDocumentShapesOf(taskByKind);
+
+  it('finds the shape with the same key', () => {
+    const before = validatorDocumentShapesOf({ bsonType: 'object', anyOf: [user, task] });
+    const after = validatorDocumentShapesOf({ bsonType: 'object', anyOf: [user, task] });
+
+    expect(after.map((shape) => sameKindOfDocumentIn(before, shape)?.key)).toEqual([
+      '0',
+      '1:["type","bug"]',
+    ]);
+  });
+
+  it('finds the root a variant comes from when that root had no variants', () => {
+    const [bug] = validatorDocumentShapesOf(task);
+
+    expect(sameKindOfDocumentIn(validatorDocumentShapesOf(plainTask), bug!)?.key).toEqual('0');
+  });
+
+  it('finds the variant of the same root with the same discriminator value when the discriminator field changes', () => {
+    expect(sameKindOfDocumentIn(validatorDocumentShapesOf(task), bugByKind!)?.key).toEqual(
+      '0:["type","bug"]',
+    );
+  });
+
+  it('finds nothing for a variant whose value the root did not have', () => {
+    const epic = {
+      ...task,
+      oneOf: [{ required: ['type'], properties: { type: { enum: ['epic'] } } }],
+    };
+    const [epicShape] = validatorDocumentShapesOf(epic);
+
+    expect(sameKindOfDocumentIn(validatorDocumentShapesOf(task), epicShape!)).toBeUndefined();
   });
 });
 

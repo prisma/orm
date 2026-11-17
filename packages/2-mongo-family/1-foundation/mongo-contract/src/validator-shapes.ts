@@ -68,7 +68,8 @@ export interface ValidatorDiscriminator {
  * variant with its root's required fields and properties. `key` names the same kind of document in
  * another validator of the collection: the root's position in `anyOf`, and the variant's
  * discriminator value, or its position when it has none. Roots are matched by position because
- * `deriveCollectionValidators` writes them in the same order every time.
+ * `deriveCollectionValidators` writes them in the same order every time. `sameKindOfDocumentIn`
+ * also matches a variant with a shape whose key differs; see there.
  */
 export interface ValidatorDocumentShape {
   readonly key: string;
@@ -91,13 +92,17 @@ function discriminatorOf(
   return others.length === 0 ? only : undefined;
 }
 
+function rootKey(rootIndex: number): string {
+  return `${rootIndex}`;
+}
+
 /** Each kind of document a collection validator's `$jsonSchema` describes. */
 export function validatorDocumentShapesOf(jsonSchema: unknown): readonly ValidatorDocumentShape[] {
   return validatorRootShapesOf(jsonSchema).flatMap((root, rootIndex): ValidatorDocumentShape[] => {
     if (root.variants.length === 0) {
       return [
         {
-          key: `${rootIndex}`,
+          key: rootKey(rootIndex),
           rootIndex,
           discriminator: undefined,
           required: root.required,
@@ -118,6 +123,30 @@ export function validatorDocumentShapesOf(jsonSchema: unknown): readonly Validat
       };
     });
   });
+}
+
+/**
+ * The shape among `shapes`, from another validator of the collection, that describes the same kind
+ * of document as `shape`: the one with the same key; for a variant, otherwise the root it comes
+ * from when that root had no variants, or the variant of that root with the same discriminator
+ * value when the discriminator field changes.
+ */
+export function sameKindOfDocumentIn(
+  shapes: readonly ValidatorDocumentShape[],
+  shape: ValidatorDocumentShape,
+): ValidatorDocumentShape | undefined {
+  const sameKey = shapes.find(({ key }) => key === shape.key);
+  if (sameKey !== undefined || shape.discriminator === undefined) return sameKey;
+  const value = JSON.stringify(shape.discriminator.value);
+  return (
+    shapes.find(({ key }) => key === rootKey(shape.rootIndex)) ??
+    shapes.find(
+      ({ rootIndex, discriminator }) =>
+        rootIndex === shape.rootIndex &&
+        discriminator !== undefined &&
+        JSON.stringify(discriminator.value) === value,
+    )
+  );
 }
 
 const NUMBER_TYPES = ['int', 'long', 'double', 'decimal'];

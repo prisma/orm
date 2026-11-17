@@ -67,3 +67,60 @@ describe('MongoMigrationRunner, --backfill advice in a collection several root m
     timeouts.spinUpMongoMemoryServer,
   );
 });
+
+describe('MongoMigrationRunner, --backfill advice for a new discriminator beside the old one', () => {
+  it(
+    'names the new discriminator as required and --backfill for it when the old one is kept as a field',
+    async () => {
+      const tasks = (discriminator: string, others: readonly string[]) => ({
+        bsonType: 'object',
+        required: ['_id', discriminator, ...others],
+        properties: Object.fromEntries([
+          ['_id', { bsonType: 'objectId' }],
+          ...[discriminator, ...others].map((field) => [field, { bsonType: 'string' }]),
+        ]),
+        oneOf: [
+          {
+            required: [discriminator],
+            properties: { [discriminator]: { enum: ['bug'] } },
+          },
+        ],
+      });
+      await live.db().createCollection('tasks', { validator: { $jsonSchema: tasks('type', []) } });
+      await live.db().collection('tasks').insertOne({ type: 'bug' });
+      const destination = contract(
+        'dest',
+        {
+          Task: {
+            collection: 'tasks',
+            fields: ['_id', 'kind', 'type'],
+            variants: { Bug: 'bug' },
+            discriminator: 'kind',
+          },
+          Bug: { collection: 'tasks', fields: [], base: 'Task' },
+        },
+        { tasks: new MongoCollection({}) },
+      );
+
+      const result = await live.run(
+        [
+          collMod(
+            'tasks',
+            { validator: { $jsonSchema: tasks('kind', ['type']) } },
+            { id: 'validator.tasks.update', checkDocuments: true },
+          ),
+        ],
+        destination,
+      );
+
+      if (result.ok) throw new Error('Expected the validator change to stop at its document check');
+      expect({
+        required: result.failure.why?.includes('This validator change makes "kind" required'),
+        advice: result.failure.why?.includes(
+          'To give "kind" values you choose, plan the change with migration plan --backfill Task.kind.',
+        ),
+      }).toEqual({ required: true, advice: true });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+});

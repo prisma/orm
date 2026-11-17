@@ -164,6 +164,7 @@ export type {
 } from '../validator-shapes';
 export {
   propertyBsonTypesOf,
+  sameKindOfDocumentIn,
   validatorDocumentShapesOf,
   validatorFieldNamesOf,
   validatorRootShapesOf,

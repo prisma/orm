@@ -38,6 +38,7 @@ import {
   type MongoContract,
   modelFieldStoredAs,
   propertyBsonTypesOf,
+  sameKindOfDocumentIn,
   selectedVariantOf,
   type ValidatorDocumentShape,
   validatorDocumentShapesOf,
@@ -609,8 +610,7 @@ function nestedRequiredKeys(
 
 /**
  * The fields a validator change makes required, and those whose accepted values it changes, each
- * kind of document compared with the same kind under the validator the collection has, and a
- * variant of a root that had no variants with that root. Inside a field both validators describe, a
+ * kind of document compared with the same kind under the validator the collection has. Inside a field both validators describe, a
  * key of its objects or list elements that the change makes required is named by its dotted path. A kind the collection's validator does not describe is not
  * compared; with no validator, every field it requires is new.
  */
@@ -623,8 +623,7 @@ function fieldsTouched(before: unknown, after: unknown): TouchedFields {
     const previous: Pick<ValidatorDocumentShape, 'required' | 'properties'> | undefined =
       shapesBefore.length === 0
         ? { required: [], properties: {} }
-        : (shapesBefore.find(({ key }) => key === shape.key) ??
-          shapesBefore.find(({ key }) => key === `${shape.rootIndex}`));
+        : sameKindOfDocumentIn(shapesBefore, shape);
     if (previous === undefined) continue;
     for (const field of shape.required) {
       if (field !== '_id' && !previous.required.includes(field)) requires.add(field);
