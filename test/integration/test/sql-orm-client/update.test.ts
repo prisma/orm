@@ -5,10 +5,11 @@ import {
   withTransaction,
 } from '@internal/sql-runtime';
 import { describe, expect, it } from 'vitest';
-import { getTestContext } from './helpers';
+import { getTestContext, includeStrategies } from './helpers';
 import {
   createReturningUsersCollection,
   createUsersCollection,
+  expectPerRelationStatements,
   timeouts,
   withCollectionRuntime,
 } from './integration-helpers';
@@ -46,7 +47,7 @@ function usersIn(tx: TransactionContext) {
   });
 }
 
-describe('integration/update', () => {
+describe.each(includeStrategies)('integration/update (%s)', (strategy) => {
   it(
     'updateAndCount() returns matched row count and updates data',
     async () => {
@@ -54,7 +55,7 @@ describe('integration/update', () => {
       const observer = statisticsStatementObserver('update-count-observer', observedStatements);
       await withCollectionRuntime(
         async (runtime) => {
-          const users = createUsersCollection(runtime);
+          const users = createUsersCollection(runtime, strategy);
 
           await seedUsers(runtime, [
             { id: 1, name: 'Stale', email: 'a@example.com' },
@@ -89,7 +90,7 @@ describe('integration/update', () => {
     'update() affects only one row even when where() matches several',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [
           { id: 1, name: 'Stale', email: 'a@example.com' },
@@ -121,7 +122,7 @@ describe('integration/update', () => {
     'updateAll() returns all updated rows',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [
           { id: 1, name: 'Draft', email: 'a@example.com' },
@@ -155,7 +156,7 @@ describe('integration/update', () => {
     'updateAll() with include() returns each updated row keyed to its own relations',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [
           { id: 1, name: 'Draft', email: 'a@example.com' },
@@ -167,11 +168,13 @@ describe('integration/update', () => {
           { id: 12, title: 'Post C', userId: 2, views: 300 },
         ]);
 
+        runtime.resetExecutions();
         const updated = await users
           .where({ name: 'Draft' })
           .select('name')
           .include('posts', (posts) => posts.orderBy((post) => post.id.asc()))
           .updateAll({ name: 'Ready' });
+        expectPerRelationStatements(runtime, strategy, 2);
 
         // The single read-back keyed by the returned identities buckets
         // each parent's relations back to the right row. Sort by the
@@ -202,7 +205,7 @@ describe('integration/update', () => {
     'update() with include() and select() keeps selected scalars and relation rows',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
         await seedPosts(runtime, [
@@ -210,11 +213,13 @@ describe('integration/update', () => {
           { id: 11, title: 'Post B', userId: 1, views: 200 },
         ]);
 
+        runtime.resetExecutions();
         const updated = await users
           .where({ id: 1 })
           .select('name')
           .include('posts', (posts) => posts.orderBy((post) => post.id.asc()))
           .update({ name: 'Alice Updated' });
+        expectPerRelationStatements(runtime, strategy, 2);
 
         expect(updated).toEqual({
           name: 'Alice Updated',
@@ -255,7 +260,7 @@ describe('integration/update', () => {
       };
       await withCollectionRuntime(
         async (runtime) => {
-          const users = createReturningUsersCollection(runtime);
+          const users = createReturningUsersCollection(runtime, strategy);
           await seedUsers(runtime, [{ id: 1, name: 'Stale', email: 'a@example.com' }]);
           events.length = 0;
 
@@ -350,7 +355,7 @@ describe('integration/update', () => {
     'updateAll({}) reads the matching rows and updateAndCount({}) changes none',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
         await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
 
         runtime.resetExecutions();

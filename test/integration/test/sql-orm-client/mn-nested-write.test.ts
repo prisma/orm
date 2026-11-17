@@ -14,15 +14,19 @@
 //   2. Explicit .select() used in most tests.
 //   3. At least one implicit/default-selection readback.
 
-import postgresAdapter from '@internal/adapter-postgres/runtime';
 import pgvectorRuntime from '@internal/extension-pgvector/runtime';
 import { Collection, or } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
-import { getExecutionDefaultedTagsContract } from './helpers';
+import {
+  getExecutionDefaultedTagsContract,
+  includeStrategies,
+  postgresAdapterFor,
+} from './helpers';
 import {
   createReturningUsersCollection,
+  expectPerRelationStatements,
   timeouts,
   withCollectionRuntime,
 } from './integration-helpers';
@@ -36,7 +40,7 @@ const ROLE_EDITOR = 'role-editor';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-describe('integration/mn-nested-write', () => {
+describe.each(includeStrategies)('integration/mn-nested-write (%s)', (strategy) => {
   // ===========================================================================
   // connect — create() parent flow
   // ===========================================================================
@@ -45,10 +49,11 @@ describe('integration/mn-nested-write', () => {
     'create(): connect links an existing tag via junction; include("tags") readback reflects the link (explicit select)',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         await seedTags(runtime, [{ id: TAG_RUST, name: 'Rust' }]);
 
+        runtime.resetExecutions();
         const created = await users
           .select('id', 'name')
           .include('tags', (tags) => tags.select('id', 'name'))
@@ -58,6 +63,7 @@ describe('integration/mn-nested-write', () => {
             email: 'alice@example.com',
             tags: (t) => t.connect({ id: TAG_RUST }),
           });
+        expectPerRelationStatements(runtime, strategy, 4);
 
         expect(created).toEqual({
           id: 1,
@@ -78,13 +84,14 @@ describe('integration/mn-nested-write', () => {
     'create(): connect links multiple existing tags; include("tags") readback contains all (explicit select)',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         await seedTags(runtime, [
           { id: TAG_RUST, name: 'Rust' },
           { id: TAG_TS, name: 'TypeScript' },
         ]);
 
+        runtime.resetExecutions();
         const created = await users
           .select('id', 'name')
           .include('tags', (tags) => tags.select('id', 'name').orderBy((t) => t.name.asc()))
@@ -94,6 +101,7 @@ describe('integration/mn-nested-write', () => {
             email: 'bob@example.com',
             tags: (t) => t.connect([{ id: TAG_RUST }, { id: TAG_TS }]),
           });
+        expectPerRelationStatements(runtime, strategy, 6);
 
         expect(created).toEqual({
           id: 2,
@@ -116,11 +124,12 @@ describe('integration/mn-nested-write', () => {
     'update(): connect links an existing tag to an existing user; include("tags") readback reflects the link (explicit select)',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
         await seedTags(runtime, [{ id: TAG_RUST, name: 'Rust' }]);
 
+        runtime.resetExecutions();
         const updated = await users
           .where({ id: 1 })
           .select('id', 'name')
@@ -128,6 +137,7 @@ describe('integration/mn-nested-write', () => {
           .update({
             tags: (t) => t.connect({ id: TAG_RUST }),
           });
+        expectPerRelationStatements(runtime, strategy, 5);
 
         expect(updated).toEqual({
           id: 1,
@@ -148,12 +158,13 @@ describe('integration/mn-nested-write', () => {
     'update(): connect to an already-linked tag keeps the one junction link',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
         await seedTags(runtime, [{ id: TAG_RUST, name: 'Rust' }]);
         await seedUserTags(runtime, [{ userId: 1, tagId: TAG_RUST }]);
 
+        runtime.resetExecutions();
         const updated = await users
           .where({ id: 1 })
           .select('id', 'name')
@@ -161,6 +172,7 @@ describe('integration/mn-nested-write', () => {
           .update({
             tags: (t) => t.connect({ id: TAG_RUST }),
           });
+        expectPerRelationStatements(runtime, strategy, 5);
 
         expect(updated).toEqual({ id: 1, name: 'Alice', tags: [{ id: TAG_RUST, name: 'Rust' }] });
 
@@ -177,7 +189,7 @@ describe('integration/mn-nested-write', () => {
     'create(): connect to a missing tag rejects and leaves no partial parent or junction write',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         await expect(
           users.create({
@@ -204,7 +216,7 @@ describe('integration/mn-nested-write', () => {
     'create(): parent insert failure after a successful connect preflight leaves no junction rows',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
         await seedTags(runtime, [{ id: TAG_RUST, name: 'Rust' }]);
@@ -238,7 +250,7 @@ describe('integration/mn-nested-write', () => {
     'create(): nested tag create failing after the parent insert rolls back the parent and junction',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         // Seed the tag so the nested target INSERT collides on the tags pkey.
         // Unlike the connect-preflight cases, this failure happens *after* the
@@ -276,7 +288,7 @@ describe('integration/mn-nested-write', () => {
     'update(): disconnect removes the junction link; include("tags") readback no longer contains the tag (explicit select)',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
         await seedTags(runtime, [
@@ -288,6 +300,7 @@ describe('integration/mn-nested-write', () => {
           { userId: 1, tagId: TAG_TS },
         ]);
 
+        runtime.resetExecutions();
         const updated = await users
           .where({ id: 1 })
           .select('id', 'name')
@@ -295,6 +308,7 @@ describe('integration/mn-nested-write', () => {
           .update({
             tags: (t) => t.disconnect([{ id: TAG_RUST }]),
           });
+        expectPerRelationStatements(runtime, strategy, 5);
 
         expect(updated).toEqual({
           id: 1,
@@ -317,18 +331,20 @@ describe('integration/mn-nested-write', () => {
       // Standard requirement: at least one test without .select() on the
       // parent so the full default row shape is asserted.
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
         await seedTags(runtime, [{ id: TAG_RUST, name: 'Rust' }]);
         await seedUserTags(runtime, [{ userId: 1, tagId: TAG_RUST }]);
 
+        runtime.resetExecutions();
         const updated = await users
           .where({ id: 1 })
           .include('tags', (tags) => tags.orderBy((t) => t.name.asc()))
           .update({
             tags: (t) => t.disconnect([{ id: TAG_RUST }]),
           });
+        expectPerRelationStatements(runtime, strategy, 5);
 
         // Full User shape + tags: [] (junction row deleted, no .select() on parent).
         expect(updated).toEqual({
@@ -353,7 +369,7 @@ describe('integration/mn-nested-write', () => {
     'update(): disconnect from a missing tag rejects and preserves existing junction links',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
         await seedTags(runtime, [{ id: TAG_TS, name: 'TypeScript' }]);
@@ -386,8 +402,9 @@ describe('integration/mn-nested-write', () => {
     'create(): nested create inserts the Tag row and the junction link; include("tags") readback reflects both (explicit select)',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
+        runtime.resetExecutions();
         const created = await users
           .select('id', 'name')
           .include('tags', (tags) => tags.select('id', 'name'))
@@ -397,6 +414,7 @@ describe('integration/mn-nested-write', () => {
             email: 'alice@example.com',
             tags: (t) => t.create([{ id: TAG_RUST, name: 'Rust' }]),
           });
+        expectPerRelationStatements(runtime, strategy, 4);
 
         expect(created).toEqual({
           id: 1,
@@ -422,10 +440,11 @@ describe('integration/mn-nested-write', () => {
     'update(): nested create inserts Tag rows and junction links; include("tags") readback reflects all (explicit select)',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
 
+        runtime.resetExecutions();
         const updated = await users
           .where({ id: 1 })
           .select('id', 'name')
@@ -437,6 +456,7 @@ describe('integration/mn-nested-write', () => {
                 { id: TAG_TS, name: 'TypeScript' },
               ]),
           });
+        expectPerRelationStatements(runtime, strategy, 7);
 
         expect(updated).toEqual({
           id: 1,
@@ -462,7 +482,7 @@ describe('integration/mn-nested-write', () => {
     'create(): nested create on User.roles throws because the junction has a required payload column (level)',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         await expect(
           users.create({
@@ -495,7 +515,7 @@ describe('integration/mn-nested-write', () => {
     'update(): connect on User.roles rejects before the scalar update persists',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
         await seedRoles(runtime, [{ id: ROLE_ADMIN, name: 'Admin' }]);
@@ -533,7 +553,7 @@ describe('integration/mn-nested-write', () => {
     'create(): connect on User.roles throws because the junction has a required payload column (level)',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         await seedRoles(runtime, [{ id: ROLE_ADMIN, name: 'Admin' }]);
 
@@ -586,7 +606,7 @@ describe('integration/mn-nested-write', () => {
           contract,
           stack: createSqlExecutionStack({
             target: postgresTarget,
-            adapter: postgresAdapter,
+            adapter: postgresAdapterFor(strategy),
             extensions: [pgvectorRuntime],
           }),
         });
@@ -594,6 +614,7 @@ describe('integration/mn-nested-write', () => {
 
         await seedTags(runtime, [{ id: TAG_RUST, name: 'Rust' }]);
 
+        runtime.resetExecutions();
         const created = await users
           .select('id', 'name')
           .include('tags', (tags) => tags.select('id', 'name'))
@@ -603,6 +624,7 @@ describe('integration/mn-nested-write', () => {
             email: 'alice@example.com',
             tags: (t) => t.connect({ id: TAG_RUST }),
           });
+        expectPerRelationStatements(runtime, strategy, 4);
 
         expect(created).toEqual({
           id: 1,
@@ -631,7 +653,7 @@ describe('integration/mn-nested-write', () => {
     'update(): disconnect on User.roles deletes the junction link; include("roles") readback is empty (explicit select)',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
         await seedRoles(runtime, [
@@ -643,6 +665,7 @@ describe('integration/mn-nested-write', () => {
           { userId: 1, roleId: ROLE_EDITOR, level: 3 },
         ]);
 
+        runtime.resetExecutions();
         const updated = await users
           .where({ id: 1 })
           .select('id', 'name')
@@ -650,6 +673,7 @@ describe('integration/mn-nested-write', () => {
           .update({
             roles: (r) => r.disconnect([{ id: ROLE_ADMIN }]),
           });
+        expectPerRelationStatements(runtime, strategy, 5);
 
         expect(updated).toEqual({
           id: 1,
@@ -670,9 +694,10 @@ describe('integration/mn-nested-write', () => {
     'create(): connect with two criteria that find the same tag links it once',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
         await seedTags(runtime, [{ id: TAG_RUST, name: 'Rust' }]);
 
+        runtime.resetExecutions();
         const created = await users
           .select('id')
           .include('tags', (tags) => tags.select('id', 'name'))
@@ -682,6 +707,7 @@ describe('integration/mn-nested-write', () => {
             email: 'ada@example.com',
             tags: (tags) => tags.connect([{ id: TAG_RUST }, { name: 'Rust' }]),
           });
+        expectPerRelationStatements(runtime, strategy, 6);
 
         expect(created).toEqual({ id: 1, tags: [{ id: TAG_RUST, name: 'Rust' }] });
         expect(await runtime.query('select user_id, tag_id from user_tags')).toEqual([
@@ -741,9 +767,10 @@ describe('integration/mn-nested-write', () => {
     'update(): where().updateAll() changes a matching linked tag and leaves a matching tag linked only to another user unchanged',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
         await seedTwoUsersWithTags(runtime);
 
+        runtime.resetExecutions();
         const updated = await users
           .where({ id: 1 })
           .select('id', 'name')
@@ -754,6 +781,7 @@ describe('integration/mn-nested-write', () => {
                 .where((tag) => or(tag.name.eq('Rust'), tag.name.eq('Go')))
                 .updateAll({ name: 'Changed' }),
           });
+        expectPerRelationStatements(runtime, strategy, 4);
 
         expect(updated).toEqual({
           id: 1,
@@ -778,10 +806,11 @@ describe('integration/mn-nested-write', () => {
     'update(): where().deleteAll() with cascading junction keys deletes a matching linked tag and its junction rows, leaving a matching tag linked only to another user',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
         await seedTwoUsersWithTags(runtime);
         await addTagForeignKey(runtime, 'cascade');
 
+        runtime.resetExecutions();
         const updated = await users
           .where({ id: 1 })
           .select('id', 'name')
@@ -789,6 +818,7 @@ describe('integration/mn-nested-write', () => {
           .update({
             tags: (t) => t.where((tag) => or(tag.name.eq('Rust'), tag.name.eq('Go'))).deleteAll(),
           });
+        expectPerRelationStatements(runtime, strategy, 4);
 
         expect(updated).toEqual({
           id: 1,
@@ -812,7 +842,7 @@ describe('integration/mn-nested-write', () => {
     'update(): deleteAll() with junction keys that do not cascade surfaces the database error and rolls back the whole update',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
         await seedTwoUsersWithTags(runtime);
         await addTagForeignKey(runtime, 'restrict');
 
@@ -844,9 +874,10 @@ describe('integration/mn-nested-write', () => {
     'update(): connect() then updateAll() in one array changes the tag the connect linked',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
         await seedTwoUsersWithTags(runtime);
 
+        runtime.resetExecutions();
         const updated = await users
           .where({ id: 2 })
           .select('id', 'name')
@@ -857,6 +888,7 @@ describe('integration/mn-nested-write', () => {
               t.where({ name: 'Rust' }).updateAll({ name: 'Rust 2' }),
             ],
           });
+        expectPerRelationStatements(runtime, strategy, 6);
 
         expect(updated).toEqual({
           id: 2,

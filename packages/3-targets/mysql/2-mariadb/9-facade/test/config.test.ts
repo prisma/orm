@@ -65,7 +65,7 @@ describe('defineConfig for MariaDB', () => {
     );
   });
 
-  it("emits a PSL contract for target mariadb, with no returning capability and typed by MariaDB's codec types module", async () => {
+  it("emits a PSL contract for target mariadb, with no returning or one-query include capability and typed by MariaDB's codec types module", async () => {
     const { contract, contractDts } = await emitFixture('example');
     expect({
       target: contract.target,
@@ -80,6 +80,7 @@ describe('defineConfig for MariaDB', () => {
           defaultInInsert: true,
           enums: true,
           foreignKeys: true,
+          jsonAgg: true,
           limit: true,
           orderBy: true,
         },
