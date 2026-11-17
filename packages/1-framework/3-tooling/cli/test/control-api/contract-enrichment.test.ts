@@ -167,56 +167,60 @@ describe('enrichContract', () => {
         targetId: 'postgres',
         version: '0.0.1',
         capabilities: { postgres: { 'pgvector.cosine': true } },
-        types: {
-          codecTypes: {
-            import: {
-              package: '@internal/extension-pgvector/codec-types',
-              named: 'CodecTypes',
-              alias: 'PgVectorTypes',
-            },
-          },
-        },
       },
     });
   });
 
-  it('strips controlPlaneHooks from extension pack metadata', () => {
+  it('records no type-import declaration and no control-plane hooks of an extension', () => {
     const extension = makeExtension({
       types: {
         codecTypes: {
           controlPlaneHooks: { 'pg/vector@1': { resolveIdentityValue: () => null } },
-          import: {
+          import: { package: '@ext/pgvector', named: 'CodecTypes', alias: 'PgvectorTypes' },
+          parameterizedOutputTypes: {
             package: '@ext/pgvector',
-            named: 'PgvectorCodecTypes',
-            alias: 'PgvectorCodecTypes',
+            named: 'ParameterizedOutputTypesForTypeParams',
+            alias: 'PgvectorOutputTypes',
           },
+          typeImports: [{ package: '@ext/pgvector', named: 'Vector', alias: 'Vector' }],
+        },
+        queryOperationTypes: {
+          import: { package: '@ext/pgvector', named: 'QueryOperationTypes', alias: 'Q' },
         },
       },
     });
 
     const result = enrichContract(makeIR(), [extension]);
-    const packMeta = result.extensions['pgvector'] as Record<string, unknown>;
-    const types = packMeta['types'] as Record<string, unknown>;
-    const codecTypes = types['codecTypes'] as Record<string, unknown>;
 
-    expect(codecTypes).not.toHaveProperty('controlPlaneHooks');
-    expect(codecTypes['import']).toBeDefined();
+    expect(result.extensions['pgvector']).toEqual({
+      kind: 'extension',
+      id: 'pgvector',
+      familyId: 'sql',
+      targetId: 'postgres',
+      version: '0.0.1',
+    });
   });
 
-  it('copies only the type metadata keys a contract carries, leaving out the storage list an older pack still declares', () => {
-    const queryOperationTypes = {
-      import: { package: '@ext/acme', named: 'QueryOperationTypes', alias: 'AcmeQueryOps' },
-    };
-    const operationTypes = {
-      import: { package: '@ext/acme', named: 'OperationTypes', alias: 'AcmeOps' },
-    };
+  it('copies only the aggregate descriptors of the type metadata, leaving out the storage list an older pack still declares', () => {
+    const aggregateDescriptors = [
+      {
+        operation: 'stddev',
+        input: { kind: 'trait', trait: 'numeric' },
+        output: { kind: 'codec', codecId: 'pg/numeric@1' },
+        nullable: true,
+      },
+    ];
     const typesOfAnOlderPack = {
       codecTypes: {
         import: { package: '@ext/acme', named: 'CodecTypes', alias: 'AcmeTypes' },
       },
-      queryOperationTypes,
-      aggregateDescriptors: [],
-      operationTypes,
+      queryOperationTypes: {
+        import: { package: '@ext/acme', named: 'QueryOperationTypes', alias: 'AcmeQueryOps' },
+      },
+      aggregateDescriptors,
+      operationTypes: {
+        import: { package: '@ext/acme', named: 'OperationTypes', alias: 'AcmeOps' },
+      },
       storage: [{ typeId: 'acme/shape@1', familyId: 'sql', targetId: 'postgres' }],
     };
     const extension = makeExtension({ types: typesOfAnOlderPack });
@@ -224,12 +228,7 @@ describe('enrichContract', () => {
     const result = enrichContract(makeIR(), [extension]);
 
     expect((result.extensions['pgvector'] as Record<string, unknown>)['types']).toEqual({
-      aggregateDescriptors: [],
-      codecTypes: {
-        import: { package: '@ext/acme', named: 'CodecTypes', alias: 'AcmeTypes' },
-      },
-      operationTypes,
-      queryOperationTypes,
+      aggregateDescriptors,
     });
   });
 

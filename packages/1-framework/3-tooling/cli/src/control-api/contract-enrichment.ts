@@ -28,14 +28,31 @@ function sortDeepTyped<T>(value: T): T {
 }
 
 /**
- * The keys of a pack's `types` metadata that a contract carries. Any other key stays out of the contract, such as the `storage` list that a pack built for an earlier framework still declares.
+ * The keys of a pack's `types` metadata that a contract carries, each with the members it leaves out. The left-out members are the type-import declarations, which only the emitter reads and reads from the descriptor, and the codec members that hold functions. Any key not listed stays out of the contract, such as the `storage` list that a pack built for an earlier framework still declares.
  */
-const CONTRACT_TYPES_KEYS: ReadonlySet<string> = new Set([
-  'aggregateDescriptors',
-  'codecTypes',
-  'operationTypes',
-  'queryOperationTypes',
+const CONTRACT_TYPES_OMITTED_MEMBERS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  ['aggregateDescriptors', new Set<string>()],
+  [
+    'codecTypes',
+    new Set([
+      'import',
+      'typeImports',
+      'parameterizedOutputTypes',
+      'controlPlaneHooks',
+      'codecDescriptors',
+    ]),
+  ],
+  ['operationTypes', new Set(['import'])],
+  ['queryOperationTypes', new Set(['import'])],
 ]);
+
+function contractTypesEntry(key: string, value: unknown): [string, unknown] | undefined {
+  const omitted = CONTRACT_TYPES_OMITTED_MEMBERS.get(key);
+  if (omitted === undefined) return undefined;
+  if (!isPlainObject(value)) return [key, value];
+  const kept = Object.entries(value).filter(([member]) => !omitted.has(member));
+  return kept.length > 0 ? [key, Object.fromEntries(kept)] : undefined;
+}
 
 function extractExtensionPackMeta(
   component: TargetBoundComponentDescriptor<string, string>,
@@ -51,20 +68,12 @@ function extractExtensionPackMeta(
   if (capabilities) {
     base['capabilities'] = capabilities;
   }
-  if (types) {
-    const carried = Object.fromEntries(
-      Object.entries(types).filter(([key]) => CONTRACT_TYPES_KEYS.has(key)),
-    );
-    if (types.codecTypes) {
-      const {
-        controlPlaneHooks: _,
-        codecDescriptors: _cd,
-        ...cleanedCodecTypes
-      } = types.codecTypes;
-      base['types'] = { ...carried, codecTypes: cleanedCodecTypes };
-    } else {
-      base['types'] = carried;
-    }
+  const carried = Object.entries(types ?? {}).flatMap(([key, value]) => {
+    const entry = contractTypesEntry(key, value);
+    return entry === undefined ? [] : [entry];
+  });
+  if (carried.length > 0) {
+    base['types'] = Object.fromEntries(carried);
   }
   return base;
 }
