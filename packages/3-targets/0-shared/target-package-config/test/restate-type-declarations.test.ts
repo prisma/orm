@@ -99,6 +99,42 @@ describe('restateTypeDeclarations', () => {
     expect(restateTypeDeclarations(descriptor, MODULE)).toBe(descriptor);
   });
 
+  it('refuses two type imports of one name from different modules, which would become one import', () => {
+    const descriptor = {
+      kind: 'adapter',
+      types: {
+        codecTypes: {
+          import: { package: '@acme/target/codec-types', named: 'CodecTypes', alias: 'PgTypes' },
+          typeImports: [
+            { package: '@acme/adapter/codec-types', named: 'CodecTypes', alias: 'AdapterTypes' },
+          ],
+        },
+      },
+    };
+
+    expect(() => restateTypeDeclarations(descriptor, MODULE)).toThrow(
+      "Two type declarations import CodecTypes, from '@acme/target/codec-types' and from '@acme/adapter/codec-types'; restated to name '@acme/orm-db/generated-types', both would import the same type",
+    );
+  });
+
+  it('keeps two type imports of one name from the same module', () => {
+    const descriptor = {
+      kind: 'adapter',
+      types: {
+        codecTypes: {
+          import: { package: '@acme/target/codec-types', named: 'CodecTypes', alias: 'PgTypes' },
+          typeImports: [
+            { package: '@acme/target/codec-types', named: 'CodecTypes', alias: 'Codecs' },
+          ],
+        },
+      },
+    };
+
+    expect(restateTypeDeclarations(descriptor, MODULE).types.codecTypes.typeImports).toEqual([
+      { package: MODULE, named: 'CodecTypes', alias: 'Codecs' },
+    ]);
+  });
+
   it('returns a descriptor with no type metadata as it is', () => {
     const descriptor: Pick<ComponentMetadata, 'types'> & { readonly kind: string } = {
       kind: 'driver',
