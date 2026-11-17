@@ -44,12 +44,12 @@ export interface MysqlRuntimeAdapterOptions<TargetId extends string> {
     MysqlRuntimeAdapterDescriptor<TargetId>,
     'codecs' | 'mutationDefaultGenerators' | 'rawCodecInferer' | 'create'
   >;
-  /** The target's runtime metadata, whose id and display name the renderer's errors show. */
-  readonly target: Pick<MysqlRuntimeTargetMeta<string>, 'targetId' | 'displayName'>;
+  /** The target's runtime metadata, whose id and display name the renderer's errors show. Its id is the adapter metadata's. */
+  readonly target: Pick<MysqlRuntimeTargetMeta<NoInfer<TargetId>>, 'targetId' | 'displayName'>;
   /** Builds the renderer that writes the target's SQL. */
   readonly renderer: (
     codecs: MysqlCodecRegistry,
-    target: Pick<MysqlRuntimeTargetMeta<string>, 'targetId' | 'displayName'>,
+    target: Pick<MysqlRuntimeTargetMeta<TargetId>, 'targetId' | 'displayName'>,
   ) => MysqlSqlRenderer;
 }
 
