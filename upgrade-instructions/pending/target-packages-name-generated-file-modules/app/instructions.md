@@ -9,7 +9,7 @@ changes:
         - '@prisma/orm-[a-z-]+/(contract/types|family-contract|target/(codec|operation)-types|adapter/codec-types)'
   - id: hand-assembled-config-names-generated-file-modules
     summary: |
-      A config built with the framework's own `defineConfig`, and not a target package's, must name the module generated contract types import from (`contract.typesModule`) and the module migration files import from (`migrations.module`). Without `contract.typesModule`, every command that writes contract types fails with `CONFIG.CONTRACT_TYPES_MODULE_MISSING`: `prisma contract emit`, `prisma migration plan`, `prisma migration new`, `prisma migrate`, `prisma db init`, `prisma db update` and `prisma db sign`. Without `migrations.module`, `prisma migration plan` and `prisma migration new` fail with `CONFIG.MIGRATION_MODULE_MISSING`.
+      A config built with the framework's own `defineConfig`, and not a target package's, must name the module generated contract types import from (`contract.typesModule`) and the module migration files import from (`migrations.module`). Without `contract.typesModule`, every command that writes contract types fails with `CONFIG.CONTRACT_TYPES_MODULE_MISSING`: `prisma contract emit`, `prisma migration plan`, `prisma migration new`, `prisma migrate`, `prisma db init`, `prisma db update` and `prisma db sign`. Without `migrations.module`, `prisma migration plan`, `prisma migration new` and `prisma migrate` fail with `CONFIG.MIGRATION_MODULE_MISSING`.
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
@@ -17,7 +17,7 @@ changes:
         - '@prisma/orm-toolchain/cli/config-types'
   - id: control-api-takes-types-module
     summary: |
-      The control client's `emit` requires `contractConfig.typesModule`, and `renderContractDts` requires `typesModule`: the module the generated contract types import from. The `projectDir` option of the control API's contract emit, `migration new` and `migration plan` operations is removed.
+      The control client's `emit` requires `contractConfig.typesModule`, and `renderContractDts` requires `typesModule`: the module the generated contract types import from. The control API's `migrate` operation requires `migrationModule`. The `projectDir` option of the control API's contract emit, `migration new` and `migration plan` operations is removed.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
@@ -91,7 +91,7 @@ defineConfig({
   ```
 
 - `migrations.module` names the module that exports the migration base class and the target's operation helpers. For Postgres that is `@prisma/orm-target-postgres/target/migration`.
-- Neither may be a path or a URL. `'./generated-types'` is refused when the config is loaded, because generated files are written into more than one folder and a relative path is right for at most one of them.
+- Neither may be empty, a path or a URL. `'./generated-types'` is refused when the config is loaded, because generated files are written into more than one folder and a relative path is right for at most one of them.
 - The application must depend directly on every package these modules import from. The target's and adapter's own types are imported from the target's package, such as `@prisma/orm-target-postgres`, so the application depends on that too.
 
 ## `control-api-takes-types-module`
@@ -105,7 +105,7 @@ await client.renderContractDts({ contract, typesModule });
 
 Take the value from the config: `defineConfig(...).contract.typesModule`. For an application on a target package it is that package's `generated-types` entrypoint, such as `'@prisma/orm-postgres/generated-types'`.
 
-A script that calls the control API's contract emit, `migration new` or `migration plan` operations directly, from `@prisma/orm-toolchain/cli/control-api`, removes the `projectDir` option. The operations read the module names from the config they are given.
+A script that calls the control API's contract emit, `migration new` or `migration plan` operations directly, from `@prisma/orm-toolchain/cli/control-api`, removes the `projectDir` option. The operations read the module names from the config they are given. A script that calls the `migrate` operation passes `migrationModule`, the config's `migrations.module`.
 
 ## `toolchain-publish-surface-entrypoints-removed`
 

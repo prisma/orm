@@ -2,7 +2,7 @@
 changes:
   - id: target-package-names-generated-file-modules
     summary: |
-      A package that adds a target must name, in the config its `defineConfig` returns, the module generated contract types import from (`contract.typesModule`) and the module migration files import from (`migrations.module`), and must hand the config target and adapter descriptors whose type declarations state its own types module. Without `contract.typesModule`, every command that writes contract types fails with `CONFIG.CONTRACT_TYPES_MODULE_MISSING`: `prisma contract emit`, `prisma migration plan`, `prisma migration new`, `prisma migrate`, `prisma db init`, `prisma db update` and `prisma db sign`. Without `migrations.module`, `prisma migration plan` and `prisma migration new` fail with `CONFIG.MIGRATION_MODULE_MISSING`.
+      A package that adds a target must name, in the config its `defineConfig` returns, the module generated contract types import from (`contract.typesModule`) and the module migration files import from (`migrations.module`), and must hand the config target and adapter descriptors whose type declarations state its own types module. Without `contract.typesModule`, every command that writes contract types fails with `CONFIG.CONTRACT_TYPES_MODULE_MISSING`: `prisma contract emit`, `prisma migration plan`, `prisma migration new`, `prisma migrate`, `prisma db init`, `prisma db update` and `prisma db sign`. Without `migrations.module`, `prisma migration plan`, `prisma migration new` and `prisma migrate` fail with `CONFIG.MIGRATION_MODULE_MISSING`.
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
@@ -39,22 +39,29 @@ changes:
       matches:
         - '(?<![\w$])(generateContractDts|generateImportLines)\s*\('
         - 'resolveImportSpecifier'
-  - id: mysql-config-components-carry-family-and-module-base
+  - id: mysql-config-components-carry-family-and-modules
     summary: |
-      `MysqlConfigComponents`, the argument of `createMysqlDefineConfig` from `@prisma/orm-mysql/config`, requires `family` and `moduleBase`, and its `target` and `adapter` are used as given.
+      `MysqlConfigComponents`, the argument of `createMysqlDefineConfig` from `@prisma/orm-mysql/config`, requires `family`, `typesModule` and `migrationModule`, and its `target` and `adapter` are used as given.
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
         - '(?<![\w$])createMysqlDefineConfig\s*\('
   - id: control-api-takes-types-module
     summary: |
-      The control client's `emit` requires `contractConfig.typesModule`, and `renderContractDts` requires `typesModule`: the module the generated contract types import from. The `projectDir` option of the control API's contract emit, `migration new` and `migration plan` operations is removed, and `preflightRefAdvancement` takes the config in its place.
+      The control client's `emit` requires `contractConfig.typesModule`, and `renderContractDts` requires `typesModule`: the module the generated contract types import from. The control API's `migrate` operation requires `migrationModule`. The `projectDir` option of the control API's contract emit, `migration new` and `migration plan` operations is removed, and `preflightRefAdvancement` takes the config in its place.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
         - 'contractConfig\s*:'
         - '(?<![\w$])renderContractDts\s*\('
         - '@prisma/orm-toolchain/cli/control-api'
+  - id: component-type-import-module-is-not-a-literal-type
+    summary: |
+      On the Postgres and MongoDB target and adapter descriptors, the type of a type import's `package` is a template string type such as `` `${string}/codec-types` ``, where it was one string literal. Code that depends on the literal type compares the value instead.
+    detection:
+      glob: "**/*.{ts,mts,cts}"
+      matches:
+        - 'codecTypes\.import\.package'
   - id: toolchain-publish-surface-entrypoints-removed
     summary: |
       `@prisma/orm-toolchain/publish-surface`, `@prisma/orm-toolchain/publish-surface/import-roots` and `@prisma/orm-toolchain/publish-surface/shells` are removed. Nothing replaces them.
@@ -120,7 +127,7 @@ export function defineConfig(options: ConfigOptions) {
 
 `migrations.module` names the module that exports the migration base class, the command-line entry and your operation helpers: everything your migration renderer writes an import for.
 
-Neither module may be a path or a URL. Name it the way your package is imported.
+Neither module may be empty, a path or a URL. Name it the way your package is imported.
 
 Then check from outside: install your package in a scratch application from a tarball, run `prisma contract emit` and `prisma migration plan`, and typecheck with `skipLibCheck` off. Every import in the generated files should name your package, an extension's own package, or a relative path.
 
@@ -181,11 +188,11 @@ This applies to code that calls the emitter directly, from `@prisma/orm-toolchai
 - In `EmitOptions`, pass `typesModule` and remove `resolveImportSpecifier`.
 - `generateImportLines`, which returned lines of import text, is replaced by `typesImportRequirements`, which returns import requirements. Render them with the helper in `@prisma/orm-framework/ts-render`.
 
-## `mysql-config-components-carry-family-and-module-base`
+## `mysql-config-components-carry-family-and-modules`
 
 This applies to a package that builds its `defineConfig` with `createMysqlDefineConfig`, as a target that speaks the MySQL protocol does.
 
-Pass two more members:
+Pass three more members:
 
 ```ts
 export const defineConfig = createMysqlDefineConfig({
@@ -194,12 +201,13 @@ export const defineConfig = createMysqlDefineConfig({
   target,
   adapter,
   driver,
-  moduleBase: '@acme/orm-db',
+  typesModule: '@acme/orm-db/generated-types',
+  migrationModule: '@acme/orm-db/migration',
 });
 ```
 
 - `family` is the SQL family's control descriptor. The helper no longer supplies it.
-- `moduleBase` is your package's name. The helper names `<moduleBase>/generated-types` and `<moduleBase>/migration` in the config, so your package must export both.
+- `typesModule` and `migrationModule` are the two modules of your package that generated files import from. The helper names them in the config, so your package must export both.
 - `target` and `adapter` are used as given. Restate their type declarations yourself with `restateTypeDeclarations`, as in the first change above.
 
 ## `control-api-takes-types-module`
@@ -213,7 +221,13 @@ await client.renderContractDts({ contract, typesModule });
 
 Take the value from the config: `defineConfig(...).contract.typesModule`.
 
-Code that calls the control API's operations directly, from `@prisma/orm-toolchain/cli/control-api`, removes the `projectDir` option from contract emit, `migration new` and `migration plan`, and passes the config to `preflightRefAdvancement` where it passed `projectDir`.
+Code that calls the control API's operations directly, from `@prisma/orm-toolchain/cli/control-api`, removes the `projectDir` option from contract emit, `migration new` and `migration plan`, and passes the config to `preflightRefAdvancement` where it passed `projectDir`. Code that calls the `migrate` operation passes `migrationModule`, the config's `migrations.module`.
+
+## `component-type-import-module-is-not-a-literal-type`
+
+This applies to code that reads the module of a type import from a Prisma target or adapter descriptor, such as `postgresAdapter.types.codecTypes.import.package`, and relies on its type being one exact string.
+
+The value is unchanged. Its type is now a template string type, because the module is filled in when the package is built. Replace a type-level comparison with the exact string by a comparison of the value, or by a check of the suffix.
 
 ## `toolchain-publish-surface-entrypoints-removed`
 
