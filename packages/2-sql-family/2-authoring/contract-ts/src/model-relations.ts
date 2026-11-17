@@ -56,6 +56,44 @@ function toOneRelationNullable(semanticModel: ModelNode, relation: RelationNode)
   return relation.nullable;
 }
 
+function uniqueColumnSets(model: ModelNode): readonly (readonly string[])[] {
+  return [
+    ...(model.id !== undefined ? [model.id.columns] : []),
+    ...(model.uniques ?? []).map((unique) => unique.columns),
+    ...(model.indexes ?? []).flatMap((index) =>
+      index.unique === true && index.columns !== undefined && index.where === undefined
+        ? [index.columns]
+        : [],
+    ),
+  ];
+}
+
+function assertHasOneKeyUnique(
+  semanticModel: ModelNode,
+  relation: RelationNode,
+  targetModel: ModelNode,
+  targetFields: readonly string[],
+): void {
+  const key = new Set(relation.on.childColumns);
+  const unique = uniqueColumnSets(targetModel).some(
+    (columns) => columns.length === key.size && columns.every((column) => key.has(column)),
+  );
+  if (unique) return;
+  throw contractError(
+    'CONTRACT.RELATION_INVALID',
+    `Relation "${semanticModel.modelName}.${relation.fieldName}" is one-to-one, but the fields ${targetFields.map((name) => `"${name}"`).join(', ')} of model "${targetModel.modelName}" are not unique. Add a unique constraint over exactly those fields, or make "${relation.fieldName}" a hasMany relation.`,
+    {
+      meta: {
+        modelName: semanticModel.modelName,
+        relationName: relation.fieldName,
+        targetModel: targetModel.modelName,
+        fields: targetFields,
+        reason: 'has-one-key-not-unique',
+      },
+    },
+  );
+}
+
 function buildThroughDescriptor(
   through: NonNullable<RelationNode['through']>,
   tableNamespaceByName: ReadonlyMap<string, string>,
@@ -226,6 +264,9 @@ export function lowerRelations(
     } else if (relation.cardinality === '1:N') {
       modelRelations[relation.fieldName] = { to, cardinality: '1:N', on };
     } else {
+      if (relation.cardinality === '1:1') {
+        assertHasOneKeyUnique(semanticModel, relation, targetModel, on.targetFields);
+      }
       modelRelations[relation.fieldName] = {
         to,
         cardinality: relation.cardinality,

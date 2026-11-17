@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm';
 import {
   AggregateExpr,
   AndExpr,
@@ -185,6 +186,50 @@ describe('Postgres adapter', () => {
     expect(lowered.sql).toBe(
       `SELECT json_build_object('value', "user"."email") AS "object", json_agg("user"."email") AS "array" FROM "user"`,
     );
+  });
+
+  describe('a JSON object wider than one json_build_object call takes', () => {
+    function lowerObjectOf(width: number): string {
+      const entries = Array.from({ length: width }, (_, index) =>
+        JsonObjectExpr.entry(
+          `c${index}`,
+          new NativeJsonValueProjection(ColumnRef.of('user', `c${index}`)),
+        ),
+      );
+      const ast = SelectAst.from(TableSource.named('user')).withProjection([
+        ProjectionItem.of('object', JsonObjectExpr.fromEntries(entries)),
+      ]);
+      return adapter.lower(ast, { contract, params: [] }).sql;
+    }
+
+    function pairs(from: number, to: number): string {
+      return Array.from({ length: to - from }, (_, offset) => {
+        const index = from + offset;
+        return `'c${index}', "user"."c${index}"`;
+      }).join(', ');
+    }
+
+    function members(from: number, to: number): string {
+      return `left(substr(json_build_object(${pairs(from, to)})::text, 2), -1)`;
+    }
+
+    it('renders 50 entries as one json_build_object call', () => {
+      expect(lowerObjectOf(50)).toBe(
+        `SELECT json_build_object(${pairs(0, 50)}) AS "object" FROM "user"`,
+      );
+    });
+
+    it('joins the members of 50-entry json_build_object calls in entry order for 51 entries', () => {
+      expect(lowerObjectOf(51)).toBe(
+        `SELECT ('{' || ${members(0, 50)} || ', ' || ${members(50, 51)} || '}')::json AS "object" FROM "user"`,
+      );
+    });
+
+    it('joins three calls in entry order for 120 entries', () => {
+      expect(lowerObjectOf(120)).toBe(
+        `SELECT ('{' || ${members(0, 50)} || ', ' || ${members(50, 100)} || ', ' || ${members(100, 120)} || '}')::json AS "object" FROM "user"`,
+      );
+    });
   });
 
   it('renders nested scalar projection expressions with exact precedence', () => {
@@ -518,6 +563,19 @@ describe('Postgres adapter', () => {
 
     expect(sql).toBe(
       `SELECT 12 AS "bigintValue", '2024-01-01T00:00:00.000Z' AS "createdAtLiteral", ARRAY[1, 'two'] AS "arrayValue", '{"ok":true}' AS "jsonValue", NULL AS "missingValue" FROM "user"`,
+    );
+  });
+
+  it('renders a Date literal created in another realm as its ISO text', () => {
+    const ast = SelectAst.from(TableSource.named('user')).withProjection([
+      ProjectionItem.of(
+        'at',
+        LiteralExpr.of(runInNewContext('new Date("2024-01-01T00:00:00.000Z")')),
+      ),
+    ]);
+
+    expect(adapter.lower(ast, { contract, params: [] }).sql).toBe(
+      `SELECT '2024-01-01T00:00:00.000Z' AS "at" FROM "user"`,
     );
   });
 

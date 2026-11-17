@@ -1079,7 +1079,7 @@ A method argument on the ORM client, or on the `sql()` / Mongo query-builder DSL
 
 ### ORM.CAPABILITY_MISSING
 
-The requested operation requires a contract capability the contract does not declare: the `returning` capability for an MTI variant `createAll()`, or, without it, a write whose rows cannot be read back by key: a `create()` whose key column has a database default other than auto-increment, a `createAll()` of several rows whose keys the database generates, a `createAll()` with `onConflict: 'skip'`, or an `upsert()` whose update sets a conflict column or whose create leaves one out (payload `capability`, `action`); `insertOnConflictTarget` for `upsert()` when the create values can collide on another unique key, and for `onConflict: 'skip'` with `conflictOn`; or, on the `sql()` builder or an ORM collection, the flag a gated method or option needs, such as `postgres.distinctOn` for `distinctOn()`, `sql.forUpdate`, `sql.forShare`, `postgres.forNoKeyUpdate` or `postgres.forKeyShare` for the four row-locking methods (`forUpdate()`, `forNoKeyUpdate()`, `forShare()`, `forKeyShare()`), and `sql.lockOf`, `sql.lockNowait` or `sql.lockSkipLocked` for their `of`, `nowait` and `skipLocked` options; the ORM's four row-locking methods also need `sql.lockOf`, because the ORM has no `of` option and always renders `OF` the model's table (payload `method`, `capability`). Raised by the ORM client and the `sql()` builder.
+The operation needs a contract capability the contract does not declare; the payload names it in `capability` and the operation in `action` or `method`.
 
 ### ORM.COLUMN_UNKNOWN
 
@@ -1461,13 +1461,17 @@ This error never occurs in the control plane. The CLI commands, `node migration.
 
 In the application, install a global implementation before any query runs (`import 'temporal-polyfill/full/global'`), or write the column as a convenience type at its default, which needs no Temporal at all: `DateTime` reads a JavaScript `Date`, and `Date`, `Time` and `Duration` read ISO 8601 strings. `temporal.CreatedAt` and `temporal.UpdatedAt` are `DateTime` and need none either.
 
+### RUNTIME.INVALID_TRANSACTION_TIMEOUT
+
+The SQL runtime callback helper received a timeout outside integer milliseconds 1..2147483647. Rejected before acquisition; omission, undefined and null disable the internal deadline. Public facades validate their options earlier with `RUNTIME.ARGUMENT_INVALID`. Payload: `timeout`.
+
 ### RUNTIME.TRANSACTION_ALREADY_OPEN
 
 `transaction()` was called on an activity handle opened on a connection while a transaction it began on that connection is still open. A connection runs one transaction at a time, and transactions do not nest. Commit or roll back the open transaction first, or send the work on it. Payload: `kind`, `id`, `transactionId`.
 
 ### RUNTIME.TRANSACTION_CLOSED
 
-A query result created inside a transaction was read after the transaction ended. Await the result or call `.toArray()` inside the transaction callback.
+Transaction work or a lazy result was used after callback completion or deadline invalidation. Consume results inside the callback and do not retain its transaction for later work.
 
 ### RUNTIME.TRANSACTION_COMMIT_FAILED
 
@@ -1475,7 +1479,11 @@ Committing a transaction failed; the runtime attempts a cleanup rollback and des
 
 ### RUNTIME.TRANSACTION_ROLLBACK_FAILED
 
-Rolling back a transaction after the callback threw itself failed; the connection is destroyed rather than returned to the pool. The original callback error is attached as `cause`. Payload: `rollbackError`.
+Rolling back after callback failure itself failed; the connection is destroyed rather than returned to the pool. The callback error is the wrapper `cause`; payload `rollbackError` is the actual underlying rollback failure, unchanged. Destruction failures do not replace this error. Timeout skips rollback and destroys the connection directly.
+
+### RUNTIME.TRANSACTION_TIMEOUT
+
+The runtime transaction exceeded its configured deadline before commit admission. Transaction access is invalidated and its signal aborts with this error. The callback helper destroys the connection without rollback or release, then rejects with this timeout even if disposal fails, without waiting for callback JavaScript; a manual runtime transaction's caller owns cleanup. Acquisition/BEGIN and admitted COMMIT duration are excluded. This is neither wire cancellation nor a hard rejection-time bound. Payload: `timeout` in milliseconds. See [callback timeouts](transaction-options.md#timeout).
 
 ### RUNTIME.TYPE_PARAMS_INVALID
 

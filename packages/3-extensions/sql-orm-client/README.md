@@ -38,7 +38,7 @@ This package should not depend on target adapters or drivers directly; execution
 
 `connection()` and `transaction()` are SQL-specific orchestration capabilities and are intentionally absent from the cross-family `RuntimeExecutor` contract. Runtimes that don't expose them are still used for single-statement execution.
 
-`orm({ context, runtime, implicitTransactionOptions })` optionally configures isolation for transactions the ORM opens itself. The configuration is retained across namespace collections, activity rebinding, nested mutations and multi-statement graphs. Omission leaves database/session defaults unchanged. An existing transaction remains authoritative: the ORM neither starts another transaction nor resets its isolation. The MySQL facade supplies ReadCommitted here independently of its callback transaction defaults; drivers receive only the resolved isolation level. See [transaction isolation](../../../docs/reference/transaction-isolation.md).
+`orm({ context, runtime, implicitTransactionOptions })` optionally configures isolation for transactions the ORM opens itself. The configuration is retained across namespace collections, activity rebinding, nested mutations and multi-statement graphs. Omission leaves database/session defaults unchanged. An existing transaction remains authoritative: the ORM neither starts another transaction nor resets its isolation. The MySQL facade supplies ReadCommitted here independently of its callback transaction defaults; drivers receive only the resolved isolation level. See [transaction isolation](../../../docs/reference/transaction-options.md).
 
 ## Architecture
 
@@ -342,7 +342,7 @@ await db.User.where({ id: 1 }).update({
 
 | Operation | Available in | Relations |
 | --- | --- | --- |
-| `r.create(data)` | `create()`, `update()` | all |
+| `r.create(data)` | `create()`, `update()` | all; on a polymorphic target, `r.variant(value).create(data)` |
 | `r.connect(criteria)` | `create()`, `update()` | all |
 | `r.disconnect(criteria?)` | `update()` | all |
 | `r.where(w).updateAll(data)`, `r.updateAll(data)` | `update()` | to-many |
@@ -369,6 +369,21 @@ await db.User.where({ id: 1 }).update({
 ```
 
 A to-one relation takes at most one operation: an array of two or more is refused with `ORM.RELATION_MUTATION_UNSUPPORTED` (`reason: 'to-one-relation'`). An array that holds another array or a value that is not an operation is refused with `ORM.RELATION_MUTATION_INVALID`, with the position in `index`.
+
+### Creating rows of a polymorphic model
+
+On a relation whose target is a polymorphic base model, the mutator has `variant(value)`, which takes a discriminator value the model declares, as a collection's `variant()` does. `r.variant(value).create(data)` creates rows of that variant, in `create()` and `update()`, with one row or an array. The data is the base model's fields and the variant's own fields, without the discriminator, which the ORM sets.
+
+```ts
+await db.Project.where({ id: 1 }).update({
+  tasks: (tasks) => [
+    tasks.variant('bug').create({ title: 'Crash on login', severity: 'high' }),
+    tasks.variant('feature').create([{ title: 'Dark mode', priority: 1 }]),
+  ],
+});
+```
+
+`r.create(data)` without `variant()` on a polymorphic target is a type error, as a collection's `create()` on a polymorphic base model without `variant()` is. Use `r.variant(value).create(data)`.
 
 ### Updating and deleting related rows
 
