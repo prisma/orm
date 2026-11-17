@@ -101,8 +101,13 @@ Both changes touch `packages/1-framework`, which the repository rule says not to
 
 - **Added:** two optional members inside existing config sections: the module for generated contract types in the `contract` section, and the module for migration files in the `migrations` section.
 - **Added:** the init contribution interface, exported from the CLI package.
-- **Changed, as the generated imports record requires:** a component's declaration of the types it contributes (`TypesImportSpec`) no longer has to name a package. A target or adapter names none, and its types are imported from the config's types module. An extension still names its own.
+- **Unchanged:** a component's declaration of the types it contributes (`TypesImportSpec`). Every component, a target and an adapter included, still names a module.
 - **Changed:** the emission and migration-rendering interfaces take the module name from the config where they took a function that translated private module names. That function, and the code that chose an import root from the application's manifest, are removed.
+- **Changed:** a family's `getFamilyImports` returns import requirements as data where it returned lines of import text.
+- **Changed:** the config loader refuses a module name that is a path or a URL.
+- **Changed:** an emitted contract no longer records where an extension's types are imported from.
+- **Changed:** names in generated files are sorted by UTF-16 code unit where they were sorted by the machine's locale, so output is the same on every machine.
+- **Added and removed error codes:** `CONFIG.CONTRACT_TYPES_MODULE_MISSING` and `CONFIG.MIGRATION_MODULE_MISSING` are added. `CLI.PROJECT_MANIFEST_INVALID` and `CLI.PROJECT_MANIFEST_UNREADABLE` are removed.
 
 No new descriptor field, registry or runtime interface.
 
