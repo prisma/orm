@@ -34,6 +34,11 @@ const uncoveredElsewhere = [
   '@prisma/orm-extension-middleware-cache',
   '@prisma/orm-postgres-contrib',
 ];
+const targetPackages = [...publicShells]
+  .filter(([, shell]) => shell.kind === 'facade')
+  .map(([name]) => name);
+/** Target packages whose `defineConfig` names `contract.typesModule` and `migrations.module`. */
+const namingGeneratedModules: readonly string[] = ['@prisma/orm-postgres'];
 const adrExampleNames = [
   '@prisma/orm-framework/contract',
   '@prisma/orm-framework/components',
@@ -56,6 +61,13 @@ const adrExampleNames = [
 
 describe('all publish shells packed and installed together', () => {
   let scratch: string;
+
+  function installedExports(name: string): Record<string, unknown> {
+    const manifest: { exports?: Record<string, unknown> } = JSON.parse(
+      readFileSync(join(scratch, 'node_modules', name, 'package.json'), 'utf8'),
+    );
+    return manifest.exports ?? {};
+  }
 
   beforeAll(() => {
     scratch = mkdtempSync(join(tmpdir(), 'orm-all-shells-smoke-'));
@@ -123,20 +135,65 @@ describe('all publish shells packed and installed together', () => {
     }
   });
 
-  it('fills in the published package name wherever a shell bundles code that reads it', () => {
+  it('fills in the published module base wherever a shell bundles code that reads it', () => {
     const unfilled: string[] = [];
     for (const name of allShells) {
       const distDir = join(scratch, 'node_modules', name, 'dist');
-      for (const file of readdirSync(distDir, { recursive: true, encoding: 'utf8' })) {
-        if (!file.endsWith('.mjs')) continue;
+      const builtFiles = readdirSync(distDir, { recursive: true, encoding: 'utf8' }).filter(
+        (file) => file.endsWith('.mjs'),
+      );
+      expect(builtFiles.length, name).toBeGreaterThan(0);
+      for (const file of builtFiles) {
         if (
-          readFileSync(join(distDir, file), 'utf8').includes('__PRISMA_PUBLISHED_PACKAGE_NAME__')
+          readFileSync(join(distDir, file), 'utf8').includes('__PRISMA_PUBLISHED_MODULE_BASE__')
         ) {
           unfilled.push(`${name}/dist/${file}`);
         }
       }
     }
     expect(unfilled).toEqual([]);
+  });
+
+  it('names only its own published exports as the modules generated files import from', () => {
+    const configPackages = targetPackages.filter((name) =>
+      Object.hasOwn(installedExports(name), './config'),
+    );
+    expect(configPackages).toEqual(expect.arrayContaining(namingGeneratedModules));
+    const script = [
+      `const names = ${JSON.stringify(configPackages)};`,
+      'const named = {};',
+      'for (const name of names) {',
+      "  const { defineConfig } = await import(name + '/config');",
+      "  const config = defineConfig({ contract: './prisma/contract.prisma' });",
+      '  named[name] = [config.contract?.typesModule ?? null, config.migrations?.module ?? null];',
+      '}',
+      'console.log(JSON.stringify(named));',
+    ].join('\n');
+    const named: Record<string, [string | null, string | null]> = JSON.parse(
+      runInScratch(scratch, script),
+    );
+
+    const problems: string[] = [];
+    for (const name of configPackages) {
+      const modules = named[name] ?? [null, null];
+      if (!namingGeneratedModules.includes(name)) {
+        if (modules.some((module) => module !== null)) {
+          problems.push(`${name} names ${modules.join(', ')} but is not listed as naming modules`);
+        }
+        continue;
+      }
+      const exports = installedExports(name);
+      for (const module of modules) {
+        if (module?.startsWith('@internal/')) {
+          problems.push(`${name} names the private module ${module}`);
+        } else if (module === null || !module.startsWith(`${name}/`)) {
+          problems.push(`${name} names ${module}, which is not a subpath of ${name}`);
+        } else if (!Object.hasOwn(exports, `.${module.slice(name.length)}`)) {
+          problems.push(`${name} names ${module}, which ${name} does not export`);
+        }
+      }
+    }
+    expect(problems).toEqual([]);
   });
 
   // The toolchain publishes the shell map so that emission can resolve
