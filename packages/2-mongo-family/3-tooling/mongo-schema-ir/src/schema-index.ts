@@ -5,6 +5,7 @@ import { MongoSchemaIRNode } from './schema-node';
 import type { MongoSchemaVisitor } from './visitor';
 
 export interface MongoSchemaIndexOptions {
+  readonly name: string;
   readonly keys: ReadonlyArray<MongoIndexKey>;
   readonly unique?: boolean | undefined;
   readonly sparse?: boolean | undefined;
@@ -19,7 +20,9 @@ export interface MongoSchemaIndexOptions {
 
 export class MongoSchemaIndex extends MongoSchemaIRNode {
   readonly nodeKind = 'index' as const;
+  /** The index name, which MongoDB keeps unique within a collection. */
   readonly id: string;
+  readonly name: string;
   readonly keys: ReadonlyArray<MongoIndexKey>;
   readonly unique: boolean;
   readonly sparse?: boolean | undefined;
@@ -33,7 +36,8 @@ export class MongoSchemaIndex extends MongoSchemaIRNode {
 
   constructor(options: MongoSchemaIndexOptions) {
     super();
-    this.id = options.keys.map((k) => `${k.field}:${k.direction}`).join(',');
+    this.id = options.name;
+    this.name = options.name;
     this.keys = options.keys;
     this.unique = options.unique ?? false;
     this.sparse = options.sparse;

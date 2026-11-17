@@ -1,0 +1,47 @@
+name: Init Journey Nightly
+
+# The init journey matrix (target × authoring, with pack install) is too slow
+# for pull requests and the merge queue, so it runs on main every night.
+# The rest of the integration suite runs in the merge queue (ci.yml).
+# A failed scheduled run posts to the Slack webhook in the
+# NIGHTLY_SLACK_WEBHOOK_URL repository secret.
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  init-journey:
+    name: Init Journey (nightly, main)
+    runs-on: ubuntu-latest
+    env:
+      TEST_TIMEOUT_MULTIPLIER: 2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm build
+      - name: Run init-journey matrix
+        run: pnpm --filter integration-tests test:init-journey
+      - name: Check working tree is clean
+        run: pnpm check:clean-tree
+      - name: Report failure to Slack
+        if: failure() && github.event_name == 'schedule'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.NIGHTLY_SLACK_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "::warning::The NIGHTLY_SLACK_WEBHOOK_URL secret is not set, so this failure was not posted to Slack."
+            exit 0
+          fi
+          jq -n --arg text "Init Journey Nightly failed on main: $RUN_URL" '{text: $text}' |
+            curl --fail --silent --show-error -X POST -H 'Content-Type: application/json' --data @- "$SLACK_WEBHOOK_URL"

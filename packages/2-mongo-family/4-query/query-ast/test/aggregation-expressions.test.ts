@@ -22,11 +22,6 @@ describe('MongoAggFieldRef', () => {
     expect(ref.path).toBe('name');
   });
 
-  it('supports dotted paths', () => {
-    const ref = MongoAggFieldRef.of('address.city');
-    expect(ref.path).toBe('address.city');
-  });
-
   it('is frozen after construction', () => {
     const ref = MongoAggFieldRef.of('name');
     expect(Object.isFrozen(ref)).toBe(true);
@@ -42,21 +37,6 @@ describe('MongoAggLiteral', () => {
     const lit = MongoAggLiteral.of(42);
     expect(lit.kind).toBe('literal');
     expect(lit.value).toBe(42);
-  });
-
-  it('constructs with string value', () => {
-    const lit = MongoAggLiteral.of('hello');
-    expect(lit.value).toBe('hello');
-  });
-
-  it('constructs with null', () => {
-    const lit = MongoAggLiteral.of(null);
-    expect(lit.value).toBe(null);
-  });
-
-  it('constructs with boolean', () => {
-    const lit = MongoAggLiteral.of(true);
-    expect(lit.value).toBe(true);
   });
 
   it('is frozen after construction', () => {

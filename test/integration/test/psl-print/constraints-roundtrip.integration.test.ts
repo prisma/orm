@@ -12,8 +12,8 @@ import { createSqlContract, timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { printContract, readPsl } from './print-and-read-back';
 
-const INT_COLUMN = { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false } as const;
-const TEXT_COLUMN = { nativeType: 'text', codecId: 'pg/text@1', nullable: false } as const;
+const INT_COLUMN = { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false } as const;
+const TEXT_COLUMN = { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false } as const;
 
 const INT_FIELD: ContractField = {
   nullable: false,
@@ -136,7 +136,7 @@ describe('table constraints survive the print and the read back', {
 
     const text = printContract(contract).text;
     expect(text).toContain(
-      '@@check(expression: "length(email) > 0", map: "widget_email_not_blank")',
+      '@@check(expression: sql`length(email) > 0`, map: "widget_email_not_blank")',
     );
 
     const readBack = storageTable(await readPsl(text), 'widget');

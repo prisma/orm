@@ -1,6 +1,7 @@
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
-import { decodeJsonString } from '@internal/framework-components/codec';
+import { type DataTypeValue, dataType, readJsonString } from '@internal/framework-components/codec';
 import { isRuntimeError } from '@internal/framework-components/runtime';
+import mongoStatic from '@internal/mongo/static';
 import { mongoCodec } from '@internal/mongo-codec';
 import type { MongoResultShape } from '@internal/mongo-query-ast/execution';
 import {
@@ -9,7 +10,6 @@ import {
   MongoMatchStage,
   RawAggregateCommand,
 } from '@internal/mongo-query-ast/execution';
-import { mongoQuery } from '@internal/mongo-query-builder';
 import { MongoParamRef } from '@internal/mongo-value';
 import { timeouts } from '@repo/test-utils';
 import { ObjectId } from 'mongodb';
@@ -19,6 +19,8 @@ import {
   type TDecodeFixtureContract,
 } from './fixtures/decode-fixture-contract';
 import { withMongod } from './setup';
+
+const textType = dataType('test/text', { read: (json) => readJsonString('test/text', json) });
 
 describe('Mongo runtime decode integration', { timeout: timeouts.spinUpMongoMemoryServer }, () => {
   it('typed read returns decoded _id, dates, and vector array', async () => {
@@ -36,8 +38,8 @@ describe('Mongo runtime decode integration', { timeout: timeouts.spinUpMongoMemo
       });
 
       // User-facing path: build the plan through the query-builder so the Row type is contract-derived (no explicit annotation on execute).
-      const plan = mongoQuery<TDecodeFixtureContract>({ contractJson: contract })
-        .from('users')
+      const plan = mongoStatic({ contract })
+        .query.from('users')
         .match((f) =>
           f['_id']!.eq(MongoParamRef.of(insert.insertedId, { codecId: 'mongo/objectId@1' })),
         )
@@ -61,11 +63,12 @@ describe('Mongo runtime decode integration', { timeout: timeouts.spinUpMongoMemo
       // query-builder.
       const failing = mongoCodec({
         typeId: 'test/throws-on-decode@1',
-        encode: (v: string) => v,
-        decode: () => {
+        toWire: (v: string) => v,
+        fromWire: () => {
           throw new Error('decode explosion');
         },
-        decodeJson: (json) => decodeJsonString('test/throws-on-decode@1', json),
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
       });
       ctx.codecs.register(failing);
 

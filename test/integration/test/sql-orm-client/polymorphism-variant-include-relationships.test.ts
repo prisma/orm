@@ -30,6 +30,7 @@ async function setupVariantAssigneeSchema(runtime: PgIntegrationRuntime): Promis
       severity text,
       project_id integer,
       reporter_id integer,
+      pinned_by_id integer unique,
       bug_assignee_person_id integer references people(id)
     )
   `);
@@ -65,7 +66,7 @@ describe('integration/polymorphism-variant-include-relationships', () => {
         await setupVariantAssigneeSchema(runtime);
 
         const rows = await tasksOf(runtime)
-          .variant('Bug')
+          .variant('bug')
           .select('id', 'title', 'type')
           .orderBy((task) => task.id.asc())
           .include('assignee', (person) => person.select('id', 'name'))
@@ -97,7 +98,7 @@ describe('integration/polymorphism-variant-include-relationships', () => {
         await setupVariantAssigneeSchema(runtime);
 
         const rows = await tasksOf(runtime)
-          .variant('Feature')
+          .variant('feature')
           .select('id', 'title', 'type')
           .orderBy((task) => task.id.asc())
           .include('assignee', (person) => person.select('id', 'name'))

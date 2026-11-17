@@ -21,10 +21,10 @@ test('InferFullRow, flattened, equals Scalars of the emitted model for every mod
   expectTypeOf<SimplifyDeep<InferFullRow<Contract, 'Comment'>>>().toEqualTypeOf<
     Scalars<Models.unbound_Comment>
   >();
-  expectTypeOf<VariantModelRow<Contract, 'Task', 'Bug'>>().toEqualTypeOf<
+  expectTypeOf<VariantModelRow<Contract, 'Task', 'bug'>>().toEqualTypeOf<
     Scalars<Models.unbound_Bug>
   >();
-  expectTypeOf<VariantModelRow<Contract, 'Task', 'Feature'>>().toEqualTypeOf<
+  expectTypeOf<VariantModelRow<Contract, 'Task', 'feature'>>().toEqualTypeOf<
     Scalars<Models.unbound_Feature>
   >();
 });

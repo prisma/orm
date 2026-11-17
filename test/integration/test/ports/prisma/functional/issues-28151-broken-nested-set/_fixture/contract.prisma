@@ -19,13 +19,13 @@
 //
 // Subject: nested `set` on a one-to-many relation produces all expected relation links.
 model User {
-  id    String @id @default(cuid(2))
+  id    String @id @onCreate(cuid(2))
   posts Post[]
   @@map("user")
 }
 
 model Post {
-  id       String  @id @default(cuid(2))
+  id       String  @id @onCreate(cuid(2))
   author   User?   @relation(fields: [authorId], references: [id])
   authorId String?
   @@map("post")

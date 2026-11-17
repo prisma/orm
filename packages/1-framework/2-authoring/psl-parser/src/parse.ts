@@ -79,6 +79,27 @@ export class Cursor {
     }
   }
 
+  newlineBefore(ahead = 0): boolean {
+    let rawIndex = 0;
+    let remaining = ahead;
+    let newline = false;
+    for (;;) {
+      const token = this.#tokenizer.peek(rawIndex);
+      if (token.kind === 'Eof') return newline;
+      if (TRIVIA_KINDS.has(token.kind)) {
+        if (token.kind === 'Newline' || (token.kind === 'Comment' && /[\r\n]/.test(token.text))) {
+          newline = true;
+        }
+        rawIndex++;
+        continue;
+      }
+      if (remaining === 0) return newline;
+      remaining--;
+      newline = false;
+      rawIndex++;
+    }
+  }
+
   /** Span of the significant token `lookahead` positions ahead (`mark(0)` = the next). */
   mark(lookahead = 0): DiagnosticMark {
     let rawIndex = 0;
@@ -247,7 +268,7 @@ export function parseQualifiedName(cursor: Cursor): void {
  */
 function parseQualifiedSegments(cursor: Cursor, separator: 'Colon' | 'Dot'): void {
   let seen = 0;
-  while (cursor.peekKind() === separator) {
+  while (cursor.peekKind() === separator && !cursor.newlineBefore()) {
     seen++;
     const separatorMark = cursor.mark();
     cursor.bump();
@@ -258,16 +279,20 @@ function parseQualifiedSegments(cursor: Cursor, separator: 'Colon' | 'Dot'): voi
         separatorMark,
       );
     }
-    if (cursor.peekKind() === 'Ident') {
+    if (cursor.peekKind() === 'Ident' && !cursor.newlineBefore()) {
       parseIdentifier(cursor);
     } else {
-      cursor.diagnostic(
-        'PSL_INVALID_QUALIFIED_NAME',
-        'Qualified name is missing a name after the separator',
-        cursor.mark(),
-      );
+      reportMissingSegment(cursor);
     }
   }
+}
+
+function reportMissingSegment(cursor: Cursor): void {
+  cursor.diagnostic(
+    'PSL_INVALID_QUALIFIED_NAME',
+    'Qualified name is missing a name after the separator',
+    cursor.markAfterLastToken(),
+  );
 }
 
 /**
@@ -388,17 +413,26 @@ export function parseObjectField(cursor: Cursor): GreenNode {
   return cursor.finishNode();
 }
 
+interface DottedChain {
+  readonly length: number;
+  readonly trailingDot: boolean;
+}
+
 /**
- * The number of significant tokens in the dotted chain `Ident ('.' Ident)*` at
- * the cursor: 1 for `a`, 3 for `a.b`, 5 for `a.b.c`; 0 when no `Ident` is next.
+ * The dotted chain `Ident ('.' Ident)*` at the cursor, which stays on one line. `length` counts its
+ * significant tokens: 1 for `a`, 3 for `a.b`, 5 for `a.b.c`; 0 when no `Ident` is next.
+ * `trailingDot` marks a chain that ends in a `.` with no name after it, as in `auth.`.
  */
-function dottedChainLength(cursor: Cursor): number {
-  if (cursor.peekKind() !== 'Ident') return 0;
+function dottedChain(cursor: Cursor): DottedChain {
+  if (cursor.peekKind() !== 'Ident') return { length: 0, trailingDot: false };
   let length = 1;
-  while (cursor.peekKind(length) === 'Dot' && cursor.peekKind(length + 1) === 'Ident') {
+  while (cursor.peekKind(length) === 'Dot' && !cursor.newlineBefore(length)) {
+    if (cursor.peekKind(length + 1) !== 'Ident' || cursor.newlineBefore(length + 1)) {
+      return { length, trailingDot: true };
+    }
     length += 2;
   }
-  return length;
+  return { length, trailingDot: false };
 }
 
 /**
@@ -407,8 +441,8 @@ function dottedChainLength(cursor: Cursor): number {
  * with no `(` after it, like `a.b`, is a path, not a call.
  */
 function isCallAhead(cursor: Cursor): boolean {
-  const chain = dottedChainLength(cursor);
-  return chain > 0 && cursor.peekKind(chain) === 'LParen';
+  const chain = dottedChain(cursor);
+  return chain.length > 0 && !chain.trailingDot && cursor.peekKind(chain.length) === 'LParen';
 }
 
 /**
@@ -421,9 +455,9 @@ function isCallAhead(cursor: Cursor): boolean {
  */
 export function parseFunctionCall(cursor: Cursor): GreenNode | undefined {
   if (!isCallAhead(cursor)) return undefined;
-  const chain = dottedChainLength(cursor);
+  const chain = dottedChain(cursor);
   cursor.startNode('FunctionCall');
-  if (chain > 1) {
+  if (chain.length > 1) {
     parsePath(cursor, chain);
   } else {
     parseQualifiedName(cursor);
@@ -436,20 +470,26 @@ export function parseFunctionCall(cursor: Cursor): GreenNode | undefined {
 
 /**
  * Parses a member path `Ident ('.' Ident)+` that is neither a call nor the tag
- * of a tagged literal, such as `address.city` in `@@index([address.city])`.
+ * of a tagged literal, such as `address.city` in `@@index([address.city])`. A
+ * path that ends in a `.` keeps the dot and reports the missing name, as in
+ * `auth.` while the member is still being typed.
  */
 export function parsePathExpr(cursor: Cursor): GreenNode | undefined {
-  const chain = dottedChainLength(cursor);
-  if (chain < 3) return undefined;
+  const chain = dottedChain(cursor);
+  if (chain.length < 3 && !chain.trailingDot) return undefined;
   return parsePath(cursor, chain);
 }
 
-function parsePath(cursor: Cursor, chain: number): GreenNode {
+function parsePath(cursor: Cursor, chain: DottedChain): GreenNode {
   cursor.startNode('PathExpr');
   parseIdentifier(cursor);
-  for (let consumed = 1; consumed < chain; consumed += 2) {
+  for (let consumed = 1; consumed < chain.length; consumed += 2) {
     cursor.bump();
     parseIdentifier(cursor);
+  }
+  if (chain.trailingDot) {
+    cursor.bump();
+    reportMissingSegment(cursor);
   }
   return cursor.finishNode();
 }
@@ -500,9 +540,41 @@ export function parseAttributeArgList(cursor: Cursor): GreenNode {
   return cursor.finishNode();
 }
 
+const LIST_CLOSERS: Partial<Record<SyntaxKind, TokenKind>> = {
+  AttributeArgList: 'RParen',
+  FunctionCall: 'RParen',
+  ArrayLiteral: 'RBracket',
+  ObjectLiteralExpr: 'RBrace',
+};
+
+function isUnclosed(node: GreenNode): boolean {
+  const closer = LIST_CLOSERS[node.kind];
+  if (closer === undefined) {
+    return node.children.some((child) => child.type === 'node' && isUnclosed(child));
+  }
+  const last = node.children.at(-1);
+  return last?.type !== 'token' || last.kind !== closer;
+}
+
+function consumeLeftover(
+  cursor: Cursor,
+  code: PslDiagnosticCode,
+  place: string,
+  diagnosticsBefore: number,
+): boolean {
+  const kind = cursor.peekKind();
+  if (kind === 'Eof' || kind === 'RBrace' || cursor.newlineBefore()) return false;
+  if (cursor.diagnostics.length === diagnosticsBefore) {
+    cursor.diagnostic(code, `Unexpected "${cursor.peekToken().text}" in ${place}`, cursor.mark());
+  }
+  cursor.recoverToSyncPoint();
+  return true;
+}
+
 export function parseAttribute(cursor: Cursor): GreenNode {
   const isBlockAttribute = cursor.peekKind() === 'DoubleAt';
   const attributeMark = cursor.mark();
+  const diagnosticsBefore = cursor.diagnostics.length;
   cursor.startNode(isBlockAttribute ? 'ModelAttribute' : 'FieldAttribute');
   cursor.bump();
   if (cursor.peekKind() === 'Ident') {
@@ -510,8 +582,13 @@ export function parseAttribute(cursor: Cursor): GreenNode {
   } else {
     cursor.diagnostic('PSL_INVALID_ATTRIBUTE_SYNTAX', 'Attribute name expected', attributeMark);
   }
-  if (cursor.peekKind() === 'LParen') {
-    parseAttributeArgList(cursor);
+  if (cursor.peekKind() === 'LParen' && isUnclosed(parseAttributeArgList(cursor))) {
+    consumeLeftover(
+      cursor,
+      'PSL_INVALID_ATTRIBUTE_SYNTAX',
+      'attribute arguments',
+      diagnosticsBefore,
+    );
   }
   return cursor.finishNode();
 }
@@ -533,8 +610,14 @@ export function parseTypeAnnotation(cursor: Cursor, memberCode: PslDiagnosticCod
   cursor.startNode('TypeAnnotation');
   if (cursor.peekKind() === 'Ident') {
     parseQualifiedName(cursor);
-    if (cursor.peekKind() === 'LParen') {
-      parseAttributeArgList(cursor);
+    const diagnosticsBefore = cursor.diagnostics.length;
+    if (
+      cursor.peekKind() === 'LParen' &&
+      isUnclosed(parseAttributeArgList(cursor)) &&
+      consumeLeftover(cursor, memberCode, 'type arguments', diagnosticsBefore)
+    ) {
+      cursor.finishNode();
+      return;
     }
   }
   const hasLeadingQuestion = cursor.peekKind() === 'Question';
@@ -601,6 +684,18 @@ const RESERVED_BLOCK_KEYWORDS: ReadonlySet<string> = new Set([
   'types',
 ]);
 
+const MIXIN_KEYWORD = 'mixin';
+
+const KEYWORDS_WITHOUT_MIXINS: ReadonlySet<string> = new Set(['namespace', 'types', MIXIN_KEYWORD]);
+
+function isMixinHeaderAhead(cursor: Cursor): boolean {
+  return (
+    cursor.peekKind() === 'Ident' &&
+    cursor.peekKind(1) === 'Ident' &&
+    cursor.peekToken(1).text === MIXIN_KEYWORD
+  );
+}
+
 function keywordIs(cursor: Cursor, keyword: string): boolean {
   return cursor.peekKind() === 'Ident' && cursor.peekToken().text === keyword;
 }
@@ -616,6 +711,10 @@ function parseDeclaration(
   insideNamespace: boolean,
   options: PslParserOptions,
 ): void {
+  if (isMixinHeaderAhead(cursor)) {
+    parseMixinDeclaration(cursor, options);
+    return;
+  }
   const name = cursor.peekKind(1) === 'Ident' ? cursor.peekToken(1).text : '';
   if (insideNamespace && keywordIs(cursor, 'namespace')) {
     cursor.diagnostic(
@@ -686,6 +785,54 @@ function parseBlock(
 export function parseModel(cursor: Cursor): GreenNode | undefined {
   if (!keywordIs(cursor, 'model')) return undefined;
   return parseBlock(cursor, 'ModelDeclaration', true, parseModelMember);
+}
+
+function parseMixinDeclaration(cursor: Cursor, options: PslParserOptions): GreenNode {
+  const keyword = cursor.peekToken().text;
+  const keywordMark = cursor.mark();
+  const mixinMark = cursor.mark(1);
+  cursor.startNode('MixinDeclaration');
+  // The block keyword, then the word `mixin`.
+  cursor.bump();
+  cursor.bump();
+  const hasName =
+    cursor.peekKind() === 'Ident' && (!cursor.newlineBefore() || cursor.peekKind(1) === 'LBrace');
+  if (hasName) {
+    parseIdentifier(cursor);
+  }
+  const hasBody = cursor.peekKind() === 'LBrace';
+  if (KEYWORDS_WITHOUT_MIXINS.has(keyword)) {
+    cursor.diagnostic(
+      'PSL_INVALID_DECLARATION',
+      `A mixin cannot be declared for "${keyword}"`,
+      keywordMark,
+    );
+  } else if (!hasName) {
+    cursor.diagnostic(
+      'PSL_INVALID_DECLARATION',
+      `Expected a mixin name after "${MIXIN_KEYWORD}"`,
+      mixinMark,
+    );
+  } else if (!hasBody) {
+    cursor.diagnostic(
+      'PSL_INVALID_DECLARATION',
+      `Expected "{" to open the "${keyword} ${MIXIN_KEYWORD}" block`,
+      cursor.markAfterLastToken(),
+    );
+  }
+  if (hasBody) {
+    parseBlockBody(cursor, mixinMemberParser(keyword, options));
+  } else {
+    cursor.recoverToSyncPoint();
+  }
+  return cursor.finishNode();
+}
+
+function mixinMemberParser(keyword: string, options: PslParserOptions): MemberParser {
+  if (keyword === 'namespace') return (inner) => parseDeclaration(inner, true, options);
+  if (keyword === 'types') return parseNamedTypeMember;
+  if (keyword === 'model' || keyword === 'type') return parseModelMember;
+  return genericBlockMemberParser(keyword, options);
 }
 
 /**
@@ -772,8 +919,25 @@ export function parseBlockAttribute(cursor: Cursor): GreenNode | undefined {
   return parseAttribute(cursor);
 }
 
+function parseMixinInclusion(cursor: Cursor, memberCode: PslDiagnosticCode): GreenNode | undefined {
+  if (cursor.peekKind() !== 'Plus') return undefined;
+  const plusMark = cursor.mark();
+  cursor.startNode('MixinInclusion');
+  cursor.bump();
+  if (cursor.peekKind() === 'Ident' && !cursor.newlineBefore()) {
+    parseQualifiedName(cursor);
+  } else {
+    cursor.diagnostic(memberCode, 'Expected a mixin name after "+"', plusMark);
+    cursor.recoverToSyncPoint();
+  }
+  return cursor.finishNode();
+}
+
 function parseModelMember(cursor: Cursor): void {
-  const node = parseBlockAttribute(cursor) ?? parseField(cursor);
+  const node =
+    parseMixinInclusion(cursor, 'PSL_INVALID_MODEL_MEMBER') ??
+    parseBlockAttribute(cursor) ??
+    parseField(cursor);
   if (!node) {
     invalidMember(
       cursor,
@@ -812,14 +976,20 @@ function genericBlockMemberParser(keyword: string, options: PslParserOptions): M
  * whether the attribute is valid for the block's kind.
  */
 function parseKeyValueMember(cursor: Cursor): void {
-  const node = parseBlockAttribute(cursor) ?? parseKeyValue(cursor);
+  const node =
+    parseMixinInclusion(cursor, 'PSL_INVALID_EXTENSION_BLOCK_MEMBER') ??
+    parseBlockAttribute(cursor) ??
+    parseKeyValue(cursor);
   if (!node) {
     invalidMember(cursor, 'PSL_INVALID_EXTENSION_BLOCK_MEMBER', 'Invalid block entry');
   }
 }
 
 function parseEnumMember(cursor: Cursor): void {
-  const node = parseBlockAttribute(cursor) ?? parseKeyValue(cursor, { memberAttributes: true });
+  const node =
+    parseMixinInclusion(cursor, 'PSL_INVALID_EXTENSION_BLOCK_MEMBER') ??
+    parseBlockAttribute(cursor) ??
+    parseKeyValue(cursor, { memberAttributes: true });
   if (!node) {
     invalidMember(cursor, 'PSL_INVALID_EXTENSION_BLOCK_MEMBER', 'Invalid block entry');
   }
@@ -884,11 +1054,21 @@ export function parseKeyValue(
   parseIdentifier(cursor);
   if (cursor.peekKind() === 'Equals') {
     cursor.bump();
-    if (!parseExpression(cursor)) {
+    const diagnosticsBefore = cursor.diagnostics.length;
+    const value = parseExpression(cursor);
+    if (!value) {
       cursor.diagnostic(
         'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
         'Expected a value after "="',
         cursor.mark(),
+      );
+    }
+    if (!value || isUnclosed(value)) {
+      consumeLeftover(
+        cursor,
+        'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
+        'the entry value',
+        diagnosticsBefore,
       );
     }
   }

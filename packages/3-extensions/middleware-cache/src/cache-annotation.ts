@@ -17,9 +17,9 @@ import {
  * `TMeta` is the shape of `meta`; pass the store's `TMeta` so the two agree.
  */
 export interface CacheAnnotationOptions<TMeta = unknown> {
-  readonly key?: string;
-  readonly meta?: TMeta;
-  readonly bypass?: boolean;
+  readonly key?: string | undefined;
+  readonly meta?: TMeta | undefined;
+  readonly bypass?: boolean | undefined;
 }
 
 /**
@@ -36,7 +36,7 @@ export type CacheAnnotationHandle = (<TMeta = unknown>(
 
 /**
  * Marks a read for the cache middleware. It applies to reads only: a write terminal refuses it at
- * compile time and at run time. The middleware reads it from `plan.meta.annotations.cache`.
+ * compile time and at run time. The middleware reads it from a statement plan's `meta.annotations.cache`, or from the annotations of a client activity, such as an ORM read, which is then cached as a whole.
  *
  * `TMeta` types `meta` for this call only. Nothing ties it to the store's `TMeta`, so a store
  * package should export a wrapper typed with its own meta, such as
@@ -74,6 +74,64 @@ function withTypedMeta(
   }
   return Object.freeze(
     Object.assign(cacheAnnotationWithMeta, {
+      namespace: handle.namespace,
+      applicableTo: handle.applicableTo,
+      read: handle.read,
+    }),
+  );
+}
+
+/**
+ * What to invalidate: the argument of the cache middleware's `invalidate`, and the payload of `invalidateAnnotation`, which the middleware passes to the same call once the write's effects are final.
+ *
+ * `TMeta` is the shape of `meta`; pass the store's `TMeta` so the two agree.
+ */
+export interface InvalidationTarget<TMeta = unknown> {
+  readonly keys?: readonly string[] | undefined;
+  readonly meta?: TMeta | undefined;
+}
+
+/**
+ * The type of `invalidateAnnotation`: a call generic in `TMeta`, plus the read-only `namespace`,
+ * `applicableTo` and `read` of the underlying annotation handle.
+ */
+export type InvalidateAnnotationHandle = (<TMeta = unknown>(
+  options: InvalidationTarget<TMeta>,
+) => AnnotationValue<InvalidationTarget, 'write'>) & {
+  readonly namespace: string;
+  readonly applicableTo: ReadonlySet<'write'>;
+  readonly read: AnnotationHandle<InvalidationTarget, 'write'>['read'];
+};
+
+/**
+ * Marks a write whose cache entries the cache middleware invalidates once the write's effects are final: right after the write outside a transaction, or when the outermost enclosing transaction ends. It does not invalidate when the write is rolled back, and does when the outcome is unknown. It applies to writes only: a read terminal refuses it at compile time and at run time.
+ *
+ * `TMeta` types `meta` for this call only. Nothing ties it to the store's `TMeta`, so a store package should export a wrapper typed with its own meta, such as `(o: InvalidationTarget<TagMeta>) => invalidateAnnotation<TagMeta>(o)`.
+ *
+ * @example
+ * ```typescript
+ * await db.orm.public.User.where({ id: 1 }).update({ name: 'Alicia' }, (meta) =>
+ *   meta.annotate(invalidateAnnotation({ keys: ['user-1'] })),
+ * );
+ * ```
+ */
+export const invalidateAnnotation: InvalidateAnnotationHandle = withTypedInvalidateMeta(
+  defineAnnotation<InvalidationTarget>()({
+    namespace: 'cache-invalidate',
+    applicableTo: ['write'],
+  }),
+);
+
+function withTypedInvalidateMeta(
+  handle: AnnotationHandle<InvalidationTarget, 'write'>,
+): InvalidateAnnotationHandle {
+  function invalidateAnnotationWithMeta<TMeta = unknown>(
+    options: InvalidationTarget<TMeta>,
+  ): AnnotationValue<InvalidationTarget, 'write'> {
+    return handle(options);
+  }
+  return Object.freeze(
+    Object.assign(invalidateAnnotationWithMeta, {
       namespace: handle.namespace,
       applicableTo: handle.applicableTo,
       read: handle.read,

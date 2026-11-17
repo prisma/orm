@@ -3,6 +3,7 @@ export { expandContractInputs, globContractInputMatching } from '../expand-contr
 export type { ConfigFile, ConfigFiles, LoadedConfig } from '../load';
 export {
   buildLoadedConfig,
+  CONFIG_FILENAME,
   evaluateConfigModule,
   findNearestConfigPathForFile,
   loadConfig,

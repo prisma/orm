@@ -1,38 +1,22 @@
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import { buildSymbolTable, type SymbolTable } from '@internal/psl-parser';
-import type { DocumentAst, PslSources } from '@internal/psl-parser/syntax';
-import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
-import { interpretPslDocumentToMongoContract } from '../src/interpreter';
+import { interpretMongoContract } from './interpreter-test-helpers';
 
-function symbolTableInput(schema: string): {
-  documents: readonly DocumentAst[];
-  symbolTable: SymbolTable;
-  sources: PslSources;
-} {
-  const { document, sources } = parse(schema, 'test.prisma');
-  const { symbolTable } = buildSymbolTable({
-    documents: [document],
-    sources,
-  });
-  return { documents: [document], symbolTable, sources };
-}
-
-const scalarTypeCodecIds: ReadonlyMap<string, string> = new Map([
+const scalarTypes: ReadonlyMap<string, string> = new Map([
   ['String', 'mongo/string@1'],
   ['Int32', 'mongo/int32@1'],
   ['ObjectId', 'mongo/objectId@1'],
 ]);
 
 function interpret(schema: string) {
-  return interpretPslDocumentToMongoContract({
-    ...symbolTableInput(schema),
-    scalarTypeCodecIds,
-    controlMutationDefaults: {
+  return interpretMongoContract(
+    schema,
+    {
+      scalarTypes,
       defaultFunctionRegistry: new Map(),
-      dataTypeEntries: {},
     },
-  });
+    'test.prisma',
+  );
 }
 
 function diagnosticsOf(schema: string) {
@@ -57,6 +41,37 @@ describe('one voice per resolution failure', () => {
         message: `Cannot find type "${type.replace('()', '')}"`,
         sourceId: 'test.prisma',
       },
+    ]);
+  });
+
+  it('reports a call in a namespace nothing registers as an unresolved constructor call', () => {
+    expect(
+      diagnosticsOf(`model Item {\n  id ObjectId @id @map("_id")\n  ts weather.updatedAt()\n}`).map(
+        ({ code, message, data }) => ({ code, message, data }),
+      ),
+    ).toEqual([
+      {
+        code: 'PSL_UNRESOLVED_REFERENCE',
+        message: 'Cannot find type "weather.updatedAt"',
+        data: { reference: 'type', name: 'weather.updatedAt', constructorCall: true },
+      },
+    ]);
+  });
+
+  it.each([
+    ['type', 'composite type'],
+    ['model', 'model'],
+  ])('reports a call qualified by a %s only through the binder', (keyword, kind) => {
+    expect(
+      diagnosticsOf(`${keyword} audit {
+  ${keyword === 'model' ? 'id ObjectId @id @map("_id")' : 'value String'}
+}
+model Item {
+  id ObjectId @id @map("_id")
+  createdAt audit.stamp()?
+}`).map(({ code, message }) => ({ code, message })),
+    ).toEqual([
+      { code: 'PSL_UNRESOLVED_REFERENCE', message: `"audit" is a ${kind}, not a namespace` },
     ]);
   });
 
@@ -99,10 +114,26 @@ model Item {
 }`);
     if (!result.ok) throw new Error(JSON.stringify(result.failure));
     expect(result.value.domain.namespaces[UNBOUND_NAMESPACE_ID]?.models['Item']?.fields).toEqual({
-      _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false, many: false },
-      label: { type: { kind: 'valueObject', name: 'String' }, nullable: false, many: false },
+      id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false, many: false },
+      label: {
+        type: {
+          kind: 'valueObject',
+          plane: 'storage',
+          namespaceId: '__unbound__',
+          entityKind: 'valueObject',
+          entityName: 'String',
+        },
+        nullable: false,
+        many: false,
+      },
     });
-    expect(result.value.domain.namespaces[UNBOUND_NAMESPACE_ID]?.valueObjects).toEqual({
+    expect(
+      JSON.parse(
+        JSON.stringify(
+          result.value.storage.namespaces[UNBOUND_NAMESPACE_ID]?.entries['valueObject'],
+        ),
+      ),
+    ).toEqual({
       String: {
         fields: {
           length: {
@@ -167,7 +198,7 @@ model Item {
     ).toEqual(['PSL_UNRESOLVED_REFERENCE', 'PSL_ORPHANED_BACKRELATION']);
   });
 
-  it('keeps the orphaned-base verdict beside an unresolved discriminator field', () => {
+  it('adds no orphaned-base verdict beside an unresolved discriminator field', () => {
     expect(
       diagnosticCodes(
         [
@@ -181,6 +212,6 @@ model Item {
           '}',
         ].join('\n'),
       ),
-    ).toEqual(['PSL_UNRESOLVED_REFERENCE', 'PSL_ORPHANED_BASE']);
+    ).toEqual(['PSL_UNRESOLVED_REFERENCE']);
   });
 });

@@ -1,3 +1,5 @@
+import type { ResolvedMigrationStatement } from '@internal/framework-components/control';
+import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { NextAction } from '@internal/utils/structured-error';
 import { docsUrlFor } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
@@ -17,6 +19,7 @@ import {
   errorFileNotFound,
   errorInvalidOutputFormat,
   errorJsonFormatNotSupported,
+  errorMigrationCliConfigNotFound,
   errorMigrationCliInvalidConfigArg,
   errorMigrationCliUnknownFlag,
   errorMigrationPlanningFailed,
@@ -65,14 +68,6 @@ describe('CliStructuredError', () => {
     const envelope = error.toEnvelope();
 
     expect(envelope.code).toBe('CONFIG.FILE_NOT_FOUND');
-    expect(envelope.summary).toBe('Test error');
-  });
-
-  it('converts to envelope for a different namespace', () => {
-    const error = new CliStructuredError('CONTRACT.MARKER_MISSING', 'Test error');
-    const envelope = error.toEnvelope();
-
-    expect(envelope.code).toBe('CONTRACT.MARKER_MISSING');
     expect(envelope.summary).toBe('Test error');
   });
 
@@ -173,11 +168,6 @@ describe('CliStructuredError', () => {
       expect(CliStructuredError.is(error)).toBe(true);
     });
 
-    it('returns true for CliStructuredError from any namespace', () => {
-      const error = new CliStructuredError('CONTRACT.VERIFY_FAILED', 'Test error');
-      expect(CliStructuredError.is(error)).toBe(true);
-    });
-
     it('returns false for non-Error values', () => {
       expect(CliStructuredError.is(null)).toBe(false);
       expect(CliStructuredError.is(undefined)).toBe(false);
@@ -236,12 +226,6 @@ describe('Config Errors', () => {
   it('errorConfigFileNotFound with custom why', () => {
     const error = errorConfigFileNotFound('/path/to/config.ts', { why: 'Custom reason' });
     expect(error.why).toBe('Custom reason');
-  });
-
-  it('errorConfigFileNotFound without configPath', () => {
-    const error = errorConfigFileNotFound();
-    expect(error.code).toBe('CONFIG.FILE_NOT_FOUND');
-    expect(error.where).toBeUndefined();
   });
 
   it('errorContractConfigMissing creates correct error', () => {
@@ -362,6 +346,48 @@ describe('Config Errors', () => {
     expect(error.meta?.['conflicts']).toEqual(conflicts);
   });
 
+  it('errorMigrationPlanningFailed carries the statement a conflict refuses, as JSON output writes it', () => {
+    const refusedStatement = {
+      kind: 'rename',
+      entity: 'model',
+      from: { namespaceId: UNBOUND_NAMESPACE_ID, model: 'Profile' },
+      to: { namespaceId: UNBOUND_NAMESPACE_ID, model: 'User' },
+    } as unknown as ResolvedMigrationStatement;
+    const error = errorMigrationPlanningFailed({
+      conflicts: [
+        {
+          kind: 'statementRefused',
+          summary: 'Cannot rename',
+          location: { namespaceId: UNBOUND_NAMESPACE_ID, entityKind: 'table', entityName: 'users' },
+          refusedStatement,
+        },
+      ],
+    });
+    expect(error.meta?.['conflicts']).toEqual([
+      {
+        kind: 'statementRefused',
+        summary: 'Cannot rename',
+        location: { entityKind: 'table', entityName: 'users' },
+        refusedStatement: {
+          kind: 'rename',
+          entity: 'model',
+          from: { model: 'Profile' },
+          to: { model: 'User' },
+        },
+      },
+    ]);
+  });
+
+  it('errorMigrationPlanningFailed keeps the namespace of a location in a named namespace', () => {
+    const location = { namespaceId: 'auth', entityKind: 'table', entityName: 'users' };
+    const error = errorMigrationPlanningFailed({
+      conflicts: [{ kind: 'statementRefused', summary: 'Cannot rename', location }],
+    });
+    expect(error.meta?.['conflicts']).toEqual([
+      { kind: 'statementRefused', summary: 'Cannot rename', location },
+    ]);
+  });
+
   it('errorMigrationPlanningFailed with custom why', () => {
     const conflicts = [{ kind: 'conflict-1', summary: 'Summary 1' }];
     const error = errorMigrationPlanningFailed({ conflicts, why: 'Custom reason' });
@@ -477,6 +503,39 @@ describe('Config Errors', () => {
   it('errorConfigVersionMarkerMissing without path omits where', () => {
     const error = errorConfigVersionMarkerMissing();
     expect(error.where).toBeUndefined();
+  });
+
+  it('errorMigrationCliConfigNotFound names each config it checked and why it does not own the migration', () => {
+    const error = errorMigrationCliConfigNotFound({
+      migrationDir: '/repo/inner/migrations/app/20260101T0000_initial',
+      checked: [
+        { configPath: '/repo/prisma.config.ts', migrationsDir: '/repo/migrations' },
+        { configPath: '/work/prisma.config.ts', loadFailure: 'Failed to evaluate config' },
+      ],
+    });
+    expect({
+      code: error.code,
+      message: error.message,
+      why: error.why,
+      fix: error.fix,
+      meta: error.meta,
+    }).toEqual({
+      code: 'CLI.MIGRATION_CONFIG_NOT_FOUND',
+      message: 'No config found for this migration',
+      why: 'Without --config, a migration.ts uses the prisma.config.ts whose migrations directory holds it: the nearest one above /repo/inner/migrations/app/20260101T0000_initial, else the one in the working directory. None of them does: /repo/prisma.config.ts keeps migrations in /repo/migrations; /work/prisma.config.ts failed to load (Failed to evaluate config).',
+      fix: 'Run it again with `--config <path to the config of the project this migration belongs to>`.',
+      meta: {
+        migrationDir: '/repo/inner/migrations/app/20260101T0000_initial',
+        checked: ['/repo/prisma.config.ts', '/work/prisma.config.ts'],
+      },
+    });
+  });
+
+  it('errorMigrationCliConfigNotFound says when it found no config at all', () => {
+    const error = errorMigrationCliConfigNotFound({ migrationDir: '/m', checked: [] });
+    expect(error.why).toBe(
+      'Without --config, a migration.ts uses the prisma.config.ts whose migrations directory holds it: the nearest one above /m, else the one in the working directory. There is neither.',
+    );
   });
 
   it('errorMigrationCliInvalidConfigArg creates correct error for missing path', () => {

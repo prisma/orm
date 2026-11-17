@@ -15,7 +15,7 @@
         "models": {
           "User": {
             "fields": {
-              "_id": {
+              "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/objectId@1",
@@ -42,7 +42,18 @@
             },
             "relations": {},
             "storage": {
-              "collection": "user"
+              "collection": "user",
+              "fields": {
+                "id": {
+                  "field": "_id"
+                },
+                "ids": {
+                  "field": "ids"
+                },
+                "name": {
+                  "field": "name"
+                }
+              }
             }
           }
         }

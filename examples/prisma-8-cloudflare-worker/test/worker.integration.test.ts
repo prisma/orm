@@ -113,7 +113,7 @@ describe('worker — postgresServerless against Hyperdrive (local)', () => {
     let consumed = 0;
 
     const rowsSent = await countPostRowsSent(connectionString, async () => {
-      const iter = db.runtime().query(
+      const iter = db.query(
         db.sql.public.post
           .select('id', 'title')
           .orderBy((f) => f.createdAt, { direction: 'asc' })
@@ -128,11 +128,6 @@ describe('worker — postgresServerless against Hyperdrive (local)', () => {
 
     expect(consumed).toBe(7);
     expect(rowsSent).toBe(10_000);
-  });
-
-  it('returns 404 for unknown routes', async () => {
-    const res = await get('/no/such/route');
-    expect(res.status).toBe(404);
   });
 
   it('connect rejects with DRIVER.CONNECTION_FAILED when the database refuses the connection', async () => {

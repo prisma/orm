@@ -1,0 +1,21 @@
+---
+description: Work never adds to or reshapes the framework domain in packages/1-framework. A design that needs to is almost certainly wrong — stop and tell the operator at once.
+globs:
+alwaysApply: true
+---
+
+# Never change the framework domain
+
+The framework domain is the concepts `packages/1-framework` defines: the contract's types (`0-foundation/contract`), the control and migration vocabulary (`1-core/framework-components`), and the interfaces families and targets implement.
+
+Work does not add a concept to it, change what one means, or move family or target code into it so two families can share it. A design that needs this is almost certainly cutting a corner. **Stop, tell the operator at once with the files and types involved, and change the design** — put the work in the family or target that owns it, behind the interfaces that already exist.
+
+**The one allowed change:** vocabulary that lets the framework name a concept its domain already defines. Example: a `valueObjectField` migration subject, because `ContractValueObjectField` already exists. Even then, tell the operator before building it, naming the existing type and every framework file you touch.
+
+## The test
+
+- Does the concept already exist in the framework's types or an ADR? If not, it is new — stop.
+- Would every family, and a database we do not support yet, mean the same thing by it? If it describes how one family stores data (rows, documents, stored names, columns), it does not belong.
+- Is it moving into the framework only so code is shared? Then each family keeps its own; they share the framework's types, not helpers built on their storage.
+
+Reviewers: any new or changed export in `packages/1-framework` is a finding until it passes this test. See also `no-family-vocabulary-in-framework.mdc`.

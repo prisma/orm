@@ -5,7 +5,9 @@ alwaysApply: true
 
 # How to run tests, check for failures, and get specific failures
 
-## 1. Run a test suite
+Every package, integration and e2e test must pass before a PR merges. You are not the only agent on this machine, so respect its CPU and memory: locally, run the tests of the packages you changed (§2) and the integration and e2e files that cover your change (§3), and let CI and the merge queue run the full suites. A full `pnpm build` is fine.
+
+## 1. Run a slow command
 
 Each slow command has an `:agent` variant. The first line of its output prints the exact log path:
 
@@ -20,9 +22,9 @@ Each `:agent` run has a hard timeout (default 5 minutes; `AGENT_CMD_TIMEOUT_SECO
 
 | Command | Purpose |
 |---|---|
-| `pnpm test:packages:agent` | Unit tests for every package |
-| `pnpm test:integration:agent` | Integration suite (PGlite + mongodb-memory-server) |
-| `pnpm test:e2e:agent` | End-to-end suite |
+| `pnpm test:packages:agent` | Unit tests for every package (CI only) |
+| `pnpm test:integration:agent` | Integration suite (PGlite + mongodb-memory-server) (CI only) |
+| `pnpm test:e2e:agent` | End-to-end suite (CI only) |
 | `pnpm build:agent` | Build every package (turbo) |
 | `pnpm typecheck:agent` | Typecheck every package (turbo, cached) |
 | `pnpm lint:agent` | Biome lint |
@@ -68,8 +70,8 @@ tail -50 wip/test-packages.20260615-190441.32317.log
 
 ## Don't
 
-- **Don't run the full integration suite locally.** It is too slow and flakes under load: run only the files for your change (`pnpm --filter integration-tests test test/cross-package/<name>`; a `--` before the path runs the whole suite) and let CI run the rest. Same for `pnpm test:packages`: run the changed package's own `pnpm test`. When you know the failing file, use §3.
-- **Don't run bare `pnpm test:packages` etc. for a full run.** They dump everything into your context; use the `:agent` variant.
+- **Don't run the full integration suite locally.** It flakes under load: run only the files for your change (`pnpm --filter integration-tests test test/cross-package/<name>`; a `--` before the path runs the whole suite). Pull-request CI does not run the integration suite; the merge queue does. To run it on a branch before queueing, use `gh workflow run integration.yml --ref <branch>`. After merging `main` into your branch, run tests only for your own packages, and only if the merged files touch them (`git diff --name-only HEAD^1 HEAD`). When you know the failing file, use §3.
+- **When asked for a full run, use the `:agent` variant, never the bare command.** The bare commands dump everything into your context.
 - **Don't pipe a `:agent` command to `tail`/`grep`/`head`.** Read the log path it printed.
 - **Don't re-run a suite to refine a grep.** Grep the file you already have.
 - **Don't pass `--force` to `turbo`.** The cache is correct by default. Only force when this same run edited `tsconfig.json` or a lockfile.

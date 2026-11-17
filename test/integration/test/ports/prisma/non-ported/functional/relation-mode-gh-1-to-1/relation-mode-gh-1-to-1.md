@@ -15,7 +15,7 @@ Prisma 8 relies on real database foreign keys and has NO client-side relationMod
 
 ## DEFAULT referential-action cell — Prisma-specific implicit default
 
-The DEFAULT matrix cell emits a `@relation` with NO `onUpdate`/`onDelete` attribute (`computeReferentialActionLine` returns an empty action line for DEFAULT). Prisma resolves a no-action relation to `onUpdate: Cascade, onDelete: Restrict`; Prisma 8 resolves a no-action relation to raw-DB `NoAction` for both (`packages/2-sql/9-family/src/core/psl-contract-infer/relation-inference.ts`, `DEFAULT_ON_DELETE`/`DEFAULT_ON_UPDATE = 'noAction'`). The DEFAULT cell's subject is Prisma's implicit no-action default, which Prisma 8 does not reproduce; the explicit NoAction cell is ported and covers NoAction faithfully.
+The DEFAULT matrix cell emits a `@relation` with NO `onUpdate`/`onDelete` attribute (`computeReferentialActionLine` returns an empty action line for DEFAULT). Prisma resolves a no-action relation to `onUpdate: Cascade, onDelete: Restrict`; Prisma 8 resolves a no-action relation to raw-DB `NoAction` for both (`packages/2-sql-family/9-family/src/core/psl-contract-infer/relation-inference.ts`, `DEFAULT_ON_DELETE`/`DEFAULT_ON_UPDATE = 'noAction'`). The DEFAULT cell's subject is Prisma's implicit no-action default, which Prisma 8 does not reproduce; the explicit NoAction cell is ported and covers NoAction faithfully.
 
 - `tests_1-to-1.ts` › all DEFAULT-action cases (relationMode=foreignKeys, both @map variants) across the `[create]`/`[update]`/`[delete]` action-gated groups — exercise Prisma's implicit `Cascade`/`Restrict` default — Prisma 8's no-action default is raw-DB NoAction (covered by the explicit NoAction cell).
 

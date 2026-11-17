@@ -5,6 +5,7 @@ import {
   createControlStack,
   type MigrationPlan,
   type MigrationPlanOperation,
+  planOriginOf,
 } from '@internal/framework-components/control';
 import {
   type AggregateMigrationEdgeRef,
@@ -69,6 +70,7 @@ function makeContract(
     string,
     {
       indexes?: Array<{
+        name: string;
         keys: Array<{ field: string; direction: 1 | -1 }>;
         unique?: boolean;
         sparse?: boolean;
@@ -122,7 +124,7 @@ function bareContract(storageHash: string): MongoContract {
 
 function planForContract(
   contract: ReturnType<typeof makeContract>,
-  origin: MongoSchemaIR = new MongoSchemaIR([]),
+  origin: MongoSchemaIR = new MongoSchemaIR([], { fromDatabase: false }),
   fromContract: MongoContract | null = null,
 ) {
   const planner = new MongoMigrationPlanner();
@@ -131,6 +133,8 @@ function planForContract(
     schema: origin,
     policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
     fromContract,
+    origin: planOriginOf(fromContract),
+    statements: [],
     frameworkComponents: [],
     snapshotsImportPath: '../../snapshots',
   });
@@ -160,7 +164,9 @@ function makeRunner() {
 describe('MongoMigrationRunner', () => {
   it('creates an index on a real MongoDB instance', async () => {
     const contract = makeContract({
-      users: { indexes: [{ keys: [{ field: 'email', direction: 1 }], unique: true }] },
+      users: {
+        indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }], unique: true }],
+      },
     });
     const plan = planForContract(contract);
     const serialized = serializePlan(plan);
@@ -189,16 +195,20 @@ describe('MongoMigrationRunner', () => {
     await db.createCollection('posts');
     await db.collection('posts').createIndex({ title: 1 }, { name: 'title_1' });
 
-    const originIR = new MongoSchemaIR([
-      new MongoSchemaCollection({
-        name: 'posts',
-        indexes: [
-          new MongoSchemaIndex({
-            keys: [{ field: 'title', direction: 1 }],
-          }),
-        ],
-      }),
-    ]);
+    const originIR = new MongoSchemaIR(
+      [
+        new MongoSchemaCollection({
+          name: 'posts',
+          indexes: [
+            new MongoSchemaIndex({
+              name: 'title_1',
+              keys: [{ field: 'title', direction: 1 }],
+            }),
+          ],
+        }),
+      ],
+      { fromDatabase: false },
+    );
     const contract = makeContract({ posts: {} }, 'dropped');
     const plan = planForContract(contract, originIR);
     const serialized = serializePlan(plan);
@@ -225,7 +235,7 @@ describe('MongoMigrationRunner', () => {
     await db.collection('items').createIndex({ sku: 1 }, { unique: true, name: 'sku_1' });
 
     const contract = makeContract({
-      items: { indexes: [{ keys: [{ field: 'sku', direction: 1 }], unique: true }] },
+      items: { indexes: [{ name: 'sku_1', keys: [{ field: 'sku', direction: 1 }], unique: true }] },
     });
     const plan = planForContract(contract);
     const serialized = serializePlan(plan);
@@ -246,12 +256,12 @@ describe('MongoMigrationRunner', () => {
     }
   });
 
-  it('returns PRECHECK_FAILED when prechecks fail', async () => {
+  it('returns PRECHECK_FAILED naming the check that failed when prechecks fail', async () => {
     await db.createCollection('users');
     await db.collection('users').createIndex({ email: 1 }, { name: 'email_1' });
 
     const contract = makeContract({
-      users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },
+      users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] },
     });
     const plan = planForContract(contract);
     const serialized = serializePlan(plan);
@@ -267,16 +277,29 @@ describe('MongoMigrationRunner', () => {
       frameworkComponents: [],
     });
 
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.failure.code).toBe('MIGRATION.PRECHECK_FAILED');
-    }
+    expect(
+      result.ok ? undefined : { code: result.failure.code, meta: result.failure.meta },
+    ).toEqual({
+      code: 'MIGRATION.PRECHECK_FAILED',
+      meta: {
+        databaseUnchanged: true,
+        failedCheck: {
+          operationId: expect.any(String),
+          phase: 'precheck',
+          description: 'no index named email_1 exists on users',
+          expectation: { expects: 'absent', object: 'an index named "email_1" in "users"' },
+        },
+      },
+    });
+    expect(result.ok ? undefined : result.failure.why).toMatch(
+      /^Before operation .* runs, it checks: no index named email_1 exists on users\. That check failed: the database already has an index named "email_1" in "users"\. The failed apply changed nothing\.$/,
+    );
   });
 
   it('executes multiple operations in order', async () => {
     const contract = makeContract({
-      alpha: { indexes: [{ keys: [{ field: 'a', direction: 1 }] }] },
-      beta: { indexes: [{ keys: [{ field: 'b', direction: 1 }] }] },
+      alpha: { indexes: [{ name: 'a_1', keys: [{ field: 'a', direction: 1 }] }] },
+      beta: { indexes: [{ name: 'b_1', keys: [{ field: 'b', direction: 1 }] }] },
     });
     const plan = planForContract(contract);
     const serialized = serializePlan(plan);
@@ -317,7 +340,7 @@ describe('MongoMigrationRunner', () => {
     });
 
     const contract = makeContract({
-      users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },
+      users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] },
     });
     const plan = planForContract(contract, undefined, bareContract('expected'));
     const serialized = serializePlan(plan);
@@ -348,7 +371,7 @@ describe('MongoMigrationRunner', () => {
     });
 
     const contract = makeContract({
-      users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },
+      users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] },
     });
     const plan = planForContract(contract);
     const serialized = serializePlan(plan);
@@ -368,7 +391,7 @@ describe('MongoMigrationRunner', () => {
 
   it('returns MARKER_ORIGIN_MISMATCH when no marker but plan has origin', async () => {
     const contract = makeContract({
-      users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },
+      users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] },
     });
     const plan = planForContract(contract, undefined, bareContract('something'));
     const serialized = serializePlan(plan);
@@ -396,7 +419,7 @@ describe('MongoMigrationRunner', () => {
     });
 
     const contract = makeContract({
-      users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },
+      users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] },
     });
     const plan = planForContract(contract, undefined, bareContract('origin'));
     const serialized = serializePlan(plan);
@@ -423,13 +446,21 @@ describe('MongoMigrationRunner', () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.failure.code).toBe('MIGRATION.MARKER_CAS_FAILURE');
+      expect(result.failure).toMatchObject({
+        code: 'MIGRATION.MARKER_CAS_FAILURE',
+        meta: {
+          space: 'app',
+          expectedStorageHash: 'origin',
+          foundStorageHash: 'tampered-by-other-process',
+          destinationStorageHash: contract.storage.storageHash,
+        },
+      });
     }
   });
 
   it('returns POLICY_VIOLATION for disallowed operation class', async () => {
     const contract = makeContract({
-      users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },
+      users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] },
     });
     const plan = planForContract(contract);
     const serialized = serializePlan(plan);
@@ -452,7 +483,7 @@ describe('MongoMigrationRunner', () => {
 
   it('updates marker and writes ledger entry after successful execution', async () => {
     const contract = makeContract({
-      users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },
+      users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] },
     });
     const plan = planForContract(contract);
     const serialized = serializePlan(plan);
@@ -736,13 +767,17 @@ describe('MongoMigrationRunner - E2E round-trip', () => {
 
     const planner = new MongoMigrationPlanner();
     const contract = makeContract({
-      orders: { indexes: [{ keys: [{ field: 'createdAt', direction: -1 }] }] },
+      orders: {
+        indexes: [{ name: 'createdAt_-1', keys: [{ field: 'createdAt', direction: -1 }] }],
+      },
     });
     const ddlResult = planner.plan({
       contract,
-      schema: new MongoSchemaIR([]),
+      schema: new MongoSchemaIR([], { fromDatabase: false }),
       policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
       fromContract: bareContract('00'),
+      origin: planOriginOf(bareContract('00')),
+      statements: [],
       frameworkComponents: [],
       snapshotsImportPath: '../../snapshots',
     });

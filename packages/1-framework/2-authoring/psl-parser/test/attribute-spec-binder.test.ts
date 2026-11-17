@@ -13,10 +13,11 @@ import { parse } from '../src/parse';
 import { PslSources } from '../src/source-file';
 import { buildSymbolTable, type FieldSymbol, type ModelSymbol } from '../src/symbol-table';
 import type { FieldAttributeAst, ModelAttributeAst } from '../src/syntax/ast/attributes';
+import { binderContext } from './support';
 
 const TYPE_CONSTRUCTORS: AuthoringTypeNamespace = {
-  Int: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1', nativeType: 'integer' } },
-  String: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1', nativeType: 'text' } },
+  Int: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1' } },
+  String: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1' } },
 };
 
 const relationSpec = fieldAttribute('relation', {
@@ -55,16 +56,15 @@ function bind(text: string) {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
+    defaultNamespaceId: 'public',
   });
   const { binder, diagnostics } = createBinder({
     sources,
     symbolTable,
-    typeConstructors: TYPE_CONSTRUCTORS,
-    attributeSpecs: ATTRIBUTE_SPECS,
-    controlMutationDefaults: {
-      defaultFunctionRegistry: new Map(),
-      dataTypeEntries: {},
-    },
+    context: binderContext({
+      contributedTypes: TYPE_CONSTRUCTORS,
+      attributeSpecs: ATTRIBUTE_SPECS,
+    }),
   });
   return { sources, symbolTable, binder, binderDiagnostics: diagnostics };
 }
@@ -95,7 +95,7 @@ const RELATION_SCHEMA = [
 
 function interpretRelation(text: string) {
   const { sources, symbolTable, binder, binderDiagnostics } = bind(text);
-  const post = symbolTable.topLevel.models['Post']!;
+  const post = symbolTable.defaultNamespace.models['Post']!;
   const field = post.fields['author']!;
   const ctx = { sources, symbols: symbolTable, binder, selfModel: post, field };
   return {
@@ -157,7 +157,7 @@ describe('reference combinators with a binder-backed context', () => {
     const { sources, symbolTable, binder, binderDiagnostics } = bind(
       'model Child {\n  id Int\n  @@base(Ghost)\n}',
     );
-    const child = symbolTable.topLevel.models['Child']!;
+    const child = symbolTable.defaultNamespace.models['Child']!;
     const ctx = { sources, symbols: symbolTable, binder, selfModel: child };
     const result = interpretAttribute(modelAttributeNode(child, 'base'), baseSpec, ctx);
 
@@ -176,7 +176,7 @@ describe('reference combinators with a binder-backed context', () => {
       '}',
     ].join('\n');
     const { sources, symbolTable, binder, binderDiagnostics } = bind(schema);
-    const post = symbolTable.topLevel.models['Post']!;
+    const post = symbolTable.defaultNamespace.models['Post']!;
     const field = post.fields['author']!;
     const ctx = { sources, symbols: symbolTable, binder, selfModel: post, field };
     const result = interpretAttribute(fieldAttributeNode(field, 'relation'), relationSpec, ctx);
@@ -190,7 +190,7 @@ describe('reference combinators with a binder-backed context', () => {
     const { sources, symbolTable, binder, binderDiagnostics } = bind(
       'model User {\n  id Int\n  @@index("id")\n}',
     );
-    const user = symbolTable.topLevel.models['User']!;
+    const user = symbolTable.defaultNamespace.models['User']!;
     const ctx = { sources, symbols: symbolTable, binder, selfModel: user };
     const result = interpretAttribute(modelAttributeNode(user, 'index'), indexSpec, ctx);
 
@@ -207,7 +207,7 @@ describe('reference combinators with a binder-backed context', () => {
     const { sources, symbolTable, binder, binderDiagnostics } = bind(
       'model User {\n  id Int\n  @@index(["id"])\n}',
     );
-    const user = symbolTable.topLevel.models['User']!;
+    const user = symbolTable.defaultNamespace.models['User']!;
     const ctx = { sources, symbols: symbolTable, binder, selfModel: user };
     const result = interpretAttribute(modelAttributeNode(user, 'index'), indexSpec, ctx);
 
@@ -224,7 +224,7 @@ describe('the binder is the only resolution path', () => {
     const { sources, symbolTable, binder, binderDiagnostics } = bind(
       'model User {\n  id Int\n  @@index([nope])\n}',
     );
-    const user = symbolTable.topLevel.models['User']!;
+    const user = symbolTable.defaultNamespace.models['User']!;
     const ctx = { sources, symbols: symbolTable, binder, selfModel: user };
     const result = interpretAttribute(modelAttributeNode(user, 'index'), indexSpec, ctx);
 
@@ -239,7 +239,7 @@ describe('the binder is the only resolution path', () => {
     const { sources, symbolTable, binder, binderDiagnostics } = bind(
       'model User {\n  id Int\n  @@index([id])\n}',
     );
-    const user = symbolTable.topLevel.models['User']!;
+    const user = symbolTable.defaultNamespace.models['User']!;
     const ctx = { sources, symbols: symbolTable, binder, selfModel: user };
     const result = interpretAttribute(modelAttributeNode(user, 'index'), indexSpec, ctx);
 
@@ -253,7 +253,7 @@ describe('a binder built over another snapshot', () => {
   it('fails without diagnostics when no binding is available', () => {
     const first = bind(RELATION_SCHEMA);
     const second = bind(RELATION_SCHEMA);
-    const post = second.symbolTable.topLevel.models['Post']!;
+    const post = second.symbolTable.defaultNamespace.models['Post']!;
     const field = post.fields['author']!;
     const ctx = {
       sources: second.sources,
@@ -270,7 +270,7 @@ describe('a binder built over another snapshot', () => {
 
   it('resolves normally when the binder and the context share a snapshot', () => {
     const { sources, symbolTable, binder } = bind(RELATION_SCHEMA);
-    const post = symbolTable.topLevel.models['Post']!;
+    const post = symbolTable.defaultNamespace.models['Post']!;
     const field = post.fields['author']!;
     const ctx = { sources, symbols: symbolTable, binder, selfModel: post, field };
 

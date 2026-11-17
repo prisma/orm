@@ -10,6 +10,6 @@
 
 model Visit {
   id        Int      @id @default(autoincrement())
-  visitTime DateTime @default(now())
+  visitTime TimestamptzTemporal @default(now())
   @@map("visit")
 }

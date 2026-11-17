@@ -1,0 +1,16 @@
+/* A comment that belongs to no declaration. */
+
+/**
+ * A documented enum.
+ */
+enum Kind {
+  A /* first */
+  B
+}
+
+/* the event */
+model Event {
+  /* the key */
+  id   Int  @id @default(autoincrement())
+  kind Kind /* trailing */
+}

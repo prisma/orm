@@ -66,7 +66,7 @@ describe('emitter', () => {
 
   it('refuses a same-space to-one relation that does not state whether it is nullable', async () => {
     const int = { type: { kind: 'scalar', codecId: 'pg/int4@1' }, nullable: false, many: false };
-    const column = { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false };
+    const column = { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false };
     const ir = createTestContract({
       models: {
         Post: {
@@ -144,8 +144,8 @@ describe('emitter', () => {
         storage: unboundNamespaceTables({
           user: {
             columns: {
-              id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-              email: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+              id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+              email: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],
@@ -199,7 +199,7 @@ describe('emitter', () => {
       },
       storage: unboundNamespaceTables({
         user: {
-          columns: { id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false } },
+          columns: { id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false } },
           primaryKey: { columns: ['id'] },
           uniques: [],
           indexes: [],
@@ -216,37 +216,13 @@ describe('emitter', () => {
     expect(dropped.contractDts).not.toContain('unbound_User');
   });
 
-  it('emits contract even when extension pack namespace does not match extensionIds', async () => {
-    const ir = createTestContract({
-      storage: unboundNamespaceTables({
-        user: {
-          columns: {
-            id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-          },
-          uniques: [],
-          indexes: [],
-          foreignKeys: [],
-        },
-      }),
-    });
-
-    const options: EmitStackInput = {
-      codecTypeImports: [],
-      extensionIds: [],
-    };
-
-    const result = await emit(ir, options, mockSqlHook);
-    expect(result.contractJson).toBeDefined();
-    expect(result.contractDts).toBeDefined();
-  });
-
   it('tolerates codec namespaces not registered in extensionIds', async () => {
     const ir = createTestContract({
       storage: unboundNamespaceTables({
         data: {
           columns: {
-            id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-            value: { codecId: 'unknown/type@1', nativeType: 'custom', nullable: false },
+            id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+            value: { codecId: 'unknown/type@1', dataType: 'unknown/type', nullable: false },
           },
           uniques: [],
           indexes: [],
@@ -258,54 +234,6 @@ describe('emitter', () => {
     const options: EmitStackInput = {
       codecTypeImports: [],
       extensionIds: ['some-other-extension'],
-    };
-
-    const result = await emit(ir, options, mockSqlHook);
-    expect(result.contractJson).toBeDefined();
-    expect(result.contractDts).toBeDefined();
-  });
-
-  it('handles missing extensions field', async () => {
-    const ir = createTestContract({
-      storage: unboundNamespaceTables({
-        user: {
-          columns: {
-            id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-          },
-          uniques: [],
-          indexes: [],
-          foreignKeys: [],
-        },
-      }),
-    });
-
-    const options: EmitStackInput = {
-      codecTypeImports: [],
-      extensionIds: [],
-    };
-
-    const result = await emit(ir, options, mockSqlHook);
-    expect(result.contractJson).toBeDefined();
-    expect(result.contractDts).toBeDefined();
-  });
-
-  it('handles empty packs array', async () => {
-    const ir = createTestContract({
-      storage: unboundNamespaceTables({
-        user: {
-          columns: {
-            id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-          },
-          uniques: [],
-          indexes: [],
-          foreignKeys: [],
-        },
-      }),
-    });
-
-    const options: EmitStackInput = {
-      codecTypeImports: [],
-      extensionIds: [],
     };
 
     const result = await emit(ir, options, mockSqlHook);
@@ -333,74 +261,6 @@ describe('emitter', () => {
     },
     timeouts.typeScriptCompilation,
   );
-
-  it('accepts meta keys when family validation allows them', async () => {
-    const ir = createTestContract({
-      meta: {
-        sourceId: 'schema.prisma',
-        schemaPath: '/tmp/schema.prisma',
-        source: 'psl',
-      },
-    });
-
-    const options: EmitStackInput = {
-      codecTypeImports: [],
-      extensionIds: [],
-    };
-
-    await expect(emit(ir, options, mockSqlHook)).resolves.toMatchObject({
-      contractJson: expect.any(String),
-      contractDts: expect.any(String),
-    });
-  });
-
-  it('accepts canonical section keys when family validation allows them', async () => {
-    const ir = createTestContract({
-      storage: unboundNamespaceTables({
-        user: {
-          columns: {
-            id: {
-              codecId: 'pg/int4@1',
-              nativeType: 'int4',
-              nullable: false,
-              sourceId: 'schema.prisma',
-            },
-          },
-          primaryKey: { columns: ['id'] },
-          uniques: [],
-          indexes: [],
-          foreignKeys: [],
-        },
-      }),
-    });
-
-    const options: EmitStackInput = {
-      codecTypeImports: [],
-      extensionIds: [],
-    };
-
-    await expect(emit(ir, options, mockSqlHook)).resolves.toMatchObject({
-      contractJson: expect.any(String),
-      contractDts: expect.any(String),
-    });
-  });
-
-  it('emits contract even when extensionIds are not in contract.extensions', async () => {
-    const ir = createTestContract({
-      storage: emptySqlStorage,
-    });
-
-    const mockHookNoTypeValidation = createMockSpi();
-
-    const options: EmitStackInput = {
-      codecTypeImports: [],
-      extensionIds: ['postgres'],
-    };
-
-    const result = await emit(ir, options, mockHookNoTypeValidation);
-    expect(result.contractJson).toBeDefined();
-    expect(result.contractDts).toBeDefined();
-  });
 
   it('defaults codecTypeImports to empty array when omitted', async () => {
     const ir = createTestContract({
@@ -438,7 +298,7 @@ describe('emitter', () => {
     expect(result.contractDts).toContain("from '@ext/query'");
   });
 
-  it('emits value object clauses when the domain namespace declares value objects', async () => {
+  it('emits value object clauses when storage declares value objects', async () => {
     const ir = createTestContract({
       storage: emptySqlStorage,
       valueObjects: {
@@ -460,45 +320,10 @@ describe('emitter', () => {
     };
 
     const result = await emit(ir, options, mockSqlHook);
-    expect(result.contractDts).toContain('readonly valueObjects:');
-    expect(result.contractDts).toContain('export type AddressOutput');
-  });
-
-  it('emits per-namespace valueObjects block when a single namespace declares value objects', () => {
-    const addressModel = {
-      fields: {
-        street: {
-          type: { kind: 'scalar' as const, codecId: 'pg/text@1' },
-          nullable: false,
-          many: false as const,
-        },
-      },
-    };
-    const contract = {
-      ...createTestContract(),
-      domain: {
-        namespaces: {
-          public: {
-            models: {},
-            valueObjects: { Address: addressModel },
-          },
-        },
-      },
-    };
-    const dts = generateContractDts(contract, mockSqlHook, [], {
-      storageHash: '0000000000000000000000000000000000000000000000000000000000000001',
-      profileHash: '0000000000000000000000000000000000000000000000000000000000000002',
-    });
-    // The per-namespace valueObjects block must appear inside the namespace block.
-    // A positive match on the nested structure proves it is inside domain.namespaces.public.
-    expect(dts).toContain('readonly public:');
-    const publicNsIndex = dts.indexOf('readonly public:');
-    const afterPublic = dts.slice(publicNsIndex);
-    // valueObjects must appear before the closing of the namespace block
-    expect(afterPublic.indexOf('readonly valueObjects:')).toBeGreaterThan(0);
-    expect(afterPublic.indexOf('readonly valueObjects:')).toBeLessThan(
-      afterPublic.indexOf('readonly capabilities:'),
+    expect(result.contractDts).toContain(
+      "export type AddressOutput = ValueObjectOutputTypes['__unbound__']['Address'];",
     );
+    expect(result.contractDts).not.toContain('readonly valueObjects:');
   });
 
   it('emits successfully when domain has more than one namespace', () => {

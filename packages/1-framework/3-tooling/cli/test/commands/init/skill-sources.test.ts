@@ -6,15 +6,6 @@ import {
 } from '../../../src/commands/init/skill-sources';
 
 describe('legacy skill cleanup', () => {
-  it('covers every harness directory the agents read', () => {
-    expect(AGENT_SKILL_ROOTS).toEqual([
-      '.claude/skills',
-      '.cursor/skills',
-      '.agents/skills',
-      '.windsurf/skills',
-    ]);
-  });
-
   it('retires the two standalone upgrade skills that folded into the router', () => {
     expect(RETIRED_SKILL_NAMES).toContain('prisma-next-upgrade');
     expect(RETIRED_SKILL_NAMES).toContain('prisma-8-extension-upgrade');

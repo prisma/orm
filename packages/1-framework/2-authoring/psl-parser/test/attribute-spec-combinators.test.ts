@@ -1,5 +1,6 @@
-import { ok } from '@internal/utils/result';
+import { notOk, ok } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
+import { leafDiagnostic } from '../src/attribute-spec/combinators/diagnostic';
 import { createBinder } from '../src/binder';
 import type { ArgType, AttributeCtx, FieldAttributeCtx, ModelAttributeCtx } from '../src/exports';
 import {
@@ -29,26 +30,23 @@ import { buildSymbolTable } from '../src/symbol-table';
 import { FieldAttributeAst, ModelAttributeAst } from '../src/syntax/ast/attributes';
 import { ArrayLiteralAst, type ExpressionAst } from '../src/syntax/ast/expressions';
 import { createSyntaxTree } from '../src/syntax/red';
+import { binderContext } from './support';
 
 function makeCtx(sources: PslSources): FieldAttributeCtx {
   const { document, sources: modelSources } = parse('model M {\n  id Int @id\n}\n', 'test.psl');
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources: modelSources,
+    defaultNamespaceId: 'public',
   });
-  const selfModel = symbolTable.topLevel.models['M'];
+  const selfModel = symbolTable.defaultNamespace.models['M'];
   if (!selfModel) throw new Error('expected model M in the symbol table');
   const field = selfModel.fields['id'];
   if (!field) throw new Error('expected field id on model M');
   const { binder } = createBinder({
     sources: modelSources,
     symbolTable,
-    typeConstructors: {},
-    attributeSpecs: { model: {}, field: {} },
-    controlMutationDefaults: {
-      defaultFunctionRegistry: new Map(),
-      dataTypeEntries: {},
-    },
+    context: binderContext(),
   });
   return { sources, symbols: symbolTable, selfModel, field, binder };
 }
@@ -59,33 +57,31 @@ function schemaArg(schema: string, attribute: string, argName?: string) {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources: registry,
+    defaultNamespaceId: 'public',
   });
-  const model = symbolTable.topLevel.models['Post'];
+  const model = symbolTable.defaultNamespace.models['Post'];
   if (!model) throw new Error('expected model Post');
   const field = model.fields['author'];
   if (!field) throw new Error('expected field author');
   const { binder } = createBinder({
     sources: registry,
     symbolTable,
-    typeConstructors: {},
-    attributeSpecs: {
-      model: {},
-      field: {
-        [attribute]: () =>
-          fieldAttribute(attribute, {
-            documentation: 'fixture',
-            positional: [{ key: 'fields', type: list(fieldRef()), documentation: 'fixture' }],
-            named: {
-              fields: { type: list(fieldRef()), documentation: 'fixture' },
-              references: { type: list(referencedFieldRef()), documentation: 'fixture' },
-            },
-          }),
+    context: binderContext({
+      attributeSpecs: {
+        model: {},
+        field: {
+          [attribute]: () =>
+            fieldAttribute(attribute, {
+              documentation: 'fixture',
+              positional: [{ key: 'fields', type: list(fieldRef()), documentation: 'fixture' }],
+              named: {
+                fields: { type: list(fieldRef()), documentation: 'fixture' },
+                references: { type: list(referencedFieldRef()), documentation: 'fixture' },
+              },
+            }),
+        },
       },
-    },
-    controlMutationDefaults: {
-      defaultFunctionRegistry: new Map(),
-      dataTypeEntries: {},
-    },
+    }),
   });
   for (const node of field.node.attributes()) {
     if (node.name()?.path().join('.') !== attribute) continue;
@@ -410,6 +406,27 @@ describe('num', () => {
   });
 });
 
+describe('a number written with a plus sign', () => {
+  it('is its value for int', () => {
+    const { expr, ctx } = argOf('+7');
+
+    expect(int({ min: 1, max: 10 }).parse(expr, ctx)).toEqual(ok(7));
+  });
+
+  it('is its value for num, unrestricted and fixed', () => {
+    const { expr, ctx } = argOf('+1.5');
+
+    expect(num().parse(expr, ctx)).toEqual(ok(1.5));
+    expect(num(1.5).parse(expr, ctx)).toEqual(ok(1.5));
+  });
+
+  it('is its text as written for numLiteral', () => {
+    const { expr, ctx } = argOf('+9007199254740993');
+
+    expect(numLiteral().parse(expr, ctx)).toEqual(ok({ text: '+9007199254740993' }));
+  });
+});
+
 describe('numLiteral', () => {
   it.each([
     ['a decimal with more digits than a JS number holds', '12345678901234567890.123456789'],
@@ -616,6 +633,28 @@ describe('oneOf', () => {
     if (result.ok) expect(result.value).toBe('first');
   });
 
+  it('returns the result of the one alternative that claims the argument, success or failure', () => {
+    const { expr, ctx } = argOf('Cascade');
+    const claiming: ArgType<'claimed', AttributeCtx> = {
+      kind: 'str',
+      value: undefined,
+      label: 'claimed',
+      claims: () => true,
+      parse: () => notOk([leafDiagnostic(ctx, expr, 'claimed but malformed')]),
+    };
+    const accepting: ArgType<'accepted', AttributeCtx> = {
+      kind: 'str',
+      value: undefined,
+      label: 'accepted',
+      parse: () => ok('accepted'),
+    };
+
+    expect(oneOf(accepting, claiming).parse(expr, ctx)).toEqual(
+      notOk([expect.objectContaining({ message: 'claimed but malformed' })]),
+    );
+    expect(oneOf(accepting, claiming, claiming).parse(expr, ctx)).toEqual(ok('accepted'));
+  });
+
   it('matches whichever alternative accepts the argument', () => {
     const { expr, ctx } = argOf('SetNull');
 
@@ -755,8 +794,9 @@ describe('entityRef', () => {
     const { symbolTable } = buildSymbolTable({
       documents: [document],
       sources,
+      defaultNamespaceId: 'public',
     });
-    const selfModel = symbolTable.topLevel.models['M'];
+    const selfModel = symbolTable.defaultNamespace.models['M'];
     const field = selfModel?.fields['id'];
     const attribute = field?.node.attributes()[Symbol.iterator]().next().value;
     const expr = attribute?.argList()?.args()[Symbol.iterator]().next().value?.value();
@@ -764,27 +804,27 @@ describe('entityRef', () => {
     const { binder } = createBinder({
       sources,
       symbolTable,
-      typeConstructors: {},
-      attributeSpecs: {
-        model: {},
-        field: {
-          x: () =>
-            fieldAttribute('x', {
-              documentation: 'fixture',
-              positional: [
-                { key: 'model', type: entityRef({ kind: 'model' }), documentation: 'fixture' },
-              ],
-            }),
+      context: binderContext({
+        attributeSpecs: {
+          model: {},
+          field: {
+            x: () =>
+              fieldAttribute('x', {
+                documentation: 'fixture',
+                positional: [
+                  { key: 'model', type: entityRef({ kind: 'model' }), documentation: 'fixture' },
+                ],
+              }),
+          },
         },
-      },
-      controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
+      }),
     });
     return { expr, ctx: { sources, symbols: symbolTable, selfModel, binder } };
   }
 
   it('parses a bare identifier into its resolved model', () => {
     const { expr, ctx } = referenceArg('M');
-    const reference = { declaration: ctx.selfModel, namespace: undefined };
+    const reference = { declaration: ctx.selfModel, namespace: ctx.symbols.defaultNamespace };
     const result = entityRef({ kind: 'model' }).parse(expr, ctx);
 
     expect(result.ok).toBe(true);
@@ -1011,6 +1051,15 @@ describe('record', () => {
 });
 
 describe('funcCall', () => {
+  it('claims a call to its name and nothing else', () => {
+    const call = funcCall('now', { documentation: 'The current time.' });
+    expect(call.claims(argOf('now()').expr)).toBe(true);
+    expect(call.claims(argOf('now(1)').expr)).toBe(true);
+    expect(call.claims(argOf('later()').expr)).toBe(false);
+    expect(call.claims(argOf('pg.now()').expr)).toBe(false);
+    expect(call.claims(argOf('now').expr)).toBe(false);
+  });
+
   it('accepts a nullary call whose callee matches the pinned name', () => {
     const { expr, ctx } = argOf('now()');
 
@@ -1136,6 +1185,36 @@ describe('funcCall with a signature', () => {
     const result = nanoid().parse(expr, ctx);
 
     expect(result.ok).toBe(false);
+  });
+
+  it('names the callee by its label in a binding diagnostic', () => {
+    const { expr, ctx } = argOf('cuid()');
+    const cuid = funcCall(
+      'cuid',
+      {
+        documentation: 'Calls the named value generator.',
+        positional: [
+          { key: 'version', type: int(), documentation: 'The value bound to this slot.' },
+        ],
+      },
+      { label: 'Default function "cuid"' },
+    );
+
+    const result = cuid.parse(expr, ctx);
+
+    expect(result.ok ? [] : result.failure.map((diagnostic) => diagnostic.message)).toEqual([
+      'Default function "cuid" is missing required argument "version"',
+    ]);
+  });
+
+  it('names the callee as an attribute when it has no label', () => {
+    const { expr, ctx } = argOf('nanoid(16, 2)');
+
+    const result = nanoid().parse(expr, ctx);
+
+    expect(result.ok ? [] : result.failure.map((diagnostic) => diagnostic.message)).toEqual([
+      'Attribute "nanoid" received too many positional arguments',
+    ]);
   });
 
   it('still rejects a callee that differs from the pinned name', () => {

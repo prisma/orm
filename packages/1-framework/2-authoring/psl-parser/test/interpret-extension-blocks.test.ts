@@ -8,6 +8,7 @@ import { list } from '../src/attribute-spec/combinators/list';
 import { oneOf } from '../src/attribute-spec/combinators/one-of';
 import { str } from '../src/attribute-spec/combinators/str';
 import { optional } from '../src/attribute-spec/optional';
+import { EMPTY_DATA_TYPES } from '../src/attribute-spec/spec-context';
 import { createBinder } from '../src/binder';
 import { mapBlock, structBlock } from '../src/block-spec/constructors';
 import type { PslBlockSpecDescriptor } from '../src/block-spec/descriptor';
@@ -15,7 +16,7 @@ import { interpretExtensionBlocks } from '../src/block-spec/interpret';
 import { parse } from '../src/parse';
 import type { BlockSymbol, ModelSymbol } from '../src/symbol-table';
 import { buildSymbolTable } from '../src/symbol-table';
-import { ownEntry } from './support';
+import { binderContext, ownEntry } from './support';
 
 const POLICY_DESCRIPTOR = {
   kind: 'pslBlock',
@@ -80,23 +81,25 @@ function build(source: string) {
   const { symbolTable, diagnostics: collectionDiagnostics } = buildSymbolTable({
     documents: [document],
     sources,
+    defaultNamespaceId: 'public',
   });
   const { binder, diagnostics: binderDiagnostics } = createBinder({
     sources,
     symbolTable,
-    typeConstructors: {
-      Int: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1' } },
-      String: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1' } },
-    },
-    attributeSpecs: { model: {}, field: {} },
-    controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
-    pslBlockDescriptors: DESCRIPTORS,
+    context: binderContext({
+      contributedTypes: {
+        Int: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1' } },
+        String: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1' } },
+      },
+      pslBlockDescriptors: DESCRIPTORS,
+    }),
   });
   const { parsedBlocks, diagnostics } = interpretExtensionBlocks({
     symbolTable,
     sources,
     pslBlockDescriptors: DESCRIPTORS,
     binder,
+    dataTypes: EMPTY_DATA_TYPES,
   });
   return {
     symbolTable,
@@ -116,8 +119,8 @@ function blockNamed(
 ): BlockSymbol {
   const scope =
     namespace === undefined
-      ? result.symbolTable.topLevel
-      : result.symbolTable.topLevel.namespaces[namespace];
+      ? result.symbolTable.defaultNamespace
+      : result.symbolTable.namespaces[namespace];
   const block = scope?.blocks[name];
   if (block === undefined) throw new Error(`expected block "${name}" in the symbol table`);
   return block;
@@ -130,8 +133,8 @@ function modelNamed(
 ): ModelSymbol {
   const scope =
     namespace === undefined
-      ? result.symbolTable.topLevel
-      : result.symbolTable.topLevel.namespaces[namespace];
+      ? result.symbolTable.defaultNamespace
+      : result.symbolTable.namespaces[namespace];
   const model = scope?.models[name];
   if (model === undefined) throw new Error(`expected model "${name}" in the symbol table`);
   return model;
@@ -432,6 +435,7 @@ describe('interpretExtensionBlocks() — consumer-resolved envelopes', () => {
       sources: result.sources,
       pslBlockDescriptors: DESCRIPTORS,
       binder: result.binder,
+      dataTypes: EMPTY_DATA_TYPES,
     });
 
     expect([...again.parsedBlocks.keys()]).toEqual([...result.parsedBlocks.keys()]);

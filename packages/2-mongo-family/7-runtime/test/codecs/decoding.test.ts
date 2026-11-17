@@ -1,4 +1,4 @@
-import { decodeJsonString } from '@internal/framework-components/codec';
+import { type DataTypeValue, dataType, readJsonString } from '@internal/framework-components/codec';
 import { isRuntimeError } from '@internal/framework-components/runtime';
 import { type MongoCodecRegistry, mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
 import type { MongoFieldShape, MongoResultShape } from '@internal/mongo-query-ast/execution';
@@ -7,6 +7,8 @@ import { structuredError } from '@internal/utils/structured-error';
 import { ObjectId } from 'mongodb';
 import { describe, expect, it, vi } from 'vitest';
 import { decodeMongoRow } from '../../src/codecs/decoding';
+
+const textType = dataType('test/text', { read: (json) => readJsonString('test/text', json) });
 
 function deferred<T>(): {
   promise: Promise<T>;
@@ -33,17 +35,19 @@ function registryWithDefaults(): MongoCodecRegistry {
   registry.register(
     mongoCodec({
       typeId: 'mongo/string@1',
-      encode: (v: string) => v,
-      decode: (w: string) => w,
-      decodeJson: (json) => decodeJsonString('mongo/string@1', json),
+      toWire: (v: string) => v,
+      fromWire: (w: string) => w,
+      dataType: textType,
+      fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
     }),
   );
   registry.register(
     mongoCodec({
       typeId: 'mongo/objectId@1',
-      encode: (v: string) => new ObjectId(v),
-      decode: (w: { toHexString: () => string }) => w.toHexString(),
-      decodeJson: (json) => decodeJsonString('mongo/objectId@1', json),
+      toWire: (v: string) => new ObjectId(v),
+      fromWire: (w: { toHexString: () => string }) => w.toHexString(),
+      dataType: textType,
+      fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
     }),
   );
   return registry;
@@ -73,9 +77,10 @@ describe('decodeMongoRow', () => {
     registry.register(
       mongoCodec({
         typeId: 'test/spy@1',
-        encode: (v: string) => v,
-        decode: decodeSpy,
-        decodeJson: (json) => decodeJsonString('test/spy@1', json),
+        toWire: (v: string) => v,
+        fromWire: decodeSpy,
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
       }),
     );
     const shape: MongoResultShape = {
@@ -148,9 +153,10 @@ describe('decodeMongoRow', () => {
     registry.register(
       mongoCodec({
         typeId: 'test/nullable-array@1',
-        encode: (value: string) => value,
-        decode: decodeSpy,
-        decodeJson: (json) => decodeJsonString('test/nullable-array@1', json).toUpperCase(),
+        toWire: (value: string) => value,
+        fromWire: decodeSpy,
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value.toUpperCase(),
       }),
     );
     const shape: MongoResultShape = {
@@ -194,12 +200,13 @@ describe('decodeMongoRow', () => {
     registry.register(
       mongoCodec({
         typeId: 'throws-on-b@1',
-        encode: (v: string) => v,
-        decode: (w: string) => {
+        toWire: (v: string) => v,
+        fromWire: (w: string) => {
           if (w === 'bad') throw new Error('boom');
           return w;
         },
-        decodeJson: (json) => decodeJsonString('throws-on-b@1', json),
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
       }),
     );
     const shapeThrow: MongoResultShape = {
@@ -319,12 +326,13 @@ describe('decodeMongoRow', () => {
     registry.register(
       mongoCodec({
         typeId: 'throws-string@1',
-        encode: (v: string) => v,
-        decode: () => {
+        toWire: (v: string) => v,
+        fromWire: () => {
           // Codec authors throwing a non-Error happens — the wrapper has to render something for the message. The cast is a deliberate exercise of `wrapDecodeFailure`'s `error instanceof Error` false-branch (pure type-system: `throw` accepts `unknown`).
           throw 'string-error' as unknown as Error;
         },
-        decodeJson: (json) => decodeJsonString('throws-string@1', json),
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
       }),
     );
     const shape: MongoResultShape = {
@@ -348,11 +356,12 @@ describe('decodeMongoRow', () => {
     registry.register(
       mongoCodec({
         typeId: 'throws@1',
-        encode: (v: string) => v,
-        decode: () => {
+        toWire: (v: string) => v,
+        fromWire: () => {
           throw new Error('boom');
         },
-        decodeJson: (json) => decodeJsonString('throws@1', json),
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
       }),
     );
     const shape: MongoResultShape = {
@@ -377,11 +386,12 @@ describe('decodeMongoRow', () => {
       registry.register(
         mongoCodec({
           typeId: 'throws@1',
-          encode: (v: string) => v,
-          decode: () => {
+          toWire: (v: string) => v,
+          fromWire: () => {
             throw new Error('boom');
           },
-          decodeJson: (json) => decodeJsonString('throws@1', json),
+          dataType: textType,
+          fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
         }),
       );
       return registry;
@@ -487,11 +497,12 @@ describe('decodeMongoRow', () => {
     registry.register(
       mongoCodec({
         typeId: 'throws@1',
-        encode: (v: string) => v,
-        decode: () => {
+        toWire: (v: string) => v,
+        fromWire: () => {
           throw new Error('boom');
         },
-        decodeJson: (json) => decodeJsonString('throws@1', json),
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
       }),
     );
     const shape: MongoResultShape = {
@@ -590,11 +601,12 @@ describe('decodeMongoRow', () => {
     registry.register(
       mongoCodec({
         typeId: 'throws@1',
-        encode: (v: string) => v,
-        decode: () => {
+        toWire: (v: string) => v,
+        fromWire: () => {
           throw new Error('inner');
         },
-        decodeJson: (json) => decodeJsonString('throws@1', json),
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
       }),
     );
     const shape: MongoResultShape = {
@@ -629,11 +641,12 @@ describe('decodeMongoRow', () => {
     registry.register(
       mongoCodec({
         typeId: 'throws@1',
-        encode: (v: string) => v,
-        decode: () => {
+        toWire: (v: string) => v,
+        fromWire: () => {
           throw original;
         },
-        decodeJson: (json) => decodeJsonString('throws@1', json),
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
       }),
     );
     const shape: MongoResultShape = {
@@ -648,15 +661,16 @@ describe('decodeMongoRow', () => {
     registry.register(
       mongoCodec({
         typeId: 'mongo/decimal128@1',
-        encode: (v: string) => v,
-        decode: (wire: unknown) => {
+        toWire: (v: string) => v,
+        fromWire: (wire: unknown) => {
           throw structuredError(
             'RUNTIME.DECODE_FAILED',
             'mongo/decimal128@1 wire value must be a Decimal128',
             { meta: { codecId: 'mongo/decimal128@1', received: typeof wire } },
           );
         },
-        decodeJson: (json) => decodeJsonString('mongo/decimal128@1', json),
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
       }),
     );
     const shape: MongoResultShape = {
@@ -694,11 +708,12 @@ describe('decodeMongoRow', () => {
     registry.register(
       mongoCodec({
         typeId: 'structured-ext@1',
-        encode: (v: string) => v,
-        decode: () => {
+        toWire: (v: string) => v,
+        fromWire: () => {
           throw envelope;
         },
-        decodeJson: (json) => decodeJsonString('structured-ext@1', json),
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
       }),
     );
     const shape: MongoResultShape = {
@@ -723,23 +738,25 @@ describe('decodeMongoRow', () => {
     registry.register(
       mongoCodec({
         typeId: 'slow-a@1',
-        encode: (v: string) => v,
-        decode: (w: string) => {
+        toWire: (v: string) => v,
+        fromWire: (w: string) => {
           callOrder.push('a-start');
           return dA.promise.then((s) => `${w}:${s}`);
         },
-        decodeJson: (json) => decodeJsonString('slow-a@1', json),
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
       }),
     );
     registry.register(
       mongoCodec({
         typeId: 'slow-b@1',
-        encode: (v: string) => v,
-        decode: (w: string) => {
+        toWire: (v: string) => v,
+        fromWire: (w: string) => {
           callOrder.push('b-start');
           return dB.promise.then((s) => `${w}:${s}`);
         },
-        decodeJson: (json) => decodeJsonString('slow-b@1', json),
+        dataType: textType,
+        fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
       }),
     );
     const shape: MongoResultShape = {

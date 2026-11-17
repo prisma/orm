@@ -291,16 +291,15 @@ withTempDir(({ createTempDir }) => {
      * Scenario: the database was updated directly via `db update` instead
      * of through the migration system.
      *
-     * The DB marker matches the live contract after db update, but that
-     * hash may not be a migration-graph node. Status defaults to the live
-     * contract as target (same as migrate); when DB and contract align,
-     * the headline is up to date while MARKER_NOT_IN_HISTORY still warns.
+     * The DB marker matches the live contract after db update, but no
+     * migration ends at that hash. Status warns MARKER_NOT_IN_HISTORY and
+     * says so in the headline, as `db migrate` refuses in the same state.
      */
     describe('DB updated directly — marker ahead of graph', () => {
       const db = useDevDatabase();
 
       it(
-        'emit → plan → apply → swap → emit → db update → up to date with divergence warn',
+        'emit → plan → apply → swap → emit → db update → marker-not-in-history warning',
         async () => {
           const ctx: JourneyContext = setupJourney({
             connectionString: db.connectionString,
@@ -325,7 +324,9 @@ withTempDir(({ createTempDir }) => {
 
           expect(status.exitCode).toBe(0);
           expect(out).toContain('@contract @db (db)');
-          expect(out).toContain('Up to date');
+          expect(out).toContain('is not in the on-disk migration graph');
+          expect(out).toContain('MIGRATION.MARKER_NOT_IN_HISTORY');
+          expect(out).not.toContain('Up to date');
         },
         timeouts.spinUpPpgDev,
       );

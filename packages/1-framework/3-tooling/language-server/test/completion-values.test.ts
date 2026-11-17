@@ -1,4 +1,5 @@
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import {
   assembleAuthoringContributions,
   assembleControlMutationDefaults,
@@ -42,6 +43,7 @@ const emptyBinder = testBinder({
   symbolTable: buildSymbolTable({
     documents: [emptyDocument.document],
     sources: emptyDocument.sources,
+    defaultNamespaceId: 'public',
   }).symbolTable,
 });
 const emptyTabStop1 = '$' + '{1:}';
@@ -238,7 +240,7 @@ const authoringContributions = assembleAuthoringContributions([
         vendor: {
           Text: {
             kind: 'typeConstructor',
-            output: { codecId: 'fixture/text', nativeType: 'text' },
+            output: { codecId: 'fixture/text' },
           },
         },
       },
@@ -262,7 +264,11 @@ function complete(markedSource: string, snippets = false, parameterHints = false
   const source = markedSource.slice(0, offset) + markedSource.slice(offset + 1);
   const { document, sources } = parse(source, 'language-server-test.psl');
   const sourceFile = sources.sourceFileFor(document.syntax);
-  const { symbolTable } = buildSymbolTable({ documents: [document], sources });
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
+    defaultNamespaceId: 'public',
+  });
   const items = providePslCompletionItems({
     context: classifyPslCompletionContext({
       document,
@@ -283,6 +289,7 @@ function complete(markedSource: string, snippets = false, parameterHints = false
       symbolTable,
       authoringContributions,
       controlMutationDefaults: assembleControlMutationDefaults([]),
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
     },
     clientSupportsSnippets: snippets,
     clientSupportsTriggerParameterHintsCommand: parameterHints,
@@ -318,7 +325,6 @@ describe('classified positions without cursor AST', () => {
             offset: 1,
             replacementStartOffset: 0,
             replacementEndOffset: 4,
-            attributeName: 'probe',
             path: [],
             existingNamedKeys: [],
             hasColon,
@@ -353,7 +359,6 @@ describe('classified positions without cursor AST', () => {
           offset: 0,
           replacementStartOffset: 0,
           replacementEndOffset: 0,
-          attributeName: 'probe',
           path: [
             { kind: 'namedArgument', name: 'overlap' },
             { kind: 'functionCall', name: 'same' },
@@ -376,7 +381,6 @@ describe('classified positions without cursor AST', () => {
           offset: 0,
           replacementStartOffset: 0,
           replacementEndOffset: 0,
-          attributeName: 'probe',
           path: [
             { kind: 'namedArgument', name: 'choice' },
             { kind: 'functionCall', name: 'ordered' },
@@ -415,9 +419,9 @@ describe('classified positions without cursor AST', () => {
           offset: 1,
           replacementStartOffset: 0,
           replacementEndOffset: 1,
-          attributeName: 'probe',
           path: [{ kind: 'namedArgument', name: 'value' }],
           syntax: 'functionName',
+          qualifier: undefined,
         },
         sourceFile: new SourceFile('language-server-test.psl', 'f()'),
         scope: emptyBinder.scopeAt(emptyDocument.document.syntax),
@@ -444,9 +448,9 @@ describe('classified positions without cursor AST', () => {
           offset: 1,
           replacementStartOffset: 0,
           replacementEndOffset: 3,
-          attributeName: 'probe',
           path: [{ kind: 'namedArgument', name: 'mode' }],
           syntax: 'scalar',
+          qualifier: undefined,
         },
         sourceFile,
         scope: emptyBinder.scopeAt(emptyDocument.document.syntax),
@@ -477,16 +481,28 @@ namespace sibling { model Hidden {} }
 `;
 
   it.each([
-    ['model', ['Example', 'Later']],
-    ['composite', ['Address']],
+    ['model', ['Example', 'Later', 'public', 'sibling']],
+    ['composite', ['Address', 'public']],
     ['named', ['Alias']],
-    ['block', ['Rules']],
-    ['enumeration', ['Choice']],
-  ])('filters the %s selector without offering namespaces or contributed types', (key, labels) => {
-    expect(
-      complete(`model Example { value String @entity(${key}: |) }${declarations}`).labels,
-    ).toEqual(labels);
-  });
+    ['block', ['Rules', 'public']],
+    ['enumeration', ['Choice', 'public']],
+  ])(
+    'filters the %s selector to matches and namespaces holding one, without contributed types',
+    (key, labels) => {
+      expect(
+        complete(`model Example { value String @entity(${key}: |) }${declarations}`).labels,
+      ).toEqual(labels);
+    },
+  );
+
+  it.each(['model: sibling.|', 'sibling.|', 'model: sibling.H|'])(
+    'offers matching members after a namespace qualifier in an attribute argument: %s',
+    (args) => {
+      expect(
+        complete(`model Example { value String @entity(${args}) }${declarations}`).labels,
+      ).toEqual(['Hidden']);
+    },
+  );
 
   it.each([
     ['model', 'Later', CompletionItemKind.Class],
@@ -521,6 +537,7 @@ namespace sibling { model Hidden {} }
         detail: 'policy',
         filterText: 'Rules',
       }),
+      expect.objectContaining({ label: 'public', detail: 'Namespace' }),
     ]);
   });
 
@@ -535,6 +552,7 @@ namespace sibling { model Hidden {} }
         detail: 'enum',
         filterText: 'Choice',
       }),
+      expect.objectContaining({ label: 'public', detail: 'Namespace' }),
     ]);
     expect(result.apply('Choice')).toContain('@entity(enumeration: Choice)');
     expect(result.items[0]?.insertTextFormat).toBeUndefined();
@@ -555,12 +573,13 @@ namespace sibling { model Hidden {} }
     expect(result.labels).toEqual([
       ...(source.startsWith('model') ? ['Example'] : []),
       'Later',
+      'public',
       ...Object.keys(entitySignature.named),
     ]);
   });
 
   it.each(['|', 'model: |', 'nested: { targets: [ref(|)] }'])(
-    'respects namespace visibility before selector filtering: %s',
+    'offers visible matches and visible namespaces holding one: %s',
     (args) => {
       const result = complete(`
 model Global {}
@@ -576,6 +595,9 @@ namespace sibling { model Hidden {} }
         'Self',
         'Forward',
         'Global',
+        'public',
+        'local',
+        'sibling',
         ...(args === '|' ? Object.keys(entitySignature.named) : []),
       ]);
       expect(rejectedParse).not.toHaveBeenCalled();
@@ -661,12 +683,12 @@ describe('recursive attribute values', () => {
     ['records: { "key": [true, |] }', ['true', 'false']],
     ['records: { | }', []],
     ['records: { ke|y: [] }', []],
-    ['all: |', ['Example', 'Alpha', 'true', 'false']],
-    ['none: |', ['Example']],
+    ['all: |', ['Example', 'public', 'Alpha', 'true', 'false']],
+    ['none: |', ['Example', 'public']],
     ['rejected: |', []],
     ['recordValues: { enabled: | }', ['true', 'false']],
     ['recordValues: { enabled: true, next: | }', ['true', 'false']],
-    ['unionLists: [|]', ['Example', 'A', 'B']],
+    ['unionLists: [|]', ['Example', 'public', 'A', 'B']],
     ['flags: [|false]', ['true', 'false']],
   ])('completes %s', (args, expected) => {
     expect(field(args).labels).toEqual(expected);
@@ -695,13 +717,9 @@ describe('recursive attribute values', () => {
         },
         sortText: '0000',
       },
+      expect.objectContaining({ label: 'public', detail: 'Namespace' }),
     ]);
-    expect(field('unionLists: [|]').labels).toEqual(['Example', 'A', 'B']);
-    expect(rejectedParse).not.toHaveBeenCalled();
-  });
-
-  it('never invokes combinator parsing to select alternatives', () => {
-    expect(field('none: |').labels).toEqual(['Example']);
+    expect(field('unionLists: [|]').labels).toEqual(['Example', 'public', 'A', 'B']);
     expect(rejectedParse).not.toHaveBeenCalled();
   });
 
@@ -868,7 +886,6 @@ describe('recursive function arguments', () => {
           offset: 0,
           replacementStartOffset: 0,
           replacementEndOffset: 0,
-          attributeName: 'probe',
           path: [],
           existingNamedKeys: [],
           hasColon: false,
@@ -887,10 +904,6 @@ describe('recursive function arguments', () => {
       textEdit: { newText: `optionalCall(${emptyTabStop1})` },
       command: { title: 'Show argument hints', command: 'editor.action.triggerParameterHints' },
     });
-  });
-
-  it('offers function calls from every alternative', () => {
-    expect(field('choice: |').labels).toEqual(['ordered', 'empty']);
   });
 
   it('inserts only required arguments with named tab stops', () => {

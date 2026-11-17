@@ -1,18 +1,16 @@
-import type { CrossReference } from '@internal/contract/types';
 import type { CodecLookup } from '@internal/framework-components/codec';
 import type { TypesImportSpec } from '@internal/framework-components/emission';
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import type { EmitStackInput } from '../src/exports';
 import { createMockSpi } from './mock-spi';
-import { createTestContract, emit, modelsFromCanonicalContract } from './utils';
+import { createTestContract, emit } from './utils';
 
 const mockSqlHook = createMockSpi();
 
 function literalCodecLookup(): CodecLookup {
   return {
     get: () => undefined,
-    targetTypesFor: () => undefined,
     renderOutputTypeFor: () => undefined,
     renderValueLiteralFor: (_id, value) =>
       typeof value === 'string'
@@ -56,8 +54,8 @@ describe('emitter integration', () => {
                 table: {
                   user: {
                     columns: {
-                      id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-                      email: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+                      id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+                      email: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
                     },
                     primaryKey: { columns: ['id'] },
                     uniques: [],
@@ -135,15 +133,22 @@ describe('emitter integration', () => {
           },
         },
         storage: {
-          tables: {
-            user: {
-              columns: {
-                id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
+          namespaces: {
+            __unbound__: {
+              id: '__unbound__',
+              entries: {
+                table: {
+                  user: {
+                    columns: {
+                      id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+                    },
+                    primaryKey: { columns: ['id'] },
+                    uniques: [],
+                    indexes: [],
+                    foreignKeys: [],
+                  },
+                },
               },
-              primaryKey: { columns: ['id'] },
-              uniques: [],
-              indexes: [],
-              foreignKeys: [],
             },
           },
         },
@@ -173,96 +178,13 @@ describe('emitter integration', () => {
   );
 
   it(
-    'round-trip: IR → JSON → parse JSON → compare',
-    async () => {
-      const ir = createTestContract({
-        models: {
-          User: {
-            storage: {
-              table: 'user',
-              fields: {
-                id: { column: 'id' },
-                email: { column: 'email' },
-              },
-            },
-            fields: {
-              id: { type: { kind: 'scalar', codecId: 'pg/int4@1' }, nullable: false, many: false },
-              email: {
-                type: { kind: 'scalar', codecId: 'pg/text@1' },
-                nullable: false,
-                many: false,
-              },
-            },
-            relations: {},
-          },
-        },
-        storage: {
-          namespaces: {
-            __unbound__: {
-              id: '__unbound__',
-              entries: {
-                table: {
-                  user: {
-                    columns: {
-                      id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-                      email: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
-                    },
-                    primaryKey: { columns: ['id'] },
-                    uniques: [],
-                    indexes: [],
-                    foreignKeys: [],
-                  },
-                },
-              },
-            },
-          },
-        },
-        extensions: {
-          postgres: {
-            version: '0.0.1',
-          },
-          pg: {},
-        },
-      });
-
-      const codecTypeImports: TypesImportSpec[] = [];
-      const extensionIds = ['postgres', 'pg'];
-      const options: EmitStackInput = {
-        codecTypeImports,
-        extensionIds,
-      };
-
-      const result1 = await emit(ir, options, mockSqlHook);
-      const contractJson1 = JSON.parse(result1.contractJson) as Record<string, unknown>;
-
-      const ir2 = createTestContract({
-        targetFamily: contractJson1['targetFamily'] as string,
-        target: contractJson1['target'] as string,
-        roots: contractJson1['roots'] as Record<string, CrossReference>,
-        models: modelsFromCanonicalContract(contractJson1),
-        storage: contractJson1['storage'] as Record<string, unknown>,
-        extensions: contractJson1['extensions'] as Record<string, unknown>,
-        capabilities:
-          (contractJson1['capabilities'] as Record<string, Record<string, boolean>>) || {},
-        meta: (contractJson1['meta'] as Record<string, unknown>) || {},
-      });
-
-      const result2 = await emit(ir2, options, mockSqlHook);
-
-      expect(result1.contractJson).toBe(result2.contractJson);
-      expect(result1.storageHash).toBe(result2.storageHash);
-    },
-    timeouts.typeScriptCompilation,
-  );
-
-  it(
     'emits the enum value union into FieldOutputTypes/FieldInputTypes for an enum-backed field',
     async () => {
       // Emit-then-consume proof. A real consumer reads the EMITTED contract.d.ts,
       // not `typeof contract`: the in-memory authoring handle's literal tuples are
       // erased by emission. This drives the full emit pipeline and asserts the
       // emitted typemap text carries the member-value union for an enum field —
-      // produced via the family `resolveFieldValueSet` resolver + the codec seam
+      // produced via the family `resolveStorageValueSet` resolver + the codec seam
       // (`renderValueLiteralFor`), the same path the SQL/Mongo emitters wire.
       const ir = createTestContract({
         models: {
@@ -313,8 +235,8 @@ describe('emitter integration', () => {
                 table: {
                   post: {
                     columns: {
-                      priority: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
-                      title: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+                      priority: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
+                      title: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
                     },
                     primaryKey: { columns: ['title'] },
                     uniques: [],
@@ -330,7 +252,7 @@ describe('emitter integration', () => {
       });
 
       const enumResolvingSpi = createMockSpi({
-        resolveFieldValueSet: (_modelName, fieldName, _model, contract) => {
+        resolveStorageValueSet: (_modelName, fieldName, _model, contract) => {
           if (fieldName !== 'priority') return undefined;
           const domainEnum = contract.domain.namespaces['__unbound__']?.enum?.['Priority'];
           return domainEnum
@@ -349,22 +271,15 @@ describe('emitter integration', () => {
         enumResolvingSpi,
       );
 
-      const outputMap = result.contractDts.slice(
+      const overrides = result.contractDts.slice(
+        result.contractDts.indexOf('type FieldTypeOverrides'),
         result.contractDts.indexOf('export type FieldOutputTypes'),
-        result.contractDts.indexOf('export type FieldInputTypes'),
-      );
-      const inputMap = result.contractDts.slice(
-        result.contractDts.indexOf('export type FieldInputTypes'),
-        result.contractDts.indexOf('export type TypeMaps'),
       );
 
-      expect(outputMap).toContain("readonly priority: 'low' | 'high' | 'urgent'");
-      expect(outputMap).not.toContain("readonly priority: CodecTypes['pg/text@1']['output']");
-      // The non-enum field stays on the codec output channel.
-      expect(outputMap).toContain("readonly title: CodecTypes['pg/text@1']['output']");
-
-      expect(inputMap).toContain("readonly priority: 'low' | 'high' | 'urgent'");
-      expect(inputMap).not.toContain("readonly priority: CodecTypes['pg/text@1']['input']");
+      expect(overrides).toContain("readonly output: 'low' | 'high' | 'urgent';");
+      expect(overrides).toContain("readonly input: 'low' | 'high' | 'urgent';");
+      // The non-enum field has no override, so the shared generic gives it its codec type.
+      expect(overrides).not.toContain('title');
     },
     timeouts.typeScriptCompilation,
   );

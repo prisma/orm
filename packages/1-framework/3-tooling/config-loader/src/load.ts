@@ -25,7 +25,7 @@ import {
   validateOrmSectionExcept,
 } from './orm-section';
 
-const CONFIG_FILENAME = 'prisma.config.ts';
+export const CONFIG_FILENAME = 'prisma.config.ts';
 
 export type { ConfigSection };
 

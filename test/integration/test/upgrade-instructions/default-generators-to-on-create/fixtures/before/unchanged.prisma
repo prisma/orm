@@ -1,0 +1,5 @@
+// use prisma-8
+model Tag {
+  id   Int    @id @default(autoincrement())
+  name String
+}

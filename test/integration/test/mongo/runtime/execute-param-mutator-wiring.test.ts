@@ -1,7 +1,7 @@
 import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
 import type { PlanMeta } from '@internal/contract/types';
 import type { CodecCallContext } from '@internal/framework-components/codec';
-import type { MongoDriver, MongoLoweredDraft } from '@internal/mongo-lowering';
+import type { MongoAdapter, MongoDriver, MongoLoweredDraft } from '@internal/mongo-lowering';
 import { InsertOneCommand } from '@internal/mongo-query-ast/execution';
 import type { MongoMiddleware } from '@internal/mongo-runtime';
 import {
@@ -10,11 +10,12 @@ import {
   createMongoRuntime,
   type MongoExecutionContext,
 } from '@internal/mongo-runtime';
-import { MongoParamRef } from '@internal/mongo-value';
+import { MongoParamRef, MongoPreparedParamRef } from '@internal/mongo-value';
 import type { AnyMongoWireCommand } from '@internal/mongo-wire';
 import { InsertOneWireCommand } from '@internal/mongo-wire';
 import mongoRuntimeTarget from '@internal/target-mongo/runtime';
 import { describe, expect, it, vi } from 'vitest';
+import { fixtureContract } from '../setup';
 
 const BULK_CODEC_ID = 'test/bulk-transform';
 
@@ -25,12 +26,18 @@ const baseMeta: PlanMeta = {
   lane: 'orm',
 };
 
-function buildStackContext(): MongoExecutionContext {
+function buildExecution(): {
+  readonly context: MongoExecutionContext<typeof fixtureContract>;
+  readonly adapter: MongoAdapter;
+} {
   const stack = createMongoExecutionStack({
     target: mongoRuntimeTarget,
     adapter: mongoRuntimeAdapter,
   });
-  return createMongoExecutionContext({ contract: {}, stack });
+  return {
+    context: createMongoExecutionContext({ contract: fixtureContract, stack }),
+    adapter: stack.adapter.create(stack),
+  };
 }
 
 function recordingDriver(): {
@@ -49,12 +56,12 @@ function recordingDriver(): {
 }
 
 describe('MongoRuntime execute param-mutator wiring', () => {
-  it('beforeQuery entries expose pre-resolve MongoParamRef handles', async () => {
+  it('beforeEncode entries expose pre-resolve MongoParamRef handles', async () => {
     const observed: Array<{ readonly isParamRef: boolean; readonly codecId: string | undefined }> =
       [];
     const middleware: MongoMiddleware = {
       name: 'param-inspector',
-      async beforeQuery(_plan, _ctx, params) {
+      async beforeEncode(_plan, _ctx, params) {
         for (const entry of params?.entries() ?? []) {
           observed.push({
             isParamRef: entry.ref instanceof MongoParamRef,
@@ -66,7 +73,7 @@ describe('MongoRuntime execute param-mutator wiring', () => {
 
     const { driver } = recordingDriver();
     const runtime = createMongoRuntime({
-      context: buildStackContext(),
+      ...buildExecution(),
       driver,
       middleware: [middleware],
     });
@@ -83,6 +90,38 @@ describe('MongoRuntime execute param-mutator wiring', () => {
     expect(observed).toEqual([{ isParamRef: true, codecId: BULK_CODEC_ID }]);
   });
 
+  it('an ad-hoc run of a plan with a placeholder hides it from middleware and fails before the driver', async () => {
+    const observedCodecIds: Array<string | undefined> = [];
+    const middleware: MongoMiddleware = {
+      name: 'param-inspector',
+      async beforeEncode(_plan, _ctx, params) {
+        for (const entry of params?.entries() ?? []) {
+          observedCodecIds.push(entry.codecId);
+        }
+      },
+    };
+    const { driver } = recordingDriver();
+    const runtime = createMongoRuntime({ ...buildExecution(), driver, middleware: [middleware] });
+
+    const run = runtime
+      .query({
+        collection: 'users',
+        command: new InsertOneCommand('users', {
+          email: new MongoPreparedParamRef('email', 'mongo/string@1', false),
+          token: new MongoParamRef('secret', { codecId: BULK_CODEC_ID }),
+        }),
+        meta: baseMeta,
+      })
+      .toArray();
+
+    await expect(run).rejects.toMatchObject({
+      code: 'RUNTIME.PREPARE_BIND_ON_ADHOC',
+      details: { name: 'email' },
+    });
+    expect(observedCodecIds).toEqual([BULK_CODEC_ID]);
+    expect(driver.execute).not.toHaveBeenCalled();
+  });
+
   it('bulk-pattern middleware mutates codec-tagged params before the driver runs', async () => {
     const bulkTransform = vi.fn(async (values: readonly unknown[]) =>
       values.map((v) => `bulk:${String(v)}`),
@@ -90,7 +129,7 @@ describe('MongoRuntime execute param-mutator wiring', () => {
 
     const middleware: MongoMiddleware = {
       name: 'bulk-transform',
-      async beforeQuery(_plan, _ctx, params) {
+      async beforeEncode(_plan, _ctx, params) {
         const targets = [...(params?.entries() ?? [])].filter(
           (entry) => entry.codecId === BULK_CODEC_ID,
         );
@@ -106,7 +145,7 @@ describe('MongoRuntime execute param-mutator wiring', () => {
 
     const { driver, commands } = recordingDriver();
     const runtime = createMongoRuntime({
-      context: buildStackContext(),
+      ...buildExecution(),
       driver,
       middleware: [middleware],
     });
@@ -136,8 +175,9 @@ describe('MongoRuntime execute param-mutator wiring', () => {
     let structuralDraft: MongoLoweredDraft | undefined;
     const resolveDraftRefs: MongoLoweredDraft[] = [];
 
-    const context = buildStackContext();
-    const adapterInstance = context.stack.adapter.create(context.stack);
+    const adapterInstance = mongoRuntimeAdapter.create(
+      createMongoExecutionStack({ target: mongoRuntimeTarget, adapter: mongoRuntimeAdapter }),
+    );
     const structuralLowerSpy = vi.fn((plan) => {
       structuralDraft = adapterInstance.structuralLower(plan);
       return structuralDraft;
@@ -158,10 +198,17 @@ describe('MongoRuntime execute param-mutator wiring', () => {
         }),
       },
     });
-    const patchedContext = createMongoExecutionContext({ contract: {}, stack: patchedStack });
+    const patchedContext = createMongoExecutionContext({
+      contract: fixtureContract,
+      stack: patchedStack,
+    });
 
     const { driver } = recordingDriver();
-    const runtime = createMongoRuntime({ context: patchedContext, driver });
+    const runtime = createMongoRuntime({
+      context: patchedContext,
+      adapter: patchedStack.adapter.create(patchedStack),
+      driver,
+    });
 
     await runtime
       .query({
@@ -179,7 +226,7 @@ describe('MongoRuntime execute param-mutator wiring', () => {
   it('content hash reflects middleware-mutated resolved values', async () => {
     const mutating: MongoMiddleware = {
       name: 'mutator',
-      async beforeQuery(_plan, _ctx, params) {
+      async beforeEncode(_plan, _ctx, params) {
         const updates = [...(params?.entries() ?? [])].map((entry) => ({
           ref: entry.ref,
           newValue: `mutated:${String(entry.value)}`,
@@ -196,13 +243,16 @@ describe('MongoRuntime execute param-mutator wiring', () => {
       let hash = '';
       const observer: MongoMiddleware = {
         name: 'hash-observer',
-        async afterQuery(plan, _result, ctx) {
-          hash = await ctx.contentHash(plan);
+        intercept: {
+          async onQuery(plan, ctx) {
+            hash = await ctx.contentHash(plan);
+            return undefined;
+          },
         },
       };
       const { driver } = recordingDriver();
       const runtime = createMongoRuntime({
-        context: buildStackContext(),
+        ...buildExecution(),
         driver,
         middleware: [middleware, observer],
       });

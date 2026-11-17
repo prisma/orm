@@ -1,46 +1,21 @@
 import { computeStorageHash } from '@internal/contract/hashing';
-import type { Codec, CodecLookup } from '@internal/framework-components/codec';
-import { emptyCodecLookup } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { describe, expect, it } from 'vitest';
-import { buildMongoStorage, encodeMongoValueSets } from '../src/build-mongo-storage';
+import { buildMongoStorage } from '../src/build-mongo-storage';
 import { mongoContractCanonicalizationHooks } from '../src/canonicalization-hooks';
 import { MongoIndex } from '../src/ir/mongo-index';
 import { MongoStorage } from '../src/ir/mongo-storage';
 
-const upperCaseCodec = {
-  encodeJson: (value: unknown) => String(value).toUpperCase(),
-} as unknown as Codec;
-
-const lookupWith = (codecs: Record<string, Codec>): CodecLookup => ({
-  ...emptyCodecLookup,
-  get: (id) => codecs[id],
-});
-
-const userIndex = new MongoIndex({ keys: [{ field: 'email', direction: 1 }], unique: true });
-
-describe('encodeMongoValueSets', () => {
-  it('encodes each member through its codec', () => {
-    const valueSets = encodeMongoValueSets(
-      { Role: { codecId: 'test/upper@1', members: [{ value: 'admin' }, { value: 'user' }] } },
-      lookupWith({ 'test/upper@1': upperCaseCodec }),
-    );
-    expect(valueSets).toEqual({ Role: { kind: 'valueSet', values: ['ADMIN', 'USER'] } });
-  });
-
-  it('rejects an enum whose codec is not in the lookup', () => {
-    expect(() =>
-      encodeMongoValueSets(
-        { Role: { codecId: 'test/missing@1', members: [{ value: 'admin' }] } },
-        emptyCodecLookup,
-      ),
-    ).toThrow(expect.objectContaining({ code: 'CONTRACT.ENUM_CODEC_NOT_IN_PACK_STACK' }));
-  });
+const userIndex = new MongoIndex({
+  name: 'email_1',
+  keys: [{ field: 'email', direction: 1 }],
+  unique: true,
 });
 
 describe('buildMongoStorage', () => {
   it('builds the unbound namespace from collections and value sets', () => {
     const storage = buildMongoStorage({
+      namespaceId: UNBOUND_NAMESPACE_ID,
       collections: { users: { indexes: [userIndex] }, posts: {} },
       valueSets: { Role: { kind: 'valueSet', values: ['admin'] } },
     });
@@ -51,12 +26,17 @@ describe('buildMongoStorage', () => {
   });
 
   it('leaves out the value set entry when there are no value sets', () => {
-    const storage = buildMongoStorage({ collections: { posts: {} }, valueSets: {} });
+    const storage = buildMongoStorage({
+      namespaceId: UNBOUND_NAMESPACE_ID,
+      collections: { posts: {} },
+      valueSets: {},
+    });
     expect(storage.namespaces[UNBOUND_NAMESPACE_ID]?.entries).not.toHaveProperty('valueSet');
   });
 
   it('hashes the constructed entries with the Mongo canonicalization hooks', () => {
     const storage = buildMongoStorage({
+      namespaceId: UNBOUND_NAMESPACE_ID,
       collections: { users: { indexes: [userIndex] } },
       valueSets: { Role: { kind: 'valueSet', values: ['admin'] } },
     });
@@ -80,10 +60,15 @@ describe('buildMongoStorage', () => {
 
   it('gives a different hash when an index changes', () => {
     const withIndex = buildMongoStorage({
+      namespaceId: UNBOUND_NAMESPACE_ID,
       collections: { users: { indexes: [userIndex] } },
       valueSets: {},
     });
-    const withoutIndex = buildMongoStorage({ collections: { users: {} }, valueSets: {} });
+    const withoutIndex = buildMongoStorage({
+      namespaceId: UNBOUND_NAMESPACE_ID,
+      collections: { users: {} },
+      valueSets: {},
+    });
     expect(withIndex.storageHash).not.toBe(withoutIndex.storageHash);
   });
 });

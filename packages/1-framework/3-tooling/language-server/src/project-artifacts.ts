@@ -1,6 +1,5 @@
 import type { ContractSourceDiagnostic, PslParserOptions } from '@internal/config/config-types';
 import {
-  assembleAttributeSpecs,
   type Binder,
   type BinderResult,
   buildSymbolTable,
@@ -10,7 +9,7 @@ import {
   type SymbolTable,
   type SymbolTableResult,
 } from '@internal/psl-parser';
-import { type DocumentAst, PslSources, type SourceFile } from '@internal/psl-parser/syntax';
+import { PslSources, type SourceFile } from '@internal/psl-parser/syntax';
 import { LSPErrorCodes, ResponseError } from 'vscode-languageserver';
 import type { ProjectInterpretation } from './config-resolution';
 import {
@@ -20,7 +19,7 @@ import {
   ParseDiagnosticSeverity,
 } from './diagnostic-mapping';
 import { DocumentSnapshot } from './document-snapshot';
-import type { LspControlStack } from './lsp-control-stack';
+import { binderContextFromStack, type LspControlStack } from './lsp-control-stack';
 import { canonicalFileIdentity, type SchemaInputSet } from './schema-inputs';
 
 function schemaInputIdentities(inputs: SchemaInputSet): ReadonlySet<string> {
@@ -69,6 +68,15 @@ export class ProjectArtifacts {
 
   document = (uri: string): DocumentSnapshot | undefined => this.#readDocument(uri);
 
+  documents = (): readonly DocumentSnapshot[] => {
+    const snapshots: DocumentSnapshot[] = [];
+    for (const uri of this.#inputs.uris()) {
+      const snapshot = this.#readDocument(uri);
+      if (snapshot !== undefined) snapshots.push(snapshot);
+    }
+    return snapshots;
+  };
+
   diagnostics = (
     uri: string,
     projectSymbolDiagnostics?: readonly PslDiagnostic[],
@@ -78,9 +86,13 @@ export class ProjectArtifacts {
     const symbolDiagnostics = (projectSymbolDiagnostics ?? this.symbolDiagnostics()).filter(
       (diagnostic) => diagnostic.filename === snapshot.uri,
     );
+    const binderDiagnostics = this.#binderDiagnostics().filter(
+      (diagnostic) => diagnostic.filename === snapshot.uri,
+    );
     return [
       ...mapParseDiagnostics(snapshot.parse().diagnostics),
       ...mapParseDiagnostics(symbolDiagnostics),
+      ...mapParseDiagnostics(binderDiagnostics),
       ...this.#interpretDiagnostics(snapshot.uri),
     ];
   };
@@ -92,22 +104,12 @@ export class ProjectArtifacts {
   binder = (): Binder => this.#readBinderResult().binder;
 
   #readBinderResult(): BinderResult {
-    const symbolTable = this.#readSymbolTable();
-    const stack = this.#options.controlStack;
-    this.#binderResult ??= createBinder({
-      sources: this.sources,
+    if (this.#binderResult !== undefined) return this.#binderResult;
+    const symbolTable = (this.#symbolTableResult ?? this.#readSymbolTableResult()).symbolTable;
+    this.#binderResult = createBinder({
       symbolTable,
-      typeConstructors: stack.authoringContributions?.type ?? {},
-      attributeSpecs:
-        stack.authoringContributions === undefined
-          ? { model: {}, field: {} }
-          : assembleAttributeSpecs(stack.authoringContributions),
-      pslBlockDescriptors: stack.pslBlockDescriptors,
-      controlMutationDefaults: {
-        defaultFunctionRegistry:
-          stack.controlMutationDefaults?.defaultFunctionRegistry ?? new Map(),
-        dataTypeEntries: stack.authoringContributions?.dataTypes ?? {},
-      },
+      sources: this.sources,
+      context: this.#interpretation?.context ?? binderContextFromStack(this.#options.controlStack),
     });
     return this.#binderResult;
   }
@@ -139,15 +141,7 @@ export class ProjectArtifacts {
   }
 
   #projectInterpretDiagnostics(): ReadonlyMap<string, readonly LspDiagnostic[]> {
-    if (this.#interpretation === undefined) {
-      const bySourceId = new Map<string, LspDiagnostic[]>();
-      for (const diagnostic of this.#readBinderResult().diagnostics) {
-        const group = bySourceId.get(diagnostic.filename) ?? [];
-        group.push(...mapParseDiagnostics([diagnostic]));
-        bySourceId.set(diagnostic.filename, group);
-      }
-      return bySourceId;
-    }
+    if (this.#interpretation === undefined) return new Map();
     this.#interpretMemo ??= this.#computeInterpretDistribution(this.#interpretation);
     return this.#interpretMemo;
   }
@@ -162,8 +156,14 @@ export class ProjectArtifacts {
       (snapshot) => snapshot.parse().document,
     );
     const warnings: ContractSourceDiagnostic[] = [];
+    const binderResult = this.#readBinderResult();
     const result = activeInterpretation.source.interpret(
-      { documents: allDocuments, sources: this.sources, symbolTable: currentSymbolTable },
+      {
+        documents: allDocuments,
+        sources: this.sources,
+        symbolTable: currentSymbolTable,
+        binder: binderResult.binder,
+      },
       {
         ...activeInterpretation.context,
         reportWarning: (diagnostic) => {
@@ -255,19 +255,20 @@ export class ProjectArtifacts {
   }
 
   #readSymbolTableResult(): SymbolTableResult {
-    const currentDocuments: DocumentAst[] = [];
-    for (const uri of this.#inputs.uris()) {
-      const snapshot = this.#readDocument(uri);
-      if (snapshot !== undefined) currentDocuments.push(snapshot.parse().document);
-    }
+    const currentDocuments = this.documents().map((snapshot) => snapshot.parse().document);
     this.#symbolTableResult ??= buildSymbolTable({
       documents: currentDocuments,
       sources: this.sources,
+      defaultNamespaceId: this.#options.controlStack.defaultNamespaceId,
     });
     return this.#symbolTableResult;
   }
 
   #readSymbolTable(): SymbolTable {
     return this.#readSymbolTableResult().symbolTable;
+  }
+
+  #binderDiagnostics(): readonly PslDiagnostic[] {
+    return this.#readBinderResult().diagnostics;
   }
 }

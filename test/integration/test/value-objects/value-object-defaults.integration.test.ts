@@ -5,8 +5,9 @@ import sql from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
-import sqlite, { sqliteCreateNamespace } from '@internal/target-sqlite/control';
+import sqlite from '@internal/target-sqlite/control';
 import sqlitePackRef from '@internal/target-sqlite/pack';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 
@@ -21,11 +22,13 @@ async function loadSqlite(pslSchema: string, schemaPath = newSchemaPath()) {
     createNamespace: sqliteCreateNamespace,
   }).source.load({
     composedExtensions: [],
+    defaultNamespaceId: sqliteStack.target.defaultNamespaceId,
     composedExtensionContracts: new Map(),
     authoringContributions: sqliteStack.authoringContributions,
     codecLookup: sqliteStack.codecLookup,
-    dataTypeLookup: sqliteStack.dataTypeLookup,
+    dataTypes: sqliteStack.dataTypes,
     controlMutationDefaults: sqliteStack.controlMutationDefaults,
+    generatorFunctions: sqliteStack.generatorFunctions,
     resolvedInputs: [schemaPath],
     capabilities: sqliteStack.capabilities,
   });
@@ -67,7 +70,7 @@ async function sqliteDiagnosticsOf(pslSchema: string) {
 }
 
 describe('value-object defaults on the SQLite stack', () => {
-  it('encodes a literal default on a value object and on a list of value objects through the sqlite/json@1 codec of their one column', async () => {
+  it('stores a literal default on a value object and on a list of value objects as the JSON text the sqlite/json@1 codec of their one column writes', async () => {
     const columns = await sqliteUserColumns(`type Address {
   street String
 }
@@ -79,20 +82,20 @@ model User {
 }`);
 
     expect(columns).toEqual({
-      id: { nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false, many: false },
+      id: { dataType: 'sqlite/integer', codecId: 'sqlite/integer@1', nullable: false, many: false },
       home: {
-        nativeType: 'text',
+        dataType: 'sqlite/json',
         codecId: 'sqlite/json@1',
         nullable: false,
         many: false,
-        default: { kind: 'literal', value: { street: 'x' } },
+        default: { kind: 'literal', value: '{"street":"x"}' },
       },
       homes: {
-        nativeType: 'text',
+        dataType: 'sqlite/json',
         codecId: 'sqlite/json@1',
         nullable: false,
         many: false,
-        default: { kind: 'literal', value: [{ street: 'y' }] },
+        default: { kind: 'literal', value: '[{"street":"y"}]' },
       },
     });
   });
@@ -110,18 +113,18 @@ model User {
 }`);
 
     const jsonWithDefault = (value: unknown) => ({
-      nativeType: 'text',
+      dataType: 'sqlite/json',
       codecId: 'sqlite/json@1',
       nullable: false,
       many: false,
       default: { kind: 'literal', value },
     });
     expect(columns).toEqual({
-      id: { nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false, many: false },
-      emptyA: jsonWithDefault([]),
-      emptyB: jsonWithDefault([]),
-      filledA: jsonWithDefault([{ street: 'x' }]),
-      filledB: jsonWithDefault([{ street: 'x' }]),
+      id: { dataType: 'sqlite/integer', codecId: 'sqlite/integer@1', nullable: false, many: false },
+      emptyA: jsonWithDefault('[]'),
+      emptyB: jsonWithDefault('[]'),
+      filledA: jsonWithDefault('[{"street":"x"}]'),
+      filledB: jsonWithDefault('[{"street":"x"}]'),
     });
   });
 
@@ -178,7 +181,7 @@ model User {
     ]);
   });
 
-  it('reads each member value the way its codec does: a decimal string for Decimal and BigInt, and any JSON value for Json', async () => {
+  it('reads each member value the way its codec does: a decimal string for Decimal and BigInt, and the JSON text of any document for Json', async () => {
     const schema = (value: string) => `type Amounts {
   price   Decimal
   big     BigInt
@@ -190,13 +193,13 @@ model User {
   a  Amounts @default(json\`${value}\`)
 }`;
     const accepted = await Promise.all(
-      ['"x"', '1', 'true', '{}', '[1]', 'null'].map(
+      ['"\\"x\\""', '"1"', '"true"', '"{}"', '"[1]"', '"null"'].map(
         async (payload) =>
           (await sqliteDiagnosticsOf(schema(`{"price": "1.5", "big": "1", "payload": ${payload}}`)))
             .diagnostics,
       ),
     );
-    const refusedSchema = schema('{"price": 1.5, "big": 1, "payload": {}}');
+    const refusedSchema = schema('{"price": 1.5, "big": 1, "payload": "{}"}');
     const refused = await sqliteDiagnosticsOf(refusedSchema);
     const invalidLiteral = (message: string) => ({
       code: 'PSL_INVALID_DEFAULT_LITERAL',
@@ -207,15 +210,15 @@ model User {
     expect({ accepted, refused: refused.diagnostics }).toEqual({
       accepted: [[], [], [], [], [], []],
       refused: [
-        invalidLiteral('Field "User.a.price": sqlite/text@1 JSON value must be a string'),
+        invalidLiteral('Field "User.a.price": sqlite/text JSON value must be a string'),
         invalidLiteral(
-          'Field "User.a.big": sqlite/bigint@1 JSON value must be a decimal integer string from -9223372036854775808 to 9223372036854775807',
+          'Field "User.a.big": sqlite/integer JSON value must be a decimal integer string from -9223372036854775808 to 9223372036854775807',
         ),
       ],
     });
   });
 
-  it('takes JSON null as the default of an optional value object', async () => {
+  it('takes JSON null as the default of an optional value object, stored as its JSON text', async () => {
     expect(
       await sqliteUserColumns(`type Address {
   street String
@@ -226,13 +229,13 @@ model User {
   home Address? @default(json\`null\`)
 }`),
     ).toEqual({
-      id: { nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false, many: false },
+      id: { dataType: 'sqlite/integer', codecId: 'sqlite/integer@1', nullable: false, many: false },
       home: {
-        nativeType: 'text',
+        dataType: 'sqlite/json',
         codecId: 'sqlite/json@1',
         nullable: true,
         many: false,
-        default: { kind: 'literal', value: null },
+        default: { kind: 'literal', value: 'null' },
       },
     });
   });
@@ -250,7 +253,7 @@ model User {
     expect(diagnostics).toEqual([
       {
         code: 'PSL_INVALID_DEFAULT_LITERAL',
-        message: 'Field "User.home.street": sqlite/text@1 JSON value must be a string',
+        message: 'Field "User.home.street": sqlite/text JSON value must be a string',
         sourceId: schemaPath,
         span: defaultSpanOf(schema, 'home'),
       },

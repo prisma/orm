@@ -19,7 +19,7 @@ describe('createCacheMiddleware — meta', () => {
         version: 0,
         data: { empty: true },
       },
-      [{ id: 1 }],
+      { kind: 'statement-rows', rows: [{ id: 1 }] },
     );
     expect(store.setSpy.mock.calls[0]?.[0].meta).toBe(meta);
   });
@@ -50,7 +50,7 @@ describe('createCacheMiddleware — meta', () => {
         version: 0,
         data: { empty: true },
       },
-      [{ id: 1 }],
+      { kind: 'statement-rows', rows: [{ id: 1 }] },
     );
   });
 });

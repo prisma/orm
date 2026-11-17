@@ -55,11 +55,13 @@ function sourceContextFromConfig(config: PrismaNextConfig): ContractSourceContex
   });
   return {
     composedExtensions: stack.extensions.map((p) => p.id),
+    defaultNamespaceId: stack.target.defaultNamespaceId,
     composedExtensionContracts: new Map(),
     authoringContributions: stack.authoringContributions,
     codecLookup: stack.codecLookup,
-    dataTypeLookup: stack.dataTypeLookup,
+    dataTypes: stack.dataTypes,
     controlMutationDefaults: stack.controlMutationDefaults,
+    generatorFunctions: stack.generatorFunctions,
     resolvedInputs: config.contract?.source.inputs ?? [],
     capabilities: stack.capabilities,
   };

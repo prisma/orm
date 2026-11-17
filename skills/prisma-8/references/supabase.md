@@ -25,7 +25,7 @@ This skill covers using Prisma 8 against a **Supabase** project end-to-end: comp
 
 - **The pack is an `external` contract space.** `@internal/extension-supabase/pack` ships a complete, introspection-generated contract of everything Supabase owns — the `auth` and `storage` schemas, their native enum types, and the platform roles (`anon`, `authenticated`, `service_role`) — all with control policy `external`. Composed via `extensions`, it means: the migration planner **emits no DDL** for those objects (Supabase manages them), and `db verify` **confirms they exist** in the live database. Your own tables stay `managed` as usual.
 - **Roles come from the pack; you never declare them.** RLS `roles = [authenticated]` identifiers resolve against the composed contract. Pointing the runtime at a non-Supabase Postgres fails verify with a `not-found` issue naming the missing role — the common "wrong database" misconfiguration surfaces before queries run.
-- **The runtime is role-first.** `supabase()` returns a `SupabaseDb` with **no top-level query surface** — there is no `db.sql` / `db.orm` until you bind a role. `await db.asUser(jwt)` / `db.asAnon()` / `db.asServiceRole()` each return a `RoleBoundDb` exposing `.sql`, `.orm`, `.raw`, `.query(plan)` (rows), `.execute(plan)` (affected count), and `.transaction(fn)`. This is deliberate: in a Supabase app there is no meaningful "no role" execution context, and defaulting to the connection's login role is a silent-RLS-bypass footgun.
+- **The runtime is role-first.** `supabase()` returns a `SupabaseDb` with **no top-level query surface** — there is no `db.sql` / `db.orm` until you bind a role. `await db.asUser(jwt)` / `db.asAnon()` / `db.asServiceRole()` each return a `RoleBoundDb` exposing `.sql`, `.orm`, `.raw`, `.prepare(...)`, `.query(plan)` (rows), `.execute(plan)` (affected count), `.enums`, `.nativeEnums`, and `.transaction(fn)`. This is deliberate: in a Supabase app there is no meaningful "no role" execution context, and defaulting to the connection's login role is a silent-RLS-bypass footgun.
 - **Role binding is below middleware and cannot leak.** Each role-bound query runs on a connection that had `set_config('role', …)` and `set_config('request.jwt.claims', …)` applied beneath the user-middleware chain, with `RESET ALL` on release. Postgres-side `auth.uid()` / `auth.jwt()` read those session vars — RLS enforcement is Postgres's job; the runtime's job is binding the context.
 - **RLS is enforced by policies *and* grants.** Policies filter *rows*; `GRANT` controls *table access*. Prisma 8 authors and migrates the policies; it does not author grants (see *What Prisma 8 doesn't do yet*). A role with policies but no `GRANT` gets a permission error, not filtered rows. On Supabase your `public` tables already carry the platform-role grants via default privileges — the grant that is actually missing out of the box is `service_role`'s on `auth.*` / `storage.*` (see *Workflow — Grants*).
 - **JWT validation is eager and configurable — current Supabase projects need `jwksUrl`.** `asUser(jwt)` verifies the token (via `jose`) *before* any connection is acquired: signature + expiry against `jwksUrl` (asymmetric signing keys — **the default on current Supabase projects**, which sign ES256) **xor** `jwtSecret` (the symmetric HS256 secret — legacy projects only). Both or neither → a structured error with code `SUPABASE.CONFIG_INVALID`. Bad tokens throw a structured error with code `SUPABASE.JWT_INVALID` and a typed `meta.reason` — including a mismatch between the token's algorithm and the configured key source (an ES256 token against a `jwtSecret` client names the problem and tells you to switch to `jwksUrl`). The Postgres role is derived from the token's `role` claim (defaults to `authenticated`). Note: `supabase status` still prints a `JWT_SECRET` even on projects that sign ES256 — its presence does not mean your project uses it.
@@ -57,7 +57,7 @@ The concept: your models live in your namespaces (`public`); Supabase's live in 
 ```prisma
 namespace public {
   model Profile {
-    id       Uuid   @id @default(uuid())
+    id       Uuid   @id @onCreate(uuid())
     username String
     userId   Uuid   @unique
     user     supabase:auth.AuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -69,14 +69,14 @@ namespace public {
   policy_select profile_owner_read {
     target = Profile
     roles  = [authenticated]
-    using  = "\"userId\"::uuid = auth.uid()"
+    using  = sql`"userId"::uuid = auth.uid()`
   }
 
   // anon may read every profile (a public directory listing).
   policy_select profile_public_read {
     target = Profile
     roles  = [anon]
-    using  = "true"
+    using  = sql`true`
   }
 
   // authenticated may update only their own profile, and may not
@@ -84,8 +84,8 @@ namespace public {
   policy_update profile_owner_write {
     target    = Profile
     roles     = [authenticated]
-    using     = "\"userId\"::uuid = auth.uid()"
-    withCheck = "\"userId\"::uuid = auth.uid()"
+    using     = sql`"userId"::uuid = auth.uid()`
+    withCheck = sql`"userId"::uuid = auth.uid()`
   }
 }
 ```
@@ -94,9 +94,9 @@ The `Uuid` constructor selects native UUID storage in type position. The legacy 
 
 The pieces:
 
-- **Per-operation policy blocks**: `policy_select`, `policy_insert`, `policy_update`, `policy_delete`, `policy_all`. Body is `key = value`: `target` (a model in this namespace), `roles` (resolve against the composed contract — the pack supplies `anon` / `authenticated` / `service_role`), `using`, and (for write operations) `withCheck`. Multiple permissive policies per `(target, operation)` are valid — Postgres ORs them. A block may also carry `@@map("physical name")` to adopt an existing live policy under its exact name (no wire-name hash; drift detection then byte-compares the body against Postgres's reprint, so keep the text as captured — hand-authoring it warns).
+- **Per-operation policy blocks**: `policy_select`, `policy_insert`, `policy_update`, `policy_delete`, `policy_all`. Body is `key = value`: `target` (a model in this namespace), `roles` (resolve against the composed contract — the pack supplies `anon` / `authenticated` / `service_role`), `using`, and (for write operations) `withCheck`. `using` and `withCheck` are `sql` literals, as in `` using = sql`"userId"::uuid = auth.uid()` ``; a quoted string is refused, and the error message gives the rewrite. Multiple permissive policies per `(target, operation)` are valid — Postgres ORs them. A block may also carry `@@map("physical name")` to adopt an existing live policy under its exact name (no wire-name hash; drift detection then byte-compares the body against Postgres's reprint, so keep the text as captured — hand-authoring it warns).
 - **`@@rls` is required on policy targets.** A `policy_*` block whose target model lacks `@@rls` fails emit with `PSL_EXTENSION_TARGET_MODEL_MISSING_ATTRIBUTE`. A model with `@@rls` and *no* policies is also meaningful: RLS enabled, deny-all.
-- **Predicates are verbatim SQL strings.** Quote camelCase column names inside them (`\"userId\"`), and cast where needed — `auth.uid()` returns `uuid`. Renames in your contract do not rewrite predicate bodies.
+- **Predicates are `sql` literals holding verbatim SQL.** Quote camelCase column names inside them with ordinary double quotes (`"userId"`; inside a backtick `sql` literal the only escapes are `` \` `` and `\\`), and cast where needed — `auth.uid()` returns `uuid`. Renames in your contract do not rewrite predicate bodies.
 - **TS-builder parity exists.** `@internal/postgres/contract-builder` exports `policySelect` / `policyInsert` / `policyUpdate` / `policyDelete` / `policyAll`, `rlsEnabled(Model)`, and `role('anon')` — mirroring the PSL lowering key-for-key (identical emitted wire names). PSL is the canonical path shown here.
 
 Emit + migrate as usual (`prisma contract emit`, then `references/migrations.md`). The plan creates your table, its FK, `ENABLE ROW LEVEL SECURITY`, and the `CREATE POLICY` statements — and **no DDL for `auth.*`**.
@@ -108,18 +108,21 @@ The concept: instead of the stock `postgres()` factory, a Supabase app builds it
 ```typescript
 // src/prisma/db.ts
 import { supabase } from '@internal/extension-supabase/runtime';
+import { contractFromJson } from '@internal/postgres/static';
 import type { Contract } from './contract.d';
 import contractJson from './contract.json' with { type: 'json' };
 
-export const db = await supabase<Contract>({
-  contractJson,
+export const contract = contractFromJson<Contract>(contractJson);
+
+export const db = await supabase({
+  contract,
   url: process.env['DATABASE_URL'],        // direct Postgres connection — see pitfalls
   jwksUrl: process.env['SUPABASE_JWKS_URL'], // https://<project-ref>.supabase.co/auth/v1/.well-known/jwks.json
   // Legacy HS256 projects use jwtSecret: process.env['SUPABASE_JWT_SECRET'] instead — exactly one of the two.
 });
 ```
 
-Options beyond the basics: `middleware` (same composition as `postgres()` — see `references/runtime.md`; middleware never sees the role-binding `set_config` calls), `poolOptions`, `pg` (BYO `pg.Pool` / `pg.Client` instead of `url`). Teardown is `await db.close()` / `await using` exactly as in `references/runtime.md` — the same script-hang rules apply.
+Options beyond the basics: `middleware` (same composition as `postgres()` — see `references/runtime.md`; middleware never sees the role-binding `set_config` calls), `poolOptions`, `pg` (BYO `pg.Pool` instead of `url`; a `pg.Client` is rejected with `SUPABASE.CONFIG_INVALID`). Teardown is `await db.close()` / `await using` exactly as in `references/runtime.md` — the same script-hang rules apply.
 
 ## Workflow — Role-bound queries
 
@@ -143,7 +146,7 @@ const updated = await userDb.orm.public.Profile
   .updateAndCount({ username: 'new-name' });
 ```
 
-Notes: `asAnon()` / `asServiceRole()` are sync; only `asUser` is async. Multi-namespace contracts address models by coordinate (`orm.public.Profile`, `sql.public.profile`) — see `references/queries.md` § *Namespace-aware accessors*. `RoleBoundDb.transaction(fn)` wraps work in a transaction on the role-bound session.
+Notes: `asAnon()` / `asServiceRole()` are sync; only `asUser` is async. Multi-namespace contracts address models by coordinate (`orm.public.Profile`, `sql.public.profile`) — see `references/queries.md` § *Namespace-aware accessors*. `RoleBoundDb.transaction(fn)` wraps work in a transaction on the role-bound session; its `tx` offers `sql`, `orm` (with the client's custom collection classes), `raw`, `prepare`, `query`, `execute`, `enums` and `nativeEnums`, and runs every statement under the bound role. A prepared statement runs on what it is given: `ps.query(userDb, params)` runs under that client's role, and `ps.query(tx, params)` runs inside the transaction.
 
 ## Workflow — Admin reads of `auth.*` / `storage.*`
 
@@ -223,7 +226,7 @@ The concept: the runtime needs a **direct, session-capable** Postgres connection
 - [ ] `extensions: [supabasePack]` (the `pack` export) in `ormConfig({...})` inside `definePrismaConfig({ orm: ... })`.
 - [ ] Cross-space FK typed `supabase:auth.AuthUser` with explicit `fields` / `references` (+ `onDelete` if wanted).
 - [ ] Every policy target model carries `@@rls`; predicates quote camelCase columns and cast for `auth.uid()`.
-- [ ] `db.ts` uses `await supabase<Contract>({ contractJson, url, jwksUrl | jwtSecret })` — exactly one JWT key source; `jwksUrl` for current projects, `jwtSecret` only for legacy HS256.
+- [ ] `db.ts` uses `await supabase({ contract, url, jwksUrl | jwtSecret })`, with `contract` from `contractFromJson<Contract>(contractJson)` of `@internal/postgres/static` — exactly one JWT key source; `jwksUrl` for current projects, `jwtSecret` only for legacy HS256.
 - [ ] Queries go through a `RoleBoundDb` from `asUser` / `asAnon` / `asServiceRole`; `asUser` is awaited.
 - [ ] `auth.*` / `storage.*` reads go through `asServiceRole().supabase` only, after the one-time narrow grant (`GRANT USAGE ON SCHEMA auth` + `GRANT SELECT` on the tables you read).
 - [ ] No per-table grants added for your own `public` tables — Supabase default privileges cover them; RLS does the protecting.

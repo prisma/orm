@@ -54,13 +54,15 @@ const result = await familyInstance.emitContract({ contract });
 
 ```typescript
 import mongoFamily from '@internal/family-mongo/pack';
-import { defineContract, field, model, rel, valueObject } from '@internal/mongo-contract-ts/contract-builder';
+import { createContractAuthoringHelpers, defineContract, model, rel, valueObject } from '@internal/mongo-contract-ts/contract-builder';
 import mongoTarget from '@internal/target-mongo/pack';
+
+const { field, type } = createContractAuthoringHelpers({ family: mongoFamily, target: mongoTarget });
 
 const Address = valueObject('Address', {
   fields: {
-    street: field.string(),
-    zip: field.string().optional(),
+    street: field.scalar(type.String()),
+    zip: field.scalar(type.String()).optional(),
   },
 });
 
@@ -70,8 +72,8 @@ const Task = model('Task', {
     comments: { field: 'comments' },
   },
   fields: {
-    _id: field.objectId(),
-    type: field.string(),
+    _id: field.scalar(type.ObjectId()),
+    type: field.scalar(type.String()),
     metadata: field.valueObject(Address).optional(),
   },
   relations: {
@@ -88,8 +90,8 @@ const Task = model('Task', {
 const Comment = model('Comment', {
   owner: Task,
   fields: {
-    _id: field.objectId(),
-    text: field.string(),
+    _id: field.scalar(type.ObjectId()),
+    text: field.scalar(type.String()),
   },
 });
 
@@ -121,7 +123,7 @@ class AddUsersCollection extends Migration {
         validator: { $jsonSchema: { required: ["email"] } },
         validationLevel: "strict",
       }),
-      createIndex("users", [{ field: "email", direction: 1 }], { unique: true }),
+      createIndex("users", [{ field: "email", direction: 1 }], { name: "email_1", unique: true }),
     ]
   }
 }
@@ -130,7 +132,7 @@ export default AddUsersCollection;
 MigrationCLI.run(import.meta.url, AddUsersCollection);
 ```
 
-Run `node migration.ts` to produce `ops.json` and `migration.json`. Use `--dry-run` to preview without writing.
+Run `node <directory>/migration.ts` from any directory to produce `ops.json` and `migration.json`. Use `--dry-run` to preview without writing.
 
 ## Package Structure
 

@@ -315,8 +315,9 @@ withTempDir(({ createTempDir }) => {
           engineError(refused),
           'R5.06: the database does not match the end contract',
         ).toMatchObject({
-          code: 'MIGRATION.RUNNER_FAILED',
+          code: 'MIGRATION.SCHEMA_VERIFY_FAILED',
           summary: expect.stringContaining('Database schema does not satisfy contract'),
+          meta: { schemaIssues: expect.any(Array), failingSpace: 'app' },
         });
         const untouched = await sql(
           db.connectionString,

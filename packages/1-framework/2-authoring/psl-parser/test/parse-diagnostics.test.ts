@@ -193,6 +193,14 @@ describe('parse() syntactic diagnostics', () => {
     expect(greenText(result.document.syntax.green)).toBe(source);
   });
 
+  it('refuses a second type constructor call on one field', () => {
+    const result = parse('model M {\n  f Timestamp(3) Timestamptz(3)\n}', 'test.psl');
+    expect(result.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      { code: 'PSL_INVALID_MODEL_MEMBER', message: 'Expected a type after field "Timestamptz"' },
+      { code: 'PSL_INVALID_MODEL_MEMBER', message: 'Invalid model member declaration "("' },
+    ]);
+  });
+
   it('reports a composite-type field missing its type, anchored on the field name', () => {
     const source = 'type Foo {\n  field\n}';
     const { result, message, diagnostic } = diagnosticFor(source, 'PSL_INVALID_MODEL_MEMBER');
@@ -675,5 +683,244 @@ describe('parse() attribute attachment is newline-insensitive', () => {
     const model = Array.from(result.document.declarations())[0];
     expect(model).toBeInstanceOf(ModelDeclarationAst);
     expect(greenText(result.document.syntax.green)).toBe(source);
+  });
+});
+
+function memberTexts(result: ReturnType<typeof parse>): string[] {
+  const [declaration] = Array.from(result.document.syntax.childNodes());
+  return Array.from(
+    declaration?.childNodes() ?? [],
+    (member) => `${member.kind} ${greenText(member.green)}`,
+  );
+}
+
+function messagesOf(result: ReturnType<typeof parse>): string[] {
+  return result.diagnostics.map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`);
+}
+
+describe('parse() keeps the rest of a line in a member whose arguments or value fail to parse', () => {
+  it('reports the argument error of a field attribute, anchored on the first token it cannot read', () => {
+    const source = 'model User {\n  id Int @default(+foo)\n  name String\n}';
+    const { result, message, diagnostic } = diagnosticFor(source, 'PSL_INVALID_ATTRIBUTE_SYNTAX');
+    expect(message).toBe('Unexpected "+" in attribute arguments');
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
+      "
+      model User {
+        id Int @default(+foo)
+                        ~
+        name String
+      }
+      "
+    `);
+    expect(result.diagnostics).toHaveLength(1);
+    expect(memberTexts(result)).toEqual([
+      'Identifier User',
+      'FieldDeclaration id Int @default(+foo)',
+      'FieldDeclaration name String',
+    ]);
+  });
+
+  it('does not read a name left on the line as another field', () => {
+    const result = parse(
+      'model User {\n  id Int @default(1 extra String)\n  name String\n}',
+      'test.psl',
+    );
+    expect(messagesOf(result)).toEqual([
+      'PSL_INVALID_ATTRIBUTE_SYNTAX: Unexpected "extra" in attribute arguments',
+    ]);
+    expect(memberTexts(result)).toEqual([
+      'Identifier User',
+      'FieldDeclaration id Int @default(1 extra String)',
+      'FieldDeclaration name String',
+    ]);
+  });
+
+  it('does not read a block attribute left on the line as a member', () => {
+    const result = parse('model User {\n  id Int @default(1 @@map("x"))\n}', 'test.psl');
+    expect(messagesOf(result)).toEqual([
+      'PSL_INVALID_ATTRIBUTE_SYNTAX: Unexpected "@@" in attribute arguments',
+    ]);
+    expect(memberTexts(result)).toEqual([
+      'Identifier User',
+      'FieldDeclaration id Int @default(1 @@map("x"))',
+    ]);
+  });
+
+  it('keeps the rest of the line after a failure in a nested list or call', () => {
+    const result = parse(
+      'model User {\n  id Int @default(fn([1 +a], 2))\n  name String\n}',
+      'test.psl',
+    );
+    expect(messagesOf(result)).toEqual([
+      'PSL_INVALID_ATTRIBUTE_SYNTAX: Unexpected "+" in attribute arguments',
+    ]);
+    expect(memberTexts(result)).toEqual([
+      'Identifier User',
+      'FieldDeclaration id Int @default(fn([1 +a], 2))',
+      'FieldDeclaration name String',
+    ]);
+  });
+
+  it('reports type arguments that fail to parse with the member code', () => {
+    const source = 'model User {\n  embedding Vector(+dims) @unique\n  name String\n}';
+    const { result, message, diagnostic } = diagnosticFor(source, 'PSL_INVALID_MODEL_MEMBER');
+    expect(message).toBe('Unexpected "+" in type arguments');
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
+      "
+      model User {
+        embedding Vector(+dims) @unique
+                         ~
+        name String
+      }
+      "
+    `);
+    expect(result.diagnostics).toHaveLength(1);
+    expect(memberTexts(result)).toEqual([
+      'Identifier User',
+      'FieldDeclaration embedding Vector(+dims) @unique',
+      'FieldDeclaration name String',
+    ]);
+  });
+
+  it('reports nothing for arguments left open at the end of a line', () => {
+    const result = parse(
+      'model User {\n  name String @default("anonymous"\n  active Boolean\n}',
+      'test.psl',
+    );
+    expect(result.diagnostics).toEqual([]);
+    expect(memberTexts(result)).toEqual([
+      'Identifier User',
+      'FieldDeclaration name String @default("anonymous"',
+      'FieldDeclaration active Boolean',
+    ]);
+  });
+
+  it('leaves the closing brace of the block to the block', () => {
+    const result = parse('model User { id Int @default(1 }', 'test.psl');
+    const [model] = Array.from(result.document.declarations());
+    expect(result.diagnostics).toEqual([]);
+    expect(model).toBeInstanceOf(ModelDeclarationAst);
+    if (model instanceof ModelDeclarationAst) expect(model.rbrace()).toBeDefined();
+  });
+
+  it('keeps the rest of the line in a block attribute of a model', () => {
+    const result = parse(
+      'model User {\n  id Int\n  @@index([id +other])\n  name String\n}',
+      'test.psl',
+    );
+    expect(messagesOf(result)).toEqual([
+      'PSL_INVALID_ATTRIBUTE_SYNTAX: Unexpected "+" in attribute arguments',
+    ]);
+    expect(memberTexts(result)).toEqual([
+      'Identifier User',
+      'FieldDeclaration id Int',
+      'ModelAttribute @@index([id +other])',
+      'FieldDeclaration name String',
+    ]);
+  });
+
+  it('keeps the rest of the line in a block attribute of a generic block', () => {
+    const result = parse('policy P {\n  @@map("p" +other)\n  k = 1\n}', 'test.psl');
+    expect(messagesOf(result)).toEqual([
+      'PSL_INVALID_ATTRIBUTE_SYNTAX: Unexpected "+" in attribute arguments',
+    ]);
+    expect(memberTexts(result)).toEqual([
+      'Identifier P',
+      'ModelAttribute @@map("p" +other)',
+      'KeyValuePair k = 1',
+    ]);
+  });
+
+  it('reports an entry value left unclosed, anchored on the first token it cannot read', () => {
+    const source = 'policy P {\n  roles = [a +b]\n  k = 1\n}';
+    const { result, message, diagnostic } = diagnosticFor(
+      source,
+      'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
+    );
+    expect(message).toBe('Unexpected "+" in the entry value');
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
+      "
+      policy P {
+        roles = [a +b]
+                   ~
+        k = 1
+      }
+      "
+    `);
+    expect(result.diagnostics).toHaveLength(1);
+    expect(memberTexts(result)).toEqual([
+      'Identifier P',
+      'KeyValuePair roles = [a +b]',
+      'KeyValuePair k = 1',
+    ]);
+  });
+
+  it('keeps the rest of the line after an entry value that is an unclosed call', () => {
+    const result = parse('policy P {\n  using = check(+owner)\n  k = 1\n}', 'test.psl');
+    expect(messagesOf(result)).toEqual([
+      'PSL_INVALID_EXTENSION_BLOCK_MEMBER: Unexpected "+" in the entry value',
+    ]);
+    expect(memberTexts(result)).toEqual([
+      'Identifier P',
+      'KeyValuePair using = check(+owner)',
+      'KeyValuePair k = 1',
+    ]);
+  });
+
+  it('reports a missing entry value once and keeps what follows on the line', () => {
+    const result = parse('policy P {\n  using = +owner\n  k = 1\n}', 'test.psl');
+    expect(messagesOf(result)).toEqual([
+      'PSL_INVALID_EXTENSION_BLOCK_MEMBER: Expected a value after "="',
+    ]);
+    expect(memberTexts(result)).toEqual([
+      'Identifier P',
+      'KeyValuePair using = +owner',
+      'KeyValuePair k = 1',
+    ]);
+  });
+
+  it('reports an unterminated object value once', () => {
+    const result = parse('policy P {\n  opts = { a: 1 +b\n  k = 1\n}', 'test.psl');
+    expect(messagesOf(result)).toEqual(['PSL_INVALID_OBJECT_LITERAL: Unterminated object literal']);
+    expect(memberTexts(result)).toEqual([
+      'Identifier P',
+      'KeyValuePair opts = { a: 1 +b',
+      'KeyValuePair k = 1',
+    ]);
+  });
+
+  it('keeps the rest of the line in an attribute of an enum member', () => {
+    const result = parse('enum Role {\n  ADMIN @map("admin" +x)\n  USER\n}', 'test.psl');
+    expect(messagesOf(result)).toEqual([
+      'PSL_INVALID_ATTRIBUTE_SYNTAX: Unexpected "+" in attribute arguments',
+    ]);
+    expect(memberTexts(result)).toEqual([
+      'Identifier Role',
+      'KeyValuePair ADMIN @map("admin" +x)',
+      'KeyValuePair USER',
+    ]);
+  });
+
+  it('still reads two fields on one line and two entries on one line', () => {
+    const model = parse('model User { id Int @id name String @default("a") }', 'test.psl');
+    const block = parse('policy P { a = [1, 2] b = fn(3) }', 'test.psl');
+    expect(model.diagnostics).toEqual([]);
+    expect(block.diagnostics).toEqual([]);
+    expect(memberTexts(model)).toEqual([
+      'Identifier User',
+      'FieldDeclaration id Int @id',
+      'FieldDeclaration name String @default("a")',
+    ]);
+    expect(memberTexts(block)).toEqual([
+      'Identifier P',
+      'KeyValuePair a = [1, 2]',
+      'KeyValuePair b = fn(3)',
+    ]);
   });
 });

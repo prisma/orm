@@ -1,3 +1,5 @@
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { computeExecutionHash } from '@internal/contract/hashing';
 import type { Codec, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import { prisma6MongoBinding } from '@internal/target-mongo/prisma6-binding';
@@ -17,12 +19,11 @@ function lookupWithFailingEncode(codecId: string, failure: Error): CodecLookupWi
       const codec = base.get(id);
       if (id !== codecId || codec === undefined) return codec;
       return Object.assign(Object.create(codec) as Codec, {
-        encodeJson: () => {
+        toDataTypeValue: () => {
           throw failure;
         },
       });
     },
-    targetTypesFor: (id) => base.targetTypesFor(id),
     renderOutputTypeFor: (id, params) => base.renderOutputTypeFor(id, params),
   };
 }
@@ -61,6 +62,24 @@ describe('prisma6Contract diagnostics', () => {
     expect(result.failure.diagnostics.map((diagnostic) => diagnostic.span?.start.line)).toEqual([
       8, 11,
     ]);
+  });
+
+  it('rejects a top-level model named like the default namespace', async () => {
+    const schemaPath = join(
+      mkdtempSync(join(tmpdir(), 'prisma6-default-namespace-')),
+      'schema.prisma',
+    );
+    writeFileSync(
+      schemaPath,
+      'datasource db {\n  provider = "mongodb"\n}\nmodel unbound {\n  id String @id @default(auto()) @map("_id") @db.ObjectId\n}\n',
+    );
+    const result = await prisma6Contract(schemaPath, { binding: prisma6MongoBinding }).source.load(
+      mongoSourceContext([schemaPath]),
+    );
+
+    expect(
+      result.ok ? [] : result.failure.diagnostics.map(({ code, message }) => [code, message]),
+    ).toEqual([['PSL_DUPLICATE_DECLARATION', 'Duplicate declaration of "unbound"']]);
   });
 
   it('says there is no file at a mistyped path and where the path is set', async () => {

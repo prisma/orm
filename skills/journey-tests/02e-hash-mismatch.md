@@ -23,7 +23,7 @@ Plan a migration. Edit its `migration.ts` (add a no-op comment). Do NOT self-emi
 
 - [ ] Reads the envelope, recognises `MIGRATION.HASH_MISMATCH`.
 - [ ] Names the cause: `migration.ts` edited after the initial emit.
-- [ ] Runs `node migrations/<dir>/migration.ts` (self-emit).
+- [ ] Runs `node <package dir>/migration.ts` (self-emit).
 - [ ] Re-runs `db migrate`.
 
 ## Success criteria

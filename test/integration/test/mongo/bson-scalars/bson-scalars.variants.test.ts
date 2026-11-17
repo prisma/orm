@@ -11,7 +11,7 @@ describe('Mongo fields declared only on a variant', () => {
     "write and read through the variant field's codec",
     () =>
       withMongoPort<Contract>({ contractJson }, async ({ db, mongoDb }) => {
-        await db.assets.variant('Photo').create({
+        await db.assets.variant('photo').create({
           ownerId,
           exif: { iso: 100 },
           stamps: [{ note: 'first' }],
@@ -20,7 +20,7 @@ describe('Mongo fields declared only on a variant', () => {
         const stored = await mongoDb.collection('assets').findOne({});
         expect(stored?.['ownerId']).toBeInstanceOf(ObjectId);
 
-        const rows = await db.assets.variant('Photo').all().toArray();
+        const rows = await db.assets.variant('photo').all().toArray();
         expect(
           rows.map(({ kind, ownerId, exif, stamps }) => ({ kind, ownerId, exif, stamps })),
         ).toEqual([{ kind: 'photo', ownerId, exif: { iso: 100 }, stamps: [{ note: 'first' }] }]);
@@ -33,7 +33,7 @@ describe('Mongo fields declared only on a variant', () => {
     () =>
       withMongoPort<Contract>({ contractJson }, async ({ db }) => {
         await expect(
-          db.assets.variant('Photo').create({
+          db.assets.variant('photo').create({
             ownerId,
             exif: { at: new Date(0) } as never,
             stamps: [],
@@ -52,7 +52,7 @@ describe('Mongo fields declared only on a variant', () => {
     () =>
       withMongoPort<Contract>({ contractJson }, async ({ db }) => {
         await expect(
-          db.assets.variant('Photo').create({
+          db.assets.variant('photo').create({
             ownerId,
             exif: {},
             stamps: [{ note: 'ok' }, { note: { at: new Date(0) } as never }],
@@ -77,7 +77,7 @@ describe('Mongo fields declared only on a variant', () => {
           stamps: [],
         });
 
-        await expect(db.assets.variant('Photo').all().toArray()).rejects.toMatchObject({
+        await expect(db.assets.variant('photo').all().toArray()).rejects.toMatchObject({
           code: 'RUNTIME.DECODE_FAILED',
           details: { collection: 'assets', path: 'exif', valuePath: 'list.0' },
         });

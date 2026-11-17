@@ -1,7 +1,6 @@
 export type {
   EmissionSpi,
   GenerateContractTypesOptions,
-  ValidationContext,
 } from '../control/emission-types';
 export {
   type ImportSpecifierResolver,

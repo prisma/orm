@@ -294,7 +294,7 @@ withTempDir(({ createTempDir }) => {
           db.exec('ALTER TABLE "_prisma_rename_UserProfile" RENAME TO "UserProfile"');
         });
 
-        const update = await runDbUpdate(ctx, ['--json', '--confirm', 'journey.db']);
+        const update = await runDbUpdate(ctx, ['--json']);
         expect(update.exitCode, `R4.05: db update after the rename: ${update.stdout}`).toBe(0);
         const state = withDatabase(ctx.dbPath, (db) => ({
           rows: db.prepare(`SELECT id, email FROM "UserProfile" ORDER BY id`).all(),

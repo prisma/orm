@@ -138,7 +138,7 @@ describe('startServer over injected streams', () => {
       textDocumentSync: { openClose: true, change: TextDocumentSyncKind.Incremental },
       documentFormattingProvider: true,
       foldingRangeProvider: true,
-      completionProvider: { triggerCharacters: ['.', '@', '[', '(', '{', ':', ','] },
+      completionProvider: { triggerCharacters: ['.', '@', '[', '(', '{', ':', ',', '+'] },
     });
     await expect(exitCode).resolves.toBe(0);
   });

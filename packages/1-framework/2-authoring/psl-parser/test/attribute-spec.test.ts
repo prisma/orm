@@ -17,26 +17,23 @@ import { buildSymbolTable } from '../src/symbol-table';
 import { FieldAttributeAst } from '../src/syntax/ast/attributes';
 import { StringLiteralExprAst } from '../src/syntax/ast/expressions';
 import { createSyntaxTree } from '../src/syntax/red';
+import { binderContext } from './support';
 
 function makeCtx(sources: PslSources): FieldAttributeCtx {
   const { document, sources: modelSources } = parse('model M {\n  id Int @id\n}\n', 'test.psl');
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources: modelSources,
+    defaultNamespaceId: 'public',
   });
-  const selfModel = symbolTable.topLevel.models['M'];
+  const selfModel = symbolTable.defaultNamespace.models['M'];
   if (!selfModel) throw new Error('expected model M in the symbol table');
   const field = selfModel.fields['id'];
   if (!field) throw new Error('expected field id on model M');
   const { binder } = createBinder({
     sources: modelSources,
     symbolTable,
-    typeConstructors: {},
-    attributeSpecs: { model: {}, field: {} },
-    controlMutationDefaults: {
-      defaultFunctionRegistry: new Map(),
-      dataTypeEntries: {},
-    },
+    context: binderContext(),
   });
   return { sources, symbols: symbolTable, selfModel, field, binder };
 }
@@ -414,7 +411,7 @@ describe('interpretArgs', () => {
     const result = interpretArgs(
       node.argList()?.args() ?? [],
       {
-        name: 'rel',
+        label: 'Attribute "rel"',
         positional: [],
         named: { size: { type: int(), documentation: 'The value supplied by name.' } },
       },
@@ -434,7 +431,7 @@ describe('interpretArgs', () => {
     const result = interpretArgs(
       node.argList()?.args() ?? [],
       {
-        name: 'rel',
+        label: 'Attribute "rel"',
         positional: [],
         named: { size: { type: int(), documentation: 'The value supplied by name.' } },
       },

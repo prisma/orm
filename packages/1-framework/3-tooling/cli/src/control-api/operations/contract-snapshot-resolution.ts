@@ -12,7 +12,11 @@ import {
   errorContractDeserializationFailed,
   MigrationToolsError,
 } from '@internal/migration-tools/errors';
-import { parseContractRef } from '@internal/migration-tools/ref-resolution';
+import {
+  isReservedContractRef,
+  parseContractRef,
+  type RefResolutionWrongGrammar,
+} from '@internal/migration-tools/ref-resolution';
 import { blindCast, castAs } from '@internal/utils/casts';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { join } from 'pathe';
@@ -23,6 +27,7 @@ import {
   errorUnexpected,
   mapRefResolutionError,
 } from '../../utils/cli-errors';
+import { RECORDED_CONTRACT_REF_FORMS } from '../../utils/contract-ref-forms';
 import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
 import { errorFromCaught } from './caught-errors';
 import { buildReadAggregate } from './contract-space-aggregate-loader';
@@ -34,24 +39,25 @@ function isEnoent(error: unknown): boolean {
 interface ResolveContractRefToSnapshotBaseOptions {
   readonly config: PrismaNextConfig;
   readonly migrationsDir: string;
-  /** User-supplied contract reference (hash, prefix, ref name, migration dir name, <dir>^, or ./path). */
+  /** User-supplied contract reference (hash, prefix, ref name, migration dir name, or <dir>^). */
   readonly refInput: string;
-  /** Absolute path of the emitted contract.json (fallback source + snapshot-path derivation). */
-  readonly contractPathAbsolute: string;
+  /** How errors name the argument that carried `refInput`, for example `--to`. */
+  readonly argument: string;
 }
 
 /**
- * `fallbackToEmitted` discriminates the missing-bundle behavior:
- * true (db sign): fall back to the emitted contract when no bundle matches and its
- * storage.storageHash matches; else the 'No contract file found for hash "<hash>"' errorRuntime.
- * false (db update --to): missing bundle = the errorUnexpected 'No migration bundle found for
- * <flag> "<input>" (resolved hash: <hash>)' envelope, so `missingBundleFlag` (the flag label
- * for that message) is required in this branch.
+ * `fallbackToEmitted` decides what happens when no migration bundle ends at the resolved hash:
+ * true (db sign) falls back to the emitted contract when its storage hash matches; false
+ * (db update --to) fails, because the argument must name a migration destination.
  */
 export type ResolveContractRefToSnapshotOptions = ResolveContractRefToSnapshotBaseOptions &
   (
-    | { readonly fallbackToEmitted: true; readonly missingBundleFlag?: never }
-    | { readonly fallbackToEmitted: false; readonly missingBundleFlag: '--to' }
+    | {
+        readonly fallbackToEmitted: true;
+        /** Absolute path of the emitted contract.json, the fallback source. */
+        readonly contractPathAbsolute: string;
+      }
+    | { readonly fallbackToEmitted: false }
   );
 
 export interface ResolveContractRefToSnapshotSuccess {
@@ -62,9 +68,26 @@ export interface ResolveContractRefToSnapshotSuccess {
   readonly source: 'snapshot' | 'emitted';
 }
 
+function reservedRefRefusal(
+  options: ResolveContractRefToSnapshotOptions,
+): RefResolutionWrongGrammar {
+  const { refInput: input, argument } = options;
+  const accepted = `${options.fallbackToEmitted ? 'a contract' : 'a migration destination'} recorded in the migrations directory`;
+  return {
+    kind: 'wrong-grammar',
+    input,
+    expectedGrammar: 'contract',
+    message: `"${input}" is a reserved reference; ${argument} takes ${accepted} (${RECORDED_CONTRACT_REF_FORMS})`,
+    fix: `Name ${accepted}, or omit ${argument} to use the emitted contract.`,
+  };
+}
+
 export async function resolveContractRefToSnapshot(
   options: ResolveContractRefToSnapshotOptions,
 ): Promise<Result<ResolveContractRefToSnapshotSuccess, CliStructuredError>> {
+  if (isReservedContractRef(options.refInput)) {
+    return notOk(mapRefResolutionError(reservedRefRefusal(options)));
+  }
   try {
     const loaded = await buildReadAggregate(options.config, {
       migrationsDir: options.migrationsDir,
@@ -105,7 +128,7 @@ export async function resolveContractRefToSnapshot(
     if (!options.fallbackToEmitted) {
       return notOk(
         errorUnexpected(
-          `No migration bundle found for ${options.missingBundleFlag} "${options.refInput}" (resolved hash: ${targetHash})`,
+          `No migration bundle found for ${options.argument} "${options.refInput}" (resolved hash: ${targetHash})`,
           {
             why: `The ref resolved successfully but no on-disk migration package has a destination (\`to\`) hash matching ${targetHash}.`,
             fix: 'Provide a ref or hash that corresponds to an existing migration package, or run `migration list` to see available migrations.',

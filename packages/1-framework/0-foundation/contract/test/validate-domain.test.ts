@@ -6,10 +6,7 @@ function crossRef(model: string, namespace: string = UNBOUND_DOMAIN_NAMESPACE_ID
   return { namespace: asNamespaceId(namespace), model };
 }
 
-import { blindCast } from '@internal/utils/casts';
-import { ifDefined } from '@internal/utils/defined';
 import { ContractValidationError } from '../src/contract-validation-error';
-import type { ContractValueObject } from '../src/domain-types';
 import type { DomainContractShape } from '../src/validate-domain';
 import { validateContractDomain } from '../src/validate-domain';
 import { applicationDomainOf } from './support/application-domain-of';
@@ -47,20 +44,28 @@ function makeValidContract(overrides: Record<string, unknown> = {}): DomainContr
     domain:
       domainOverride !== undefined
         ? (domainOverride as DomainContractShape['domain'])
-        : applicationDomainOf({
-            models,
-            ...ifDefined(
-              'valueObjects',
-              valueObjects !== undefined
-                ? blindCast<
-                    Record<string, ContractValueObject>,
-                    'validate-domain fixtures use structural value-object shapes'
-                  >(valueObjects)
-                : undefined,
-            ),
-          }),
+        : applicationDomainOf({ models }),
+    storage: {
+      namespaces: {
+        [UNBOUND_DOMAIN_NAMESPACE_ID]: {
+          id: UNBOUND_DOMAIN_NAMESPACE_ID,
+          entries: valueObjects !== undefined ? { valueObject: valueObjects } : {},
+        },
+      },
+    },
     ...rest,
   } as DomainContractShape;
+}
+
+/** A field type that refers to the value object `name` in the storage namespace `namespaceId`. */
+function valueObjectType(name: string, namespaceId: string = UNBOUND_DOMAIN_NAMESPACE_ID) {
+  return {
+    kind: 'valueObject',
+    plane: 'storage',
+    namespaceId,
+    entityKind: 'valueObject',
+    entityName: name,
+  };
 }
 
 describe('validateContractDomain()', () => {
@@ -141,7 +146,7 @@ describe('validateContractDomain()', () => {
               type: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
             },
             discriminator: { field: 'type' },
-            variants: { SpecialItem: { value: 'special' } },
+            variants: { special: crossRef('SpecialItem') },
           }),
           SpecialItem: makeMinimalModel({ base: crossRef('Item') }),
         },
@@ -157,7 +162,7 @@ describe('validateContractDomain()', () => {
               type: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
             },
             discriminator: { field: 'type' },
-            variants: { Ghost: { value: 'ghost' } },
+            variants: { ghost: crossRef('Ghost') },
           }),
         },
       });
@@ -173,7 +178,7 @@ describe('validateContractDomain()', () => {
               type: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
             },
             discriminator: { field: 'type' },
-            variants: { Child: { value: 'child' } },
+            variants: { child: crossRef('Child') },
           }),
           Child: makeMinimalModel(),
         },
@@ -192,7 +197,7 @@ describe('validateContractDomain()', () => {
               type: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
             },
             discriminator: { field: 'type' },
-            variants: { Child: { value: 'child' } },
+            variants: { child: crossRef('Child') },
           }),
           Other: makeMinimalModel({
             fields: {
@@ -225,6 +230,48 @@ describe('validateContractDomain()', () => {
       });
       expect(() => validateContractDomain(contract)).toThrow(
         /model.*Orphan.*base.*Item.*not list.*variant/i,
+      );
+    });
+
+    it('accepts a variant in a different namespace from its base', () => {
+      const contract = makeValidContract({
+        roots: { tasks: crossRef('Task', 'a') },
+        domain: {
+          namespaces: {
+            a: {
+              models: {
+                Task: makeMinimalModel({
+                  fields: {
+                    type: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+                  },
+                  discriminator: { field: 'type' },
+                  variants: { b: crossRef('Epic', 'b'), c: crossRef('Epic', 'c') },
+                }),
+              },
+            },
+            b: { models: { Epic: makeMinimalModel({ base: crossRef('Task', 'a') }) } },
+            c: { models: { Epic: makeMinimalModel({ base: crossRef('Task', 'a') }) } },
+          },
+        },
+      });
+      expect(() => validateContractDomain(contract)).not.toThrow();
+    });
+
+    it('rejects a variant listed under two discriminator values', () => {
+      const contract = makeValidContract({
+        models: {
+          Item: makeMinimalModel({
+            fields: {
+              type: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+            },
+            discriminator: { field: 'type' },
+            variants: { bug: crossRef('Bug'), defect: crossRef('Bug') },
+          }),
+          Bug: makeMinimalModel({ base: crossRef('Item') }),
+        },
+      });
+      expect(() => validateContractDomain(contract)).toThrow(
+        'Model "__unbound__:Item" lists variant "__unbound__:Bug" under both discriminator values "bug" and "defect"',
       );
     });
 
@@ -421,7 +468,7 @@ describe('validateContractDomain()', () => {
               _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
             },
             discriminator: { field: 'kind' },
-            variants: { Special: { value: 'special' } },
+            variants: { special: crossRef('Special') },
           }),
           Special: makeMinimalModel({ base: crossRef('Item') }),
         },
@@ -440,7 +487,7 @@ describe('validateContractDomain()', () => {
               type: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
             },
             discriminator: { field: 'type' },
-            variants: { Child: { value: 'child' } },
+            variants: { child: crossRef('Child') },
           }),
           Child: makeMinimalModel({
             base: crossRef('Item'),
@@ -460,7 +507,7 @@ describe('validateContractDomain()', () => {
             fields: {
               type: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
             },
-            variants: { Special: { value: 'special' } },
+            variants: { special: crossRef('Special') },
           }),
           Special: makeMinimalModel({ base: crossRef('Item') }),
         },
@@ -479,17 +526,34 @@ describe('validateContractDomain()', () => {
               type: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
             },
             discriminator: { field: 'type' },
-            variants: { Child: { value: 'child' } },
+            variants: { child: crossRef('Child') },
           }),
           Child: makeMinimalModel({
             base: crossRef('Item'),
-            variants: { Grandchild: { value: 'grandchild' } },
+            variants: { grandchild: crossRef('Grandchild') },
           }),
         },
       });
       expect(() => validateContractDomain(contract)).toThrow(
         /model.*Child.*base.*must not.*variants/i,
       );
+    });
+
+    it('accepts variants with distinct discriminator values', () => {
+      const contract = makeValidContract({
+        models: {
+          Item: makeMinimalModel({
+            fields: {
+              type: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+            },
+            discriminator: { field: 'type' },
+            variants: { bug: crossRef('Bug'), feature: crossRef('Feature') },
+          }),
+          Bug: makeMinimalModel({ base: crossRef('Item') }),
+          Feature: makeMinimalModel({ base: crossRef('Item') }),
+        },
+      });
+      expect(() => validateContractDomain(contract)).not.toThrow();
     });
   });
 
@@ -581,8 +645,8 @@ describe('validateContractDomain()', () => {
             },
             discriminator: { field: 'type' },
             variants: {
-              Bug: { value: 'bug' },
-              Feature: { value: 'feature' },
+              bug: crossRef('Bug'),
+              feature: crossRef('Feature'),
             },
           }),
           Bug: makeMinimalModel({
@@ -637,45 +701,114 @@ describe('validateContractDomain()', () => {
   });
 
   describe('value object reference validation', () => {
-    it('accepts valid value object references from model fields', () => {
+    const address = {
+      fields: {
+        street: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+        city: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+      },
+    };
+
+    it('accepts a model field that refers to a value object in storage', () => {
       const contract = makeValidContract({
         roots: { users: crossRef('User') },
         models: {
           User: makeMinimalModel({
             fields: {
               id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
-              homeAddress: { nullable: false, type: { kind: 'valueObject', name: 'Address' } },
+              homeAddress: { nullable: false, type: valueObjectType('Address') },
             },
           }),
         },
-        valueObjects: {
-          Address: {
+        valueObjects: { Address: address },
+      });
+      expect(() => validateContractDomain(contract)).not.toThrow();
+    });
+
+    it('refuses a model field that refers to a value object storage does not have, naming the field and the coordinate', () => {
+      const contract = makeValidContract({
+        roots: { users: crossRef('User') },
+        models: {
+          User: makeMinimalModel({
             fields: {
-              street: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
-              city: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+              id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+              addr: { nullable: false, type: valueObjectType('Missing') },
             },
-          },
+          }),
+        },
+        valueObjects: { Address: address },
+      });
+      expect(() => validateContractDomain(contract)).toThrow(
+        `Model "__unbound__:User" field "addr" refers to value object "Missing" in storage namespace "__unbound__", which storage.namespaces.__unbound__.entries.valueObject does not have`,
+      );
+    });
+
+    it('refuses a reference into a storage namespace the contract does not have', () => {
+      const contract = makeValidContract({
+        roots: { users: crossRef('User') },
+        models: {
+          User: makeMinimalModel({
+            fields: { addr: { nullable: false, type: valueObjectType('Address', 'billing') } },
+          }),
+        },
+        valueObjects: { Address: address },
+      });
+      expect(() => validateContractDomain(contract)).toThrow(
+        `Model "__unbound__:User" field "addr" refers to value object "Address" in storage namespace "billing", which storage.namespaces.billing.entries.valueObject does not have`,
+      );
+    });
+
+    it('refuses a value object reference that does not point at a storage value object', () => {
+      const contract = makeValidContract({
+        roots: { users: crossRef('User') },
+        models: {
+          User: makeMinimalModel({
+            fields: {
+              addr: {
+                nullable: false,
+                type: { ...valueObjectType('Address'), plane: 'domain', entityKind: 'enum' },
+              },
+            },
+          }),
+        },
+        valueObjects: { Address: address },
+      });
+      expect(() => validateContractDomain(contract)).toThrow(
+        `Model "__unbound__:User" field "addr" refers to a value object with plane "domain" and entityKind "enum"; a value object reference has plane "storage" and entityKind "valueObject"`,
+      );
+    });
+
+    it('refuses a reference by name, the old shape, and says to re-emit', () => {
+      const contract = makeValidContract({
+        roots: { users: crossRef('User') },
+        models: {
+          User: makeMinimalModel({
+            fields: { addr: { nullable: false, type: { kind: 'valueObject', name: 'Address' } } },
+          }),
+        },
+        valueObjects: { Address: address },
+      });
+      expect(() => validateContractDomain(contract)).toThrow(
+        'Model "__unbound__:User" field "addr" refers to value object "Address" by name; contracts no longer do: a field refers to its value object by the coordinate of a storage entity under storage.namespaces.<namespace>.entries.valueObject, so re-emit the contract from its source, or rewrite a stored contract such as a migration snapshot with value-objects-in-storage.ts, which ships in the value-objects-in-storage scripts of the Prisma 8 upgrade guide',
+      );
+    });
+
+    it('accepts a value object whose field refers to another value object', () => {
+      const contract = makeValidContract({
+        roots: { users: crossRef('User') },
+        models: {
+          User: makeMinimalModel({
+            fields: { profile: { nullable: false, type: valueObjectType('Profile') } },
+          }),
+        },
+        valueObjects: {
+          Address: address,
+          Profile: { fields: { home: { nullable: true, type: valueObjectType('Address') } } },
         },
       });
       expect(() => validateContractDomain(contract)).not.toThrow();
     });
 
-    it('rejects nonexistent value object reference from model field', () => {
-      const contract = makeValidContract({
-        roots: { users: crossRef('User') },
-        models: {
-          User: makeMinimalModel({
-            fields: {
-              id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
-              addr: { nullable: false, type: { kind: 'valueObject', name: 'Missing' } },
-            },
-          }),
-        },
-      });
-      expect(() => validateContractDomain(contract)).toThrow(/Missing.*does not exist/);
-    });
-
-    it('accepts self-referencing value object', () => {
+    it('accepts a value object that refers to itself', () => {
       const contract = makeValidContract({
         roots: {},
         models: {},
@@ -683,7 +816,7 @@ describe('validateContractDomain()', () => {
           TreeNode: {
             fields: {
               label: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
-              child: { nullable: true, type: { kind: 'valueObject', name: 'TreeNode' } },
+              child: { nullable: true, type: valueObjectType('TreeNode') },
             },
           },
         },
@@ -691,74 +824,59 @@ describe('validateContractDomain()', () => {
       expect(() => validateContractDomain(contract)).not.toThrow();
     });
 
-    it('rejects nonexistent value object reference from another value object', () => {
+    it('refuses a union member that refers to a value object storage does not have', () => {
       const contract = makeValidContract({
+        roots: { users: crossRef('User') },
+        models: {
+          User: makeMinimalModel({
+            fields: {
+              data: {
+                nullable: false,
+                type: {
+                  kind: 'union',
+                  members: [{ kind: 'scalar', codecId: 'pg/text@1' }, valueObjectType('Ghost')],
+                },
+              },
+            },
+          }),
+        },
+      });
+      expect(() => validateContractDomain(contract)).toThrow(/value object "Ghost"/);
+    });
+
+    it('accepts a union member that refers to a value object in storage', () => {
+      const contract = makeValidContract({
+        roots: { users: crossRef('User') },
+        models: {
+          User: makeMinimalModel({
+            fields: {
+              data: {
+                nullable: false,
+                type: {
+                  kind: 'union',
+                  members: [{ kind: 'scalar', codecId: 'pg/text@1' }, valueObjectType('Address')],
+                },
+              },
+            },
+          }),
+        },
+        valueObjects: { Address: address },
+      });
+      expect(() => validateContractDomain(contract)).not.toThrow();
+    });
+
+    it('refuses value objects in the domain plane, and says where they live now', () => {
+      const contract = makeValidContract({
+        domain: {
+          namespaces: {
+            public: { models: {}, valueObjects: { Address: address } },
+          },
+        },
         roots: {},
-        models: {},
-        valueObjects: {
-          Wrapper: {
-            fields: {
-              inner: { nullable: false, type: { kind: 'valueObject', name: 'Nonexistent' } },
-            },
-          },
-        },
       });
-      expect(() => validateContractDomain(contract)).toThrow(/Nonexistent.*does not exist/);
-    });
-
-    it('rejects nonexistent value object reference inside union members', () => {
-      const contract = makeValidContract({
-        roots: { users: crossRef('User') },
-        models: {
-          User: makeMinimalModel({
-            fields: {
-              id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
-              data: {
-                nullable: false,
-                type: {
-                  kind: 'union',
-                  members: [
-                    { kind: 'scalar', codecId: 'pg/text@1' },
-                    { kind: 'valueObject', name: 'Ghost' },
-                  ],
-                },
-              },
-            },
-          }),
-        },
-      });
-      expect(() => validateContractDomain(contract)).toThrow(/Ghost.*does not exist/);
-    });
-
-    it('accepts valid value object reference inside union members', () => {
-      const contract = makeValidContract({
-        roots: { users: crossRef('User') },
-        models: {
-          User: makeMinimalModel({
-            fields: {
-              id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
-              data: {
-                nullable: false,
-                type: {
-                  kind: 'union',
-                  members: [
-                    { kind: 'scalar', codecId: 'pg/text@1' },
-                    { kind: 'valueObject', name: 'Address' },
-                  ],
-                },
-              },
-            },
-          }),
-        },
-        valueObjects: {
-          Address: {
-            fields: {
-              street: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
-            },
-          },
-        },
-      });
-      expect(() => validateContractDomain(contract)).not.toThrow();
+      expect(() => validateContractDomain(contract)).toThrow(
+        'domain.namespaces.public.valueObjects: contracts no longer store value objects in the domain plane; they are storage entities under storage.namespaces.<namespace>.entries.valueObject, so re-emit the contract from its source, or rewrite a stored contract such as a migration snapshot with value-objects-in-storage.ts, which ships in the value-objects-in-storage scripts of the Prisma 8 upgrade guide',
+      );
     });
   });
 
@@ -817,25 +935,6 @@ describe('validateContractDomain()', () => {
         },
       });
       expect(() => validateContractDomain(contract)).toThrow(/sibling "elementNullable"/);
-    });
-
-    it('rejects old many: true when type checking is bypassed', () => {
-      const contract = makeValidContract({
-        roots: {},
-        models: {},
-        valueObjects: {
-          Address: {
-            fields: {
-              tags: {
-                nullable: false,
-                type: { kind: 'scalar', codecId: 'pg/text@1' },
-                many: true,
-              },
-            },
-          },
-        },
-      });
-      expect(() => validateContractDomain(contract)).toThrow(/Value object.*invalid "many"/);
     });
   });
 });

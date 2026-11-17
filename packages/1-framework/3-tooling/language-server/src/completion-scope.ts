@@ -1,8 +1,12 @@
+import type { DataTypeSupport } from '@internal/framework-components/authoring';
 import {
   type Binder,
   type EntitySelector,
   entityReference,
+  isNamespaceLike,
+  type MixinSymbol,
   matchesSelector,
+  memberEntries,
   type ScopeResolution,
 } from '@internal/psl-parser';
 import {
@@ -20,19 +24,31 @@ export interface ScopeCompletionCapabilities {
   readonly clientSupportsTriggerSuggestCommand?: boolean;
 }
 
+export interface EntitySelection {
+  readonly selector: EntitySelector;
+  readonly namespaces: boolean;
+}
+
+export interface MixinSelection {
+  readonly offers: (mixin: MixinSymbol) => boolean;
+  readonly namespaces: boolean;
+}
+
 export function scopeCompletionItems(
   entries: Iterable<readonly [string, ScopeResolution]>,
   binder: Binder,
+  dataTypes: DataTypeSupport,
   range: Range,
   capabilities: ScopeCompletionCapabilities,
-  selector?: EntitySelector,
+  selection?: EntitySelection | MixinSelection,
 ): readonly CompletionItem[] {
   const items: CompletionItem[] = [];
   for (const [name, resolution] of entries) {
-    if (selector !== undefined) {
-      const reference = entityReference(resolution);
-      if (reference === undefined || !matchesSelector(reference, selector)) continue;
-    } else if (resolution.kind === 'block') {
+    if (selection !== undefined && 'offers' in selection) {
+      if (!offersMixin(resolution, selection)) continue;
+    } else if (selection !== undefined) {
+      if (!offersEntity(resolution, selection)) continue;
+    } else if (resolution.kind === 'block' || resolution.kind === 'mixin') {
       continue;
     }
     const item: CompletionItem = {
@@ -69,13 +85,20 @@ export function scopeCompletionItems(
         break;
       case 'contributedType': {
         const descriptor = resolution.symbol.descriptor;
+        if (descriptor.kind === 'typeAlias' || descriptor.kind === 'typeChoice') {
+          item.kind = CompletionItemKind.Class;
+          item.detail =
+            descriptor.documentation ||
+            (descriptor.kind === 'typeAlias' ? 'Type alias' : 'Convenience type');
+          break;
+        }
         const callable = descriptor.args !== undefined || descriptor.entityRefArg !== undefined;
         item.kind = callable ? CompletionItemKind.Function : CompletionItemKind.Class;
         if (callable) {
           item.textEdit = {
             range,
             newText: capabilities.clientSupportsSnippets
-              ? typeConstructorSnippet(name, descriptor)
+              ? typeConstructorSnippet(name, descriptor, dataTypes)
               : `${name}()`,
           };
           if (capabilities.clientSupportsSnippets) item.insertTextFormat = InsertTextFormat.Snippet;
@@ -94,8 +117,37 @@ export function scopeCompletionItems(
             : CompletionItemKind.Keyword;
         item.detail = resolution.symbol.keyword;
         break;
+      case 'mixin':
+        item.kind = CompletionItemKind.Interface;
+        item.detail = `${resolution.symbol.keyword} mixin`;
+        break;
     }
     items.push(item);
   }
   return items;
+}
+
+function offersMixin(resolution: ScopeResolution, selection: MixinSelection): boolean {
+  if (resolution.kind === 'mixin') return selection.offers(resolution.symbol);
+  if (resolution.kind !== 'namespace' || !selection.namespaces) return false;
+  for (const [, member] of memberEntries(resolution)) {
+    if (member.kind === 'mixin' && selection.offers(member.symbol)) return true;
+  }
+  return false;
+}
+
+function offersEntity(resolution: ScopeResolution, selection: EntitySelection): boolean {
+  if (isNamespaceLike(resolution)) {
+    if (!selection.namespaces) return false;
+    for (const [, member] of memberEntries(resolution)) {
+      if (matchesEntity(member, selection.selector)) return true;
+    }
+    return false;
+  }
+  return matchesEntity(resolution, selection.selector);
+}
+
+function matchesEntity(resolution: ScopeResolution, selector: EntitySelector): boolean {
+  const reference = entityReference(resolution);
+  return reference !== undefined && matchesSelector(reference, selector);
 }

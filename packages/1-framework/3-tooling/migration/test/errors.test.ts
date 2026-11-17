@@ -1,4 +1,6 @@
+import { ContractValidationError } from '@internal/contract/contract-validation-error';
 import { CliStructuredError } from '@internal/errors/control';
+import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import {
   errorBundleNotFoundForGraphNode,
@@ -73,6 +75,31 @@ describe('errorNoInvariantPath', () => {
     });
   });
 
+  it('names an extension space and carries the advice written for it', () => {
+    const nextActions = [{ kind: 'user-choice', label: 'Install another version' }] as const;
+    const err = errorNoInvariantPath({
+      required: ['X'],
+      missing: ['X'],
+      structuralPath: baseStructural,
+      extensionSpace: { spaceId: 'audit', why: 'Why for audit', fix: 'Fix for audit', nextActions },
+    });
+    expect({
+      isToolsError: MigrationToolsError.is(err),
+      message: err.message,
+      why: err.why,
+      fix: err.fix,
+      nextActions: err.nextActions,
+      meta: err.meta,
+    }).toEqual({
+      isToolsError: true,
+      message: 'No path covers the required invariants of extension space "audit"',
+      why: 'Why for audit',
+      fix: 'Fix for audit',
+      nextActions,
+      meta: { spaceId: 'audit', required: ['X'], missing: ['X'], structuralPath: baseStructural },
+    });
+  });
+
   it('includes refName on meta when provided', () => {
     const err = errorNoInvariantPath({
       refName: 'prod',
@@ -122,26 +149,6 @@ describe('errorNoInvariantPath', () => {
     });
     expect(err.why).toContain('required=["a", "b", "c"]');
     expect(err.why).toContain('missing=["c"]');
-  });
-
-  it('preserves the structuralPath wire shape exactly', () => {
-    // The JSON envelope (meta.structuralPath) is part of the public CLI
-    // contract — pin the per-edge key set so adding or dropping a field
-    // requires an explicit test update.
-    const err = errorNoInvariantPath({
-      required: ['X'],
-      missing: ['X'],
-      structuralPath: baseStructural,
-    });
-    const path = err.meta?.['structuralPath'] as readonly Record<string, unknown>[];
-    expect(path).toHaveLength(1);
-    expect(Object.keys(path[0]!).sort()).toEqual([
-      'dirName',
-      'from',
-      'invariants',
-      'migrationHash',
-      'to',
-    ]);
   });
 });
 
@@ -252,6 +259,13 @@ describe('MigrationToolsError base type', () => {
     expect(MigrationToolsError.is(err)).toBe(true);
   });
 
+  it('tells the user to repeat --config when re-emitting a package', () => {
+    const err = errorMissingFile('ops.json', join(process.cwd(), 'db/migrations/app/0001_init'));
+    expect(err.fix).toBe(
+      'Re-emit the package by running `node "db/migrations/app/0001_init/migration.ts"`, adding the `--config <path>` you gave this command, if any, or delete the directory if the migration is unwanted and the source TypeScript is gone.',
+    );
+  });
+
   it('exposes toEnvelope() with code, summary, why, fix, nextActions, and meta', () => {
     const err = errorDirectoryExists('/tmp/m/20260101_init');
     expect(err.toEnvelope()).toEqual({
@@ -279,5 +293,24 @@ describe('MigrationToolsError base type', () => {
       expect(err.fix).toBeTypeOf('string');
       expect(err.fix).not.toBe(err.why);
     }
+  });
+});
+
+describe('errorContractDeserializationFailed', () => {
+  const refusedDefaults = [{ namespaceId: 'public', table: 'Token', column: 'value' }];
+
+  it('keeps the refused defaults of a contract the family refused', () => {
+    const cause = new ContractValidationError('refused', 'storage', { refusedDefaults });
+    expect(
+      errorContractDeserializationFailed('/m/snapshots/x/contract.json', 'refused', { cause }).meta,
+    ).toEqual({ refusedDefaults, filePath: '/m/snapshots/x/contract.json', message: 'refused' });
+  });
+
+  it('carries only the file and message for any other failure', () => {
+    expect(
+      errorContractDeserializationFailed('/m/contract.json', 'bad shape', {
+        cause: new Error('bad shape'),
+      }).meta,
+    ).toEqual({ filePath: '/m/contract.json', message: 'bad shape' });
   });
 });

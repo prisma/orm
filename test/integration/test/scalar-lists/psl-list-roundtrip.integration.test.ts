@@ -55,6 +55,8 @@ async function migrateContract(
       schema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents: postgresFrameworkComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -119,10 +121,9 @@ describe('PSL scalar-list end-to-end', { concurrent: false }, () => {
       const tagsColumn = findStorageColumn(contract, 'tags');
       expect(tagsColumn).toMatchObject({
         codecId: 'pg/text@1',
-        nativeType: 'text',
         many: { elementNullable: false },
       });
-      expect(tagsColumn?.['nativeType']).not.toBe('jsonb');
+      expect(tagsColumn?.['dataType']).toBe('pg/text');
 
       await withClient(database.connectionString, async (client) => {
         await client.query('DROP SCHEMA IF EXISTS public CASCADE');
@@ -146,7 +147,7 @@ describe('PSL scalar-list end-to-end', { concurrent: false }, () => {
       const driver = await postgresControlDriver.create(database.connectionString);
       try {
         const schemaIR = await familyInstance.introspect({ driver });
-        const inferredAst = familyInstance.inferPslContract(schemaIR);
+        const inferredAst = await familyInstance.inferPslContract(schemaIR);
         const models = flatPslModels(inferredAst);
         const postModel = models.find((model) =>
           model.fields.some((field) => field.name === 'tags'),
@@ -172,12 +173,12 @@ describe('PSL scalar-list end-to-end', { concurrent: false }, () => {
       if (!database) throw new Error('database not initialised');
 
       const authored = await authorSqlContractFromPsl(`types {
-  Amount = Numeric(30, 10)
+  Amount = NumericString(30, 10)
 }
 
 model Reading {
   id       Int        @id
-  dates    DateTime[]
+  dates    TimestamptzTemporal[]
   payloads Bytes[]
   amounts  Amount[]
 }`);

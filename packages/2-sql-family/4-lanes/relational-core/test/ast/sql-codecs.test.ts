@@ -1,0 +1,238 @@
+import { timeouts } from '@repo/test-utils';
+import { describe, expect, it } from 'vitest';
+import {
+  SQL_CHAR_CODEC_ID,
+  SQL_FLOAT_CODEC_ID,
+  SQL_INT_CODEC_ID,
+  SQL_TEXT_CODEC_ID,
+  SQL_VARCHAR_CODEC_ID,
+} from '../../src/ast/sql-codec-helpers';
+import {
+  sqlCharColumn,
+  sqlCharDescriptor,
+  sqlFloatColumn,
+  sqlFloatDescriptor,
+  sqlIntColumn,
+  sqlIntDescriptor,
+  sqlTextColumn,
+  sqlTextDescriptor,
+  sqlVarcharColumn,
+  sqlVarcharDescriptor,
+} from '../../src/ast/sql-codecs';
+import {
+  readStored,
+  sqlCharCodec,
+  sqlFloatCodec,
+  sqlIntCodec,
+  sqlTextCodec,
+  sqlVarcharCodec,
+  storedJson,
+} from '../template-codecs';
+
+const instanceCtx = { name: '<test>' };
+const callCtx = {};
+
+describe('sql-codecs', () => {
+  describe('sql/text@1', () => {
+    const codec = sqlTextCodec();
+
+    it('id proxies through the descriptor', () => {
+      expect(codec.id).toBe(SQL_TEXT_CODEC_ID);
+    });
+
+    it('encodes and decodes string values', async () => {
+      expect(await codec.toWire('hello', callCtx)).toBe('hello');
+      expect(await codec.fromWire('hello', callCtx)).toBe('hello');
+    });
+
+    it('round-trips through JSON identity', () => {
+      expect(storedJson(codec, 'hello')).toBe('hello');
+      expect(readStored(codec, 'hello')).toBe('hello');
+    });
+  });
+
+  describe('sql/int@1', () => {
+    const codec = sqlIntCodec();
+
+    it('id proxies through the descriptor', () => {
+      expect(codec.id).toBe(SQL_INT_CODEC_ID);
+    });
+
+    it('encodes and decodes number values', async () => {
+      expect(await codec.toWire(42, callCtx)).toBe(42);
+      expect(await codec.fromWire(42, callCtx)).toBe(42);
+    });
+
+    it('round-trips through JSON identity', () => {
+      expect(storedJson(codec, 42)).toBe(42);
+      expect(readStored(codec, 42)).toBe(42);
+    });
+  });
+
+  describe('sql/float@1', () => {
+    const codec = sqlFloatCodec();
+
+    it('id proxies through the descriptor', () => {
+      expect(codec.id).toBe(SQL_FLOAT_CODEC_ID);
+    });
+
+    it('encodes and decodes number values', async () => {
+      expect(await codec.toWire(3.14, callCtx)).toBe(3.14);
+      expect(await codec.fromWire(3.14, callCtx)).toBe(3.14);
+    });
+
+    it('round-trips through JSON identity', () => {
+      expect(storedJson(codec, 3.14)).toBe(3.14);
+      expect(readStored(codec, 3.14)).toBe(3.14);
+    });
+
+    // A database can hold a non-finite float and spells it as a JSON string —
+    // PostgreSQL emits `"NaN"` and `"Infinity"` — which JSON has no number for.
+    // The codec's application type is `number`, so it rejects rather than hand
+    // back a string wearing that type.
+    it('writes a non-finite value as the text PostgreSQL writes for it', () => {
+      expect(
+        [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY].map((value) =>
+          storedJson(codec, value),
+        ),
+      ).toEqual(['NaN', 'Infinity', '-Infinity']);
+    });
+
+    it('reads the strings a database uses for non-finite floats', () => {
+      expect(['NaN', 'Infinity'].map((json) => readStored(codec, json))).toEqual([
+        Number.NaN,
+        Number.POSITIVE_INFINITY,
+      ]);
+    });
+
+    it('rejects a JSON value that is not a number', () => {
+      expect(() => readStored(codec, true)).toThrow(/sql\/float@1/);
+      expect(() => readStored(codec, null)).toThrow(/sql\/float@1/);
+    });
+  });
+
+  describe('sql/char@1', () => {
+    const codec = sqlCharCodec({ length: 8 });
+
+    it('id proxies through the descriptor (independent of params)', () => {
+      expect(codec.id).toBe(SQL_CHAR_CODEC_ID);
+    });
+
+    it('encodes string values verbatim', async () => {
+      expect(await codec.toWire('user_001', callCtx)).toBe('user_001');
+    });
+
+    it('trims trailing spaces on decode, and only spaces, the padding a character column adds', async () => {
+      expect(
+        await Promise.all(
+          ['user_001                            ', 'user_001', 'a\t  ', 'a\n', ' a'].map((wire) =>
+            codec.fromWire(wire, callCtx),
+          ),
+        ),
+      ).toEqual(['user_001', 'user_001', 'a\t', 'a\n', ' a']);
+    });
+
+    it('trims a value with a long interior run of spaces in time linear in its length', async () => {
+      const wire = `${' '.repeat(50_000)}x${' '.repeat(49_999)}`;
+      const started = performance.now();
+      const decoded = await codec.fromWire(wire, callCtx);
+      expect({ decoded, withinBound: performance.now() - started < timeouts.default }).toEqual({
+        decoded: `${' '.repeat(50_000)}x`,
+        withinBound: true,
+      });
+    });
+
+    it('round-trips through JSON identity, keeping trailing spaces, as a default is written', () => {
+      expect(storedJson(codec, 'user_001')).toBe('user_001');
+      expect(['user_001', 'a  ', 'a\t'].map((json) => readStored(codec, json))).toEqual([
+        'user_001',
+        'a  ',
+        'a\t',
+      ]);
+    });
+  });
+
+  describe('sql/varchar@1', () => {
+    const codec = sqlVarcharCodec({ length: 255 });
+
+    it('id proxies through the descriptor', () => {
+      expect(codec.id).toBe(SQL_VARCHAR_CODEC_ID);
+    });
+
+    it('encodes and decodes string values verbatim', async () => {
+      expect(await codec.toWire('hello', callCtx)).toBe('hello');
+      expect(await codec.fromWire('hello', callCtx)).toBe('hello');
+    });
+
+    it('round-trips through JSON identity', () => {
+      expect(storedJson(codec, 'hello')).toBe('hello');
+      expect(readStored(codec, 'hello')).toBe('hello');
+    });
+  });
+
+  describe('column helpers', () => {
+    it('sqlTextColumn produces a ColumnSpec with the text codec and no typeParams', () => {
+      const spec = sqlTextColumn();
+      expect(spec.codecId).toBe(SQL_TEXT_CODEC_ID);
+      expect(spec.typeParams).toBeUndefined();
+    });
+
+    it('sqlIntColumn produces a ColumnSpec with the int codec', () => {
+      const spec = sqlIntColumn();
+      expect(spec.codecId).toBe(SQL_INT_CODEC_ID);
+    });
+
+    it('sqlFloatColumn produces a ColumnSpec with the float codec', () => {
+      const spec = sqlFloatColumn();
+      expect(spec.codecId).toBe(SQL_FLOAT_CODEC_ID);
+    });
+
+    it('sqlCharColumn defaults typeParams to {} when invoked without arguments', () => {
+      const spec = sqlCharColumn();
+      expect(spec.codecId).toBe(SQL_CHAR_CODEC_ID);
+      expect(spec.typeParams).toEqual({});
+    });
+
+    it('sqlCharColumn carries the explicit length param', () => {
+      const spec = sqlCharColumn({ length: 16 });
+      expect(spec.typeParams).toEqual({ length: 16 });
+    });
+
+    it('sqlVarcharColumn defaults typeParams to {} when invoked without arguments', () => {
+      const spec = sqlVarcharColumn();
+      expect(spec.typeParams).toEqual({});
+    });
+
+    it('sqlVarcharColumn carries the explicit length param', () => {
+      const spec = sqlVarcharColumn({ length: 64 });
+      expect(spec.typeParams).toEqual({ length: 64 });
+    });
+  });
+
+  describe('templates', () => {
+    it('build no codec, because only a target that adapts them names their data type', () => {
+      expect(() => sqlTextDescriptor.factory()(instanceCtx)).toThrow(
+        /sql\/text@1 is a SQL family template/,
+      );
+      expect(() => sqlCharDescriptor.factory({ length: 8 })(instanceCtx)).toThrow(
+        /sql\/char@1 is a SQL family template/,
+      );
+    });
+  });
+
+  describe('descriptor metadata', () => {
+    it('codec ids match the SQL_*_CODEC_ID constants', () => {
+      expect(sqlTextDescriptor.codecId).toBe(SQL_TEXT_CODEC_ID);
+      expect(sqlIntDescriptor.codecId).toBe(SQL_INT_CODEC_ID);
+      expect(sqlFloatDescriptor.codecId).toBe(SQL_FLOAT_CODEC_ID);
+      expect(sqlCharDescriptor.codecId).toBe(SQL_CHAR_CODEC_ID);
+      expect(sqlVarcharDescriptor.codecId).toBe(SQL_VARCHAR_CODEC_ID);
+    });
+
+    it('exposes traits for each codec', () => {
+      expect(sqlTextDescriptor.traits).toEqual(['equality', 'order', 'textual']);
+      expect(sqlIntDescriptor.traits).toEqual(['equality', 'order', 'numeric']);
+      expect(sqlFloatDescriptor.traits).toEqual(['equality', 'order', 'numeric']);
+    });
+  });
+});

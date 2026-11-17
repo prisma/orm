@@ -1,0 +1,19 @@
+{
+  "include": ["src/**/*.{ts,tsx,js,jsx}"],
+  "exclude": [
+    "dist/**",
+    "test/**",
+    "**/*.test.ts",
+    "**/*.test-d.ts",
+    "**/*.spec.ts",
+    "**/*.d.ts",
+    "**/*.config.ts",
+    "**/exports/**"
+  ],
+  "thresholds": {
+    "lines": 85,
+    "branches": 75,
+    "functions": 82,
+    "statements": 85
+  }
+}

@@ -19,6 +19,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { emit } from '../../utils/emit';
 import { createIntegrationTestDir } from '../utils/cli-test-helpers';
 
+const TEST_INVOCATION = { cwd: process.cwd(), configPath: undefined, dbGiven: false };
+
 /**
  * Materialise pgvector's pinned contract-space artifacts under
  * `<projectRoot>/migrations/pgvector/...` so the per-space db init
@@ -35,16 +37,14 @@ async function materialisePgvectorPinnedArtifacts(projectRoot: string): Promise<
   if (!space) {
     throw new Error('pgvector descriptor must declare a contractSpace');
   }
-  const baseline = space.migrations[0];
-  if (!baseline) {
-    throw new Error('pgvector contract-space must ship at least one baseline migration');
-  }
   await emitContractSpaceArtifacts(migrationsDir, 'pgvector', {
     contract: space.contractJson,
     contractDts: '// rendered .d.ts for pgvector contract space\nexport interface Contract {}\n',
     headRef: { hash: space.headRef.hash, invariants: [...space.headRef.invariants] },
   });
-  await materialiseMigrationPackage(join(migrationsDir, 'pgvector'), baseline);
+  for (const migration of space.migrations) {
+    await materialiseMigrationPackage(join(migrationsDir, 'pgvector'), migration);
+  }
   return migrationsDir;
 }
 
@@ -85,11 +85,13 @@ describe(
 
       const pslResult = await contractConfig.source.load({
         composedExtensions: [pgvector.id],
+        defaultNamespaceId: stack.target.defaultNamespaceId,
         composedExtensionContracts: new Map(),
         authoringContributions: stack.authoringContributions,
         codecLookup: stack.codecLookup,
-        dataTypeLookup: stack.dataTypeLookup,
+        dataTypes: stack.dataTypes,
         controlMutationDefaults: stack.controlMutationDefaults,
+        generatorFunctions: stack.generatorFunctions,
         resolvedInputs: [schemaPath],
         capabilities: stack.capabilities,
       });
@@ -147,13 +149,14 @@ model Document {
         await withDevDatabase(async ({ connectionString }) => {
           await withPgvectorControlClient(connectionString, async (client) => {
             const plan = await client.dbInit({
+              invocation: TEST_INVOCATION,
               contract: emittedContract,
               mode: 'plan',
               migrationsDir,
             });
             expect(plan.ok).toBe(true);
             if (!plan.ok) {
-              throw new Error(`dbInit plan failed: ${plan.failure.summary}`);
+              throw new Error(`dbInit plan failed: ${plan.failure.message}`);
             }
 
             const ddl =
@@ -165,13 +168,14 @@ model Document {
             expect(ddl).not.toContain('"vector(1536)"');
 
             const apply = await client.dbInit({
+              invocation: TEST_INVOCATION,
               contract: emittedContract,
               mode: 'apply',
               migrationsDir,
             });
             if (!apply.ok) {
               throw new Error(
-                `dbInit apply failed: ${apply.failure.summary}\n\n${JSON.stringify(apply.failure, null, 2)}`,
+                `dbInit apply failed: ${apply.failure.message}\n\n${JSON.stringify(apply.failure, null, 2)}`,
               );
             }
           });
@@ -198,13 +202,14 @@ model Document {
         await withDevDatabase(async ({ connectionString }) => {
           await withPgvectorControlClient(connectionString, async (client) => {
             const init = await client.dbInit({
+              invocation: TEST_INVOCATION,
               contract: emittedContract,
               mode: 'apply',
               migrationsDir,
             });
             if (!init.ok) {
               throw new Error(
-                `dbInit apply failed: ${init.failure.summary}\n\n${JSON.stringify(init.failure, null, 2)}`,
+                `dbInit apply failed: ${init.failure.message}\n\n${JSON.stringify(init.failure, null, 2)}`,
               );
             }
           });
@@ -222,13 +227,19 @@ model Document {
 
           await withPgvectorControlClient(connectionString, async (client) => {
             const update = await client.dbUpdate({
+              invocation: TEST_INVOCATION,
+              answerQuestions: async (questions) =>
+                questions.map((question) => ({
+                  verb: question.verbs.includes('allow') ? ('allow' as const) : ('delete' as const),
+                  text: question.subject,
+                })),
               contract: emittedContract,
               mode: 'apply',
               migrationsDir,
             });
             if (!update.ok) {
               throw new Error(
-                `dbUpdate apply failed: ${update.failure.summary}\n\n${JSON.stringify(update.failure, null, 2)}`,
+                `dbUpdate apply failed: ${update.failure.message}\n\n${JSON.stringify(update.failure, null, 2)}`,
               );
             }
           });

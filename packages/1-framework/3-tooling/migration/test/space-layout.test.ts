@@ -7,12 +7,6 @@ import {
   spaceMigrationDirectory,
 } from '../src/space-layout';
 
-describe('APP_SPACE_ID', () => {
-  it('equals "app"', () => {
-    expect(APP_SPACE_ID).toBe('app');
-  });
-});
-
 describe('isValidSpaceId', () => {
   it.each([
     ['app', true],
@@ -80,9 +74,5 @@ describe('spaceMigrationDirectory', () => {
     expect(() => spaceMigrationDirectory('/p/migrations', 'Bad Space')).toThrow(
       MigrationToolsError,
     );
-  });
-
-  it('accepts the app space id (it matches the validation pattern)', () => {
-    expect(() => spaceMigrationDirectory('/p/migrations', APP_SPACE_ID)).not.toThrow();
   });
 });

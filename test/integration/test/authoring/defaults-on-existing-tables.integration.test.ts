@@ -5,8 +5,17 @@ import sqliteAdapter from '@internal/adapter-sqlite/control';
 import type { Contract } from '@internal/contract/types';
 import postgresControlDriver from '@internal/driver-postgres/control';
 import sqliteDriver from '@internal/driver-sqlite/control';
-import sql, { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
-import { APP_SPACE_ID, createControlStack } from '@internal/framework-components/control';
+import sql, {
+  INIT_ADDITIVE_POLICY,
+  type SqlMigrationPlanner,
+  type SqlMigrationRunner,
+  type SqlPlanTargetDetails,
+} from '@internal/family-sql/control';
+import {
+  APP_SPACE_ID,
+  createControlStack,
+  planOriginOf,
+} from '@internal/framework-components/control';
 import { buildFabricatedMigrationEdge } from '@internal/migration-tools/aggregate';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import postgres from '@internal/target-postgres/control';
@@ -28,8 +37,8 @@ const EVERY_CLASS = { allowedOperationClasses: ['additive', 'widening', 'destruc
 
 interface Stack {
   readonly family: ReturnType<typeof sql.create>;
-  readonly planner: ReturnType<typeof postgres.createPlanner>;
-  readonly runner: ReturnType<typeof postgres.createRunner>;
+  readonly planner: SqlMigrationPlanner<SqlPlanTargetDetails>;
+  readonly runner: SqlMigrationRunner<SqlPlanTargetDetails>;
   readonly frameworkComponents:
     | typeof postgresFrameworkComponents
     | typeof sqliteFrameworkComponents;
@@ -76,6 +85,8 @@ async function move(
     schema: await stack.family.introspect({ driver }),
     policy: fromContract === null ? INIT_ADDITIVE_POLICY : EVERY_CLASS,
     fromContract,
+    origin: planOriginOf(fromContract),
+    statements: [],
     frameworkComponents: stack.frameworkComponents,
     spaceId: APP_SPACE_ID,
     snapshotsImportPath: '../../snapshots',
@@ -131,6 +142,8 @@ async function moveAndVerify(
     schema: introspected,
     policy: EVERY_CLASS,
     fromContract: after,
+    origin: planOriginOf(after),
+    statements: [],
     frameworkComponents: stack.frameworkComponents,
     spaceId: APP_SPACE_ID,
     snapshotsImportPath: '../../snapshots',
@@ -155,8 +168,8 @@ const POSTGRES_BEFORE = `
 model Box {
   id       Int            @id
   tags     String[]       @default(["x"])
-  at       DateTime       @default("2020-01-01T00:00:00Z")
-  hundreds Numeric(5, -2) @default(100)
+  at       TimestamptzTemporal       @default(timestamptz\`2020-01-01T00:00:00Z\`)
+  hundreds NumericString(5, -2) @default(100)
   code     Char(5)        @default("z")
   token    Uuid           @default("11111111-1111-1111-1111-111111111111")
 }
@@ -166,14 +179,14 @@ const POSTGRES_AFTER = `
 model Box {
   id          Int            @id
   tags        String[]       @default(["a", "b"])
-  at          DateTime       @default("2024-01-01T01:00:00+01:00")
-  hundreds    Numeric(5, -2) @default(12300)
+  at          TimestamptzTemporal       @default(timestamptz\`2024-01-01T01:00:00+01:00\`)
+  hundreds    NumericString(5, -2) @default(12300)
   code        Char(5)        @default("ab")
   token       Uuid           @default("A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11")
   addedTags   String[]       @default(["a", "b"])
   addedEmpty  String[]       @default([])
-  addedAt     Timestamp      @default("0044-03-15 12:00:00 BC")
-  addedNumber Numeric(5, -2) @default(-9999900)
+  addedAt     TimestampTemporal      @default(timestamp\`0044-03-15 12:00:00 BC\`)
+  addedNumber NumericString(5, -2) @default(-9999900)
   addedCode   Char(5)        @default("ab")
   addedToken  Uuid           @default("{a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11}")
 }
@@ -226,7 +239,7 @@ describe('a default the codecs read, on a table the database already has', () =>
       `model Note {
   id    Int      @id
   body  String   @default("ab")
-  at    DateTime @default("2024-01-01T01:00:00+01:00")
+  at    DateTime @default(datetime\`2024-01-01T01:00:00+01:00\`)
   data  Json     @default(json\`{"a": [1, "x"]}\`)
   big   BigInt   @default(9007199254740993)
   ratio Float    @default(1.5)
@@ -245,7 +258,7 @@ describe('a default the codecs read, on a table the database already has', () =>
       `model Note {
   id    Int      @id
   body  String   @default("z")
-  at    DateTime @default("2020-01-01T00:00:00Z")
+  at    DateTime @default(datetime\`2020-01-01T00:00:00Z\`)
   data  Json     @default(json\`{"a": 0}\`)
   big   BigInt   @default(1)
   ratio Float    @default(2.5)
@@ -254,7 +267,7 @@ describe('a default the codecs read, on a table the database already has', () =>
       `model Note {
   id    Int      @id
   body  String   @default("ab")
-  at    DateTime @default("2024-01-01T01:00:00+01:00")
+  at    DateTime @default(datetime\`2024-01-01T01:00:00+01:00\`)
   data  Json     @default(json\`{"a": [1, "x"]}\`)
   big   BigInt   @default(9007199254740993)
   ratio Float    @default(1.5)

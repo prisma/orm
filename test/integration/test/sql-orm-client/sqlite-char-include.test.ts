@@ -15,7 +15,7 @@ import { InternalError } from '@internal/utils/internal-error';
 import { join } from 'pathe';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-const char3 = { codecId: 'sql/char@1', nativeType: 'text', typeParams: { length: 3 } } as const;
+const char3 = { codecId: 'sql/char@1', typeParams: { length: 3 } } as const;
 
 const PointBase = model('Point', {
   fields: {

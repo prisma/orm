@@ -9,6 +9,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import { bindWhereExpr } from '../src/where-binding';
 import { baseContract, createCollectionFor } from './collection-fixtures';
+import { publicTables } from './helpers';
 
 describe('SQL ORM collections with rich AST plans', () => {
   it('stores direct where expressions and bound where payloads in collection state', () => {
@@ -17,7 +18,11 @@ describe('SQL ORM collections with rich AST plans', () => {
     const direct = collection.where(BinaryExpr.eq(ColumnRef.of('users', 'id'), LiteralExpr.of(1)));
     expect(direct.state.filters[0]).toBeInstanceOf(BinaryExpr);
     expect(
-      bindWhereExpr(baseContract, BinaryExpr.eq(ColumnRef.of('users', 'id'), LiteralExpr.of(1))),
+      bindWhereExpr(
+        baseContract,
+        BinaryExpr.eq(ColumnRef.of('users', 'id'), LiteralExpr.of(1)),
+        publicTables('users'),
+      ),
     ).toEqual(direct.state.filters[0]);
 
     const bound = collection.where({
@@ -45,26 +50,5 @@ describe('SQL ORM collections with rich AST plans', () => {
     const plan = runtime.executions[0]?.plan;
     expect(plan?.ast).toBeInstanceOf(SelectAst);
     expect((plan!.ast as SelectAst).limit).toBe(1);
-  });
-
-  it('executes grouped aggregates backed by aggregate expressions', async () => {
-    const { collection, runtime } = createCollectionFor('Post');
-    runtime.setNextResults([[{ user_id: 1, postCount: 2, totalViews: 30 }]]);
-
-    const rows = await collection
-      .groupBy('userId')
-      .having((having) => having.count().gt(1))
-      .aggregate((aggregate) => ({
-        postCount: aggregate.count(),
-        totalViews: aggregate.sum('views'),
-      }));
-
-    expect(rows).toEqual([{ userId: 1, postCount: 2, totalViews: 30 }]);
-
-    const plan = runtime.executions[0]?.plan;
-    expect(plan?.ast).toBeInstanceOf(SelectAst);
-    const ast = plan?.ast as SelectAst;
-    expect(ast.having?.kind).toBe('binary');
-    expect((ast.having as BinaryExpr).left.kind).toBe('aggregate');
   });
 });

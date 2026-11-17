@@ -18,6 +18,8 @@ import type { ShellDefinition, ShellName } from '../src/shells';
 
 const postgresFacade: ImportRoot = { mode: 'facade', facade: '@prisma/orm-postgres' };
 const mongoFacade: ImportRoot = { mode: 'facade', facade: '@prisma/orm-mongo' };
+const mysqlFacade: ImportRoot = { mode: 'facade', facade: '@prisma/orm-mysql' };
+const mariadbFacade: ImportRoot = { mode: 'facade', facade: '@prisma/orm-mariadb' };
 const platform: ImportRoot = { mode: 'platform' };
 
 describe('resolveImportSpecifier', () => {
@@ -69,6 +71,12 @@ describe('resolveImportSpecifier', () => {
       expect(
         resolveImportSpecifier('@internal/extension-pgvector/codec-types', postgresFacade),
       ).toBe('@prisma/orm-extension-pgvector/codec-types');
+    });
+
+    it('resolves a contrib module pack to its entrypoint group in the contrib package', () => {
+      expect(resolveImportSpecifier('@internal/extension-citext/codec-types', postgresFacade)).toBe(
+        '@prisma/orm-postgres-contrib/citext/codec-types',
+      );
     });
 
     it('refuses a surface the facade does not republish', () => {
@@ -135,6 +143,75 @@ describe('resolveImportSpecifier', () => {
       expect(() => resolveImportSpecifier('@internal/migration-tools', postgresFacade)).toThrow(
         /has no name under @prisma\/orm-postgres/,
       );
+    });
+
+    it('resolves what emitted MySQL contracts and migrations name to the MySQL facade', () => {
+      expect(resolveImportSpecifier('@internal/adapter-mysql/codec-types', mysqlFacade)).toBe(
+        '@prisma/orm-mysql/adapter/codec-types',
+      );
+      expect(resolveImportSpecifier('@internal/sql-contract/types', mysqlFacade)).toBe(
+        '@prisma/orm-mysql/family-contract/types',
+      );
+      expect(resolveImportSpecifier('@internal/contract/types', mysqlFacade)).toBe(
+        '@prisma/orm-mysql/contract/types',
+      );
+      expect(resolveImportSpecifier('@internal/mysql/migration', mysqlFacade)).toBe(
+        '@prisma/orm-mysql/migration',
+      );
+    });
+
+    it('resolves what emitted MariaDB contracts, migrations and configs name to the MariaDB facade', () => {
+      expect(
+        [
+          '@internal/adapter-mariadb/codec-types',
+          '@internal/sql-contract/types',
+          '@internal/contract/types',
+          '@internal/mariadb/migration',
+          '@internal/mariadb/config',
+          '@internal/mariadb/control',
+          '@internal/driver-mariadb/control',
+        ].map((specifier) => resolveImportSpecifier(specifier, mariadbFacade)),
+      ).toEqual([
+        '@prisma/orm-mariadb/adapter/codec-types',
+        '@prisma/orm-mariadb/family-contract/types',
+        '@prisma/orm-mariadb/contract/types',
+        '@prisma/orm-mariadb/migration',
+        '@prisma/orm-mariadb/config',
+        '@prisma/orm-mariadb/control',
+        '@prisma/orm-mariadb/driver/control',
+      ]);
+    });
+
+    it('gives the MariaDB facade no name for MySQL modules or a query runtime', () => {
+      for (const specifier of [
+        '@internal/adapter-mysql/codec-types',
+        '@internal/mysql/migration',
+        '@internal/sql-runtime',
+      ]) {
+        expect(() => resolveImportSpecifier(specifier, mariadbFacade)).toThrow(
+          /has no name under @prisma\/orm-mariadb/,
+        );
+      }
+    });
+
+    it('resolves what a MySQL application queries with to the MySQL facade', () => {
+      expect(
+        [
+          '@internal/mysql/runtime',
+          '@internal/mysql/static',
+          '@internal/sql-runtime',
+          '@internal/sql-orm-client',
+          '@internal/sql-builder/runtime',
+          '@internal/sql-relational-core/ast',
+        ].map((specifier) => resolveImportSpecifier(specifier, mysqlFacade)),
+      ).toEqual([
+        '@prisma/orm-mysql/runtime',
+        '@prisma/orm-mysql/static',
+        '@prisma/orm-mysql/family-runtime',
+        '@prisma/orm-mysql/orm-client',
+        '@prisma/orm-mysql/builder/runtime',
+        '@prisma/orm-mysql/relational-core/ast',
+      ]);
     });
 
     it('rejects a non-facade shell as the facade', () => {
@@ -207,6 +284,7 @@ describe('directDependencyShells', () => {
       '@prisma/orm-extension-postgis',
       '@prisma/orm-extension-supabase',
       '@prisma/orm-postgres',
+      '@prisma/orm-postgres-contrib',
     ]);
   });
 

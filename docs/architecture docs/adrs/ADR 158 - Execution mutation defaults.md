@@ -1,5 +1,7 @@
 # ADR 158 — Execution mutation defaults
 
+**Amended by [ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md):** generators are authored with `@onCreate(fn())` and `@onUpdate(fn())`, so §1's update scope is no longer future work. §3's compatibility check is a binding of a generator function to codec ids, which the stack assembles. §4's precedence covers `@default(...)` with `@onCreate(...)` on one column: the client writes its value on writes through the ORM and the database default fills other inserts.
+
 ## Context
 
 We want to support **execution-time value generation** for columns during mutation operations (for example, generating IDs via `cuid()`), similar to behaviors found in many existing ORMs and query builders.
@@ -54,7 +56,7 @@ Each default is keyed by a reference to a stored field:
 
 `entry` names the storage entry that holds the field and `field` the stored field in it. For SQL these are the table and column names; for Mongo they are the collection and the stored document field. The names are family-neutral so every family uses the same framework type.
 
-This ADR defines defaults for create mutations (`onCreate`). Additional scopes (for example, update/upsert behavior) are future work.
+This ADR defines defaults for create mutations (`onCreate`). Generators on update (`onUpdate`) followed; PSL writes the two as `@onCreate(fn())` and `@onUpdate(fn())` ([ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md)).
 
 ### 2) Execution-plane behavior is provided as a shared helper (via `ExecutionContext`)
 
@@ -80,7 +82,7 @@ Generators must be registered with:
 - a static descriptor used for validation, for example:
   - JS/domain output shape (must be accepted by the backing column codec’s `encode`)
   - optional constraints (maxLength, etc.)
-  - supported column codecs (or a predicate over `{ codecId, nativeType, typeParams, ... }`)
+  - supported column codecs (or a predicate over `{ codecId, dataType, typeParams, ... }`)
 
 The contract stores only generator references (for example `{ kind: "generator", id: "cuid" }`), not executable code. Implementations live in the generator registry provided by the execution plane (built-ins and extension packs).
 
@@ -97,7 +99,7 @@ When authoring a mutation:
 3. Else, allow **database default** to apply by omitting the column when `storage.tables.*.columns.*.default` exists.
 4. Else, if the column is non-nullable, fail mutation authoring with a missing required value error.
 
-If both an execution mutation default and a database default exist for the same column, the execution default shadows the database default. This is allowed, but authoring/validation should emit a diagnostic to reduce accidental ambiguity.
+If both an execution mutation default and a database default exist for the same column, the execution default shadows the database default on writes through the ORM, and a write outside the ORM gets the database default. This is allowed, and authoring emits no diagnostic: the user wrote both on purpose, as in Prisma 7's `@default(now()) @updatedAt` ([`explicit-opt-in-over-diagnostics.mdc`](../../../.agents/rules/explicit-opt-in-over-diagnostics.mdc)).
 
 ## Hashing and marker verification
 
@@ -140,8 +142,8 @@ The database marker verifies only what the database must satisfy:
     "tables": {
       "user": {
         "columns": {
-          "id": { "nativeType": "text", "codecId": "pg/text@1", "nullable": false },
-          "email": { "nativeType": "text", "codecId": "pg/text@1", "nullable": false }
+          "id": { "codecId": "pg/text@1", "dataType": "pg/text", "nullable": false },
+          "email": { "codecId": "pg/text@1", "dataType": "pg/text", "nullable": false }
         },
         "primaryKey": { "columns": ["id"] },
         "uniques": [],

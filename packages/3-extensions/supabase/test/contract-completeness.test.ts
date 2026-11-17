@@ -7,6 +7,7 @@
  * captured 2026-07-12 — see `test/fixtures/supabase-reference/schema.sql`)
  * and catches accidental omissions in `contract:generate`'s output.
  */
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import contractJson from '../src/contract/contract.json' with { type: 'json' };
 import { SupabaseRole } from '../src/contract/roles';
@@ -138,8 +139,8 @@ const ENUM_LITERAL_DEFAULTS: Readonly<Record<string, string>> = {
   'storage.buckets_vectors.type': 'VECTOR',
 };
 
-/** Every list column that waives the derived element-not-null check. */
-const ELEMENT_NOT_NULL_WAIVERS = [
+/** Every list column. None has a check against null elements. */
+const LIST_COLUMNS = [
   'auth.custom_oauth_providers.acceptable_client_ids',
   'auth.custom_oauth_providers.scopes',
   'storage.buckets.allowed_mime_types',
@@ -149,7 +150,7 @@ const ELEMENT_NOT_NULL_WAIVERS = [
 type ContractJsonColumn = {
   codecId: string;
   default?: { kind: string; value?: unknown };
-  noCheck?: readonly string[];
+  many?: false | { elementNullable: boolean };
 };
 
 type ContractJsonTable = {
@@ -196,8 +197,20 @@ describe('contract completeness — auth/storage table, native enum, and role se
     );
   });
 
-  it('declares the nine curated named types', () => {
-    expect(Object.keys(storage.types ?? {}).sort()).toEqual([...NAMED_TYPES].sort());
+  it('declares the nine curated type aliases in its source and stores none of them', () => {
+    const source = readFileSync(
+      new URL('../src/contract/contract.prisma', import.meta.url),
+      'utf8',
+    );
+    const aliases = [
+      ...(/^types \{\n([\s\S]*?)^\}/m.exec(source)?.[1] ?? '').matchAll(/^\s+(\w+) =/gm),
+    ]
+      .map((match) => match[1])
+      .sort();
+    expect({ aliases, stored: storage.types }).toEqual({
+      aliases: [...NAMED_TYPES].sort(),
+      stored: undefined,
+    });
   });
 
   const declaredColumns = (['auth', 'storage'] as const).flatMap((namespaceId) =>
@@ -235,14 +248,14 @@ describe('contract completeness — auth/storage table, native enum, and role se
     );
   });
 
-  it('waives the derived element-not-null check on every list column', () => {
+  it('describes every list column as a list whose elements may be null', () => {
     const declared = Object.fromEntries(
       declaredColumns
-        .filter(({ column }) => column.noCheck !== undefined)
-        .map(({ path, column }) => [path, column.noCheck]),
+        .filter(({ column }) => column.many !== undefined && column.many !== false)
+        .map(({ path, column }) => [path, column.many]),
     );
     expect(declared).toEqual(
-      Object.fromEntries(ELEMENT_NOT_NULL_WAIVERS.map((path) => [path, ['elementNotNull']])),
+      Object.fromEntries(LIST_COLUMNS.map((path) => [path, { elementNullable: true }])),
     );
   });
 

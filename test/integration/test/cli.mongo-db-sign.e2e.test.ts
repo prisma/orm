@@ -38,7 +38,10 @@ const testContract: MongoContract = {
               },
             },
             relations: {},
-            storage: { collection: 'users' },
+            storage: {
+              collection: 'users',
+              fields: { _id: { field: '_id' }, email: { field: 'email' } },
+            },
           },
         },
       },
@@ -53,7 +56,11 @@ const testContract: MongoContract = {
           collection: {
             users: new MongoCollection({
               indexes: [
-                new MongoIndex({ keys: [{ field: 'email', direction: 1 as const }], unique: true }),
+                new MongoIndex({
+                  name: 'email_1',
+                  keys: [{ field: 'email', direction: 1 as const }],
+                  unique: true,
+                }),
               ],
             }),
           },
@@ -135,8 +142,8 @@ describe('mongo db sign command (e2e)', { timeout: timeouts.spinUpMongoMemorySer
       expect(run.exitCode).toBe(0);
       expect(run.presented?.data).toMatchObject({
         ok: true,
-        summary: expect.stringContaining('marker created'),
-        marker: { created: true, updated: false },
+        summary: 'Database signed',
+        spaces: [{ space: 'app', status: 'created' }],
       });
 
       const marker = await controlAdapter.readMarker(new MongoControlDriver(db, client), 'app');
@@ -165,8 +172,8 @@ describe('mongo db sign command (e2e)', { timeout: timeouts.spinUpMongoMemorySer
       expect(secondSign.exitCode).toBe(0);
       expect(secondSign.presented?.data).toMatchObject({
         ok: true,
-        summary: expect.stringContaining('already signed'),
-        marker: { created: false, updated: false },
+        summary: 'Database signed',
+        spaces: [{ space: 'app', status: 'unchanged' }],
       });
     });
 
@@ -200,8 +207,8 @@ describe('mongo db sign command (e2e)', { timeout: timeouts.spinUpMongoMemorySer
       expect(secondSign.exitCode).toBe(0);
       expect(secondSign.presented?.data).toMatchObject({
         ok: true,
-        summary: expect.stringContaining('marker updated'),
-        marker: { created: false, updated: true },
+        summary: 'Database signed',
+        spaces: [{ space: 'app', status: 'updated' }],
       });
 
       const marker = await controlAdapter.readMarker(new MongoControlDriver(db, client), 'app');

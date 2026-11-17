@@ -115,16 +115,27 @@ describe('ref list', () => {
     ]);
   });
 
-  it('leaves stdout empty in human mode', async () => {
+  it('prints one data line per ref: its name, contract hash and invariants', async () => {
     const { dir } = await seedRefProject();
+    await writeRef(refsDirIn(dir), 'production', {
+      hash: HASH_B,
+      invariants: ['users_backfilled', 'emails_lowercased'],
+    });
     await writeRef(refsDirIn(dir), 'staging', { hash: HASH_A, invariants: [] });
 
-    const run = await harness().run(['migration', 'ref', 'list'], {
-      cwd: dir,
-      isTty: { stdout: true },
-    });
+    const run = await harness().run(['migration', 'ref', 'list'], { cwd: dir });
 
-    expect(run.presented?.presentation.stdout).toEqual([]);
+    expect(run.stdout).toBe(
+      `production\t${HASH_B}\tusers_backfilled,emails_lowercased\nstaging\t${HASH_A}\t\n`,
+    );
+  });
+
+  it('prints nothing when the project has no refs', async () => {
+    const { dir } = await seedRefProject();
+
+    const run = await harness().run(['migration', 'ref', 'list'], { cwd: dir });
+
+    expect(run.exitCode).toBe(0);
     expect(run.stdout).toBe('');
   });
 });

@@ -14,7 +14,14 @@ import type { RuntimeQueryable } from '@internal/sql-orm-client';
 import type { SelectAst, SqlStatementStats } from '@internal/sql-relational-core/ast';
 import type { SqlExecutionPlan, SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
-import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
+import type { RuntimeScope } from '@internal/sql-relational-core/types';
+import {
+  type ActivityHandle,
+  type ActivitySource,
+  activitySource,
+  createExecutionContext,
+  createSqlExecutionStack,
+} from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
 import type { Contract as ExecutionDefaultedTagsContract } from './fixtures/execution-defaulted-tags/generated/contract';
 import executionDefaultedTagsContractJson from './fixtures/execution-defaulted-tags/generated/contract.json' with {
@@ -92,7 +99,7 @@ type MutableDomainModel = {
   relations: Record<string, unknown>;
   storage: Record<string, unknown>;
   discriminator?: { field: string };
-  variants?: Record<string, { value: string }>;
+  variants?: Record<string, { model: string; namespace: string }>;
   base?: { model: string; namespace: string };
 };
 
@@ -186,7 +193,10 @@ export function buildMixedPolyContract(): TestContract {
       fields: { id: { column: 'id' }, title: { column: 'title' }, type: { column: 'type' } },
     },
     discriminator: { field: 'type' },
-    variants: { Bug: { value: 'bug' }, Feature: { value: 'feature' } },
+    variants: {
+      bug: { model: 'Bug', namespace: POSTGRES_DEFAULT_NAMESPACE_ID },
+      feature: { model: 'Feature', namespace: POSTGRES_DEFAULT_NAMESPACE_ID },
+    },
   };
 
   domainModels['Bug'] = {
@@ -217,10 +227,10 @@ export function buildMixedPolyContract(): TestContract {
 
   raw.storage.namespaces[POSTGRES_DEFAULT_NAMESPACE_ID].entries.table.tasks = {
     columns: {
-      id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-      title: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
-      type: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
-      severity: { nativeType: 'text', codecId: 'pg/text@1', nullable: true },
+      id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+      title: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
+      type: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
+      severity: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: true },
     },
     primaryKey: { columns: ['id'] },
     uniques: [],
@@ -230,8 +240,8 @@ export function buildMixedPolyContract(): TestContract {
 
   raw.storage.namespaces[POSTGRES_DEFAULT_NAMESPACE_ID].entries.table.features = {
     columns: {
-      id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-      priority: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+      id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+      priority: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
     },
     primaryKey: { columns: ['id'] },
     uniques: [],
@@ -263,8 +273,8 @@ export function buildStiPolyContract(): TestContract {
   };
   userModel.discriminator = { field: 'kind' };
   userModel.variants = {
-    Admin: { value: 'admin' },
-    Regular: { value: 'regular' },
+    admin: { model: 'Admin', namespace: POSTGRES_DEFAULT_NAMESPACE_ID },
+    regular: { model: 'Regular', namespace: POSTGRES_DEFAULT_NAMESPACE_ID },
   };
 
   domainModels['Admin'] = {
@@ -295,21 +305,45 @@ export function buildStiPolyContract(): TestContract {
 
   raw.storage.namespaces[POSTGRES_DEFAULT_NAMESPACE_ID].entries.table.users.columns.kind = {
     codecId: 'pg/text@1',
-    nativeType: 'text',
+    dataType: 'pg/text',
     nullable: false,
   };
   raw.storage.namespaces[POSTGRES_DEFAULT_NAMESPACE_ID].entries.table.users.columns.role = {
     codecId: 'pg/text@1',
-    nativeType: 'text',
+    dataType: 'pg/text',
     nullable: true,
   };
   raw.storage.namespaces[POSTGRES_DEFAULT_NAMESPACE_ID].entries.table.users.columns.plan = {
     codecId: 'pg/text@1',
-    nativeType: 'text',
+    dataType: 'pg/text',
     nullable: true,
   };
 
   return deserializeTestContract(raw);
+}
+
+/** An activity source for a test stub: each activity's handle sends its statements through `target` itself, and ends doing nothing. */
+export function stubActivitySource(target: RuntimeScope): ActivitySource {
+  const source: ActivitySource = {
+    async startActivity(start) {
+      const handle = Object.assign(Object.create(target), {
+        activity: {
+          id: 'stub-activity',
+          kind: start.kind,
+          contentHash: start.contentHash,
+          annotations: start.annotations ?? new Map(),
+        },
+        intercepted: undefined,
+        end: async () => {},
+        startActivity: source.startActivity,
+        planContentHash: source.planContentHash,
+        [activitySource]: source,
+      });
+      return handle as ActivityHandle<typeof start.kind>;
+    },
+    planContentHash: async () => 'stub-plan-hash',
+  };
+  return source;
 }
 
 export function createMockRuntime(): MockRuntime {
@@ -317,7 +351,7 @@ export function createMockRuntime(): MockRuntime {
   let nextResults: Record<string, unknown>[][] = [];
   let nextStats: SqlStatementStats[] = [];
 
-  const runtime: MockRuntime = {
+  const base = {
     executions,
     setNextResults(results: Record<string, unknown>[][]) {
       nextResults = [...results];
@@ -347,6 +381,7 @@ export function createMockRuntime(): MockRuntime {
       return stats;
     },
   };
+  const runtime: MockRuntime = Object.assign(base, { [activitySource]: stubActivitySource(base) });
 
   return runtime;
 }

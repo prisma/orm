@@ -13,5 +13,5 @@
     "prisma.config.ts",
     "prisma7.config.ts"
   ],
-  "exclude": ["dist"]
+  "exclude": ["dist", "test/handover"]
 }

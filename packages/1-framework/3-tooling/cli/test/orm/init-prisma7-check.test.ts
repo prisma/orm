@@ -150,7 +150,7 @@ describe('the Prisma 7 check before init changes the project', () => {
       copyFixture();
       loadTargetConfig = await targetConfigWith(refusingSource);
 
-      const run = await harness().run(prisma7Argv(), { cwd: projectDir });
+      const run = await harness().run([...prisma7Argv(), '--json'], { cwd: projectDir });
 
       expect(run.exitCode).toBe(2);
       expect(envelopeOf(run)).toMatchObject({
@@ -190,7 +190,7 @@ describe('the Prisma 7 check before init changes the project', () => {
       writeFileSync(join(projectDir, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
       loadTargetConfig = await targetConfigWith(refusingSource);
 
-      const run = await harness().run(prisma7Argv(), { cwd: projectDir });
+      const run = await harness().run([...prisma7Argv(), '--json'], { cwd: projectDir });
 
       expect(envelopeOf(run)).toMatchObject({
         error: {
@@ -216,7 +216,7 @@ describe('the Prisma 7 check before init changes the project', () => {
       copyFixture();
       loadTargetConfig = await targetConfigWith(undefined);
 
-      const run = await harness().run(prisma7Argv(), { cwd: projectDir });
+      const run = await harness().run([...prisma7Argv(), '--json'], { cwd: projectDir });
 
       expect(run.exitCode).toBe(2);
       expect(envelopeOf(run)).toMatchObject({
@@ -272,7 +272,7 @@ describe('the Prisma 7 check before init changes the project', () => {
       copyFixture();
 
       const run = await harness().run(
-        ['orm', 'init', '--from-prisma7-schema', 'prisma/schema.prisma'],
+        ['orm', 'init', '--from-prisma7-schema', 'prisma/schema.prisma', '--json'],
         { cwd: projectDir },
       );
 
@@ -323,7 +323,7 @@ describe('the Prisma 7 check before init changes the project', () => {
       copyFixture();
       loadTargetConfig = await loader();
 
-      const run = await harness().run(prisma7Argv(), { cwd: projectDir });
+      const run = await harness().run([...prisma7Argv(), '--json'], { cwd: projectDir });
 
       expect(envelopeOf(run)).toMatchObject({
         error: {
@@ -372,7 +372,7 @@ describe('the Prisma 7 check before init changes the project', () => {
       script = [{ exitCode: 1, stderr: PNPM_WORKSPACE_LEAK }];
       loadTargetConfig = await targetConfigWith(refusingSource);
 
-      const run = await harness('pnpm').run(prisma7Argv(), { cwd: projectDir });
+      const run = await harness('pnpm').run([...prisma7Argv(), '--json'], { cwd: projectDir });
 
       expect(envelopeOf(run)).toMatchObject({
         error: {
@@ -394,7 +394,7 @@ describe('the Prisma 7 check before init changes the project', () => {
       copyFixture();
       loadTargetConfig = async () => undefined;
 
-      const run = await harness().run(prisma7Argv(), { cwd: projectDir });
+      const run = await harness().run([...prisma7Argv(), '--json'], { cwd: projectDir });
 
       expect(envelopeOf(run)).toMatchObject({
         error: {

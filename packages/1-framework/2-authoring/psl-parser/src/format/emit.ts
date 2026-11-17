@@ -6,6 +6,8 @@ import {
   FieldDeclarationAst,
   GenericBlockDeclarationAst,
   KeyValuePairAst,
+  MixinDeclarationAst,
+  MixinInclusionAst,
   ModelDeclarationAst,
   NamedTypeDeclarationAst,
   NamespaceDeclarationAst,
@@ -137,6 +139,7 @@ function spaceBetween(
     case 'Dot':
     case 'At':
     case 'DoubleAt':
+    case 'Plus':
       return false;
     default:
       return true;
@@ -259,47 +262,28 @@ function leafMember(
 
 type MemberClassifier = (node: SyntaxNode) => BlockMember | undefined;
 
-function emitModel(
-  writer: LineWriter,
-  model: ModelDeclarationAst,
-  trailing: string | undefined,
-): void {
-  const alignmentColumns = alignmentMap(model.syntax);
-  emitBlockBody(writer, model.syntax, trailing, (node) => {
+function inclusionMember(writer: LineWriter, node: SyntaxNode): BlockMember | undefined {
+  const inclusion = MixinInclusionAst.cast(node);
+  if (inclusion === undefined) return undefined;
+  return leafMember(writer, 'regular', () => streamNode(writer, inclusion.syntax));
+}
+
+function fieldBodyMembers(writer: LineWriter, block: SyntaxNode): MemberClassifier {
+  const alignmentColumns = alignmentMap(block);
+  return (node) => {
     const field = FieldDeclarationAst.cast(node);
     if (field)
       return leafMember(writer, 'regular', () => emitField(writer, field, alignmentColumns));
     const attribute = ModelAttributeAst.cast(node);
     if (attribute)
       return leafMember(writer, 'blockAttribute', () => emitBlockAttribute(writer, attribute));
-    return undefined;
-  });
+    return inclusionMember(writer, node);
+  };
 }
 
-function emitCompositeType(
-  writer: LineWriter,
-  composite: CompositeTypeDeclarationAst,
-  trailing: string | undefined,
-): void {
-  const alignmentColumns = alignmentMap(composite.syntax);
-  emitBlockBody(writer, composite.syntax, trailing, (node) => {
-    const field = FieldDeclarationAst.cast(node);
-    if (field)
-      return leafMember(writer, 'regular', () => emitField(writer, field, alignmentColumns));
-    const attribute = ModelAttributeAst.cast(node);
-    if (attribute)
-      return leafMember(writer, 'blockAttribute', () => emitBlockAttribute(writer, attribute));
-    return undefined;
-  });
-}
-
-function emitGenericBlock(
-  writer: LineWriter,
-  block: GenericBlockDeclarationAst,
-  trailing: string | undefined,
-): void {
-  const alignment = alignmentMap(block.syntax);
-  emitBlockBody(writer, block.syntax, trailing, (node) => {
+function entryBodyMembers(writer: LineWriter, block: SyntaxNode): MemberClassifier {
+  const alignment = alignmentMap(block);
+  return (node) => {
     const field = FieldDeclarationAst.cast(node);
     if (field) return leafMember(writer, 'regular', () => emitField(writer, field, alignment));
     const entry = KeyValuePairAst.cast(node);
@@ -307,8 +291,45 @@ function emitGenericBlock(
     const attribute = ModelAttributeAst.cast(node);
     if (attribute)
       return leafMember(writer, 'blockAttribute', () => emitBlockAttribute(writer, attribute));
-    return undefined;
-  });
+    return inclusionMember(writer, node);
+  };
+}
+
+function emitModel(
+  writer: LineWriter,
+  model: ModelDeclarationAst,
+  trailing: string | undefined,
+): void {
+  emitBlockBody(writer, model.syntax, trailing, fieldBodyMembers(writer, model.syntax));
+}
+
+function emitCompositeType(
+  writer: LineWriter,
+  composite: CompositeTypeDeclarationAst,
+  trailing: string | undefined,
+): void {
+  emitBlockBody(writer, composite.syntax, trailing, fieldBodyMembers(writer, composite.syntax));
+}
+
+function emitGenericBlock(
+  writer: LineWriter,
+  block: GenericBlockDeclarationAst,
+  trailing: string | undefined,
+): void {
+  emitBlockBody(writer, block.syntax, trailing, entryBodyMembers(writer, block.syntax));
+}
+
+const FIELD_BODY_KEYWORDS: ReadonlySet<string> = new Set(['model', 'type']);
+
+function emitMixinDeclaration(
+  writer: LineWriter,
+  mixin: MixinDeclarationAst,
+  trailing: string | undefined,
+): void {
+  const members = FIELD_BODY_KEYWORDS.has(mixin.keyword()?.text ?? '')
+    ? fieldBodyMembers(writer, mixin.syntax)
+    : entryBodyMembers(writer, mixin.syntax);
+  emitBlockBody(writer, mixin.syntax, trailing, members);
 }
 
 function emitNamespace(
@@ -362,6 +383,8 @@ function castBlockDeclaration(node: SyntaxNode): BlockEmitter | undefined {
   if (composite) return (writer, trailing) => emitCompositeType(writer, composite, trailing);
   const generic = GenericBlockDeclarationAst.cast(node);
   if (generic) return (writer, trailing) => emitGenericBlock(writer, generic, trailing);
+  const mixin = MixinDeclarationAst.cast(node);
+  if (mixin) return (writer, trailing) => emitMixinDeclaration(writer, mixin, trailing);
   return undefined;
 }
 

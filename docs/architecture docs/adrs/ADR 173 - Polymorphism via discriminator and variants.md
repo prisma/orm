@@ -6,48 +6,59 @@ A polymorphic Task model with Bug and Feature variants. Task declares which fiel
 
 ```json
 {
-  "roots": { "tasks": "Task" },
-  "models": {
-    "Task": {
-      "fields": {
-        "id": { "nullable": false, "codecId": "pg/int4@1" },
-        "title": { "nullable": false, "codecId": "pg/text@1" },
-        "type": { "nullable": false, "codecId": "pg/text@1" },
-        "assigneeId": { "nullable": true, "codecId": "pg/int4@1" }
-      },
-      "discriminator": { "field": "type" },
-      "variants": {
-        "Bug": { "value": "bug" },
-        "Feature": { "value": "feature" }
-      },
-      "relations": {
-        "assignee": { "to": "User", "cardinality": "N:1", "on": { "localFields": ["assigneeId"], "targetFields": ["id"] } }
-      },
-      "storage": {
-        "table": "tasks",
-        "fields": {
-          "id": { "column": "id" },
-          "title": { "column": "title" },
-          "type": { "column": "type" },
-          "assigneeId": { "column": "assignee_id" }
+  "roots": { "tasks": { "model": "Task", "namespace": "public" } },
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "Task": {
+            "discriminator": { "field": "type" },
+            "fields": {
+              "id": { "nullable": false, "type": { "codecId": "pg/int4@1", "kind": "scalar" } },
+              "title": { "nullable": false, "type": { "codecId": "pg/text@1", "kind": "scalar" } },
+              "type": { "nullable": false, "type": { "codecId": "pg/text@1", "kind": "scalar" } }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": { "column": "id" },
+                "title": { "column": "title" },
+                "type": { "column": "type" }
+              },
+              "namespaceId": "public",
+              "table": "tasks"
+            },
+            "variants": {
+              "bug": { "model": "Bug", "namespace": "public" },
+              "feature": { "model": "Feature", "namespace": "public" }
+            }
+          },
+          "Bug": {
+            "base": { "model": "Task", "namespace": "public" },
+            "fields": {
+              "severity": { "nullable": false, "type": { "codecId": "pg/text@1", "kind": "scalar" } }
+            },
+            "relations": {},
+            "storage": {
+              "fields": { "severity": { "column": "severity" } },
+              "namespaceId": "public",
+              "table": "tasks"
+            }
+          },
+          "Feature": {
+            "base": { "model": "Task", "namespace": "public" },
+            "fields": {
+              "priority": { "nullable": false, "type": { "codecId": "pg/int4@1", "kind": "scalar" } }
+            },
+            "relations": {},
+            "storage": {
+              "fields": { "priority": { "column": "priority" } },
+              "namespaceId": "public",
+              "table": "features"
+            }
+          }
         }
       }
-    },
-    "Bug": {
-      "base": "Task",
-      "fields": {
-        "severity": { "nullable": false, "codecId": "pg/text@1" }
-      },
-      "relations": {},
-      "storage": { "table": "tasks", "fields": { "severity": { "column": "severity" } } }
-    },
-    "Feature": {
-      "base": "Task",
-      "fields": {
-        "priority": { "nullable": false, "codecId": "pg/int4@1" }
-      },
-      "relations": {},
-      "storage": { "table": "features", "fields": { "priority": { "column": "priority" } } }
     }
   }
 }
@@ -115,21 +126,23 @@ Each model explicitly labels its role in the polymorphic hierarchy.
 Polymorphism is expressed bidirectionally. On the base model:
 
 - **`discriminator`**: which field distinguishes the variants (`{ "field": "type" }`)
-- **`variants`**: which models are specializations, and what discriminator value each uses (`{ "Bug": { "value": "bug" }, "Feature": { "value": "feature" } }`)
+- **`variants`**: which models are specializations, keyed by the discriminator value each uses (`{ "bug": { "model": "Bug", "namespace": "public" }, "feature": { "model": "Feature", "namespace": "public" } }`)
 
 On each variant:
 
-- **`base`**: which model this variant specializes (`"Task"`)
+- **`base`**: which model this variant specializes (`{ "model": "Task", "namespace": "public" }`)
 
 Each variant appears as a sibling in the `models` dictionary with its own fields and storage. Refer to the [At a glance](#at-a-glance) example for the complete structure.
+
+`variants` is keyed by discriminator value, and each entry references the variant model by its coordinate, `{ namespace, model }` (see [ADR 221](ADR%20221%20-%20Contract%20IR%20two%20planes%20with%20uniform%20entity%20coordinate%20and%20pack-contributed%20entity%20kinds.md)). A value names one variant in a hierarchy, so a variant may be in a different namespace from its base, and two variants may have the same model name.
 
 The `base` ↔ `variants` relationship is bidirectional: the base model answers "what are Task's specializations?" and each variant answers "what model does Bug specialize?" This is redundant (the emitter writes both sides), but each direction serves a different traversal — see [ADR 172](ADR%20172%20-%20Contract%20domain-storage%20separation.md) for why redundancy in an emitted artifact is acceptable.
 
 ### Variant fields are thin
 
-Variants list only their own additional fields — they inherit the base model's fields via the `base` reference. In the example above, Bug's `fields` contains only `severity`; it inherits `id`, `title`, `type`, and `assigneeId` from Task.
+Variants list only their own additional fields — they inherit the base model's fields via the `base` reference. In the example above, Bug's `fields` contains only `severity`; it inherits `id`, `title` and `type` from Task.
 
-This avoids redundancy (Task has 4 fields; repeating them on each variant triples the declarations), eliminates consistency risk (the emitter handles field resolution — it can't get out of sync), and makes domain reading cleaner (Bug's `fields` tells you exactly what Bug *adds* to the base).
+This avoids redundancy (Task has 3 fields; repeating them on each variant triples the declarations), eliminates consistency risk (the emitter handles field resolution — it can't get out of sync), and makes domain reading cleaner (Bug's `fields` tells you exactly what Bug *adds* to the base).
 
 ### Persistence strategy is emergent
 
@@ -164,6 +177,8 @@ These are independent properties. This composability is why we rejected labeled 
 
 ### Value objects use the same mechanism
 
+> **Note:** value objects are now storage entities, at `storage.namespaces.<ns>.entries.valueObject`, not a domain `valueObjects` section ([ADR 309](ADR%20309%20-%20Value%20objects%20are%20storage%20entities%2C%20and%20a%20discriminator%20column%20names%20a%20value%20set.md)). On SQL, a base model's discriminator column also refers to a value set of its variants' values.
+
 The `discriminator`/`variants`/`base` pattern applies identically to value objects in the `valueObjects` section ([ADR 178](ADR%20178%20-%20Value%20objects%20in%20the%20contract.md)). A base value object declares a discriminator and variants; each variant declares its base and adds type-specific fields:
 
 ```json
@@ -171,21 +186,21 @@ The `discriminator`/`variants`/`base` pattern applies identically to value objec
   "ContactInfo": {
     "discriminator": { "field": "channel" },
     "variants": {
-      "EmailContact": { "value": "email" },
-      "PhoneContact": { "value": "phone" }
+      "email": { "model": "EmailContact", "namespace": "__unbound__" },
+      "phone": { "model": "PhoneContact", "namespace": "__unbound__" }
     },
     "fields": {
       "channel": { "nullable": false, "codecId": "mongo/string@1" }
     }
   },
   "EmailContact": {
-    "base": "ContactInfo",
+    "base": { "model": "ContactInfo", "namespace": "__unbound__" },
     "fields": {
       "address": { "nullable": false, "codecId": "mongo/string@1" }
     }
   },
   "PhoneContact": {
-    "base": "ContactInfo",
+    "base": { "model": "ContactInfo", "namespace": "__unbound__" },
     "fields": {
       "number": { "nullable": false, "codecId": "mongo/string@1" }
     }

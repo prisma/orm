@@ -12,17 +12,8 @@
  *      hands back for `geometry` columns. We parse it into a
  *      GeoJSON-shaped object so callers see structured data, not
  *      opaque hex.
- * 2. `PostgisGeometryDescriptor` extends {@link PostgresCodecDescriptor}
- *    with the codec id, traits, target types, params schema
- *    (`{ srid?: number }`, preserving unparameterized geometry while validating supplied SRIDs), explicit target behavior, and
- *    the emit-path `renderOutputType` producing `Geometry<${srid}>` /
- *    `Geometry` when no SRID is supplied.
- * 3. `pgGeometryColumn({ srid })` per-codec column helper invoking
- *    `descriptor.factory({ srid })` and passing the bare
- *    `nativeType: 'geometry'`. The family-layer `expandNativeType`
- *    hook renders the parameterised form
- *    (`geometry(Geometry,${srid})`) at emit/verify time from
- *    `nativeType` + `typeParams`.
+ * 2. `PostgisGeometryDescriptor` extends {@link PostgresCodecDescriptor} with the codec id, traits, the `postgis/geometry` data type and its params schema (`{ srid?: number }`), and explicit target behavior. Every column reads as `Geometry`, whatever its SRID. The data type declares the type's name and the bound of `srid`.
+ * 3. `pgGeometryColumn({ srid })` per-codec column helper invoking `descriptor.factory({ srid })`.
  *
  * The geometry codec's encode/decode is parameter-independent — the
  * wire format already carries SRID inside the EWKT/EWKB payload, so the
@@ -31,7 +22,6 @@
  * (e.g. SRID cross-checks) without rewriting the constructor.
  */
 
-import type { JsonValue } from '@internal/contract/types';
 import {
   type AnyCodecDescriptor,
   type CodecCallContext,
@@ -40,42 +30,25 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
-  decodeJsonMatching,
+  type DataTypeValue,
 } from '@internal/framework-components/codec';
-import type { ExtractCodecTypes, ProjectionExpr } from '@internal/sql-relational-core/ast';
+import {
+  CastExpr,
+  type ExtractCodecTypes,
+  type ProjectionExpr,
+} from '@internal/sql-relational-core/ast';
 import {
   definePostgresCodecs,
   PostgresCodecDescriptor,
 } from '@internal/target-postgres/codec-descriptor';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
-import { type as arktype } from 'arktype';
 import { POSTGIS_GEOMETRY_CODEC_ID } from './constants';
-import { postgisGeometry } from './data-types';
+import { postgisGeometry, postgisGeometryParams } from './data-types';
 import { postgisError } from './errors';
 import { decodeEWKBHex, encodeEWKBHex, encodeEWKT } from './ewkb';
 import type { Geometry } from './geojson';
 
-const HEX_TEXT = /^(?:[0-9A-Fa-f]{2})*$/;
-
 type GeometryParams = { readonly srid?: number };
-
-const geometryParamsSchema = arktype({
-  'srid?': 'number',
-}).narrow((params, ctx) => {
-  const { srid } = params;
-  if (srid === undefined) {
-    return true;
-  }
-  if (!Number.isInteger(srid)) {
-    return ctx.mustBe('an integer');
-  }
-  if (srid < 0) {
-    return ctx.mustBe('a non-negative integer');
-  }
-  return true;
-}) satisfies StandardSchemaV1<GeometryParams>;
-
-const POSTGIS_GEOMETRY_NATIVE_TYPE = 'geometry';
 
 const allowedGeometryTypes = new Set([
   'Point',
@@ -113,16 +86,16 @@ export class PostgisGeometryCodec extends CodecImpl<
   string,
   Geometry
 > {
-  constructor(descriptor: AnyCodecDescriptor) {
-    super(descriptor);
+  constructor(descriptor: AnyCodecDescriptor, params: GeometryParams) {
+    super(descriptor, postgisGeometry, params);
   }
 
-  async encode(value: Geometry, _ctx: CodecCallContext): Promise<string> {
+  async toWire(value: Geometry, _ctx: CodecCallContext): Promise<string> {
     assertGeometry(value);
     return encodeEWKT(value);
   }
 
-  async decode(wire: string, _ctx: CodecCallContext): Promise<Geometry> {
+  async fromWire(wire: string, _ctx: CodecCallContext): Promise<Geometry> {
     if (typeof wire !== 'string') {
       throw postgisError('RUNTIME.DECODE_FAILED', 'Geometry wire value must be a string', {
         meta: { codecId: POSTGIS_GEOMETRY_CODEC_ID },
@@ -131,35 +104,28 @@ export class PostgisGeometryCodec extends CodecImpl<
     return decodeEWKBHex(wire);
   }
 
-  encodeJson(value: Geometry): JsonValue {
-    assertGeometry(value);
-    return encodeEWKBHex(value);
+  fromDataTypeValue(value: DataTypeValue<string>): Geometry {
+    return decodeEWKBHex(value.value);
   }
 
-  decodeJson(json: JsonValue): Geometry {
-    return decodeEWKBHex(
-      decodeJsonMatching(POSTGIS_GEOMETRY_CODEC_ID, json, HEX_TEXT, 'a HEXEWKB string'),
-    );
+  toDataTypeValue(input: Geometry): DataTypeValue {
+    assertGeometry(input);
+    return this.dataTypeValueOf(encodeEWKBHex(input));
   }
 }
 
 export class PostgisGeometryDescriptor extends PostgresCodecDescriptor<GeometryParams> {
-  protected override nativeType(): string {
-    return POSTGIS_GEOMETRY_NATIVE_TYPE;
-  }
+  override readonly jsonType = 'object' as const;
+  /** The HEXEWKB text PostgreSQL prints for a geometry, which `fromWire` reads as it reads a row. A JSON constructor handed the geometry itself may write GeoJSON instead. */
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return expression;
+    return CastExpr.as(expression, 'text');
   }
   override readonly dataType = postgisGeometry.id;
   override readonly codecId = POSTGIS_GEOMETRY_CODEC_ID;
   override readonly traits = ['equality'] as const;
-  override readonly targetTypes = ['geometry'] as const;
-  override readonly paramsSchema: StandardSchemaV1<GeometryParams> = geometryParamsSchema;
-  override renderOutputType(params: GeometryParams): string {
-    const { srid } = params;
-    if (srid === undefined) return 'Geometry';
-    return `Geometry<${srid}>`;
-  }
+  override readonly enumRefusal =
+    'Enums over a geometry codec are not supported yet, because no test proves that a shape reads back as its member. Use a text enum that names each shape instead.';
+  override readonly paramsSchema: StandardSchemaV1<GeometryParams> = postgisGeometryParams;
   /**
    * Runtime materialization uses an empty parameter object for the
    * existing unparameterized `geometryColumn` variant and `{ srid }` for
@@ -167,8 +133,8 @@ export class PostgisGeometryDescriptor extends PostgresCodecDescriptor<GeometryP
    * the wire format already carries SRID inside the EWKT/EWKB payload,
    * so codec behavior is parameter-independent.
    */
-  override factory(_params: GeometryParams): (ctx: CodecInstanceContext) => PostgisGeometryCodec {
-    return () => new PostgisGeometryCodec(this);
+  override factory(params: GeometryParams): (ctx: CodecInstanceContext) => PostgisGeometryCodec {
+    return () => new PostgisGeometryCodec(this, params ?? {});
   }
 }
 
@@ -180,32 +146,12 @@ export const postgisGeometryDescriptor = new PostgisGeometryDescriptor();
  * Generic over `S extends number` so the column site preserves the
  * SRID literal in `typeParams` (e.g. `pgGeometryColumn({ srid: 4326 })`
  * packs `typeParams: { srid: 4326 }`).
- *
- * Passes the bare `nativeType: 'geometry'`; the family-layer
- * `expandNativeType` hook renders the parameterised form
- * (`geometry(Geometry,${srid})`) at emit/verify time from `nativeType`
- * + `typeParams`.
- *
- * @throws If `srid` is not a non-negative integer
- * (structured `CONTRACT.ARGUMENT_INVALID`).
  */
 export const pgGeometryColumn = <S extends number>(options: { readonly srid: S }) => {
   const { srid } = options;
-  if (!Number.isInteger(srid) || srid < 0) {
-    throw postgisError(
-      'CONTRACT.ARGUMENT_INVALID',
-      `postgis: srid must be a non-negative integer, got ${srid}`,
-      {
-        meta: { helperPath: 'pgGeometryColumn', expected: 'non-negative integer', received: srid },
-      },
-    );
-  }
-  return column(
-    postgisGeometryDescriptor.factory({ srid }),
-    postgisGeometryDescriptor.codecId,
-    { srid },
-    'geometry',
-  );
+  return column(postgisGeometryDescriptor.factory({ srid }), postgisGeometryDescriptor.codecId, {
+    srid,
+  });
 };
 
 pgGeometryColumn satisfies ColumnHelperFor<PostgisGeometryDescriptor>;

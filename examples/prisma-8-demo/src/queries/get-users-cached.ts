@@ -9,7 +9,7 @@
  * bypass the type check with a cast.
  *
  * The cache key is computed by the runtime via
- * `RuntimeMiddlewareContext.contentHash(exec)` — the post-lowering
+ * `ActivityContext.contentHash(exec)` — the post-lowering
  * statement plus parameters, hashed to a bounded SHA-512 digest.
  * Subsequent calls with the same plan while the entry lives are
  * served from the cache without invoking the driver.
@@ -23,5 +23,5 @@ export async function getUsersCached(limit = 10) {
     .annotate(cacheAnnotation({}))
     .limit(limit)
     .build();
-  return db.runtime().query(plan);
+  return db.query(plan);
 }

@@ -19,6 +19,7 @@ export async function resetTelemetrySchema(connectionString: string): Promise<vo
     });
 
     const result = await client.dbInit({
+      invocation: { cwd: process.cwd(), configPath: undefined, dbGiven: false },
       contract: contractJson,
       mode: 'apply',
       migrationsDir,

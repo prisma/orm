@@ -23,7 +23,7 @@ export function UserList({ users }: { users: UsersResponse }) {
       <h2>Authors ({users.length})</h2>
       <div className="cards">
         {users.map((user) => (
-          <UserCard key={user._id} user={user} />
+          <UserCard key={user.id} user={user} />
         ))}
       </div>
     </div>

@@ -84,7 +84,7 @@ async emitContract({ contractIR }): Promise<EmitContractResult> {
 **Inline (orchestration logic):**
 - Validation steps
 - Building validation contexts
-- Calling family hooks (`sqlTargetFamilyHook.validateTypes()`, etc.)
+- Calling family hooks
 - Assembling final results
 - Error handling specific to the domain action
 

@@ -17,7 +17,7 @@ test('INSERT array form with returning resolves to selected columns', () => {
 
 test('INSERT array form build return type', () => {
   const result = db.public.users
-    .insert([{ id: 1 }])
+    .insert([{ id: 1, name: 'Alice', email: 'a@b.com' }])
     .returning('id', 'name')
     .build();
   expectTypeOf(result).toEqualTypeOf<SqlQueryPlan<{ id: number; name: string }>>();
@@ -25,7 +25,7 @@ test('INSERT array form build return type', () => {
 
 test('INSERT array form build returns SqlQueryPlan', () => {
   const result = db.public.users
-    .insert([{ id: 1 }])
+    .insert([{ id: 1, name: 'Alice', email: 'a@b.com' }])
     .returning('id')
     .build();
   expectTypeOf(result).toEqualTypeOf<SqlQueryPlan<{ id: number }>>();
@@ -34,8 +34,8 @@ test('INSERT array form build returns SqlQueryPlan', () => {
 test('INSERT multi-row with returning resolves to selected columns', () => {
   const result = db.public.users
     .insert([
-      { id: 1, name: 'Alice' },
-      { id: 2, name: 'Bob' },
+      { id: 1, name: 'Alice', email: 'a@b.com' },
+      { id: 2, name: 'Bob', email: 'b@b.com' },
     ])
     .returning('id')
     .build();
@@ -87,7 +87,7 @@ test('DELETE with WHERE and returning resolves to selected columns', () => {
 
 test('INSERT returning includes nullable column', () => {
   const result = db.public.users
-    .insert([{ id: 1 }])
+    .insert([{ id: 1, name: 'Alice', email: 'a@b.com' }])
     .returning('id', 'invited_by_id')
     .build();
   expectTypeOf(result).toEqualTypeOf<SqlQueryPlan<{ id: number; invited_by_id: number | null }>>();
@@ -97,9 +97,9 @@ test('INSERT array values accept codec input types', () => {
   // number for int4, string for text — should compile
   db.public.users.insert([{ id: 1, name: 'Alice', email: 'a@b.com' }]);
 
-  // nullable column accepts value or undefined (optional)
-  db.public.users.insert([{ id: 1, invited_by_id: 42 }]);
-  db.public.users.insert([{ id: 1 }]); // invited_by_id omitted — all fields optional
+  // nullable column accepts a value or may be left out
+  db.public.users.insert([{ id: 1, name: 'Alice', email: 'a@b.com', invited_by_id: 42 }]);
+  db.public.users.insert([{ id: 1, name: 'Alice', email: 'a@b.com' }]); // invited_by_id omitted — it is nullable, so optional
 });
 
 test('UPDATE values accept codec input types', () => {
@@ -109,7 +109,7 @@ test('UPDATE values accept codec input types', () => {
 
 test('returning only accepts valid column names', () => {
   // @ts-expect-error — 'nonexistent' is not a column
-  db.public.users.insert([{ id: 1 }]).returning('nonexistent');
+  db.public.users.insert([{ id: 1, name: 'Alice', email: 'a@b.com' }]).returning('nonexistent');
 
   // @ts-expect-error — 'nonexistent' is not a column
   db.public.users.update({ name: 'Bob' }).returning('nonexistent');
@@ -120,8 +120,8 @@ test('returning only accepts valid column names', () => {
 
 // Negative type tests — bare-object insert form must be rejected
 test('INSERT bare object form is a type error', () => {
-  // @ts-expect-error — bare object is no longer accepted; wrap in array: insert([{ id: 1 }])
-  db.public.users.insert({ id: 1 });
+  // @ts-expect-error — bare object is no longer accepted; wrap in array: insert([{ ... }])
+  db.public.users.insert({ id: 1, name: 'Alice', email: 'a@b.com' });
 });
 
 // UPDATE callback overload — type-level tests

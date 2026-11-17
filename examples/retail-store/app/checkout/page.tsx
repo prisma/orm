@@ -31,7 +31,7 @@ export default async function CheckoutPage() {
     : '';
 
   const locationList = locations.map((loc) => ({
-    id: loc._id,
+    id: loc.id,
     name: loc.name,
     address: `${loc.streetAndNumber}, ${loc.city}`,
   }));

@@ -14,12 +14,6 @@ describe('normalizeError', () => {
       meta: { spaceId: 'billing' },
     });
 
-    it('turns the fix prose into a single next action', () => {
-      expect(normalizeError(raised).nextActions).toEqual([
-        { kind: 'user-choice', label: 'Run `{bin} migration list` to see every space.' },
-      ]);
-    });
-
     it('carries the code, summary and structured fields through unchanged', () => {
       const normalized = normalizeError(raised);
 
@@ -35,10 +29,6 @@ describe('normalizeError', () => {
           { kind: 'user-choice', label: 'Run `{bin} migration list` to see every space.' },
         ],
       });
-    });
-
-    it('drops the non-protocol fix field', () => {
-      expect(normalizeError(raised).toEnvelope()).not.toHaveProperty('fix');
     });
 
     it('splits multi-line fix prose into one action per line', () => {

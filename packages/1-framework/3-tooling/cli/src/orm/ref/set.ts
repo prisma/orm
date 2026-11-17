@@ -4,12 +4,14 @@ import { positional } from '@prisma/cli-engine';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import type { RefSetResult } from '../../control-api/operations/ref';
 import { executeRefSetCommand } from '../../control-api/operations/ref';
+import { RECORDED_CONTRACT_REF_FORMS } from '../../utils/contract-ref-forms';
+import { valueLines } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
 
 function setPresentations(document: RefSetResult): Presentations {
   return {
-    stdout: () => [],
+    stdout: () => valueLines([document.hash]),
     next: () => [],
     human: (): readonly Block[] => [
       {
@@ -50,7 +52,7 @@ export function createRefSetCommand(execute: typeof executeRefSetCommand = execu
           placeholder: 'name',
         }),
         contract: positional.string({
-          brief: 'Contract reference: hash, prefix, ref name, migration dir name, or <dir>^',
+          brief: `Contract reference (${RECORDED_CONTRACT_REF_FORMS})`,
           placeholder: 'contract',
         }),
       },

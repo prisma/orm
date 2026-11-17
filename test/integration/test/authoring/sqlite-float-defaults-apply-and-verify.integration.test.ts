@@ -5,7 +5,11 @@ import sqliteAdapter from '@internal/adapter-sqlite/control';
 import type { Contract } from '@internal/contract/types';
 import sqliteDriver from '@internal/driver-sqlite/control';
 import sql, { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
-import { APP_SPACE_ID, createControlStack } from '@internal/framework-components/control';
+import {
+  APP_SPACE_ID,
+  createControlStack,
+  planOriginOf,
+} from '@internal/framework-components/control';
 import { buildFabricatedMigrationEdge } from '@internal/migration-tools/aggregate';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { defineContract, field, model } from '@internal/sqlite/contract-builder';
@@ -24,8 +28,8 @@ const familyInstance = sql.create(controlStack);
 const planner = sqliteTarget.createPlanner(sqliteAdapter.create(controlStack));
 const frameworkComponents = [sqliteTarget, sqliteAdapter] as const;
 
-const sqlFloat = { codecId: 'sql/float@1', nativeType: 'real' } as const;
-const sqliteReal = { codecId: 'sqlite/real@1', nativeType: 'real' } as const;
+const sqlFloat = { codecId: 'sql/float@1' } as const;
+const sqliteReal = { codecId: 'sqlite/real@1' } as const;
 
 const contract = defineContract({
   models: {
@@ -51,6 +55,8 @@ describe('an infinite float default on SQLite', () => {
         schema: await familyInstance.introspect({ driver }),
         policy: INIT_ADDITIVE_POLICY,
         fromContract: null,
+        origin: null,
+        statements: [],
         frameworkComponents,
         spaceId: APP_SPACE_ID,
         snapshotsImportPath: '../../snapshots',
@@ -90,6 +96,8 @@ describe('an infinite float default on SQLite', () => {
         schema: introspected,
         policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
         fromContract: contract,
+        origin: planOriginOf(contract),
+        statements: [],
         frameworkComponents,
         spaceId: APP_SPACE_ID,
         snapshotsImportPath: '../../snapshots',

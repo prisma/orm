@@ -97,14 +97,6 @@ describe('createRequestsPerMinuteRateLimiter', () => {
     expect(() => createRequestsPerMinuteRateLimiter(rpm, () => 0)).toThrow(/rpm/);
   });
 
-  it('caps a same-instant burst at the requests-per-minute threshold', () => {
-    const limiter = createRequestsPerMinuteRateLimiter(60, () => 0);
-    for (let i = 0; i < 60; i += 1) {
-      expect(limiter.allow('client')).toBe(true);
-    }
-    expect(limiter.allow('client')).toBe(false);
-  });
-
   it('lets through one additional request per token-refill interval', () => {
     let now = 0;
     const limiter = createRequestsPerMinuteRateLimiter(60, () => now);

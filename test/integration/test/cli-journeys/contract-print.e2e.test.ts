@@ -1,16 +1,5 @@
 /**
- * The user-facing journey for `prisma contract print`: a project whose
- * `prisma.config.ts` points at `prisma7Schema('./schema.prisma')` runs
- * `contract print`, switches its config to the Prisma 8 PSL the command wrote,
- * and emits the same contract, which `db sign` and `db verify` then accept
- * against the database the Prisma 7 SQL built. It runs over the `relations` and
- * `supported-verify` fixtures, whose database is the SQL Prisma 7.10.0
- * generated for the full `supported` schema. The command is not tied to
- * Prisma 7: a PSL source prints too. Two things are refused with exit 2 and no
- * file written: a Prisma 7 schema Prisma 8 cannot read, and an output path
- * that is the schema being read. A contract with a default control policy
- * prints with a warning, and the config the READMEs show for the printed file
- * emits it with the same policy.
+ * The user-facing journey for `prisma contract print`: a project whose `prisma.config.ts` points at `prisma7Schema('./schema.prisma')` runs `contract print`, switches its config to the Prisma 8 PSL the command wrote, and emits the same contract, which `db sign` and `db verify` then accept against the database the Prisma 7 SQL built. It runs over the `relations` and `supported` fixtures, whose database is the SQL Prisma 7.10.0 generated for the `supported` schema, with their `@ignore` fields and `@@ignore` models removed: Prisma 8 PSL has no syntax yet for storage that no field or model maps (TML-3469), so print refuses those schemas as they are. The command is not tied to Prisma 7: a PSL source prints too. Three things are refused with exit 2 and no file written: a Prisma 7 schema Prisma 8 cannot read, a Prisma 7 schema with ignored storage, and an output path that is the schema being read. A contract with a default control policy prints with a warning, and the config the READMEs show for the printed file emits it with the same policy.
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { withClient } from '@repo/test-utils';
@@ -34,7 +23,7 @@ const JOURNEY_FIXTURES = join(__dirname, '../fixtures/cli/cli-e2e-test-app/fixtu
 const REPO_ROOT = join(__dirname, '../../../..');
 const READMES_WITH_POLICY_CONFIG = [
   join(REPO_ROOT, 'packages/1-framework/3-tooling/cli/README.md'),
-  join(REPO_ROOT, 'packages/3-extensions/postgres/README.md'),
+  join(REPO_ROOT, 'packages/3-targets/postgres/9-facade/README.md'),
 ];
 
 /** The published import paths the READMEs use, and the workspace packages that back them. */
@@ -83,7 +72,31 @@ view ActiveUsers {
 }
 `;
 
+const UNSUPPORTED_SCHEMA = `datasource db {
+  provider = "postgresql"
+}
+
+model Post {
+  id     Int                      @id
+  search Unsupported("tsvector")?
+}
+`;
+
 const NO_DATABASE = 'postgres://user:password@localhost:5432/unused';
+
+/**
+ * The schema without its `@ignore` fields, `Unsupported(...)` fields and `@@ignore` models, so the
+ * contract it emits has no storage that Prisma 8 PSL cannot write.
+ */
+function withoutIgnoredStorage(schema: string): string {
+  const stripped = schema
+    .replace(/^model \w+ \{[^}]*@@ignore[^}]*\}\n+/gm, '')
+    .replace(/^.*\s(@ignore|Unsupported\(.*)\n/gm, '');
+  if (stripped.includes('@ignore') || stripped.includes('Unsupported(')) {
+    throw new Error('the schema still has storage this helper does not remove');
+  }
+  return stripped;
+}
 
 function writeConfig(testDir: string, fixture: string, connectionString: string): string {
   const config = readFileSync(join(JOURNEY_FIXTURES, fixture), 'utf-8').replace(
@@ -194,12 +207,14 @@ withTempDir(({ createTempDir }) => {
       onReady: (cs) => withClient(cs, (client) => client.query(PRISMA7_DDL)),
     });
 
-    it.each(['relations', 'supported-verify'])(
+    it.each(['relations', 'supported'])(
       'prints the %s fixture and verifies against the database Prisma 7 built',
       async (fixture) => {
         await printAndVerify(
           setupPrisma7Project(createTempDir, db.connectionString, {
-            copyFrom: join(PRISMA7_FIXTURES, `${fixture}/schema.prisma`),
+            text: withoutIgnoredStorage(
+              readFileSync(join(PRISMA7_FIXTURES, `${fixture}/schema.prisma`), 'utf-8'),
+            ),
           }),
           db.connectionString,
         );
@@ -292,6 +307,33 @@ withTempDir(({ createTempDir }) => {
 
       expect(print.exitCode, output(print)).toBe(2);
       expect(errorOf(print).code).toBe('CONTRACT.SOURCE_LOAD_FAILED');
+      expect(existsSync(join(ctx.testDir, 'contract.prisma'))).toBe(false);
+    });
+
+    it('refuses a Prisma 7 schema with ignored storage and writes nothing', async () => {
+      const ctx = setupPrisma7Project(createTempDir, NO_DATABASE, {
+        copyFrom: join(PRISMA7_FIXTURES, 'relations/schema.prisma'),
+      });
+
+      const print = await runContractPrint(ctx, ['--output', 'contract.prisma', '--json']);
+
+      expect(print.exitCode, output(print)).toBe(2);
+      expect(errorOf(print).code).toBe('CONTRACT.PRINT_UNSUPPORTED');
+      expect(existsSync(join(ctx.testDir, 'contract.prisma'))).toBe(false);
+    });
+
+    it('refuses a Prisma 7 schema with an Unsupported field and writes nothing', async () => {
+      const ctx = setupPrisma7Project(createTempDir, NO_DATABASE, { text: UNSUPPORTED_SCHEMA });
+
+      const print = await runContractPrint(ctx, ['--output', 'contract.prisma', '--json']);
+
+      expect(print.exitCode, output(print)).toBe(2);
+      expect(errorOf(print)).toMatchObject({
+        code: 'CONTRACT.PRINT_UNSUPPORTED',
+        summary: expect.stringContaining(
+          'column "public"."Post"."search" is not stored by any field',
+        ),
+      });
       expect(existsSync(join(ctx.testDir, 'contract.prisma'))).toBe(false);
     });
 
