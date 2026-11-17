@@ -365,6 +365,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
       subjects,
       dataLoss: labelled(subjects.dataLoss).map((entry) => ({ ...entry, loss: entry.loss })),
       accessChanges: labelled(subjects.accessChanges),
+      temporaryValues: subjects.temporaryValues,
       ...ifDefined(
         'namespaces',
         orderedResolutions.find(({ spaceId }) => spaceId === aggregate.app.spaceId)?.entry

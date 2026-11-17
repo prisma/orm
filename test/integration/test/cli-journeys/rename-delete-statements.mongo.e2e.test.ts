@@ -367,7 +367,7 @@ describe('Journeys (MongoDB): --rename and --delete', {
     const renameForm = printedFlags(modelFirst, 'rename');
     expect(renameForm, 'R4.05: the printed rename form').toEqual([
       '--rename',
-      'Person.nickname:Person.<new name>',
+      'Person.nickname:Person.alias',
     ]);
 
     const renamed = await runDbUpdate(ctx, [
