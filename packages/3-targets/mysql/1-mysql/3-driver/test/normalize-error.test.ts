@@ -233,6 +233,7 @@ describe('normalizeMysqlError for errors MySQL reports about a statement', () =>
       [1217, '23000', '23503'],
       [1048, '23000', '23502'],
       [3819, 'HY000', '23514'],
+      [4025, '23000', '23514'],
       [1022, '23000', '23000'],
     ] as const;
     expect(

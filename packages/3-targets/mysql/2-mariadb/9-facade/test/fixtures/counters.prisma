@@ -1,6 +1,0 @@
-// use prisma-8
-
-model Counter {
-  id  Int    @id
-  big BigInt
-}

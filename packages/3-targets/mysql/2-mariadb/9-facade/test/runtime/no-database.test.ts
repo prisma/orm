@@ -1,5 +1,4 @@
 import mariadbDriver from '@internal/driver-mariadb/runtime';
-import type { MysqlOptionsBase } from '@internal/mysql/runtime';
 import { contractFromJson as mysqlContractFromJson } from '@internal/mysql/static';
 import type { NoCollectionClasses } from '@internal/sql-orm-client';
 import type { SqlExecutionOptions } from '@internal/sql-runtime';
@@ -7,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'v
 import mysqlContractJson from '../../../../1-mysql/9-facade/test/fixtures/generated/contract.json' with {
   type: 'json',
 };
-import mariadb, { type MariadbOptions } from '../../src/exports/runtime';
+import mariadb, { type MariadbOptions, type MariadbOptionsBase } from '../../src/exports/runtime';
 import mariadbStatic, { contractFromJson } from '../../src/exports/static';
 import type { Contract } from '../fixtures/generated/contract.d';
 import contractJson from '../fixtures/generated/contract.json' with { type: 'json' };
@@ -99,15 +98,15 @@ describe('a MariaDB client with no database', () => {
 
   it('takes the options mysql() takes', () => {
     expectTypeOf<MariadbOptions<Contract>>().toEqualTypeOf<
-      MysqlOptionsBase<'mariadb'> & {
+      MariadbOptionsBase & {
         readonly contract: Contract;
         readonly collections?: NoCollectionClasses;
         readonly url?: string;
       }
     >();
-    expectTypeOf<
-      Pick<MysqlOptionsBase<'mariadb'>, keyof SqlExecutionOptions<'mariadb'>>
-    >().toEqualTypeOf<SqlExecutionOptions<'mariadb'>>();
+    expectTypeOf<Pick<MariadbOptionsBase, keyof SqlExecutionOptions<'mariadb'>>>().toEqualTypeOf<
+      SqlExecutionOptions<'mariadb'>
+    >();
   });
 
   it('offers the query surfaces without a driver through the static entry', () => {

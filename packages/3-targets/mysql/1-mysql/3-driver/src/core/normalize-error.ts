@@ -82,6 +82,7 @@ const CONSTRAINT_SQLSTATES: ReadonlyMap<number, string> = new Map([
   [1452, FOREIGN_KEY_VIOLATION],
   [1048, NOT_NULL_VIOLATION],
   [3819, CHECK_VIOLATION],
+  [4025, CHECK_VIOLATION],
 ]);
 
 const PUBLIC_KEY_FIX =
