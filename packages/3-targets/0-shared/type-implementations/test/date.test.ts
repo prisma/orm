@@ -1,7 +1,10 @@
+import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import {
+  dateOfThisRealm,
   hasDigitsBelow,
   hasDigitsBelowAMillisecond,
+  isDate,
   isValidDate,
   utcIsoTextOf,
   withoutZerosBelowAMillisecond,
@@ -10,11 +13,29 @@ import {
 
 const EARLIEST = new Date('-004713-11-24T00:00:00Z').getTime();
 
+const fakeDate = { [Symbol.toStringTag]: 'Date', getTime: () => 0 };
+
+describe('isDate', () => {
+  it.each([
+    [new Date(0), true],
+    [new Date(Number.NaN), true],
+    [runInNewContext('new Date(0)'), true],
+    [fakeDate, false],
+    [0, false],
+    [null, false],
+  ])('%o is %s', (value, date) => {
+    expect(isDate(value)).toBe(date);
+  });
+});
+
 describe('isValidDate', () => {
   it.each([
     [new Date('2024-01-01T00:00:00Z'), true],
     [new Date(8.64e15), true],
+    [runInNewContext('new Date("2024-01-01T00:00:00Z")'), true],
     [new Date(Number.NaN), false],
+    [runInNewContext('new Date(Number.NaN)'), false],
+    [fakeDate, false],
     ['2024-01-01T00:00:00Z', false],
     [Date.parse('2024-01-01T00:00:00Z'), false],
     [null, false],
@@ -90,5 +111,21 @@ describe('withThreeFractionDigits', () => {
     ['2024-01-01T00:00:00Z', '2024-01-01T00:00:00.000Z'],
   ])('%s is %s', (text, expected) => {
     expect(withThreeFractionDigits(text)).toBe(expected);
+  });
+});
+
+describe('dateOfThisRealm', () => {
+  it('returns a Date of this realm unchanged', () => {
+    const date = new Date(0);
+    expect(dateOfThisRealm(date)).toBe(date);
+  });
+
+  it('copies a Date from another realm into this one, keeping its instant', () => {
+    const date: Date = runInNewContext('new Date(86400000)');
+    const copy = dateOfThisRealm(date);
+    expect({ local: copy instanceof Date, time: copy.getTime() }).toEqual({
+      local: true,
+      time: 86400000,
+    });
   });
 });

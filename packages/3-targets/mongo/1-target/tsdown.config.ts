@@ -11,5 +11,6 @@ export default defineConfig({
     'src/exports/data-types.ts',
     'src/exports/migration.ts',
     'src/exports/runtime.ts',
+    'src/exports/server-version.ts',
   ],
 });

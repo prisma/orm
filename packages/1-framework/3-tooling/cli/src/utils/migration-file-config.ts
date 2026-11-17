@@ -1,5 +1,5 @@
 import { existsSync, realpathSync } from 'node:fs';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import {
   CONFIG_FILENAME,
   type ConfigSection,
@@ -25,7 +25,7 @@ export async function loadMigrationFileConfig(options: {
   readonly migrationFile: string;
   readonly cwd: string;
   readonly sections: readonly ConfigSection[];
-}): Promise<Result<PrismaNextConfig, CliStructuredError>> {
+}): Promise<Result<PrismaConfig, CliStructuredError>> {
   const { configPath, migrationFile, cwd, sections } = options;
   if (configPath !== undefined) {
     return loadConfigForSections(configPath, sections);
@@ -60,7 +60,7 @@ export async function loadMigrationFileConfig(options: {
 
 /** Whether `migrationFile` is inside the migrations directory of the config at `configPath`. */
 export function ownsMigration(
-  config: Pick<PrismaNextConfig, 'baseDir' | 'migrations'>,
+  config: Pick<PrismaConfig, 'baseDir' | 'migrations'>,
   configPath: string,
   migrationFile: string,
 ): boolean {

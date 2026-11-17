@@ -35,7 +35,7 @@ function configWithSource(output: string, load: () => Promise<unknown>) {
     },
     extensions: [],
     contract: { source: { format: 'typescript', load }, output },
-  } as unknown as configLoader.PrismaNextConfig;
+  } as unknown as configLoader.PrismaConfig;
 }
 
 describe('loadContractSource', () => {
@@ -180,7 +180,7 @@ describe('executeContractEmit', () => {
     const config = {
       family: { id: 'family:test', version: '0.0.1', familyId: 'test-family', emission: {} },
       contract: {},
-    } as unknown as configLoader.PrismaNextConfig;
+    } as unknown as configLoader.PrismaConfig;
 
     await expect(executeContractEmit({ config, cwd: tmpdir() })).rejects.toMatchObject({
       why: expect.stringContaining('must have output path'),

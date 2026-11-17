@@ -1,0 +1,42 @@
+// use prisma-8
+
+// A many-to-many relation whose target is a polymorphic model with a
+// multi-table-inheritance variant: Tag --tasks(N:M)--> Task, Feature in its own table.
+
+model Task {
+  id    Int    @id
+  title String
+  type  String
+
+  tags Tag[]
+
+  @@discriminator(type)
+  @@map("mnp_tasks")
+}
+
+model Feature {
+  priority Int
+
+  @@base(Task, "feature")
+  @@map("mnp_features")
+}
+
+model Tag {
+  id   Int    @id
+  name String
+
+  tasks Task[]
+
+  @@map("mnp_tags")
+}
+
+model TaskTag {
+  taskId Int @map("task_id")
+  tagId  Int @map("tag_id")
+
+  task Task @relation(fields: [taskId], references: [id])
+  tag  Tag  @relation(fields: [tagId], references: [id])
+
+  @@id([taskId, tagId])
+  @@map("mnp_task_tags")
+}

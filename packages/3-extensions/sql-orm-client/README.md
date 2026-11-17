@@ -2,7 +2,7 @@
 
 ORM client for Prisma 8 — fluent, type-safe model collections.
 
-This package provides a high-level ORM client surface on top of the runtime. Ordinary and prepared SELECT reads with includes compile to a single correlated-subquery plan and use the supplied runtime without acquiring an additional connection scope. Caller-owned connections and transactions remain caller-owned; nested mutations orchestrate several statements inside one scope.
+This package provides a high-level ORM client surface on top of the runtime. Reads with includes load the related rows in one of two ways, chosen from the contract's capabilities (see [How includes load](#how-includes-load)), and use the supplied runtime without acquiring an additional connection scope. Caller-owned connections and transactions remain caller-owned; nested mutations orchestrate several statements inside one scope.
 
 ## Responsibilities
 
@@ -10,11 +10,25 @@ This package provides a high-level ORM client surface on top of the runtime. Ord
 - Build filter/order/include state from fluent APIs (`where`, `include`, `orderBy`, `limit`, `offset`)
 - Accept lane-agnostic `WhereArg` filter inputs (`WhereExpr` or `ToWhereExpr`) and normalize bound payloads inside ORM while preserving bound params/descriptors for runtime encoding and adapter lowering
 - Compile collection state into SQL AST query plans (`SqlQueryPlan`) without rendering SQL in ORM
-- Buffer SELECT include results and read embedded include payloads in the ORM consumer
+- Buffer SELECT include results: read embedded include payloads, or attach the rows of one query per relation to their parents
 - Orchestrate multi-statement mutations, such as nested creates
 - Run each terminal method as one `orm-call` activity that carries the user's annotations
 - Map storage-column rows back to model-field row shapes
 - Expose an `orm()` client with typed collection keys (for example `db.Post`)
+
+## How includes load
+
+```ts
+const posts = await db.Post
+  .include('author')
+  .include('comments', (comments) => comments.orderBy((comment) => comment.createdAt.desc()).limit(3))
+  .all();
+```
+
+- **The one-query include.** Where the contract's `sql` capability group reports `jsonAgg`, `outerReferencesInDerivedTables` and `jsonAggWithoutTruncation`, each include is a correlated subquery in the parent's `SELECT` that aggregates the related rows into JSON, so the read above is one statement.
+- **One query per relation.** Where any of the three is missing, the client reads the parent rows, then for each include one statement that reads the related rows of all those parents by the parents' identity, and attaches each related row to its parent. The read above is three statements. `limit`, `offset`, `distinct`, `distinctOn` and aggregates still run in SQL, per parent. The key lists are split into statements of at most 10 000 bound parameters and an estimated 1 MiB of key values. A read of several statements opens no transaction; a write that returns rows with includes reads them inside its own transaction. Every parent table needs a primary key or a unique key whose columns are all `NOT NULL`, or the read fails with `ORM.ROW_IDENTITY_MISSING`, and a prepared read with includes fails with `ORM.CAPABILITY_MISSING`, because a prepared read is one statement.
+
+There is no switch between the two: the adapter's capabilities decide ([ADR 164](../../../docs/architecture%20docs/adrs/ADR%20164%20-%20Repository%20Layer.md), [ADR 296](../../../docs/architecture%20docs/adrs/ADR%20296%20-%20Prisma%208%20has%20no%20relationLoadStrategy.md)).
 
 ## Dependency Boundaries
 
@@ -69,11 +83,11 @@ const audit: SqlMiddleware = {
 await db.orm.public.User.first({ id: 1 }, (meta) => meta.annotate(cacheAnnotation({ key: 'user-1' })));
 ```
 
-- **Statements go through the call.** Reads and the statements of a mutation graph, including those of nested-relation mutations, are the call's children. The client's own transaction is `handle.transaction()`; inside `db.transaction(fn)` the call is a child of that transaction and opens none of its own.
+- **Statements go through the call.** Reads and the statements of a statement graph, including those of nested-relation mutations, are the call's children. The client's own transaction is `handle.transaction()`; inside `db.transaction(fn)` the call is a child of that transaction and opens none of its own.
 - **Annotations live on the call.** The annotations the `configure` callback records are the call's, including for writes with relation callbacks. The statements the call sends carry only the reserved keys the client sets itself, so a middleware that reads annotations from `plan.meta.annotations` sees none from an ORM call.
 - **The call ends with the value the method returns:** the model rows, the row or `null`, the aggregate object or the count. A failed call ends `failed`. A streaming terminal such as `all()` starts its call when the caller first reads it and ends it when the caller reads to the end (`succeeded`), stops early (`stopped`) or the stream fails (`failed`); it keeps the rows for the call's result only when the call carries annotations. Read a streaming terminal with `for await` or `await`, or call `return()` on its iterator when you stop early: an iterator dropped after `next()` leaves its call open, and `close()` then waits for it for ever.
 - **Middleware can answer the call.** When an `intercept.onActivity` handler supplies a result, the client returns it without sending any statement. A value of the wrong shape for the method rejects with `ORM.INTERCEPTED_RESULT_INVALID`.
-- **Content hash.** The call's `activity.contentHash()` is computed only when a middleware asks: for a read, a digest of `orm-call`, the method and the content hash of the statement it sends first (for a prepared collection, the statement with that execution's parameters); for a write, of `orm-call`, the method and the model.
+- **Content hash.** The call's `activity.contentHash()` is computed only when a middleware asks: for a read, a digest of `orm-call`, the method and the content hash of the statement it sends first, or, for a read whose includes load with one query per relation, the content hashes of its statements before any parent keys are added and a description of the include tree (for a prepared collection, the statement with that execution's parameters); for a write, of `orm-call`, the method and the model.
 - **A call that resolves to one value starts in the same turn as the method,** so a runtime closed after the method returns waits for it.
 - **The queryable must carry an activity source.** The SQL runtime's runtimes, connections, transactions and activity handles do. A terminal method on a queryable without one, such as a custom object or a wrapper that copies only `query` and `execute`, fails with `ORM.ACTIVITY_SOURCE_MISSING`: a streaming terminal such as `all()` throws when called, and the others reject, so a call's annotations are never dropped silently. A wrapper that replaces `query` and `execute` must also wrap `[activitySource]`, because the call sends its statements through the handle the source opens.
 
@@ -342,7 +356,7 @@ await db.User.where({ id: 1 }).update({
 
 | Operation | Available in | Relations |
 | --- | --- | --- |
-| `r.create(data)` | `create()`, `update()` | all |
+| `r.create(data)` | `create()`, `update()` | all; on a polymorphic target, `r.variant(value).create(data)` |
 | `r.connect(criteria)` | `create()`, `update()` | all |
 | `r.disconnect(criteria?)` | `update()` | all |
 | `r.where(w).updateAll(data)`, `r.updateAll(data)` | `update()` | to-many |
@@ -369,6 +383,52 @@ await db.User.where({ id: 1 }).update({
 ```
 
 A to-one relation takes at most one operation: an array of two or more is refused with `ORM.RELATION_MUTATION_UNSUPPORTED` (`reason: 'to-one-relation'`). An array that holds another array or a value that is not an operation is refused with `ORM.RELATION_MUTATION_INVALID`, with the position in `index`.
+
+### Nested writes on a polymorphic model
+
+On a relation whose target is a polymorphic base model, the mutator has `variant(value)`, which takes a discriminator value the model declares. `r.variant(value)` has `create`, `connect`, `disconnect`, `where`, `updateAll` and `deleteAll`, available where the same operation is available on `r` except `disconnect` on a relation the record holds the key for, and each acts only on rows of that variant: for a variant stored in the base table, the rows whose discriminator is the variant's value; for a variant stored in its own table, the base rows with that discriminator value that have a row in the variant table.
+
+#### Creating rows
+
+`r.variant(value).create(data)` creates rows of that variant, in `create()` and `update()`, with one row or an array. The data is the base model's fields and the variant's own fields, without the discriminator, which the ORM sets.
+
+```ts
+await db.Project.where({ id: 1 }).update({
+  tasks: (tasks) => [
+    tasks.variant('bug').create({ title: 'Crash on login', severity: 'high' }),
+    tasks.variant('feature').create([{ title: 'Dark mode', priority: 1 }]),
+  ],
+});
+```
+
+`r.create(data)` without `variant()` on a polymorphic target is a type error, as a collection's `create()` on a polymorphic base model without `variant()` is. Use `r.variant(value).create(data)`.
+
+#### Connecting and disconnecting rows
+
+`r.variant(value).connect(criteria)` and `r.variant(value).disconnect(criteria?)` find only rows of the variant. A row of another variant is treated as a row that does not exist: `connect` on a relation the record holds the key for, and `connect` and `disconnect` on a many-to-many relation, refuse it with `ORM.RELATION_ROW_MISSING`; on a relation the related rows hold the key for, `connect` links nothing and `disconnect` unlinks nothing, with no error.
+
+```ts
+await db.Project.where({ id: 1 }).update({
+  tasks: (tasks) => [tasks.variant('bug').connect({ id: 7 }), tasks.variant('feature').disconnect()],
+});
+```
+
+On a relation the record holds the key for, `disconnect` is not available on a variant: it is a type error and is refused with `ORM.RELATION_MUTATION_UNSUPPORTED` (`reason: 'variant-parent-owned'`). Use `r.disconnect()`.
+
+#### Updating and deleting rows of a variant
+
+`r.variant(value).where(w).updateAll(data)`, `.deleteAll()`, and both without `where`, change only the related rows of the variant, on a one-to-many and a many-to-many relation, in `update()`. `updateAll` data takes the base model's fields only: a field of the variant is a type error and is refused with `ORM.FIELD_UNKNOWN`.
+
+```ts
+await db.Project.where({ id: 1 }).update({
+  tasks: (tasks) => [
+    tasks.variant('bug').where((bug) => bug.severity.eq('low')).updateAll({ title: 'Later' }),
+    tasks.variant('feature').where((feature) => feature.priority.gt(3)).deleteAll(),
+  ],
+});
+```
+
+`deleteAll` on a variant stored in its own table deletes the base rows; the variant rows are removed by the variant table's foreign key to the base table, which the PSL contract declares with a cascading delete.
 
 ### Updating and deleting related rows
 

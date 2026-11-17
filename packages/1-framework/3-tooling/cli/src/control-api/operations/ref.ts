@@ -2,7 +2,7 @@
  * Policy cores of the `ref set` / `ref delete` / `ref list` commands: resolve the reference, and write or read the refs index.
  */
 
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import {
   contractSnapshotDir,
@@ -54,7 +54,7 @@ export interface RefListResult {
 }
 
 export interface RefOperationOptions {
-  readonly config: PrismaNextConfig;
+  readonly config: PrismaConfig;
   /** Directory the command was invoked from. */
   readonly cwd: string;
 }

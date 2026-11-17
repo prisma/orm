@@ -1,5 +1,5 @@
 import type { ContractSourceContext, PslParserOptions } from '@internal/config/config-types';
-import { loadConfig, type PrismaNextConfig, requireConfigSections } from '@internal/config-loader';
+import { loadConfig, type PrismaConfig, requireConfigSections } from '@internal/config-loader';
 import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import type { ControlStack } from '@internal/framework-components/control';
 import { createControlStack } from '@internal/framework-components/control';
@@ -106,7 +106,7 @@ function lspControlStackFromStack(stack: ControlStack): LspControlStack {
 }
 
 function resolveInterpretation(
-  config: PrismaNextConfig,
+  config: PrismaConfig,
   stack: ControlStack,
   inputs: SchemaInputSet,
 ): ProjectInterpretation | undefined {

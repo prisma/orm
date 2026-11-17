@@ -1,7 +1,7 @@
 /**
  * Field type changes and new required fields on MongoDB collections that hold documents, through `migration plan` then `db migrate` and through `db update`.
  *
- * C1 converts `String` to `Int` with `--convert` and a filled update. C2 answers the same change with `--delete`, which casts the values. C3 does that for an optional field holding `null` or nothing. C4 casts `Int` to `Float` and to `Int64` with nothing asked. C5 changes `Int` to `Json` and `String` to `Bson`, which needs only the validator change. B1 adds a required field, filled with a temporary value. B2 fills a new required field with `--backfill`. B3 makes an optional field required with `--backfill`. B4 makes an optional field required without it, so the document check stops the apply. W1 gives a field an enum, which plans no rewrite and warns, through both commands. Every journey that applies ends with an empty further plan and a clean `db verify --schema-only`.
+ * C1 converts `String` to `Int` with `--convert` and a filled update. C2 answers the same change with `--delete`, which casts the values. C3 does that for an optional field holding `null` or nothing. C4 casts `Int` to `Float` and to `BigInt` with nothing asked. C5 changes `Int` to `Json` and `String` to `Bson`, which needs only the validator change. B1 adds a required field, filled with a temporary value. B2 fills a new required field with `--backfill`. B3 makes an optional field required with `--backfill`. B4 makes an optional field required without it, so the document check stops the apply. W1 gives a field an enum, which plans no rewrite and warns, through both commands. Every journey that applies ends with an empty further plan and a clean `db verify --schema-only`.
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -280,7 +280,7 @@ describe('Journeys (MongoDB): type changes and new required fields on documents'
   it('C4: a cast that keeps every value is planned with nothing asked', async () => {
     const journey: Journey = {
       before: '  ratio Int\n  big   Int',
-      after: '  ratio Float\n  big   Int64',
+      after: '  ratio Float\n  big   BigInt',
       documents: [{ email: 'a@example.com', ratio: 3, big: 4 }],
     };
     const types = async (dbName: string) =>

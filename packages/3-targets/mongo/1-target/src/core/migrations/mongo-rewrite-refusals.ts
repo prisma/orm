@@ -3,13 +3,15 @@ import type {
   MigrationPlannerConflict,
   ModelCoordinate,
 } from '@internal/framework-components/control';
-import { otherModelsReached, validatorRootShapesOf } from '@internal/mongo-contract';
+import {
+  otherModelsReached,
+  type SelectedVariant,
+  validatorRootShapesOf,
+} from '@internal/mongo-contract';
 import type { MongoFieldRewriteMeta } from '@internal/mongo-query-ast/control';
 
-type Document = Record<string, unknown>;
-
 export const SEPARATE_THE_MODELS =
-  'move the models to separate collections, or carry out the change in a dataTransform operation of a migration.ts, with a filter that selects only their documents';
+  'move the models to separate collections, or carry out the change yourself, with a filter that selects only their documents, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh';
 
 export function sharedCollectionWhy(
   collection: string,
@@ -32,15 +34,19 @@ export interface PlannedRewrite {
   readonly collection: string;
   /** The stored name of the field the rewrite changes. */
   readonly field: string;
-  /** The documents it selects, such as a variant's discriminator value; `undefined` for all of them. */
-  readonly filter: Document | undefined;
+  /** The variant whose documents it selects; `undefined` for a root model's documents. */
+  readonly variant: SelectedVariant | undefined;
   /** The model whose documents it changes; `undefined` when no origin contract names it. */
   readonly model: ModelCoordinate | undefined;
+  /** For a rewrite of a key inside the field: the field the key stores, in words, and the other models whose documents the same rewrite is planned for. */
+  readonly storedKey: { readonly key: string; readonly together: readonly string[] } | undefined;
 }
 
 interface RewriteWords {
   readonly conflictKind: string;
   readonly verb: string;
+  /** The verb for a key a rewrite names, as in "rename value object field "Address.street" inside". */
+  readonly keyVerb: string | undefined;
   readonly preposition: string;
   /** Whether the rewrite reaches only the documents that hold the field, or every document its filter selects. */
   readonly reaches: 'holding' | 'selected';
@@ -51,6 +57,7 @@ interface RewriteWords {
 
 const WORDS: Readonly<Record<RewriteKind, RewriteWords>> = {
   removal: {
+    keyVerb: undefined,
     conflictKind: 'fieldRemovalRefused',
     verb: 'remove',
     preposition: 'from',
@@ -61,6 +68,7 @@ const WORDS: Readonly<Record<RewriteKind, RewriteWords>> = {
     sharedGoal: (_model, others) => `To keep it in ${others} documents only`,
   },
   cast: {
+    keyVerb: undefined,
     conflictKind: 'typeChangeRefused',
     verb: 'cast',
     preposition: 'in',
@@ -71,6 +79,7 @@ const WORDS: Readonly<Record<RewriteKind, RewriteWords>> = {
     sharedGoal: (model) => `To change it in ${model} documents only`,
   },
   conversion: {
+    keyVerb: undefined,
     conflictKind: 'typeChangeRefused',
     verb: 'convert',
     preposition: 'in',
@@ -81,6 +90,7 @@ const WORDS: Readonly<Record<RewriteKind, RewriteWords>> = {
     sharedGoal: (model) => `To change it in ${model} documents only`,
   },
   fill: {
+    keyVerb: undefined,
     conflictKind: 'fieldFillRefused',
     verb: 'fill',
     preposition: 'in',
@@ -91,6 +101,7 @@ const WORDS: Readonly<Record<RewriteKind, RewriteWords>> = {
     sharedGoal: (model) => `To fill it in ${model} documents only`,
   },
   backfill: {
+    keyVerb: undefined,
     conflictKind: 'fieldFillRefused',
     verb: 'backfill',
     preposition: 'in',
@@ -98,6 +109,61 @@ const WORDS: Readonly<Record<RewriteKind, RewriteWords>> = {
     timeSeries:
       'so a data transform cannot fill the field. Make the field optional in the contract, then run this command again.',
     sharedChange: 'the data transform would fill it in the documents',
+    sharedGoal: (model) => `To fill it in ${model} documents only`,
+  },
+  renameStoredKey: {
+    keyVerb: 'rename',
+    conflictKind: 'statementRefused',
+    verb: 'rename a key inside',
+    preposition: 'in',
+    reaches: 'holding',
+    timeSeries:
+      "so the key cannot be renamed in the documents. Keep the key's name in the contract, then run this command again.",
+    sharedChange: 'renaming the key would rename it in the documents',
+    sharedGoal: (model) => `To rename it in ${model} documents only`,
+  },
+  removeStoredKey: {
+    keyVerb: 'remove',
+    conflictKind: 'fieldRemovalRefused',
+    verb: 'remove a key inside',
+    preposition: 'in',
+    reaches: 'holding',
+    timeSeries:
+      'so the key cannot be removed from the documents that hold it. Keep the key in the contract, as an optional field if new documents leave it out, then run this command again.',
+    sharedChange: 'removing the key would remove it from the documents',
+    sharedGoal: (_model, others) => `To keep it in ${others} documents only`,
+  },
+  replaceStoredValue: {
+    keyVerb: 'replace',
+    conflictKind: 'statementRefused',
+    verb: 'replace a value inside',
+    preposition: 'in',
+    reaches: 'holding',
+    timeSeries:
+      "so the stored value cannot be replaced in the documents. Keep the enum value's stored value in the contract, then run this command again.",
+    sharedChange: 'replacing the value would replace it in the documents',
+    sharedGoal: (model) => `To replace it in ${model} documents only`,
+  },
+  removeStoredValue: {
+    keyVerb: 'remove',
+    conflictKind: 'fieldRemovalRefused',
+    verb: 'remove a value inside',
+    preposition: 'from',
+    reaches: 'holding',
+    timeSeries:
+      'so the stored value cannot be removed from the documents that hold it. Keep the enum value in the contract, then run this command again.',
+    sharedChange: 'removing the value would remove it from the documents',
+    sharedGoal: (_model, others) => `To keep it in ${others} documents only`,
+  },
+  fillStoredKey: {
+    keyVerb: 'fill',
+    conflictKind: 'fieldFillRefused',
+    verb: 'fill a key inside',
+    preposition: 'in',
+    reaches: 'holding',
+    timeSeries:
+      'so the key cannot be filled in the documents. Make the key optional in the contract, then run this command again.',
+    sharedChange: 'filling the key would fill it in the documents',
     sharedGoal: (model) => `To fill it in ${model} documents only`,
   },
 };
@@ -113,11 +179,19 @@ export interface RewriteCollection {
   readonly validator: unknown;
 }
 
+/** What a rewrite does, as a refusal names it: the key it rewrites inside the field, when it names one. */
+function action(rewrite: PlannedRewrite): string {
+  const words = WORDS[rewrite.kind];
+  return rewrite.storedKey !== undefined && words.keyVerb !== undefined
+    ? `${words.keyVerb} ${rewrite.storedKey.key} inside`
+    : words.verb;
+}
+
 function timeSeriesRefusal(rewrite: PlannedRewrite): MigrationPlannerConflict {
   const words = WORDS[rewrite.kind];
   return {
     kind: words.conflictKind,
-    summary: `Cannot ${words.verb} field ${JSON.stringify(rewrite.field)} ${words.preposition} collection ${JSON.stringify(rewrite.collection)}: it is a time-series collection`,
+    summary: `Cannot ${action(rewrite)} field ${JSON.stringify(rewrite.field)} ${words.preposition} collection ${JSON.stringify(rewrite.collection)}: it is a time-series collection`,
     why: `${TIME_SERIES_UPDATES}, ${words.timeSeries}`,
   };
 }
@@ -138,12 +212,16 @@ function sharedCollectionRefusal(
   const words = WORDS[rewrite.kind];
   const { collection, field, model } = rewrite;
   if (model === undefined) {
-    if (rewrite.kind === 'removal' || validatorRootShapesOf(validator).length <= 1) {
+    if (
+      rewrite.kind === 'removal' ||
+      rewrite.kind === 'removeStoredKey' ||
+      validatorRootShapesOf(validator).length <= 1
+    ) {
       return undefined;
     }
     return {
       kind: words.conflictKind,
-      summary: `Cannot ${words.verb} field ${JSON.stringify(field)} ${words.preposition} collection ${JSON.stringify(collection)}: the collection stores several root models`,
+      summary: `Cannot ${action(rewrite)} field ${JSON.stringify(field)} ${words.preposition} collection ${JSON.stringify(collection)}: the collection stores several root models`,
       why: 'No discriminator tells their documents apart, and without the origin contract the plan cannot tell which documents belong to the model that changed. Plan the change with migration plan --from <hash of the migration the database is at>.',
     };
   }
@@ -151,15 +229,15 @@ function sharedCollectionRefusal(
     contract.domain,
     model,
     collection,
-    rewrite.filter,
+    rewrite.variant,
     words.reaches === 'holding' ? field : undefined,
-  );
+  ).filter((name) => !(rewrite.storedKey?.together.includes(name) ?? false));
   if (others.length === 0) return undefined;
   const named = quoted(others);
   const modelName = JSON.stringify(model.model);
   return {
     kind: words.conflictKind,
-    summary: `Cannot ${words.verb} field ${JSON.stringify(field)} of model ${modelName} ${words.preposition} collection ${JSON.stringify(collection)}: model ${named} ${words.reaches === 'holding' ? 'stores it' : 'is stored'} in the same collection`,
+    summary: `Cannot ${action(rewrite)} field ${JSON.stringify(field)} of model ${modelName} ${words.preposition} collection ${JSON.stringify(collection)}: model ${named} ${words.reaches === 'holding' ? 'stores it' : 'is stored'} in the same collection`,
     why: `${sharedCollectionWhy(collection, others, words.sharedChange)} ${words.sharedGoal(modelName, named)}, ${SEPARATE_THE_MODELS}.`,
   };
 }

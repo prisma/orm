@@ -1,10 +1,10 @@
 import { int4Column, rawColumn } from '@internal/adapter-postgres/column-types';
-import postgresAdapter from '@internal/adapter-postgres/runtime';
 import { defineContract, field, model, rel, sql } from '@internal/postgres/contract-builder';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { describe, expect, expectTypeOf, it } from 'vitest';
+import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
 import { timeouts, withPushedContractRuntime } from './integration-helpers';
 
 const ShelfBase = model('Shelf', {
@@ -34,10 +34,15 @@ const Shelf = ShelfBase.relations({
 }).sql({ table: 'raw_shelves' });
 
 const contract = defineContract({ models: { Shelf, Book } });
-const context = createExecutionContext({
-  contract,
-  stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),
-});
+function contextOf(strategy: IncludeStrategy) {
+  return createExecutionContext({
+    contract,
+    stack: createSqlExecutionStack({
+      target: postgresTarget,
+      adapter: postgresAdapterFor(strategy),
+    }),
+  });
+}
 const namespace = { namespaceId: 'public' };
 
 const shelfFields = ['id', 'search', 'area', 'size', 'open', 'net', 'nets', 'codes'] as const;
@@ -54,7 +59,8 @@ const shelfAsPrinted = {
   codes: ['abc', 'xy'],
 };
 
-describe('raw fields through the ORM', () => {
+describe.each(includeStrategies)('raw fields through the ORM (%s)', (strategy) => {
+  const context = contextOf(strategy);
   it(
     'read as the text the database prints, flat and through includes, and write back as read',
     async () => {

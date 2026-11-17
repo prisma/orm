@@ -67,6 +67,7 @@ describe('resolveStatements, value object field renames', () => {
       resolve([rename('GeoPoint.lng:GeoPoint.latitude')]),
       UNRESOLVED,
       'The field "lng" still exists in the destination value object "GeoPoint", so it was not renamed.',
+      'If "lng" in the destination is another field that takes the name, make the change in two migrations: first change the contract so that "lng" is renamed to "latitude" and no field has the name "lng", and plan it with --rename GeoPoint.lng:GeoPoint.latitude; then add or rename the field that takes the name "lng" and plan that.',
     );
   });
 
@@ -75,6 +76,7 @@ describe('resolveStatements, value object field renames', () => {
       resolve([rename('GeoPoint.lat:GeoPoint.lng')]),
       UNRESOLVED,
       'The field "lng" already exists in the origin value object "GeoPoint", so it cannot be the new name of a field.',
+      'If another field holds the name "lng" in the origin and this change renames or removes it, make the change in two migrations: first change the contract so that field has its new name or is gone, and plan only that; then give "lat" the name "lng" and plan it with --rename GeoPoint.lat:GeoPoint.lng.',
     );
   });
 

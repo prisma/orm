@@ -142,7 +142,7 @@ model Document {
   it('instantiates family-owned and extension-owned constructor expressions from shared authoring contributions', () => {
     const result = interpretSqlContract(
       `types {
-  ShortName = sql.String(length: 35)
+  ShortName = sql.Varchar(length: 35)
   Embedding1536 = pgvector.Vector(1536)
 }
 
@@ -158,7 +158,7 @@ model Document {
         authoringContributions: {
           type: {
             sql: {
-              String: {
+              Varchar: {
                 kind: 'typeConstructor',
                 args: [{ kind: 'value', dataType: 'pg/int4', name: 'length' }],
                 output: {
@@ -199,7 +199,7 @@ model Document {
     const result = interpretSqlContract(
       `model Document {
   id Int @id
-  shortName sql.String(length: 35)
+  shortName sql.Varchar(length: 35)
   embedding pgvector.Vector(length: 1536)?
 }
 `,
@@ -209,7 +209,7 @@ model Document {
         authoringContributions: {
           type: {
             sql: {
-              String: {
+              Varchar: {
                 kind: 'typeConstructor',
                 args: [{ kind: 'value', dataType: 'pg/int4', name: 'length' }],
                 output: {

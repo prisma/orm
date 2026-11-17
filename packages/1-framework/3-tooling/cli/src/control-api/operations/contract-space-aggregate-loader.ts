@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
 import type {
   ControlExtensionDescriptor,
@@ -376,7 +376,7 @@ export async function loadContractRawSafely(config: {
  * load without requiring a readable contract.
  */
 export async function buildReadAggregate(
-  config: PrismaNextConfig,
+  config: PrismaConfig,
   options: {
     readonly migrationsDir: string;
     /** Command-scoped verifier to share the verified-hash memo; defaults to one built from `config`. */

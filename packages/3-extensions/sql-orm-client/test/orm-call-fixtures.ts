@@ -97,6 +97,9 @@ export function createActivityRuntime(options: ActivityRuntimeOptions = {}): {
           rollback: async () => {
             call.transactions[index] = 'rolled-back';
           },
+          transaction: async (): Promise<never> => {
+            throw new Error('transaction is not stubbed');
+          },
         };
       };
       const handle = {

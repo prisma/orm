@@ -1,4 +1,3 @@
-import postgresAdapter from '@internal/adapter-postgres/runtime';
 import { and, Collection } from '@internal/sql-orm-client';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
@@ -8,6 +7,7 @@ import type { Contract as SelfRelationsContract } from './fixtures/self-relation
 import selfRelationsContractJson from './fixtures/self-relations/generated/contract.json' with {
   type: 'json',
 };
+import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
 import { timeouts, withPushedContractRuntime } from './integration-helpers';
 import type { PgIntegrationRuntime } from './runtime-helpers';
 
@@ -15,13 +15,18 @@ const selfRelationsContract =
   new PostgresContractSerializer().deserializeContract<SelfRelationsContract>(
     selfRelationsContractJson,
   );
-const selfRelationsContext: ExecutionContext<SelfRelationsContract> = createExecutionContext({
-  contract: selfRelationsContract,
-  stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),
-});
+function selfRelationsContext(strategy: IncludeStrategy): ExecutionContext<SelfRelationsContract> {
+  return createExecutionContext({
+    contract: selfRelationsContract,
+    stack: createSqlExecutionStack({
+      target: postgresTarget,
+      adapter: postgresAdapterFor(strategy),
+    }),
+  });
+}
 
-function createPeopleCollection(runtime: PgIntegrationRuntime) {
-  return new Collection({ runtime, context: selfRelationsContext }, 'Person', {
+function createPeopleCollection(runtime: PgIntegrationRuntime, strategy: IncludeStrategy) {
+  return new Collection({ runtime, context: selfRelationsContext(strategy) }, 'Person', {
     namespaceId: 'public',
   });
 }
@@ -52,6 +57,7 @@ async function seedSelfRelationGraph(runtime: PgIntegrationRuntime): Promise<voi
 }
 
 async function withSelfRelationGraph(
+  strategy: IncludeStrategy,
   fn: (
     runtime: PgIntegrationRuntime,
     people: ReturnType<typeof createPeopleCollection>,
@@ -59,15 +65,15 @@ async function withSelfRelationGraph(
 ): Promise<void> {
   await withPushedContractRuntime(selfRelationsContract, async (runtime) => {
     await seedSelfRelationGraph(runtime);
-    await fn(runtime, createPeopleCollection(runtime));
+    await fn(runtime, createPeopleCollection(runtime, strategy));
   });
 }
 
-describe('integration/self-relation matrix', () => {
+describe.each(includeStrategies)('integration/self-relation matrix (%s)', (strategy) => {
   it(
     'M:1 and 1:M predicates, joins, nesting, and aggregates work in both directions',
     async () => {
-      await withSelfRelationGraph(async (_runtime, people) => {
+      await withSelfRelationGraph(strategy, async (_runtime, people) => {
         const descendants = await people
           .select('id', 'name')
           .where((person) =>
@@ -161,7 +167,7 @@ describe('integration/self-relation matrix', () => {
   it(
     '1:1 predicates and depth-2 joins work in both directions with filtered aggregation',
     async () => {
-      await withSelfRelationGraph(async (_runtime, people) => {
+      await withSelfRelationGraph(strategy, async (_runtime, people) => {
         const owningDirection = await people
           .select('id', 'name')
           .where((person) =>
@@ -225,7 +231,7 @@ describe('integration/self-relation matrix', () => {
   it(
     'implicit M:N predicates, joins, nesting, and counts work in both directions',
     async () => {
-      await withSelfRelationGraph(async (runtime, people) => {
+      await withSelfRelationGraph(strategy, async (runtime, people) => {
         runtime.resetExecutions();
         const rows = await people
           .select('id', 'name')
@@ -270,7 +276,7 @@ describe('integration/self-relation matrix', () => {
             followers: { rows: [{ id: 2, name: 'Bea' }], count: 1 },
           },
         ]);
-        expect(runtime.executions).toHaveLength(1);
+        expect(runtime.executions).toHaveLength(strategy === 'join' ? 1 : 6);
         expect(runtime.executions[0]?.sql).toContain('INNER JOIN "public"."person_follows"');
       });
     },
@@ -280,7 +286,7 @@ describe('integration/self-relation matrix', () => {
   it(
     'explicit M:N junction predicates, joins, nesting, and aggregates work in both directions',
     async () => {
-      await withSelfRelationGraph(async (_runtime, people) => {
+      await withSelfRelationGraph(strategy, async (_runtime, people) => {
         const rows = await people
           .select('id', 'name')
           .where((person) =>

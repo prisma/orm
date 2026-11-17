@@ -873,12 +873,12 @@ export function resolveRowIdentityColumns(
   if (table.primaryKey && table.primaryKey.columns.length > 0) {
     return table.primaryKey.columns;
   }
-  for (const unique of table.uniques) {
-    if (unique.columns.length > 0) {
-      return unique.columns;
-    }
-  }
-  return [];
+  const identity = table.uniques.find(
+    (unique) =>
+      unique.columns.length > 0 &&
+      unique.columns.every((column) => table.columns?.[column]?.nullable !== true),
+  );
+  return identity?.columns ?? [];
 }
 
 export function resolveUniqueKeyColumnSets(
