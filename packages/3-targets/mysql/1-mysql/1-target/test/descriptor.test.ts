@@ -24,8 +24,8 @@ describe('the MySQL target descriptor', () => {
     });
   });
 
-  it('declares, on the control and runtime target, that every session runs in UTC, which its datetime codec reads, and at READ COMMITTED, as Postgres does', () => {
-    const settings = { time_zone: '+00:00', transaction_isolation: 'READ-COMMITTED' };
+  it('declares UTC on the control and runtime target without overriding session isolation', () => {
+    const settings = { time_zone: '+00:00' };
     expect([mysqlTargetDescriptorMeta.sessionSettings, mysqlRuntimeTarget.sessionSettings]).toEqual(
       [settings, settings],
     );

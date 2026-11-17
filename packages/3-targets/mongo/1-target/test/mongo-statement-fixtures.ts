@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { asNamespaceId, type ControlPolicy } from '@internal/contract/types';
 import type {
   MigrationOperationPolicy,
@@ -5,6 +6,7 @@ import type {
   ResolvedMigrationStatement,
 } from '@internal/framework-components/control';
 import { MongoCollection, type MongoContract } from '@internal/mongo-contract';
+import type { AnyMongoMigrationOperation } from '@internal/mongo-query-ast/control';
 import {
   MongoSchemaCollection,
   MongoSchemaCollectionOptions,
@@ -12,6 +14,7 @@ import {
   MongoSchemaIR,
   MongoSchemaValidator,
 } from '@internal/mongo-schema-ir';
+import { mongoTargetDescriptor } from '../src/core/migrations/control-target';
 import { MongoMigrationPlanner } from '../src/core/migrations/mongo-planner';
 import type { PlannerProducedMongoMigration } from '../src/core/migrations/planner-produced-migration';
 
@@ -21,15 +24,30 @@ export const ALL_CLASSES_POLICY: MigrationOperationPolicy = {
 
 export const NS = asNamespaceId('__unbound__');
 
+/** A field's type: its codec, and whether it takes null or is a list. A field without one is a required string. */
+export interface FieldTypeSpec {
+  readonly codecId: string;
+  readonly nullable?: boolean;
+  readonly many?: boolean;
+  /** The value object the field holds, in place of its codec. */
+  readonly valueObject?: string;
+  /** The enum whose values the field takes. */
+  readonly valueSet?: string;
+}
+
 export interface ModelSpec {
-  readonly collection: string;
+  /** Left out for a model whose documents live in another model's collection, or in none. */
+  readonly collection?: string;
   readonly fields: readonly string[];
+  readonly types?: Readonly<Record<string, FieldTypeSpec>>;
   /** The stored name of each field stored under a name other than its own. */
   readonly storedAs?: Readonly<Record<string, string>>;
   /** The stored name of each embed relation, keyed by relation name. */
   readonly embeds?: Readonly<Record<string, string>>;
   readonly relations?: readonly string[];
   readonly base?: string;
+  /** The model whose documents embed this one's. */
+  readonly owner?: string;
   readonly discriminator?: string;
   readonly variants?: Readonly<Record<string, string>>;
 }
@@ -64,10 +82,38 @@ function validatorJsonSchemaOf(spec: CollectionSpec): Record<string, unknown> | 
   return spec.jsonSchema ?? (spec.required === undefined ? undefined : jsonSchema(spec.required));
 }
 
+function contractField(spec: FieldTypeSpec | undefined) {
+  return {
+    type:
+      spec?.valueObject === undefined
+        ? { kind: 'scalar', codecId: spec?.codecId ?? 'mongo/string@1' }
+        : {
+            kind: 'valueObject',
+            plane: 'storage',
+            namespaceId: '__unbound__',
+            entityKind: 'valueObject',
+            entityName: spec.valueObject,
+          },
+    nullable: spec?.nullable ?? false,
+    ...(spec?.many === true ? { many: { elementNullable: false } } : {}),
+    ...(spec?.valueSet === undefined
+      ? {}
+      : {
+          valueSet: {
+            plane: 'domain',
+            namespaceId: '__unbound__',
+            entityKind: 'enum',
+            entityName: spec.valueSet,
+          },
+        }),
+  };
+}
+
 export function contract(
   seed: string,
   models: Readonly<Record<string, ModelSpec>>,
   collections: Readonly<Record<string, CollectionSpec>>,
+  valueObjects: Readonly<Record<string, Readonly<Record<string, FieldTypeSpec>>>> = {},
 ): MongoContract {
   return {
     target: 'mongo',
@@ -84,7 +130,9 @@ export function contract(
             Object.entries(models).map(([name, spec]) => [
               name,
               {
-                fields: Object.fromEntries(spec.fields.map((field) => [field, {}])),
+                fields: Object.fromEntries(
+                  spec.fields.map((field) => [field, contractField(spec.types?.[field])]),
+                ),
                 relations: Object.fromEntries([
                   ...(spec.relations ?? []).map((relation) => [
                     relation,
@@ -100,7 +148,7 @@ export function contract(
                   ]),
                 ]),
                 storage: {
-                  collection: spec.collection,
+                  ...(spec.collection === undefined ? {} : { collection: spec.collection }),
                   fields: Object.fromEntries(
                     spec.fields.map((field) => [field, { field: spec.storedAs?.[field] ?? field }]),
                   ),
@@ -118,6 +166,7 @@ export function contract(
                 ...(spec.base === undefined
                   ? {}
                   : { base: { namespace: '__unbound__', model: spec.base } }),
+                ...(spec.owner === undefined ? {} : { owner: spec.owner }),
                 ...(spec.discriminator === undefined
                   ? {}
                   : {
@@ -136,12 +185,29 @@ export function contract(
       },
     },
     storage: {
-      storageHash: `storage-${seed}`,
+      storageHash: createHash('sha256').update(seed).digest('hex'),
       namespaces: {
         __unbound__: {
           id: '__unbound__',
           kind: 'mongo-namespace',
           entries: {
+            ...(Object.keys(valueObjects).length === 0
+              ? {}
+              : {
+                  valueObject: Object.fromEntries(
+                    Object.entries(valueObjects).map(([name, fields]) => [
+                      name,
+                      {
+                        fields: Object.fromEntries(
+                          Object.entries(fields).map(([field, type]) => [
+                            field,
+                            contractField(type),
+                          ]),
+                        ),
+                      },
+                    ]),
+                  ),
+                }),
             collection: Object.fromEntries(
               Object.entries(collections).map(([name, spec]) => [
                 name,
@@ -207,6 +273,10 @@ export function plan(input: {
   readonly policy?: MigrationOperationPolicy;
   /** The origin a migration package asserts; `db update` plans without one. */
   readonly origin?: PlanOrigin | null;
+  /** The composed components, whose codecs and data types the planner reads; the MongoDB target by default. */
+  readonly frameworkComponents?: Parameters<
+    MongoMigrationPlanner['plan']
+  >[0]['frameworkComponents'];
 }) {
   return new MongoMigrationPlanner().plan({
     contract: input.to,
@@ -215,14 +285,37 @@ export function plan(input: {
     fromContract: input.from,
     origin: input.origin ?? null,
     statements: input.statements ?? [],
-    frameworkComponents: [],
+    frameworkComponents: input.frameworkComponents ?? [mongoTargetDescriptor],
     snapshotsImportPath: '../../snapshots',
+  });
+}
+
+/** The operations of a plan with no unfilled placeholder. */
+export function settledOperations(
+  migration: PlannerProducedMongoMigration,
+): readonly AnyMongoMigrationOperation[] {
+  return migration.operations.map((operation) => {
+    if (operation instanceof Promise) throw new Error('Expected no unfilled placeholder');
+    return operation;
+  });
+}
+
+/** The id, label and class of each operation of a plan, an unfilled placeholder by the operation it stands for. */
+export async function listedOperations(migration: PlannerProducedMongoMigration) {
+  const settled = await Promise.allSettled(migration.operations);
+  return settled.map((entry) => {
+    if (entry.status === 'fulfilled') {
+      const { id, label, operationClass } = entry.value;
+      return { id, label, operationClass };
+    }
+    const meta: unknown = Reflect.get(entry.reason, 'meta');
+    return Reflect.get(meta ?? {}, 'operation');
   });
 }
 
 export function planned(result: ReturnType<typeof plan>) {
   if (result.kind !== 'success') throw new Error(JSON.stringify(result.conflicts, null, 2));
-  const operations = (result.plan as PlannerProducedMongoMigration).operations;
+  const operations = settledOperations(result.plan as PlannerProducedMongoMigration);
   return {
     labels: operations.map((operation) => operation.label),
     classes: operations.map((operation) => operation.operationClass),

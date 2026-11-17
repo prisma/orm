@@ -46,7 +46,16 @@ export function printExpression(expr: AnyExpression, tableName: string): string 
     not: (not) => `not (${print(not.expr)})`,
     nullCheck: (check) => `${print(check.expr)} ${check.isNull ? 'is null' : 'is not null'}`,
     exists: printKind,
-    subquery: printKind,
+    subquery: ({ query }) => {
+      const { from } = query;
+      const name = from?.kind === 'table-source' ? from.name : '';
+      const alias = from?.kind === 'table-source' ? (from.alias ?? name) : '';
+      const source = alias === name ? name : `${name} ${alias}`;
+      const columns = query.projection.map((item) => printExpression(item.expr, alias));
+      const where =
+        query.where === undefined ? '' : ` where ${printExpression(query.where, alias)}`;
+      return `(select ${columns.join(', ')} from ${source}${where})`;
+    },
     operation: printKind,
     aggregate: printKind,
     windowFunc: printKind,

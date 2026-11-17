@@ -22,24 +22,35 @@ import {
 import {
   collectionControlPoliciesOf,
   collectionControlPolicyOf,
-  collectionRootModelsOf,
+  collectionOfModel,
+  embeddingModelOf,
   hasOwnFieldStoredAs,
   MongoCollection,
   type MongoContract,
   type MongoModelStorage,
   modelAndBasesOf,
   mongoModelsOf,
+  otherModelsReached,
   ownEmbedStoredNamesOf,
   ownStoredNameOf,
   ownStoredNamesOf,
   validatorFieldNamesOf,
   validatorRootShapesOf,
+  variantFilterOf,
 } from '@internal/mongo-contract';
 import { MongoSchemaCollection, MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { unrewritableFieldNameReason } from './migration-factories';
 import {
+  SEPARATE_THE_MODELS,
+  sharedCollectionWhy,
+  TIME_SERIES_UPDATES,
+} from './mongo-rewrite-refusals';
+import {
+  type CastFieldCall,
+  type DataTransformCall,
+  type FillFieldCall,
   type OpFactoryCall,
   RenameCollectionCall,
   RenameFieldCall,
@@ -48,19 +59,26 @@ import {
 
 type Document = Record<string, unknown>;
 
-/** The collection a model stores its documents in; a model without `@@map` names it verbatim. */
-export function collectionOf(
-  contract: ContractWithDomain | null,
+/** Why the plan does not rewrite the fields of the model at `coordinate`: its documents are embedded in another model's, if they are. */
+export function embeddedModelReason(
+  contract: ContractWithDomain,
   coordinate: ModelCoordinate,
-): string {
-  const collection =
-    contract?.domain.namespaces[coordinate.namespaceId]?.models[coordinate.model]?.storage[
-      'collection'
-    ];
-  return typeof collection === 'string' ? collection : coordinate.model;
+): string | undefined {
+  const owner = embeddingModelOf(contract.domain, coordinate);
+  return owner === undefined
+    ? undefined
+    : `model "${modelDisplayName(coordinate)}" is embedded in the documents of model "${owner}"`;
 }
 
-function modelAt(
+export const EMBEDDED_MODEL_WHY =
+  'Fields of an embedded model are not rewritten in this release. Leave out this statement.';
+
+/** Why a statement on `model` cannot be planned when no collection holds its documents. */
+export function noCollectionReason(model: ModelCoordinate): string {
+  return `model "${modelDisplayName(model)}" names no collection, and neither does a base or an owner`;
+}
+
+export function modelAt(
   contract: ContractWithDomain,
   coordinate: ModelCoordinate,
 ): ContractModel<MongoModelStorage> | undefined {
@@ -88,31 +106,6 @@ function resolvedStoredNameAt(contract: ContractWithDomain, coordinate: FieldCoo
     );
   }
   return storedName;
-}
-
-/**
- * The condition that selects a variant's documents in the collection it shares with its base: the
- * base's discriminator field holding the variant's value. A model that is not a variant has none.
- */
-function variantFilter(
-  contract: ContractWithDomain,
-  coordinate: ModelCoordinate,
-): Document | undefined {
-  const base = modelAt(contract, coordinate)?.base;
-  if (base === undefined) return undefined;
-  const baseModel = modelAt(contract, {
-    namespaceId: asNamespaceId(base.namespace),
-    model: base.model,
-  });
-  const field = baseModel?.discriminator?.field;
-  const variants = Object.entries(baseModel?.variants ?? {});
-  const value = variants.find(
-    ([, variant]) =>
-      variant.namespace === coordinate.namespaceId && variant.model === coordinate.model,
-  )?.[0];
-  return baseModel === undefined || field === undefined || value === undefined
-    ? undefined
-    : { [ownStoredNameOf(baseModel, field)]: value };
 }
 
 /** The control policy that governs a collection, and the policy its contract declares for it. */
@@ -198,7 +191,13 @@ export interface StatementCalls {
   /** Run first. */
   readonly collectionRenames: readonly RenameCollectionCall[];
   /** Run after index drops and before index creates. */
-  readonly rewrites: readonly (RenameFieldCall | UnsetFieldCall)[];
+  readonly rewrites: readonly (
+    | RenameFieldCall
+    | CastFieldCall
+    | DataTransformCall
+    | FillFieldCall
+    | UnsetFieldCall
+  )[];
 }
 
 export interface StatementPlan {
@@ -225,121 +224,6 @@ function refused(
 }
 
 const LEAVE_OUT = 'Leave out this statement.';
-
-const SEPARATE_THE_MODELS =
-  'move the models to separate collections, or carry out the change in a dataTransform operation of a migration.ts, with a filter that selects only their documents';
-
-/**
- * The discriminator field and value a variant's filter selects, or `undefined` for a filter that selects by anything else, or no filter.
- */
-function discriminatorValueOf(
-  filter: Document | undefined,
-): { readonly field: string; readonly value: unknown } | undefined {
-  const entries = Object.entries(filter ?? {});
-  if (entries.length !== 1) return undefined;
-  const [entry] = entries;
-  if (entry === undefined) return undefined;
-  const [field, value] = entry;
-  return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
-    ? { field, value }
-    : undefined;
-}
-
-/**
- * The other models stored in `collection`, root models and their variants, whose documents a change of `storedName` with `filter` reaches, and which store the field themselves or through their base. No discriminator tells the documents of several root models apart, so without a filter, or with a base model's filter, every other root model's documents are reached. A variant's filter, one discriminator value, reaches a model only when its documents can hold that value: a variant of another root model with the same discriminator field and value, or a model that declares the discriminator field itself.
- */
-function otherModelsReached(
-  contract: ContractWithDomain,
-  model: ModelCoordinate,
-  collection: string,
-  filter: Document | undefined,
-  storedName: string,
-): readonly string[] {
-  const models = mongoModelsOf(contract.domain, model.namespaceId);
-  const baseOf = (name: string) => {
-    const base = models[name]?.base;
-    return base === undefined ? undefined : models[base.model];
-  };
-  const storesOrInherits = (name: string, storedName: string) =>
-    modelAndBasesOf(models, name).some((each) => ownStores(each, storedName));
-  const selected = discriminatorValueOf(filter);
-  const canHold = (name: string) => {
-    if (selected === undefined) return true;
-    const base = baseOf(name);
-    const discriminator = base?.discriminator?.field;
-    if (
-      base !== undefined &&
-      discriminator !== undefined &&
-      ownStoredNameOf(base, discriminator) === selected.field
-    ) {
-      return Object.entries(base.variants ?? {}).some(
-        ([value, variant]) => variant.model === name && value === selected.value,
-      );
-    }
-    return storesOrInherits(name, selected.field);
-  };
-  const subjectRoot = modelAt(contract, model)?.base?.model ?? model.model;
-  return (collectionRootModelsOf(models)[collection] ?? [])
-    .filter((name) => name !== subjectRoot)
-    .flatMap((name) => [
-      name,
-      ...Object.values(models[name]?.variants ?? {}).map((variant) => variant.model),
-    ])
-    .filter((name) => canHold(name) && storesOrInherits(name, storedName));
-}
-
-function sharedCollectionWhy(
-  collection: string,
-  others: readonly string[],
-  change: string,
-): string {
-  const names = others.map((name) => JSON.stringify(name)).join(', ');
-  return `Collection ${JSON.stringify(collection)} stores several models and no discriminator tells their documents apart, so ${change} of ${names} too.`;
-}
-
-/**
- * A removal the plan cannot carry out because another root model stored in the same collection still stores the field, and no discriminator selects the documents of the model that loses it.
- */
-export function sharedCollectionRemovalRefusals(
-  removals: readonly FieldRemoval[],
-  contract: ContractWithDomain,
-): readonly MigrationPlannerConflict[] {
-  return removals.flatMap((removal): MigrationPlannerConflict[] => {
-    const { subject, call } = removal;
-    if (subject.kind !== 'field') return [];
-    const others = otherModelsReached(contract, subject, call.collection, call.filter, call.field);
-    if (others.length === 0) return [];
-    return [
-      {
-        kind: 'fieldRemovalRefused',
-        summary: `Cannot remove field ${JSON.stringify(call.field)} of model ${JSON.stringify(subject.model)} from collection ${JSON.stringify(call.collection)}: model ${others.map((name) => JSON.stringify(name)).join(', ')} stores it in the same collection`,
-        why: `${sharedCollectionWhy(call.collection, others, 'removing the field would remove it from the documents')} To keep it in ${others.map((name) => JSON.stringify(name)).join(', ')} documents only, ${SEPARATE_THE_MODELS}.`,
-      },
-    ];
-  });
-}
-
-const TIME_SERIES_UPDATES =
-  'MongoDB updates the documents of a time-series collection only through its metaField';
-
-/**
- * A removal the plan cannot carry out because its collection is a time-series collection, whose
- * documents MongoDB does not let an update change except through the metaField.
- */
-export function timeSeriesRemovalRefusals(
-  removals: readonly FieldRemoval[],
-  schema: MongoSchemaIR,
-): readonly MigrationPlannerConflict[] {
-  return removals
-    .filter(
-      (removal) => schema.collection(removal.call.collection)?.options?.timeseries !== undefined,
-    )
-    .map((removal) => ({
-      kind: 'fieldRemovalRefused',
-      summary: `Cannot remove field ${JSON.stringify(removal.call.field)} from collection ${JSON.stringify(removal.call.collection)}: it is a time-series collection`,
-      why: `${TIME_SERIES_UPDATES}, so the field cannot be removed from the documents that hold it. Keep the field in the contract, as an optional field if new documents leave it out, then run this command again.`,
-    }));
-}
 
 /**
  * Plans the rename each statement states, in order: a model statement whose collection changes renames the
@@ -480,8 +364,8 @@ function discriminatorValueChange(
   statement: ResolvedModelRenameStatement,
   input: { readonly fromContract: ContractWithDomain; readonly contract: MongoContract },
 ): readonly [reason: string, why: string] | undefined {
-  const before = variantFilter(input.fromContract, statement.from);
-  const after = variantFilter(input.contract, statement.to);
+  const before = variantFilterOf(input.fromContract.domain, statement.from);
+  const after = variantFilterOf(input.contract.domain, statement.to);
   const base = modelAt(input.contract, statement.to)?.base;
   if (before === undefined || after === undefined || base === undefined) return undefined;
   const [field, oldValue] = Object.entries(before)[0] ?? [];
@@ -501,12 +385,37 @@ function planModelStatement(
   schema: MongoSchemaIR,
   input: { readonly fromContract: ContractWithDomain; readonly contract: MongoContract },
 ): StatementOutcome {
+  const embedded =
+    embeddedModelReason(input.fromContract, statement.from) ??
+    embeddedModelReason(input.contract, statement.to);
+  if (embedded !== undefined) {
+    return {
+      kind: 'refused',
+      conflict: refused(
+        statement,
+        label,
+        embedded,
+        `Embedded models are not renamed in this release. ${LEAVE_OUT}`,
+      ),
+    };
+  }
   const discriminatorChange = discriminatorValueChange(statement, input);
   if (discriminatorChange !== undefined) {
     return { kind: 'refused', conflict: refused(statement, label, ...discriminatorChange) };
   }
-  const from = collectionOf(input.fromContract, statement.from);
-  const to = collectionOf(input.contract, statement.to);
+  const from = collectionOfModel(input.fromContract.domain, statement.from);
+  const to = collectionOfModel(input.contract.domain, statement.to);
+  if (from === undefined || to === undefined) {
+    return {
+      kind: 'refused',
+      conflict: refused(
+        statement,
+        label,
+        noCollectionReason(from === undefined ? statement.from : statement.to),
+        `A statement renames the documents of a model in its collection. Give the model a collection, then run this command again, or ${LEAVE_OUT.toLowerCase()}`,
+      ),
+    };
+  }
   if (from === to) return { kind: 'unchanged' };
   const policyRefusal = controlPolicyRefusal(statement, label, input.contract, to);
   if (policyRefusal !== undefined) return policyRefusal;
@@ -558,6 +467,10 @@ function planFieldStatement(
     kind: 'refused',
     conflict: refused(statement, label, reason, why),
   });
+  const embedded =
+    embeddedModelReason(input.fromContract, statement.from) ??
+    embeddedModelReason(input.contract, statement.to);
+  if (embedded !== undefined) return refuse(embedded, EMBEDDED_MODEL_WHY);
   const fromField = storedField(modelAt(input.fromContract, statement.from), statement.from.field);
   const toField = storedField(modelAt(input.contract, statement.to), statement.to.field);
   if (fromField.kind === 'embed' || toField.kind === 'embed') {
@@ -575,9 +488,15 @@ function planFieldStatement(
   }
   const fromStored = resolvedStoredNameAt(input.fromContract, statement.from);
   const toStored = resolvedStoredNameAt(input.contract, statement.to);
-  const originCollection = collectionOf(input.fromContract, statement.from);
+  const originCollection = collectionOfModel(input.fromContract.domain, statement.from);
+  const destinationCollection = collectionOfModel(input.contract.domain, statement.to);
+  if (originCollection === undefined || destinationCollection === undefined) {
+    return refuse(
+      noCollectionReason(originCollection === undefined ? statement.from : statement.to),
+      `A statement renames a field in the documents of its model's collection. ${LEAVE_OUT}`,
+    );
+  }
   const collection = renamedCollections.get(originCollection) ?? originCollection;
-  const destinationCollection = collectionOf(input.contract, statement.to);
   if (fromStored === toStored && collection === destinationCollection) {
     return { kind: 'unchanged' };
   }
@@ -612,7 +531,7 @@ function planFieldStatement(
   }
   const policyRefusal = controlPolicyRefusal(statement, label, input.contract, collection);
   if (policyRefusal !== undefined) return policyRefusal;
-  const variant = variantFilter(input.fromContract, statement.from);
+  const variant = variantFilterOf(input.fromContract.domain, statement.from);
   const renamedTogether = new Set(
     input.statements.flatMap((other) =>
       other.entity === 'field' &&
@@ -624,7 +543,7 @@ function planFieldStatement(
     ),
   );
   const others = otherModelsReached(
-    input.fromContract,
+    input.fromContract.domain,
     statement.from,
     originCollection,
     variant,
@@ -675,7 +594,7 @@ export interface FieldRemoval {
   readonly subject: MigrationSubject;
 }
 
-function modelCoordinates(contract: ContractWithDomain): readonly ModelCoordinate[] {
+export function modelCoordinates(contract: ContractWithDomain): readonly ModelCoordinate[] {
   return Object.entries(contract.domain?.namespaces ?? {}).flatMap(([namespaceId, namespace]) =>
     Object.keys(namespace.models).map((model) => ({
       namespaceId: asNamespaceId(namespaceId),
@@ -692,9 +611,9 @@ function sameModel(a: ModelCoordinate, b: ModelCoordinate): boolean {
  * The destination model an origin model became: the one a statement renamed it to, else the one of
  * the same name, else the only one stored the same way (same collection, same variant value).
  */
-function destinationModelOf(
+export function destinationModelOf(
   origin: ModelCoordinate,
-  input: FieldRemovalInput,
+  input: ModelMatchInput,
 ): ModelCoordinate | undefined {
   const renamed = input.statements.find(
     (statement): statement is ResolvedModelRenameStatement =>
@@ -702,22 +621,69 @@ function destinationModelOf(
   );
   if (renamed !== undefined) return renamed.to;
   if (modelAt(input.contract, origin) !== undefined) return origin;
-  const collection = input.collectionAfterRenames(collectionOf(input.fromContract, origin));
-  const filter = JSON.stringify(variantFilter(input.fromContract, origin) ?? null);
+  if (embeddingModelOf(input.fromContract.domain, origin) !== undefined) return undefined;
+  const originCollection = collectionOfModel(input.fromContract.domain, origin);
+  if (originCollection === undefined) return undefined;
+  const collection = input.collectionAfterRenames(originCollection);
+  const filter = JSON.stringify(variantFilterOf(input.fromContract.domain, origin) ?? null);
   const stored = modelCoordinates(input.contract).filter(
     (candidate) =>
-      collectionOf(input.contract, candidate) === collection &&
-      JSON.stringify(variantFilter(input.contract, candidate) ?? null) === filter,
+      embeddingModelOf(input.contract.domain, candidate) === undefined &&
+      collectionOfModel(input.contract.domain, candidate) === collection &&
+      JSON.stringify(variantFilterOf(input.contract.domain, candidate) ?? null) === filter,
   );
   const [only] = stored;
   return stored.length === 1 ? only : undefined;
 }
 
-interface FieldRemovalInput {
+/** What finding a model or field of one contract in the other reads: the renames, both contracts, and the collection each origin collection becomes. */
+export interface ModelMatchInput {
   readonly statements: readonly ResolvedRenameStatement[];
   readonly fromContract: ContractWithDomain;
   readonly contract: MongoContract;
   readonly collectionAfterRenames: (collection: string) => string;
+}
+
+/** The origin model a destination model was, by the rules of `destinationModelOf`, read the other way. */
+export function originModelOf(
+  destination: ModelCoordinate,
+  input: ModelMatchInput,
+): ModelCoordinate | undefined {
+  return modelCoordinates(input.fromContract).find((origin) => {
+    const matched = destinationModelOf(origin, input);
+    return matched !== undefined && sameModel(matched, destination);
+  });
+}
+
+function sameField(a: FieldCoordinate, b: FieldCoordinate): boolean {
+  return sameModel(a, b) && a.field === b.field;
+}
+
+/** The name a field of the origin has in the destination: its rename statement's new name, else its own. */
+export function destinationFieldOf(
+  origin: FieldCoordinate,
+  statements: readonly ResolvedRenameStatement[],
+): string {
+  const renamed = statements.find(
+    (statement): statement is ResolvedFieldRenameStatement =>
+      statement.entity === 'field' && sameField(statement.from, origin),
+  );
+  return renamed?.to.field ?? origin.field;
+}
+
+/** The name a field of the destination had in the origin: its rename statement's old name, else its own. */
+export function originFieldOf(
+  destination: FieldCoordinate,
+  statements: readonly ResolvedRenameStatement[],
+): string {
+  const renamed = statements.find(
+    (statement): statement is ResolvedFieldRenameStatement =>
+      statement.entity === 'field' && sameField(statement.to, destination),
+  );
+  return renamed?.from.field ?? destination.field;
+}
+
+export interface FieldRemovalInput extends ModelMatchInput {
   readonly keptCollections: ReadonlySet<string>;
 }
 
@@ -739,7 +705,10 @@ function ownStores(model: ContractModel<MongoModelStorage>, storedName: string):
 }
 
 /** The stored names of the documents of the model at `coordinate`: its fields and embed relations, its own and those it inherits. */
-function storedFieldsOf(contract: ContractWithDomain, coordinate: ModelCoordinate): Set<string> {
+export function storedFieldsOf(
+  contract: ContractWithDomain,
+  coordinate: ModelCoordinate,
+): Set<string> {
   const models = mongoModelsOf(contract.domain, coordinate.namespaceId);
   return new Set(
     modelAndBasesOf(models, coordinate.model).flatMap((model) => [
@@ -785,14 +754,17 @@ function rootDocumentsLosing(
  */
 export function planFieldRemovals(input: FieldRemovalInput): readonly FieldRemoval[] {
   return modelCoordinates(input.fromContract).flatMap((origin) => {
-    const collection = input.collectionAfterRenames(collectionOf(input.fromContract, origin));
+    if (embeddingModelOf(input.fromContract.domain, origin) !== undefined) return [];
+    const originCollection = collectionOfModel(input.fromContract.domain, origin);
+    if (originCollection === undefined) return [];
+    const collection = input.collectionAfterRenames(originCollection);
     if (!input.keptCollections.has(collection)) return [];
     if (collectionControlPolicy(input.contract, collection) !== 'managed') return [];
     const destination = destinationModelOf(origin, input);
     if (destination === undefined) return [];
     const model = modelAt(input.fromContract, origin);
     if (model === undefined) return [];
-    const variant = variantFilter(input.fromContract, origin);
+    const variant = variantFilterOf(input.fromContract.domain, origin);
     const losing = (storedName: string): { readonly filter: Document | undefined } | undefined => {
       if (variant !== undefined) {
         return storedFieldsOf(input.contract, destination).has(storedName)

@@ -38,10 +38,17 @@ export function closedSchema(fields: readonly string[]) {
 }
 
 export interface ModelSpec {
-  readonly collection: string;
+  /** Left out for a model embedded in another model's documents. */
+  readonly collection?: string;
   readonly fields: readonly string[];
   readonly base?: string;
+  /** The model whose documents embed this one's. */
+  readonly owner?: string;
+  /** The codec of each field that is not a string. */
+  readonly codecs?: Readonly<Record<string, string>>;
   readonly variants?: Readonly<Record<string, string>>;
+  /** The discriminator field of a model with variants; `type` when left out. */
+  readonly discriminator?: string;
 }
 
 export function contract(
@@ -64,19 +71,28 @@ export function contract(
             Object.entries(models).map(([name, spec]) => [
               name,
               {
-                fields: Object.fromEntries(spec.fields.map((field) => [field, {}])),
+                fields: Object.fromEntries(
+                  spec.fields.map((field) => [
+                    field,
+                    {
+                      type: { kind: 'scalar', codecId: spec.codecs?.[field] ?? 'mongo/string@1' },
+                      nullable: false,
+                    },
+                  ]),
+                ),
                 relations: {},
                 storage: {
-                  collection: spec.collection,
+                  ...(spec.collection === undefined ? {} : { collection: spec.collection }),
                   fields: Object.fromEntries(spec.fields.map((field) => [field, { field }])),
                 },
+                ...(spec.owner === undefined ? {} : { owner: spec.owner }),
                 ...(spec.base === undefined
                   ? {}
                   : { base: { namespace: '__unbound__', model: spec.base } }),
                 ...(spec.variants === undefined
                   ? {}
                   : {
-                      discriminator: { field: 'type' },
+                      discriminator: { field: spec.discriminator ?? 'type' },
                       variants: Object.fromEntries(
                         Object.entries(spec.variants).map(([variant, value]) => [
                           value,
@@ -182,6 +198,7 @@ export function useStatementsDatabase(dbName: string) {
     from: MongoContract,
     to: MongoContract,
     statements: readonly ResolvedMigrationStatement[] = [],
+    frameworkComponents: Parameters<MongoMigrationPlanner['plan']>[0]['frameworkComponents'] = [],
   ) {
     await controlAdapter.initMarker(new MongoControlDriver(live(), connected()), 'app', {
       storageHash: from.storage.storageHash,
@@ -194,7 +211,7 @@ export function useStatementsDatabase(dbName: string) {
       fromContract: from,
       origin: { storageHash: from.storage.storageHash },
       statements,
-      frameworkComponents: [],
+      frameworkComponents,
       snapshotsImportPath: '../../snapshots',
     });
     if (planned.kind !== 'success') throw new Error(JSON.stringify(planned.conflicts, null, 2));

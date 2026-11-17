@@ -4,12 +4,14 @@ import type { NextAction } from '@prisma/cli-engine/protocol';
 import { labelsText } from '../../control-api/statements/plan-questions';
 import { statementFlag } from '../../control-api/statements/statement-flag';
 import type { PerSpaceExecutionEntry } from '../../control-api/types';
+import { skippedOperationsText } from '../../utils/applied-summary';
 import {
   type MigrationCommandResult,
   previewBlockHeader,
   renderPreviewStatement,
 } from '../../utils/formatters/migrations';
 import { runCommandAction } from '../../utils/next-actions';
+import { plannerWarningText } from '../../utils/planner-warning-text';
 import { type CliInvocation, cliCommand, printedPlanCommand } from '../../utils/printed-command';
 import { appliedStatementBlocks } from '../statement-blocks';
 
@@ -104,6 +106,13 @@ function operationBlocks(result: MigrationCommandResult): readonly Block[] {
   ];
 }
 
+/** What the planner flagged without refusing to plan it, each its summary followed by its why. */
+function plannerWarningBlocks(result: MigrationCommandResult): readonly Block[] {
+  return (result.plannerWarnings ?? []).map(
+    (warning): Block => ({ kind: 'summary', status: 'warn', text: plannerWarningText(warning) }),
+  );
+}
+
 /** The statements a database would run, printed verbatim rather than laid out. */
 function previewBlocks(preview: OperationPreview | undefined): readonly Block[] {
   if (preview === undefined) {
@@ -123,18 +132,6 @@ function previewBlocks(preview: OperationPreview | undefined): readonly Block[] 
     : [header, { kind: 'drawing', lines: statements }];
 }
 
-/** What the planner flagged without refusing to plan it. */
-function plannerWarningBlocks(result: MigrationCommandResult): readonly Block[] {
-  const warnings = result.warnings ?? [];
-  if (warnings.length === 0) {
-    return [];
-  }
-  return [
-    { kind: 'summary', status: 'warn', text: 'Planner warnings' },
-    { kind: 'list', items: warnings.map((warning) => warning.summary) },
-  ];
-}
-
 /** The new required fields whose existing rows get a temporary value, and how to choose the value. */
 function temporaryValueBlocks(
   result: MigrationCommandResult,
@@ -146,7 +143,7 @@ function temporaryValueBlocks(
     ({ field, value }): Block => ({
       kind: 'summary',
       status: 'warn',
-      text: `Existing rows ${get} ${value} in field "${field}". To choose the value, plan a migration with ${printedPlanCommand(invocation, databaseStorageHash, [statementFlag({ verb: 'backfill', text: field })])} instead.`,
+      text: `Field "${field}" ${get} the temporary value ${value} where existing data has none. To choose the value, plan a migration with ${printedPlanCommand(invocation, databaseStorageHash, [statementFlag({ verb: 'backfill', text: field })])} instead.`,
     }),
   );
 }
@@ -161,13 +158,16 @@ function planSummaryText(result: MigrationCommandResult): string {
 
 function applySummaryText(result: MigrationCommandResult): string {
   const executed = result.execution?.operationsExecuted ?? 0;
+  const planned = result.plan.operations.length;
   const spaces = result.perSpace?.length ?? 0;
   const across = spaces > 0 ? ` across ${spaces} contract space${spaces === 1 ? '' : 's'}` : '';
   if (result.changedStorageEntities !== undefined) return result.summary;
   if (executed === 0) {
     return `Database already matches contract${across}`;
   }
-  return `Applied ${executed} operation(s)${across}`;
+  return executed < planned
+    ? `Applied ${executed} of ${planned} operation(s)${across}; ${skippedOperationsText(planned - executed)}`
+    : `Applied ${executed} operation(s)${across}`;
 }
 
 /** For each namespace the plan removes, the answers that answer all of its questions. */

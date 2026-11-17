@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { updateFirstGraph } from '../../src/mutation-graph/collection-graphs';
 import { parseMutationInput } from '../../src/relation-mutations';
 import type { RelationMutator } from '../../src/types';
-import { createCollectionFor } from '../collection-fixtures';
+import { createCollectionFor, relatedCollectionOf } from '../collection-fixtures';
 import { getTestContext } from '../helpers';
 import { printGraph } from './print-graph';
 
@@ -18,7 +18,13 @@ function printUpdate(
   const users = createCollectionFor('User').collection.where({ id: 1 });
   const state = withPosts ? users.include('posts').state : users.state;
   const context = getTestContext();
-  const parsed = parseMutationInput(context.contract, 'public', 'User', input as never);
+  const parsed = parseMutationInput(
+    context.contract,
+    'public',
+    'User',
+    input as never,
+    relatedCollectionOf(context),
+  );
   return printGraph(
     updateFirstGraph(
       { context, state, modelName: 'User', namespaceId: 'public' },
@@ -38,10 +44,10 @@ describe('updateFirstGraph with relation operations', () => {
         ),
       ).toBe(
         [
-          'n1 Find users where id = 1 limit 1',
+          'n1 Find users where id = 1',
           'n2 Find users where id = 2 limit 1 <- Requires n1',
           'n3 Assert <- Rows n2, Requires n1',
-          "n4 Update users set name = 'Ada' <- FilterData n1 (id->id), PayloadData n2 (id->invited_by_id)",
+          "n4 Update users set name = 'Ada' where id = 1 <- PayloadData n2 (id->invited_by_id)",
           'result: n4',
         ].join('\n'),
       );
@@ -55,9 +61,9 @@ describe('updateFirstGraph with relation operations', () => {
         }),
       ).toBe(
         [
-          'n1 Find users where id = 1 limit 1',
+          'n1 Find users where id = 1',
           'n2 Insert users <- Requires n1',
-          'n3 Update users set nothing <- FilterData n1 (id->id), PayloadData n2 (id->invited_by_id)',
+          'n3 Update users set nothing where id = 1 <- FilterData n1 (id->id), PayloadData n2 (id->invited_by_id)',
           'result: n3',
         ].join('\n'),
       );
@@ -66,8 +72,8 @@ describe('updateFirstGraph with relation operations', () => {
     it('sets the key of the parent to null on disconnect', () => {
       expect(printUpdate({ invitedBy: (inviter: Mutator) => inviter.disconnect() })).toBe(
         [
-          'n1 Find users where id = 1 limit 1',
-          'n2 Update users set invited_by_id = null <- FilterData n1 (id->id)',
+          'n1 Find users where id = 1',
+          'n2 Update users set invited_by_id = null where id = 1',
           'result: n2',
         ].join('\n'),
       );
@@ -82,7 +88,7 @@ describe('updateFirstGraph with relation operations', () => {
         }),
       ).toBe(
         [
-          'n1 Find users where id = 1 limit 1',
+          'n1 Find users where id = 1',
           'n2 Insert posts <- PayloadData n1 (id->user_id)',
           'result: n1',
         ].join('\n'),
@@ -92,7 +98,7 @@ describe('updateFirstGraph with relation operations', () => {
     it('sets the key of the parent on the children a connect matches', () => {
       expect(printUpdate({ posts: (posts: Mutator) => posts.connect({ id: 10 }) })).toBe(
         [
-          'n1 Find users where id = 1 limit 1',
+          'n1 Find users where id = 1',
           'n2 Update posts set nothing where id = 10 <- PayloadData n1 (id->user_id)',
           'result: n1',
         ].join('\n'),
@@ -102,14 +108,14 @@ describe('updateFirstGraph with relation operations', () => {
     it('sets the key to null on every child of the parent, or on those the criterion matches', () => {
       expect(printUpdate({ posts: (posts: Mutator) => posts.disconnect() })).toBe(
         [
-          'n1 Find users where id = 1 limit 1',
+          'n1 Find users where id = 1',
           'n2 Update posts set user_id = null <- FilterData n1 (id->user_id)',
           'result: n1',
         ].join('\n'),
       );
       expect(printUpdate({ posts: (posts: Mutator) => posts.disconnect([{ id: 10 }]) })).toBe(
         [
-          'n1 Find users where id = 1 limit 1',
+          'n1 Find users where id = 1',
           'n2 Update posts set user_id = null where id = 10 <- FilterData n1 (id->user_id)',
           'result: n1',
         ].join('\n'),
@@ -123,7 +129,7 @@ describe('updateFirstGraph with relation operations', () => {
         printUpdate({ tags: (tags: Mutator) => tags.create([{ id: 't1', name: 'SQL' }]) }),
       ).toBe(
         [
-          'n1 Find users where id = 1 limit 1',
+          'n1 Find users where id = 1',
           'n2 Insert tags <- Requires n1',
           'n3 Insert user_tags <- PayloadData n1 (id->user_id), PayloadData n2 (id->tag_id)',
           'result: n1',
@@ -134,7 +140,7 @@ describe('updateFirstGraph with relation operations', () => {
     it('finds and asserts the target, then inserts a junction row that skips an existing link', () => {
       expect(printUpdate({ tags: (tags: Mutator) => tags.connect({ name: 'SQL' }) })).toBe(
         [
-          'n1 Find users where id = 1 limit 1',
+          'n1 Find users where id = 1',
           "n2 Find tags where name = 'SQL' limit 1 <- Requires n1",
           'n3 Assert <- Rows n2, Requires n1',
           'n4 Insert user_tags on conflict (user_id, tag_id) do nothing <- PayloadData n1 (id->user_id), PayloadData n2 (id->tag_id)',
@@ -146,7 +152,7 @@ describe('updateFirstGraph with relation operations', () => {
     it('finds and asserts the target, then deletes the junction row by both keys', () => {
       expect(printUpdate({ tags: (tags: Mutator) => tags.disconnect([{ name: 'SQL' }]) })).toBe(
         [
-          'n1 Find users where id = 1 limit 1',
+          'n1 Find users where id = 1',
           "n2 Find tags where name = 'SQL' limit 1 <- Requires n1",
           'n3 Assert <- Rows n2, Requires n1',
           'n4 Delete user_tags <- FilterData n1 (id->user_id), FilterData n2 (id->tag_id)',
@@ -171,8 +177,8 @@ describe('updateFirstGraph with relation operations', () => {
       printUpdate({ posts: (posts: Mutator) => posts.connect({ id: 10 }) }, { name: 'Ada' }, true),
     ).toBe(
       [
-        'n1 Find users where id = 1 limit 1',
-        "n2 Update users set name = 'Ada' <- FilterData n1 (id->id)",
+        'n1 Find users where id = 1',
+        "n2 Update users set name = 'Ada' where id = 1",
         'n3 Update posts set nothing where id = 10 <- PayloadData n2 (id->user_id)',
         'n4 Find users <- FilterData n2 (id->id)',
         'result: n4',
@@ -202,9 +208,13 @@ describe('updateFirstGraph with relation operations', () => {
 
   it('builds a graph with no node after limit(0)', () => {
     const context = getTestContext();
-    const parsed = parseMutationInput(context.contract, 'public', 'User', {
-      posts: (posts: Mutator) => posts.connect({ id: 10 }),
-    } as never);
+    const parsed = parseMutationInput(
+      context.contract,
+      'public',
+      'User',
+      { posts: (posts: Mutator) => posts.connect({ id: 10 }) } as never,
+      relatedCollectionOf(context),
+    );
     const state = createCollectionFor('User').collection.where({ id: 1 }).limit(0).state;
 
     expect(

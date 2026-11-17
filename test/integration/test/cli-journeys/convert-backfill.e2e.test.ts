@@ -222,7 +222,7 @@ withTempDir(({ createTempDir }) => {
         ]);
         expect(temporary.exitCode, `plan name: ${temporary.stderr}`).toBe(0);
         expect(`${temporary.stdout}${temporary.stderr}`).toContain(
-          `Existing rows get '' in field "User.name". To choose the value, plan again with --backfill User.name.`,
+          `Field "User.name" gets the temporary value '' where existing data has none. To choose the value, plan again with --backfill User.name.`,
         );
         expect(readFileSync(join(latestDir(ctx), 'migration.ts'), 'utf-8')).toContain(
           'temporaryDefault',
@@ -496,7 +496,7 @@ withTempDir(({ createTempDir }) => {
         const added = await runDbUpdate(ctx);
         expect(added.exitCode, `db update name: ${added.stderr}`).toBe(0);
         expect(`${added.stdout}${added.stderr}`).toContain(
-          `Existing rows got '' in field "User.name". To choose the value, plan a migration with prisma-test migration plan --backfill User.name instead.`,
+          `Field "User.name" got the temporary value '' where existing data has none. To choose the value, plan a migration with prisma-test migration plan --backfill User.name instead.`,
         );
         expect(
           (await sql(db.connectionString, `SELECT id, name FROM "user" ORDER BY id`)).rows,

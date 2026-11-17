@@ -362,6 +362,44 @@ describe('migration plan', () => {
     });
   });
 
+  it('prints each planner warning with its why, and lists the warnings themselves in --json', async () => {
+    const project = await plannableProject();
+    const jsonProject = await plannableProject();
+    const warning = {
+      kind: 'documentsNotRewritten',
+      summary: 'Field "User.status" gains enum "Status"',
+      why: 'Write a dataTransform before the validator change.',
+    };
+
+    const human = await harness(project, { script: { warnings: [warning] } }).run(
+      ['migration', 'plan', '--name', 'first'],
+      { cwd: project.dir, isTty: { stdout: true } },
+    );
+    const json = await harness(jsonProject, { script: { warnings: [warning] } }).run(
+      ['migration', 'plan', '--name', 'first', '--json'],
+      { cwd: jsonProject.dir },
+    );
+
+    expect({
+      exitCode: human.exitCode,
+      shown: human.presented?.presentation.human.filter(
+        (block) => block.kind === 'summary' && block.status === 'warn',
+      ),
+      data: json.presented?.data,
+    }).toEqual({
+      exitCode: 0,
+      shown: [
+        {
+          kind: 'summary',
+          status: 'warn',
+          text: 'Field "User.status" gains enum "Status". Write a dataTransform before the validator change.',
+        },
+      ],
+      data: expect.objectContaining({ plannerWarnings: [warning] }),
+    });
+    expect(json.presented?.data).not.toHaveProperty('warnings');
+  });
+
   it('does not warn when the default origin ref has no outgoing edges', async () => {
     const project = await plannableProject();
 

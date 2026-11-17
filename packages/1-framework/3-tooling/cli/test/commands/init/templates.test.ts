@@ -382,7 +382,7 @@ describe('templates', () => {
           null,
           2,
         );
-        const merged = JSON.parse(mergeTsConfig(existing)) as Record<string, unknown>;
+        const merged = JSON.parse(mergeTsConfig(existing, 'module')) as Record<string, unknown>;
         const opts = merged['compilerOptions'] as Record<string, unknown>;
 
         expect(opts['outDir']).toBe('./dist');
@@ -402,7 +402,7 @@ describe('templates', () => {
           null,
           2,
         );
-        const merged = JSON.parse(mergeTsConfig(existing)) as Record<string, unknown>;
+        const merged = JSON.parse(mergeTsConfig(existing, 'module')) as Record<string, unknown>;
         const opts = merged['compilerOptions'] as Record<string, unknown>;
 
         expect(opts['module']).toBe('preserve');
@@ -420,7 +420,7 @@ describe('templates', () => {
           null,
           2,
         );
-        const merged = JSON.parse(mergeTsConfig(existing)) as Record<string, unknown>;
+        const merged = JSON.parse(mergeTsConfig(existing, 'module')) as Record<string, unknown>;
 
         expect(merged['include']).toEqual(['src/**/*.ts']);
         expect(merged['exclude']).toEqual(['node_modules']);
@@ -428,7 +428,7 @@ describe('templates', () => {
 
       it('creates compilerOptions if missing', () => {
         const existing = JSON.stringify({ include: ['src'] }, null, 2);
-        const merged = JSON.parse(mergeTsConfig(existing)) as Record<string, unknown>;
+        const merged = JSON.parse(mergeTsConfig(existing, 'module')) as Record<string, unknown>;
         const opts = merged['compilerOptions'] as Record<string, unknown>;
 
         for (const [key, value] of Object.entries(REQUIRED_COMPILER_OPTIONS)) {

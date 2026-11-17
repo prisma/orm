@@ -432,3 +432,23 @@ describe('MongoMigrationPlanner, a field of a time-series collection', () => {
     ]);
   });
 });
+
+describe('MongoMigrationPlanner, a model with no collection', () => {
+  it('refuses a rename of a model whose documents no collection holds, naming the model', () => {
+    const orphan = (seed: string, model: string) =>
+      contract(seed, { [model]: { fields: ['_id', 'name'] } }, {});
+
+    expect(
+      refusal(
+        plan({
+          from: orphan('from', 'Orphan'),
+          to: orphan('to', 'Lonely'),
+          schema: [],
+          statements: [renameModel('Orphan', 'Lonely')],
+        }),
+      ).map(({ summary }) => summary),
+    ).toEqual([
+      'Cannot rename model "Orphan" to "Lonely": model "Orphan" names no collection, and neither does a base or an owner',
+    ]);
+  });
+});

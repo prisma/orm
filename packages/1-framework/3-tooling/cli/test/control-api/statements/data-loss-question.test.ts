@@ -16,6 +16,24 @@ const drop = {
 } as const;
 
 describe('dataLossQuestion for data no model names', () => {
+  it('says a type change changes the type of the data and can change or lose its values', () => {
+    const question = dataLossQuestion(
+      {
+        operationIndex: 0,
+        label: 'Cast field age in collection users from string to int',
+        subject: { kind: 'storage', name: 'users.age' },
+        loss: 'typeChange',
+      },
+      { origin, destination, statements: [], canConvert: false, originKnown: false },
+    );
+
+    expect({ question: question.question, verbs: question.verbs }).toEqual({
+      question:
+        'Cast field age in collection users from string to int would change the type of "users.age", named by its storage name because the origin contract is unknown, and can change or lose its values. --delete keeps the field and lets the database cast its values, which can change or lose some.',
+      verbs: ['delete'],
+    });
+  });
+
   it('says no model of a known origin contract stores it', () => {
     const question = dataLossQuestion(drop, {
       origin,
@@ -163,7 +181,7 @@ describe('dataLossQuestion for a type change', () => {
       },
     );
     expect(rebuild.question).toBe(
-      'Recreate table User would change the type of field "User.age" and can change or lose its values.',
+      'Recreate table User would change the type of field "User.age" and can change or lose its values. --convert writes a conversion for you to fill in; --delete keeps the field and lets the database cast its values, which can change or lose some.',
     );
   });
 
