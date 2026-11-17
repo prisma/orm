@@ -1,3 +1,4 @@
+import { compareCodeUnits } from '@internal/contract/hashing-utils';
 import { contractError } from './contract-errors';
 import type { ImportRequirement } from './ts-expression';
 
@@ -229,11 +230,6 @@ function renderNamedBindingsList(group: ModuleImportGroup, statementTypeOnly: bo
     .sort(compareNamedBindings)
     .map((binding) => renderNamedBinding(binding, statementTypeOnly))
     .join(', ');
-}
-
-/** Orders by UTF-16 code unit, so the rendered text does not depend on the machine's locale. */
-function compareCodeUnits(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 function compareNamedBindings(a: NamedBinding, b: NamedBinding): number {

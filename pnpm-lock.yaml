@@ -1288,6 +1288,9 @@ importers:
 
   packages/1-framework/1-core/ts-render:
     dependencies:
+      '@internal/contract':
+        specifier: workspace:8.0.0-rc.24
+        version: link:../../0-foundation/contract
       '@internal/utils':
         specifier: workspace:8.0.0-rc.24
         version: link:../../0-foundation/utils
