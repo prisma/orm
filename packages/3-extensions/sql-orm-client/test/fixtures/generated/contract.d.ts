@@ -17,7 +17,7 @@ import type {
   RelationKeys,
   StorageHashBase,
   TypeMaps as TypeMapsType,
-} from '../generated-types';
+} from '#fixture-generated-types';
 // pgvector types replaced with local aliases (see note above)
 type PgVectorTypes = {
   readonly 'pg/vector@1': {

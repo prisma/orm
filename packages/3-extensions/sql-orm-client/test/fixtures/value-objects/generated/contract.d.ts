@@ -13,7 +13,7 @@ import type {
   StorageHashBase,
   TypeMaps as TypeMapsType,
   ValueObjectTypesFromStorage,
-} from '../../generated-types';
+} from '#fixture-generated-types';
 import type {
   CodecTypes as PgTypes,
   ParameterizedOutputTypesForTypeParams as PgParameterizedOutputTypes,
