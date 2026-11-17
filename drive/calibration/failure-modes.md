@@ -975,7 +975,7 @@ Per-repo stop conditions beyond the canonical ones:
 
 **Root cause.** The reviewer judged the type inside one family. The repo copies the Postgres facade pattern on every family, so a public type that looks redundant in one family can be the counterpart of a type the other family's clients extend. Neither the review brief nor the fix compared the two.
 
-**Detection signal.** A finding or a fix deletes, renames or changes the meaning of an exported type in one family. `grep -rn "<TypeNameWithoutFamilyPrefix>" packages/2-sql-family packages/3-targets/postgres --include='*.ts'` finds a type of the same role in the sibling.
+**Detection signal.** A finding or a fix deletes, renames or changes the meaning of an exported type in one family. `grep -rn "<TypeNameWithoutFamilyPrefix>" packages/2-sql-family packages/2-mongo-family packages/3-targets/postgres packages/3-targets/mongo --include='*.ts'` finds a type of the same role in the sibling, whichever family the change is in.
 
 **Mitigation.** Before accepting such a finding, find the sibling family's counterpart and what uses it. If the sibling's clients or runtime use the counterpart, keep the type and give it the sibling's role. Put the comparison in the review brief when the slice adds or changes a facade interface.
 
