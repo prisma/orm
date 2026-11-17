@@ -351,6 +351,35 @@ function stillStoredRefusal(
   );
 }
 
+/**
+ * For a member that keeps its name and takes the stored value of an origin member the destination no longer has: the plan cannot tell whether that member is gone, so it says how to name the member it became.
+ */
+function takenValueAdvice(
+  enums: EnumComparison,
+  enumValue: EnumValueCoordinate,
+  to: StoredValue,
+  holder: string | undefined,
+): string | undefined {
+  const { originEnum, destinationEnum } = enums;
+  if (holder === undefined || destinationEnum.members.some(({ name }) => name === holder)) {
+    return undefined;
+  }
+  const added = destinationEnum.members.filter(
+    ({ name }) => !originEnum.members.some((member) => member.name === name),
+  );
+  const [only] = added;
+  if (only === undefined) return undefined;
+  const holderText = enumValueStatementText(enums.fromContract, { ...enumValue, member: holder });
+  const lead = `Its new stored value ${JSON.stringify(to)} was the stored value of enum value "${holderText}", which the enum no longer has.`;
+  const ask = 'and the next question says how to keep the data of both.';
+  const memberText = (member: string) =>
+    enumValueStatementText(enums.contract, { ...enumValue, member });
+  if (added.length > 1) {
+    return `${lead} If "${holderText}" is now another member, add --rename '${holderText}:${memberText('<new member>')}', ${ask}`;
+  }
+  return `${lead} If "${holderText}" is now "${memberText(only.name)}", add --rename ${holderText}:${memberText(only.name)}, ${ask}`;
+}
+
 function mergingRefusal(
   enums: EnumComparison,
   statement: ResolvedEnumValueRenameStatement,
@@ -515,6 +544,12 @@ function planEnum(
         : overlapping.includes(change)
           ? 'advice'
           : 'edit';
+    const removalAdvice =
+      keepsDataBy === 'advice'
+        ? twoMigrationsAdvice(enums, overlapping)
+        : change.statement === undefined && change.to !== undefined
+          ? takenValueAdvice(enums, change.enumValue, change.to, merging(change.to)?.name)
+          : undefined;
     for (const enumPlace of live) {
       const policy = collectionControlPolicy(contract, enumPlace.place.collection);
       if (policy !== 'managed') continue;
@@ -565,8 +600,7 @@ function planEnum(
                 replaceWith: callInSentence(replacementCall(change.to)),
               }
             : undefined,
-        keepDataAdvice:
-          keepsDataBy === 'advice' ? twoMigrationsAdvice(enums, overlapping) : undefined,
+        keepDataAdvice: removalAdvice,
         twoMigrationsAdvice: advice,
         variant: enumPlace.place.variant,
       });

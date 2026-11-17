@@ -527,4 +527,68 @@ describe('Journeys (MongoDB): enum value statements', {
       return parseJsonOutput<{ plan: { operations: readonly unknown[] } }>(further).plan.operations;
     });
   });
+
+  it('E7: a member that takes the stored value of a member that became another is asked to name it, and the two runs then keep the data of both', async () => {
+    const dbName = 'mongo_e7_update';
+    const ctx = setup(dbName);
+    const chained = usersPsl('  ACTIVE = "archived"\n  RETIRED = "retired"');
+    await emit(ctx, BEFORE, 'E7.01');
+    expect((await runDbUpdate(ctx, ['--no-interactive'])).exitCode, 'E7.02').toBe(0);
+    await seed(dbName, DOCUMENTS);
+    await emit(ctx, chained, 'E7.03');
+
+    const asked = await runDbUpdate(ctx, ['--no-interactive', '--json']);
+    expect(engineError(asked)?.why).toContain(
+      'If "Status.ARCHIVED" is now "Status.RETIRED", add --rename Status.ARCHIVED:Status.RETIRED, and the next question says how to keep the data of both.',
+    );
+    const renamed = await runDbUpdate(ctx, [
+      '--rename',
+      'Status.ARCHIVED:Status.RETIRED',
+      '--no-interactive',
+      '--json',
+    ]);
+    expect(
+      (engineError(renamed)?.nextActions ?? [])
+        .map(({ label }) => label)
+        .filter((label) => label.startsWith('To keep it with db update')),
+    ).toEqual([
+      expect.stringContaining(
+        "db update --rename Status.ARCHIVED:Status.RETIRED --rename 'Status.ACTIVE:Status.<temporary member>'`",
+      ),
+    ]);
+
+    await emit(ctx, usersPsl('  ACTIVE_TMP = "active_tmp"\n  RETIRED = "retired"'), 'E7.04');
+    const first = await runDbUpdate(ctx, [
+      '--rename',
+      'Status.ARCHIVED:Status.RETIRED',
+      '--rename',
+      'Status.ACTIVE:Status.ACTIVE_TMP',
+      '--no-interactive',
+      '--json',
+    ]);
+    expect(first.exitCode, `E7.05: ${JSON.stringify(engineError(first))}`).toBe(0);
+    await emit(ctx, chained, 'E7.06');
+    const second = await runDbUpdate(ctx, [
+      '--rename',
+      'Status.ACTIVE_TMP:Status.ACTIVE',
+      '--no-interactive',
+      '--json',
+    ]);
+    expect(second.exitCode, `E7.07: ${JSON.stringify(engineError(second))}`).toBe(0);
+
+    expect(await documents(dbName)).toEqual([
+      {
+        email: 'a@example.com',
+        status: 'retired',
+        tags: ['retired', 'archived'],
+        home: { street: 'Main St', kind: 'retired' },
+      },
+      { email: 'b@example.com', status: 'archived', tags: [], home: null },
+      { email: 'c@example.com', tags: ['archived'] },
+    ]);
+    await verifiedAndSettled(ctx, dbName, 'E7', async () => {
+      const further = await runDbUpdate(ctx, ['--dry-run', '--no-interactive', '--json']);
+      return parseJsonOutput<{ plan: { operations: readonly unknown[] } }>(further).plan.operations;
+    });
+  });
 });

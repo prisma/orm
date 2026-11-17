@@ -339,6 +339,49 @@ describe('MongoMigrationPlanner, a removed enum value', () => {
     ]);
   });
 
+  it('advises naming the new member of a member whose stored value a kept member takes, which the plan cannot tell from a removal', () => {
+    const types = { status: { ...STATUS, nullable: true } };
+    const lossesTo = (members: Readonly<Record<string, unknown>>) => {
+      const result = plan({
+        from: users('from', BEFORE, types),
+        to: users('to', statuses(members), types),
+        schema: live,
+      });
+      if (result.kind !== 'success') throw new Error('Expected a plan');
+      return result.dataLoss.map(({ subject, keepDataEdit, keepDataAdvice }) => ({
+        subject,
+        keepDataEdit,
+        keepDataAdvice,
+      }));
+    };
+
+    expect({
+      oneNewMember: lossesTo({ ACTIVE: 'archived', RETIRED: 'retired' }),
+      twoNewMembers: lossesTo({ ACTIVE: 'archived', RETIRED: 'retired', GONE: 'gone' }),
+      noNewMember: lossesTo({ ACTIVE: 'archived' }),
+    }).toEqual({
+      oneNewMember: [
+        {
+          subject: enumValue('ACTIVE'),
+          keepDataEdit: undefined,
+          keepDataAdvice:
+            'Its new stored value "archived" was the stored value of enum value "Status.ARCHIVED", which the enum no longer has. If "Status.ARCHIVED" is now "Status.RETIRED", add --rename Status.ARCHIVED:Status.RETIRED, and the next question says how to keep the data of both.',
+        },
+      ],
+      twoNewMembers: [
+        {
+          subject: enumValue('ACTIVE'),
+          keepDataEdit: undefined,
+          keepDataAdvice:
+            'Its new stored value "archived" was the stored value of enum value "Status.ARCHIVED", which the enum no longer has. If "Status.ARCHIVED" is now another member, add --rename \'Status.ARCHIVED:Status.<new member>\', and the next question says how to keep the data of both.',
+        },
+      ],
+      noNewMember: [
+        { subject: enumValue('ACTIVE'), keepDataEdit: undefined, keepDataAdvice: undefined },
+      ],
+    });
+  });
+
   it('advises a boolean enum whose values trade places to swap them in one update, which two migrations cannot do', () => {
     const BOOLEAN_SWAP_ADVICE = `${NO_THIRD_BOOLEAN} To keep that data, ${SWAP_IN_ONE_UPDATE}, and remove the removeStoredValue calls of this enum from migration.ts before you apply it.`;
     const flags = (seed: string, members: Readonly<Record<string, unknown>>) =>
