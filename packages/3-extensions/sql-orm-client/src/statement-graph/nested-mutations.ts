@@ -315,7 +315,7 @@ function addParentOwned(
   }
   return [
     {
-      from: addFindAndAssert(t, related, name, 'connect', criterion, columns, mutation.state),
+      from: addFindAndAssert(t, { name, relation }, mutation, criterion, columns),
       columns,
     },
   ];
@@ -371,7 +371,7 @@ function addChildOwned(
         related,
         {},
         {
-          where: requiredCriterion(context, related, name, 'connect', criterion, mutation.state),
+          where: requiredCriterion(context, related, name, mutation, criterion),
           filters: [],
           links: [],
           payloads: [{ from: parent, columns: fromParent }],
@@ -389,9 +389,7 @@ function addChildOwned(
   const wheres =
     criteria.length === 0
       ? [variantWhere(contract, mutation.state, undefined)]
-      : criteria.map((criterion) =>
-          requiredCriterion(context, related, name, 'disconnect', criterion, mutation.state),
-        );
+      : criteria.map((criterion) => requiredCriterion(context, related, name, mutation, criterion));
   for (const where of wheres) {
     updateRows(t, related, unlink, {
       where,
@@ -479,10 +477,7 @@ function addJunctionOwned(
   if (mutation.kind === 'connect') {
     const conflict = linkKeyConflict(contract, relation);
     for (const criterion of mutation.criteria) {
-      addLink(
-        addFindAndAssert(t, related, name, 'connect', criterion, fromTarget, mutation.state),
-        conflict,
-      );
+      addLink(addFindAndAssert(t, { name, relation }, mutation, criterion, fromTarget), conflict);
     }
     return;
   }
@@ -495,15 +490,7 @@ function addJunctionOwned(
     );
   }
   for (const criterion of criteria) {
-    const target = addFindAndAssert(
-      t,
-      related,
-      name,
-      'disconnect',
-      criterion,
-      fromTarget,
-      mutation.state,
-    );
+    const target = addFindAndAssert(t, { name, relation }, mutation, criterion, fromTarget);
     deleteRows(t, junction, {
       where: undefined,
       filters: [
@@ -616,21 +603,22 @@ function addChildInserts(
 
 function addFindAndAssert(
   t: Translation,
-  related: Model,
-  name: string,
-  kind: 'connect' | 'disconnect',
+  { name, relation }: Pick<ParsedRelationMutation, 'name' | 'relation'>,
+  mutation: Extract<Mutation, { kind: 'connect' | 'disconnect' }>,
   criterion: Readonly<Record<string, unknown>>,
   columns: readonly ColumnMapping[],
-  variant: CollectionState | undefined,
 ): NodeId {
   const { graph, context } = t;
-  const where = requiredCriterion(context, related, name, kind, criterion, variant);
-  const withVariants = {
-    ...related,
-    tables:
-      variant?.tables ??
-      createCollectionTables(context.contract, related.namespaceId, related.modelName),
-  };
+  const { kind } = mutation;
+  const related = relatedModel(context.contract, relation, mutation.state);
+  const where = requiredCriterion(context, related, name, mutation, criterion);
+  const withVariants =
+    mutation.state === undefined
+      ? {
+          ...related,
+          tables: createCollectionTables(context.contract, related.namespaceId, related.modelName),
+        }
+      : related;
   const find = findRows(
     t,
     selectAstOf(
@@ -664,9 +652,8 @@ function requiredCriterion(
   context: ExecutionContext,
   model: Model,
   name: string,
-  kind: 'connect' | 'disconnect',
+  { kind, state: variant }: Extract<Mutation, { kind: 'connect' | 'disconnect' }>,
   criterion: Readonly<Record<string, unknown>>,
-  variant: CollectionState | undefined,
 ): AnyExpression {
   const where = criterionWhere(context, model, criterion);
   if (where === undefined) {
