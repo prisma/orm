@@ -471,6 +471,7 @@ function hasStatement(change: TableChange | ColumnChange): boolean {
  */
 function tableRenameConflict(
   change: TableChange,
+  current: string | undefined,
   changes: readonly TableChange[],
   tables: SchemaTables,
   renames: StorageRenames,
@@ -485,7 +486,9 @@ function tableRenameConflict(
     `rows of table "${table}" as rows of ${modelsText(change.renames.map((rename) => rename.from))}`;
   const others = changes.filter((other) => other !== change);
   const { sameName } = renames;
-  const [held] = tables.tablesNamed(namespaceId, to).filter((table) => table !== from);
+  const [held] = tables
+    .tablesNamed(namespaceId, to)
+    .filter((table) => !sameName(table, from) && table !== current);
   if (held !== undefined) {
     const heldTable = { namespaceId, table: held };
     const moved = others.find(
@@ -531,6 +534,7 @@ function tableRenameConflict(
 function columnRenameConflict(
   change: ColumnChange,
   table: string,
+  current: string | undefined,
   changes: readonly ColumnChange[],
   tables: SchemaTables,
   renames: StorageRenames,
@@ -547,7 +551,7 @@ function columnRenameConflict(
   const { sameName } = renames;
   const [held] = tables
     .columnsNamed(namespaceId, table, change.to)
-    .filter((column) => column !== change.from);
+    .filter((column) => !sameName(column, change.from) && column !== current);
   if (held !== undefined) {
     const moved = others.find((other) => sameName(other.from, held));
     if (moved !== undefined) {
@@ -582,8 +586,12 @@ function columnRenameConflict(
   return undefined;
 }
 
-/** A change the schema being planned from has already made: it has the new name, as `name`, and not the old one. */
-export interface AlreadyMade<TChange> {
+/**
+ * Where the schema being planned from has the table or column of a change under a name other than
+ * its old one, as `name`: the new name, when the change is made already, or a name the target takes
+ * for the old or new one, which differs from it only in case.
+ */
+export interface FoundUnder<TChange> {
   readonly change: TChange;
   readonly name: string;
 }
@@ -592,27 +600,35 @@ export interface AlreadyMade<TChange> {
 export interface PlannedStorageRenames {
   readonly tables: readonly TableChange[];
   readonly columns: readonly ColumnChange[];
-  /** The changes no statement asks for that the schema being planned from has already made. */
-  readonly madeTables: readonly AlreadyMade<TableChange>[];
-  readonly madeColumns: readonly AlreadyMade<ColumnChange>[];
+  /** The changes no statement asks for whose table the schema being planned from has under another name. */
+  readonly foundTables: readonly FoundUnder<TableChange>[];
+  readonly foundColumns: readonly FoundUnder<ColumnChange>[];
+}
+
+function foundName<TChange>(
+  found: readonly FoundUnder<TChange>[],
+  matches: (change: TChange) => boolean,
+): string | undefined {
+  return found.find(({ change }) => matches(change))?.name;
 }
 
 /**
  * The name the table of a column change has in the schema being planned from: its origin name
- * when the table stays or is renamed, its new name when the schema already has it renamed, and
- * `undefined` when the plan does not move the table.
+ * when the table stays or is renamed from it, the name the schema has it under when that differs,
+ * and `undefined` when the plan does not move the table.
  */
 function columnTableInSchema(
   change: ColumnChange,
   tables: readonly TableChange[],
-  madeTables: readonly AlreadyMade<TableChange>[],
+  foundTables: readonly FoundUnder<TableChange>[],
   renames: StorageRenames,
 ): string | undefined {
   if (renames.inPlace(change.origin, change.destination)) return change.origin.table;
   const matches = (table: TableChange) =>
     sameTable(table.origin, change.origin) && sameTable(table.destination, change.destination);
-  if (tables.some(matches)) return change.origin.table;
-  return madeTables.find((made) => matches(made.change))?.name;
+  const found = foundName(foundTables, matches);
+  if (found !== undefined) return found;
+  return tables.some(matches) ? change.origin.table : undefined;
 }
 
 /**
@@ -626,52 +642,74 @@ export function storageRenameConflict(
 ): SqlPlannerConflict | undefined {
   for (const change of planned.tables) {
     if (hasStatement(change)) continue;
-    const conflict = tableRenameConflict(change, planned.tables, tables, renames);
+    const current = foundName(planned.foundTables, (found) => found === change);
+    const conflict = tableRenameConflict(change, current, planned.tables, tables, renames);
     if (conflict !== undefined) return conflict;
   }
   for (const change of planned.columns) {
     if (hasStatement(change)) continue;
-    const table = columnTableInSchema(change, planned.tables, planned.madeTables, renames);
+    const table = columnTableInSchema(change, planned.tables, planned.foundTables, renames);
     if (table === undefined) continue;
-    const conflict = columnRenameConflict(change, table, planned.columns, tables, renames);
+    const current = foundName(planned.foundColumns, (found) => found === change);
+    const conflict = columnRenameConflict(change, table, current, planned.columns, tables, renames);
     if (conflict !== undefined) return conflict;
   }
   return undefined;
 }
 
 type Disposition =
-  | { readonly kind: 'rename' | 'none' }
-  | { readonly kind: 'made'; readonly name: string };
+  | { readonly kind: 'none' }
+  | { readonly kind: 'rename' | 'made'; readonly found: string | undefined };
 
 /**
  * What the plan does for a change no statement asks for, from what the schema being planned from
- * has: rename it when the old name is there; nothing when the schema already has the new name in
- * place of the old one, which the plan records as made; nothing when the schema has neither. When
- * the new name is one the origin contract has, it is a rename, which the conflict check refuses.
+ * has, as the target compares names: `current`, the name it has for the old one, and `held`, a
+ * name it has for the new one that is not the old one. With the old name, the plan renames it from
+ * `current`, unless `current` is the new name already. With only the new name, the change is made,
+ * and a rename gives it the contract's case; when the origin contract has that name too, it is a
+ * rename, which the conflict check refuses. With neither, nothing is planned.
  */
 function disposition(
-  hasOld: boolean,
+  to: string,
+  current: string | undefined,
   held: string | undefined,
   originHasHeld: (held: string) => boolean,
 ): Disposition {
-  if (hasOld) return { kind: 'rename' };
+  if (current !== undefined) {
+    return current === to ? { kind: 'made', found: current } : { kind: 'rename', found: current };
+  }
   if (held === undefined) return { kind: 'none' };
-  return originHasHeld(held) ? { kind: 'rename' } : { kind: 'made', name: held };
+  if (originHasHeld(held)) return { kind: 'rename', found: undefined };
+  return held === to ? { kind: 'made', found: held } : { kind: 'rename', found: held };
 }
 
 /**
  * The renames the plan makes: every change a statement asks for, and each change no statement
  * asks for whose whole table or column moves, whose control policy is `managed` in both
- * contracts, and whose old table or column the schema being planned from has. A change whose new
- * name the schema has in place of the old one is made already. A column change on a table that
- * changes needs the table change planned or made.
+ * contracts, and whose old table or column the schema being planned from has, under the old name
+ * or one the target takes for it. A change whose new name the schema has in place of the old one is
+ * made already. A column change on a table that changes needs the table change planned or made.
  */
 export function plannedStorageRenames(
   renames: StorageRenames,
   tables: SchemaTables,
 ): PlannedStorageRenames {
+  const { sameName } = renames;
   const plannedTables: TableChange[] = [];
-  const madeTables: AlreadyMade<TableChange>[] = [];
+  const foundTables: FoundUnder<TableChange>[] = [];
+  const record = <TChange>(
+    change: TChange,
+    from: string,
+    outcome: Disposition,
+    planned: TChange[],
+    found: FoundUnder<TChange>[],
+  ) => {
+    if (outcome.kind === 'none') return;
+    if (outcome.kind === 'rename') planned.push(change);
+    if (outcome.found !== undefined && outcome.found !== from) {
+      found.push({ change, name: outcome.found });
+    }
+  };
   for (const change of renames.tableChanges) {
     if (hasStatement(change)) {
       plannedTables.push(change);
@@ -685,23 +723,22 @@ export function plannedStorageRenames(
       continue;
     }
     const { namespaceId, table: from } = change.origin;
-    const [held] = tables
-      .tablesNamed(namespaceId, change.destination.table)
-      .filter((table) => table !== from);
-    const outcome = disposition(tables.hasTable(namespaceId, from), held, (name) =>
+    const to = change.destination.table;
+    const [current] = tables.tablesNamed(namespaceId, from);
+    const [held] = tables.tablesNamed(namespaceId, to).filter((table) => !sameName(table, from));
+    const outcome = disposition(to, current, held, (name) =>
       renames.originHasTable({ namespaceId, table: name }),
     );
-    if (outcome.kind === 'rename') plannedTables.push(change);
-    if (outcome.kind === 'made') madeTables.push({ change, name: outcome.name });
+    record(change, from, outcome, plannedTables, foundTables);
   }
   const plannedColumns: ColumnChange[] = [];
-  const madeColumns: AlreadyMade<ColumnChange>[] = [];
+  const foundColumns: FoundUnder<ColumnChange>[] = [];
   for (const change of renames.columnChanges) {
     if (hasStatement(change)) {
       plannedColumns.push(change);
       continue;
     }
-    const table = columnTableInSchema(change, plannedTables, madeTables, renames);
+    const table = columnTableInSchema(change, plannedTables, foundTables, renames);
     if (
       table === undefined ||
       !renames.managedOnBothSides(change) ||
@@ -710,14 +747,14 @@ export function plannedStorageRenames(
       continue;
     }
     const { namespaceId } = change.origin;
+    const [current] = tables.columnsNamed(namespaceId, table, change.from);
     const [held] = tables
       .columnsNamed(namespaceId, table, change.to)
-      .filter((column) => column !== change.from);
-    const outcome = disposition(tables.hasColumn(namespaceId, table, change.from), held, (name) =>
+      .filter((column) => !sameName(column, change.from));
+    const outcome = disposition(change.to, current, held, (name) =>
       renames.originHasColumn(change.origin, name),
     );
-    if (outcome.kind === 'rename') plannedColumns.push(change);
-    if (outcome.kind === 'made') madeColumns.push({ change, name: outcome.name });
+    record(change, change.from, outcome, plannedColumns, foundColumns);
   }
-  return { tables: plannedTables, columns: plannedColumns, madeTables, madeColumns };
+  return { tables: plannedTables, columns: plannedColumns, foundTables, foundColumns };
 }

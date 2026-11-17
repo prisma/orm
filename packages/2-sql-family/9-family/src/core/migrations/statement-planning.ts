@@ -389,12 +389,11 @@ class StatementPlanner<TCall extends CallWithCompanions> {
   readonly #renamedTables = new Map<string, ModelTable>();
   /** The origin place of each table renamed or moved so far, keyed as `#renamedTables`. */
   readonly #originTables = new Map<string, ModelTable>();
-  /** Each column renamed so far: its origin table, and its name before and after. */
-  readonly #renamedColumns: {
-    readonly origin: ModelTable;
-    readonly from: string;
-    readonly to: string;
-  }[] = [];
+  /** Each column renamed so far, keyed by its origin table and origin name: its name now. */
+  readonly #renamedColumns = new Map<
+    string,
+    { readonly origin: ModelTable; readonly from: string; readonly to: string }
+  >();
   /** The name each namespace renamed so far has in the working schema, keyed by its origin name. */
   readonly #renamedNamespaces = new Map<string, string>();
   readonly #ownership: StatementOwnership | undefined;
@@ -432,31 +431,33 @@ class StatementPlanner<TCall extends CallWithCompanions> {
     );
   }
 
-  /** Renames a column no statement asks for, on its table as the working schema has it now. */
+  /** Renames a column no statement asks for, as the working schema has it and its table now. */
   planColumnChange(change: ColumnChange): Result<readonly number[], SqlPlannerConflict> {
     const current = this.#current(change.origin);
+    const from = this.#currentColumn(change.origin, change.from);
     return this.#renameColumn(
       { statement: undefined, change: columnChangeText(change) },
-      `Cannot rename column "${current.table}"."${change.from}" to "${change.to}"`,
+      `Cannot rename column "${current.table}"."${from}" to "${change.to}"`,
       change.origin,
-      { namespaceId: current.namespaceId, table: current.table, from: change.from, to: change.to },
+      change.from,
+      { namespaceId: current.namespaceId, table: current.table, from, to: change.to },
     );
   }
 
   /**
-   * Records that a table no statement asks to rename already has its new name in the working
-   * schema, as `table`: later renames and questions find it there, as after a planned rename.
+   * Records that the working schema has the table of a change no statement asks for as `table`:
+   * later renames and questions find it there, as after a planned rename.
    */
-  recordMadeTableChange(change: TableChange, table: string): Result<readonly number[], never> {
+  recordTableFound(change: TableChange, table: string): Result<readonly number[], never> {
     const current = this.#current(change.origin);
     this.#renamedTables.set(tableKey(change.origin), { namespaceId: current.namespaceId, table });
     this.#originTables.set(tableKey(change.origin), change.origin);
     return ok([]);
   }
 
-  /** Records that a column no statement asks to rename already has its new name, as `column`. */
-  recordMadeColumnChange(change: ColumnChange, column: string): Result<readonly number[], never> {
-    this.#renamedColumns.push({ origin: change.origin, from: change.from, to: column });
+  /** Records that the working schema has the column of a change no statement asks for as `column`. */
+  recordColumnFound(change: ColumnChange, column: string): Result<readonly number[], never> {
+    this.#recordColumn(change.origin, change.from, column);
     return ok([]);
   }
 
@@ -473,6 +474,15 @@ class StatementPlanner<TCall extends CallWithCompanions> {
       case 'valueObjectField':
         return ok(PLANNED_WITH_DIFF);
     }
+  }
+
+  #recordColumn(origin: ModelTable, from: string, to: string): void {
+    this.#renamedColumns.set(JSON.stringify([tableKey(origin), from]), { origin, from, to });
+  }
+
+  /** The name a column of an origin table has in the working schema, after the renames planned so far. */
+  #currentColumn(origin: ModelTable, column: string): string {
+    return this.#renamedColumns.get(JSON.stringify([tableKey(origin), column]))?.to ?? column;
   }
 
   /** Where a table of the origin is in the working schema, after the renames planned so far. */
@@ -848,13 +858,14 @@ class StatementPlanner<TCall extends CallWithCompanions> {
     }
     const shared = this.#sharedColumnRefusal(statement);
     if (shared !== undefined) return notOk(shared);
-    return this.#renameColumn({ statement }, label, effect.table, rename);
+    return this.#renameColumn({ statement }, label, effect.table, effect.from, rename);
   }
 
   #renameColumn(
     source: RenameSource,
     label: string,
     origin: ModelTable,
+    originColumn: string,
     rename: ColumnRename,
   ): Result<readonly number[], SqlPlannerConflict> {
     const planned = this.#emit(
@@ -865,7 +876,7 @@ class StatementPlanner<TCall extends CallWithCompanions> {
     );
     if (planned.ok) {
       this.columnRenames.push(rename);
-      this.#renamedColumns.push({ origin, from: rename.from, to: rename.to });
+      this.#recordColumn(origin, originColumn, rename.to);
     }
     return planned;
   }
@@ -885,7 +896,7 @@ class StatementPlanner<TCall extends CallWithCompanions> {
         return current;
       },
       originColumn: (origin, column) =>
-        this.#renamedColumns.find(
+        [...this.#renamedColumns.values()].find(
           (renamed) => sameTable(renamed.origin, origin) && renamed.to === column,
         )?.from ?? column,
     };
@@ -958,10 +969,10 @@ export function planStatements<TCall extends CallWithCompanions>(input: {
     ...input.statements
       .filter((statement) => statement.entity === 'namespace')
       .map((statement) => () => planStatement(statement)),
-    ...storageRenames.madeTables.map(
+    ...storageRenames.foundTables.map(
       ({ change, name }) =>
         () =>
-          planner.recordMadeTableChange(change, name),
+          planner.recordTableFound(change, name),
     ),
     ...storageRenames.tables
       .filter(unstated)
@@ -969,10 +980,10 @@ export function planStatements<TCall extends CallWithCompanions>(input: {
     ...input.statements
       .filter((statement) => statement.entity !== 'namespace')
       .map((statement) => () => planStatement(statement)),
-    ...storageRenames.madeColumns.map(
+    ...storageRenames.foundColumns.map(
       ({ change, name }) =>
         () =>
-          planner.recordMadeColumnChange(change, name),
+          planner.recordColumnFound(change, name),
     ),
     ...storageRenames.columns
       .filter(unstated)

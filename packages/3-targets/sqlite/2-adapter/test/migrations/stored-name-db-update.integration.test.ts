@@ -4,77 +4,13 @@
  * when it has only the new one, left to the storage diff when it has neither, and refused when it
  * has both.
  */
-import type { Contract } from '@internal/contract/types';
 import { asNamespaceId } from '@internal/contract/types';
-import { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
-import { createDataTypeLookup } from '@internal/framework-components/codec';
-import {
-  APP_SPACE_ID,
-  type MigrationOperationPolicy,
-  planOriginOf,
-  type ResolvedMigrationStatement,
-} from '@internal/framework-components/control';
+import type { ResolvedMigrationStatement } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import type { SqlStorage } from '@internal/sql-contract/types';
-import { buildSqlContractFromDefinition } from '@internal/sql-contract-ts/contract-builder';
-import { createSqliteBuiltinCodecLookup } from '@internal/target-sqlite/codecs';
-import { sqliteDataTypes } from '@internal/target-sqlite/data-types';
-import sqlitePack from '@internal/target-sqlite/pack';
-import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { timeouts } from '@repo/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import {
-  controlAdapter,
-  createTestDatabase,
-  emptySchema,
-  familyInstance,
-  formatRunnerFailure,
-  frameworkComponents,
-  sqliteTargetDescriptor,
-  synthEdges,
-  type TestDatabase,
-} from './fixtures/runner-fixtures';
-
-const codecLookup = createSqliteBuiltinCodecLookup();
-const dataTypeLookup = createDataTypeLookup(sqliteDataTypes);
-
-const FULL_POLICY: MigrationOperationPolicy = {
-  allowedOperationClasses: ['additive', 'widening', 'destructive'],
-};
-
-const text = { codecId: 'sqlite/text@1' } as const;
-
-/** `User` in `table`, with an `id` primary key and a text column per entry of `fields`. */
-function userContract(
-  table: string,
-  fields: Readonly<Record<string, string>> = { email: 'email' },
-): Contract<SqlStorage> {
-  return buildSqlContractFromDefinition(
-    {
-      warnings: undefined,
-      target: sqlitePack,
-      createNamespace: sqliteCreateNamespace,
-      models: [
-        {
-          modelName: 'User',
-          tableName: table,
-          fields: [
-            { fieldName: 'id', columnName: 'id', descriptor: text, nullable: false },
-            ...Object.entries(fields).map(([fieldName, columnName]) => ({
-              fieldName,
-              columnName,
-              descriptor: text,
-              nullable: false,
-            })),
-          ],
-          id: { columns: ['id'] },
-        },
-      ],
-    },
-    codecLookup,
-    dataTypeLookup,
-  );
-}
+import { createTestDatabase, type TestDatabase } from './fixtures/runner-fixtures';
+import { dbUpdateHarness, userContract } from './fixtures/stored-name-db-update';
 
 const app = asNamespaceId(UNBOUND_NAMESPACE_ID);
 const origin = userContract('users', { email: 'email', name: 'name' });
@@ -92,68 +28,16 @@ describe('SQLite db update, a stored name that changes', {
     testDb?.cleanup();
   });
 
-  const query = (sql: string) => testDb.driver.query(sql);
-
-  async function plan(
-    from: Contract<SqlStorage> | null,
-    to: Contract<SqlStorage>,
-    statements: readonly ResolvedMigrationStatement[] = [],
-  ) {
-    const schema =
-      from === null
-        ? emptySchema
-        : await familyInstance.introspect({ driver: testDb.driver, contract: from });
-    return sqliteTargetDescriptor.createPlanner(controlAdapter).plan({
-      contract: to,
-      schema,
-      policy: from === null ? INIT_ADDITIVE_POLICY : FULL_POLICY,
-      fromContract: from,
-      origin: from === null ? null : planOriginOf(from),
-      statements,
-      frameworkComponents,
-      spaceId: APP_SPACE_ID,
-      snapshotsImportPath: '../../snapshots',
-    });
-  }
-
-  function success(result: Awaited<ReturnType<typeof plan>>) {
-    if (result.kind !== 'success') throw new Error(JSON.stringify(result.conflicts));
-    return result;
-  }
-
-  async function labelsOf(result: Awaited<ReturnType<typeof plan>>): Promise<readonly string[]> {
-    return (await Promise.all(success(result).plan.operations)).map((op) => op.label);
-  }
-
-  async function apply(result: Awaited<ReturnType<typeof plan>>, contract: Contract<SqlStorage>) {
-    const { driver } = testDb;
-    const executed = await sqliteTargetDescriptor.createRunner(familyInstance).execute({
-      driver,
-      perSpaceOptions: [
-        {
-          space: APP_SPACE_ID,
-          plan: success(result).plan,
-          migrationEdges: synthEdges(success(result).plan),
-          driver,
-          destinationContract: contract,
-          policy: FULL_POLICY,
-          frameworkComponents,
-        },
-      ],
-    });
-    if (!executed.ok) throw new Error(formatRunnerFailure(executed.failure));
-  }
-
-  async function start(): Promise<void> {
-    await apply(await plan(null, origin), origin);
-    await query(
-      `insert into "users" (id, email, name) values ('1', 'a@example.com', 'Ada'), ('2', 'b@example.com', 'Bo')`,
-    );
-  }
-
-  async function rows(sql: string): Promise<unknown[]> {
-    return (await query(sql)).rows;
-  }
+  const {
+    query,
+    plan,
+    success,
+    labelsOf,
+    apply,
+    start: startWith,
+    rows,
+  } = dbUpdateHarness(() => testDb);
+  const start = () => startWith(origin);
 
   describe('a table', () => {
     const to = userContract('app_users', { email: 'email', name: 'name' });
