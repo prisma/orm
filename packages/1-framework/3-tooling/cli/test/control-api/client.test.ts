@@ -197,6 +197,7 @@ describe('ControlClient progress emission', () => {
       const result = await client.dbSign({
         contract,
         migrationsDir: '/tmp/__test-client-migrations',
+        invocation: { cwd: '/work/app', configPath: undefined, dbGiven: false },
         connection: 'postgres://test',
         onProgress: (event) => events.push(event),
       });
@@ -1077,6 +1078,7 @@ describe('ControlClient progress emission', () => {
 
       const result = await client.dbSign({
         contract: createContract(),
+        invocation: { cwd: '/work/app', configPath: undefined, dbGiven: false },
         migrationsDir: '/tmp/__test-client-migrations',
         connection: 'postgres://test',
       });
