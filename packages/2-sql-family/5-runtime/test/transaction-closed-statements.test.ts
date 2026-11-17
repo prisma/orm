@@ -1,13 +1,22 @@
-import type { SqlDriver } from '@internal/sql-relational-core/ast';
+import { RawQueryAst, type SqlDriver } from '@internal/sql-relational-core/ast';
+import { planFromAst } from '@internal/sql-relational-core/plan';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { startActivityOn } from '../src/activity-handle';
 import type { SqlMiddleware } from '../src/middleware/sql-middleware';
 import {
   type RuntimeTransaction,
   type TransactionContext,
   withTransaction,
 } from '../src/sql-runtime';
+import { testCall } from './client-activity-kinds';
 import { deferred } from './closed-runtime-stub';
-import { createSetup, rawPlan, type Setup } from './transaction-activity-fixtures';
+import {
+  createSetup,
+  names,
+  rawPlan,
+  type Setup,
+  testContract,
+} from './transaction-activity-fixtures';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -34,7 +43,7 @@ function holdInMiddleware(sql: string) {
     name: 'held-encoding',
     familyId: 'sql',
     async beforeEncode(plan) {
-      if (plan.sql !== sql) return;
+      if (!plan.sql.includes(sql)) return;
       entered.resolve();
       await resume.promise;
     },
@@ -101,6 +110,7 @@ describe('withTransaction when the callback throws', () => {
 
     expect(await pending).toMatchObject(transactionClosed);
     expect(sentSql(setup.driver)).not.toContain('insert held');
+    expect(names(setup.events)).toContain('rollback');
   });
 
   it('keeps TRANSACTION_CLOSED when closing the source stream also fails', async () => {
@@ -239,6 +249,85 @@ describe('a transaction from connection.transaction()', () => {
       await connection.release();
     },
   );
+});
+
+describe('a statement on a raw transaction, still in middleware when the transaction ends', () => {
+  const ends = ['commit', 'rollback'] as const;
+
+  it.each(ends)(
+    'refuses one sent through an activity handle on the transaction at %s()',
+    async (end) => {
+      const held = holdInMiddleware('update held');
+      const setup = createSetup({ middleware: [held.middleware] });
+      const connection = await setup.runtime.connection();
+      const transaction = await connection.transaction();
+      const call = await startActivityOn(transaction, testCall);
+      const pending = settled(call.execute(rawPlan('update held')));
+      await held.entered.promise;
+
+      await transaction[end]();
+      held.resume.resolve();
+
+      expect(await pending).toMatchObject(transactionClosed);
+      expect(sentSql(setup.driver)).toEqual([]);
+      await connection.release();
+    },
+  );
+
+  it.each(ends)(
+    'refuses one sent through an activity handle on its connection at %s()',
+    async (end) => {
+      const held = holdInMiddleware('update held');
+      const setup = createSetup({ middleware: [held.middleware] });
+      const connection = await setup.runtime.connection();
+      const transaction = await connection.transaction();
+      const call = await startActivityOn(connection, testCall);
+      const pending = settled(call.execute(rawPlan('update held')));
+      await held.entered.promise;
+
+      await transaction[end]();
+      held.resume.resolve();
+
+      expect(await pending).toMatchObject(transactionClosed);
+      expect(sentSql(setup.driver)).toEqual([]);
+      await connection.release();
+    },
+  );
+
+  it.each(ends)('refuses a query() stream at %s()', async (end) => {
+    const held = holdInMiddleware('select held');
+    const setup = createSetup({ middleware: [held.middleware] });
+    const connection = await setup.runtime.connection();
+    const transaction = await connection.transaction();
+    const pending = settled(transaction.query(rawPlan('select held')).toArray());
+    await held.entered.promise;
+
+    await transaction[end]();
+    held.resume.resolve();
+
+    expect(await pending).toMatchObject(transactionClosed);
+    expect(sentSql(setup.driver)).toEqual([]);
+    await connection.release();
+  });
+
+  it.each(ends)('refuses a prepared statement at %s()', async (end) => {
+    const held = holdInMiddleware('update prepared');
+    const setup = createSetup({ middleware: [held.middleware] });
+    const prepared = await setup.runtime.prepare({}, () =>
+      planFromAst(RawQueryAst.affectedCount(['update prepared']), testContract),
+    );
+    const connection = await setup.runtime.connection();
+    const transaction = await connection.transaction();
+    const pending = settled(prepared.execute(transaction, {}));
+    await held.entered.promise;
+
+    await transaction[end]();
+    held.resume.resolve();
+
+    expect(await pending).toMatchObject(transactionClosed);
+    expect(sentSql(setup.driver)).toEqual([]);
+    await connection.release();
+  });
 });
 
 describe('the runtime first statement, held in middleware while its transaction closes', () => {
