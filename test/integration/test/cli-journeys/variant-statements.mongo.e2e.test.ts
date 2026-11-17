@@ -343,6 +343,34 @@ describe('Journeys (MongoDB): variant statements', {
     expect(await throughDbUpdate('mongo_v3_update', journey, 'V3')).toEqual(kept);
   });
 
+  it('V12: a variant renamed with its discriminator value kept asks nothing and keeps its documents, with or without --rename, with both commands', async () => {
+    const issue = tasksPsl([{ ...BUG, name: 'Issue' }, EPIC]);
+    const kept = DOCUMENTS.map((row) => ({ ...row }));
+
+    for (const statements of [[], ['--rename', 'Bug:Issue']]) {
+      const label = `V12 ${statements.join(' ') || 'without a statement'}`;
+      const suffix = statements.length === 0 ? 'none' : 'rename';
+      const { ctx, origin } = await migratedThenChanged(
+        `mongo_v12_plan_${suffix}`,
+        { before: BEFORE, after: issue, statements },
+        label,
+      );
+      const planned = await runMigrationPlan(ctx, ['--from', origin, ...statements, '--json']);
+      expect(
+        planned.exitCode,
+        `${label}: migration plan: ${planned.stdout}\n${planned.stderr}`,
+      ).toBe(0);
+      expect(parseJsonOutput<{ operations: readonly unknown[] }>(planned).operations).toEqual([]);
+      expect(
+        await throughDbUpdate(
+          `mongo_v12_update_${suffix}`,
+          { before: BEFORE, after: issue, statements },
+          label,
+        ),
+      ).toEqual(kept);
+    }
+  });
+
   it('V4: a removed variant whose value another variant takes is refused under both commands with advice to make the change in two steps, and two migrations succeed', async () => {
     const dbName = 'mongo_v4_plan';
     const { ctx, origin } = await migratedThenChanged(

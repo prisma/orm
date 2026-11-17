@@ -7,6 +7,7 @@ import {
   modelDisplayName,
   type ResolvedMigrationStatement,
   type ResolvedModelRenameStatement,
+  type ResolvedRenameStatement,
   type ResolvedVariantConvertStatement,
 } from '@internal/framework-components/control';
 import {
@@ -28,7 +29,12 @@ import {
   sharedCollectionWhy,
   TIME_SERIES_UPDATES,
 } from './mongo-rewrite-refusals';
-import { collectionControlPolicy, modelAt, modelCoordinates } from './mongo-statement-planning';
+import {
+  collectionControlPolicy,
+  destinationModelOf,
+  modelAt,
+  modelCoordinates,
+} from './mongo-statement-planning';
 import { DeleteDocumentsCall, ReplaceStoredValueCall } from './op-factory-call';
 
 type VariantStatement = ResolvedModelRenameStatement | ResolvedVariantConvertStatement;
@@ -105,16 +111,20 @@ function statementOf(
   );
 }
 
-/** The model of the destination a model of the origin is: the one a statement renames it to, else the one of the same name, as SQL finds it. */
-function destinationOf(origin: ModelCoordinate, input: VariantInput): ModelCoordinate | undefined {
-  const rename = input.statements.find(
-    (statement): statement is ResolvedModelRenameStatement =>
-      statement.kind === 'rename' &&
-      statement.entity === 'model' &&
-      sameModel(statement.from, origin),
-  );
-  if (rename !== undefined) return rename.to;
-  return modelAt(input.contract, origin) === undefined ? undefined : origin;
+/** The model of the destination a model of the origin is, as the statements and field changes find it: a variant renamed without a statement that keeps its collection and value is the same documents. */
+function destinationOf(
+  origin: ModelCoordinate,
+  fromContract: ContractWithDomain,
+  input: VariantInput,
+): ModelCoordinate | undefined {
+  return destinationModelOf(origin, {
+    statements: input.statements.filter(
+      (statement): statement is ResolvedRenameStatement => statement.kind === 'rename',
+    ),
+    fromContract,
+    contract: input.contract,
+    collectionAfterRenames: input.collectionAfterRenames,
+  });
 }
 
 function baseOf(contract: ContractWithDomain, model: ModelCoordinate): ModelCoordinate | undefined {
@@ -134,7 +144,7 @@ function destinationBaseOf(
   const originBase = baseOf(fromContract, origin);
   return (
     (destination === undefined ? undefined : baseOf(input.contract, destination)) ??
-    (originBase === undefined ? undefined : destinationOf(originBase, input))
+    (originBase === undefined ? undefined : destinationOf(originBase, fromContract, input))
   );
 }
 
@@ -181,7 +191,7 @@ function changeOf(
   if (before === undefined || originCollection === undefined) return undefined;
   const collection = input.collectionAfterRenames(originCollection);
   if (!input.keptCollections.has(collection)) return undefined;
-  const destination = destinationOf(origin, input);
+  const destination = destinationOf(origin, fromContract, input);
   const after =
     destination === undefined ? undefined : selectedVariantOf(input.contract.domain, destination);
   if (destination !== undefined && after === undefined) return undefined;

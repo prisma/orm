@@ -597,7 +597,7 @@ function sameModel(a: ModelCoordinate, b: ModelCoordinate): boolean {
 
 /**
  * The destination model an origin model became: the one a statement renamed it to, else the one of
- * the same name, else the only one stored the same way (same collection, same variant value).
+ * the same name, else the only new model stored the same way (same collection, same variant value).
  */
 export function destinationModelOf(
   origin: ModelCoordinate,
@@ -616,6 +616,7 @@ export function destinationModelOf(
   const variant = selectedVariantOf(input.fromContract.domain, origin);
   const stored = modelCoordinates(input.contract).filter(
     (candidate) =>
+      modelAt(input.fromContract, candidate) === undefined &&
       embeddingModelOf(input.contract.domain, candidate) === undefined &&
       collectionOfModel(input.contract.domain, candidate) === collection &&
       sameVariant(selectedVariantOf(input.contract.domain, candidate), variant),

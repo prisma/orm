@@ -249,6 +249,24 @@ describe('MongoMigrationPlanner, a removed variant', () => {
   });
 });
 
+describe('MongoMigrationPlanner, a variant renamed with its discriminator value kept', () => {
+  const renamed = tasks('to', { Issue: BUG, Epic: EPIC });
+
+  it('deletes no documents, with or without the rename, since the documents keep the collection and the value', () => {
+    const without = plan({ from: BEFORE, to: renamed, schema: live });
+    const withRename = plan({
+      from: BEFORE,
+      to: renamed,
+      schema: live,
+      statements: [renameModel('Bug', 'Issue')],
+    });
+    expect([planned(without), planned(withRename)]).toEqual([
+      { labels: [], classes: [], applied: [], dataLoss: [] },
+      { labels: [], classes: [], applied: [[]], dataLoss: [] },
+    ]);
+  });
+});
+
 describe('MongoMigrationPlanner, discriminator values one operation frees and another writes', () => {
   it('refuses a removed variant whose value another variant takes', () => {
     const result = plan({
@@ -700,7 +718,7 @@ describe('MongoMigrationPlanner, a plan-wide refusal involving a removed variant
       }),
     ).map(({ why: text }) => text?.slice(0, text.indexOf(ONE_AT_A_TIME)));
     expect(why).toEqual([
-      'The plan holds changes that no --rename or --convert statement carries: model "Bug", whose documents the plan deletes; new required field "Epic.scope", which the plan fills with a temporary value. To keep their data, run the command again with: --rename Bug:Defect. ',
+      'The plan holds changes that no --rename or --convert statement carries: model "Bug", whose documents the plan deletes. To keep their data, run the command again with: --rename Bug:Defect. ',
     ]);
   });
 });
