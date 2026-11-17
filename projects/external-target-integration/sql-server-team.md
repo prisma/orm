@@ -29,8 +29,10 @@ An application's `prisma.config.ts` imports `defineConfig` from your package. Th
 
 ```ts
 // @microsoft/prisma-orm-mssql/config
+import { defineConfig as frameworkDefineConfig } from '@prisma/orm-framework/config/config-types';
+
 export function defineConfig(options: MssqlConfigOptions) {
-  return coreDefineConfig({
+  return frameworkDefineConfig({
     family: sql,
     target: mssqlTarget,
     adapter: mssqlAdapter,
@@ -60,6 +62,15 @@ import type {
 ```
 
 and a migration file rendered by `prisma migration plan` imports its helpers from `@microsoft/prisma-orm-mssql/migration`.
+
+The framework exports a `defineConfig` that takes the family, target, adapter and driver. Your package wraps it in a `defineConfig` of its own that fills those in, so an application passes only its contract and connection. The import alias above exists only because both functions have the same name.
+
+Only names that would clash are imported under an alias:
+
+- `Contract` and `TypeMaps` are renamed by Prisma, because the generated file exports its own `Contract` and `TypeMaps`.
+- `CodecTypes` and `QueryOperationTypes` are renamed to the alias your target's descriptor declares, because the generated file exports its own `CodecTypes`, which combines yours with those of any extension pack.
+
+Your generated-types module exports every type under its original name. The renaming happens in the generated file.
 
 The two modules:
 
