@@ -25,10 +25,11 @@ If the user has clearly already followed the contribution flow and just needs th
 Verify the **result**, not the authorship. The maintainers do not ask whether the change was AI-assisted; they verify that:
 
 1. It is scoped to one logical concern.
-2. The right test suite is green.
-3. The PR explains *why* the change exists, not file-by-file *what*.
-4. Every commit is signed off (DCO).
-5. The PR title is in conventional-commit form.
+2. A bug fix covers every place the bug occurs, not only the one the issue reports.
+3. The right test suite is green.
+4. The PR explains *why* the change exists, not file-by-file *what*.
+5. Every commit is signed off (DCO).
+6. The PR title is in conventional-commit form.
 
 This skill is a pit of success — there is no CI gate that checks you used it. Following it is the cheapest way to land the PR cleanly.
 
@@ -48,7 +49,8 @@ If anything in `CONTRIBUTING.md` contradicts what this skill says, `CONTRIBUTING
 
 Before opening the PR, check:
 
-- **One logical change.** If the diff includes unrelated cleanup or "while I was here" fixes, ask the user whether to split them into separate PRs. Mixed-scope PRs almost always trigger a "please split this" review comment.
+- **A bug fix covers every place the bug occurs.** An issue reports one occurrence. Before opening the PR, find the cause rather than the line that throws, then search for the same mistake in the other database targets, in the other family (SQL and MongoDB), and along the other code paths the same value passes through. Fix every occurrence in this PR, with a test for each, and say in the PR body where you looked and what you found. If the diff fixes only the reported occurrence, do the search now and tell the user what it found. See [Fix the cause, everywhere it occurs](../../CONTRIBUTING.md#fix-the-cause-everywhere-it-occurs).
+- **One logical change.** The same bug in several places is one logical change. If the diff includes unrelated cleanup or "while I was here" fixes, ask the user whether to split them into separate PRs. Mixed-scope PRs almost always trigger a "please split this" review comment.
 - **Substantive change?** If the change is more than a typo / doc fix / obvious bug fix, ask the user whether they opened a tracking issue first per `CONTRIBUTING.md`. If not, recommend they do — maintainers will respond within 5 business days, and a half-day issue conversation can prevent a one-week PR rewrite when the design direction differs from what they expect.
 - **Tests updated.** If the change has any behavioural delta and there are no test changes in the diff, push back on the user before opening the PR. "Why aren't there tests?" is the most common reason a PR gets bounced.
 - **No backward-compat shims.** Prisma 8 is RC; if the change renames or removes an API, the call sites should be updated, not aliased.
