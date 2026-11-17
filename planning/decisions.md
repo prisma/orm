@@ -98,6 +98,7 @@ Will, 2026-09-30: the emulator controls (start, stop, list, reset) are now urgen
   - `orm init --probe-db` writes the profile that matches the database it read.
   - The error for a database that lacks a capability is written in versions, with two pieces of advice: select another profile, or upgrade the database.
   - The runtime stops merging the stack's capabilities over the contract's.
+  - The profile hash stays in the marker. The ticket to remove it (TML-2252) is cancelled.
 
 ## Changes of 2026-11-13
 
