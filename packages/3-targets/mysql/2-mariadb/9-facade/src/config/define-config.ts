@@ -4,6 +4,7 @@ import mariadbDriver from '@internal/driver-mariadb/control';
 import { createMysqlDefineConfig, type MysqlConfigOptions } from '@internal/mysql/config';
 import mariadb from '@internal/target-mariadb/control';
 import mariadbPackRef from '@internal/target-mariadb/pack';
+import { moduleBase } from './module-base';
 
 export type MariadbConfigOptions = MysqlConfigOptions<'mariadb'>;
 
@@ -14,4 +15,5 @@ export const defineConfig: (options: MariadbConfigOptions) => PrismaNextConfig<'
     target: mariadb,
     adapter: mariadbAdapter,
     driver: mariadbDriver,
+    moduleBase,
   });

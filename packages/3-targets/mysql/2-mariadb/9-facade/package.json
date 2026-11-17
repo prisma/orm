@@ -19,9 +19,11 @@
     "@internal/adapter-mariadb": "workspace:8.0.0-rc.24",
     "@internal/cli": "workspace:8.0.0-rc.24",
     "@internal/config": "workspace:8.0.0-rc.24",
+    "@internal/contract": "workspace:8.0.0-rc.24",
     "@internal/driver-mariadb": "workspace:8.0.0-rc.24",
     "@internal/family-sql": "workspace:8.0.0-rc.24",
     "@internal/mysql": "workspace:8.0.0-rc.24",
+    "@internal/sql-contract": "workspace:8.0.0-rc.24",
     "@internal/target-mariadb": "workspace:8.0.0-rc.24",
     "@internal/target-mysql": "workspace:8.0.0-rc.24",
     "@internal/utils": "workspace:8.0.0-rc.24",
@@ -58,6 +60,7 @@
   "exports": {
     "./config": "./dist/config.mjs",
     "./control": "./dist/control.mjs",
+    "./generated-types": "./dist/generated-types.mjs",
     "./migration": "./dist/migration.mjs",
     "./package.json": "./package.json"
   },

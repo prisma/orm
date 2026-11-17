@@ -18,6 +18,7 @@ import { mongoTargetDescriptor } from '@internal/target-mongo/control';
 import mongoTargetPack from '@internal/target-mongo/pack';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
+import { moduleBase } from './module-base';
 
 export interface MongoConfigOptions {
   /** A contract file path (`.prisma` or `.ts`), or a ready `ContractConfig` such as `prisma6Schema(...)`. */
@@ -81,9 +82,9 @@ export function defineConfig(options: MongoConfigOptions): PrismaNextConfig<'mon
     adapter: mongoAdapter,
     driver: mongoDriver,
     extensions,
-    contract: contractConfig,
+    contract: { ...contractConfig, typesModule: `${moduleBase}/generated-types` },
+    migrations: { ...options.migrations, module: `${moduleBase}/migration` },
     ...ifDefined('db', options.db),
-    ...ifDefined('migrations', options.migrations),
     ...ifDefined('formatter', options.formatter),
   });
 }

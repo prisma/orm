@@ -1171,6 +1171,12 @@
       "plane": "migration"
     },
     {
+      "glob": "packages/3-targets/sqlite/9-facade/src/exports/generated-types.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-targets/sqlite/9-facade/src/exports/migration.ts",
       "domain": "extensions",
       "layer": "adapters",
@@ -1441,6 +1447,12 @@
       "plane": "migration"
     },
     {
+      "glob": "packages/3-targets/mysql/1-mysql/9-facade/src/exports/generated-types.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-targets/mysql/1-mysql/9-facade/src/exports/migration.ts",
       "domain": "extensions",
       "layer": "adapters",
@@ -1577,6 +1589,12 @@
       "domain": "extensions",
       "layer": "adapters",
       "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/9-facade/src/exports/generated-types.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
     },
     {
       "glob": "packages/3-targets/mysql/2-mariadb/9-facade/src/exports/migration.ts",
@@ -1778,6 +1796,18 @@
     },
     {
       "glob": "packages/3-targets/mongo/9-facade/src/exports/control.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/mongo/9-facade/src/exports/generated-types.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/mongo/9-facade/src/exports/migration.ts",
       "domain": "extensions",
       "layer": "adapters",
       "plane": "migration"

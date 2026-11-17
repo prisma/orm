@@ -90,6 +90,8 @@
     "./family-contract/data-type": "./dist/family-contract__data-type.mjs",
     "./family-contract/entity-kinds": "./dist/family-contract__entity-kinds.mjs",
     "./family-runtime": "./dist/family-runtime.mjs",
+    "./generated-types": "./dist/generated-types.mjs",
+    "./migration": "./dist/migration.mjs",
     "./migration-tools/aggregate": "./dist/migration-tools__aggregate.mjs",
     "./migration-tools/contract-snapshot-store": "./dist/migration-tools__contract-snapshot-store.mjs",
     "./migration-tools/hash": "./dist/migration-tools__hash.mjs",

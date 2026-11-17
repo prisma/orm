@@ -73,6 +73,8 @@
     "./contract-builder": "./dist/contract-builder.mjs",
     "./control": "./dist/control.mjs",
     "./family": "./dist/family.mjs",
+    "./generated-types": "./dist/generated-types.mjs",
+    "./migration": "./dist/migration.mjs",
     "./runtime": "./dist/runtime.mjs",
     "./static": "./dist/static.mjs",
     "./target": "./dist/target.mjs",

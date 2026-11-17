@@ -26,6 +26,7 @@ const mariadbComponents = {
     create: (stack) => createMysqlControlAdapter(stack, { readCatalog: readMysqlCatalog }),
   } satisfies SqlControlAdapterDescriptor<'mariadb'>,
   driver: createMysqlControlDriverDescriptor('mariadb'),
+  moduleBase: '@internal/mariadb',
 };
 
 describe('createMysqlDefineConfig', () => {
@@ -42,6 +43,8 @@ describe('createMysqlDefineConfig', () => {
       driver: config.driver,
       output: config.contract?.output,
       inputs: config.contract?.source.inputs,
+      typesModule: config.contract?.typesModule,
+      migrations: config.migrations,
     }).toEqual({
       family: sql,
       target: mariadbComponents.target,
@@ -49,6 +52,8 @@ describe('createMysqlDefineConfig', () => {
       driver: mariadbComponents.driver,
       output: './prisma/contract.json',
       inputs: ['./prisma/contract.prisma'],
+      typesModule: '@internal/mariadb/generated-types',
+      migrations: { module: '@internal/mariadb/migration' },
     });
   });
 

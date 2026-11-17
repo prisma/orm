@@ -21,6 +21,7 @@ import { mysqlCreateNamespace } from '@internal/target-mysql/types';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
 import { typescriptContractUnsupported } from '../errors';
+import { moduleBase } from './module-base';
 
 export interface MysqlConfigOptions<TargetId extends string = 'mysql'> {
   readonly contract: string;
@@ -41,6 +42,8 @@ export interface MysqlConfigComponents<TargetId extends string> {
   readonly target: PrismaNextConfig<'sql', TargetId>['target'];
   readonly adapter: PrismaNextConfig<'sql', TargetId>['adapter'];
   readonly driver: NonNullable<PrismaNextConfig<'sql', TargetId>['driver']>;
+  /** The base of the modules the target's generated files import from: `<moduleBase>/generated-types` and `<moduleBase>/migration`. */
+  readonly moduleBase: string;
 }
 
 const typescriptExtensions: ReadonlySet<string> = new Set(['.ts', '.mts', '.cts', '.tsx']);
@@ -62,9 +65,9 @@ function buildConfig<TargetId extends string>(
     adapter: components.adapter,
     driver: components.driver,
     extensions: options.extensions ?? [],
-    contract,
+    contract: { ...contract, typesModule: `${components.moduleBase}/generated-types` },
+    migrations: { ...options.migrations, module: `${components.moduleBase}/migration` },
     ...ifDefined('db', options.db),
-    ...ifDefined('migrations', options.migrations),
     ...ifDefined('formatter', options.formatter),
   });
 }
@@ -97,6 +100,7 @@ const mysqlComponents: MysqlConfigComponents<'mysql'> = {
   target: mysql,
   adapter: mysqlAdapter,
   driver: mysqlDriver,
+  moduleBase,
 };
 
 const mysqlPslDefineConfig = createMysqlDefineConfig(mysqlComponents);

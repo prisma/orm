@@ -65,6 +65,7 @@
     "./config": "./dist/config.mjs",
     "./contract-builder": "./dist/contract-builder.mjs",
     "./control": "./dist/control.mjs",
+    "./generated-types": "./dist/generated-types.mjs",
     "./migration": "./dist/migration.mjs",
     "./runtime": "./dist/runtime.mjs",
     "./static": "./dist/static.mjs",

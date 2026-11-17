@@ -32,7 +32,7 @@ describe('defineConfig for MariaDB', () => {
       output: './prisma/contract.json',
       inputs: ['./prisma/contract.prisma'],
       db: { connection: 'mysql://root@localhost:3306/app' },
-      migrations: { dir: './migrations' },
+      migrations: { dir: './migrations', module: '@internal/mariadb/migration' },
     });
   });
 
@@ -86,5 +86,16 @@ describe('defineConfig for MariaDB', () => {
       },
       codecTypes: true,
     });
+  });
+});
+
+describe('the modules generated files import from', () => {
+  it('names its own generated-types and migration modules', () => {
+    const config = defineConfig({ contract: './prisma/contract.prisma' });
+
+    expect([config.contract?.typesModule, config.migrations]).toEqual([
+      '@internal/mariadb/generated-types',
+      { module: '@internal/mariadb/migration' },
+    ]);
   });
 });

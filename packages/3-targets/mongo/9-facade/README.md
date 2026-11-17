@@ -251,6 +251,14 @@ export const shoutRuntime: MongoRuntimeExtensionDescriptor<'mongo'> = {
 
 Also exports the `MongoBinding`, `MongoBindingInput`, `MongoClient`, `MongoOptions` and `MongoTargetId` types.
 
+### `@internal/mongo/migration`
+
+Re-exports everything from `@internal/target-mongo/migration`: what a MongoDB `migration.ts` imports. `defineConfig` names this module in `migrations.module`. Published as `@prisma/orm-mongo/migration`.
+
+### `@internal/mongo/generated-types`
+
+Re-exports, as types only, the framework contract types, the MongoDB family contract types and the MongoDB codec types: everything a generated `contract.d.ts` imports. `defineConfig` names this module in `contract.typesModule`. Published as `@prisma/orm-mongo/generated-types`.
+
 ### `@internal/mongo/family`
 
 Re-exports the MongoDB family pack (only needed when using the low-level API; `defineContract` pre-binds this for you).

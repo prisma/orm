@@ -15,6 +15,7 @@ import sqlitePackRef from '@internal/target-sqlite/pack';
 import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
+import { moduleBase } from './module-base';
 
 export interface SqliteConfigOptions {
   readonly contract: string;
@@ -53,9 +54,9 @@ export function defineConfig(options: SqliteConfigOptions): PrismaNextConfig<'sq
     adapter: sqliteAdapter,
     driver: sqliteDriver,
     extensions,
-    contract: contractConfig,
+    contract: { ...contractConfig, typesModule: `${moduleBase}/generated-types` },
+    migrations: { ...options.migrations, module: `${moduleBase}/migration` },
     ...ifDefined('db', options.db),
-    ...ifDefined('migrations', options.migrations),
     ...ifDefined('formatter', options.formatter),
   });
 }

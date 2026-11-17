@@ -105,6 +105,7 @@
     "./family-contract/types": "./dist/family-contract__types.mjs",
     "./family-contract/validators": "./dist/family-contract__validators.mjs",
     "./family-contract/value-set-derivation-hook": "./dist/family-contract__value-set-derivation-hook.mjs",
+    "./generated-types": "./dist/generated-types.mjs",
     "./migration": "./dist/migration.mjs",
     "./migration-tools/aggregate": "./dist/migration-tools__aggregate.mjs",
     "./migration-tools/contract-snapshot-store": "./dist/migration-tools__contract-snapshot-store.mjs",

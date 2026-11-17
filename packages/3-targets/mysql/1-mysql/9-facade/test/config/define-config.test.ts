@@ -67,3 +67,14 @@ describe('defineConfig for MySQL', () => {
     expect(Object.hasOwn(config, 'formatter')).toBe(false);
   });
 });
+
+describe('the modules generated files import from', () => {
+  it('names its own generated-types and migration modules', () => {
+    const config = defineConfig({ contract: './prisma/contract.prisma' });
+
+    expect([config.contract?.typesModule, config.migrations]).toEqual([
+      '@internal/mysql/generated-types',
+      { module: '@internal/mysql/migration' },
+    ]);
+  });
+});
