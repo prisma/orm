@@ -567,6 +567,8 @@ export interface RowsWithoutValueReport {
   readonly reason: 'nullValues' | 'newField' | 'backfillMissedRows';
   /** How many rows have no value. */
   readonly rows: number;
+  /** Whether the field is its model's discriminator, which the contract cannot make optional. */
+  readonly discriminator: boolean;
 }
 
 /** The result of `db update`: a failure is the structured error the command reports. */

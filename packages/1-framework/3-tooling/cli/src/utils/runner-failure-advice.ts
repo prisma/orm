@@ -134,7 +134,22 @@ export function dbUpdateRowsWithoutValueAdvice(
       ...planned,
     ];
   }
-  return [...planned, editFileAction('Make the field optional in the contract source')];
+  return [
+    ...planned,
+    ...(planned.length > 0 && onlyDiscriminators(reports)
+      ? []
+      : [editFileAction(`Make ${theFields(reports)} optional in the contract source`)]),
+  ];
+}
+
+/** Whether every field is a discriminator, which the contract cannot make optional. */
+function onlyDiscriminators(reports: readonly RowsWithoutValueReport[]): boolean {
+  return reports.every(({ discriminator }) => discriminator);
+}
+
+function theFields(reports: readonly RowsWithoutValueReport[]): string {
+  const named = new Set(reports.flatMap(({ field }) => (field === undefined ? [] : [field])));
+  return named.size > 1 ? 'the fields' : 'the field';
 }
 
 function distinct(values: readonly string[]): readonly string[] {
@@ -489,16 +504,19 @@ function migrateRowsWithoutValueAdvice(
         ),
     ];
   }
-  const required = again('To keep the field required, delete');
+  const fields = theFields(reports);
+  const required = again(`To keep ${fields} required, delete`);
   return required === undefined
     ? [
         editFileAction(
-          'Make the field optional in the contract source, and plan the migration again',
+          `Make ${fields} optional in the contract source, and plan the migration again`,
         ),
       ]
     : [
         required,
-        editFileAction('Make the field optional in the contract source, and plan it again'),
+        ...(onlyDiscriminators(reports)
+          ? []
+          : [editFileAction(`Make ${fields} optional in the contract source, and plan it again`)]),
       ];
 }
 
