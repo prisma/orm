@@ -8,9 +8,9 @@ Columns: the PSL name, the TypeScript builder helper (inside the `defineContract
 
 | PSL name | TS helper | Codec id | Storage type (BSON) | Application type |
 | --- | --- | --- | --- | --- |
-| `String` | `field.scalar(type.String())` | `mongo/string@1` | `string` | `string` |
+| `BsonString` | `field.scalar(type.BsonString())` | `mongo/string@1` | `string` | `string` |
 | `Int32` | `field.scalar(type.Int32())` | `mongo/int32@1` | `int` | `number` |
-| `Int64` | `field.scalar(type.Int64())` | `mongo/int64@1` | `long` | `bigint` |
+| `Int64BigInt` | `field.scalar(type.Int64BigInt())` | `mongo/int64@1` | `long` | `bigint` |
 | `Int64Number` | `field.scalar(type.Int64Number())` | `mongo/int64Number@1` | `long` | `number` (safe-integer range) |
 | `Double` | `field.scalar(type.Double())` | `mongo/double@1` | `double` | `number` |
 | `Decimal128` | `field.scalar(type.Decimal128())` | `mongo/decimal128@1` | `decimal` | `string` (decimal text without an exponent; a stored value with an extreme exponent such as `1E-6176` reads back as a digit string of about 6,100 characters) |
@@ -25,9 +25,24 @@ Columns: the PSL name, the TypeScript builder helper (inside the `defineContract
 | `DurationString` | `field.scalar(type.DurationString())` | `mongo/duration-string@1` | `string` | `string`, an ISO 8601 duration |
 | `ObjectId` | `field.scalar(type.ObjectId())` | `mongo/objectId@1` | `objectId` | `string` (hex) |
 | `Binary` | `field.scalar(type.Binary())` | `mongo/binary@1` | `binData` | `Uint8Array` |
-| `Json` | `field.scalar(type.Json())` | `mongo/json@1` | `object`, `array`, `string`, `double`, `int`, `long`, `bool` or `null` | `JsonValue` |
+| `PlainJson` | `field.scalar(type.PlainJson())` | `mongo/json@1` | `object`, `array`, `string`, `double`, `int`, `long`, `bool` or `null` | `JsonValue` |
 | `Bson` | `field.scalar(type.Bson())` | `mongo/bson@1` | any BSON type; the validator does not constrain it (a list field must still be an array) | `BsonValue` |
 | `Vector(length?)` | `field.scalar(type.Vector(length?))` | `mongo/vector@1` | `array` | `readonly number[]`; `length` types the field as a vector of that many numbers; a value written in the contract, such as a default, must have that length, and a value the application writes or reads is not checked |
+
+MongoDB has convenience types for its other scalars. Each is a type choice ([ADR 279](../architecture%20docs/adrs/ADR%20279%20-%20Convenience%20types%20choose%20an%20explicit%20type%20from%20their%20arguments.md)): its `storage` and `as` arguments choose one explicit type above, and the contract stores only that type. `storage` names the BSON type ([ADR 322](../architecture%20docs/adrs/ADR%20322%20-%20Each%20target%20declares%20the%20scalar%20convenience%20types%20over%20its%20own%20explicit%20types.md)).
+
+| Convenience type | `as` | `storage` | Becomes |
+| --- | --- | --- | --- |
+| `Int(storage?)` | | `int` | `Int32` |
+| `BigInt(as?, storage?)` | `bigint` (default), `number` | `long` | `Int64BigInt`, `Int64Number` |
+| `Float(storage?)` | | `double` | `Double` |
+| `Decimal(storage?)` | | `decimal` | `Decimal128` |
+| `Boolean(storage?)` | | `bool` | `Bool` |
+| `Bytes(storage?)` | | `binData` | `Binary` |
+| `String(storage?)` | | `string` | `BsonString` |
+| `Json(storage?)` | | `bson` | `PlainJson` |
+
+In TypeScript the same calls are `type.Int()`, `type.BigInt({ as: 'number' })`, `type.Json()` and so on. `storage: bson` on `Json` means the value is stored as whichever BSON value fits it: an object, array, string, number, bool or null. It is not the `Bson` type, which takes any BSON value.
 
 MongoDB has the convenience date and time types ([ADR 315](../architecture%20docs/adrs/ADR%20315%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md)). The defaults need no `Temporal`.
 
@@ -62,7 +77,7 @@ A field the ORM fills, such as `temporal.CreatedAt` or `DateTime @onCreate(now()
 
 A contract written in Prisma 8 PSL and one built with the TypeScript builder get the same collection validator, derived from the contract. A contract read from a Prisma 6 schema (`prisma6Schema`) gets no validator, so there the codecs' checks on read and write are the only ones.
 
-The PSL names `Int`, `Float` and `Boolean` are deprecated aliases of `Int32`, `Double` and `Bool`; they report `PSL_DEPRECATED_SCALAR_NAME` as a warning and will be removed.
+The PSL name `Int64` is a deprecated alias of `Int64BigInt`; it reports `PSL_DEPRECATED_SCALAR_NAME` as a warning, gives the same contract, and will be removed. It has no TypeScript helper: write `type.BigInt()` or `type.Int64BigInt()`.
 
 One limitation to know about:
 
@@ -71,11 +86,11 @@ One limitation to know about:
 ### Values through the Mongo ORM
 
 - A whole number written to a `Double` field is stored as a BSON `double`, not an `int`, so `$type: 'double'` matches it. An `Int32` field refuses a fraction or a number outside the signed 32-bit range with `RUNTIME.ENCODE_FAILED`.
-- The update operations `inc` and `mul` exist on single-valued `Int32`, `Double`, `Int64` and `Decimal128` fields and take the field's write type: a `number`, a `bigint` for `Int64` (`u.karma.inc(2n)`), and decimal text for `Decimal128` (`u.balance.inc('0.5')`). They exist on nullable fields too. On a field missing from the document, `inc` sets it to the operand and `mul` sets it to zero; on a field that holds `null`, MongoDB refuses both and the update fails.
-- A list field is encoded element by element through its element codec, so an `ObjectId[]` field stores hex strings as `ObjectId`s and an `Int64[]` field stores `bigint`s as `long`s.
+- The update operations `inc` and `mul` exist on single-valued `Int32`, `Double`, `Int64BigInt`, `Int64Number` and `Decimal128` fields and take the field's write type: a `number`, a `bigint` for `Int64BigInt` (`u.karma.inc(2n)`), and decimal text for `Decimal128` (`u.balance.inc('0.5')`). They exist on nullable fields too. On a field missing from the document, `inc` sets it to the operand and `mul` sets it to zero; on a field that holds `null`, MongoDB refuses both and the update fails.
+- A list field is encoded element by element through its element codec, so an `ObjectId[]` field stores hex strings as `ObjectId`s and an `Int64BigInt[]` field stores `bigint`s as `long`s.
 - `create()` and `createAll()` return each document as stored, decoded as a read decodes it. The ORM computes it from the document it sent, without a second query: a `Bson` field comes back as a read returns it, and a nullable field left out comes back as `null`.
 - A nullable field missing from a stored document reads as `null`, the same as one that holds `null`.
-- A `MongoFieldFilter` passed to the ORM's `where()` compares the field's application value, encoded through the field's codec as the object form of `where()` is: a hex string or an `ObjectId` for an `ObjectId` field, a `bigint` for an `Int64` field. A value that is not a `MongoValue`, such as a `bigint` or an `ObjectId`, goes in a `MongoParamRef`: `MongoFieldFilter.gt('views', new MongoParamRef(5n))`. The query builder's `match()` does not know the field's codec and sends values as given, so compare there with the driver's classes, such as `new MongoParamRef(new ObjectId(hex))`.
+- A `MongoFieldFilter` passed to the ORM's `where()` compares the field's application value, encoded through the field's codec as the object form of `where()` is: a hex string or an `ObjectId` for an `ObjectId` field, a `bigint` for an `Int64BigInt` field. A value that is not a `MongoValue`, such as a `bigint` or an `ObjectId`, goes in a `MongoParamRef`: `MongoFieldFilter.gt('views', new MongoParamRef(5n))`. The query builder's `match()` does not know the field's codec and sends values as given, so compare there with the driver's classes, such as `new MongoParamRef(new ObjectId(hex))`.
 - Each codec refuses a value of the wrong type with `RUNTIME.ENCODE_FAILED` naming the field, a list element included: a `null` in a `String[]` list, a string for a `Bool` field, an invalid `Date`, or anything but a 24-digit hex string or an `ObjectId` for an `ObjectId` field.
 - A write refuses a value outside the field's enum and `null` for a field that is not nullable, with `RUNTIME.ENCODE_FAILED` naming the field. A filter accepts both, so it can find documents that hold one.
 - The query builder (`@prisma/orm-mongo/query-builder`) sends the values it is given as they are, without a field's codec. To filter or write a `Date` (calendar date) or `DateTime(as: string)` field there, give the BSON date: `new Date('2024-02-29T00:00:00Z')`. A `Time` or `Duration` field holds a string, which is sent as given. A placeholder of a prepared statement (`db.prepare`) is encoded with the codec its declaration names, so a placeholder declared as `mongo/date-string@1` takes `'2024-02-29'`. The ORM encodes every value through the field's codec.
@@ -273,23 +288,23 @@ The PSL name on each target for a concept, and the Prisma 6/7 name a migrating s
 
 | Concept | Prisma 6/7 name | PostgreSQL | SQLite | MySQL | MongoDB |
 | --- | --- | --- | --- | --- | --- |
-| 32-bit integer | `Int` (on MongoDB, `Int @db.Int`) | `Int` (an `Int4`) | — (`Int` stores a 64-bit `integer`) | `Int` | `Int32` |
-| 64-bit integer | `BigInt` | `BigInt` (an `Int8BigInt`) | `BigInt` | `BigInt` | `Int64` |
-| 64-bit integer read as a `number` | `Int` on MongoDB, which Prisma 6 stores as a BSON long | `BigInt(as: number)` | `BigIntNumber` | — | `Int64Number` |
-| double | `Float` | `Float` | `Float` | — | `Double` |
-| decimal | `Decimal` | `Decimal` (a `NumericString`) | `Decimal` (stored as text) | — | `Decimal128` |
-| boolean | `Boolean` | `Boolean` | — | — | `Bool` |
+| 32-bit integer | `Int` (on MongoDB, `Int @db.Int`) | `Int` (an `Int4`) | — (`Int` stores a 64-bit `integer`) | `Int` | `Int` (an `Int32`) |
+| 64-bit integer | `BigInt` | `BigInt` (an `Int8BigInt`) | `BigInt` | `BigInt` | `BigInt` (an `Int64BigInt`) |
+| 64-bit integer read as a `number` | `Int` on MongoDB, which Prisma 6 stores as a BSON long | `BigInt(as: number)` | `BigIntNumber` | — | `BigInt(as: number)` (an `Int64Number`) |
+| double | `Float` | `Float` | `Float` | — | `Float` (a `Double`) |
+| decimal | `Decimal` | `Decimal` (a `NumericString`) | `Decimal` (stored as text) | — | `Decimal` (a `Decimal128`) |
+| boolean | `Boolean` | `Boolean` | — | — | `Boolean` (a `Bool`) |
 | timestamp | `DateTime` | `DateTime` (a `TimestamptzJsDate(3)`) | `DateTime` (a `DatetimeJsDate`) | `DateTime` (a `DatetimeJsDate(3)`) | `DateTime` (a `DateJsDate`) |
 | calendar date | `DateTime @db.Date` (on MongoDB an instant; see below) | `Date` (a `DateString`) | `Date` (a `DateString`) | `Date` (a `DateString`) | `Date` (a `DateString`) |
 | time of day | `DateTime @db.Time` | `Time` (a `TimeString`) | `Time` (a `TimeString`) | `Time` (a `TimeString(6)`) | `Time` (a `TimeString`) |
 | duration | — | `Duration` (an `IntervalString`) | `Duration` (a `DurationString`) | `Duration` (a `DurationString`) | `Duration` (a `DurationString`) |
-| text | `String` | `String` | `String` | `String` | `String` |
-| bytes | `Bytes` | `Bytes` | `Bytes` | — | `Binary` |
-| JSON | `Json` (a `jsonb` column on PostgreSQL) | `Json` (a `PlainJson`), `Json(storage: jsonb)` (a `Jsonb`) | `Json` | — | `Json` |
+| text | `String` | `String` | `String` | `String` | `String` (a `BsonString`) |
+| bytes | `Bytes` | `Bytes` | `Bytes` | — | `Bytes` (a `Binary`) |
+| JSON | `Json` (a `jsonb` column on PostgreSQL) | `Json` (a `PlainJson`), `Json(storage: jsonb)` (a `Jsonb`) | `Json` | — | `Json` (a `PlainJson`) |
 | any value | — | — | — | — | `Bson` |
 | ObjectId | `String @db.ObjectId` (MongoDB) | — | — | — | `ObjectId` |
 
-A Prisma 6 MongoDB schema read with `prisma6Schema` may keep its native types. Each native type Prisma 6.19 accepts gives the field the MongoDB type of what Prisma 6 stores: `Int @db.Int` is `Int32`, `Int @db.Long` is `Int64Number` like a plain `Int`, `BigInt @db.Long` is `Int64`, `Bytes @db.ObjectId` is `ObjectId`, and `@db.String`, `@db.Bool`, `@db.Double`, `@db.BinData` and `@db.Json` are the same type as the plain field. `DateTime` and `DateTime @db.Date` are both `DateJsDate`: Prisma 6 stores the full instant under `@db.Date`, and `prisma db pull` writes `@db.Date` on every BSON date. `DateTime @db.Timestamp` stores a BSON timestamp, which no MongoDB scalar type holds, so `prisma6Schema` refuses it.
+A Prisma 6 MongoDB schema read with `prisma6Schema` may keep its native types. Each native type Prisma 6.19 accepts gives the field the MongoDB type of what Prisma 6 stores: `Int @db.Int` is `Int32`, `Int @db.Long` is `Int64Number` like a plain `Int`, `BigInt @db.Long` is `Int64BigInt`, `Bytes @db.ObjectId` is `ObjectId`, and `@db.String`, `@db.Bool`, `@db.Double`, `@db.BinData` and `@db.Json` are the same type as the plain field. `DateTime` and `DateTime @db.Date` are both `DateJsDate`: Prisma 6 stores the full instant under `@db.Date`, and `prisma db pull` writes `@db.Date` on every BSON date. `DateTime @db.Timestamp` stores a BSON timestamp, which no MongoDB scalar type holds, so `prisma6Schema` refuses it.
 
 A Prisma 7 PostgreSQL schema read with `prisma7Schema` reads every `@db.*` type Prisma 7 accepts. `@db.Bit`, `@db.Xml`, `@db.Oid` and `@db.Money` are the types of the same names above, and `@db.VarBit` is `Varbit`. `@db.Citext` is `citext.Citext` from the citext pack, so it reads only when `extensions` in `prisma.config.ts` holds `citext` from `@prisma/orm-postgres-contrib/citext/control`; without it, the field is refused with `PSL.PRISMA7_EXTENSION_PACK_MISSING`.
 

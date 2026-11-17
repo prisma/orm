@@ -6,15 +6,13 @@ import { describe, expect, it } from 'vitest';
 import {
   mongoAuthoringTypes,
   mongoConvenienceDateTimeTypes,
-  mongoDateTimeTypeConstructors,
+  mongoExplicitDateTimeTypes,
   mongoScalarTypeConstructors,
 } from '../src/core/authoring';
 
 describe('the explicit date and time types', () => {
   it('each name the codec it is', () => {
-    expect(
-      Object.fromEntries(collectScalarTypeConstructors(mongoDateTimeTypeConstructors)),
-    ).toEqual({
+    expect(Object.fromEntries(collectScalarTypeConstructors(mongoExplicitDateTimeTypes))).toEqual({
       DateJsDate: { codecId: 'mongo/date@1' },
       DateInstant: { codecId: 'mongo/date-instant@1' },
       DateInstantString: { codecId: 'mongo/date-instant-string@1' },
@@ -27,7 +25,7 @@ describe('the explicit date and time types', () => {
   });
 
   it.each([
-    ...Object.entries(mongoDateTimeTypeConstructors),
+    ...Object.entries(mongoExplicitDateTimeTypes),
     ...Object.entries(mongoConvenienceDateTimeTypes),
   ])('documents %s by the BSON type it is stored as', (_name, descriptor) => {
     expect(descriptor.documentation).toMatch(/stored as (a )?BSON (date|string)/);
