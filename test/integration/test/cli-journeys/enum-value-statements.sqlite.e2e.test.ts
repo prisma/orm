@@ -467,7 +467,7 @@ withTempDir(({ createTempDir }) => {
         const refused = await runDbUpdate(ctx, ['--no-interactive', '--json']);
         expect(engineError(refused)?.code, 'S7.04').toBe('CLI.CONSENT_REQUIRED');
         expect(nextActionLabels(refused), 'S7.04: the way that keeps the data first').toEqual([
-          "To keep it with db update, change it in two runs. First rename member ARCHIVED of enum Status in the contract source to a name the enum does not have and give it a stored value the enum does not use, run `prisma-test contract emit`, and run `prisma-test db update --rename 'Status.ARCHIVED:Status.<temporary member>'`. Then rename that member back to ARCHIVED with its new stored value, run `prisma-test contract emit`, and run `prisma-test db update --rename 'Status.<temporary member>:Status.ARCHIVED'`.",
+          "To keep it with db update, change it in two runs. First rename member ARCHIVED of enum Status in the contract source to a name the enum does not have and give it a stored value the enum does not use, run `prisma-test contract emit`, and run `prisma-test db update --rename 'Status.ARCHIVED:Status.<temporary member>'`. Then rename that member back to ARCHIVED with its final stored value, run `prisma-test contract emit`, and run `prisma-test db update --rename 'Status.<temporary member>:Status.ARCHIVED'`.",
           'Run the command again with --delete Status.ARCHIVED',
         ]);
         expect(engineError(refused)?.why, 'S7.04: says plainly what --delete does').toContain(
@@ -632,7 +632,7 @@ model Job {
           'db update cannot keep that data in one run, because members of the enum swap stored values, and --delete Status.ACTIVE removes it.',
         );
         expect(nextActionLabels(refused)).toContain(
-          "To keep it with db update, change them in two runs. First rename members ACTIVE and ARCHIVED of enum Status in the contract source to names the enum does not have and give each a stored value the enum does not use, run `prisma-test contract emit`, and run `prisma-test db update --rename 'Status.ACTIVE:Status.<temporary member for ACTIVE>' --rename 'Status.ARCHIVED:Status.<temporary member for ARCHIVED>'`. Then rename those members back to ACTIVE and ARCHIVED with their new stored values, run `prisma-test contract emit`, and run `prisma-test db update --rename 'Status.<temporary member for ACTIVE>:Status.ACTIVE' --rename 'Status.<temporary member for ARCHIVED>:Status.ARCHIVED'`.",
+          "To keep it with db update, change them in two runs. First rename members ACTIVE and ARCHIVED of enum Status in the contract source to names the enum does not have and give each a stored value the enum does not use, run `prisma-test contract emit`, and run `prisma-test db update --rename 'Status.ACTIVE:Status.<temporary member for ACTIVE>' --rename 'Status.ARCHIVED:Status.<temporary member for ARCHIVED>'`. Then rename those members back to ACTIVE and ARCHIVED with their final stored values, run `prisma-test contract emit`, and run `prisma-test db update --rename 'Status.<temporary member for ACTIVE>:Status.ACTIVE' --rename 'Status.<temporary member for ARCHIVED>:Status.ARCHIVED'`.",
         );
         expect(tasks(ctx.dbPath), 'S10.04: nothing changed').toEqual([
           { id: 1, status: 'archived' },

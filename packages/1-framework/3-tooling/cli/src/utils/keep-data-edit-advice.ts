@@ -92,8 +92,8 @@ function twoRuns(
   );
   const names = listed(members);
   return one
-    ? `To keep it with db update, change it in two runs. First rename member ${names} of enum ${enumName} in the contract source to a name the enum does not have and give it a stored value the enum does not use, run ${emit}, and run ${quoted(first)}. Then rename that member back to ${names} with its new stored value, run ${emit}, and run ${quoted(second)}.`
-    : `To keep it with db update, change them in two runs. First rename members ${names} of enum ${enumName} in the contract source to names the enum does not have and give each a stored value the enum does not use, run ${emit}, and run ${quoted(first)}. Then rename those members back to ${names} with their new stored values, run ${emit}, and run ${quoted(second)}.`;
+    ? `To keep it with db update, change it in two runs. First rename member ${names} of enum ${enumName} in the contract source to a name the enum does not have and give it a stored value the enum does not use, run ${emit}, and run ${quoted(first)}. Then rename that member back to ${names} with its final stored value, run ${emit}, and run ${quoted(second)}.`
+    : `To keep it with db update, change them in two runs. First rename members ${names} of enum ${enumName} in the contract source to names the enum does not have and give each a stored value the enum does not use, run ${emit}, and run ${quoted(first)}. Then rename those members back to ${names} with their final stored values, run ${emit}, and run ${quoted(second)}.`;
 }
 
 /**
