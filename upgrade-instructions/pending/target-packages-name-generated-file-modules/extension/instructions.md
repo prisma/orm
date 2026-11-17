@@ -2,7 +2,7 @@
 changes:
   - id: target-package-names-generated-file-modules
     summary: |
-      A package that adds a target must name, in the config its `defineConfig` returns, the module generated contract types import from (`contract.typesModule`) and the module migration files import from (`migrations.module`), and must hand the config target and adapter descriptors whose type declarations state its own types module. Without the two members `prisma contract emit` fails with `CONFIG.CONTRACT_TYPES_MODULE_MISSING` and `prisma migration plan` fails with `CONFIG.MIGRATION_MODULE_MISSING`.
+      A package that adds a target must name, in the config its `defineConfig` returns, the module generated contract types import from (`contract.typesModule`) and the module migration files import from (`migrations.module`), and must hand the config target and adapter descriptors whose type declarations state its own types module. Without `contract.typesModule`, every command that writes contract types fails with `CONFIG.CONTRACT_TYPES_MODULE_MISSING`: `prisma contract emit`, `prisma migration plan`, `prisma migration new`, `prisma migrate`, `prisma db init`, `prisma db update` and `prisma db sign`. Without `migrations.module`, `prisma migration plan` and `prisma migration new` fail with `CONFIG.MIGRATION_MODULE_MISSING`.
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
@@ -10,7 +10,7 @@ changes:
         - '@prisma/orm-toolchain/cli/config-types'
   - id: extension-config-names-generated-file-modules
     summary: |
-      An extension that has a contract of its own, emitted with a config it assembles from the framework's `defineConfig`, must name `contract.typesModule` and `migrations.module` in that config. `prisma contract emit` in the extension otherwise fails with `CONFIG.CONTRACT_TYPES_MODULE_MISSING`.
+      An extension that has a contract of its own, emitted with a config it assembles from the framework's `defineConfig`, must name `contract.typesModule` and `migrations.module` in that config. The extension's own commands otherwise fail in the same way as an application's: see `target-package-names-generated-file-modules`.
     detection:
       glob: "**/prisma.config.{ts,mts,cts}"
       matches:

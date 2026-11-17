@@ -9,7 +9,7 @@ changes:
         - '@prisma/orm-[a-z-]+/(contract/types|family-contract|target/(codec|operation)-types|adapter/codec-types)'
   - id: hand-assembled-config-names-generated-file-modules
     summary: |
-      A config built with the framework's own `defineConfig`, and not a target package's, must name the module generated contract types import from (`contract.typesModule`) and the module migration files import from (`migrations.module`). Without them `prisma contract emit` fails with `CONFIG.CONTRACT_TYPES_MODULE_MISSING` and `prisma migration plan` and `prisma migration new` fail with `CONFIG.MIGRATION_MODULE_MISSING`.
+      A config built with the framework's own `defineConfig`, and not a target package's, must name the module generated contract types import from (`contract.typesModule`) and the module migration files import from (`migrations.module`). Without `contract.typesModule`, every command that writes contract types fails with `CONFIG.CONTRACT_TYPES_MODULE_MISSING`: `prisma contract emit`, `prisma migration plan`, `prisma migration new`, `prisma migrate`, `prisma db init`, `prisma db update` and `prisma db sign`. Without `migrations.module`, `prisma migration plan` and `prisma migration new` fail with `CONFIG.MIGRATION_MODULE_MISSING`.
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
