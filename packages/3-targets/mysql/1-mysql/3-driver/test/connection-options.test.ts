@@ -18,6 +18,25 @@ describe('mysqlConnectionOptions', () => {
     });
   });
 
+  it('leaves the user unset when the URL leaves it blank, so the connector falls back to its default', () => {
+    const options = mysqlConnectionOptions('mysql://:password@localhost/db');
+    expect(options).not.toHaveProperty('user');
+    expect(options).toMatchObject({ host: 'localhost', password: 'password', database: 'db' });
+  });
+
+  it('leaves the host unset when the URL leaves it blank', () => {
+    const options = mysqlConnectionOptions('mysql://user:password@/db');
+    expect(options).not.toHaveProperty('host');
+    expect(options).toMatchObject({ user: 'user', password: 'password', database: 'db' });
+  });
+
+  it('leaves both unset when the URL names neither', () => {
+    const options = mysqlConnectionOptions('mysql:///db');
+    expect(options).not.toHaveProperty('user');
+    expect(options).not.toHaveProperty('host');
+    expect(options.database).toBe('db');
+  });
+
   it('reads TLS settings as pg-connection-string does for Postgres: ssl, sslmode, and sslcert, sslkey and sslrootcert as PEM files', () => {
     const dir = mkdtempSync(join(tmpdir(), 'mysql-tls-'));
     const file = (name: string) => {
