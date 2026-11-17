@@ -111,9 +111,9 @@ import type {
   VerifyMarkerOption,
 } from './runtime-spi';
 import {
+  type OpenTransaction,
   OuterTransaction,
-  type QueryableTransaction,
-  type TransactionHost,
+  type TransactionRuntime,
   transactionClosedError,
 } from './runtime-transaction';
 import type { ExecutionContext } from './sql-context';
@@ -309,8 +309,8 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   // Each open transaction this runtime began, keyed by its driver transaction and its connection, until its commit() or rollback() is called. A statement sent on either is the transaction's child.
   // Decided once when the runtime is created: a transaction keeps its finished statements to finalize them only when some middleware implements activityFinalized.
   readonly #holdFinishedChildren: boolean;
-  readonly #transactions = new WeakMap<SqlQueryable, QueryableTransaction>();
-  readonly #transactionHost: TransactionHost = {
+  readonly #transactions = new WeakMap<SqlQueryable, OpenTransaction>();
+  readonly #transactionRuntime: TransactionRuntime = {
     route: (driverTx, activity, savepoint) =>
       this.queryableRoute(driverTx, 'transaction', () => activity, {
         transaction: undefined,
@@ -326,14 +326,14 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
         parent,
         holdFinishedChildren: this.#holdFinishedChildren,
       }),
-    track: (operation) => this.#inFlight.track(operation),
+    trackInFlight: (operation) => this.#inFlight.track(operation),
     register: (queryable, transaction) => {
       this.#transactions.set(queryable, transaction);
     },
-    hold: (driverTx, driverSavepoint) => {
+    markHeld: (driverTx, driverSavepoint) => {
       if (this.#heldQueryables.has(driverTx)) this.#heldQueryables.add(driverSavepoint);
     },
-    onRelease: (connection, teardown) => {
+    onConnectionReleased: (connection, teardown) => {
       this.#transactionWorkOn.set(connection, teardown);
     },
   };
@@ -920,7 +920,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     options: ActivityExecuteOptions | undefined,
   ): ActivityParent | undefined {
     const transaction = this.#transactions.get(queryable);
-    transaction?.guard?.();
+    transaction?.assertAcceptsStatements?.();
     const openTransaction = transaction?.activity;
     const activityParent = options?.activityParent;
     if (activityParent === undefined) return openTransaction;
@@ -951,7 +951,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
 
     try {
       const stream = run.runQuery(exec, () => {
-        this.#transactions.get(queryable)?.check?.();
+        this.#transactions.get(queryable)?.assertBeforeDeadline?.();
         return driverCall();
       });
 
@@ -1141,7 +1141,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     let telemetryOutcome: TelemetryOutcome = 'success';
     try {
       return await run.runExecute(exec, () => {
-        this.#transactions.get(queryable)?.check?.();
+        this.#transactions.get(queryable)?.assertBeforeDeadline?.();
         return driverCall();
       });
     } catch (error) {
@@ -1504,7 +1504,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     }
     if (this.#heldQueryables.has(connection)) this.#heldQueryables.add(driverTx);
     return new OuterTransaction(
-      this.#transactionHost,
+      this.#transactionRuntime,
       connection,
       driverTx,
       activity,

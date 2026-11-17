@@ -44,13 +44,13 @@ import {
 
 type TransactionRun = TransactionActivityRun<SqlMiddlewareContext>;
 
-export interface QueryableTransaction {
+export interface OpenTransaction {
   activity: TransactionRun | undefined;
-  guard: (() => void) | undefined;
-  readonly check: (() => void) | undefined;
+  assertAcceptsStatements: (() => void) | undefined;
+  readonly assertBeforeDeadline: (() => void) | undefined;
 }
 
-export interface TransactionHost {
+export interface TransactionRuntime {
   route(
     driverTx: SqlTransaction,
     activity: TransactionRun,
@@ -62,10 +62,10 @@ export interface TransactionHost {
   ): Promise<ActivityHandle<K>>;
   planContentHash(plan: HashablePlan, parent: ActivityParent): Promise<string>;
   startTransactionActivity(parent: ActivityParent): Promise<TransactionRun>;
-  track<T>(operation: () => Promise<T>): Promise<T>;
-  register(queryable: SqlQueryable, transaction: QueryableTransaction): void;
-  hold(driverTx: SqlTransaction, driverSavepoint: SqlTransaction): void;
-  onRelease(connection: SqlConnection, teardown: () => Promise<void>): void;
+  trackInFlight<T>(operation: () => Promise<T>): Promise<T>;
+  register(queryable: SqlQueryable, transaction: OpenTransaction): void;
+  markHeld(driverTx: SqlTransaction, driverSavepoint: SqlTransaction): void;
+  onConnectionReleased(connection: SqlConnection, teardown: () => Promise<void>): void;
 }
 
 abstract class TransactionBase
@@ -77,44 +77,44 @@ abstract class TransactionBase
 {
   abstract readonly signal: AbortSignal;
   readonly [activitySource]: ActivitySource;
-  protected readonly host: TransactionHost;
+  protected readonly runtime: TransactionRuntime;
   protected readonly driverTx: SqlTransaction;
   protected readonly activity: TransactionRun;
   protected readonly stack: TransactionStack;
   protected readonly entry: StackEntry;
-  protected readonly registration: QueryableTransaction;
+  protected readonly openTransaction: OpenTransaction;
   private readonly route: ActivityRoute;
 
   constructor(
-    host: TransactionHost,
+    runtime: TransactionRuntime,
     driverTx: SqlTransaction,
     activity: TransactionRun,
     stack: TransactionStack,
     entry: StackEntry,
   ) {
-    this.host = host;
+    this.runtime = runtime;
     this.driverTx = driverTx;
     this.activity = activity;
     this.stack = stack;
     this.entry = entry;
-    this.route = host.route(driverTx, activity, (parent) => this.openSavepoint(parent));
-    this.registration = {
+    this.route = runtime.route(driverTx, activity, (parent) => this.savepoint(parent));
+    this.openTransaction = {
       activity,
-      guard: () => this.assertMayWork(),
-      check: () => this.checkDeadline(),
+      assertAcceptsStatements: () => this.assertAcceptsStatements(),
+      assertBeforeDeadline: () => this.assertBeforeDeadline(),
     };
-    host.register(driverTx, this.registration);
+    runtime.register(driverTx, this.openTransaction);
     this[activitySource] = {
-      startActivity: (clientActivity) => host.startActivity(this.route, clientActivity),
-      planContentHash: (plan) => host.planContentHash(plan, activity),
+      startActivity: (clientActivity) => runtime.startActivity(this.route, clientActivity),
+      planContentHash: (plan) => runtime.planContentHash(plan, activity),
     };
   }
 
   abstract get isClosed(): boolean;
-  abstract checkDeadline(): void;
+  abstract assertBeforeDeadline(): void;
   abstract commit(): Promise<void>;
   abstract rollback(): Promise<void>;
-  protected abstract assertMayWork(): void;
+  protected abstract assertAcceptsStatements(): void;
   protected abstract get rootTransaction(): OuterTransaction;
 
   query<Row>(
@@ -161,11 +161,7 @@ abstract class TransactionBase
     );
   }
 
-  savepoint(): Promise<RuntimeTransaction> {
-    return this.openSavepoint(this.activity);
-  }
-
-  private async openSavepoint(parent: ActivityParent): Promise<RuntimeTransaction> {
+  async savepoint(parent: ActivityParent = this.activity): Promise<RuntimeTransaction> {
     if (this.isClosed) throw transactionClosedError();
     if (this.stack.top !== this.entry) throw savepointAlreadyOpenError(this.stack);
     const name = this.stack.nextSavepointName();
@@ -173,7 +169,7 @@ abstract class TransactionBase
     this.stack.push(entry);
     let activity: TransactionRun;
     try {
-      activity = await this.host.startTransactionActivity(parent);
+      activity = await this.runtime.startTransactionActivity(parent);
     } catch (error) {
       this.stack.pop();
       throw error;
@@ -181,15 +177,15 @@ abstract class TransactionBase
     entry.activity = activity;
     let driverSavepoint: SqlTransaction;
     try {
-      driverSavepoint = await this.host.track(() => this.driverTx.savepoint(name));
+      driverSavepoint = await this.runtime.trackInFlight(() => this.driverTx.savepoint(name));
     } catch (error) {
       this.stack.pop();
       await activity.end({ by: 'rollback', outcome: 'failed', commitAttempted: false });
       throw error;
     }
-    this.host.hold(this.driverTx, driverSavepoint);
+    this.runtime.markHeld(this.driverTx, driverSavepoint);
     return new Savepoint(
-      this.host,
+      this.runtime,
       driverSavepoint,
       activity,
       this.stack,
@@ -203,7 +199,7 @@ export class OuterTransaction extends TransactionBase implements SettledTransact
   readonly signal: AbortSignal;
   readonly [transactionSettlement]: TransactionSettlementState;
   private readonly controller = new AbortController();
-  private readonly onConnection: QueryableTransaction;
+  private readonly onConnection: OpenTransaction;
   private readonly endTransactionWork: () => void;
   private readonly timeout: number | undefined;
   private readonly deadline: number;
@@ -213,7 +209,7 @@ export class OuterTransaction extends TransactionBase implements SettledTransact
   private readonly self: OuterTransaction = this;
 
   constructor(
-    host: TransactionHost,
+    runtime: TransactionRuntime,
     connection: SqlConnection,
     driverTx: SqlTransaction,
     activity: TransactionRun,
@@ -221,14 +217,18 @@ export class OuterTransaction extends TransactionBase implements SettledTransact
     timeout: number | undefined,
   ) {
     const entry: StackEntry = { name: undefined, activity, commitEnding: undefined, state: 'open' };
-    super(host, driverTx, activity, new TransactionStack(), entry);
+    super(runtime, driverTx, activity, new TransactionStack(), entry);
     this.stack.push(entry);
     this.signal = this.controller.signal;
     this.endTransactionWork = endTransactionWork;
     this.timeout = timeout;
     this.deadline = performance.now() + (timeout ?? Number.POSITIVE_INFINITY);
-    this.onConnection = { activity, guard: () => this.assertMayWork(), check: undefined };
-    host.register(connection, this.onConnection);
+    this.onConnection = {
+      activity,
+      assertAcceptsStatements: () => this.assertAcceptsStatements(),
+      assertBeforeDeadline: undefined,
+    };
+    runtime.register(connection, this.onConnection);
     this[transactionSettlement] = {
       get committed() {
         return entry.state === 'committed';
@@ -240,7 +240,7 @@ export class OuterTransaction extends TransactionBase implements SettledTransact
     };
     if (timeout !== undefined) {
       this.timer = setTimeout(() => this.expire(), timeout);
-      host.onRelease(connection, () => this.releaseConnection());
+      runtime.onConnectionReleased(connection, () => this.releaseConnection());
     }
   }
 
@@ -252,14 +252,14 @@ export class OuterTransaction extends TransactionBase implements SettledTransact
     return this.self;
   }
 
-  checkDeadline(): void {
+  assertBeforeDeadline(): void {
     if (this.timeout === undefined) return;
     if (!this.closed && performance.now() >= this.deadline) this.expire();
     this.signal.throwIfAborted();
     if (this.closed) throw transactionClosedError();
   }
 
-  protected assertMayWork(): void {
+  protected assertAcceptsStatements(): void {
     if (this.stack.invalidated) throw transactionClosedError();
     if (!this.closed && this.stack.top !== this.entry) {
       throw transactionSuspendedError(this.stack);
@@ -267,13 +267,13 @@ export class OuterTransaction extends TransactionBase implements SettledTransact
   }
 
   async commit(): Promise<void> {
-    this.checkDeadline();
-    this.assertMayWork();
+    this.assertBeforeDeadline();
+    this.assertAcceptsStatements();
     this.stopDeadline();
     this.commitAttempted = true;
     this.stopAcceptingChildren();
     try {
-      await this.host.track(() => this.driverTx.commit());
+      await this.runtime.trackInFlight(() => this.driverTx.commit());
     } catch (error) {
       this.endTransactionWork();
       await this.activity.end({ by: 'commit', outcome: 'failed' });
@@ -301,7 +301,7 @@ export class OuterTransaction extends TransactionBase implements SettledTransact
     }
     if (this.entry.state === 'rolled-back') return;
     try {
-      await this.host.track(() => this.driverTx.rollback());
+      await this.runtime.trackInFlight(() => this.driverTx.rollback());
     } catch (error) {
       this.endTransactionWork();
       await this.activity.end({
@@ -374,11 +374,11 @@ export class OuterTransaction extends TransactionBase implements SettledTransact
   private stopAcceptingChildren(): void {
     this.activity.stopAcceptingChildren();
     const records =
-      this.timeout === undefined ? [this.registration, this.onConnection] : [this.onConnection];
+      this.timeout === undefined ? [this.openTransaction, this.onConnection] : [this.onConnection];
     for (const record of records) {
       if (record.activity === this.activity) record.activity = undefined;
     }
-    this.onConnection.guard = undefined;
+    this.onConnection.assertAcceptsStatements = undefined;
   }
 
   private logDroppedError(error: unknown): void {
@@ -394,14 +394,14 @@ class Savepoint extends TransactionBase {
   private readonly root: OuterTransaction;
 
   constructor(
-    host: TransactionHost,
+    runtime: TransactionRuntime,
     driverTx: SqlTransaction,
     activity: TransactionRun,
     stack: TransactionStack,
     entry: StackEntry,
     root: OuterTransaction,
   ) {
-    super(host, driverTx, activity, stack, entry);
+    super(runtime, driverTx, activity, stack, entry);
     this.root = root;
   }
 
@@ -417,19 +417,19 @@ class Savepoint extends TransactionBase {
     return this.root;
   }
 
-  checkDeadline(): void {
-    this.root.checkDeadline();
+  assertBeforeDeadline(): void {
+    this.root.assertBeforeDeadline();
   }
 
-  protected assertMayWork(): void {
+  protected assertAcceptsStatements(): void {
     if (this.isClosed) throw transactionClosedError();
     if (this.stack.top !== this.entry) throw transactionSuspendedError(this.stack);
   }
 
   async commit(): Promise<void> {
-    this.assertMayWork();
+    this.assertAcceptsStatements();
     try {
-      await this.host.track(() => this.driverTx.commit());
+      await this.runtime.trackInFlight(() => this.driverTx.commit());
     } catch (error) {
       this.entry.state = 'commit-failed';
       throw error;
@@ -452,7 +452,7 @@ class Savepoint extends TransactionBase {
     }
     if (this.stack.top !== this.entry) throw transactionSuspendedError(this.stack);
     try {
-      await this.host.track(() => this.driverTx.rollback());
+      await this.runtime.trackInFlight(() => this.driverTx.rollback());
     } catch (error) {
       this.stack.invalidate();
       await this.activity.end({ by: 'rollback', outcome: 'failed', commitAttempted });
