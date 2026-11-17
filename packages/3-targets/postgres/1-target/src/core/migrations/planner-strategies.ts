@@ -26,7 +26,6 @@
  * / the slice spec).
  */
 
-import { compareCodeUnits } from '@internal/contract/hashing-utils';
 import type { Contract } from '@internal/contract/types';
 import {
   type CodecControlHooks,
@@ -429,7 +428,7 @@ export const storageTypePlanCallStrategy: CallMigrationStrategy = (issues, ctx) 
   const calls: PostgresOpFactoryCall[] = [];
 
   for (const [typeName, typeInstance] of Object.entries(storageTypes).sort(([a], [b]) =>
-    compareCodeUnits(a, b),
+    a.localeCompare(b),
   )) {
     const codecInstance = blindCast<
       StorageTypeInstance,

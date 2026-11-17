@@ -3,11 +3,6 @@ import type { MongoSchemaCollection } from './schema-collection';
 import { MongoSchemaIRNode } from './schema-node';
 import type { MongoSchemaVisitor } from './visitor';
 
-/** Orders by UTF-16 code unit, so the order does not depend on the machine's locale. */
-function compareCodeUnits(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
-}
-
 export class MongoSchemaIR extends MongoSchemaIRNode {
   readonly nodeKind = 'schema' as const;
   /** Fixed sentinel: the schema is always the diff tree's single root. */
@@ -25,7 +20,7 @@ export class MongoSchemaIR extends MongoSchemaIRNode {
   ) {
     super();
     this.fromDatabase = options.fromDatabase;
-    const sorted = [...collections].sort((a, b) => compareCodeUnits(a.name, b.name));
+    const sorted = [...collections].sort((a, b) => a.name.localeCompare(b.name));
     this.collections = sorted;
     this._byName = new Map(sorted.map((c) => [c.name, c]));
     this.collectionNames = sorted.map((c) => c.name);
