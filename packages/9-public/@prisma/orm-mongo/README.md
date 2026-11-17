@@ -25,10 +25,11 @@ pnpm add @prisma/orm-mongo mongodb
 | `/runtime` | `mongo(url)` — the lazy query client |
 | `/static` | statically composed runtime for pre-wired deployments |
 | `/config` | `defineConfig` for `prisma.config.ts`, and `prisma6Schema` to read a Prisma 6 MongoDB schema as the contract source |
+| `/generated-types` | the types a generated `contract.d.ts` imports |
 | `/contract-builder` | `defineContract` and Mongo contract authoring |
 | `/bson` | BSON value helpers (`ObjectId`, `Decimal128`, …) |
 | `/target`, `/family` | the Mongo target pack and the Mongo family pack |
-| `/control` | the control client |
+| `/migration`, `/control` | migration planning and the control client |
 
 Generated contract files import their types from the facade, so an application never has to depend on a package it did not install:
 

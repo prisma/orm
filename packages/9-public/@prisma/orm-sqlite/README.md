@@ -25,6 +25,7 @@ The driver is Node's built-in `node:sqlite`, so there is no native module to com
 | `/runtime` | `sqlite(path)` — the lazy query client |
 | `/static` | statically composed runtime for pre-wired deployments |
 | `/config` | `defineConfig` for `prisma.config.ts` |
+| `/generated-types` | the types a generated `contract.d.ts` imports |
 | `/contract-builder` | `defineContract` and SQLite contract authoring |
 | `/migration`, `/control` | migration planning and the control client |
 
