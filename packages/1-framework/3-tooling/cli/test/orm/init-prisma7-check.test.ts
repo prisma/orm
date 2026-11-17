@@ -8,7 +8,7 @@ import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
 import { type ImportFromProject, importFromProject } from '../../src/orm/init-prisma7-check';
 import { createTestProjectDir } from '../utils/test-project-dir';
-import { PNPM_WORKSPACE_LEAK } from './init-install-fixtures';
+import { PNPM_WORKSPACE_LEAK, resolveWithin } from './init-install-fixtures';
 import { copyPrisma7Fixture, PRISMA7_FIXTURE, prisma7InitArgv } from './init-prisma7-fixtures';
 
 const TARGET_CONFIG = '@prisma/orm-postgres/config';
@@ -46,6 +46,7 @@ function harness(packageManager?: PackageManagerId) {
     'orm init': createInitCommand({
       emitScaffoldedContract: vi.fn().mockResolvedValue(undefined),
       importFromProject: (cwd, specifier) => loadTargetConfig(cwd, specifier),
+      resolveModule: resolveWithin(projectDir),
     }),
   };
   return createTestCli({

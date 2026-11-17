@@ -8,12 +8,17 @@ import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
 import { importFromProject } from '../../src/orm/init-prisma7-check';
 import { createTestProjectDir, fixtureAppDir } from '../utils/test-project-dir';
+import { resolveWithin } from './init-install-fixtures';
 
 const FIXTURE = join(fixtureAppDir, 'fixtures/prisma7-project');
 const emit = vi.fn();
 const commands: MountedTree = {
   ...BIN_COMMANDS,
-  'orm init': createInitCommand({ emitScaffoldedContract: emit, importFromProject }),
+  'orm init': createInitCommand({
+    emitScaffoldedContract: emit,
+    importFromProject,
+    resolveModule: (fromFile, specifier) => resolveWithin(projectDir)(fromFile, specifier),
+  }),
 };
 
 let projectDir: string;

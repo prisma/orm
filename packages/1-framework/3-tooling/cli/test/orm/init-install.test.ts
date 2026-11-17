@@ -10,6 +10,7 @@ import {
   initTestCli,
   PNPM_WORKSPACE_LEAK,
   type RunnerCall,
+  resolveWithin,
   type ScriptedInstalls,
   scriptedInstalls,
 } from './init-install-fixtures';
@@ -31,7 +32,11 @@ afterEach(() => {
 
 function harness(packageManager?: PackageManagerId) {
   return initTestCli({
-    dependencies: { emitScaffoldedContract: emit, importFromProject },
+    dependencies: {
+      emitScaffoldedContract: emit,
+      importFromProject,
+      resolveModule: resolveWithin(projectDir),
+    },
     runner: installs.runner,
     packageManager,
   });
@@ -49,9 +54,14 @@ describe('init installs', () => {
   it(
     'installs the engine in the same add as prisma, pinned to the version the toolchain of the target package peers on',
     async () => {
-      const store = join(projectDir, 'node_modules', '.pnpm', 'runtime', 'node_modules', '@prisma');
+      const store = join(projectDir, 'node_modules', '.pnpm', 'target', 'node_modules', '@prisma');
       mkdirSync(join(store, 'orm-postgres'), { recursive: true });
       mkdirSync(join(store, 'orm-toolchain'), { recursive: true });
+      writeFileSync(
+        join(store, 'orm-postgres', 'package.json'),
+        JSON.stringify({ name: '@prisma/orm-postgres', version: '8.0.0-rc.4' }),
+        'utf-8',
+      );
       writeFileSync(
         join(store, 'orm-toolchain', 'package.json'),
         JSON.stringify({
@@ -449,7 +459,11 @@ describe('init installs', () => {
       'reports the install failure rather than pretending it installed',
       async () => {
         const cli = initTestCli({
-          dependencies: { emitScaffoldedContract: emit, importFromProject },
+          dependencies: {
+            emitScaffoldedContract: emit,
+            importFromProject,
+            resolveModule: resolveWithin(projectDir),
+          },
           runner: undefined,
           packageManager: undefined,
         });

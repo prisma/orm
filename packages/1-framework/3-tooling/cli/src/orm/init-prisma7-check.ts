@@ -23,7 +23,7 @@ import {
 } from '../commands/init/templates/code-templates';
 import { loadContractSource } from '../control-api/operations/load-contract-source';
 import { chooseAction } from '../utils/next-actions';
-import { installProjectDependencies } from './init-packages';
+import { installProjectDependencies, type ResolveModule } from './init-packages';
 import { normalizeError } from './normalize-error';
 
 /** A module as the project itself resolves it; `undefined` when the project cannot resolve it. */
@@ -107,6 +107,7 @@ export function createPrisma7SourceCheck(ctx: {
   readonly packageManager: PackageManager;
   readonly install: boolean;
   readonly importFromProject: ImportFromProject;
+  readonly resolveModule: ResolveModule;
 }): CheckPrisma7Source {
   return async ({ target, schemaPath }) => {
     const resolveImportSpecifier = scaffoldSpecifierResolverFor(target);
@@ -127,6 +128,7 @@ export function createPrisma7SourceCheck(ctx: {
         targetPackage: undefined,
         devDeps: [],
         catalogWarnings: ctx.packageManager === 'pnpm' ? buildCatalogWarnings(ctx.cwd, deps) : [],
+        resolveModule: ctx.resolveModule,
       });
       if (outcome.failure !== undefined) {
         throw new Prisma7CheckInstallFailed(outcome.failure, target, schemaPath, outcome.warnings);

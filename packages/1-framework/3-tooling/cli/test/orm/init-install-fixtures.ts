@@ -4,6 +4,7 @@ import { createTestCli } from '@prisma/cli-engine/testing';
 import { join } from 'pathe';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand, type InitCommandDependencies } from '../../src/orm/init';
+import { type ResolveModule, resolveModule } from '../../src/orm/init-packages';
 
 export const PNPM_WORKSPACE_LEAK =
   'ERR_PNPM_WORKSPACE_PKG_NOT_FOUND  In : "@prisma/orm-postgres@workspace:*" is in the dependencies but no package named "@prisma/orm-postgres" is present in the workspace';
@@ -90,6 +91,22 @@ function writePnpm11Records(cwd: string, args: readonly string[]): void {
     join(cwd, 'node_modules', '.modules.yaml'),
     JSON.stringify({ ignoredBuilds: ['esbuild@0.28.2'], pendingBuilds: [] }),
   );
+}
+
+/**
+ * Node's resolution, refusing whatever it finds outside `rootDir`. The test runner's `NODE_PATH`
+ * reaches this repository's own packages from any folder, which a user's project never sees.
+ */
+export function resolveWithin(rootDir: string): ResolveModule {
+  return (fromFile, specifier) => {
+    const resolved = resolveModule(fromFile, specifier);
+    if (!resolved.startsWith(`${rootDir}/`)) {
+      throw Object.assign(new Error(`Cannot find module '${specifier}' inside ${rootDir}`), {
+        code: 'MODULE_NOT_FOUND',
+      });
+    }
+    return resolved;
+  };
 }
 
 /** The production command tree, with `init` rebuilt around the given dependencies. */

@@ -20,6 +20,7 @@ import { createInitCommand } from '../../src/orm/init';
 import { emitScaffoldedContract } from '../../src/orm/init-emit';
 import { importFromProject } from '../../src/orm/init-prisma7-check';
 import { createTestProjectDir, fixtureAppDir } from '../utils/test-project-dir';
+import { resolveWithin } from './init-install-fixtures';
 
 const FIXTURE = join(fixtureAppDir, 'fixtures/prisma7-project');
 const VIEW_FIXTURE = join(fixtureAppDir, 'fixtures/prisma7-project-view');
@@ -38,6 +39,7 @@ const commands: MountedTree = {
     emitScaffoldedContract: (ctx) =>
       emitScaffoldedContract(ctx, { resolveFromBaseDir: () => CLI_PACKAGE_MANIFEST }),
     importFromProject,
+    resolveModule: (fromFile, specifier) => resolveWithin(projectDir)(fromFile, specifier),
   }),
 };
 let projectDir: string;

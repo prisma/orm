@@ -26,7 +26,7 @@ import { buildInitNextActions, initPresentations } from './init-blocks';
 import { EMIT_COMMAND, emitFailedFinding, installFailedFinding } from './init-diagnostics';
 import { emitScaffoldedContract } from './init-emit';
 import { type ResolvedInitInputs, resolveInitInputs } from './init-inputs';
-import { installProjectDependencies } from './init-packages';
+import { installProjectDependencies, type ResolveModule, resolveModule } from './init-packages';
 import {
   createPrisma7SourceCheck,
   type ImportFromProject,
@@ -76,6 +76,7 @@ function causeMessage(error: unknown): string {
 export interface InitCommandDependencies {
   readonly emitScaffoldedContract: typeof emitScaffoldedContract;
   readonly importFromProject: ImportFromProject;
+  readonly resolveModule: ResolveModule;
 }
 
 export const createInitCommand = (injected: InitCommandDependencies) =>
@@ -167,6 +168,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
             packageManager,
             install: !args.flags.skipInstall,
             importFromProject: injected.importFromProject,
+            resolveModule: injected.resolveModule,
           }),
           warn,
           packageManager,
@@ -343,6 +345,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
           deps: depsToInstall,
           targetPackage,
           devDeps,
+          resolveModule: injected.resolveModule,
           catalogWarnings:
             packageManager === 'pnpm'
               ? buildCatalogWarnings(ctx.cwd, [...depsToInstall, ...devDeps])
@@ -407,4 +410,8 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
     },
   });
 
-export const initCommand = createInitCommand({ emitScaffoldedContract, importFromProject });
+export const initCommand = createInitCommand({
+  emitScaffoldedContract,
+  importFromProject,
+  resolveModule,
+});

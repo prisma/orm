@@ -396,7 +396,12 @@ describe('init scaffold', () => {
 
         expect(envelopeOf(run)).toMatchObject({ ok: true });
         expect(run.exitCode).toBe(0);
-        expect(calls[1]?.args).toEqual(['add', '-D', 'prisma@latest', '@prisma/cli-engine@latest']);
+        expect(calls[1]?.args).toEqual([
+          'add',
+          '-D',
+          'prisma@latest',
+          expect.stringMatching(/^@prisma\/cli-engine@/),
+        ]);
         expect(calls).toHaveLength(2);
       },
       timeouts.coldTransformImport,

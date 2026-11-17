@@ -14,6 +14,7 @@ import {
   PNPM_11_IGNORED_BUILDS,
   PNPM_12_IGNORED_BUILDS,
   PNPM_WORKSPACE_LEAK,
+  resolveWithin,
   type ScriptedInstalls,
   scriptedInstalls,
 } from './init-install-fixtures';
@@ -36,7 +37,11 @@ afterEach(() => {
 
 function harness(packageManager?: PackageManagerId) {
   return initTestCli({
-    dependencies: { emitScaffoldedContract: emit, importFromProject },
+    dependencies: {
+      emitScaffoldedContract: emit,
+      importFromProject,
+      resolveModule: resolveWithin(projectDir),
+    },
     runner: installs.runner,
     packageManager,
   });

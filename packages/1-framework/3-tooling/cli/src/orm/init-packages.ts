@@ -1,13 +1,20 @@
-import { readFileSync, realpathSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { ifDefined } from '@internal/utils/defined';
 import type { PackageManagerId, PackageOperations } from '@prisma/cli-engine';
 import type { CliStructuredError } from '@prisma/cli-engine/protocol';
-import { dirname, join } from 'pathe';
+import { join } from 'pathe';
 import {
   isOnlyPnpmIgnoredBuildsError,
   isRecognisedPnpmResolutionError,
 } from '../commands/init/pnpm-error-codes';
 import { redactSecrets } from '../commands/init/redact-secrets';
+
+/** Resolves `specifier` as Node does from the file `fromFile`, and throws when it cannot. */
+export type ResolveModule = (fromFile: string, specifier: string) => string;
+
+export const resolveModule: ResolveModule = (fromFile, specifier) =>
+  createRequire(fromFile).resolve(specifier);
 
 const ENGINE_PACKAGE = '@prisma/cli-engine';
 const TOOLCHAIN_PACKAGE = '@prisma/orm-toolchain';
@@ -125,26 +132,28 @@ function enginePeerOf(manifestPath: string): string | undefined {
  * `prisma.config.ts` imports `definePrismaConfig` from `@prisma/cli-engine`,
  * and the target package's `@prisma/orm-toolchain` peer-depends on the exact
  * engine version it runs against — so the spec is read from the manifest the
- * target package's install just placed, never guessed from a dist-tag (whose `latest` has
- * lagged that version before and broken the very next command). It has to be
- * known before `prisma` installs, because the engine goes into the same `add`
- * as `prisma`: pnpm 12 links an engine added on its own to a store entry it
- * never materializes. The toolchain sits either under the target package or
- * beside it — in pnpm's virtual store, beside the link's target. A target
- * package without a readable toolchain manifest falls back to the `latest` tag.
+ * target package's install just placed, never guessed from a dist-tag (whose
+ * `latest` has lagged that version before and broken the very next command).
+ * It has to be known before `prisma` installs, because the engine goes into
+ * the same `add` as `prisma`: pnpm 12 links an engine added on its own to a
+ * store entry it never materializes. Both manifests are found the way Node
+ * finds them from the project, so a nested, pnpm-linked or hoisted layout
+ * all work. A target package without a readable toolchain manifest falls back
+ * to the `latest` tag.
  */
-function engineDevDependencySpec(cwd: string, targetPackage: string): string {
-  let targetDir: string;
+function engineDevDependencySpec(
+  cwd: string,
+  targetPackage: string,
+  resolve: ResolveModule,
+): string {
+  let toolchainManifest: string;
   try {
-    targetDir = realpathSync(join(cwd, 'node_modules', targetPackage));
+    const targetManifest = resolve(join(cwd, 'package.json'), `${targetPackage}/package.json`);
+    toolchainManifest = resolve(targetManifest, `${TOOLCHAIN_PACKAGE}/package.json`);
   } catch {
     return `${ENGINE_PACKAGE}@latest`;
   }
-  const modulesDir = targetPackage.split('/').reduce((dir) => dirname(dir), targetDir);
-  const engine =
-    enginePeerOf(join(targetDir, 'node_modules', TOOLCHAIN_PACKAGE, 'package.json')) ??
-    enginePeerOf(join(modulesDir, TOOLCHAIN_PACKAGE, 'package.json'));
-  return `${ENGINE_PACKAGE}@${engine ?? 'latest'}`;
+  return `${ENGINE_PACKAGE}@${enginePeerOf(toolchainManifest) ?? 'latest'}`;
 }
 
 /**
@@ -166,6 +175,7 @@ export async function installProjectDependencies(ctx: {
   readonly targetPackage: string | undefined;
   readonly devDeps: readonly string[];
   readonly catalogWarnings: readonly string[];
+  readonly resolveModule: ResolveModule;
 }): Promise<InstallOutcome> {
   const install = async (request: InstallRequest): Promise<StepResult> => {
     if (request.packages.length === 0) {
@@ -193,7 +203,7 @@ export async function installProjectDependencies(ctx: {
     const devDeps =
       target === undefined
         ? [...ctx.devDeps]
-        : [...ctx.devDeps, engineDevDependencySpec(ctx.cwd, target)];
+        : [...ctx.devDeps, engineDevDependencySpec(ctx.cwd, target, ctx.resolveModule)];
     const developmentDeps = await install({
       packages: devDeps,
       dev: true,
