@@ -17,12 +17,15 @@ function resolveLiteral(entry: string): string {
  * to native absolute paths, so on Windows an authored `./schema/*.prisma`
  * arrives as `C:\app\schema\*.prisma`, where the backslash escapes the
  * wildcard. Convert native separators back to `/` on Windows only, so glob
- * escapes keep working on POSIX. The drive letter is uppercased because pathe
- * uppercases it in the path a pattern is matched against.
+ * escapes keep working on POSIX.
  */
 function toGlobPattern(pattern: string): string {
-  if (process.platform !== 'win32') return pattern;
-  return pattern.replaceAll('\\', '/').replace(/^[a-z]:/, (drive) => drive.toUpperCase());
+  return process.platform === 'win32' ? pattern.replaceAll('\\', '/') : pattern;
+}
+
+/** pathe's `matchesGlob` uppercases the drive letter of the path it tests, so the pattern's must match. */
+function withUppercaseDrive(globPattern: string): string {
+  return globPattern.replace(/^[a-z]:/, (drive) => drive.toUpperCase());
 }
 
 /**
@@ -74,6 +77,6 @@ export function globContractInputMatching(
 ): string | undefined {
   return patterns.find((pattern) => {
     const globPattern = toGlobPattern(pattern);
-    return isDynamicPattern(globPattern) && matchesGlob(path, globPattern);
+    return isDynamicPattern(globPattern) && matchesGlob(path, withUppercaseDrive(globPattern));
   });
 }
