@@ -4,8 +4,8 @@
 import type {
   CodecTypes as PgTypes,
   ParameterizedOutputTypesForTypeParams as PgParameterizedOutputTypes,
-} from '@internal/target-postgres/codec-types';
-import type { QueryOperationTypes as PgTargetQueryOps } from '@internal/target-postgres/operation-types';
+  QueryOperationTypes as PgTargetQueryOps,
+} from '@internal/postgres/generated-types';
 
 import type {
   ColumnTypesFromStorage,

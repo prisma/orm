@@ -5,8 +5,8 @@ import type { CodecTypes as CitextTypes } from '@prisma/orm-postgres-contrib/cit
 import type {
   CodecTypes as PgTypes,
   ParameterizedOutputTypesForTypeParams as PgParameterizedOutputTypes,
-} from '@prisma/orm-postgres/target/codec-types';
-import type { QueryOperationTypes as PgTargetQueryOps } from '@prisma/orm-postgres/target/operation-types';
+  QueryOperationTypes as PgTargetQueryOps,
+} from '@prisma/orm-postgres/generated-types';
 
 import type {
   ColumnTypesFromStorage,

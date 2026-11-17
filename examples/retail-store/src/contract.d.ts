@@ -4,7 +4,7 @@
 import type {
   CodecTypes as MongoCodecTypes,
   ParameterizedOutputTypesForTypeParams as MongoParameterizedOutputTypes,
-} from '@prisma/orm-mongo/target/codec-types';
+} from '@prisma/orm-mongo/generated-types';
 
 import type {
   MongoCollection,

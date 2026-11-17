@@ -4,7 +4,7 @@
 import type {
   CodecTypes as MongoCodecTypes,
   ParameterizedOutputTypesForTypeParams as MongoParameterizedOutputTypes,
-} from '@internal/target-mongo/codec-types';
+} from '@internal/mongo/generated-types';
 
 import type {
   MongoCollection,
