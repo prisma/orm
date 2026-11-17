@@ -11,6 +11,7 @@ import { codecForRef, readContractValue } from '@internal/framework-components/c
 import {
   type EnumValueCoordinate,
   enumValueStatementText,
+  modelStatementText,
   type ResolvedEnumValueRenameStatement,
   type ResolvedMigrationStatement,
 } from '@internal/framework-components/control';
@@ -19,7 +20,7 @@ import { invariant } from '@internal/utils/assertions';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { structuredError } from '@internal/utils/structured-error';
 import { buildColumnCodecRef } from './contract-to-schema-ir';
-import { handWrittenMigrationAdvice } from './hand-written-migration';
+import { handWrittenMigrationAdvice, handWrittenMigrationSteps } from './hand-written-migration';
 import { jsonPathText } from './json-path';
 import { isSqlModelStorage, tableControlPolicy } from './model-storage';
 import type { SchemaTables } from './schema-tables';
@@ -49,13 +50,6 @@ export interface StoredValueRewrite {
   readonly to: StoredEnumValue | undefined;
   /** The rename statement the rewrite carries out, if any. */
   readonly statement: ResolvedEnumValueRenameStatement | undefined;
-  /**
-   * For a removal the plan asks about, the replacements that would keep its data instead, in the
-   * order they run; none when keeping it would merge it with another member's data.
-   */
-  readonly keepData: readonly StoredValueReplacement[] | undefined;
-  /** Whether the value moves in a cycle with other values of the enum, so keeping its data swaps values. */
-  readonly swapsValues: boolean;
 }
 
 /** One replacement of a stored value by another. */
@@ -181,6 +175,14 @@ function membersTypedBy(
   return ok(found);
 }
 
+/** How a refusal names a change that no statement asks for: the removal of a value, or a member's new stored value. */
+function changeText(enums: EnumComparison, change: StoredChange): string {
+  const member = enumValueStatementText(enums.fromContract, change.enumValue);
+  return change.to === undefined
+    ? `Cannot remove enum value "${member}"`
+    : `Cannot change the stored value of enum value "${member}" from ${enums.text(change.from)} to ${enums.text(change.to)}`;
+}
+
 function unlistedRefusal(
   contract: Contract<SqlStorage>,
   enums: EnumComparison,
@@ -202,7 +204,7 @@ function unlistedRefusal(
     invariant(first !== undefined, 'an enum with no changed value plans no rewrite to refuse');
     return {
       kind: 'unsupportedOperation',
-      summary: `Cannot remove enum value "${enumValueStatementText(enums.fromContract, first.enumValue)}": ${reason}`,
+      summary: `${changeText(enums, first)}: ${reason}`,
       why: `${why} ${handWrittenMigrationAdvice(`the JSON of ${where}`)}`,
     };
   }
@@ -243,7 +245,7 @@ function unsupportedValue(
   return {
     kind: 'unsupportedOperation',
     summary: `Cannot rewrite enum value "${text}": its stored value ${JSON.stringify(stored)} is not a string or a number`,
-    why: `The plan rewrites the rows that hold a removed or renamed enum value, and it compares only string and number values. Rewrite the rows that hold enum value "${text}" yourself, then plan again.`,
+    why: `The plan rewrites the rows that hold a removed, renamed or changed enum value, and it compares only string and number values. Rewrite the rows that hold enum value "${text}" yourself, then plan again.`,
   };
 }
 
@@ -313,6 +315,69 @@ function cycleRefusal(
     why: 'Leave out the renames in the cycle, and write the rewrites by hand in the migration.ts a plan without them writes: rewrite the first value to a value no member stores, then each other value, then that value to its new value, with this.replaceStoredValue({ table, column, from, to }) for each.',
     refusedStatement: statement,
     leaveOut: cycle.flatMap((change) => (change.statement === undefined ? [] : [change.statement])),
+  };
+}
+
+/** A member that keeps its name and takes the stored value `to`, which `holder` keeps in the origin enum, so their data would merge. */
+function changeMergingRefusal(
+  change: StoredChange,
+  to: StoredEnumValue,
+  holder: string,
+  enums: EnumComparison,
+): SqlPlannerConflict {
+  const member = enumValueStatementText(enums.fromContract, change.enumValue);
+  const holderText = enumValueStatementText(enums.fromContract, {
+    ...change.enumValue,
+    member: holder,
+  });
+  const fromText = enums.text(change.from);
+  const toText = enums.text(to);
+  return {
+    kind: 'unsupportedOperation',
+    summary: `${changeText(enums, change)}: the origin enum stores ${toText} as enum value "${holderText}"`,
+    why: `A changed stored value is rewritten in every row that holds it, so the rows of "${member}" would hold ${toText} as the rows of "${holderText}" do, and their data would merge. To keep their data apart, give "${member}" a stored value no member of the origin enum stores, and plan again. To merge their data on purpose, write this change as a hand-written migration: ${handWrittenMigrationSteps(`${fromText} to ${toText} in each column the enum types, with this.replaceStoredValue({ table, column, from, to })`)}`,
+  };
+}
+
+function listText(items: readonly string[]): string {
+  return `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`;
+}
+
+/**
+ * Members that keep their names and move stored values in a cycle, with the rewrites a hand-written
+ * migration makes instead: the first value moves to a value no member stores, the others move in
+ * reverse order, each into the value the one before it freed, and that value moves last.
+ */
+function changeCycleRefusal(
+  cycle: readonly StoredChange[],
+  enums: EnumComparison,
+  taken: readonly JsonValue[],
+): SqlPlannerConflict {
+  const moves = cycle.map(({ enumValue, from, to }) => {
+    invariant(to !== undefined, 'a cycle of stored values moves each value to another');
+    return { enumValue, from, to };
+  });
+  const [first, ...rest] = moves;
+  invariant(first !== undefined, 'a cycle has a change');
+  const swap = temporaryValue(first.from, taken);
+  const moveText = ({ from, to }: StoredValueReplacement) =>
+    `${enums.text(from)} to ${enums.text(to)}`;
+  const steps = [
+    { from: first.from, to: swap },
+    ...[...rest].reverse(),
+    { from: swap, to: first.to },
+  ].map(moveText);
+  const enumText = modelStatementText(enums.fromContract, {
+    namespaceId: first.enumValue.namespaceId,
+    model: first.enumValue.enum,
+  });
+  const members = moves.map(
+    ({ enumValue }) => `"${enumValueStatementText(enums.fromContract, enumValue)}"`,
+  );
+  return {
+    kind: 'unsupportedOperation',
+    summary: `Cannot change the stored values of enum "${enumText}": enum values ${listText(members)} move stored values in a cycle, ${listText(moves.map(moveText))}, and a rewrite of one would overwrite the other before it is read`,
+    why: `The plan rewrites a changed stored value in every row that holds it, one value after another, and no order of the rewrites moves values in a cycle. ${handWrittenMigrationAdvice(`the values in each column the enum types through a value no member stores, ${steps.slice(0, -1).join(', then ')}, then ${steps.at(-1)}, each with this.replaceStoredValue({ table, column, from, to })`)}`,
   };
 }
 
@@ -396,11 +461,11 @@ function temporaryValue(value: StoredEnumValue, taken: readonly JsonValue[]): St
 /**
  * The rewrites of stored enum values a plan makes. Enums are compared by the stored value of each
  * member (see `valueChanges`). A changed value is rewritten in every column, in the working schema,
- * whose field the destination enum types: a rename statement replaces it, and any other change
- * removes it, which the plan asks about, with the replacements that would keep its data. Changes
- * that shift values along are ordered so none overwrites a value another still has to read; rename
- * statements that move values in a cycle are refused, and other changes in a cycle keep their data
- * through a temporary value. With no origin contract, nothing is known to have changed.
+ * whose field the destination enum types: a rename statement, or a member that keeps its name,
+ * replaces it, and a removed member's value is removed, which the plan asks about. Changes that
+ * shift values along are ordered so none overwrites a value another still has to read. Changes that
+ * move values in a cycle, or into a value another member of the origin enum keeps, are refused.
+ * With no origin contract, nothing is known to have changed.
  */
 export function planEnumValueRewrites(input: {
   readonly statements: readonly ResolvedMigrationStatement[];
@@ -487,21 +552,30 @@ export function planEnumValueRewrites(input: {
         ...originEnum.members.map(({ value }) => value),
         ...destinationEnum.members.map(({ value }) => value),
       ];
+      for (const change of checked) {
+        if (change.statement !== undefined || change.to === undefined) continue;
+        const merged = merging(change.to);
+        if (merged !== undefined) {
+          return notOk(changeMergingRefusal(change, change.to, merged.name, enums));
+        }
+      }
       for (const group of orderChanges(checked)) {
-        const refused = group.cycle
-          ? group.changes.find(({ statement }) => statement !== undefined)?.statement
-          : undefined;
-        if (refused !== undefined) return notOk(cycleRefusal(refused, group.changes, enums));
-        for (const [change, keepData] of keptData(group, taken, merging)) {
+        if (group.cycle) {
+          const refused = group.changes.find(({ statement }) => statement !== undefined)?.statement;
+          return notOk(
+            refused === undefined
+              ? changeCycleRefusal(group.changes, enums, taken)
+              : cycleRefusal(refused, group.changes, enums),
+          );
+        }
+        for (const change of group.changes) {
           for (const column of columns) {
             rewrites.push({
               enumValue: change.enumValue,
               ...column,
               from: change.from,
-              to: change.statement === undefined ? undefined : change.to,
+              to: change.to,
               statement: change.statement,
-              keepData,
-              swapsValues: group.cycle,
             });
           }
         }
@@ -509,41 +583,6 @@ export function planEnumValueRewrites(input: {
     }
   }
   return ok(rewrites);
-}
-
-/**
- * Each change of a group, in the order it runs, with the replacements that keep the data of a
- * change the plan removes: its value replaced by its new value, unless another member of the
- * origin enum keeps that value, which would merge their data. In a cycle, the first value moves to
- * a temporary value, the rest move around, and the temporary value moves last.
- */
-function keptData(
-  group: { readonly changes: readonly StoredChange[]; readonly cycle: boolean },
-  taken: readonly JsonValue[],
-  merging: (to: JsonValue) => unknown,
-): readonly (readonly [StoredChange, readonly StoredValueReplacement[] | undefined])[] {
-  const moved = ({ from, to }: StoredChange): readonly StoredValueReplacement[] =>
-    to === undefined ? [] : [{ from, to }];
-  const [first, ...rest] = group.changes;
-  if (!group.cycle || first === undefined) {
-    return group.changes.map((change) => [
-      change,
-      change.statement === undefined && change.to !== undefined && merging(change.to) === undefined
-        ? moved(change)
-        : undefined,
-    ]);
-  }
-  const swap = temporaryValue(first.from, taken);
-  const reversed = [...rest].reverse();
-  return [
-    [first, [{ from: first.from, to: swap }]],
-    ...reversed.map((change, index): readonly [StoredChange, readonly StoredValueReplacement[]] => [
-      change,
-      index === reversed.length - 1
-        ? [...moved(change), ...moved({ ...first, from: swap })]
-        : moved(change),
-    ]),
-  ];
 }
 
 /** The codec of the column a stored value is in, and the stack's codecs, which build it. */

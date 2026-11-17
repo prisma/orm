@@ -85,7 +85,7 @@ describe('subjectsOfCalls', () => {
     });
   });
 
-  it('names the enum value a removal is about, with the advice the target gives', () => {
+  it('names the enum value a removal is about', () => {
     const enumValue = { namespaceId: app, enum: 'Status', member: 'ARCHIVED' };
     expect(
       subjectsOfCalls(
@@ -98,7 +98,6 @@ describe('subjectsOfCalls', () => {
                 ...column('user', 'full_name'),
                 enumValue,
                 loss: 'drop',
-                keepDataEdit: { remove: 'this.remove()', replaceWith: 'this.replace()' },
               },
             ],
           },
@@ -117,7 +116,6 @@ describe('subjectsOfCalls', () => {
         subject: { kind: 'enumValue', ...enumValue },
         loss: 'drop',
         label: 'Remove value',
-        keepDataEdit: { remove: 'this.remove()', replaceWith: 'this.replace()' },
       },
     ]);
   });

@@ -327,6 +327,36 @@ describe('planEnumValueRewrites, members of value objects', () => {
     ]);
   });
 
+  it('replaces the value of a member that keeps its name in the column the enum types and in the members of value objects', () => {
+    const valueObjects = { Meta: { status } };
+    const columns = [{ field: 'status' }, meta];
+    expect(
+      places(
+        plan(
+          { members: ACTIVE_ARCHIVED, valueObjects, columns },
+          { members: { ACTIVE: 'active', ARCHIVED: 'retired' }, valueObjects, columns },
+        ),
+      ),
+    ).toEqual([
+      {
+        column: 'status',
+        codecRef: { codecId: 'test/text@1' },
+        many: false,
+        member: undefined,
+        from: 'archived',
+        to: 'retired',
+      },
+      {
+        column: 'meta',
+        codecRef: undefined,
+        many: false,
+        member: { path: '$.status', nullable: false },
+        from: 'archived',
+        to: 'retired',
+      },
+    ]);
+  });
+
   it('writes the path with the destination names when the same plan renames the member', () => {
     expect(
       places(
@@ -392,6 +422,24 @@ describe('planEnumValueRewrites, members of value objects', () => {
         'Cannot rename enum value "Status.ARCHIVED" to "Status.RETIRED": column "meta" of "ticket" holds a union of value objects',
       why: 'The plan rewrites an enum value inside JSON only in a column that holds a value object or a list of them. Write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the JSON of column "meta" of "ticket" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
       refusedStatement: statement,
+    });
+  });
+
+  it('refuses a changed stored value of a member that keeps its name when a column holds a union of value objects with the member', () => {
+    const union = { field: 'meta', valueObject: 'Meta', union: true };
+    const result = plan(
+      { members: ACTIVE_ARCHIVED, valueObjects: { Meta: { status } }, columns: [union] },
+      {
+        members: { ACTIVE: 'active', ARCHIVED: 'retired' },
+        valueObjects: { Meta: { status } },
+        columns: [union],
+      },
+    );
+    expect(refusal(result)).toEqual({
+      kind: 'unsupportedOperation',
+      summary:
+        'Cannot change the stored value of enum value "Status.ARCHIVED" from "archived" to "retired": column "meta" of "ticket" holds a union of value objects',
+      why: 'The plan rewrites an enum value inside JSON only in a column that holds a value object or a list of them. Write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the JSON of column "meta" of "ticket" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
     });
   });
 

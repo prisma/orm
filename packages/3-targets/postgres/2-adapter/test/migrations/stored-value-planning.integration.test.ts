@@ -1,7 +1,8 @@
 /**
  * The Postgres planner rewrites the stored values of an enum whose members change: a removed value
- * is set to NULL, a renamed one is replaced, between the drop of the old check and the creation of
- * the new one, and the runner leaves no row holding the old value.
+ * is set to NULL, a renamed one, or one whose member keeps its name, is replaced, between the drop
+ * of the old check and the creation of the new one, and the runner leaves no row holding the old
+ * value.
  */
 import type { Contract } from '@internal/contract/types';
 import { asNamespaceId } from '@internal/contract/types';
@@ -47,7 +48,7 @@ const FULL_POLICY: MigrationOperationPolicy = {
 
 function roleContract(
   members: Readonly<Record<string, string>>,
-  options: { readonly required?: boolean } = {},
+  options: { readonly required?: boolean; readonly default?: string } = {},
 ): Contract<SqlStorage> {
   const [first, ...rest] = Object.entries(members);
   if (first === undefined) throw new Error('a role needs a member');
@@ -66,12 +67,22 @@ function roleContract(
         User: m('User', {
           fields: {
             id: f.column(type.String()).id(),
-            role: options.required === true ? f.namedType(Role) : f.namedType(Role).optional(),
+            role: withDefault(
+              options.required === true ? f.namedType(Role) : f.namedType(Role).optional(),
+              options.default,
+            ),
           },
         }),
       },
     }),
   ) as Contract<SqlStorage>;
+}
+
+function withDefault<TField extends { default(value: string): TField }>(
+  field: TField,
+  value: string | undefined,
+): TField {
+  return value === undefined ? field : field.default(value);
 }
 
 function teamContract(
@@ -302,7 +313,7 @@ describe('Postgres planner, stored enum values', { concurrent: false }, () => {
     ]);
   });
 
-  it('advises the update by hand when a member keeps its name and changes its stored value', {
+  it('replaces the stored value of a member that keeps its name between the check drop and creation, and asks nothing', {
     timeout: testTimeout,
   }, async () => {
     const from = roleContract({ USER: 'user', GUEST: 'guest' });
@@ -311,15 +322,83 @@ describe('Postgres planner, stored enum values', { concurrent: false }, () => {
 
     const result = await plan(from, to);
 
-    expect(result.kind === 'success' && result.dataLoss[0]?.keepDataEdit).toEqual({
-      remove:
-        'this.removeStoredValue({ schema: "public", table: "User", column: "role", value: "guest", codecRef: { codecId: "pg/text@1" }, enumValue: { namespaceId: "public", enum: "Role", member: "GUEST" } })',
-      replaceWith:
-        'this.replaceStoredValue({ schema: "public", table: "User", column: "role", from: "guest", to: "visitor", codecRef: { codecId: "pg/text@1" } })',
-    });
+    expect(await operationKinds(result)).toEqual([
+      'dropCheckConstraint',
+      'replaceStoredValue',
+      'checkConstraint',
+    ]);
+    expect(result.kind === 'success' && result.dataLoss).toEqual([]);
+    expect(result.kind === 'success' && result.appliedStatements).toEqual([]);
+    await apply(result, to);
+    expect(await roles()).toEqual([
+      { id: '1', role: 'visitor' },
+      { id: '2', role: 'user' },
+      { id: '3', role: null },
+    ]);
+    expect(await operationKinds(await plan(to, to))).toEqual([]);
   });
 
-  it('advises a swap through a temporary value when two members swap stored values', {
+  it('replaces the stored values of a chain of members that keep their names, the last value first', {
+    timeout: testTimeout,
+  }, async () => {
+    const from = roleContract({ USER: 'user', GUEST: 'guest' });
+    const to = roleContract({ USER: 'guest', GUEST: 'visitor' });
+    await start(from);
+
+    const result = await plan(from, to);
+
+    expect(await operationKinds(result)).toEqual([
+      'dropCheckConstraint',
+      'replaceStoredValue',
+      'replaceStoredValue',
+      'checkConstraint',
+    ]);
+    await apply(result, to);
+    expect(await roles()).toEqual([
+      { id: '1', role: 'visitor' },
+      { id: '2', role: 'guest' },
+      { id: '3', role: null },
+    ]);
+  });
+
+  it('replaces a value a member frees and a new member takes, and no row holds the new member', {
+    timeout: testTimeout,
+  }, async () => {
+    const from = roleContract({ USER: 'user', GUEST: 'guest' });
+    const to = roleContract({ USER: 'user', GUEST: 'visitor', NEWBIE: 'guest' });
+    await start(from);
+
+    const result = await plan(from, to);
+    await apply(result, to);
+
+    expect(await roles()).toEqual([
+      { id: '1', role: 'visitor' },
+      { id: '2', role: 'user' },
+      { id: '3', role: null },
+    ]);
+  });
+
+  it('replaces the column default along with the value when the default is the old stored value', {
+    timeout: testTimeout,
+  }, async () => {
+    const from = roleContract({ USER: 'user', GUEST: 'guest' }, { default: 'guest' });
+    const to = roleContract({ USER: 'user', GUEST: 'visitor' }, { default: 'visitor' });
+    await start(from);
+
+    const result = await plan(from, to);
+    await apply(result, to);
+    await driver.query(`insert into "User" (id) values ('4')`);
+
+    expect(await roles()).toEqual([
+      { id: '1', role: 'visitor' },
+      { id: '2', role: 'user' },
+      { id: '3', role: null },
+      { id: '4', role: 'visitor' },
+    ]);
+    expect(await operationKinds(await plan(to, to))).toEqual([]);
+  });
+
+  it('refuses members that keep their names and swap stored values, and leaves the rows as they are', {
     timeout: testTimeout,
   }, async () => {
     const from = roleContract({ USER: 'user', GUEST: 'guest' });
@@ -328,12 +407,32 @@ describe('Postgres planner, stored enum values', { concurrent: false }, () => {
 
     const result = await plan(from, to);
 
-    expect(
-      result.kind === 'success' &&
-        result.dataLoss.map(({ keepDataEdit }) => keepDataEdit?.replaceWith),
-    ).toEqual([
-      'this.replaceStoredValue({ schema: "public", table: "User", column: "role", from: "user", to: "prisma_swap", codecRef: { codecId: "pg/text@1" } })',
-      'this.replaceStoredValue({ schema: "public", table: "User", column: "role", from: "guest", to: "user", codecRef: { codecId: "pg/text@1" } }), this.replaceStoredValue({ schema: "public", table: "User", column: "role", from: "prisma_swap", to: "guest", codecRef: { codecId: "pg/text@1" } })',
+    expect(result.kind === 'failure' && result.conflicts).toEqual([
+      {
+        kind: 'unsupportedOperation',
+        summary:
+          'Cannot change the stored values of enum "Role": enum values "Role.USER" and "Role.GUEST" move stored values in a cycle, "user" to "guest" and "guest" to "user", and a rewrite of one would overwrite the other before it is read',
+        why: 'The plan rewrites a changed stored value in every row that holds it, one value after another, and no order of the rewrites moves values in a cycle. Write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the values in each column the enum types through a value no member stores, "user" to "prisma_swap", then "guest" to "user", then "prisma_swap" to "guest", each with this.replaceStoredValue({ table, column, from, to }) yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
+      },
+    ]);
+  });
+
+  it('refuses a member that keeps its name and takes the stored value of a removed member', {
+    timeout: testTimeout,
+  }, async () => {
+    const from = roleContract({ USER: 'user', GUEST: 'guest' });
+    const to = roleContract({ USER: 'guest' });
+    await start(from);
+
+    const result = await plan(from, to);
+
+    expect(result.kind === 'failure' && result.conflicts).toEqual([
+      {
+        kind: 'unsupportedOperation',
+        summary:
+          'Cannot change the stored value of enum value "Role.USER" from "user" to "guest": the origin enum stores "guest" as enum value "Role.GUEST"',
+        why: 'A changed stored value is rewritten in every row that holds it, so the rows of "Role.USER" would hold "guest" as the rows of "Role.GUEST" do, and their data would merge. To keep their data apart, give "Role.USER" a stored value no member of the origin enum stores, and plan again. To merge their data on purpose, write this change as a hand-written migration: run prisma migration new, and in the operations of the migration.ts it writes, rewrite "user" to "guest" in each column the enum types, with this.replaceStoredValue({ table, column, from, to }) yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
+      },
     ]);
   });
 
@@ -420,6 +519,49 @@ describe('Postgres planner, stored enum values', { concurrent: false }, () => {
       { id: '2', roles: '{user}' },
     ]);
     expect(await operationKinds(await plan(to, to))).toEqual([]);
+  });
+
+  it('replaces the stored value of a member that keeps its name in every table the enum types, list columns too', {
+    timeout: testTimeout,
+  }, async () => {
+    const from = teamContract({ USER: 'user', GUEST: 'guest' }, { legacy: false });
+    const to = teamContract({ USER: 'user', GUEST: 'visitor' }, { legacy: false });
+    await apply(await plan(null, from), from);
+    await driver.query(`insert into "User" (id, role) values ('1', 'guest'), ('2', 'user')`);
+    await driver.query(
+      `insert into "Team" (id, roles) values ('1', '{guest,user}'), ('2', '{user}')`,
+    );
+
+    const result = await plan(from, to);
+    expect(result.kind === 'success' && result.dataLoss).toEqual([]);
+    await apply(result, to);
+
+    expect(await roles()).toEqual([
+      { id: '1', role: 'visitor' },
+      { id: '2', role: 'user' },
+    ]);
+    expect((await driver.query('select id, roles from "Team" order by id')).rows).toEqual([
+      { id: '1', roles: '{visitor,user}' },
+      { id: '2', roles: '{user}' },
+    ]);
+    expect(await operationKinds(await plan(to, to))).toEqual([]);
+  });
+
+  it('replaces a numeric stored value of a member that keeps its name, written through the column codec', {
+    timeout: testTimeout,
+  }, async () => {
+    const from = rankContract({ LOW: 1, MID: 2 });
+    const to = rankContract({ LOW: 10, MID: 2 });
+    await apply(await plan(null, from), from);
+    await driver.query(`insert into "User" (id, rank) values ('1', 1), ('2', 2), ('3', null)`);
+
+    await apply(await plan(from, to), to);
+
+    expect((await driver.query('select id, rank from "User" order by id')).rows).toEqual([
+      { id: '1', rank: 10 },
+      { id: '2', rank: 2 },
+      { id: '3', rank: null },
+    ]);
   });
 
   it('removes and replaces a numeric stored value, written through the column codec', {

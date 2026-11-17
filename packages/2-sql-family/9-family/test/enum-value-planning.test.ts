@@ -207,8 +207,6 @@ describe('planEnumValueRewrites', () => {
         from: 'archived',
         to: undefined,
         statement: undefined,
-        keepData: undefined,
-        swapsValues: false,
       },
       {
         enumValue: ARCHIVED,
@@ -220,8 +218,6 @@ describe('planEnumValueRewrites', () => {
         from: 'archived',
         to: undefined,
         statement: undefined,
-        keepData: undefined,
-        swapsValues: false,
       },
     ]);
   });
@@ -272,108 +268,50 @@ describe('planEnumValueRewrites', () => {
         from: 'archived',
         to: 'retired',
         statement,
-        keepData: undefined,
-        swapsValues: false,
       },
     ]);
   });
 
-  it('removes a stored value that changed under the same member name, and says what it changed to', () => {
+  it('replaces the stored value of a member that keeps its name, in every column the enum types', () => {
+    const columns = [
+      taskColumn,
+      { model: 'Note', table: 'note', column: 'tags', field: 'tags', many: true },
+    ];
     expect(
       rewrites(
         planEnumValueRewrites({
           statements: [],
-          fromContract: contractWith({ members: { ARCHIVED: 1 }, columns: [taskColumn] }),
-          contract: contractWith({ members: { ARCHIVED: 2 }, columns: [taskColumn] }),
-          tables: tablesOf(['app.task.status']),
+          fromContract: contractWith({ members: { ARCHIVED: 1 }, columns }),
+          contract: contractWith({ members: { ARCHIVED: 2 }, columns }),
+          tables: tablesOf(['app.task.status', 'app.note.tags']),
           codecs: noCodecs,
         }),
       ),
-    ).toMatchObject([
-      { enumValue: ARCHIVED, from: 1, to: undefined, keepData: [{ from: 1, to: 2 }] },
-    ]);
-  });
-
-  it('asks about members that swap stored values, and keeps their data through a temporary value', () => {
-    const planned = rewrites(
-      planEnumValueRewrites({
-        statements: [],
-        fromContract: contractWith({
-          members: { ACTIVE: 'active', OLD: 'old' },
-          columns: [taskColumn],
-        }),
-        contract: contractWith({
-          members: { ACTIVE: 'old', OLD: 'active' },
-          columns: [taskColumn],
-        }),
-        tables: tablesOf(['app.task.status']),
-        codecs: noCodecs,
-      }),
-    );
-    expect(
-      planned.map(({ enumValue, from, to, keepData, swapsValues }) => ({
-        member: enumValue.member,
-        from,
-        to,
-        keepData,
-        swapsValues,
-      })),
     ).toEqual([
       {
-        member: 'ACTIVE',
-        from: 'active',
-        to: undefined,
-        keepData: [{ from: 'active', to: 'prisma_swap' }],
-        swapsValues: true,
+        enumValue: ARCHIVED,
+        namespaceId: 'app',
+        table: 'task',
+        column: 'status',
+        codecRef,
+        many: false,
+        member: undefined,
+        from: 1,
+        to: 2,
+        statement: undefined,
       },
       {
-        member: 'OLD',
-        from: 'old',
-        to: undefined,
-        keepData: [
-          { from: 'old', to: 'active' },
-          { from: 'prisma_swap', to: 'old' },
-        ],
-        swapsValues: true,
+        enumValue: ARCHIVED,
+        namespaceId: 'app',
+        table: 'note',
+        column: 'tags',
+        codecRef,
+        many: true,
+        member: undefined,
+        from: 1,
+        to: 2,
+        statement: undefined,
       },
-    ]);
-  });
-
-  it('swaps integer stored values through the next integer no member stores', () => {
-    const planned = rewrites(
-      planEnumValueRewrites({
-        statements: [],
-        fromContract: contractWith({ members: { LOW: 1, HIGH: 2, TOP: 7 }, columns: [taskColumn] }),
-        contract: contractWith({ members: { LOW: 2, HIGH: 1, TOP: 7 }, columns: [taskColumn] }),
-        tables: tablesOf(['app.task.status']),
-        codecs: noCodecs,
-      }),
-    );
-    expect(planned.map(({ keepData }) => keepData)).toEqual([
-      [{ from: 1, to: 8 }],
-      [
-        { from: 2, to: 1 },
-        { from: 8, to: 2 },
-      ],
-    ]);
-  });
-
-  it('swaps non-integer stored values through a whole number no member stores', () => {
-    const planned = rewrites(
-      planEnumValueRewrites({
-        statements: [],
-        fromContract: contractWith({ members: { LOW: 1.5, HIGH: 2.5 }, columns: [taskColumn] }),
-        contract: contractWith({ members: { LOW: 2.5, HIGH: 1.5 }, columns: [taskColumn] }),
-        tables: tablesOf(['app.task.status']),
-        codecs: noCodecs,
-      }),
-    );
-    expect(planned.map(({ keepData }) => keepData)).toEqual([
-      [{ from: 1.5, to: 3 }],
-      [
-        { from: 2.5, to: 1.5 },
-        { from: 3, to: 2.5 },
-      ],
     ]);
   });
 
@@ -388,11 +326,113 @@ describe('planEnumValueRewrites', () => {
       }),
     );
     expect(
-      planned.map(({ from, keepData, swapsValues }) => ({ from, keepData, swapsValues })),
+      planned.map(({ enumValue, from, to, statement }) => ({
+        member: enumValue.member,
+        from,
+        to,
+        statement,
+      })),
     ).toEqual([
-      { from: 'b', keepData: [{ from: 'b', to: 'c' }], swapsValues: false },
-      { from: 'a', keepData: [{ from: 'a', to: 'b' }], swapsValues: false },
+      { member: 'B', from: 'b', to: 'c', statement: undefined },
+      { member: 'A', from: 'a', to: 'b', statement: undefined },
     ]);
+  });
+
+  it('replaces a value a member frees and a new member takes, and the new member starts with no rows', () => {
+    expect(
+      rewrites(
+        planEnumValueRewrites({
+          statements: [],
+          fromContract: contractWith({ members: { A: 'a' }, columns: [taskColumn] }),
+          contract: contractWith({ members: { A: 'b', C: 'a' }, columns: [taskColumn] }),
+          tables: tablesOf(['app.task.status']),
+          codecs: noCodecs,
+        }),
+      ).map(({ enumValue, from, to }) => ({ member: enumValue.member, from, to })),
+    ).toEqual([{ member: 'A', from: 'a', to: 'b' }]);
+  });
+
+  it('refuses members that keep their names and move stored values in a cycle, and says how to write the rewrites by hand', () => {
+    const refused = refusal(
+      planEnumValueRewrites({
+        statements: [],
+        fromContract: contractWith({
+          members: { ACTIVE: 'active', OLD: 'old' },
+          columns: [taskColumn],
+        }),
+        contract: contractWith({
+          members: { ACTIVE: 'old', OLD: 'active' },
+          columns: [taskColumn],
+        }),
+        tables: tablesOf(['app.task.status']),
+        codecs: noCodecs,
+      }),
+    );
+    expect(refused).toEqual({
+      kind: 'unsupportedOperation',
+      summary:
+        'Cannot change the stored values of enum "Status": enum values "Status.ACTIVE" and "Status.OLD" move stored values in a cycle, "active" to "old" and "old" to "active", and a rewrite of one would overwrite the other before it is read',
+      why: 'The plan rewrites a changed stored value in every row that holds it, one value after another, and no order of the rewrites moves values in a cycle. Write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the values in each column the enum types through a value no member stores, "active" to "prisma_swap", then "old" to "active", then "prisma_swap" to "old", each with this.replaceStoredValue({ table, column, from, to }) yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
+    });
+  });
+
+  it('moves a cycle of integer stored values through the next integer no member stores, in the advice', () => {
+    const refused = refusal(
+      planEnumValueRewrites({
+        statements: [],
+        fromContract: contractWith({
+          members: { LOW: 1, MID: 2, HIGH: 3, TOP: 7 },
+          columns: [taskColumn],
+        }),
+        contract: contractWith({
+          members: { LOW: 2, MID: 3, HIGH: 1, TOP: 7 },
+          columns: [taskColumn],
+        }),
+        tables: tablesOf(['app.task.status']),
+        codecs: noCodecs,
+      }),
+    );
+    expect(refused).toEqual({
+      kind: 'unsupportedOperation',
+      summary:
+        'Cannot change the stored values of enum "Status": enum values "Status.LOW", "Status.MID" and "Status.HIGH" move stored values in a cycle, 1 to 2, 2 to 3 and 3 to 1, and a rewrite of one would overwrite the other before it is read',
+      why: 'The plan rewrites a changed stored value in every row that holds it, one value after another, and no order of the rewrites moves values in a cycle. Write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the values in each column the enum types through a value no member stores, 1 to 8, then 3 to 1, then 2 to 3, then 8 to 2, each with this.replaceStoredValue({ table, column, from, to }) yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
+    });
+  });
+
+  it('moves a cycle of non-integer stored values through a whole number no member stores, in the advice', () => {
+    const refused = refusal(
+      planEnumValueRewrites({
+        statements: [],
+        fromContract: contractWith({ members: { LOW: 1.5, HIGH: 2.5 }, columns: [taskColumn] }),
+        contract: contractWith({ members: { LOW: 2.5, HIGH: 1.5 }, columns: [taskColumn] }),
+        tables: tablesOf(['app.task.status']),
+        codecs: noCodecs,
+      }),
+    );
+    expect(refused.why).toContain('1.5 to 3, then 2.5 to 1.5, then 3 to 2.5,');
+  });
+
+  it('refuses a member that keeps its name and takes the stored value of a member the destination removes', () => {
+    expect(
+      refusal(
+        planEnumValueRewrites({
+          statements: [],
+          fromContract: contractWith({
+            members: { ARCHIVED: 'archived', DONE: 'done' },
+            columns: [taskColumn],
+          }),
+          contract: contractWith({ members: { ARCHIVED: 'done' }, columns: [taskColumn] }),
+          tables: tablesOf(['app.task.status']),
+          codecs: noCodecs,
+        }),
+      ),
+    ).toEqual({
+      kind: 'unsupportedOperation',
+      summary:
+        'Cannot change the stored value of enum value "Status.ARCHIVED" from "archived" to "done": the origin enum stores "done" as enum value "Status.DONE"',
+      why: 'A changed stored value is rewritten in every row that holds it, so the rows of "Status.ARCHIVED" would hold "done" as the rows of "Status.DONE" do, and their data would merge. To keep their data apart, give "Status.ARCHIVED" a stored value no member of the origin enum stores, and plan again. To merge their data on purpose, write this change as a hand-written migration: run prisma migration new, and in the operations of the migration.ts it writes, rewrite "archived" to "done" in each column the enum types, with this.replaceStoredValue({ table, column, from, to }) yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
+    });
   });
 
   it('accepts renames that shift stored values along, and rewrites the last value first', () => {

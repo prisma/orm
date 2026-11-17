@@ -26,6 +26,7 @@ import {
   assembleAuthoringContributions,
   issueOutcome,
   type MigrationOperationPolicy,
+  planOriginOf,
 } from '@internal/framework-components/control';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema } from '@internal/psl-parser/test';
@@ -163,6 +164,22 @@ namespace public {
     draft    = "draft"
     reviewed = "reviewed"
     done     = "done"
+    @@map("order_status")
+  }
+
+  model orders {
+    id     Int @id
+    status pg.enum(OrderStatus)
+  }
+}
+`;
+
+const PSL_ENUM_VALUE_CHANGED = `
+namespace public {
+  native_enum OrderStatus {
+    draft  = "draft"
+    review = "reviewed"
+    done   = "done"
     @@map("order_status")
   }
 
@@ -330,14 +347,15 @@ function planDirect(
   contract: Contract<SqlStorage>,
   schema: SqlSchemaIRNode,
   policy: MigrationOperationPolicy,
+  fromContract: Contract<SqlStorage> | null = null,
 ) {
   const planner = postgresTargetDescriptor.createPlanner(controlAdapter);
   return planner.plan({
     contract,
     schema,
     policy,
-    fromContract: null,
-    origin: null,
+    fromContract,
+    origin: fromContract === null ? null : planOriginOf(fromContract),
     statements: [],
     frameworkComponents,
     spaceId: APP_SPACE_ID,
@@ -852,6 +870,42 @@ describe('managed native-enum member-change refusal end-to-end (R9)', { concurre
       testTimeout,
     );
   }
+
+  it(
+    'a member that keeps its name with a new stored value: refused with the exact diagnostic when the plan has an origin contract, database untouched',
+    async () => {
+      const base = buildContractFromPsl(PSL_WITH_ENUM, 'managed');
+      const introspectedBase = await familyInstance.introspect({ driver: driver!, contract: base });
+
+      const result = planDirect(
+        buildContractFromPsl(PSL_ENUM_VALUE_CHANGED, 'managed'),
+        introspectedBase,
+        ALLOW_DESTRUCTIVE,
+        base,
+      );
+
+      expect(result.kind === 'failure' && result.conflicts).toEqual([
+        {
+          kind: 'unsupportedOperation',
+          summary: orderStatusRefusalMessage(
+            ['draft', 'reviewed', 'done'],
+            ['draft', 'review', 'done'],
+          ),
+          why: 'Use `migration new` to author a custom migration for this change.',
+        },
+      ]);
+      const introspectedAfter = await familyInstance.introspect({
+        driver: driver!,
+        contract: base,
+      });
+      expect(nativeEnumMembers(introspectedAfter, 'public', 'order_status')).toEqual([
+        'draft',
+        'review',
+        'done',
+      ]);
+    },
+    testTimeout,
+  );
 });
 
 describe('external native enum: live-appended value produces ZERO ops (R5)', {
