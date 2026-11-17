@@ -4,7 +4,7 @@ import {
   type ModelMatchInput,
   originModelOf,
 } from '../src/core/migrations/mongo-statement-planning';
-import { contract, type ModelSpec, NS, renameModel } from './mongo-statement-fixtures';
+import { contract, type ModelSpec, NS } from './mongo-statement-fixtures';
 
 const at = (model: string) => ({ namespaceId: NS, model });
 
@@ -41,7 +41,7 @@ describe('destinationModelOf', () => {
 
   it('pairs no origin model by storage with a model a rename statement names', () => {
     const input = match(tasks({ Bug: 'bug', Epic: 'epic' }), tasks({ Saga: 'bug' }), [
-      renameModel('Epic', 'Saga'),
+      { kind: 'rename', entity: 'model', from: at('Epic'), to: at('Saga') },
     ]);
 
     expect({
