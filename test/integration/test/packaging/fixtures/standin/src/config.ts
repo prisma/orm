@@ -2,7 +2,7 @@ import { prismaContract } from '@prisma/orm-family-sql/contract-psl/provider';
 import type { ControlExtensionDescriptor } from '@prisma/orm-framework/components/control';
 import {
   defineConfig as defineFrameworkConfig,
-  type PrismaNextConfig,
+  type PrismaConfig,
 } from '@prisma/orm-framework/config/config-types';
 import postgresPack from '@prisma/orm-target-postgres/target/pack';
 import { postgresCreateNamespace } from '@prisma/orm-target-postgres/target/types';
@@ -16,7 +16,7 @@ export interface StandinConfigOptions {
   readonly extensions?: readonly ControlExtensionDescriptor<'sql', 'postgres'>[];
 }
 
-export function defineConfig(options: StandinConfigOptions): PrismaNextConfig<'sql', 'postgres'> {
+export function defineConfig(options: StandinConfigOptions): PrismaConfig<'sql', 'postgres'> {
   return defineFrameworkConfig({
     family,
     target,

@@ -427,7 +427,7 @@ describe('printPsl', () => {
       model Data {
         id        Int                    @id
         computed  String                 @default(sql\`my_custom_func()\`)
-        payload   Jsonb                  @default(json\`{}\`)
+        payload   Json(storage: jsonb)   @default(json\`{}\`)
         touchedAt DateTime(precision: 6) @default(sql\`clock_timestamp()\`) @map("touched_at")
 
         @@map("data")

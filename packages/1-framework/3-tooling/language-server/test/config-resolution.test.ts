@@ -1,7 +1,7 @@
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
-import type { PrismaNextConfig } from '@internal/config-loader';
+import type { PrismaConfig } from '@internal/config-loader';
 import * as configLoader from '@internal/config-loader';
 import {
   type CliStructuredError,
@@ -28,7 +28,7 @@ vi.mock('@internal/config-loader', { spy: true });
 vi.mock('@internal/framework-components/control', { spy: true });
 
 function mockLoadedConfig(
-  config: PrismaNextConfig,
+  config: PrismaConfig,
   diagnostics: readonly CliStructuredError[] = [],
 ): void {
   vi.spyOn(configLoader, 'loadConfig').mockResolvedValue(ok({ config, diagnostics }));
@@ -38,11 +38,11 @@ function mockLoadFailure(failure: CliStructuredError): void {
   vi.spyOn(configLoader, 'loadConfig').mockResolvedValue(notOk(failure));
 }
 
-function loadedConfig(format: string, inputs: readonly string[]): PrismaNextConfig {
-  return { contract: { source: { format, inputs } } } as unknown as PrismaNextConfig;
+function loadedConfig(format: string, inputs: readonly string[]): PrismaConfig {
+  return { contract: { source: { format, inputs } } } as unknown as PrismaConfig;
 }
 
-function interpretCapableConfig(inputs: readonly string[]): PrismaNextConfig {
+function interpretCapableConfig(inputs: readonly string[]): PrismaConfig {
   return {
     contract: {
       source: {
@@ -52,7 +52,7 @@ function interpretCapableConfig(inputs: readonly string[]): PrismaNextConfig {
         interpret: () => ({}) as never,
       },
     },
-  } as unknown as PrismaNextConfig;
+  } as unknown as PrismaConfig;
 }
 
 function stubStackWithContext(): ControlStack {
@@ -327,7 +327,7 @@ describe('control-stack input derivation', () => {
     const parserOptions = { grammar: 'prisma-7' } as const;
     mockLoadedConfig({
       contract: { source: { format: 'psl', inputs: ['/abs/schema.prisma'], parserOptions } },
-    } as unknown as PrismaNextConfig);
+    } as unknown as PrismaConfig);
     vi.spyOn(control, 'createControlStack').mockReturnValue(stubStack(['Int'], {}));
 
     const result = await resolveConfigInputs('/abs/prisma.config.ts', () => '// use prisma-8\n');
@@ -405,7 +405,7 @@ describe('interpretation resolution', () => {
   });
 
   it('carries no interpretation when the config has no contract', async () => {
-    mockLoadedConfig({} as unknown as PrismaNextConfig);
+    mockLoadedConfig({} as unknown as PrismaConfig);
 
     const result = await resolveConfigInputs('/abs/prisma.config.ts', () => '// use prisma-8\n');
 

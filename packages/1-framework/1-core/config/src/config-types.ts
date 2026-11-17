@@ -69,7 +69,7 @@ export function normalizeContractConfig(
  * @template TTargetId - The target ID (e.g., 'postgres', 'mysql')
  * @template TConnection - The driver connection input type (defaults to `unknown` for config flexibility)
  */
-export interface PrismaNextConfig<
+export interface PrismaConfig<
   TFamilyId extends string = string,
   TTargetId extends string = string,
   TConnection = unknown,
@@ -140,8 +140,8 @@ export interface PrismaNextConfig<
  * @returns Normalized config IR with defaults applied
  */
 export function defineConfig<TFamilyId extends string = string, TTargetId extends string = string>(
-  config: PrismaNextConfig<TFamilyId, TTargetId>,
-): PrismaNextConfig<TFamilyId, TTargetId> {
+  config: PrismaConfig<TFamilyId, TTargetId>,
+): PrismaConfig<TFamilyId, TTargetId> {
   if (config.contract) {
     return {
       ...config,

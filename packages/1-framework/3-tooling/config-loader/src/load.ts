@@ -2,7 +2,7 @@ import { realpathSync } from 'node:fs';
 import { access } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import { getEmittedArtifactPaths } from '@internal/emitter';
 import {
   CliStructuredError,
@@ -34,10 +34,10 @@ export type { ConfigSection };
  * Diagnostics are tagged with the config section they concern
  * (`meta.section`); sections without diagnostics are safe to read. Callers
  * must guard access through {@link requireConfigSections} — a section with a
- * diagnostic may be missing or malformed despite the `PrismaNextConfig` type.
+ * diagnostic may be missing or malformed despite the `PrismaConfig` type.
  */
 export interface LoadedConfig {
-  readonly config: PrismaNextConfig;
+  readonly config: PrismaConfig;
   readonly diagnostics: readonly CliStructuredError[];
 }
 
@@ -71,7 +71,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function collectArtifactCollisionDiagnostics(
-  contract: NonNullable<PrismaNextConfig['contract']>,
+  contract: NonNullable<PrismaConfig['contract']>,
 ): CliStructuredError[] {
   const inputs = contract.source.inputs;
   const output = contract.output;
@@ -126,7 +126,7 @@ function validateLoadedSection(
     );
     const partial = validateOrmSectionExcept(rawConfig, provenance, failing);
     const config = blindCast<
-      PrismaNextConfig,
+      PrismaConfig,
       'a config with diagnostics is guarded by requireConfigSections before any subsection is read'
     >(partial.ok ? partial.value : rawConfig);
     if (!partial.ok) {
@@ -427,7 +427,7 @@ export async function loadConfig(
 export function requireConfigSections(
   loaded: LoadedConfig,
   sections: readonly ConfigSection[],
-): Result<PrismaNextConfig, CliStructuredError> {
+): Result<PrismaConfig, CliStructuredError> {
   const blocking = loaded.diagnostics.find((diagnostic) => {
     const section = diagnostic.meta?.['section'];
     return typeof section !== 'string' || sections.some((required) => required === section);
@@ -443,7 +443,7 @@ export function requireConfigSections(
 export async function loadConfigForSections(
   configPath: string | undefined,
   sections: readonly ConfigSection[],
-): Promise<Result<PrismaNextConfig, CliStructuredError>> {
+): Promise<Result<PrismaConfig, CliStructuredError>> {
   const loaded = await loadConfig(configPath);
   if (!loaded.ok) {
     return loaded;

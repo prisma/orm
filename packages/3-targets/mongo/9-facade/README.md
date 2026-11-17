@@ -203,7 +203,7 @@ Options besides the binding:
 - `middleware`: a middleware chain applied to every MongoDB execution.
 - `mode`: the runtime mode.
 
-`db.prepare(declaration, callback)` builds a prepared statement: the callback runs once with one placeholder per declared parameter and returns a query-builder plan, which is lowered once. It opens no connection, so a client with no binding can prepare; a closed client rejects with `DRIVER.NOT_CONNECTED`. Run the handle against the runtime: `await ps.query(await db.runtime(), params).toArray()`, or `ps.execute(...)` for an update or delete. Declarations are checked against the contract's codec ids. See [ADR 318](../../../../docs/architecture%20docs/adrs/ADR%20318%20-%20MongoDB%20prepared%20statements.md).
+`db.prepare(declaration, callback)` builds a prepared statement: the callback runs once with one placeholder per declared parameter and returns a query-builder plan or an ORM read (`db.orm.users.where({ email: p.email }).prepared.first()`), whose plan is lowered once. It opens no connection, so a client with no binding can prepare; a closed client rejects with `DRIVER.NOT_CONNECTED`. Run the handle against the runtime: `await ps.query(await db.runtime(), params).toArray()`, or `ps.execute(...)` for an update or delete. A prepared ORM read's `query` returns what the ad-hoc read returns: a row stream for `.prepared.all()`, a promise for `.prepared.first()` and `.prepared.firstOrThrow()`. Declarations are checked against the contract's codec ids. See [ADR 318](../../../../docs/architecture%20docs/adrs/ADR%20318%20-%20MongoDB%20prepared%20statements.md).
 
 #### Writing a MongoDB extension
 

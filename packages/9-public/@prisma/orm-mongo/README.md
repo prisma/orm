@@ -57,7 +57,16 @@ const byEmail = await db.prepare({ email: 'mongo/string@1' }, (p) =>
 const users = await byEmail.query(await db.runtime(), { email: 'alice@example.com' }).toArray();
 ```
 
-The handle and declaration types (`MongoPreparedStatement`, `MongoPreparedExecution`, `MongoDeclaration`, `MongoParamsFromDeclaration`) are exported from `@prisma/orm-mongo/family-runtime`.
+ORM reads are prepared through `.prepared.all()`, `.prepared.first()` and `.prepared.firstOrThrow()`, and the handle's `query` returns what the ad-hoc read returns:
+
+```ts
+const userByEmail = await db.prepare({ email: 'mongo/string@1' }, (p) =>
+  db.orm.users.where({ email: p.email }).prepared.first(),
+);
+const user = await userByEmail.query(await db.runtime(), { email: 'alice@example.com' });
+```
+
+The handle and declaration types (`MongoPreparedStatement`, `MongoPreparedExecution`, `MongoDeclaration`, `MongoParamsFromDeclaration`) are exported from `@prisma/orm-mongo/family-runtime`. The ORM read handle types (`MongoPreparedRowQuery`, `MongoPreparedFrom`) and `MongoPrepareMember`, the type that has the client's `prepare` method, are exported from `@prisma/orm-mongo/runtime`.
 
 ## The CLI
 

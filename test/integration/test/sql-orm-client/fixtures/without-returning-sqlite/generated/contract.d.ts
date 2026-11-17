@@ -904,8 +904,10 @@ type ContractBase = Omit<
       readonly insertOnConflictSkip: true;
       readonly insertOnConflictWithoutTarget: true;
       readonly jsonAgg: true;
+      readonly jsonAggWithoutTruncation: true;
       readonly limit: true;
       readonly orderBy: true;
+      readonly outerReferencesInDerivedTables: true;
     };
   };
   readonly extensions: {};

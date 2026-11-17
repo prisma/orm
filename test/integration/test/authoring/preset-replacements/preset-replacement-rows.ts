@@ -262,8 +262,8 @@ export const postgresRows: readonly SqlRow<PostgresHelpers>[] = [
   },
   {
     model: 'JsonbColumn',
-    psl: { preset: 'json()', replacement: 'Jsonb' },
-    ts: ({ field, type }) => field.column(type.Jsonb()),
+    psl: { preset: 'json()', replacement: 'Json(storage: jsonb)' },
+    ts: ({ field, type }) => field.column(type.Json({ storage: 'jsonb' })),
   },
   {
     model: 'Bytea',

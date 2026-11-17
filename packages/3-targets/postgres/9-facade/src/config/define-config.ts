@@ -1,8 +1,4 @@
-import type {
-  ContractConfig,
-  FormatterConfig,
-  PrismaNextConfig,
-} from '@internal/config/config-types';
+import type { ContractConfig, FormatterConfig, PrismaConfig } from '@internal/config/config-types';
 import {
   defineConfig as coreDefineConfig,
   defaultContractOutputPath,
@@ -60,7 +56,7 @@ function resolveContractConfig(options: PostgresConfigOptions): ContractConfig {
   return { ...options.contract, ...ifDefined('output', output) };
 }
 
-export function defineConfig(options: PostgresConfigOptions): PrismaNextConfig<'sql', 'postgres'> {
+export function defineConfig(options: PostgresConfigOptions): PrismaConfig<'sql', 'postgres'> {
   const extensions = options.extensions ?? [];
   const contractConfig = resolveContractConfig(options);
 

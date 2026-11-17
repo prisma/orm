@@ -81,6 +81,8 @@ const defaultCapabilities = Object.freeze({
     limit: true,
     lateral: false,
     jsonAgg: true,
+    outerReferencesInDerivedTables: true,
+    jsonAggWithoutTruncation: true,
     returning: true,
     enums: false,
     insertOnConflictSkip: true,

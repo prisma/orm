@@ -5,7 +5,7 @@
  * notOk(CliStructuredError) — never as an unhandled rejection past the Result
  * contract.
  */
-import type { PrismaNextConfig } from '@internal/config-loader';
+import type { PrismaConfig } from '@internal/config-loader';
 import { errorInvalidJson } from '@internal/migration-tools/errors';
 import { ok } from '@internal/utils/result';
 import { afterAll, describe, expect, it, vi } from 'vitest';
@@ -26,7 +26,7 @@ vi.mock('../../src/utils/command-helpers', async (importOriginal) => {
 const config = {
   contract: { typesModule: '@acme/orm-db/generated-types' },
   migrations: { dir: 'migrations', module: '@acme/orm-db/migration' },
-} as unknown as PrismaNextConfig;
+} as unknown as PrismaConfig;
 
 describe('executeMigrationPlanCommand — mutation-prologue guard', () => {
   afterAll(() => {

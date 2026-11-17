@@ -109,13 +109,13 @@ describe('statement errors say what to type', () => {
   it('says a model renamed to itself renames nothing, and what to do when only its stored name changed', () => {
     expect(adviceOf(resolve(['Profile:Profile'], profile, profile), INVALID)).toEqual({
       why: 'The statement renames model "Profile" to itself.',
-      fix: 'Leave out --rename Profile:Profile. If only the stored name changed (@map or @@map), a statement cannot state that in this release, and a plan without it drops and creates what the model or field is stored in, with its data. With migration plan, edit the planned migration.ts to rename the stored name instead of dropping and creating it. With db update, rename it in the database yourself first, then run db update, which then finds nothing that loses data.',
+      fix: 'Leave out --rename Profile:Profile. If only the stored name changed (@map or @@map), a statement cannot state that in this release, and a plan without it drops and creates what the model or field is stored in, with its data. With migration plan, edit the planned migration.ts to rename the stored name instead of dropping and creating it. With db update, rename it in the database yourself first, then run db update.',
     });
   });
 
   it('says a field renamed to itself renames nothing, and what to do when only its stored name changed', () => {
     expect(adviceOf(resolve(['Profile.name:Profile.name'], profile, profile), INVALID).fix).toBe(
-      'Leave out --rename Profile.name:Profile.name. If only the stored name changed (@map or @@map), a statement cannot state that in this release, and a plan without it drops and creates what the model or field is stored in, with its data. With migration plan, edit the planned migration.ts to rename the stored name instead of dropping and creating it. With db update, rename it in the database yourself first, then run db update, which then finds nothing that loses data.',
+      'Leave out --rename Profile.name:Profile.name. If only the stored name changed (@map or @@map), a statement cannot state that in this release, and a plan without it drops and creates what the model or field is stored in, with its data. With migration plan, edit the planned migration.ts to rename the stored name instead of dropping and creating it. With db update, rename it in the database yourself first, then run db update.',
     );
   });
 

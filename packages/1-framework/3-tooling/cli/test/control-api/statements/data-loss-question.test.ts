@@ -24,7 +24,14 @@ describe('dataLossQuestion for data no model names', () => {
         subject: { kind: 'storage', name: 'users.age' },
         loss: 'typeChange',
       },
-      { origin, destination, statements: [], canConvert: false, originKnown: false },
+      {
+        origin,
+        destination,
+        statements: [],
+        canConvert: false,
+        originKnown: false,
+        temporaryValues: [],
+      },
     );
 
     expect({ question: question.question, verbs: question.verbs }).toEqual({
@@ -41,6 +48,7 @@ describe('dataLossQuestion for data no model names', () => {
       statements: [],
       canConvert: true,
       originKnown: true,
+      temporaryValues: [],
     });
 
     expect({ question: question.question, verbs: question.verbs }).toEqual({
@@ -57,6 +65,7 @@ describe('dataLossQuestion for data no model names', () => {
       statements: [],
       canConvert: true,
       originKnown: false,
+      temporaryValues: [],
     });
 
     expect(question.question).toBe(
@@ -86,6 +95,7 @@ describe('dataLossQuestion verbs', () => {
         statements: [],
         canConvert: true,
         originKnown: true,
+        temporaryValues: [],
       },
     );
   }
@@ -117,9 +127,16 @@ describe('dataLossQuestion verbs', () => {
         statements: [{ verb: 'rename', text: 'User.nickname:User.handle' }],
         canConvert: true,
         originKnown: true,
+        temporaryValues: [],
       },
     );
     expect(question.verbs).toEqual(['delete']);
+  });
+
+  it('asks again for the new name when rename is typed with the old name only', () => {
+    expect(
+      questionFor('nickname', destinationWithoutNickname).validate('rename', 'User.nickname'),
+    ).toBe('rename needs the new name: type rename User.nickname:User.<new name>.');
   });
 
   it('writes the rename form of a field with its model, as a field rename is written', () => {
@@ -157,6 +174,7 @@ describe('dataLossQuestion for a type change', () => {
       statements,
       canConvert,
       originKnown: true,
+      temporaryValues: [],
     });
   }
 
@@ -178,6 +196,7 @@ describe('dataLossQuestion for a type change', () => {
         statements: [],
         canConvert: true,
         originKnown: true,
+        temporaryValues: [],
       },
     );
     expect(rebuild.question).toBe(
@@ -224,6 +243,7 @@ describe('dataLossQuestion for a field whose model the destination names differe
       statements: [],
       canConvert: true,
       originKnown: true,
+      temporaryValues: [],
     });
     expect({ verbs: question.verbs, question: question.question }).toEqual({
       verbs: ['delete'],
@@ -239,6 +259,7 @@ describe('dataLossQuestion for a field whose model the destination names differe
       statements: [{ verb: 'rename', text: 'Profile:Person' }],
       canConvert: true,
       originKnown: true,
+      temporaryValues: [],
     });
     expect({
       subject: question.subject,
@@ -248,7 +269,7 @@ describe('dataLossQuestion for a field whose model the destination names differe
     }).toEqual({
       subject: 'Person.nickname',
       verbs: ['rename', 'delete'],
-      forms: { rename: 'Person.nickname:Person.<new name>' },
+      forms: { rename: 'Person.nickname:Person.alias' },
       accepted: undefined,
     });
   });
@@ -282,7 +303,14 @@ describe('dataLossQuestion with advice from the target', () => {
         loss: 'drop',
         keepDataAdvice: 'To keep its data, move it by hand.',
       },
-      { origin: users, destination: users, statements: [], canConvert: true, originKnown: true },
+      {
+        origin: users,
+        destination: users,
+        statements: [],
+        canConvert: true,
+        originKnown: true,
+        temporaryValues: [],
+      },
     );
 
     expect({ question: question.question, verbs: question.verbs }).toEqual({

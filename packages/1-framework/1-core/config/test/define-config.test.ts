@@ -5,7 +5,7 @@ import type {
 } from '@internal/framework-components/control';
 import { ok } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
-import { defineConfig, type PrismaNextConfig } from '../src/config-types';
+import { defineConfig, type PrismaConfig } from '../src/config-types';
 
 const mockHook = {
   id: 'sql',
@@ -26,7 +26,7 @@ function createSourceProvider(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function createValidConfig(overrides: Record<string, unknown> = {}): PrismaNextConfig {
+function createValidConfig(overrides: Record<string, unknown> = {}): PrismaConfig {
   return {
     family: {
       kind: 'family',
@@ -77,7 +77,7 @@ function createValidConfig(overrides: Record<string, unknown> = {}): PrismaNextC
     },
     extensions: [],
     ...overrides,
-  } as PrismaNextConfig;
+  } as PrismaConfig;
 }
 
 describe('defineConfig', () => {
@@ -138,7 +138,7 @@ describe('defineConfig', () => {
   });
 
   it('does not validate structure — invalid shapes pass through for the loader to diagnose', () => {
-    const invalidConfig = { family: null } as unknown as PrismaNextConfig;
+    const invalidConfig = { family: null } as unknown as PrismaConfig;
     expect(() => defineConfig(invalidConfig)).not.toThrow();
   });
 });

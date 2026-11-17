@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { readdir, readFile, rm } from 'node:fs/promises';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { writeRef } from '@internal/migration-tools/refs';
@@ -549,7 +549,7 @@ describe('migration plan', () => {
               },
             }),
             baseDir: project.dir,
-          } as unknown as PrismaNextConfig,
+          } as unknown as PrismaConfig,
           cwd: project.dir,
           statements,
           answerQuestions,
@@ -619,7 +619,7 @@ describe('migration plan', () => {
               },
             }),
             baseDir: project.dir,
-          } as unknown as PrismaNextConfig,
+          } as unknown as PrismaConfig,
           cwd: project.dir,
           statements: [{ verb: 'delete', text: 'audit_log' }],
           answerQuestions: async (questions) =>
@@ -1025,7 +1025,7 @@ describe('migration plan', () => {
           .nextActions,
       );
       expect(actions).toContain('--delete User.nickname');
-      expect(actions).toContain("--rename 'User.nickname:User.<new name>'");
+      expect(actions).toContain('--rename User.nickname:User.handle');
 
       const deleted = await harness(project, { script }).run(
         ['migration', 'plan', '--rename', 'Profile:User', '--delete', 'User.nickname', '--json'],

@@ -82,7 +82,7 @@ describe('MongoMigrationPlanner, a collection that stores several root models', 
 });
 
 const SEPARATE =
-  'move the models to separate collections, or carry out the change in a dataTransform operation of a migration.ts, with a filter that selects only their documents';
+  'move the models to separate collections, or carry out the change yourself, with a filter that selects only their documents, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh';
 
 describe('MongoMigrationPlanner, field changes in a collection that stores several root models', () => {
   const schema = [

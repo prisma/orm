@@ -2,7 +2,7 @@ import mysqlAdapter, {
   createMysqlControlAdapter,
   readMysqlCatalog,
 } from '@internal/adapter-mysql/control';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import { createMysqlControlDriverDescriptor } from '@internal/driver-mysql/control';
 import sql, { type SqlControlAdapterDescriptor } from '@internal/family-sql/control';
 import type { TargetPackRef } from '@internal/framework-components/components';
@@ -35,7 +35,7 @@ describe('createMysqlDefineConfig', () => {
       contract: './prisma/contract.prisma',
       db: { connection: 'mysql://root@localhost:3306/app' },
     });
-    expectTypeOf(config).toEqualTypeOf<PrismaNextConfig<'sql', 'mariadb'>>();
+    expectTypeOf(config).toEqualTypeOf<PrismaConfig<'sql', 'mariadb'>>();
     expect({
       family: config.family,
       target: config.target,

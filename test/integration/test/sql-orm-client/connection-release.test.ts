@@ -1,5 +1,4 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
-import postgresAdapter from '@internal/adapter-postgres/runtime';
 import postgresDriver from '@internal/driver-postgres/runtime';
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
 import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
@@ -10,6 +9,7 @@ import postgresTarget from '@internal/target-postgres/runtime';
 import { createDevDatabase, timeouts } from '@repo/test-utils';
 import { Pool } from 'pg';
 import { describe, expect, it, vi } from 'vitest';
+import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
 
 const Parent = model('Parent', {
   fields: {
@@ -32,6 +32,7 @@ const contract = defineContract({
 });
 
 async function withPooledRuntime(
+  strategy: IncludeStrategy,
   run: (setup: Awaited<ReturnType<typeof createPooledRuntime>>) => Promise<void>,
 ): Promise<void> {
   const database = await createDevDatabase();
@@ -42,7 +43,7 @@ async function withPooledRuntime(
   });
   let runtime: PostgresRuntimeImpl | undefined;
   try {
-    const setup = await createPooledRuntime(pool);
+    const setup = await createPooledRuntime(pool, strategy);
     runtime = setup.runtime;
     await run(setup);
   } finally {
@@ -55,7 +56,7 @@ async function withPooledRuntime(
   }
 }
 
-async function createPooledRuntime(pool: Pool) {
+async function createPooledRuntime(pool: Pool, strategy: IncludeStrategy) {
   await pool.query(`
     create table parents (id integer primary key, name text not null);
     create table children (id integer primary key, parent_id integer not null);
@@ -64,7 +65,7 @@ async function createPooledRuntime(pool: Pool) {
   `);
   const stack = createSqlExecutionStack({
     target: postgresTarget,
-    adapter: postgresAdapter,
+    adapter: postgresAdapterFor(strategy),
     driver: {
       ...postgresDriver,
       create: () => postgresDriver.create({ cursor: { disabled: true } }),
@@ -105,11 +106,11 @@ const expected = [
   { id: 2, name: 'Bob', children: [{ id: 20 }] },
 ];
 
-describe('integration/ORM buffered connection release', () => {
+describe.each(includeStrategies)('integration/ORM buffered connection release (%s)', (strategy) => {
   it(
     'makes the size-one pool available while an included parent is decoding',
     async () => {
-      await withPooledRuntime(async ({ pool, parents, included, codec }) => {
+      await withPooledRuntime(strategy, async ({ pool, parents, included, codec }) => {
         const entered = gate();
         const resume = gate();
         const decode = codec.fromWire.bind(codec);
@@ -151,7 +152,7 @@ describe('integration/ORM buffered connection release', () => {
   it(
     'makes the size-one pool available while the include consumer is paused',
     async () => {
-      await withPooledRuntime(async ({ pool, parents, included }) => {
+      await withPooledRuntime(strategy, async ({ pool, parents, included }) => {
         const iterator = included.all()[Symbol.asyncIterator]();
         try {
           expect(await iterator.next()).toEqual({ done: false, value: expected[0] });
@@ -176,7 +177,7 @@ describe('integration/ORM buffered connection release', () => {
   it(
     'leaves the pool reusable after an included parent decoder fails',
     async () => {
-      await withPooledRuntime(async ({ pool, parents, included, codec }) => {
+      await withPooledRuntime(strategy, async ({ pool, parents, included, codec }) => {
         const released = vi.fn();
         pool.on('release', released);
         const spy = vi.spyOn(codec, 'fromWire').mockRejectedValueOnce(new Error('Decoder failed'));

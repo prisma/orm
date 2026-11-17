@@ -70,7 +70,7 @@ function readFacadeExports(packageJsonPath: string): FacadeExports {
   };
 }
 
-function extractPrismaNextImports(source: string): readonly string[] {
+function extractInternalImports(source: string): readonly string[] {
   const matches = source.matchAll(/(?:\bfrom\s+|\bimport\s+)['"](@internal\/[^'"]+)['"]/g);
   return Array.from(new Set(Array.from(matches, (m) => m[1] as string)));
 }
@@ -85,15 +85,15 @@ function templateSources(target: TargetId, authoring: AuthoringId): readonly str
 }
 
 describe('init templates only depend on the facade package (TML-2485)', () => {
-  describe('extractPrismaNextImports', () => {
+  describe('extractInternalImports', () => {
     it('captures `import x from "pkg"` (named-binding form)', () => {
       const source = "import postgres from '@internal/postgres/runtime';\n";
-      expect(extractPrismaNextImports(source)).toEqual(['@internal/postgres/runtime']);
+      expect(extractInternalImports(source)).toEqual(['@internal/postgres/runtime']);
     });
 
     it('captures `import "pkg"` (side-effect form)', () => {
       const source = "import '@internal/postgres/runtime';\n";
-      expect(extractPrismaNextImports(source)).toEqual(['@internal/postgres/runtime']);
+      expect(extractInternalImports(source)).toEqual(['@internal/postgres/runtime']);
     });
 
     it('deduplicates repeated specifiers', () => {
@@ -101,7 +101,7 @@ describe('init templates only depend on the facade package (TML-2485)', () => {
         "import postgres from '@internal/postgres/runtime';",
         "import type { Foo } from '@internal/postgres/runtime';",
       ].join('\n');
-      expect(extractPrismaNextImports(source)).toEqual(['@internal/postgres/runtime']);
+      expect(extractInternalImports(source)).toEqual(['@internal/postgres/runtime']);
     });
   });
 
@@ -109,7 +109,7 @@ describe('init templates only depend on the facade package (TML-2485)', () => {
     const facade = FACADE_FOR_TARGET[target];
 
     describe(`${target} + ${authoring}`, () => {
-      const allImports = templateSources(target, authoring).flatMap(extractPrismaNextImports);
+      const allImports = templateSources(target, authoring).flatMap(extractInternalImports);
 
       it('every @internal/* import targets the facade package', () => {
         expect(allImports.length).toBeGreaterThan(0);

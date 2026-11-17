@@ -54,6 +54,7 @@ export type {
   NullableDocField,
   NullableNumericField,
   NumericField,
+  PagingCount,
   ProjectedShape,
   ResolveRow,
   SortSpec,

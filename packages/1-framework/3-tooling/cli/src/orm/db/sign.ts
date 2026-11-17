@@ -1,4 +1,4 @@
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import { ormConfigSection } from '@internal/config-loader';
 import type { Contract } from '@internal/contract/types';
 import {
@@ -357,7 +357,7 @@ function signPresentations(inputs: {
 }
 
 function hydrateContract(
-  config: PrismaNextConfig,
+  config: PrismaConfig,
   json: unknown,
   path: string,
 ): Result<Contract, CliStructuredError> {

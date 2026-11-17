@@ -453,10 +453,13 @@ type ContractBase = Omit<
       readonly forUpdate: true;
       readonly insertOnConflictSkip: true;
       readonly insertOnConflictWithoutTarget: true;
+      readonly jsonAgg: true;
+      readonly jsonAggWithoutTruncation: true;
       readonly lateral: true;
       readonly lockNowait: true;
       readonly lockOf: true;
       readonly lockSkipLocked: true;
+      readonly outerReferencesInDerivedTables: true;
       readonly returning: true;
       readonly scalarList: true;
     };

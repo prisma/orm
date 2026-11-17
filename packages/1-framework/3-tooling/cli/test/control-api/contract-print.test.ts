@@ -1,6 +1,6 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import { ok } from '@internal/utils/result';
 import { structuredError } from '@internal/utils/structured-error';
 import { join } from 'pathe';
@@ -48,7 +48,7 @@ function configWithMalformedContract(output: string) {
       output,
       typesModule: '@acme/orm-db/generated-types',
     },
-  } as unknown as PrismaNextConfig;
+  } as unknown as PrismaConfig;
   return { config, familyInstance };
 }
 

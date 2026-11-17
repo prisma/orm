@@ -33,7 +33,7 @@ function mockConfigWithContract(contractOverrides: Record<string, unknown>) {
     family: stubDescriptor('family', 'test'),
     target: stubDescriptor('target', 'test'),
     contract: { typesModule: TYPES_MODULE, ...contractOverrides },
-  } as unknown as configLoader.PrismaNextConfig;
+  } as unknown as configLoader.PrismaConfig;
 }
 
 function createSourceProvider(load: () => Promise<unknown>): {
@@ -100,7 +100,7 @@ function createSuccessfulConfig(output: string) {
       output,
       typesModule: TYPES_MODULE,
     },
-  } as unknown as configLoader.PrismaNextConfig;
+  } as unknown as configLoader.PrismaConfig;
 }
 
 describe('executeContractEmit', () => {
@@ -117,14 +117,14 @@ describe('executeContractEmit', () => {
     }
   });
 
-  function emitOptions(config: configLoader.PrismaNextConfig, configPath = 'prisma.config.ts') {
+  function emitOptions(config: configLoader.PrismaConfig, configPath = 'prisma.config.ts') {
     return { config, cwd: tmpDir, configPath };
   }
 
   it('throws when the config declares no contract section', async () => {
     const config = {
       family: stubDescriptor('family', 'test'),
-    } as unknown as configLoader.PrismaNextConfig;
+    } as unknown as configLoader.PrismaConfig;
     await expect(executeContractEmitWithMock(emitOptions(config))).rejects.toThrow();
   });
 
@@ -366,7 +366,7 @@ describe('executeContractEmit', () => {
               ...config.contract,
               source: { load: async (context: never) => load(context) },
             },
-          } as unknown as configLoader.PrismaNextConfig,
+          } as unknown as configLoader.PrismaConfig,
           join(tmpDir, 'prisma.config.ts'),
         ),
       );
@@ -646,7 +646,7 @@ describe('executeContractEmit', () => {
 
       await expect(
         executeContractEmitWithMock(
-          emitOptions({ ...config, contract } as unknown as configLoader.PrismaNextConfig),
+          emitOptions({ ...config, contract } as unknown as configLoader.PrismaConfig),
         ),
       ).rejects.toMatchObject({
         code: 'CONFIG.CONTRACT_TYPES_MODULE_MISSING',

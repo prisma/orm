@@ -1,8 +1,4 @@
-import type {
-  ContractConfig,
-  FormatterConfig,
-  PrismaNextConfig,
-} from '@internal/config/config-types';
+import type { ContractConfig, FormatterConfig, PrismaConfig } from '@internal/config/config-types';
 import {
   defineConfig as coreDefineConfig,
   defaultContractOutputPath,
@@ -69,7 +65,7 @@ function resolveContractConfig(
   return { ...options.contract, ...ifDefined('output', output) };
 }
 
-export function defineConfig(options: MongoConfigOptions): PrismaNextConfig<'mongo', 'mongo'> {
+export function defineConfig(options: MongoConfigOptions): PrismaConfig<'mongo', 'mongo'> {
   const extensions = options.extensions ?? [];
   const contractConfig = resolveContractConfig(options, extensions);
 
