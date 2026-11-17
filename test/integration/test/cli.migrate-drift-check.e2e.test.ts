@@ -160,11 +160,6 @@ withTempDir(({ createTempDir }) => {
               why: `The database's marker names ${markerHash}, which no migration in migrations/app starts or ends at. After ${initialHash}, the last graph contract it reached, it applied ${deleted}, which is no longer on disk.`,
               nextActions: [
                 {
-                  kind: 'user-choice',
-                  label:
-                    'Unless this database changes only through migrations, as production does, move it with db update; its data stays:',
-                },
-                {
                   kind: 'run-command',
                   label: 'Preview the changes',
                   command: `prisma-test db update --to ${targetHash} --dry-run`,
@@ -174,15 +169,12 @@ withTempDir(({ createTempDir }) => {
                   label: 'Reconcile the database',
                   command: `prisma-test db update --to ${targetHash}`,
                 },
-                {
-                  kind: 'user-choice',
-                  label: `Otherwise plan a migration from ${initialHash} to its current contract, then one to ${targetHash}, and deploy again.`,
-                },
               ],
               meta: {
                 spaceId: 'app',
                 markerHash,
                 targetHash,
+                change: ['migrate', 'reconcile'],
                 lastGraphHash: initialHash,
                 missingMigrations: [deleted],
               },
