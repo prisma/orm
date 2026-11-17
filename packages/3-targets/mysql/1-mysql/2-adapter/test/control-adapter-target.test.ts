@@ -51,12 +51,22 @@ describe('the control adapter of a target that extends MySQL', () => {
 });
 
 describe('the marker upsert', () => {
-  it('binds its values a second time for the update, naming no row alias, so MySQL and MariaDB both run it', async () => {
+  const columns =
+    'core_hash = ?, profile_hash = ?, contract_json = NULL, canonical_version = NULL, updated_at = CURRENT_TIMESTAMP(3), app_tag = NULL, invariants = ?';
+  const insert =
+    'INSERT INTO `_prisma_marker` (space, core_hash, profile_hash, contract_json, canonical_version, updated_at, app_tag, meta, invariants) VALUES (?, ?, ?, NULL, NULL, CURRENT_TIMESTAMP(3), NULL, ?, ?)';
+
+  function recordUpsert() {
     const calls: { sql: string; params: readonly unknown[] }[] = [];
     const driver = recordingDriver((sql, params) => {
       calls.push({ sql, params });
       return [];
     });
+    return { calls, driver };
+  }
+
+  it('binds its values a second time for the update, naming no row alias, and keeps the stored meta, so MySQL and MariaDB both run it', async () => {
+    const { calls, driver } = recordUpsert();
     await createAdapter().initMarker(driver, 'app', {
       storageHash: 'sha256:a',
       profileHash: 'sha256:p',
@@ -64,8 +74,41 @@ describe('the marker upsert', () => {
     });
     expect(calls).toEqual([
       {
-        sql: "INSERT INTO `_prisma_marker` (space, core_hash, profile_hash, contract_json, canonical_version, updated_at, app_tag, meta, invariants) VALUES (?, ?, ?, NULL, NULL, CURRENT_TIMESTAMP(3), NULL, '{}', ?) ON DUPLICATE KEY UPDATE core_hash = ?, profile_hash = ?, contract_json = NULL, canonical_version = NULL, updated_at = CURRENT_TIMESTAMP(3), app_tag = NULL, meta = '{}', invariants = ?",
-        params: ['app', 'sha256:a', 'sha256:p', '["inv"]', 'sha256:a', 'sha256:p', '["inv"]'],
+        sql: `${insert} ON DUPLICATE KEY UPDATE ${columns}`,
+        params: ['app', 'sha256:a', 'sha256:p', '{}', '["inv"]', 'sha256:a', 'sha256:p', '["inv"]'],
+      },
+    ]);
+  });
+
+  it('sets only the policies in the stored meta when the destination records them', async () => {
+    const { calls, driver } = recordUpsert();
+    await createAdapter().initMarker(driver, 'app', {
+      storageHash: 'sha256:a',
+      profileHash: 'sha256:p',
+      databasePolicies: {
+        change: ['migrate'],
+        dataProtection: {
+          dataLoss: 'data-loss-forbidden',
+          accessWidening: 'access-widening-with-consent',
+        },
+      },
+    });
+    const policies =
+      '{"change":["migrate"],"dataProtection":{"dataLoss":"data-loss-forbidden","accessWidening":"access-widening-with-consent"}}';
+    expect(calls).toEqual([
+      {
+        sql: `${insert} ON DUPLICATE KEY UPDATE ${columns}, meta = JSON_SET(meta, '$.policies', JSON_EXTRACT(?, '$'))`,
+        params: [
+          'app',
+          'sha256:a',
+          'sha256:p',
+          `{"policies":${policies}}`,
+          '[]',
+          'sha256:a',
+          'sha256:p',
+          '[]',
+          policies,
+        ],
       },
     ]);
   });

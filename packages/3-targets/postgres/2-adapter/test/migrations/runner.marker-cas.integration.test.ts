@@ -107,6 +107,7 @@ describe('PostgresMigrationRunner marker compare-and-swap', { concurrent: false 
     expect(result.assertNotOk()).toMatchObject({
       code: 'MIGRATION.MARKER_CAS_FAILURE',
       meta: {
+        reason: 'storageHash',
         space: APP_SPACE_ID,
         expectedStorageHash: 'origin',
         foundStorageHash: 'moved',
