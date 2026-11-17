@@ -297,8 +297,6 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   readonly #openTransactionWork = new InFlightOperations();
   // Ends the open-transaction record of the transaction most recently begun on each connection.
   readonly #transactionWorkOn = new WeakMap<SqlQueryable, () => void | Promise<void>>();
-  readonly #transactionChecks = new WeakMap<SqlQueryable, () => void>();
-  readonly #transactionGuards = new WeakMap<SqlQueryable, () => void>();
   #openActivityHandles = 0;
   #refusing = false;
   // Connections and transactions this runtime handed out. When the first query of the runtime runs on one of them, the runtime-wide marker read runs on it too, so it works while close() waits for their release, and concurrent first queries share its result. Other queryables, such as a subclass's raw connection, read the marker through the driver.
@@ -307,10 +305,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   // Each open transaction this runtime began, keyed by its driver transaction and its connection, until its commit() or rollback() is called. A statement sent on either is the transaction's child.
   // Decided once when the runtime is created: a transaction keeps its finished statements to finalize them only when some middleware implements activityFinalized.
   readonly #holdFinishedChildren: boolean;
-  readonly #openTransactions = new WeakMap<
-    SqlQueryable,
-    TransactionActivityRun<SqlMiddlewareContext>
-  >();
+  readonly #transactions = new WeakMap<SqlQueryable, QueryableTransaction>();
   private codecRegistryValidated: boolean;
   private _telemetry: RuntimeTelemetryEvent | null;
 
@@ -617,7 +612,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     connection: SqlConnection,
     owner: TransactionStartTarget,
   ): ActivityRoute {
-    const openTransaction = this.#openTransactions.get(connection);
+    const openTransaction = this.#transactions.get(connection)?.activity;
     return this.queryableRoute(connection, 'connection', () => openTransaction, {
       transaction:
         openTransaction === undefined
@@ -634,7 +629,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     parent: ActivityParent,
     options?: RuntimeTransactionOptions,
   ): Promise<RuntimeTransaction> {
-    const openTransaction = this.#openTransactions.get(connection);
+    const openTransaction = this.#transactions.get(connection)?.activity;
     if (openTransaction !== undefined) {
       return Promise.reject(transactionAlreadyOpenError(parent, openTransaction));
     }
@@ -652,7 +647,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       ): Promise<ActivityHandle<K>> =>
         this.startActivityOnRoute(this.connectionRoute(connection, owner()), activity, undefined),
       planContentHash: (plan: HashablePlan): Promise<string> =>
-        this.planContentHashFor(plan, 'connection', this.#openTransactions.get(connection)),
+        this.planContentHashFor(plan, 'connection', this.#transactions.get(connection)?.activity),
     };
   }
 
@@ -893,8 +888,9 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     queryable: SqlQueryable,
     options: ActivityExecuteOptions | undefined,
   ): ActivityParent | undefined {
-    this.#transactionGuards.get(queryable)?.();
-    const openTransaction = this.#openTransactions.get(queryable);
+    const transaction = this.#transactions.get(queryable);
+    transaction?.guard?.();
+    const openTransaction = transaction?.activity;
     const activityParent = options?.activityParent;
     if (activityParent === undefined) return openTransaction;
     if (openTransaction !== undefined && !activityParent.ctx.inTransaction()) {
@@ -924,7 +920,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
 
     try {
       const stream = run.runQuery(exec, () => {
-        this.#transactionChecks.get(queryable)?.();
+        this.#transactions.get(queryable)?.check?.();
         return driverCall();
       });
 
@@ -1114,7 +1110,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     let telemetryOutcome: TelemetryOutcome = 'success';
     try {
       return await run.runExecute(exec, () => {
-        this.#transactionChecks.get(queryable)?.();
+        this.#transactions.get(queryable)?.check?.();
         return driverCall();
       });
     } catch (error) {
@@ -1501,19 +1497,16 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     endTransactionWork: () => void,
     timeout: number | undefined,
   ): { readonly scope: TransactionScope; readonly outer: OuterTransaction } {
-    this.#openTransactions.set(connection, activity);
-    let connectionGuard: (() => void) | undefined;
+    const onConnection: QueryableTransaction = { activity, guard: undefined, check: undefined };
+    this.#transactions.set(connection, onConnection);
     let teardown: () => Promise<void> = async () => {};
     const stopAcceptingChildren = (): void => {
       activity.stopAcceptingChildren();
-      for (const queryable of timeout === undefined ? [driverTx, connection] : [connection]) {
-        if (this.#openTransactions.get(queryable) === activity) {
-          this.#openTransactions.delete(queryable);
-        }
+      const onDriverTx = timeout === undefined ? this.#transactions.get(driverTx) : undefined;
+      for (const transaction of [onDriverTx, onConnection]) {
+        if (transaction?.activity === activity) transaction.activity = undefined;
       }
-      if (this.#transactionGuards.get(connection) === connectionGuard) {
-        this.#transactionGuards.delete(connection);
-      }
+      onConnection.guard = undefined;
     };
     const logDroppedError = (error: unknown): void => {
       try {
@@ -1572,8 +1565,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
         },
         endWork: endTransactionWork,
         attach: (guard, end) => {
-          connectionGuard = guard;
-          this.#transactionGuards.set(connection, guard);
+          onConnection.guard = guard;
           teardown = end;
         },
       },
@@ -1661,9 +1653,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       if (self.#heldQueryables.has(driverTx)) self.#heldQueryables.add(driverSavepoint);
       return self.wrapTransaction(driverSavepoint, childActivity, connectionState, child, scope);
     };
-    this.#openTransactions.set(driverTx, activity);
-    this.#transactionGuards.set(driverTx, assertAcceptsWork);
-    this.#transactionChecks.set(driverTx, scope.check);
+    this.#transactions.set(driverTx, { activity, guard: assertAcceptsWork, check: scope.check });
     outer?.attach(assertAcceptsWork, async () => {
       const endAbove = closeAbove();
       if (!onStack()) return;
@@ -1957,6 +1947,12 @@ function transactionAlreadyOpenError(
 interface SavepointEntry {
   readonly name: string | undefined;
   activity?: TransactionActivityRun<SqlMiddlewareContext>;
+}
+
+interface QueryableTransaction {
+  activity: TransactionActivityRun<SqlMiddlewareContext> | undefined;
+  guard: (() => void) | undefined;
+  readonly check: (() => void) | undefined;
 }
 
 interface ConnectionTransactions {
