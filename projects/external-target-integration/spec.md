@@ -4,7 +4,7 @@ Linear project: [P-TML-1170](https://linear.app/prisma-company/project/targets-b
 
 ## Purpose
 
-Someone outside Prisma can publish a package that adds a database to Prisma 8, and an application using it gets the same `prisma orm init` and the same generated files as an application on Postgres. The first such package is the SQL Server target a team at Microsoft is building in their own repository.
+Someone outside Prisma can publish a package that adds a target to Prisma 8, and an application using it gets the same `prisma orm init` and the same generated files as an application on Postgres. The first such package is the SQL Server target a team at Microsoft is building in their own repository.
 
 ## At a glance
 
@@ -46,17 +46,17 @@ import type { Contract as ContractType } from '@microsoft/prisma-orm-mssql/gener
 
 Each has its own design record in this folder.
 
-### Generated files import from the module the database package names
+### Generated files import from the module the target package names
 
-[adrs/generated-files-import-from-the-database-package.md](adrs/generated-files-import-from-the-database-package.md)
+[adrs/generated-files-import-from-the-target-package.md](adrs/generated-files-import-from-the-target-package.md)
 
-The config a database package's `defineConfig` builds says which module `contract.d.ts` imports its types from and which module a rendered `migration.ts` imports from. The emitter writes those names. It no longer reads the application's `package.json`, and no table of Prisma's package names is consulted when a file is generated.
+The config a target package's `defineConfig` builds says which module `contract.d.ts` imports its types from and which module a rendered `migration.ts` imports from. The emitter writes those names. It no longer reads the application's `package.json`, and no table of Prisma's package names is consulted when a file is generated.
 
-### `init` gets everything about a database from that database's package
+### `init` gets everything about a target from the target's package
 
 [adrs/init-contribution.md](adrs/init-contribution.md)
 
-A database package exports an init contribution: its label, starter contract, database file, environment example, driver packages, quick reference text and an optional server probe. `init` resolves the package, installs it, loads the contribution and then writes files. The package is named by a short name from a list the CLI holds of packages Prisma vouches for, or by its npm package name.
+A target package exports an init contribution: its label, starter contract, `db.ts` content, environment example, driver packages, quick reference text and an optional server probe. `init` resolves the package, installs it, loads the contribution and then writes files. The package is named by a short name from a list the CLI holds of packages Prisma vouches for, or by its npm package name.
 
 ## Non-goals
 
@@ -77,10 +77,10 @@ A database package exports an init contribution: its label, starter contract, da
 
 ## Cross-cutting requirements
 
-- **The framework CLI contains no behaviour that depends on which database is chosen.** The only database names left in it are the entries of the known-packages list.
+- **The framework CLI contains no behaviour that depends on which target is chosen.** The only target names left in it are the entries of the known-packages list.
 - **Nothing is inferred.** A config that does not say where generated files import from fails `contract emit` with an error that says so. A package with no init contribution fails `init` with an error that says to write the config by hand.
 - **One copy of the framework.** The init contribution entrypoint imports no framework runtime module, so loading it from the project cannot create a second copy.
-- **Applications install one database package.** Generated files name that package and extension packs only.
+- **Applications install one target package.** Generated files name that package and extensions only.
 - **What outside authors need is documented where they look**: the upgrade instructions skill for extension authors and the extension-author tools README.
 
 ## Contract impact
@@ -93,7 +93,7 @@ A database package exports an init contribution: its label, starter contract, da
 - **SQLite and MySQL facades**: each names its generated-types and migration modules in `defineConfig`, and gains an `init` entrypoint. Neither is in the list of known packages, so they are the first real users of `init` by package name: `prisma orm init --target @prisma/orm-sqlite`.
 - **MariaDB facade**: names its generated-types and migration modules in `defineConfig`. No init contribution, because it has no runtime client.
 - **Target renderers** stop naming a module themselves and use the one the config gives.
-- **Extension packs** state the module their types come from as the published name.
+- **Extensions** state the module their types come from as the published name.
 
 ## Framework impact
 
@@ -106,7 +106,7 @@ No new descriptor field, registry or runtime interface.
 
 ## Failure states of `init`
 
-`init` edits a project it did not create. The reordered pipeline installs the database package before it writes any file, so:
+`init` edits a project it did not create. The reordered pipeline installs the target package before it writes any file, so:
 
 | Where it stops | State of the project |
 | --- | --- |
@@ -123,12 +123,12 @@ Every refusal `init` can predict is reported before the first file is written.
 
 - **Each slice leaves `main` shippable.** After the imports slice, every in-repo config that emits names its modules. After the init mechanism slice, `init --target postgres` and `--target mongodb` produce the same files as before.
 - **The imports slice changes every committed generated file in the repository** (about 500), by regeneration. The slice's pull request says so and keeps the regeneration in its own commit.
-- **No period with two mechanisms.** The `package.json` read is removed in the slice that adds the config members. The database branches in `init` are removed in the slice that moves the templates.
+- **No period with two mechanisms.** The `package.json` read is removed in the slice that adds the config members. The target branches in `init` are removed in the slice that moves the templates.
 
 ## Project definition of done
 
-- [ ] A test application outside the monorepo, built from packed tarballs, depends on a stand-in database package that is not in any list in this repository. `prisma orm init --target <that package>` scaffolds it, and `contract emit`, `migration plan` and a typecheck pass with no `@internal/` or `@prisma/orm-framework` name in any generated file.
-- [ ] `git grep` finds no branch on a database name under `packages/1-framework/3-tooling/cli/src`, and the vocabulary threshold in `scripts/framework-vocabulary-thresholds.json` is lowered by every site removed.
+- [ ] A test application outside the monorepo, built from packed tarballs, depends on a stand-in target package that is not in any list in this repository. `prisma orm init --target <that package>` scaffolds it, and `contract emit`, `migration plan` and a typecheck pass with no `@internal/` or `@prisma/orm-framework` name in any generated file.
+- [ ] `git grep` finds no branch on a target name under `packages/1-framework/3-tooling/cli/src`, and the vocabulary threshold in `scripts/framework-vocabulary-thresholds.json` is lowered by every site removed.
 - [ ] The CLI does not read `package.json` to choose import names: `project-import-root.ts` is gone.
 - [ ] The init journey tests pass for Postgres and MongoDB in both authoring modes.
 - [ ] `prisma orm init --target @prisma/orm-sqlite` and `--target @prisma/orm-mysql` each scaffold a project that emits and typechecks, and the SQLite project runs a query. Neither package is in the list of known packages.

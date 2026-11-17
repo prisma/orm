@@ -13,19 +13,19 @@ Nothing below starts until the two design records are approved.
 
 ## Pull requests
 
-### 1. Generated files import from the module the database package names
+### 1. Generated files import from the module the target package names
 
 [TML-3830](https://linear.app/prisma-company/issue/TML-3830), and it closes [TML-3143](https://linear.app/prisma-company/issue/TML-3143).
 
-- **Outcome:** `contract emit` and the migration commands take import names from the config. The CLI no longer reads `package.json` for them. An application whose database package Prisma did not write gets generated files that compile.
+- **Outcome:** `contract emit` and the migration commands take import names from the config. The CLI no longer reads `package.json` for them. An application whose target package Prisma did not write gets generated files that compile.
 - **Builds on:** the approved design record.
-- **Hands on:** the two config members, set by every facade; the packaging test's stand-in database package, which pull request 3 reuses.
+- **Hands on:** the two config members, set by every facade; the packaging test's stand-in target package, which pull request 3 reuses.
 
-### 2. `init` scaffolds from the database package's init contribution
+### 2. `init` scaffolds from the target package's init contribution
 
 [TML-3702](https://linear.app/prisma-company/issue/TML-3702).
 
-- **Outcome:** the init contribution interface exists, Postgres and MongoDB provide one, and `init` installs the package before writing files. `--target` still takes the two short names. No file in the CLI branches on a database.
+- **Outcome:** the init contribution interface exists, Postgres and MongoDB provide one, and `init` installs the package before writing files. `--target` still takes the two short names. No file in the CLI branches on a target.
 - **Builds on:** the approved design record. Independent of pull request 1: a contribution's templates name their own package, so `init` needs no import-name translation.
 - **Hands on:** the interface and the reordered pipeline.
 
@@ -33,7 +33,7 @@ Nothing below starts until the two design records are approved.
 
 [TML-3831](https://linear.app/prisma-company/issue/TML-3831).
 
-- **Outcome:** `prisma orm init --target <any package>` works. Prisma's SQLite and MySQL packages export an init contribution and are scaffolded by package name, as the first real test of the mechanism. The guide for authors of database packages exists.
+- **Outcome:** `prisma orm init --target <any package>` works. Prisma's SQLite and MySQL packages export an init contribution and are scaffolded by package name, as the first real test of the mechanism. The guide for authors of target packages exists.
 - **Builds on:** pull requests 1 and 2. Its end-to-end test needs both: `init` on an unlisted package, then an emit that compiles.
 - **Hands on:** the project's definition of done.
 

@@ -68,7 +68,7 @@ The framework exports a `defineConfig` that takes the family, target, adapter an
 Only names that would clash are imported under an alias:
 
 - `Contract` and `TypeMaps` are renamed by Prisma, because the generated file exports its own `Contract` and `TypeMaps`.
-- `CodecTypes` and `QueryOperationTypes` are renamed to the alias your target's descriptor declares, because the generated file exports its own `CodecTypes`, which combines yours with those of any extension pack.
+- `CodecTypes` and `QueryOperationTypes` are renamed to the alias your target's descriptor declares, because the generated file exports its own `CodecTypes`, which combines yours with those of any extension.
 
 Your generated-types module exports every type under its original name. The renaming happens in the generated file.
 
@@ -93,7 +93,7 @@ Rules:
 
 - If a config names no module, the command that needs it stops with an error naming the missing member. Prisma does not guess a module.
 - Prisma does not read the application's `package.json` to choose import names, and consults no list of package names.
-- An extension pack, such as a vector type package, is a separate package the application installs. Its types are imported from its own package, not from yours.
+- An extension, such as a vector type package, is a separate package the application installs. Its types are imported from its own package, not from yours.
 
 **Requirements from your proposal this satisfies**
 
@@ -131,7 +131,7 @@ The values above are placeholders for yours.
 
 | Member | What `init` does with it |
 | --- | --- |
-| `label` | Shows it as the database's name |
+| `label` | Shows it as the target's name |
 | `configModule` | Writes `prisma.config.ts` importing `defineConfig` from it |
 | `peerPackages` | Installs these driver packages into the application |
 | `authoringModes` | Offers these ways to write the contract. A mode you do not list is refused |
@@ -143,7 +143,7 @@ The values above are placeholders for yours.
 | `serverRequirement` | Optional. States the minimum server version in the quick reference |
 | `probe(databaseUrl)` | Optional. Run for `--probe-db`; connects and reports the server version |
 
-Prisma decides which files exist and where they go, and writes everything that does not depend on the database: `tsconfig.json`, `.gitignore`, the `package.json` scripts.
+Prisma decides which files exist and where they go, and writes everything that does not depend on the target: `tsconfig.json`, `.gitignore`, the `package.json` scripts.
 
 The order of steps is: resolve the package, install it, load your contribution, ask the user the remaining questions, write files, install your `peerPackages` and the CLI, emit the contract.
 
@@ -158,7 +158,7 @@ Rules:
 **Requirements from your proposal this satisfies**
 
 - The familiar `prisma orm init` workflow, with no new command and no plugin loader.
-- Your package owns its identity and its database-specific starter.
+- Your package owns its identity and its target-specific starter.
 - Existing Postgres and MongoDB behaviour is unchanged for their users.
 - Nothing is discovered: no scan of installed packages, no registry lookup, no network guess. The user names one package.
 
@@ -209,7 +209,7 @@ export default defineConfig({
 });
 ```
 
-**The application installs two framework packages beside yours.** Its own `package.json` lists `@prisma/orm-framework` and `@prisma/orm-family-sql`, at the exact version your package uses, and none of Prisma's database packages. Today's CLI picks import names by looking for those in the application's `package.json`, and with them present it writes:
+**The application installs two framework packages beside yours.** Its own `package.json` lists `@prisma/orm-framework` and `@prisma/orm-family-sql`, at the exact version your package uses, and none of Prisma's target packages. Today's CLI picks import names by looking for those in the application's `package.json`, and with them present it writes:
 
 ```ts
 import type { Contract as ContractType } from '@prisma/orm-framework/contract/types';
