@@ -464,7 +464,7 @@ describe('MongoMigrationPlanner, a discriminator renamed without its statement',
         kind: 'unsupportedOperation',
         summary:
           'Cannot plan the migration: new discriminator field "Job.kind" has no value in the documents of collection tasks',
-        why: `${NO_TEMPORARY_VALUE} The documents hold their variant in "Job.type", which the plan removes: add --rename Task:Job --rename Job.type:Job.kind to keep it, and run the command again.`,
+        why: `${NO_TEMPORARY_VALUE} The documents hold their variant in "Task.type", which the plan removes: add --rename Task:Job --rename Job.type:Job.kind to keep it, and run the command again.`,
       },
     ]);
   });
@@ -479,7 +479,7 @@ describe('MongoMigrationPlanner, a discriminator renamed without its statement',
         kind: 'unsupportedOperation',
         summary:
           'Cannot plan the migration: new discriminator field "Job.kind" has no value in the documents of collection tasks',
-        why: `${NO_TEMPORARY_VALUE} The documents hold their variant in "Job.type", which the plan removes: add --rename Job.type:Job.kind to keep it, and run the command again.`,
+        why: `${NO_TEMPORARY_VALUE} The documents hold their variant in "Task.type", which the plan removes: add --rename Job.type:Job.kind to keep it, and run the command again.`,
       },
     ]);
   });
