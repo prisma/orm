@@ -10,7 +10,11 @@ MariaDB runtime and control drivers for Prisma 8.
 
 ## Purpose
 
-MySQL's drivers ([`@internal/driver-mysql`](../../1-mysql/3-driver/README.md)) built for the `mariadb` target id, which the config loader requires every component of a MariaDB stack to carry. The package holds no driver code: the MySQL driver connects to MariaDB 10.11 unchanged, and its README's environment requirements hold on MariaDB too.
+MySQL's drivers ([`@internal/driver-mysql`](../../1-mysql/3-driver/README.md)) built for the `mariadb` target id, which the config loader requires every component of a MariaDB stack to carry, and named MariaDB in their errors. The package holds no driver code: the MySQL driver connects to MariaDB 10.11 unchanged, and its README's environment requirements hold on MariaDB too.
+
+## Responsibilities
+
+- `src/core/runtime/runtime-driver.ts` and `src/core/migrations/control-driver.ts` apply `createMysqlRuntimeDriverDescriptor` and `createMysqlControlDriverDescriptor` to `'mariadb'` and `'MariaDB'`.
 
 ## Exports
 

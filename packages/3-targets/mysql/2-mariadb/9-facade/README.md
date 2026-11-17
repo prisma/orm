@@ -6,11 +6,11 @@ MariaDB configuration, control client and migration classes for Prisma 8.
 
 - **Domain**: extensions
 - **Layer**: adapters
-- **Plane**: multi-plane (shared, migration)
+- **Plane**: multi-plane (shared, migration, runtime)
 
 ## Purpose
 
-Wires the MariaDB target, adapter and driver together for a project's `prisma.config.ts`, the CLI and each `migration.ts`.
+Wires the MariaDB target, adapter and driver together for a project's `prisma.config.ts`, the CLI, each `migration.ts` and the application's client.
 
 ## Responsibilities
 
@@ -18,8 +18,9 @@ Wires the MariaDB target, adapter and driver together for a project's `prisma.co
 - **`createMariadbControlClient`** (`./control`): a control client for `migration plan`, `db migrate`, `db verify`, `db sign` and introspection.
 - **`./migration`**: what a MariaDB `migration.ts` imports: `Migration`, which is `MariadbMigration`, `MigrationCLI` and the rest of MySQL's migration module.
 
-There is no `mariadb()` runtime client yet.
+- **`mariadb({ contract, url })`** (`./runtime`): MySQL's `createMysqlClient` applied to MariaDB's runtime target, adapter and driver. It takes every option `mysql()` takes (`MariadbOptions`) and returns a `MariadbClient`. The URL must use `mariadb://` or `mysql://`. A contract emitted for another target fails with `RUNTIME.CONTRACT_TARGET_MISMATCH`. MariaDB loads includes with one query per relation, since its adapter reports neither `sql.outerReferencesInDerivedTables` nor `sql.jsonAggWithoutTruncation`.
+- **`contractFromJson`** and the static context (`./static`): built with MySQL's `mysqlContractValidation` and `createMysqlStatic`.
 
 ## Testing
 
-The live tests need `MARIADB_URL` and are skipped without it, except in CI, where `test/live-server.test.ts` fails without it: `MARIADB_URL='mysql://root@127.0.0.1:3368/' pnpm test` against `docker run -p 3368:3306 -e MARIADB_ALLOW_EMPTY_ROOT_PASSWORD=1 mariadb:10.11`. `test/fixtures/` holds PSL contracts the tests emit in memory.
+The live tests need `MARIADB_URL` and are skipped without it, except in CI, where `test/live-server.test.ts` fails without it: `MARIADB_URL='mysql://root@127.0.0.1:3368/' pnpm test` against `docker run -p 3368:3306 -e MARIADB_ALLOW_EMPTY_ROOT_PASSWORD=1 mariadb:10.11`. `test/fixtures/` holds PSL contracts the tests emit in memory, and `test/fixtures/generated/` the example contract emitted by `pnpm emit`. `test/runtime/*.live.test.ts` run MySQL's ORM live test suites (`../../1-mysql/9-facade/test/runtime/suites/`) against MariaDB, with contracts emitted for MariaDB from the same models.

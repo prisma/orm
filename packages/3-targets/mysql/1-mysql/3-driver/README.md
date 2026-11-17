@@ -61,5 +61,5 @@ The driver does not check the database at startup or deploy time for these requi
 
 ## Exports
 
-- `./runtime`: the runtime driver descriptor, `createMysqlRuntimeDriverDescriptor`, which builds it for a target that extends MySQL, such as MariaDB, under that target's id, and the `MysqlBinding`, `MysqlDriverCreateOptions` and `MysqlPoolOptions` types
-- `./control`: the control driver descriptor, `createMysqlControlDriverDescriptor`, which builds it for a target that extends MySQL under that target's id (its drivers are typed as `SqlControlDriverInstance` of that id), and `MysqlControlDriver`, a MySQL control connection built with `new MysqlControlDriver(connection)`
+- `./runtime`: the runtime driver descriptor, `createMysqlRuntimeDriverDescriptor`, which builds it for a target that extends MySQL, such as MariaDB, under that target's id and with the display name its errors show, and the `MysqlBinding`, `MysqlDriverCreateOptions` and `MysqlPoolOptions` types
+- `./control`: the control driver descriptor, `createMysqlControlDriverDescriptor`, which builds it for a target that extends MySQL under that target's id and display name (its drivers are typed as `SqlControlDriverInstance` of that id), and `MysqlControlDriver`, a MySQL control connection built with `new MysqlControlDriver(connection)`
