@@ -121,4 +121,8 @@ export const packageName =
     : '@internal/postgres';
 ```
 
+Write this check in each package's own source, never in a helper from another package. The shell build defines the constant only in the code it bundles into that shell, and a helper owned by another shell is bundled into that other shell, so it would return that shell's name for every package that calls it.
+
+`all-shells-tarball.test.ts` in `@prisma/orm-framework` fails when the identifier is left in any published package's built code.
+
 The workspace build must not define it. The shell build bundles the workspace build's `dist`, so a value substituted there could not be replaced with the published name. See `packages/3-targets/postgres/9-facade/src/config/package-name.ts`.

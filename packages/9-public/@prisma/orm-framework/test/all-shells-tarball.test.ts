@@ -123,6 +123,22 @@ describe('all publish shells packed and installed together', () => {
     }
   });
 
+  it('fills in the published package name wherever a shell bundles code that reads it', () => {
+    const unfilled: string[] = [];
+    for (const name of allShells) {
+      const distDir = join(scratch, 'node_modules', name, 'dist');
+      for (const file of readdirSync(distDir, { recursive: true, encoding: 'utf8' })) {
+        if (!file.endsWith('.mjs')) continue;
+        if (
+          readFileSync(join(distDir, file), 'utf8').includes('__PRISMA_PUBLISHED_PACKAGE_NAME__')
+        ) {
+          unfilled.push(`${name}/dist/${file}`);
+        }
+      }
+    }
+    expect(unfilled).toEqual([]);
+  });
+
   // The toolchain publishes the shell map so that emission can resolve
   // import roots at run time, which puts every internal package name into a
   // published dist as string data. The scan above has to keep passing
