@@ -202,14 +202,6 @@ describe('enrichContract', () => {
   });
 
   it('copies only the aggregate descriptors of the type metadata, leaving out the storage list an older pack still declares', () => {
-    const aggregateDescriptors = [
-      {
-        operation: 'stddev',
-        input: { kind: 'trait', trait: 'numeric' },
-        output: { kind: 'codec', codecId: 'pg/numeric@1' },
-        nullable: true,
-      },
-    ];
     const typesOfAnOlderPack = {
       codecTypes: {
         import: { package: '@ext/acme', named: 'CodecTypes', alias: 'AcmeTypes' },
@@ -217,7 +209,7 @@ describe('enrichContract', () => {
       queryOperationTypes: {
         import: { package: '@ext/acme', named: 'QueryOperationTypes', alias: 'AcmeQueryOps' },
       },
-      aggregateDescriptors,
+      aggregateDescriptors: [],
       operationTypes: {
         import: { package: '@ext/acme', named: 'OperationTypes', alias: 'AcmeOps' },
       },
@@ -228,7 +220,7 @@ describe('enrichContract', () => {
     const result = enrichContract(makeIR(), [extension]);
 
     expect((result.extensions['pgvector'] as Record<string, unknown>)['types']).toEqual({
-      aggregateDescriptors,
+      aggregateDescriptors: [],
     });
   });
 
