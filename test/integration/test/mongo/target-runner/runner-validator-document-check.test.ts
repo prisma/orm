@@ -323,6 +323,50 @@ describe('MongoMigrationRunner, a validator change that checks the documents fir
   );
 
   it(
+    'names a nested key the object a document holds lacks, beside a list element that is not an object',
+    async () => {
+      const address = (required: readonly string[]) => ({
+        bsonType: 'object',
+        ...(required.length === 0 ? {} : { required }),
+        additionalProperties: false,
+        properties: { line1: { bsonType: 'string' }, zip: { bsonType: ['null', 'string'] } },
+      });
+      const schema = (required: readonly string[]) => ({
+        bsonType: 'object',
+        required: ['_id'],
+        properties: {
+          _id: { bsonType: 'objectId' },
+          addresses: { bsonType: 'array', items: address(required) },
+          home: { oneOf: [{ bsonType: 'null' }, address(required)] },
+        },
+      });
+      await db.createCollection('users', { validator: { $jsonSchema: schema([]) } });
+      await db.collection('users').insertOne(
+        {
+          _id: new ObjectId('64b7f0c2a1b2c3d4e5f6071a'),
+          addresses: [null, { line1: 'a' }],
+          home: { zip: '9' },
+        },
+        { bypassDocumentValidation: true },
+      );
+
+      const result = await run([
+        setValidation('users', schema(['line1']), {
+          validationLevel: 'strict',
+          validationAction: 'error',
+          checkDocuments: true,
+        }),
+      ]);
+
+      if (result.ok) throw new Error('Expected the validator change to stop at its document check');
+      expect(result.failure.why?.split(' Find them all')[0]).toBe(
+        'This validator change makes "home.line1" required and changes what "addresses" and "home" accept. It has _id ObjectId("64b7f0c2a1b2c3d4e5f6071a"). That document has no "home.line1" and holds an element in "addresses" that is not an object.',
+      );
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
     'applies the validator when every document fits',
     async () => {
       await db.createCollection('users');

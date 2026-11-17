@@ -1417,12 +1417,17 @@ export class MongoMigrationRunner {
             shape,
             '',
           );
+    const nested = nestedFindings(touched, fields);
     const shownProblems = [
       ...problems,
-      ...nestedFindings(touched, fields).notObjects.map((field) => ({
-        text: `holds an element in ${JSON.stringify(field)} that is not an object`,
-        uncheckable: false,
-      })),
+      ...[
+        ...nested.lacking.map((key) => `has no ${JSON.stringify(key)}`),
+        ...nested.notObjects.map(
+          (field) => `holds an element in ${JSON.stringify(field)} that is not an object`,
+        ),
+      ]
+        .filter((text) => !problems.some((problem) => problem.text === text))
+        .map((text) => ({ text, uncheckable: false })),
     ];
     const hadValidator = typeof validatorBefore === 'object' && validatorBefore !== null;
     const found = [
