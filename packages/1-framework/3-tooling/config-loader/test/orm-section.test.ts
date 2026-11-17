@@ -106,6 +106,34 @@ describe('the orm section', () => {
     expect(result.ok && result.value.migrations?.dir).toBe('/elsewhere/db');
   });
 
+  it('keeps the module names generated files import from as written', () => {
+    const raw = validRaw({
+      contract: {
+        source: { format: 'psl', load: () => ({}) },
+        typesModule: '@acme/orm-db/generated-types',
+      },
+      migrations: { module: '@acme/orm-db/migration' },
+    });
+
+    const result = validateOrmSection(raw, provenanceFor(raw));
+
+    expect(result.ok && result.value).toMatchObject({
+      contract: { typesModule: '@acme/orm-db/generated-types' },
+      migrations: { dir: '/project/migrations', module: '@acme/orm-db/migration' },
+    });
+  });
+
+  it('reports module names that are not strings', () => {
+    expect(
+      fields(
+        validRaw({
+          contract: { source: { format: 'psl', load: () => ({}) }, typesModule: 1 },
+          migrations: { module: false },
+        }),
+      ),
+    ).toEqual(['migrations.module', 'contract.typesModule']);
+  });
+
   it('reports each missing descriptor under its own field', () => {
     expect(fields({})).toEqual(['adapter', 'family', 'target']);
   });

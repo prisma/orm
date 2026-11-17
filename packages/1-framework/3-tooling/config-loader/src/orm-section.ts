@@ -84,8 +84,9 @@ const ormSubsectionsSchema = configSchema({
   'contract?': {
     source: contractSource,
     output: ['path', '=', () => 'src/prisma/contract.json'],
+    'typesModule?': 'string',
   },
-  migrations: [{ dir: ['path', '=', () => './migrations'] }, '=', () => ({})],
+  migrations: [{ dir: ['path', '=', () => './migrations'], 'module?': 'string' }, '=', () => ({})],
   'formatter?': { 'indent?': "number.integer >= 1 | 'tab'", 'newline?': "'LF' | 'CRLF'" },
 });
 
