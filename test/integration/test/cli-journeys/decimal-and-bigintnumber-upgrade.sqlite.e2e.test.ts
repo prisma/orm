@@ -3,7 +3,7 @@
  *
  * Before the upgrade a `Decimal` field emitted `sqlite/text@1` and a `BigIntNumber` field `sqlite/bigintnumber@1`. Now they emit `sqlite/decimal@1` and `sqlite/integer@1`. Neither column changes. The old contract is written in TypeScript with the codec ids the old names emitted, because no name emits them any more.
  *
- * Journey U1 signs a database with the old contract, emits the new one, and checks what `db verify` and `migration plan` report. Journey U2 adds a required `Decimal` field to a table that has rows and reads the value it was filled with.
+ * Journey U1 signs a database with the old contract, emits the new one, and checks what `db verify` and `migration plan` report. Journey U3 does the same with `db update`. Journey U2 adds a required `Decimal` field to a table that has rows and reads the value it was filled with.
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -18,6 +18,7 @@ import {
   planMigrationAndSelfEmit,
   readEmittedContractStorageHash,
   runContractEmit,
+  runDbUpdate,
   runDbVerify,
   runMigrate,
   runMigrationPlan,
@@ -217,6 +218,28 @@ withTempDir(({ createTempDir }) => {
           query(ctx.dbPath, 'SELECT "id", "total", "visits" FROM "invoice"'),
           'U1.08: no data moved',
         ).toEqual([{ id: 1, total: '12.50', visits: 3 }]);
+      },
+      timeouts.spinUpPpgDev,
+    );
+  });
+
+  describe('Journey U3 (SQLite): db update on a database signed with the contract the old Decimal and BigIntNumber emitted', () => {
+    it(
+      'runs no operation and signs the database with the new contract',
+      async () => {
+        const ctx = setupTypescriptJourney(createTempDir);
+        await emit(ctx, 'contract.ts', OLD_CONTRACT_TS, 'U3.01');
+        const initial = await runDbUpdate(ctx);
+        expect(initial.exitCode, `U3.02: db update initial: ${initial.stderr}`).toBe(0);
+        await emit(ctx, 'contract.ts', NEW_CONTRACT_TS, 'U3.03');
+
+        const update = await runDbUpdate(ctx);
+        expect(update.exitCode, `U3.04: db update: ${update.stderr}`).toBe(0);
+        expect(`${update.stdout}${update.stderr}`, 'U3.04: no operation ran').toContain(
+          'the database needs no operation for it, so none ran and the database was signed with the new contract. What changed: table "invoice".',
+        );
+        const verify = await runDbVerify(ctx);
+        expect(verify.exitCode, `U3.05: db verify: ${verify.stderr}`).toBe(0);
       },
       timeouts.spinUpPpgDev,
     );

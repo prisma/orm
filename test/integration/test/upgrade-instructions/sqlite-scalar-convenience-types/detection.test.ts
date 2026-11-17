@@ -66,3 +66,63 @@ describe.each(GUIDES)('the renamed SQLite column helpers detection in %s', (guid
     });
   });
 });
+
+describe.each(GUIDES)('the SQLite Decimal and BigIntNumber detections in %s', (guidePath) => {
+  const matcher = (id: string) => (content: string) =>
+    detectionPatterns(guidePath, id).some((pattern) => pattern.test(content));
+
+  it('match a schema with a Decimal field or alias, and not one that only names Decimal otherwise', () => {
+    const matches = matcher('sqlite-decimal-codec');
+    expect({
+      field: matches('model Product {\n  id    Int     @id\n  price Decimal\n}'),
+      optional: matches('model Product {\n  price Decimal? @default("1.50")\n}'),
+      convenienceCall: matches('model Product {\n  price Decimal(storage: text)\n}'),
+      alias: matches('types {\n  Money = Decimal\n}'),
+      explicit: matches('model Product {\n  price DecimalString\n}'),
+      comment: matches('// a Decimal would be better here\nmodel Product {\n  price String\n}'),
+      otherType: matches('model Product {\n  price DecimalValue\n}'),
+    }).toEqual({
+      field: true,
+      optional: true,
+      convenienceCall: true,
+      alias: true,
+      explicit: false,
+      comment: false,
+      otherType: false,
+    });
+  });
+
+  it('match a SQLite TypeScript contract that calls type.Decimal, and not a PostgreSQL one', () => {
+    const matches = matcher('ts-sqlite-decimal-codec');
+    const sqlite = "import { defineContract } from '@prisma/orm-sqlite/contract-builder';\n";
+    expect({
+      published: matches(`${sqlite}field.column(type.Decimal());`),
+      internal: matches(
+        "import { defineContract } from '@internal/sqlite/contract-builder';\nfield.column(type.Decimal({ storage: 'text' }));",
+      ),
+      explicit: matches(`${sqlite}field.column(type.DecimalString());`),
+      postgres: matches(
+        "import { defineContract } from '@prisma/orm-postgres/contract-builder';\nfield.column(type.Decimal());",
+      ),
+    }).toEqual({ published: true, internal: true, explicit: false, postgres: false });
+  });
+
+  it('match BigIntNumber in a schema or a TypeScript contract, and not a longer name', () => {
+    const matches = matcher('sqlite-bigintnumber-deprecated');
+    expect({
+      field: matches('model Post {\n  views BigIntNumber\n}'),
+      alias: matches('types {\n  Views = BigIntNumber\n}'),
+      typescript: matches('field.column(type.BigIntNumber());'),
+      replacement: matches('model Post {\n  views BigInt(as: number)\n}'),
+      longerName: matches('model Post {\n  views BigIntNumberish\n}'),
+      codecId: matches("const id = 'sqlite/bigintnumber@1';"),
+    }).toEqual({
+      field: true,
+      alias: true,
+      typescript: true,
+      replacement: false,
+      longerName: false,
+      codecId: false,
+    });
+  });
+});
