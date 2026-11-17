@@ -220,7 +220,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         ctx.report({ kind: 'message', severity: 'info', text: note });
       }
 
-      const runtimePackage = targetPackageName(inputs.target, scaffold.resolveImportSpecifier);
+      const targetPackage = targetPackageName(inputs.target, scaffold.resolveImportSpecifier);
       // Prisma 7 requires CLI and client at the same version, so when the CLI
       // moves aside as @prisma/prisma7 a client below the 7 line moves with it.
       const movePackages = inputs.sideBySide?.movePackages ?? null;
@@ -232,7 +232,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
       // workspace or catalog, is left alone: only a declared major below 7 moves.
       const moveClient = movePackages !== null && clientMajor !== undefined && clientMajor < 7;
       const deps = [
-        runtimePackage,
+        targetPackage,
         'dotenv',
         ...targetPeerPackages(inputs.target),
         ...(moveClient ? ['@prisma/client@7'] : []),
@@ -245,7 +245,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
       // invoke. `@prisma/cli-engine` — the config file's
       // definePrismaConfig import — is added by the install itself, in the
       // same `add` as `prisma`, at the exact version the just-installed
-      // runtime's toolchain peers on. Under moduleResolution 'bundler' the
+      // target package's toolchain peers on. Under moduleResolution 'bundler' the
       // scaffolded files reference process.env, which only typechecks with
       // Node's ambient types present; a project that already pins @types/node
       // keeps its own major.
@@ -341,7 +341,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
           packages: ctx.packages,
           cwd: ctx.cwd,
           deps: depsToInstall,
-          runtimePackage,
+          targetPackage,
           devDeps,
           catalogWarnings:
             packageManager === 'pnpm'
@@ -373,7 +373,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
       } else {
         extraActions.push(
           chooseAction(
-            `Install the project dependencies with your package manager: ${deps.join(', ')} (and ${devDeps.join(', ')} plus @prisma/cli-engine at the version the runtime's @prisma/orm-toolchain declares as its peer dependency, as development dependencies in a single install)`,
+            `Install the project dependencies with your package manager: ${deps.join(', ')} (and ${devDeps.join(', ')} plus @prisma/cli-engine at the version the target package's @prisma/orm-toolchain declares as its peer dependency, as development dependencies in a single install)`,
           ),
         );
       }

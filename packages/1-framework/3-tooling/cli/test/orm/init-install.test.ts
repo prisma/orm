@@ -149,7 +149,7 @@ function skillCalls(): readonly RunnerCall[] {
 
 describe('init installs', () => {
   it(
-    'installs the engine in the same add as prisma, pinned to the version the runtime toolchain peers on',
+    'installs the engine in the same add as prisma, pinned to the version the toolchain of the target package peers on',
     async () => {
       const store = join(projectDir, 'node_modules', '.pnpm', 'runtime', 'node_modules', '@prisma');
       mkdirSync(join(store, 'orm-postgres'), { recursive: true });

@@ -123,26 +123,26 @@ function enginePeerOf(manifestPath: string): string | undefined {
 /**
  * The engine dependency spec a fresh scaffold installs. The scaffolded
  * `prisma.config.ts` imports `definePrismaConfig` from `@prisma/cli-engine`,
- * and the runtime's `@prisma/orm-toolchain` peer-depends on the exact engine
- * version it runs against — so the spec is read from the manifest the runtime
- * install just placed, never guessed from a dist-tag (whose `latest` has
+ * and the target package's `@prisma/orm-toolchain` peer-depends on the exact
+ * engine version it runs against — so the spec is read from the manifest the
+ * target package's install just placed, never guessed from a dist-tag (whose `latest` has
  * lagged that version before and broken the very next command). It has to be
  * known before `prisma` installs, because the engine goes into the same `add`
  * as `prisma`: pnpm 12 links an engine added on its own to a store entry it
- * never materializes. The toolchain sits either under the runtime or beside
- * it — in pnpm's virtual store, beside the link's target. A runtime without a
- * readable toolchain manifest falls back to the `latest` tag.
+ * never materializes. The toolchain sits either under the target package or
+ * beside it — in pnpm's virtual store, beside the link's target. A target
+ * package without a readable toolchain manifest falls back to the `latest` tag.
  */
-function engineDevDependencySpec(cwd: string, runtimePackage: string): string {
-  let runtimeDir: string;
+function engineDevDependencySpec(cwd: string, targetPackage: string): string {
+  let targetDir: string;
   try {
-    runtimeDir = realpathSync(join(cwd, 'node_modules', runtimePackage));
+    targetDir = realpathSync(join(cwd, 'node_modules', targetPackage));
   } catch {
     return `${ENGINE_PACKAGE}@latest`;
   }
-  const modulesDir = runtimePackage.split('/').reduce((dir) => dirname(dir), runtimeDir);
+  const modulesDir = targetPackage.split('/').reduce((dir) => dirname(dir), targetDir);
   const engine =
-    enginePeerOf(join(runtimeDir, 'node_modules', TOOLCHAIN_PACKAGE, 'package.json')) ??
+    enginePeerOf(join(targetDir, 'node_modules', TOOLCHAIN_PACKAGE, 'package.json')) ??
     enginePeerOf(join(modulesDir, TOOLCHAIN_PACKAGE, 'package.json'));
   return `${ENGINE_PACKAGE}@${engine ?? 'latest'}`;
 }
@@ -159,11 +159,11 @@ export async function installProjectDependencies(ctx: {
   readonly cwd: string;
   readonly deps: readonly string[];
   /**
-   * The installed runtime whose toolchain names the engine pin — `undefined`
+   * The installed target package whose toolchain names the engine pin — `undefined`
    * for an install that declares no development dependencies, and so carries
    * no engine.
    */
-  readonly runtimePackage: string | undefined;
+  readonly targetPackage: string | undefined;
   readonly devDeps: readonly string[];
   readonly catalogWarnings: readonly string[];
 }): Promise<InstallOutcome> {
@@ -189,11 +189,11 @@ export async function installProjectDependencies(ctx: {
     if (runtimeDeps.failure !== undefined) {
       return { ...runtimeDeps, devDeps: [] };
     }
-    const runtime = ctx.runtimePackage;
+    const target = ctx.targetPackage;
     const devDeps =
-      runtime === undefined
+      target === undefined
         ? [...ctx.devDeps]
-        : [...ctx.devDeps, engineDevDependencySpec(ctx.cwd, runtime)];
+        : [...ctx.devDeps, engineDevDependencySpec(ctx.cwd, target)];
     const developmentDeps = await install({
       packages: devDeps,
       dev: true,

@@ -122,9 +122,9 @@ export function createPrisma7SourceCheck(ctx: {
         packages: ctx.packages,
         cwd: ctx.cwd,
         deps,
-        // The check installs the runtime to read the schema with, nothing to
+        // The check installs the target package to read the schema with, nothing to
         // develop against — so no engine rides along.
-        runtimePackage: undefined,
+        targetPackage: undefined,
         devDeps: [],
         catalogWarnings: ctx.packageManager === 'pnpm' ? buildCatalogWarnings(ctx.cwd, deps) : [],
       });
