@@ -41,6 +41,7 @@ const STORED_AS_TEXT: readonly string[] = [
   'sqlite/time',
   'sqlite/duration',
   'sqlite/json',
+  'sqlite/decimal',
 ];
 
 const registered: readonly DataType[] = sqliteTargetDescriptorMeta.dataTypes;

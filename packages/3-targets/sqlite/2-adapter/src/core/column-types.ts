@@ -9,6 +9,7 @@ import {
   SQLITE_DATETIME_CODEC_ID,
   SQLITE_DATETIME_STRING_CODEC_ID,
   SQLITE_DATETIME_TEMPORAL_CODEC_ID,
+  SQLITE_DECIMAL_CODEC_ID,
   SQLITE_DURATION_STRING_CODEC_ID,
   SQLITE_INTEGER_CODEC_ID,
   SQLITE_JSON_CODEC_ID,
@@ -28,6 +29,10 @@ export const integerNumberColumn = {
 
 export const realColumn = {
   codecId: SQLITE_REAL_CODEC_ID,
+} as const;
+
+export const decimalStringColumn = {
+  codecId: SQLITE_DECIMAL_CODEC_ID,
 } as const;
 
 export const blobColumn = {

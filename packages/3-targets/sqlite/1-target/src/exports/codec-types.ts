@@ -30,6 +30,7 @@ import {
   sqliteTimeStringDescriptor,
   sqliteTimeTemporalDescriptor,
 } from '../core/date-time-codecs';
+import { sqliteDecimalStringDescriptor } from '../core/decimal-codec';
 
 const codecDescriptorMap = {
   char: sqliteSqlCharDescriptor,
@@ -52,6 +53,7 @@ const codecDescriptorMap = {
   bigint: sqliteBigintDescriptor,
   bigintnumber: sqliteBigintNumberDescriptor,
   raw: sqliteSqlRawDescriptor,
+  decimal: sqliteDecimalStringDescriptor,
 } as const;
 
 type Resolve<T> = { readonly [K in keyof T]: { readonly [P in keyof T[K]]: T[K][P] } };

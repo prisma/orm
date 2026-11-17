@@ -15,6 +15,7 @@ const storedValues: Readonly<Record<string, JsonValue>> = {
   'sqlite/time': '09:30:00.000',
   'sqlite/duration': 'PT1H30M',
   'sqlite/json': '"x"',
+  'sqlite/decimal': '12.50',
 };
 
 describe('the literal each registered codec renders', () => {
@@ -46,6 +47,7 @@ describe('the literal each registered codec renders', () => {
       'sqlite/json@1': '"x"',
       'sqlite/bigint@1': '1n',
       'sqlite/bigintnumber@1': '1',
+      'sqlite/decimal@1': '"12.50"',
     });
   });
 

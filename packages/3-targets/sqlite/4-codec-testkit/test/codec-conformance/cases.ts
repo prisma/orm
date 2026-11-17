@@ -434,6 +434,14 @@ export const sqliteConformanceCases: readonly SqliteCodecConformanceCase[] = [
     storageType: 'TEXT',
   },
   { codecId: 'sqlite/duration-string@1', label: 'zero', value: 'PT0S', storageType: 'TEXT' },
+  { codecId: 'sqlite/decimal@1', label: 'decimal', value: '12.50', storageType: 'TEXT' },
+  { codecId: 'sqlite/decimal@1', label: 'negative', value: '-0.001', storageType: 'TEXT' },
+  {
+    codecId: 'sqlite/decimal@1',
+    label: 'more digits than a double holds',
+    value: '12345678901234567890.123456789',
+    storageType: 'TEXT',
+  },
   // Every column can be NULL, and no `value` denotes it: NULL is a state of the
   // column rather than something a codec can be handed. Most codecs reject
   // `null`; the JSON codecs accept it, but there `value: null` means a JSON
@@ -481,6 +489,13 @@ export const sqliteConformanceCases: readonly SqliteCodecConformanceCase[] = [
     label: 'null',
     value: undefined,
     storageType: 'INTEGER',
+    nullValue: true,
+  },
+  {
+    codecId: 'sqlite/decimal@1',
+    label: 'null',
+    value: undefined,
+    storageType: 'TEXT',
     nullValue: true,
   },
   {

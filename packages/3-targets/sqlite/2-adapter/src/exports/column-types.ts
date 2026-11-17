@@ -1,6 +1,7 @@
 export {
   blobColumn,
   datetimeColumn,
+  decimalStringColumn,
   integerBigIntColumn,
   integerNumberColumn,
   plainJsonColumn,

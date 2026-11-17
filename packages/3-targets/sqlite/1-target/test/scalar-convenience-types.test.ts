@@ -15,6 +15,7 @@ const explicitTypes = [
   ['IntegerNumber', 'sqlite/integer@1', 'stored as SQLite integer'],
   ['IntegerBigInt', 'sqlite/bigint@1', 'stored as SQLite integer'],
   ['Real', 'sqlite/real@1', 'stored as SQLite real'],
+  ['DecimalString', 'sqlite/decimal@1', 'stored as SQLite text'],
   ['Text', 'sqlite/text@1', 'stored as SQLite text'],
   ['Blob', 'sqlite/blob@1', 'stored as SQLite blob'],
   ['PlainJson', 'sqlite/json@1', 'stored as SQLite text'],
@@ -29,6 +30,8 @@ const convenienceRows = [
   ['BigInt', ['number', 'integer'], 'IntegerNumber', 'sqlite/integer@1'],
   ['Float', [], 'Real', 'sqlite/real@1'],
   ['Float', ['real'], 'Real', 'sqlite/real@1'],
+  ['Decimal', [], 'DecimalString', 'sqlite/decimal@1'],
+  ['Decimal', ['text'], 'DecimalString', 'sqlite/decimal@1'],
   ['String', [], 'Text', 'sqlite/text@1'],
   ['String', ['text'], 'Text', 'sqlite/text@1'],
   ['Bytes', [], 'Blob', 'sqlite/blob@1'],
@@ -68,6 +71,7 @@ describe('the SQLite scalar convenience types', () => {
       Int: ['typeChoice', false, ['storage']],
       BigInt: ['typeChoice', false, ['as', 'storage']],
       Float: ['typeChoice', false, ['storage']],
+      Decimal: ['typeChoice', false, ['storage']],
       String: ['typeChoice', false, ['storage']],
       Bytes: ['typeChoice', false, ['storage']],
       Json: ['typeChoice', false, ['storage']],
@@ -86,6 +90,7 @@ describe('the SQLite scalar convenience types', () => {
     ['BigInt', ['string']],
     ['BigInt', ['number', 'text']],
     ['Float', ['integer']],
+    ['Decimal', ['real']],
     ['String', ['blob']],
     ['Bytes', ['text']],
     ['Json', ['blob']],
@@ -105,6 +110,7 @@ describe('the SQLite scalar convenience types', () => {
     ['IntegerNumber', 'Int'],
     ['IntegerBigInt', 'BigInt'],
     ['Real', 'Float'],
+    ['DecimalString', 'Decimal'],
     ['Text', 'String'],
     ['Blob', 'Bytes'],
     ['PlainJson', 'Json'],
@@ -112,5 +118,17 @@ describe('the SQLite scalar convenience types', () => {
     expect(
       findAuthoringTypeChoiceCall({ namespace, call: { path: [explicit], args: [] } }),
     ).toEqual({ path: [convenience], args: [], becomes: { path: [explicit], args: [] } });
+  });
+});
+
+describe('the deprecated SQLite scalar names', () => {
+  it('BigIntNumber is a deprecated alias of IntegerNumber, on its codec', () => {
+    expect(namespace.BigIntNumber).toEqual({
+      ...sqliteExplicitScalarTypes.IntegerNumber,
+      deprecated: { replacement: 'IntegerNumber' },
+    });
+    expect(instantiateAuthoringTypeCall(namespace, 'BigIntNumber', [])).toEqual({
+      codecId: 'sqlite/integer@1',
+    });
   });
 });

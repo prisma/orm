@@ -186,6 +186,12 @@ const FIXTURES: readonly AggregateFixture[] = [
     storageClass: 'blob',
     samples: ["x'01'", "x'02'"],
   },
+  {
+    codecId: 'sqlite/decimal@1',
+    storageType: 'TEXT',
+    storageClass: 'text',
+    samples: ["'1.50'", "'-2'"],
+  },
 ];
 
 /**
@@ -203,6 +209,7 @@ const COERCED_RATHER_THAN_TYPED = [
   'avg(sqlite/datetime-string@1)',
   'avg(sqlite/datetime-temporal@1)',
   'avg(sqlite/datetime@1)',
+  'avg(sqlite/decimal@1)',
   'avg(sqlite/duration-string@1)',
   'avg(sqlite/json@1)',
   'avg(sqlite/text@1)',
@@ -217,6 +224,7 @@ const COERCED_RATHER_THAN_TYPED = [
   'sum(sqlite/datetime-string@1)',
   'sum(sqlite/datetime-temporal@1)',
   'sum(sqlite/datetime@1)',
+  'sum(sqlite/decimal@1)',
   'sum(sqlite/duration-string@1)',
   'sum(sqlite/json@1)',
   'sum(sqlite/text@1)',
@@ -227,12 +235,14 @@ const COERCED_RATHER_THAN_TYPED = [
 /**
  * The pairs SQLite computes and this target declines to offer because the codec declares no
  * `order` trait: a raw column's values are not interpreted, so the ORM offers no extremum of them
- * (ADR 273), and a duration's text does not sort in the order of the durations.
+ * (ADR 273), and neither a duration's text nor a decimal's sorts in the order of the values.
  */
 const UNORDERED = [
   'max(sql/raw@1)',
+  'max(sqlite/decimal@1)',
   'max(sqlite/duration-string@1)',
   'min(sql/raw@1)',
+  'min(sqlite/decimal@1)',
   'min(sqlite/duration-string@1)',
 ];
 
@@ -402,14 +412,16 @@ describe('SQLite aggregate conformance', { concurrent: false }, () => {
       (codecId) => registry.resolve('avgDecimal', { codecId }) !== undefined,
     );
     const exactCodecs = [...sqliteCodecRegistry.values()]
+      .filter((descriptor) => descriptor.traits.includes('numeric'))
       .map((descriptor) => descriptor.codecId)
       .filter((codecId) => /decimal|numeric|unbounded/.test(codecId));
 
     expect(operations).toEqual(CONTRIBUTED_OPERATIONS);
     expect(claimingAvgDecimal).toEqual([]);
     expect(registry.resolve('avgDecimal')).toBeUndefined();
-    // Nor is there a codec such a result could name: no exact decimal, no
-    // unbounded integer. An `avg` here is the `real` SQLite computes.
+    // Nor is there a codec such a result could name: no exact decimal that
+    // offers arithmetic, no unbounded integer. An `avg` here is the `real`
+    // SQLite computes.
     expect(exactCodecs).toEqual([]);
   });
 

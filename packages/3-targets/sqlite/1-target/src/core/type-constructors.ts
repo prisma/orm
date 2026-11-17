@@ -7,6 +7,7 @@ import {
   SQLITE_DATETIME_CODEC_ID,
   SQLITE_DATETIME_STRING_CODEC_ID,
   SQLITE_DATETIME_TEMPORAL_CODEC_ID,
+  SQLITE_DECIMAL_CODEC_ID,
   SQLITE_DURATION_STRING_CODEC_ID,
   SQLITE_INTEGER_CODEC_ID,
   SQLITE_JSON_CODEC_ID,
@@ -17,15 +18,17 @@ import {
 } from './codec-ids';
 
 /**
- * The explicit SQLite scalar types, each named after the SQLite column type that stores it, plus the value it reads where that column type has more than one codec. PSL writes them as field types and the TypeScript builder calls them as `type.X()`. ADR 315, ADR 322.
+ * The explicit SQLite scalar types, each named after the SQLite column type that stores it, plus the value it reads where that column type has more than one codec. `DecimalString` is named after its data type, because SQLite has no decimal column type. PSL writes them as field types and the TypeScript builder calls them as `type.X()`. ADR 315, ADR 322.
  */
+const integerNumber = {
+  kind: 'typeConstructor',
+  documentation:
+    'An integer read as a JavaScript number within its safe integer range, stored as SQLite integer.',
+  output: { codecId: SQLITE_INTEGER_CODEC_ID },
+} as const;
+
 export const sqliteExplicitScalarTypes = {
-  IntegerNumber: {
-    kind: 'typeConstructor',
-    documentation:
-      'An integer read as a JavaScript number within its safe integer range, stored as SQLite integer.',
-    output: { codecId: SQLITE_INTEGER_CODEC_ID },
-  },
+  IntegerNumber: integerNumber,
   IntegerBigInt: {
     kind: 'typeConstructor',
     documentation: 'An integer read as a JavaScript bigint, stored as SQLite integer.',
@@ -35,6 +38,12 @@ export const sqliteExplicitScalarTypes = {
     kind: 'typeConstructor',
     documentation: 'A floating-point number, stored as SQLite real.',
     output: { codecId: SQLITE_REAL_CODEC_ID },
+  },
+  DecimalString: {
+    kind: 'typeConstructor',
+    documentation:
+      'An exact decimal number read as decimal text such as "12.50", stored as SQLite text. Text compares by its characters, so a field of this type can be compared for equality but not ordered or summed.',
+    output: { codecId: SQLITE_DECIMAL_CODEC_ID },
   },
   Text: {
     kind: 'typeConstructor',
@@ -99,6 +108,13 @@ export const sqliteConvenienceScalarTypes = {
     args: [storageOption('real')],
     choices: [{ when: { storage: 'real' }, type: 'Real' }],
   },
+  Decimal: {
+    kind: 'typeChoice',
+    documentation:
+      'An exact decimal number read as decimal text such as "12.50", stored as SQLite text. It can be compared for equality but not ordered or summed.',
+    args: [storageOption('text')],
+    choices: [{ when: { storage: 'text' }, type: 'DecimalString' }],
+  },
   String: {
     kind: 'typeChoice',
     documentation: 'Text, stored as SQLite text.',
@@ -120,16 +136,19 @@ export const sqliteConvenienceScalarTypes = {
 } as const satisfies AuthoringTypeNamespace;
 
 /**
- * SQLite's scalar types other than the date and time types: the explicit types, the convenience types, and `Decimal`, which is still a type constructor on text. `sqliteScalarTypeConstructors` adds the date and time types.
+ * The explicit types' former names, kept for one release line as deprecated aliases. Each gives the same codec as its replacement, and the PSL interpreter warns where one is written (ADR 257).
+ */
+export const sqliteDeprecatedScalarTypes = {
+  BigIntNumber: { ...integerNumber, deprecated: { replacement: 'IntegerNumber' } },
+} as const satisfies AuthoringTypeNamespace;
+
+/**
+ * SQLite's scalar types other than the date and time types: the explicit types, the convenience types and the deprecated aliases. `sqliteScalarTypeConstructors` adds the date and time types.
  */
 export const sqliteScalarAuthoringTypes = {
   ...sqliteExplicitScalarTypes,
   ...sqliteConvenienceScalarTypes,
-  Decimal: {
-    kind: 'typeConstructor',
-    documentation: 'A decimal value stored and represented as text to preserve precision.',
-    output: { codecId: SQLITE_TEXT_CODEC_ID },
-  },
+  ...sqliteDeprecatedScalarTypes,
 } as const satisfies AuthoringTypeNamespace;
 
 /**

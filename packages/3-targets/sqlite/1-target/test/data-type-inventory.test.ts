@@ -23,6 +23,7 @@ const EXPECTED: Readonly<Record<string, string>> = {
   'sqlite/real@1': 'sqlite/real',
   'sql/float@1': 'sqlite/real',
   'sql/raw@1': 'sql/raw',
+  'sqlite/decimal@1': 'sqlite/decimal',
 };
 
 describe('sqlite data type inventory', () => {

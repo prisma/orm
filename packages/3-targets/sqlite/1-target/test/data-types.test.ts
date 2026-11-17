@@ -7,6 +7,7 @@ import {
   sqliteDataTypes,
   sqliteDate,
   sqliteDatetime,
+  sqliteDecimal,
   sqliteDuration,
   sqliteInteger,
   sqliteJson,
@@ -27,6 +28,7 @@ describe('the data types this target registers', () => {
       'sqlite/character-varying',
       'sqlite/date',
       'sqlite/datetime',
+      'sqlite/decimal',
       'sqlite/duration',
       'sqlite/integer',
       'sqlite/json',
@@ -48,6 +50,7 @@ describe('the data types this target registers', () => {
     ['sqlite/time', sqliteTime, []],
     ['sqlite/duration', sqliteDuration, []],
     ['sqlite/json', sqliteJson, []],
+    ['sqlite/decimal', sqliteDecimal, ['sqlite/integer', 'sqlite/text']],
   ])('%s casts from exactly the types the design names', (_id, type, sources) => {
     expect(sourcesOf(type)).toEqual(sources);
   });

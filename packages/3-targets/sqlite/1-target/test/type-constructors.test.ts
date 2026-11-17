@@ -22,7 +22,6 @@ describe('the type constructors the SQLite target contributes', () => {
       ...sqliteScalarTypeConstructors,
       ...sqliteAuthoringTypes,
     });
-    expect(Object.keys(sqliteAuthoringTypes)).toEqual(['sql', 'BigIntNumber', 'temporal']);
   });
 
   it('contributes the family’s sql.Varchar, whose length is a value of sqlite/real', () => {
@@ -50,7 +49,6 @@ describe('the type constructors the SQLite target contributes', () => {
 
   const allConstructors = {
     ...sqliteAuthoringTypes.sql,
-    BigIntNumber: sqliteAuthoringTypes.BigIntNumber,
     ...sqliteScalarAuthoringTypes,
     ...sqliteDateTimeTypeConstructors,
   };
@@ -59,16 +57,18 @@ describe('the type constructors the SQLite target contributes', () => {
     ['IntegerNumber', 'sqlite/integer@1', 'integer'],
     ['IntegerBigInt', 'sqlite/bigint@1', 'integer'],
     ['Real', 'sqlite/real@1', 'real'],
+    ['DecimalString', 'sqlite/decimal@1', 'text'],
     ['Text', 'sqlite/text@1', 'text'],
     ['Blob', 'sqlite/blob@1', 'blob'],
     ['PlainJson', 'sqlite/json@1', 'text'],
     ['Int', 'sqlite/integer@1', 'integer'],
     ['BigInt', 'sqlite/bigint@1', 'integer'],
     ['Float', 'sqlite/real@1', 'real'],
+    ['Decimal', 'sqlite/decimal@1', 'text'],
     ['String', 'sqlite/text@1', 'text'],
     ['Bytes', 'sqlite/blob@1', 'blob'],
     ['Json', 'sqlite/json@1', 'text'],
-    ['Decimal', 'sqlite/text@1', 'text'],
+    ['BigIntNumber', 'sqlite/integer@1', 'integer'],
     ['DatetimeJsDate', 'sqlite/datetime@1', 'text'],
     ['DatetimeTemporal', 'sqlite/datetime-temporal@1', 'text'],
     ['DatetimeString', 'sqlite/datetime-string@1', 'text'],

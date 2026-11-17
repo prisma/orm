@@ -45,4 +45,6 @@ export {
   sqliteTimeTemporalColumn,
 } from '../core/date-time-codecs';
 export { SQLITE_NOW_EXPRESSION, sqliteNowExpressionFor } from '../core/datetime-text';
+export type { SqliteDecimalStringDescriptor } from '../core/decimal-codec';
+export { sqliteDecimalStringColumn } from '../core/decimal-codec';
 export { sqliteCodecDescriptorRegistry, sqliteCodecRegistry } from '../core/registry';

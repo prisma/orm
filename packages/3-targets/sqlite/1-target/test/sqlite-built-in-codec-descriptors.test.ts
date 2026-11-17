@@ -64,6 +64,7 @@ const EXPECTED_CODEC_IDS = [
   'sqlite/json@1',
   'sqlite/bigint@1',
   'sqlite/bigintnumber@1',
+  'sqlite/decimal@1',
 ] as const;
 
 const refFor = (

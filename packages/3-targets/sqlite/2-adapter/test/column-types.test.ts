@@ -7,10 +7,12 @@ describe('the SQLite column helpers', () => {
       integerNumberColumn: columnTypes.integerNumberColumn,
       integerBigIntColumn: columnTypes.integerBigIntColumn,
       plainJsonColumn: columnTypes.plainJsonColumn,
+      decimalStringColumn: columnTypes.decimalStringColumn,
     }).toEqual({
       integerNumberColumn: { codecId: 'sqlite/integer@1' },
       integerBigIntColumn: { codecId: 'sqlite/bigint@1' },
       plainJsonColumn: { codecId: 'sqlite/json@1' },
+      decimalStringColumn: { codecId: 'sqlite/decimal@1' },
     });
   });
 

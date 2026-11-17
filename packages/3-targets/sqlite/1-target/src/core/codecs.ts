@@ -81,6 +81,7 @@ import {
   sqliteTimeTemporalDescriptor,
 } from './date-time-codecs';
 import { sqliteInstantMilliseconds } from './date-time-values';
+import { sqliteDecimalStringDescriptor } from './decimal-codec';
 import { errorDateTimeUnwritable, sqliteError } from './errors';
 
 /**
@@ -889,4 +890,5 @@ export const codecDescriptors = defineSqliteCodecs([
   sqliteJsonDescriptor,
   sqliteBigintDescriptor,
   sqliteBigintNumberDescriptor,
+  sqliteDecimalStringDescriptor,
 ]);

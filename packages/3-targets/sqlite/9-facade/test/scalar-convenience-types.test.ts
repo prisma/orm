@@ -62,7 +62,9 @@ const model = (...fields: readonly string[]) =>
     '',
   ].join('\n');
 
-const withColumns = (columns: Readonly<Record<string, { readonly codecId: string }>>) => ({
+const withColumns = (
+  columns: Readonly<Record<string, { readonly codecId: string; readonly default?: unknown }>>,
+) => ({
   storage: { namespaces: { __unbound__: { entries: { table: { event: { columns } } } } } },
 });
 
@@ -74,6 +76,8 @@ const rows = [
   ['BigInt(as: number)', 'IntegerNumber', 'sqlite/integer@1'],
   ['Float', 'Real', 'sqlite/real@1'],
   ['Float(storage: real)', 'Real', 'sqlite/real@1'],
+  ['Decimal', 'DecimalString', 'sqlite/decimal@1'],
+  ['Decimal(storage: text)', 'DecimalString', 'sqlite/decimal@1'],
   ['String', 'Text', 'sqlite/text@1'],
   ['String(storage: text)', 'Text', 'sqlite/text@1'],
   ['Bytes', 'Blob', 'sqlite/blob@1'],
@@ -106,6 +110,8 @@ model Event {
   total   ${names['BigInt']} @default(0)
   rank    ${names['BigIntNumber']}?
   ratio   ${names['Float']} @default(1.5)
+  price   ${names['Decimal']} @default("12.50")
+  fee     ${names['Decimal']}? @default(3)
   name    ${names['String']} @unique @default("x")
   avatar  ${names['Bytes']}?
   payload ${names['Json']}?
@@ -129,6 +135,7 @@ model Owner {
         BigInt: 'BigInt',
         BigIntNumber: 'BigInt(as: number)',
         Float: 'Float',
+        Decimal: 'Decimal',
         String: 'String',
         Bytes: 'Bytes',
         Json: 'Json',
@@ -140,6 +147,7 @@ model Owner {
         BigInt: 'IntegerBigInt',
         BigIntNumber: 'IntegerNumber',
         Float: 'Real',
+        Decimal: 'DecimalString',
         String: 'Text',
         Bytes: 'Blob',
         Json: 'PlainJson',
@@ -162,15 +170,54 @@ model Owner {
     expect(result.ok ? '' : JSON.stringify(result.failure)).toContain(message);
   });
 
-  it('keeps Decimal and BigIntNumber on the codecs they had', () => {
-    const { contract, warnings } = emit(model('price Decimal', 'bounded BigIntNumber'));
+  it('gives Decimal its own codec, sqlite/decimal@1, on a text column', () => {
+    const { contract, warnings } = emit(model('price Decimal'));
     expect(warnings).toEqual([]);
+    expect(contract).toMatchObject(withColumns({ price: { codecId: 'sqlite/decimal@1' } }));
+  });
+
+  it('stores a Decimal default written as text or a whole number in the form the codec writes', () => {
+    const { contract } = emit(
+      model('price Decimal @default("012.50")', 'fee Decimal @default(-3)'),
+    );
     expect(contract).toMatchObject(
       withColumns({
-        price: { codecId: 'sqlite/text@1' },
-        bounded: { codecId: 'sqlite/bigintnumber@1' },
+        price: { codecId: 'sqlite/decimal@1', default: { kind: 'literal', value: '12.50' } },
+        fee: { codecId: 'sqlite/decimal@1', default: { kind: 'literal', value: '-3' } },
       }),
     );
+  });
+
+  it('refuses a Decimal default that is not decimal text', () => {
+    const { result } = interpret(model('price Decimal @default("twelve")'));
+    expect(result.ok ? '' : JSON.stringify(result.failure)).toContain(
+      'sqlite/decimal cannot read \\"twelve\\". Write decimal text, as in \\"12.50\\".',
+    );
+  });
+
+  it('warns that BigIntNumber is deprecated, and emits the contract IntegerNumber emits', () => {
+    const deprecated = emit(
+      `types {\n  Bounded = BigIntNumber\n}\n\n${model('bounded BigIntNumber', 'aliased Bounded')}`,
+    );
+    const replacement = emit(
+      `types {\n  Bounded = IntegerNumber\n}\n\n${model('bounded IntegerNumber', 'aliased Bounded')}`,
+    );
+    expect(deprecated.json).toBe(replacement.json);
+    expect(deprecated.contract).toMatchObject(
+      withColumns({ bounded: { codecId: 'sqlite/integer@1' } }),
+    );
+    expect(deprecated.warnings.map(({ code, message }) => ({ code, message }))).toEqual([
+      {
+        code: 'PSL_DEPRECATED_SCALAR_NAME',
+        message:
+          'Scalar type "BigIntNumber" is deprecated and will be removed; use "IntegerNumber".',
+      },
+      {
+        code: 'PSL_DEPRECATED_SCALAR_NAME',
+        message:
+          'Scalar type "BigIntNumber" is deprecated and will be removed; use "IntegerNumber".',
+      },
+    ]);
   });
 });
 
@@ -185,6 +232,8 @@ describe('the SQLite scalar convenience types in a TypeScript contract', () => {
             total: field.column(type.BigInt()),
             rank: field.column(type.BigInt({ as: 'number' })),
             ratio: field.column(type.Float()),
+            price: field.column(type.Decimal()),
+            storedPrice: field.column(type.Decimal({ storage: 'text' })),
             name: field.column(type.String()),
             avatar: field.column(type.Bytes()),
             payload: field.column(type.Json()),
@@ -202,6 +251,8 @@ describe('the SQLite scalar convenience types in a TypeScript contract', () => {
             total: field.column(type.IntegerBigInt()),
             rank: field.column(type.IntegerNumber()),
             ratio: field.column(type.Real()),
+            price: field.column(type.DecimalString()),
+            storedPrice: field.column(type.DecimalString()),
             name: field.column(type.Text()),
             avatar: field.column(type.Blob()),
             payload: field.column(type.PlainJson()),
@@ -219,6 +270,7 @@ describe('the SQLite scalar convenience types in a TypeScript contract', () => {
         total: { codecId: 'sqlite/bigint@1' },
         rank: { codecId: 'sqlite/integer@1' },
         ratio: { codecId: 'sqlite/real@1' },
+        price: { codecId: 'sqlite/decimal@1' },
         name: { codecId: 'sqlite/text@1' },
         avatar: { codecId: 'sqlite/blob@1' },
         payload: { codecId: 'sqlite/json@1' },
