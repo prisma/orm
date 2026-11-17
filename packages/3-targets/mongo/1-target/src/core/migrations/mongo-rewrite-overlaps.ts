@@ -193,6 +193,16 @@ function filterReadsOf(collection: string, filter: DiscriminatorFilter | undefin
 }
 
 function accessOf(rewrite: OrderedRewrite): Access {
+  if (rewrite.kind === 'deleteDocuments') {
+    const { collection } = rewrite.call.options;
+    const { field, value: deleted } = rewrite.deletedVariant;
+    return {
+      role: 'empties',
+      empties: [value({ collection, field }, deleted)],
+      writes: [],
+      filterReads: [key(collection, field)],
+    };
+  }
   const selecting = (
     role: Role,
     collection: string,
@@ -202,10 +212,7 @@ function accessOf(rewrite: OrderedRewrite): Access {
     role,
     empties,
     writes,
-    filterReads:
-      rewrite.kind === 'deleteDocuments'
-        ? []
-        : filterReadsOf(collection, rewrite.discriminatorFilter),
+    filterReads: filterReadsOf(collection, rewrite.discriminatorFilter),
   });
   switch (rewrite.kind) {
     case 'renameField': {
@@ -254,16 +261,6 @@ function accessOf(rewrite: OrderedRewrite): Access {
     case 'removeStoredValue': {
       const { options } = rewrite.call;
       return selecting('empties', options.collection, [value(options, options.value)], []);
-    }
-    case 'deleteDocuments': {
-      const { collection } = rewrite.call.options;
-      const { field, value: deleted } = rewrite.deletedVariant;
-      return {
-        role: 'empties',
-        empties: [value({ collection, field }, deleted)],
-        writes: [],
-        filterReads: [key(collection, field)],
-      };
     }
     default: {
       const unmodelled: never = rewrite;
