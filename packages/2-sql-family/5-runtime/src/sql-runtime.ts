@@ -682,7 +682,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
         return this.beginTransactionOn(connection, owner, parent, options);
       },
       release: async () => {},
-      destroy: async () => {},
+      destroy: (reason) => connection.destroy(reason),
     };
     return { connection: async () => held };
   }

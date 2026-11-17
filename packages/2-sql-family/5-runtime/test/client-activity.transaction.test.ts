@@ -71,7 +71,7 @@ describe('the transaction of an activity handle', () => {
       expect(beforeRelease).toEqual(['begin', 'commit', 'begin', 'rollback']);
     });
 
-    it('leaves the connection held after a failed rollback', async () => {
+    it('destroys the connection after a failed rollback', async () => {
       const { runtime, events } = createSetup({
         failures: { rollback: new Error('rollback failed') },
       });
@@ -85,7 +85,7 @@ describe('the transaction of an activity handle', () => {
       ).rejects.toMatchObject({ code: 'RUNTIME.TRANSACTION_ROLLBACK_FAILED' });
       await call.end({ outcome: 'failed' });
 
-      expect(driverCalls(events)).toEqual(['begin', 'rollback']);
+      expect(driverCalls(events)).toEqual(['begin', 'rollback', 'destroy']);
     });
 
     it('rejects a second transaction while the first is open, leaving the connection held', async () => {
