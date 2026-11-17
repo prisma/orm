@@ -84,9 +84,25 @@ import { col, Migration, MigrationCLI } from '@prisma/orm-postgres/migration';
 
 Both members sit in config sections that already describe the same artifacts: `contract` holds the contract's source and output paths, and `migrations` holds the migrations directory.
 
-## Extensions
+## Every component states where its types are
 
-An extension, such as `@prisma/orm-extension-pgvector`, is a package the application installs itself. Its types are imported from its own package, in their own import line. The extension states that module name, as the target package states its two.
+A target, an adapter and an extension are the same kind of thing: a framework component. Each declares the types it contributes to `contract.d.ts` in the same form, a module, a name and an alias:
+
+```ts
+{ package: '@prisma/orm-extension-pgvector/codec-types', named: 'CodecTypes', alias: 'PgVectorTypes' }
+{ package: '@prisma/orm-target-postgres/target/codec-types', named: 'CodecTypes', alias: 'PgTypes' }
+```
+
+The module is always one that can be imported from outside this repository. A declaration in a published package never holds a private workspace name.
+
+The emitter treats every declaration the same way. It writes one import line per module and groups the names that share one.
+
+An application imports only from packages it depends on directly, and that decides which module a declaration ends up naming:
+
+- **An extension** is a package the application installs, so its declarations name its own package and are used as they are.
+- **A target and its adapter** are parts of a target package. They name their own published module, which an application that assembles its own stack depends on directly. An application on a target package does not, so that package's `defineConfig`, which hands the config the target and adapter descriptors, restates their declarations with its own `generated-types` module. That module re-exports the same types.
+
+So for an application on `@prisma/orm-postgres` the framework, family, target and adapter types all name one module and come out as one import line, and each extension gets its own.
 
 ## A config must name its modules
 
@@ -107,9 +123,11 @@ Any module name recorded inside an emitted contract is the name the matching imp
 
 This section concerns only the packages built in this repository.
 
-Their source is written against private workspace names, such as `@internal/postgres`. The published packages, such as `@prisma/orm-postgres`, are produced from that source by a build step that knows the published name.
+Their source is written against private workspace names, such as `@internal/postgres`. The published packages, such as `@prisma/orm-postgres`, are produced from that source by a build step that knows, for each workspace package, the published package it goes into and the entry it is published under.
 
-A package's own name is therefore a constant that the build fills in: the published name in the published package, the workspace name when the source is used directly inside this repository. So `@prisma/orm-postgres` names `@prisma/orm-postgres/generated-types`, and a test in this repository that loads the workspace package gets `@internal/postgres/generated-types`, which resolves there.
+A workspace package's published module base is therefore a constant that the build fills in, one per workspace package: `@prisma/orm-postgres` for the Postgres target package, `@prisma/orm-target-postgres/target` for the Postgres target, `@prisma/orm-postgres-contrib/citext` for the citext extension. When the source is used directly inside this repository, the constant is not filled in and the package uses its workspace name, which resolves there.
+
+A component that names another workspace package's module, as the Postgres adapter names the target's codec types, takes that package's base from it.
 
 The table that maps workspace packages to published packages is configuration for that build. It plays no part when a user's files are generated.
 
@@ -118,6 +136,7 @@ The table that maps workspace packages to published packages is configuration fo
 - A target package from any author gets correct generated files with no change to the CLI.
 - A target package has two obligations: a module that re-exports the contract types, and a module for migration files.
 - A generated file can be checked mechanically: every import is one of the config's two modules, an extension's module, or a relative path.
+- A published package can be checked mechanically: every module one of its components declares, and every module its config names, is one of that package's own exports, and no declaration holds a private workspace name.
 - An application that assembles its own stack from the framework, family and target packages writes a small module that re-exports their types and names it in its config.
 
 ## Alternatives considered
@@ -135,6 +154,14 @@ The package would map each of Prisma's private module names to one of its own su
 ### One module for both kinds of file
 
 Rejected because a migration file's module is loaded at run time and should not carry the type surface.
+
+### A target and its adapter declare no module
+
+The types module named in the config would carry every name, so a target or adapter would declare only names and aliases, and only an extension would name a module. Rejected because it makes a target a different kind of thing from an extension, and because an application that assembles its own stack would have nothing to say where the target's types come from.
+
+### Declarations hold workspace names and are translated when files are generated
+
+Each declaration names a private workspace module, and a function turns it into a published name at the moment a file is written. Rejected because a declaration then says something false wherever it is read, and every reader needs the function and the table behind it.
 
 ### Each part names its own package
 

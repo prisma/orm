@@ -21,11 +21,28 @@ Known failure modes to check in every dispatch: destructive git operations are f
 - **Hands on:** every config built by a target package names both modules.
 - **Amended 2026-11-17, during the dispatch:** the brief said nothing emitted would change. That is false for an application that loads an extension from its published package: the extension now states its published module, so the `package` string recorded beside its codec metadata in the emitted contract changes from `@internal/extension-<x>/...` to the published name. That is the design record's rule arriving here (a module name recorded in an emitted contract is the name the matching import line uses), so the regeneration is accepted in this dispatch, in its own commit. Import lines and hashes do not change. Dispatch 5 still decides whether the string is read at all and should be removed.
 
-## 3. Contract types are emitted from `contract.typesModule`
+## 3. Contract types are emitted from the modules the config and the components state
 
-- **Outcome:** the framework emitter and the SQL and MongoDB family emitters write one import line from the config's module; target and adapter descriptors declare names and aliases but no package; a missing member is a structured error; every in-repo config assembled by hand that emits names its module; the CLI no longer consults the manifest for contract types.
-- **Builds on:** dispatch 2.
-- **Hands on:** regenerated `contract.d.ts` files in their own commit, `pnpm fixtures:check` green, the planner golden manifest regenerated.
+Redesigned 2026-11-17 after the operator pointed out that a target and an extension are the same kind of thing, and that a declaration must never hold a workspace name. The design record's section "Every component states where its types are" is the contract. It runs as three dispatches.
+
+### 3a. Targets and adapters state their own published module
+
+- **Outcome:** the shell build fills in one module-base constant per workspace package, so a package in a published build that bundles several gets its own. Every target's and adapter's type declaration states its published module through it; an adapter that names its target's module takes the target's base. A pull-request check asserts, for every published package, that each module a component declares is one of that package's exports, that no declaration holds an `@internal/` name in built code or declaration files, and that no unfilled constant remains. The list of workspace names allowed in published output loses every entry this removes, and every entry that no longer has a cause.
+- **Property it preserves:** `TypesImportSpec` and every descriptor's shape are unchanged. What any command emits is unchanged, because the translation function still maps a workspace name and passes a published one through.
+- **Builds on:** dispatches 1 and 2.
+- **Hands on:** no component in a published package declares a workspace name.
+
+### 3b. A target package restates its components' declarations
+
+- **Outcome:** each target package's `defineConfig` hands the config copies of its target and adapter descriptors whose type declarations name the package's `generated-types` module. A pull-request check asserts that every declaration in a target package's config names one of that package's own exports.
+- **Builds on:** 3a.
+- **Hands on:** for an application on a target package, every declaration names a package the application depends on directly.
+
+### 3c. The emitters stop translating
+
+- **Outcome:** the framework emitter and the SQL and MongoDB family emitters write their own imports from `contract.typesModule` and every component's declaration from the module it states, one import line per module. A missing `contract.typesModule` is a structured error. Every in-repo config assembled by hand that emits names its module. The CLI no longer consults the manifest for contract types.
+- **Builds on:** 3b.
+- **Hands on:** regenerated `contract.d.ts` files in their own commit, `pnpm fixtures:check` green.
 
 ## 4. Migration files are rendered from `migrations.module`; the old mechanism is removed
 
