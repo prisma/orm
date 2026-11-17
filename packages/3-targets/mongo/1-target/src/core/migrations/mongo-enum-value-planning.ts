@@ -33,6 +33,7 @@ import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { type StoredValue, unrewritableKeyReason } from './migration-factories';
 import { type PlannedRewrite, rewriteRefusals } from './mongo-rewrite-refusals';
+import { statementFlag } from './mongo-statement-flags';
 import { collectionControlPolicy, modelCoordinates } from './mongo-statement-planning';
 import { rewriteCollectionOf } from './mongo-stored-key-planning';
 import {
@@ -352,20 +353,22 @@ function stillStoredRefusal(
 }
 
 /**
- * For a member that keeps its name and takes the stored value of an origin member the destination no longer has: the plan cannot tell whether that member is gone, so it says how to name the member it became.
+ * For a member that keeps its name and takes the stored value of an origin member the destination no longer has: the plan cannot tell whether that member is gone, so it says how to name the member it became. The member it suggests is the destination's only new member that no rename names, as the question picks it.
  */
 function takenValueAdvice(
   enums: EnumComparison,
   enumValue: EnumValueCoordinate,
   to: StoredValue,
   holder: string | undefined,
+  renamedTo: readonly string[],
 ): string | undefined {
   const { originEnum, destinationEnum } = enums;
   if (holder === undefined || destinationEnum.members.some(({ name }) => name === holder)) {
     return undefined;
   }
   const added = destinationEnum.members.filter(
-    ({ name }) => !originEnum.members.some((member) => member.name === name),
+    ({ name }) =>
+      !renamedTo.includes(name) && !originEnum.members.some((member) => member.name === name),
   );
   const [only] = added;
   if (only === undefined) return undefined;
@@ -374,10 +377,11 @@ function takenValueAdvice(
   const ask = 'and the next question says how to keep the data of both.';
   const memberText = (member: string) =>
     enumValueStatementText(enums.contract, { ...enumValue, member });
+  const rename = (member: string) => statementFlag('rename', `${holderText}:${memberText(member)}`);
   if (added.length > 1) {
-    return `${lead} If "${holderText}" is now another member, add --rename '${holderText}:${memberText('<new member>')}', ${ask}`;
+    return `${lead} If "${holderText}" is now another member, add ${rename('<new member>')}, ${ask}`;
   }
-  return `${lead} If "${holderText}" is now "${memberText(only.name)}", add --rename ${holderText}:${memberText(only.name)}, ${ask}`;
+  return `${lead} If "${holderText}" is now "${memberText(only.name)}", add ${rename(only.name)}, ${ask}`;
 }
 
 function mergingRefusal(
@@ -548,7 +552,17 @@ function planEnum(
       keepsDataBy === 'advice'
         ? twoMigrationsAdvice(enums, overlapping)
         : change.statement === undefined && change.to !== undefined
-          ? takenValueAdvice(enums, change.enumValue, change.to, merging(change.to)?.name)
+          ? takenValueAdvice(
+              enums,
+              change.enumValue,
+              change.to,
+              merging(change.to)?.name,
+              valueRenames.flatMap((statement) =>
+                statement.to.enum === enumName && statement.to.namespaceId === namespaceId
+                  ? [statement.to.member]
+                  : [],
+              ),
+            )
           : undefined;
     for (const enumPlace of live) {
       const policy = collectionControlPolicy(contract, enumPlace.place.collection);

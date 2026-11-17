@@ -382,6 +382,20 @@ describe('MongoMigrationPlanner, a removed enum value', () => {
     });
   });
 
+  it('leaves out a member another rename names when it picks the member to suggest', () => {
+    const types = { status: { ...STATUS, nullable: true } };
+    const result = plan({
+      from: users('from', statuses({ ACTIVE: 'active', ARCHIVED: 'archived', OLD: 'old' }), types),
+      to: users('to', statuses({ ACTIVE: 'archived', RETIRED: 'retired', NEW: 'old' }), types),
+      schema: live,
+      statements: [renameValue('OLD', 'NEW')],
+    });
+    if (result.kind !== 'success') throw new Error('Expected a plan');
+    expect(result.dataLoss.map(({ keepDataAdvice }) => keepDataAdvice)).toEqual([
+      'Its new stored value "archived" was the stored value of enum value "Status.ARCHIVED", which the enum no longer has. If "Status.ARCHIVED" is now "Status.RETIRED", add --rename Status.ARCHIVED:Status.RETIRED, and the next question says how to keep the data of both.',
+    ]);
+  });
+
   it('advises a boolean enum whose values trade places to swap them in one update, which two migrations cannot do', () => {
     const BOOLEAN_SWAP_ADVICE = `${NO_THIRD_BOOLEAN} To keep that data, ${SWAP_IN_ONE_UPDATE}, and remove the removeStoredValue calls of this enum from migration.ts before you apply it.`;
     const flags = (seed: string, members: Readonly<Record<string, unknown>>) =>
