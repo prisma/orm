@@ -128,23 +128,44 @@ export function dbUpdateRowsWithoutValueAdvice(
         ];
   const [first] = reports;
   if (first?.reason === 'nullValues') {
+    const keep = optionalFields([first], 'the field');
     return [
       chooseAction(`Set a value in ${theRows(first.rows)}`),
-      editFileAction('Keep the field optional in the contract source'),
+      ...(keep === undefined
+        ? []
+        : [editFileAction(`Keep ${keep.text} optional in the contract source`)]),
       ...planned,
     ];
   }
+  const optional = optionalFields(reports, theFields(reports));
   return [
     ...planned,
-    ...(planned.length > 0 && onlyDiscriminators(reports)
+    ...(optional === undefined
       ? []
-      : [editFileAction(`Make ${theFields(reports)} optional in the contract source`)]),
+      : [editFileAction(`Make ${optional.text} optional in the contract source`)]),
   ];
 }
 
-/** Whether every field is a discriminator, which the contract cannot make optional. */
-function onlyDiscriminators(reports: readonly RowsWithoutValueReport[]): boolean {
-  return reports.every(({ discriminator }) => discriminator);
+/**
+ * The fields of the reports the contract can make optional, which leaves out discriminators: in the words the caller
+ * gives for all of them, or by name when a discriminator is left out. Undefined when every field is a discriminator.
+ */
+function optionalFields(
+  reports: readonly RowsWithoutValueReport[],
+  allOfThem: string,
+): { readonly text: string; readonly one: boolean } | undefined {
+  const optional = reports.filter(({ discriminator }) => !discriminator);
+  if (optional.length === 0) {
+    return undefined;
+  }
+  const named = distinct(optional.flatMap(({ field }) => (field === undefined ? [] : [field])));
+  if (optional.length === reports.length || named.length === 0) {
+    return { text: allOfThem, one: reports.length === 1 };
+  }
+  const [only] = named;
+  return named.length === 1 && only !== undefined
+    ? { text: `field "${only}"`, one: true }
+    : { text: `fields ${named.map((field) => `"${field}"`).join(', ')}`, one: false };
 }
 
 function theFields(reports: readonly RowsWithoutValueReport[]): string {
@@ -484,40 +505,66 @@ function migrateRowsWithoutValueAdvice(
         : `Set a value in the rows that hold NULL in each of ${fieldList(reports)} and re-run ${dbMigrateCommand(invocation)}`,
     );
     const backfill = again('Delete');
-    const fields = one ? 'the field' : 'those fields';
+    const fields = optionalFields(reports, one ? 'the field' : 'those fields');
     const keep =
-      failedMigration === undefined
-        ? editFileAction(
-            `Keep ${fields} optional in the contract source, and plan the migration again`,
-          )
-        : keepOptional(fields, one ? 'it' : 'them', failedMigration, invocation);
-    return [rerun, ...(backfill === undefined ? [] : [backfill]), keep];
+      fields === undefined
+        ? []
+        : [
+            failedMigration === undefined
+              ? editFileAction(
+                  `Keep ${fields.text} optional in the contract source, and plan the migration again`,
+                )
+              : keepOptional(fields.text, fields.one ? 'it' : 'them', failedMigration, invocation),
+          ];
+    return [rerun, ...(backfill === undefined ? [] : [backfill]), ...keep];
   }
   if (first?.reason === 'nullValues') {
     const notEnough =
       'The migration also adds a required field the existing rows have no value for, so setting values is not enough.';
     const backfill = again(`${notEnough} Delete`);
-    return [
-      backfill ??
-        editFileAction(
-          `${notEnough} Make the new fields optional in the contract source, and plan the migration again`,
-        ),
-    ];
+    if (backfill !== undefined) {
+      return [backfill];
+    }
+    const newFields = optionalFields(
+      reports.filter(({ reason }) => reason === 'newField'),
+      'the new fields',
+    );
+    return newFields === undefined
+      ? [resolveTheCause(invocation)]
+      : [
+          editFileAction(
+            `${notEnough} Make ${newFields.text} optional in the contract source, and plan the migration again`,
+          ),
+        ];
   }
   const fields = theFields(reports);
   const required = again(`To keep ${fields} required, delete`);
-  return required === undefined
-    ? [
-        editFileAction(
-          `Make ${fields} optional in the contract source, and plan the migration again`,
-        ),
-      ]
-    : [
-        required,
-        ...(onlyDiscriminators(reports)
-          ? []
-          : [editFileAction(`Make ${fields} optional in the contract source, and plan it again`)]),
-      ];
+  const optional = optionalFields(reports, fields);
+  if (required === undefined) {
+    return [
+      optional === undefined
+        ? resolveTheCause(invocation)
+        : editFileAction(
+            `Make ${optional.text} optional in the contract source, and plan the migration again`,
+          ),
+    ];
+  }
+  return [
+    required,
+    ...(optional === undefined
+      ? []
+      : [
+          editFileAction(
+            `Make ${optional.text} optional in the contract source, and plan it again`,
+          ),
+        ]),
+  ];
+}
+
+function resolveTheCause(invocation: CliInvocation): NextAction {
+  return chooseAction(
+    `Resolve the cause the failure names, then re-run \`${cliCommand(invocation, 'db migrate', invocation.rerunArgs ?? [])}\``,
+  );
 }
 
 function keepOptional(
@@ -621,9 +668,5 @@ export function migrateAdvice(
   if (facts.failedPrecheck !== undefined) {
     return migrateFailedPrecheckAdvice(facts.failedPrecheck, invocation);
   }
-  return [
-    chooseAction(
-      `Resolve the cause the failure names, then re-run \`${cliCommand(invocation, 'db migrate', invocation.rerunArgs ?? [])}\``,
-    ),
-  ];
+  return [resolveTheCause(invocation)];
 }

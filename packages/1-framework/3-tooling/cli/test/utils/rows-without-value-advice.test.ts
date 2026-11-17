@@ -304,6 +304,40 @@ describe('the advice for rows a required field has no value for', () => {
     ]);
   });
 
+  it('names only the fields that are not discriminators when it offers to make fields optional', () => {
+    const rowsWithoutValue = [
+      { field: 'Task.type', reason: 'newField', rows: 3, discriminator: true },
+      { field: 'Task.dueAt', reason: 'newField', rows: 3, discriminator: false },
+    ] as const;
+    const replan = `\`migrations/app/20261012T1200_note\` (copy any code you wrote in its migration.ts first), plan it again with \`{bin} migration plan --from ${FROM} --name note --backfill Task.type --backfill Task.dueAt\`, adding any other statements you planned it with, fill in the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, and run \`{bin} db migrate\``;
+    expect([
+      dbUpdateError(
+        { ...runnerFailed, conflicts: undefined, rowsWithoutValue, databaseStorageHash: DATABASE },
+        FROM_PROJECT,
+      ).fix,
+      migrateError({ ...runnerFailed, rowsWithoutValue, failedMigration }, FROM_PROJECT).fix,
+      migrateError({ ...runnerFailed, rowsWithoutValue }, FROM_PROJECT).fix,
+    ]).toEqual([
+      `Plan it with \`{bin} migration plan --from ${DATABASE} --backfill Task.type --backfill Task.dueAt\`, fill the backfill steps in the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, and apply it with \`{bin} db migrate\`. Or: Make field "Task.dueAt" optional in the contract source.`,
+      `To keep the fields required, delete ${replan}. Or: Make field "Task.dueAt" optional in the contract source, and plan it again.`,
+      'Make field "Task.dueAt" optional in the contract source, and plan the migration again.',
+    ]);
+  });
+
+  it('on db migrate with no failed migration found, offers no optional field when the only field is a discriminator', () => {
+    expect(
+      migrateError(
+        {
+          ...runnerFailed,
+          rowsWithoutValue: [
+            { field: 'Task.type', reason: 'newField', rows: 3, discriminator: true },
+          ],
+        },
+        FROM_PROJECT,
+      ).fix,
+    ).toBe('Resolve the cause the failure names, then re-run `{bin} db migrate`.');
+  });
+
   it('never mentions schema drift', () => {
     expect(
       dbUpdateError(
