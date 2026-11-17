@@ -1,39 +1,193 @@
-# Building the SQL Server target outside the Prisma ORM repository
+# How a SQL Server package plugs into Prisma 8
 
-For the team building a SQL Server target for Prisma 8 in their own repository. It says what to build now, how an application uses it before our changes ship, and what to add to your package when each change ships.
+For the team building a SQL Server target for Prisma 8 in their own repository. This replaces the mechanism proposed in [prisma/orm#31008](https://github.com/prisma/orm/pull/31008).
 
-## The short version
+**Status:** the design below is proposed in [prisma/orm#31057](https://github.com/prisma/orm/pull/31057) and under maintainer review. The shape is settled; the exact member names can still change before release. We will post in the Discord thread when each part is released, with the version to pin.
 
-- Almost all of your work is the target itself: the target, adapter and driver descriptors, codecs, query lowering, migrations, introspection and tests. None of it waits on us.
-- Two things in our CLI do not yet work for a package we did not write: `prisma orm init`, and the import lines in generated files. We are fixing both. Until then there is a way around each.
-- Nothing is registered in `package.json`. A Prisma 8 extension is installed one way: add the package, import it in `prisma.config.ts`, include it.
+## The outcome
 
-## What to build now
+We accept the need you raised and are building it. We are not taking the `package.json` registration from your proposal.
 
-Follow the Postgres target as the reference. Its packages are in [`packages/3-targets/postgres/`](../../packages/3-targets/postgres/), numbered in dependency order: target, adapter, driver, then the facade that composes them.
+When this is released, an application uses your package like this, with no entry for SQL Server anywhere in Prisma's code:
 
-Build against the published packages:
+```sh
+prisma orm init --target @microsoft/prisma-orm-mssql
+prisma contract emit
+```
 
-- `@prisma/orm-framework` and `@prisma/orm-family-sql` as dependencies;
-- pin every `@prisma/orm-*` package to one exact version while Prisma 8 is in release candidates. Two versions in one application load two copies of the framework, and values made by one copy are not recognised by the other.
+You are not blocked meanwhile. [Until the changes are released](#until-the-changes-are-released) says how an application uses your package today.
 
-Publish one package that an application installs, shaped like `@prisma/orm-postgres`:
+`@microsoft/prisma-orm-mssql` is a placeholder throughout. You choose the name.
+
+## The design
+
+Your package tells Prisma about itself in two places, both of them code your package exports. Prisma's own Postgres and MongoDB packages will use exactly the same two mechanisms.
+
+### 1. Your `defineConfig` names the modules that generated files import from
+
+An application's `prisma.config.ts` imports `defineConfig` from your package. The config object it returns names two modules:
+
+```ts
+// @microsoft/prisma-orm-mssql/config
+export function defineConfig(options: MssqlConfigOptions) {
+  return coreDefineConfig({
+    family: sql,
+    target: mssqlTarget,
+    adapter: mssqlAdapter,
+    driver: mssqlDriver,
+    contract: {
+      ...contractConfig,
+      typesModule: '@microsoft/prisma-orm-mssql/generated-types',
+    },
+    migrations: {
+      ...options.migrations,
+      module: '@microsoft/prisma-orm-mssql/migration',
+    },
+  });
+}
+```
+
+`prisma contract emit` then writes this into the application's `contract.d.ts`:
+
+```ts
+import type {
+  CodecTypes as MssqlTypes,
+  Contract as ContractType,
+  ContractWithTypeMaps,
+  StorageHashBase,
+  TypeMaps as TypeMapsType,
+} from '@microsoft/prisma-orm-mssql/generated-types';
+```
+
+and a migration file rendered by `prisma migration plan` imports its helpers from `@microsoft/prisma-orm-mssql/migration`.
+
+The two modules:
+
+| Config member | What the module must export |
+| --- | --- |
+| `contract.typesModule` | Every type a generated `contract.d.ts` uses: the framework's contract types, the SQL family's contract types, and your target's codec and operation types |
+| `migrations.module` | Whatever your migration renderer writes imports for: the migration base class, the CLI entry and your operation factories |
+
+Your generated-types module is four lines, because it only re-exports:
+
+```ts
+// @microsoft/prisma-orm-mssql/generated-types
+export type * from '@prisma/orm-framework/contract/types';
+export type * from '@prisma/orm-family-sql/contract/types';
+export type * from './codec-types';
+export type * from './operation-types';
+```
+
+Rules:
+
+- If a config names no module, the command that needs it stops with an error naming the missing member. Prisma does not guess a module.
+- Prisma does not read the application's `package.json` to choose import names, and consults no list of package names.
+- An extension pack, such as a vector type package, is a separate package the application installs. Its types are imported from its own package, not from yours.
+
+**Requirements from your proposal this satisfies**
+
+- Generated files refer only to public exports of a package the application depends on directly.
+- Your package owns its public entrypoints. Prisma never sees or depends on a private module name of yours, and you never depend on one of ours.
+- No SQL Server names or logic in Prisma's shared code.
+- Installing a package activates nothing. Only the package the application's config imports is used.
+- An unsupported setup fails with an explicit error. Nothing falls back to Postgres.
+
+### 2. Your package exports an init contribution
+
+`prisma orm init --target <package>` installs that package, loads the default export of its `/init` entrypoint, and scaffolds the project from it:
+
+```ts
+// @microsoft/prisma-orm-mssql/init
+import type { InitContribution } from '@prisma/orm-toolchain/cli/init-contribution';
+
+export default {
+  label: 'SQL Server',
+  configModule: '@microsoft/prisma-orm-mssql/config',
+  peerPackages: ['mssql'],
+  authoringModes: ['psl', 'typescript'],
+  starterContract: (mode) => (mode === 'psl' ? starterPsl : starterTs),
+  contractSample: (mode) => (mode === 'psl' ? samplePsl : sampleTs),
+  databaseFile: ({ contractImport }) => dbFile(contractImport),
+  envExample: () => 'DATABASE_URL="sqlserver://localhost:1433;database=mydb;user=sa;password=..."\n',
+  quickReference: (input) => renderQuickReference(input),
+  readme: (input) => renderReadme(input),
+  serverRequirement: { minVersion: '2019', checkCommand: 'SELECT @@VERSION' },
+  probe: (databaseUrl) => probeSqlServer(databaseUrl),
+} satisfies InitContribution;
+```
+
+The values above are placeholders for yours.
+
+| Member | What `init` does with it |
+| --- | --- |
+| `label` | Shows it as the database's name |
+| `configModule` | Writes `prisma.config.ts` importing `defineConfig` from it |
+| `peerPackages` | Installs these driver packages into the application |
+| `authoringModes` | Offers these ways to write the contract. A mode you do not list is refused |
+| `starterContract(mode)` | Writes it as the starter contract file |
+| `contractSample(mode)` | Shows it in the quick reference |
+| `databaseFile(input)` | Writes it as `db.ts`, the file that creates the client |
+| `envExample()` | Writes it into `.env.example` |
+| `quickReference(input)`, `readme(input)` | Writes them as the getting-started documents |
+| `serverRequirement` | Optional. States the minimum server version in the quick reference |
+| `probe(databaseUrl)` | Optional. Run for `--probe-db`; connects and reports the server version |
+
+Prisma decides which files exist and where they go, and writes everything that does not depend on the database: `tsconfig.json`, `.gitignore`, the `package.json` scripts.
+
+The order of steps is: resolve the package, install it, load your contribution, ask the user the remaining questions, write files, install your `peerPackages` and the CLI, emit the contract.
+
+Rules:
+
+- **Your package is named by its package name.** `--target mssql` would need an entry in a list of short names Prisma holds for packages it vouches for. The list holds names only and changes no behaviour: a listed package runs the same code as an unlisted one. We can add yours once it is published and we have used it.
+- **`init` runs code from your package.** It loads `/init` from the application's `node_modules` right after installing it. There is no static metadata step.
+- **`/init` must not import any framework runtime module.** Types are fine. The CLI that loads it may be a different installed copy of the framework from the one your package depends on, and two copies in one process do not recognise each other's values.
+- **Both authoring modes are open to you.** Your proposal limited the first version to TypeScript; nothing here requires that.
+- With `--skip-install`, your package must already be installed, because the files come from it.
+
+**Requirements from your proposal this satisfies**
+
+- The familiar `prisma orm init` workflow, with no new command and no plugin loader.
+- Your package owns its identity and its database-specific starter.
+- Existing Postgres and MongoDB behaviour is unchanged for their users.
+- Nothing is discovered: no scan of installed packages, no registry lookup, no network guess. The user names one package.
+
+**Two requirements from your proposal this does not satisfy, on purpose**
+
+- *No package code runs during discovery.* `init` runs your package's code. It is about to load the config and emit, which run the same package, so a static step would protect nothing.
+- *No change before every check has passed.* Your package is installed before `init` can learn whether it has an init contribution. If it has none, `init` stops with the package installed and no file written.
+
+## What your package contains
+
+Required by the design above:
+
+| Entrypoint | Holds | Needed for |
+| --- | --- | --- |
+| `/config` | `defineConfig` | Every command |
+| `/generated-types` (your choice of name) | The type re-exports | `contract emit` |
+| `/migration` (your choice of name) | Migration base class and operation factories | `migration plan` |
+| `/init` | The init contribution | `prisma orm init` |
+
+Conventions we recommend, because Prisma's packages and documentation follow them:
 
 | Entrypoint | Holds |
 | --- | --- |
-| `/config` | `defineConfig`, which composes the SQL family with your target, adapter and driver descriptors |
 | `/runtime` | Your client factory |
-| `/contract-builder` | `defineContract` bound to your target |
-| `/migration` | The base class and operation factories your rendered migration files import |
-| `/control` | A control client for scripts |
+| `/contract-builder` | The TypeScript contract builder bound to your target |
+| `/control` | A client for scripts that inspect or migrate a database |
 
-Name the package `prisma-orm-<name>` under your scope, for example `@microsoft/prisma-orm-mssql`, and add the keyword `prisma-orm-extension`. This is the convention for packages Prisma does not publish.
+The Postgres package is the reference for all of these: [`packages/3-targets/postgres/`](https://github.com/prisma/orm/tree/main/packages/3-targets/postgres). Its folders are numbered in dependency order: target, adapter, driver, then `9-facade`, the package applications install.
 
-In your descriptors, wherever you declare the module your codec and operation types come from, write your package's published name. A name that is already public passes through our emitter unchanged.
+Package rules:
 
-## How an application uses your package today
+- Depend on `@prisma/orm-framework` and `@prisma/orm-family-sql`, pinned to one exact version while Prisma 8 is in release candidates.
+- Name the package `prisma-orm-<name>` under your scope, and add the keyword `prisma-orm-extension`. This is the convention for packages Prisma does not publish.
+- Do not import or name any module beginning `@internal/`. Those are our private workspace names.
 
-**Skip `prisma orm init`.** It accepts only `postgres` and `mongodb`. The application writes `prisma.config.ts` by hand:
+## Until the changes are released
+
+Almost all of your work is the target itself: descriptors, codecs, query lowering, migrations, introspection and tests. None of it waits on us. Two things differ for an application until our changes are released.
+
+**There is no `init`.** It accepts only `postgres` and `mongodb`. The application writes `prisma.config.ts` by hand:
 
 ```ts
 import { defineConfig } from '@microsoft/prisma-orm-mssql/config';
@@ -44,41 +198,39 @@ export default defineConfig({
 });
 ```
 
-**Install the framework packages beside yours.** The application's own `package.json` lists `@prisma/orm-framework` and `@prisma/orm-family-sql` as dependencies, at the same exact version your package uses, and none of Prisma's database packages. With that, `prisma contract emit` writes import lines that name those two packages and yours. Without it, the generated files name packages that cannot be resolved.
+**The application installs two framework packages beside yours.** Its own `package.json` lists `@prisma/orm-framework` and `@prisma/orm-family-sql`, at the exact version your package uses, and none of Prisma's database packages. Today's CLI picks import names by looking for those in the application's `package.json`, and with them present it writes:
 
-We have not run this end to end outside our repository. Please try it in a clean application with your package installed from a tarball: `contract emit`, `migration plan`, then a typecheck. Tell us what fails. That report is the most useful thing you can send us now.
-
-## When generated imports ship
-
-Our change: the config says which modules generated files import from, and the database package fills that in.
-
-What you add:
-
-1. A module that re-exports the types a generated `contract.d.ts` uses from the framework, the SQL family and your target. We will publish the exact list of names with the release.
-2. In your `defineConfig`, name that module as the contract types module, and your `/migration` entrypoint as the migrations module.
-
-What your users change: they remove `@prisma/orm-framework` and `@prisma/orm-family-sql` from their own dependencies and run `prisma contract emit` again. They then install one package, yours.
-
-## When `init` ships
-
-Our change: `prisma orm init` installs the package it is given, loads an init contribution from it and scaffolds from that.
-
-What you add: an `/init` entrypoint that exports your contribution. It holds your display label, starter contract, `db.ts` content, `.env` example, driver packages, quick reference text and an optional probe that reads the server version.
-
-What your users get:
-
-```sh
-prisma orm init --target @microsoft/prisma-orm-mssql
+```ts
+import type { Contract as ContractType } from '@prisma/orm-framework/contract/types';
+import type { ContractWithTypeMaps } from '@prisma/orm-family-sql/contract/types';
+import type { CodecTypes as MssqlTypes } from '@microsoft/prisma-orm-mssql/codec-types';
 ```
 
-A short name such as `--target mssql` comes from a list of packages Prisma vouches for. We can add yours once it is published and we have used it.
+For the third line to come out right, the module names your descriptors declare for their codec and operation types must be your package's published names. A published name passes through unchanged.
 
-## What not to build
+We have not run this arrangement outside our repository. Please try it in a clean application with your package installed from a tarball: `contract emit`, `migration plan`, then a typecheck. Tell us what fails.
 
-- Any `package.json` metadata that describes your package to the CLI, or a field in the application's `package.json` that selects it.
-- A fork or patch of the CLI.
-- Code that depends on a module name beginning `@internal/`. Those are our workspace names and are not published.
+## What changes at each release
+
+| Release | What you do | What your users do |
+| --- | --- | --- |
+| Generated imports | Add the generated-types module and name both modules in `defineConfig`. **This is required in the same version:** that release removes the `package.json` lookup, so a config that names no module stops emitting | Upgrade your package, remove the two framework packages from their own dependencies, run `prisma contract emit` |
+| `init` | Add the `/init` entrypoint | New projects run `prisma orm init --target <your package>`. Existing projects change nothing |
+
+## Alternatives considered
+
+These are the parts of your proposal we are not taking, and why.
+
+**A `package.json` field in the application that selects the package, and one in your package that describes it.** A Prisma 8 extension is installed one way: add the package, import it in `prisma.config.ts`, include it. The CLI takes its inputs from that config. A second declaration in `package.json` can disagree with the config, and it is a different installation procedure from every other extension.
+
+**A map from Prisma's module names to your package's subpaths.** The keys were our private `@internal/` names. That makes names we rename freely into an interface you would have to track. Naming one module that exports the types needs no keys.
+
+**Static metadata and inline template strings instead of code.** Chosen in your proposal so that no package code runs before the project is set up. `init` loads the config and emits a moment later, which runs the same package, and a server probe cannot be data.
+
+**A separate "external target" path beside the built-in one.** Your proposal left Prisma's own targets on their hardcoded path. Every target is external to the framework, so Postgres and MongoDB move onto the same two mechanisms and the hardcoded path is removed.
+
+**Scanning installed packages for registrations.** Your proposal rejected this too, for the same reason we do: installing a package must not change behaviour.
 
 ## Where to ask
 
-The Discord thread where this started. We will post there when each change is released, with the version to pin.
+The Discord thread where this started.

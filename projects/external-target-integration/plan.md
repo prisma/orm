@@ -55,7 +55,7 @@ Pull requests 1 and 2 touch different files, except the facades' `package.json` 
 ## The SQL Server team
 
 - Now: send them [sql-server-team.md](sql-server-team.md) once the design is approved. It does not depend on any of our changes.
-- After the release with pull request 1: tell them the version and the list of type names their generated-types module re-exports.
+- After the release with pull request 1: tell them the version. Their package must name its two modules in the same version, because that release removes the `package.json` lookup their interim setup relies on.
 - After the release with pull request 3: tell them the version and point them to the author guide.
 
 ## Close-out
