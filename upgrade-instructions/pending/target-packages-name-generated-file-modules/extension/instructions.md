@@ -97,8 +97,8 @@ export type * from './operation-types';
 // src/components.ts
 import { restateTypeDeclarations } from '@prisma/orm-framework/target-package-config/type-declarations';
 
-export const typesModule = '@acme/orm-db/generated-types';
-export const migrationModule = '@acme/orm-db/migration';
+export const typesModule = 'prisma-orm-acmedb/generated-types';
+export const migrationModule = 'prisma-orm-acmedb/migration';
 
 export const target = restateTypeDeclarations(dbTarget, typesModule);
 export const adapter = restateTypeDeclarations(dbAdapter, typesModule);
@@ -110,16 +110,24 @@ An application on your package can import only from packages it depends on direc
 
 ```ts
 // src/config.ts
+import { prismaContract } from '@prisma/orm-family-sql/contract-psl/provider';
 import { defineConfig as defineFrameworkConfig } from '@prisma/orm-framework/config/config-types';
-import { adapter, driver, family, migrationModule, target, typesModule } from './components';
+import { adapter, createNamespace, driver, family, migrationModule, pack, target, typesModule } from './components';
 
-export function defineConfig(options: ConfigOptions) {
+export function defineConfig(options: { contract: string; output: string }) {
   return defineFrameworkConfig({
     family,
     target,
     adapter,
     driver,
-    contract: { ...contractSource(options), typesModule },
+    contract: {
+      ...prismaContract(options.contract, {
+        output: options.output,
+        target: pack,
+        createNamespace,
+      }),
+      typesModule,
+    },
     migrations: { module: migrationModule },
   });
 }
@@ -201,8 +209,8 @@ export const defineConfig = createMysqlDefineConfig({
   target,
   adapter,
   driver,
-  typesModule: '@acme/orm-db/generated-types',
-  migrationModule: '@acme/orm-db/migration',
+  typesModule: 'prisma-orm-acmedb/generated-types',
+  migrationModule: 'prisma-orm-acmedb/migration',
 });
 ```
 
