@@ -212,6 +212,7 @@ export async function defineShellConfig(shellName: ShellName): Promise<UserConfi
     entry,
     copy: (shell.copy ?? []).map((pattern) => ({ from: resolve(repoRoot, pattern) })),
     skipNodeModulesBundle: false,
+    define: { __PRISMA_PUBLISHED_PACKAGE_NAME__: JSON.stringify(shellName) },
     external: (id: string) => /^[@a-zA-Z]/.test(id) && !id.startsWith('@internal/'),
     dts: { enabled: true, sourcemap: true },
     exports: {

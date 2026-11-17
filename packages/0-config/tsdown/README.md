@@ -107,3 +107,18 @@ When using an exception:
 - Keep the exception local to that package only.
 - Add a short comment in `tsdown.config.ts` explaining why it cannot use auto-exports.
 - Keep `package.json#exports` minimal and explicit.
+
+## A package's own name
+
+A package that names its own modules, for example in the config its `defineConfig` returns, reads its name from the global `__PRISMA_PUBLISHED_PACKAGE_NAME__`. The shell build (`@repo/tsdown/shell-build`) defines it as the published name of the shell, such as `@prisma/orm-postgres`. Nothing else defines it, so the package falls back to its workspace name when its own build or its source runs inside this repository:
+
+```ts
+declare const __PRISMA_PUBLISHED_PACKAGE_NAME__: string | undefined;
+
+export const packageName =
+  typeof __PRISMA_PUBLISHED_PACKAGE_NAME__ === 'string'
+    ? __PRISMA_PUBLISHED_PACKAGE_NAME__
+    : '@internal/postgres';
+```
+
+The workspace build must not define it. The shell build bundles the workspace build's `dist`, so a value substituted there could not be replaced with the published name. See `packages/3-targets/postgres/9-facade/src/config/package-name.ts`.
