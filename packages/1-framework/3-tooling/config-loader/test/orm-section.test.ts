@@ -299,23 +299,34 @@ describe('the orm section', () => {
     const withModules = (module: string) =>
       validRaw({ contract: { source, typesModule: module }, migrations: { module } });
 
-    it.each(['./generated-types', '../generated-types', '/project/generated-types'])(
-      'refuses %s for both modules, saying why and what to name instead',
-      (module) => {
-        const raw = withModules(module);
-        const result = validateOrmSection(raw, provenanceFor(raw));
+    it.each([
+      './generated-types',
+      '../generated-types',
+      '/project/generated-types',
+      '.',
+      '..',
+      '.\\generated-types',
+      '..\\generated-types',
+      '\\project\\generated-types',
+      'C:\\project\\generated-types',
+      'C:/project/generated-types',
+      'file:///project/generated-types.ts',
+      'https://example.com/generated-types.js',
+      'node:module',
+    ])('refuses %s for both modules, saying why and what to name instead', (module) => {
+      const raw = withModules(module);
+      const result = validateOrmSection(raw, provenanceFor(raw));
 
-        expect(result.ok ? [] : result.diagnostics.map((d) => d.meta?.['field'])).toEqual([
-          'contract.typesModule',
-          'migrations.module',
-        ]);
-        expect(result.ok ? '' : (result.diagnostics[0]?.summary ?? '')).toMatch(
-          /generated files are written into more than one folder.*`#`/,
-        );
-      },
-    );
+      expect(result.ok ? [] : result.diagnostics.map((d) => d.meta?.['field'])).toEqual([
+        'contract.typesModule',
+        'migrations.module',
+      ]);
+      expect(result.ok ? '' : (result.diagnostics[0]?.summary ?? '')).toMatch(
+        /names the path or URL .*generated files are written into more than one folder.*`#`/,
+      );
+    });
 
-    it.each(['#generated-types', '@acme/orm-db/generated-types', 'orm-db/migration'])(
+    it.each(['#generated-types', '@acme/orm-db/generated-types', 'orm-db/migration', 'orm-db'])(
       'accepts %s',
       (module) => {
         expect(fields(withModules(module))).toEqual([]);

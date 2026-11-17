@@ -156,12 +156,15 @@ export function descriptorRelationshipProblems(
 }
 
 /**
- * Whether a module specifier is a relative or absolute path rather than the
- * name of a package or of an import private to one: by the language's rules,
- * a specifier that begins `./`, `../` or `/`.
+ * Whether a module specifier names a file rather than a package or an import
+ * private to one: it begins `.`, `/` or a backslash, holds a backslash, or begins with a
+ * URL scheme such as `file:` or a Windows drive such as `C:`. A package name
+ * (`pkg`, `pkg/sub`, `@scope/pkg/sub`) and a `#` import are not paths.
  */
-function isModulePath(specifier: string): boolean {
-  return specifier.startsWith('./') || specifier.startsWith('../') || specifier.startsWith('/');
+function isPathOrUrl(specifier: string): boolean {
+  return (
+    /^[./\\]/.test(specifier) || specifier.includes('\\') || /^[A-Za-z][\w+.-]*:/.test(specifier)
+  );
 }
 
 /**
@@ -177,11 +180,11 @@ function modulePathProblems(config: {
     [['migrations', 'module'], config.migrations?.module],
   ];
   return named.flatMap(([path, module]) =>
-    module !== undefined && isModulePath(module)
+    module !== undefined && isPathOrUrl(module)
       ? [
           {
             path,
-            message: `Config.${path.join('.')} names the path '${module}': generated files are written into more than one folder, beside the contract and beside each migration, so a path resolves from at most one of them. Name the module the way a package is imported, or by a \`#\` import declared in the \`imports\` of the package that holds the generated files`,
+            message: `Config.${path.join('.')} names the path or URL '${module}': generated files are written into more than one folder, beside the contract and beside each migration, so a path resolves from at most one of them. Name the module the way a package is imported, or by a \`#\` import declared in the \`imports\` of the package that holds the generated files`,
           },
         ]
       : [],
