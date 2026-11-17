@@ -193,8 +193,8 @@ describe('templates', () => {
       expect(db).toContain('postgres({\n  contract,\n');
       expect(db).toContain("url: process.env['DATABASE_URL']!,");
       expect(db).not.toContain('await db.connect');
-      const prismaNextImports = db.split('\n').filter((l) => l.includes("from '@internal/"));
-      expect(prismaNextImports).toHaveLength(2);
+      const internalImports = db.split('\n').filter((l) => l.includes("from '@internal/"));
+      expect(internalImports).toHaveLength(2);
     });
 
     it('generates mongo db.ts with lazy facade and DATABASE_URL binding', () => {
@@ -206,8 +206,8 @@ describe('templates', () => {
       expect(db).toContain('mongo({\n  contract,\n');
       expect(db).toContain("url: process.env['DATABASE_URL']!,");
       expect(db).not.toContain('await db.connect');
-      const prismaNextImports = db.split('\n').filter((l) => l.includes("from '@internal/"));
-      expect(prismaNextImports).toHaveLength(2);
+      const internalImports = db.split('\n').filter((l) => l.includes("from '@internal/"));
+      expect(internalImports).toHaveLength(2);
     });
   });
 

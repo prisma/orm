@@ -2,7 +2,7 @@ import type {
   ContractSourceDiagnostic,
   ContractSourceDiagnostics,
   ContractSourceProvider,
-  PrismaNextConfig,
+  PrismaConfig,
 } from '@internal/config/config-types';
 import type { Contract, ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
@@ -787,7 +787,7 @@ export type MigrateResult = Result<MigrateSuccess, CliStructuredError>;
  */
 export interface ContractEmitOptions {
   /** The already-loaded config. Callers own loading; this operation never reads it from disk. */
-  readonly config: PrismaNextConfig;
+  readonly config: PrismaConfig;
   /** Directory the caller was invoked from. */
   readonly cwd: string;
   /**

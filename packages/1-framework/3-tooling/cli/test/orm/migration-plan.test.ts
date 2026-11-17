@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { readdir, readFile, rm } from 'node:fs/promises';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { writeRef } from '@internal/migration-tools/refs';
@@ -546,7 +546,7 @@ describe('migration plan', () => {
               },
             }),
             baseDir: project.dir,
-          } as unknown as PrismaNextConfig,
+          } as unknown as PrismaConfig,
           cwd: project.dir,
           projectDir: project.dir,
           statements,
@@ -617,7 +617,7 @@ describe('migration plan', () => {
               },
             }),
             baseDir: project.dir,
-          } as unknown as PrismaNextConfig,
+          } as unknown as PrismaConfig,
           cwd: project.dir,
           projectDir: project.dir,
           statements: [{ verb: 'delete', text: 'audit_log' }],
