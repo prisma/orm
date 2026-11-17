@@ -2,7 +2,7 @@
 changes:
   - id: config-type-renamed-to-prisma-config
     summary: |
-      The config type that `defineConfig` returns is renamed from `PrismaNextConfig` to `PrismaConfig`, in `@internal/config/config-types`, `@prisma/orm-toolchain/cli/config-types` and every package that re-exports it, including the target facades' `defineConfig` return types. The old name is gone. The detection matches TypeScript sources that name the old type.
+      The config type that `defineConfig` returns is renamed from `PrismaNextConfig` to `PrismaConfig`, in `@prisma/orm-framework/config/config-types`, `@prisma/orm-toolchain/cli/config-types` and every package that re-exports it, including the target facades' `defineConfig` return types. The old name is gone. The detection matches TypeScript sources that name the old type.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:

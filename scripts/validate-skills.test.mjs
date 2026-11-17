@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import {
   findInternalPackageNames,
+  isTransitionChecked,
   MAX_DESCRIPTION_LENGTH,
   runCheck,
   SKILL_ROOTS,
@@ -235,5 +236,72 @@ describe('findInternalPackageNames', () => {
 
   it('finds no @internal/ package in the repository skill', () => {
     deepStrictEqual(findInternalPackageNames(), []);
+  });
+});
+
+describe('isTransitionChecked', () => {
+  it('checks transitions to a release after 8.0.0-rc.24', () => {
+    strictEqual(isTransitionChecked('8.0.0-rc.24-to-8.0.0-rc.25'), true);
+    strictEqual(isTransitionChecked('8.0.0-rc.24-to-8.0'), true);
+    strictEqual(isTransitionChecked('8.0-to-8.1'), true);
+  });
+
+  it('leaves transitions up to 8.0.0-rc.24 as they shipped', () => {
+    strictEqual(isTransitionChecked('8.0.0-rc.23-to-8.0.0-rc.24'), false);
+    strictEqual(isTransitionChecked('8.0.0-rc.9-to-8.0.0-rc.10'), false);
+    strictEqual(isTransitionChecked('0.17-to-8.0.0-rc.1'), false);
+    strictEqual(isTransitionChecked('0.9-to-0.10'), false);
+  });
+});
+
+describe('findInternalPackageNames over upgrade instructions', () => {
+  const guide = (detectionLine, prose) => `---
+changes:
+  - id: renamed
+    summary: |
+      ${prose}
+    detection:
+      glob: "**/*.ts"
+      matches:
+        - '${detectionLine}'
+---
+
+# Renamed
+`;
+
+  function tree(files) {
+    const root = mkdtempSync(join(tmpdir(), 'validate-skills-upgrades-'));
+    for (const [path, content] of Object.entries(files)) {
+      mkdirSync(join(root, path, '..'), { recursive: true });
+      writeFileSync(join(root, path), content);
+    }
+    return root;
+  }
+
+  it('reports newer transitions and pending fragments, and leaves older transitions alone', () => {
+    const bad = guide('x', 'Import it from `@internal/postgres/runtime`.');
+    const root = tree({
+      'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.23-to-8.0.0-rc.24/instructions.md': bad,
+      'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.24-to-8.0.0-rc.25/instructions.md':
+        bad,
+      'upgrade-instructions/pending/renamed/app/instructions.md': bad,
+    });
+    deepStrictEqual(
+      findInternalPackageNames({ root }).map(({ file }) => file),
+      [
+        'upgrade-instructions/pending/renamed/app/instructions.md',
+        'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.24-to-8.0.0-rc.25/instructions.md',
+      ],
+    );
+  });
+
+  it('lets a detection pattern match a workspace name', () => {
+    const root = tree({
+      'upgrade-instructions/pending/renamed/extension/instructions.md': guide(
+        'from [\'"]@internal/adapter-postgres/column-types[\'"]',
+        'Import it from `@prisma/orm-postgres/runtime`.',
+      ),
+    });
+    deepStrictEqual(findInternalPackageNames({ root }), []);
   });
 });
