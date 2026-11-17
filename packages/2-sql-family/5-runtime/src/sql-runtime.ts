@@ -195,7 +195,7 @@ export interface RuntimeConnection extends RuntimeQueryable {
 }
 
 /**
- * A transaction on a runtime connection. Once `commit()` or `rollback()` is called it refuses statements, including one started earlier that has not reached the driver yet.
+ * A transaction on a runtime connection, or a savepoint that `transaction()` opens on one. Once `commit()` or `rollback()` is called, or the transaction it is in closes, it refuses statements, including one started earlier that has not reached the driver yet.
  */
 export interface RuntimeTransaction extends RuntimeQueryable {
   readonly signal: AbortSignal;
