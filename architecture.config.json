@@ -1387,6 +1387,12 @@
       "plane": "runtime"
     },
     {
+      "glob": "packages/3-targets/mysql/1-mysql/2-adapter/src/exports/sql-renderer.ts",
+      "domain": "targets",
+      "layer": "adapters",
+      "plane": "runtime"
+    },
+    {
       "glob": "packages/3-targets/mysql/1-mysql/3-driver/src/core/*.ts",
       "domain": "targets",
       "layer": "drivers",

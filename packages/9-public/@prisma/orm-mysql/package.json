@@ -46,6 +46,7 @@
     "./adapter/codec-types": "./dist/adapter__codec-types.mjs",
     "./adapter/control": "./dist/adapter__control.mjs",
     "./adapter/runtime": "./dist/adapter__runtime.mjs",
+    "./adapter/sql-renderer": "./dist/adapter__sql-renderer.mjs",
     "./builder": "./dist/builder.mjs",
     "./builder/runtime": "./dist/builder__runtime.mjs",
     "./builder/types": "./dist/builder__types.mjs",

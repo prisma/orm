@@ -43,12 +43,12 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { createMysqlBuiltinCodecLookup } from '@internal/target-mysql/codecs';
 import { describe, expect, it } from 'vitest';
-import { renderMysqlSql } from '../src/core/sql-renderer';
+import { MysqlSqlRenderer } from '../src/core/sql-renderer';
 
-const codecs = createMysqlBuiltinCodecLookup();
+const renderer = new MysqlSqlRenderer(createMysqlBuiltinCodecLookup());
 /** Renders `ast` and records what it rendered as a snapshot, so every input below pins the SQL MySQL is sent. */
 const lower = (ast: AnyQueryAst) => {
-  const lowered = renderMysqlSql(ast, undefined, codecs);
+  const lowered = renderer.render(ast, undefined);
   expect(lowered).toMatchSnapshot();
   return lowered;
 };

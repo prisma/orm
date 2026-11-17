@@ -12,7 +12,7 @@ import type { MysqlCodecRegistry } from '@internal/target-mysql/codecs';
 import { structuredError } from '@internal/utils/structured-error';
 import { mysqlAdapterCapabilities } from '../capabilities';
 import { type MarkerQuery, readMarkerResult } from '../marker-read';
-import { type MysqlContract, renderMysqlSql } from '../sql-renderer';
+import { type MysqlContract, MysqlSqlRenderer } from '../sql-renderer';
 
 function markerQuery(queryable: SqlQueryable): MarkerQuery {
   return {
@@ -33,10 +33,10 @@ class MysqlAdapterImpl implements Adapter<AnyQueryAst, MysqlContract, LoweredSta
   readonly familyId = 'sql' as const;
   readonly targetId = 'mysql' as const;
   readonly profile: AdapterProfile<'mysql'>;
-  readonly #codecs: MysqlCodecRegistry;
+  readonly #renderer: MysqlSqlRenderer;
 
   constructor(codecs: MysqlCodecRegistry) {
-    this.#codecs = codecs;
+    this.#renderer = new MysqlSqlRenderer(codecs);
     this.profile = Object.freeze({
       id: 'mysql/default@1',
       target: 'mysql',
@@ -54,7 +54,7 @@ class MysqlAdapterImpl implements Adapter<AnyQueryAst, MysqlContract, LoweredSta
         { meta: { surface: 'runtime-adapter' } },
       );
     }
-    return renderMysqlSql(ast, context.contract, this.#codecs);
+    return this.#renderer.render(ast, context.contract);
   }
 }
 
