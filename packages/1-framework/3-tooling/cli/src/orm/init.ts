@@ -147,6 +147,9 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
     handler: async (args, ctx) => {
       const warnings: string[] = [];
       const warn = (text: string): void => {
+        if (warnings.includes(text)) {
+          return;
+        }
         warnings.push(text);
         ctx.report({ kind: 'message', severity: 'warn', text });
       };
