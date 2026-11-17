@@ -19,7 +19,7 @@ import postgresPackRef from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
-import { packageName } from './package-name';
+import { moduleBase } from './module-base';
 
 export interface PostgresConfigOptions {
   /** A contract file path (`.prisma` or `.ts`), or a ready `ContractConfig` such as `prisma7Schema(...)`. */
@@ -73,8 +73,8 @@ export function defineConfig(options: PostgresConfigOptions): PrismaNextConfig<'
     adapter: postgresAdapter,
     driver: postgresDriver,
     extensions,
-    contract: { ...contractConfig, typesModule: `${packageName}/generated-types` },
-    migrations: { ...options.migrations, module: `${packageName}/migration` },
+    contract: { ...contractConfig, typesModule: `${moduleBase}/generated-types` },
+    migrations: { ...options.migrations, module: `${moduleBase}/migration` },
     ...ifDefined('db', options.db),
     ...ifDefined('formatter', options.formatter),
   });

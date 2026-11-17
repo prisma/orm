@@ -108,21 +108,23 @@ When using an exception:
 - Add a short comment in `tsdown.config.ts` explaining why it cannot use auto-exports.
 - Keep `package.json#exports` minimal and explicit.
 
-## A package's own name
+## A package's published module base
 
-A package that names its own modules, for example in the config its `defineConfig` returns, reads its name from the global `__PRISMA_PUBLISHED_PACKAGE_NAME__`. The shell build (`@repo/tsdown/shell-build`) defines it as the published name of the shell, such as `@prisma/orm-postgres`. Nothing else defines it, so the package falls back to its workspace name when its own build or its source runs inside this repository:
+A package that names its own modules, for example in the config its `defineConfig` returns, reads its published module base from the global `__PRISMA_PUBLISHED_MODULE_BASE__` and appends the subpath. The module base is the published package's name plus the entry the package is published under in `packages/0-shared/publish-surface/src/shells.ts`: `@prisma/orm-postgres` for `@internal/postgres`, which has no entry, and `@prisma/orm-postgres-contrib/citext` for `@internal/extension-citext`. The shell build (`@repo/tsdown/shell-build`) derives it from that table. Nothing else defines it, so the package falls back to its workspace name when its own build or its source runs inside this repository:
 
 ```ts
-declare const __PRISMA_PUBLISHED_PACKAGE_NAME__: string | undefined;
+declare const __PRISMA_PUBLISHED_MODULE_BASE__: string | undefined;
 
-export const packageName =
-  typeof __PRISMA_PUBLISHED_PACKAGE_NAME__ === 'string'
-    ? __PRISMA_PUBLISHED_PACKAGE_NAME__
+export const moduleBase =
+  typeof __PRISMA_PUBLISHED_MODULE_BASE__ === 'string'
+    ? __PRISMA_PUBLISHED_MODULE_BASE__
     : '@internal/postgres';
 ```
 
-Write this check in each package's own source, never in a helper from another package. The shell build defines the constant only in the code it bundles into that shell, and a helper owned by another shell is bundled into that other shell, so it would return that shell's name for every package that calls it.
+Write this check in each package's own source, never in a helper from another package. The shell build defines the constant only in the code it bundles into that shell, and a helper owned by another shell is bundled into that other shell, so it would return that shell's module base for every package that calls it.
 
-`all-shells-tarball.test.ts` in `@prisma/orm-framework` fails when the identifier is left in any published package's built code.
+The shell build defines the constant only for a shell that bundles exactly one internal package, because one global cannot hold a different value for each package. A package in a shell that bundles several cannot use this pattern.
 
-The workspace build must not define it. The shell build bundles the workspace build's `dist`, so a value substituted there could not be replaced with the published name. See `packages/3-targets/postgres/9-facade/src/config/package-name.ts`.
+The workspace build must not define it. The shell build bundles the workspace build's `dist`, so a value substituted there could not be replaced with the published one. See `packages/3-targets/postgres/9-facade/src/config/module-base.ts`.
+
+Two cases in `all-shells-tarball.test.ts` in `@prisma/orm-framework` check this on every pull request. One fails when the identifier is left in any published package's built code. The other loads each published target package's `defineConfig` and fails unless the modules it names are exports of that package.

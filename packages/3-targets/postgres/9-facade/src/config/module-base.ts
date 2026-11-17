@@ -1,6 +1,6 @@
-declare const __PRISMA_PUBLISHED_PACKAGE_NAME__: string | undefined;
+declare const __PRISMA_PUBLISHED_MODULE_BASE__: string | undefined;
 
-export const packageName =
-  typeof __PRISMA_PUBLISHED_PACKAGE_NAME__ === 'string'
-    ? __PRISMA_PUBLISHED_PACKAGE_NAME__
+export const moduleBase =
+  typeof __PRISMA_PUBLISHED_MODULE_BASE__ === 'string'
+    ? __PRISMA_PUBLISHED_MODULE_BASE__
     : '@internal/postgres';
