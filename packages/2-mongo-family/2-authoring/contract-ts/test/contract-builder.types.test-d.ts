@@ -141,7 +141,7 @@ test('BSON scalar helpers infer their application types', () => {
     collection: 'posts',
     fields: {
       _id: field.scalar(type.ObjectId()),
-      views: field.scalar(type.Int64()),
+      views: field.scalar(type.Int64BigInt()),
       hits: field.scalar(type.Int64Number()),
       price: field.scalar(type.Decimal128()),
       thumbnail: field.scalar(type.Binary()),

@@ -290,9 +290,16 @@ describe('the MongoDB scalar convenience types in a TypeScript contract', () => 
     ).toThrow(message);
   });
 
-  it('has no Int64 helper', () => {
+  it('has no Int64 helper, and a read of one names Int64BigInt', () => {
     defineContract({}, ({ type }) => {
-      expect(type).not.toHaveProperty('Int64');
+      expect('Int64' in type).toBe(false);
+      expect(() => Reflect.get(type, 'Int64')).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.FIELD_HELPER_UNKNOWN',
+          message:
+            'type.Int64() was removed. Int64 is a deprecated PSL name, which has no TypeScript helper. Write type.Int64BigInt().',
+        }),
+      );
       return { models: {} };
     });
   });
