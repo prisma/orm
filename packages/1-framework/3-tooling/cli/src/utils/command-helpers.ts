@@ -20,9 +20,6 @@ import {
 
 const PASSWORD_QUERY_KEY = /password/i;
 
-/**
- * Resolves the absolute path to contract.json from the config.
- */
 /** The module a rendered `migration.ts` imports from: the config's `migrations.module`. */
 export function migrationModuleOf(config: {
   readonly migrations?: { readonly module?: string };
@@ -31,6 +28,9 @@ export function migrationModuleOf(config: {
   return module === undefined ? notOk(errorMigrationModuleMissing()) : ok(module);
 }
 
+/**
+ * Resolves the absolute path to contract.json from the config.
+ */
 export function resolveContractPath(config: { contract?: { output?: string } }): string {
   if (config.contract?.output === undefined) {
     throw errorRuntime(
