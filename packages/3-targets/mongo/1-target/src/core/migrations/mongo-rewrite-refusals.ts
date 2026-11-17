@@ -11,7 +11,7 @@ import {
 import type { MongoFieldRewriteMeta } from '@internal/mongo-query-ast/control';
 
 export const SEPARATE_THE_MODELS =
-  'move the models to separate collections, or carry out the change in a dataTransform operation of a migration.ts, with a filter that selects only their documents';
+  'move the models to separate collections, or carry out the change yourself, with a filter that selects only their documents, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh';
 
 export function sharedCollectionWhy(
   collection: string,

@@ -227,7 +227,7 @@ function unlistedRefusal(
   contracts: StoredKeyContracts,
 ): MigrationPlannerConflict {
   const byHand = (advice: string) =>
-    `Rewrite ${placeText(place)} in a dataTransform operation of migration.ts, or ${advice}.`;
+    `Rewrite ${placeText(place)} yourself, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh, or ${advice}.`;
   if (place.reach.kind === 'containsItself') {
     return refused(
       change,

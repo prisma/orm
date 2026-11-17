@@ -70,7 +70,7 @@ function refuse(
 }
 
 const NESTED_CONVERT_WHY =
-  'A --convert statement converts a field of a model or a variant. Converting a field inside a value object or an embedded model is not a statement on any database in this release: rewrite the values in a dataTransform operation of migration.ts, and leave out this statement.';
+  'A --convert statement converts a field of a model or a variant. Converting a field inside a value object or an embedded model is not a statement on any database in this release: rewrite the values yourself, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh, and leave out this statement.';
 
 function withVariant(variant: SelectedVariant | undefined, condition: Document): Document {
   return variant === undefined ? condition : { $and: [variantFilter(variant), condition] };

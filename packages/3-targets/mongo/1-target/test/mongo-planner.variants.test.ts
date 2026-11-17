@@ -790,7 +790,7 @@ describe('MongoMigrationPlanner, a variant sharing its collection with another r
     Note: { collection: 'tasks', fields: ['_id', 'type', 'text'] },
   };
   const SHARED_WHY = (change: string) =>
-    `Collection "tasks" stores several models and no discriminator tells their documents apart, so ${change} of "Note" too. To change only the documents of variant "Bug", move the models to separate collections, or carry out the change in a dataTransform operation of a migration.ts, with a filter that selects only their documents.`;
+    `Collection "tasks" stores several models and no discriminator tells their documents apart, so ${change} of "Note" too. To change only the documents of variant "Bug", move the models to separate collections, or carry out the change yourself, with a filter that selects only their documents, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh.`;
 
   it('refuses deleting the documents of a removed variant', () => {
     expect(

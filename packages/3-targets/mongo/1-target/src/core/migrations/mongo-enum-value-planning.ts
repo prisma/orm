@@ -418,13 +418,13 @@ function unlistedRefusal(
         enums,
         change,
         `${where} holds it inside "${unlisted.reach.type}", which contains itself, so the documents can hold it at any depth`,
-        `The plan rewrites a stored value at every path from a field to it, and a type that contains itself has no last path. Rewrite ${where} in a dataTransform operation of the migration.ts that migration plan writes.`,
+        `The plan rewrites a stored value at every path from a field to it, and a type that contains itself has no last path. Rewrite ${where} yourself, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh.`,
       )
     : refused(
         enums,
         change,
         `${where} holds a ${unlisted.reach.kind} of value objects`,
-        `The plan rewrites a stored value only in a field that holds it, a value object, a list of them, or an embedded model. Rewrite ${where} in a dataTransform operation of the migration.ts that migration plan writes.`,
+        `The plan rewrites a stored value only in a field that holds it, a value object, a list of them, or an embedded model. Rewrite ${where} yourself, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh.`,
       );
 }
 

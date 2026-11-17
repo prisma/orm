@@ -325,7 +325,7 @@ describe('MongoMigrationPlanner, a field of a value object', () => {
         kind: 'fieldRemovalRefused',
         summary:
           'Cannot remove value object field "Address.street" inside field "addresses" of model "User" in collection "users": model "Note" stores it in the same collection',
-        why: 'Collection "users" stores several models and no discriminator tells their documents apart, so removing the key would remove it from the documents of "Note" too. To keep it in "Note" documents only, move the models to separate collections, or carry out the change in a dataTransform operation of a migration.ts, with a filter that selects only their documents.',
+        why: 'Collection "users" stores several models and no discriminator tells their documents apart, so removing the key would remove it from the documents of "Note" too. To keep it in "Note" documents only, move the models to separate collections, or carry out the change yourself, with a filter that selects only their documents, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh.',
       },
     ]);
   });
@@ -389,7 +389,7 @@ describe('MongoMigrationPlanner, a field of a value object', () => {
         kind: 'statementRefused',
         summary:
           'Cannot rename value object field "Address.street" to "Address.line1": field "tree" of collection "users" holds it inside "Tree", which contains itself, so the documents can hold it at any depth',
-        why: 'The plan rewrites a key at every path from a field to its objects, and a type that contains itself has no last path. Rewrite field "tree" of collection "users" in a dataTransform operation of migration.ts, or leave out this statement.',
+        why: 'The plan rewrites a key at every path from a field to its objects, and a type that contains itself has no last path. Rewrite field "tree" of collection "users" yourself, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh, or leave out this statement.',
       },
     ]);
   });

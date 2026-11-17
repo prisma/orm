@@ -276,7 +276,7 @@ function unlistedRefusal(
   contracts: { readonly fromContract: ContractWithDomain; readonly contract: MongoContract },
 ): MigrationPlannerConflict {
   const byHand = (advice: string) =>
-    `Fill the key in ${placeText(place)} in a dataTransform operation of migration.ts, or ${advice}.`;
+    `Fill the key in ${placeText(place)} yourself, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh, or ${advice}.`;
   if (place.reach.kind === 'containsItself') {
     return refused(
       required,

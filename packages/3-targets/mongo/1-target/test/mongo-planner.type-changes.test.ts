@@ -342,7 +342,7 @@ describe('MongoMigrationPlanner, a field whose type changes', () => {
           kind: 'typeChangeRefused',
           summary:
             'Cannot cast field "age" of model "User" in collection "people": model "Admin" stores it in the same collection',
-          why: 'Collection "people" stores several models and no discriminator tells their documents apart, so casting the field would cast it in the documents of "Admin" too. To change it in "User" documents only, move the models to separate collections, or carry out the change in a dataTransform operation of a migration.ts, with a filter that selects only their documents.',
+          why: 'Collection "people" stores several models and no discriminator tells their documents apart, so casting the field would cast it in the documents of "Admin" too. To change it in "User" documents only, move the models to separate collections, or carry out the change yourself, with a filter that selects only their documents, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh.',
         },
       ]);
     });

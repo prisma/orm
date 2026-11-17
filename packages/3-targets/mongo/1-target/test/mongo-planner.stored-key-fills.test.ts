@@ -383,6 +383,42 @@ describe('MongoMigrationPlanner, --backfill of a field inside a value object or 
     ]);
   });
 
+  it('refuses a backfill through a value object that contains itself, with a route by hand under either command', () => {
+    const trees = (seed: string, address: Record<string, FieldTypeSpec>) =>
+      contract(
+        seed,
+        {
+          User: {
+            collection: 'users',
+            fields: ['_id', 'tree'],
+            types: { _id: OBJECT_ID, tree: voField('Tree') },
+          },
+        },
+        { users: {} },
+        {
+          Address: address,
+          Tree: { at: voField('Address'), children: voField('Tree', { many: true }) },
+        },
+      );
+    expect(
+      refusal(
+        plan({
+          from: trees('from', { street: STRING }),
+          to: trees('to', { street: STRING, zip: STRING }),
+          schema: live,
+          statements: [backfillAddress('zip')],
+        }),
+      ),
+    ).toEqual([
+      {
+        kind: 'statementRefused',
+        summary:
+          'Cannot backfill value object field "Address.zip": field "tree" of collection "users" holds it inside "Tree", which contains itself, so the documents can hold it at any depth',
+        why: 'The plan fills a key at every path from a field to its objects, and a type that contains itself has no last path. Fill the key in field "tree" of collection "users" yourself, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh, or leave out this statement.',
+      },
+    ]);
+  });
+
   it('refuses a backfill of a field that was already required', () => {
     expect(
       refusal(
@@ -424,7 +460,7 @@ describe('MongoMigrationPlanner, --backfill of a field inside a value object or 
         kind: 'statementRefused',
         summary:
           'Cannot convert field "Address.zip": model "Address" is embedded in the documents of model "User"',
-        why: 'A --convert statement converts a field of a model or a variant. Converting a field inside a value object or an embedded model is not a statement on any database in this release: rewrite the values in a dataTransform operation of migration.ts, and leave out this statement.',
+        why: 'A --convert statement converts a field of a model or a variant. Converting a field inside a value object or an embedded model is not a statement on any database in this release: rewrite the values yourself, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh, and leave out this statement.',
       },
     ]);
   });
