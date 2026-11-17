@@ -1,0 +1,265 @@
+import type { ContractSourceContext } from '@internal/config/config-types';
+import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
+import { emptyCodecLookup } from '@internal/framework-components/codec';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
+import { buildSymbolTable, createBinder, EMPTY_DATA_TYPES } from '@internal/psl-parser';
+import { parse, SyntaxNode } from '@internal/psl-parser/syntax';
+import { describe, expect, it } from 'vitest';
+import { describeUnresolvedMongoType } from '../src/describe-unresolved-type';
+import {
+  describeUnsupportedMongoAttribute,
+  mongoAttributeSpecs,
+} from '../src/mongo-attribute-specs';
+
+const SCHEMA = `
+model User {
+  id        ObjectId @id @map("_id")
+  createdAt temporal.CreatedAt
+  score     Points
+  weird     String   @unrecognized
+  ghost     Unknown
+  sessionId ObjectId
+  session   Session  @relation(fields: [sessionId], references: [id])
+  @@index([sessionId])
+  @@unrecognizedModelAttribute
+}
+
+model Session {
+  id ObjectId @id @map("_id")
+}
+`;
+
+const mongoScalarAuthoringTypes: AuthoringTypeNamespace = {
+  String: { kind: 'typeConstructor', output: { codecId: 'mongo/string@1' } },
+  ObjectId: { kind: 'typeConstructor', output: { codecId: 'mongo/objectId@1' } },
+  Points: { kind: 'typeConstructor', output: { codecId: 'mongo/int32@1' } },
+  temporal: {
+    CreatedAt: { kind: 'typeAlias', output: { type: { codecId: 'mongo/date@1' } } },
+  },
+};
+
+function normalize(resolution: unknown): unknown {
+  const r = resolution as {
+    readonly kind: string;
+    readonly symbol?: unknown;
+    readonly name?: string;
+  };
+  switch (r.kind) {
+    case 'attribute': {
+      const symbol = r.symbol as { readonly name: string; readonly level: string };
+      return { kind: 'attribute', name: symbol.name, level: symbol.level };
+    }
+    case 'contributedType': {
+      const symbol = r.symbol as { readonly name: string; readonly path: readonly string[] };
+      return { kind: 'contributedType', name: symbol.name, path: symbol.path };
+    }
+    case 'contributedNamespace': {
+      const symbol = r.symbol as { readonly name: string };
+      return { kind: 'contributedNamespace', name: symbol.name };
+    }
+    case 'crossSpace':
+      return { kind: 'crossSpace' };
+    case 'unresolved':
+      return { kind: 'unresolved', name: r.name };
+    case 'model':
+    case 'compositeType':
+    case 'namedType':
+    case 'block':
+    case 'namespace':
+    case 'field':
+    case 'parameter':
+    case 'function':
+    case 'constant': {
+      const symbol = r.symbol as { readonly name: string };
+      return { kind: r.kind, name: symbol.name };
+    }
+    default:
+      return resolution;
+  }
+}
+
+function collectResolutions(
+  rootSyntax: SyntaxNode,
+  binder: { symbolForNode(node: SyntaxNode): unknown },
+) {
+  const resolutions: unknown[] = [];
+  for (const el of rootSyntax.descendants()) {
+    if (el instanceof SyntaxNode) {
+      const resolution = binder.symbolForNode(el);
+      if (resolution !== undefined) {
+        resolutions.push(normalize(resolution));
+      }
+    }
+  }
+  return resolutions;
+}
+
+describe('createBinder', () => {
+  it('produces the expected diagnostics and resolution for every node', () => {
+    const { document, sources } = parse(SCHEMA, 'schema.prisma');
+    const { symbolTable } = buildSymbolTable({
+      documents: [document],
+      sources,
+      defaultNamespaceId: '__unbound__',
+    });
+
+    const defaultFunctionRegistry = new Map();
+
+    const context: ContractSourceContext = {
+      composedExtensions: [],
+      defaultNamespaceId: '__unbound__',
+      composedExtensionContracts: new Map(),
+      authoringContributions: {
+        dataTypes: {},
+        type: mongoScalarAuthoringTypes,
+        entityTypes: {},
+        pslBlockDescriptors: {},
+        modelAttributes: {},
+        attributeSpecs: mongoAttributeSpecs,
+      },
+      pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
+      codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
+      controlMutationDefaults: { defaultFunctionRegistry, generatorDescriptors: [] },
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
+      dataTypes: EMPTY_DATA_TYPES,
+      resolvedInputs: [],
+      capabilities: {},
+    };
+
+    const { binder, diagnostics } = createBinder({ symbolTable, sources, context });
+
+    expect(diagnostics).toEqual([
+      {
+        code: 'PSL_UNRESOLVED_REFERENCE',
+        message: 'Cannot find type "Unknown"',
+        data: { reference: 'type', name: 'Unknown', constructorCall: false },
+        filename: 'schema.prisma',
+        range: { start: { line: 6, character: 12 }, end: { line: 6, character: 19 } },
+      },
+      {
+        code: 'PSL_UNSUPPORTED_MODEL_ATTRIBUTE',
+        message: 'Model "User" uses unsupported attribute "@@unrecognizedModelAttribute"',
+        filename: 'schema.prisma',
+        range: { start: { line: 10, character: 2 }, end: { line: 10, character: 30 } },
+      },
+      {
+        code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
+        message: 'Field "User.weird" uses unsupported attribute "@unrecognized"',
+        filename: 'schema.prisma',
+        range: { start: { line: 5, character: 21 }, end: { line: 5, character: 34 } },
+      },
+    ]);
+
+    expect(collectResolutions(document.syntax, binder)).toEqual([
+      { kind: 'model', name: 'User' },
+      { kind: 'field', name: 'id' },
+      { kind: 'contributedType', name: 'ObjectId', path: ['ObjectId'] },
+      { kind: 'attribute', name: 'id', level: 'field' },
+      { kind: 'attribute', name: 'map', level: 'field' },
+      { kind: 'field', name: 'createdAt' },
+      { kind: 'contributedType', name: 'CreatedAt', path: ['temporal', 'CreatedAt'] },
+      { kind: 'contributedNamespace', name: 'temporal' },
+      { kind: 'field', name: 'score' },
+      { kind: 'contributedType', name: 'Points', path: ['Points'] },
+      { kind: 'field', name: 'weird' },
+      { kind: 'contributedType', name: 'String', path: ['String'] },
+      { kind: 'field', name: 'ghost' },
+      { kind: 'unresolved', name: 'Unknown' },
+      { kind: 'field', name: 'sessionId' },
+      { kind: 'contributedType', name: 'ObjectId', path: ['ObjectId'] },
+      { kind: 'field', name: 'session' },
+      { kind: 'model', name: 'Session' },
+      { kind: 'attribute', name: 'relation', level: 'field' },
+      { kind: 'parameter', name: 'fields' },
+      { kind: 'field', name: 'sessionId' },
+      { kind: 'parameter', name: 'references' },
+      { kind: 'field', name: 'id' },
+      { kind: 'attribute', name: 'index', level: 'model' },
+      { kind: 'field', name: 'sessionId' },
+      { kind: 'model', name: 'Session' },
+      { kind: 'field', name: 'id' },
+      { kind: 'contributedType', name: 'ObjectId', path: ['ObjectId'] },
+      { kind: 'attribute', name: 'id', level: 'field' },
+      { kind: 'attribute', name: 'map', level: 'field' },
+    ]);
+  });
+
+  it('reports an unsupported attribute of a mixin once, in the mixin, naming the mixin', () => {
+    const schema = [
+      'model mixin Stamped {',
+      '  label String @unrecognized',
+      '  ghost Unknown',
+      '  @@unrecognizedModelAttribute',
+      '}',
+      'type mixin Geo {',
+      '  place String',
+      '  @@unrecognizedModelAttribute',
+      '}',
+      'model User {',
+      '  id ObjectId @id @map("_id")',
+      '  +Stamped',
+      '}',
+      'model Post {',
+      '  id ObjectId @id @map("_id")',
+      '  +Stamped',
+      '}',
+    ].join('\n');
+    const { document, sources } = parse(schema, 'schema.prisma');
+    const { symbolTable } = buildSymbolTable({
+      documents: [document],
+      sources,
+      defaultNamespaceId: '__unbound__',
+    });
+    const context: ContractSourceContext = {
+      defaultNamespaceId: '__unbound__',
+      composedExtensions: [],
+      composedExtensionContracts: new Map(),
+      authoringContributions: {
+        dataTypes: {},
+        type: mongoScalarAuthoringTypes,
+        entityTypes: {},
+        pslBlockDescriptors: {},
+        modelAttributes: {},
+        attributeSpecs: mongoAttributeSpecs,
+      },
+      pslDiagnostics: {
+        describeUnsupportedAttribute: describeUnsupportedMongoAttribute,
+        describeUnresolvedType: describeUnresolvedMongoType,
+      },
+      codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
+      controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
+      dataTypes: EMPTY_DATA_TYPES,
+      resolvedInputs: [],
+      capabilities: {},
+    };
+
+    const { diagnostics } = createBinder({ symbolTable, sources, context });
+
+    expect(
+      diagnostics.map(({ code, message, range }) => ({ code, message, line: range.start.line })),
+    ).toEqual([
+      {
+        code: 'PSL_UNRESOLVED_REFERENCE',
+        message:
+          'Field "Stamped.ghost" has type "Unknown", which is not a scalar type, an enum, a composite type or a model. The Mongo scalar types are String, ObjectId and Points.',
+        line: 2,
+      },
+      {
+        code: 'PSL_UNSUPPORTED_MODEL_ATTRIBUTE',
+        message: 'Mixin "Stamped" uses unsupported attribute "@@unrecognizedModelAttribute"',
+        line: 3,
+      },
+      {
+        code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
+        message: 'Field "Stamped.label" uses unsupported attribute "@unrecognized"',
+        line: 1,
+      },
+      {
+        code: 'PSL_UNSUPPORTED_MODEL_ATTRIBUTE',
+        message: 'Mixin "Geo" uses unsupported attribute "@@unrecognizedModelAttribute"',
+        line: 7,
+      },
+    ]);
+  });
+});

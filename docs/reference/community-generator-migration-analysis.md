@@ -1,14 +1,14 @@
-# Community Generator → Prisma Next Extension Analysis
+# Community Generator → Prisma 8 Extension Analysis
 
 ## Purpose
 
-Prisma ORM's community generator ecosystem reflects real user needs that exist independently of code generation. This document catalogs every community generator, identifies the underlying user need, determines how each maps to the Prisma Next architecture, and sketches a design direction where applicable.
+Prisma ORM's community generator ecosystem reflects real user needs that exist independently of code generation. This document catalogs every community generator, identifies the underlying user need, determines how each maps to the Prisma 8 architecture, and sketches a design direction where applicable.
 
 The goal is to inform which interfaces must be stable before approaching community authors.
 
-## How Prisma Next changes the picture
+## How Prisma 8 changes the picture
 
-In Prisma ORM, generators receive the internal DMMF AST and produce files. In Prisma Next, there is no code generation step. Instead, the **contract IR** — a typed, validated runtime object — is the primary interface between the data model and everything that consumes it.
+In Prisma ORM, generators receive the internal DMMF AST and produce files. In Prisma 8, there is no code generation step. Instead, the **contract IR** — a typed, validated runtime object — is the primary interface between the data model and everything that consumes it.
 
 Generator use cases map to **consumer libraries** — functions that accept the contract IR and derive something from it. They follow the same pattern as query lanes (accept context, return a handle) and need no special pack SPI or plugin hook. They differ only in how much of the stack they need:
 
@@ -22,7 +22,7 @@ Both receive the contract IR, which is authoring-agnostic — it doesn't matter 
 | Runtime context | Contract IR + operations + codecs | Validators, GraphQL, tRPC, test factories |
 | Contract only | Schema graph (models, fields, relations, storage) | ERD, DBML, OpenAPI, Dart models, Drizzle types |
 
-For reference, **pack extensions** (pgvector, PostGIS) change how Prisma Next *behaves* via the extension descriptor SPI. No generator use cases fall into this category.
+For reference, **pack extensions** (pgvector, PostGIS) change how Prisma 8 *behaves* via the extension descriptor SPI. No generator use cases fall into this category.
 
 **Important caveat**: Today, the only implemented target family is SQL. The runtime context is `ExecutionContext` (SQL-specific), and the contract type is `SqlContract`. A `ContractBase` type and a `DocumentContract` stub exist in the framework layer, but the document family has not been implemented — no document target, no document execution context, no document ORM client. Many of the user needs cataloged here (validators, GraphQL, visualization, cross-language models) are conceptually family-agnostic — they care about models, fields, and relations, not SQL tables specifically. But the cross-family extension story is unvalidated. See [Cross-family support](#cross-family-support-and-fragmentation-risk) below.
 
@@ -128,7 +128,7 @@ Contract-only consumer libraries — they only need the schema graph (models, fi
 | [prisma-json-schema-generator](https://github.com/valentinpalkovic/prisma-json-schema-generator) | JSON Schema |
 | [prisma-openapi](https://github.com/nitzano/prisma-openapi) | OpenAPI 3.x |
 
-Same pattern as category 3 — contract-only consumer libraries. A `contractToJsonSchema(contract)` or `contractToOpenApi(contract)` function, with no Prisma Next runtime dependency. Conceptually family-agnostic.
+Same pattern as category 3 — contract-only consumer libraries. A `contractToJsonSchema(contract)` or `contractToOpenApi(contract)` function, with no Prisma 8 runtime dependency. Conceptually family-agnostic.
 
 Note: runtime JSON Schema *validation* (validating a request body against a model shape) is a different use case — that's category 1 (schema validation), which needs the runtime context.
 
@@ -168,7 +168,7 @@ const appRouter = createTrpcRouter(context, {
 | [prisma-kysely](https://github.com/valtyr/prisma-kysely) | Kysely | Type definitions |
 | [prisma-generator-drizzle](https://github.com/farreldarian/prisma-generator-drizzle) | Drizzle ORM | Schema definitions |
 
-Users who want to query through Kysely or Drizzle are opting out of Prisma Next's runtime, guardrails, and plan model. They only need the schema graph. A consumer library accepting the contract can derive Kysely type definitions or Drizzle schema objects from the contract IR, regardless of how the schema was authored (PSL or TypeScript). This is one of the few categories that's inherently SQL-specific — Kysely and Drizzle are SQL query builders.
+Users who want to query through Kysely or Drizzle are opting out of Prisma 8's runtime, guardrails, and plan model. They only need the schema graph. A consumer library accepting the contract can derive Kysely type definitions or Drizzle schema objects from the contract IR, regardless of how the schema was authored (PSL or TypeScript). This is one of the few categories that's inherently SQL-specific — Kysely and Drizzle are SQL query builders.
 
 ---
 
@@ -186,9 +186,9 @@ Users who want to query through Kysely or Drizzle are opting out of Prisma Next'
 Already addressed:
 
 - **Plain TS interfaces / types**: `contract.d.ts` provides zero-dependency typed model definitions.
-- **Typed JSON fields** (`prisma-json-types-generator`): Prisma Next has a more capable built-in solution. Library-bound JSON codecs (e.g. `@internal/extension-arktype-json`) accept a typed schema (arktype, zod, etc.), serialize the schema's IR into the contract, and validate inline inside the resolved codec's `decode` body — used for both compile-time typing (emitted into `contract.d.ts` as a concrete type expression) and runtime validation. Strictly more capable than the overlay approach.
+- **Typed JSON fields** (`prisma-json-types-generator`): Prisma 8 has a more capable built-in solution. Library-bound JSON codecs (e.g. `@internal/extension-arktype-json`) accept a typed schema (arktype, zod, etc.), serialize the schema's IR into the contract, and validate inline inside the resolved codec's `decode` body — used for both compile-time typing (emitted into `contract.d.ts` as a concrete type expression) and runtime validation. Strictly more capable than the overlay approach.
 - **Repository / custom models** (`prisma-custom-models-generator`): The ORM client's `Collection` subclassing is this pattern done properly — custom collections add domain methods that compose with all built-in query methods and propagate through includes. No scaffolding generator needed.
-- **Class-based DTOs** (`prisma-class-generator`): Low relevance in Prisma Next's functional/interface-oriented design.
+- **Class-based DTOs** (`prisma-class-generator`): Low relevance in Prisma 8's functional/interface-oriented design.
 
 ---
 
@@ -200,7 +200,7 @@ Already addressed:
 |---|---|
 | [prisma-generator-dart](https://github.com/FredrikBorgstrom/abcx3/tree/master/libs/prisma-generator-dart) | Dart / Flutter |
 
-Same pattern as categories 3 and 4 — a contract-only consumer library. A `contractToDart(contract)` function produces Dart classes, and the same approach works for Swift structs, Kotlin data classes, or any other language target. Conceptually family-agnostic. No PSL parser dependency, no Prisma Next runtime dependency.
+Same pattern as categories 3 and 4 — a contract-only consumer library. A `contractToDart(contract)` function produces Dart classes, and the same approach works for Swift structs, Kotlin data classes, or any other language target. Conceptually family-agnostic. No PSL parser dependency, no Prisma 8 runtime dependency.
 
 ---
 
@@ -319,7 +319,7 @@ Without answers to these questions, we risk stabilizing the wrong interfaces.
 ### Not prioritized
 
 9. **TS Type Utilities** — Already addressed by `contract.d.ts`.
-10. **Class-based DTOs** — Low relevance in Prisma Next's design.
+10. **Class-based DTOs** — Low relevance in Prisma 8's design.
 11. **json-server / mock API** — Very niche.
 
 ## Appendix: Complete generator inventory

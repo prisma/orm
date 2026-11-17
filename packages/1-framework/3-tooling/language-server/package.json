@@ -1,15 +1,14 @@
 {
   "name": "@internal/language-server",
   "private": true,
-  "version": "8.0.0-rc.2",
+  "version": "8.0.0-rc.24",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "Prisma Next language server: PSL diagnostics and whole-document formatting over LSP",
+  "description": "Prisma 8 language server: PSL diagnostics and whole-document formatting over LSP",
   "scripts": {
     "build": "tsdown",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --project tsconfig.json --noEmit",
     "lint": "biome check . --error-on-warnings",
     "lint:fix": "biome check --write .",
@@ -17,20 +16,20 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/config": "workspace:8.0.0-rc.2",
-    "@internal/config-loader": "workspace:8.0.0-rc.2",
-    "@internal/errors": "workspace:8.0.0-rc.2",
-    "@internal/framework-components": "workspace:8.0.0-rc.2",
-    "@internal/psl-parser": "workspace:8.0.0-rc.2",
-    "@internal/utils": "workspace:8.0.0-rc.2",
+    "@internal/config": "workspace:8.0.0-rc.24",
+    "@internal/config-loader": "workspace:8.0.0-rc.24",
+    "@internal/errors": "workspace:8.0.0-rc.24",
+    "@internal/framework-components": "workspace:8.0.0-rc.24",
+    "@internal/psl-parser": "workspace:8.0.0-rc.24",
+    "@internal/utils": "workspace:8.0.0-rc.24",
     "pathe": "^2.0.3",
     "vscode-languageserver": "catalog:",
     "vscode-languageserver-textdocument": "catalog:"
   },
   "devDependencies": {
-    "@repo/test-utils": "workspace:8.0.0-rc.2",
-    "@repo/tsconfig": "workspace:8.0.0-rc.2",
-    "@repo/tsdown": "workspace:8.0.0-rc.2",
+    "@repo/test-utils": "workspace:8.0.0-rc.24",
+    "@repo/tsconfig": "workspace:8.0.0-rc.24",
+    "@repo/tsdown": "workspace:8.0.0-rc.24",
     "@types/node": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:",
@@ -59,7 +58,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/1-framework/3-tooling/language-server"
   }
 }

@@ -8,6 +8,7 @@ import {
   type RuntimeDriverInstance,
 } from '@internal/framework-components/execution';
 import { PostgresRuntimeImpl } from '@internal/postgres/runtime';
+import type { RawQueryColumn } from '@internal/sql-relational-core/ast';
 import { createRawSql, param } from '@internal/sql-relational-core/expression';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import {
@@ -85,9 +86,10 @@ describe('integration: whole-query raw statements', { timeout: timeouts.database
     const resolvedDriver = stackInstance.driver;
     if (!resolvedDriver) throw new Error('Driver missing');
     driver = resolvedDriver as SqlRuntimeDriverInstance<'postgres'>;
-    await driver.connect({ kind: 'pgClient', client });
+    await driver.connect({ kind: 'pgClient', client, ownedByDriver: false });
 
     runtime = new PostgresRuntimeImpl({
+      closeRefusal: undefined,
       context,
       adapter: stackInstance.adapter,
       driver,
@@ -161,6 +163,41 @@ describe('integration: whole-query raw statements', { timeout: timeouts.database
     const rows = await runtime.query(plan);
 
     expect(rows).toEqual([{ invited_count: 2 }]);
+  });
+
+  it('decodes an outer column through the codec its inner query declared', async () => {
+    // The inner statement declares `invitee_count` as an int8. The outer spec
+    // inherits that declaration rather than restating the id, so the value
+    // arrives as the bigint the inherited codec decodes to.
+    const invitesPerInviter = rawSql()`
+      SELECT invited_by_id AS inviter_id, count(*) AS invitee_count
+      FROM users
+      WHERE invited_by_id IS NOT NULL
+      GROUP BY invited_by_id
+    `.returnsRow({
+      inviter_id: 'pg/int4@1',
+      invitee_count: 'pg/int8@1',
+    });
+
+    const plan = rawSql()`
+      WITH invites AS (${invitesPerInviter})
+      SELECT u.name, invites.invitee_count
+      FROM invites
+      JOIN users u ON u.id = invites.inviter_id
+    `
+      .returnsRow({
+        // The target-agnostic tag keys its refs by an index signature, so the
+        // lookup needs a cast here. Through the contract-bound lane the refs are
+        // exact, and `inner.returns.invitee_count` reads without one.
+        name: 'pg/text@1',
+        invitee_count: invitesPerInviter.returns['invitee_count'] as RawQueryColumn,
+      })
+      .build();
+
+    const rows = await runtime.query(plan);
+
+    expect(rows).toEqual([{ name: 'Alice', invitee_count: 2n }]);
+    expect(typeof (rows[0] as { invitee_count: unknown }).invitee_count).toBe('bigint');
   });
 
   it('refuses a __proto__ column before the statement reaches the database', () => {

@@ -52,7 +52,12 @@
             },
             "relations": {},
             "storage": {
-              "collection": "posts"
+              "collection": "posts",
+              "fields": {
+                "summary": {
+                  "field": "summary"
+                }
+              }
             }
           },
           "Post": {
@@ -60,13 +65,6 @@
               "field": "kind"
             },
             "fields": {
-              "_id": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/objectId@1",
-                  "kind": "scalar"
-                }
-              },
               "authorId": {
                 "nullable": false,
                 "type": {
@@ -88,6 +86,13 @@
                   "kind": "scalar"
                 }
               },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
               "kind": {
                 "nullable": false,
                 "type": {
@@ -106,12 +111,13 @@
             "relations": {
               "author": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "authorId"
                   ],
                   "targetFields": [
-                    "_id"
+                    "id"
                   ]
                 },
                 "to": {
@@ -121,14 +127,36 @@
               }
             },
             "storage": {
-              "collection": "posts"
+              "collection": "posts",
+              "fields": {
+                "authorId": {
+                  "field": "authorId"
+                },
+                "content": {
+                  "field": "content"
+                },
+                "createdAt": {
+                  "field": "createdAt"
+                },
+                "id": {
+                  "field": "_id"
+                },
+                "kind": {
+                  "field": "kind"
+                },
+                "title": {
+                  "field": "title"
+                }
+              }
             },
             "variants": {
-              "Article": {
-                "value": "article"
+              "article": {
+                "model": "Article",
+                "namespace": "__unbound__"
               },
-              "Tutorial": {
-                "value": "tutorial"
+              "tutorial": {
+                "model": "Tutorial",
+                "namespace": "__unbound__"
               }
             }
           },
@@ -155,23 +183,34 @@
             },
             "relations": {},
             "storage": {
-              "collection": "posts"
+              "collection": "posts",
+              "fields": {
+                "difficulty": {
+                  "field": "difficulty"
+                },
+                "duration": {
+                  "field": "duration"
+                }
+              }
             }
           },
           "User": {
             "fields": {
-              "_id": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/objectId@1",
-                  "kind": "scalar"
-                }
-              },
               "address": {
                 "nullable": true,
                 "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "Address",
                   "kind": "valueObject",
-                  "name": "Address"
+                  "namespaceId": "__unbound__",
+                  "plane": "storage"
+                }
+              },
+              "availableFrom": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mongo/time-string@1",
+                  "kind": "scalar"
                 }
               },
               "bio": {
@@ -181,10 +220,24 @@
                   "kind": "scalar"
                 }
               },
+              "birthday": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mongo/date-string@1",
+                  "kind": "scalar"
+                }
+              },
               "email": {
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
                   "kind": "scalar"
                 }
               },
@@ -214,7 +267,7 @@
                 "cardinality": "1:N",
                 "on": {
                   "localFields": [
-                    "_id"
+                    "id"
                   ],
                   "targetFields": [
                     "authorId"
@@ -227,39 +280,31 @@
               }
             },
             "storage": {
-              "collection": "users"
-            }
-          }
-        },
-        "valueObjects": {
-          "Address": {
-            "fields": {
-              "city": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              },
-              "country": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              },
-              "street": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              },
-              "zip": {
-                "nullable": true,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
+              "collection": "users",
+              "fields": {
+                "address": {
+                  "field": "address"
+                },
+                "availableFrom": {
+                  "field": "availableFrom"
+                },
+                "bio": {
+                  "field": "bio"
+                },
+                "birthday": {
+                  "field": "birthday"
+                },
+                "email": {
+                  "field": "email"
+                },
+                "id": {
+                  "field": "_id"
+                },
+                "name": {
+                  "field": "name"
+                },
+                "role": {
+                  "field": "role"
                 }
               }
             }
@@ -282,7 +327,8 @@
                       "field": "authorId"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "authorId_1"
                 },
                 {
                   "keys": [
@@ -295,7 +341,8 @@
                       "field": "authorId"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "createdAt_-1_authorId_1"
                 },
                 {
                   "keys": [
@@ -305,6 +352,7 @@
                     }
                   ],
                   "kind": "mongo-index",
+                  "name": "summary_1",
                   "partialFilterExpression": {
                     "kind": "article"
                   },
@@ -462,10 +510,22 @@
                         }
                       ]
                     },
+                    "availableFrom": {
+                      "bsonType": [
+                        "null",
+                        "string"
+                      ]
+                    },
                     "bio": {
                       "bsonType": [
                         "null",
                         "string"
+                      ]
+                    },
+                    "birthday": {
+                      "bsonType": [
+                        "null",
+                        "date"
                       ]
                     },
                     "email": {
@@ -496,6 +556,40 @@
               }
             }
           },
+          "valueObject": {
+            "Address": {
+              "fields": {
+                "city": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                },
+                "country": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                },
+                "street": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                },
+                "zip": {
+                  "nullable": true,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                }
+              }
+            }
+          },
           "valueSet": {
             "UserRole": {
               "kind": "valueSet",
@@ -511,14 +605,14 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "d264cabd6a02546054a776ed3c04438b9a22989f406c49f5590f7f2101156eb0"
+    "storageHash": "4a982736e89b99615c530abbd19d92cf955a27063db9ec4dcf0bddcc2dcc6595"
   },
   "capabilities": {},
   "extensions": {},
   "meta": {},
   "_generated": {
     "warning": "⚠️  GENERATED FILE - DO NOT EDIT",
-    "message": "This file is automatically generated by \"prisma-next contract emit\".",
-    "regenerate": "To regenerate, run: prisma-next contract emit"
+    "message": "This file is automatically generated by \"prisma contract emit\".",
+    "regenerate": "To regenerate, run: prisma contract emit"
   }
 }

@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "1",
+  "targetFamily": "mongo",
+  "target": "mongo",
+  "storage": {
+    "collections": {
+      "user": {
+        "fields": {
+          "id": {
+            "codecId": "mongo/objectId@1",
+            "nativeType": "objectId"
+          }
+        }
+      }
+    },
+    "storageHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  }
+}

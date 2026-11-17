@@ -7,9 +7,11 @@
  * Coverage:
  * - **Row shape**: `DefaultModelRow` / `InferRootRow` carry plain `T` for both `.first()` and `for await` consumption paths.
  * - **Write surfaces**: `CreateInput`, `MutationUpdateInput`, `UniqueConstraintCriterion`, and `ShorthandWhereFilter` carry plain `T` for field positions.
- * - **Negative tests**: no `Promise<T>` form leaks into a row-shape position (read or write). The ORM client uses one field type-map (rooted in `DefaultModelRow`); there is no read/write split for codec output types.
+ * - **Negative tests**: no `Promise<T>` form leaks into a row-shape position (read or write). Reads are rooted in `DefaultModelRow` (codec `output` types) and writes in `DefaultModelInputRow` (codec `input` types); neither carries `Promise<T>`.
  */
 
+import type { Expression, ScopeField } from '@internal/sql-relational-core/expression';
+import type { JsonValue } from '@internal/utils/json';
 import { expectTypeOf, test } from 'vitest';
 import type { Collection } from '../src/collection';
 import type {
@@ -21,8 +23,9 @@ import type {
   UniqueConstraintCriterion,
 } from '../src/types';
 import type { Contract } from './fixtures/generated/contract';
+import type { Contract as ValueObjectContract } from './fixtures/value-objects/generated/contract';
 
-// `User.address` is jsonb-backed (a value object whose fields and the field itself flow through the `pg/jsonb@1` codec); `User.invitedById` is int4 and nullable. Both codecs are lifted to async dispatch at the codec boundary regardless of whether the author wrote sync or async functions, so these columns are representative of "async codec columns" at the runtime boundary.
+// `User.address` is jsonb-backed: in the value-objects fixture it holds a value object, whose fields and the field itself flow through the `pg/jsonb@1` codec. `User.invitedById` is int4 and nullable. Both codecs are lifted to async dispatch at the codec boundary regardless of whether the author wrote sync or async functions, so these columns are representative of "async codec columns" at the runtime boundary.
 //
 // See `packages/1-framework/1-core/framework-components/src/shared/codec.ts` (`Codec` interface — `encode`/`decode` return `Promise<…>`) — every author function is wrapped at the class boundary, which means every column is an "async codec" at the runtime layer.
 
@@ -35,10 +38,13 @@ type AddressShape = {
 type IsPromiseLike<T> = T extends Promise<unknown> ? true : false;
 
 type UserRow = DefaultModelRow<Contract, 'User'>;
+type ValueObjectUserRow = DefaultModelRow<ValueObjectContract, 'User'>;
+type ValueObjectUserCreate = CreateInput<ValueObjectContract, 'User'>;
+type ValueObjectUserUpdate = MutationUpdateInput<ValueObjectContract, 'User'>;
 type UserCreate = CreateInput<Contract, 'User'>;
 type UserUpdate = MutationUpdateInput<Contract, 'User'>;
 type UserUnique = UniqueConstraintCriterion<Contract, 'User'>;
-type UserWhere = ShorthandWhereFilter<Contract, 'User'>;
+type UserWhere = ShorthandWhereFilter<Contract, 'public', 'User'>;
 type UserInferRoot = InferRootRow<Contract, 'User'>;
 
 test('DefaultModelRow exposes plain `string` for pg/text@1 columns', () => {
@@ -55,7 +61,7 @@ test('DefaultModelRow exposes plain `T | null` for nullable pg/int4@1 columns', 
 });
 
 test('DefaultModelRow exposes plain object value (no Promise) for jsonb-backed value object', () => {
-  expectTypeOf<UserRow['address']>().toEqualTypeOf<AddressShape | null>();
+  expectTypeOf<ValueObjectUserRow['address']>().toEqualTypeOf<AddressShape | null>();
 });
 
 test('InferRootRow for non-polymorphic model equals DefaultModelRow', () => {
@@ -74,7 +80,7 @@ test('Collection.first() resolves to a plain row | null (no Promise<T> on row fi
   type Row = Exclude<FirstAwaited, null>;
   expectTypeOf<Row['name']>().toEqualTypeOf<string>();
   expectTypeOf<Row['id']>().toEqualTypeOf<number>();
-  expectTypeOf<Row['address']>().toEqualTypeOf<AddressShape | null>();
+  expectTypeOf<Row['address']>().toEqualTypeOf<JsonValue | null>();
   expectTypeOf<IsPromiseLike<Row['name']>>().toEqualTypeOf<false>();
 });
 
@@ -83,7 +89,7 @@ test('Collection async iteration yields a plain row (no Promise<T> on row fields
   type IteratedRow = UserCollectionRow<UserCollection>;
   expectTypeOf<IteratedRow['name']>().toEqualTypeOf<string>();
   expectTypeOf<IteratedRow['id']>().toEqualTypeOf<number>();
-  expectTypeOf<IteratedRow['address']>().toEqualTypeOf<AddressShape | null>();
+  expectTypeOf<IteratedRow['address']>().toEqualTypeOf<JsonValue | null>();
   expectTypeOf<IsPromiseLike<IteratedRow['name']>>().toEqualTypeOf<false>();
 });
 
@@ -103,11 +109,11 @@ test('CreateInput accepts plain `string` for pg/text@1 fields', () => {
 });
 
 test('CreateInput accepts plain object for jsonb-backed value-object field', () => {
-  expectTypeOf<UserCreate['address']>().toEqualTypeOf<AddressShape | null | undefined>();
+  expectTypeOf<ValueObjectUserCreate['address']>().toEqualTypeOf<AddressShape | null | undefined>();
 });
 
 test('MutationUpdateInput accepts plain T for jsonb-backed value-object field', () => {
-  expectTypeOf<UserUpdate['address']>().toEqualTypeOf<AddressShape | null | undefined>();
+  expectTypeOf<ValueObjectUserUpdate['address']>().toEqualTypeOf<AddressShape | null | undefined>();
 });
 
 test('MutationUpdateInput accepts plain `string` for pg/text@1 fields', () => {
@@ -121,10 +127,16 @@ test('UniqueConstraintCriterion variants carry plain T for unique columns', () =
   expectTypeOf<{ readonly email: string }>().toExtend<UserUnique>();
 });
 
-test('ShorthandWhereFilter accepts plain T (or null/undefined) for filterable fields', () => {
-  expectTypeOf<UserWhere['name']>().toEqualTypeOf<string | null | undefined>();
-  expectTypeOf<UserWhere['email']>().toEqualTypeOf<string | null | undefined>();
-  expectTypeOf<UserWhere['id']>().toEqualTypeOf<number | null | undefined>();
+test('ShorthandWhereFilter literal inputs stay plain T alongside expressions', () => {
+  expectTypeOf<Exclude<UserWhere['name'], Expression<ScopeField>>>().toEqualTypeOf<
+    string | null | undefined
+  >();
+  expectTypeOf<Exclude<UserWhere['email'], Expression<ScopeField>>>().toEqualTypeOf<
+    string | null | undefined
+  >();
+  expectTypeOf<Exclude<UserWhere['id'], Expression<ScopeField>>>().toEqualTypeOf<
+    number | null | undefined
+  >();
 });
 
 test('no DefaultModelRow field position resolves to a Promise<T>', () => {
@@ -157,15 +169,15 @@ test('no ShorthandWhereFilter field position resolves to a Promise<T>', () => {
   expectTypeOf<IsPromiseLike<NonNullable<UserWhere['id']>>>().toEqualTypeOf<false>();
 });
 
-// One field type-map shared by read and write surfaces: `CreateInput` and `MutationUpdateInput` are both derived from `DefaultModelRow`, which means the field-type source of truth is identical for reads and writes. The assertions below pin the field types to a single shape so that any future drift (e.g. introducing a `DefaultModelInputRow` with `Promise<T>` shapes) would break this test.
+// Read and write surfaces resolve to the same plain field types here: `CreateInput` and `MutationUpdateInput` are derived from `DefaultModelInputRow` (the codec `input` map) and `DefaultModelRow` from the `output` map, which agree for these codecs. The assertions below pin the field types to a single shape so that any future drift (e.g. `Promise<T>` shapes on the write side) would break this test.
 
-test('CreateInput field types match DefaultModelRow field types (one type-map)', () => {
+test('CreateInput field types match DefaultModelRow field types for these codecs', () => {
   expectTypeOf<NonNullable<UserCreate['name']>>().toEqualTypeOf<UserRow['name']>();
   expectTypeOf<NonNullable<UserCreate['email']>>().toEqualTypeOf<UserRow['email']>();
   expectTypeOf<UserCreate['address']>().toEqualTypeOf<UserRow['address'] | undefined>();
 });
 
-test('MutationUpdateInput field types match DefaultModelRow field types (one type-map)', () => {
+test('MutationUpdateInput field types match DefaultModelRow field types for these codecs', () => {
   expectTypeOf<NonNullable<UserUpdate['name']>>().toEqualTypeOf<UserRow['name']>();
   expectTypeOf<NonNullable<UserUpdate['email']>>().toEqualTypeOf<UserRow['email']>();
   expectTypeOf<UserUpdate['address']>().toEqualTypeOf<UserRow['address'] | undefined>();

@@ -3,9 +3,10 @@
  *
  * First half: a database created "by another tool" carries an expression index, a
  * partial index, a unique expression index, and two RLS policies (one
- * PERMISSIVE, one RESTRICTIVE) on an RLS-enabled table. `contract infer` →
- * emit → `db verify` reports ZERO issues → `db update --dry-run` plans ZERO
- * operations.
+ * PERMISSIVE, one RESTRICTIVE) on an RLS-enabled table. `db sign` against the
+ * base contract is refused and suggests changing either side; then
+ * `contract infer` → emit → `db verify` reports ZERO issues →
+ * `db update --dry-run` plans ZERO operations.
  *
  * Second half: from that signed contract, one index and one policy transition
  * from `map:` to the wire spelling (bodies verbatim) → the widening plan
@@ -18,24 +19,21 @@ import { join } from 'node:path';
 import { withClient } from '@repo/test-utils';
 import stripAnsi from 'strip-ansi';
 import { afterAll, describe, expect, it } from 'vitest';
-import {
-  computeContentHash,
-  computeIndexContentHash,
-  normalizeSqlBody,
-} from '../utils/cli-commands';
+import { computeIndexContentHash } from '../utils/cli-commands';
 import { fixtureAppDir } from '../utils/cli-test-helpers';
 import {
   engineDocument,
   getLatestMigrationDir,
   type JourneyContext,
+  latestMigrationDirName,
   parseJsonOutput,
+  planMigrationAndSelfEmit,
   runContractEmit,
   runContractInfer,
   runDbSign,
   runDbUpdate,
   runDbVerify,
   runMigrate,
-  runMigrationPlanAndEmit,
   setupJourney,
   timeouts,
   useDevDatabase,
@@ -52,6 +50,8 @@ const FOREIGN_TOOL_SCHEMA = `
   CREATE INDEX documents_email_lower_idx ON documents (lower(email));
   CREATE INDEX documents_active_idx ON documents (tenant_id) WHERE (archived_at IS NULL);
   CREATE UNIQUE INDEX documents_email_ci_key ON documents (lower(email));
+  CREATE INDEX documents_email_idx ON documents (email);
+  CREATE INDEX email_lookup ON documents (tenant_id, email);
   ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
   CREATE POLICY "Tenant members can read" ON documents
     AS PERMISSIVE FOR SELECT TO tenant_app_user
@@ -64,13 +64,6 @@ const FOREIGN_TOOL_SCHEMA = `
 const WIRE_INDEX_NAME = `documents_email_lower_${computeIndexContentHash({
   expression: 'lower(email)',
   unique: false,
-})}`;
-
-const WIRE_POLICY_NAME = `Tenant_members_can_read_${computeContentHash({
-  using: normalizeSqlBody('(tenant_id = 1)'),
-  roles: ['tenant_app_user'],
-  operation: 'select',
-  permissive: true,
 })}`;
 
 interface PlannedOp {
@@ -115,7 +108,7 @@ describe('sign a database this toolchain has never seen, then transition to wire
   let inferredPsl: string;
 
   it(
-    'infer → emit → verify zero issues → sign → dry-run zero ops',
+    'sign refused → infer → emit → verify zero issues → sign → dry-run zero ops',
     async () => {
       ctx = setupJourney({
         connectionString: db.connectionString,
@@ -123,18 +116,44 @@ describe('sign a database this toolchain has never seen, then transition to wire
         contractMode: 'psl',
       });
 
+      const emitBase = await runContractEmit(ctx);
+      expect(emitBase.exitCode, `2.0: emit base\n${stripAnsi(emitBase.stderr)}`).toBe(0);
+      const refused = await runDbSign(ctx, ['--json']);
+      expect(refused.exitCode, `2.0: db sign refused\n${stripAnsi(refused.stderr)}`).toBe(4);
+      expect(refused.presented?.diagnostics[0]?.nextActions, '2.0: next actions').toEqual([
+        {
+          kind: 'run-command',
+          label: 'Change the database to match the contract, then sign again',
+          command: 'prisma-test db update',
+        },
+        {
+          kind: 'user-choice',
+          label:
+            'Or change the contract source to describe the database as it is, re-run contract emit, then sign again',
+        },
+      ]);
+
       // Infer captures the full surface.
       const infer = await runContractInfer(ctx);
       expect(infer.exitCode, `2.1: contract infer\n${stripAnsi(infer.stderr)}`).toBe(0);
       inferredPsl = readFileSync(join(ctx.testDir, 'contract.prisma'), 'utf-8');
       expect(inferredPsl).toContain(
-        '@@index(expression: "lower(email)", map: "documents_email_lower_idx")',
+        '@@index(expression: sql`lower(email)`, map: "documents_email_lower_idx")',
       );
       expect(inferredPsl).toContain(
-        '@@index([tenantId], map: "documents_active_idx", where: "(archived_at IS NULL)")',
+        '@@index([tenantId], map: "documents_active_idx", where: sql`(archived_at IS NULL)`)',
       );
       expect(inferredPsl).toContain(
-        '@@index(expression: "lower(email)", map: "documents_email_ci_key", unique: true)',
+        '@@index(expression: sql`lower(email)`, map: "documents_email_ci_key", unique: true)',
+      );
+      // Fields-only indexes adopt exactly too — default-named and
+      // custom-named (folded in from the deleted index-name-convergence
+      // exact-mode adoption case).
+      expect(inferredPsl, 'default-named index adopted exactly').toContain(
+        '@@index([email], map: "documents_email_idx")',
+      );
+      expect(inferredPsl, 'custom-named index adopted exactly').toContain(
+        '@@index([tenantId, email], map: "email_lookup")',
       );
       expect(inferredPsl).toContain('policy_select Tenant_members_can_read {');
       expect(inferredPsl).toContain('@@map("Tenant members can read")');
@@ -168,13 +187,13 @@ describe('sign a database this toolchain has never seen, then transition to wire
   );
 
   it(
-    'map:-to-wire transition plans exactly two renames, applies, verifies clean',
+    'map:-to-wire index transition plans exactly one rename, applies, verifies clean',
     async () => {
       expect(ctx, 'the signing step must have completed').toBeDefined();
 
       // Baseline migration so migration plan diffs from the
       // adopted contract; a fresh migrate is a no-op against the live DB.
-      const planBaseline = await runMigrationPlanAndEmit(ctx, ['--name', 'baseline']);
+      const planBaseline = await planMigrationAndSelfEmit(ctx, ['--name', 'baseline']);
       expect(planBaseline.exitCode, `3.1: plan baseline\n${stripAnsi(planBaseline.stderr)}`).toBe(
         0,
       );
@@ -187,50 +206,47 @@ describe('sign a database this toolchain has never seen, then transition to wire
         migrationsApplied: 0,
       });
 
-      // Transition ONE index and ONE policy to wire spellings,
-      // bodies verbatim.
-      const transitioned = inferredPsl
-        .replace(
-          '@@index(expression: "lower(email)", map: "documents_email_lower_idx")',
-          '@@index(expression: "lower(email)", name: "documents_email_lower")',
-        )
-        .replace(/^\s*@@map\("Tenant members can read"\)\n/m, '');
-      // The index replacement above cannot mask a no-op here: prove the
-      // @@map line itself is gone, not merely that something changed.
-      expect(transitioned).not.toContain('@@map("Tenant members can read")');
+      // Transition ONE index to its wire spelling, body verbatim. (The
+      // matching policy transition is owned by the rls-exact-name-adoption
+      // journey.)
+      const transitioned = inferredPsl.replace(
+        '@@index(expression: sql`lower(email)`, map: "documents_email_lower_idx")',
+        '@@index(expression: sql`lower(email)`, name: "documents_email_lower")',
+      );
+      expect(transitioned, '3.2: the map: spelling is gone').not.toContain(
+        'map: "documents_email_lower_idx"',
+      );
       writeFileSync(join(ctx.testDir, 'contract.prisma'), transitioned, 'utf-8');
       const emitWire = await runContractEmit(ctx);
       expect(emitWire.exitCode, `3.2: emit wire\n${stripAnsi(emitWire.stderr)}`).toBe(0);
 
-      // The widening plan is EXACTLY the two renames.
-      const plan = await runMigrationPlanAndEmit(ctx, ['--name', 'adopt-wire-names']);
+      // The widening plan is EXACTLY the one rename.
+      const plan = await planMigrationAndSelfEmit(ctx, [
+        '--name',
+        'adopt-wire-names',
+        '--from',
+        latestMigrationDirName(ctx),
+      ]);
       expect(plan.exitCode, `3.3: migration plan\n${stripAnsi(plan.stderr)}`).toBe(0);
       const ops = readPlannedOps(ctx);
       expect(
-        ops
-          .map((op) => ({
-            id: op.id,
-            operationClass: op.operationClass,
-            sql: op.execute[0]?.sql,
-          }))
-          .sort((a, b) => (a.id < b.id ? -1 : 1)),
-        '3.3: exactly two renames',
+        ops.map((op) => ({
+          id: op.id,
+          operationClass: op.operationClass,
+          sql: op.execute[0]?.sql,
+        })),
+        '3.3: exactly one rename',
       ).toEqual([
         {
           id: 'index.public.documents.documents_email_lower_idx.rename',
           operationClass: 'widening',
           sql: `ALTER INDEX "public"."documents_email_lower_idx" RENAME TO "${WIRE_INDEX_NAME}"`,
         },
-        {
-          id: 'rlsPolicy.public.documents.Tenant members can read.rename',
-          operationClass: 'widening',
-          sql: `ALTER POLICY "Tenant members can read" ON "public"."documents" RENAME TO "${WIRE_POLICY_NAME}"`,
-        },
       ]);
 
       // Apply; verify clean under the wire names.
       const apply = await runMigrate(ctx);
-      expect(apply.exitCode, `3.4: migration apply\n${stripAnsi(apply.stderr)}`).toBe(0);
+      expect(apply.exitCode, `3.4: migrate\n${stripAnsi(apply.stderr)}`).toBe(0);
       const verifyWire = await runDbVerify(ctx);
       expect(verifyWire.exitCode, `3.4: verify clean\n${stripAnsi(verifyWire.stderr)}`).toBe(0);
     },

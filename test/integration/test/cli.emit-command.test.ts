@@ -1,16 +1,23 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { loadConfig } from '@internal/config-loader';
+import { createControlStack } from '@internal/framework-components/control';
 import type { CompletedEnvelope, ErroredEnvelope } from '@prisma/cli-engine';
 import { timeouts } from '@repo/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   type EngineRunResult,
+  integrationFixtureAppDir,
   runOnEngine,
   setupIntegrationTestDirectoryFromFixtures,
+  setupTestDirectoryFromFixtures,
+  withTempDir,
 } from './utils/cli-test-helpers';
 
-// Fixture subdirectory for emit-command tests
+// The 'emit-command' fixtures drive the config-shape and provider cases;
+// the 'emit' fixtures drive the canonical end-to-end command runs.
 const fixtureSubdir = 'emit-command';
+const emitFixtureSubdir = 'emit';
 
 /** What the run settled with, read off the terminal frame of the json stream. */
 function settledEnvelope(run: EngineRunResult): CompletedEnvelope | ErroredEnvelope | undefined {
@@ -172,7 +179,7 @@ describe('emit command', () => {
         error: { code: 'CLI.CONFIG_SECTION_INVALID', summary: expect.any(String) },
       });
       expect(envelope?.diagnostics).toEqual(
-        expect.arrayContaining([expect.objectContaining({ code: 'CONFIG.VALIDATION_FAILED' })]),
+        expect.arrayContaining([expect.objectContaining({ code: 'CLI.CONFIG_FIELD_INVALID' })]),
       );
     } finally {
       documentSetup.cleanup();
@@ -265,6 +272,625 @@ describe('emit command', () => {
       expect(existsSync(contractJsonPath)).toBe(true);
     } finally {
       syncSetup.cleanup();
+    }
+  });
+});
+
+withTempDir(({ createTempDir }) => {
+  describe('contract emit command (e2e)', () => {
+    it(
+      'emits contract.json and contract.d.ts with canonical command',
+      async () => {
+        const testSetup = setupTestDirectoryFromFixtures(
+          createTempDir,
+          emitFixtureSubdir,
+          'prisma.config.emit.ts',
+        );
+        const outputDir = testSetup.outputDir;
+
+        const run = await runOnEngine(testSetup, ['contract', 'emit', '--json']);
+        expect(run.exitCode).toBe(0);
+
+        expect(run.presented?.data).toMatchObject({
+          ok: true,
+          storageHash: expect.any(String),
+          outDir: expect.any(String),
+          files: {
+            json: expect.any(String),
+            dts: expect.any(String),
+          },
+          timings: {
+            total: expect.any(Number),
+          },
+        });
+
+        // Verify files were actually created
+        const contractJsonPath = join(outputDir, 'contract.json');
+        const contractDtsPath = join(outputDir, 'contract.d.ts');
+
+        expect(existsSync(contractJsonPath)).toBe(true);
+        expect(existsSync(contractDtsPath)).toBe(true);
+
+        // Verify contract.json content
+        const contractJson = JSON.parse(readFileSync(contractJsonPath, 'utf-8'));
+        expect(contractJson).toMatchObject({
+          targetFamily: 'sql',
+          _generated: expect.anything(),
+        });
+
+        // Verify contract.d.ts content
+        const contractDts = readFileSync(contractDtsPath, 'utf-8');
+        expect(contractDts).toContain('export type Contract');
+        expect(contractDts).toContain('CodecTypes');
+
+        // Verify temporary publication artifacts were cleaned up
+        expect(readdirSync(outputDir).filter((entry) => entry.endsWith('.tmp'))).toEqual([]);
+
+        // Verify the result document matches the actual files
+        expect(run.presented?.data).toMatchObject({
+          storageHash: contractJson.storage.storageHash,
+          files: {
+            json: contractJsonPath,
+            dts: contractDtsPath,
+          },
+        });
+      },
+      timeouts.typeScriptCompilation,
+    );
+
+    it(
+      'outputs JSON when --json flag is provided',
+      async () => {
+        const testSetup = setupTestDirectoryFromFixtures(
+          createTempDir,
+          emitFixtureSubdir,
+          'prisma.config.emit.ts',
+        );
+
+        const run = await runOnEngine(testSetup, ['contract', 'emit', '--json']);
+        expect(run.exitCode).toBe(0);
+
+        expect(run.presented?.data).toMatchObject({
+          ok: true,
+          storageHash: expect.any(String),
+          outDir: expect.any(String),
+          files: {
+            json: expect.any(String),
+            dts: expect.any(String),
+          },
+          timings: {
+            total: expect.any(Number),
+          },
+        });
+      },
+      timeouts.typeScriptCompilation,
+    );
+
+    it(
+      'throws error with CONFIG.FILE_NOT_FOUND code when config file is missing',
+      async () => {
+        // Set up test directory from fixtures (but we'll use a non-existent config)
+        const testSetup = setupTestDirectoryFromFixtures(
+          createTempDir,
+          emitFixtureSubdir,
+          'prisma.config.emit.ts',
+        );
+
+        const run = await runOnEngine(testSetup, [
+          'contract',
+          'emit',
+          '--config',
+          'nonexistent.config.ts',
+          '--json',
+        ]);
+
+        // Config errors should have exit code 2
+        expect(run.exitCode).toBe(2);
+
+        const envelope = settledEnvelope(run);
+        expect(envelope).toMatchObject({
+          ok: false,
+          error: {
+            code: 'CONFIG.FILE_NOT_FOUND',
+            summary: expect.any(String),
+            why: expect.any(String),
+          },
+        });
+        expect(envelope?.nextActions.length).toBeGreaterThan(0);
+      },
+      timeouts.typeScriptCompilation,
+    );
+
+    it(
+      'throws error with CONFIG.CONTRACT_MISSING code when contract config is missing',
+      async () => {
+        const testSetup = setupTestDirectoryFromFixtures(
+          createTempDir,
+          emitFixtureSubdir,
+          'prisma.config.no-contract.ts',
+        );
+
+        const run = await runOnEngine(testSetup, ['contract', 'emit', '--json']);
+        expect(run.exitCode).toBe(2);
+
+        const envelope = settledEnvelope(run);
+        expect(envelope).toMatchObject({
+          ok: false,
+          error: {
+            code: 'CONFIG.CONTRACT_MISSING',
+            summary: expect.any(String),
+            why: expect.any(String),
+          },
+        });
+        expect(envelope?.nextActions.length).toBeGreaterThan(0);
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'outputs timings in verbose mode',
+      async () => {
+        const testSetup = setupTestDirectoryFromFixtures(
+          createTempDir,
+          emitFixtureSubdir,
+          'prisma.config.emit.ts',
+        );
+
+        const run = await runOnEngine(testSetup, ['contract', 'emit', '--verbose']);
+        expect(run.exitCode).toBe(0);
+
+        expect(run.stderr).toContain('Total time');
+      },
+      timeouts.typeScriptCompilation,
+    );
+
+    it(
+      'suppresses output in quiet mode',
+      async () => {
+        const testSetup = setupTestDirectoryFromFixtures(
+          createTempDir,
+          emitFixtureSubdir,
+          'prisma.config.emit.ts',
+        );
+
+        const quiet = await runOnEngine(testSetup, ['contract', 'emit', '--quiet']);
+        expect(quiet.exitCode).toBe(0);
+
+        const normal = await runOnEngine(testSetup, ['contract', 'emit']);
+        expect(normal.exitCode).toBe(0);
+
+        // The engine's --quiet is a log-level shorthand: it drops the progress
+        // commentary but still presents the result.
+        expect(quiet.stderr).not.toContain('Resolving contract source');
+        expect(quiet.stderr).not.toContain('Emitting contract...');
+        expect(quiet.stderr.length).toBeLessThan(normal.stderr.length);
+      },
+      timeouts.typeScriptCompilation,
+    );
+  });
+});
+
+describe('emit command: additional fixtures', () => {
+  it('emits equivalent hashes from psl and ts providers', {
+    timeout: timeouts.typeScriptCompilation,
+  }, async () => {
+    const tsSetup = setupIntegrationTestDirectoryFromFixtures(
+      fixtureSubdir,
+      'prisma.config.parity-ts.ts',
+    );
+    const pslSetup = setupIntegrationTestDirectoryFromFixtures(
+      fixtureSubdir,
+      'prisma.config.parity-psl.ts',
+    );
+
+    try {
+      const tsRun = await runOnEngine(tsSetup, ['contract', 'emit', '--json']);
+      expect(tsRun.exitCode).toBe(0);
+      const tsContract = JSON.parse(
+        readFileSync(join(tsSetup.outputDir, 'contract.json'), 'utf-8'),
+      ) as Record<string, unknown>;
+      const storage = tsContract['storage'] as Record<string, unknown>;
+      const storageHash = storage['storageHash'];
+      const profileHash = tsContract['profileHash'];
+      expect(storageHash).toMatch(/^[a-f0-9]{64}$/);
+      expect(profileHash).toMatch(/^[a-f0-9]{64}$/);
+      const tsProviderStorageHash = storageHash as string;
+      const tsProviderProfileHash = profileHash as string;
+
+      writeFileSync(
+        join(pslSetup.testDir, 'schema.prisma'),
+        readFileSync(
+          join(integrationFixtureAppDir, 'fixtures', fixtureSubdir, 'schema.parity.psl'),
+          'utf-8',
+        ),
+        'utf-8',
+      );
+
+      const pslRun = await runOnEngine(pslSetup, ['contract', 'emit', '--json']);
+      expect(pslRun.exitCode).toBe(0);
+
+      const contractJsonPath = join(pslSetup.testDir, 'output/contract.json');
+      const contractDtsPath = join(pslSetup.testDir, 'output/contract.d.ts');
+      expect(existsSync(contractJsonPath)).toBe(true);
+      expect(existsSync(contractDtsPath)).toBe(true);
+
+      const emitted = JSON.parse(readFileSync(contractJsonPath, 'utf-8'));
+      const emittedStorage = emitted['storage'] as Record<string, unknown>;
+      const emittedStorageHash = emittedStorage['storageHash'];
+      const emittedProfileHash = emitted['profileHash'];
+
+      expect(emitted).toMatchObject({
+        targetFamily: 'sql',
+      });
+      expect(emittedStorageHash).toMatch(/^[a-f0-9]{64}$/);
+      expect(emittedProfileHash).toMatch(/^[a-f0-9]{64}$/);
+      expect(emittedStorageHash).toBe(tsProviderStorageHash);
+      expect(emittedProfileHash).toBe(tsProviderProfileHash);
+      expect(emitted).not.toHaveProperty('sources');
+      expect(emitted).toMatchObject({
+        meta: expect.not.objectContaining({
+          source: expect.anything(),
+          sourceId: expect.anything(),
+          schemaPath: expect.anything(),
+        }),
+      });
+    } finally {
+      tsSetup.cleanup();
+      pslSetup.cleanup();
+    }
+  });
+
+  it('renders provider diagnostics when psl provider fails', {
+    timeout: timeouts.typeScriptCompilation,
+  }, async () => {
+    const testSetup = setupIntegrationTestDirectoryFromFixtures(
+      fixtureSubdir,
+      'prisma.config.parity-psl.ts',
+    );
+
+    try {
+      writeFileSync(
+        join(testSetup.testDir, 'schema.prisma'),
+        `// use prisma-8
+model Post {
+  id Int @id
+  data Unsupported
+}
+`,
+        'utf-8',
+      );
+
+      const providerConfig = (
+        await loadConfig(join(testSetup.testDir, 'prisma.config.ts'))
+      ).assertOk().config;
+      const contractConfig = providerConfig.contract;
+      expect(contractConfig).toBeDefined();
+
+      const stack = createControlStack({
+        family: providerConfig.family,
+        target: providerConfig.target,
+        adapter: providerConfig.adapter,
+        extensions: providerConfig.extensions ?? [],
+      });
+      const sourceResult = await contractConfig!.source.load({
+        composedExtensions: stack.extensions.map((p) => p.id),
+        defaultNamespaceId: stack.target.defaultNamespaceId,
+        composedExtensionContracts: new Map(),
+        authoringContributions: stack.authoringContributions,
+        codecLookup: stack.codecLookup,
+        dataTypes: stack.dataTypes,
+        controlMutationDefaults: stack.controlMutationDefaults,
+        generatorFunctions: stack.generatorFunctions,
+        resolvedInputs: contractConfig!.source.inputs ?? [],
+        capabilities: stack.capabilities,
+      });
+
+      expect(sourceResult.ok).toBe(false);
+      if (sourceResult.ok) {
+        throw new Error('Expected source provider to fail for unsupported field type');
+      }
+      expect(sourceResult.failure.summary).toBe('Schema has 1 error');
+      expect(sourceResult.failure.diagnostics).toHaveLength(1);
+
+      expect(sourceResult.failure.diagnostics).toEqual([
+        expect.objectContaining({
+          code: 'PSL_UNRESOLVED_REFERENCE',
+          sourceId: join(testSetup.testDir, 'schema.prisma'),
+          message: 'Cannot find type "Unsupported"',
+          span: expect.objectContaining({
+            start: expect.objectContaining({ line: 4 }),
+          }),
+        }),
+      ]);
+
+      const run = await runOnEngine(testSetup, ['contract', 'emit', '--json']);
+      expect(run.exitCode).toBe(2);
+
+      const terminal = run.json.at(-1);
+      const envelope =
+        terminal !== undefined && terminal.kind === 'result' ? terminal.envelope : undefined;
+      expect(envelope).toMatchObject({
+        ok: false,
+        error: {
+          code: 'CONTRACT.SOURCE_LOAD_FAILED',
+          why: 'Schema has 1 error',
+        },
+      });
+
+      const reported = JSON.stringify(envelope);
+      expect(reported).toContain('PSL_UNRESOLVED_REFERENCE');
+      expect(reported).toContain(JSON.stringify('Cannot find type "Unsupported"'));
+      expect(reported).not.toContain('PSL_UNSUPPORTED_FIELD_TYPE');
+      expect(reported).toContain('schema.prisma');
+    } finally {
+      testSetup.cleanup();
+    }
+  });
+
+  it('names the rewrite of removed presets on related models, not a relation error', {
+    timeout: timeouts.typeScriptCompilation,
+  }, async () => {
+    const testSetup = setupIntegrationTestDirectoryFromFixtures(
+      fixtureSubdir,
+      'prisma.config.parity-psl.ts',
+    );
+
+    try {
+      writeFileSync(
+        join(testSetup.testDir, 'schema.prisma'),
+        `// use prisma-8
+model User {
+  id    id.ulid()
+  posts Post[]
+}
+
+model Post {
+  id       id.ulid()
+  authorId ulid()
+  author   User @relation(fields: [authorId], references: [id])
+}
+`,
+        'utf-8',
+      );
+
+      const run = await runOnEngine(testSetup, ['contract', 'emit', '--json']);
+      expect(run.exitCode).toBe(2);
+      const terminal = run.json.at(-1);
+      const envelope =
+        terminal !== undefined && terminal.kind === 'result' ? terminal.envelope : undefined;
+      expect(envelope).toMatchObject({
+        ok: false,
+        error: { code: 'CONTRACT.SOURCE_LOAD_FAILED', why: 'Schema has 3 errors' },
+      });
+      const reported = JSON.stringify(envelope);
+      expect(reported).toContain(
+        JSON.stringify(
+          'id.ulid() was a field preset, and Prisma 8 removed field presets. Write Ulid @id @onCreate(ulid()).',
+        ),
+      );
+      expect(reported).not.toContain('CONTRACT.RELATION_INVALID');
+    } finally {
+      testSetup.cleanup();
+    }
+  });
+
+  it('rejects plain-object configs that were not created by definePrismaConfig', {
+    timeout: timeouts.typeScriptCompilation,
+  }, async () => {
+    const testSetup = setupIntegrationTestDirectoryFromFixtures(
+      fixtureSubdir,
+      'prisma.config.missing-output.ts',
+    );
+
+    try {
+      const run = await runOnEngine(testSetup, ['contract', 'emit', '--json']);
+      expect(run.exitCode).toBe(2);
+
+      const terminal = run.json.at(-1);
+      const envelope =
+        terminal !== undefined && terminal.kind === 'result' ? terminal.envelope : undefined;
+      expect(envelope).toMatchObject({
+        ok: false,
+        error: { code: 'CONFIG.VERSION_MARKER_MISSING' },
+      });
+      expect(existsSync(join(testSetup.testDir, 'src/prisma/contract.json'))).toBe(false);
+    } finally {
+      testSetup.cleanup();
+    }
+  });
+
+  it('emits contract.json and contract.d.ts with Mongo config', {
+    timeout: timeouts.typeScriptCompilation,
+  }, async () => {
+    const testSetup = setupIntegrationTestDirectoryFromFixtures(
+      fixtureSubdir,
+      'prisma.config.mongo.ts',
+    );
+
+    try {
+      writeFileSync(
+        join(testSetup.testDir, 'contract.prisma'),
+        `// use prisma-8
+
+model User {
+  id    ObjectId @id @map("_id")
+  name  String
+  email String
+  posts Post[]
+  @@map("users")
+}
+
+model Post {
+  id        ObjectId @id @map("_id")
+  title     String
+  authorId  ObjectId
+  author    User @relation(fields: [authorId], references: [id])
+  @@map("posts")
+}
+`,
+        'utf-8',
+      );
+
+      const run = await runOnEngine(testSetup, ['contract', 'emit', '--json']);
+      expect(run.exitCode).toBe(0);
+
+      const contractJsonPath = join(testSetup.outputDir, 'contract.json');
+      const contractDtsPath = join(testSetup.outputDir, 'contract.d.ts');
+
+      expect(existsSync(contractJsonPath)).toBe(true);
+      expect(existsSync(contractDtsPath)).toBe(true);
+
+      const contractJson = JSON.parse(readFileSync(contractJsonPath, 'utf-8'));
+      expect(contractJson).toMatchObject({
+        targetFamily: 'mongo',
+        target: 'mongo',
+        domain: {
+          namespaces: {
+            __unbound__: {
+              models: {
+                User: expect.objectContaining({
+                  fields: expect.objectContaining({
+                    id: {
+                      type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+                      nullable: false,
+                      many: false,
+                    },
+                    name: {
+                      type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                      nullable: false,
+                      many: false,
+                    },
+                  }),
+                  storage: expect.objectContaining({
+                    fields: expect.objectContaining({
+                      id: { field: '_id' },
+                      name: { field: 'name' },
+                    }),
+                  }),
+                }),
+                Post: expect.objectContaining({
+                  relations: expect.objectContaining({
+                    author: expect.objectContaining({
+                      to: { namespace: '__unbound__', model: 'User' },
+                      cardinality: 'N:1',
+                    }),
+                  }),
+                }),
+              },
+            },
+          },
+        },
+      });
+
+      const contractDts = readFileSync(contractDtsPath, 'utf-8');
+      expect(contractDts).toContain('export type Contract');
+      expect(contractDts).toContain('CodecTypes');
+
+      expect(run.presented?.data).toMatchObject({
+        ok: true,
+        storageHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+        files: {
+          json: expect.stringContaining('contract.json'),
+          dts: expect.stringContaining('contract.d.ts'),
+        },
+      });
+    } finally {
+      testSetup.cleanup();
+    }
+  });
+
+  it('emits contract.json and contract.d.ts with Mongo contract.ts config', {
+    timeout: timeouts.typeScriptCompilation,
+  }, async () => {
+    const testSetup = setupIntegrationTestDirectoryFromFixtures(
+      fixtureSubdir,
+      'prisma.config.mongo-contract-ts.ts',
+    );
+
+    try {
+      const run = await runOnEngine(testSetup, ['contract', 'emit', '--json']);
+      expect(run.exitCode).toBe(0);
+
+      const contractJsonPath = join(testSetup.outputDir, 'contract.json');
+      const contractDtsPath = join(testSetup.outputDir, 'contract.d.ts');
+
+      expect(existsSync(contractJsonPath)).toBe(true);
+      expect(existsSync(contractDtsPath)).toBe(true);
+
+      const contractJson = JSON.parse(readFileSync(contractJsonPath, 'utf-8'));
+      expect(contractJson).toMatchObject({
+        targetFamily: 'mongo',
+        target: 'mongo',
+        storage: {
+          namespaces: {
+            __unbound__: {
+              entries: {
+                collection: {
+                  users: {
+                    indexes: [{ keys: [{ field: 'email', direction: 1 }], unique: true }],
+                    options: {
+                      collation: { locale: 'en', strength: 2 },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        domain: {
+          namespaces: {
+            __unbound__: {
+              models: {
+                Task: expect.objectContaining({
+                  storage: expect.objectContaining({
+                    collection: 'tasks',
+                    relations: {
+                      comments: { field: 'comments' },
+                    },
+                  }),
+                  discriminator: { field: 'type' },
+                  variants: {
+                    bug: { namespace: '__unbound__', model: 'Bug' },
+                  },
+                }),
+                Bug: expect.objectContaining({
+                  base: { namespace: '__unbound__', model: 'Task' },
+                }),
+                Comment: expect.objectContaining({
+                  owner: 'Task',
+                }),
+              },
+            },
+          },
+        },
+      });
+
+      const contractDts = readFileSync(contractDtsPath, 'utf-8');
+      expect(contractDts).toContain("readonly owner: 'Task'");
+      expect(contractDts).toMatch(/readonly base:\s*{\s*readonly namespace:/);
+      expect(contractDts).toContain("readonly discriminator: { readonly field: 'type' }");
+      expect(contractDts).toContain('readonly users: {');
+      expect(contractDts).toContain('readonly indexes:');
+      expect(contractDts).toContain("readonly kind: 'mongo-index'");
+      expect(contractDts).toContain("readonly field: 'email'");
+      expect(contractDts).toContain('readonly direction: 1');
+      expect(contractDts).toContain('readonly unique: true');
+      expect(contractDts).toContain('readonly options:');
+      expect(contractDts).toContain("readonly kind: 'mongo-collection-options'");
+      expect(contractDts).toContain("readonly kind: 'mongo-collation-options'");
+      expect(contractDts).toContain("readonly locale: 'en'");
+      expect(contractDts).toContain('readonly strength: 2');
+
+      expect(run.presented?.data).toMatchObject({
+        ok: true,
+        storageHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+        files: {
+          json: expect.stringContaining('contract.json'),
+          dts: expect.stringContaining('contract.d.ts'),
+        },
+      });
+    } finally {
+      testSetup.cleanup();
     }
   });
 });

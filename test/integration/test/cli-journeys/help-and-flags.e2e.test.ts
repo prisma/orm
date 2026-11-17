@@ -9,100 +9,109 @@
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
-import { parseJsonOutput, runContractEmit, setupJourney } from '../utils/journey-test-helpers';
+import { runContractEmit, setupJourney } from '../utils/journey-test-helpers';
+
+function stdoutFrames(stdout: string): unknown[] {
+  return stdout
+    .split('\n')
+    .filter((line) => line.length > 0)
+    .map((line) => JSON.parse(line));
+}
 
 withTempDir(({ createTempDir }) => {
   describe('Journey Y: Global Flags', () => {
-    // Y.01: --no-color (already used by default in our helpers)
+    // --no-color
     it(
-      'Y.01: --no-color suppresses ANSI codes in stdout',
+      '--no-color strips the ANSI codes a TTY run carries',
       async () => {
         const ctx = setupJourney({ createTempDir });
 
-        const result = await runContractEmit(ctx);
-        expect(result.exitCode, 'Y.01: emit succeeds').toBe(0);
-        // Verify that stdout (the primary output channel) has no ANSI codes.
-        // Note: stderr may still contain decoration characters from TerminalUI
-        // even with --no-color due to how the mock captures output.
-        // The key assertion is that the meaningful output is ANSI-free.
-        expect(
-          result.stdout.length + result.stderr.length,
-          'Y.01: produces output',
-        ).toBeGreaterThan(0);
+        const colored = await runContractEmit(ctx);
+        expect(colored.exitCode, 'colored emit succeeds').toBe(0);
+        const plain = await runContractEmit(ctx, ['--no-color']);
+        expect(plain.exitCode, '--no-color emit succeeds').toBe(0);
+
+        // The harness reports a TTY, so the default run colorizes its
+        // progress commentary; --no-color must strip every escape code.
+        expect(colored.stderr, 'TTY run carries ANSI codes').toContain('\u001b[');
+        expect(plain.stdout + plain.stderr, '--no-color output is ANSI-free').not.toContain(
+          '\u001b[',
+        );
       },
       timeouts.typeScriptCompilation,
     );
 
-    // Y.02: -q (quiet)
+    // -q (quiet)
     it(
-      'Y.02: quiet mode reduces output',
+      'quiet mode drops the progress commentary the default run prints',
       async () => {
         const ctx = setupJourney({ createTempDir });
 
         const normal = await runContractEmit(ctx);
-        expect(normal.exitCode, 'Y.02: normal emit').toBe(0);
+        expect(normal.exitCode, 'normal emit').toBe(0);
 
         const quiet = await runContractEmit(ctx, ['-q']);
-        expect(quiet.exitCode, 'Y.02: quiet emit').toBe(0);
+        expect(quiet.exitCode, 'quiet emit').toBe(0);
 
-        // Quiet output should be shorter than or equal to normal output
-        const normalLen = normal.stdout.length + normal.stderr.length;
-        const quietLen = quiet.stdout.length + quiet.stderr.length;
-        expect(quietLen, 'Y.02: quiet output is shorter').toBeLessThanOrEqual(normalLen);
+        expect(normal.stderr, 'default run narrates progress').toContain('Emitting contract');
+        expect(quiet.stderr, 'quiet run does not').not.toContain('Emitting contract');
+        expect(quiet.stderr.length, 'quiet output is strictly shorter').toBeLessThan(
+          normal.stderr.length,
+        );
       },
       timeouts.typeScriptCompilation,
     );
 
-    // Y.03: -v (verbose)
+    // -v (verbose)
     it(
-      'Y.03: verbose mode increases output',
+      'verbose mode adds timings the default run does not print',
       async () => {
         const ctx = setupJourney({ createTempDir });
 
         const normal = await runContractEmit(ctx);
-        expect(normal.exitCode, 'Y.03: normal emit').toBe(0);
+        expect(normal.exitCode, 'normal emit for the verbose comparison').toBe(0);
 
         const verbose = await runContractEmit(ctx, ['-v']);
-        expect(verbose.exitCode, 'Y.03: verbose emit').toBe(0);
+        expect(verbose.exitCode, 'verbose emit').toBe(0);
 
-        // Verbose output should be longer than normal
-        const normalLen = normal.stdout.length + normal.stderr.length;
-        const verboseLen = verbose.stdout.length + verbose.stderr.length;
-        expect(verboseLen, 'Y.03: verbose output is longer').toBeGreaterThanOrEqual(normalLen);
+        expect(verbose.stderr, 'verbose run reports timings').toContain('Total time');
+        expect(normal.stderr, 'default run reports no timings').not.toContain('Total time');
       },
       timeouts.typeScriptCompilation,
     );
 
-    // Y.04: auto-JSON when stdout is piped (not a TTY)
     it(
-      'Y.04: auto-enables JSON output when stdout is piped',
+      'Y.04: a piped stdout receives the emitted file paths relative to the working directory, not JSON',
       async () => {
         const ctx = setupJourney({ createTempDir });
 
-        // Simulate piped stdout (isTTY=false) — no explicit --json flag
         const result = await runContractEmit(ctx, [], { isTTY: false });
         expect(result.exitCode, 'Y.04: emit succeeds').toBe(0);
 
-        // When piped, output should be valid JSON on stdout
-        const json = parseJsonOutput(result);
-        expect(json, 'Y.04: outputs valid JSON object').toBeDefined();
-        expect(typeof json, 'Y.04: JSON is an object').toBe('object');
+        expect(result.stdout.trimEnd().split('\n')).toEqual([
+          expect.stringMatching(/^[^/].*contract\.json$/),
+          expect.stringMatching(/^[^/].*contract\.d\.ts$/),
+        ]);
       },
       timeouts.typeScriptCompilation,
     );
 
-    // Y.05: explicit --json flag still works in interactive mode
     it(
       'Y.05: explicit --json flag produces JSON in interactive mode',
       async () => {
         const ctx = setupJourney({ createTempDir });
 
+        const human = await runContractEmit(ctx);
+        expect(human.exitCode, 'Y.05: interactive emit succeeds').toBe(0);
+        expect(human.stdout, 'Y.05: interactive run without --json prints no JSON').toBe('');
+
         const result = await runContractEmit(ctx, ['--json']);
         expect(result.exitCode, 'Y.05: emit succeeds').toBe(0);
 
-        const json = parseJsonOutput(result);
-        expect(json, 'Y.05: outputs valid JSON object').toBeDefined();
-        expect(typeof json, 'Y.05: JSON is an object').toBe('object');
+        expect(stdoutFrames(result.stdout).at(-1)).toMatchObject({
+          kind: 'result',
+          envelope: { ok: true, result: { storageHash: expect.any(String) } },
+        });
       },
       timeouts.typeScriptCompilation,
     );

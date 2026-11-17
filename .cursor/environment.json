@@ -1,6 +1,6 @@
 {
   "$schema": "https://www.cursor.com/schemas/environment.schema.json",
-  "name": "prisma-next",
+  "name": "prisma-8",
   "repositoryDependencies": ["https://github.com/prisma/ignite"],
   "install": "set -euo pipefail; corepack enable >/dev/null 2>&1 || true; pnpm install --frozen-lockfile; IGNITE_DIR=\"$HOME/ignite\"; if [ ! -d \"$IGNITE_DIR/.git\" ]; then git clone https://github.com/prisma/ignite \"$IGNITE_DIR\"; else git -C \"$IGNITE_DIR\" fetch --quiet origin && git -C \"$IGNITE_DIR\" reset --quiet --hard origin/HEAD; fi"
 }

@@ -31,7 +31,7 @@ Choose between the dotted format (`RUNTIME.DECODE_FAILED`, ~89 codes) and the pr
 
 Keep the Postgres 17 floor (it was an early-access-era convenience) or lower it for the migrating audience. Every supported version is a CI matrix row forever. The decision unblocks final matrix verdicts for version-sensitive cells.
 
-**Decided August 11: the floor is 15** ([ADR 244](../../docs/architecture%20docs/adrs/ADR%20244%20-%20PostgreSQL%20floor%20lowered%20to%2015.md)). CI already runs `postgres:15` in every job, so the lowered floor adds no new matrix rows today; the feature-implied floor is 12, so 15 carries ample headroom.
+**Decided August 11: the floor is 15** ([ADR 248](../../docs/architecture%20docs/adrs/ADR%20248%20-%20PostgreSQL%20floor%20lowered%20to%2015.md)). CI already runs `postgres:15` in every job, so the lowered floor adds no new matrix rows today; the feature-implied floor is 12, so 15 carries ample headroom.
 
 ## Wed July 23 — quality sweep target
 

@@ -1,1 +1,6 @@
-export type { MongoControlAdapter, MongoControlAdapterDescriptor } from '../core/control-adapter';
+export type {
+  MarkerOperations,
+  MongoControlAdapter,
+  MongoControlAdapterDescriptor,
+  MongoRunnerDependencies,
+} from '../core/control-adapter';

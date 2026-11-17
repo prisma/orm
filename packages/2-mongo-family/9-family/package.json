@@ -1,11 +1,11 @@
 {
   "name": "@internal/family-mongo",
   "private": true,
-  "version": "8.0.0-rc.2",
+  "version": "8.0.0-rc.24",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "Mongo family descriptor for Prisma Next",
+  "description": "Mongo family descriptor for Prisma 8",
   "scripts": {
     "build": "tsdown",
     "test": "vitest run --passWithNoTests",
@@ -14,26 +14,30 @@
     "clean": "rm -rf dist coverage"
   },
   "dependencies": {
-    "@internal/contract": "workspace:8.0.0-rc.2",
-    "@internal/emitter": "workspace:8.0.0-rc.2",
-    "@internal/errors": "workspace:8.0.0-rc.2",
-    "@internal/framework-components": "workspace:8.0.0-rc.2",
-    "@internal/migration-tools": "workspace:8.0.0-rc.2",
-    "@internal/mongo-contract": "workspace:8.0.0-rc.2",
-    "@internal/mongo-emitter": "workspace:8.0.0-rc.2",
-    "@internal/mongo-query-ast": "workspace:8.0.0-rc.2",
-    "@internal/mongo-schema-ir": "workspace:8.0.0-rc.2",
-    "@internal/mongo-value": "workspace:8.0.0-rc.2",
-    "@internal/utils": "workspace:8.0.0-rc.2",
+    "@internal/contract": "workspace:8.0.0-rc.24",
+    "@internal/contract-authoring": "workspace:8.0.0-rc.24",
+    "@internal/emitter": "workspace:8.0.0-rc.24",
+    "@internal/errors": "workspace:8.0.0-rc.24",
+    "@internal/framework-components": "workspace:8.0.0-rc.24",
+    "@internal/migration-tools": "workspace:8.0.0-rc.24",
+    "@internal/mongo-contract": "workspace:8.0.0-rc.24",
+    "@internal/mongo-contract-psl": "workspace:8.0.0-rc.24",
+    "@internal/mongo-emitter": "workspace:8.0.0-rc.24",
+    "@internal/mongo-lowering": "workspace:8.0.0-rc.24",
+    "@internal/mongo-query-ast": "workspace:8.0.0-rc.24",
+    "@internal/mongo-schema-ir": "workspace:8.0.0-rc.24",
+    "@internal/mongo-value": "workspace:8.0.0-rc.24",
+    "@internal/psl-parser": "workspace:8.0.0-rc.24",
+    "@internal/utils": "workspace:8.0.0-rc.24",
     "arktype": "catalog:",
     "mongodb": "catalog:",
     "pathe": "^2.0.3"
   },
   "devDependencies": {
-    "@internal/mongo-contract-ts": "workspace:8.0.0-rc.2",
-    "@repo/test-utils": "workspace:8.0.0-rc.2",
-    "@repo/tsconfig": "workspace:8.0.0-rc.2",
-    "@repo/tsdown": "workspace:8.0.0-rc.2",
+    "@internal/mongo-contract-ts": "workspace:8.0.0-rc.24",
+    "@repo/test-utils": "workspace:8.0.0-rc.24",
+    "@repo/tsconfig": "workspace:8.0.0-rc.24",
+    "@repo/tsdown": "workspace:8.0.0-rc.24",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
@@ -66,7 +70,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/2-mongo-family/9-family"
   }
 }

@@ -1,0 +1,88 @@
+import { defineContract } from '@internal/postgres/contract-builder';
+import { describe, expect, it } from 'vitest';
+import { vector } from '../src/exports/column-types';
+import pgvector from '../src/exports/pack';
+
+function embeddingDefault(literal: number[], form: 'typeHelper' | 'column'): unknown {
+  const contract = defineContract({ extensions: { pgvector } }, ({ field, model, type, gen }) => {
+    const embedding = field.column(form === 'typeHelper' ? type.pgvector.Vector(3) : vector(3));
+    return {
+      models: {
+        Doc: model('Doc', {
+          fields: {
+            id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+            embedding: embedding.default(literal),
+          },
+        }),
+      },
+    };
+  });
+  return contract.storage.namespaces['public']?.entries.table?.['Doc']?.columns['embedding']
+    ?.default;
+}
+
+const lengthRefusal = expect.objectContaining({
+  code: 'CONTRACT.DEFAULT_INVALID',
+  message:
+    'Field "Doc.embedding" has a default that its codec refuses: Vector length mismatch: expected 3, got 2',
+  meta: {
+    modelName: 'Doc',
+    fieldName: 'embedding',
+    codecId: 'pg/vector@1',
+    reason: 'codec-refused-default',
+  },
+});
+
+describe('literal defaults on a codec contributed through extensions', () => {
+  describe('on a column typed by type.pgvector.Vector', () => {
+    it('stores a vector of the declared length', () => {
+      expect(embeddingDefault([1, 2, 3], 'typeHelper')).toEqual({
+        kind: 'literal',
+        value: [1, 2, 3],
+      });
+    });
+
+    it('refuses a vector of another length', () => {
+      expect(() => embeddingDefault([1, 2], 'typeHelper')).toThrow(lengthRefusal);
+    });
+  });
+
+  describe('on a plain column', () => {
+    it('stores a vector of the declared length', () => {
+      expect(embeddingDefault([1, 2, 3], 'column')).toEqual({ kind: 'literal', value: [1, 2, 3] });
+    });
+
+    it('refuses a vector of another length', () => {
+      expect(() => embeddingDefault([1, 2], 'column')).toThrow(lengthRefusal);
+    });
+  });
+
+  describe('on a column whose type parameters the data type does not accept', () => {
+    it('reports the type parameters, not the default', () => {
+      expect(() =>
+        defineContract({ extensions: { pgvector } }, ({ field, model, gen, type }) => ({
+          models: {
+            Doc: model('Doc', {
+              fields: {
+                id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+                embedding: field.column({ codecId: 'pg/vector@1' } as const).default([1, 2, 3]),
+              },
+            }),
+          },
+        })),
+      ).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.TYPE_PARAMS_INVALID',
+          message:
+            'Field "Doc.embedding" has type parameters that its data type does not accept: pgvector/vector: length must be a number (was missing)',
+          meta: {
+            dataType: 'pgvector/vector',
+            parameters: ['length'],
+            modelName: 'Doc',
+            fieldName: 'embedding',
+          },
+        }),
+      );
+    });
+  });
+});

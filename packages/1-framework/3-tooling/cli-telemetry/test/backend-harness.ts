@@ -8,7 +8,7 @@ import { dirname, join, resolve } from 'pathe';
  * Shared end-to-end harness around the real Bun telemetry backend.
  *
  * Both `integration.test.ts` (which forks the sender script directly)
- * and `cli-e2e.test.ts` (which spawns the compiled `prisma-next` binary)
+ * and `cli-e2e.test.ts` (which spawns the compiled `prisma` binary)
  * stand up the same surface: a fresh dev Postgres database, the
  * backend's contract schema initialised against it, the
  * `apps/telemetry-backend` HTTP service started on an ephemeral port,
@@ -161,20 +161,9 @@ function runCommand(
 async function initializeBackendSchema(database: DevDatabase): Promise<void> {
   await runCommand(
     'pnpm',
-    [
-      '--filter',
-      'telemetry-backend',
-      'exec',
-      'prisma-next',
-      'db',
-      'init',
-      '--db',
-      database.connectionString,
-      '--json',
-      '--no-color',
-    ],
+    ['exec', 'prisma', 'db', 'init', '--db', database.connectionString, '--json', '--no-color'],
     {
-      cwd: REPO_ROOT,
+      cwd: BACKEND_DIR,
       env: { ...process.env, DATABASE_URL: database.connectionString },
     },
   );
@@ -246,25 +235,16 @@ async function stopBackend(backend: BackendProcess): Promise<void> {
   });
 }
 
-// The dev Postgres' default `databaseIdleTimeoutMillis` (1000ms in
-// `@repo/test-utils`) is too aggressive for this suite: any
-// backend pg-pool connection that idles past one second between test
-// cases gets killed server-side, which the production driver's pool
-// surfaces as an unhandled `'error'` event and crashes the backend
-// process (Node's default behaviour for emitter `'error'` events with
-// no listener). Cases whose parent CLI runs longer than a second
-// between rows reliably trip this.
+// Any backend pg-pool connection that idles past the dev Postgres'
+// `databaseIdleTimeoutMillis` between test cases gets killed
+// server-side. The driver's pool suppresses the resulting 'error' event
+// (no crash), but a statement in flight on a reaped connection still
+// rejects and fails the case.
 //
-// 60_000ms comfortably exceeds any single test file's wall-clock so
-// no idle connection gets reaped during a run. Teardown is fast
-// regardless — `harness.stop()` and `database.close()` don't wait on
-// idle reapers.
-//
-// Production-side follow-up: `packages/3-targets/7-drivers/postgres/
-// src/postgres-driver.ts`'s `createBoundDriverFromBinding` constructs
-// `new Pool(...)` without attaching an `'error'` listener, so real
-// users whose database ends an idle connection (RDS proxy timeout,
-// network blip, etc.) would also crash. Worth its own ticket.
+// 60_000ms exceeds the `@repo/test-utils` default and comfortably
+// exceeds any single test file's wall-clock, so no idle connection gets
+// reaped during a run. Teardown is fast regardless — `harness.stop()`
+// and `database.close()` don't wait on idle reapers.
 const DEV_DB_IDLE_TIMEOUT_MS = 60_000;
 
 /**

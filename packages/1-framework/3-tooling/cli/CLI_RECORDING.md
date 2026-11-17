@@ -1,6 +1,6 @@
 # CLI Recording
 
-Animated SVG and plain-text ASCII recordings of `prisma-next` CLI commands, produced by [VHS](https://github.com/charmbracelet/vhs).
+Animated SVG and plain-text ASCII recordings of `prisma` CLI commands, produced by [VHS](https://github.com/charmbracelet/vhs).
 
 ## Prerequisites
 
@@ -47,7 +47,7 @@ recordings/config.ts          Defines scenarios (commands, db state, timing)
         ▼
 scripts/record.ts             Orchestrator:
    1. Validates prerequisites (vhs on PATH, CLI built)
-   2. Creates shell wrapper scripts (.bin/) so VHS can find `prisma-next`
+   2. Creates shell wrapper scripts (.bin/) so VHS can find `prisma`
    3. Sets up database state per scenario (reset, emit, init)
    4. Generates .tape files from config
    5. Runs `vhs <tape>` to produce output

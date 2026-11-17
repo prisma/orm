@@ -22,12 +22,10 @@ import {
  * F23 lock — `db verify` against a multi-member aggregate (app +
  * extension, both claiming live tables) returns zero schema issues.
  *
- * Pre-aggregate (M2 R6 R1), `db verify` projected the live schema only
- * through the app contract. Tables claimed by extensions surfaced as
- * `extras` and tripped lenient/strict schema diffs, polluting the
- * verify output. The aggregate verifier (M2.5) pre-projects the live
- * schema per member before running the family's schema-verify, so each
- * member only sees the elements it owns.
+ * The aggregate verifier pre-projects the live schema per contract-space
+ * member before running the family's schema-verify, so each member only
+ * sees the elements it owns — extension-claimed tables never surface as
+ * `extras` in the app contract's diff.
  *
  * Setup mirrors the spec's intent (sub-spec § "Commit 6"):
  * - app contract claims `user`

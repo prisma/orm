@@ -22,7 +22,7 @@ import type { MigrationMetadata } from './metadata';
  * documentation explaining why it is safe.
  *
  * Safety: the JSON files passed here are produced by the framework's own
- * emit pipeline (`prisma-next contract emit` and `MigrationCLI.run`)
+ * emit pipeline (`prisma contract emit` and `MigrationCLI.run`)
  * and re-validated downstream by the runner / verifier. The descriptor
  * is a pass-through wiring layer — no descriptor consumer treats the
  * narrowed types as a stronger guarantee than "these came from the

@@ -1,5 +1,7 @@
 # ADR 202 — Codec trait system
 
+> **Update — `targetTypes` is removed** by [ADR 254 — Data types and casts](ADR%20254%20-%20Data%20types%20and%20casts.md): a codec names the data type it represents, and the data type declares how the database names the type. Where this ADR names `targetTypes`, it describes the codec shape of its time.
+
 > **Retrospective note.** This ADR's examples show codec definitions via `defineCodec({...})`. That factory was retired in favor of class-based descriptors (`CodecDescriptorImpl`); traits are now declared as `override readonly traits = [...] as const` on the descriptor class. The `'json-validator'` trait this ADR introduced was also retired — JSON-Schema validation now lives uniformly inside the resolved codec's `decode` body rather than behind a parallel `JsonSchemaValidatorRegistry`. The trait system itself, the operator-gating semantics, and the canonical traits set are all unchanged. See [ADR 208](ADR%20208%20-%20Higher-order%20codecs%20for%20parameterized%20types.md) and the [Codec authoring guide](../../reference/codec-authoring-guide.md).
 
 ## Context

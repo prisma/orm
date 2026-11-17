@@ -1,4 +1,4 @@
-# Agents — Prisma Next
+# Agents — Prisma 8
 
 Welcome. This is a contract‑first, agent‑friendly data layer.
 
@@ -21,7 +21,7 @@ Welcome. This is a contract‑first, agent‑friendly data layer.
 
 ## Project Overview
 
-**Prisma Next** is a contract-first data access layer:
+**Prisma 8** is a contract-first data access layer:
 
 - **Contract-first**: Emit `contract.json` + `contract.d.ts` — no executable runtime code generation
 - **Composable DSL**: Type-safe query builder (`sql().from(...).select(...)`)
@@ -42,9 +42,10 @@ The repo keeps a single canonical home for each kind of agent surface, with pres
 
 ## Golden Rules
 
+- **Never change the framework domain** (`packages/1-framework`). If a design needs to, stop and tell the operator: `.agents/rules/never-change-the-framework-domain.mdc`.
 - **Node.js version**: Use the shell's Node — do not run `nvm`/`fnm` or any version switcher. Source of truth is the root `package.json` `engines.node`. If the shell's `node -v` doesn't satisfy that, report that the shell is misconfigured (e.g. user should set their default Node in their version manager, or use Volta) — don't try to switch it yourself.
 - Use `pnpm`, not `npm`. Never use `npx`.
-- Build with `pnpm build` (delegates to Turbo). After changing exported types in a workspace package consumed elsewhere, run that package's `pnpm build` to refresh `dist/*.d.mts` before validating downstream TypeScript.
+- Build with `pnpm build` (delegates to Turbo). After changing exported types in a workspace package consumed elsewhere, run `pnpm build` to refresh `dist/*.d.mts` before validating downstream TypeScript. Never build single packages: a partial build leaves stale `dist`.
 - For typecheck/test, use the local `pnpm typecheck` / `pnpm test` scripts rather than writing `tsc`/`vitest` invocations from scratch.
 - Use arktype, not zod.
 - Never add file extensions to imports in TypeScript.
@@ -70,7 +71,8 @@ The repo keeps a single canonical home for each kind of agent surface, with pres
 
 ```bash
 pnpm build                 # Build via Turbo
-pnpm test:packages         # Run package tests (cheapest healthy-workspace signal)
+# Full suites: CI runs them; locally, run your packages' tests (.agents/rules/running-tests.mdc)
+pnpm test:packages         # Package tests
 pnpm test:integration      # Integration tests (PGlite + mongodb-memory-server, no external DB)
 pnpm test:e2e              # E2E tests (also self-contained)
 pnpm test:all              # Everything
@@ -85,15 +87,15 @@ pnpm fixtures:check        # Use this rather than ad-hoc emit-and-diff
 
 1. **Authoring**: Write `schema.psl` or use TypeScript builders → canonicalized Contract IR
 2. **Emission**: Emitter validates and generates `contract.json` + `contract.d.ts`
-3. **Validation**: `validateContract<Contract>(json)` validates structure and returns typed contract
+3. **Hydration**: `contractFromJson` (facade `/static`) validates `contract.json` into the typed contract
 4. **Usage**: DSL functions (`sql()`, `schema()`) accept the contract and propagate types
 
 ### Key Patterns
 
-- **Type Parameter Pattern**: JSON imports lose literal types. Import the precise types from `contract.d.ts` and validate the JSON at runtime: `validateContract<Contract>(contractJson)`. The type parameter must be the fully-typed `Contract`, not a generic like `SqlContract<SqlStorage>`.
+- **Type Parameter Pattern**: JSON imports lose literal types. Name the `contract.d.ts` type where the JSON enters — `contractFromJson<Contract>(contractJson)`, then `postgres({ contract, url })`; `validateSqlContractFully<Contract>(contractJson)` in client-less tests. Never a generic like `SqlContract<SqlStorage>`.
 - **ExecutionContext**: Encapsulates contract, codecs, operations, and types. Pass to `schema()`, `sql()`, `orm()`.
-- **Interface + factory pattern for stateful services**: Stateful services (registries, runtimes, adapters, drivers) are exposed through an interface plus a `createX()` factory; the implementing class stays package-private. Consumers depend on the interface, never the implementation. Pattern reference: [`docs/architecture docs/patterns/interface-plus-factory.md`](docs/architecture%20docs/patterns/interface-plus-factory.md).
-- **Three-layer polymorphic IR for AST/IR class hierarchies**: AST/IR nodes (Contract IR, Schema IR, migration ops) are organised as framework interface → family abstract base → target concrete classes. Concrete classes are publicly exported as the target's IR alphabet; `freezeNode(this)` is called in the constructor. Target packs contribute new entity kinds via `AuthoringContributions.entityTypes` (see [`docs/reference/typescript-patterns.md`](docs/reference/typescript-patterns.md) § "AST/IR class hierarchies"). Pattern references: [`three-layer-polymorphic-ir.md`](docs/architecture%20docs/patterns/three-layer-polymorphic-ir.md), [`frozen-class-ast.md`](docs/architecture%20docs/patterns/frozen-class-ast.md), [`json-canonical-class-in-memory.md`](docs/architecture%20docs/patterns/json-canonical-class-in-memory.md).
+- **Interface + factory pattern for stateful services**: Stateful services (registries, runtimes, adapters, drivers) expose an interface plus a `createX()` factory; the implementing class stays package-private and consumers depend on the interface, never it. Pattern reference: [`docs/architecture docs/patterns/interface-plus-factory.md`](docs/architecture%20docs/patterns/interface-plus-factory.md).
+- **Three-layer polymorphic IR for AST/IR class hierarchies**: AST/IR nodes (Contract IR, Schema IR, migration ops) go framework interface → family abstract base → target concrete classes. Concrete classes are the target's exported IR alphabet and call `freezeNode(this)` in their constructor; target packs add entity kinds via `AuthoringContributions.entityTypes` (see [`docs/reference/typescript-patterns.md`](docs/reference/typescript-patterns.md) § "AST/IR class hierarchies"). Pattern references: [`three-layer-polymorphic-ir.md`](docs/architecture%20docs/patterns/three-layer-polymorphic-ir.md), [`frozen-class-ast.md`](docs/architecture%20docs/patterns/frozen-class-ast.md), [`json-canonical-class-in-memory.md`](docs/architecture%20docs/patterns/json-canonical-class-in-memory.md).
 - **Capability Gating**: Features like `returning()` require capabilities in the contract; gating is enforced at authoring time.
 - **Builder chaining**: Methods return new instances — always chain calls.
 - **Column access**: Use `table.columns.fieldName` to avoid conflicts with table properties.
@@ -113,6 +115,10 @@ See `architecture.config.json` for the complete mapping and `pnpm lint:deps` to 
 - Day-to-day playbook (add SQL operation, split monolith, fix import violation, etc.): [Common Tasks Playbook](docs/onboarding/Common-Tasks-Playbook.md)
 - Shape and deliver a project (spec → plan → implement): run `drive-start-workflow`; methodology in [`prisma/ignite docs/drive/`](https://github.com/prisma/ignite/tree/main/docs/drive); project artifacts live under `projects/` (see [`projects/README.md`](projects/README.md))
 - Cut the next npm minor release: `.agents/skills/publish-npm-version/SKILL.md` (policy in [`docs/oss/versioning.md`](docs/oss/versioning.md))
+
+## Check requests and proposals against the vision
+
+Before you judge a feature request or pull request, or propose a feature or solution, read the [project intent](docs/design/00-purpose/project-intent.md), the [vision](docs/design/00-purpose/vision.md#how-to-use-this-page) and the [steering list](docs/architecture%20docs/ADR-INDEX.md#steering-list).
 
 ## Subsystem Deep Dives
 

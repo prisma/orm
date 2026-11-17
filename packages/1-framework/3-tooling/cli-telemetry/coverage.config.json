@@ -1,0 +1,5 @@
+{
+  "include": ["src/**/*.ts"],
+  "exclude": ["dist/**", "test/**", "**/*.test.ts", "**/*.config.ts", "**/exports/**"],
+  "thresholds": {}
+}

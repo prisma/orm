@@ -1,6 +1,6 @@
 {
   "name": "e2e-tests",
-  "version": "8.0.0-rc.2",
+  "version": "8.0.0-rc.24",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,24 +9,30 @@
     "lint": "biome check . --error-on-warnings",
     "lint:fix": "biome check --write .",
     "lint:fix:unsafe": "biome check --write --unsafe .",
-    "emit": "prisma-next contract emit --config test/fixtures/prisma.config.ts && prisma-next contract emit --config test/sqlite/fixtures/prisma.config.ts",
+    "emit": "prisma contract emit --config test/fixtures/prisma.config.ts && prisma contract emit --config test/sqlite/fixtures/prisma.config.ts",
     "emit:check": "pnpm emit && git diff --exit-code test/fixtures/generated/ test/sqlite/fixtures/generated/",
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "devDependencies": {
-    "@repo/tsconfig": "workspace:8.0.0-rc.2",
+    "@repo/prisma-bin": "workspace:8.0.0-rc.24",
+    "@repo/tsconfig": "workspace:8.0.0-rc.24",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
     "pg": "catalog:",
+    "temporal-polyfill": "^1.0.4",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
   "dependencies": {
-    "@prisma/orm-extension-arktype-json": "workspace:8.0.0-rc.2",
-    "@prisma/orm-extension-pgvector": "workspace:8.0.0-rc.2",
-    "@prisma/orm-postgres": "workspace:8.0.0-rc.2",
-    "@prisma/orm-sqlite": "workspace:8.0.0-rc.2",
-    "@repo/test-utils": "workspace:8.0.0-rc.2",
+    "@prisma/orm-extension-arktype-json": "workspace:8.0.0-rc.24",
+    "@prisma/orm-extension-paradedb": "workspace:8.0.0-rc.24",
+    "@prisma/orm-extension-pgvector": "workspace:8.0.0-rc.24",
+    "@prisma/orm-extension-postgis": "workspace:8.0.0-rc.24",
+    "@prisma/orm-mongo": "workspace:8.0.0-rc.24",
+    "@prisma/orm-postgres": "workspace:8.0.0-rc.24",
+    "@prisma/orm-postgres-contrib": "workspace:8.0.0-rc.24",
+    "@prisma/orm-sqlite": "workspace:8.0.0-rc.24",
+    "@repo/test-utils": "workspace:8.0.0-rc.24",
     "arktype": "catalog:"
   }
 }

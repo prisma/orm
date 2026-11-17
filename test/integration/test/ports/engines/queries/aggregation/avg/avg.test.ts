@@ -1,6 +1,5 @@
-import type { Numeric } from '@internal/target-postgres/codec-types';
 import { describe, expect, it } from 'vitest';
-import { timeouts, withPostgresPort } from '../../../../_harness/postgres';
+import { timeouts, withPostgresPort } from '../../../../../_harness/postgres';
 import type { Contract as DecimalContract } from './_fixture/decimal/generated/contract';
 import decimalContractJson from './_fixture/decimal/generated/contract.json' with { type: 'json' };
 import type { Contract as NumericContract } from './_fixture/numeric/generated/contract';
@@ -60,8 +59,8 @@ describe('ports/engines/queries/aggregation/avg', () => {
     () =>
       withPostgresPort<DecimalContract>({ contractJson: decimalContractJson }, async ({ db }) => {
         await db.public.TestModel.createAll([
-          { id: 1, decimal: '5.5' as Numeric<65, 30> },
-          { id: 2, decimal: '4.5' as Numeric<65, 30> },
+          { id: 1, decimal: '5.5' },
+          { id: 2, decimal: '4.5' },
         ]);
 
         const result = await db.public.TestModel.aggregate((aggregate) => ({

@@ -1,15 +1,14 @@
 {
   "name": "@internal/mongo-codec",
   "private": true,
-  "version": "8.0.0-rc.2",
+  "version": "8.0.0-rc.24",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "Codec interface and registry for Prisma Next MongoDB support",
+  "description": "Codec interface and registry for Prisma 8 MongoDB support",
   "scripts": {
     "build": "tsdown",
     "test": "vitest run --passWithNoTests",
-    "test:coverage": "vitest run --coverage --passWithNoTests",
     "typecheck": "tsc --noEmit",
     "lint": "biome check . --error-on-warnings",
     "lint:fix": "biome check --write .",
@@ -17,14 +16,14 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/contract": "workspace:8.0.0-rc.2",
-    "@internal/framework-components": "workspace:8.0.0-rc.2",
-    "@internal/utils": "workspace:8.0.0-rc.2"
+    "@internal/contract": "workspace:8.0.0-rc.24",
+    "@internal/framework-components": "workspace:8.0.0-rc.24",
+    "@internal/utils": "workspace:8.0.0-rc.24"
   },
   "devDependencies": {
-    "@repo/test-utils": "workspace:8.0.0-rc.2",
-    "@repo/tsconfig": "workspace:8.0.0-rc.2",
-    "@repo/tsdown": "workspace:8.0.0-rc.2",
+    "@repo/test-utils": "workspace:8.0.0-rc.24",
+    "@repo/tsconfig": "workspace:8.0.0-rc.24",
+    "@repo/tsdown": "workspace:8.0.0-rc.24",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
@@ -51,7 +50,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/2-mongo-family/1-foundation/mongo-codec"
   }
 }

@@ -1,6 +1,6 @@
 import { ObjectId } from 'mongodb';
 import { describe, expect, it } from 'vitest';
-import { timeouts, withMongoPort } from '../../../_harness/mongo';
+import { timeouts, withMongoPort } from '../../../../_harness/mongo';
 import type { Contract } from './_fixture/generated/contract';
 import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
 
@@ -11,15 +11,15 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // This port uses two separate roots (required / optional content), mirroring the
 // create port, because upstream is matrix-parameterised on contentProperty.
 //
-// prisma-next: `.where({ _id }).upsert({ create, update: {} })`.
+// Prisma 8: `.where({ id }).upsert({ create, update: {} })`.
 //
 // Like create(), upsert() returns the input merged with the server-assigned
-// `_id` and does NOT re-read the stored document — so the shape is asserted via
-// toMatchObject (content/country) plus `_id`, exactly as the create port does.
-// Upstream asserts `id: expect.any(String)`; prisma-next decodes write results
-// through the same codecs as reads (#29879), so `_id` is a hex string here too.
+// `id` and does NOT re-read the stored document — so the shape is asserted via
+// toMatchObject (content/country) plus `id`, exactly as the create port does.
+// Upstream asserts `id: expect.any(String)`; Prisma 8 decodes write results
+// through the same codecs as reads (#29879), so `id` is a hex string here too.
 //
-// Upstream "set null" for the required variant throws at runtime; in prisma-next the
+// Upstream "set null" for the required variant throws at runtime; in Prisma 8 the
 // required constraint is enforced at the type level (@ts-expect-error holds) and
 // MongoDB rejects it through the provisioned collection validator.
 
@@ -34,10 +34,10 @@ describe('ports/prisma/functional/composites/object/upsert-create', () => {
       () =>
         withComposites(async ({ db }) => {
           const id = new ObjectId().toHexString();
-          const comment = await db.comments_required.where({ _id: id }).upsert({
+          const comment = await db.comments_required.where({ id }).upsert({
             update: {},
             create: {
-              _id: id,
+              id,
               country: 'France',
               content: {
                 text: 'Hello World',
@@ -53,7 +53,7 @@ describe('ports/prisma/functional/composites/object/upsert-create', () => {
               upvotes: [{ userId: '10', vote: true }],
             },
           });
-          expect(comment._id).toEqual(expect.any(String));
+          expect(comment.id).toEqual(expect.any(String));
         }),
       timeouts.spinUpMongoMemoryServer,
     );
@@ -63,10 +63,10 @@ describe('ports/prisma/functional/composites/object/upsert-create', () => {
       () =>
         withComposites(async ({ db }) => {
           const id = new ObjectId().toHexString();
-          const comment = await db.comments_required.where({ _id: id }).upsert({
+          const comment = await db.comments_required.where({ id }).upsert({
             update: {},
             create: {
-              _id: id,
+              id,
               country: 'France',
               content: {
                 text: 'Hello World',
@@ -86,7 +86,7 @@ describe('ports/prisma/functional/composites/object/upsert-create', () => {
       timeouts.spinUpMongoMemoryServer,
     );
 
-    // Upstream: null on required `content` throws at runtime. prisma-next rejects it
+    // Upstream: null on required `content` throws at runtime. Prisma 8 rejects it
     // at the type level (@ts-expect-error holds), and MongoDB rejects it through the
     // provisioned collection validator.
     it(
@@ -94,29 +94,10 @@ describe('ports/prisma/functional/composites/object/upsert-create', () => {
       () =>
         withComposites(async ({ db }) => {
           const id = new ObjectId().toHexString();
-          const comment = db.comments_required.where({ _id: id }).upsert({
+          const comment = db.comments_required.where({ id }).upsert({
             update: {},
             create: {
-              _id: id,
-              country: 'France',
-              // @ts-expect-error required `content` cannot be null
-              content: null,
-            },
-          });
-          await expect(comment).rejects.toThrow();
-        }),
-      timeouts.spinUpMongoMemoryServer,
-    );
-
-    it(
-      'set null shorthand',
-      () =>
-        withComposites(async ({ db }) => {
-          const id = new ObjectId().toHexString();
-          const comment = db.comments_required.where({ _id: id }).upsert({
-            update: {},
-            create: {
-              _id: id,
+              id,
               country: 'France',
               // @ts-expect-error required `content` cannot be null
               content: null,
@@ -132,10 +113,10 @@ describe('ports/prisma/functional/composites/object/upsert-create', () => {
       () =>
         withComposites(async ({ db }) => {
           const id = new ObjectId().toHexString();
-          const comment = await db.comments_required.where({ _id: id }).upsert({
+          const comment = await db.comments_required.where({ id }).upsert({
             update: {},
             create: {
-              _id: id,
+              id,
               country: 'France',
               content: {
                 text: 'Hello World',
@@ -168,32 +149,10 @@ describe('ports/prisma/functional/composites/object/upsert-create', () => {
       () =>
         withComposites(async ({ db }) => {
           const id = new ObjectId().toHexString();
-          const comment = await db.comments_optional.where({ _id: id }).upsert({
+          const comment = await db.comments_optional.where({ id }).upsert({
             update: {},
             create: {
-              _id: id,
-              country: 'France',
-              content: null,
-            },
-          });
-
-          expect(comment).toMatchObject({
-            country: 'France',
-            content: null,
-          });
-        }),
-      timeouts.spinUpMongoMemoryServer,
-    );
-
-    it(
-      'set null shorthand (content omitted)',
-      () =>
-        withComposites(async ({ db }) => {
-          const id = new ObjectId().toHexString();
-          const comment = await db.comments_optional.where({ _id: id }).upsert({
-            update: {},
-            create: {
-              _id: id,
+              id,
               country: 'France',
               content: null,
             },

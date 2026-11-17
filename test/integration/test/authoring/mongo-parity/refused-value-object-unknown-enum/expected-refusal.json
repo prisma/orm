@@ -1,0 +1,13 @@
+{
+  "ts": {
+    "code": "CONTRACT.ENUM_UNKNOWN",
+    "message": "Value object \"Badge\" field \"level\" references enum \"Level\" which is not declared in defineContract({ enums: { ... } })."
+  },
+  "psl": [
+    {
+      "code": "PSL_UNRESOLVED_REFERENCE",
+      "message": "Cannot find type \"Level\"",
+      "spanText": "Level"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model NativeTypeDefaults {
+  id       Int     @id
+  bit      String  @default("10101010") @db.Bit(8)
+  varBit   String  @default("101") @db.VarBit(8)
+  xml      String  @default("<a>b</a>") @db.Xml
+  oid      Int     @default(42) @db.Oid
+  oidMax   Int     @default(4294967295) @db.Oid
+  money    Decimal @default(12.5) @db.Money
+  moneyNeg Decimal @default(-1234.56) @db.Money
+  moneyInt Decimal @default(1000) @db.Money
+}

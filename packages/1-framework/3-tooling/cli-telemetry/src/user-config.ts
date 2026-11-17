@@ -20,14 +20,14 @@ export interface UserConfig {
   readonly [key: string]: unknown;
 }
 
-const APP_DIR = 'prisma-next';
+const APP_DIR = 'prisma-8';
 const FILE_NAME = 'config.json';
 
 /**
  * Resolves the user-level config directory:
- *   - Windows: `%APPDATA%\prisma-next\` (fallback: `%USERPROFILE%\AppData\Roaming\prisma-next\`).
- *   - Unix (incl. macOS): `$XDG_CONFIG_HOME/prisma-next/` if set, else
- *     `$HOME/.config/prisma-next/` per the XDG Base Directory Specification.
+ *   - Windows: `%APPDATA%\prisma-8\` (fallback: `%USERPROFILE%\AppData\Roaming\prisma-8\`).
+ *   - Unix (incl. macOS): `$XDG_CONFIG_HOME/prisma-8/` if set, else
+ *     `$HOME/.config/prisma-8/` per the XDG Base Directory Specification.
  *
  * The spec deliberately picks XDG over the macOS-native
  * `~/Library/Preferences/` convention so the path resolution is

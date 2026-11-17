@@ -1,5 +1,4 @@
 import { readFileSync } from 'node:fs';
-import type { PrismaNextConfig } from '@internal/config/config-types';
 import { blindCast } from '@internal/utils/casts';
 import { determineAgent } from '@vercel/detect-agent';
 import { join } from 'pathe';
@@ -25,12 +24,12 @@ const EMPTY_PROJECT_CONFIG: ProjectConfigFields = {
  * Best-effort load of `prisma.config.*` from `projectRoot`,
  * validated against the canonical `@internal/config` schema.
  * Returns `{ databaseTarget: null, extensions: [] }` on any failure
- * mode — missing config file (e.g. before `prisma-next init`), c12
+ * mode — missing config file (e.g. before `prisma orm init`), c12
  * throws while evaluating user TS, validator rejects a malformed
  * shape, etc. Telemetry is non-blocking and best-effort; an empty
  * result is the only downside of an unloadable or invalid config.
  *
- * Both `c12` and `@internal/config/config-validation` are imported
+ * Both `c12` and the config loader are imported
  * lazily so the detached sender's cold-start cost is paid only when
  * telemetry actually fires, not on every fork even when gates
  * short-circuit before reaching this code path.
@@ -46,13 +45,7 @@ export async function loadProjectConfig(projectRoot: string): Promise<ProjectCon
         rcFile: false,
         globalRc: false,
       });
-    // `prisma.config.*` is the canonical filename; `prisma-next.config.*`
-    // is the deprecated one the config-loader still discovers, so mirror
-    // its fallback here.
-    let result = await load('prisma');
-    if (!result.config || Object.keys(result.config).length === 0) {
-      result = await load('prisma-next');
-    }
+    const result = await load('prisma');
     let config: Record<string, unknown> | null = result.config ?? null;
     // c12 returns an empty object when no config file exists in the
     // search path — distinct from "file existed but parsed to an empty
@@ -62,25 +55,25 @@ export async function loadProjectConfig(projectRoot: string): Promise<ProjectCon
     if (config === null || Object.keys(config).length === 0) {
       return EMPTY_PROJECT_CONFIG;
     }
-    // The engine shape nests the Prisma Next config as the `orm` section.
-    if (config['$prismaConfig'] !== undefined) {
-      const orm = config['orm'];
-      if (orm === null || typeof orm !== 'object' || Array.isArray(orm)) {
-        return EMPTY_PROJECT_CONFIG;
-      }
-      config = blindCast<
-        Record<string, unknown>,
-        'a non-null non-array object indexes by string keys'
-      >(orm);
-    }
-    const validation = await import('@internal/config/config-validation');
-    if (validation.collectConfigIssues(config).length > 0) {
+    // The engine shape nests the Prisma 8 config as the `orm` section;
+    // an export without the marker is not a config this CLI reads.
+    if (config['$prismaConfig'] === undefined) {
       return EMPTY_PROJECT_CONFIG;
     }
-    const validConfig = blindCast<
-      PrismaNextConfig,
-      'collectConfigIssues returned no issues, so the validated sections are present'
-    >(config);
+    const orm = config['orm'];
+    if (orm === null || typeof orm !== 'object' || Array.isArray(orm)) {
+      return EMPTY_PROJECT_CONFIG;
+    }
+    config = blindCast<
+      Record<string, unknown>,
+      'a non-null non-array object indexes by string keys'
+    >(orm);
+    const { validateOrmSection } = await import('@internal/config-loader');
+    const validation = validateOrmSection(config, { files: [], keys: {} });
+    if (!validation.ok) {
+      return EMPTY_PROJECT_CONFIG;
+    }
+    const validConfig = validation.value;
     return {
       databaseTarget: validConfig.target.targetId,
       extensions: (validConfig.extensions ?? []).map((pack) => pack.id),

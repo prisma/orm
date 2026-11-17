@@ -14,10 +14,10 @@ import {
   migrationStatusAppSpace,
   parseJsonOutput,
   parseMigrationStatusJson,
+  planMigrationAndSelfEmit,
   runContractEmit,
   runDbUpdate,
   runMigrate,
-  runMigrationPlanAndEmit,
   runMigrationStatus,
   setupJourney,
   swapContract,
@@ -51,7 +51,7 @@ withTempDir(({ createTempDir }) => {
         expect(update1.exitCode, 'O.02: db update C2').toBe(0);
 
         // O.03: plan baseline migration EMPTY→C2 (current contract)
-        const planBaseline = await runMigrationPlanAndEmit(ctx, ['--name', 'baseline', '--json']);
+        const planBaseline = await planMigrationAndSelfEmit(ctx, ['--name', 'baseline', '--json']);
         expect(planBaseline.exitCode, 'O.03: plan baseline').toBe(0);
         const baselineResult = parseJsonOutput<{ to: string; noOp: boolean }>(planBaseline);
         expect(baselineResult.noOp, 'O.03: baseline is not a plan-noop').toBe(false);
@@ -73,7 +73,11 @@ withTempDir(({ createTempDir }) => {
         swapContract(ctx, 'contract-phone-bio');
         const emit2 = await runContractEmit(ctx);
         expect(emit2.exitCode, 'O.05: emit C3').toBe(0);
-        const planIncremental = await runMigrationPlanAndEmit(ctx, ['--name', 'add-bio', '--json']);
+        const planIncremental = await planMigrationAndSelfEmit(ctx, [
+          '--name',
+          'add-bio',
+          '--json',
+        ]);
         expect(planIncremental.exitCode, 'O.05: plan C2→C3').toBe(0);
         const incrementalResult = parseJsonOutput<{ from: string; to: string }>(planIncremental);
         expect(incrementalResult.from, 'O.05: from C2').toBe(c2Hash);

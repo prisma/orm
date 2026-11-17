@@ -1,10 +1,10 @@
 {
   "name": "@prisma/orm-toolchain",
-  "version": "8.0.0-rc.2",
+  "version": "8.0.0-rc.24",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "Prisma Next dev/build tooling: the ORM command family, emitter, config-loader, language server, telemetry, vite plugin",
+  "description": "Prisma 8 dev/build tooling: the ORM command family, emitter, config-loader, language server, telemetry, vite plugin",
   "files": [
     "dist"
   ],
@@ -14,7 +14,7 @@
     "clean": "rm -rf dist src-gen"
   },
   "dependencies": {
-    "@prisma/orm-framework": "workspace:8.0.0-rc.2",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.24",
     "@vercel/detect-agent": "^1.2.4",
     "arktype": "catalog:",
     "c12": "^3.3.4",
@@ -29,26 +29,27 @@
     "prettier": "^3.9.6",
     "string-width": "^8.2.2",
     "strip-ansi": "^7.2.0",
+    "tinyglobby": "catalog:",
     "vscode-languageserver": "catalog:",
     "vscode-languageserver-textdocument": "catalog:",
     "wrap-ansi": "^10.0.0"
   },
   "devDependencies": {
-    "@internal/cli": "workspace:8.0.0-rc.2",
-    "@internal/cli-telemetry": "workspace:8.0.0-rc.2",
-    "@internal/config-loader": "workspace:8.0.0-rc.2",
-    "@internal/emitter": "workspace:8.0.0-rc.2",
-    "@internal/language-server": "workspace:8.0.0-rc.2",
-    "@internal/migration-tools": "workspace:8.0.0-rc.2",
-    "@internal/publish-surface": "workspace:8.0.0-rc.2",
-    "@repo/tsconfig": "workspace:8.0.0-rc.2",
-    "@repo/tsdown": "workspace:8.0.0-rc.2",
-    "@internal/vite-plugin-contract-emit": "workspace:8.0.0-rc.2",
+    "@internal/cli": "workspace:8.0.0-rc.24",
+    "@internal/cli-telemetry": "workspace:8.0.0-rc.24",
+    "@internal/config-loader": "workspace:8.0.0-rc.24",
+    "@internal/emitter": "workspace:8.0.0-rc.24",
+    "@internal/language-server": "workspace:8.0.0-rc.24",
+    "@internal/migration-tools": "workspace:8.0.0-rc.24",
+    "@internal/publish-surface": "workspace:8.0.0-rc.24",
+    "@repo/tsconfig": "workspace:8.0.0-rc.24",
+    "@repo/tsdown": "workspace:8.0.0-rc.24",
+    "@internal/vite-plugin-contract-emit": "workspace:8.0.0-rc.24",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },
   "peerDependencies": {
-    "@prisma/cli-engine": "0.1.1",
+    "@prisma/cli-engine": "0.10.0",
     "typescript": ">=5.9",
     "vite": "^7.0.0 || ^8.0.0"
   },
@@ -99,7 +100,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/9-public/@prisma/orm-toolchain"
   }
 }

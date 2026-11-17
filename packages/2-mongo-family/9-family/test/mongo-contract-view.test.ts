@@ -8,10 +8,6 @@ import contractJson from './fixtures/orm-contract.json' with { type: 'json' };
 const contract = new MongoContractSerializer().deserializeContract<Contract>(contractJson);
 
 describe('MongoContractView', () => {
-  it('from() returns a view object', () => {
-    expect(MongoContractView.from(contract)).toBeDefined();
-  });
-
   it('the view is a superset of the contract (contract fields present)', () => {
     const view = MongoContractView.from(contract);
     expect(view.storage).toBe(contract.storage);

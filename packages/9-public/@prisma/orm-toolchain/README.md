@@ -1,6 +1,6 @@
 # @prisma/orm-toolchain
 
-Prisma Next's development and build tooling: the ORM command family the unified `prisma` CLI mounts, the contract emitter, the config loader, the language server, CLI telemetry, and the Vite plugin. This package ships no bin.
+Prisma 8's development and build tooling: the ORM command family the unified `prisma` CLI mounts, the contract emitter, the config loader, the language server, CLI telemetry, and the Vite plugin. This package ships no bin.
 
 Applications get it as an exact-pinned dependency of their database facade (`@prisma/orm-postgres`, `@prisma/orm-sqlite`, `@prisma/orm-mongo`); app developers install the facade, not this package. It is separate from `@prisma/orm-framework` so deployed applications never trace a compiler, formatter, or language server into their runtime bundle.
 
@@ -22,7 +22,3 @@ Applications get it as an exact-pinned dependency of their database facade (`@pr
 ## Responsibilities
 
 Everything that runs at development or build time: emitting contracts, loading config, planning and packaging migrations, editor support, and the CLI itself. Nothing here is needed by a deployed application at runtime.
-
-## Dependencies
-
-`@prisma/orm-framework` (exact lockstep pin) plus the tooling's third-party dependencies (esbuild, prettier, clipanion, vscode-languageserver, and friends) — the deliberate reason this package is not part of `orm-framework`.

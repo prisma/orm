@@ -1,0 +1,8 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Timestamps {
+  id           Int       @id
+  updatedAtOpt DateTime? @updatedAt
+}

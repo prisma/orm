@@ -1,614 +1,475 @@
 #!/usr/bin/env node
 
-import { exec } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
-import { promisify } from 'node:util';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { type } from 'arktype';
 
-const execAsync = promisify(exec);
+import {
+  classifyWarning,
+  discoverCoverageConfigs,
+  loadRootCoverageConfig,
+} from './coverage-config.js';
 
-const ROOT = resolve(process.cwd());
+class CoverageReportError extends Error {}
 
-const EXCLUDED_PATHS = ['examples/', 'test/'];
+const StatementMap = type({
+  '[string]': type({
+    start: type({
+      line: 'number.integer >= 1',
+    }),
+  }),
+});
+const HitMap = type({ '[string]': 'number.integer >= 0' });
+const BranchHitMap = type({ '[string]': type('number.integer >= 0').array() });
+const BranchMap = type({
+  '[string]': type({
+    locations: type('unknown').array(),
+  }),
+});
+const FunctionMap = type({ '[string]': 'unknown' });
 
-async function loadWarningConfig() {
-  const configPath = join(ROOT, 'coverage.config.json');
-  try {
-    const configContent = await readFile(configPath, 'utf-8');
-    const config = JSON.parse(configContent);
-    return {
-      warningOnly: config.warningOnly || [],
-      excludedPackages: config.excludedPackages || [],
-    };
-  } catch {
-    console.warn(
-      'Warning: Could not load coverage.config.json, no warning-only packages configured.',
-    );
-    return {
-      warningOnly: [],
-      excludedPackages: [],
-    };
+const IstanbulCoverageRecord = type({
+  path: 'string',
+  statementMap: StatementMap,
+  s: HitMap,
+  branchMap: BranchMap,
+  b: BranchHitMap,
+  fnMap: FunctionMap,
+  f: HitMap,
+});
+
+const METRICS = ['lines', 'statements', 'branches', 'functions'];
+
+function assertSameKeys(left, right, description) {
+  const leftKeys = Object.keys(left).sort();
+  const rightKeys = Object.keys(right).sort();
+  if (
+    leftKeys.length !== rightKeys.length ||
+    leftKeys.some((key, index) => key !== rightKeys[index])
+  ) {
+    throw new CoverageReportError(`Invalid Istanbul coverage record: ${description} keys differ`);
   }
 }
 
-function checkExpiry(warningEntry) {
-  const addedDate = new Date(warningEntry.addedDate);
-  const expiryDate = new Date(addedDate);
-  expiryDate.setDate(expiryDate.getDate() + warningEntry.expiryDays);
-  const now = new Date();
-  const daysRemaining = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
+function validateCoverageRecord(value, filePath) {
+  let record;
+  try {
+    record = IstanbulCoverageRecord.assert(value);
+  } catch (error) {
+    throw new CoverageReportError(`Invalid Istanbul coverage record for ${filePath}: ${error}`, {
+      cause: error,
+    });
+  }
 
+  assertSameKeys(record.statementMap, record.s, `${filePath} statementMap/s`);
+  assertSameKeys(record.branchMap, record.b, `${filePath} branchMap/b`);
+  assertSameKeys(record.fnMap, record.f, `${filePath} fnMap/f`);
+
+  for (const [branchId, hits] of Object.entries(record.b)) {
+    if (record.branchMap[branchId].locations.length !== hits.length) {
+      throw new CoverageReportError(
+        `Invalid Istanbul coverage record: ${filePath} branch ${branchId} locations/hits differ`,
+      );
+    }
+  }
+
+  return record;
+}
+
+function normalizeReportPath(root, reportPath) {
+  if (reportPath.length === 0 || reportPath.includes('\0')) {
+    throw new CoverageReportError(`Invalid coverage report path: ${JSON.stringify(reportPath)}`);
+  }
+  const absoluteRoot = resolve(root);
+  const absolutePath = isAbsolute(reportPath)
+    ? resolve(reportPath)
+    : resolve(absoluteRoot, reportPath);
+  const pathFromRoot = relative(absoluteRoot, absolutePath);
+  if (pathFromRoot === '..' || pathFromRoot.startsWith(`..${sep}`) || isAbsolute(pathFromRoot)) {
+    throw new CoverageReportError(`Covered path is outside repository root: ${reportPath}`);
+  }
+  return pathFromRoot.split(sep).join('/');
+}
+
+function emptyCount() {
+  return { total: 0, covered: 0 };
+}
+
+function percentage(count) {
   return {
-    expiryDate: expiryDate.toISOString().split('T')[0],
-    daysRemaining,
-    isExpired: daysRemaining < 0,
-    isExpiringSoon: daysRemaining >= 0 && daysRemaining <= 7,
+    ...count,
+    pct: count.total === 0 ? 100 : (count.covered / count.total) * 100,
   };
 }
 
-async function getPackages(excludedPackages = []) {
-  const excludedSet = new Set(
-    excludedPackages.map((pkg) => (pkg.startsWith('packages/') ? pkg : `packages/${pkg}`)),
+function recordMetrics(record) {
+  const statements = {
+    total: Object.keys(record.s).length,
+    covered: Object.values(record.s).filter((hits) => hits > 0).length,
+  };
+  const branchHits = Object.values(record.b).flat();
+  const branches = {
+    total: branchHits.length,
+    covered: branchHits.filter((hits) => hits > 0).length,
+  };
+  const functions = {
+    total: Object.keys(record.f).length,
+    covered: Object.values(record.f).filter((hits) => hits > 0).length,
+  };
+  const linesByNumber = new Map();
+  for (const [statementId, location] of Object.entries(record.statementMap)) {
+    const line = location.start.line;
+    const covered = record.s[statementId] > 0;
+    linesByNumber.set(line, covered || (linesByNumber.get(line) ?? false));
+  }
+  const lines = {
+    total: linesByNumber.size,
+    covered: [...linesByNumber.values()].filter(Boolean).length,
+  };
+  return { lines, statements, branches, functions };
+}
+
+function addMetrics(target, source) {
+  for (const metric of METRICS) {
+    target[metric].total += source[metric].total;
+    target[metric].covered += source[metric].covered;
+  }
+}
+
+function packagePathSort(left, right) {
+  return left.packageDir.localeCompare(right.packageDir);
+}
+
+function isWithinPackage(sourcePath, packageDir) {
+  return sourcePath === packageDir || sourcePath.startsWith(`${packageDir}/`);
+}
+
+export function aggregateCoverage({ root, report, packageConfigs, skippedPackageDirs = [] }) {
+  if (report === null || typeof report !== 'object' || Array.isArray(report)) {
+    throw new CoverageReportError('Coverage report must be an object keyed by source path');
+  }
+
+  const owners = [...packageConfigs].sort(
+    (left, right) => right.packageDir.length - left.packageDir.length,
+  );
+  const aggregateByPackage = new Map(
+    packageConfigs.map(({ packageDir, config }) => [
+      packageDir,
+      {
+        packageDir,
+        thresholds: config.thresholds,
+        files: [],
+        present: false,
+        counts: Object.fromEntries(METRICS.map((metric) => [metric, emptyCount()])),
+      },
+    ]),
   );
 
-  // Use pnpm to get all packages recursively
-  const { stdout } = await execAsync('pnpm -r list --json', { cwd: ROOT });
-  const packages = JSON.parse(stdout);
-
-  // Filter to only packages in packages/ directory, exclude examples and test packages
-  const packagePaths = packages
-    .map((pkg) => {
-      if (!pkg.path) return null;
-      const relativePath = pkg.path.replace(`${ROOT}/`, '');
-      return relativePath;
-    })
-    .filter((path) => {
-      if (!path) return false;
-      // Only include packages in packages/ directory
-      if (!path.startsWith('packages/')) return false;
-      // Exclude test packages and examples
-      if (EXCLUDED_PATHS.some((excluded) => path.startsWith(excluded))) return false;
-      return true;
-    })
-    .filter((path) => !excludedSet.has(path))
-    .map((path) => path.replace('packages/', ''));
-
-  return packagePaths;
-}
-
-async function runCoverage(packagePath) {
-  const packageDir = join(ROOT, 'packages', packagePath);
-  const packageJsonPath = join(packageDir, 'package.json');
-
-  try {
-    const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf-8'));
-
-    if (!packageJson.scripts?.['test:coverage']) {
-      return { package: packagePath, skipped: true, reason: 'No test:coverage script' };
+  for (const [reportPath, value] of Object.entries(report)) {
+    const sourcePath = normalizeReportPath(root, reportPath);
+    if (skippedPackageDirs.some((packageDir) => isWithinPackage(sourcePath, packageDir))) {
+      continue;
     }
-
-    const command = `pnpm --filter ${packageJson.name} test:coverage`;
-
-    try {
-      const { stdout, stderr } = await execAsync(command, {
-        cwd: ROOT,
-        maxBuffer: 10 * 1024 * 1024, // 10MB
-      });
-
-      const output = stdout + stderr;
-      const testFailed =
-        /FAIL\s+\d+/.test(output) ||
-        /Tests\s+\d+\s+failed/.test(output) ||
-        /Test Files\s+\d+\s+failed/.test(output);
-      const coverageFailed =
-        /Coverage threshold/.test(output) ||
-        /coverage threshold/.test(output) ||
-        /Thresholds not met/.test(output) ||
-        (/Coverage for/.test(output) && /does not meet/.test(output));
-
-      const coverageReport = await parseCoverageReport(packageDir).catch(() => null);
-
-      return {
-        package: packagePath,
-        testPassed: !testFailed,
-        coveragePassed: !coverageFailed,
-        coverageReport,
-        output,
-      };
-    } catch (error) {
-      const output = (error.stdout || '') + (error.stderr || '');
-      const testFailed =
-        /FAIL\s+\d+/.test(output) ||
-        /Tests\s+\d+\s+failed/.test(output) ||
-        /Test Files\s+\d+\s+failed/.test(output);
-      const coverageFailed =
-        /Coverage threshold/.test(output) ||
-        /coverage threshold/.test(output) ||
-        /Thresholds not met/.test(output) ||
-        (/Coverage for/.test(output) && /does not meet/.test(output));
-
-      const coverageReport = await parseCoverageReport(packageDir).catch(() => null);
-
-      return {
-        package: packagePath,
-        testPassed: !testFailed,
-        coveragePassed: !coverageFailed,
-        coverageReport,
-        output,
-        error: error.message,
-      };
+    const owner = owners.find(({ packageDir }) => isWithinPackage(sourcePath, packageDir));
+    if (!owner) {
+      throw new CoverageReportError(
+        `Covered path has no configured package owner: ${sourcePath || reportPath}`,
+      );
     }
-  } catch (error) {
-    return {
-      package: packagePath,
-      skipped: true,
-      reason: error.message,
-    };
-  }
-}
-
-async function parseCoverageReport(packageDir) {
-  const coverageJsonPath = join(packageDir, 'coverage', 'coverage-final.json');
-
-  try {
-    const coverageData = JSON.parse(await readFile(coverageJsonPath, 'utf-8'));
-
-    const fileCoverage = Object.entries(coverageData).map(([filePath, data]) => {
-      const relativePath = filePath.replace(`${packageDir}/`, '');
-      const statementMap = data.s || {};
-      const branchMap = data.b || {};
-      const functionMap = data.f || {};
-
-      const statements = Object.keys(statementMap).length;
-      const coveredStatements = Object.values(statementMap).filter((v) => v > 0).length;
-      const statementPct = statements > 0 ? (coveredStatements / statements) * 100 : 100;
-
-      const branchHits = Object.values(branchMap).flat();
-      const coveredBranches = branchHits.filter((v) => v > 0).length;
-      const totalBranchPoints = branchHits.length;
-      const branchPct = totalBranchPoints > 0 ? (coveredBranches / totalBranchPoints) * 100 : 100;
-
-      const functions = Object.keys(functionMap).length;
-      const coveredFunctions = Object.values(functionMap).filter((v) => v > 0).length;
-      const functionPct = functions > 0 ? (coveredFunctions / functions) * 100 : 100;
-
-      return {
-        file: relativePath,
-        statements: { total: statements, covered: coveredStatements, pct: statementPct },
-        branches: { total: totalBranchPoints, covered: coveredBranches, pct: branchPct },
-        functions: { total: functions, covered: coveredFunctions, pct: functionPct },
-      };
-    });
-
-    return fileCoverage;
-  } catch (_error) {
-    return null;
-  }
-}
-
-function calculateOverallCoverage(fileCoverage) {
-  if (!fileCoverage || fileCoverage.length === 0) return null;
-
-  let totalStatements = 0;
-  let coveredStatements = 0;
-  let totalBranches = 0;
-  let coveredBranches = 0;
-  let totalFunctions = 0;
-  let coveredFunctions = 0;
-
-  for (const file of fileCoverage) {
-    totalStatements += file.statements.total;
-    coveredStatements += file.statements.covered;
-    totalBranches += file.branches.total;
-    coveredBranches += file.branches.covered;
-    totalFunctions += file.functions.total;
-    coveredFunctions += file.functions.covered;
+    const record = validateCoverageRecord(value, sourcePath);
+    const aggregate = aggregateByPackage.get(owner.packageDir);
+    aggregate.present = true;
+    aggregate.files.push(sourcePath);
+    addMetrics(aggregate.counts, recordMetrics(record));
   }
 
-  return {
-    statements: {
-      total: totalStatements,
-      covered: coveredStatements,
-      pct: totalStatements > 0 ? (coveredStatements / totalStatements) * 100 : 100,
-    },
-    branches: {
-      total: totalBranches,
-      covered: coveredBranches,
-      pct: totalBranches > 0 ? (coveredBranches / totalBranches) * 100 : 100,
-    },
-    functions: {
-      total: totalFunctions,
-      covered: coveredFunctions,
-      pct: totalFunctions > 0 ? (coveredFunctions / totalFunctions) * 100 : 100,
-    },
-  };
+  return [...aggregateByPackage.values()].sort(packagePathSort).map((aggregate) => ({
+    packageDir: aggregate.packageDir,
+    thresholds: aggregate.thresholds,
+    files: aggregate.files.sort(),
+    present: aggregate.present,
+    metrics: Object.fromEntries(
+      METRICS.map((metric) => [metric, percentage(aggregate.counts[metric])]),
+    ),
+  }));
 }
 
-function checkThresholds(fileCoverage, thresholds) {
-  if (!fileCoverage || !thresholds) return [];
+export function checkThresholds(metrics, thresholds) {
+  const deficits = [];
+  for (const metric of METRICS) {
+    const threshold = thresholds[metric];
+    if (threshold !== undefined && metrics[metric].pct < threshold) {
+      deficits.push({ metric, actual: metrics[metric].pct, threshold });
+    }
+  }
+  return deficits;
+}
 
+export function suggestThresholdIncreases(metrics, thresholds, margin = 5, cap = 95) {
+  const suggestions = {};
+  for (const metric of METRICS) {
+    const current = thresholds[metric];
+    if (current === undefined || metrics[metric].pct < current + margin) continue;
+    const suggested = Math.min(cap, Math.floor(metrics[metric].pct));
+    if (suggested > current) {
+      suggestions[metric] = { current, actual: metrics[metric].pct, suggested };
+    }
+  }
+  return suggestions;
+}
+
+export function processCoverageReport({ root, report, packageConfigs, rootConfig, now }) {
+  const excluded = new Set(rootConfig.excludedPackages.map((path) => `packages/${path}`));
+  const configuredPackages = packageConfigs.filter(({ packageDir }) => !excluded.has(packageDir));
+  const warningByPackage = new Map(
+    rootConfig.warningOnly.map((entry) => [`packages/${entry.package}`, entry]),
+  );
+  const expiredWarnings = rootConfig.warningOnly
+    .map((entry) => ({ entry, ...classifyWarning(entry, now) }))
+    .filter(({ active }) => !active);
+  const expiredPackages = new Set(expiredWarnings.map(({ entry }) => `packages/${entry.package}`));
+  const warnings = [];
   const failures = [];
 
-  for (const file of fileCoverage) {
-    const fileFailures = [];
+  const packages = aggregateCoverage({
+    root,
+    report,
+    packageConfigs: configuredPackages,
+    skippedPackageDirs: [...excluded],
+  }).map((packageResult) => {
+    const deficits = checkThresholds(packageResult.metrics, packageResult.thresholds);
+    const warningEntry = warningByPackage.get(packageResult.packageDir);
+    const warningState = warningEntry ? classifyWarning(warningEntry, now) : null;
+    const hasThresholds = Object.keys(packageResult.thresholds).length > 0;
+    let status = hasThresholds ? 'passed' : 'no-threshold';
 
-    if (thresholds.statements && file.statements.pct < thresholds.statements) {
-      fileFailures.push(
-        `statements: ${file.statements.pct.toFixed(2)}% < ${thresholds.statements}%`,
-      );
-    }
-    if (thresholds.branches && file.branches.pct < thresholds.branches) {
-      fileFailures.push(`branches: ${file.branches.pct.toFixed(2)}% < ${thresholds.branches}%`);
-    }
-    if (thresholds.functions && file.functions.pct < thresholds.functions) {
-      fileFailures.push(`functions: ${file.functions.pct.toFixed(2)}% < ${thresholds.functions}%`);
-    }
-
-    if (fileFailures.length > 0) {
-      failures.push({
-        file: file.file,
-        failures: fileFailures,
+    if (!packageResult.present && warningState?.active) {
+      status = 'missing-warning';
+      warnings.push({
+        packageDir: packageResult.packageDir,
+        reason: 'absent-from-report',
+        entry: warningEntry,
+        expiryDate: warningState.expiryDate,
       });
+    } else if (!packageResult.present && hasThresholds) {
+      status = expiredPackages.has(packageResult.packageDir) ? 'expired-warning' : 'missing';
+      failures.push({
+        packageDir: packageResult.packageDir,
+        reason: 'absent-from-report',
+      });
+    } else if (expiredPackages.has(packageResult.packageDir)) {
+      status = 'expired-warning';
+      if (deficits.length > 0) {
+        failures.push({ packageDir: packageResult.packageDir, deficits });
+      }
+    } else if (deficits.length > 0 && warningState?.active) {
+      status = 'warning';
+      warnings.push({
+        packageDir: packageResult.packageDir,
+        deficits,
+        entry: warningEntry,
+        expiryDate: warningState.expiryDate,
+      });
+    } else if (deficits.length > 0) {
+      status = 'failed';
+      failures.push({ packageDir: packageResult.packageDir, deficits });
     }
-  }
 
-  return failures;
-}
-
-function suggestThresholdIncreases(overallCoverage, thresholds, margin = 5) {
-  if (!overallCoverage || !thresholds) return null;
-
-  const suggestions = {};
-  let hasSuggestions = false;
-
-  if (thresholds.statements && overallCoverage.statements.pct >= thresholds.statements + margin) {
-    const suggested = Math.min(95, Math.floor(overallCoverage.statements.pct));
-    if (suggested > thresholds.statements) {
-      suggestions.statements = {
-        current: thresholds.statements,
-        actual: overallCoverage.statements.pct,
-        suggested,
-      };
-      hasSuggestions = true;
-    }
-  }
-
-  if (thresholds.branches && overallCoverage.branches.pct >= thresholds.branches + margin) {
-    const suggested = Math.min(95, Math.floor(overallCoverage.branches.pct));
-    if (suggested > thresholds.branches) {
-      suggestions.branches = {
-        current: thresholds.branches,
-        actual: overallCoverage.branches.pct,
-        suggested,
-      };
-      hasSuggestions = true;
-    }
-  }
-
-  if (thresholds.functions && overallCoverage.functions.pct >= thresholds.functions + margin) {
-    const suggested = Math.min(95, Math.floor(overallCoverage.functions.pct));
-    if (suggested > thresholds.functions) {
-      suggestions.functions = {
-        current: thresholds.functions,
-        actual: overallCoverage.functions.pct,
-        suggested,
-      };
-      hasSuggestions = true;
-    }
-  }
-
-  return hasSuggestions ? suggestions : null;
-}
-
-async function getThresholds(packagePath) {
-  const vitestConfigPath = join(ROOT, 'packages', packagePath, 'vitest.config.ts');
-
-  try {
-    const configContent = await readFile(vitestConfigPath, 'utf-8');
-
-    const thresholdsMatch = configContent.match(/thresholds:\s*\{([^}]+)\}/s);
-    if (!thresholdsMatch) return null;
-
-    const thresholds = {};
-    const linesMatch = thresholdsMatch[1].match(/lines:\s*(\d+)/);
-    const branchesMatch = thresholdsMatch[1].match(/branches:\s*(\d+)/);
-    const functionsMatch = thresholdsMatch[1].match(/functions:\s*(\d+)/);
-    const statementsMatch = thresholdsMatch[1].match(/statements:\s*(\d+)/);
-
-    if (statementsMatch) {
-      thresholds.statements = Number.parseInt(statementsMatch[1], 10);
-    } else if (linesMatch) {
-      thresholds.statements = Number.parseInt(linesMatch[1], 10);
-    }
-    if (branchesMatch) thresholds.branches = Number.parseInt(branchesMatch[1], 10);
-    if (functionsMatch) thresholds.functions = Number.parseInt(functionsMatch[1], 10);
-
-    return Object.keys(thresholds).length > 0 ? thresholds : null;
-  } catch {
-    return null;
-  }
-}
-
-async function formatResults(results, warningConfig) {
-  // Create a map of warning-only packages for quick lookup
-  const warningPackages = new Set(warningConfig.map((entry) => entry.package));
-  const warningMap = new Map(warningConfig.map((entry) => [entry.package, entry]));
-
-  // Separate warning-only packages from actual failures
-  const testFailures = results.filter(
-    (r) => !r.skipped && !r.testPassed && !warningPackages.has(r.package),
-  );
-  const testWarnings = results.filter(
-    (r) => !r.skipped && !r.testPassed && warningPackages.has(r.package),
-  );
-  const coverageFailures = results.filter(
-    (r) => !r.skipped && r.testPassed && !r.coveragePassed && !warningPackages.has(r.package),
-  );
-  const coverageWarnings = results.filter(
-    (r) => !r.skipped && r.testPassed && !r.coveragePassed && warningPackages.has(r.package),
-  );
-  const passed = results.filter((r) => !r.skipped && r.testPassed && r.coveragePassed);
-  const skipped = results.filter((r) => r.skipped);
-
-  console.log(`\n${'='.repeat(80)}`);
-  console.log('COVERAGE REPORT SUMMARY');
-  console.log(`${'='.repeat(80)}\n`);
-
-  // Technical Debt Section - Show at the TOP
-  if (testWarnings.length > 0 || coverageWarnings.length > 0) {
-    console.log('🚨 TECHNICAL DEBT - COVERAGE WARNINGS');
-    console.log('='.repeat(80));
-    console.log('The following packages have coverage/test failures but are NOT blocking CI.');
-    console.log('These are time-limited exceptions that MUST be resolved before expiry.\n');
-
-    const allWarnings = [...testWarnings, ...coverageWarnings];
-    for (const result of allWarnings) {
-      const warningEntry = warningMap.get(result.package);
-      if (!warningEntry) continue; // Safety check
-
-      const expiry = checkExpiry(warningEntry);
-      const statusIcon = expiry.isExpiringSoon ? '⚠️' : '📋';
-
-      console.log(`${statusIcon}  ${result.package}`);
-      console.log(`    Reason: ${warningEntry.reason}`);
-      console.log(
-        `    Added: ${warningEntry.addedDate} | Expires: ${expiry.expiryDate} (${expiry.daysRemaining} days remaining)`,
-      );
-
-      if (warningEntry.assignee) {
-        console.log(`    Assignee: ${warningEntry.assignee}`);
-      }
-      if (warningEntry.linear) {
-        console.log(`    Linear: ${warningEntry.linear}`);
-      }
-      if (expiry.isExpiringSoon) {
-        console.log(`    🚨 EXPIRING SOON - Must be resolved within ${expiry.daysRemaining} days!`);
-      }
-
-      // Show failure details
-      if (!result.testPassed) {
-        console.log('    ❌ Test failures');
-        if (result.error) {
-          const errorLines = result.error.split('\n').slice(0, 5);
-          for (const line of errorLines) {
-            console.log(`       ${line}`);
-          }
-          if (result.error.split('\n').length > 5) {
-            console.log('       ...');
-          }
-        }
-      } else if (!result.coveragePassed) {
-        console.log('    ❌ Coverage threshold failures');
-        const thresholds = await getThresholds(result.package);
-        if (thresholds && result.coverageReport) {
-          const fileFailures = checkThresholds(result.coverageReport, thresholds);
-          if (fileFailures.length > 0 && fileFailures.length <= 3) {
-            for (const failure of fileFailures) {
-              console.log(`       - ${failure.file}: ${failure.failures.join(', ')}`);
-            }
-          } else if (fileFailures.length > 3) {
-            console.log(`       ${fileFailures.length} files below thresholds`);
-          }
-        }
-      }
-      console.log('');
-    }
-    console.log(`${'='.repeat(80)}\n`);
-  }
-
-  if (testFailures.length > 0) {
-    console.log('❌ PACKAGES WITH TEST FAILURES:');
-    console.log('-'.repeat(80));
-    for (const result of testFailures) {
-      console.log(`  • ${result.package}`);
-      if (result.error) {
-        console.log(`    Error: ${result.error}`);
-      }
-    }
-    console.log('');
-  }
-
-  if (coverageFailures.length > 0) {
-    console.log('⚠️  PACKAGES WITH COVERAGE THRESHOLD FAILURES:');
-    console.log('-'.repeat(80));
-    for (const result of coverageFailures) {
-      console.log(`  • ${result.package}`);
-
-      const thresholds = await getThresholds(result.package);
-      if (thresholds && result.coverageReport) {
-        const fileFailures = checkThresholds(result.coverageReport, thresholds);
-        if (fileFailures.length > 0) {
-          console.log('    Files below thresholds:');
-          for (const failure of fileFailures) {
-            console.log(`      - ${failure.file}`);
-            for (const fail of failure.failures) {
-              console.log(`        ${fail}`);
-            }
-          }
-        }
-      }
-    }
-    console.log('');
-  }
-
-  const thresholdSuggestions = [];
-
-  for (const result of passed) {
-    if (result.coverageReport) {
-      const thresholds = await getThresholds(result.package);
-      if (thresholds) {
-        const overallCoverage = calculateOverallCoverage(result.coverageReport);
-        if (overallCoverage) {
-          const suggestions = suggestThresholdIncreases(overallCoverage, thresholds);
-          if (suggestions) {
-            thresholdSuggestions.push({
-              package: result.package,
-              overallCoverage,
-              suggestions,
-            });
-          }
-        }
-      }
-    }
-  }
-
-  if (passed.length > 0) {
-    console.log('✅ PACKAGES PASSING ALL CHECKS:');
-    console.log('-'.repeat(80));
-    for (const result of passed) {
-      console.log(`  • ${result.package}`);
-    }
-    console.log('');
-  }
-
-  if (thresholdSuggestions.length > 0) {
-    console.log('📈 PACKAGES ABOVE THRESHOLDS (consider increasing):');
-    console.log('-'.repeat(80));
-    for (const item of thresholdSuggestions) {
-      console.log(`  • ${item.package}`);
-      console.log('    Current coverage:');
-      if (item.suggestions.statements) {
-        console.log(
-          `      statements: ${item.overallCoverage.statements.pct.toFixed(2)}% (threshold: ${item.suggestions.statements.current}%)`,
-        );
-      }
-      if (item.suggestions.branches) {
-        console.log(
-          `      branches: ${item.overallCoverage.branches.pct.toFixed(2)}% (threshold: ${item.suggestions.branches.current}%)`,
-        );
-      }
-      if (item.suggestions.functions) {
-        console.log(
-          `      functions: ${item.overallCoverage.functions.pct.toFixed(2)}% (threshold: ${item.suggestions.functions.current}%)`,
-        );
-      }
-      console.log('    Suggested thresholds:');
-      const suggestedThresholds = [];
-      if (item.suggestions.statements) {
-        suggestedThresholds.push(`statements: ${item.suggestions.statements.suggested}`);
-      }
-      if (item.suggestions.branches) {
-        suggestedThresholds.push(`branches: ${item.suggestions.branches.suggested}`);
-      }
-      if (item.suggestions.functions) {
-        suggestedThresholds.push(`functions: ${item.suggestions.functions.suggested}`);
-      }
-      console.log(`      ${suggestedThresholds.join(', ')}`);
-    }
-    console.log('');
-  }
-
-  if (skipped.length > 0) {
-    console.log('⏭️  SKIPPED PACKAGES:');
-    console.log('-'.repeat(80));
-    for (const result of skipped) {
-      console.log(`  • ${result.package}: ${result.reason}`);
-    }
-    console.log('');
-  }
-
-  console.log('='.repeat(80));
-  console.log(
-    `Total: ${results.length} | Passed: ${passed.length} | Test Failures: ${testFailures.length} | Coverage Failures: ${coverageFailures.length} | Warnings: ${testWarnings.length + coverageWarnings.length} | Threshold Suggestions: ${thresholdSuggestions.length} | Skipped: ${skipped.length}`,
-  );
-  console.log(`${'='.repeat(80)}\n`);
+    const suggestions =
+      status === 'passed' && packageResult.present
+        ? suggestThresholdIncreases(packageResult.metrics, packageResult.thresholds)
+        : {};
+    return { ...packageResult, deficits, status, suggestions };
+  });
 
   return {
-    testFailures: testFailures.length,
-    coverageFailures: coverageFailures.length,
-    warnings: testWarnings.length + coverageWarnings.length,
-    passed: passed.length,
-    total: results.length,
+    ok: failures.length === 0 && expiredWarnings.length === 0,
+    packages,
+    failures,
+    warnings,
+    expiredWarnings,
+    skipped: [...excluded].sort(),
   };
 }
 
-async function main() {
-  const config = await loadWarningConfig();
-  const warningConfig = config.warningOnly;
+function formatDeficits(deficits, indent) {
+  return deficits
+    .map(
+      ({ metric, actual, threshold }) =>
+        `${indent}${metric}: ${actual.toFixed(2)}% < ${threshold}%`,
+    )
+    .join('\n');
+}
 
-  // Check for expired warnings FIRST
-  const expiredWarnings = warningConfig.filter((entry) => {
-    const expiry = checkExpiry(entry);
-    return expiry.isExpired;
-  });
+export function formatCoverageReport(result) {
+  const lines = ['='.repeat(80), 'COVERAGE REPORT SUMMARY', '='.repeat(80), ''];
 
-  if (expiredWarnings.length > 0) {
-    console.error(`\n${'='.repeat(80)}`);
-    console.error('❌ EXPIRED COVERAGE WARNINGS - CI BLOCKED');
-    console.error('='.repeat(80));
-    console.error('The following warning-only packages have EXPIRED and must be resolved:\n');
-
-    for (const entry of expiredWarnings) {
-      const expiry = checkExpiry(entry);
-      console.error(`  • ${entry.package}`);
-      console.error(
-        `    Added: ${entry.addedDate} | Expired: ${expiry.expiryDate} (${Math.abs(expiry.daysRemaining)} days ago)`,
-      );
-      console.error(`    Reason: ${entry.reason}`);
-      if (entry.assignee) console.error(`    Assignee: ${entry.assignee}`);
-      if (entry.linear) console.error(`    Linear: ${entry.linear}`);
-      console.error('');
+  if (result.expiredWarnings.length > 0) {
+    lines.push('EXPIRED COVERAGE WARNINGS - BLOCKING', '-'.repeat(80));
+    for (const { entry, expiryDate } of result.expiredWarnings) {
+      lines.push(`  packages/${entry.package}`);
+      lines.push(`    Reason: ${entry.reason}`);
+      lines.push(`    Added: ${entry.addedDate} | Expired: ${expiryDate}`);
+      if (entry.assignee) lines.push(`    Assignee: ${entry.assignee}`);
+      if (entry.linear) lines.push(`    Linear: ${entry.linear}`);
     }
-
-    console.error('Action required:');
-    console.error('  1. Fix the tests/coverage issues in these packages, OR');
-    console.error(
-      '  2. Update coverage.config.json to extend the expiry date with justification\n',
+    lines.push(
+      '  Action required: remove the exception after recovery or extend it with justification.',
+      '',
     );
-    console.error(`${'='.repeat(80)}\n`);
-
-    process.exit(1);
   }
 
-  const packages = await getPackages(config.excludedPackages);
-
-  console.log(`Running coverage for ${packages.length} packages...\n`);
-
-  const results = [];
-  for (const packagePath of packages) {
-    process.stdout.write(`Running coverage for ${packagePath}... `);
-    const result = await runCoverage(packagePath);
-    results.push(result);
-
-    if (result.skipped) {
-      console.log('⏭️  skipped');
-    } else if (!result.testPassed) {
-      console.log('❌ tests failed');
-    } else if (!result.coveragePassed) {
-      console.log('⚠️  coverage failed');
-    } else {
-      console.log('✅ passed');
+  if (result.warnings.length > 0) {
+    lines.push('TECHNICAL DEBT - NONBLOCKING COVERAGE WARNINGS', '-'.repeat(80));
+    for (const warning of result.warnings) {
+      lines.push(`  ${warning.packageDir}`);
+      lines.push(`    Reason: ${warning.entry.reason}`);
+      lines.push(`    Added: ${warning.entry.addedDate} | Expires: ${warning.expiryDate}`);
+      if (warning.entry.assignee) lines.push(`    Assignee: ${warning.entry.assignee}`);
+      if (warning.entry.linear) lines.push(`    Linear: ${warning.entry.linear}`);
+      if (warning.reason === 'absent-from-report') {
+        lines.push('    Missing from coverage report');
+      } else {
+        lines.push(formatDeficits(warning.deficits, '    '));
+      }
     }
+    lines.push('');
   }
 
-  const summary = await formatResults(results, warningConfig);
+  if (result.failures.length > 0) {
+    lines.push('BLOCKING COVERAGE FAILURES', '-'.repeat(80));
+    for (const failure of result.failures) {
+      lines.push(`  ${failure.packageDir}`);
+      if (failure.reason === 'absent-from-report') {
+        lines.push('    Missing from coverage report');
+      } else {
+        lines.push(formatDeficits(failure.deficits, '    '));
+      }
+    }
+    lines.push('');
+  }
 
-  if (summary.testFailures > 0 || summary.coverageFailures > 0) {
-    process.exit(1);
+  const passing = result.packages.filter(({ status }) => status === 'passed');
+  if (passing.length > 0) {
+    lines.push(
+      'PASSING',
+      '-'.repeat(80),
+      ...passing.map(({ packageDir }) => `  ${packageDir}`),
+      '',
+    );
+  }
+
+  const noThreshold = result.packages.filter(
+    ({ present, status }) => present && status === 'no-threshold',
+  );
+  if (noThreshold.length > 0) {
+    lines.push(
+      'NO THRESHOLDS',
+      '-'.repeat(80),
+      ...noThreshold.map(({ packageDir }) => `  ${packageDir}`),
+      '',
+    );
+  }
+
+  const absentWithoutThresholds = result.packages.filter(
+    ({ present, status }) => !present && status === 'no-threshold',
+  );
+  if (absentWithoutThresholds.length > 0) {
+    lines.push(
+      'ABSENT FROM REPORT',
+      '-'.repeat(80),
+      '  No source entries; no thresholds configured (empty metrics are 100%):',
+      ...absentWithoutThresholds.map(({ packageDir }) => `  ${packageDir}`),
+      '',
+    );
+  }
+
+  const suggestions = result.packages.filter(
+    ({ suggestions: packageSuggestions }) => Object.keys(packageSuggestions).length > 0,
+  );
+  if (suggestions.length > 0) {
+    lines.push('THRESHOLD INCREASE SUGGESTIONS', '-'.repeat(80));
+    for (const packageResult of suggestions) {
+      lines.push(`  ${packageResult.packageDir}`);
+      for (const metric of METRICS) {
+        const suggestion = packageResult.suggestions[metric];
+        if (suggestion) {
+          lines.push(
+            `    ${metric}: ${suggestion.current} -> ${suggestion.suggested} (actual ${suggestion.actual.toFixed(2)}%)`,
+          );
+        }
+      }
+    }
+    lines.push('');
+  }
+
+  if (result.skipped.length > 0) {
+    lines.push(
+      'SKIPPED BY ROOT POLICY',
+      '-'.repeat(80),
+      ...result.skipped.map((packageDir) => `  ${packageDir}`),
+      '',
+    );
+  }
+
+  const statusCounts = Object.fromEntries(
+    [
+      'passed',
+      'failed',
+      'missing',
+      'warning',
+      'missing-warning',
+      'expired-warning',
+      'no-threshold',
+    ].map((status) => [
+      status,
+      result.packages.filter((packageResult) => packageResult.status === status).length,
+    ]),
+  );
+  lines.push('='.repeat(80));
+  lines.push(
+    `Total: ${result.packages.length} | Passed: ${statusCounts.passed} | Failures: ${result.failures.length} | Warnings: ${statusCounts.warning + statusCounts['missing-warning']} | Expired: ${result.expiredWarnings.length} | No thresholds: ${statusCounts['no-threshold']} | Skipped: ${result.skipped.length}`,
+  );
+  lines.push('='.repeat(80));
+  return `${lines.join('\n')}\n`;
+}
+
+async function loadCoverageJson(root) {
+  const reportPath = join(root, 'coverage', 'coverage-final.json');
+  let source;
+  try {
+    source = await readFile(reportPath, 'utf8');
+  } catch (error) {
+    throw new CoverageReportError(`Missing coverage report: ${reportPath}`, { cause: error });
+  }
+  try {
+    return JSON.parse(source);
+  } catch (error) {
+    throw new CoverageReportError(`Malformed coverage report: ${reportPath}`, { cause: error });
   }
 }
 
-main().catch((error) => {
-  console.error('Error running coverage report:', error);
-  process.exit(1);
-});
+export async function runCoverageReport({ root = resolve(process.cwd()), now = new Date() } = {}) {
+  const rootConfig = loadRootCoverageConfig(root);
+  const packageConfigs = discoverCoverageConfigs(root);
+  const report = await loadCoverageJson(root);
+  return processCoverageReport({ root, report, packageConfigs, rootConfig, now });
+}
+
+export async function main() {
+  const result = await runCoverageReport();
+  process.stdout.write(formatCoverageReport(result));
+  if (!result.ok) process.exitCode = 1;
+  return result;
+}
+
+const isDirectExecution =
+  process.argv[1] !== undefined && pathToFileURL(resolve(process.argv[1])).href === import.meta.url;
+
+if (isDirectExecution) {
+  main().catch((error) => {
+    console.error(`Coverage report failed: ${error.message}`);
+    process.exitCode = 1;
+  });
+}

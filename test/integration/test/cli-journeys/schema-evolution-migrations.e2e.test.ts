@@ -20,17 +20,18 @@ import { clearDbRefForGreenfieldPlan, withTempDir } from '../utils/cli-test-help
 import {
   getLatestMigrationDir,
   type JourneyContext,
+  latestMigrationDirName,
   parseJsonOutput,
+  planMigrationAndSelfEmit,
   runContractEmit,
   runDbInit,
   runDbUpdate,
   runDbVerify,
   runMigrate,
-  runMigrationEmit,
   runMigrationPlan,
-  runMigrationPlanAndEmit,
   runMigrationShow,
   runMigrationStatus,
+  selfEmitMigration,
   setupJourney,
   swapContract,
   timeouts,
@@ -55,7 +56,7 @@ withTempDir(({ createTempDir }) => {
         // Precondition: emit base contract and plan initial migration (∅ → base)
         const emit0 = await runContractEmit(ctx);
         expect(emit0.exitCode, 'B.pre: emit base').toBe(0);
-        const planInit = await runMigrationPlanAndEmit(ctx, ['--name', 'initial']);
+        const planInit = await planMigrationAndSelfEmit(ctx, ['--name', 'initial']);
         expect(planInit.exitCode, 'B.pre: plan initial').toBe(0);
         const applyInit = await runMigrate(ctx);
         expect(applyInit.exitCode, 'B.pre: apply initial').toBe(0);
@@ -66,7 +67,12 @@ withTempDir(({ createTempDir }) => {
         expect(emit.exitCode, 'B.01: contract emit v2').toBe(0);
 
         // B.02: migration plan --name add-name-column
-        const plan = await runMigrationPlan(ctx, ['--name', 'add-name-column']);
+        const plan = await runMigrationPlan(ctx, [
+          '--name',
+          'add-name-column',
+          '--from',
+          latestMigrationDirName(ctx),
+        ]);
         expect(plan.exitCode, 'B.02: migration plan').toBe(0);
         expect(stripAnsi(plan.stderr), 'B.02: shows migration').toContain('add-name-column');
 
@@ -76,20 +82,20 @@ withTempDir(({ createTempDir }) => {
         const show = await runMigrationShow(ctx, [showTarget!]);
         expect(show.exitCode, 'B.03: migration show').toBe(0);
 
-        // B.04: migration emit --dir <planned-dir>
+        // self-emit the planned migration.ts
         const migDir = getLatestMigrationDir(ctx);
         expect(migDir, 'B.04: migration dir exists').toBeDefined();
-        const emitMig = await runMigrationEmit(ctx, ['--dir', `migrations/app/${migDir}`]);
-        expect(emitMig.exitCode, 'B.04: migration emit').toBe(0);
+        const emitMig = await selfEmitMigration(ctx, ['--dir', `migrations/app/${migDir}`]);
+        expect(emitMig.exitCode, 'migration.ts self-emit').toBe(0);
 
         // B.05: migration status (pre-apply — shows pending migration)
         const statusPreApply = await runMigrationStatus(ctx);
         expect(statusPreApply.exitCode, 'B.05: migration status pre-apply').toBe(0);
         expect(stripAnsi(statusPreApply.stderr), 'B.05: shows pending').toContain('pending');
 
-        // B.06: migration apply
+        // migrate applies the planned migration
         const apply = await runMigrate(ctx);
-        expect(apply.exitCode, 'B.06: migration apply').toBe(0);
+        expect(apply.exitCode, 'migrate applies the plan').toBe(0);
 
         // B.07: migration status (all applied)
         const statusApplied = await runMigrationStatus(ctx);
@@ -118,11 +124,11 @@ withTempDir(({ createTempDir }) => {
           ],
         });
 
-        // --- Merged from Journey Q: migration apply noop (already up-to-date) ---
+        // --- Merged from Journey Q: migrate noop (already up-to-date) ---
 
-        // Q.01: migration apply --json (already up-to-date)
+        // migrate --json (already up-to-date)
         const applyNoop = await runMigrate(ctx, ['--json']);
-        expect(applyNoop.exitCode, 'Q.01: migration apply noop').toBe(0);
+        expect(applyNoop.exitCode, 'migrate noop').toBe(0);
         const noopApplyData = parseJsonOutput(applyNoop);
         expect(noopApplyData, 'Q.01: 0 applied').toMatchObject({
           ok: true,
@@ -131,11 +137,15 @@ withTempDir(({ createTempDir }) => {
 
         // --- Merged from Journey R: migration plan noop (contract unchanged) ---
 
-        // R.01: migration plan --json (no changes — contract matches leaf)
-        const planNoop = await runMigrationPlan(ctx, ['--json']);
-        expect(planNoop.exitCode, 'R.01: migration plan noop').toBe(0);
+        // migration plan from the leaf (no changes — contract matches it)
+        const planNoop = await runMigrationPlan(ctx, [
+          '--from',
+          latestMigrationDirName(ctx),
+          '--json',
+        ]);
+        expect(planNoop.exitCode, 'migration plan noop').toBe(0);
         const noopPlanData = parseJsonOutput(planNoop);
-        expect(noopPlanData, 'R.01: noop flag').toMatchObject({ noOp: true });
+        expect(noopPlanData, 'noop flag').toMatchObject({ noOp: true });
 
         // --- Merged from Journey X: migration show variants ---
 
@@ -196,11 +206,11 @@ withTempDir(({ createTempDir }) => {
         const plan = await runMigrationPlan(ctx, ['--name', 'initial-evolution']);
         expect(plan.exitCode, 'Z.02: migration plan').toBe(0);
 
-        // Z.03: migration apply fails because the db init marker doesn't match
+        // migrate fails because the db init marker doesn't match
         // the migration chain root (planned from ∅→additive, but marker is at base).
         // Then db update recovers by applying the schema directly.
         const apply = await runMigrate(ctx);
-        expect(apply.exitCode, 'Z.03: migration apply rejects marker mismatch').toBe(2);
+        expect(apply.exitCode, 'migrate rejects marker mismatch').toBe(2);
 
         const update = await runDbUpdate(ctx);
         expect(update.exitCode, 'Z.03: db update recovery').toBe(0);

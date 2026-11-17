@@ -17,24 +17,12 @@ function projectDir(): string {
  * Written without importing the workspace, so what the loader reads is exactly
  * what these tests write and nothing resolves out of the fixture package. The
  * version marker is the same enumerable `$prismaConfig` key the engine's
- * defineConfig stamps, with the whole config nested as the orm section.
+ * definePrismaConfig stamps, with the whole config nested as the orm section.
  */
 function configModule(body: string): string {
   return [`const config = ${body};`, 'export default { $prismaConfig: 1, orm: config };'].join(
     '\n',
   );
-}
-
-/** The deprecated flat shape, stamped the way the target defineConfigs do. */
-function flatConfigModule(body: string): string {
-  return [
-    `const config = ${body};`,
-    `Object.defineProperty(config, Symbol.for('prisma-next.config-format-version'), {`,
-    '  value: 1,',
-    '  enumerable: false,',
-    '});',
-    'export default config;',
-  ].join('\n');
 }
 
 const DESCRIPTOR = `{ kind: 'target', id: 'target-id', familyId: 'sql', targetId: 'postgres', version: '1.0.0', create: () => ({}) }`;
@@ -58,7 +46,7 @@ afterEach(() => {
 
 describe('loadOrmConfig', () => {
   it(
-    'nests the whole configuration under the orm section',
+    'hands the engine the requested file with the whole configuration under the orm section',
     async () => {
       const dir = projectDir();
       writeConfig(dir, VALID_BODY);
@@ -66,31 +54,24 @@ describe('loadOrmConfig', () => {
       const loaded = await loadOrmConfig({ cwd: dir });
 
       expect(loaded.diagnostics).toEqual([]);
-      expect(Object.keys(loaded.sections)).toEqual(['orm']);
+      expect(loaded.files.map((file) => file.path)).toEqual([join(dir, 'prisma.config.ts')]);
+      expect(Object.keys(loaded.files[0]?.sections ?? {})).toEqual(['orm']);
     },
     // The first load pays jiti's cold transform for the config module.
     timeouts.coldTransformImport,
   );
 
-  it('finalizes contract paths against the config file directory', async () => {
+  it('leaves paths as written: the engine resolves them against the file that declared them', async () => {
     const dir = projectDir();
     writeConfig(dir, VALID_BODY);
 
     const loaded = await loadOrmConfig({ cwd: dir });
-    const orm = loaded.sections['orm'] as {
+    const orm = loaded.files[0]?.sections['orm'] as {
       contract?: { output?: string; source?: { inputs?: readonly string[] } };
     };
 
-    expect(orm.contract?.output).toBe(join(dir, 'output/contract.json'));
-    expect(orm.contract?.source?.inputs).toEqual([join(dir, 'contract.prisma')]);
-  });
-
-  it('discovers the config in the supplied cwd rather than the process cwd', async () => {
-    const dir = projectDir();
-    writeConfig(dir, VALID_BODY);
-
-    expect(dir).not.toBe(process.cwd());
-    expect((await loadOrmConfig({ cwd: dir })).sections['orm']).toBeDefined();
+    expect(orm.contract?.output).toBe('output/contract.json');
+    expect(orm.contract?.source?.inputs).toEqual(['contract.prisma']);
   });
 
   it('reads an explicit config path relative to the cwd', async () => {
@@ -100,14 +81,15 @@ describe('loadOrmConfig', () => {
     const loaded = await loadOrmConfig({ cwd: dir, configPath: 'custom.config.ts' });
 
     expect(loaded.diagnostics).toEqual([]);
-    expect(loaded.sections['orm']).toBeDefined();
+    expect(loaded.files[0]?.path).toBe(join(dir, 'custom.config.ts'));
+    expect(loaded.files[0]?.sections['orm']).toBeDefined();
   });
 
   describe('a config that cannot be evaluated', () => {
     it('reports a file-level diagnostic and no sections', async () => {
       const loaded = await loadOrmConfig({ cwd: projectDir() });
 
-      expect(loaded.sections).toEqual({});
+      expect(loaded.files).toEqual([]);
       expect(loaded.diagnostics).toHaveLength(1);
       expect(loaded.diagnostics[0]?.section).toBeNull();
       expect(loaded.diagnostics[0]?.diagnostic).toMatchObject({
@@ -120,7 +102,7 @@ describe('loadOrmConfig', () => {
       const loaded = await loadOrmConfig({ cwd: projectDir() });
 
       expect(loaded.diagnostics[0]?.diagnostic.nextActions).toEqual([
-        { kind: 'run-command', label: 'Create a config file', command: '{bin} init' },
+        { kind: 'run-command', label: 'Create a config file', command: '{bin} orm init' },
       ]);
     });
 
@@ -134,7 +116,7 @@ describe('loadOrmConfig', () => {
 
       const loaded = await loadOrmConfig({ cwd: dir });
 
-      expect(loaded.sections).toEqual({});
+      expect(loaded.files).toEqual([]);
       expect(loaded.diagnostics).toHaveLength(1);
       expect(loaded.diagnostics[0]).toMatchObject({ section: null });
       expect(loaded.diagnostics[0]?.diagnostic.code).toMatch(/^[A-Z][A-Z0-9]*\.[A-Z][A-Z0-9_]*$/);
@@ -142,11 +124,11 @@ describe('loadOrmConfig', () => {
 
     it('reports a missing version marker as file-level', async () => {
       const dir = projectDir();
-      writeFileSync(join(dir, 'prisma-next.config.ts'), 'export default { family: {} };', 'utf-8');
+      writeFileSync(join(dir, 'prisma.config.ts'), 'export default { family: {} };', 'utf-8');
 
       const loaded = await loadOrmConfig({ cwd: dir });
 
-      expect(loaded.sections).toEqual({});
+      expect(loaded.files).toEqual([]);
       expect(loaded.diagnostics[0]).toMatchObject({
         section: null,
         diagnostic: { code: 'CONFIG.VERSION_MARKER_MISSING' },
@@ -155,42 +137,14 @@ describe('loadOrmConfig', () => {
   });
 
   describe('a structurally invalid config that still evaluates', () => {
-    it('leaves the structural verdict to the section validator', async () => {
+    it('leaves the structural verdict to the section schema', async () => {
       const dir = projectDir();
       writeConfig(dir, '{ migrations: { dir: 42 } }');
 
       const loaded = await loadOrmConfig({ cwd: dir });
 
       expect(loaded.diagnostics).toEqual([]);
-      expect(loaded.sections['orm']).toMatchObject({ migrations: { dir: 42 } });
-    });
-  });
-
-  describe('deprecated spellings', () => {
-    it('loads a flat-shape prisma-next.config.ts and warns once per deprecation', async () => {
-      const dir = projectDir();
-      writeFileSync(join(dir, 'prisma-next.config.ts'), flatConfigModule(VALID_BODY), 'utf-8');
-      const warnings: string[] = [];
-
-      const loaded = await loadOrmConfig({ cwd: dir, warn: (message) => warnings.push(message) });
-
-      expect(loaded.diagnostics).toEqual([]);
-      expect(loaded.path).toBe(join(dir, 'prisma-next.config.ts'));
-      expect(loaded.sections['orm']).toBeDefined();
-      expect(warnings).toEqual([
-        expect.stringContaining('prisma-next.config.ts is deprecated'),
-        expect.stringContaining('flat Prisma Next config shape is deprecated'),
-      ]);
-    });
-
-    it('does not warn for the primary filename and shape', async () => {
-      const dir = projectDir();
-      writeConfig(dir, VALID_BODY);
-      const warnings: string[] = [];
-
-      await loadOrmConfig({ cwd: dir, warn: (message) => warnings.push(message) });
-
-      expect(warnings).toEqual([]);
+      expect(loaded.files[0]?.sections['orm']).toMatchObject({ migrations: { dir: 42 } });
     });
   });
 });

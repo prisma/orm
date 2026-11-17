@@ -1,6 +1,6 @@
 import { not } from '@internal/sql-orm-client';
 import { describe, expect, it } from 'vitest';
-import { timeouts, withPostgresPort } from '../../../../_harness/postgres';
+import { timeouts, withPostgresPort } from '../../../../../_harness/postgres';
 import type { Contract as BaseContract } from './_fixture/base/generated/contract';
 import baseContractJson from './_fixture/base/generated/contract.json' with { type: 'json' };
 import type {
@@ -15,8 +15,8 @@ type DecimalListInput = DecimalFieldInputTypes['public']['TestModel']['decimal']
 
 const testBytes = new Uint8Array([116, 101, 115, 116]);
 const tBytes = new Uint8Array([116]);
-const firstDate = new Date('1969-01-01T10:33:59.000Z');
-const secondDate = new Date('2018-12-05T12:34:23.000Z');
+const firstDate = Temporal.Instant.from('1969-01-01T10:33:59.000Z');
+const secondDate = Temporal.Instant.from('2018-12-05T12:34:23.000Z');
 
 function withBaseLists(fn: Parameters<typeof withPostgresPort<BaseContract>>[1]) {
   return withPostgresPort<BaseContract>({ contractJson: baseContractJson }, async (ctx) => {

@@ -6,7 +6,7 @@
   "compatibility_flags": ["nodejs_compat"],
   "hyperdrive": [
     {
-      // Production binding ID is provisioned in M4 task 4.2 via `wrangler hyperdrive create`.
+      // The production binding ID comes from `wrangler hyperdrive create`; see the README.
       // For local dev, set WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE in
       // `.env` (gitignored); see README. The vitest-pool-workers integration test
       // injects the URL via miniflare's `hyperdrives` option in `vitest.config.ts`.

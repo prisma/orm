@@ -5,8 +5,11 @@ import type {
   MongoContractWithTypeMaps,
   RootModelName,
 } from '@internal/mongo-contract';
-import type { AnyMongoCommand, MongoQueryPlan } from '@internal/mongo-query-ast/execution';
-import { blindCast } from '@internal/utils/casts';
+import type {
+  AnyMongoCommand,
+  MongoExecutionContext,
+  MongoQueryPlan,
+} from '@internal/mongo-query-ast/execution';
 import { contractError } from './contract-errors';
 import { asMongoContract, type CollectionHandle, createCollectionHandle } from './state-classes';
 
@@ -30,13 +33,11 @@ export interface QueryRoot<
   rawCommand<C extends AnyMongoCommand>(command: C): MongoQueryPlan<unknown, C>;
 }
 
+/** Builds queries for the contract of `context`, which `mongoStatic({ contract })` and `mongo({ contract })` create after validating the contract. */
 export function mongoQuery<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
->(options: { contractJson: unknown }): QueryRoot<TContract> {
-  const contract = blindCast<
-    TContract,
-    'mongoQuery accepts validated contract JSON with domain.namespaces'
-  >(options.contractJson);
+>(options: { readonly context: MongoExecutionContext<TContract> }): QueryRoot<TContract> {
+  const { contract } = options.context;
   return {
     from<K extends keyof TContract['roots'] & string>(rootName: K) {
       return createCollectionHandle(contract, rootName);

@@ -6,12 +6,12 @@ import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
 import { blindCast } from '@internal/utils/casts';
-import { createTestCli } from '@prisma/cli-engine/testing';
 import { createSqlContract } from '@repo/test-utils';
 import { join } from 'pathe';
 import stripAnsi from 'strip-ansi';
 import { afterEach, describe, expect, it } from 'vitest';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
 import { createTestProjectDir } from '../utils/test-project-dir';
 
 const HASH_A = `4cb4256${'0'.repeat(57)}`;
@@ -96,7 +96,7 @@ async function seedMigration(migrationsDir: string): Promise<void> {
 }
 
 function harness(config: Record<string, unknown>) {
-  return createTestCli({ commands: BIN_COMMANDS, groups: BIN_GROUPS, config: { orm: config } });
+  return createOrmTestCli({ commands: BIN_COMMANDS, groups: BIN_GROUPS, orm: config });
 }
 
 describe('migration graph', () => {
@@ -104,7 +104,9 @@ describe('migration graph', () => {
     const dir = await projectDir();
     await seedMigration(join(dir, 'migrations'));
 
-    const run = await harness(ormConfig()).run(['migration', 'graph', '--json'], { cwd: dir });
+    const run = await harness(ormConfig()).run(['migration', 'graph', '--json'], {
+      cwd: dir,
+    });
 
     expect(run.exitCode).toBe(0);
     expect(run.json.at(-1)).toMatchObject({ kind: 'result', envelope: { ok: true, exitCode: 0 } });
@@ -142,8 +144,16 @@ describe('migration graph', () => {
     });
     expect(drawing?.kind).toBe('drawing');
     expect(JSON.stringify(drawing)).toContain(MIGRATION_DIR);
-    expect(run.presented?.presentation.stdout).toEqual([]);
     expect(run.stdout).toBe('');
+  });
+
+  it('prints one data line per migration: space, name, from and to', async () => {
+    const dir = await projectDir();
+    await seedMigration(join(dir, 'migrations'));
+
+    const run = await harness(ormConfig()).run(['migration', 'graph'], { cwd: dir });
+
+    expect(run.stdout).toBe(`app\t${MIGRATION_DIR}\t\t${HASH_A}\n`);
   });
 
   it('paints the drawing, keeping the tree aligned once colour is stripped', async () => {
@@ -173,6 +183,25 @@ describe('migration graph', () => {
     expect(run.exitCode).toBe(0);
     expect(run.presented?.presentation.stdout?.[0]).toBe('digraph migrations {');
     expect(run.presented?.presentation.stdout?.join('\n')).toContain(MIGRATION_DIR);
+    expect(run.stdout).toContain('digraph migrations {');
+  });
+
+  it('draws the DOT as a human block, so one shared screen still shows it', async () => {
+    const dir = await projectDir();
+    await seedMigration(join(dir, 'migrations'));
+
+    const run = await harness(ormConfig()).run(['migration', 'graph', '--dot'], {
+      cwd: dir,
+      isTty: { stdout: true, stderr: true },
+    });
+    const drawing = run.presented?.presentation.human.at(-1);
+
+    expect(run.exitCode).toBe(0);
+    expect(drawing?.kind).toBe('drawing');
+    expect(JSON.stringify(drawing)).toContain('digraph migrations {');
+    expect(stripAnsi(run.stderr)).toContain('digraph migrations {');
+    expect(run.stdout).toBe('');
+    expect(run.presented?.presentation.stdout?.[0]).toBe('digraph migrations {');
   });
 
   it('carries the DOT text on the json result alongside the graph document', async () => {
@@ -194,7 +223,9 @@ describe('migration graph', () => {
     const dir = await projectDir();
     await seedMigration(join(dir, 'migrations'));
 
-    const run = await harness(ormConfig()).run(['migration', 'graph', '--json'], { cwd: dir });
+    const run = await harness(ormConfig()).run(['migration', 'graph', '--json'], {
+      cwd: dir,
+    });
 
     expect(run.presented?.data).not.toHaveProperty('dot');
   });

@@ -21,11 +21,13 @@ Manual QA reads:
 | Extension worked-examples | `packages/3-extensions/<extension>/` — each has its own tests describing the extension's contract |
 | Upgrade-skills coverage gate | `pnpm check:upgrade-coverage` (relevant for any framework-breaking change) |
 | Fixture suite | `pnpm fixtures:check` (relevant for any IR / emitter / serialiser change) |
-| Standard test gates | `pnpm test:packages`, `pnpm test:integration`, `pnpm test:e2e` (these are CI gates, not manual QA — listed here so scripts don't redundantly re-author them) |
+| Standard test gates | `pnpm test:packages`, `pnpm test:integration`, `pnpm test:e2e` (CI gates only: never run locally, see `.agents/rules/running-tests.mdc`) |
 
 ## Standard pre-QA gate
 
-A clean pre-QA tree means `pnpm typecheck && pnpm test:packages && pnpm fixtures:check` all green. QA against an unverified tree wastes the runner's time discovering broken assertions that a 1-minute `pnpm test:packages` would have surfaced.
+A clean pre-QA tree means `pnpm typecheck`, the changed packages' own tests and `pnpm fixtures:check` all green. QA against an unverified tree wastes the runner's time discovering broken assertions those tests would have surfaced.
+
+When the QA project installs published builds made from `main` (for example a package's `dev` dist-tag), merge the current `origin/main` into the branch, rebuild every workspace package the run executes (`pnpm build`, or `pnpm --filter <package> build` for each one), and run the rebuilt binary, not one installed earlier. A branch that is behind `main`, run against packages built from a later `main`, fails in ways neither side fails alone. (Added 2026-09-24: a Prisma 7 schema check on a branch based on a week-old `main` refused `@default(false)`, because the branch's CLI lacked a lookup the `dev` target package expected. The same run on the merged branch passed.)
 
 ## Sample coherence, not just placement, for content-preamble dispatches
 

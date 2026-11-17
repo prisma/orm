@@ -60,19 +60,6 @@ describe('scaffolded project files under each import root', () => {
         }
       }
     });
-
-    // `init` scaffolds an application around the per-database facade, whose
-    // `runtime` entrypoint is the facade's own wiring code rather than a
-    // re-export of anything — a decomposed install has no name for it because
-    // it has no such module. That makes `platform` not a scaffold root at all,
-    // so `ScaffoldImportRoot` excludes it and this does not compile rather
-    // than throwing at render time.
-    it('cannot be asked for the platform root', () => {
-      // @ts-expect-error `platform` is not a `ScaffoldImportRoot`.
-      const rejected: ScaffoldImportRoot = { mode: 'platform' };
-
-      expect(rejected.mode).toBe('platform');
-    });
   });
 
   it('changes nothing but the specifiers', () => {

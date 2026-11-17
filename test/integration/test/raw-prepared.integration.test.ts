@@ -102,9 +102,10 @@ describe('integration: prepared whole-query raw statements', {
     const resolvedDriver = stackInstance.driver;
     if (!resolvedDriver) throw new Error('Driver missing');
     driver = resolvedDriver as SqlRuntimeDriverInstance<'postgres'>;
-    await driver.connect({ kind: 'pgClient', client });
+    await driver.connect({ kind: 'pgClient', client, ownedByDriver: false });
 
     runtime = new PostgresRuntimeImpl({
+      closeRefusal: undefined,
       context,
       adapter: stackInstance.adapter,
       driver,

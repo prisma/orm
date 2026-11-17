@@ -39,7 +39,7 @@ describe('MongoControlFamilyInstance OperationPreviewCapable', () => {
     const preview = instantiate().toOperationPreview([op]);
     expect(preview.statements).toEqual([
       {
-        text: 'db.users.createIndex({ "email": 1 }, { unique: true, name: "email_1" })',
+        text: 'db.getCollection("users").createIndex({ "email": 1 }, { unique: true, name: "email_1" })',
         language: 'mongodb-shell',
       },
     ]);
@@ -61,7 +61,7 @@ describe('MongoControlFamilyInstance OperationPreviewCapable', () => {
     };
     const preview = instantiate().toOperationPreview([op]);
     expect(preview.statements).toEqual([
-      { text: 'db.users.dropIndex("email_1")', language: 'mongodb-shell' },
+      { text: 'db.getCollection("users").dropIndex("email_1")', language: 'mongodb-shell' },
     ]);
   });
 

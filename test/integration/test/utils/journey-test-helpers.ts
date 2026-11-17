@@ -6,7 +6,7 @@
  * so journey tests stay concise and readable.
  */
 
-import { execFile } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import {
   copyFileSync,
   existsSync,
@@ -16,20 +16,21 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
-import { promisify } from 'node:util';
+import {
+  issueOutcome,
+  type VerifyDatabaseSchemaResult,
+} from '@internal/framework-components/control';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { EngineEvent, PresentedResult, StreamEvent } from '@prisma/cli-engine';
 import type { Diagnostic } from '@prisma/cli-engine/protocol';
 import { createDevDatabase, timeouts, withClient } from '@repo/test-utils';
-import { isAbsolute, join, resolve } from 'pathe';
-import { afterAll, beforeAll } from 'vitest';
-
-const execFileAsync = promisify(execFile);
-const TSX_BIN = resolve(import.meta.dirname, '../../../../node_modules/.bin/tsx');
+import { isAbsolute, join } from 'pathe';
+import stripAnsi from 'strip-ansi';
+import { afterAll, beforeAll, expect } from 'vitest';
 
 import {
-  appendImplicitMigrationPlanFrom,
   runOnEngine as runCommandOnEngine,
+  runMigrationFile,
   writeProjectManifest,
 } from './cli-test-helpers';
 
@@ -59,6 +60,8 @@ export interface JourneyContext {
   testDir: string;
   configPath: string;
   outputDir: string;
+  /** The config's `migrations.dir`, relative to `testDir`, when it is not `migrations`. */
+  migrationsDir?: string;
 }
 
 // Re-export timeouts so journey tests can import from a single module.
@@ -103,7 +106,7 @@ export function useDevDatabase(options?: {
 
   afterAll(async () => {
     await close();
-  });
+  }, timeouts.spinUpPpgDev);
 
   return {
     get connectionString() {
@@ -203,6 +206,7 @@ export const contractFixtures = {
     'contract-nullable-name-required.ts',
   ),
   'contract-expression-authored': join(JOURNEY_FIXTURES_DIR, 'contract-expression-authored.ts'),
+  'contract-date-time-defaults': join(JOURNEY_FIXTURES_DIR, 'contract-date-time-defaults.ts'),
 } as const;
 
 export type ContractVariant = keyof typeof contractFixtures;
@@ -211,6 +215,8 @@ export const pslContractFixtures = {
   'contract-base': join(JOURNEY_FIXTURES_DIR, 'contract-base.prisma'),
   'contract-additive': join(JOURNEY_FIXTURES_DIR, 'contract-additive.prisma'),
   'contract-composite-pk': join(JOURNEY_FIXTURES_DIR, 'contract-composite-pk.prisma'),
+  'contract-extensions': join(JOURNEY_FIXTURES_DIR, 'contract-extensions.prisma'),
+  'contract-extensions-name': join(JOURNEY_FIXTURES_DIR, 'contract-extensions-name.prisma'),
   'contract-index-upgrade': join(JOURNEY_FIXTURES_DIR, 'contract-index-upgrade.prisma'),
   'contract-expression-authored': join(JOURNEY_FIXTURES_DIR, 'contract-expression-authored.prisma'),
   'contract-expression-authored-renamed': join(
@@ -223,9 +229,61 @@ export const pslContractFixtures = {
   ),
   'contract-rls-adopted': join(JOURNEY_FIXTURES_DIR, 'contract-rls-adopted.prisma'),
   'contract-rls-wire': join(JOURNEY_FIXTURES_DIR, 'contract-rls-wire.prisma'),
+  'contract-rename-table-objects-from': join(
+    JOURNEY_FIXTURES_DIR,
+    'contract-rename-table-objects-from.prisma',
+  ),
+  'contract-rename-table-objects-to': join(
+    JOURNEY_FIXTURES_DIR,
+    'contract-rename-table-objects-to.prisma',
+  ),
+  'contract-rename-table-objects-dropped': join(
+    JOURNEY_FIXTURES_DIR,
+    'contract-rename-table-objects-dropped.prisma',
+  ),
+  'contract-rename-statements-from': join(
+    JOURNEY_FIXTURES_DIR,
+    'contract-rename-statements-from.prisma',
+  ),
+  'contract-rename-statements-to': join(
+    JOURNEY_FIXTURES_DIR,
+    'contract-rename-statements-to.prisma',
+  ),
+  'contract-move-statements-from': join(
+    JOURNEY_FIXTURES_DIR,
+    'contract-move-statements-from.prisma',
+  ),
+  'contract-move-statements-to': join(JOURNEY_FIXTURES_DIR, 'contract-move-statements-to.prisma'),
+  'contract-namespace-statements-from': join(
+    JOURNEY_FIXTURES_DIR,
+    'contract-namespace-statements-from.prisma',
+  ),
+  'contract-namespace-statements-renamed': join(
+    JOURNEY_FIXTURES_DIR,
+    'contract-namespace-statements-renamed.prisma',
+  ),
+  'contract-namespace-statements-removed': join(
+    JOURNEY_FIXTURES_DIR,
+    'contract-namespace-statements-removed.prisma',
+  ),
+  'contract-namespace-statements-kept': join(
+    JOURNEY_FIXTURES_DIR,
+    'contract-namespace-statements-kept.prisma',
+  ),
+  'contract-namespace-statements-public-renamed': join(
+    JOURNEY_FIXTURES_DIR,
+    'contract-namespace-statements-public-renamed.prisma',
+  ),
 } as const;
 
 export type PslContractVariant = keyof typeof pslContractFixtures;
+
+export const sqlitePslConfigFixture = join(JOURNEY_FIXTURES_DIR, 'prisma.config.sqlite.psl.ts');
+export const mysqlPslConfigFixture = join(JOURNEY_FIXTURES_DIR, 'prisma.config.mysql.psl.ts');
+export const pgvectorPslConfigFixture = join(
+  JOURNEY_FIXTURES_DIR,
+  'prisma.config.with-db.pgvector.psl.ts',
+);
 
 /**
  * Swaps the active contract in the test directory to a different variant.
@@ -253,7 +311,7 @@ export function swapPslContract(ctx: JourneyContext, variant: PslContractVariant
 
 /** Options for controlling the test environment when running a CLI command. */
 export interface RunCommandOptions {
-  /** Simulate piped stdout (isTTY=false) to test auto-JSON forwarding. Default: true (interactive). */
+  /** Simulate piped stdout (isTTY=false), which receives the command's data lines. Default: true (interactive). */
   readonly isTTY?: boolean;
 }
 
@@ -297,6 +355,14 @@ export async function runContractInfer(
   return runOnEngine(ctx, ['contract', 'infer', ...extraArgs], options);
 }
 
+export async function runContractPrint(
+  ctx: JourneyContext,
+  extraArgs: readonly string[] = [],
+  options?: RunCommandOptions,
+): Promise<EngineCommandResult> {
+  return runOnEngine(ctx, ['contract', 'print', ...extraArgs], options);
+}
+
 export async function runDbInit(
   ctx: JourneyContext,
   extraArgs: readonly string[] = [],
@@ -311,21 +377,6 @@ export async function runDbUpdate(
   options?: RunCommandOptions,
 ): Promise<EngineCommandResult> {
   return runOnEngine(ctx, ['db', 'update', ...extraArgs], options);
-}
-
-/**
- * What `db update` asks the user to type before it destroys anything: the name
- * of the connected database, which for these Postgres-backed tests is the
- * database segment of the connection URL. A run that means to accept data loss
- * passes it as `--confirm`, because `--yes` cannot grant a consent.
- */
-export function consentTokenFor(connectionString: string): string {
-  const parsed = new URL(connectionString);
-  const name = parsed.pathname.split('/').filter((segment) => segment.length > 0)[0];
-  if (name === undefined) {
-    throw new Error(`Connection URL names no database: ${connectionString}`);
-  }
-  return decodeURIComponent(name);
 }
 
 export async function runDbVerify(
@@ -357,11 +408,7 @@ export async function runMigrationPlan(
   extraArgs: readonly string[] = [],
   options?: RunCommandOptions,
 ): Promise<EngineCommandResult> {
-  return runOnEngine(
-    ctx,
-    ['migration', 'plan', ...appendImplicitMigrationPlanFrom(ctx.testDir, extraArgs)],
-    options,
-  );
+  return runOnEngine(ctx, ['migration', 'plan', ...extraArgs], options);
 }
 
 export async function runMigrationNew(
@@ -372,12 +419,40 @@ export async function runMigrationNew(
   return runOnEngine(ctx, ['migration', 'new', ...extraArgs], options);
 }
 
+/**
+ * Authors a migration by hand: `migration new` scaffolds `migration.ts`, the given source replaces the body of its `operations` array, and `migration.ts` is run to write `ops.json` and `migration.json`. `origin` is the target hash of the migration the new one chains from, which `migration new` needs whenever migrations exist and no `db` ref names the origin. Returns the directory name and the self-emit result, which carries the error when building the operations fails.
+ */
+export async function authorMigration(
+  ctx: JourneyContext,
+  name: string,
+  operationsSource: string,
+  origin: string,
+): Promise<{ readonly dirName: string; readonly emit: CommandResult }> {
+  const scaffold = await runMigrationNew(ctx, ['--name', name, '--from', origin]);
+  if (scaffold.exitCode !== 0) {
+    throw new Error(`authorMigration: migration new failed: ${scaffold.stderr}`);
+  }
+  const dirName = latestMigrationDirName(ctx);
+  const migrationTsPath = join(appMigrationsDir(ctx), dirName, 'migration.ts');
+  const scaffolded = readFileSync(migrationTsPath, 'utf-8');
+  const authored = scaffolded.replace(
+    /return \[[\s\S]*?\];/,
+    () => `return [\n      ${operationsSource},\n    ];`,
+  );
+  if (authored === scaffolded) {
+    throw new Error('authorMigration: the scaffold has no operations array to fill');
+  }
+  writeFileSync(migrationTsPath, authored, 'utf-8');
+  const emit = await selfEmitMigration(ctx, ['--dir', join(appMigrationsDir(ctx), dirName)]);
+  return { dirName, emit };
+}
+
 export async function runMigrate(
   ctx: JourneyContext,
   extraArgs: readonly string[] = [],
   options?: RunCommandOptions,
 ): Promise<EngineCommandResult> {
-  return runOnEngine(ctx, ['migrate', ...extraArgs], options);
+  return runOnEngine(ctx, ['db', 'migrate', ...extraArgs], options);
 }
 
 export async function runMigrationStatus(
@@ -447,7 +522,7 @@ const MIGRATION_CLASS_HEADER_RE = /export default class M extends Migration(?:<[
  * `Migration` base. This helper rewrites the scaffold for the journey test's
  * runtime apply: it drops the raw-JSON import, deserializes the contract
  * (runtime SQL qualification needs a hydrated Postgres schema namespace with
- * `qualifyTable`), and wires a `db = sql(...)` the filled-in dataTransform
+ * `qualifyTable`), and wires a `db = sqlBuilder(...)` the filled-in dataTransform
  * closures use. The deserialized contract is bound back to `endContract`, so
  * the scaffold's `endContractJson = endContract` field still resolves (and
  * the base still derives `describe()` from its `storage.storageHash`).
@@ -466,13 +541,13 @@ export function injectMigrationSqlDbSetup(scaffold: string): string {
     `import endContractJson from '${endContractSpecifier}' with { type: 'json' };`,
     `import { PostgresContractSerializer } from '@internal/target-postgres/runtime';`,
     `import postgresAdapter from '@internal/adapter-postgres/runtime';`,
-    `import { sql } from '@internal/sql-builder/runtime';`,
+    `import { sql as sqlBuilder } from '@internal/sql-builder/runtime';`,
     `import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';`,
     `import postgresTarget from '@internal/target-postgres/runtime';`,
     '',
     'const endContract = new PostgresContractSerializer().deserializeContract(endContractJson);',
     '',
-    'const db = sql({',
+    'const db = sqlBuilder({',
     '  context: createExecutionContext({',
     '    contract: endContract,',
     '    stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),',
@@ -486,17 +561,16 @@ export function injectMigrationSqlDbSetup(scaffold: string): string {
 }
 
 /**
- * Self-emits a migration package by running its `migration.ts` directly with
- * `tsx`. The migration.ts invokes `MigrationCLI.run(import.meta.url, …)`,
- * which serializes the class's `operations` to `ops.json` and attests
- * `migration.json` in the package directory.
+ * Runs a migration package's `migration.ts` in-process so it writes its own
+ * `ops.json` and attested `migration.json` into the package directory
+ * (self-emission; see {@link runMigrationFile}).
  *
- * Accepts a trailing `--dir <path>` pair (relative to `ctx.testDir`) to stay
- * source-compatible with the old `migration emit --dir` callsites. Any other
- * arguments are forwarded to the spawned process so tests can pass flags like
+ * Accepts a trailing `--dir <path>` pair (relative to `ctx.testDir`) naming
+ * the migration package whose `migration.ts` to run. Any other arguments are
+ * forwarded to the migration-file CLI so tests can pass flags like
  * `--dry-run`.
  */
-export async function runMigrationEmit(
+export async function selfEmitMigration(
   ctx: JourneyContext,
   extraArgs: readonly string[] = [],
 ): Promise<CommandResult> {
@@ -504,7 +578,7 @@ export async function runMigrationEmit(
   const dirIdx = args.indexOf('--dir');
   if (dirIdx < 0 || dirIdx === args.length - 1) {
     throw new Error(
-      'runMigrationEmit requires `--dir <migration-dir>` so we know which migration.ts to execute',
+      'selfEmitMigration requires `--dir <migration-dir>` so we know which migration.ts to execute',
     );
   }
   const dirArg = args[dirIdx + 1]!;
@@ -513,40 +587,112 @@ export async function runMigrationEmit(
   const migrationTs = isAbsolute(dirArg)
     ? join(dirArg, 'migration.ts')
     : join(ctx.testDir, dirArg, 'migration.ts');
-  try {
-    const { stdout, stderr } = await execFileAsync(TSX_BIN, [migrationTs, ...args], {
-      cwd: ctx.testDir,
-    });
-    return { exitCode: 0, stdout, stderr };
-  } catch (error) {
-    const e = error as { stdout?: string; stderr?: string; code?: number };
-    return { exitCode: e.code ?? 1, stdout: e.stdout ?? '', stderr: e.stderr ?? '' };
-  }
+  return runMigrationFile(migrationTs, args, ctx.testDir);
+}
+
+/** Runs the `migration.ts` of `migrationDir` again, and expects it to write the same `ops.json`. */
+export async function expectMigrationTsReproducesOps(
+  ctx: JourneyContext,
+  migrationDir: string,
+  label: string,
+): Promise<void> {
+  const opsPath = join(migrationDir, 'ops.json');
+  const written = readFileSync(opsPath, 'utf-8');
+  const emitted = await selfEmitMigration(ctx, ['--dir', migrationDir, '--config', ctx.configPath]);
+  expect(
+    emitted.exitCode,
+    `${label}: node migration.ts: ${emitted.stdout}\n${emitted.stderr}`,
+  ).toBe(0);
+  expect(
+    readFileSync(opsPath, 'utf-8'),
+    `${label}: a re-run of migration.ts reproduces ops.json`,
+  ).toBe(written);
 }
 
 /**
- * Runs `migration plan` and then self-emits the resulting draft `migration.ts`
- * via `tsx`. Mirrors the old `migration plan`-auto-emits behaviour that journey
- * tests relied on before the `migration emit` command was removed.
- *
- * Returns the original plan result (so JSON callers still see the plan's
- * stdout). If plan fails, emit is skipped. If emit fails, the returned result
- * carries the emit failure via `exitCode`/`stderr`.
+ * Follows a message that says to run a migration's `migration.ts` with node: runs `node migration.ts` inside `packageDir`, the migration package directory, as a user would.
  */
-export async function runMigrationPlanAndEmit(
+export function runPrintedSelfEmit(message: string, packageDir: string): CommandResult {
+  if (!/\bnode on that migration\.ts\b/.test(message)) {
+    return {
+      exitCode: -1,
+      stdout: '',
+      stderr: `the message does not say to run node on that migration.ts: ${message}`,
+    };
+  }
+  const run = spawnSync(process.execPath, ['migration.ts'], { cwd: packageDir, encoding: 'utf-8' });
+  return { exitCode: run.status ?? -1, stdout: run.stdout, stderr: run.stderr };
+}
+
+/**
+ * Splits the body of a `return [ ... ]` operations list into its top-level entries, keeping each entry's source text.
+ */
+function operationEntries(body: string): string[] {
+  const entries: string[] = [];
+  let depth = 0;
+  let quote: string | undefined;
+  let start = 0;
+  for (let i = 0; i < body.length; i++) {
+    const char = body[i]!;
+    if (quote !== undefined) {
+      if (char === '\\') i++;
+      else if (char === quote) quote = undefined;
+    } else if (char === "'" || char === '"' || char === '`') quote = char;
+    else if ('([{'.includes(char)) depth++;
+    else if (')]}'.includes(char)) depth--;
+    else if (char === ',' && depth === 0) {
+      entries.push(body.slice(start, i));
+      start = i + 1;
+    }
+  }
+  entries.push(body.slice(start));
+  return entries.map((entry) => entry.trim()).filter((entry) => entry !== '');
+}
+
+/**
+ * Edits a MongoDB `migration.ts` as the advice to keep a dropped collection's documents says: `renameCollection(from, to)` becomes the first operation, imported with the others, and the drop of `from` and any create of `to` are deleted.
+ */
+export function followRenameCollectionAdvice(source: string, from: string, to: string): string {
+  const operations = /(override get operations\(\) \{\s*return \[)([\s\S]*?)(\];\s*\})/;
+  const match = operations.exec(source);
+  if (match === null) throw new Error(`no operations list in:\n${source}`);
+  const isCall = (entry: string, factory: string, collection: string) =>
+    new RegExp(`^${factory}\\(\\s*['"]${collection}['"]`).test(entry);
+  const kept = operationEntries(match[2]!).filter(
+    (entry) => !isCall(entry, 'dropCollection', from) && !isCall(entry, 'createCollection', to),
+  );
+  const entries = [`renameCollection(${JSON.stringify(from)}, ${JSON.stringify(to)})`, ...kept];
+  return source
+    .replace(
+      operations,
+      (_all, open: string, _body, close: string) => `${open}${entries.join(', ')}${close}`,
+    )
+    .replace(/import \{/, 'import { renameCollection,');
+}
+
+/**
+ * Runs `migration plan` (which scaffolds a draft migration.ts), then runs
+ * that migration.ts in-process so it writes its own ops.json and
+ * migration.json (self-emission; see {@link runMigrationFile}).
+ *
+ * Returns the plan result (so JSON callers still see the plan's stdout). If
+ * plan fails, the self-emit is skipped. If the self-emit fails, the returned
+ * result carries that failure via `exitCode`/`stderr`.
+ */
+export async function planMigrationAndSelfEmit(
   ctx: JourneyContext,
   extraArgs: readonly string[] = [],
-): Promise<CommandResult> {
+): Promise<EngineCommandResult> {
   const planResult = await runMigrationPlan(ctx, extraArgs);
   if (planResult.exitCode !== 0) return planResult;
   const latest = getLatestMigrationDir(ctx);
   if (!latest) return planResult;
-  const emitResult = await runMigrationEmit(ctx, ['--dir', `migrations/app/${latest}`]);
+  const emitResult = await selfEmitMigration(ctx, ['--dir', join(appMigrationsDir(ctx), latest)]);
   if (emitResult.exitCode !== 0) {
     return {
       ...planResult,
       exitCode: emitResult.exitCode,
-      stderr: `${planResult.stderr}\n[runMigrationPlanAndEmit] migration emit failed (exit ${emitResult.exitCode}):\n${emitResult.stderr}`,
+      stderr: `${planResult.stderr}\n[planMigrationAndSelfEmit] migration.ts self-emit failed (exit ${emitResult.exitCode}):\n${emitResult.stderr}`,
     };
   }
   return planResult;
@@ -557,7 +703,7 @@ export async function runRef(
   subcommandArgs: readonly string[],
   options?: RunCommandOptions,
 ): Promise<EngineCommandResult> {
-  return runOnEngine(ctx, ['ref', ...subcommandArgs], options);
+  return runOnEngine(ctx, ['migration', 'ref', ...subcommandArgs], options);
 }
 
 /**
@@ -570,9 +716,7 @@ export async function runContractEmitWithConfig(
   configPath: string,
   extraArgs: readonly string[] = [],
 ): Promise<EngineCommandResult> {
-  return runCommandOnEngine({ testDir, configPath }, ['contract', 'emit', ...extraArgs], {
-    settleConfigFailures: true,
-  });
+  return runCommandOnEngine({ testDir, configPath }, ['contract', 'emit', ...extraArgs]);
 }
 
 export async function runFormat(
@@ -580,7 +724,7 @@ export async function runFormat(
   extraArgs: readonly string[] = [],
   options?: RunCommandOptions,
 ): Promise<EngineCommandResult> {
-  return runOnEngine(ctx, ['format', ...extraArgs], options);
+  return runOnEngine(ctx, ['contract', 'format', ...extraArgs], options);
 }
 
 /**
@@ -599,49 +743,23 @@ export async function runDbVerifyWithDb(
 // ---------------------------------------------------------------------------
 
 /**
- * The document a step's `--json` run produced.
- *
- * The two shells frame it differently and this unwraps both. The commander
- * writes the document itself; the engine writes one `StreamEvent` per line and
- * carries the document inside the terminal `result` frame's envelope — under
- * `result` when the command completed and under `error` when it did not, which
- * is where the commander put its error envelope too.
+ * The `--json` document a step produced. A step run through the engine
+ * carries it as the presented result when the handler presented; a step that
+ * settled without presenting (a config or orchestration error) carries the
+ * document in the terminal `result` frame's envelope — under `result` when
+ * the command completed and under `error` when it did not.
  */
-/**
- * The `--json` document a step produced. A step run through the engine already
- * carries it as the presented result — the engine's json mode writes NDJSON
- * frames rather than the bare document, so the document is read from the run
- * rather than parsed back out of stdout.
- */
-export function parseJsonOutput<T = Record<string, unknown>>(
-  result: CommandResult | EngineCommandResult,
-): T {
-  const presented = 'presented' in result ? result.presented : undefined;
-  if (presented !== undefined) {
-    return (presented.presentation.json ?? presented.data) as T;
+export function parseJsonOutput<T = Record<string, unknown>>(result: EngineCommandResult): T {
+  if (result.presented !== undefined) {
+    return (result.presented.presentation.json ?? result.presented.data) as T;
   }
-  const output = result.stdout.trim();
-  const parsed = lastJsonValue(output);
-  if (parsed === undefined) {
-    throw new Error(`Failed to parse JSON from command output:\n${output}`);
+  const terminal = result.json.at(-1);
+  if (terminal === undefined || terminal.kind !== 'result') {
+    throw new Error(
+      `Step produced no terminal result frame (exit ${result.exitCode}):\n${result.stderr}`,
+    );
   }
-  const document = frameDocument(parsed);
-  return (document === undefined ? parsed : document) as T;
-}
-
-function lastJsonValue(output: string): unknown {
-  try {
-    return JSON.parse(output);
-  } catch {
-    const lines = output.split('\n');
-    for (let i = lines.length - 1; i >= 0; i--) {
-      const candidate = lines.slice(i).join('\n').trim();
-      try {
-        return JSON.parse(candidate);
-      } catch {}
-    }
-    return undefined;
-  }
+  return (terminal.envelope.ok ? terminal.envelope.result : terminal.envelope.error) as T;
 }
 
 /**
@@ -670,16 +788,41 @@ export function engineDiagnosticCodes(run: EngineCommandResult): readonly string
   return presented.diagnostics.map((diagnostic) => diagnostic.code);
 }
 
-function frameDocument(parsed: unknown): unknown {
-  if (typeof parsed !== 'object' || parsed === null) {
-    return undefined;
-  }
-  const frame = parsed as { kind?: unknown; envelope?: unknown };
-  if (frame.kind !== 'result' || typeof frame.envelope !== 'object' || frame.envelope === null) {
-    return undefined;
-  }
-  const envelope = frame.envelope as { ok?: unknown; result?: unknown; error?: unknown };
-  return envelope.ok === true ? envelope.result : envelope.error;
+/** A schema issue as the journeys assert it: where it is, what kind of node, and whether it is missing, extra or different. */
+export interface ExpectedVerifyIssue {
+  readonly path: readonly string[];
+  readonly nodeKind: string;
+  readonly outcome: ReturnType<typeof issueOutcome>;
+}
+
+/**
+ * Asserts that `db verify --schema-only --strict` ran in strict mode and reported exactly `expectedIssues` and no warnings. Strict mode is what makes a live column or constraint the contract leaves out an issue.
+ */
+export async function expectStrictVerifyIssues(
+  ctx: JourneyContext,
+  subject: string,
+  expectedIssues: readonly ExpectedVerifyIssue[] = [],
+): Promise<void> {
+  const result = await runDbVerify(ctx, ['--schema-only', '--strict', '--json']);
+  const document = engineDocument<VerifyDatabaseSchemaResult>(result);
+  expect(
+    {
+      ok: document.ok,
+      strict: document.meta?.strict,
+      issues: document.schema.issues.map((issue) => ({
+        path: issue.path,
+        nodeKind: (issue.expected ?? issue.actual)?.nodeKind,
+        outcome: issueOutcome(issue),
+      })),
+      warnings: document.schema.warnings?.issues ?? [],
+    },
+    `${subject}: db verify --schema-only --strict\n${stripAnsi(result.stderr)}`,
+  ).toEqual({
+    ok: expectedIssues.length === 0,
+    strict: true,
+    issues: expectedIssues,
+    warnings: [],
+  });
 }
 
 export { EMPTY_CONTRACT_HASH };
@@ -735,7 +878,7 @@ export function engineError(result: EngineCommandResult): Diagnostic | undefined
   return terminal.envelope.error;
 }
 
-export function parseMigrationStatusJson(result: CommandResult): MigrationStatusJson {
+export function parseMigrationStatusJson(result: EngineCommandResult): MigrationStatusJson {
   return parseJsonOutput<MigrationStatusJson>(result);
 }
 
@@ -759,7 +902,7 @@ export function migrationStatusAppSpace(
  * test root (`migrations/app/`).
  */
 function appMigrationsDir(ctx: JourneyContext): string {
-  return join(ctx.testDir, 'migrations', 'app');
+  return join(ctx.testDir, ctx.migrationsDir ?? 'migrations', 'app');
 }
 
 /**
@@ -770,7 +913,8 @@ export function getMigrationDirs(ctx: JourneyContext): string[] {
   const migrationsDir = appMigrationsDir(ctx);
   if (!existsSync(migrationsDir)) return [];
   return readdirSync(migrationsDir)
-    .filter((d) => !d.startsWith('.'))
+    .filter((d) => !d.startsWith('.') && d !== 'refs')
+    .filter((d) => statSync(join(migrationsDir, d)).isDirectory())
     .sort();
 }
 
@@ -784,17 +928,52 @@ export function getMigrationDirs(ctx: JourneyContext): string[] {
  * mis-identified as "not the latest" if we just used `sort().at(-1)`. The
  * on-disk mtime always reflects the actual creation order.
  */
+/**
+ * The newest migration directory's name — what a user reads out of
+ * `migrations/app/` to continue planning from the tip (`--from <dir>`
+ * resolves to that migration's destination contract). Throws when the
+ * journey has no migrations yet, so call sites can pass it straight into
+ * argv.
+ */
+export function latestMigrationDirName(ctx: JourneyContext): string {
+  const latest = getLatestMigrationDir(ctx);
+  if (latest === undefined) {
+    throw new Error('latestMigrationDirName: the journey has no migration directories yet');
+  }
+  return latest;
+}
+
+/**
+ * The destination contract hash of the newest migration — what `migration new
+ * --from` takes when a journey has no `db` ref (plain `migrate` never writes one).
+ */
+export function latestMigrationToHash(ctx: JourneyContext): string {
+  const manifestPath = join(appMigrationsDir(ctx), latestMigrationDirName(ctx), 'migration.json');
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8')) as { to: string };
+  return manifest.to;
+}
+
 export function getLatestMigrationDir(ctx: JourneyContext): string | undefined {
   const dirs = getMigrationDirs(ctx);
   if (dirs.length === 0) return undefined;
   const migrationsDir = appMigrationsDir(ctx);
+  const createdAtOf = (dir: string): string => {
+    const manifestPath = join(migrationsDir, dir, 'migration.json');
+    if (!existsSync(manifestPath)) return '';
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8')) as { createdAt?: string };
+    return manifest.createdAt ?? '';
+  };
+  // Newest by the manifest's own createdAt (directory mtime ties on coarse
+  // filesystems, and the minute-precision dir-name prefix cannot break a
+  // same-minute tie); equal timestamps fall back to the lexicographically
+  // last dir name so the choice is deterministic either way.
   let newest = dirs[0]!;
-  let newestMtime = statSync(join(migrationsDir, newest)).mtimeMs;
+  let newestCreatedAt = createdAtOf(newest);
   for (let i = 1; i < dirs.length; i++) {
     const dir = dirs[i]!;
-    const mtime = statSync(join(migrationsDir, dir)).mtimeMs;
-    if (mtime > newestMtime) {
-      newestMtime = mtime;
+    const createdAt = createdAtOf(dir);
+    if (createdAt > newestCreatedAt || (createdAt === newestCreatedAt && dir > newest)) {
+      newestCreatedAt = createdAt;
       newest = dir;
     }
   }

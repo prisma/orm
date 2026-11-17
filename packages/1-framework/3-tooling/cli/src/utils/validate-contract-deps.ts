@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import { resolve as resolvePath } from 'node:path';
 
 const IMPORT_PATTERN = /import\s+type\s+.*?\s+from\s+['"](@[^/]+\/[^/'"]+)/g;
 
@@ -21,7 +22,9 @@ export function validateContractDeps(
   projectRoot: string,
 ): ContractDepsValidation {
   const packages = extractPackageSpecifiers(dtsContent);
-  const resolve = createRequire(`${projectRoot}/package.json`);
+  // createRequire requires an absolute path; the project root arrives
+  // relative when the command is invoked with a relative --project.
+  const resolve = createRequire(resolvePath(projectRoot, 'package.json'));
 
   const missing: string[] = [];
   for (const pkg of packages) {

@@ -40,8 +40,8 @@ export interface PnpmCatalogScanResult {
  *
  * - We only inspect the unnamed top-level `catalog:` block. pnpm also
  *   supports `catalogs:` (plural — *named* catalogs referenced via
- *   `catalog:foo` specifiers); those don't apply to a vanilla
- *   `pnpm add prisma-next` invocation, so we skip them.
+ *   `catalog:foo` specifiers); those don't apply to the vanilla
+ *   `pnpm add` invocations `init` runs, so we skip them.
  * - We don't validate YAML syntax exhaustively. The file format pnpm
  *   ships is line-oriented and well-known; a minimal regex is more
  *   robust than depending on a YAML parser for one warning.

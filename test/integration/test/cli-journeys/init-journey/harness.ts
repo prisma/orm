@@ -1,7 +1,7 @@
 /**
- * Harness for the `prisma-next init` user-journey test (TML-2490).
+ * Harness for the `prisma orm init` user-journey test (TML-2490).
  *
- * A "seam verifier" — exercises the full user inner loop from `prisma-next
+ * A "seam verifier" — exercises the full user inner loop from `prisma orm
  * init` through to a working query against a real DB, asserting the contract
  * at each seam between subsystems.
  *
@@ -34,10 +34,22 @@ const execFileAsync = promisify(execFile);
 /**
  * Path to the workspace-built CLI binary. The integration package's
  * `pretest` hook runs `pnpm -w build`, so `dist/bin.mjs` exists when these
- * tests run.
+ * tests run. Only `orm init` runs it: the project has nothing installed yet,
+ * so the CLI is the only framework copy loaded.
  */
 const WORKSPACE_ROOT = resolve(import.meta.dirname, '../../../../..');
-const CLI_BIN = join(WORKSPACE_ROOT, 'packages/1-framework/3-tooling/cli/dist/bin.mjs');
+const WORKSPACE_CLI_BIN = join(WORKSPACE_ROOT, 'packages/1-framework/3-tooling/cli/dist/bin.mjs');
+
+/**
+ * The project's own `prisma` command, written after install. It runs the CLI
+ * from the project's installed `@prisma/orm-toolchain`, so the CLI and the
+ * project's `@prisma/orm-*` packages load one framework copy, as a user's do.
+ */
+const PROJECT_CLI_FILE = 'prisma-cli.mjs';
+const PROJECT_CLI_SOURCE = `import { runOrmBin } from '@prisma/orm-toolchain/cli';
+
+await runOrmBin();
+`;
 
 /**
  * Shared cache root for the journey runs. Lives outside the repo (under
@@ -93,7 +105,7 @@ export interface JourneyProject {
   readonly dir: string;
   /** Which cell this project represents. */
   readonly cell: CellId;
-  /** Result of the `prisma-next init` invocation that materialised the project. */
+  /** Result of the `prisma orm init` invocation that materialised the project. */
   readonly initResult: CommandRun;
   /** Result of the `pnpm install` invocation, or `null` when install was skipped. */
   readonly installResult: CommandRun | null;
@@ -121,7 +133,7 @@ interface CreateJourneyProjectOptions {
 
 /**
  * Materialises a fresh project tmpdir, writes a minimal `package.json` (init
- * requires one to attach to), runs `prisma-next init --target <t> --authoring
+ * requires one to attach to), runs `prisma orm init --target <t> --authoring
  * <a> --yes --skip-install` via the workspace-built CLI binary as a real
  * subprocess, then optionally runs `pnpm install` against the workspace's
  * pre-packed tarballs with `node-linker=isolated`.
@@ -146,15 +158,10 @@ export async function createJourneyProject(
     writeMinimalPackageJson(dir);
 
     const target = cell.target === 'mongo' ? 'mongodb' : 'postgres';
-    // `--skip-skills` matters here: this journey verifies
-    // scaffold/install/emit/migrate only; skill registration is
-    // intentionally not exercised. Without the flag, project-level skill
-    // install pulls the `prisma/prisma/skills#v<cliVersion>` tag from
-    // GitHub, which does not exist for an in-development minor (the tag is
-    // only cut after publish), so every release-bump PR's CI goes red.
     const initResult = await runNode(
       [
-        CLI_BIN,
+        WORKSPACE_CLI_BIN,
+        'orm',
         'init',
         '--target',
         target,
@@ -162,7 +169,6 @@ export async function createJourneyProject(
         cell.authoring,
         '--yes',
         '--skip-install',
-        '--skip-skills',
       ],
       dir,
     );
@@ -173,6 +179,7 @@ export async function createJourneyProject(
       rewritePackageJsonForTarballs(dir, cell, tarballs);
       writeIsolatedNpmrc(dir);
       installResult = await runPnpm(['install', '--no-frozen-lockfile'], dir);
+      writeFileSync(join(dir, PROJECT_CLI_FILE), PROJECT_CLI_SOURCE, 'utf-8');
     }
 
     return {
@@ -340,9 +347,7 @@ function walkForPackageJsons(dir: string, found: WorkspacePackage[], depth: numb
       // leaves the tarball cache.
       const ours =
         typeof pkg.name === 'string' &&
-        (pkg.name.startsWith('@internal/') ||
-          pkg.name.startsWith('@prisma/orm-') ||
-          pkg.name === 'prisma-next');
+        (pkg.name.startsWith('@internal/') || pkg.name.startsWith('@prisma/orm-'));
       if (ours && typeof pkg.name === 'string') {
         found.push({ name: pkg.name, version: pkg.version ?? '0.0.0', dir });
       }
@@ -489,14 +494,15 @@ function rewritePackageJsonForTarballs(dir: string, cell: CellId, tarballs: Pack
     ...migrationDepEntries,
     dotenv: '^16.4.5',
   };
-  // No `prisma-next` devDependency: the standalone CLI package stopped
-  // being published; journey steps invoke the workspace-built engine bin.
-  // `@prisma/cli-engine` is the scaffolded prisma.config.ts's defineConfig
-  // import, installed from the registry exactly as `init`'s own install
-  // would.
+  // `@prisma/orm-toolchain` is what the project's `prisma` command
+  // (`PROJECT_CLI_FILE`) runs the CLI from. `@prisma/cli-engine` is the
+  // scaffolded prisma.config.ts's definePrismaConfig import, installed from the registry exactly as
+  // `init`'s own install would. Must be an engine that has that export
+  // (0.2.0+), and should track what the workspace pins.
   pkg.devDependencies = {
     ...(pkg.devDependencies ?? {}),
-    '@prisma/cli-engine': '0.0.9',
+    '@prisma/cli-engine': '0.9.0',
+    '@prisma/orm-toolchain': `file:${requireTarball(tarballs, '@prisma/orm-toolchain')}`,
     '@types/node': '^24.10.4',
     typescript: '^5.9.3',
   };
@@ -573,13 +579,12 @@ export function attachDatabase(project: JourneyProject, connectionString: string
 }
 
 /**
- * Emits the contract. The standalone `prisma-next` package is no longer
- * published (the user-facing bin is the unified `prisma` CLI, which lives
- * outside this repo), so journey steps invoke the workspace-built engine
- * bin in the project directory instead of `pnpm exec prisma-next`.
+ * Emits the contract. The user-facing bin is the unified `prisma` CLI
+ * (published from the prisma-cli repo), so journey steps run the project's
+ * `PROJECT_CLI_FILE`, which loads the CLI from the installed toolchain.
  */
 export async function emitContract(project: JourneyProject): Promise<StepResult> {
-  return runStep(project, ['node', CLI_BIN, 'contract', 'emit']);
+  return runStep(project, ['node', PROJECT_CLI_FILE, 'contract', 'emit']);
 }
 
 /**
@@ -588,18 +593,18 @@ export async function emitContract(project: JourneyProject): Promise<StepResult>
  * the schema in via `migrationPlan` + `migrationApply`.
  */
 export async function dbInit(project: JourneyProject): Promise<StepResult> {
-  return runStep(project, ['node', CLI_BIN, 'db', 'init']);
+  return runStep(project, ['node', PROJECT_CLI_FILE, 'db', 'init']);
 }
 
 /**
- * Runs `prisma-next migration plan --name <name>`. On a fresh scaffold
+ * Runs `prisma migration plan --name <name>`. On a fresh scaffold
  * this materialises `migrations/app/<timestamp>_<name>/` with a draft
  * `migration.ts` describing the create-from-scratch operations. The
  * caller is responsible for self-emitting that draft (via
  * `selfEmitLatestMigration`) and then running `migrationApply`.
  */
 export async function migrationPlan(project: JourneyProject, name: string): Promise<StepResult> {
-  return runStep(project, ['node', CLI_BIN, 'migration', 'plan', '--name', name]);
+  return runStep(project, ['node', PROJECT_CLI_FILE, 'migration', 'plan', '--name', name]);
 }
 
 /**
@@ -637,12 +642,12 @@ export async function selfEmitLatestMigration(project: JourneyProject): Promise<
 }
 
 /**
- * Runs `prisma-next migrate`. Applies every pending migration
+ * Runs `prisma db migrate`. Applies every pending migration
  * to the live database — the mongo planner's missing-`createCollection`
  * seam (TML-2486) surfaces here when the bug is present.
  */
 export async function migrationApply(project: JourneyProject): Promise<StepResult> {
-  return runStep(project, ['node', CLI_BIN, 'migrate']);
+  return runStep(project, ['node', PROJECT_CLI_FILE, 'db', 'migrate']);
 }
 
 /**
@@ -694,29 +699,4 @@ async function runStep(project: JourneyProject, args: readonly string[]): Promis
   }
   const result = await runExec(bin, rest, project.dir);
   return { ...result, command: args.join(' ') };
-}
-
-/**
- * Helper that flips one assertion based on whether a bug is currently
- * `'broken'` or `'fixed'`. The journey test encodes one of these per known
- * seam bug (TML-2486, TML-2487, TML-2314, TML-2461); flipping the status
- * is how individual bug-fix commits land in the same PR without rewriting
- * the journey test itself.
- */
-export interface SeamExpectation<T> {
-  readonly ticket: string;
-  readonly description: string;
-  readonly status: 'broken' | 'fixed';
-  readonly whenBroken: (result: T) => void;
-  readonly whenFixed: (result: T) => void;
-}
-
-export function seamExpectation<T>(spec: SeamExpectation<T>): (result: T) => void {
-  return (result) => {
-    if (spec.status === 'broken') {
-      spec.whenBroken(result);
-    } else {
-      spec.whenFixed(result);
-    }
-  };
 }

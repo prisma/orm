@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA7_ENUM_NAMESPACE_MISMATCH",
+    "file": "schema.prisma",
+    "line": 14,
+    "message": "Field \"Event.action\" uses enum \"AuditAction\" from schema \"audit\", but the model is in schema \"public\". Prisma 8 columns reference the enum type of their own schema; declare the enum in \"public\" or move the model."
+  }
+]

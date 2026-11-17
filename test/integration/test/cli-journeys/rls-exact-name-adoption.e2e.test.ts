@@ -15,12 +15,13 @@ import { withTempDir } from '../utils/cli-test-helpers';
 import {
   getLatestMigrationDir,
   type JourneyContext,
+  latestMigrationDirName,
   parseJsonOutput,
+  planMigrationAndSelfEmit,
   runContractEmit,
   runDbSign,
   runDbVerify,
   runMigrate,
-  runMigrationPlanAndEmit,
   setupJourney,
   swapPslContract,
   timeouts,
@@ -88,7 +89,7 @@ withTempDir(({ createTempDir }) => {
         ).toBe(0);
 
         // baseline: EMPTY → adopted contract; no-op on apply.
-        const planBaseline = await runMigrationPlanAndEmit(ctx, ['--name', 'baseline']);
+        const planBaseline = await planMigrationAndSelfEmit(ctx, ['--name', 'baseline']);
         expect(planBaseline.exitCode, `baseline: plan\n${stripAnsi(planBaseline.stderr)}`).toBe(0);
         const applyBaseline = await runMigrate(ctx, ['--json']);
         expect(applyBaseline.exitCode, `baseline: apply\n${stripAnsi(applyBaseline.stderr)}`).toBe(
@@ -106,7 +107,12 @@ withTempDir(({ createTempDir }) => {
         );
 
         // plan rename: the widening plan is exactly one ALTER POLICY … RENAME.
-        const plan = await runMigrationPlanAndEmit(ctx, ['--name', 'adopt-wire-name']);
+        const plan = await planMigrationAndSelfEmit(ctx, [
+          '--name',
+          'adopt-wire-name',
+          '--from',
+          latestMigrationDirName(ctx),
+        ]);
         expect(plan.exitCode, `plan rename: migration plan\n${stripAnsi(plan.stderr)}`).toBe(0);
         const ops = readPlannedOps(ctx);
         expect(
@@ -126,7 +132,7 @@ withTempDir(({ createTempDir }) => {
 
         // apply: run the rename and verify clean under the wire name.
         const apply = await runMigrate(ctx);
-        expect(apply.exitCode, `apply: migration apply\n${stripAnsi(apply.stderr)}`).toBe(0);
+        expect(apply.exitCode, `apply: migrate\n${stripAnsi(apply.stderr)}`).toBe(0);
         const verifyWire = await runDbVerify(ctx);
         expect(verifyWire.exitCode, `apply: verify clean\n${stripAnsi(verifyWire.stderr)}`).toBe(0);
       },

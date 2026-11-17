@@ -11,7 +11,7 @@ relationMode=foreignKeys is ported (passing) under
 
 ## No nested `delete` mutator
 
-prisma-next's nested-update relation mutator exposes only `create`/`connect`/`disconnect` — there
+Prisma 8's nested-update relation mutator exposes only `create`/`connect`/`disconnect` — there
 is no nested `delete` mutator (`RelationMutation` union in
 `packages/3-extensions/sql-orm-client/src/types.ts`; factory in `relation-mutator.ts`). The
 nested-`delete` behaviour under test cannot be expressed.
@@ -20,7 +20,7 @@ nested-`delete` behaviour under test cannot be expressed.
 
 ## No relationMode=prisma emulation
 
-prisma-next has no client-side relationMode=prisma referential-action emulation; it relies on DB
+Prisma 8 has no client-side relationMode=prisma referential-action emulation; it relies on DB
 foreign keys. Both relationMode=prisma matrix entries are non-ported.
 
 - `packages/client/tests/functional/relationMode-17255-mixed-actions/tests.ts` › `original > [update] main with nested delete alice should succeed` [mode=prisma] — no relationMode=prisma emulation (and no nested `delete` mutator).

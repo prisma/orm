@@ -1,3 +1,5 @@
+import type { ResolvedMigrationStatement } from '@internal/framework-components/control';
+import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { NextAction } from '@internal/utils/structured-error';
 import { docsUrlFor } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
@@ -17,6 +19,7 @@ import {
   errorFileNotFound,
   errorInvalidOutputFormat,
   errorJsonFormatNotSupported,
+  errorMigrationCliConfigNotFound,
   errorMigrationCliInvalidConfigArg,
   errorMigrationCliUnknownFlag,
   errorMigrationPlanningFailed,
@@ -68,14 +71,6 @@ describe('CliStructuredError', () => {
     expect(envelope.summary).toBe('Test error');
   });
 
-  it('converts to envelope for a different namespace', () => {
-    const error = new CliStructuredError('CONTRACT.MARKER_MISSING', 'Test error');
-    const envelope = error.toEnvelope();
-
-    expect(envelope.code).toBe('CONTRACT.MARKER_MISSING');
-    expect(envelope.summary).toBe('Test error');
-  });
-
   it('sets cause when provided', () => {
     const cause = new Error('underlying failure');
     const error = new CliStructuredError('CONFIG.FILE_NOT_FOUND', 'Test error', { cause });
@@ -108,9 +103,34 @@ describe('CliStructuredError', () => {
     expect(envelope.fix).toBeUndefined();
   });
 
+  describe('diagnostics', () => {
+    const diagnostic = {
+      code: 'CONTRACT.SOURCE_DIAGNOSTIC' as const,
+      severity: 'error' as const,
+      summary: 'schema.prisma:9:1 PSL_VIEW_UNSUPPORTED: views are not supported',
+      nextActions: [],
+      where: { path: 'schema.prisma', line: 9 },
+    };
+
+    it('carries accompanying findings onto the envelope', () => {
+      const error = new CliStructuredError('CONTRACT.SOURCE_LOAD_FAILED', 'Test error', {
+        diagnostics: [diagnostic],
+      });
+
+      expect(error.diagnostics).toEqual([diagnostic]);
+      expect(error.toEnvelope().diagnostics).toEqual([diagnostic]);
+    });
+
+    it('omits the field when there are none', () => {
+      const error = new CliStructuredError('CONTRACT.SOURCE_LOAD_FAILED', 'Test error');
+
+      expect(Object.keys(error.toEnvelope())).not.toContain('diagnostics');
+    });
+  });
+
   describe('nextActions', () => {
     const nextActions: readonly NextAction[] = [
-      { kind: 'run-command', label: 'Create the config', command: '{bin} init' },
+      { kind: 'run-command', label: 'Create the config', command: '{bin} orm init' },
     ];
 
     it('carries nextActions onto the error and the envelope, {bin} left unsubstituted', () => {
@@ -132,12 +152,12 @@ describe('CliStructuredError', () => {
     it('keeps fix alongside nextActions — both survive the transition', () => {
       const error = new CliStructuredError('CONFIG.FILE_NOT_FOUND', 'Test error', {
         why: 'No config file',
-        fix: "Run 'prisma-next init' to create a config file",
+        fix: "Run '{bin} orm init' to create a config file",
         nextActions,
       });
       const envelope = error.toEnvelope();
 
-      expect(envelope.fix).toBe("Run 'prisma-next init' to create a config file");
+      expect(envelope.fix).toBe("Run '{bin} orm init' to create a config file");
       expect(envelope.nextActions).toEqual(nextActions);
     });
   });
@@ -145,11 +165,6 @@ describe('CliStructuredError', () => {
   describe('is() type guard', () => {
     it('returns true for CliStructuredError instances', () => {
       const error = new CliStructuredError('CONFIG.FILE_NOT_FOUND', 'Test error');
-      expect(CliStructuredError.is(error)).toBe(true);
-    });
-
-    it('returns true for CliStructuredError from any namespace', () => {
-      const error = new CliStructuredError('CONTRACT.VERIFY_FAILED', 'Test error');
       expect(CliStructuredError.is(error)).toBe(true);
     });
 
@@ -213,12 +228,6 @@ describe('Config Errors', () => {
     expect(error.why).toBe('Custom reason');
   });
 
-  it('errorConfigFileNotFound without configPath', () => {
-    const error = errorConfigFileNotFound();
-    expect(error.code).toBe('CONFIG.FILE_NOT_FOUND');
-    expect(error.where).toBeUndefined();
-  });
-
   it('errorContractConfigMissing creates correct error', () => {
     const error = errorContractConfigMissing();
     expect(error.code).toBe('CONFIG.CONTRACT_MISSING');
@@ -279,14 +288,14 @@ describe('Config Errors', () => {
 
   it('errorDatabaseConnectionRequired with commandName shows fully copyable command', () => {
     const error = errorDatabaseConnectionRequired({ commandName: 'db init' });
-    expect(error.fix).toContain('Run `prisma-next db init --db <url>`');
+    expect(error.fix).toContain('Run `{bin} db init --db <url>`');
   });
 
   it('errorDatabaseConnectionRequired with retryCommand preserves command flags', () => {
     const error = errorDatabaseConnectionRequired({
-      retryCommand: 'prisma-next db verify --schema-only --strict --db <url>',
+      retryCommand: '{bin} db verify --schema-only --strict --db <url>',
     });
-    expect(error.fix).toContain('Run `prisma-next db verify --schema-only --strict --db <url>`');
+    expect(error.fix).toContain('Run `{bin} db verify --schema-only --strict --db <url>`');
   });
 
   it('errorQueryRunnerFactoryRequired creates correct error', () => {
@@ -335,6 +344,48 @@ describe('Config Errors', () => {
     expect(error.fix).toContain('Fix 1');
     expect(error.fix).toContain('Fix 2');
     expect(error.meta?.['conflicts']).toEqual(conflicts);
+  });
+
+  it('errorMigrationPlanningFailed carries the statement a conflict refuses, as JSON output writes it', () => {
+    const refusedStatement = {
+      kind: 'rename',
+      entity: 'model',
+      from: { namespaceId: UNBOUND_NAMESPACE_ID, model: 'Profile' },
+      to: { namespaceId: UNBOUND_NAMESPACE_ID, model: 'User' },
+    } as unknown as ResolvedMigrationStatement;
+    const error = errorMigrationPlanningFailed({
+      conflicts: [
+        {
+          kind: 'statementRefused',
+          summary: 'Cannot rename',
+          location: { namespaceId: UNBOUND_NAMESPACE_ID, entityKind: 'table', entityName: 'users' },
+          refusedStatement,
+        },
+      ],
+    });
+    expect(error.meta?.['conflicts']).toEqual([
+      {
+        kind: 'statementRefused',
+        summary: 'Cannot rename',
+        location: { entityKind: 'table', entityName: 'users' },
+        refusedStatement: {
+          kind: 'rename',
+          entity: 'model',
+          from: { model: 'Profile' },
+          to: { model: 'User' },
+        },
+      },
+    ]);
+  });
+
+  it('errorMigrationPlanningFailed keeps the namespace of a location in a named namespace', () => {
+    const location = { namespaceId: 'auth', entityKind: 'table', entityName: 'users' };
+    const error = errorMigrationPlanningFailed({
+      conflicts: [{ kind: 'statementRefused', summary: 'Cannot rename', location }],
+    });
+    expect(error.meta?.['conflicts']).toEqual([
+      { kind: 'statementRefused', summary: 'Cannot rename', location },
+    ]);
   });
 
   it('errorMigrationPlanningFailed with custom why', () => {
@@ -443,8 +494,8 @@ describe('Config Errors', () => {
   it('errorConfigVersionMarkerMissing creates correct error', () => {
     const error = errorConfigVersionMarkerMissing('/project/prisma.config.ts');
     expect(error.code).toBe('CONFIG.VERSION_MARKER_MISSING');
-    expect(error.message).toBe('Config is not a defineConfig result');
-    expect(error.fix).toContain('defineConfig');
+    expect(error.message).toBe('Config is not a definePrismaConfig result');
+    expect(error.fix).toContain('definePrismaConfig');
     expect(error.where?.path).toBe('/project/prisma.config.ts');
     expect(error.docsUrl).toBe(docsUrlFor('CONFIG.VERSION_MARKER_MISSING'));
   });
@@ -452,6 +503,39 @@ describe('Config Errors', () => {
   it('errorConfigVersionMarkerMissing without path omits where', () => {
     const error = errorConfigVersionMarkerMissing();
     expect(error.where).toBeUndefined();
+  });
+
+  it('errorMigrationCliConfigNotFound names each config it checked and why it does not own the migration', () => {
+    const error = errorMigrationCliConfigNotFound({
+      migrationDir: '/repo/inner/migrations/app/20260101T0000_initial',
+      checked: [
+        { configPath: '/repo/prisma.config.ts', migrationsDir: '/repo/migrations' },
+        { configPath: '/work/prisma.config.ts', loadFailure: 'Failed to evaluate config' },
+      ],
+    });
+    expect({
+      code: error.code,
+      message: error.message,
+      why: error.why,
+      fix: error.fix,
+      meta: error.meta,
+    }).toEqual({
+      code: 'CLI.MIGRATION_CONFIG_NOT_FOUND',
+      message: 'No config found for this migration',
+      why: 'Without --config, a migration.ts uses the prisma.config.ts whose migrations directory holds it: the nearest one above /repo/inner/migrations/app/20260101T0000_initial, else the one in the working directory. None of them does: /repo/prisma.config.ts keeps migrations in /repo/migrations; /work/prisma.config.ts failed to load (Failed to evaluate config).',
+      fix: 'Run it again with `--config <path to the config of the project this migration belongs to>`.',
+      meta: {
+        migrationDir: '/repo/inner/migrations/app/20260101T0000_initial',
+        checked: ['/repo/prisma.config.ts', '/work/prisma.config.ts'],
+      },
+    });
+  });
+
+  it('errorMigrationCliConfigNotFound says when it found no config at all', () => {
+    const error = errorMigrationCliConfigNotFound({ migrationDir: '/m', checked: [] });
+    expect(error.why).toBe(
+      'Without --config, a migration.ts uses the prisma.config.ts whose migrations directory holds it: the nearest one above /m, else the one in the working directory. There is neither.',
+    );
   });
 
   it('errorMigrationCliInvalidConfigArg creates correct error for missing path', () => {

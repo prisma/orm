@@ -1,6 +1,5 @@
 import { CliStructuredError } from '@internal/errors/control';
 import type { ErroredEnvelope, MountedTree, StreamEvent } from '@prisma/cli-engine';
-import { createTestCli } from '@prisma/cli-engine/testing';
 import type { Mock } from 'vitest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { executeFormat } from '../../src/control-api/operations/format';
@@ -14,6 +13,7 @@ import { createFormatCommand } from '../../src/orm/format';
 import { createRefDeleteCommand } from '../../src/orm/ref/delete';
 import { createRefListCommand } from '../../src/orm/ref/list';
 import { createRefSetCommand } from '../../src/orm/ref/set';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
 
 const operations = {
   executeFormat: vi.fn<typeof executeFormat>(),
@@ -23,10 +23,10 @@ const operations = {
 };
 
 const commands: MountedTree = {
-  format: createFormatCommand(operations.executeFormat),
-  'ref delete': createRefDeleteCommand(operations.executeRefDeleteCommand),
-  'ref list': createRefListCommand(operations.executeRefListCommand),
-  'ref set': createRefSetCommand(operations.executeRefSetCommand),
+  'contract format': createFormatCommand(operations.executeFormat),
+  'migration ref delete': createRefDeleteCommand(operations.executeRefDeleteCommand),
+  'migration ref list': createRefListCommand(operations.executeRefListCommand),
+  'migration ref set': createRefSetCommand(operations.executeRefSetCommand),
 };
 
 beforeEach(() => {
@@ -43,22 +43,20 @@ const DESCRIPTOR = {
 };
 
 function harness() {
-  return createTestCli({
+  return createOrmTestCli({
     commands,
     groups: BIN_GROUPS,
-    config: {
-      orm: {
-        family: {
-          kind: 'family',
-          id: 'sql',
-          familyId: 'sql',
-          version: '1.0.0',
-          emission: {},
-          create: () => ({}),
-        },
-        target: { ...DESCRIPTOR, kind: 'target', id: 'postgres' },
-        adapter: { ...DESCRIPTOR, kind: 'adapter', id: 'pg' },
+    orm: {
+      family: {
+        kind: 'family',
+        id: 'sql',
+        familyId: 'sql',
+        version: '1.0.0',
+        emission: {},
+        create: () => ({}),
       },
+      target: { ...DESCRIPTOR, kind: 'target', id: 'postgres' },
+      adapter: { ...DESCRIPTOR, kind: 'adapter', id: 'pg' },
     },
   });
 }
@@ -80,7 +78,7 @@ function erroredEnvelope(run: { readonly json: readonly StreamEvent[] }): Errore
  */
 const RAISED_BY_PRISMA = new CliStructuredError(
   'CONFIG.VALIDATION_FAILED',
-  'Prisma Next configuration is not usable',
+  'Prisma 8 configuration is not usable',
   {
     why: 'contract.source.inputs names a file that does not exist.',
     fix: 'Correct contract.source.inputs in prisma.config.ts and re-run',
@@ -96,16 +94,20 @@ interface BoundaryCase {
 const HASH = `4cb4256${'0'.repeat(57)}`;
 
 const CASES: readonly BoundaryCase[] = [
-  { command: 'format', argv: ['format'], operation: operations.executeFormat },
+  { command: 'format', argv: ['contract', 'format'], operation: operations.executeFormat },
   {
     command: 'ref delete',
-    argv: ['ref', 'delete', 'staging'],
+    argv: ['migration', 'ref', 'delete', 'staging'],
     operation: operations.executeRefDeleteCommand,
   },
-  { command: 'ref list', argv: ['ref', 'list'], operation: operations.executeRefListCommand },
+  {
+    command: 'ref list',
+    argv: ['migration', 'ref', 'list'],
+    operation: operations.executeRefListCommand,
+  },
   {
     command: 'ref set',
-    argv: ['ref', 'set', 'staging', HASH],
+    argv: ['migration', 'ref', 'set', 'staging', HASH],
     operation: operations.executeRefSetCommand,
   },
 ];

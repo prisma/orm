@@ -1,36 +1,41 @@
 {
   "name": "@prisma/orm-target-sqlite",
-  "version": "8.0.0-rc.2",
+  "version": "8.0.0-rc.24",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "Prisma Next SQLite target: target descriptor, adapter, driver",
+  "description": "Prisma 8 SQLite target: target descriptor, adapter, driver",
   "files": [
     "dist"
   ],
   "scripts": {
     "build": "tsdown",
     "lint": "biome check . --error-on-warnings",
-    "clean": "rm -rf dist src-gen"
+    "clean": "rm -rf dist src-gen",
+    "test": "vitest run"
   },
   "dependencies": {
-    "@prisma/orm-family-sql": "workspace:8.0.0-rc.2",
-    "@prisma/orm-framework": "workspace:8.0.0-rc.2",
-    "@prisma/orm-toolchain": "workspace:8.0.0-rc.2",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.24",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.24",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.24",
     "@standard-schema/spec": "1.1.0",
     "arktype": "^2.2.2",
-    "pathe": "^2.0.3"
+    "pathe": "^2.0.3",
+    "temporal-spec": "1.0.1"
   },
   "devDependencies": {
-    "@internal/adapter-sqlite": "workspace:8.0.0-rc.2",
-    "@internal/driver-sqlite": "workspace:8.0.0-rc.2",
-    "@internal/target-sqlite": "workspace:8.0.0-rc.2",
-    "@repo/tsconfig": "workspace:8.0.0-rc.2",
-    "@repo/tsdown": "workspace:8.0.0-rc.2",
+    "@internal/adapter-sqlite": "workspace:8.0.0-rc.24",
+    "@internal/driver-sqlite": "workspace:8.0.0-rc.24",
+    "@internal/target-sqlite": "workspace:8.0.0-rc.24",
+    "@repo/test-utils": "workspace:8.0.0-rc.24",
+    "@repo/tsconfig": "workspace:8.0.0-rc.24",
+    "@repo/tsdown": "workspace:8.0.0-rc.24",
     "tsdown": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "peerDependencies": {
+    "temporal-polyfill": "^1.0.4",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {
@@ -59,10 +64,10 @@
     "./target/contract-free": "./dist/target__contract-free.mjs",
     "./target/control": "./dist/target__control.mjs",
     "./target/control-tables": "./dist/target__control-tables.mjs",
+    "./target/data-types": "./dist/target__data-types.mjs",
     "./target/ddl": "./dist/target__ddl.mjs",
     "./target/default-normalizer": "./dist/target__default-normalizer.mjs",
     "./target/migration": "./dist/target__migration.mjs",
-    "./target/native-type-normalizer": "./dist/target__native-type-normalizer.mjs",
     "./target/op-factory-call": "./dist/target__op-factory-call.mjs",
     "./target/pack": "./dist/target__pack.mjs",
     "./target/planner": "./dist/target__planner.mjs",
@@ -71,11 +76,12 @@
     "./target/render-ops": "./dist/target__render-ops.mjs",
     "./target/runtime": "./dist/target__runtime.mjs",
     "./target/sql-utils": "./dist/target__sql-utils.mjs",
+    "./target/types": "./dist/target__types.mjs",
     "./package.json": "./package.json"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/9-public/@prisma/orm-target-sqlite"
   }
 }

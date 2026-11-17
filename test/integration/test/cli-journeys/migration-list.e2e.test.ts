@@ -3,9 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
 import {
   type JourneyContext,
+  latestMigrationDirName,
+  planMigrationAndSelfEmit,
   runContractEmit,
   runMigrationList,
-  runMigrationPlanAndEmit,
   setupJourney,
   swapContract,
 } from '../utils/journey-test-helpers';
@@ -21,10 +22,15 @@ withTempDir(({ createTempDir }) => {
     async function projectWithTwoMigrations(): Promise<JourneyContext> {
       const ctx = setupJourney({ createTempDir });
       await runContractEmit(ctx);
-      await runMigrationPlanAndEmit(ctx, ['--name', 'initial']);
+      await planMigrationAndSelfEmit(ctx, ['--name', 'initial']);
       swapContract(ctx, 'contract-additive');
       await runContractEmit(ctx);
-      await runMigrationPlanAndEmit(ctx, ['--name', 'add-name']);
+      await planMigrationAndSelfEmit(ctx, [
+        '--name',
+        'add-name',
+        '--from',
+        latestMigrationDirName(ctx),
+      ]);
       return ctx;
     }
 
@@ -99,7 +105,8 @@ withTempDir(({ createTempDir }) => {
           error: { code: 'MIGRATION.SPACE_NOT_FOUND' },
         });
         expect(envelope?.nextActions.length).toBeGreaterThan(0);
-        expect(envelope).not.toHaveProperty('fix');
+        expect(envelope?.ok).toBe(false);
+        expect(envelope).not.toHaveProperty('error.fix');
       },
       timeouts.coldTransformImport,
     );

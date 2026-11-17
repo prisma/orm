@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createUsersCollection, timeouts, withCollectionRuntime } from './integration-helpers';
 import { seedUsers } from './runtime-helpers';
 
@@ -28,6 +28,47 @@ describe('integration/first', () => {
           address: null,
         });
         expect(missing).toBeNull();
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'firstOrThrow() returns the first matching row and rejects when no row matches',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createUsersCollection(runtime).select('id', 'email');
+
+        await seedUsers(runtime, [
+          { id: 1, name: 'Alice', email: 'alice@example.com' },
+          { id: 2, name: 'Alice', email: 'alice2@example.com' },
+        ]);
+
+        expect(await users.orderBy((user) => user.id.desc()).firstOrThrow()).toEqual({
+          id: 2,
+          email: 'alice2@example.com',
+        });
+        expect(await users.firstOrThrow({ email: 'alice@example.com' })).toEqual({
+          id: 1,
+          email: 'alice@example.com',
+        });
+        expect(await users.firstOrThrow((user) => user.id.eq(2))).toEqual({
+          id: 2,
+          email: 'alice2@example.com',
+        });
+        const configure = vi.fn();
+        expect(
+          await users.orderBy((user) => user.id.asc()).firstOrThrow(undefined, configure),
+        ).toEqual({ id: 1, email: 'alice@example.com' });
+        expect(await users.firstOrThrow({ id: 2 }, configure)).toEqual({
+          id: 2,
+          email: 'alice2@example.com',
+        });
+        expect(configure).toHaveBeenCalledTimes(2);
+        await expect(users.firstOrThrow({ id: 999 })).rejects.toMatchObject({
+          code: 'RUNTIME.NO_ROWS',
+          message: 'Expected at least one row, but none were returned',
+        });
       });
     },
     timeouts.spinUpPpgDev,

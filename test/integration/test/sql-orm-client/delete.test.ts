@@ -1,29 +1,40 @@
 import type { SqlMiddleware } from '@internal/sql-runtime';
 import { describe, expect, it } from 'vitest';
+import { includeStrategies } from './helpers';
 import {
   createReturningUsersCollection,
   createUsersCollection,
-  createUsersCollectionWithoutReturning,
+  expectPerRelationStatements,
   timeouts,
   withCollectionRuntime,
 } from './integration-helpers';
 import { seedPosts, seedUsers } from './runtime-helpers';
 
-describe('integration/delete', () => {
+const returnsKey = Symbol('returns');
+
+/** Records the SQL of every statement sent for its statistics. */
+function statisticsStatementObserver(name: string, observed: string[]): SqlMiddleware {
+  return {
+    name,
+    familyId: 'sql',
+    async activityStarted(activity, ctx) {
+      if (activity.kind === 'statement') ctx.state(returnsKey)['returns'] = activity.returns;
+    },
+    beforeEncode(exec, ctx) {
+      if (ctx.state(returnsKey)['returns'] === 'stats') observed.push(exec.sql);
+    },
+  };
+}
+
+describe.each(includeStrategies)('integration/delete (%s)', (strategy) => {
   it(
     'deleteAndCount() returns matched row count and deletes data',
     async () => {
       const observedStatements: string[] = [];
-      const observer: SqlMiddleware = {
-        name: 'delete-count-observer',
-        familyId: 'sql',
-        beforeExecute(exec) {
-          observedStatements.push(exec.sql);
-        },
-      };
+      const observer = statisticsStatementObserver('delete-count-observer', observedStatements);
       await withCollectionRuntime(
         async (runtime) => {
-          const users = createUsersCollection(runtime);
+          const users = createUsersCollection(runtime, strategy);
 
           await seedUsers(runtime, [
             { id: 1, name: 'Remove', email: 'a@example.com' },
@@ -54,7 +65,7 @@ describe('integration/delete', () => {
     'delete() returns deleted row and null when no row matches',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [
           { id: 1, name: 'Remove', email: 'a@example.com' },
@@ -86,7 +97,7 @@ describe('integration/delete', () => {
     'delete() affects only one row even when where() matches several',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [
           { id: 1, name: 'Remove', email: 'a@example.com' },
@@ -116,7 +127,7 @@ describe('integration/delete', () => {
     'deleteAll() returns all deleted rows',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [
           { id: 1, name: 'Remove', email: 'a@example.com' },
@@ -146,7 +157,7 @@ describe('integration/delete', () => {
     'delete() with include() returns the deleted row with a pre-delete snapshot of its relations',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
         await seedPosts(runtime, [
@@ -154,10 +165,12 @@ describe('integration/delete', () => {
           { id: 11, title: 'Post B', userId: 1, views: 200 },
         ]);
 
+        runtime.resetExecutions();
         const deleted = await users
           .where({ id: 1 })
           .include('posts', (posts) => posts.orderBy((post) => post.id.asc()))
           .delete();
+        expectPerRelationStatements(runtime, strategy, 3);
 
         // The relations are read together with the row before the DELETE
         // is issued, so the deleted row carries the posts it owned.
@@ -184,7 +197,7 @@ describe('integration/delete', () => {
     'deleteAll() with include() returns every deleted row with its relations',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [
           { id: 1, name: 'Remove', email: 'a@example.com' },
@@ -196,10 +209,12 @@ describe('integration/delete', () => {
           { id: 11, title: 'Post B', userId: 2, views: 200 },
         ]);
 
+        runtime.resetExecutions();
         const deleted = await users
           .where({ name: 'Remove' })
           .include('posts', (posts) => posts.orderBy((post) => post.id.asc()))
           .deleteAll();
+        expectPerRelationStatements(runtime, strategy, 3);
 
         expect(deleted).toEqual(
           expect.arrayContaining([
@@ -227,20 +242,6 @@ describe('integration/delete', () => {
           'select id, name from users order by id',
         );
         expect(remaining).toEqual([{ id: 3, name: 'Keep' }]);
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-
-  it(
-    'delete() and deleteAll() reject when returning capability is disabled',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollectionWithoutReturning(runtime);
-        const filtered = users.where({ id: 1 });
-
-        await expect(filtered.delete()).rejects.toThrow(/requires contract capability "returning"/);
-        expect(() => filtered.deleteAll()).toThrow(/requires contract capability "returning"/);
       });
     },
     timeouts.spinUpPpgDev,

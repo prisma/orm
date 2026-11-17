@@ -1,11 +1,14 @@
 import { timeouts } from '@repo/test-utils';
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
+import { initJourneyExclude, setupFiles } from './vitest.config';
 
 export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    setupFiles,
     include: ['test/cli-journeys/**/*.e2e.test.ts'],
+    exclude: [...configDefaults.exclude, ...initJourneyExclude],
     testTimeout: timeouts.spinUpPpgDev,
     hookTimeout: timeouts.spinUpPpgDev,
     // Required (not a preference): journey helpers use process.chdir() and mock

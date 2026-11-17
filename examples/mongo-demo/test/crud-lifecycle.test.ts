@@ -4,14 +4,13 @@ import { timeouts } from '@repo/test-utils';
 import { MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import type { Contract } from '../src/contract';
-import contractJson from '../src/contract.json' with { type: 'json' };
+import { contract } from '../src/db';
 
 describe('CRUD lifecycle', { timeout: timeouts.spinUpMongoMemoryServer }, () => {
   let replSet: MongoMemoryReplSet;
   let client: MongoClient;
   const dbName = 'crud_lifecycle_test';
-  const mongoDb = mongo<Contract>({ contractJson });
+  const mongoDb = mongo({ contract });
   const orm = mongoDb.orm;
 
   beforeAll(async () => {
@@ -41,7 +40,7 @@ describe('CRUD lifecycle', { timeout: timeouts.spinUpMongoMemoryServer }, () => 
       address: null,
     });
 
-    expect(alice._id).toBeDefined();
+    expect(alice.id).toBeDefined();
     expect(alice.name).toBe('Alice');
     expect(alice.email).toBe('alice@example.com');
 
@@ -67,6 +66,34 @@ describe('CRUD lifecycle', { timeout: timeouts.spinUpMongoMemoryServer }, () => 
 
     const afterDelete = await orm.users.all();
     expect(afterDelete).toHaveLength(0);
+  });
+
+  it('writes a calendar date and a time of day, and reads them back as strings', async () => {
+    const created = await orm.users.create({
+      name: 'Dana',
+      email: 'dana@example.com',
+      bio: null,
+      role: 'author',
+      address: null,
+      birthday: '1990-02-28',
+      availableFrom: '09:30',
+    });
+
+    const stored = await client
+      .db(dbName)
+      .collection('users')
+      .findOne({ email: 'dana@example.com' });
+    const [read] = await orm.users.where(MongoFieldFilter.eq('email', 'dana@example.com')).all();
+
+    expect({
+      created: { birthday: created.birthday, availableFrom: created.availableFrom },
+      stored: { birthday: stored?.['birthday'], availableFrom: stored?.['availableFrom'] },
+      read: { birthday: read?.birthday, availableFrom: read?.availableFrom },
+    }).toEqual({
+      created: { birthday: '1990-02-28', availableFrom: '09:30:00.000' },
+      stored: { birthday: new Date('1990-02-28T00:00:00.000Z'), availableFrom: '09:30:00.000' },
+      read: { birthday: '1990-02-28', availableFrom: '09:30:00.000' },
+    });
   });
 
   it('createAll → read → updateAll → read → deleteAll → read', async () => {
@@ -162,7 +189,7 @@ describe('CRUD lifecycle', { timeout: timeouts.spinUpMongoMemoryServer }, () => 
     });
 
     expect(result).toBeDefined();
-    expect(result._id).toBeDefined();
+    expect(result.id).toBeDefined();
 
     const allUsers = await orm.users.all();
     expect(allUsers).toHaveLength(1);

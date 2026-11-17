@@ -2,7 +2,7 @@
 
 A small, self-contained example showing how to use the
 **[`@internal/extension-postgis`](../../packages/3-extensions/postgis)**
-extension pack to model and query geospatial data with Prisma Next on
+extension pack to model and query geospatial data with Prisma 8 on
 PostgreSQL.
 
 The demo tells a story you can verify end-to-end:
@@ -128,28 +128,28 @@ completed before `pnpm dev` will return data.
 ## Schema
 
 ```prisma
-// use prisma-next
+// use prisma-8
 
 types {
   WgsGeometry = postgis.Geometry(4326)
 }
 
 model Cafe {
-  id       Char(36)    @id @default(uuid())
+  id       Char(36)    @id @onCreate(uuid())
   name     String
   location WgsGeometry
   @@map("cafe")
 }
 
 model Route {
-  id   Char(36)    @id @default(uuid())
+  id   Char(36)    @id @onCreate(uuid())
   name String
   path WgsGeometry
   @@map("route")
 }
 
 model Neighborhood {
-  id       Char(36)    @id @default(uuid())
+  id       Char(36)    @id @onCreate(uuid())
   name     String
   boundary WgsGeometry
   @@map("neighborhood")
@@ -192,7 +192,7 @@ collection surface (`db.orm.public.Cafe`, `db.orm.public.Route`, `db.orm.public.
 — the PostGIS extension hangs `.contains` / `.within` / `.intersects` /
 `.intersectsBbox` / `.distanceSphere` / `.distance` / `.dwithin` directly
 on geometry fields, so spatial predicates compose with the usual
-`.where` / `.take` / `.orderBy` chain.
+`.where` / `.limit` / `.orderBy` chain.
 
 `findCafesNearPoint` is the exception: it projects a computed
 `meters` column alongside the model fields, which only the SQL builder
@@ -285,11 +285,12 @@ extensions: [postgis];
 ```typescript
 // src/prisma/db.ts (runtime)
 import postgis from '@internal/extension-postgis/runtime';
-export const db = postgres<Contract>({ contractJson, extensions: [postgis] });
+export const contract = contractFromJson<Contract>(contractJson);
+export const db = postgres({ contract, extensions: [postgis] });
 ```
 
 The control descriptor declares `CREATE EXTENSION IF NOT EXISTS postgis`
-as a database dependency, so `prisma-next db init` enables PostGIS for
+as a database dependency, so `prisma db init` enables PostGIS for
 you on first use. The runtime descriptor registers the `pg/geometry@1`
 codec and the geospatial query operations (`distance`, `distanceSphere`,
 `dwithin`, `contains`, `within`, `intersects`, `intersectsBbox`).

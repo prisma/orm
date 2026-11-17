@@ -1,12 +1,14 @@
-// use prisma-next
+// use prisma-8
 
 model User {
   id Int @id
   posts Post[] @unique
+  @@map("user")
 }
 
 model Post {
   id Int @id
   userId Int
   user User @relation(fields: [userId], references: [id])
+  @@map("post")
 }

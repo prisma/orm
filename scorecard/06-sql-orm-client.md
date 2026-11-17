@@ -4,28 +4,29 @@
 
 Legend:
 
-- `✅` **Works** — proven by a Prisma Next **integration** test (one that executes the feature against a database — Postgres via PGlite, SQLite via its real driver, or MongoDB via mongodb-memory-server — and asserts the observable runtime result). Unit-tier tests (SQL/AST/plan/type/snapshot assertions, or any test that never hits a database) do not qualify. Per-database rigor applies: a Postgres integration test cannot justify a SQLite or MongoDB `✅`, and vice versa.
-- `🟡` **Untested** — reachable through the Prisma Next public surface, but no proving Prisma Next integration test exists yet (evidence left blank). This includes features whose only backing is a unit-tier test.
-- `🧪` **Experimental** — shipped in Prisma Next but outside the stability promise (polymorphism / multi-table inheritance).
-- `❌` **Not in 8.0** — deliberately absent from Prisma Next.
+- `✅` **Works** — proven by a Prisma 8 **integration** test (one that executes the feature against a database — Postgres via PGlite, SQLite via its real driver, or MongoDB via mongodb-memory-server — and asserts the observable runtime result). Unit-tier tests (SQL/AST/plan/type/snapshot assertions, or any test that never hits a database) do not qualify. Per-database rigor applies: a Postgres integration test cannot justify a SQLite or MongoDB `✅`, and vice versa.
+- `🟡` **Untested** — reachable through the Prisma 8 public surface, but no proving Prisma 8 integration test exists yet (evidence left blank). This includes features whose only backing is a unit-tier test.
+- `🧪` **Experimental** — shipped in Prisma 8 but outside the stability promise (polymorphism / multi-table inheritance).
+- `❌` **Not in 8.0** — deliberately absent from Prisma 8.
 - `—` **n/a** — feature does not apply to that database.
 
-| Feature | Postgres | SQLite | MongoDB | Prisma Next evidence |
+| Feature | Postgres | SQLite | MongoDB | Prisma 8 evidence |
 | --- | --- | --- | --- | --- |
 | `where(...)` (callback / where input / shorthand) | ✅ | ✅ | — | `test/integration/test/sql-orm-client/mn-filter.test.ts`; `test/e2e/framework/test/sqlite/orm.test.ts` (`findMany › with filter`) |
 | `select(...)` projection | ✅ | ✅ | — | `test/integration/test/sql-orm-client/include.test.ts`; `test/e2e/framework/test/sqlite/orm.test.ts` |
 | `orderBy(...)` | ✅ | ✅ | — | `test/integration/test/sql-orm-client/self-relations.test.ts` (`orderBy on a depth-1 self-relation`); `test/e2e/framework/test/sqlite/orm.test.ts` (`with ordering`) |
-| `take` | ✅ | ✅ | — | `test/integration/test/sql-orm-client/pagination.test.ts` (`take() and skip() apply limit and offset`); `test/e2e/framework/test/sqlite/orm.test.ts` (`with take and skip`) |
-| `skip` | ✅ | ✅ | — | `test/integration/test/sql-orm-client/pagination.test.ts` (`take() and skip() apply limit and offset`); `test/e2e/framework/test/sqlite/orm.test.ts` (`with take and skip`) |
+| `limit` | ✅ | ✅ | — | `test/integration/test/sql-orm-client/pagination.test.ts` (`limit() and offset() apply limit and offset`); `test/e2e/framework/test/sqlite/orm.test.ts` (`with limit and offset`) |
+| `offset` | ✅ | ✅ | — | `test/integration/test/sql-orm-client/pagination.test.ts` (`limit() and offset() apply limit and offset`); `test/e2e/framework/test/sqlite/orm.test.ts` (`with limit and offset`) |
 | `cursor(...)` keyset pagination | ✅ | 🟡 | — | `test/integration/test/sql-orm-client/pagination.test.ts` (`cursor() applies forward and backward boundaries`) |
-| `distinct` / `distinctOn` | ✅ | 🟡 | — | `test/integration/test/sql-orm-client/pagination.test.ts` (`distinct()`, `distinctOn()`) |
+| `distinct(...)` | ✅ | 🟡 | — | `test/integration/test/sql-orm-client/pagination.test.ts` (`distinct() returns unique values for selected fields`) |
+| `distinctOn(...)` | ✅ | — | — | `test/integration/test/sql-orm-client/pagination.test.ts` (`distinctOn() keeps one row per key using orderBy precedence`) |
 | `first()` | ✅ | ✅ | — | `test/integration/test/sql-orm-client/first.test.ts`; `test/e2e/framework/test/sqlite/orm.test.ts` (`findFirst`) |
 | `all()` result retrieval | ✅ | ✅ | — | `test/integration/test/sql-orm-client/include.test.ts`; `test/integration/test/sql-orm-client/codec-async.test.ts` (`for await` iteration over `all()`); `test/e2e/framework/test/sqlite/orm.test.ts` (`findMany › returns all rows`) |
 | `create` | ✅ | ✅ | — | `test/integration/test/sql-orm-client/create.test.ts`; `test/e2e/framework/test/sqlite/orm.test.ts` (`create`) |
 | `createAll` | ✅ | ✅ | — | `test/integration/test/sql-orm-client/create.test.ts`; `test/e2e/framework/test/sqlite/orm.test.ts` (`createAll`) |
 | `createAndCount` | ✅ | 🟡 | — | `test/integration/test/sql-orm-client/create.test.ts` (`createAndCount`) |
 | `update` | ✅ | ✅ | — | `test/integration/test/sql-orm-client/update.test.ts`; `test/e2e/framework/test/sqlite/orm.test.ts` (`update`) |
-| Empty-data `update` returns the matched row | ❌ | 🟡 | — | `test/integration/test/ports/prisma/functional/extended-where/extended-where.test.ts` (`update with where 1 unique (PK)`) |
+| Empty-data `update` returns the matched row | ✅ | 🟡 | — | `test/integration/test/ports/prisma/functional/extended-where/extended-where.test.ts` (`update with where 1 unique (PK)`) |
 | `updateAll` | ✅ | 🟡 | — | `test/integration/test/sql-orm-client/update.test.ts` (`updateAll`) |
 | `updateAndCount` | ✅ | ✅ | — | `test/integration/test/sql-orm-client/update.test.ts` (`updateAndCount`, one write statement); `test/integration/test/sql-orm-client/count-terminal-interleaving.test.ts` (SQLite real-driver write-derived count) |
 | `delete` | ✅ | 🟡 | — | `test/integration/test/sql-orm-client/delete.test.ts` (`delete`) |
@@ -56,9 +57,9 @@ Legend:
 | String `contains` first-class helper | 🟡 | 🟡 | — | |
 | String `startsWith` first-class helper | 🟡 | 🟡 | — | |
 | String `endsWith` first-class helper | 🟡 | 🟡 | — | |
-| `findUniqueOrThrow` / `findFirstOrThrow` terminal | ❌ | ❌ | — | |
+| `firstOrThrow()` (`findUniqueOrThrow` / `findFirstOrThrow`) | ✅ | 🟡 | — | `test/integration/test/sql-orm-client/first.test.ts` (`firstOrThrow() returns the first matching row and rejects when no row matches`) |
 | Per-query / global `omit` | ❌ | ❌ | — | |
-| `createMany({ skipDuplicates })` | ❌ | ❌ | — | |
+| `createMany({ skipDuplicates })` — `createAll`/`createAndCount` with `{ onConflict: 'skip' }` | ✅ | ✅ | — | `test/integration/test/sql-orm-client/create-on-conflict.test.ts`; `test/e2e/framework/test/sqlite/orm.test.ts` (`createAll with onConflict skip`) |
 | `updateMany({ limit })` | ❌ | ❌ | — | |
 | `relationLoadStrategy: 'query' \| 'join'` | ❌ | ❌ | — | |
 | `Prisma.skip` | ❌ | ❌ | — | |

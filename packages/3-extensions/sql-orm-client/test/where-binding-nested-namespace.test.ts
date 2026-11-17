@@ -15,10 +15,22 @@ import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
 import { bindWhereExpr } from '../src/where-binding';
 
+const DATA_TYPE_OF_CODEC: Readonly<Record<string, string>> = {
+  'pg/int4@1': 'pg/int4',
+  'pg/text@1': 'pg/text',
+  'pg/varchar@1': 'pg/varchar',
+};
+
+function dataTypeOf(codecId: string): string {
+  const dataType = DATA_TYPE_OF_CODEC[codecId];
+  if (dataType === undefined) throw new Error(`no data type listed for codec ${codecId}`);
+  return dataType;
+}
+
 function storageTable(columnCodecs: Record<string, string>) {
-  const cols: Record<string, { codecId: string; nativeType: string; nullable: boolean }> = {};
+  const cols: Record<string, { codecId: string; dataType: string; nullable: boolean }> = {};
   for (const [column, codecId] of Object.entries(columnCodecs)) {
-    cols[column] = { codecId, nativeType: codecId, nullable: false };
+    cols[column] = { codecId, dataType: dataTypeOf(codecId), nullable: false };
   }
   return {
     columns: cols,
@@ -32,7 +44,7 @@ function storageTable(columnCodecs: Record<string, string>) {
 // The SAME bare table name `users` exists in both namespaces, each with a
 // `token` column carrying a DIFFERENT codec. `public` is deliberately FIRST in
 // `Object.keys(storage.namespaces)` so the first-match namespace scan in
-// `createParamRef` resolves to `public` (the WRONG namespace) whenever the
+// the binder resolves to `public` (the WRONG namespace) whenever the
 // namespace coordinate is dropped on the recursive descent.
 const twoNamespaceContract = blindCast<Contract<SqlStorage>, 'hand-built multi-namespace fixture'>({
   target: 'postgres',
@@ -69,7 +81,11 @@ describe('bindWhereExpr nested-subquery namespace coordinate', () => {
       .withProjection([ProjectionItem.of('token', ColumnRef.of('users', 'token'))])
       .withWhere(BinaryExpr.eq(ColumnRef.of('users', 'token'), LiteralExpr.of('secret')));
 
-    const bound = bindWhereExpr(twoNamespaceContract, ExistsExpr.exists(subquery)) as ExistsExpr;
+    const bound = bindWhereExpr(
+      twoNamespaceContract,
+      ExistsExpr.exists(subquery),
+      new Map(),
+    ) as ExistsExpr;
 
     const innerWhere = (bound.subquery as SelectAst).where as BinaryExpr;
     const param = innerWhere.right as ParamRef;
@@ -91,7 +107,11 @@ describe('bindWhereExpr nested-subquery namespace coordinate', () => {
       .withProjection([ProjectionItem.of('token', ColumnRef.of('users', 'token'))])
       .withJoins([join]);
 
-    const bound = bindWhereExpr(twoNamespaceContract, ExistsExpr.exists(query)) as ExistsExpr;
+    const bound = bindWhereExpr(
+      twoNamespaceContract,
+      ExistsExpr.exists(query),
+      new Map(),
+    ) as ExistsExpr;
 
     const boundJoin = (bound.subquery as SelectAst).joins?.[0] as JoinAst;
     const onExpr = boundJoin.on as BinaryExpr;

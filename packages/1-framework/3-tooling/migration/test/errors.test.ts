@@ -1,7 +1,8 @@
+import { ContractValidationError } from '@internal/contract/contract-validation-error';
 import { CliStructuredError } from '@internal/errors/control';
+import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import {
-  errorAmbiguousTarget,
   errorBundleNotFoundForGraphNode,
   errorContractDeserializationFailed,
   errorContractSnapshotHashMismatch,
@@ -28,9 +29,7 @@ import {
   errorMigrationContractViewMissing,
   errorMigrationHashMismatch,
   errorMissingFile,
-  errorNoInitialMigration,
   errorNoInvariantPath,
-  errorNoTarget,
   errorOperationsNotArray,
   errorProvidedInvariantsMismatch,
   errorRefNotResolvable,
@@ -73,6 +72,31 @@ describe('errorNoInvariantPath', () => {
       required: ['X', 'Y'],
       missing: ['Y'],
       structuralPath: baseStructural,
+    });
+  });
+
+  it('names an extension space and carries the advice written for it', () => {
+    const nextActions = [{ kind: 'user-choice', label: 'Install another version' }] as const;
+    const err = errorNoInvariantPath({
+      required: ['X'],
+      missing: ['X'],
+      structuralPath: baseStructural,
+      extensionSpace: { spaceId: 'audit', why: 'Why for audit', fix: 'Fix for audit', nextActions },
+    });
+    expect({
+      isToolsError: MigrationToolsError.is(err),
+      message: err.message,
+      why: err.why,
+      fix: err.fix,
+      nextActions: err.nextActions,
+      meta: err.meta,
+    }).toEqual({
+      isToolsError: true,
+      message: 'No path covers the required invariants of extension space "audit"',
+      why: 'Why for audit',
+      fix: 'Fix for audit',
+      nextActions,
+      meta: { spaceId: 'audit', required: ['X'], missing: ['X'], structuralPath: baseStructural },
     });
   });
 
@@ -125,26 +149,6 @@ describe('errorNoInvariantPath', () => {
     });
     expect(err.why).toContain('required=["a", "b", "c"]');
     expect(err.why).toContain('missing=["c"]');
-  });
-
-  it('preserves the structuralPath wire shape exactly', () => {
-    // The JSON envelope (meta.structuralPath) is part of the public CLI
-    // contract — pin the per-edge key set so adding or dropping a field
-    // requires an explicit test update.
-    const err = errorNoInvariantPath({
-      required: ['X'],
-      missing: ['X'],
-      structuralPath: baseStructural,
-    });
-    const path = err.meta?.['structuralPath'] as readonly Record<string, unknown>[];
-    expect(path).toHaveLength(1);
-    expect(Object.keys(path[0]!).sort()).toEqual([
-      'dirName',
-      'from',
-      'invariants',
-      'migrationHash',
-      'to',
-    ]);
   });
 });
 
@@ -227,12 +231,9 @@ describe('MigrationToolsError base type', () => {
     }),
     errorDuplicateSpaceId('app'),
     errorSameSourceAndTarget('/tmp/m/20260101_init', 'a'.repeat(64)),
-    errorAmbiguousTarget(['aaa', 'bbb']),
-    errorNoInitialMigration(['aaa']),
     errorInvalidRefs('/tmp/m/refs.json', 'not an object'),
     errorInvalidRefFile('/tmp/m/refs/prod.json', 'not an object'),
     errorInvalidRefName('BAD NAME'),
-    errorNoTarget(['aaa']),
     errorInvalidRefValue('not-a-hash'),
     errorDuplicateMigrationHash('mh:abc'),
     errorInvalidInvariantId('has a space'),
@@ -256,6 +257,13 @@ describe('MigrationToolsError base type', () => {
     expect(err.name).toBe('CliStructuredError');
     expect(CliStructuredError.is(err)).toBe(true);
     expect(MigrationToolsError.is(err)).toBe(true);
+  });
+
+  it('tells the user to repeat --config when re-emitting a package', () => {
+    const err = errorMissingFile('ops.json', join(process.cwd(), 'db/migrations/app/0001_init'));
+    expect(err.fix).toBe(
+      'Re-emit the package by running `node "db/migrations/app/0001_init/migration.ts"`, adding the `--config <path>` you gave this command, if any, or delete the directory if the migration is unwanted and the source TypeScript is gone.',
+    );
   });
 
   it('exposes toEnvelope() with code, summary, why, fix, nextActions, and meta', () => {
@@ -285,5 +293,73 @@ describe('MigrationToolsError base type', () => {
       expect(err.fix).toBeTypeOf('string');
       expect(err.fix).not.toBe(err.why);
     }
+  });
+});
+
+describe('errorContractDeserializationFailed', () => {
+  const refusedDefaults = [{ namespaceId: 'public', table: 'Token', column: 'value' }];
+
+  it('keeps the refused defaults of a contract the family refused', () => {
+    const cause = new ContractValidationError('refused', 'storage', { refusedDefaults });
+    expect(
+      errorContractDeserializationFailed('/m/snapshots/x/contract.json', 'refused', { cause }).meta,
+    ).toEqual({ refusedDefaults, filePath: '/m/snapshots/x/contract.json', message: 'refused' });
+  });
+
+  it('carries only the file and message for any other failure', () => {
+    expect(
+      errorContractDeserializationFailed('/m/contract.json', 'bad shape', {
+        cause: new Error('bad shape'),
+      }).meta,
+    ).toEqual({ filePath: '/m/contract.json', message: 'bad shape' });
+  });
+});
+
+describe('errorInvalidRefFile', () => {
+  it('describes the ref file when no policy is at fault', () => {
+    expect(errorInvalidRefFile('/m/app/refs/prod.json', 'bad').fix).toBe(
+      'Make the ref file valid JSON of the form { "hash": "<64 hex chars>", "invariants": ["..."] }, with an optional "policies" object.',
+    );
+  });
+
+  it.each([
+    {
+      path: 'change[0]',
+      fix: 'Set policies.change[0] to "migrate" or "reconcile".',
+    },
+    {
+      path: 'change',
+      fix: 'Set policies.change to a non-empty list whose items are "migrate" or "reconcile".',
+    },
+    {
+      path: 'dataProtection.dataLoss',
+      fix: 'Set policies.dataProtection.dataLoss to "data-loss-forbidden", "data-loss-with-consent" or "data-loss-permitted".',
+    },
+    {
+      path: 'dataProtection.accessWidening',
+      fix: 'Set policies.dataProtection.accessWidening to "access-widening-forbidden", "access-widening-with-consent" or "access-widening-permitted".',
+    },
+    {
+      path: 'dataProtection',
+      fix: 'Set policies.dataProtection to an object with "dataLoss" and "accessWidening", each optional.',
+    },
+    {
+      path: '',
+      fix: 'Set policies to an object with "change" and "dataProtection", each optional.',
+    },
+    { path: 'dataProtection.dataloss', fix: 'Remove policies.dataProtection.dataloss.' },
+  ])('names the policy key at fault and its allowed values: $path', ({ path, fix }) => {
+    expect(
+      errorInvalidRefFile('/m/app/refs/prod.json', 'bad', [{ path, problem: 'is wrong' }]).fix,
+    ).toBe(fix);
+  });
+
+  it('gives one sentence per policy key at fault', () => {
+    expect(
+      errorInvalidRefFile('/m/app/refs/prod.json', 'bad', [
+        { path: 'change[1]', problem: 'is wrong' },
+        { path: 'extra', problem: 'must be removed' },
+      ]).fix,
+    ).toBe('Set policies.change[1] to "migrate" or "reconcile". Remove policies.extra.');
   });
 });

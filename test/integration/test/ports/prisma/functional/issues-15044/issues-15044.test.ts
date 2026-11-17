@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { timeouts, withPostgresPort } from '../../../_harness/postgres';
+import { timeouts, withPostgresPort } from '../../../../_harness/postgres';
 import type { Contract } from './_fixture/generated/contract';
 import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
 
@@ -18,7 +18,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //   - `select: { id, name, wallet, user }` → `.include('wallet').include('user')` on the create.
 //
 // The test is skipped for D1 (no iTx) and js_libsql in upstream; those drivers
-// are not present in the prisma-next integration harness, so the skip is a no-op.
+// are not present in the Prisma 8 integration harness, so the skip is a no-op.
 //
 // Dispositions:
 //   'should not throw error when using connect inside transaction' → PORTED (passing)

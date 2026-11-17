@@ -1,9 +1,9 @@
 /**
- * Prisma Next config for the `extension-paradedb` package.
+ * Prisma 8 config for the `extension-paradedb` package.
  *
  * The extension package is treated as a self-contained "project" for
- * the CLI: `prisma-next contract emit` writes
- * `<package>/src/contract.{json,d.ts}`; `prisma-next migration plan` writes
+ * the CLI: `prisma contract emit` writes
+ * `<package>/src/contract.{json,d.ts}`; `prisma migration plan` writes
  * `<package>/migrations/<dirName>/...`. The descriptor at
  * `src/exports/control.ts` then JSON-imports those artefacts.
  *
@@ -15,19 +15,17 @@
 import postgresAdapter from '@internal/adapter-postgres/control';
 import { defineConfig as ormConfig } from '@internal/cli/config-types';
 import sql from '@internal/family-sql/control';
-import { emptyContract } from '@internal/sql-contract-ts/config-types';
+import { prismaContract } from '@internal/sql-contract-psl/provider';
 import postgres from '@internal/target-postgres/control';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
-import { defineConfig } from '@prisma/cli-engine';
+import { definePrismaConfig } from '@prisma/cli-engine';
 
-export default defineConfig({
+export default definePrismaConfig({
   orm: ormConfig({
     family: sql,
     target: postgres,
     adapter: postgresAdapter,
-    // migrations-only contract space: installs pg_search via migrations, contributes no app-visible schema
-    contract: emptyContract({
-      output: 'src/contract.json',
+    contract: prismaContract('src/contract.prisma', {
       target: postgres,
       createNamespace: postgresCreateNamespace,
     }),

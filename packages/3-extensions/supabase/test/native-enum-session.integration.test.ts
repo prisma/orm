@@ -2,7 +2,7 @@
  * Native Postgres enum end-to-end proof — the Supabase extension declares a
  * `native_enum AalLevel` in `auth` (member set `aal1`/`aal2`/`aal3`, mapped to
  * the Postgres type `aal_level`) and a `sessions` table with an `aal
- * pg.enum(AalLevel)?` column. Both are external — Prisma Next emits no DDL
+ * pg.enum(AalLevel)?` column. Both are external — Prisma 8 emits no DDL
  * for them; `setUpSupabaseMockSchema` seeds `CREATE TYPE auth.aal_level` and
  * `auth.sessions` directly, mirroring the existing `auth.users`/`storage.*`
  * seed pattern.
@@ -17,10 +17,10 @@
  *   2. `db.asServiceRole().supabase.nativeEnums.auth.AalLevel` exposes the
  *      same member set at runtime, wired via `@internal/postgres`'s
  *      `buildNamespacedNativeEnums`, built from the extension contract's own
- *      storage.
+ *      value sets.
  *   3. A query that binds `aal` as a parameter forces the renderer to emit a
  *      `$N::auth.aal_level` cast (the column's own schema-qualified
- *      `nativeType`, since `auth` is not the default `public` schema). The
+ *      `typeParams.typeName`, since `auth` is not the default `public` schema). The
  *      query executes against real Postgres and returns the expected row.
  */
 
@@ -163,7 +163,7 @@ describe('native Postgres enum (auth.aal_level) on auth.sessions', () => {
           //   (Postgres code 42704, routine typenameType)
           // because the unqualified cast resolved under the default
           // search_path (`public`), and `aal_level` lives in `auth`. The
-          // column's `nativeType` is now schema-qualified (`auth.aal_level`),
+          // column's `typeParams.typeName` is now schema-qualified (`auth.aal_level`),
           // so the cast resolves and the query executes.
           const rows = await findSessionsByAal(internal, 'aal2');
           expect(rows).toEqual([{ id: sessionId, aal: 'aal2' }]);

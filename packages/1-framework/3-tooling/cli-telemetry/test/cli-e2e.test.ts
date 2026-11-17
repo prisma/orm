@@ -113,23 +113,23 @@ function spawnCli(
  */
 function buildEnv(xdg: string): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env };
-  delete env['PRISMA_NEXT_DISABLE_TELEMETRY'];
+  delete env['PRISMA_DISABLE_TELEMETRY'];
   delete env['DO_NOT_TRACK'];
-  delete env['PRISMA_NEXT_DEBUG'];
+  delete env['PRISMA_DEBUG'];
   return {
     ...env,
     CI: 'false',
     XDG_CONFIG_HOME: xdg,
-    PRISMA_NEXT_TELEMETRY_ENDPOINT: harness.endpointBase,
+    PRISMA_TELEMETRY_ENDPOINT: harness.endpointBase,
   };
 }
 
 /**
- * Seed `$XDG_CONFIG_HOME/prisma-next/config.json` with a pre-generated
+ * Seed `$XDG_CONFIG_HOME/prisma-8/config.json` with a pre-generated
  * consent + installation id, so the assertion can pin the exact id.
  */
 function seedConsent(xdg: string, installationId: string): void {
-  const dir = join(xdg, 'prisma-next');
+  const dir = join(xdg, 'prisma-8');
   mkdirSync(dir, { recursive: true });
   writeFileSync(
     join(dir, 'config.json'),
@@ -137,19 +137,17 @@ function seedConsent(xdg: string, installationId: string): void {
   );
 }
 
-const V4_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
 // A cheap run that errors but settles: `migration list` in a project
 // directory with no config file settles errored (CONFIG.FILE_NOT_FOUND)
 // at exit 2, which is exactly what the settlement hook reports.
 const SETTLING_COMMAND = ['migration', 'list'] as const;
 
 describe('cli-telemetry e2e — engine bin against the real backend', () => {
-  it('prisma-next --help on a fresh XDG_CONFIG_HOME writes no config.json and emits no event', async () => {
+  it('prisma-8 --help on a fresh XDG_CONFIG_HOME writes no config.json and emits no event', async () => {
     const result = await spawnCli(['--help'], { env: buildEnv(xdgDir), cwd: projectDir });
 
     expect(result.exitCode).toBe(0);
-    expect(existsSync(join(xdgDir, 'prisma-next', 'config.json'))).toBe(false);
+    expect(existsSync(join(xdgDir, 'prisma-8', 'config.json'))).toBe(false);
 
     // `onSettled` never fires for --help (no mounted command settles), so
     // no fork should ever happen. Wait a beat anyway so a regression that
@@ -166,7 +164,6 @@ describe('cli-telemetry e2e — engine bin against the real backend', () => {
     const rows = await harness.awaitRowsForInstallation(installationId, 1);
 
     expect(rows[0]?.installationId).toBe(installationId);
-    expect(rows[0]?.installationId).toMatch(V4_UUID);
     expect(rows[0]?.command).toBe('migration list');
   });
 
@@ -181,6 +178,29 @@ describe('cli-telemetry e2e — engine bin against the real backend', () => {
     expect(rows).toHaveLength(2);
     expect(rows[0]?.installationId).toBe(installationId);
     expect(rows[1]?.installationId).toBe(installationId);
+  });
+
+  it('transmits only flag names, never flag values or positionals', async () => {
+    const installationId = randomUUID();
+    seedConsent(xdgDir, installationId);
+
+    await spawnCli(
+      [
+        'migration',
+        'show',
+        'customer-acme-payments',
+        '--config',
+        '/Users/alice/secrets/prisma.config.ts',
+      ],
+      { env: buildEnv(xdgDir), cwd: projectDir },
+    );
+    const [row] = await harness.awaitRowsForInstallation(installationId, 1);
+
+    expect(row?.command).toBe('migration show');
+    expect(row?.flags).toEqual(['config']);
+    const serialised = JSON.stringify(row);
+    expect(serialised).not.toContain('customer-acme-payments');
+    expect(serialised).not.toContain('/Users/alice/secrets');
   });
 
   it('an erroring-but-settling run produces a row carrying the exit code', async () => {

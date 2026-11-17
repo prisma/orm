@@ -1,0 +1,9 @@
+// use prisma-8
+
+model Doc {
+  id ObjectId @id @map("_id")
+  a  String
+
+  @@unique([wildcard()])
+  @@map("docs")
+}

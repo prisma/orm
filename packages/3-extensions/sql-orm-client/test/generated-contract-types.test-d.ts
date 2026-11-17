@@ -1,7 +1,9 @@
 import type { Contract, NamespaceId, StorageHashBase } from '@internal/contract/types';
-import type { ContractWithTypeMaps, SqlStorage, TypeMaps } from '@internal/sql-contract/types';
+import type { ContractWithTypeMaps, TypeMaps } from '@internal/sql-contract/types';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
+import { expectTypeOf, test } from 'vitest';
 import { Collection } from '../src/collection';
+import type { CollectionRowOf, CollectionTypeStateOf } from '../src/collection-types';
 
 import { createMockRuntime } from './helpers';
 
@@ -76,11 +78,36 @@ type GeneratedLikeStorage = {
         table: {
           user: {
             columns: {
-              id: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: false };
-              name: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: false };
-              email: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: false };
-              active: { nativeType: 'bool'; codecId: 'pg/bool@1'; nullable: false };
-              metadata: { nativeType: 'jsonb'; codecId: 'pg/jsonb@1'; nullable: false };
+              id: {
+                readonly many: false;
+                dataType: 'pg/text';
+                codecId: 'pg/text@1';
+                nullable: false;
+              };
+              name: {
+                readonly many: false;
+                dataType: 'pg/text';
+                codecId: 'pg/text@1';
+                nullable: false;
+              };
+              email: {
+                readonly many: false;
+                dataType: 'pg/text';
+                codecId: 'pg/text@1';
+                nullable: false;
+              };
+              active: {
+                readonly many: false;
+                dataType: 'pg/bool';
+                codecId: 'pg/bool@1';
+                nullable: false;
+              };
+              metadata: {
+                readonly many: false;
+                dataType: 'pg/jsonb';
+                codecId: 'pg/jsonb@1';
+                nullable: false;
+              };
             };
             primaryKey: { columns: ['id'] };
             uniques: [];
@@ -89,9 +116,24 @@ type GeneratedLikeStorage = {
           };
           post: {
             columns: {
-              id: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: false };
-              userId: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: false };
-              title: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: false };
+              id: {
+                readonly many: false;
+                dataType: 'pg/text';
+                codecId: 'pg/text@1';
+                nullable: false;
+              };
+              userId: {
+                readonly many: false;
+                dataType: 'pg/text';
+                codecId: 'pg/text@1';
+                nullable: false;
+              };
+              title: {
+                readonly many: false;
+                dataType: 'pg/text';
+                codecId: 'pg/text@1';
+                nullable: false;
+              };
             };
             primaryKey: { columns: ['id'] };
             uniques: [];
@@ -118,22 +160,27 @@ type GeneratedLikeModels = {
     };
     fields: {
       id: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         readonly nullable: false;
       };
       name: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         readonly nullable: false;
       };
       email: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         readonly nullable: false;
       };
       active: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bool@1' };
         readonly nullable: false;
       };
       metadata: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/jsonb@1' };
         readonly nullable: false;
       };
@@ -160,14 +207,17 @@ type GeneratedLikeModels = {
     };
     fields: {
       id: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         readonly nullable: false;
       };
       userId: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         readonly nullable: false;
       };
       title: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         readonly nullable: false;
       };
@@ -176,11 +226,16 @@ type GeneratedLikeModels = {
   };
 };
 
-type GeneratedLikeContractBase = Omit<Contract<GeneratedLikeStorage>, 'domain'> & {
+type GeneratedLikeContractBase = Omit<Contract<GeneratedLikeStorage>, 'domain' | 'capabilities'> & {
   readonly domain: {
     readonly namespaces: {
       readonly __unbound__: { readonly models: GeneratedLikeModels };
     };
+  };
+  // Only the one capability this file's inference assertions exercise —
+  // deliberately minimal, not a stand-in for a real contract's full set.
+  readonly capabilities: {
+    readonly postgres: { readonly distinctOn: true };
   };
 };
 
@@ -191,26 +246,6 @@ class PostCollection extends Collection<GeneratedLikeContract, 'Post'> {
     return this.where((post) => post.userId.eq(userId));
   }
 }
-
-type RowOf<TCollection> =
-  TCollection extends Collection<
-    infer _Contract extends Contract<SqlStorage>,
-    infer _ModelName extends string,
-    infer Row,
-    infer _State
-  >
-    ? Row
-    : never;
-
-type StateOf<TCollection> =
-  TCollection extends Collection<
-    infer _Contract extends Contract<SqlStorage>,
-    infer _ModelName extends string,
-    infer _Row,
-    infer State
-  >
-    ? State
-    : never;
 
 const runtime = createMockRuntime();
 const context = {} as unknown as ExecutionContext<GeneratedLikeContract>;
@@ -278,6 +313,32 @@ userCollection.create({
 userCollection.create({ id: 'user_only_id' });
 // @ts-expect-error Post has no relation callbacks to satisfy required userId in create()
 postCollection.create({ id: 'post_missing_user', title: 'Missing owner' });
+const createNestedPosts: NonNullable<
+  import('../src/types').CreateInput<GeneratedLikeContract, 'User'>['posts']
+> = (posts) => posts.create([{ id: 'post_001', title: 'Nested' }]);
+const scalarUserCreateInput = {
+  id: 'user_001',
+  name: 'Alice',
+  email: 'alice@example.com',
+  active: true,
+  metadata: {},
+};
+userCollection.createAll([scalarUserCreateInput]);
+userCollection.createAll([
+  {
+    ...scalarUserCreateInput,
+    // @ts-expect-error createAll does not support relation callbacks
+    posts: createNestedPosts,
+  },
+]);
+userCollection.createAndCount([scalarUserCreateInput]);
+userCollection.createAndCount([
+  {
+    ...scalarUserCreateInput,
+    // @ts-expect-error createAndCount does not support relation callbacks
+    posts: createNestedPosts,
+  },
+]);
 userCollection.upsert({
   create: { id: 'user_001', name: 'Alice', email: 'alice@example.com', active: true, metadata: {} },
   update: { name: 'Alice Updated' },
@@ -285,6 +346,18 @@ userCollection.upsert({
 });
 userCollection.upsert({
   create: { id: 'user_001', name: 'Alice', email: 'alice@example.com', active: true, metadata: {} },
+  update: { name: 'Alice Updated' },
+});
+userCollection.upsert({
+  create: {
+    id: 'user_001',
+    name: 'Alice',
+    email: 'alice@example.com',
+    active: true,
+    metadata: {},
+    // @ts-expect-error upsert create does not support relation callbacks
+    posts: createNestedPosts,
+  },
   update: { name: 'Alice Updated' },
 });
 userCollection.upsert({
@@ -318,15 +391,15 @@ userCollection.deleteAll();
 // @ts-expect-error deleteAndCount() requires where() first
 userCollection.deleteAndCount();
 
-type SelectedUserRow = RowOf<typeof selectedUsers>;
-type SelectedUserWithPostsRow = RowOf<typeof selectedUsersWithPosts>;
-type UsersWithPostCountRow = RowOf<typeof usersWithPostCount>;
-type UsersWithPostSummaryRow = RowOf<typeof usersWithPostSummary>;
-type FilteredUsersState = StateOf<typeof filteredUsers>;
-type OrderedUsersState = StateOf<typeof orderedUsers>;
-type CursorPagedUsersState = StateOf<typeof cursorPagedUsers>;
-type DistinctUsersState = StateOf<typeof distinctUsers>;
-type DistinctOnUsersState = StateOf<typeof distinctOnUsers>;
+type SelectedUserRow = CollectionRowOf<typeof selectedUsers>;
+type SelectedUserWithPostsRow = CollectionRowOf<typeof selectedUsersWithPosts>;
+type UsersWithPostCountRow = CollectionRowOf<typeof usersWithPostCount>;
+type UsersWithPostSummaryRow = CollectionRowOf<typeof usersWithPostSummary>;
+type FilteredUsersState = CollectionTypeStateOf<typeof filteredUsers>;
+type OrderedUsersState = CollectionTypeStateOf<typeof orderedUsers>;
+type CursorPagedUsersState = CollectionTypeStateOf<typeof cursorPagedUsers>;
+type DistinctUsersState = CollectionTypeStateOf<typeof distinctUsers>;
+type DistinctOnUsersState = CollectionTypeStateOf<typeof distinctOnUsers>;
 type UserAggregateResult = Awaited<typeof userAggregate>;
 type GroupedUserStatsResult = Awaited<typeof groupedUserStats>;
 type GroupedUserStatsRow = GroupedUserStatsResult[number];
@@ -350,7 +423,7 @@ export type GeneratedContractTypeAssertions = [
   Assert<Equal<FilteredUsersState['hasWhere'], true>>,
   Assert<Equal<OrderedUsersState['hasOrderBy'], true>>,
   Assert<Equal<CursorPagedUsersState['hasOrderBy'], true>>,
-  Assert<Equal<DistinctUsersState['hasOrderBy'], false>>,
+  Assert<Equal<DistinctUsersState['hasOrderBy'], boolean>>,
   Assert<Equal<DistinctOnUsersState['hasOrderBy'], true>>,
   // `count` types as the contract's aggregate map declares it — this map names
   // `pg/int8@1`, whose application value is a bigint.
@@ -442,13 +515,54 @@ type VOContractBase = Omit<
         id: '__unbound__';
         kind: 'schema';
         entries: {
+          valueObject: {
+            readonly Address: {
+              readonly fields: {
+                readonly street: {
+                  readonly many: false;
+                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+                  readonly nullable: false;
+                };
+                readonly city: {
+                  readonly many: false;
+                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+                  readonly nullable: false;
+                };
+                readonly zip: {
+                  readonly many: false;
+                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+                  readonly nullable: false;
+                };
+              };
+            };
+          };
           table: {
             users: {
               columns: {
-                id: { nativeType: 'int4'; codecId: 'pg/int4@1'; nullable: false };
-                name: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: false };
-                home_address: { nativeType: 'jsonb'; codecId: 'pg/jsonb@1'; nullable: true };
-                work_address: { nativeType: 'jsonb'; codecId: 'pg/jsonb@1'; nullable: false };
+                id: {
+                  readonly many: false;
+                  dataType: 'pg/int4';
+                  codecId: 'pg/int4@1';
+                  nullable: false;
+                };
+                name: {
+                  readonly many: false;
+                  dataType: 'pg/text';
+                  codecId: 'pg/text@1';
+                  nullable: false;
+                };
+                home_address: {
+                  readonly many: false;
+                  dataType: 'pg/jsonb';
+                  codecId: 'pg/jsonb@1';
+                  nullable: true;
+                };
+                work_address: {
+                  readonly many: false;
+                  dataType: 'pg/jsonb';
+                  codecId: 'pg/jsonb@1';
+                  nullable: false;
+                };
               };
               primaryKey: { columns: ['id'] };
               uniques: [];
@@ -482,41 +596,39 @@ type VOContractBase = Omit<
             };
             readonly fields: {
               readonly id: {
+                readonly many: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
                 readonly nullable: false;
               };
               readonly name: {
+                readonly many: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
                 readonly nullable: false;
               };
               readonly homeAddress: {
-                readonly type: { readonly kind: 'valueObject'; readonly name: 'Address' };
+                readonly many: false;
+                readonly type: {
+                  readonly kind: 'valueObject';
+                  readonly plane: 'storage';
+                  readonly namespaceId: '__unbound__';
+                  readonly entityKind: 'valueObject';
+                  readonly entityName: 'Address';
+                };
                 readonly nullable: true;
               };
               readonly workAddress: {
-                readonly type: { readonly kind: 'valueObject'; readonly name: 'Address' };
+                readonly many: false;
+                readonly type: {
+                  readonly kind: 'valueObject';
+                  readonly plane: 'storage';
+                  readonly namespaceId: '__unbound__';
+                  readonly entityKind: 'valueObject';
+                  readonly entityName: 'Address';
+                };
                 readonly nullable: false;
               };
             };
             readonly relations: Record<string, never>;
-          };
-        };
-        readonly valueObjects: {
-          readonly Address: {
-            readonly fields: {
-              readonly street: {
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-                readonly nullable: false;
-              };
-              readonly city: {
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-                readonly nullable: false;
-              };
-              readonly zip: {
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-                readonly nullable: false;
-              };
-            };
           };
         };
       };
@@ -549,3 +661,14 @@ export type ValueObjectUpdateInputAssertions = [
   Assert<Equal<VOUpdateInput['homeAddress'], ExpectedAddressShape | null | undefined>>,
   Assert<Equal<VOUpdateInput['workAddress'], ExpectedAddressShape | undefined>>,
 ];
+
+type GeneratedTypeAssertions = [
+  ...GeneratedContractTypeAssertions,
+  ...ValueObjectTypeAssertions,
+  ...ValueObjectCreateInputAssertions,
+  ...ValueObjectUpdateInputAssertions,
+];
+
+test('generated contract type assertions compile', () => {
+  expectTypeOf<GeneratedTypeAssertions>().toMatchTypeOf<readonly true[]>();
+});

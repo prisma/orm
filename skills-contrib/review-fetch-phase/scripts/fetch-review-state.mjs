@@ -7,9 +7,9 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { renderReviewStateMarkdown as renderReviewStateMarkdownImpl } from './render-review-state.mjs';
 import {
-  assertReviewStateV1,
+  assertReviewStateV2,
   formatCanonicalJson,
-  normalizeReviewStateV1,
+  normalizeReviewStateV2,
 } from './review-artifacts.mjs';
 
 const EXIT_SUCCESS = 0;
@@ -548,7 +548,7 @@ async function main() {
   }
 
   const fetchedAt = new Date().toISOString();
-  const reviewState = normalizeReviewStateV1({
+  const reviewState = normalizeReviewStateV2({
     fetchedAt,
     sourceBranch,
     pr: payload.pr,
@@ -556,7 +556,7 @@ async function main() {
     reviews: payload.reviews,
     issueComments: payload.issueComments,
   });
-  assertReviewStateV1(reviewState);
+  assertReviewStateV2(reviewState);
 
   const jsonText = formatCanonicalJson(reviewState);
   const outJsonPath = deriveOutJsonPath(options.outPath, options.outJsonPath);

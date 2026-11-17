@@ -1,5 +1,4 @@
 import { docsUrlFor } from '@internal/utils/structured-error';
-import type { PackageManagerId } from '@prisma/cli-engine';
 import { flag } from '@prisma/cli-engine';
 import type { Diagnostic, NextAction } from '@prisma/cli-engine/protocol';
 import { CliStructuredError, notOk, ok } from '@prisma/cli-engine/protocol';
@@ -11,31 +10,36 @@ import {
   type InitOutput,
   InitOutputSchema,
   type InstallStatus,
+  NEXT_STEPS_BEFORE_SCAFFOLD,
 } from '../commands/init/output';
+import { versionMajor } from '../commands/init/prisma7-detect';
 import { type ProbeOutcome, probeServerVersion } from '../commands/init/probe-db';
-import { resolveProjectSkillInstallCommands } from '../commands/init/skill-sources';
-import { targetPackageName } from '../commands/init/templates/code-templates';
+import {
+  type TargetId,
+  targetPackageName,
+  targetPeerPackages,
+} from '../commands/init/templates/code-templates';
 import { MIN_SERVER_VERSION } from '../commands/init/templates/env';
 import { chooseAction } from '../utils/next-actions';
 import { defineOrmCommand } from './define-command';
 import { buildInitNextActions, initPresentations } from './init-blocks';
-import {
-  EMIT_COMMAND,
-  emitFailedFinding,
-  installFailedFinding,
-  skillInstallFailedFinding,
-} from './init-diagnostics';
+import { EMIT_COMMAND, emitFailedFinding, installFailedFinding } from './init-diagnostics';
 import { emitScaffoldedContract } from './init-emit';
-import { resolveInitInputs } from './init-inputs';
-import { installAgentSkills, installProjectDependencies } from './init-packages';
+import { type ResolvedInitInputs, resolveInitInputs } from './init-inputs';
+import { engineDevDependencySpec, installProjectDependencies } from './init-packages';
+import {
+  createPrisma7SourceCheck,
+  type ImportFromProject,
+  importFromProject,
+  Prisma7CheckInstallFailed,
+} from './init-prisma7-check';
 import { resolveScaffoldPackageManager, scaffoldProject } from './init-scaffold';
 import { normalizeError } from './normalize-error';
 
-/** The scaffold is on disk from here on, so each of these is a finding. */
+/** Each of these is a finding on a completed run, not an error. */
 const INIT_EXIT_CODES = {
-  4: 'scaffold written; dependency install failed',
+  4: 'dependency install failed',
   5: 'scaffold written and installed; contract emit failed',
-  6: 'scaffold complete; agent-skill install failed',
 } as const;
 
 function probeWarning(
@@ -61,34 +65,49 @@ function probeWarning(
   }
 }
 
+function outputTarget(target: TargetId): InitOutput['target'] {
+  return target === 'mongo' ? 'mongodb' : 'postgres';
+}
+
 function causeMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
 export interface InitCommandDependencies {
   readonly emitScaffoldedContract: typeof emitScaffoldedContract;
+  readonly importFromProject: ImportFromProject;
 }
 
 export const createInitCommand = (injected: InitCommandDependencies) =>
   defineOrmCommand({
     help: {
-      summary: 'Initialize a new Prisma Next project',
+      summary: 'Initialize a new Prisma ORM project',
       description:
         'Scaffolds config, schema, and runtime files, installs dependencies,\n' +
         'and emits the contract. Gets you from zero to typed queries in one step.\n' +
         '\n' +
         'Run it interactively for a guided setup, or supply --target and --authoring\n' +
-        'for a fully scriptable run (CI, AI coding agents, automation).',
+        'for a fully scriptable run (CI, AI coding agents, automation).\n' +
+        '\n' +
+        'In a Prisma 7 project, pass --from-prisma7-schema (or answer yes when asked)\n' +
+        'to use the existing schema.prisma as the contract source.\n' +
+        '\n' +
+        // biome-ignore lint/plugin/no-family-vocabulary: names the database on purpose — user-facing help for the one database whose schemas only Prisma 6 wrote
+        'In a Prisma 6 MongoDB project, init changes nothing: it prints how to install\n' +
+        'Prisma 8 beside Prisma 6 and read schema.prisma through prisma6Schema in\n' +
+        'prisma.config.ts, keeping the Prisma 6 CLI as an alias with its own config.\n' +
+        'Passing --target and --authoring sets up a starter in the same project instead,\n' +
+        'which breaks the Prisma 6 CLI.',
       examples: [
-        'init',
+        'orm init',
         // biome-ignore lint/plugin/no-family-vocabulary: names a target on purpose — user-facing help showing what to pass to --target
-        'init --target postgres --authoring psl',
+        'orm init --target postgres --authoring psl',
         // biome-ignore lint/plugin/no-family-vocabulary: names a target on purpose — user-facing help showing what to pass to --target
-        'init --target mongodb --authoring typescript --json',
-        'init --skip-install',
-        'init --skip-skills',
+        'orm init --target mongodb --authoring typescript --json',
+        'orm init --skip-install',
         // biome-ignore lint/plugin/no-family-vocabulary: names a target on purpose — user-facing help showing what to pass to --target
-        'init --target postgres --keep-previous-facade',
+        'orm init --target postgres --keep-previous-facade',
+        'orm init --from-prisma7-schema prisma/schema.prisma --confirm my-app',
       ],
     },
     args: {
@@ -114,9 +133,12 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         }),
         strictProbe: flag.boolean({ brief: 'Treat a failed --probe-db as fatal' }),
         skipInstall: flag.boolean({ brief: 'Skip dependency installation and contract emission' }),
-        skipSkills: flag.boolean({ brief: 'Skip the Prisma Next agent-skill install' }),
         keepPreviousFacade: flag.boolean({
           brief: 'Keep the previous target package in package.json when switching targets',
+        }),
+        fromPrisma7Schema: flag.string({
+          brief: 'Use an existing Prisma 7 schema.prisma as the contract source',
+          placeholder: 'path',
         }),
       },
     },
@@ -129,13 +151,61 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         ctx.report({ kind: 'message', severity: 'warn', text });
       };
 
-      const inputs = await resolveInitInputs({
-        cwd: ctx.cwd,
-        flags: args.flags,
-        prompt: ctx.prompt,
-      });
-
       const packageManager = await resolveScaffoldPackageManager({ cwd: ctx.cwd, env: ctx.env });
+      let inputs: ResolvedInitInputs;
+      try {
+        inputs = await resolveInitInputs({
+          cwd: ctx.cwd,
+          flags: args.flags,
+          prompt: ctx.prompt,
+          checkPrisma7Source: createPrisma7SourceCheck({
+            cwd: ctx.cwd,
+            packages: ctx.packages,
+            packageManager,
+            install: !args.flags.skipInstall,
+            importFromProject: injected.importFromProject,
+          }),
+          warn,
+          packageManager,
+        });
+      } catch (error) {
+        if (!(error instanceof Prisma7CheckInstallFailed)) {
+          throw error;
+        }
+        const document: InitOutput = {
+          ok: true,
+          target: outputTarget(error.target),
+          authoring: 'prisma7',
+          schemaPath: error.schemaPath,
+          filesWritten: [],
+          filesDeleted: [],
+          filesRenamed: [],
+          packagesInstalled: { status: 'failed', deps: [], devDeps: [] },
+          contractEmitted: false,
+          prisma7: {
+            schemaPath: error.schemaPath,
+            configRenamedTo: null,
+            scriptsRewritten: [],
+            packagesMoved: [],
+          },
+          nextSteps: [...NEXT_STEPS_BEFORE_SCAFFOLD],
+          warnings,
+        };
+        return ok(
+          ctx.present(
+            {
+              data: document,
+              exitCode: 4,
+              diagnostics: [installFailedFinding(error.failure, [])],
+            },
+            initPresentations({ document, complete: false, nextActions: [] }),
+          ),
+        );
+      }
+      for (const warning of inputs.warnings) {
+        warn(warning);
+      }
+
       const scaffold = scaffoldProject({ cwd: ctx.cwd, inputs, packageManager });
       for (const warning of scaffold.warnings) {
         warn(warning);
@@ -144,46 +214,83 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         ctx.report({ kind: 'message', severity: 'info', text: note });
       }
 
-      const deps = [targetPackageName(inputs.target, scaffold.resolveImportSpecifier), 'dotenv'];
-      // The CLI the scaffolded scripts run is the unified `@prisma/cli`, whose
-      // v8 line publishes under the `next` dist-tag (the `prisma-next` shim is
-      // no longer published). `@prisma/cli-engine` is the config file's
-      // defineConfig import. Under moduleResolution 'bundler' the scaffolded
-      // files reference process.env, which only typechecks with Node's ambient
-      // types present; a project that already pins @types/node keeps its own
-      // major.
-      const cliDevDeps = ['@prisma/cli@next', '@prisma/cli-engine'];
-      const devDeps = scaffold.hasTypesNode ? cliDevDeps : [...cliDevDeps, '@types/node'];
+      // Prisma 7 requires CLI and client at the same version, so when the CLI
+      // moves aside as @prisma/prisma7 a client below the 7 line moves with it.
+      const movePackages = inputs.sideBySide?.movePackages ?? null;
+      const clientMajor =
+        movePackages?.clientVersion === undefined
+          ? undefined
+          : versionMajor(movePackages.clientVersion);
+      // A client the project never declared, or one it links through a
+      // workspace or catalog, is left alone: only a declared major below 7 moves.
+      const moveClient = movePackages !== null && clientMajor !== undefined && clientMajor < 7;
+      const deps = [
+        targetPackageName(inputs.target, scaffold.resolveImportSpecifier),
+        'dotenv',
+        ...targetPeerPackages(inputs.target),
+        ...(moveClient ? ['@prisma/client@7'] : []),
+      ];
+      const depsToInstall = deps.filter((dep) => !inputs.preinstalled.includes(dep));
+      // The CLI the scaffolded scripts run is `prisma`, the unified CLI's
+      // published name, whose v8 line publishes under the `latest` dist-tag (the
+      // standalone shim is no longer published). It is the package that
+      // carries the `prisma` binary, which is what the scaffolded scripts
+      // invoke. `@prisma/cli-engine` — the config file's
+      // definePrismaConfig import — is deliberately absent here: the CLI declares it
+      // as an exact peer, so it installs in a second step at the version the
+      // just-installed CLI names. Under moduleResolution 'bundler' the
+      // scaffolded files reference process.env, which only typechecks with
+      // Node's ambient types present; a project that already pins @types/node
+      // keeps its own major.
+      const cliDevDeps = ['prisma@latest'];
+      const devDeps: string[] = [
+        ...(scaffold.hasTypesNode ? cliDevDeps : [...cliDevDeps, '@types/node']),
+        ...(movePackages !== null ? ['@prisma/prisma7@7'] : []),
+      ];
+
+      const packagesMoved = [
+        ...(moveClient ? ['@prisma/client@7'] : []),
+        ...(movePackages !== null ? ['@prisma/prisma7@7'] : []),
+      ];
+      const adoptsPrisma7 = inputs.contractSource.kind === 'prisma7-schema';
+      const prisma7Steps = adoptsPrisma7 ? { packagesMoved, clientMoved: moveClient } : null;
 
       const findings: Diagnostic[] = [];
       const extraActions: NextAction[] = [];
-      let installedManager: PackageManagerId | undefined;
       let packagesInstalled: InstallStatus = 'skipped';
       let contractEmitted = false;
-      let skillRegistered = false;
 
-      const settle = (exitCode: 0 | 4 | 5 | 6) => {
+      const settle = (exitCode: 0 | 4 | 5) => {
         const installed = packagesInstalled === 'installed';
         const document: InitOutput = {
           ok: true,
-          target: inputs.target === 'mongo' ? 'mongodb' : 'postgres',
-          authoring: inputs.authoring,
+          target: outputTarget(inputs.target),
+          authoring: adoptsPrisma7 ? 'prisma7' : inputs.authoring,
           schemaPath: inputs.schemaPath,
           filesWritten: scaffold.filesWritten,
           filesDeleted: scaffold.filesDeleted,
+          filesRenamed: scaffold.filesRenamed,
           packagesInstalled: {
             status: packagesInstalled,
-            deps: installed ? deps : [],
+            deps: installed ? deps : [...inputs.preinstalled],
             devDeps: installed ? devDeps : [],
           },
           contractEmitted,
+          prisma7: adoptsPrisma7
+            ? {
+                schemaPath: inputs.schemaPath,
+                configRenamedTo: scaffold.filesRenamed[0]?.to ?? null,
+                scriptsRewritten: [...scaffold.scriptsRewritten],
+                packagesMoved,
+              }
+            : null,
           nextSteps: buildNextSteps({
-            target: inputs.target === 'mongo' ? 'mongodb' : 'postgres',
+            target: outputTarget(inputs.target),
             packagesInstalled,
             contractEmitted,
             emitCommand: EMIT_COMMAND,
             schemaPath: inputs.schemaPath,
-            skillRegistered,
+            prisma7: prisma7Steps,
           }),
           warnings,
         };
@@ -196,7 +303,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
               {
                 why: `The success document failed schema validation: ${String(validated)}`,
                 nextActions: [
-                  chooseAction('This is a bug in Prisma Next. Please report it with `-v` output.'),
+                  chooseAction('This is a bug in Prisma ORM. Please report it with `-v` output.'),
                 ],
                 docsUrl: docsUrlFor('CLI.INIT_INVALID_OUTPUT_DOCUMENT'),
               },
@@ -214,7 +321,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
                 ...buildInitNextActions({
                   contractEmitted,
                   schemaPath: inputs.schemaPath,
-                  skillRegistered,
+                  prisma7: prisma7Steps,
                 }),
               ],
             }),
@@ -223,24 +330,35 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
       };
 
       if (inputs.install) {
-        const outcome = await installProjectDependencies({
+        const installFailure = await installProjectDependencies({
           packages: ctx.packages,
           cwd: ctx.cwd,
-          deps,
+          deps: depsToInstall,
           devDeps,
-          catalogWarnings:
-            packageManager === 'pnpm' ? buildCatalogWarnings(ctx.cwd, [...deps, ...devDeps]) : [],
         });
-        for (const warning of outcome.warnings) {
-          warn(warning);
-        }
-        if (outcome.failure !== undefined) {
+        if (installFailure !== undefined) {
           packagesInstalled = 'failed';
-          findings.push(installFailedFinding(outcome.failure, scaffold.filesWritten));
+          findings.push(installFailedFinding(installFailure, scaffold.filesWritten));
           return settle(4);
         }
+        if (packageManager === 'pnpm') {
+          for (const warning of buildCatalogWarnings(ctx.cwd, [...depsToInstall, ...devDeps])) {
+            warn(warning);
+          }
+        }
+        const engineSpec = engineDevDependencySpec(ctx.cwd);
+        const engineInstall = await ctx.packages.install({
+          packages: [engineSpec],
+          dev: true,
+          cwd: ctx.cwd,
+        });
+        if (!engineInstall.ok) {
+          packagesInstalled = 'failed';
+          findings.push(installFailedFinding(engineInstall.failure, scaffold.filesWritten));
+          return settle(4);
+        }
+        devDeps.push(engineSpec);
         packagesInstalled = 'installed';
-        installedManager = outcome.manager;
 
         const emitStep = 'Emit the contract';
         ctx.report({ kind: 'step-started', step: emitStep });
@@ -256,7 +374,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
       } else {
         extraActions.push(
           chooseAction(
-            `Install the project dependencies with your package manager: ${deps.join(', ')} (and ${devDeps.join(', ')} as development dependencies)`,
+            `Install the project dependencies with your package manager: ${deps.join(', ')} (and ${devDeps.join(', ')} plus @prisma/cli-engine at the version prisma declares as its dependency, as development dependencies)`,
           ),
         );
       }
@@ -286,35 +404,8 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         }
       }
 
-      // The skills install through the same manager the dependencies did, and
-      // needs no scaffold, so the commands stand alone: whether it is skipped or
-      // fails, what the user is told to run is the install itself — never `init`
-      // again, which would re-scaffold over the schema they have since written.
-      const skillCommands = resolveProjectSkillInstallCommands(
-        installedManager ?? packageManager,
-        ctx.env,
-      );
-
-      if (inputs.installProjectSkill) {
-        const failure = await installAgentSkills({
-          packages: ctx.packages,
-          cwd: ctx.cwd,
-          env: ctx.env,
-          manager: installedManager,
-        });
-        if (failure !== undefined) {
-          findings.push(skillInstallFailedFinding(failure, scaffold.filesWritten, skillCommands));
-          return settle(6);
-        }
-        skillRegistered = true;
-      } else {
-        warn(
-          `Skipped the Prisma Next agent-skill install (--skip-skills). To install them later, run: ${skillCommands.map((command) => `\`${command}\``).join(' && ')}`,
-        );
-      }
-
       return settle(0);
     },
   });
 
-export const initCommand = createInitCommand({ emitScaffoldedContract });
+export const initCommand = createInitCommand({ emitScaffoldedContract, importFromProject });

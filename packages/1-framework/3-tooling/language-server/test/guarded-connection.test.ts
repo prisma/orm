@@ -67,14 +67,6 @@ async function closedConnection(): Promise<Connection> {
 
 describe('guardedConnection', () => {
   describe('once the client is gone', () => {
-    it('drops a notification instead of throwing at its sender', async () => {
-      const connection = guardedConnection(await closedConnection());
-
-      expect(() =>
-        connection.sendDiagnostics({ uri: 'file:///x.psl', diagnostics: [] }),
-      ).not.toThrow();
-    });
-
     it('hands an awaiting sender a promise, not a bare undefined', async () => {
       const connection = guardedConnection(await closedConnection());
 
@@ -105,6 +97,24 @@ describe('guardedConnection', () => {
     await expect(
       connection.sendDiagnostics({ uri: 'file:///x.psl', diagnostics: [] }),
     ).resolves.toBeUndefined();
+  });
+
+  // A second copy of `vscode-jsonrpc` in the tree throws its own
+  // `ConnectionError` class, so the error carries the shape but not the
+  // identity of the one this module imports.
+  class ForeignConnectionError extends Error {
+    readonly code = 2;
+  }
+
+  it('drops a send the connection refused from another copy of the transport', () => {
+    const console = {
+      error: () => {
+        throw new ForeignConnectionError('Connection is disposed.');
+      },
+    };
+    const guarded = guardedConnection({ console } as unknown as Connection);
+
+    expect(() => guarded.console.error('late log')).not.toThrow();
   });
 
   it('lets an error that is not the connection leaving through', () => {

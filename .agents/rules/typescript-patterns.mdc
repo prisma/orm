@@ -21,6 +21,8 @@ This rulecard is intentionally short. For deeper examples, see `docs/reference/t
 - **Export interfaces; construct via factories**: keep classes as private implementation details.
 - **No generic defaults unless meaningful**: defaults are semantics, not “flexibility”.
 - **Test-only escapes**: `@ts-expect-error` and double casts are acceptable only in test files, with a short explanation.
+- **Key id-like string parameters on the map they come from**: a `Record<string, string>` constraint widens `'pg/int8@1'` to `string`; `keyof CT & string` preserves the literal and gives completions. Reach for the keyed union whenever a string is semantically an id from a known map.
+- **`ReturnType` of an overloaded function resolves to the last overload.** Adding a new last overload, or reordering the existing ones so a different signature ends up last, silently retypes every `ReturnType<typeof fn>` consumer; an overload inserted earlier leaves them alone. Order overloads most-specific first and most general last, and pin the inferred type with a type test so a change to the last signature fails loudly.
 
 ## Related rules
 

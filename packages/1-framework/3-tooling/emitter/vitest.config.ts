@@ -9,25 +9,6 @@ export default defineConfig({
     // graph on first import. The 100ms default bets that neither costs
     // anything, which loses whenever the whole suite runs under load.
     testTimeout: timeouts.typeScriptCompilation,
-    hookTimeout: timeouts.default,
-    coverage: {
-      provider: 'v8',
-      reporter: ['text', 'json', 'html'],
-      include: ['src/**/*.ts'],
-      exclude: [
-        'dist/**',
-        'test/**',
-        '**/*.test.ts',
-        '**/*.test-d.ts',
-        '**/*.config.ts',
-        '**/exports/**',
-      ],
-      thresholds: {
-        lines: 91,
-        branches: 90,
-        functions: 100,
-        statements: 95,
-      },
-    },
+    hookTimeout: timeouts.vitestPackageDefault,
   },
 });

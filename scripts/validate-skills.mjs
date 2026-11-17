@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /**
  * Validates SKILL.md frontmatter across every skill root the `skills` CLI
- * and `prisma-next init` discover skills from: `skills-contrib` (contributor
- * skill sources, linted only) and the user-facing tree that `prisma-next
+ * and `prisma orm init` discover skills from: `skills-contrib` (contributor
+ * skill sources, linted only) and the user-facing tree that `prisma
  * init` installs into consumer projects (`skills`). YAML must parse, and
  * `name` + `description`
  * must be non-empty strings. Also enforces the agentskills.io 1024-character
  * description limit used by `skills add` registry manifests.
  *
  * A skill whose frontmatter fails to parse is silently omitted from
- * discovery (by `skills add` or by `prisma-next init`) — this lint catches
+ * discovery (by `skills add` or by `prisma orm init`) — this lint catches
  * that before merge.
  */
 
@@ -53,6 +53,26 @@ export function validateSkillMd(content) {
     errors.push(
       `description exceeds ${MAX_DESCRIPTION_LENGTH} characters (${data.description.length}); use a folded block scalar (description: >) or shorten the text`,
     );
+  }
+
+  // The Agent Skills spec defines `name` and `description` at the top level
+  // and reserves `metadata` for everything else, as a map of strings. An
+  // unquoted version stamp is the way this goes wrong in practice: YAML reads
+  // `8.1` as a number, and a consumer comparing it against a package version
+  // string finds no match.
+  if (data.metadata !== undefined) {
+    // A prototype check rather than `typeof`: YAML parses an unquoted
+    // timestamp as a Date, which is object-typed but has no enumerable
+    // entries, so it would sail through the per-entry check below.
+    if (data.metadata === null || Object.getPrototypeOf(data.metadata) !== Object.prototype) {
+      errors.push("invalid 'metadata' (must be a map of string keys to string values)");
+    } else {
+      for (const [key, value] of Object.entries(data.metadata)) {
+        if (typeof value !== 'string') {
+          errors.push(`metadata.${key} is ${typeof value}, not a string; quote the value`);
+        }
+      }
+    }
   }
 
   return errors;
@@ -142,7 +162,7 @@ function main() {
   }
   console.error(
     '\nUnparseable frontmatter is silently skipped by `skills add` during pnpm prepare, ' +
-      'and by `prisma-next init` when it installs the user-facing skills/ tree. ' +
+      'and by `prisma orm init` when it installs the user-facing skills/ tree. ' +
       'Use a folded block scalar (description: >) when the description contains colons.',
   );
   return 1;

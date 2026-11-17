@@ -1,11 +1,8 @@
-export type { ContractConfig, FormatterConfig, PrismaNextConfig } from '../config-types';
+export type { ContractConfig, FormatterConfig, PrismaConfig } from '../config-types';
 export {
-  CONFIG_FORMAT_VERSION,
   DEFAULT_CONTRACT_SOURCE_DIR,
   defineConfig,
-  hasCurrentConfigFormatVersion,
   normalizeContractConfig,
-  readConfigFormatVersion,
 } from '../config-types';
 export type {
   ContractSourceContext,
@@ -16,7 +13,9 @@ export type {
   ContractSourceFormat,
   ContractSourceProvider,
   ContractSourceProviderBase,
-  OpaqueContractSourceProvider,
   PslContractSourceProvider,
+  PslGrammar,
+  PslParserOptions,
   TypeScriptContractSourceProvider,
 } from '../contract-source-types';
+export { defaultContractOutputPath } from '../default-contract-output-path';

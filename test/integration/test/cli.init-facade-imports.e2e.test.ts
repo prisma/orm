@@ -13,7 +13,7 @@ import {
 /**
  * Regression guard for TML-2485.
  *
- * When `prisma-next init --postgres|--mongo` ran on a default pnpm install
+ * When `prisma orm init --postgres|--mongo` ran on a default pnpm install
  * (`node-linker=isolated`), the generated `prisma/contract.ts` failed at
  * runtime with `ERR_MODULE_NOT_FOUND` because the templates imported from
  * `@internal/family-*`, `@internal/target-*`, and
@@ -39,11 +39,11 @@ interface FacadeInfo {
 const FACADE_FOR_TARGET: Record<TargetId, FacadeInfo> = {
   postgres: {
     packageName: '@internal/postgres',
-    packageJsonPath: resolve(REPO_ROOT, 'packages/3-extensions/postgres/package.json'),
+    packageJsonPath: resolve(REPO_ROOT, 'packages/3-targets/postgres/9-facade/package.json'),
   },
   mongo: {
     packageName: '@internal/mongo',
-    packageJsonPath: resolve(REPO_ROOT, 'packages/3-extensions/mongo/package.json'),
+    packageJsonPath: resolve(REPO_ROOT, 'packages/3-targets/mongo/9-facade/package.json'),
   },
 };
 
@@ -69,7 +69,7 @@ function readFacadeExports(packageJsonPath: string): FacadeExports {
   };
 }
 
-function extractPrismaNextImports(source: string): readonly string[] {
+function extractInternalImports(source: string): readonly string[] {
   const matches = source.matchAll(/(?:\bfrom\s+|\bimport\s+)['"](@internal\/[^'"]+)['"]/g);
   return Array.from(new Set(Array.from(matches, (m) => m[1] as string)));
 }
@@ -80,15 +80,15 @@ function templateSources(target: TargetId, authoring: AuthoringId): readonly str
 }
 
 describe('init templates only depend on the facade package (TML-2485)', () => {
-  describe('extractPrismaNextImports', () => {
+  describe('extractInternalImports', () => {
     it('captures `import x from "pkg"` (named-binding form)', () => {
       const source = "import postgres from '@internal/postgres/runtime';\n";
-      expect(extractPrismaNextImports(source)).toEqual(['@internal/postgres/runtime']);
+      expect(extractInternalImports(source)).toEqual(['@internal/postgres/runtime']);
     });
 
     it('captures `import "pkg"` (side-effect form)', () => {
       const source = "import '@internal/postgres/runtime';\n";
-      expect(extractPrismaNextImports(source)).toEqual(['@internal/postgres/runtime']);
+      expect(extractInternalImports(source)).toEqual(['@internal/postgres/runtime']);
     });
 
     it('deduplicates repeated specifiers', () => {
@@ -96,7 +96,7 @@ describe('init templates only depend on the facade package (TML-2485)', () => {
         "import postgres from '@internal/postgres/runtime';",
         "import type { Foo } from '@internal/postgres/runtime';",
       ].join('\n');
-      expect(extractPrismaNextImports(source)).toEqual(['@internal/postgres/runtime']);
+      expect(extractInternalImports(source)).toEqual(['@internal/postgres/runtime']);
     });
   });
 
@@ -104,7 +104,7 @@ describe('init templates only depend on the facade package (TML-2485)', () => {
     const facade = FACADE_FOR_TARGET[target];
 
     describe(`${target} + ${authoring}`, () => {
-      const allImports = templateSources(target, authoring).flatMap(extractPrismaNextImports);
+      const allImports = templateSources(target, authoring).flatMap(extractInternalImports);
 
       it('every @internal/* import targets the facade package', () => {
         expect(allImports.length).toBeGreaterThan(0);

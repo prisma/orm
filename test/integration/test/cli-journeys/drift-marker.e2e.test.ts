@@ -170,7 +170,7 @@ withTempDir(({ createTempDir }) => {
         const emitV3 = await runContractEmit(ctx);
         expect(emitV3.exitCode, 'P.02.pre: emit v3').toBe(0);
 
-        // P.02: db update to v3 (recovery via db update instead of migration apply)
+        // db update to v3 (recovery via db update instead of migrate)
         const updateV3 = await runDbUpdate(ctx);
         expect(updateV3.exitCode, 'P.02: db update to v3').toBe(0);
 

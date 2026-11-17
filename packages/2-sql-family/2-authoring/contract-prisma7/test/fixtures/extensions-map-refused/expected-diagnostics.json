@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA7_EXTENSION_ARGUMENT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 3,
+    "message": "Extension \"trgm\": the map argument is not supported. Replace trgm(map: \"pg_trgm\") with pg_trgm, the extension's name in the database; Prisma 7's next migration is then empty."
+  }
+]

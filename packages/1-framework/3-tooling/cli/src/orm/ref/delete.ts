@@ -1,15 +1,15 @@
+import { ormConfigSection } from '@internal/config-loader';
 import type { Block, Presentations } from '@prisma/cli-engine';
-import { positional } from '@prisma/cli-engine';
+import { noDataLines, positional } from '@prisma/cli-engine';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import type { RefDeleteResult } from '../../control-api/operations/ref';
 import { executeRefDeleteCommand } from '../../control-api/operations/ref';
-import { ormConfigSection } from '../config-section';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
 
 function deletePresentations(document: RefDeleteResult): Presentations {
   return {
-    stdout: () => [],
+    stdout: noDataLines('Deleting a ref has no data; the exit code says whether it worked.'),
     next: () => [],
     human: (): readonly Block[] => [
       {
@@ -31,7 +31,7 @@ export function createRefDeleteCommand(
       description:
         'Removes migrations/app/refs/<name>.json. The contract the ref pointed at\n' +
         'is untouched: a ref is a pointer, and its target survives the deletion.',
-      examples: ['ref delete staging', 'ref delete staging --json'],
+      examples: ['migration ref delete staging', 'migration ref delete staging --json'],
     },
     args: {
       positionals: {

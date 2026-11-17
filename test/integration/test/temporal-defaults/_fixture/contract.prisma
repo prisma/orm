@@ -1,0 +1,11 @@
+// use prisma-8
+
+model Reading {
+  id             Int    @id
+  label          String
+  createdAt      TimestamptzTemporal @onCreate(now())
+  updatedAt      TimestamptzTemporal @onCreate(now()) @onUpdate(now())
+  createdAtText  TimestamptzString @onCreate(now())
+  updatedAtText  TimestamptzString @onCreate(now()) @onUpdate(now())
+  @@map("reading")
+}

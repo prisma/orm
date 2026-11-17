@@ -1,4 +1,8 @@
-import { int4Column, textColumn, timestamptzColumn } from '@internal/adapter-postgres/column-types';
+import {
+  int4Column,
+  textColumn,
+  timestamptzTemporalColumn,
+} from '@internal/adapter-postgres/column-types';
 import { defineContract, field, model } from '@internal/postgres/contract-builder';
 
 export const contract = defineContract({
@@ -13,7 +17,7 @@ export const contract = defineContract({
     AuditLog: model('AuditLog', {
       fields: {
         id: field.column(int4Column).id(),
-        ts: field.column(timestamptzColumn),
+        ts: field.column(timestamptzTemporalColumn),
       },
     }).sql({ table: 'audit_log', control: 'tolerated' }),
 

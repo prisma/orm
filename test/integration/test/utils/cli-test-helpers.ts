@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   copyFileSync,
   existsSync,
@@ -5,18 +6,18 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
-  statSync,
   writeFileSync,
 } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { Writable } from 'node:stream';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadOrmConfig, ormCommandFamily } from '@internal/cli';
+import { MigrationCLI } from '@internal/cli/migration-cli';
 import type { Contract } from '@internal/contract/types';
-import type { MigrationMetadata } from '@internal/migration-tools/metadata';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import type { EngineEvent, MountedTree, PresentedResult, StreamEvent } from '@prisma/cli-engine';
-import { createTestCli } from '@prisma/cli-engine/testing';
+import { createTestCli, type TestCli } from '@prisma/cli-engine/testing';
 import { afterEach, beforeEach } from 'vitest';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -37,14 +38,8 @@ export interface EngineRunResult {
 }
 
 export interface RunOnEngineOptions {
-  /** Simulate piped stdout (isTTY=false) to exercise the engine's json auto-selection. */
+  /** Simulate piped stdout (isTTY=false), which receives the command's data lines. */
   readonly isTTY?: boolean;
-  /**
-   * Run the config file through the engine's loader rather than pre-evaluating
-   * it, so a file that does not evaluate settles as the run's error instead of
-   * throwing here.
-   */
-  readonly settleConfigFailures?: boolean;
 }
 
 /**
@@ -63,39 +58,80 @@ function groupsFor(commands: MountedTree): Record<string, { readonly brief: stri
 }
 
 /**
- * Runs one CLI invocation through the engine's own harness.
- *
- * The harness takes config as an already-evaluated record and has no config
- * option on `run()`, so the project's `prisma.config.ts` is evaluated here
- * — through the same adapter the binary uses — and a fresh `TestCli` is built
- * per run. That is what lets a step which writes or rewrites the config be
- * picked up by the next one. The project directory is passed as `cwd` rather
- * than chdir'ed into, so nothing about the run is process-global.
+ * The ORM family mounted the way the real host mounts it: every command at
+ * its family key, which spells the unified CLI's mount path. Shared by every
+ * helper that builds a test CLI over the family.
+ */
+export function ormEngineMount(): {
+  readonly commands: MountedTree;
+  readonly groups: Record<string, { readonly brief: string }>;
+} {
+  if (cachedMount === undefined) {
+    const commands = { ...ormCommandFamily.commands };
+    cachedMount = { commands, groups: groupsFor(commands) };
+  }
+  return cachedMount;
+}
+
+let cachedMount:
+  | {
+      readonly commands: MountedTree;
+      readonly groups: Record<string, { readonly brief: string }>;
+    }
+  | undefined;
+
+/**
+ * One `TestCli` per project, keyed by `testDir` + `configPath`. The engine's
+ * `loadConfig` hook runs on every invocation that needs config (the same
+ * adapter the binary uses), so a step that writes or rewrites the config file
+ * is picked up by the next command without rebuilding the harness — and a
+ * config that does not evaluate settles as the run's error, exactly as it
+ * would for a user. A test that swaps to a whole new project directory gets a
+ * fresh harness through the key.
+ */
+const engineCliCache = new Map<string, TestCli>();
+
+/**
+ * Drops every cached harness for a project directory. Called from the
+ * temp-dir cleanup paths so a worker does not retain a `TestCli` (and its
+ * `loadConfig` closure) for every deleted directory it ever ran against.
+ */
+export function evictEngineCli(testDir: string): void {
+  for (const key of engineCliCache.keys()) {
+    if (key.startsWith(`${testDir}\u0000`)) {
+      engineCliCache.delete(key);
+    }
+  }
+}
+
+/**
+ * Runs one CLI invocation through the engine's own harness. The project
+ * directory is passed as `cwd` rather than chdir'ed into, so nothing about
+ * the run is process-global.
  */
 export async function runOnEngine(
   project: { readonly testDir: string; readonly configPath: string },
   argv: readonly string[],
   options?: RunOnEngineOptions,
 ): Promise<EngineRunResult> {
-  const commands = ormCommandFamily.commands;
-  const spec = {
-    commandFamilies: [ormCommandFamily],
-    commands,
-    groups: groupsFor(commands),
-  };
+  const key = `${project.testDir}\u0000${project.configPath}`;
+  let cli = engineCliCache.get(key);
+  if (cli === undefined) {
+    const { commands, groups } = ormEngineMount();
+    cli = createTestCli({
+      commandFamilies: [ormCommandFamily],
+      commands,
+      groups,
+      loadConfig: (configPath) =>
+        loadOrmConfig({
+          cwd: project.testDir,
+          configPath: configPath ?? project.configPath,
+        }),
+    });
+    engineCliCache.set(key, cli);
+  }
 
-  const cli = options?.settleConfigFailures
-    ? createTestCli({
-        ...spec,
-        loadConfig: (configPath) =>
-          loadOrmConfig({
-            cwd: project.testDir,
-            configPath: configPath ?? project.configPath,
-          }),
-      })
-    : createTestCli({ ...spec, config: await evaluatedSections(project) });
-
-  const run = await cli.run(argv, {
+  const run = await cli.run([...argv], {
     cwd: project.testDir,
     isTty: { stdout: options?.isTTY !== false, stderr: options?.isTTY !== false },
   });
@@ -108,20 +144,6 @@ export async function runOnEngine(
     json: run.json,
     presented: run.presented,
   };
-}
-
-async function evaluatedSections(project: {
-  readonly testDir: string;
-  readonly configPath: string;
-}): Promise<Readonly<Record<string, unknown>>> {
-  const loaded = await loadOrmConfig({ cwd: project.testDir, configPath: project.configPath });
-  const fileLevel = loaded.diagnostics.find((entry) => entry.section === null);
-  if (fileLevel !== undefined) {
-    throw new Error(
-      `runOnEngine: ${project.configPath} did not evaluate: ${fileLevel.diagnostic.code} — ${fileLevel.diagnostic.summary}`,
-    );
-  }
-  return loaded.sections;
 }
 
 /**
@@ -313,6 +335,7 @@ export function setupIntegrationTestDirectoryFromFixtures(
   }
 
   const cleanup = () => {
+    evictEngineCli(testDir);
     if (existsSync(testDir)) {
       rmSync(testDir, { recursive: true, force: true });
     }
@@ -369,6 +392,7 @@ export function setupTestDirectory(): {
   const configPath = join(testDir, 'prisma.config.ts');
 
   const cleanup = () => {
+    evictEngineCli(testDir);
     if (existsSync(testDir)) {
       rmSync(testDir, { recursive: true, force: true });
     }
@@ -418,65 +442,6 @@ export async function setupDbTestFixture(
   return { testSetup, configPath };
 }
 
-function readMigrationGraphTipHash(testDir: string): string | null {
-  const appDir = join(testDir, 'migrations', 'app');
-  if (!existsSync(appDir)) {
-    return null;
-  }
-  let newestDir: string | null = null;
-  let newestMtime = 0;
-  for (const dir of readdirSync(appDir)) {
-    if (dir.startsWith('.') || dir === 'refs') {
-      continue;
-    }
-    const dirPath = join(appDir, dir);
-    if (!statSync(dirPath).isDirectory()) {
-      continue;
-    }
-    const manifestPath = join(dirPath, 'migration.json');
-    if (!existsSync(manifestPath)) {
-      continue;
-    }
-    const mtime = statSync(dirPath).mtimeMs;
-    if (mtime > newestMtime) {
-      newestMtime = mtime;
-      newestDir = dir;
-    }
-  }
-  if (newestDir === null) {
-    return null;
-  }
-  const manifest = JSON.parse(
-    readFileSync(join(appDir, newestDir, 'migration.json'), 'utf-8'),
-  ) as MigrationMetadata;
-  return manifest.to;
-}
-
-/**
- * Supplies an implicit `--from` for integration tests that predate the db-ref
- * default: when the db ref is absent but the on-disk graph is not, plan from
- * the graph tip (matching pre-change CLI behaviour). Callers that exercise the
- * implicit db default leave the db ref in place; greenfield scenarios clear it
- * with {@link clearDbRefForGreenfieldPlan}.
- */
-export function appendImplicitMigrationPlanFrom(
-  testDir: string,
-  extraArgs: readonly string[],
-): readonly string[] {
-  if (extraArgs.some((arg) => arg === '--from' || arg.startsWith('--from='))) {
-    return extraArgs;
-  }
-  const dbRefPath = join(testDir, 'migrations', 'app', 'refs', 'db.json');
-  if (existsSync(dbRefPath)) {
-    return extraArgs;
-  }
-  const tipHash = readMigrationGraphTipHash(testDir);
-  if (tipHash !== null) {
-    return [...extraArgs, '--from', tipHash];
-  }
-  return extraArgs;
-}
-
 export function clearDbRefForGreenfieldPlan(testDir: string): void {
   const refsDir = join(testDir, 'migrations', 'app', 'refs');
   if (!existsSync(refsDir)) {
@@ -486,6 +451,83 @@ export function clearDbRefForGreenfieldPlan(testDir: string): void {
     if (name === 'db.json' || name.startsWith('db.contract.')) {
       rmSync(join(refsDir, name), { force: true });
     }
+  }
+}
+
+/** What running a `migration.ts` file reports back. */
+export interface MigrationFileRunResult {
+  readonly exitCode: number;
+  readonly stdout: string;
+  readonly stderr: string;
+}
+
+class CapturingWritable extends Writable {
+  private readonly chunks: Buffer[] = [];
+
+  override _write(
+    chunk: Buffer | string,
+    _encoding: BufferEncoding,
+    callback: (error?: Error | null) => void,
+  ): void {
+    this.chunks.push(Buffer.from(chunk));
+    callback();
+  }
+
+  get text(): string {
+    return Buffer.concat(this.chunks).toString('utf-8');
+  }
+}
+
+/**
+ * Runs a scaffolded `migration.ts` in-process, replacing the old
+ * `execFile(tsx, [migration.ts])` pattern. Each spawn paid a node boot, an
+ * esbuild transform, and a cold import of the workspace packages — one to
+ * three seconds per migration step on CI, multiplied across every journey.
+ *
+ * Vitest's own transformer imports the file (the `?v=<content-hash>` query
+ * defeats the ESM module cache when a test rewrites the same migration.ts),
+ * and the module-scope `MigrationCLI.run(import.meta.url, M)` call inside the
+ * file no-ops because the file is not the process entrypoint. The helper then
+ * invokes `MigrationCLI.run` itself with an argv whose second element is the
+ * migration path, which satisfies the entrypoint guard, and with injected
+ * capture streams — the same in-process testability surface the CLI package's
+ * own tests use.
+ *
+ * Two process globals are saved and restored around the run, because the
+ * migration-file CLI is written for a process it owns: config discovery falls
+ * back to the config in `process.cwd()` (so the helper chdirs to `cwd`,
+ * exactly where the old spawn pointed the child), and a failing run sets `process.exitCode`
+ * (which must not leak into the vitest worker's exit status when a test
+ * asserts on a migration failure). Tests within a worker run sequentially
+ * under the forks pool, so the temporary chdir cannot interleave with another
+ * test.
+ */
+export async function runMigrationFile(
+  migrationTs: string,
+  args: readonly string[] = [],
+  cwd?: string,
+): Promise<MigrationFileRunResult> {
+  const content = readFileSync(migrationTs, 'utf-8');
+  const version = createHash('sha1').update(content).digest('hex').slice(0, 12);
+  const migrationUrl = pathToFileURL(migrationTs).href;
+  const module = (await import(`${migrationUrl}?v=${version}`)) as {
+    default: Parameters<typeof MigrationCLI.run>[1];
+  };
+  const stdout = new CapturingWritable();
+  const stderr = new CapturingWritable();
+  const previousExitCode = process.exitCode;
+  const previousCwd = process.cwd();
+  try {
+    process.chdir(cwd ?? dirname(migrationTs));
+    const exitCode = await MigrationCLI.run(migrationUrl, module.default, {
+      argv: [process.execPath, migrationTs, ...args],
+      stdout,
+      stderr,
+    });
+    return { exitCode, stdout: stdout.text, stderr: stderr.text };
+  } finally {
+    process.chdir(previousCwd);
+    process.exitCode = previousExitCode;
   }
 }
 
@@ -519,6 +561,7 @@ export function withTempDir(callback: (context: { createTempDir: () => string })
     // Clean up all directories created during this test
     for (const dir of tempDirs) {
       try {
+        evictEngineCli(dir);
         if (existsSync(dir)) {
           rmSync(dir, { recursive: true, force: true });
         }

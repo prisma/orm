@@ -1,0 +1,45 @@
+{
+  "packages/group/a/src/example.ts": {
+    "path": "packages/group/a/src/example.ts",
+    "statementMap": {
+      "0": {
+        "start": { "line": 1, "column": 0 },
+        "end": { "line": 1, "column": null }
+      }
+    },
+    "fnMap": {
+      "0": {
+        "name": "example",
+        "decl": {
+          "start": { "line": 1, "column": 0 },
+          "end": { "line": 1, "column": null }
+        },
+        "loc": {
+          "start": { "line": 1, "column": 0 },
+          "end": { "line": 1, "column": null }
+        },
+        "line": 1
+      }
+    },
+    "branchMap": {
+      "0": {
+        "loc": { "start": {}, "end": {} },
+        "type": "branch",
+        "locations": [
+          { "start": {}, "end": {} },
+          {
+            "start": { "line": 1, "column": 0 },
+            "end": { "line": 1, "column": null }
+          }
+        ],
+        "line": 1
+      }
+    },
+    "s": { "0": 1 },
+    "f": { "0": 1 },
+    "b": { "0": [1, 0] },
+    "inputSourceMap": null,
+    "_coverageSchema": "1a1c01bbd47fc00a2c39e90264f33305004495a9",
+    "hash": "vitest-4-fixture"
+  }
+}

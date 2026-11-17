@@ -4,8 +4,8 @@
  * and a body edit under the same name converges as create + drop.
  *
  * A `.prisma` contract carries the Cipherstash-style index
- * (`@@index(expression: "eql_v3.eq_term(email)", name: "users_email_eq",
- * type: "btree")` — the default access method normalizes away in the schema
+ * (``@@index(expression: sql`eql_v3.eq_term(email)`, name: "users_email_eq",
+ * type: "btree")`` — the default access method normalizes away in the schema
  * IR, so the DDL carries no USING clause and verify is clean),
  * a partial index, a unique expression index, and a registry-typed
  * (`USING hash`) index; a `.ts` twin authors the same schema via
@@ -23,10 +23,11 @@ import { withTempDir } from '../utils/cli-test-helpers';
 import {
   getLatestMigrationDir,
   type JourneyContext,
+  latestMigrationDirName,
+  planMigrationAndSelfEmit,
   runContractEmit,
   runDbVerify,
   runMigrate,
-  runMigrationPlanAndEmit,
   setupJourney,
   swapContract,
   swapPslContract,
@@ -69,14 +70,14 @@ async function runInitialFlow(ctx: JourneyContext, connectionString: string): Pr
   const emit = await runContractEmit(ctx);
   expect(emit.exitCode, `contract emit\n${stripAnsi(emit.stderr)}`).toBe(0);
 
-  const plan = await runMigrationPlanAndEmit(ctx, ['--name', 'initial']);
+  const plan = await planMigrationAndSelfEmit(ctx, ['--name', 'initial']);
   expect(plan.exitCode, `migration plan\n${stripAnsi(plan.stderr)}`).toBe(0);
   expect(indexSqlOf(readPlannedOps(ctx)).sort(), 'byte-exact index DDL').toEqual(
     EXPECTED_INDEX_DDL,
   );
 
   const apply = await runMigrate(ctx);
-  expect(apply.exitCode, `migration apply\n${stripAnsi(apply.stderr)}`).toBe(0);
+  expect(apply.exitCode, `migrate\n${stripAnsi(apply.stderr)}`).toBe(0);
 
   const verify = await runDbVerify(ctx);
   expect(verify.exitCode, `db verify clean\n${stripAnsi(verify.stderr)}`).toBe(0);
@@ -122,7 +123,12 @@ withTempDir(({ createTempDir }) => {
         swapPslContract(ctx, 'contract-expression-authored-renamed');
         const emitRenamed = await runContractEmit(ctx);
         expect(emitRenamed.exitCode, `rename: emit\n${stripAnsi(emitRenamed.stderr)}`).toBe(0);
-        const planRename = await runMigrationPlanAndEmit(ctx, ['--name', 'rename-search-index']);
+        const planRename = await planMigrationAndSelfEmit(ctx, [
+          '--name',
+          'rename-search-index',
+          '--from',
+          latestMigrationDirName(ctx),
+        ]);
         expect(planRename.exitCode, `rename: plan\n${stripAnsi(planRename.stderr)}`).toBe(0);
         const renameOps = readPlannedOps(ctx);
         expect(
@@ -147,7 +153,12 @@ withTempDir(({ createTempDir }) => {
         swapPslContract(ctx, 'contract-expression-authored-editedbody');
         const emitEdited = await runContractEmit(ctx);
         expect(emitEdited.exitCode, `body-edit: emit\n${stripAnsi(emitEdited.stderr)}`).toBe(0);
-        const planEdit = await runMigrationPlanAndEmit(ctx, ['--name', 'edit-search-index-body']);
+        const planEdit = await planMigrationAndSelfEmit(ctx, [
+          '--name',
+          'edit-search-index-body',
+          '--from',
+          latestMigrationDirName(ctx),
+        ]);
         expect(planEdit.exitCode, `body-edit: plan\n${stripAnsi(planEdit.stderr)}`).toBe(0);
         expect(
           indexSqlOf(readPlannedOps(ctx)).sort(),

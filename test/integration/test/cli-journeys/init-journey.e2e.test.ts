@@ -1,18 +1,12 @@
 /**
- * `prisma-next init` user-journey test (TML-2490) — seam verifier.
+ * `prisma orm init` user-journey test (TML-2490) — seam verifier.
  *
- * Walks the full user inner loop from `prisma-next init` through to a working
+ * Walks the full user inner loop from `prisma orm init` through to a working
  * query against a real DB, across all four `(target × authoring)` cells.
  * Asserts the contract one subsystem hands to the next at every seam.
  *
- * Each known seam bug (TML-2461, TML-2486, TML-2487, TML-2314) is expressed
- * as a `seamExpectation` whose `status` records whether the seam is still
- * `'broken'` or already `'fixed'`. While a seam is `'broken'` the test
- * passes precisely *because* the bug is still present (the
- * `whenBroken` assertion holds); when the fix lands, the maintainer flips
- * the status to `'fixed'` and the `whenFixed` assertion takes over. This
- * keeps the test honest as a regression backstop without forcing the
- * journey to be temporarily disabled around an in-flight fix.
+ * The seams that were once tracked as known bugs are all fixed; each step
+ * now asserts the working behavior directly.
  */
 
 import { existsSync, readFileSync } from 'node:fs';
@@ -33,7 +27,6 @@ import {
   migrationPlan,
   runUserCode,
   type StepResult,
-  seamExpectation,
   selfEmitLatestMigration,
 } from './init-journey/harness';
 
@@ -112,18 +105,21 @@ describe.each(ALL_CELLS.map((cell) => ({ cell, label: cellLabel(cell) })))(
       ).toBe(true);
     });
 
-    it('step 4b (migration emit): self-emits ops.json next to the draft migration.ts', () => {
+    it('step 4b (migration.ts self-emit): self-emits ops.json next to the draft migration.ts', () => {
       const result = ctx.migrationEmit;
       expect(result, 'migration self-emit was not run (precondition failure)').not.toBeNull();
       if (result === null) return;
-      expect(result.exitCode, formatStepDiagnostic('migration emit', ctx.project, result)).toBe(0);
+      expect(
+        result.exitCode,
+        formatStepDiagnostic('migration.ts self-emit', ctx.project, result),
+      ).toBe(0);
     });
 
-    it('step 4c (migration apply): applies the planned migration (TML-2486 seam)', () => {
+    it('step 4c (migrate): applies the planned migration', () => {
       const result = ctx.migrationApply;
-      expect(result, 'migration apply was not run (precondition failure)').not.toBeNull();
+      expect(result, 'migrate was not run (precondition failure)').not.toBeNull();
       if (result === null) return;
-      TML_2486_seam(cell, ctx.project, result);
+      expectMigrationApplied(ctx.project, result);
     });
 
     it(
@@ -140,7 +136,7 @@ describe.each(ALL_CELLS.map((cell) => ({ cell, label: cellLabel(cell) })))(
             '',
           ].join('\n'),
         );
-        TML_2487_seam(run);
+        expectObjectIdImportWorks(run);
       },
       timeouts.coldTransformImport,
     );
@@ -168,6 +164,7 @@ describe.each(ALL_CELLS.map((cell) => ({ cell, label: cellLabel(cell) })))(
           [
             "import { createPostgresControlClient } from '@prisma/orm-postgres/control';",
             "import postgres from '@prisma/orm-postgres/runtime';",
+            "import { contractFromJson } from '@prisma/orm-postgres/static';",
             "import type { Contract } from './src/prisma/contract.d';",
             "import contractJson from './src/prisma/contract.json' with { type: 'json' };",
             '',
@@ -177,7 +174,7 @@ describe.each(ALL_CELLS.map((cell) => ({ cell, label: cellLabel(cell) })))(
             '  process.exit(2);',
             '}',
             '',
-            'const db = postgres<Contract>({ contractJson, url });',
+            'const db = postgres({ contract: contractFromJson<Contract>(contractJson), url });',
             // String concatenation (not a template literal) to avoid
             // biome's `noTemplateCurlyInString` rule in this fixture
             // string — the generated user code is functionally
@@ -199,7 +196,7 @@ describe.each(ALL_CELLS.map((cell) => ({ cell, label: cellLabel(cell) })))(
             '  await control.connect();',
             '  const marker = await control.readMarker();',
             '  if (marker === null) {',
-            "    console.error('control readMarker returned null after migration apply');",
+            "    console.error('control readMarker returned null after migrate');",
             '    process.exit(3);',
             '  }',
             '} finally {',
@@ -210,7 +207,7 @@ describe.each(ALL_CELLS.map((cell) => ({ cell, label: cellLabel(cell) })))(
             '',
           ].join('\n'),
         );
-        TML_2314_seam(run);
+        expectPostgresUserCodeRoundTrip(run);
       },
       timeouts.coldTransformImport,
     );
@@ -275,71 +272,24 @@ async function runFullJourney(cell: CellId): Promise<JourneyContext> {
   }
 }
 
-// --- Seam expectations -----------------------------------------------------
-//
-// One per known seam bug. Each is a `seamExpectation<T>` with `status:
-// 'broken'`. When the matching fix commit lands, the maintainer flips
-// `'broken'` to `'fixed'` here and the assertion follows.
+// --- Per-seam step assertions ------------------------------------------
 
-const TML_2486_seam = (cell: CellId, project: JourneyProject, result: StepResult): void => {
-  if (cell.target !== 'mongo') {
-    expect(result.exitCode, formatStepDiagnostic('migration apply', project, result)).toBe(0);
-    return;
-  }
-  seamExpectation<StepResult>({
-    ticket: 'TML-2486',
-    description:
-      'mongo migration apply successfully creates the contract collections (planner emits createCollection for plain collections; serializer accepts in-memory ops with undefined optionals)',
-    status: 'fixed',
-    whenBroken: (r) => {
-      expect(
-        r.exitCode,
-        'TML-2486 still broken: mongo migration apply must currently fail',
-      ).not.toBe(0);
-      // Prisma-Next CLI journey tests treat stdout as the
-      // machine-readable channel — assert the diagnostic regex against
-      // stdout only so a regression that quietly moves the message to
-      // stderr would still flip the test red.
-      expect(
-        r.stdout,
-        'TML-2486 still broken: mongo error must mention undefined fields or missing collections',
-      ).toMatch(/undefined|CLI.UNEXPECTED|createCollection|MIGRATION.RUNNER_FAILED|missing_table/);
-    },
-    whenFixed: (r) => {
-      expect(r.exitCode, formatStepDiagnostic('migration apply', project, r)).toBe(0);
-    },
-  })(result);
+const expectMigrationApplied = (project: JourneyProject, result: StepResult): void => {
+  expect(result.exitCode, formatStepDiagnostic('migrate', project, result)).toBe(0);
 };
 
-const TML_2487_seam = seamExpectation<StepResult>({
-  ticket: 'TML-2487',
-  description: '@prisma/orm-mongo/bson re-exports ObjectId',
-  status: 'fixed',
-  whenBroken: (r) => {
-    expect(r.exitCode, 'TML-2487 still broken: ObjectId import must currently fail').not.toBe(0);
-  },
-  whenFixed: (r) => {
-    expect(r.exitCode, formatStepDiagnostic('ObjectId import', null, r)).toBe(0);
-    expect(r.stdout.trim(), 'ObjectId.toHexString() should yield 24 hex chars').toBe('24');
-  },
-});
+const expectObjectIdImportWorks = (r: StepResult): void => {
+  expect(r.exitCode, formatStepDiagnostic('ObjectId import', null, r)).toBe(0);
+  expect(r.stdout.trim(), 'ObjectId.toHexString() should yield 24 hex chars').toBe('24');
+};
 
-const TML_2314_seam = seamExpectation<StepResult>({
-  ticket: 'TML-2314',
-  description:
-    'user can write/read an entity via @internal/postgres/runtime and the /control facade composes a working stack',
-  status: 'fixed',
-  whenBroken: (r) => {
-    expect(r.exitCode, 'TML-2314 still broken: control import must currently fail').not.toBe(0);
-  },
-  whenFixed: (r) => {
-    expect(r.exitCode, formatStepDiagnostic('postgres journey user-code', null, r)).toBe(0);
-    expect(
-      r.stdout.trim(),
-      'postgres journey must complete a runtime CRUD round-trip and a control readMarker',
-    ).toBe('ok');
-  },
-});
+const expectPostgresUserCodeRoundTrip = (r: StepResult): void => {
+  expect(r.exitCode, formatStepDiagnostic('postgres journey user-code', null, r)).toBe(0);
+  expect(
+    r.stdout.trim(),
+    'postgres journey must complete a runtime CRUD round-trip and a control readMarker',
+  ).toBe('ok');
+};
 
 function expectScaffoldedFiles(project: JourneyProject): void {
   const required = [
@@ -410,7 +360,7 @@ function expectFacadeIsResolvable(project: JourneyProject): void {
 
 function formatInitDiagnostic(project: JourneyProject): string {
   return [
-    `prisma-next init failed for ${cellLabel(project.cell)}`,
+    `prisma orm init failed for ${cellLabel(project.cell)}`,
     `  exit code: ${project.initResult.exitCode}`,
     '  stdout:',
     indent(project.initResult.stdout, '    '),

@@ -9,10 +9,11 @@ import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
 import {
   type JourneyContext,
+  latestMigrationDirName,
+  planMigrationAndSelfEmit,
   runContractEmit,
   runMigrate,
   runMigrationLog,
-  runMigrationPlanAndEmit,
   setupJourney,
   swapContract,
   timeouts,
@@ -40,7 +41,7 @@ withTempDir(({ createTempDir }) => {
         });
 
         expect((await runContractEmit(ctx)).exitCode, 'emit base').toBe(0);
-        expect((await runMigrationPlanAndEmit(ctx, ['--name', 'initial'])).exitCode, 'plan').toBe(
+        expect((await planMigrationAndSelfEmit(ctx, ['--name', 'initial'])).exitCode, 'plan').toBe(
           0,
         );
         expect((await runMigrate(ctx)).exitCode, 'apply initial').toBe(0);
@@ -48,7 +49,14 @@ withTempDir(({ createTempDir }) => {
         swapContract(ctx, 'contract-additive');
         expect((await runContractEmit(ctx)).exitCode, 'emit v2').toBe(0);
         expect(
-          (await runMigrationPlanAndEmit(ctx, ['--name', 'add-name-column'])).exitCode,
+          (
+            await planMigrationAndSelfEmit(ctx, [
+              '--name',
+              'add-name-column',
+              '--from',
+              latestMigrationDirName(ctx),
+            ])
+          ).exitCode,
           'plan v2',
         ).toBe(0);
         expect((await runMigrate(ctx)).exitCode, 'apply v2').toBe(0);
@@ -106,7 +114,8 @@ withTempDir(({ createTempDir }) => {
           error: { code: 'CONFIG.DB_CONNECTION_REQUIRED' },
         });
         expect(envelope?.nextActions.length).toBeGreaterThan(0);
-        expect(envelope).not.toHaveProperty('fix');
+        expect(envelope?.ok).toBe(false);
+        expect(envelope).not.toHaveProperty('error.fix');
       },
       timeouts.typeScriptCompilation,
     );

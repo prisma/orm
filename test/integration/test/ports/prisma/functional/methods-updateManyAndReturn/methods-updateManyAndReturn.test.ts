@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { timeouts, withPostgresPort } from '../../../_harness/postgres';
+import { timeouts, withPostgresPort } from '../../../../_harness/postgres';
 import type { Contract } from './_fixture/generated/contract';
 import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
 
@@ -8,8 +8,8 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // (postgres matrix entry).
 //
 // Upstream schema (postgres):
-//   model User { id String @id @default(cuid()); email String @unique; name String?; posts Post[] }
-//   model Post { id String @id @default(cuid()); title String; user User @relation(fields:[userId], references:[id]); userId String }
+//   model User { id String @id @onCreate(cuid()); email String @unique; name String?; posts Post[] }
+//   model Post { id String @id @onCreate(cuid()); title String; user User @relation(fields:[userId], references:[id]); userId String }
 //
 // API mapping:
 //   prisma.user.updateManyAndReturn({ data, where }) → db.public.User.where(where).updateAll(data)
@@ -24,16 +24,17 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //   "should update and return records satisfying the where clause" → ported (passing)
 //   "should accept select"                                    → ported (passing)
 //   "should accept include on the post side"                  → ported (passing)
-//   "should fail include on the user side"  → non-ported: prisma-next's updateAll DOES support
+//   "should fail include on the user side"  → non-ported: Prisma 8's updateAll DOES support
 //                                             include('posts') on User; no equivalent restriction
 //   "take should fail"                      → non-ported: updateAll takes (data, configure?) not
 //                                             an options bag; take is not an option here
 //   "orderBy should fail"                   → non-ported: same as above
 //   "distinct should fail"                  → non-ported: same as above
 //   "select _count should fail"             → ported (passing): inline @ts-expect-error on
-//                                             select('_count'); the invalid column rejects at runtime
+//                                             select('_count'); building the query throws
+//                                             ORM.FIELD_UNKNOWN
 //   "include _count should fail"            → ported (it.fails): inline @ts-expect-error on
-//                                             include('_count'); prisma-next type-rejects but ignores
+//                                             include('_count'); Prisma 8 type-rejects but ignores
 //                                             the unknown relation at runtime (no throw)
 
 function withUpdateManyAndReturn(fn: Parameters<typeof withPostgresPort<Contract>>[1]) {
@@ -175,10 +176,10 @@ describe('ports/prisma/functional/methods-updateManyAndReturn-supported', () => 
     () =>
       withUpdateManyAndReturn(async ({ db }) => {
         await db.public.User.create({ email: 'umar-select-count@example.com' });
-        await expect(
+        expect(() =>
           // @ts-expect-error `_count` is not a scalar field
           db.public.User.select('_count').where({}).updateAll({ name: 'x' }),
-        ).rejects.toThrow();
+        ).toThrow(expect.objectContaining({ code: 'ORM.FIELD_UNKNOWN' }));
       }),
     timeouts.spinUpPpgDev,
   );

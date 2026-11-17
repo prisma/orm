@@ -5,7 +5,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { assertReviewStateV1, formatCanonicalJson } from './review-artifacts.mjs';
+import { assertReviewStateV2, formatCanonicalJson } from './review-artifacts.mjs';
 
 const EXIT_SUCCESS = 0;
 const EXIT_OPERATIONAL = 1;
@@ -86,7 +86,7 @@ async function main() {
 
   const raw = await readFile(args.inPath, 'utf8');
   const reviewState = JSON.parse(raw);
-  assertReviewStateV1(reviewState);
+  assertReviewStateV2(reviewState);
   const payload = buildTargetsPayload(reviewState, args.inPath);
   await mkdir(dirname(args.outPath), { recursive: true });
   await writeFile(args.outPath, formatCanonicalJson(payload), 'utf8');

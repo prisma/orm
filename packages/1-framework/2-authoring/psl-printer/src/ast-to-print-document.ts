@@ -1,7 +1,9 @@
 import type {
   PslAttribute,
   PslAttributeArgument,
+  PslCompositeType,
   PslDocumentAst,
+  PslExtensionBlock,
   PslField,
   PslModel,
   PslNamedTypeDeclaration,
@@ -16,15 +18,16 @@ import type { PrintDocument, PrintNamespaceSection } from './print-document';
 import { escapePslString } from './serialize-print-document';
 import type { PrinterField, PrinterModel, PrinterNamedType } from './types';
 
-// `contract infer` produces a starting-point PSL contract from a live database
-// schema; the user is expected to edit it (rename models/fields, tighten types,
-// add `@id` where introspection couldn't infer one, etc.) and then run
-// `contract emit` to produce the canonical artifacts. The header invites that
-// workflow rather than warning against it.
-const DEFAULT_AST_PRINT_HEADER =
-  '// use prisma-next\n// Contract inferred from the live database schema. Edit as needed, then run `prisma-next contract emit`.';
+const PRISMA_8_MARKER = '// use prisma-8';
 
-export function astDocumentToPrintDocument(ast: PslDocumentAst): PrintDocument {
+function headerCommentFor(description: string | undefined): string {
+  return description === undefined ? PRISMA_8_MARKER : `${PRISMA_8_MARKER}\n// ${description}`;
+}
+
+export function astDocumentToPrintDocument(
+  ast: PslDocumentAst,
+  description?: string,
+): PrintDocument {
   // FK dependencies are resolved across the whole document — a model in one
   // namespace can reference a model in another, and the topo-sort needs to
   // see every model to produce a stable order. After sorting, we re-bucket by
@@ -34,41 +37,78 @@ export function astDocumentToPrintDocument(ast: PslDocumentAst): PrintDocument {
   const deps = buildModelFkDeps(allModels, modelNames);
   const sortedModels = topologicalSortModels(allModels, deps);
 
-  const modelNamespaceIndex = new Map<string, string>();
-  for (const namespace of ast.namespaces) {
-    for (const model of namespace.models) {
-      modelNamespaceIndex.set(model.name, namespace.name);
-    }
-  }
-
   const namedTypes: PrinterNamedType[] = ast.types
     ? ast.types.declarations.map(namedTypeDeclarationToPrinterNamedType)
     : [];
 
-  const namespaceSections: PrintNamespaceSection[] = ast.namespaces.map((namespace) => {
-    const namespaceModels = sortedModels.filter(
-      (model) => modelNamespaceIndex.get(model.name) === namespace.name,
-    );
-    const printerModels = namespaceModels.map((m) => modelToPrinterModel(m));
-    return {
-      name: namespace.name,
-      models: printerModels,
-      extensionBlocks: namespacePslExtensionBlocks(namespace),
+  const modelOrder = new Map(sortedModels.map((model, index) => [model.name, index]));
+
+  // A namespace's name is its identity, but `ast.namespaces` is an array, so a
+  // producer can hand over two entries sharing one name. One section per
+  // distinct name, and each section takes its content from its own entries
+  // rather than from a document-wide name lookup: a model name is unique
+  // within a namespace but not across them, so a lookup keyed on the name
+  // alone attributes both to whichever namespace came last and drops the
+  // other.
+  //
+  // Models and blocks are both keyed the way a single namespace keys them
+  // (`entries[kind][name]`, last one wins), so two entries declaring the same
+  // model or block print it once instead of emitting a duplicate declaration
+  // that would not parse back.
+  type Section = {
+    readonly compositeTypes: Map<string, PslCompositeType>;
+    readonly models: Map<string, PslModel>;
+    readonly blocks: Map<string, PslExtensionBlock>;
+  };
+  const sectionsByName = new Map<string, Section>();
+  for (const namespace of ast.namespaces) {
+    const section: Section = sectionsByName.get(namespace.name) ?? {
+      compositeTypes: new Map(),
+      models: new Map(),
+      blocks: new Map(),
     };
-  });
+    for (const compositeType of namespace.compositeTypes) {
+      section.compositeTypes.set(compositeType.name, compositeType);
+    }
+    for (const model of namespace.models) {
+      section.models.set(model.name, model);
+    }
+    for (const block of namespacePslExtensionBlocks(namespace)) {
+      section.blocks.set(`${block.kind} ${block.name}`, block);
+    }
+    sectionsByName.set(namespace.name, section);
+  }
+
+  // Absent from the order map means absent from `flatPslModels`, which reads
+  // the same `entries['model']` the section did — so it cannot happen. Sorting
+  // such a model to the tail keeps the failure visible if it ever does, rather
+  // than tying it with the genuine first model.
+  const unranked = sortedModels.length;
+  const namespaceSections: PrintNamespaceSection[] = [...sectionsByName].map(([name, section]) => ({
+    name,
+    compositeTypes: [...section.compositeTypes.values()]
+      .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+      .map((compositeType) => modelToPrinterModel(compositeType)),
+    models: [...section.models.values()]
+      .sort((a, b) => (modelOrder.get(a.name) ?? unranked) - (modelOrder.get(b.name) ?? unranked))
+      .map((m) => modelToPrinterModel(m)),
+    extensionBlocks: [...section.blocks.values()],
+  }));
 
   // Ensure the synthesised `__unspecified__` bucket sorts first so top-level
   // declarations print before any `namespace { … }` blocks — matches what a
-  // user would write by hand.
+  // user would write by hand. Remaining names compare by code point, not by
+  // `localeCompare`, so the emitted bytes do not depend on the host's locale
+  // or ICU build.
   namespaceSections.sort((a, b) => {
     if (a.name === b.name) return 0;
     if (a.name === UNSPECIFIED_PSL_NAMESPACE_ID) return -1;
     if (b.name === UNSPECIFIED_PSL_NAMESPACE_ID) return 1;
-    return a.name.localeCompare(b.name);
+    return a.name < b.name ? -1 : 1;
   });
 
   return {
-    headerComment: DEFAULT_AST_PRINT_HEADER,
+    headerComment: headerCommentFor(description),
     namedTypes,
     namespaces: namespaceSections,
   };
@@ -104,7 +144,8 @@ function namedTypeDeclarationToPrinterNamedType(decl: PslNamedTypeDeclaration): 
 
 function formatTypeConstructor(tc: PslTypeConstructorCall): string {
   const path = tc.path.join('.');
-  if (tc.args.length === 0) {
+  const isNamespaced = tc.path.length > 1;
+  if (tc.args.length === 0 && !isNamespaced) {
     return path;
   }
   return `${path}(${tc.args.map(renderAttributeArgument).join(', ')})`;
@@ -115,8 +156,9 @@ function getPositionalStringArg(attr: PslAttribute, index: number): string | und
   const raw = positional[index]?.value.trim();
   if (!raw) return undefined;
   const m = raw.match(/^(['"])(.*)\1$/);
-  if (!m) return undefined;
-  return unescapePslString(m[2] as string);
+  const unescaped = m?.[2];
+  if (unescaped === undefined) return undefined;
+  return unescapePslString(unescaped);
 }
 
 /**
@@ -150,7 +192,7 @@ function unescapePslString(value: string): string {
   return result;
 }
 
-function modelToPrinterModel(model: PslModel): PrinterModel {
+function modelToPrinterModel(model: PslModel | PslCompositeType): PrinterModel {
   let mapName: string | undefined;
   const modelAttrStrings: string[] = [];
 
@@ -173,7 +215,7 @@ function modelToPrinterModel(model: PslModel): PrinterModel {
     mapName,
     fields: printerFields,
     modelAttributes: modelAttrStrings,
-    comment: model.comment,
+    comment: model.kind === 'model' ? model.comment : undefined,
   };
 }
 
@@ -219,8 +261,6 @@ function fieldToPrinterField(field: PslField): PrinterField {
 
   const isRelation = field.attributes.some((a) => a.name === 'relation' && a.target === 'field');
 
-  const isUnsupported = typeName.startsWith('Unsupported(');
-
   const isId = field.attributes.some((a) => a.name === 'id' && a.target === 'field');
 
   return {
@@ -228,11 +268,11 @@ function fieldToPrinterField(field: PslField): PrinterField {
     typeName,
     optional: field.optional,
     list: field.list,
+    elementOptional: field.elementOptional ?? false,
     attributes: attrStrings,
     mapName,
     isId,
     isRelation,
-    isUnsupported,
     comment: undefined,
   };
 }
@@ -251,7 +291,7 @@ function buildModelFkDeps(
       const refModel = relationReferencedModel(field, modelNames);
       if (!refModel || refModel === m.name) continue;
       if (!hasFullRelation(field)) continue;
-      (deps.get(m.name) as Set<string>).add(refModel);
+      deps.get(m.name)?.add(refModel);
     }
   }
 

@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma@a6d0155
 // packages/client/tests/functional/issues/16535-select-enum (postgres matrix entry).
 //
@@ -5,7 +7,7 @@
 //   model User { id String @id; role UserRole }
 //   enum UserRole { ADMIN USER }
 //
-// prisma-next: text-backed enum uses @@type("pg/text@1").
+// Prisma 8: text-backed enum uses @@type("pg/text@1").
 
 enum UserRole {
   @@type("pg/text@1")
@@ -14,6 +16,7 @@ enum UserRole {
 }
 
 model User {
-  id   String   @id @default(cuid(2))
+  id   String   @id @onCreate(cuid(2))
   role UserRole
+  @@map("user")
 }

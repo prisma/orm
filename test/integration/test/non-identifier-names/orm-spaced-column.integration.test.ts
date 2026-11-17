@@ -53,6 +53,8 @@ async function migrateContract(connectionString: string): Promise<void> {
       schema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -90,7 +92,7 @@ async function migrateContract(connectionString: string): Promise<void> {
   }
 }
 
-describe.sequential('ORM round-trip over a space-containing column name', () => {
+describe('ORM round-trip over a space-containing column name', { concurrent: false }, () => {
   let database: DevDatabase | undefined;
 
   beforeAll(async () => {

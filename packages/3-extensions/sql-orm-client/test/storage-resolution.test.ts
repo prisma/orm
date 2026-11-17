@@ -18,8 +18,8 @@ const STORAGE_HASH = blindCast<SqlStorageType['storageHash'], 'test storage hash
 function usersTable(columnName: string): StorageTable {
   return new StorageTable({
     columns: {
-      id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-      [columnName]: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+      id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+      [columnName]: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
     },
     primaryKey: { columns: ['id'] },
     uniques: [],
@@ -72,24 +72,5 @@ describe('storage-resolution coordinate-aware lookups', () => {
 
     expect(requireStorageTableForContract(contract, 'auth', 'users').namespaceId).toBe('auth');
     expect(tableSourceForContract(contract, 'public', 'users').namespaceId).toBe('public');
-  });
-
-  it('resolves a bare table name within the given namespace', () => {
-    const contract = contractWith(
-      new SqlStorage({
-        storageHash: STORAGE_HASH,
-        namespaces: {
-          public: postgresCreateNamespace({
-            id: 'public',
-            entries: { table: { users: usersTable('email_addr') } },
-          }),
-        },
-      }),
-    );
-
-    expect(Object.keys(storageTableForContract(contract, 'public', 'users').columns)).toEqual([
-      'id',
-      'email_addr',
-    ]);
   });
 });

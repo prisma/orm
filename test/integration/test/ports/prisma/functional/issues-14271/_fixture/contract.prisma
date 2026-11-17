@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma@a6d0155
 // packages/client/tests/functional/issues/14271 (postgres matrix entry).
 //
@@ -23,6 +25,7 @@ model Hub {
   id            Int            @id @default(autoincrement())
   name          String         @unique
   batteryLevels BatteryLevel[]
+  @@map("hub")
 }
 
 model BatteryLevel {
@@ -30,4 +33,5 @@ model BatteryLevel {
   name  String @unique
   hubId Int?
   hub   Hub?   @relation(fields: [hubId], references: [id], onDelete: SetNull)
+  @@map("batteryLevel")
 }

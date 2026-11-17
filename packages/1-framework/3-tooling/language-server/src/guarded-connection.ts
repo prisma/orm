@@ -1,4 +1,4 @@
-import { type Connection, ConnectionError } from 'vscode-languageserver';
+import { type Connection, ConnectionError, ConnectionErrors } from 'vscode-languageserver';
 
 /**
  * Wraps a connection so that an outbound call the client is no longer there to
@@ -45,12 +45,36 @@ function guardCalls<Target extends object>(target: Target): Target {
   });
 }
 
+/**
+ * Whether an error says the connection is gone.
+ *
+ * The identity check is the fast path. It misses when the error comes from a
+ * second copy of `vscode-jsonrpc` in the dependency tree, whose
+ * `ConnectionError` is a different class carrying the same shape, so the code
+ * is what decides: `Closed`, `Disposed` and `AlreadyListening` are the whole
+ * range, and no other error jsonrpc throws carries a numeric `code` in it.
+ */
+function isConnectionGone(error: unknown): error is ConnectionError {
+  if (error instanceof ConnectionError) {
+    return true;
+  }
+  if (!(error instanceof Error) || !('code' in error)) {
+    return false;
+  }
+  const { code } = error;
+  return (
+    code === ConnectionErrors.Closed ||
+    code === ConnectionErrors.Disposed ||
+    code === ConnectionErrors.AlreadyListening
+  );
+}
+
 function whileConnected(send: () => unknown): unknown {
   let sent: unknown;
   try {
     sent = send();
   } catch (error) {
-    if (error instanceof ConnectionError) {
+    if (isConnectionGone(error)) {
       // Sends return promises, so a caller that awaits or chains a swallowed
       // one must get a promise back, not a bare `undefined`.
       return Promise.resolve(undefined);

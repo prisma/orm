@@ -45,7 +45,8 @@ export function rewriteWorkspaceDeps(packageJson: MutablePackageJson, version: s
     if (!deps) continue;
     for (const [name, spec] of Object.entries(deps)) {
       if (typeof spec !== 'string' || !spec.startsWith('workspace:')) continue;
-      deps[name] = `workspace:${version}`;
+      const alias = /^workspace:((?:@[^/@]+\/)?[^@]+)@/.exec(spec)?.[1];
+      deps[name] = alias ? `workspace:${alias}@${version}` : `workspace:${version}`;
     }
   }
 }
@@ -68,4 +69,61 @@ export function participatesInLockstep(packageJson: MutablePackageJson): boolean
     }
   }
   return false;
+}
+
+/**
+ * Rewrite one key of a `SKILL.md`'s frontmatter `metadata` map, leaving the
+ * rest of the file untouched. Mutation is confined to the metadata block, so
+ * the same words appearing in the skill's description or prose are left alone.
+ *
+ * The Agent Skills spec defines `name` and `description` at the top level and
+ * reserves `metadata` (a string-to-string map) for everything else, so the
+ * version stamp lives there rather than as a key of our own invention. The
+ * value is written quoted: a version is a string, and an unquoted one would
+ * parse as a number the moment a release is numbered like one.
+ *
+ * The stamp is what tells a consumer's `prisma skills sync` whether the copy
+ * of the skill in its agent directories still describes the installed
+ * packages, so it versions in lockstep with everything else the publish
+ * pipeline rewrites. A skill that has lost the key throws rather than shipping
+ * an unstamped copy that no consumer can compare against.
+ */
+export function stampSkillMetadata(skillMd: string, key: string, value: string): string {
+  const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---/.exec(skillMd)?.[1];
+  if (frontmatter === undefined) throw new Error('SKILL.md has no frontmatter block');
+
+  const lines = frontmatter.split('\n');
+  const metadataAt = lines.findIndex((line) => /^metadata:\s*$/.test(line));
+  if (metadataAt === -1) throw new Error('SKILL.md frontmatter has no metadata block');
+
+  const entry = new RegExp(`^(\\s+)${key}:.*$`);
+  for (let index = metadataAt + 1; index < lines.length; index++) {
+    const line = lines[index];
+    // The metadata map ends at the first line that is not one of its entries.
+    if (line.trim() !== '' && !/^\s/.test(line)) break;
+    const match = entry.exec(line);
+    if (match === null) continue;
+    lines[index] = `${match[1]}${key}: '${value}'`;
+    return skillMd.replace(frontmatter, lines.join('\n'));
+  }
+  throw new Error(`SKILL.md metadata has no ${key} key to stamp`);
+}
+
+/**
+ * Move an extension's version stamp in an emitted contract artefact from
+ * `from` to `to`. Extension packs record their own package version in every
+ * `contract.json` / `contract.d.ts` they contribute to, so the tracked
+ * artefacts go stale on each bump and `fixtures:check` diffs them. Only the
+ * `version` that directly follows an extension entry's `targetId` is touched;
+ * every other `version` field in the artefact is left alone. Idempotent, and
+ * a no-op when the stamp is not `from`.
+ */
+export function restampExtensionVersion(artefact: string, from: string, to: string): string {
+  const escaped = from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const json = new RegExp(`("targetId":\\s*"[^"]*",\\s*"version":\\s*")${escaped}(")`, 'g');
+  const dts = new RegExp(
+    `(readonly targetId:\\s*'[^']*';\\s*readonly version:\\s*')${escaped}(')`,
+    'g',
+  );
+  return artefact.replace(json, `$1${to}$2`).replace(dts, `$1${to}$2`);
 }

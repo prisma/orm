@@ -3,7 +3,7 @@
  *
  * The happy path: a dataTransform declares an `invariantId`, the resulting
  * `migration.json` carries `providedInvariants`, a ref declares the same
- * id, and `migration apply --ref` routes through the data-bearing path.
+ * id, and `migrate --to` routes through the data-bearing path.
  * The marker write unions the applied id, so re-applying the same ref
  * subtracts already-covered invariants from the required set and the
  * second apply is a no-op.
@@ -18,31 +18,34 @@
 
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { storageHashHex } from '@prisma/orm-postgres/components/control';
 import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
 import {
   engineError,
   injectMigrationSqlDbSetup,
   type JourneyContext,
+  latestMigrationDirName,
   migrationStatusAppSpace,
   parseJsonOutput,
   parseMigrationStatusJson,
+  planMigrationAndSelfEmit,
   runContractEmit,
   runMigrate,
-  runMigrationEmit,
   runMigrationNew,
   runMigrationPlan,
-  runMigrationPlanAndEmit,
   runMigrationStatus,
+  selfEmitMigration,
   setupJourney,
   sql,
   swapContract,
   timeouts,
   useDevDatabase,
 } from '../utils/journey-test-helpers';
+import { postgresDataMigrationHeader } from '../utils/journey-workspace-helpers';
 
 const INVARIANT_ID = 'backfill-user-name';
+/** The slots `--backfill User.name` writes, named by the field. */
+const BACKFILL_SLOT = 'User.name';
 const BACKFILLED_NAME = 'unknown';
 
 /**
@@ -80,21 +83,19 @@ function patchBackfillMigrationTs(
 
   let filled = injectMigrationSqlDbSetup(scaffold)
     .replace(
-      `() => placeholder('${INVARIANT_ID}:check')`,
+      `() => placeholder('${BACKFILL_SLOT}:check')`,
       "() => db.public.user.select('id').where((f, fns) => fns.eq(f.name, null)).limit(1)",
     )
     .replace(
-      `() => placeholder('${INVARIANT_ID}:run')`,
+      `() => placeholder('${BACKFILL_SLOT}:run')`,
       `() => db.public.user.update({ name: '${BACKFILLED_NAME}' }).where((f, fns) => fns.eq(f.name, null))`,
     );
 
   if (opts.addInvariantId) {
     const id = opts.invariantId ?? INVARIANT_ID;
-    // Inject `invariantId` as the first key in the dataTransform options
-    // object. The scaffold always starts the options with `check:`.
     filled = filled.replace(
-      /(this\.dataTransform\(endContract,\s*['"][\w-]+['"]\s*,\s*\{\s*)check:/,
-      `$1invariantId: '${id}',\n  check:`,
+      /(this\.dataTransform\(endContract,\s*['"][\w-]+['"]\s*,\s*\{\n)/,
+      `$1  invariantId: '${id}',\n`,
     );
   }
 
@@ -116,7 +117,7 @@ withTempDir(({ createTempDir }) => {
 
         // O.01: emit base contract (C1) → plan + apply init (creates user table)
         expect((await runContractEmit(ctx)).exitCode, 'O.01: emit C1').toBe(0);
-        const plan0 = await runMigrationPlanAndEmit(ctx, ['--name', 'init', '--json']);
+        const plan0 = await planMigrationAndSelfEmit(ctx, ['--name', 'init', '--json']);
         expect(plan0.exitCode, 'O.01: plan init').toBe(0);
         expect((await runMigrate(ctx)).exitCode, 'O.01: apply init').toBe(0);
 
@@ -127,10 +128,17 @@ withTempDir(({ createTempDir }) => {
         );
 
         // O.03: swap to the contract that adds a NOT NULL `name` column;
-        // the planner emits a placeholder dataTransform.
+        // `--backfill` makes the planner emit a placeholder dataTransform.
         swapContract(ctx, 'contract-additive-required-name');
         expect((await runContractEmit(ctx)).exitCode, 'O.03: emit C2').toBe(0);
-        const planResult = await runMigrationPlan(ctx, ['--name', 'add-required-name']);
+        const planResult = await runMigrationPlan(ctx, [
+          '--name',
+          'add-required-name',
+          '--from',
+          latestMigrationDirName(ctx),
+          '--backfill',
+          'User.name',
+        ]);
         expect(planResult.exitCode, 'O.03: plan add-required-name').toBe(0);
 
         const migrationsDir = join(ctx.testDir, 'migrations', 'app');
@@ -146,7 +154,7 @@ withTempDir(({ createTempDir }) => {
 
         // O.05: re-emit and confirm the manifest carries `providedInvariants`.
         expect(
-          (await runMigrationEmit(ctx, ['--dir', migrationDir])).exitCode,
+          (await selfEmitMigration(ctx, ['--dir', migrationDir])).exitCode,
           'O.05: re-emit',
         ).toBe(0);
         const manifestAfter = JSON.parse(
@@ -161,10 +169,10 @@ withTempDir(({ createTempDir }) => {
         // O.06: declare a ref `prod` that points at C2 and requires the invariant.
         writeRefFile(ctx, 'prod', c2Hash, [INVARIANT_ID]);
 
-        // O.07: apply --ref prod — routes through the invariant-bearing path,
+        // apply --to prod — routes through the invariant-bearing path,
         // backfills the data, advances the marker.
         const applyRef = await runMigrate(ctx, ['--to', 'prod', '--json']);
-        expect(applyRef.exitCode, 'O.07: apply --ref prod').toBe(0);
+        expect(applyRef.exitCode, 'apply --to prod').toBe(0);
         const applyResult = parseJsonOutput<{
           ok: boolean;
           markerHash: string;
@@ -198,10 +206,10 @@ withTempDir(({ createTempDir }) => {
           { id: 2, email: 'bob@test.org', name: BACKFILLED_NAME },
         ]);
 
-        // O.09: status --ref prod surfaces the three invariant sets and the per-edge
+        // status --to prod surfaces the three invariant sets and the per-edge
         // invariants on the selected path.
         const statusRef = await runMigrationStatus(ctx, ['--to', 'prod', '--json']);
-        expect(statusRef.exitCode, 'O.09: status --ref prod').toBe(0);
+        expect(statusRef.exitCode, 'status --to prod').toBe(0);
         const statusResult = parseMigrationStatusJson(statusRef);
         expect(
           statusResult.diagnostics?.some((d) => d.code === 'MIGRATION.MISSING_INVARIANTS'),
@@ -213,12 +221,12 @@ withTempDir(({ createTempDir }) => {
           'O.09: path migrations applied',
         ).toBe(true);
 
-        // O.10: re-apply --ref prod is a no-op. The marker subtraction in
+        // re-apply --to prod is a no-op. The marker subtraction in
         // the apply command (`effectiveRequired = ref.invariants − marker.invariants`)
         // empties the required set, so routing falls through to the trivial
         // marker===target case (no path selected).
         const reapply = await runMigrate(ctx, ['--to', 'prod', '--json']);
-        expect(reapply.exitCode, 'O.10: re-apply --ref prod').toBe(0);
+        expect(reapply.exitCode, 're-apply --to prod').toBe(0);
         const reapplyResult = parseJsonOutput<{
           ok: boolean;
           markerHash: string;
@@ -245,7 +253,7 @@ withTempDir(({ createTempDir }) => {
 
         // P.01: emit base + plan + apply a single migration that declares a real invariant.
         expect((await runContractEmit(ctx)).exitCode, 'P.01: emit C1').toBe(0);
-        const plan0 = await runMigrationPlanAndEmit(ctx, ['--name', 'init', '--json']);
+        const plan0 = await planMigrationAndSelfEmit(ctx, ['--name', 'init', '--json']);
         expect(plan0.exitCode, 'P.01: plan init').toBe(0);
         expect((await runMigrate(ctx)).exitCode, 'P.01: apply init').toBe(0);
 
@@ -257,7 +265,16 @@ withTempDir(({ createTempDir }) => {
         swapContract(ctx, 'contract-additive-required-name');
         expect((await runContractEmit(ctx)).exitCode, 'P.02: emit C2').toBe(0);
         expect(
-          (await runMigrationPlan(ctx, ['--name', 'add-required-name'])).exitCode,
+          (
+            await runMigrationPlan(ctx, [
+              '--name',
+              'add-required-name',
+              '--from',
+              latestMigrationDirName(ctx),
+              '--backfill',
+              'User.name',
+            ])
+          ).exitCode,
           'P.02: plan',
         ).toBe(0);
 
@@ -271,7 +288,7 @@ withTempDir(({ createTempDir }) => {
         );
         patchBackfillMigrationTs(migrationDir, { addInvariantId: true });
         expect(
-          (await runMigrationEmit(ctx, ['--dir', migrationDir])).exitCode,
+          (await selfEmitMigration(ctx, ['--dir', migrationDir])).exitCode,
           'P.02: re-emit',
         ).toBe(0);
 
@@ -281,7 +298,7 @@ withTempDir(({ createTempDir }) => {
         // P.03: declare a ref requiring an id no migration provides.
         writeRefFile(ctx, 'prod', c2Hash, ['typo-no-migration-declares-this']);
 
-        // P.04: apply --ref prod fails fast with UNKNOWN_INVARIANT, marker untouched.
+        // apply --to prod fails fast with UNKNOWN_INVARIANT, marker untouched.
         const applyFail = await runMigrate(ctx, ['--to', 'prod', '--json']);
         expect(applyFail.exitCode, 'P.04: apply exits 2').toBe(2);
         const applyEnvelope = parseJsonOutput<{
@@ -297,14 +314,14 @@ withTempDir(({ createTempDir }) => {
         ]);
 
         // P.05: marker still at C1 — UNKNOWN_INVARIANT fired before any DB write.
-        // Querying via the CLI status path (without --ref so the pre-check doesn't
+        // Querying via the CLI status path (without --to so the pre-check doesn't
         // fire) is the cleanest cross-DB-family way to read the marker.
         const statusOffline = await runMigrationStatus(ctx, ['--json']);
         expect(statusOffline.exitCode, 'P.05: status exit').toBe(0);
         const offlineState = migrationStatusAppSpace(parseMigrationStatusJson(statusOffline));
         expect(offlineState.currentContract, 'P.05: marker did not advance to C2').not.toBe(c2Hash);
 
-        // P.06: status --ref prod is fatal too (parity with apply).
+        // status --to prod is fatal too (parity with apply).
         const statusFail = await runMigrationStatus(ctx, ['--to', 'prod', '--json']);
         expect(statusFail.exitCode, 'P.06: status exits 2').toBe(2);
         expect(engineError(statusFail)?.code, 'P.06: status error code').toBe(
@@ -328,7 +345,7 @@ withTempDir(({ createTempDir }) => {
 
         // Q.01: emit base (C1), plan + apply init (no invariants on this edge).
         expect((await runContractEmit(ctx)).exitCode, 'Q.01: emit C1').toBe(0);
-        const plan0 = await runMigrationPlanAndEmit(ctx, ['--name', 'init', '--json']);
+        const plan0 = await planMigrationAndSelfEmit(ctx, ['--name', 'init', '--json']);
         expect(plan0.exitCode, 'Q.01: plan init').toBe(0);
         const c1Hash = parseJsonOutput<{ to: string }>(plan0).to;
         expect((await runMigrate(ctx)).exitCode, 'Q.01: apply init').toBe(0);
@@ -342,7 +359,14 @@ withTempDir(({ createTempDir }) => {
         // This edge declares invariantId=INVARIANT_ID and goes C1 → CA.
         swapContract(ctx, 'contract-additive-required-name');
         expect((await runContractEmit(ctx)).exitCode, 'Q.02: emit CA').toBe(0);
-        const planA = await runMigrationPlan(ctx, ['--name', 'branch-a-with-invariant']);
+        const planA = await runMigrationPlan(ctx, [
+          '--name',
+          'branch-a-with-invariant',
+          '--from',
+          latestMigrationDirName(ctx),
+          '--backfill',
+          'User.name',
+        ]);
         expect(planA.exitCode, 'Q.02: plan branch A').toBe(0);
         const migrationsDir = join(ctx.testDir, 'migrations', 'app');
         const branchADir = join(
@@ -354,7 +378,7 @@ withTempDir(({ createTempDir }) => {
         );
         patchBackfillMigrationTs(branchADir, { addInvariantId: true });
         expect(
-          (await runMigrationEmit(ctx, ['--dir', branchADir])).exitCode,
+          (await selfEmitMigration(ctx, ['--dir', branchADir])).exitCode,
           'Q.02: re-emit branch A',
         ).toBe(0);
 
@@ -362,7 +386,7 @@ withTempDir(({ createTempDir }) => {
         // plan with --from C1 to create a divergent edge C1 → CB. No invariants.
         swapContract(ctx, 'contract-phone');
         expect((await runContractEmit(ctx)).exitCode, 'Q.03: emit CB').toBe(0);
-        const planB = await runMigrationPlanAndEmit(ctx, [
+        const planB = await planMigrationAndSelfEmit(ctx, [
           '--name',
           'branch-b-no-invariant',
           '--from',
@@ -377,7 +401,7 @@ withTempDir(({ createTempDir }) => {
         // The structural path C1 → CB exists; it just doesn't cover the required id.
         writeRefFile(ctx, 'prod', cbHash, [INVARIANT_ID]);
 
-        // Q.05: apply --ref prod fails with NO_INVARIANT_PATH (not UNKNOWN_INVARIANT,
+        // apply --to prod fails with NO_INVARIANT_PATH (not UNKNOWN_INVARIANT,
         // because the id IS declared somewhere in the graph). The structural path
         // points at the CB-branch edge that doesn't cover it.
         const applyFail = await runMigrate(ctx, ['--to', 'prod', '--json']);
@@ -412,7 +436,7 @@ withTempDir(({ createTempDir }) => {
     // The pinned behavior: `marker.invariants` is set-semantic. Once an
     // invariant id has been written by a successful apply, it stays in the
     // set forever — no rollback path removes it. A second forward apply via
-    // `--ref` after an out-of-band marker reset routes through the same
+    // `--to` after an out-of-band marker reset routes through the same
     // edge, the data transform is re-evaluated, and the set is unchanged
     // (already-present id is a no-op union).
     //
@@ -424,7 +448,7 @@ withTempDir(({ createTempDir }) => {
     // honest outcome — the test does not pretend the data transform's
     // body re-fires when it doesn't.
     it(
-      'rollback marker.storageHash to A → re-apply via --ref selects M1 → marker advances back to B with invariants unchanged',
+      'rollback marker.storageHash to A → re-apply via --to selects M1 → marker advances back to B with invariants unchanged',
       async () => {
         const ctx: JourneyContext = setupJourney({
           connectionString: db.connectionString,
@@ -432,7 +456,7 @@ withTempDir(({ createTempDir }) => {
         });
 
         expect((await runContractEmit(ctx)).exitCode, 'R.01: emit C1').toBe(0);
-        const plan0 = await runMigrationPlanAndEmit(ctx, ['--name', 'init', '--json']);
+        const plan0 = await planMigrationAndSelfEmit(ctx, ['--name', 'init', '--json']);
         expect(plan0.exitCode, 'R.01: plan init').toBe(0);
         const c1Hash = parseJsonOutput<{ to: string }>(plan0).to;
         expect((await runMigrate(ctx)).exitCode, 'R.01: apply init').toBe(0);
@@ -445,7 +469,16 @@ withTempDir(({ createTempDir }) => {
         swapContract(ctx, 'contract-additive-required-name');
         expect((await runContractEmit(ctx)).exitCode, 'R.02: emit C2').toBe(0);
         expect(
-          (await runMigrationPlan(ctx, ['--name', 'add-required-name'])).exitCode,
+          (
+            await runMigrationPlan(ctx, [
+              '--name',
+              'add-required-name',
+              '--from',
+              latestMigrationDirName(ctx),
+              '--backfill',
+              'User.name',
+            ])
+          ).exitCode,
           'R.02: plan',
         ).toBe(0);
 
@@ -458,9 +491,10 @@ withTempDir(({ createTempDir }) => {
             .at(-1)!,
         );
         patchBackfillMigrationTs(migrationDir, { addInvariantId: true });
-        expect((await runMigrationEmit(ctx, ['--dir', migrationDir])).exitCode, 'R.02: emit').toBe(
-          0,
-        );
+        expect(
+          (await selfEmitMigration(ctx, ['--dir', migrationDir])).exitCode,
+          're-emit with invariant',
+        ).toBe(0);
 
         const manifest = JSON.parse(readFileSync(join(migrationDir, 'migration.json'), 'utf-8'));
         const c2Hash = manifest.to as string;
@@ -468,7 +502,7 @@ withTempDir(({ createTempDir }) => {
         writeRefFile(ctx, 'prod', c2Hash, [INVARIANT_ID]);
 
         const apply1 = await runMigrate(ctx, ['--to', 'prod', '--json']);
-        expect(apply1.exitCode, 'R.02: apply --ref prod').toBe(0);
+        expect(apply1.exitCode, 'apply --to prod after rollback').toBe(0);
         expect(
           parseJsonOutput<{ markerHash: string }>(apply1).markerHash,
           'R.02: marker at C2',
@@ -496,7 +530,7 @@ withTempDir(({ createTempDir }) => {
         ).toEqual([INVARIANT_ID]);
 
         const apply2 = await runMigrate(ctx, ['--to', 'prod', '--json']);
-        expect(apply2.exitCode, 'R.04: re-apply --ref prod').toBe(0);
+        expect(apply2.exitCode, 're-apply --to prod after rollback').toBe(0);
         const apply2Result = parseJsonOutput<{
           markerHash: string;
           pathDecision?: {
@@ -535,7 +569,7 @@ withTempDir(({ createTempDir }) => {
 
     // Self-edges (from === to) carry only data ops. The pathfinder treats
     // them as routing-visible when they declare an invariantId, and the
-    // runner runs them on `migration apply --ref` even though the marker's
+    // runner runs them on `migrate --to` even though the marker's
     // storage hash never changes.
     it(
       'migration new --from <currentHash> scaffolds self-edge → fill in dataTransform → apply normalizes data and accumulates marker.invariants',
@@ -546,7 +580,7 @@ withTempDir(({ createTempDir }) => {
         });
 
         expect((await runContractEmit(ctx)).exitCode, 'S.01: emit C1').toBe(0);
-        const plan0 = await runMigrationPlanAndEmit(ctx, ['--name', 'init', '--json']);
+        const plan0 = await planMigrationAndSelfEmit(ctx, ['--name', 'init', '--json']);
         expect(plan0.exitCode, 'S.01: plan init').toBe(0);
         const c1Hash = parseJsonOutput<{ to: string }>(plan0).to;
         expect((await runMigrate(ctx)).exitCode, 'S.01: apply init').toBe(0);
@@ -579,24 +613,7 @@ withTempDir(({ createTempDir }) => {
         expect(draftManifest.from, 'S.03: scaffold has from === to').toBe(c1Hash);
         expect(draftManifest.to).toBe(c1Hash);
 
-        const endContractSpecifier = `../../snapshots/${storageHashHex(c1Hash)}/contract.json`;
-        const handAuthored = `import postgresAdapter from '@prisma/orm-postgres/adapter/runtime';
-import { Migration, MigrationCLI } from '@prisma/orm-postgres/migration';
-import postgresTarget from '@prisma/orm-postgres/target/runtime';
-import { sql } from '@prisma/orm-postgres/builder/runtime';
-import { createExecutionContext, createSqlExecutionStack } from '@prisma/orm-postgres/family-runtime';
-import endContractJson from '${endContractSpecifier}' with { type: 'json' };
-import { PostgresContractSerializer } from '@prisma/orm-postgres/target/runtime';
-
-const endContract = new PostgresContractSerializer().deserializeContract(endContractJson);
-
-const db = sql({
-  context: createExecutionContext({
-    contract: endContract,
-    stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),
-  }),
-});
-
+        const handAuthored = `${postgresDataMigrationHeader(c1Hash)}
 export default class M extends Migration {
   override describe() {
     return { from: ${JSON.stringify(c1Hash)}, to: ${JSON.stringify(c1Hash)} };
@@ -616,7 +633,7 @@ export default class M extends Migration {
 MigrationCLI.run(import.meta.url, M);
 `;
         writeFileSync(join(migrationDir, 'migration.ts'), handAuthored);
-        const emitResult = await runMigrationEmit(ctx, ['--dir', migrationDir]);
+        const emitResult = await selfEmitMigration(ctx, ['--dir', migrationDir]);
         expect(emitResult.exitCode, `S.04: emit: ${emitResult.stdout}\n${emitResult.stderr}`).toBe(
           0,
         );
@@ -634,7 +651,7 @@ MigrationCLI.run(import.meta.url, M);
         const applyRef = await runMigrate(ctx, ['--to', 'prod', '--json']);
         expect(
           applyRef.exitCode,
-          `S.05: apply --ref prod: ${applyRef.stdout}\n${applyRef.stderr}`,
+          `apply --to prod (subset ref): ${applyRef.stdout}\n${applyRef.stderr}`,
         ).toBe(0);
         const applyResult = parseJsonOutput<{
           markerHash: string;
@@ -682,7 +699,7 @@ MigrationCLI.run(import.meta.url, M);
     );
   });
 
-  describe('Journey T: status --ref reports INVARIANTS_PENDING when marker is at target hash but missing required invariants', () => {
+  describe('Journey T: status --to reports INVARIANTS_PENDING when marker is at target hash but missing required invariants', () => {
     const db = useDevDatabase();
 
     const NORMALIZED_EMAIL = 'normalized@example.com';
@@ -692,12 +709,12 @@ MigrationCLI.run(import.meta.url, M);
     // (`pendingCount === 0`) but is missing required invariants the active
     // ref declares, status must NOT say "up to date". A self-edge migration
     // exists in the graph that provides the invariant, so the routing path
-    // is satisfiable — but `apply --ref` hasn't been run since marker.invariants
+    // is satisfiable — but `apply --to` hasn't been run since marker.invariants
     // got out of sync (modeled here by an out-of-band UPDATE).
     //
     // Mirrors Journey R's manual-marker-UPDATE pattern.
     it(
-      'manually clear marker.invariants → status --ref surfaces MIGRATION.INVARIANTS_PENDING and summary names the missing id',
+      'manually clear marker.invariants → status --to surfaces MIGRATION.INVARIANTS_PENDING and summary names the missing id',
       async () => {
         const ctx: JourneyContext = setupJourney({
           connectionString: db.connectionString,
@@ -705,7 +722,7 @@ MigrationCLI.run(import.meta.url, M);
         });
 
         expect((await runContractEmit(ctx)).exitCode, 'T.01: emit C1').toBe(0);
-        const plan0 = await runMigrationPlanAndEmit(ctx, ['--name', 'init', '--json']);
+        const plan0 = await planMigrationAndSelfEmit(ctx, ['--name', 'init', '--json']);
         expect(plan0.exitCode, 'T.01: plan init').toBe(0);
         const c1Hash = parseJsonOutput<{ to: string }>(plan0).to;
         expect((await runMigrate(ctx)).exitCode, 'T.01: apply init').toBe(0);
@@ -732,24 +749,7 @@ MigrationCLI.run(import.meta.url, M);
             .at(-1)!,
         );
 
-        const endContractSpecifier = `../../snapshots/${storageHashHex(c1Hash)}/contract.json`;
-        const handAuthored = `import postgresAdapter from '@prisma/orm-postgres/adapter/runtime';
-import { Migration, MigrationCLI } from '@prisma/orm-postgres/migration';
-import postgresTarget from '@prisma/orm-postgres/target/runtime';
-import { sql } from '@prisma/orm-postgres/builder/runtime';
-import { createExecutionContext, createSqlExecutionStack } from '@prisma/orm-postgres/family-runtime';
-import endContractJson from '${endContractSpecifier}' with { type: 'json' };
-import { PostgresContractSerializer } from '@prisma/orm-postgres/target/runtime';
-
-const endContract = new PostgresContractSerializer().deserializeContract(endContractJson);
-
-const db = sql({
-  context: createExecutionContext({
-    contract: endContract,
-    stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),
-  }),
-});
-
+        const handAuthored = `${postgresDataMigrationHeader(c1Hash)}
 export default class M extends Migration {
   override describe() {
     return { from: ${JSON.stringify(c1Hash)}, to: ${JSON.stringify(c1Hash)} };
@@ -770,7 +770,7 @@ MigrationCLI.run(import.meta.url, M);
 `;
         writeFileSync(join(migrationDir, 'migration.ts'), handAuthored);
         expect(
-          (await runMigrationEmit(ctx, ['--dir', migrationDir])).exitCode,
+          (await selfEmitMigration(ctx, ['--dir', migrationDir])).exitCode,
           'T.02: emit self-edge',
         ).toBe(0);
 
@@ -805,7 +805,7 @@ MigrationCLI.run(import.meta.url, M);
           [],
         );
 
-        // T.05: status --ref must report INVARIANTS_PENDING, NOT UP_TO_DATE.
+        // status --to must report INVARIANTS_PENDING, NOT UP_TO_DATE.
         const statusResult = await runMigrationStatus(ctx, ['--to', 'prod', '--json']);
         expect(statusResult.exitCode, 'T.05: status exits 0').toBe(0);
         const envelope = parseMigrationStatusJson(statusResult);

@@ -15,11 +15,12 @@ import {
   type VerifierOutput,
   verifyMigration,
 } from '@internal/migration-tools/aggregate';
+import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
 import { castAs } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { CliStructuredError } from '../../utils/cli-errors';
-import type { OnControlProgress } from '../types';
+import type { ControlActionName, OnControlProgress } from '../types';
 import {
   type BuildAggregateInputs,
   buildContractSpaceAggregate,
@@ -55,6 +56,8 @@ export interface ExecuteDbVerifyOptions<TFamilyId extends string, TTargetId exte
   readonly mode: 'strict' | 'lenient';
   readonly skipSchema: boolean;
   readonly skipMarker: boolean;
+  /** Content check for contract snapshots the aggregate loader resolves. */
+  readonly verifySnapshotContent?: SnapshotContentVerifier;
   readonly onProgress?: OnControlProgress;
 }
 
@@ -120,6 +123,7 @@ export async function executeDbVerify<TFamilyId extends string, TTargetId extend
   const schemaIntrospection = skipSchema
     ? null
     : await runIntrospection({
+        action: 'dbVerify',
         driver,
         familyInstance,
         onProgress,
@@ -147,7 +151,13 @@ export async function executeDbVerify<TFamilyId extends string, TTargetId extend
     ...ifDefined('classifySubjectGranularity', classifySubjectGranularity),
     ...ifDefined('classifyEntityKind', classifyEntityKind),
   });
-  return finaliseVerifyResult({ verifyResult, aggregate, skipMarker, onProgress });
+  return finaliseVerifyResult({
+    verifyResult,
+    aggregate,
+    skipMarker,
+    onProgress,
+    migrationsDir: options.migrationsDir,
+  });
 }
 
 function buildLoadInputs<TFamilyId extends string, TTargetId extends string>(
@@ -159,18 +169,20 @@ function buildLoadInputs<TFamilyId extends string, TTargetId extends string>(
     appContract: options.contract,
     extensions: options.extensions,
     deserializeContract: (json) => options.familyInstance.deserializeContract(json),
+    ...ifDefined('verifySnapshotContent', options.verifySnapshotContent),
   };
 }
 
-async function runIntrospection<TFamilyId extends string, TTargetId extends string>(args: {
+export async function runIntrospection<TFamilyId extends string, TTargetId extends string>(args: {
+  action: ControlActionName;
   driver: ControlDriverInstance<TFamilyId, TTargetId>;
   familyInstance: ControlFamilyInstance<TFamilyId, unknown>;
   onProgress: OnControlProgress | undefined;
   contract: unknown;
 }): Promise<unknown> {
-  const { driver, familyInstance, onProgress, contract } = args;
+  const { action, driver, familyInstance, onProgress, contract } = args;
   onProgress?.({
-    action: 'dbVerify',
+    action,
     kind: 'spanStart',
     spanId: SPAN_IDS.introspect,
     label: 'Introspecting database schema',
@@ -178,7 +190,7 @@ async function runIntrospection<TFamilyId extends string, TTargetId extends stri
   try {
     const result = await familyInstance.introspect({ driver, contract });
     onProgress?.({
-      action: 'dbVerify',
+      action,
       kind: 'spanEnd',
       spanId: SPAN_IDS.introspect,
       outcome: 'ok',
@@ -186,7 +198,7 @@ async function runIntrospection<TFamilyId extends string, TTargetId extends stri
     return result;
   } catch (error) {
     onProgress?.({
-      action: 'dbVerify',
+      action,
       kind: 'spanEnd',
       spanId: SPAN_IDS.introspect,
       outcome: 'error',
@@ -257,8 +269,9 @@ function finaliseVerifyResult(args: {
   };
   skipMarker: boolean;
   onProgress: OnControlProgress | undefined;
+  migrationsDir: string;
 }): ExecuteDbVerifyResult {
-  const { verifyResult, aggregate, skipMarker, onProgress } = args;
+  const { verifyResult, aggregate, skipMarker, onProgress, migrationsDir } = args;
   if (!verifyResult.ok) {
     emitVerifySpan(onProgress, 'spanEndError');
     return notOk(
@@ -275,7 +288,7 @@ function finaliseVerifyResult(args: {
   }
   const markerDrift = skipMarker
     ? null
-    : mapMarkerCheckFailures(aggregate.app.spaceId, verifyResult.value.markerCheck);
+    : mapMarkerCheckFailures(aggregate.app.spaceId, verifyResult.value.markerCheck, migrationsDir);
   emitVerifySpan(onProgress, markerDrift === null ? 'spanEndOk' : 'spanEndError');
   return ok({
     schemaResults: verifyResult.value.schemaCheck.perSpace,
@@ -323,6 +336,7 @@ function mapMarkerCheckFailures(
     >;
     readonly orphanMarkers: readonly { readonly spaceId: string; readonly row: unknown }[];
   },
+  migrationsDir: string,
 ): CliStructuredError | null {
   const violations: Array<{
     kind: string;
@@ -337,8 +351,8 @@ function mapMarkerCheckFailures(
         spaceId,
         remediation:
           spaceId === appSpaceId
-            ? 'Run `prisma-cli db update` to advance the marker, or roll the database back to the recorded hash.'
-            : `Apply on-disk migrations under \`migrations/${spaceId}/\` to advance the marker, or remove the conflicting marker row.`,
+            ? 'Run `{bin} db update` to advance the marker, or roll the database back to the recorded hash.'
+            : `Apply on-disk migrations under \`${migrationsDir}/${spaceId}/\` to advance the marker, or remove the conflicting marker row.`,
       });
       continue;
     }
@@ -346,7 +360,7 @@ function mapMarkerCheckFailures(
       violations.push({
         kind: 'invariantsMismatch',
         spaceId,
-        remediation: `Re-apply the migrations under \`migrations/${spaceId}/\` so the marker carries invariants: ${result.missing.join(', ')}.`,
+        remediation: `Re-apply the migrations under \`${migrationsDir}/${spaceId}/\` so the marker carries invariants: ${result.missing.join(', ')}.`,
       });
     }
   }
@@ -364,7 +378,7 @@ function mapMarkerCheckFailures(
       ? 'Contract-space verifier found a violation'
       : `Contract-space verifier found violations (${violations.length})`;
   return new CliStructuredError('MIGRATION.CONTRACT_SPACE_VIOLATION', summary, {
-    why: `The on-disk \`migrations/\` directory, the \`extensions\` declaration, and the live database marker rows are not in agreement.\n${lines.join('\n')}`,
+    why: `The on-disk \`${migrationsDir}/\` directory, the \`extensions\` declaration, and the live database marker rows are not in agreement.\n${lines.join('\n')}`,
     fix: violations[0]?.remediation ?? 'Review and reconcile the violations listed above.',
     docsUrl: 'https://pris.ly/contract-spaces',
     meta: { violations },

@@ -1,6 +1,6 @@
+import { checkContractComponentRequirements } from '@internal/framework-components/components';
 import {
   createExecutionStack,
-  type ExecutionStack,
   type RuntimeAdapterDescriptor,
   type RuntimeAdapterInstance,
   type RuntimeDriverDescriptor,
@@ -10,19 +10,24 @@ import {
   type RuntimeTargetDescriptor,
   type RuntimeTargetInstance,
 } from '@internal/framework-components/execution';
-import { runtimeError } from '@internal/framework-components/runtime';
-import type { MongoCodec } from '@internal/mongo-codec';
-import { type MongoCodecRegistry, newMongoCodecRegistry } from '@internal/mongo-codec';
-import type { MongoAdapter } from '@internal/mongo-lowering';
+import {
+  applyMutationDefaults,
+  assertMutationDefaultGeneratorsAvailable,
+  collectMutationDefaultGenerators,
+  type MutationDefaultGeneratorContributor,
+  type MutationDefaultsOptions,
+  runtimeError,
+} from '@internal/framework-components/runtime';
+import { assembleMongoCodecRegistry, type MongoCodecContributor } from '@internal/mongo-codec';
+import type { MongoContract } from '@internal/mongo-contract';
+import type { MongoAdapter, MongoDriver } from '@internal/mongo-lowering';
+import type { MongoExecutionContext } from '@internal/mongo-query-ast/execution';
 
 /**
- * Mongo-specific static contributions a runtime descriptor declares.
- *
- * Mirrors `SqlStaticContributions` in shape: a `codecs()` getter that yields a `MongoCodecRegistry` populated with this contributor's codecs. The registry is then walked by `createMongoExecutionContext` and folded into the single per-execution registry the runtime reads from at decode time.
+ * Mongo-specific static contributions a runtime descriptor declares. Codecs are not among them: a descriptor declares its codecs once, as codec descriptors in `types.codecTypes.codecDescriptors`, which `createMongoExecutionContext` and the adapter both read with `assembleMongoCodecRegistry`.
  */
-export interface MongoStaticContributions {
-  readonly codecs: () => MongoCodecRegistry;
-}
+export interface MongoStaticContributions
+  extends Pick<MutationDefaultGeneratorContributor, 'mutationDefaultGenerators'> {}
 
 export interface MongoRuntimeTargetDescriptor<
   TTargetId extends string = 'mongo',
@@ -56,106 +61,130 @@ export interface MongoRuntimeExtensionDescriptor<TTargetId extends string = 'mon
 }
 
 /**
- * The Mongo execution stack: target + adapter + optional driver + extension packs. Mirrors `SqlExecutionStack`. Constructed via `createMongoExecutionStack`.
+ * The Mongo execution stack: target + adapter + extension packs. Mirrors `SqlExecutionStack`. Constructed via `createMongoExecutionStack`; given a driver, it returns a {@link MongoExecutionStackWithDriver}.
  */
 export interface MongoExecutionStack<TTargetId extends string = 'mongo'> {
   readonly target: MongoRuntimeTargetDescriptor<TTargetId>;
   readonly adapter: MongoRuntimeAdapterDescriptor<TTargetId>;
-  readonly driver:
-    | RuntimeDriverDescriptor<
-        'mongo',
-        TTargetId,
-        unknown,
-        RuntimeDriverInstance<'mongo', TTargetId>
-      >
-    | undefined;
   readonly extensions: readonly MongoRuntimeExtensionDescriptor<TTargetId>[];
 }
 
-export function createMongoExecutionStack<TTargetId extends string = 'mongo'>(options: {
+/**
+ * The binding type is erased to `unknown` here, as in `SqlRuntimeDriverInstance`. A target client such as `mongo()` resolves the concrete binding before it calls `driver.connect(binding)`.
+ */
+export type MongoRuntimeDriverInstance<TTargetId extends string = 'mongo'> = RuntimeDriverInstance<
+  'mongo',
+  TTargetId
+> &
+  MongoDriver<unknown>;
+
+export type MongoExecutionStackWithDriver<TTargetId extends string = 'mongo'> =
+  MongoExecutionStack<TTargetId> & {
+    readonly driver: RuntimeDriverDescriptor<
+      'mongo',
+      TTargetId,
+      unknown,
+      MongoRuntimeDriverInstance<TTargetId>
+    >;
+  };
+
+interface MongoExecutionStackOptions<TTargetId extends string> {
   readonly target: MongoRuntimeTargetDescriptor<TTargetId>;
   readonly adapter: MongoRuntimeAdapterDescriptor<TTargetId>;
-  readonly driver?:
-    | RuntimeDriverDescriptor<
-        'mongo',
-        TTargetId,
-        unknown,
-        RuntimeDriverInstance<'mongo', TTargetId>
-      >
-    | undefined;
   readonly extensions?: readonly MongoRuntimeExtensionDescriptor<TTargetId>[] | undefined;
-}): MongoExecutionStack<TTargetId> {
-  const stack = createExecutionStack({
+}
+
+export function createMongoExecutionStack<TTargetId extends string = 'mongo'>(
+  options: MongoExecutionStackOptions<TTargetId> & {
+    readonly driver: MongoExecutionStackWithDriver<TTargetId>['driver'];
+  },
+): MongoExecutionStackWithDriver<TTargetId>;
+export function createMongoExecutionStack<TTargetId extends string = 'mongo'>(
+  options: MongoExecutionStackOptions<TTargetId>,
+): MongoExecutionStack<TTargetId>;
+export function createMongoExecutionStack<TTargetId extends string = 'mongo'>(
+  options: MongoExecutionStackOptions<TTargetId> & {
+    readonly driver?: MongoExecutionStackWithDriver<TTargetId>['driver'];
+  },
+): MongoExecutionStack<TTargetId> | MongoExecutionStackWithDriver<TTargetId> {
+  const { target, adapter, driver, extensions } = createExecutionStack({
     target: options.target,
     adapter: options.adapter,
     driver: options.driver,
     extensions: options.extensions,
   });
-  return stack as ExecutionStack<'mongo', TTargetId> as MongoExecutionStack<TTargetId>;
-}
-
-/**
- * Read-only view of the codec registry exposed on `MongoExecutionContext`.
- *
- * Hides `register()` and the iterator from public surface — users do not mutate the per-execution codec registry. Internal aggregation in `createMongoExecutionContext` keeps using the full `MongoCodecRegistry` (it needs `register()`).
- */
-export interface MongoCodecLookup {
-  get(id: string): MongoCodec<string> | undefined;
-  has(id: string): boolean;
-}
-
-/**
- * Per-execution context aggregated from a `MongoExecutionStack`.
- *
- * Carries the user's contract, a read-only lookup over the codec registry composed from every stack contributor, and a back-reference to the stack itself so the runtime can reach the adapter without users threading it explicitly.
- *
- * Mirrors SQL's `ExecutionContext` in role; Mongo's flavour is leaner because there are no parameterised codecs, JSON-schema validators, or mutation-default generators in scope yet.
- */
-export interface MongoExecutionContext<TContract = unknown, TTargetId extends string = 'mongo'> {
-  readonly contract: TContract;
-  readonly codecs: MongoCodecLookup;
-  readonly stack: MongoExecutionStack<TTargetId>;
+  return driver === undefined
+    ? { target, adapter, extensions }
+    : { target, adapter, driver, extensions };
 }
 
 export function createMongoExecutionContext<
-  TContract = unknown,
+  TContract extends MongoContract = MongoContract,
   TTargetId extends string = 'mongo',
 >(options: {
   readonly contract: TContract;
   readonly stack: MongoExecutionStack<TTargetId>;
-}): MongoExecutionContext<TContract, TTargetId> {
-  const registry = newMongoCodecRegistry();
-  const owners = new Map<string, string>();
+}): MongoExecutionContext<TContract> {
+  assertMongoExecutionStackContractRequirements(options.contract, options.stack);
 
-  const contributors: ReadonlyArray<MongoStaticContributions & { readonly id: string }> = [
+  const contributors: ReadonlyArray<MongoStaticContributions & MongoCodecContributor> = [
     options.stack.target,
     options.stack.adapter,
     ...options.stack.extensions,
   ];
 
-  for (const contributor of contributors) {
-    const contributed = contributor.codecs();
-    for (const codec of iterateCodecs(contributed)) {
-      const existingOwner = owners.get(codec.id);
-      if (existingOwner !== undefined) {
-        throw runtimeError(
-          'RUNTIME.DUPLICATE_CODEC',
-          `Duplicate Mongo codec id '${codec.id}' contributed by '${contributor.id}' (already registered by '${existingOwner}').`,
-          { codecId: codec.id, existingOwner, incomingOwner: contributor.id },
-        );
-      }
-      registry.register(codec);
-      owners.set(codec.id, contributor.id);
-    }
-  }
+  const generators = collectMutationDefaultGenerators(contributors);
+  const execution = options.contract.execution;
+  assertMutationDefaultGeneratorsAvailable(execution, generators);
+
+  const registry = assembleMongoCodecRegistry(contributors);
 
   return Object.freeze({
     contract: options.contract,
     codecs: registry,
-    stack: options.stack,
+    applyMutationDefaults: (mutation: MutationDefaultsOptions) =>
+      applyMutationDefaults(execution, generators, mutation),
   });
 }
 
-function* iterateCodecs(registry: MongoCodecRegistry): Iterable<MongoCodec<string>> {
-  yield* registry.values();
+function assertMongoExecutionStackContractRequirements<TTargetId extends string>(
+  contract: MongoContract,
+  stack: MongoExecutionStack<TTargetId>,
+): void {
+  const result = checkContractComponentRequirements({
+    contract,
+    expectedTargetFamily: 'mongo',
+    expectedTargetId: stack.target.targetId,
+    providedComponentIds: [
+      stack.target.id,
+      stack.adapter.id,
+      ...stack.extensions.map((pack) => pack.id),
+    ],
+  });
+
+  if (result.familyMismatch) {
+    throw runtimeError(
+      'RUNTIME.CONTRACT_FAMILY_MISMATCH',
+      `Contract target family '${result.familyMismatch.actual}' does not match runtime family '${result.familyMismatch.expected}'.`,
+      { actual: result.familyMismatch.actual, expected: result.familyMismatch.expected },
+    );
+  }
+
+  if (result.targetMismatch) {
+    throw runtimeError(
+      'RUNTIME.CONTRACT_TARGET_MISMATCH',
+      `Contract target '${result.targetMismatch.actual}' does not match runtime target descriptor '${result.targetMismatch.expected}'.`,
+      { actual: result.targetMismatch.actual, expected: result.targetMismatch.expected },
+    );
+  }
+
+  if (result.missingExtensionPackIds.length > 0) {
+    const packIds = result.missingExtensionPackIds;
+    const packList = packIds.map((id) => `'${id}'`).join(', ');
+    throw runtimeError(
+      'RUNTIME.MISSING_EXTENSION_PACK',
+      `Contract requires extension pack(s) ${packList}, but runtime descriptors do not provide matching component(s).`,
+      { packIds },
+    );
+  }
 }

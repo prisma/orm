@@ -1,166 +1,150 @@
 ---
 name: record-upgrade-instructions
 description: >-
-  Record upgrade instructions alongside a Prisma Next breaking-change
+  Record upgrade instructions alongside a Prisma 8 breaking-change
   PR, so downstream consumers (users of `@internal/*` and authors
-  of Prisma Next extensions) can apply the matching code translation
+  of Prisma 8 extensions) can apply the matching code translation
   automatically via the published upgrade skills. Use when you have
   refactored framework code and the test suite went red in
-  `examples/` or `packages/3-extensions/`, when you fixed those
-  red tests by editing the substrate, when you are told to "record
+  `examples/`, `packages/3-extensions/` or a target facade, when you fixed those
+  red tests by updating example or extension code, when you are told to "record
   upgrade instructions for this PR", or when you made a breaking
-  change to Prisma Next that downstream consumers will need help
+  change to Prisma 8 that downstream consumers will need help
   migrating across.
 ---
 
 # Record upgrade instructions
 
-This skill fires on PRs **inside this repo** that make a breaking change to Prisma Next. It walks you through adding a per-transition upgrade-instructions entry in the right published skill package(s) — so downstream users and extension authors can run the matching agent flow to migrate their code automatically.
+Contribute an independent fragment on the PR that changes Prisma 8. Release preparation combines fragments into the published app and extension guides; **feature PRs do not edit shared transition guides or choose a release number**. Read the canonical [upgrade instruction lifecycle](../../upgrade-instructions/README.md) for storage, release assembly, and checker modes.
 
-The published skills you will be authoring entries into:
+## Detection signals and routing
 
-- `skills/upgrade/prisma-next-upgrade/` — distributed via `pnpm dlx skills add prisma/prisma/skills/upgrade --all`. **Audience: users of Prisma Next** (consumers of the public package API: `@internal/postgres`, `@internal/mongo`, the contract files in `prisma/`, on-disk migration shape).
-- `skills/extension-author/prisma-8-extension-upgrade/` — distributed via `pnpm dlx skills add prisma/prisma/skills/extension-author --all`. **Audience: authors of Prisma Next extensions** (consumers of the framework SPI: `@internal/contract`, `@internal/framework-components`, `@internal/migration-tools`, etc.).
+Use this skill when a framework change makes tests red in `examples/`, `packages/3-extensions/` or a target facade (`packages/3-targets/*/9-facade/` or `packages/3-targets/*/*/9-facade/`) and you fix them by updating the example or extension code rather than reverting the framework change. Those edits are the same translation downstream consumers need.
 
-The two skill clusters are independent (no shared content). Cross-audience breaking changes — where the same on-disk transformation applies to both substrates — are recorded *separately* in each cluster, including duplicated colocated scripts.
+| Directory changed by the PR | Fragment audience | Consumers |
+| --- | --- | --- |
+| `examples/` | `app` | Public package API, contract files, on-disk migrations |
+| `packages/3-extensions/`, `packages/3-targets/*/9-facade/` and `packages/3-targets/*/*/9-facade/` | `extension` | Framework SPI and extension authors |
+| Both | Both, independently | Both audiences |
 
-## When to use
+Changes in these directories require a declaration, subject to existing coverage-check exclusions. Generated artefacts are not generally exempt: contract format changes require a codemod or re-emission instructions. Genuinely consumer-invisible changes still get an explicit `changes: []` declaration, with no prose.
 
-Fire this skill on any PR where:
+**Stacked PRs:** compare against the branch the PR actually targets, not always `main`. Each PR adds its own declaration in its own commits; inherited fragments do not cover a new PR. Do not pool a stack's instructions in its bottom PR.
 
-- You refactored framework code, then
-- the test suite went red in `examples/` and/or `packages/3-extensions/`, and
-- you fixed those red tests by editing the substrate (not by reverting the framework change).
-
-Those edits to `examples/` or `packages/3-extensions/` *are* the signal. The matching test suite would have been red for downstream consumers without an upgrade-instructions entry; the entry's effect on the substrate is the same code translation a downstream consumer will run via the published skill.
-
-If both substrates are touched, both packages need entries (see *Cross-audience entries*).
-
-Even consumer-invisible-looking diffs need an entry. A change to the format of `contract.json` / `contract.d.ts` (or any other emitted artefact) is itself an upgrade instruction — consumers will need to either run a codemod or re-emit. Where the substrate diff is genuinely no-op for consumers (incidental regeneration with no behavioural change), the entry can ship with `changes: []` to record that explicitly. There is no carve-out for "generated paths"; any substrate diff requires a record.
-
-## Detection signals & routing
-
-Two mechanical signals, each tied to one destination package:
-
-| Substrate touched by the PR    | Destination skill                                              |
-| ------------------------------ | -------------------------------------------------------------- |
-| `examples/`                    | `skills/upgrade/prisma-next-upgrade/`                          |
-| `packages/3-extensions/`       | `skills/extension-author/prisma-8-extension-upgrade/`       |
-| Both                           | Both — duplicated entries (see below)                          |
-
-The substrate diff is the signal that an entry is required. The agent fixing the red tests in those substrates sees the signal directly; the reviewer sees the same diff. The release-pipeline check (`pnpm check:upgrade-coverage`) enforces the outcome — a substrate diff without the matching directory fails the PR.
+Throughout this skill, `<target>` is the target branch (`main` unless stacked), `<base>` is its pinned comparison commit, and `<head>` is the PR head commit.
 
 ## Authoring workflow
 
-For each PR that hits one or both signals, walk these steps in order.
+1. **Identify affected audiences.** Inspect `git diff <base>..<head> -- examples/ packages/3-extensions/ 'packages/3-targets/*/9-facade/' 'packages/3-targets/*/*/9-facade/'`. If none of these directories has relevant changes, the coverage check does not require a declaration.
+2. **Choose a descriptive pending name.** Add `upgrade-instructions/pending/<descriptive-name>/<audience>/instructions.md` for each affected audience. Avoid collisions with pending work; no random suffix, global registry, historical-name reservation, or shared index is required. Never append to another PR's fragment. A release landing during your PR does not change this unversioned destination.
+3. **Write the instructions.** Retain the existing YAML frontmatter `changes[]` and Markdown prose format. Each change has a kebab-case `id` unique within the guide, a one-line `summary`, optional `detection` (glob and content predicate), and an optional `script` path relative to `instructions.md`. Prose-only transformations omit `script`; the consumer's agent follows the body.
 
-1. **Determine the in-flight transition.** Read the `version` field from the root `package.json` on the PR branch. That value is the *currently published* version (the source-of-truth `pnpm bump-version` reads when preparing the next release). The in-flight transition is the step from it to whatever ships next, and both sides are named the way transition directories name versions: a stable version by its minor, a release candidate by its full version.
+   **Write detection patterns for whole-file matching.** The upgrade flows test each `matches` pattern as `new RegExp(pattern)`, with no flags, against the whole content of a file ([upgrade-app.md](../../skills/prisma-8/references/upgrade-app.md), step 4). A pattern may span lines. To exclude a file by something elsewhere in it, anchor a lookahead at the start of the input with `(?<![\s\S])`, not `^`, which the `m` flag turns into a line start.
 
-   - `"0.7.0"` → the next release is `0.8`, so you author into `upgrades/0.7-to-0.8/`.
-   - `"8.0.0-rc.1"` → the next release is the next release candidate, so you author into `upgrades/8.0.0-rc.1-to-8.0.0-rc.2/`. An RC line lives inside a single minor and each RC may carry breaking changes of its own, so on an RC line a step is one RC rather than one minor.
+   **Make detection predicates token-precise.** Test against both a true positive and the nearest false positive. A moved tag must not match an unchanged tag; excluding an unchanged spelling needs a token boundary:
 
-   The branch's `package.json` is the source-of-truth — do **not** consult `npm view`. If there is no substrate diff at all, no entry is needed — skip to step 7.
+   ```text
+   matches:      .raw`
+   must not fire on: fns.raw`
+   too broad:    (?<!fns)\.raw`        also suppresses myfns.raw`
+   shipped:      (?<!(?<![\w$])fns)\.raw`
+   ```
 
-2. **Identify the touched substrate(s).** Compute `git diff origin/main..HEAD` restricted to `examples/` and to `packages/3-extensions/`. Each non-empty substrate corresponds to one destination package per the routing table above. The "both" case is normal — the rare PR (e.g. a structural on-disk migration shape change) touches both.
+   The inner lookbehind restricts the exclusion to the exact `fns` token.
 
-3. **Find or create the directory in each destination.** For each destination, the directory is `<destination>/upgrades/<in-flight transition>/` from step 1 (so e.g. `skills/prisma-next-upgrade/upgrades/0.7-to-0.8/` for the user-skill). If the directory already exists (an earlier PR on the same transition created it, or the placeholder shipped with the initial mechanism PR is still there), **do not create a duplicate** — append a new entry to the existing `instructions.md`'s `changes[]` array.
+   **Only describe consumer action.** Omit narrative about internal renames, dev-only dependency bumps, and incidental generated churn. Changes to `@internal/*` APIs that no published `@prisma/*` package re-exports are not consumer action either: a PR that only changes those declares `changes: []`, even when extension tests had to be updated. If this PR's audience needs no action, use only:
 
-4. **Write the entry into `instructions.md`.** Each `changes[]` entry carries an `id` (kebab-case, unique within the transition), a one-line `summary`, an optional `detection` block (glob + content predicate the consumer's agent runs to know whether the change applies to that consumer's project), and an optional `script:` reference (relative path to a colocated script next to `instructions.md`). For changes that need agent reasoning across the codebase rather than a deterministic script, the entry omits `script:` and the agent follows the prose body of `instructions.md` instead.
+   ```md
+   ---
+   changes: []
+   ---
+   ```
 
-   **Only record changes that require consumer action.** Every `changes[]` entry — and every paragraph in the prose body — must describe something the consumer has to *do*. Do not include narrative about substrate diffs that need no consumer response (e.g. dev-only dep bumps inside `examples/`, internal-only renames, generated-artefact churn that round-trips on re-emit). The absence of an entry already communicates "do nothing" — saying it explicitly is noise, and it dilutes the signal of the entries that *do* require action. If the entire in-flight transition is genuinely no-op for consumers, ship `changes: []` with no body prose; the `changes: []` array is the record. The reviewer treats any "consumers do not need to take any action" sentence in the body as a defect.
+   No "consumers need not do anything" body prose. Both audiences declare independently, including real-change/no-op combinations.
 
-5. **Author any colocated scripts.** Scripts are portable — TypeScript (run via `pnpm exec tsx`), shell (`*.sh`), codemods (`jscodeshift`-style `*.codemod.cjs`), whichever fits the change. Scripts must not require network access, environment variables, or any input beyond the consumer's filesystem and the script's bundled assets. If the same script applies to both substrates (cross-audience case), **copy** it into both packages' directories — symlinks do not survive npm publish, and a hard dependency between the two packages is forbidden.
+4. **Author optional colocated scripts/assets.** TypeScript that Node runs directly (`node <script>.ts`, so only syntax Node's type stripping accepts; a project made by `orm init` has no `tsx`), shell, or codemods are appropriate. Require no network, environment variables, or input beyond the consumer filesystem and bundled assets. Keep relative references inside the fragment's audience directory. For cross-audience changes, copy scripts into both audience directories; do not symlink or import from the other audience. The published clusters remain independently installable. A script that patches a snapshot `migrations/snapshots/<hex>/contract.d.ts` must handle both the single-line form the store writes and the formatted form of entries written before it, so match declarations without relying on line breaks or indentation.
 
-6. **Validate the entry by execution** (see *Validation by execution* below for the concrete recipe). The acceptance criterion is the matching substrate's test suite green after the entry application, and the resulting substrate diff matching the PR-branch state.
+   **Test a script outside the fragment.** A script's tests and fixtures live in `test/integration/test/upgrade-instructions/<fragment-name>/`, where tests can import `@internal/*` and CI runs them with the integration suite. One constant in that folder, `SCRIPT_PATHS`, names the path of each audience's copy of the script, so the tests run the files that ship; while the fragment is pending it points into `upgrade-instructions/pending/<fragment-name>/`. Put fixture projects under the folder's `fixtures/`. Every `test/integration/test/upgrade-instructions/*/fixtures` folder is left out of the integration TypeScript project, the single-import-root lint and the scans for the repository's own contracts, so a fixture may hold old-format files and import either root. A test that checks the script against live framework code, such as one that recomputes fixture hashes with `@internal/*` functions, and a generator that writes fixtures with them, hold only while the fragment is pending: the published script is frozen at its release, and a later framework change would fail them. At release, the release step points `SCRIPT_PATHS` at the published copy, keeps the before-and-after tests, and freezes the live-code tests and the generator (records what they compute) or deletes them.
+5. **Validate by execution** using the unchanged concrete procedure below. An entry updates consumer code, not the example or extension tests. Do not introduce a separate testing system: a script's own tests (step 4) are ordinary integration tests, and the validation by execution below is still required beside them.
+6. **Include the fragment and updated example or extension code in the PR.** Commit working changes before running the Git-ref check:
 
-7. **Commit on the PR branch** (see *PR commit shape* below for what the commit must include).
+   ```bash
+   pnpm check:upgrade-coverage --mode pr --prev <base> --head <head>
+   ```
+
+   `<head>` must include the committed declaration; the check does not inspect uncommitted edits. Link each new fragment directory in the PR description. Review must verify that the instructions actually describe the PR's changes; the gate checks added declarations, readable change lists, and relative script references, not semantic correctness.
 
 ## Validation by execution
 
-Before merging, every new entry runs against the corresponding in-repo substrate, starting from the substrate's pre-PR state and ending with green tests. This is the quality bar — the human reviewer does not have to vouch for entries on cases they didn't run.
+Before merging, run every new entry against the corresponding example or extension code in this repository, starting from its pre-PR state and ending with passing tests. This is the existing per-PR quality bar, not a release-wide migration test.
 
-Workflow per entry (one of the two flows; both apply for cross-audience entries):
+Workflow per entry (both flows apply for cross-audience entries):
 
-### User-skill entry (against `examples/`)
+- **Open PR:** `<head>` is the PR branch head; `<base>` is the actual target branch's comparison commit.
+- **Merged PR:** `<head>` is the merge commit; `<base>` is its mainline parent. `git log --first-parent` names both.
 
-1. Check out the PR branch with the framework change applied.
-2. Revert `examples/` to its pre-PR state (`git restore --source=origin/main -- examples/`).
-3. Run the entry against the reverted substrate — invoke any colocated script(s) per the entry's `script:` reference, then walk the prose body of `instructions.md` if the entry has additional instructions.
-4. Verify the resulting `examples/` directory matches the PR-branch state (`git diff origin/main..HEAD -- examples/` ≡ `git diff -- examples/` after step 3).
-5. Verify the matching test suite is green: `pnpm test:examples`.
+Use a disposable checkout for the restoration steps so unrelated working changes are not overwritten. The PR author updates example and extension tests; the upgrade instructions must not change them. The equality check excludes `test/` directories; the companion check confirms the entry left those directories exactly as it found them.
 
-If any of those checks fail, iterate on the entry. Do not merge.
+### App entry (against `examples/`)
 
-### Extension-skill entry (against `packages/3-extensions/`)
+1. Check out `<head>`, which has the framework change applied.
+2. Revert `examples/` to its pre-PR state (`git restore --source=<base> -- examples/`).
+3. Run the fragment against the restored example code: invoke colocated scripts per `script:` references, then walk the prose body for additional instructions.
+4. Verify `examples/` matches `<head>` outside test directories:
 
-1. Check out the PR branch with the framework change applied.
-2. Revert `packages/3-extensions/` to its pre-PR state (`git restore --source=origin/main -- packages/3-extensions/`).
-3. Run the entry against the reverted substrate.
-4. Verify the resulting `packages/3-extensions/` directory matches the PR-branch state.
-5. Verify the matching test suite is green: `pnpm test --filter='./packages/3-extensions/*'`.
+   ```bash
+   git status --porcelain -- examples/ ':(exclude)examples/*/test/**'
+   ```
 
-If any of those checks fail, iterate on the entry. Do not merge.
+   It must print nothing, including no newly created files. The entry must reproduce `git diff <base>..<head> -- examples/ ':(exclude)examples/*/test/**'`.
+5. Verify the entry left tests at `<base>`; the source equality check cannot detect test changes:
+
+   ```bash
+   git diff --exit-code <base> -- 'examples/*/test/**'
+   git ls-files --others --exclude-standard -- 'examples/*/test/**'
+   ```
+
+   The first command must exit 0 and the second print nothing. An entry must not mutate or create tests to make the next step pass. A file under a test directory that the entry's own script wrote passes when it equals `<head>` byte for byte.
+6. Run `pnpm --filter <example-package> test` for each touched example. The repo-wide `pnpm test:examples` also runs examples needing a database and `.env` (`pnpm db:up`, then copy `.env.example`); run it only with those in place.
+
+### Extension entry (against `packages/3-extensions/`)
+
+The target facades, every folder matching `packages/3-targets/*/9-facade/` or `packages/3-targets/*/*/9-facade/`, are extension code too; the check covers a new database's facade without any change to the script. When the PR changes one, add its folder to every path in the commands below.
+
+1. Check out `<head>`, which has the framework change applied.
+2. Revert `packages/3-extensions/` to its pre-PR state (`git restore --source=<base> -- packages/3-extensions/`).
+3. Run the fragment against the restored extension code, including referenced scripts and prose.
+4. Verify the non-test paths match `<head>`:
+
+   ```bash
+   git status --porcelain -- packages/3-extensions/ ':(exclude)packages/3-extensions/*/test/**'
+   ```
+
+   It must print nothing. The entry reproduces `git diff <base>..<head> -- packages/3-extensions/ ':(exclude)packages/3-extensions/*/test/**'`.
+5. Verify test paths remain at `<base>`:
+
+   ```bash
+   git diff --exit-code <base> -- 'packages/3-extensions/*/test/**'
+   git ls-files --others --exclude-standard -- 'packages/3-extensions/*/test/**'
+   ```
+
+   The first command must exit 0; the second must print nothing. A file under a test directory that the entry's own script wrote passes when it equals `<head>` byte for byte.
+6. Verify the matching test suite is green: `pnpm test --filter='./packages/3-extensions/*'`.
+
+If any check fails, iterate on the entry; do not merge. Classify failures before changing anything, per [CI failure classification](../../.agents/rules/ci-failure-classification.mdc). A timeout or connection error makes the environment a candidate cause, not a verdict.
 
 ## PR commit shape
 
-The PR that introduces the breaking change must contain, in addition to the framework change itself:
+Include:
 
-- **The new entry directory in each affected skill** — `<destination>/upgrades/<in-flight transition>/instructions.md` plus any colocated scripts (the in-flight transition being the one determined in step 1 of the authoring workflow).
-- **The post-instructions state of every affected substrate** — these substrates would have been left broken without the entry; the entry's effect on the substrate *is* the diff that brings them back to green. The PR-branch substrate state and the validation-by-execution output state must be identical.
-- **A reference in the PR description naming each entry directory** (e.g. *"Adds entries to `skills/upgrade/prisma-next-upgrade/upgrades/0.7-to-0.8/` and `skills/extension-author/prisma-8-extension-upgrade/upgrades/0.7-to-0.8/`."*).
+- Each new `upgrade-instructions/pending/<name>/<audience>/instructions.md` and any colocated scripts/assets.
+- The updated example and extension code, matching the result of applying the instructions outside test directories. The entry neither writes nor updates those tests.
+- PR-description references naming the fragment directories, for example `upgrade-instructions/pending/migration-metadata-shape/app/` and `upgrade-instructions/pending/migration-metadata-shape/extension/`.
 
-The human reviewer + the CI gate (`pnpm check:upgrade-coverage`) both check this shape, but the gate is **necessary-but-not-sufficient** — it only asserts that the in-flight transition *directory* exists, not that *this PR's* substrate diff has a matching `changes[]` entry. So a PR can have a real substrate diff, contribute no entry, and still pass the gate green whenever an earlier PR already created the transition directory. (This is exactly how a breaking change can ship undocumented: the directory was already there, so the gate stayed green.) The gap is load-bearing for the reviewer: **the human reviewer must verify that every substrate diff in the PR has a corresponding entry** — the gate will not catch a missing entry once the directory exists. The reviewer also catches the semantic case (entry exists but its prose / scripts don't match the framework change).
-
-## Cross-audience entries (duplication)
-
-When a breaking change affects both substrates, the same on-disk transformation may apply to both `examples/` and `packages/3-extensions/`. Author entries in **both** packages:
-
-- Append a `changes[]` entry to each skill's `instructions.md`. The two entries may have the same `id`, `summary`, and `detection` — that is fine; they are independent records in independent skill clusters.
-- Copy the colocated script into both directories. Do **not** symlink (the GitHub-URL `pnpm dlx skills add` flow discards symlinks); do **not** import one from the other (the two clusters have no cross-dep).
-
-Bug fixes to either copy land via normal PRs. Yes, duplication carries small ongoing maintenance cost. The trade-off is deliberate — the two skill clusters must remain independent so a consumer can install either, both, or neither without one transitively pulling in the other.
-
-## Skipped publishes
-
-If a minor was bumped in-tree but never actually shipped to npm — `package.json` advanced from `M` to `M+1` on `main` but no `vM+1.0` tag landed, so the next publish crosses two minor steps in one release — keep authoring per single-step transition. The coverage gate accepts the **chain** of consecutive transition directories spanning the unreleased range: a 0.7 → 0.9 publish is satisfied by both `upgrades/0.7-to-0.8/` and `upgrades/0.8-to-0.9/` existing, not by a synthetic `upgrades/0.7-to-0.9/`. New entries added on a branch that publishes across a skip may land in any chain step (or the in-flight directory for the cycle after head); the per-version-step authoring model is the source of truth, the gate aggregates.
-
-Chaining is a property of the stable minor line only. On a release-candidate line the gate never composes a chain across RC counters — an `rc.1 → rc.4` range is the single step `upgrades/8.0.0-rc.1-to-8.0.0-rc.4/`.
-
-## Rebase scenario
-
-If a release PR lands on `main` mid-flight (advancing the currently-published version, whether that is a minor or a release candidate), your topic branch's next rebase brings the new `package.json` value with it:
-
-1. Re-run step 1 of the authoring workflow. The in-flight transition has moved one release forward.
-2. Author any **new** entries (changes added on this rebase) in the new in-flight directory. The new-entries check (part of `pnpm check:upgrade-coverage`) blocks file *adds* in stale transition directories.
-3. **Existing entries** your branch added before the rebase to the previous in-flight directory may be left in place — they describe the transition that just shipped, and modifications / removals of any transition directory are allowed (the new-entries check only enforces *added* paths).
-
-Decide per-entry whether each prior add belongs in the just-shipped transition directory or should be relocated. The rule of thumb: if the entry fixes a substrate diff that already shipped in the release that just landed, leave it in the previous directory; if the entry fixes a substrate diff introduced by the further refactoring you did after the rebase, move it to the new in-flight directory.
+Both audience copies may share IDs, summaries, or detection predicates; they are independent records. Fixes to either copy use normal PR review. Historical published guidance can also be corrected through normal reviewed PRs, but edits to old guides do not replace a new PR's required pending declaration.
 
 ## Out of scope
 
-This skill records **upgrade instructions** — code-translation entries the published skills will replay against consumer projects. It does **not** add the per-step bump-install-instructions-validate-commit loop to entry bodies. That flow is general content carried in the published `SKILL.md` files (`skills/upgrade/prisma-next-upgrade/SKILL.md` and the matching extension-author file) and runs around your entry. Your entry only contains the code-translation work specific to the transition.
+Fragments describe code translation only. Do not add the general bump/install/instructions/validate/commit loop to their bodies: the published [app](../../skills/prisma-8/references/upgrade-app.md) and [extension](../../skills/prisma-8/references/upgrade-extension.md) flows own it. Extension exact-pin enforcement remains `prisma-8-check-pins` from `@internal/extension-author-tools`.
 
-This skill also does not enforce the exact-pin rule for extensions — that is `prisma-8-check-pins` (a `bin` of `@internal/extension-author-tools`), and it runs in extension authors' own CI plus in the extension-upgrade skill's per-step flow.
-
-## Worked example
-
-A PR refactors types in `@internal/migration-tools`. After running `pnpm typecheck`:
-
-- `packages/3-extensions/pgvector` is red — the extension consumes `MigrationMetadata` and the type shape changed. You fix the extension's source until tests are green.
-- `examples/multi-extension-monorepo` is red as a downstream consequence of the extension change. You fix the example until tests are green.
-
-Both substrates are touched → both skill packages need entries.
-
-1. Read root `package.json` on the PR branch → `version: "0.7.0"`. Currently-published minor is `0.7`, so the in-flight transition is `0.7 → 0.8`. Directory is `upgrades/0.7-to-0.8/` in each skill package.
-2. Both substrates touched.
-3. `skills/upgrade/prisma-next-upgrade/upgrades/0.7-to-0.8/instructions.md` already exists (placeholder shipped with the initial mechanism PR). Append a `changes[]` entry — call it `migration-metadata-shape-update`. Same for `skills/extension-author/prisma-8-extension-upgrade/upgrades/0.7-to-0.8/instructions.md`.
-4. The user-skill entry may be prose-only (e.g. "rename the imported type from `MigrationMetadata` to `MigrationManifest` in any consumer code"), since the user-facing fix is a simple rename.
-5. The extension-skill entry needs more work — the SPI changed shape, not just name. Author `skills/extension-author/prisma-8-extension-upgrade/upgrades/0.7-to-0.8/update-migration-tools-imports.ts` and reference it from the entry's `script:` field. If the same transformation also applies to the example, copy the script into the user-skill cluster's directory too.
-6. Validate by execution: revert `packages/3-extensions/` to pre-PR → run the extension-skill entry → verify `pnpm test --filter='./packages/3-extensions/*'` green and diff matches PR-branch state. Then revert `examples/` to pre-PR → run the user-skill entry → verify `pnpm test:examples` green and diff matches.
-7. Commit on the PR branch with both entry directories, the colocated script(s), and the matching substrate post-state.
-
-## Reference
-
-- Mechanism Linear ticket: [TML-2519](https://linear.app/prisma-company/issue/TML-2519).
-- Coverage gate script: `scripts/check-upgrade-coverage.mjs` (invoked as `pnpm check:upgrade-coverage`).
-- Published skills whose entries you are authoring: `skills/upgrade/prisma-next-upgrade/`, `skills/extension-author/prisma-8-extension-upgrade/`.
+Release synthesis, archives, skipped unpublished bumps, and release completeness belong to the [canonical lifecycle](../../upgrade-instructions/README.md), not feature-PR authoring. No release-wide migration rehearsal is required.

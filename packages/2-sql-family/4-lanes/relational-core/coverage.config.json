@@ -1,0 +1,24 @@
+{
+  "include": ["src/**/*.ts"],
+  "exclude": [
+    "dist/**",
+    "test/**",
+    "**/*.test.ts",
+    "**/*.test-d.ts",
+    "**/*.config.ts",
+    "**/exports/**",
+    "**/index.ts",
+    "**/types.ts",
+    "src/utils/guards.ts",
+    "src/ast/adapter-types.ts",
+    "src/ast/driver-types.ts",
+    "src/ast/predicate.ts",
+    "src/query-lane-context.ts"
+  ],
+  "thresholds": {
+    "lines": 96,
+    "branches": 95,
+    "functions": 95,
+    "statements": 96
+  }
+}

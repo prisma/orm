@@ -1,10 +1,10 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { writeRef } from '@internal/migration-tools/refs';
-import { createTestCli } from '@prisma/cli-engine/testing';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { MigrationCheckResult } from '../../src/commands/json/schemas';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
 import {
   contractJson,
   createOfflineProject,
@@ -46,7 +46,7 @@ function postgisExtension(): Record<string, unknown> {
 function harness(project: OfflineProject, options: { readonly declared?: boolean } = {}) {
   const base = offlineConfig({ project });
   const config = options.declared === false ? base : { ...base, extensions: [postgisExtension()] };
-  return createTestCli({ commands: BIN_COMMANDS, groups: BIN_GROUPS, config: { orm: config } });
+  return createOrmTestCli({ commands: BIN_COMMANDS, groups: BIN_GROUPS, orm: config });
 }
 
 async function seedHeadRef(spaceDir: string, hash: string): Promise<void> {
@@ -100,7 +100,9 @@ describe('migration check across spaces', () => {
     const project = await twoSpaceProject({});
     await seedDanglingRef(project.extMigrationsDir);
 
-    const run = await harness(project).run(['migration', 'check', '--json'], { cwd: project.dir });
+    const run = await harness(project).run(['migration', 'check', '--json'], {
+      cwd: project.dir,
+    });
 
     expect(run.exitCode).toBe(4);
     const failures = documentOf(run).failures.filter(
@@ -119,7 +121,9 @@ describe('migration check across spaces', () => {
       invariants: [],
     });
 
-    const run = await harness(project).run(['migration', 'check', '--json'], { cwd: project.dir });
+    const run = await harness(project).run(['migration', 'check', '--json'], {
+      cwd: project.dir,
+    });
 
     expect(run.exitCode).toBe(0);
     expect(documentOf(run)).toEqual({ ok: true, failures: [], summary: 'All checks passed' });
@@ -143,7 +147,9 @@ describe('migration check across spaces', () => {
     await seedHeadRef(extMigrationsDir, HASH_EXT);
     await seedContractSnapshot({ migrationsDir: project.migrationsDir, storageHash: HASH_EXT });
 
-    const run = await harness(project).run(['migration', 'check', '--json'], { cwd: project.dir });
+    const run = await harness(project).run(['migration', 'check', '--json'], {
+      cwd: project.dir,
+    });
 
     expect(run.exitCode).toBe(4);
     const unreachable = documentOf(run).failures.filter(

@@ -22,12 +22,13 @@ import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
 import {
   type JourneyContext,
+  latestMigrationDirName,
   migrationStatusAppSpace,
   parseJsonOutput,
   parseMigrationStatusJson,
+  planMigrationAndSelfEmit,
   runContractEmit,
   runMigrate,
-  runMigrationPlanAndEmit,
   runMigrationStatus,
   runRef,
   setupJourney,
@@ -48,6 +49,7 @@ withTempDir(({ createTempDir }) => {
   describe('Journey D: Diamond Convergence', () => {
     const stagingDb = useDevDatabase();
     const prodDb = useDevDatabase();
+    const freshDb = useDevDatabase();
 
     it(
       'two environments diverge from C1, converge to C5 via distinct paths',
@@ -61,7 +63,7 @@ withTempDir(({ createTempDir }) => {
         // D.01: emit base (C1) → plan init (∅→C1)
         const emit0 = await runContractEmit(staging);
         expect(emit0.exitCode, 'D.01: emit C1').toBe(0);
-        const plan0 = await runMigrationPlanAndEmit(staging, ['--name', 'init', '--json']);
+        const plan0 = await planMigrationAndSelfEmit(staging, ['--name', 'init', '--json']);
         expect(plan0.exitCode, 'D.01: plan init').toBe(0);
         const c1Hash = parseJsonOutput<{ to: string }>(plan0).to;
 
@@ -83,7 +85,13 @@ withTempDir(({ createTempDir }) => {
         swapContract(staging, 'contract-phone');
         const emit1 = await runContractEmit(staging);
         expect(emit1.exitCode, 'D.04: emit C2').toBe(0);
-        const plan1 = await runMigrationPlanAndEmit(staging, ['--name', 'add-phone', '--json']);
+        const plan1 = await planMigrationAndSelfEmit(staging, [
+          '--name',
+          'add-phone',
+          '--from',
+          latestMigrationDirName(staging),
+          '--json',
+        ]);
         expect(plan1.exitCode, 'D.04: plan C1→C2').toBe(0);
         const applyStaging1 = await runMigrate(staging);
         expect(applyStaging1.exitCode, 'D.04: apply C2 to staging').toBe(0);
@@ -92,7 +100,13 @@ withTempDir(({ createTempDir }) => {
         swapContract(staging, 'contract-phone-bio');
         const emit2 = await runContractEmit(staging);
         expect(emit2.exitCode, 'D.05: emit C3').toBe(0);
-        const plan2 = await runMigrationPlanAndEmit(staging, ['--name', 'add-bio', '--json']);
+        const plan2 = await planMigrationAndSelfEmit(staging, [
+          '--name',
+          'add-bio',
+          '--from',
+          latestMigrationDirName(staging),
+          '--json',
+        ]);
         expect(plan2.exitCode, 'D.05: plan C2→C3').toBe(0);
         const c3Hash = parseJsonOutput<{ to: string }>(plan2).to;
         const applyStaging2 = await runMigrate(staging);
@@ -108,7 +122,7 @@ withTempDir(({ createTempDir }) => {
         swapContract(staging, 'contract-avatar');
         const emit3 = await runContractEmit(staging);
         expect(emit3.exitCode, 'D.06: emit C4').toBe(0);
-        const plan3 = await runMigrationPlanAndEmit(staging, [
+        const plan3 = await planMigrationAndSelfEmit(staging, [
           '--name',
           'add-avatar',
           '--from',
@@ -136,7 +150,7 @@ withTempDir(({ createTempDir }) => {
         expect(emit4.exitCode, 'D.07: emit C5').toBe(0);
 
         // Plan merge from staging branch: C3→C5
-        const planMergeStaging = await runMigrationPlanAndEmit(staging, [
+        const planMergeStaging = await planMigrationAndSelfEmit(staging, [
           '--name',
           'merge-staging',
           '--from',
@@ -147,7 +161,7 @@ withTempDir(({ createTempDir }) => {
         const c5Hash = parseJsonOutput<{ to: string }>(planMergeStaging).to;
 
         // Plan merge from production branch: C4→C5
-        const planMergeProd = await runMigrationPlanAndEmit(staging, [
+        const planMergeProd = await planMigrationAndSelfEmit(staging, [
           '--name',
           'merge-prod',
           '--from',
@@ -212,6 +226,23 @@ withTempDir(({ createTempDir }) => {
           prodStatusData.migrations.length,
           'D.10: production lists migrations',
         ).toBeGreaterThan(3);
+
+        // Shortest-path selection: apply the whole graph to an empty database —
+        // the pathfinder
+        // picks the shortest route to C5 (∅→C1→C4→C5, 3 steps) over the
+        // longer staging branch (∅→C1→C2→C3→C5, 4 steps). Folded in from the
+        // deleted converging-paths journey.
+        const fresh = createSecondDbContext(staging, freshDb.connectionString);
+        const applyFresh = await runMigrate(fresh, ['--json']);
+        expect(applyFresh.exitCode, 'apply to empty database').toBe(0);
+        const freshResult = parseJsonOutput<{
+          ok: boolean;
+          migrationsApplied: number;
+          markerHash: string;
+        }>(applyFresh);
+        expect(freshResult.ok, 'apply to empty database ok').toBe(true);
+        expect(freshResult.markerHash, 'empty-database marker at C5').toBe(c5Hash);
+        expect(freshResult.migrationsApplied, 'shortest path = 3 steps').toBe(3);
       },
       timeouts.spinUpPpgDev,
     );

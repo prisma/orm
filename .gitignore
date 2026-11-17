@@ -9,6 +9,7 @@ coverage
 .env.local
 .env.*.local
 .turbo
+.vitest
 *.tsbuildinfo
 packages/e2e-tests/.tmp-output
 /wip/*
@@ -29,9 +30,14 @@ CLAUDE.local.md
 .agents/skills/
 .claude/skills/
 
+# The user-facing skill tree copied into each shipping package by
+# `scripts/sync-package-skills.ts` (run from their `prepack`). The
+# canonical source of truth is `skills/` at the repository root.
+packages/9-public/@prisma/*/skills/
+
 # Per-machine install lockfile written by `skills add`. Local only;
 # our canonical source is `skills-contrib/` (for contributors) and the
-# git-pinned tag (for external consumers via `prisma-next init`).
+# git-pinned tag (for external consumers via `prisma init`).
 skills-lock.json
 
 # Review artifacts (transient, local-only)
@@ -69,10 +75,19 @@ test/**/fixtures/generated/
 .devin/
 .windsurf/
 
+# Pinned extension-pack files `contract emit` writes beside emit-only test
+# fixtures, which never migrate a database.
+packages/3-extensions/supabase/test/fixtures/migrations/
+test/e2e/framework/test/fixtures/migrations/
+test/integration/test/planner-golden/fixtures/postgres/migrations/
+test/integration/test/sql-builder/fixtures/migrations/
+test/integration/test/sql-orm-client/fixtures/collection-methods/migrations/
+test/integration/test/sql-orm-client/fixtures/migrations/
+
 # Temp config written by scripts/regen-example-migrations.mjs during emit; it is
 # unlinked after each migration, but a signal-killed run must never leave one
 # committable.
-**/.prisma-next-regen.config.ts
+**/.prisma-regen.config.ts
 
 # Reference clones inside transient projects (browsing aids, not committed)
 projects/*/reference/

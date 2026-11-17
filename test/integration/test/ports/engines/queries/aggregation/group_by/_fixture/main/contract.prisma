@@ -1,3 +1,5 @@
+// use prisma-8
+
 model A {
   id     Int    @id
   float  Float
@@ -5,10 +7,12 @@ model A {
   string String
   b_id   Int?
   b      B?     @relation(fields: [b_id], references: [id])
+  @@map("a")
 }
 
 model B {
   id     Int    @id
   field  String
   many_a A[]
+  @@map("b")
 }

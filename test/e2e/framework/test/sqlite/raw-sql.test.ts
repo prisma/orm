@@ -11,6 +11,7 @@ import type { Runtime, SqlMiddleware } from '@prisma/orm-sqlite/family-runtime';
 import { param } from '@prisma/orm-sqlite/relational-core/expression';
 import type { SqlParamRefMutator } from '@prisma/orm-sqlite/relational-core/middleware';
 import sqlite from '@prisma/orm-sqlite/runtime';
+import { contractFromJson } from '@prisma/orm-sqlite/static';
 import { timeouts } from '@repo/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Contract } from './fixtures/generated/contract.d';
@@ -30,8 +31,8 @@ async function buildHarness(middleware?: readonly SqlMiddleware[]): Promise<Harn
   const testDir = mkdtempSync(join(tmpdir(), 'prisma-sqlite-rawsql-'));
   const dbPath = join(testDir, 'test.db');
 
-  const client = sqlite<Contract>({
-    contractJson,
+  const client = sqlite({
+    contract: contractFromJson<Contract>(contractJson),
     path: dbPath,
     verifyMarker: false,
     ...(middleware ? { middleware } : {}),
@@ -140,14 +141,14 @@ describe('e2e: rawSql expression on SQLite', { timeout: timeouts.databaseOperati
     });
   });
 
-  describe('ParamRef from rawSql interpolation surfaces in beforeQuery params walk', () => {
-    it('param() inside rawSql appears in beforeQuery entries() in canonical order', async () => {
+  describe('ParamRef from rawSql interpolation surfaces in beforeEncode params walk', () => {
+    it('param() inside rawSql appears in beforeEncode entries() in canonical order', async () => {
       const capturedEntries: Array<{ codecId: string | undefined; value: unknown }> = [];
 
       const middleware: SqlMiddleware = {
         name: 'param-capture',
         familyId: 'sql',
-        beforeQuery(_plan, _ctx, params?: SqlParamRefMutator) {
+        beforeEncode(_plan, _ctx, params?: SqlParamRefMutator) {
           if (!params) return;
           for (const entry of params.entries()) {
             capturedEntries.push({ codecId: entry.codecId, value: entry.value });
@@ -160,7 +161,7 @@ describe('e2e: rawSql expression on SQLite', { timeout: timeouts.databaseOperati
 
       // The where clause embeds a param() inside a rawSql expression.
       // After lowering, the plan carries one ParamRef (value 50, codec sqlite/integer@1).
-      // The middleware's beforeQuery should see it via params.entries().
+      // The middleware's beforeEncode should see it via params.entries().
       await harness.runtime.query(
         harness.db[UNBOUND_NAMESPACE_ID].posts
           .select('id')
@@ -179,13 +180,13 @@ describe('e2e: rawSql expression on SQLite', { timeout: timeouts.databaseOperati
       expect(paramEntry?.value).toBe(50);
     });
 
-    it('param() count in beforeQuery entries matches the number of param() calls in rawSql', async () => {
+    it('param() count in beforeEncode entries matches the number of param() calls in rawSql', async () => {
       const capturedEntries: Array<{ codecId: string | undefined; value: unknown }> = [];
 
       const middleware: SqlMiddleware = {
         name: 'param-count-capture',
         familyId: 'sql',
-        beforeQuery(_plan, _ctx, params?: SqlParamRefMutator) {
+        beforeEncode(_plan, _ctx, params?: SqlParamRefMutator) {
           if (!params) return;
           for (const entry of params.entries()) {
             capturedEntries.push({ codecId: entry.codecId, value: entry.value });

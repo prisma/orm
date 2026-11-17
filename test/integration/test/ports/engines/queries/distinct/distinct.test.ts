@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { timeouts, withPostgresPort } from '../../../_harness/postgres';
+import { timeouts, withPostgresPort } from '../../../../_harness/postgres';
 import type { Contract } from './_fixture/generated/contract';
 import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
 
@@ -110,7 +110,7 @@ describe('ports/engines/queries/distinct', () => {
         expect(
           await db.public.User.select('id', 'first_name', 'last_name')
             .distinct('first_name', 'last_name')
-            .skip(1)
+            .offset(1)
             .all(),
         ).toEqual([{ id: 2, first_name: 'Hans', last_name: 'Wurst' }]);
       }),
@@ -126,7 +126,7 @@ describe('ports/engines/queries/distinct', () => {
           await db.public.User.select('first_name', 'last_name')
             .orderBy((u) => u.first_name.asc())
             .distinct('first_name', 'last_name')
-            .skip(1)
+            .offset(1)
             .all(),
         ).toEqual([{ first_name: 'Joe', last_name: 'Doe' }]);
       }),

@@ -6,7 +6,7 @@ import type { TargetId } from './templates/code-templates';
  * [`.gitattributes`](../../../../../../../../.gitattributes):
  *
  * - **Today**: `contract.json`, `contract.d.ts` are emitted on every
- *   `prisma-cli contract emit`. Marking them `linguist-generated`
+ *   `prisma contract emit`. Marking them `linguist-generated`
  *   keeps GitHub's diff stats honest and collapses the file in code
  *   review by default.
  * - **Forward-looking**: `ops.json`, `migration.json` are not yet emitted

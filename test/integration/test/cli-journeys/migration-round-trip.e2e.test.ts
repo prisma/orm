@@ -4,45 +4,46 @@
  * Drives the full migration lifecycle end-to-end against a live
  * Postgres:
  *
- *   1. `migration plan` → `migration apply` against an empty
+ *   1. `migration plan` → `migrate` against an empty
  *      database creates the initial table (`createTable` only — no
  *      placeholders, no data ops).
- *   2. Re-run `migration apply` is a no-op — `migrationsApplied: 0`
+ *   2. Re-run `migrate` is a no-op — `migrationsApplied: 0`
  *      and the formatted output reports "Already up to date" (per
  *      `plan.md` lines 318-323).
  *   3. Swap to a contract that both adds a nullable column and
  *      requires a data backfill, hand-author a `migration.ts` that
  *      combines `addColumn` + `dataTransform` + `setNotNull`, run
- *      it to emit `ops.json`, then `migration apply` succeeds and
+ *      it to emit `ops.json`, then `migrate` succeeds and
  *      the data is correct.
- *   4. Re-running `migration apply` after the second migration is
+ *   4. Re-running `migrate` after the second migration is
  *      again a no-op.
  *
  * This is the broader companion to the per-strategy planner-assisted
- * e2es (`data-transform-not-null-backfill.e2e.test.ts` and
- * friends): those isolate one strategy each, this one proves the
- * whole pipeline (createTable → addColumn → dataTransform →
- * setNotNull) round-trips and is idempotent.
+ * e2es (`data-transform-strategies.e2e.test.ts`): those isolate one
+ * strategy each, this one proves the whole pipeline (createTable →
+ * addColumn → dataTransform → setNotNull) round-trips and is
+ * idempotent.
  */
 
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { storageHashHex } from '@prisma/orm-postgres/components/control';
 import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
 import {
   type JourneyContext,
+  latestMigrationToHash,
+  planMigrationAndSelfEmit,
   runContractEmit,
   runMigrate,
-  runMigrationEmit,
   runMigrationNew,
-  runMigrationPlanAndEmit,
+  selfEmitMigration,
   setupJourney,
   sql,
   swapContract,
   timeouts,
   useDevDatabase,
 } from '../utils/journey-test-helpers';
+import { postgresDataMigrationHeader } from '../utils/journey-workspace-helpers';
 
 const BACKFILLED_NAME = 'unknown';
 
@@ -62,13 +63,13 @@ withTempDir(({ createTempDir }) => {
         // Step 1: emit base contract → plan → apply (createTable
         // only). The base contract is `id + email`; nothing data-
         // safety touches it, so the planner emits a pure
-        // `createTable` and `migration apply` runs all of it without
+        // `createTable` and `migrate` runs all of it without
         // any user intervention.
         // -----------------------------------------------------------
         const emit0 = await runContractEmit(ctx);
         expect(emit0.exitCode, `emit base: ${emit0.stderr}`).toBe(0);
 
-        const plan0 = await runMigrationPlanAndEmit(ctx, ['--name', 'initial']);
+        const plan0 = await planMigrationAndSelfEmit(ctx, ['--name', 'initial']);
         expect(plan0.exitCode, `plan initial: ${plan0.stderr}`).toBe(0);
 
         const apply0 = await runMigrate(ctx);
@@ -81,7 +82,7 @@ withTempDir(({ createTempDir }) => {
         );
 
         // -----------------------------------------------------------
-        // Step 2: re-running `migration apply` against an
+        // Step 2: re-running `migrate` against an
         // already-up-to-date database must be a no-op (Phase 3 AC,
         // plan.md lines 318-323).
         // -----------------------------------------------------------
@@ -102,7 +103,13 @@ withTempDir(({ createTempDir }) => {
         const emit1 = await runContractEmit(ctx);
         expect(emit1.exitCode, `emit additive-required: ${emit1.stderr}`).toBe(0);
 
-        const newResult = await runMigrationNew(ctx, ['--name', 'add-required-name']);
+        // Plain `migrate` never advances the `db` ref, so name the origin.
+        const newResult = await runMigrationNew(ctx, [
+          '--name',
+          'add-required-name',
+          '--from',
+          latestMigrationToHash(ctx),
+        ]);
         expect(newResult.exitCode, `migration new: ${newResult.stderr}`).toBe(0);
 
         const migrationsDir = join(ctx.testDir, 'migrations', 'app');
@@ -116,25 +123,8 @@ withTempDir(({ createTempDir }) => {
           readFileSync(join(migrationDir, 'migration.json'), 'utf-8'),
         );
 
-        const endContractSpecifier = `../../snapshots/${storageHashHex(manifestInitial.to)}/contract.json`;
         const migrationTs = `
-import postgresAdapter from '@prisma/orm-postgres/adapter/runtime';
-import { sql } from '@prisma/orm-postgres/builder/runtime';
-import { createExecutionContext, createSqlExecutionStack } from '@prisma/orm-postgres/family-runtime';
-import { Migration, MigrationCLI, col } from '@prisma/orm-postgres/migration';
-import postgresTarget from '@prisma/orm-postgres/target/runtime';
-import endContractJson from '${endContractSpecifier}' with { type: 'json' };
-import { PostgresContractSerializer } from '@prisma/orm-postgres/target/runtime';
-
-const endContract = new PostgresContractSerializer().deserializeContract(endContractJson);
-
-const db = sql({
-  context: createExecutionContext({
-    contract: endContract,
-    stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),
-  }),
-});
-
+${postgresDataMigrationHeader(manifestInitial.to)}
 export default class M extends Migration {
   override describe() {
     return { from: ${JSON.stringify(manifestInitial.from)}, to: ${JSON.stringify(manifestInitial.to)} };
@@ -156,7 +146,7 @@ MigrationCLI.run(import.meta.url, M);
 `;
         writeFileSync(migrationTsPath, migrationTs);
 
-        const emitResult = await runMigrationEmit(ctx, [
+        const emitResult = await selfEmitMigration(ctx, [
           '--dir',
           migrationDir,
           '--config',

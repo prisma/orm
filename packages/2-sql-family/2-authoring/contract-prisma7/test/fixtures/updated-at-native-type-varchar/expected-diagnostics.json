@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA7_UPDATED_AT_FIELD_INVALID",
+    "file": "schema.prisma",
+    "line": 7,
+    "message": "Field \"Post.updatedAt\" has @updatedAt, but \"@db.VarChar\" makes it a column that is not a date or time, so @updatedAt cannot set it. Prisma 7 refuses this schema too: \"Native type VarChar is not compatible with declared field type DateTime\". Remove @updatedAt, or use a date or time native type such as @db.Timestamp."
+  }
+]

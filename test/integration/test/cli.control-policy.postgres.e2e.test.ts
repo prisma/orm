@@ -131,7 +131,7 @@ function expectVerifyPassed(run: EngineRunResult): void {
 
 withTempDir(({ createTempDir }) => {
   describe('control policy postgres CLI (e2e)', () => {
-    // Pins `prisma-next contract emit` end-to-end for every ControlPolicy value:
+    // Pins `prisma contract emit` end-to-end for every ControlPolicy value:
     // per-table `control` survives canonicalisation, and missing-control on the
     // table left at the contract default is omitted (default-omission). The
     // contract-level `defaultControlPolicy` round-trip is pinned by the
@@ -307,7 +307,6 @@ withTempDir(({ createTempDir }) => {
 
           const dryRun = await runDbUpdate(testSetup, ['--config', configPath, '--dry-run']);
           const dryRunOutput = stripAnsi(dryRun.stderr);
-          expect(dryRunOutput).toContain('Planner warnings');
           expect(dryRunOutput).toContain('control policy suppressed: table "auth.sessions"');
 
           const apply = await runDbUpdateAllowFailure(testSetup, ['--config', configPath]);

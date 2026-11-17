@@ -1,0 +1,28 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id       String    @id @default(auto()) @map("_id") @db.ObjectId
+  legacyId String    @unique @ignore
+  posts    Post[]
+  comments Comment[]
+}
+
+model Post {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  title  String @ignore
+  slug   String @ignore @unique
+
+  authorId String @ignore @db.ObjectId
+  author   User   @relation(fields: [authorId], references: [id])
+
+  @@index([title])
+}
+
+model Comment {
+  id       String @id @default(auto()) @map("_id") @db.ObjectId
+  authorId String @db.ObjectId
+  author   User   @relation(fields: [authorId], references: [legacyId])
+}
