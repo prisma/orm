@@ -20,6 +20,7 @@ import {
 } from '@internal/mongo-contract';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { notOk, ok, type Result } from '@internal/utils/result';
+import { discriminatorRenameOf } from './mongo-discriminator-renames';
 import {
   SEPARATE_THE_MODELS,
   sharedCollectionWhy,
@@ -68,9 +69,17 @@ export interface VariantInput {
   readonly collectionAfterRenames: (collection: string) => string;
   /** The plan's replacements of enum values, one of which may already move a variant's discriminator value. */
   readonly enumReplacements: readonly ReplaceStoredValueCall[];
+  /** The plan's renames of fields, as stored. */
+  readonly fieldRenames: readonly {
+    readonly collection: string;
+    readonly from: string;
+    readonly to: string;
+  }[];
 }
 
 interface VariantChange extends Omit<VariantDocumentRewrite, 'call'> {
+  /** The model of the destination the variant is, if any. */
+  readonly destination: ModelCoordinate | undefined;
   /** The stored name of the discriminator in the origin. */
   readonly originField: string;
   /** The enum value replacement that already moves the value, when the discriminator is an enum. */
@@ -113,6 +122,20 @@ function baseOf(contract: ContractWithDomain, model: ModelCoordinate): ModelCoor
     : { namespaceId: asNamespaceId(base.namespace), model: base.model };
 }
 
+/** The destination's base of a variant of the origin: the base of the model it is, else the model its origin base is. */
+function destinationBaseOf(
+  origin: ModelCoordinate,
+  destination: ModelCoordinate | undefined,
+  fromContract: ContractWithDomain,
+  input: VariantInput,
+): ModelCoordinate | undefined {
+  const originBase = baseOf(fromContract, origin);
+  return (
+    (destination === undefined ? undefined : baseOf(input.contract, destination)) ??
+    (originBase === undefined ? undefined : destinationOf(originBase, input))
+  );
+}
+
 /** The stored name of the discriminator of the destination's base, when it still has one, as SQL finds the column. */
 function destinationDiscriminator(
   origin: ModelCoordinate,
@@ -120,10 +143,7 @@ function destinationDiscriminator(
   fromContract: ContractWithDomain,
   input: VariantInput,
 ): string | undefined {
-  const originBase = baseOf(fromContract, origin);
-  const base =
-    (destination === undefined ? undefined : baseOf(input.contract, destination)) ??
-    (originBase === undefined ? undefined : destinationOf(originBase, input));
+  const base = destinationBaseOf(origin, destination, fromContract, input);
   const model = base === undefined ? undefined : modelAt(input.contract, base);
   const field = model?.discriminator?.field;
   return model === undefined || field === undefined ? undefined : ownStoredNameOf(model, field);
@@ -174,6 +194,7 @@ function changeOf(
     to === undefined ? undefined : enumReplacementOf(input, { collection, field }, from, to);
   return {
     model: origin,
+    destination,
     collection,
     field,
     originField: before.field,
@@ -278,6 +299,45 @@ function sharedCollectionRefusal(
   );
 }
 
+/**
+ * The refusal of a change whose documents hold their discriminator value in a field the plan does
+ * not rename to the destination's discriminator: the rewrite would select its documents by a field
+ * that holds no variant's value.
+ */
+function unrenamedDiscriminatorRefusal(
+  change: VariantChange,
+  input: VariantInput,
+  fromContract: ContractWithDomain,
+): MigrationPlannerConflict | undefined {
+  const renamed = input.fieldRenames.some(
+    (rename) =>
+      rename.collection === change.collection &&
+      rename.from === change.originField &&
+      rename.to === change.field,
+  );
+  if (change.field === change.originField || renamed) return undefined;
+  const destinationBase = destinationBaseOf(change.model, change.destination, fromContract, input);
+  const rename =
+    destinationBase === undefined
+      ? undefined
+      : discriminatorRenameOf(baseOf(fromContract, change.model), destinationBase, {
+          fromContract,
+          contract: input.contract,
+          statements: input.statements,
+        });
+  const field = quoted(change.field);
+  const advice =
+    rename === undefined
+      ? `Make the change in two migrations: first give the documents their values in field ${field} and apply that; then change the variants.`
+      : `Add ${rename.flag} and plan again.`;
+  return refusedChange(
+    change,
+    changeLabel(change, input, fromContract),
+    `its documents hold their discriminator value in field ${quoted(change.originField)}, which the plan does not rename to ${field}`,
+    `The plan rewrites the documents of a variant by their value in field ${field}, which only a rename of field ${quoted(change.originField)} gives them. ${advice}`,
+  );
+}
+
 function callOf(change: VariantChange): ReplaceStoredValueCall | DeleteDocumentsCall {
   if (change.byEnum !== undefined) return change.byEnum;
   return change.to === undefined
@@ -321,7 +381,9 @@ export function planVariantDocumentRewrites(
     return unmanagedDelete ? [] : [change];
   });
   const refusals = changes.flatMap((change) => {
-    const refusal = collectionRefusal(change, input, fromContract);
+    const refusal =
+      collectionRefusal(change, input, fromContract) ??
+      unrenamedDiscriminatorRefusal(change, input, fromContract);
     return refusal === undefined ? [] : [refusal];
   });
   if (refusals.length > 0) return notOk(refusals);

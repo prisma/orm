@@ -652,6 +652,26 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
     if (!enumValues.ok) return { kind: 'failure', conflicts: [...enumValues.failure] };
     const { replacements: valueReplacements, removals: valueRemovals } = enumValues.value;
     const renamedTo = new Map(collectionRenames.map((call) => [call.from, call.to]));
+    const match: ModelMatchInput | undefined =
+      fromContract === null
+        ? undefined
+        : {
+            statements: renames,
+            fromContract,
+            contract,
+            collectionAfterRenames: (collection) => renamedTo.get(collection) ?? collection,
+          };
+    const lookups = mongoTypeLookupsOf(options.frameworkComponents);
+    const plannedFills = planFieldFills({
+      match,
+      contract,
+      lookups,
+      schema,
+      destination: destinationIR,
+      statements: options.statements,
+    });
+    if (!plannedFills.ok) return { kind: 'failure', conflicts: [...plannedFills.failure] };
+    const fills = plannedFills.value;
     const variants = planVariantDocumentRewrites({
       statements: options.statements,
       fromContract,
@@ -664,6 +684,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       enumReplacements: valueReplacements.flatMap(({ call }) =>
         call instanceof ReplaceStoredValueCall ? [call] : [],
       ),
+      fieldRenames: fieldRenames.map(({ call }) => call),
     });
     if (!variants.ok) return { kind: 'failure', conflicts: [...variants.failure] };
     const { deletes: variantDeletes, replacements: variantReplacements } = variants.value;
@@ -680,16 +701,6 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
               schema.collectionNames.filter((name) => destinationIR.collection(name) !== undefined),
             ),
           });
-    const match: ModelMatchInput | undefined =
-      fromContract === null
-        ? undefined
-        : {
-            statements: renames,
-            fromContract,
-            contract,
-            collectionAfterRenames: (collection) => renamedTo.get(collection) ?? collection,
-          };
-    const lookups = mongoTypeLookupsOf(options.frameworkComponents);
     const typeChanges: readonly TypeChange[] =
       fromContract === null
         ? planValidatorTypeChanges({ origin: schema, destination: destinationIR, contract })
@@ -736,14 +747,6 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
     const casts = rewritable.flatMap((change) => {
       const call = castFieldCallOf(change);
       return call === undefined ? [] : [{ ...change, call }];
-    });
-    const fills = planFieldFills({
-      match,
-      contract,
-      lookups,
-      schema,
-      destination: destinationIR,
-      statements: options.statements,
     });
     const storedKeyFills = planStoredKeyFills({
       statements: options.statements,

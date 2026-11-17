@@ -3,7 +3,7 @@
  *
  * `Task` is stored in collection `tasks` and discriminated by `type`. `Bug` (`bug`, with `severity`) and `Epic` (`epic`, with `scope`) are its variants.
  *
- * V1: the value of `Bug` becomes `defect`. Without a statement both commands ask, offering `--convert Bug` first and `--delete Bug` second; `--convert Bug` rewrites the documents. V2: `Bug` is renamed to `Defect`, whose value is `defect`: `--rename Bug:Defect` rewrites the documents. V3: `Bug` is removed: it is asked about as the model, and `--delete Bug` deletes its documents and keeps the others. V4: `Bug` is removed and `Epic` takes `bug`: the plan is refused with advice to use two migrations, and two migrations then delete the documents of `Bug` and move `Epic` to `bug`. V5: without a snapshot of the origin contract `db update` rewrites nothing, and the validator's document check stops it while documents hold `bug`. V6: the discriminator is renamed to `kind` and the value of `Bug` becomes `defect`: planned without statements, the refusal names the changes no statement answers and offers `--rename Task.type:Task.kind` first and `--convert Bug` second; the plan with the statements it offers keeps every document's variant.
+ * V1: the value of `Bug` becomes `defect`. Without a statement both commands ask, offering `--convert Bug` first and `--delete Bug` second; `--convert Bug` rewrites the documents. V2: `Bug` is renamed to `Defect`, whose value is `defect`: `--rename Bug:Defect` rewrites the documents. V3: `Bug` is removed: it is asked about as the model, and `--delete Bug` deletes its documents and keeps the others. V4: `Bug` is removed and `Epic` takes `bug`: the plan is refused with advice to use two migrations, and two migrations then delete the documents of `Bug` and move `Epic` to `bug`. V5: without a snapshot of the origin contract `db update` rewrites nothing, and the validator's document check stops it while documents hold `bug`. V6: the discriminator is renamed to `kind` and the value of `Bug` becomes `defect`: planned without statements, with `--convert Bug --delete Task.type`, or with `--delete Task.type --delete Bug`, and through `db update`, the plan is refused because a temporary value would name no variant, offering `--rename Task.type:Task.kind`, and nothing is applied; the plan with that rename and `--convert Bug` keeps every document's variant.
  *
  * Every journey that applies ends with an empty further plan, a clean `db verify --schema-only`, and every document accepting an update; each `migration.ts` written is run again and reproduces its `ops.json`.
  */
@@ -367,39 +367,65 @@ describe('Journeys (MongoDB): variant statements', {
     await verifiedAndSettled(ctx, dbName, 'V4', furtherMigrationPlan(ctx));
   });
 
-  it('V6: a discriminator rename with a changed variant value, planned without statements, is refused with the statements to pass, the rename first, and the plan with them keeps the variants', async () => {
+  it('V6: a discriminator renamed without its statement is refused with the rename to pass, whatever the other answers, and the plan with the rename keeps the variants', async () => {
     const dbName = 'mongo_v6_plan';
     const { ctx, origin } = await migratedThenChanged(
       dbName,
       { before: BEFORE, after: KIND_CHANGED, statements: [] },
       'V6',
     );
-    const refused = await runMigrationPlan(ctx, ['--name', 'refused', '--from', origin, '--json']);
-    const failure = engineError(refused);
-    const text = [failure?.why, ...(failure?.nextActions ?? []).map(({ label }) => label)].join(
-      '\n',
-    );
-    const offered = [...text.matchAll(/--(rename|convert) (\S+?) or --delete/g)].map(
-      ([, verb, statement]) => [`--${verb}`, statement ?? ''],
-    );
-    expect({
-      exitCode: refused.exitCode === 0 ? 0 : 'failed',
-      offered,
-      names: ['field "Task.type"', 'new required field "Task.kind"'].every((name) =>
-        text.includes(name),
-      ),
-      firstOnly: text.includes('first only'),
-    }).toEqual({
+    const NEW_DISCRIMINATOR =
+      'Cannot plan the migration: new discriminator field \\"Task.kind\\" has no value in the documents of collection tasks';
+    const refusalOf = (result: Awaited<ReturnType<typeof runMigrationPlan>>) => {
+      const text = JSON.stringify(engineError(result) ?? {});
+      return {
+        exitCode: result.exitCode === 0 ? 0 : 'failed',
+        newDiscriminator: text.includes(NEW_DISCRIMINATOR),
+        offered: [
+          ...new Set([...text.matchAll(/add (--rename \S+) to keep it/g)].map(([, flag]) => flag)),
+        ],
+      };
+    };
+    const refused = {
       exitCode: 'failed',
-      offered: [
-        ['--rename', 'Task.type:Task.kind'],
-        ['--convert', 'Bug'],
-      ],
-      names: true,
-      firstOnly: false,
+      newDiscriminator: true,
+      offered: ['--rename Task.type:Task.kind'],
+    };
+    const answers = [
+      [],
+      ['--convert', 'Bug', '--delete', 'Task.type'],
+      ['--delete', 'Task.type', '--delete', 'Bug'],
+    ];
+    const planned = [];
+    for (const statements of answers) {
+      planned.push(
+        refusalOf(await runMigrationPlan(ctx, ['--from', origin, ...statements, '--json'])),
+      );
+    }
+    const updated = refusalOf(
+      await runDbUpdate(ctx, [
+        '--no-interactive',
+        '--json',
+        '--delete',
+        'Task.type',
+        '--convert',
+        'Bug',
+      ]),
+    );
+    expect({ planned, updated, documents: await documents(dbName) }).toEqual({
+      planned: answers.map(() => refused),
+      updated: refused,
+      documents: DOCUMENTS,
     });
 
-    await planAndMigrate(ctx, origin, 'change', offered.flat(), 'V6');
+    const [rename] = refused.offered;
+    await planAndMigrate(
+      ctx,
+      origin,
+      'change',
+      [...(rename ?? '').split(' '), '--convert', 'Bug'],
+      'V6',
+    );
 
     expect(await documents(dbName)).toEqual([
       { title: 'a', kind: 'defect', severity: 'high' },

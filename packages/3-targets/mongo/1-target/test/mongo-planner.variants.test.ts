@@ -415,37 +415,105 @@ describe('MongoMigrationPlanner, a removed variant whose base renames its discri
   });
 });
 
-describe('MongoMigrationPlanner, a discriminator rename planned without its statement', () => {
+describe('MongoMigrationPlanner, a discriminator renamed without its statement', () => {
   const renameType = renameField('Task', 'type', 'Task', 'kind');
-  const fillKind = 'Fill field kind in collection tasks where it is missing or null';
+  const backfillKind: ResolvedMigrationStatement = {
+    kind: 'backfill',
+    entity: 'field',
+    field: { namespaceId: NS, model: 'Task', field: 'kind' },
+  };
   const after = (variants: Readonly<Record<string, VariantSpec>>) =>
     tasks('to', variants, {}, { discriminator: 'kind' });
   const valueChanged = after({ Bug: { ...BUG, value: 'defect' }, Epic: EPIC });
+  const NO_TEMPORARY_VALUE =
+    "A document's discriminator value says which variant it is, and no temporary value names a variant, so the plan does not fill the field.";
+  const kindRefusal = {
+    kind: 'unsupportedOperation',
+    summary:
+      'Cannot plan the migration: new discriminator field "Task.kind" has no value in the documents of collection tasks',
+    why: `${NO_TEMPORARY_VALUE} The documents hold their variant in "Task.type", which the plan removes: add --rename Task.type:Task.kind to keep it, and plan again.`,
+  };
 
-  it('names the changes no statement answers and the statements that answer them, the rename first', () => {
-    expect(refusal(plan({ from: BEFORE, to: valueChanged, schema: live }))).toEqual([
+  it('refuses the plan and offers the rename, for the rename alone, a changed variant value and a removed variant', () => {
+    expect(
+      [after({ Bug: BUG, Epic: EPIC }), valueChanged, after({ Epic: EPIC })].map((to) =>
+        refusal(plan({ from: BEFORE, to, schema: live })),
+      ),
+    ).toEqual([[kindRefusal], [kindRefusal], [kindRefusal]]);
+  });
+
+  it('refuses --convert Bug when the old discriminator is deleted instead of renamed', () => {
+    expect(
+      refusal(plan({ from: BEFORE, to: valueChanged, schema: live, statements: [convert('Bug')] })),
+    ).toEqual([kindRefusal]);
+  });
+
+  it('offers --backfill for a base that gains its first discriminator', () => {
+    const plain = contract(
+      'from',
+      { Task: { collection: 'tasks', fields: ['_id'] } },
       {
-        kind: 'unsupportedOperation',
-        summary: `Cannot plan the migration: the filter of one of its operations reads what another changes (${deleteLabel('bug', 'kind')}; ${fillKind})`,
-        why: 'An operation selects its documents by its filter when it runs, so it must run after the operations that write what its filter reads and before those that empty it, and these operations need both. The plan holds changes that no statement answers yet: field "Task.type", which the plan removes; model "Bug", whose documents the plan deletes; new required field "Task.kind", which the plan fills with a temporary value. Answer them and plan again: --rename Task.type:Task.kind or --delete Task.type; --convert Bug or --delete Bug.',
+        tasks: {},
+      },
+    );
+    expect(
+      refusal(plan({ from: plain, to: after({ Bug: BUG, Epic: EPIC }), schema: live })),
+    ).toEqual([
+      {
+        ...kindRefusal,
+        why: `${NO_TEMPORARY_VALUE} Add --backfill Task.kind and write each document's value in migration.ts.`,
       },
     ]);
   });
 
-  it('plans the change with the rename', () => {
-    expect(
-      planned(plan({ from: BEFORE, to: valueChanged, schema: live, statements: [renameType] }))
-        .labels,
-    ).toEqual(['Rename field type to kind in collection tasks', deleteLabel('bug', 'kind')]);
+  it('refuses a variant convert or delete that selects documents by a discriminator the plan backfills instead of renaming', () => {
+    const refusedWhy =
+      'The plan rewrites the documents of a variant by their value in field "kind", which only a rename of field "type" gives them. Add --rename Task.type:Task.kind and plan again.';
+    expect({
+      converted: refusal(
+        plan({
+          from: BEFORE,
+          to: valueChanged,
+          schema: live,
+          statements: [backfillKind, convert('Bug')],
+        }),
+      ),
+      deleted: refusal(
+        plan({ from: BEFORE, to: after({ Epic: EPIC }), schema: live, statements: [backfillKind] }),
+      ),
+    }).toEqual({
+      converted: [
+        {
+          kind: 'statementRefused',
+          summary:
+            'Cannot convert variant "Bug": its documents hold their discriminator value in field "type", which the plan does not rename to "kind"',
+          why: refusedWhy,
+        },
+      ],
+      deleted: [
+        {
+          kind: 'unsupportedOperation',
+          summary:
+            'Cannot delete the documents of variant "Bug": its documents hold their discriminator value in field "type", which the plan does not rename to "kind"',
+          why: refusedWhy,
+        },
+      ],
+    });
   });
 
-  it('names a removed variant the same way', () => {
+  it('plans the change with the rename, and fills no discriminator', () => {
     expect(
-      refusal(plan({ from: BEFORE, to: after({ Epic: EPIC }), schema: live })).map(({ why }) =>
-        why?.slice(why.indexOf('The plan holds')),
-      ),
+      planned(
+        plan({
+          from: BEFORE,
+          to: valueChanged,
+          schema: live,
+          statements: [renameType, convert('Bug')],
+        }),
+      ).labels,
     ).toEqual([
-      'The plan holds changes that no statement answers yet: field "Task.type", which the plan removes; model "Bug", whose documents the plan deletes; new required field "Task.kind", which the plan fills with a temporary value. Answer them and plan again: --rename Task.type:Task.kind or --delete Task.type; --delete Bug.',
+      'Rename field type to kind in collection tasks',
+      replaceLabel('bug', 'defect', 'kind'),
     ]);
   });
 });

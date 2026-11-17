@@ -1,9 +1,12 @@
 import type { ContractField, ContractValueObjectField } from '@internal/contract/types';
 import type { TypeLookups } from '@internal/framework-components/codec';
-import type {
-  FieldCoordinate,
-  MigrationSubject,
-  ResolvedMigrationStatement,
+import {
+  type FieldCoordinate,
+  fieldStatementText,
+  type MigrationPlannerConflict,
+  type MigrationSubject,
+  type ModelCoordinate,
+  type ResolvedMigrationStatement,
 } from '@internal/framework-components/control';
 import {
   collectionOfModel,
@@ -20,7 +23,10 @@ import {
   temporaryValueOfCodec,
 } from '@internal/mongo-contract/data-type';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
+import { notOk, ok, type Result } from '@internal/utils/result';
 import { unrewritableFieldNameReason } from './migration-factories';
+import { discriminatorRenameOf } from './mongo-discriminator-renames';
+import { statementFlag } from './mongo-statement-flags';
 import {
   collectionControlPolicy,
   destinationFieldOf,
@@ -115,12 +121,48 @@ function underUniqueIndex(
 }
 
 /**
+ * The refusal of a new required discriminator: a temporary value names no variant, so no fill keeps
+ * a document's variant. It offers the rename of the origin's discriminator when the destination no
+ * longer has it, and `--backfill` otherwise.
+ */
+function newDiscriminatorRefusal(
+  input: FillInput,
+  model: ModelCoordinate,
+  field: string,
+  collection: string,
+): MigrationPlannerConflict {
+  const text = fieldStatementText(input.contract, { ...model, field });
+  const rename =
+    input.match === undefined
+      ? undefined
+      : discriminatorRenameOf(originModelOf(model, input.match), model, {
+          fromContract: input.match.fromContract,
+          contract: input.contract,
+          statements: input.statements,
+        });
+  const advice =
+    rename === undefined
+      ? `Add ${statementFlag('backfill', text)} and write each document's value in migration.ts.`
+      : `The documents hold their variant in "${rename.from}", which the plan removes: add ${rename.flag} to keep it, and plan again.`;
+  return {
+    kind: 'unsupportedOperation',
+    summary: `Cannot plan the migration: new discriminator field "${text}" has no value in the documents of collection ${collection}`,
+    why: `A document's discriminator value says which variant it is, and no temporary value names a variant, so the plan does not fill the field. ${advice}`,
+  };
+}
+
+/**
  * Each required field of the destination that is new on a collection the plan keeps, with the
  * temporary value its type declares, unless a `--backfill` statement names it. A field whose type
  * declares none, or that a unique index covers, is left to the validator change's document check.
+ * A new discriminator is refused instead: a temporary value would leave every document matched by
+ * no variant.
  */
-export function planFieldFills(input: FillInput): readonly FieldFill[] {
-  return modelCoordinates(input.contract).flatMap((model) => {
+export function planFieldFills(
+  input: FillInput,
+): Result<readonly FieldFill[], readonly MigrationPlannerConflict[]> {
+  const refusals: MigrationPlannerConflict[] = [];
+  const fills = modelCoordinates(input.contract).flatMap((model) => {
     const definition = modelAt(input.contract, model);
     const collection = collectionOfModel(input.contract.domain, model);
     if (
@@ -142,6 +184,10 @@ export function planFieldFills(input: FillInput): readonly FieldFill[] {
         }
         if (backfilled(input.statements, coordinate)) return [];
         if (inOrigin(input, coordinate, collection, storedName)) return [];
+        if (definition.discriminator?.field === field) {
+          refusals.push(newDiscriminatorRefusal(input, model, field, collection));
+          return [];
+        }
         if (underUniqueIndex(input.destination, collection, storedName)) return [];
         const value = temporaryValueOf(contractField, input.lookups);
         if (value === undefined) return [];
@@ -161,4 +207,5 @@ export function planFieldFills(input: FillInput): readonly FieldFill[] {
         ];
       });
   });
+  return refusals.length > 0 ? notOk(refusals) : ok(fills);
 }
