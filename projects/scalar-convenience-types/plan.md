@@ -9,7 +9,7 @@ Each slice is one PR, branched from `main`. A slice starts only after the one be
 | # | Slice | Linear | State |
 | --- | --- | --- | --- |
 | 1 | PostgreSQL `Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean`, `Bytes`; explicit renames with deprecated aliases; ADR 316 | TML-3715 | Merged, prisma/orm#30942 |
-| 2 | PostgreSQL `Json` as a convenience type that defaults to `json`; explicit name `PlainJson`; `jsonColumn` renamed; `sql.String` renamed `sql.Varchar`; ADR 316 amended; the duplicate ADR 316 renumbered | TML-3789, reopened with this scope | Not started |
+| 2 | PostgreSQL `Json` as a convenience type that defaults to `json`; explicit name `PlainJson`; `jsonColumn` renamed; `sql.String` renamed `sql.Varchar`; ADR 316 amended; the duplicate ADR 316 renumbered | TML-3789 | Merged, prisma/orm#31065 |
 | 3 | MongoDB convenience types; `Int`, `Float` and `Boolean` stop being deprecated; the deprecation warning fires wherever a deprecated name is written; `type.Int64()` removed with an upgrade instruction; new ADR with the shared rules and MongoDB's table | TML-3790 | Not started |
 | 4 | SQLite convenience types and explicit renames; new `Boolean` and `Decimal` codecs; column helpers renamed; shared decimal and boolean value code | TML-3790, TML-3562, TML-3782 | Not started |
 | 5 | MySQL convenience types for all eight names, with the codecs it lacks: bigint as number, float, double, decimal, boolean, bytes and JSON; the plain-JSON check shared with MongoDB | TML-3790, TML-3783 | Not started |
