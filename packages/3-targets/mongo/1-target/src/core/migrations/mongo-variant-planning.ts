@@ -21,6 +21,7 @@ import {
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { discriminatorRenameOf } from './mongo-discriminator-renames';
+import { inTwoSteps } from './mongo-rewrite-overlaps';
 import {
   SEPARATE_THE_MODELS,
   sharedCollectionWhy,
@@ -236,8 +237,10 @@ function refusedChange(
 }
 
 /** How to change discriminator values that one migration cannot change safely. */
-export const VARIANT_TWO_MIGRATIONS =
-  'Make the change in two migrations: first delete the variants, or move their values to discriminator values no variant uses, and apply that; then change the values to their final ones.';
+export const VARIANT_TWO_STEPS = inTwoSteps(
+  'delete the variants, or move their values to discriminator values no variant uses',
+  'change the values to their final ones',
+);
 
 /** Why a change cannot be planned in its collection: a time-series collection, or, for a statement, one whose control policy is not `managed`. */
 function collectionRefusal(
@@ -328,7 +331,10 @@ function unrenamedDiscriminatorRefusal(
   const field = quoted(change.field);
   const advice =
     rename === undefined
-      ? `Make the change in two migrations: first give the documents their values in field ${field} and apply that; then change the variants.`
+      ? inTwoSteps(
+          `add field ${field} and give every document its value there (under migration plan, with --backfill)`,
+          'change the variants',
+        )
       : `Add ${rename.flags} and run the command again.`;
   const unrenamed = `hold their discriminator value in field ${quoted(change.originField)}, which the plan does not rename to ${field}`;
   return refusedChange(

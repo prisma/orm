@@ -81,7 +81,7 @@ import {
 } from './mongo-type-changes';
 import { mongoTypeLookupsOf } from './mongo-type-lookups';
 import type { UnansweredChange } from './mongo-unanswered-changes';
-import { planVariantDocumentRewrites, VARIANT_TWO_MIGRATIONS } from './mongo-variant-planning';
+import { planVariantDocumentRewrites, VARIANT_TWO_STEPS } from './mongo-variant-planning';
 import type { OpFactoryCall } from './op-factory-call';
 import {
   CollModCall,
@@ -837,7 +837,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         (rewrite) => [rewrite.call, rewrite.twoMigrationsAdvice] as const,
       ),
       ...[...variantDeletes, ...variantReplacements].map(
-        (rewrite) => [rewrite.call, VARIANT_TWO_MIGRATIONS] as const,
+        (rewrite) => [rewrite.call, VARIANT_TWO_STEPS] as const,
       ),
     ]);
     const changeOfCall = new Map<OpFactoryCall, UnansweredChange>([

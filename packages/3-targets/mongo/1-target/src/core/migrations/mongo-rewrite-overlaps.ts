@@ -25,17 +25,26 @@ import { jsonPathText, storedKeyPath } from './stored-key-path';
 export const ONE_AT_A_TIME =
   "MongoDB applies a migration's operations one at a time, without a transaction, and knows that an operation already ran only from the documents.";
 
-const RENAME_ADVICE =
-  'Make the change in two migrations: first rename the keys or fields to names nothing else uses and apply that; then rename them to their final names.';
+/** Advice to make a change as two changes to the contract, the first applied before the second is made. */
+export function inTwoSteps(first: string, second: string): string {
+  return `Make the change as two changes to the contract, and apply the first, by a migration or by db update, before you make the second: first ${first}; then ${second}.`;
+}
 
-const FILL_ADVICE =
-  'Make the change in two migrations: first make the rename and apply it, without the new required field; then add the new field.';
+const RENAME_ADVICE = inTwoSteps(
+  'rename the keys or fields to names nothing else uses',
+  'rename them to their final names',
+);
+
+const FILL_ADVICE = inTwoSteps(
+  'make the rename, without the new required field',
+  'add the new field',
+);
 
 const fillAfterRemovalAdvice = (noun: string) =>
-  `Make the change in two migrations: first remove the old ${noun} and apply that; then add the new one.`;
+  inTwoSteps(`remove the old ${noun}`, 'add the new one');
 
 const removeBeforeRenameAdvice = (noun: string) =>
-  `Make the change in two migrations: first remove the ${noun} whose name the rename takes and apply that; then make the rename.`;
+  inTwoSteps(`remove the ${noun} whose name the rename takes`, 'make the rename');
 
 /** A call of the rewrite step of a plan. */
 export type RewriteCall =
@@ -103,7 +112,7 @@ export type OrderedRewrite = {
     readonly call: RewriteCallNamed<Name>;
     /** The statements the call carries out. */
     readonly statements: readonly ResolvedMigrationStatement[];
-    /** How to make a change of stored values in two migrations; `undefined` for keys and fields. */
+    /** How to make a change of stored values in two steps; `undefined` for keys and fields. */
     readonly twoMigrationsAdvice: string | undefined;
     /** The change the call makes when no statement carries it; `undefined` when a statement does, or the call answers no question. */
     readonly unanswered: UnansweredChange | undefined;
@@ -479,7 +488,10 @@ export function overlapRefusal(
     why(
       involved,
       'One of these operations finds its documents by what another changes, and the order the plan needs runs it on the wrong side of that change.',
-      `Make the change in two migrations: first only "${conflict.later.rewrite.call.label}" and apply that; then the rest.`,
+      inTwoSteps(
+        `make only the part of the change that "${conflict.later.rewrite.call.label}" carries out`,
+        'the rest',
+      ),
     ),
     contracts,
   );

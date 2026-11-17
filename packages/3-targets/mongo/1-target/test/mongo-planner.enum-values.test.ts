@@ -73,10 +73,10 @@ const OVERLAP_WHY = (advice: string) =>
   `MongoDB applies a migration's operations one at a time, without a transaction, and knows that an operation already ran only from the documents. An operation that reads a value another operation of the same migration writes acts on what that operation wrote: at once when it runs later, and when the migration runs again after a later operation stops. ${advice}`;
 
 const ENUM_TWO_MIGRATIONS =
-  'Make the change in two migrations: first move every value they swap or chain to a stored value the enum does not use, all in one migration, and apply it; then move them to their final values in a second.';
+  'Make the change as two changes to the contract, and apply the first, by a migration or by db update, before you make the second: first move every value they swap or chain to a stored value the enum does not use; then move them to their final values.';
 
 const NO_THIRD_BOOLEAN =
-  'A boolean enum has no third value to move a stored value to, so the change cannot be split into two migrations.';
+  'A boolean enum has no third value to move a stored value to, so the change cannot be split into two steps.';
 
 const SWAP_IN_ONE_UPDATE =
   'swap the stored values yourself in one update of the database, such as an updateMany whose pipeline sets each field that holds the enum to its negation with $not';
@@ -92,7 +92,7 @@ const replacementsOf = (...moves: readonly (readonly [string, string])[]) =>
     .join('; ');
 
 const TWO_MIGRATIONS = (members: string) =>
-  `To keep that data, make the change in two migrations: first move the stored values of ${members} to values the enum does not use, all in one migration, and apply it; then move them to their final values in a second. MongoDB applies a migration's operations one at a time, so replacements whose old values other replacements write cannot safely run again after a later operation stops.`;
+  `To keep that data: Make the change as two changes to the contract, and apply the first, by a migration or by db update, before you make the second: first move the stored values of ${members} to values the enum does not use; then move them to their final values. MongoDB applies the operations one at a time, so replacements whose old values other replacements write cannot safely run again after a later operation stops.`;
 
 /** A call as `migration.ts` writes it, without white space or trailing commas. */
 const compact = (text: string | undefined) => text?.replace(/\s+/g, '').replace(/,(?=[)}\]])/g, '');
@@ -397,7 +397,7 @@ describe('MongoMigrationPlanner, a removed enum value', () => {
   });
 
   it('advises a boolean enum whose values trade places to swap them in one update, which two migrations cannot do', () => {
-    const BOOLEAN_SWAP_ADVICE = `${NO_THIRD_BOOLEAN} To keep that data, ${SWAP_IN_ONE_UPDATE}, and remove the removeStoredValue calls of this enum from migration.ts before you apply it.`;
+    const BOOLEAN_SWAP_ADVICE = `${NO_THIRD_BOOLEAN} To keep that data, plan the change with migration plan, remove the removeStoredValue calls of this enum from the migration.ts it writes, and ${SWAP_IN_ONE_UPDATE}, before you apply it.`;
     const flags = (seed: string, members: Readonly<Record<string, unknown>>) =>
       users(seed, statuses(members, 'mongo/bool@1'), {
         flag: { codecId: 'mongo/bool@1', valueSet: 'Status', nullable: true },
@@ -477,7 +477,7 @@ describe('MongoMigrationPlanner, enum value refusals', () => {
         kind: 'fieldRemovalRefused',
         summary:
           'Cannot remove enum value "Status.B": its stored value {"x":2} is not a string, a number or a boolean',
-        why: 'The plan matches stored enum values by equality, and MongoDB\'s equality on an object depends on the order of its keys and on a list matches lists that contain it. Rewrite the documents that hold enum value "Status.B" in a dataTransform operation of migration.ts, then plan again.',
+        why: 'The plan matches stored enum values by equality, and MongoDB\'s equality on an object depends on the order of its keys and on a list matches lists that contain it. Rewrite the documents that hold enum value "Status.B" yourself, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh, then run the command again.',
       },
     ]);
   });
@@ -546,7 +546,7 @@ describe('MongoMigrationPlanner, enum value refusals', () => {
     });
     expect(refusal(result).map(({ why }) => why)).toEqual([
       OVERLAP_WHY(
-        `${NO_THIRD_BOOLEAN} Leave out these statements, ${SWAP_IN_ONE_UPDATE}, and remove the removeStoredValue calls of this enum from the migration.ts that migration plan writes before you apply it.`,
+        `${NO_THIRD_BOOLEAN} Leave out these statements, plan the change with migration plan, remove the removeStoredValue calls of this enum from the migration.ts it writes, and ${SWAP_IN_ONE_UPDATE}, before you apply it.`,
       ),
     ]);
   });

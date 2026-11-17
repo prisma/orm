@@ -317,7 +317,7 @@ describe('Journeys (MongoDB): enum value statements', {
       code: engineError(asked)?.code,
       asksActive: question.includes('Status.ACTIVE'),
       asksArchived: question.includes('Status.ARCHIVED'),
-      twoMigrations: question.includes('make the change in two migrations'),
+      twoMigrations: question.includes('Make the change as two changes to the contract'),
       temporaryValue: question.includes('replaceStoredValue'),
     }).toEqual({
       code: 'CLI.CONSENT_REQUIRED',

@@ -43,7 +43,7 @@ const FILTER_REASON =
 const filterRefusal = (earlier: OrderedRewrite, later: OrderedRewrite) => ({
   kind: 'unsupportedOperation',
   summary: `Cannot plan the migration: the filter of one of its operations reads what another changes (${earlier.call.label}; ${later.call.label})`,
-  why: `${FILTER_REASON} Make the change in two migrations: first only "${later.call.label}" and apply that; then the rest.`,
+  why: `${FILTER_REASON} Make the change as two changes to the contract, and apply the first, by a migration or by db update, before you make the second: first make only the part of the change that "${later.call.label}" carries out; then the rest.`,
 });
 
 describe('overlapRefusal', () => {
@@ -87,7 +87,7 @@ describe('overlapRefusal', () => {
         statements: [],
       })?.why,
     ).toEqual(
-      `The plan holds changes that no --rename or --convert statement carries: field "User.a", which the plan removes. To keep their data, plan again with: --rename User.a:User.c. ${FILTER_REASON} If every answer is --delete, the plan stays as it is: make the change in two migrations: first only "${replaceType.call.label}" and apply that; then the rest.`,
+      `The plan holds changes that no --rename or --convert statement carries: field "User.a", which the plan removes. To keep their data, run the command again with: --rename User.a:User.c. ${FILTER_REASON} If every answer is --delete, the plan stays as it is: make the change as two changes to the contract, and apply the first, by a migration or by db update, before you make the second: first make only the part of the change that "${replaceType.call.label}" carries out; then the rest.`,
     );
   });
 

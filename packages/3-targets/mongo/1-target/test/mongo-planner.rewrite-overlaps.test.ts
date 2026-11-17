@@ -22,10 +22,10 @@ const why = (noun: string, advice: string) =>
   `${ONE_AT_A_TIME} An operation that reads a ${noun} another operation of the same migration writes acts on what that operation wrote: at once when it runs later, and when the migration runs again after a later operation stops. ${advice}`;
 
 const RENAME_ADVICE =
-  'Make the change in two migrations: first rename the keys or fields to names nothing else uses and apply that; then rename them to their final names.';
+  'Make the change as two changes to the contract, and apply the first, by a migration or by db update, before you make the second: first rename the keys or fields to names nothing else uses; then rename them to their final names.';
 
 const FILL_ADVICE =
-  'Make the change in two migrations: first make the rename and apply it, without the new required field; then add the new field.';
+  'Make the change as two changes to the contract, and apply the first, by a migration or by db update, before you make the second: first make the rename, without the new required field; then add the new field.';
 
 /** Users holding a list of `Address` value objects. */
 function addressUsers(seed: string, address: Record<string, FieldTypeSpec>) {
@@ -318,7 +318,7 @@ describe('MongoMigrationPlanner, a new required field under a stored name a rena
 });
 
 const REMOVE_ADVICE = (noun: string) =>
-  `Make the change in two migrations: first remove the ${noun} whose name the rename takes and apply that; then make the rename.`;
+  `Make the change as two changes to the contract, and apply the first, by a migration or by db update, before you make the second: first remove the ${noun} whose name the rename takes; then make the rename.`;
 
 describe('MongoMigrationPlanner, a rename onto a name the origin also stores', () => {
   it('removes the field the origin stores under that name, and refuses the plan', () => {
@@ -364,7 +364,7 @@ describe('MongoMigrationPlanner, a rename onto a name the origin also stores', (
         }),
       ).map(({ why: text }) => text?.slice(0, text.indexOf(ONE_AT_A_TIME))),
     ).toEqual([
-      'The plan holds changes that no --rename or --convert statement carries: field "Person.a", which the plan removes. To keep their data, plan again with: --rename Person.a:Person.c. ',
+      'The plan holds changes that no --rename or --convert statement carries: field "Person.a", which the plan removes. To keep their data, run the command again with: --rename Person.a:Person.c. ',
     ]);
   });
 
@@ -379,7 +379,7 @@ describe('MongoMigrationPlanner, a rename onto a name the origin also stores', (
         }),
       ).map(({ why: text }) => text),
     ).toEqual([
-      `The plan holds changes that no --rename or --convert statement carries: field "User.a", which the plan removes. To keep their data, plan again with: --rename User.a:User.c. ${ONE_AT_A_TIME} An operation that reads a field another operation of the same migration writes acts on what that operation wrote: at once when it runs later, and when the migration runs again after a later operation stops. If every answer is --delete, the plan stays as it is: m${REMOVE_ADVICE('field').slice(1)}`,
+      `The plan holds changes that no --rename or --convert statement carries: field "User.a", which the plan removes. To keep their data, run the command again with: --rename User.a:User.c. ${ONE_AT_A_TIME} An operation that reads a field another operation of the same migration writes acts on what that operation wrote: at once when it runs later, and when the migration runs again after a later operation stops. If every answer is --delete, the plan stays as it is: m${REMOVE_ADVICE('field').slice(1)}`,
     ]);
   });
 
@@ -424,7 +424,7 @@ describe('MongoMigrationPlanner, a rename onto a name the origin also stores', (
       }),
     ).map(({ why: text }) => text?.slice(0, text.indexOf(ONE_AT_A_TIME)));
     expect(why).toEqual([
-      'The plan holds changes that no --rename or --convert statement carries: field "User.a", which the plan removes; value object field "Address.line1", which the plan removes; enum value "Status.ARCHIVED", which the plan removes from the data. To keep their data, plan again with: --rename User.a:User.c; --rename Address.line1:Address.street; --rename Status.ARCHIVED:Status.RETIRED. ',
+      'The plan holds changes that no --rename or --convert statement carries: field "User.a", which the plan removes; value object field "Address.line1", which the plan removes; enum value "Status.ARCHIVED", which the plan removes from the data. To keep their data, run the command again with: --rename User.a:User.c; --rename Address.line1:Address.street; --rename Status.ARCHIVED:Status.RETIRED. ',
     ]);
   });
 

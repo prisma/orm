@@ -32,6 +32,7 @@ import { bsonTypesOfCodec } from '@internal/mongo-contract/data-type';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { type StoredValue, unrewritableKeyReason } from './migration-factories';
+import { inTwoSteps } from './mongo-rewrite-overlaps';
 import { type PlannedRewrite, rewriteRefusals } from './mongo-rewrite-refusals';
 import { statementFlag } from './mongo-statement-flags';
 import { collectionControlPolicy, modelCoordinates } from './mongo-statement-planning';
@@ -59,7 +60,7 @@ export interface EnumValueRewrite<
   readonly keepDataEdit: KeepDataEdit | undefined;
   /** For a removal whose data no edit of this migration can keep safely, how to keep it instead. */
   readonly keepDataAdvice: string | undefined;
-  /** How to make a change of this enum's stored values in two migrations, when one migration cannot make it safely. */
+  /** How to make a change of this enum's stored values in two steps, when one migration cannot make it safely. */
   readonly twoMigrationsAdvice: string;
   /** The variant whose documents the call selects; `undefined` for a root model's documents. */
   readonly variant: SelectedVariant | undefined;
@@ -262,14 +263,14 @@ function isBooleanEnum(enums: EnumComparison): boolean {
 }
 
 const NO_THIRD_BOOLEAN =
-  'A boolean enum has no third value to move a stored value to, so the change cannot be split into two migrations.';
+  'A boolean enum has no third value to move a stored value to, so the change cannot be split into two steps.';
 
 const SWAP_IN_ONE_UPDATE =
   'swap the stored values yourself in one update of the database, such as an updateMany whose pipeline sets each field that holds the enum to its negation with $not';
 
 function twoMigrationsAdvice(enums: EnumComparison, changes: readonly ValueChange[]): string {
   if (isBooleanEnum(enums)) {
-    return `${NO_THIRD_BOOLEAN} To keep that data, ${SWAP_IN_ONE_UPDATE}, and remove the removeStoredValue calls of this enum from migration.ts before you apply it.`;
+    return `${NO_THIRD_BOOLEAN} To keep that data, plan the change with migration plan, remove the removeStoredValue calls of this enum from the migration.ts it writes, and ${SWAP_IN_ONE_UPDATE}, before you apply it.`;
   }
   const names = changes.map(
     ({ enumValue }) => `"${enumValueStatementText(enums.fromContract, enumValue)}"`,
@@ -278,14 +279,17 @@ function twoMigrationsAdvice(enums: EnumComparison, changes: readonly ValueChang
     names.length === 1
       ? `enum value ${names.join('')}`
       : `enum values ${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
-  return `To keep that data, make the change in two migrations: first move the stored values of ${named} to values the enum does not use, all in one migration, and apply it; then move them to their final values in a second. MongoDB applies a migration's operations one at a time, so replacements whose old values other replacements write cannot safely run again after a later operation stops.`;
+  return `To keep that data: ${inTwoSteps(`move the stored values of ${named} to values the enum does not use`, 'move them to their final values')} MongoDB applies the operations one at a time, so replacements whose old values other replacements write cannot safely run again after a later operation stops.`;
 }
 
 /** How to make a change of the enum's stored values that one migration cannot make safely. */
 function enumTwoMigrationsAdvice(enums: EnumComparison): string {
   return isBooleanEnum(enums)
-    ? `${NO_THIRD_BOOLEAN} Leave out these statements, ${SWAP_IN_ONE_UPDATE}, and remove the removeStoredValue calls of this enum from the migration.ts that migration plan writes before you apply it.`
-    : 'Make the change in two migrations: first move every value they swap or chain to a stored value the enum does not use, all in one migration, and apply it; then move them to their final values in a second.';
+    ? `${NO_THIRD_BOOLEAN} Leave out these statements, plan the change with migration plan, remove the removeStoredValue calls of this enum from the migration.ts it writes, and ${SWAP_IN_ONE_UPDATE}, before you apply it.`
+    : inTwoSteps(
+        'move every value they swap or chain to a stored value the enum does not use',
+        'move them to their final values',
+      );
 }
 
 /** The expression that writes a stored value with the BSON type the enum's codec stores. */
@@ -333,7 +337,7 @@ function unsupportedValueRefusal(
     enums,
     change,
     `its stored value ${JSON.stringify(stored)} is not a string, a number or a boolean`,
-    `The plan matches stored enum values by equality, and MongoDB's equality on an object depends on the order of its keys and on a list matches lists that contain it. Rewrite the documents that hold ${enumValueText(enums.fromContract, change.enumValue)} in a dataTransform operation of migration.ts, then plan again.`,
+    `The plan matches stored enum values by equality, and MongoDB's equality on an object depends on the order of its keys and on a list matches lists that contain it. Rewrite the documents that hold ${enumValueText(enums.fromContract, change.enumValue)} yourself, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh, then run the command again.`,
   );
 }
 
@@ -414,13 +418,13 @@ function unlistedRefusal(
         enums,
         change,
         `${where} holds it inside "${unlisted.reach.type}", which contains itself, so the documents can hold it at any depth`,
-        `The plan rewrites a stored value at every path from a field to it, and a type that contains itself has no last path. Rewrite ${where} in a dataTransform operation of migration.ts.`,
+        `The plan rewrites a stored value at every path from a field to it, and a type that contains itself has no last path. Rewrite ${where} in a dataTransform operation of the migration.ts that migration plan writes.`,
       )
     : refused(
         enums,
         change,
         `${where} holds a ${unlisted.reach.kind} of value objects`,
-        `The plan rewrites a stored value only in a field that holds it, a value object, a list of them, or an embedded model. Rewrite ${where} in a dataTransform operation of migration.ts.`,
+        `The plan rewrites a stored value only in a field that holds it, a value object, a list of them, or an embedded model. Rewrite ${where} in a dataTransform operation of the migration.ts that migration plan writes.`,
       );
 }
 

@@ -90,7 +90,7 @@ function rendered(result: ReturnType<typeof plan>): readonly string[] {
 const ONE_AT_A_TIME =
   "MongoDB applies a migration's operations one at a time, without a transaction, and knows that an operation already ran only from the documents.";
 
-const TWO_MIGRATIONS = `${ONE_AT_A_TIME} An operation that reads a value another operation of the same migration writes acts on what that operation wrote: at once when it runs later, and when the migration runs again after a later operation stops. Make the change in two migrations: first delete the variants, or move their values to discriminator values no variant uses, and apply that; then change the values to their final ones.`;
+const TWO_MIGRATIONS = `${ONE_AT_A_TIME} An operation that reads a value another operation of the same migration writes acts on what that operation wrote: at once when it runs later, and when the migration runs again after a later operation stops. Make the change as two changes to the contract, and apply the first, by a migration or by db update, before you make the second: first delete the variants, or move their values to discriminator values no variant uses; then change the values to their final ones.`;
 
 const replaceLabel = (from: string, to: string, field = 'type') =>
   `Replace value "${from}" with "${to}" in field ${field} of collection tasks`;
@@ -631,7 +631,7 @@ describe('MongoMigrationPlanner, a plan-wide refusal involving a removed variant
       }),
     ).map(({ why: text }) => text?.slice(0, text.indexOf(ONE_AT_A_TIME)));
     expect(why).toEqual([
-      'The plan holds changes that no --rename or --convert statement carries: model "Bug", whose documents the plan deletes; new required field "Epic.scope", which the plan fills with a temporary value. To keep their data, plan again with: --rename Bug:Defect. ',
+      'The plan holds changes that no --rename or --convert statement carries: model "Bug", whose documents the plan deletes; new required field "Epic.scope", which the plan fills with a temporary value. To keep their data, run the command again with: --rename Bug:Defect. ',
     ]);
   });
 });

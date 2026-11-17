@@ -299,5 +299,5 @@ export function unansweredChangesAdvice(
     );
   const named = [...removed.map(({ description }) => description), ...filled];
   const keeping = removed.map(({ answer }) => answer.keeping);
-  return `The plan holds changes that no --rename or --convert statement carries: ${named.join('; ')}. To keep their data, plan again with: ${keeping.join('; ')}.`;
+  return `The plan holds changes that no --rename or --convert statement carries: ${named.join('; ')}. To keep their data, run the command again with: ${keeping.join('; ')}.`;
 }
