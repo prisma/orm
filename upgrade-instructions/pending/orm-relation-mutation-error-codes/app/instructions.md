@@ -18,4 +18,6 @@ Replace every comparison with the old codes:
 - `ORM.RELATION_MUTATION_INVALID` becomes `ORM.ARGUMENT_INVALID`.
 - `ORM.RELATION_MUTATION_UNSUPPORTED` becomes `ORM.OPERATION_UNSUPPORTED`.
 
-The `meta` of these errors keeps its fields (`kind`, `relation`, `problem`, `reason` and the others). Code that needs to tell a nested relation mutation error from another error with the same code can check `meta.relation`, which every nested relation mutation error carries.
+The `meta` of these errors keeps its fields (`kind`, `relation`, `problem`, `reason` and the others). Code that needs to tell a nested relation mutation error from another error with the same code can check `meta.relation`, which the nested relation mutation errors with these two codes carry.
+
+A nested `create` whose `conflictOn` names a field the related model does not have throws `ORM.FIELD_UNKNOWN`, as top-level `createAll` does, with `meta.model` and `meta.field` and no `meta.relation`.

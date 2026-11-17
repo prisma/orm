@@ -39,7 +39,7 @@ A row can conflict when it gives a non-null value for every column of at least o
 
 A row that cannot conflict is rejected while the graph is built, before any statement runs (decided 2026-11-13):
 
-- nested `create`: `ORM.RELATION_MUTATION_INVALID`, `meta` with the relation, the row's index and the conflict columns;
+- nested `create`: `ORM.ARGUMENT_INVALID`, `meta` with the relation, the row's index and the conflict columns;
 - top-level `createAll(rows, { onConflict: 'skip' })` and `createAndCount(rows, { onConflict: 'skip' })`: `ORM.ARGUMENT_INVALID`, the code `#resolveConflictSkip` uses, `meta` with the method, the model, the row's index and the conflict columns.
 
 The check is one function over the storage rows after defaults are applied, used by both paths. For top-level calls this is a behaviour change: a call that inserted such rows before now throws. It gets an `upgrade-instructions/pending/` entry for app authors.
@@ -72,9 +72,9 @@ The second and third rows assign a column its own proposed value; the costs list
 
 Each at runtime, while the graph is built; the type-level ones as described under Surface.
 
-- `onConflict: 'skip'` on a to-one (`N:1`, `1:1`) or many-to-many relation: `ORM.RELATION_MUTATION_UNSUPPORTED`.
-- An `onConflict` value other than `'skip'` or `'connect'`, or `conflictOn` naming a field the model does not have: `ORM.RELATION_MUTATION_INVALID`.
-- Either value when the relation's target model is a variant stored in its own table: `ORM.RELATION_MUTATION_UNSUPPORTED`, as top-level `createAll` refuses the option. Slice `nested-variant-creates` adds `variant()` to the mutator; whichever of the two merges second applies the same check to a create through `variant()`.
+- `onConflict: 'skip'` on a to-one (`N:1`, `1:1`) or many-to-many relation: `ORM.OPERATION_UNSUPPORTED`.
+- An `onConflict` value other than `'skip'` or `'connect'`: `ORM.ARGUMENT_INVALID`. `conflictOn` naming a field the model does not have: `ORM.FIELD_UNKNOWN`, as on top-level `createAll`.
+- Either value when the relation's target model is a variant stored in its own table: `ORM.OPERATION_UNSUPPORTED`, as top-level `createAll` refuses the option. Slice `nested-variant-creates` adds `variant()` to the mutator; whichever of the two merges second applies the same check to a create through `variant()`.
 - A row that cannot conflict: above.
 
 ## Coherence rationale
