@@ -90,6 +90,7 @@ import {
   documentsWithObject,
   type JsonPathStep,
   jsonPathText,
+  keysOf,
   lacksKey,
   storedKeyPath,
 } from './stored-key-path';
@@ -413,12 +414,14 @@ function backfillAdvice(
   lacking: { readonly collection: string; readonly documents: ReadonlyMap<string, number> },
   touched: TouchedFields,
   rewriteCollection: RewriteCollection,
-  operationIndex: number,
+  position: { readonly operationIndex: number; readonly renamed: ReadonlySet<string> },
 ): {
   readonly sentences: readonly string[];
   readonly rowsWithoutValue: readonly RowsWithoutValue[];
 } {
-  const lackingFields = [...lacking.documents.keys()];
+  const lackingFields = [...lacking.documents.keys()].filter(
+    (field) => !position.renamed.has(field),
+  );
   const accepted = backfillStatements(
     contract,
     lacking.collection,
@@ -451,7 +454,7 @@ function backfillAdvice(
       field: subject,
       reason: 'newField',
       rows: documents,
-      operationIndex,
+      operationIndex: position.operationIndex,
     })),
   };
 }
@@ -490,6 +493,35 @@ function newVariantFieldsAdvice(
     `The update you write for --backfill ${discriminatorBackfill.statement} can also set ${joinedList(where)}, such as { $set: { ${first.discriminator.field}: ${JSON.stringify(first.discriminator.value)}, ${example.join(', ')} } }.`,
     `Or keep ${quotedList(fields.map(({ field }) => field))} optional until a later change, which can make ${them} required${later.length === 0 ? '' : ` with ${later.join(' ')}`}.`,
   ];
+}
+
+/**
+ * The fields and nested keys, by their dotted stored paths such as `home.line1`, to which a rename
+ * of the plan gives its new name in `collection`. Such a field was required under its old name, so
+ * a document without it lacked the old one too: it needs fixing, not a `--backfill`.
+ */
+function renamedInto(
+  operations: readonly AnyMongoMigrationOperation[],
+  collection: string,
+): ReadonlySet<string> {
+  return new Set(
+    operations.flatMap((operation): readonly string[] => {
+      if (!isMongoDmlOperation(operation)) return [];
+      const rewrite = operation.meta?.rewrite;
+      if (rewrite?.kind === 'renameStoredKey') {
+        if (rewrite.collection !== collection) return [];
+        const parsed = storedKeyPath(rewrite.field, rewrite.path);
+        if (!parsed.ok) return [];
+        return [[rewrite.field, ...keysOf(parsed.value).slice(0, -1), rewrite.to].join('.')];
+      }
+      const renamed = fieldRewriteOf(operation);
+      if (renamed === undefined || renamed.collection !== collection) return [];
+      const names: unknown = Reflect.get(renamed.command.update, '$rename');
+      return isRecord(names)
+        ? Object.values(names).filter((name): name is string => typeof name === 'string')
+        : [];
+    }),
+  );
 }
 
 /** The `--backfill` statement of a nested key, by the field of a value object or an embedded model stored there, and that field, when the planner would accept it. */
@@ -1132,7 +1164,7 @@ export class MongoMigrationRunner {
                 operation,
                 failing,
                 options.destinationContract,
-                operationIndex,
+                { operationIndex, plan: operations },
               )) ??
               runnerFailure(
                 'MIGRATION.PRECHECK_FAILED',
@@ -1478,8 +1510,12 @@ export class MongoMigrationRunner {
     op: MongoMigrationPlanOperation,
     failed: MongoMigrationCheck,
     contract: MongoContract,
-    operationIndex: number,
+    position: {
+      readonly operationIndex: number;
+      readonly plan: readonly AnyMongoMigrationOperation[];
+    },
   ): Promise<MongoMigrationRunnerResult | undefined> {
+    const { operationIndex, plan } = position;
     if (isInspectionCheckSource(failed.source)) return undefined;
     const collMod = validatorSetBy(op);
     if (collMod?.validator === undefined) return undefined;
@@ -1555,7 +1591,7 @@ export class MongoMigrationRunner {
             },
             touched,
             inPlace.rewrite,
-            operationIndex,
+            { operationIndex, renamed: renamedInto(plan, collection) },
           );
     const advice = uncheckable
       ? [

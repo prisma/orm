@@ -1,5 +1,5 @@
 import { MongoCollection } from '@internal/mongo-contract';
-import { collMod } from '@internal/target-mongo/migration';
+import { collMod, renameField } from '@internal/target-mongo/migration';
 import { timeouts } from '@repo/test-utils';
 import { ObjectId } from 'mongodb';
 import { describe, expect, it } from 'vitest';
@@ -212,6 +212,46 @@ describe("MongoMigrationRunner, --backfill advice for a model's first discrimina
           },
         ],
       });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+});
+
+describe('MongoMigrationRunner, a renamed field that a document never held', () => {
+  it(
+    'offers no --backfill for the field a rename of the same plan gives its name',
+    async () => {
+      const users = (name: string) => ({
+        bsonType: 'object',
+        required: ['_id', name],
+        properties: { _id: { bsonType: 'objectId' }, [name]: { bsonType: 'string' } },
+      });
+      await live.db().createCollection('people', { validator: { $jsonSchema: users('name') } });
+      await live.db().collection('people').insertOne({}, { bypassDocumentValidation: true });
+      const destination = contract(
+        'dest',
+        { User: { collection: 'people', fields: ['_id', 'fullName'] } },
+        { people: new MongoCollection({}) },
+      );
+
+      const result = await live.run(
+        [
+          renameField('people', 'name', 'fullName'),
+          collMod(
+            'people',
+            { validator: { $jsonSchema: users('fullName') } },
+            { id: 'validator.people.update', checkDocuments: true },
+          ),
+        ],
+        destination,
+      );
+
+      if (result.ok) throw new Error('Expected the validator change to stop at its document check');
+      expect({
+        named: result.failure.why?.includes('This validator change makes "fullName" required.'),
+        backfill: result.failure.why?.includes('--backfill'),
+        rowsWithoutValue: result.failure.meta.rowsWithoutValue,
+      }).toEqual({ named: true, backfill: false, rowsWithoutValue: undefined });
     },
     timeouts.spinUpMongoMemoryServer,
   );
