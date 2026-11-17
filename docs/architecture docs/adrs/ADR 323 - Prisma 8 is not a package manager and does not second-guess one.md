@@ -1,6 +1,6 @@
 # ADR 323 — Prisma 8 is not a package manager and does not second-guess one
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-11-18
 
 ---
@@ -10,17 +10,15 @@
 ```text
 $ prisma orm init
 
-✔ Write prisma.config.ts
 ✘ pnpm add @prisma/orm-postgres
-    ERR_PNPM_IGNORED_BUILDS  Ignored build scripts: some-native-module
-    Run "pnpm approve-builds" to pick which dependencies should be allowed to run scripts.
+ERR_PNPM_IGNORED_BUILDS  Ignored build scripts: some-native-module
+help: Run "pnpm approve-builds" to pick which dependencies should be allowed to run scripts.
 
 ✘ [CLI.INIT_INSTALL_FAILED] Failed to install dependencies
   why: pnpm exited with code 1.
-  fix: Run the install yourself: pnpm add @prisma/orm-postgres
 ```
 
-`init` stops there. It shows what pnpm said, says that the install failed, and names the command so the user can run it and act on pnpm's answer.
+`init` stops there. It shows what pnpm said and says that the install failed. Its next action, "Run the install yourself", carries the command, so the user can run it and act on pnpm's answer.
 
 ## Decision
 
