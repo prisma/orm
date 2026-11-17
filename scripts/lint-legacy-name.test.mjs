@@ -108,12 +108,16 @@ describe('what the check forbids', () => {
       `export const CODE = '${prisma.toUpperCase()}_${next.toUpperCase()}_FAILED';\n`,
     );
     write('docs/intro.md', `Welcome to ${cap(prisma)} ${cap(next)}.\n`);
+    write('src/legacy.ts', `type C = legacy.${cap(prisma)}${cap(next)}Config;\n`);
+    write('src/import.ts', `import x from './${LEGACY}.js';\n`);
     const result = run();
     assert.equal(result.status, 1, `expected exit 1; stdout=${result.stdout}`);
     assert.match(result.stderr, /package\.json:1:/);
     assert.match(result.stderr, /src\/config\.ts:1:/);
     assert.match(result.stderr, /src\/codes\.ts:1:/);
     assert.match(result.stderr, /docs\/intro\.md:1:/);
+    assert.match(result.stderr, /src\/legacy\.ts:1:/);
+    assert.match(result.stderr, /src\/import\.ts:1:/);
   });
 });
 
@@ -215,9 +219,16 @@ describe('what the check allows', () => {
   it('allows the Prisma 8 skill to say once that it was formerly called by the old name', () => {
     const skill = 'skills/prisma-8/SKILL.md';
     const formerName = ['Prisma', 'Next'].join(' ');
-    write(skill, `description: Prisma 8 (formerly ${formerName}) queries.\n`);
+    write(skill, `description: Queries (Prisma 8, formerly ${formerName}).\n`);
     const result = run();
     assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
-    assert.match(allowanceFor(skill, `(formerly ${formerName})`).why, /former name/);
+    assert.match(allowanceFor(skill, `(Prisma 8, formerly ${formerName})`).why, /former name/);
+  });
+
+  it('fails on any other mention of the old name in the Prisma 8 skill', () => {
+    const formerName = ['Prisma', 'Next'].join(' ');
+    write('skills/prisma-8/SKILL.md', `Run ${formerName} commands, formerly ${formerName}.\n`);
+    const result = run();
+    assert.equal(result.status, 1, `expected exit 1; stdout=${result.stdout}`);
   });
 });

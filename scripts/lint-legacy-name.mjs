@@ -27,11 +27,11 @@ const GIT_ROOT = process.cwd();
 const LEGACY = 'prisma-next';
 
 /**
- * Any case, joined by nothing, a space, a hyphen or an underscore. Not after a
- * dot, so `contract.prisma next to` is a file name followed by a word, and not
- * before `js`, so `Prisma Next.js` is the framework.
+ * Any case, joined by nothing, a hyphen or an underscore. Joined by a space,
+ * not after a dot, so `contract.prisma next to` is a file name followed by a
+ * word, and not before `js`, so `Prisma Next.js` is the framework.
  */
-const LEGACY_PATTERN = /(?<!\.)prisma[ _-]?next(?!\.?js\b)/gi;
+const LEGACY_PATTERN = /prisma[_-]?next|(?<!\.)prisma next(?!\.?js\b)/gi;
 
 function occurrences(line) {
   return [...line.matchAll(LEGACY_PATTERN)].map((match) => ({
@@ -98,8 +98,10 @@ const ALLOWED = [
   },
   {
     why: 'the Prisma 8 skill’s description naming its former name once, so an agent matches a user who still says it',
-    matches: (relPath, line, before) =>
-      relPath === 'skills/prisma-8/SKILL.md' && /formerly $/.test(before),
+    matches: (relPath, line, before, after) =>
+      relPath === 'skills/prisma-8/SKILL.md' &&
+      /\(Prisma 8, formerly $/.test(before) &&
+      after.startsWith(')'),
   },
   {
     why: 'a third party’s package name — `@cipherstash/prisma-next` is published under that name and only that name',
