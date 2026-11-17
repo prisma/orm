@@ -149,7 +149,7 @@ The handle and declaration types, and `MongoPreparedParamRef` as a type, are exp
 
 ## `null` values
 
-A `null` binds to `MongoParamRef(null, { name, codecId, nullable })`, so middleware sees it like any other value. `resolveValue` sends `null` without calling the codec only when the parameter holds `null` and is marked nullable. Every other `null` on a parameter that names a codec still goes to that codec's `toWire`; a codec with no `toWire` sends it unchanged. A codec that cannot encode `null` refuses it with `RUNTIME.ENCODE_FAILED`; a codec whose values include `null`, such as `mongo/json@1`, encodes it.
+A `null` binds to `MongoParamRef(null, { name, codecId, nullable })`, so middleware sees it like any other value. `resolveValue` sends a `null` on a parameter marked nullable without calling the codec. A `null` on any other parameter goes to its codec's `toWire`, and is sent unchanged if that codec has no `toWire`. A codec that cannot encode `null` refuses it with `RUNTIME.ENCODE_FAILED`; a codec whose values include `null`, such as `mongo/json@1`, encodes it.
 
 SQL skips the codec for every `null`. MongoDB cannot: the ORM wraps a `null` element written to a list whose elements are not nullable as `MongoParamRef(null, { codecId })` so the codec decides. A non-nullable placeholder given `null` at run time goes to its codec the same way, which matches its type: `null` is accepted only where the codec's input type includes it.
 
