@@ -2308,11 +2308,6 @@ export interface RelationMutator<
       ? never
       : readonly RelationConnectCriterion<TContract, ModelName, NsId>[],
   ): RelationMutationConnect<TContract, ModelName, NsId>;
-  // `disconnect` is update-only: `createGraph` rejects any nested disconnect
-  // during `create()`, so in the create context the criteria parameter narrows
-  // to `never`, making every call a type error (mirrors the `LinkWritesDisabled`
-  // arms above). `never` is callable, so disabling must live on the parameter,
-  // not the property type.
   readonly disconnect: DisconnectDisabled extends true
     ? (criteria: never) => RelationMutationDisconnect<TContract, ModelName, NsId>
     : DisconnectMutator<TContract, ModelName, BareDisconnectDisabled, NsId>;
