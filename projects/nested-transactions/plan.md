@@ -56,7 +56,7 @@ Line counts are estimates, measured against the existing code. For example:
    - **Hands to:**
      - `RuntimeTransaction.savepoint()`.
      - `savepoint()` on an activity handle opened on a transaction.
-     - The savepoint-name counter per connection, and tracking of the innermost open level per connection.
+     - The savepoint-name counter per transaction, and tracking of the innermost open level per connection.
      - `RUNTIME.TRANSACTION_SUSPENDED`, and savepoint wording for `RUNTIME.TRANSACTION_ALREADY_OPEN`.
      - Every level invalidated after a failed `ROLLBACK TO`.
    - **Focus:**

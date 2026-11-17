@@ -42,7 +42,7 @@ All production changes are in `packages/2-sql-family/5-runtime/src` (`sql-runtim
    - `SAVEPOINT` fails: `{ by: 'rollback', outcome: 'failed', commitAttempted: false }`, and `savepoint()` rejects with the driver error. The parent level stays usable.
    - An `activityStarted` hook throws: no `SAVEPOINT` is sent, `savepoint()` rejects, and the parent level stays usable (decision 9).
 3. **`savepoint()` on an activity handle** opened on a transaction or on a savepoint. The new savepoint's activity is a child of the handle's activity. Handles opened on the runtime or on a connection have no `savepoint`. `ActivityHandle` gains an optional `savepoint?: () => Promise<RuntimeTransaction>`, documented like the existing optional `transaction`.
-4. **Names.** `sp_<n>`, from a counter per connection that starts at 1 and only goes up. Only one savepoint is open per level, so names never collide.
+4. **Names.** `sp_<n>`, from a counter per transaction that starts at 1 at `BEGIN` and only goes up. `COMMIT` and `ROLLBACK` remove every savepoint of the transaction, so the next transaction on the connection starts at `sp_1` again. Only one savepoint is open per level, so names never collide within a transaction.
 **One stack per connection.** Only one savepoint is open per level, so the open levels on a connection always form one chain: the outer transaction, then `sp_1`, then `sp_2`. The runtime keeps that chain as one stack per transaction, created at `BEGIN`, with an invalidated flag, instead of a record per level linked to its enclosing level and its open child. A connection has at most one open transaction, so this is the connection's stack while the transaction is open. Each transaction and savepoint holds a reference to the stack and its own entry (its name and, once started, its activity), and checks by identity whether it is the top before doing anything. Rules 5–7 read the stack:
 
 - a level may send work only while it is the top of the stack;
@@ -96,7 +96,7 @@ The savepoint level, its activity, the guard and the invalidation rules are one 
 Beyond CI, review and the project DoD. Each is a runtime test with the stub driver, as the existing `transaction-activity.*` tests are:
 
 - [ ] Released savepoint: `SAVEPOINT sp_1`, statement, `RELEASE SAVEPOINT sp_1`; middleware sees a `'transaction'` activity beneath the outer one, finalized with the outer outcome. Rolled-back savepoint: finalized `rolled-back` before `rollback()` resolves, and the outer commit is `committed`.
-- [ ] A savepoint inside a savepoint gets the next name, and the counter is per connection.
+- [ ] A savepoint inside a savepoint gets the next name, and the next transaction on the connection starts at `sp_1` again.
 - [ ] `savepoint()` with an open sibling rejects `TRANSACTION_ALREADY_OPEN` naming it, with nothing sent.
 - [ ] A statement and `commit()` on a level with an open child reject `TRANSACTION_SUSPENDED` with the child's activity ID; the level works again after the child settles.
 - [ ] `rollback()` on a level with an open child closes the child; later work on it rejects `TRANSACTION_CLOSED`.
@@ -136,6 +136,7 @@ Beyond CI, review and the project DoD. Each is a runtime test with the stub driv
 - **D1 review R1: the connection is guarded too.** Rule 5 now covers statements sent on the connection while its transaction is open (reviewer F1), closed levels report their closed state ahead of `TRANSACTION_SUSPENDED` (F3), and § Errors states when `savepointId` is `undefined`. The orchestrator had first told the implementer to leave connection statements for slice 4; that was wrong, because the statement is finalized with the wrong outcome.
 - **After the PR opened: one wrapper for every level.** The first implementation had a separate savepoint wrapper with its own settle code, and a `TransactionLevel` class that kept a second copy of state the transaction wrapper already held. That did not use the single `SqlTransaction` shape decision 4 chose so the settle logic is written once. The operator asked for one wrapper; § Chosen design now requires it.
 - **After the PR opened: one stack per connection.** The per-level records with links to the enclosing level and the open child were replaced by one stack of open levels per connection, which the project plan described as "tracking of the innermost open level per connection". Requested by the operator.
+- **After the PR opened: a savepoint-name counter per transaction.** The counter per connection was replaced by one kept with the transaction's stack. Savepoints end with their transaction, so names do not need to be unique across transactions. The project spec and plan are amended to match. Requested by the operator.
 
 ## References
 

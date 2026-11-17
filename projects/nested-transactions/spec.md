@@ -53,7 +53,7 @@ Each decision was reached in a design discussion with the operator. The research
 3. **Concurrency on one transaction fails fast.**
    - **A second savepoint while one is open on the same level** (`Promise.all([tx.transaction(a), tx.transaction(b)])`) rejects with `RUNTIME.TRANSACTION_ALREADY_OPEN`, with a message that names the savepoint.
    - **Using the parent context while a child savepoint is open** rejects with a new code, `RUNTIME.TRANSACTION_SUSPENDED`, whose details carry the open savepoint's activity ID. The parent can be used again once the child has settled.
-   - **Savepoint names** come from a counter per connection. Only one savepoint is open per level, so names never collide.
+   - **Savepoint names** come from a counter per transaction. `COMMIT` and `ROLLBACK` remove every savepoint of the transaction, so names can repeat across transactions, and only one savepoint is open per level, so names never collide within one.
    - Why: a savepoint applies to whatever runs on the connection at that moment. A sibling's `ROLLBACK TO` would undo the other sibling's statements, and outer work sent while a savepoint is open would be undone with it.
    - Rejected: making siblings wait for each other (Knex). It hides the bug: statements run in a different order from the one the code reads in.
 4. **Driver interface: one recursive `SqlTransaction`.**
