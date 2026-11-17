@@ -47,6 +47,8 @@ export interface ScriptedResult {
   readonly stdout?: string;
   /** Leaves on disk what pnpm 11 has written by the time it fails an add over ignored build scripts. */
   readonly writesPnpm11Records?: boolean;
+  /** Writes a manifest for each package the add names into the project's `node_modules`. */
+  readonly addsPackages?: boolean;
 }
 
 /** A package-manager runner that records each call and answers from `script`, then succeeds. */
@@ -69,10 +71,27 @@ export function scriptedInstalls(): ScriptedInstalls {
       if (result.writesPnpm11Records === true) {
         writePnpm11Records(request.cwd, request.args);
       }
+      if (result.addsPackages === true) {
+        writeAddedPackages(request.cwd, request.args);
+      }
       return { exitCode: result.exitCode, stderr: result.stderr };
     },
   };
   return installs;
+}
+
+function addedSpecs(args: readonly string[]): readonly string[] {
+  return args.filter((arg) => arg !== 'add' && arg !== '-D');
+}
+
+function writeAddedPackages(cwd: string, args: readonly string[]): void {
+  for (const spec of addedSpecs(args)) {
+    const versionAt = spec.indexOf('@', 1);
+    const name = versionAt === -1 ? spec : spec.slice(0, versionAt);
+    const dir = join(cwd, 'node_modules', name);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name, version: '0.0.0' }));
+  }
 }
 
 function writePnpm11Records(cwd: string, args: readonly string[]): void {
@@ -81,7 +100,7 @@ function writePnpm11Records(cwd: string, args: readonly string[]): void {
     ? JSON.parse(readFileSync(manifestPath, 'utf-8'))
     : {};
   const field = args.includes('-D') ? 'devDependencies' : 'dependencies';
-  const added = args.filter((arg) => arg !== 'add' && arg !== '-D');
+  const added = addedSpecs(args);
   writeFileSync(
     manifestPath,
     JSON.stringify({ ...manifest, [field]: Object.fromEntries(added.map((spec) => [spec, '*'])) }),

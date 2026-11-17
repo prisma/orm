@@ -51,8 +51,8 @@ function metaString(failure: CliStructuredError, key: string): string {
 }
 
 /**
- * pnpm installed the packages and then failed only because it skipped build scripts nobody
- * approved. Only pnpm 12 is recognised: pnpm 11 prints the code on stdout, and the capability
+ * pnpm says it failed only because it skipped build scripts nobody approved, which it reports
+ * after the packages are added. Only pnpm 12 is recognised: pnpm 11 prints the code on stdout, and the capability
  * returns stderr alone.
  */
 function pnpmOnlySkippedBuilds(failure: CliStructuredError): boolean {
@@ -60,6 +60,28 @@ function pnpmOnlySkippedBuilds(failure: CliStructuredError): boolean {
     metaString(failure, 'manager') === 'pnpm' &&
     isOnlyPnpmIgnoredBuildsError(metaString(failure, 'stderrTail'))
   );
+}
+
+function packageNameOf(spec: string): string {
+  const versionAt = spec.indexOf('@', 1);
+  return versionAt === -1 ? spec : spec.slice(0, versionAt);
+}
+
+function errorCode(error: unknown): unknown {
+  return error instanceof Error && 'code' in error ? error.code : undefined;
+}
+
+/**
+ * Whether the package resolves from the project. A package whose `exports` hide its manifest
+ * was still found, which is all this asks.
+ */
+function resolvesFromProject(cwd: string, spec: string, resolve: ResolveModule): boolean {
+  try {
+    resolve(join(cwd, 'package.json'), `${packageNameOf(spec)}/package.json`);
+    return true;
+  } catch (error) {
+    return errorCode(error) === 'ERR_PACKAGE_PATH_NOT_EXPORTED';
+  }
 }
 
 const SKIPPED_BUILDS_WARNING = [
@@ -161,7 +183,8 @@ function engineDevDependencySpec(
  * manager. The retry is `init`'s alone: the engine spells and runs the
  * command, and this decides — from the stderr it returned — that another
  * manager is worth a try, or that a pnpm add which skipped only unapproved
- * build scripts did install.
+ * build scripts did install, once the first package it added resolves from
+ * the project.
  */
 export async function installProjectDependencies(ctx: {
   readonly packages: PackageOperations;
@@ -185,7 +208,12 @@ export async function installProjectDependencies(ctx: {
     if (result.ok) {
       return { failure: undefined, skippedBuilds: false };
     }
-    return pnpmOnlySkippedBuilds(result.failure)
+    const [firstPackage] = request.packages;
+    const installedAnyway =
+      pnpmOnlySkippedBuilds(result.failure) &&
+      firstPackage !== undefined &&
+      resolvesFromProject(ctx.cwd, firstPackage, ctx.resolveModule);
+    return installedAnyway
       ? { failure: undefined, skippedBuilds: true }
       : { failure: result.failure, skippedBuilds: false };
   };

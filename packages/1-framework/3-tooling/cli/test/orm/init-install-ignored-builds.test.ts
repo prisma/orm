@@ -35,11 +35,11 @@ afterEach(() => {
   rmSync(projectDir, { recursive: true, force: true });
 });
 
-function harness(packageManager?: PackageManagerId) {
+function harness(packageManager?: PackageManagerId, loadTargetConfig = importFromProject) {
   return initTestCli({
     dependencies: {
       emitScaffoldedContract: emit,
-      importFromProject,
+      importFromProject: loadTargetConfig,
       resolveModule: resolveWithin(projectDir),
     },
     runner: installs.runner,
@@ -56,8 +56,8 @@ describe('build scripts pnpm has not been told to trust', () => {
     'completes with one warning when pnpm 12 fails both adds only over ignored build scripts',
     async () => {
       installs.script = [
-        { exitCode: 1, stderr: PNPM_12_IGNORED_BUILDS },
-        { exitCode: 1, stderr: PNPM_12_IGNORED_BUILDS },
+        { exitCode: 1, stderr: PNPM_12_IGNORED_BUILDS, addsPackages: true },
+        { exitCode: 1, stderr: PNPM_12_IGNORED_BUILDS, addsPackages: true },
       ];
 
       const run = await harness('pnpm').run(scaffoldArgv(), { cwd: projectDir });
@@ -77,6 +77,28 @@ describe('build scripts pnpm has not been told to trust', () => {
         warnings: [MINIMAL_MANIFEST_WARNING, IGNORED_BUILDS_WARNING],
       });
       expect(emit).toHaveBeenCalledWith({ cwd: projectDir });
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'fails the install when pnpm 12 fails over ignored build scripts but its first package does not resolve',
+    async () => {
+      installs.script = [{ exitCode: 1, stderr: PNPM_12_IGNORED_BUILDS }];
+
+      const run = await harness('pnpm').run([...scaffoldArgv(), '--json'], { cwd: projectDir });
+
+      expect(installSummary(run, installs.calls)).toEqual({
+        exitCode: 4,
+        calls: ['pnpm add @prisma/orm-postgres dotenv'],
+        packagesInstalled: { status: 'failed', deps: [], devDeps: [] },
+        contractEmitted: false,
+        warnings: [MINIMAL_MANIFEST_WARNING],
+      });
+      expect(envelopeOf(run)).toMatchObject({
+        diagnostics: [{ code: 'CLI.INIT_INSTALL_FAILED', severity: 'error' }],
+      });
+      expect(emit).not.toHaveBeenCalled();
     },
     timeouts.coldTransformImport,
   );
@@ -191,12 +213,15 @@ describe('build scripts pnpm has not been told to trust', () => {
     'proceeds with one warning when pnpm fails the install before the Prisma 7 check only over ignored build scripts',
     async () => {
       copyPrisma7Fixture(projectDir);
+      const targetConfig = await importFromProject(projectDir, '@prisma/orm-postgres/config');
       installs.script = [
-        { exitCode: 1, stderr: PNPM_12_IGNORED_BUILDS },
-        { exitCode: 1, stderr: PNPM_12_IGNORED_BUILDS },
+        { exitCode: 1, stderr: PNPM_12_IGNORED_BUILDS, addsPackages: true },
+        { exitCode: 1, stderr: PNPM_12_IGNORED_BUILDS, addsPackages: true },
       ];
 
-      const run = await harness('pnpm').run(prisma7InitArgv(projectDir), { cwd: projectDir });
+      const run = await harness('pnpm', async () => targetConfig).run(prisma7InitArgv(projectDir), {
+        cwd: projectDir,
+      });
 
       const data = Object(run.presented?.data);
       expect({

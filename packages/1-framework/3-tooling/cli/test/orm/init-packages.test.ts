@@ -1,11 +1,15 @@
 import { mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import type { PackageOperations } from '@prisma/cli-engine';
-import { okVoid } from '@prisma/cli-engine/protocol';
+import { CliStructuredError, notOk, okVoid } from '@prisma/cli-engine/protocol';
 import { dirname, join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { installProjectDependencies } from '../../src/orm/init-packages';
 import { createTestProjectDir } from '../utils/test-project-dir';
-import { resolveWithin } from './init-install-fixtures';
+import {
+  IGNORED_BUILDS_WARNING,
+  PNPM_12_IGNORED_BUILDS,
+  resolveWithin,
+} from './init-install-fixtures';
 
 type InstallRequest = Parameters<PackageOperations['install']>[0];
 
@@ -58,6 +62,14 @@ function install(cwd: string, deps: readonly string[] = ['@prisma/orm-postgres',
     catalogWarnings: [],
     resolveModule: resolveWithin(projectDir),
   });
+}
+
+function pnpmIgnoredBuilds() {
+  return notOk(
+    new CliStructuredError('CLI.PACKAGE_INSTALL_FAILED', 'pnpm add failed', {
+      meta: { manager: 'pnpm', stderrTail: PNPM_12_IGNORED_BUILDS },
+    }),
+  );
 }
 
 describe('the engine version init installs', () => {
@@ -122,5 +134,49 @@ describe('the engine version init installs', () => {
     const outcome = await install(projectDir);
 
     expect(outcome.devDeps).toEqual(['prisma@latest', '@prisma/cli-engine@latest']);
+  });
+});
+
+describe('a pnpm add that failed only over ignored build scripts', () => {
+  it('counts as installed when its first package resolves from the project', async () => {
+    writeTarget(join(projectDir, 'node_modules/@prisma/orm-postgres'));
+    writeJson(join(projectDir, 'node_modules/prisma/package.json'), { name: 'prisma' });
+    results = [pnpmIgnoredBuilds(), pnpmIgnoredBuilds()];
+
+    const outcome = await install(projectDir);
+
+    expect(outcome).toEqual({
+      failure: undefined,
+      devDeps: ['prisma@latest', '@prisma/cli-engine@latest'],
+      manager: undefined,
+      warnings: [IGNORED_BUILDS_WARNING],
+    });
+  });
+
+  it('returns the install failure when its first package does not resolve', async () => {
+    const failed = pnpmIgnoredBuilds();
+    results = [failed];
+
+    const outcome = await install(projectDir);
+
+    expect(outcome).toEqual({
+      failure: failed.failure,
+      devDeps: [],
+      manager: undefined,
+      warnings: [],
+    });
+    expect(requests).toHaveLength(1);
+  });
+
+  it('counts a package whose manifest is not exported as present', async () => {
+    writeJson(join(projectDir, 'node_modules/closed/package.json'), {
+      name: 'closed',
+      exports: { '.': './index.js' },
+    });
+    results = [pnpmIgnoredBuilds()];
+
+    const outcome = await install(projectDir, ['closed@^1.0.0']);
+
+    expect(outcome.failure).toBeUndefined();
   });
 });
