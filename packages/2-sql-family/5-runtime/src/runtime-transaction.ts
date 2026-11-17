@@ -45,9 +45,9 @@ import {
 type TransactionRun = TransactionActivityRun<SqlMiddlewareContext>;
 
 export interface OpenTransaction {
-  activity: TransactionRun | undefined;
-  assertAcceptsStatements: (() => void) | undefined;
-  readonly assertBeforeDeadline: (() => void) | undefined;
+  readonly activity: TransactionRun;
+  readonly assertAcceptsStatements: () => void;
+  readonly assertOpen: () => void;
 }
 
 export interface TransactionRuntime {
@@ -98,7 +98,7 @@ abstract class TransactionBase
     this.openTransaction = {
       activity,
       assertAcceptsStatements: () => this.assertAcceptsStatements(),
-      assertBeforeDeadline: () => this.assertBeforeDeadline(),
+      assertOpen: () => this.assertOpen(),
     };
     runtime.register(driverTx, this.openTransaction);
     this[activitySource] = {
@@ -108,7 +108,7 @@ abstract class TransactionBase
   }
 
   abstract get isClosed(): boolean;
-  abstract assertBeforeDeadline(): void;
+  abstract assertOpen(): void;
   abstract commit(): Promise<void>;
   abstract rollback(): Promise<void>;
   protected abstract assertAcceptsStatements(): void;
@@ -245,11 +245,10 @@ export class OuterTransaction extends TransactionBase implements SettledTransact
     return this.self;
   }
 
-  assertBeforeDeadline(): void {
-    if (this.timeout === undefined) return;
+  assertOpen(): void {
     if (!this.closed && performance.now() >= this.deadline) this.expire();
     this.signal.throwIfAborted();
-    if (this.closed) throw transactionClosedError();
+    if (this.isClosed) throw transactionClosedError();
   }
 
   protected assertAcceptsStatements(): void {
@@ -260,7 +259,7 @@ export class OuterTransaction extends TransactionBase implements SettledTransact
   }
 
   async commit(): Promise<void> {
-    this.assertBeforeDeadline();
+    if (this.timeout !== undefined) this.assertOpen();
     this.assertAcceptsStatements();
     this.stopDeadline();
     this.commitAttempted = true;
@@ -366,7 +365,6 @@ export class OuterTransaction extends TransactionBase implements SettledTransact
 
   private stopAcceptingChildren(): void {
     this.activity.stopAcceptingChildren();
-    if (this.timeout === undefined) this.openTransaction.activity = undefined;
     this.runtime.unregister(this.connection, this.openTransaction);
   }
 
@@ -406,8 +404,9 @@ class Savepoint extends TransactionBase {
     return this.root;
   }
 
-  assertBeforeDeadline(): void {
-    this.root.assertBeforeDeadline();
+  assertOpen(): void {
+    this.root.assertOpen();
+    if (this.isClosed) throw transactionClosedError();
   }
 
   protected assertAcceptsStatements(): void {

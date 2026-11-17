@@ -1193,7 +1193,7 @@ A client started an activity with a kind that has no hyphen, such as `statement`
 
 ### RUNTIME.ACTIVITY_NOT_ACCEPTING_CHILDREN
 
-A statement or an activity was started beneath an activity that no longer accepts children: a transaction whose `commit()` or `rollback()` has been called, which happens before the transaction ends, a client activity after its `end()`, or a client activity inside such a transaction. Through an activity handle, the work is refused before it takes a connection or a session. No middleware hook runs for the refused work. Start the work before ending or settling its parent, or on a queryable that is still open. Payload: `parentKind`, `parentId`.
+A statement or an activity was started beneath an activity that no longer accepts children: a transaction whose `commit()` or `rollback()` has been called, which happens before the transaction ends, a client activity after its `end()`, or a client activity inside such a transaction. Through an activity handle, the work is refused before it takes a connection or a session. No middleware hook runs for the refused work. A statement that had already started when `commit()` or `rollback()` was called is refused with `RUNTIME.TRANSACTION_CLOSED` instead. Start the work before ending or settling its parent, or on a queryable that is still open. Payload: `parentKind`, `parentId`.
 
 ### RUNTIME.ACTIVITY_OUTSIDE_TRANSACTION
 
@@ -1475,7 +1475,7 @@ The SQL runtime callback helper received a timeout outside integer milliseconds 
 
 ### RUNTIME.TRANSACTION_CLOSED
 
-Transaction work or a lazy result was used after callback completion or deadline invalidation. Consume results inside the callback and do not retain its transaction for later work.
+Transaction work or a lazy result was used after callback completion or deadline invalidation, or a statement started beneath a transaction or savepoint had not reached the driver when its `commit()` or `rollback()` was called, or when the transaction it is in closed. This includes a statement sent on the transaction's connection while the transaction was open. The statement is not sent. Await every statement before the callback returns, or before calling `commit()` or `rollback()`. Consume results inside the callback and do not retain its transaction for later work.
 
 A savepoint refuses work with this code once it has been committed or rolled back, or once the transaction or a savepoint below it has settled, timed out or been invalidated. A failed `ROLLBACK TO SAVEPOINT` closes the transaction and every savepoint: their statements, `transaction()` and `commit()` are refused with this code, and the outer `rollback()` rejects with it without sending `ROLLBACK`, so the connection is destroyed.
 
