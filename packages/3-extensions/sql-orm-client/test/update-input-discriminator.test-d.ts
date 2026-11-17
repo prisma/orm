@@ -1,5 +1,5 @@
-import { describe, test } from 'vitest';
-import type { MutationUpdateInput, ScalarUpdateInput } from '../src/types';
+import { describe, expectTypeOf, test } from 'vitest';
+import type { DefaultModelInputRow, MutationUpdateInput, ScalarUpdateInput } from '../src/types';
 import type { Contract } from './fixtures/polymorphism/generated/contract';
 
 type PublicNamespace = Contract['domain']['namespaces']['public'];
@@ -22,5 +22,13 @@ describe('update data when another namespace has a same-named model without a di
     // @ts-expect-error
     const mutation: MutationUpdateInput<ContractWithShadowTask, 'Task', 'public'> = { type: 'bug' };
     void [scalar, mutation];
+  });
+});
+
+describe('update data of a model without a discriminator', () => {
+  test('is the partial input row', () => {
+    expectTypeOf<ScalarUpdateInput<Contract, 'Project'>>().toEqualTypeOf<
+      Partial<DefaultModelInputRow<Contract, 'Project'>>
+    >();
   });
 });

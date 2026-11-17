@@ -1768,13 +1768,16 @@ type WithoutDiscriminator<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   NsId extends string = never,
-> = {
-  readonly [K in DiscriminatorFieldName<
+> =
+  DiscriminatorFieldName<
     TContract,
     ModelName,
     string extends NsId ? never : NsId
-  >]?: never;
-};
+  > extends infer Discriminator extends string
+    ? [Discriminator] extends [never]
+      ? unknown
+      : { readonly [K in Discriminator]?: never }
+    : unknown;
 
 /**
  * An input with no keys is `Record<string, never>`, not `{}`: TypeScript accepts any object where `{}` is expected, so a model with no fields would accept any key.
