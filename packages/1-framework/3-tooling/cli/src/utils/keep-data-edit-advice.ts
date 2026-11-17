@@ -1,5 +1,9 @@
-import type { KeepDataEdit } from '@internal/framework-components/control';
-import type { KeepDataAdvice, KeepDataEditAdvice } from '../control-api/statements/plan-questions';
+import type { EnumValueCoordinate, KeepDataEdit } from '@internal/framework-components/control';
+import type {
+  KeepDataAdvice,
+  KeepDataEditAdvice,
+  KeptSubject,
+} from '../control-api/statements/plan-questions';
 import { statementFlag } from '../control-api/statements/statement-flag';
 import { type CliInvocation, cliCommand, printedPlanCommand } from './printed-command';
 import { runWrittenFile } from './runner-failure-advice';
@@ -16,13 +20,13 @@ function quoted(command: string): string {
 
 /** How `migration plan` says to keep the data of a subject: answer with a delete, then make the edits in the file it writes. */
 export function migrationPlanKeepDataEditAdvice(invocation: CliInvocation): KeepDataEditAdvice {
-  return (subject, edits) => ({
+  return ({ text }, edits) => ({
     lead: undefined,
     ways:
       edits.length === 0
         ? []
         : [
-            `To keep that data, answer with ${statementFlag({ verb: 'delete', text: subject })}, then in the migration.ts this command writes ${editsText(edits)}, ${runWrittenFile(invocation)}.`,
+            `To keep that data, answer with ${statementFlag({ verb: 'delete', text })}, then in the migration.ts this command writes ${editsText(edits)}, ${runWrittenFile(invocation)}.`,
           ],
   });
 }
@@ -36,24 +40,39 @@ function otherStatements(
   return (invocation.statementArgs ?? []).filter((flag) => !answers.includes(flag));
 }
 
-function enumAndMember(subject: string): { readonly enumName: string; readonly member: string } {
-  const dot = subject.lastIndexOf('.');
-  return { enumName: subject.slice(0, dot), member: subject.slice(dot + 1) };
-}
-
 function listed(words: readonly string[]): string {
   return words.length < 2
     ? words.join('')
     : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`;
 }
 
+/** The members of `kept` in the enum of `subject`, compared by namespace and enum, in the order given. */
+function sameEnum(
+  subject: EnumValueCoordinate,
+  kept: readonly KeptSubject[],
+): readonly { readonly member: string; readonly text: string }[] {
+  return kept.flatMap(({ subject: each, text }) =>
+    each.kind === 'enumValue' &&
+    each.namespaceId === subject.namespaceId &&
+    each.enum === subject.enum
+      ? [{ member: each.member, text }]
+      : [],
+  );
+}
+
 /**
- * Two runs of `db update` that keep the data when members keep their names and only their stored values change, which no rename statement can name. The first run renames each member to a temporary member with a stored value the enum does not use, so its rename rewrites the stored values, and the second renames it back with its new stored value the same way. Passing through unused values means no rewrite writes a value another rewrite replaces, so members that swap values are kept too.
+ * Two runs of `db update` that keep the data when members keep their names and only their stored values change, which no rename statement can name. The first run renames each member to a temporary member with a stored value the enum does not use, so its rename rewrites the stored values, and the second renames it back with its final stored value the same way. Passing through unused values means no rewrite writes a value another rewrite replaces, so members that swap values are kept too. `undefined` for a subject that is no enum value.
  */
-function twoRuns(invocation: CliInvocation, subject: string, kept: readonly string[]): string {
-  const { enumName } = enumAndMember(subject);
-  const subjects = kept.filter((each) => enumAndMember(each).enumName === enumName);
-  const members = subjects.map((each) => enumAndMember(each).member);
+function twoRuns(
+  invocation: CliInvocation,
+  subject: KeptSubject,
+  kept: readonly KeptSubject[],
+): string | undefined {
+  if (subject.subject.kind !== 'enumValue') return undefined;
+  const enumName = subject.text.slice(0, -(subject.subject.member.length + 1));
+  const same = sameEnum(subject.subject, kept);
+  const members = same.map(({ member }) => member);
+  const subjects = same.map(({ text }) => text);
   const one = members.length === 1;
   const temporary = (member: string) =>
     `${enumName}.<temporary member${one ? '' : ` for ${member}`}>`;
@@ -85,23 +104,24 @@ export function dbUpdateKeepDataEditAdvice(
   databaseStorageHash: string | undefined,
 ): KeepDataEditAdvice {
   return (subject, edits, kept): KeepDataAdvice => {
-    const deleteFlag = statementFlag({ verb: 'delete', text: subject });
+    const deleteFlag = statementFlag({ verb: 'delete', text: subject.text });
     const swaps = edits.some(({ swapsValues }) => swapsValues === true);
     const lead = swaps
       ? `db update cannot keep that data in one run, because members of the enum swap stored values, and ${deleteFlag} removes it.`
       : `db update cannot keep that data in one run, and ${deleteFlag} removes it.`;
     const runs = twoRuns(invocation, subject, kept);
-    if (databaseStorageHash === undefined || edits.length === 0) return { lead, ways: [runs] };
-    const deletes = kept.map((text) => statementFlag({ verb: 'delete', text }));
+    const runWays = runs === undefined ? [] : [runs];
+    if (databaseStorageHash === undefined || edits.length === 0) return { lead, ways: runWays };
+    const deletes = kept.map(({ text }) => statementFlag({ verb: 'delete', text }));
     const plan = printedPlanCommand(invocation, databaseStorageHash, [
-      ...otherStatements(invocation, [subject]).filter((flag) => !deletes.includes(flag)),
+      ...otherStatements(invocation, [subject.text]).filter((flag) => !deletes.includes(flag)),
       ...deletes,
     ]);
     return {
       lead,
       ways: [
         `To keep it, plan the change with ${quoted(plan)}, in the migration.ts it writes ${editsText(edits)}, ${runWrittenFile(invocation)}.`,
-        ...(swaps ? [] : [runs]),
+        ...(swaps ? [] : runWays),
       ],
     };
   };

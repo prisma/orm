@@ -576,7 +576,7 @@ type DataLossContracts = StatementContracts & {
   /** The command's words for the edits that keep a subject's data; none when it gives none. */
   readonly keepDataEditAdvice?: KeepDataEditAdvice;
   /** The subjects of the round's questions whose data the command may say how to keep, in question order. */
-  readonly keptSubjects?: readonly string[];
+  readonly keptSubjects?: readonly KeptSubject[];
   /** The fields the plan gives a temporary value, in the destination contract. */
   readonly temporaryValues: readonly { readonly subject: MigrationSubject }[];
 };
@@ -587,13 +587,19 @@ export interface KeepDataAdvice {
   readonly ways: readonly string[];
 }
 
+/** A subject whose data a command may say how to keep, with its text as a statement names it. */
+export interface KeptSubject {
+  readonly subject: MigrationSubject;
+  readonly text: string;
+}
+
 /**
  * How a command says to keep the data of the subject `subject`: with `edits`, when the target gives any, or by changing a member that keeps its name. `kept` are the subjects of the round's questions whose data the command may say how to keep, `subject` among them, in question order; a plan keeps their data together.
  */
 export type KeepDataEditAdvice = (
-  subject: string,
+  subject: KeptSubject,
   edits: readonly KeepDataEdit[],
-  kept: readonly string[],
+  kept: readonly KeptSubject[],
 ) => KeepDataAdvice;
 
 /** Whether a command may say how to keep the subject's data: the target gives edits that keep it, or it is an enum value whose member keeps its name with a new stored value. */
@@ -798,7 +804,11 @@ export function dataLossQuestion(
     contracts.keepDataEditAdvice === undefined ||
     !keepsDataByCommand(loss.subject, edits, contracts)
       ? undefined
-      : contracts.keepDataEditAdvice(subject, edits, contracts.keptSubjects ?? [subject]);
+      : contracts.keepDataEditAdvice(
+          { subject: loss.subject, text: subject },
+          edits,
+          contracts.keptSubjects ?? [{ subject: loss.subject, text: subject }],
+        );
   const lost = lossText(loss.subject, subject, contracts.originKnown, loss.loss);
   const operations = [...new Set(labels)];
   const advice = [
@@ -1173,7 +1183,7 @@ export async function askPlanQuestions<TPlan extends PlannedQuestions, TFailure>
       ...contracts,
       keptSubjects: losses
         .filter((loss) => keepsDataByCommand(loss.subject, editsOf(loss), contracts))
-        .map((loss) => subjectText(loss.subject, contracts)),
+        .map((loss) => ({ subject: loss.subject, text: subjectText(loss.subject, contracts) })),
     };
     const accessChanges = input.askAccess ? pending('allow', plan.accessChanges) : [];
     if (losses.length + accessChanges.length === 0 && round > 0) break;
