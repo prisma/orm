@@ -317,19 +317,24 @@ export function withPlanRecording<T extends SqlRuntimeQueryable>(
       record(plan);
       return await target.execute(plan, options);
     },
-    ...(typeof transaction === 'function'
-      ? {
-          transaction: (
-            fn: (tx: SqlRuntimeQueryable) => PromiseLike<unknown>,
-            options?: RuntimeTransactionOptions,
-          ) =>
-            transaction.call(
-              target,
-              (tx: SqlRuntimeQueryable) => fn(withPlanRecording(tx, record)),
-              options,
-            ),
-        }
-      : {}),
+    ...(typeof transaction !== 'function'
+      ? {}
+      : typeof commit === 'function'
+        ? {
+            transaction: async () =>
+              withPlanRecording((await transaction.call(target)) as SqlRuntimeQueryable, record),
+          }
+        : {
+            transaction: (
+              fn: (tx: SqlRuntimeQueryable) => PromiseLike<unknown>,
+              options?: RuntimeTransactionOptions,
+            ) =>
+              transaction.call(
+                target,
+                (tx: SqlRuntimeQueryable) => fn(withPlanRecording(tx, record)),
+                options,
+              ),
+          }),
     ...(typeof preparedQuery === 'function'
       ? {
           [preparedStatementQuery]: (
