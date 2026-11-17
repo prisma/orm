@@ -113,10 +113,11 @@ import type {
 import type { ExecutionContext } from './sql-context';
 import { SqlFamilyAdapter } from './sql-family-adapter';
 import { validateTransactionTimeout } from './transaction-deadline';
+import { type StackEntry, TransactionStack } from './transaction-stack';
 import {
   createTransactionStart,
-  type SettledTransactionTarget,
   settlementOf,
+  type TransactionSettlementState,
   type TransactionStartTarget,
   transactionSettlement,
   transactionStart,
@@ -1472,42 +1473,36 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       throw error;
     }
     if (this.#heldQueryables.has(connection)) this.#heldQueryables.add(driverTx);
-    const entry: SavepointEntry = { name: undefined, activity };
-    const { scope, outer } = this.outerTransaction(
+    const stack = new TransactionStack();
+    const entry = openEntry(undefined, activity);
+    stack.push(entry);
+    const { scope, lifecycle, settlement } = this.outerTransaction(
       driverTx,
       connection,
-      activity,
+      stack,
+      entry,
       endTransactionWork,
       timeout,
     );
-    return this.wrapTransaction(
-      driverTx,
-      activity,
-      { stack: [entry], invalidated: false, savepoints: 0 },
-      entry,
-      scope,
-      outer,
-    );
+    return Object.assign(this.wrapTransaction(driverTx, activity, stack, entry, scope, lifecycle), {
+      [transactionSettlement]: settlement,
+    });
   }
 
   private outerTransaction(
     driverTx: SqlTransaction,
     connection: SqlConnection,
-    activity: TransactionActivityRun<SqlMiddlewareContext>,
+    stack: TransactionStack,
+    entry: StackEntry,
     endTransactionWork: () => void,
     timeout: number | undefined,
-  ): { readonly scope: TransactionScope; readonly outer: OuterTransaction } {
-    const onConnection: QueryableTransaction = { activity, guard: undefined, check: undefined };
-    this.#transactions.set(connection, onConnection);
-    let teardown: () => Promise<void> = async () => {};
-    const stopAcceptingChildren = (): void => {
-      activity.stopAcceptingChildren();
-      const onDriverTx = timeout === undefined ? this.#transactions.get(driverTx) : undefined;
-      for (const transaction of [onDriverTx, onConnection]) {
-        if (transaction?.activity === activity) transaction.activity = undefined;
-      }
-      onConnection.guard = undefined;
-    };
+  ): {
+    readonly scope: TransactionScope;
+    readonly lifecycle: TransactionLifecycle;
+    readonly settlement: TransactionSettlementState;
+  } {
+    const { activity } = entry;
+    invariant(activity !== undefined, 'A transaction has its activity once it has begun');
     const logDroppedError = (error: unknown): void => {
       try {
         activity.ctx.log.error({ event: 'middleware.activityEnded.error', error });
@@ -1516,6 +1511,20 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       }
     };
     const controller = new AbortController();
+    const onConnection: QueryableTransaction = {
+      activity,
+      guard: () => assertMayWork(stack, entry, controller.signal.aborted, true),
+      check: undefined,
+    };
+    this.#transactions.set(connection, onConnection);
+    const stopAcceptingChildren = (): void => {
+      activity.stopAcceptingChildren();
+      const onDriverTx = timeout === undefined ? this.#transactions.get(driverTx) : undefined;
+      for (const transaction of [onDriverTx, onConnection]) {
+        if (transaction?.activity === activity) transaction.activity = undefined;
+      }
+      onConnection.guard = undefined;
+    };
     const deadline = performance.now() + (timeout ?? Number.POSITIVE_INFINITY);
     let timer: ReturnType<typeof setTimeout> | undefined;
     const stopDeadline = () => {
@@ -1538,13 +1547,32 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       controller.signal.throwIfAborted();
       if (timer === undefined) throw transactionClosedError();
     };
+    const closeSavepoints = (): ((outcome: 'succeeded' | 'failed') => Promise<void>) => {
+      const closed: StackEntry[] = [];
+      while (stack.includes(entry) && stack.top !== entry) closed.push(stack.pop());
+      for (const savepoint of closed) savepoint.state = 'rolled-back';
+      return async (outcome) => {
+        for (const savepoint of closed) {
+          await savepoint.activity
+            ?.end({ by: 'rollback', outcome, commitAttempted: false })
+            .catch(logDroppedError);
+        }
+      };
+    };
     if (timeout !== undefined) {
       timer = setTimeout(expire, timeout);
       this.#transactionWorkOn.set(connection, async () => {
         stopDeadline();
         stopAcceptingChildren();
         try {
-          await teardown();
+          if (stack.includes(entry)) {
+            const commitAttempted = entry.state === 'committing';
+            const endSavepoints = closeSavepoints();
+            stack.pop();
+            entry.state = 'rolled-back';
+            await endSavepoints('failed');
+            await activity.end({ by: 'rollback', outcome: 'failed', commitAttempted });
+          }
         } catch (error) {
           logDroppedError(error);
         } finally {
@@ -1553,21 +1581,24 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       });
     }
     return {
-      scope: {
-        signal: controller.signal,
-        check,
-        logDroppedError,
-      },
-      outer: {
+      scope: { signal: controller.signal, check, logDroppedError },
+      lifecycle: {
+        beforeCommit: check,
         stop: () => {
           stopDeadline();
           stopAcceptingChildren();
         },
         endWork: endTransactionWork,
-        attach: (guard, end) => {
-          onConnection.guard = guard;
-          teardown = end;
+        closeSavepoints,
+      },
+      settlement: {
+        get committed() {
+          return entry.state === 'committed';
         },
+        get rolledBack() {
+          return entry.state === 'rolled-back';
+        },
+        logDroppedError,
       },
     };
   }
@@ -1575,169 +1606,129 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   private wrapTransaction(
     driverTx: SqlTransaction,
     activity: TransactionActivityRun<SqlMiddlewareContext>,
-    connectionState: ConnectionTransactions,
-    entry: SavepointEntry,
+    stack: TransactionStack,
+    entry: StackEntry,
     scope: TransactionScope,
-    outer?: OuterTransaction,
-  ): RuntimeTransaction {
-    const { stack } = connectionState;
-    let commitAttempted = false;
-    let closing = false;
-    let commitEnding: Promise<void> | undefined;
-    const onStack = () => stack.includes(entry);
-    const above = () => stack[stack.indexOf(entry) + 1];
-    const closed = () =>
-      connectionState.invalidated || !onStack() || closing || scope.signal.aborted;
-    const assertOpen = () => {
-      if (connectionState.invalidated || (outer === undefined && closed())) {
-        throw transactionClosedError();
-      }
-    };
-    const assertAcceptsWork = () => {
-      assertOpen();
-      const open = above();
-      if (!closed() && open !== undefined) throw transactionSuspendedError(open);
-    };
-    const pop = () => {
-      if (onStack()) stack.length = stack.indexOf(entry);
-    };
-    const stopOuter = () => {
-      if (outer === undefined) return;
-      outer.stop();
-      closing = true;
-    };
-    const closeAbove = (): ((outcome: 'succeeded' | 'failed') => Promise<void>) => {
-      const closedAbove = onStack() ? stack.splice(stack.indexOf(entry) + 1).reverse() : [];
-      return async (outcome) => {
-        for (const { activity: open } of closedAbove) {
-          await open
-            ?.end({ by: 'rollback', outcome, commitAttempted: false })
-            .catch(scope.logDroppedError);
-        }
-      };
-    };
+    lifecycle: TransactionLifecycle,
+  ): RuntimeTransaction &
+    ActivitySourceTarget &
+    PreparedStatementQueryTarget &
+    PreparedStatementExecuteTarget {
+    const outer = entry.name === undefined;
+    const assertCanWork = () => assertMayWork(stack, entry, scope.signal.aborted, outer);
     const self = this;
     const openSavepoint = async (parent: ActivityParent): Promise<RuntimeTransaction> => {
-      if (closed()) throw transactionClosedError();
-      const open = above();
-      if (open !== undefined) throw savepointAlreadyOpenError(open);
-      connectionState.savepoints += 1;
-      const name = `sp_${connectionState.savepoints}`;
-      const child: SavepointEntry = { name };
-      stack.push(child);
-      const leave = () => {
-        if (stack.includes(child)) stack.length = stack.indexOf(child);
-      };
-      let childActivity: TransactionActivityRun<SqlMiddlewareContext>;
+      const verdict = access(stack, entry, scope.signal.aborted);
+      if (verdict === 'closed') throw transactionClosedError();
+      if (verdict === 'suspended') throw savepointAlreadyOpenError(stack);
+      const name = stack.nextSavepointName();
+      const savepoint = openEntry(name, undefined);
+      stack.push(savepoint);
+      let savepointActivity: TransactionActivityRun<SqlMiddlewareContext>;
       try {
-        childActivity = await startTransactionActivity<SqlMiddlewareContext>({
+        savepointActivity = await startTransactionActivity<SqlMiddlewareContext>({
           middleware: self.middleware,
           context: { ...self.sqlCtx, scope: 'transaction' },
           parent,
           holdFinishedChildren: self.#holdFinishedChildren,
         });
       } catch (error) {
-        leave();
+        if (stack.top === savepoint) stack.pop();
         throw error;
       }
-      child.activity = childActivity;
+      savepoint.activity = savepointActivity;
       let driverSavepoint: SqlTransaction;
       try {
-        if (!stack.includes(child) || closed()) throw transactionClosedError();
+        if (access(stack, savepoint, scope.signal.aborted) !== 'allowed') {
+          throw transactionClosedError();
+        }
         driverSavepoint = await self.#inFlight.track(() => driverTx.savepoint(name));
       } catch (error) {
-        leave();
-        await childActivity.end({ by: 'rollback', outcome: 'failed', commitAttempted: false });
+        if (stack.top === savepoint) stack.pop();
+        await savepointActivity.end({ by: 'rollback', outcome: 'failed', commitAttempted: false });
         throw error;
       }
       if (self.#heldQueryables.has(driverTx)) self.#heldQueryables.add(driverSavepoint);
-      return self.wrapTransaction(driverSavepoint, childActivity, connectionState, child, scope);
+      return self.wrapTransaction(
+        driverSavepoint,
+        savepointActivity,
+        stack,
+        savepoint,
+        scope,
+        savepointLifecycle,
+      );
     };
-    this.#transactions.set(driverTx, { activity, guard: assertAcceptsWork, check: scope.check });
-    outer?.attach(assertAcceptsWork, async () => {
-      const endAbove = closeAbove();
-      if (!onStack()) return;
-      pop();
-      await endAbove('failed');
-      await activity.end({ by: 'rollback', outcome: 'failed', commitAttempted });
-    });
-    const wrappedTransaction: RuntimeTransaction &
-      Partial<SettledTransactionTarget> &
-      ActivitySourceTarget &
-      PreparedStatementQueryTarget &
-      PreparedStatementExecuteTarget = {
-      ...(outer === undefined
-        ? {}
-        : {
-            [transactionSettlement]: {
-              get committed() {
-                return commitEnding !== undefined;
-              },
-              get rolledBack() {
-                return commitEnding === undefined && !onStack();
-              },
-              logDroppedError: scope.logDroppedError,
-            },
-          }),
+    this.#transactions.set(driverTx, { activity, guard: assertCanWork, check: scope.check });
+    return {
       signal: scope.signal,
       async commit(): Promise<void> {
-        if (outer !== undefined) scope.check();
-        assertAcceptsWork();
-        stopOuter();
-        commitAttempted = true;
+        lifecycle.beforeCommit();
+        assertCanWork();
+        lifecycle.stop();
+        entry.state = 'committing';
         try {
           await self.#inFlight.track(() => driverTx.commit());
         } catch (error) {
-          if (outer !== undefined) {
-            outer.endWork();
+          lifecycle.endWork();
+          if (outer) {
             await activity.end({ by: 'commit', outcome: 'failed' });
+          } else {
+            entry.state = 'release-failed';
           }
           throw error;
         }
-        pop();
-        commitEnding = activity.end({
-          by: outer === undefined ? 'release' : 'commit',
+        if (stack.top === entry) stack.pop();
+        entry.state = 'committed';
+        entry.commitEnding = activity.end({
+          by: outer ? 'commit' : 'release',
           outcome: 'succeeded',
         });
         try {
-          await commitEnding;
+          await entry.commitEnding;
         } finally {
-          outer?.endWork();
+          lifecycle.endWork();
         }
       },
       async rollback(): Promise<void> {
-        stopOuter();
-        if (commitEnding !== undefined) {
-          await commitEnding.catch(() => undefined);
+        if (entry.state === 'committed') {
+          await entry.commitEnding?.catch(() => undefined);
           return;
         }
-        if (!onStack()) return;
-        const endAbove = closeAbove();
-        if (connectionState.invalidated || (outer === undefined && scope.signal.aborted)) {
-          outer?.endWork();
-          await endAbove('failed');
+        if (!stack.includes(entry)) return;
+        const verdict = access(stack, entry, scope.signal.aborted);
+        if (verdict === 'suspended') throw transactionSuspendedError(stack);
+        if (!outer && (entry.state === 'committing' || entry.state === 'rolling-back')) {
+          throw transactionClosedError();
+        }
+        lifecycle.stop();
+        const commitAttempted = entry.state === 'committing' || entry.state === 'release-failed';
+        const endSavepoints = lifecycle.closeSavepoints();
+        if (refusesAsClosed(stack, verdict, outer)) {
+          lifecycle.endWork();
+          await endSavepoints('failed');
           await activity.end({ by: 'rollback', outcome: 'failed', commitAttempted });
           throw transactionClosedError();
         }
-        closing = true;
+        entry.state = 'rolling-back';
         try {
           await self.#inFlight.track(() => driverTx.rollback());
         } catch (error) {
-          if (outer === undefined) {
-            pop();
-            connectionState.invalidated = true;
+          if (!outer) {
+            if (stack.top === entry) stack.pop();
+            stack.invalidate();
           }
-          outer?.endWork();
-          await endAbove('failed');
+          lifecycle.endWork();
+          await endSavepoints('failed');
           await activity.end({ by: 'rollback', outcome: 'failed', commitAttempted });
           throw error;
         }
-        pop();
+        if (stack.top === entry) stack.pop();
+        entry.state = 'rolled-back';
         try {
-          await endAbove('succeeded');
+          await endSavepoints('succeeded');
           await activity.end({ by: 'rollback', outcome: 'succeeded', commitAttempted });
         } finally {
-          outer?.endWork();
+          lifecycle.endWork();
         }
       },
       savepoint: () => openSavepoint(activity),
@@ -1746,7 +1737,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
           clientActivity: StartActivity<K>,
         ): Promise<ActivityHandle<K>> => {
           try {
-            assertOpen();
+            assertCanWork();
           } catch (error) {
             return Promise.reject(error);
           }
@@ -1812,7 +1803,6 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
         );
       },
     };
-    return wrappedTransaction;
   }
 
   telemetry(): RuntimeTelemetryEvent | null {
@@ -1944,21 +1934,10 @@ function transactionAlreadyOpenError(
   );
 }
 
-interface SavepointEntry {
-  readonly name: string | undefined;
-  activity?: TransactionActivityRun<SqlMiddlewareContext>;
-}
-
 interface QueryableTransaction {
   activity: TransactionActivityRun<SqlMiddlewareContext> | undefined;
   guard: (() => void) | undefined;
   readonly check: (() => void) | undefined;
-}
-
-interface ConnectionTransactions {
-  readonly stack: SavepointEntry[];
-  invalidated: boolean;
-  savepoints: number;
 }
 
 interface TransactionScope {
@@ -1967,13 +1946,65 @@ interface TransactionScope {
   logDroppedError(error: unknown): void;
 }
 
-interface OuterTransaction {
+interface TransactionLifecycle {
+  beforeCommit(): void;
   stop(): void;
   endWork(): void;
-  attach(guard: () => void, teardown: () => Promise<void>): void;
+  closeSavepoints(): (outcome: 'succeeded' | 'failed') => Promise<void>;
 }
 
-function transactionSuspendedError(open: SavepointEntry): Error {
+const savepointLifecycle: TransactionLifecycle = {
+  beforeCommit: noWork,
+  stop: noWork,
+  endWork: noWork,
+  closeSavepoints: () => async () => {},
+};
+
+type StackAccess = 'allowed' | 'suspended' | 'closed';
+
+function openEntry(
+  name: string | undefined,
+  activity: TransactionActivityRun<SqlMiddlewareContext> | undefined,
+): StackEntry {
+  return { name, activity, commitEnding: undefined, state: 'open' };
+}
+
+function access(stack: TransactionStack, entry: StackEntry, timedOut: boolean): StackAccess {
+  if (
+    stack.invalidated ||
+    timedOut ||
+    !stack.includes(entry) ||
+    entry.state === 'committing' ||
+    entry.state === 'rolling-back'
+  ) {
+    return 'closed';
+  }
+  return stack.top === entry ? 'allowed' : 'suspended';
+}
+
+function refusesAsClosed(stack: TransactionStack, verdict: StackAccess, outer: boolean): boolean {
+  return verdict === 'closed' && (!outer || stack.invalidated);
+}
+
+function assertMayWork(
+  stack: TransactionStack,
+  entry: StackEntry,
+  timedOut: boolean,
+  outer: boolean,
+): void {
+  const verdict = access(stack, entry, timedOut);
+  if (refusesAsClosed(stack, verdict, outer)) throw transactionClosedError();
+  if (verdict === 'suspended') throw transactionSuspendedError(stack);
+}
+
+function topOf(stack: TransactionStack): StackEntry {
+  const { top } = stack;
+  invariant(top !== undefined, 'A suspended transaction has a savepoint above it');
+  return top;
+}
+
+function transactionSuspendedError(stack: TransactionStack): Error {
+  const open = topOf(stack);
   return runtimeError(
     'RUNTIME.TRANSACTION_SUSPENDED',
     `Savepoint ${open.name} is open on this transaction; commit or roll it back before using the transaction again.`,
@@ -1981,7 +2012,8 @@ function transactionSuspendedError(open: SavepointEntry): Error {
   );
 }
 
-function savepointAlreadyOpenError(open: SavepointEntry): Error {
+function savepointAlreadyOpenError(stack: TransactionStack): Error {
+  const open = topOf(stack);
   return runtimeError(
     'RUNTIME.TRANSACTION_ALREADY_OPEN',
     `Savepoint ${open.name} is already open on this transaction; commit or roll it back before opening another.`,

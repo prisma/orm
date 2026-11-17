@@ -18,7 +18,7 @@ async function begin(options: SetupOptions = {}) {
   return { ...setup, connection, transaction };
 }
 
-type RuntimeLevel = Awaited<ReturnType<typeof begin>>['transaction'];
+type SavepointOrTransaction = Awaited<ReturnType<typeof begin>>['transaction'];
 
 const update = rawPlan('update t set x = 1');
 
@@ -44,21 +44,25 @@ describe('RuntimeTransaction.savepoint()', () => {
     {
       title: 'releases',
       failures: {},
-      settle: (savepoint: RuntimeLevel) => savepoint.commit(),
+      settle: (savepoint: SavepointOrTransaction) => savepoint.commit(),
       sent: 'RELEASE SAVEPOINT sp_1',
       outcome: 'committed',
     },
     {
       title: 'rolls back',
       failures: {},
-      settle: (savepoint: RuntimeLevel) => savepoint.rollback(),
+      settle: (savepoint: SavepointOrTransaction) => savepoint.rollback(),
       sent: 'ROLLBACK TO SAVEPOINT sp_1',
       outcome: 'rolled-back',
     },
     {
       title: 'rolls back after a failed RELEASE',
       failures: { releaseSavepoint: new Error('release failed') },
-      settle: async (savepoint: RuntimeLevel, transaction: RuntimeLevel, events: HookEvent[]) => {
+      settle: async (
+        savepoint: SavepointOrTransaction,
+        transaction: SavepointOrTransaction,
+        events: HookEvent[],
+      ) => {
         await expect(savepoint.commit()).rejects.toThrow('release failed');
         await rejectsWith(transaction.execute(update), 'TRANSACTION_SUSPENDED');
         expect(finalized(events)).toBe('');
@@ -91,7 +95,7 @@ describe('RuntimeTransaction.savepoint()', () => {
     },
   );
 
-  it('rejects a second savepoint while one is open on the level, naming it and sending nothing', async () => {
+  it('rejects a second savepoint while one is open, naming the top of the stack and sending nothing', async () => {
     const { transaction, events } = await begin();
     const [opened, concurrent] = await Promise.allSettled([
       transaction.savepoint(),
@@ -106,30 +110,48 @@ describe('RuntimeTransaction.savepoint()', () => {
     });
     expect(events.slice(before)).toEqual([]);
 
-    if (opened?.status === 'fulfilled') await opened.value.commit();
+    if (opened?.status !== 'fulfilled') throw new Error('the first savepoint did not open');
+    const nested = await opened.value.savepoint();
+    await expect(transaction.savepoint()).rejects.toMatchObject({
+      code: 'RUNTIME.TRANSACTION_ALREADY_OPEN',
+      message: expect.stringContaining('sp_2'),
+      details: { savepointId: transactionIds(events)[2] },
+    });
+
+    await nested.commit();
+    await opened.value.commit();
     await expect(transaction.savepoint()).resolves.toBeDefined();
   });
 
   it.each([
-    { title: 'a statement', run: (level: RuntimeLevel) => level.execute(update) },
-    { title: 'a query', run: (level: RuntimeLevel) => level.query(rawPlan('select 1')).toArray() },
-    { title: 'commit()', run: (level: RuntimeLevel) => level.commit() },
-  ])('suspends $title on a level with an open child until the child settles', async ({ run }) => {
-    const { transaction, events } = await begin();
-    const outerChild = await transaction.savepoint();
-    const innerChild = await outerChild.savepoint();
-    const before = events.length;
+    { title: 'a statement', run: (target: SavepointOrTransaction) => target.execute(update) },
+    {
+      title: 'a query',
+      run: (target: SavepointOrTransaction) => target.query(rawPlan('select 1')).toArray(),
+    },
+    { title: 'commit()', run: (target: SavepointOrTransaction) => target.commit() },
+    { title: 'rollback()', run: (target: SavepointOrTransaction) => target.rollback() },
+  ])(
+    'suspends $title below the top of the stack until the savepoints above settle, naming the top',
+    async ({ run }) => {
+      const { transaction, events } = await begin();
+      const outerChild = await transaction.savepoint();
+      const innerChild = await outerChild.savepoint();
+      const before = events.length;
 
-    await expect(run(outerChild)).rejects.toMatchObject({
-      code: 'RUNTIME.TRANSACTION_SUSPENDED',
-      details: { savepointId: transactionIds(events)[2] },
-    });
-    await rejectsWith(run(transaction), 'TRANSACTION_SUSPENDED');
-    expect(events.slice(before)).toEqual([]);
+      for (const below of [outerChild, transaction]) {
+        await expect(run(below)).rejects.toMatchObject({
+          code: 'RUNTIME.TRANSACTION_SUSPENDED',
+          message: expect.stringContaining('sp_2'),
+          details: { savepointId: transactionIds(events)[2] },
+        });
+      }
+      expect(events.slice(before)).toEqual([]);
 
-    await innerChild.commit();
-    await run(outerChild);
-  });
+      await innerChild.commit();
+      await run(outerChild);
+    },
+  );
 
   it('suspends statements on the connection while a savepoint is open on its transaction', async () => {
     const { connection, transaction, events } = await begin();
@@ -149,15 +171,45 @@ describe('RuntimeTransaction.savepoint()', () => {
     expect(after?.ctx?.parent).toBeUndefined();
   });
 
-  it('closes the open savepoints innermost first when the outer transaction rolls back, and refuses work on them', async () => {
-    const { connection, transaction, events } = await begin();
+  it('refuses rollback() while RELEASE is in flight, with no side effects, and the savepoint finalizes with the outer outcome', async () => {
+    let releaseHeld = (): void => undefined;
+    const held = new Promise<void>((resolve) => {
+      releaseHeld = resolve;
+    });
+    const { transaction, events } = await begin({ failures: { releaseSavepointHeldUntil: held } });
+    const savepoint = await transaction.savepoint();
+    await savepoint.execute(update);
+    const releasing = savepoint.commit();
+    const before = events.length;
+
+    await rejectsWith(savepoint.rollback(), 'TRANSACTION_CLOSED');
+    expect(events.slice(before)).toEqual([]);
+    releaseHeld();
+    await releasing;
+    await transaction.commit();
+
+    expect(driverCalls(events)).toBe('begin, SAVEPOINT sp_1, RELEASE SAVEPOINT sp_1, commit');
+    expect(finalized(events)).toBe(
+      'statement:committed, transaction:committed, transaction:committed',
+    );
+  });
+
+  it('closes the open savepoints innermost first when the outer transaction rolls back after its timeout, and refuses work on them', async () => {
+    const { runtime, events } = createSetup();
+    const connection = await runtime.connection();
+    const transaction = await connection.transaction({ timeout: 1 });
     const outerChild = await transaction.savepoint();
     const innerChild = await outerChild.savepoint();
     await (await startActivityOn(innerChild, testCall)).end({ outcome: 'succeeded' });
+    await new Promise((resolve) => setTimeout(resolve, 5));
 
     await transaction.rollback();
     const ends = events.filter((event) => event.name.startsWith('ended:transaction'));
-    expect(ends.map((event) => event.activity?.id)).toEqual(transactionIds(events).reverse());
+    expect(ends.map((event) => [event.name, event.activity?.id])).toEqual(
+      transactionIds(events)
+        .reverse()
+        .map((id) => ['ended:transaction:succeeded', id]),
+    );
     const before = events.length;
     for (const refused of [
       innerChild.execute(update),
@@ -192,7 +244,7 @@ describe('RuntimeTransaction.savepoint()', () => {
     expect(savepoint.signal).toBe(transaction.signal);
   });
 
-  it('invalidates every level when ROLLBACK TO fails, and destroys an owned connection on the outer rollback', async () => {
+  it('closes the transaction and every savepoint when ROLLBACK TO fails, and destroys an owned connection on the outer rollback', async () => {
     const setup = createSetup({
       failures: { rollbackToSavepoint: new Error('rollback to failed') },
     });
@@ -203,10 +255,10 @@ describe('RuntimeTransaction.savepoint()', () => {
 
     await expect(innerChild.rollback()).rejects.toThrow('rollback to failed');
     const before = setup.events.length;
-    for (const level of [outerChild, transaction]) {
-      await rejectsWith(level.execute(update), 'TRANSACTION_CLOSED');
-      await rejectsWith(level.savepoint(), 'TRANSACTION_CLOSED');
-      await rejectsWith(level.commit(), 'TRANSACTION_CLOSED');
+    for (const closed of [outerChild, transaction]) {
+      await rejectsWith(closed.execute(update), 'TRANSACTION_CLOSED');
+      await rejectsWith(closed.savepoint(), 'TRANSACTION_CLOSED');
+      await rejectsWith(closed.commit(), 'TRANSACTION_CLOSED');
     }
     expect(setup.events.slice(before)).toEqual([]);
 

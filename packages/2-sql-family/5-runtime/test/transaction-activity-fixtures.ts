@@ -66,6 +66,7 @@ export interface DriverFailures {
   readonly destroy?: Error;
   readonly savepoint?: Error;
   readonly releaseSavepoint?: Error;
+  readonly releaseSavepointHeldUntil?: Promise<void>;
   readonly rollbackToSavepoint?: Error;
 }
 
@@ -94,7 +95,13 @@ function createDriver(events: HookEvent[], failures: DriverFailures): SqlDriver 
       ...queryable,
       commit: vi
         .fn()
-        .mockImplementation(settle(`RELEASE SAVEPOINT ${name}`, failures.releaseSavepoint)),
+        .mockImplementation(
+          settle(
+            `RELEASE SAVEPOINT ${name}`,
+            failures.releaseSavepoint,
+            failures.releaseSavepointHeldUntil,
+          ),
+        ),
       rollback: vi
         .fn()
         .mockImplementation(settle(`ROLLBACK TO SAVEPOINT ${name}`, failures.rollbackToSavepoint)),
