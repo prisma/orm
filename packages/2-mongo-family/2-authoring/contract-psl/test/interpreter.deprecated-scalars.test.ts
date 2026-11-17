@@ -83,6 +83,61 @@ describe('deprecated Mongo PSL scalar names', () => {
     },
   );
 
+  describe('warns wherever a deprecated name is written', () => {
+    const deprecated = { name: 'Int', replacement: 'Int32' };
+    const current = 'Bool';
+
+    const warningAt = (line: number, column: number, name = deprecated.name) => ({
+      code: 'PSL_DEPRECATED_SCALAR_NAME',
+      message: `Scalar type "${name}" is deprecated and will be removed; use "${deprecated.replacement}".`,
+      sourceId: 'schema.prisma',
+      span: expect.objectContaining({
+        start: expect.objectContaining({ line, column }),
+        end: expect.objectContaining({ line, column: column + name.length }),
+      }),
+      severity: 'warning',
+    });
+
+    it('in a model field written with parentheses', () => {
+      const { result, warnings } = interpret(schemaWith(`${deprecated.name}()`));
+      expect(result.ok).toBe(true);
+      expect(warnings).toEqual([warningAt(3, 9)]);
+    });
+
+    it.each([
+      ['bare', deprecated.name],
+      ['with parentheses', `${deprecated.name}()`],
+    ])('in a value object member written %s', (_, written) => {
+      const { result, warnings } = interpret(
+        `type Address {\n  number ${written}\n}\n\nmodel Post {\n  id ObjectId @id @map("_id")\n  address Address\n}\n`,
+      );
+      expect(result.ok).toBe(true);
+      expect(warnings).toEqual([warningAt(2, 10)]);
+    });
+
+    it.each([
+      ['bare', deprecated.name],
+      ['with parentheses', `${deprecated.name}()`],
+    ])(
+      'at the base of a types {} alias written %s, once however many fields use it',
+      (_, written) => {
+        const { result, warnings } = interpret(
+          `types {\n  Count = ${written}\n}\n\nmodel Post {\n  id ObjectId @id @map("_id")\n  a Count\n  b Count?\n}\n`,
+        );
+        expect(result.ok).toBe(true);
+        expect(warnings).toEqual([warningAt(2, 11)]);
+      },
+    );
+
+    it('nowhere for a name that is not deprecated', () => {
+      const { result, warnings } = interpret(
+        `types {\n  Flag = ${current}\n}\n\ntype Address {\n  a ${current}\n  b ${current}()\n}\n\nmodel Post {\n  id ObjectId @id @map("_id")\n  c ${current}\n  d ${current}()\n  e Flag\n  address Address\n}\n`,
+      );
+      expect(result.ok).toBe(true);
+      expect(warnings).toEqual([]);
+    });
+  });
+
   it('accepts a deprecated name when no warning sink is supplied', () => {
     const result = interpretMongoContract(schemaWith('Int'), {
       scalarTypes,
