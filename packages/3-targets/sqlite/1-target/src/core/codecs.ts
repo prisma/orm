@@ -482,10 +482,12 @@ export class SqliteIntegerCodec extends CodecImpl<
   number
 > {
   async toWire(value: number, _ctx: CodecCallContext): Promise<number> {
-    return value;
+    return encodableSafeInteger(SQLITE_INTEGER_CODEC_ID, value);
   }
   async fromWire(wire: number | string, _ctx: CodecCallContext): Promise<number> {
-    return safeIntegerWire(SQLITE_INTEGER_CODEC_ID, wire);
+    return typeof wire === 'number'
+      ? safeIntegerNumber(SQLITE_INTEGER_CODEC_ID, wire, 'RUNTIME.DECODE_FAILED')
+      : safeIntegerWire(SQLITE_INTEGER_CODEC_ID, wire);
   }
   fromDataTypeValue(value: DataTypeValue<string>): number {
     return safeIntegerFromDigitText(SQLITE_INTEGER_CODEC_ID, value.value);

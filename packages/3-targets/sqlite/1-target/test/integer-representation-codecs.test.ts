@@ -2,7 +2,11 @@ import type { CodecInstanceContext } from '@internal/framework-components/codec'
 import { AggregateExpr, CastExpr } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import { SQLITE_BIGINT_NUMBER_CODEC_ID } from '../src/core/codec-ids';
-import { sqliteBigintDescriptor, sqliteBigintNumberDescriptor } from '../src/core/codecs';
+import {
+  sqliteBigintDescriptor,
+  sqliteBigintNumberDescriptor,
+  sqliteIntegerDescriptor,
+} from '../src/core/codecs';
 import { fromContractJson, toContractJson } from './contract-json';
 
 const instanceCtx: CodecInstanceContext = { name: 'test' };
@@ -209,5 +213,39 @@ describe('sqlite/bigintnumber@1', () => {
 
   it('renders a default as a number literal', () => {
     expect(sqliteBigintNumberDescriptor.renderValueLiteral?.('42')).toBe('42');
+  });
+});
+
+describe('sqlite/integer@1 guards the safe integer range as sqlite/bigintnumber@1 does', () => {
+  const codec = sqliteIntegerDescriptor.factory()(instanceCtx);
+
+  it('writes and reads an integer within the safe range, and negative zero as zero', async () => {
+    expect({
+      written: await codec.toWire(9007199254740991, {}),
+      read: await codec.fromWire(-9007199254740991, {}),
+      negativeZero: await codec.toWire(-0, {}),
+    }).toEqual({ written: 9007199254740991, read: -9007199254740991, negativeZero: 0 });
+  });
+
+  it.each([9007199254740992, -9007199254740992, 1.5])('refuses to write %d', async (value) => {
+    await expect(codec.toWire(value, {})).rejects.toMatchObject({
+      code: 'RUNTIME.ENCODE_FAILED',
+      message: `sqlite/integer@1 value must be an integer within the safe integer range, got ${value}`,
+      meta: { codecId: 'sqlite/integer@1', received: String(value) },
+    });
+  });
+
+  it('refuses to write a value that is not a number', async () => {
+    await expect(codec.toWire(wrongTyped(9n), {})).rejects.toMatchObject({
+      code: 'RUNTIME.ENCODE_FAILED',
+      message: 'sqlite/integer@1 value must be a number, got bigint 9',
+    });
+  });
+
+  it.each([9007199254740992, 1.5])('refuses to read the number %d', async (wire) => {
+    await expect(codec.fromWire(wire, {})).rejects.toMatchObject({
+      code: 'RUNTIME.DECODE_FAILED',
+      message: `sqlite/integer@1 value must be an integer within the safe integer range, got ${wire}`,
+    });
   });
 });
