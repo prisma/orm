@@ -16,12 +16,12 @@ const schema = `// use prisma-8
 
 model Post {
   id    ObjectId @id @map("_id")
-  value BigInt
+  value Money
 }
 `;
 
-describe('the language server and the provider agree on Mongo earlier-name wording', () => {
-  it('reports the same PSL_UNRESOLVED_REFERENCE message for a field typed with a scalar name an earlier Prisma used', async () => {
+describe('the language server and the provider agree on Mongo unresolved-type wording', () => {
+  it('reports the same PSL_UNRESOLVED_REFERENCE message for a field typed with a name that is no type', async () => {
     const uri = pathToFileURL(schemaPath).href;
     const documents = new DocumentStore();
     documents.open({ uri, languageId: 'prisma', version: 1, text: schema });
@@ -47,8 +47,8 @@ describe('the language server and the provider agree on Mongo earlier-name wordi
     const providerMessage = providerResult.failure.diagnostics.find(
       (diagnostic) => diagnostic.code === 'PSL_UNRESOLVED_REFERENCE',
     )?.message;
-    expect(providerMessage).toBe(
-      'Field "Post.value" has type "BigInt", which is not a Mongo scalar type; use "Int64".',
+    expect(providerMessage).toMatch(
+      /^Field "Post\.value" has type "Money", which is not a scalar type, an enum, a composite type or a model\. The Mongo scalar types are .*\bInt64BigInt\b/,
     );
 
     const project = new ProjectArtifacts({

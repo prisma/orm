@@ -41,21 +41,18 @@ async function load(schema: string) {
 
 describe('a Prisma 8 Mongo schema read through defineConfig', () => {
   it.each([
-    ['BigInt', 'Int64'],
-    ['Decimal', 'Decimal128'],
-    ['Bytes', 'Binary'],
-  ])('refuses the Prisma 6 name %s and names %s', async (oldName, newName) => {
+    ['BigInt', 'mongo/int64@1'],
+    ['Decimal', 'mongo/decimal128@1'],
+    ['Bytes', 'mongo/binary@1'],
+  ])('reads the convenience type %s as codec %s', async (name, codecId) => {
     const result = await load(
-      `// use prisma-8\nmodel Post {\n  id ObjectId @id @map("_id")\n  value ${oldName}\n}\n`,
+      `// use prisma-8\nmodel Post {\n  id ObjectId @id @map("_id")\n  value ${name}\n}\n`,
     );
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.failure.diagnostics).toEqual([
-      expect.objectContaining({
-        code: 'PSL_UNRESOLVED_REFERENCE',
-        message: `Field "Post.value" has type "${oldName}", which is not a Mongo scalar type; use "${newName}".`,
-      }),
-    ]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(
+      result.value.domain.namespaces['__unbound__']?.models['Post']?.fields['value']?.type,
+    ).toEqual({ kind: 'scalar', codecId });
   });
 
   it('lists the Mongo scalar types for a name that was never one', async () => {

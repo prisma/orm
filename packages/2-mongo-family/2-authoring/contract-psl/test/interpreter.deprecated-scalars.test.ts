@@ -1,6 +1,7 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type {
   AuthoringContributions,
+  AuthoringTypeChoiceDescriptor,
   AuthoringTypeConstructorDescriptor,
 } from '@internal/framework-components/authoring';
 import { mongoCodecLookup } from '@internal/mongo-contract/test';
@@ -16,22 +17,38 @@ function scalar(codecId: string, replacement?: string): AuthoringTypeConstructor
   };
 }
 
+function choice(storage: string, explicit: string): AuthoringTypeChoiceDescriptor {
+  return {
+    kind: 'typeChoice',
+    args: [
+      { kind: 'option', name: 'storage', values: [storage], default: storage, optional: true },
+    ],
+    choices: [{ when: { storage }, type: explicit }],
+  };
+}
+
 const type = {
   ObjectId: scalar('mongo/objectId@1'),
-  Int64: scalar('mongo/int64@1'),
+  Int64BigInt: scalar('mongo/int64@1'),
   Binary: scalar('mongo/binary@1'),
   Int32: scalar('mongo/int32@1'),
   Double: scalar('mongo/double@1'),
   Bool: scalar('mongo/bool@1'),
   DateTime: scalar('mongo/date@1'),
-  Int: scalar('mongo/int32@1', 'Int32'),
-  Float: scalar('mongo/double@1', 'Double'),
-  Boolean: scalar('mongo/bool@1', 'Bool'),
+  Int: choice('int', 'Int32'),
+  Float: choice('double', 'Double'),
+  Boolean: choice('bool', 'Bool'),
+  Int64: scalar('mongo/int64@1', 'Int64BigInt'),
 };
 
-const scalarTypes: ReadonlyMap<string, string> = new Map(
-  Object.entries(type).map(([name, descriptor]) => [name, descriptor.output.codecId]),
-);
+const scalarTypes: ReadonlyMap<string, string> = new Map([
+  ...Object.entries(type).flatMap(([name, descriptor]) =>
+    descriptor.kind === 'typeConstructor' ? [[name, descriptor.output.codecId] as const] : [],
+  ),
+  ['Int', 'mongo/int32@1'],
+  ['Float', 'mongo/double@1'],
+  ['Boolean', 'mongo/bool@1'],
+]);
 
 const authoringContributions = { type } as unknown as AuthoringContributions;
 
@@ -54,11 +71,7 @@ const schemaWith = (typeName: string) =>
   `model Post {\n  id ObjectId @id @map("_id")\n  value ${typeName}?\n}\n`;
 
 describe('deprecated Mongo PSL scalar names', () => {
-  it.each([
-    ['Int', 'Int32'],
-    ['Float', 'Double'],
-    ['Boolean', 'Bool'],
-  ])(
+  it.each([['Int64', 'Int64BigInt']])(
     'accepts %s with a warning at the type, and gives the contract %s gives',
     (oldName, newName) => {
       const deprecated = interpret(schemaWith(oldName));
@@ -84,8 +97,7 @@ describe('deprecated Mongo PSL scalar names', () => {
   );
 
   describe('warns wherever a deprecated name is written', () => {
-    const deprecated = { name: 'Int', replacement: 'Int32' };
-    const current = 'Bool';
+    const deprecated = { name: 'Int64', replacement: 'Int64BigInt' };
 
     const warningAt = (line: number, column: number, name = deprecated.name) => ({
       code: 'PSL_DEPRECATED_SCALAR_NAME',
@@ -129,17 +141,20 @@ describe('deprecated Mongo PSL scalar names', () => {
       },
     );
 
-    it('nowhere for a name that is not deprecated', () => {
-      const { result, warnings } = interpret(
-        `types {\n  Flag = ${current}\n}\n\ntype Address {\n  a ${current}\n  b ${current}()\n}\n\nmodel Post {\n  id ObjectId @id @map("_id")\n  c ${current}\n  d ${current}()\n  e Flag\n  address Address\n}\n`,
-      );
-      expect(result.ok).toBe(true);
-      expect(warnings).toEqual([]);
-    });
+    it.each(['Bool', 'Int', 'Float', 'Boolean'])(
+      'nowhere for %s, which is not deprecated',
+      (current) => {
+        const { result, warnings } = interpret(
+          `types {\n  Flag = ${current}\n}\n\ntype Address {\n  a ${current}\n  b ${current}()\n}\n\nmodel Post {\n  id ObjectId @id @map("_id")\n  c ${current}\n  d ${current}()\n  e Flag\n  address Address\n}\n`,
+        );
+        expect(result.ok).toBe(true);
+        expect(warnings).toEqual([]);
+      },
+    );
   });
 
   it('accepts a deprecated name when no warning sink is supplied', () => {
-    const result = interpretMongoContract(schemaWith('Int'), {
+    const result = interpretMongoContract(schemaWith('Int64'), {
       scalarTypes,
       authoringContributions,
       codecLookup: mongoCodecLookup,
@@ -157,29 +172,11 @@ describe('deprecated Mongo PSL scalar names', () => {
       expect.objectContaining({
         code: 'PSL_UNRESOLVED_REFERENCE',
         message:
-          'Field "Post.value" has type "Money", which is not a scalar type, an enum, a composite type or a model. The Mongo scalar types are ObjectId, Int64, Binary, Int32, Double, Bool and DateTime.',
+          'Field "Post.value" has type "Money", which is not a scalar type, an enum, a composite type or a model. The Mongo scalar types are ObjectId, Int64BigInt, Binary, Int32, Double, Bool, DateTime, Int, Float and Boolean.',
         sourceId: 'schema.prisma',
         span: expect.objectContaining({
           start: expect.objectContaining({ line: 3, column: 9 }),
           end: expect.objectContaining({ line: 3, column: 14 }),
-        }),
-      }),
-    ]);
-  });
-
-  it.each([
-    ['BigInt', 'Int64'],
-    ['Bytes', 'Binary'],
-  ])('refuses %s, a name from an earlier Prisma, and names %s instead', (oldName, newName) => {
-    const { result } = interpret(schemaWith(oldName));
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.failure.diagnostics).toEqual([
-      expect.objectContaining({
-        code: 'PSL_UNRESOLVED_REFERENCE',
-        message: `Field "Post.value" has type "${oldName}", which is not a Mongo scalar type; use "${newName}".`,
-        span: expect.objectContaining({
-          start: expect.objectContaining({ line: 3, column: 9 }),
         }),
       }),
     ]);

@@ -25,11 +25,17 @@ import {
   MONGO_VECTOR_CODEC_ID,
 } from './codec-ids';
 
+const int64BigInt = {
+  kind: 'typeConstructor',
+  documentation: 'A signed 64-bit integer read as a bigint, stored as BSON long.',
+  output: { codecId: MONGO_INT64_CODEC_ID },
+} as const;
+
 /**
- * The MongoDB scalar types as type constructors, which PSL writes as field types and the TypeScript builder calls as `type.X()`. Each names a codec; the collection validator reads the BSON types from the data type the codec represents, not from the constructor.
+ * The explicit MongoDB scalar types, each named after the BSON type that stores it, which PSL writes as field types and the TypeScript builder calls as `type.X()`. Each names a codec; the collection validator reads the BSON types from the data type the codec represents, not from the constructor.
  */
-export const mongoScalarAuthoringTypes = {
-  String: {
+export const mongoExplicitScalarTypes = {
+  BsonString: {
     kind: 'typeConstructor',
     documentation: 'Text, stored as BSON string.',
     output: { codecId: MONGO_STRING_CODEC_ID },
@@ -54,11 +60,7 @@ export const mongoScalarAuthoringTypes = {
     documentation: 'A double-precision floating-point number, stored as BSON double.',
     output: { codecId: MONGO_DOUBLE_CODEC_ID },
   },
-  Int64: {
-    kind: 'typeConstructor',
-    documentation: 'A signed 64-bit integer read as a bigint, stored as BSON long.',
-    output: { codecId: MONGO_INT64_CODEC_ID },
-  },
+  Int64BigInt: int64BigInt,
   Int64Number: {
     kind: 'typeConstructor',
     documentation:
@@ -76,7 +78,7 @@ export const mongoScalarAuthoringTypes = {
     documentation: 'Bytes read as a Uint8Array, stored as BSON binData.',
     output: { codecId: MONGO_BINARY_CODEC_ID },
   },
-  Json: {
+  PlainJson: {
     kind: 'typeConstructor',
     documentation:
       'A JSON value, stored as BSON object, array, string, double, int, long, bool or null; the collection validator admits only those types at the top level, and the codec refuses anything else at any depth.',
@@ -98,25 +100,105 @@ export const mongoScalarAuthoringTypes = {
       typeParams: { length: { kind: 'arg', index: 0 } },
     },
   },
+} as const satisfies AuthoringTypeNamespace;
+
+/**
+ * The explicit types' former names, kept for one release line as deprecated aliases. Each gives the same codec as its replacement, and the PSL interpreter warns where one is written. A deprecated name has no `type.*` helper. ADR 257.
+ */
+export const mongoDeprecatedScalarTypes = {
+  Int64: {
+    ...int64BigInt,
+    documentation: `Deprecated: use Int64BigInt. ${int64BigInt.documentation}`,
+    deprecated: { replacement: 'Int64BigInt' },
+  },
+} as const satisfies AuthoringTypeNamespace;
+
+function storageOption<const Storage extends string>(storage: Storage) {
+  return {
+    kind: 'option',
+    name: 'storage',
+    values: [storage],
+    default: storage,
+    optional: true,
+  } as const;
+}
+
+/**
+ * The convenience types of MongoDB's scalars. Each is a type choice: `storage` names the BSON type that stores the value and, for `BigInt`, `as` chooses the application value. ADR 279.
+ */
+export const mongoConvenienceScalarTypes = {
   Int: {
-    kind: 'typeConstructor',
-    documentation: 'Deprecated: use Int32. A signed 32-bit integer, stored as BSON int.',
-    output: { codecId: MONGO_INT32_CODEC_ID },
-    deprecated: { replacement: 'Int32' },
+    kind: 'typeChoice',
+    documentation: 'An integer read as a JavaScript number, stored as BSON int, a 32-bit integer.',
+    args: [storageOption('int')],
+    choices: [{ when: { storage: 'int' }, type: 'Int32' }],
+  },
+  BigInt: {
+    kind: 'typeChoice',
+    documentation:
+      'An integer that may exceed 32 bits, stored as BSON long, a 64-bit integer. `as` is what the application reads: bigint, or number within the safe integer range.',
+    args: [
+      {
+        kind: 'option',
+        name: 'as',
+        values: ['bigint', 'number'],
+        default: 'bigint',
+        optional: true,
+      },
+      storageOption('long'),
+    ],
+    choices: [
+      { when: { as: 'bigint', storage: 'long' }, type: 'Int64BigInt' },
+      { when: { as: 'number', storage: 'long' }, type: 'Int64Number' },
+    ],
   },
   Float: {
-    kind: 'typeConstructor',
+    kind: 'typeChoice',
+    documentation: 'A floating-point number, stored as BSON double.',
+    args: [storageOption('double')],
+    choices: [{ when: { storage: 'double' }, type: 'Double' }],
+  },
+  Decimal: {
+    kind: 'typeChoice',
     documentation:
-      'Deprecated: use Double. A double-precision floating-point number, stored as BSON double.',
-    output: { codecId: MONGO_DOUBLE_CODEC_ID },
-    deprecated: { replacement: 'Double' },
+      'An exact decimal number, read as decimal text such as "12.50", stored as BSON decimal.',
+    args: [storageOption('decimal')],
+    choices: [{ when: { storage: 'decimal' }, type: 'Decimal128' }],
   },
   Boolean: {
-    kind: 'typeConstructor',
-    documentation: 'Deprecated: use Bool. A true or false value, stored as BSON bool.',
-    output: { codecId: MONGO_BOOLEAN_CODEC_ID },
-    deprecated: { replacement: 'Bool' },
+    kind: 'typeChoice',
+    documentation: 'A true or false value, stored as BSON bool.',
+    args: [storageOption('bool')],
+    choices: [{ when: { storage: 'bool' }, type: 'Bool' }],
   },
+  Bytes: {
+    kind: 'typeChoice',
+    documentation: 'Binary data, read as a Uint8Array, stored as BSON binData.',
+    args: [storageOption('binData')],
+    choices: [{ when: { storage: 'binData' }, type: 'Binary' }],
+  },
+  String: {
+    kind: 'typeChoice',
+    documentation: 'Text, stored as BSON string.',
+    args: [storageOption('string')],
+    choices: [{ when: { storage: 'string' }, type: 'BsonString' }],
+  },
+  Json: {
+    kind: 'typeChoice',
+    documentation:
+      'A JSON value. `storage` is bson: the value is stored as whichever BSON value fits it, an object, array, string, number, bool or null. It is not the Bson type, which takes any BSON value.',
+    args: [storageOption('bson')],
+    choices: [{ when: { storage: 'bson' }, type: 'PlainJson' }],
+  },
+} as const satisfies AuthoringTypeNamespace;
+
+/**
+ * MongoDB's scalar types: the explicit types, the convenience types and the deprecated aliases.
+ */
+export const mongoScalarAuthoringTypes = {
+  ...mongoExplicitScalarTypes,
+  ...mongoConvenienceScalarTypes,
+  ...mongoDeprecatedScalarTypes,
 } as const satisfies AuthoringTypeNamespace;
 
 /**
