@@ -1,5 +1,6 @@
 import type { Contract } from '@internal/contract/types';
 import {
+  type ActivityContext,
   type ActivityContextFields,
   type ActivityParent,
   AsyncIterableResult,
@@ -297,7 +298,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   readonly #openTransactionWork = new InFlightOperations();
   // Ends the open-transaction record of the transaction most recently begun on each connection.
   readonly #transactionWorkOn = new WeakMap<SqlQueryable, () => void | Promise<void>>();
-  readonly #transactionChecks = new WeakMap<SqlQueryable, () => void>();
+  readonly #transactionChecks = new WeakMap<ActivityContext, () => void>();
   #openActivityHandles = 0;
   #refusing = false;
   // Connections and transactions this runtime handed out. When the first query of the runtime runs on one of them, the runtime-wide marker read runs on it too, so it works while close() waits for their release, and concurrent first queries share its result. Other queryables, such as a subclass's raw connection, read the marker through the driver.
@@ -893,6 +894,17 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     return activityParent;
   }
 
+  // A statement is checked against the transaction it was admitted beneath, whichever queryable it was sent on.
+  private checkAdmittingTransaction(ctx: ActivityContext | undefined): void {
+    for (let ancestor = ctx; ancestor !== undefined; ancestor = ancestor.parent) {
+      const check = this.#transactionChecks.get(ancestor);
+      if (check !== undefined) {
+        check();
+        return;
+      }
+    }
+  }
+
   protected getListDecoder(): ListDecoder {
     return sqlNativeArrayListDecoder;
   }
@@ -914,7 +926,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
 
     try {
       const stream = run.runQuery(exec, () => {
-        this.#transactionChecks.get(queryable)?.();
+        this.checkAdmittingTransaction(run.ctx);
         return driverCall();
       });
 
@@ -1104,7 +1116,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     let telemetryOutcome: TelemetryOutcome = 'success';
     try {
       return await run.runExecute(exec, () => {
-        this.#transactionChecks.get(queryable)?.();
+        this.checkAdmittingTransaction(run.ctx);
         return driverCall();
       });
     } catch (error) {
@@ -1521,7 +1533,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       controller.signal.throwIfAborted();
       if (closed) throw transactionClosedError();
     };
-    this.#transactionChecks.set(driverTx, check);
+    this.#transactionChecks.set(activity.ctx, check);
     if (timeout !== undefined) {
       timer = setTimeout(expire, timeout);
       this.#transactionWorkOn.set(connection, async () => {

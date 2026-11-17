@@ -199,6 +199,25 @@ describe('a transaction from connection.transaction()', () => {
   );
 
   it.each(['commit', 'rollback'] as const)(
+    'refuses a statement sent on its connection and still in middleware when %s() is called',
+    async (end) => {
+      const held = holdInMiddleware('update held');
+      const setup = createSetup({ middleware: [held.middleware] });
+      const connection = await setup.runtime.connection();
+      const transaction = await connection.transaction();
+      const pending = settled(connection.execute(rawPlan('update held')));
+      await held.entered.promise;
+
+      await transaction[end]();
+      held.resume.resolve();
+
+      expect(await pending).toMatchObject(transactionClosed);
+      expect(sentSql(setup.driver)).toEqual([]);
+      await connection.release();
+    },
+  );
+
+  it.each(['commit', 'rollback'] as const)(
     'refuses a statement still in middleware when %s() is called',
     async (end) => {
       const held = holdInMiddleware('update held');
