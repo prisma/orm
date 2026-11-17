@@ -68,11 +68,11 @@ The PSL name of an explicit type is the database type, plus a suffix naming the 
 | `PlainJson` | `pg/json@1` | `json` | a JSON value |
 | `Jsonb` | `pg/jsonb@1` | `jsonb` | a JSON value |
 
-A convenience type and an explicit type cannot share a name, because a type choice row names its explicit type in the same `type` namespace. Where the naming rule above would give an explicit type the name of a convenience type, the explicit type takes the first of these that applies:
+A convenience type and an explicit type cannot share a name, because a type choice row names its explicit type in the same `type` namespace. This rule is decided here and applied to PostgreSQL in this change. SQLite, MySQL and MongoDB still have explicit types with convenience names, such as SQLite's `Int` and MongoDB's `Json`; each takes the names below when it gets these convenience types. Where the naming rule above would give an explicit type the name of a convenience type, the explicit type takes the first of these that applies:
 
 1. The database's own second name for the type, where it has one, such as MySQL's `INT4`, `NUMERIC` and `BOOL`.
-2. The application-value suffix of [ADR 315](ADR%20315%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md) (rule 5), where it gives a meaningful name, such as SQLite's `DecimalString`.
-3. A name recorded as an exception. The exceptions are `PlainJson`, the explicit type of a `json` column on every target that has one, and MongoDB's `BsonString`.
+2. The application-value suffix of [ADR 315](ADR%20315%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md) (rule 5), where it gives a meaningful name, such as `DecimalString`, the name SQLite's explicit decimal type will take.
+3. A name recorded as an exception. The exceptions are `PlainJson` and `BsonString`, the name MongoDB's explicit string type will take. `PlainJson` is the explicit type a bare `Json` becomes.
 
 PostgreSQL's `json` type has no second name, and the suffix rule would give `JsonJson`, which says nothing about the column. So the explicit type of a `json` column is `PlainJson`: plain JSON as opposed to `jsonb`. Users meet it in hover text, in the scalar type reference, and in the refusal of `@db.Json`, which names the explicit type as `@db.Integer` names `Int4`. `contract infer` and `contract print` write `Json`.
 
@@ -163,7 +163,7 @@ The Prisma 7 reader gives Prisma 7's `Json`, which was a `jsonb` column, as `Jso
 - In a TypeScript contract, `type.Int()`, `type.BigInt({ as: 'number' })`, `type.Json({ storage: 'jsonb' })` and so on are typed as the explicit type they choose, and a combination with no row does not compile.
 - A bare `Json` field cannot be filtered by equality, indexed or made unique, as before. The convenience type makes the fix one argument: `Json(storage: jsonb)`.
 - SQLite, MySQL and MongoDB use some of these names for explicit types today. They get the same convenience types over their own explicit types in a later change, decided on its own, as [ADR 315](ADR%20315%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md) did for the date and time types.
-- This ADR's `Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean` and `Bytes` are concepts, not representations, as in [ADR 315](ADR%20315%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md). SQLite's `Int` today is an explicit type: SQLite's `integer`, read as a `number`. Under ADR 315 an explicit type does not take a convenience name, so TML-3790 must rename it and declare SQLite's `Int` as a convenience type over it. That SQLite stores the integer in 64 bits is SQLite's representation and does not change the concept.
+- This ADR's `Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean`, `Bytes` and `Json` are concepts, not representations, as in [ADR 315](ADR%20315%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md). SQLite's `Int` today is an explicit type: SQLite's `integer`, read as a `number`. Under ADR 315 an explicit type does not take a convenience name, so the change that gives SQLite these convenience types must rename it and declare SQLite's `Int` as a convenience type over it. That SQLite stores the integer in 64 bits is SQLite's representation and does not change the concept.
 
 ## Alternatives considered
 
