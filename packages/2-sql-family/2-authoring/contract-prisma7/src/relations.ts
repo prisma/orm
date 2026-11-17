@@ -1,4 +1,5 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
+import { compareCodeUnits } from '@internal/contract/hashing-utils';
 import type {
   FieldSymbol,
   PslSpan,
@@ -811,7 +812,7 @@ export function lowerRelations(
   for (const [modelName, nodes] of modelRelations) {
     relations.set(
       modelName,
-      [...nodes].sort((left, right) => left.fieldName.localeCompare(right.fieldName)),
+      [...nodes].sort((left, right) => compareCodeUnits(left.fieldName, right.fieldName)),
     );
   }
   return { junctions, ignoredJunctions, foreignKeys, relations };

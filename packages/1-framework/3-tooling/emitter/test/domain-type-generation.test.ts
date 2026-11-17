@@ -197,6 +197,12 @@ describe('generateModelsType', () => {
     expect(generateModelsType({}, noopStorage)).toBe('Record<string, never>');
   });
 
+  it('orders models by code unit, whatever the locale', () => {
+    // A locale orders `alpha` before `Beta`; code units put `B` (66) before `a` (97).
+    const result = generateModelsType({ alpha: makeModel(), Beta: makeModel() }, noopStorage);
+    expect(result.indexOf('readonly Beta:')).toBeLessThan(result.indexOf('readonly alpha:'));
+  });
+
   it('generates model with fields, relations, and storage', () => {
     const models: Record<string, ContractModel> = {
       User: makeModel({

@@ -67,3 +67,24 @@ describe('the modules SQL contract types import from', () => {
     ]);
   });
 });
+
+describe('the order of emitted SQL storage', () => {
+  it('orders tables by code unit, whatever the locale', () => {
+    // A locale orders `alpha` before `Beta`; code units put `B` (66) before `a` (97).
+    const table = {
+      columns: { id: { dataType: 'pg/int4', codecId: 'sql/int@1', nullable: false } },
+      primaryKey: { columns: ['id'] },
+      uniques: [],
+      indexes: [],
+      foreignKeys: [],
+    };
+    const dts = generateContractDts(
+      createContract({ storage: { tables: { alpha: table, Beta: table } } }),
+      sqlEmission,
+      [],
+      hashes,
+      TYPES_MODULE,
+    );
+    expect(dts.indexOf('readonly Beta:')).toBeLessThan(dts.indexOf('readonly alpha:'));
+  });
+});

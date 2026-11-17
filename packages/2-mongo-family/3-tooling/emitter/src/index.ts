@@ -1,3 +1,4 @@
+import { compareCodeUnits } from '@internal/contract/hashing-utils';
 import type { Contract, ContractModelBase, JsonValue } from '@internal/contract/types';
 import {
   generateValueObjectsDescriptorType,
@@ -32,7 +33,7 @@ function generateMongoNamespaceCollectionsType(
 ): string {
   const entries: string[] = [];
   for (const [collName, coll] of Object.entries(collections).sort(([a], [b]) =>
-    a.localeCompare(b),
+    compareCodeUnits(a, b),
   )) {
     entries.push(
       `readonly ${serializeObjectKey(collName)}: ${generateMongoCollectionEntryType(coll)}`,
@@ -45,7 +46,7 @@ function generateMongoNamespaceCollectionsType(
 }
 
 function generateMongoNamespacesType(namespaces: MongoStorage['namespaces']): string {
-  const sorted = Object.entries(namespaces ?? {}).sort(([a], [b]) => a.localeCompare(b));
+  const sorted = Object.entries(namespaces ?? {}).sort(([a], [b]) => compareCodeUnits(a, b));
   if (sorted.length === 0) {
     return 'Record<string, never>';
   }

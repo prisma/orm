@@ -1,3 +1,4 @@
+import { compareCodeUnits } from '@internal/contract/hashing-utils';
 import type {
   AuthoringPslBlockDescriptor,
   AuthoringPslBlockDescriptorNamespace,
@@ -68,7 +69,7 @@ export function serializePrintDocument(
 
   sections.push(doc.headerComment);
 
-  const namedTypeEntries = [...doc.namedTypes].sort((a, b) => a.name.localeCompare(b.name));
+  const namedTypeEntries = [...doc.namedTypes].sort((a, b) => compareCodeUnits(a.name, b.name));
   if (namedTypeEntries.length > 0) {
     sections.push(serializeTypesBlock(namedTypeEntries));
   }

@@ -40,6 +40,26 @@ describe('renderImports', () => {
     );
   });
 
+  it('orders modules, default bindings and attributes by code unit, whatever the locale', () => {
+    // A locale orders `alpha` before `Beta`; code units put `B` (66) before `a` (97).
+    const out = renderImports([
+      { moduleSpecifier: '@acme/alpha', symbol: 'a' },
+      { moduleSpecifier: '@acme/Beta', symbol: 'b' },
+      { moduleSpecifier: 'm', symbol: 'alpha', kind: 'default' },
+      { moduleSpecifier: 'm', symbol: 'Beta', kind: 'default' },
+      { moduleSpecifier: 'j', symbol: 'j', attributes: { mode: 'x', Type: 'json' } },
+    ]);
+    expect(out).toBe(
+      [
+        "import { b } from '@acme/Beta';",
+        "import { a } from '@acme/alpha';",
+        'import { j } from \'j\' with { Type: "json", mode: "x" };',
+        "import Beta from 'm';",
+        "import alpha from 'm';",
+      ].join('\n'),
+    );
+  });
+
   it('emits a default import when kind is "default"', () => {
     const out = renderImports([
       { moduleSpecifier: './contract.json', symbol: 'contract', kind: 'default' },

@@ -2,7 +2,10 @@ import { generateContractDts } from '@internal/emitter';
 import type { TypesImportSpec } from '@internal/framework-components/emission';
 import { describe, expect, it } from 'vitest';
 import { mongoEmission } from '../src/index';
-import { createMongoContract } from './fixtures/create-mongo-contract';
+import {
+  createMongoContract,
+  namespacedMongoStorageFromCollections,
+} from './fixtures/create-mongo-contract';
 
 const TYPES_MODULE = '@acme/orm-db/generated-types';
 
@@ -23,5 +26,21 @@ describe('the modules Mongo contract types import from', () => {
     expect([...dts.matchAll(/^import type \{[^}]*\} from '[^']+';$/gm)].map(([s]) => s)).toEqual([
       `import type { CodecTypes as MongoCodecTypes, Contract as ContractType, ExecutionHashBase, FieldTypesFromDomain, MongoCollection, MongoContractWithTypeMaps, MongoTypeMaps, NamespaceId, ProfileHashBase, RelationKeys, StorageHashBase } from '${TYPES_MODULE}';`,
     ]);
+  });
+});
+
+describe('the order of emitted Mongo storage', () => {
+  it('orders collections by code unit, whatever the locale', () => {
+    // A locale orders `alpha` before `Beta`; code units put `B` (66) before `a` (97).
+    const dts = generateContractDts(
+      createMongoContract({
+        storage: namespacedMongoStorageFromCollections({ alpha: {}, Beta: {} }),
+      }),
+      mongoEmission,
+      [],
+      { storageHash: 'storage', profileHash: 'profile' },
+      TYPES_MODULE,
+    );
+    expect(dts.indexOf('readonly Beta:')).toBeLessThan(dts.indexOf('readonly alpha:'));
   });
 });

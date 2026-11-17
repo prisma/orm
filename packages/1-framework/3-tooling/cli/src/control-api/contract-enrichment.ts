@@ -1,3 +1,4 @@
+import { compareCodeUnits } from '@internal/contract/hashing-utils';
 import type { Contract } from '@internal/contract/types';
 import {
   mergeCapabilityMatrices,
@@ -15,7 +16,7 @@ function sortDeep(value: unknown): unknown {
   if (!isPlainObject(value)) {
     return value;
   }
-  const entries = Object.entries(value).sort(([a], [b]) => a.localeCompare(b));
+  const entries = Object.entries(value).sort(([a], [b]) => compareCodeUnits(a, b));
   const next: Record<string, unknown> = {};
   for (const [key, child] of entries) {
     next[key] = sortDeep(child);

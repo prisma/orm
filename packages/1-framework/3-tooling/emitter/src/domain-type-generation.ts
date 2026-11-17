@@ -1,3 +1,4 @@
+import { compareCodeUnits } from '@internal/contract/hashing-utils';
 import type {
   Contract,
   ContractField,
@@ -216,7 +217,9 @@ export function generateModelsType(
   }
 
   const modelTypes: string[] = [];
-  for (const [modelName, model] of Object.entries(models).sort(([a], [b]) => a.localeCompare(b))) {
+  for (const [modelName, model] of Object.entries(models).sort(([a], [b]) =>
+    compareCodeUnits(a, b),
+  )) {
     const fieldsType = generateModelFieldsType(model.fields);
     const relationsType = generateModelRelationsType(model.relations);
     const storageType = generateModelStorage(modelName, model);
@@ -527,7 +530,7 @@ export function renderTypeOverridesMap(
 
 function renderOverrideTree(tree: OverrideTree): string {
   const parts = [...tree]
-    .sort(([a], [b]) => a.localeCompare(b))
+    .sort(([a], [b]) => compareCodeUnits(a, b))
     .map(
       ([key, value]) =>
         `readonly ${serializeObjectKey(key)}: ${value instanceof Map ? renderOverrideTree(value) : renderTypeOverride(value)}`,

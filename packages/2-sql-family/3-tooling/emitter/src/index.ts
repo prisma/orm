@@ -1,3 +1,4 @@
+import { compareCodeUnits } from '@internal/contract/hashing-utils';
 import type {
   Contract,
   ContractModel,
@@ -63,11 +64,13 @@ function generateAggregateTypes(options?: GenerateContractTypesOptions): string 
     );
   }
 
-  const operations = [...settled.operations].sort(([left], [right]) => left.localeCompare(right));
+  const operations = [...settled.operations].sort(([left], [right]) =>
+    compareCodeUnits(left, right),
+  );
   const entries = operations.map(([operation, entry]) => {
     const rows = [...entry.byCodecId]
       .filter(([codecId]) => contributedIds.has(codecId))
-      .sort(([left], [right]) => left.localeCompare(right))
+      .sort(([left], [right]) => compareCodeUnits(left, right))
       .map(([codecId, descriptor]) => {
         return `readonly ${serializeObjectKey(codecId)}: ${renderAggregateResult(descriptor, codecId, contributedIds)}`;
       });
@@ -363,7 +366,7 @@ function generateDocumentScopedStorageTypesType(types: SqlStorage['types']): str
  */
 function generateValueSetBlockType(valueSets: Readonly<Record<string, StorageValueSet>>): string {
   const entries = Object.entries(valueSets)
-    .sort(([a], [b]) => a.localeCompare(b))
+    .sort(([a], [b]) => compareCodeUnits(a, b))
     .map(([name, valueSet]) => `readonly ${serializeObjectKey(name)}: ${serializeValue(valueSet)}`);
   return `{ ${entries.join('; ')} }`;
 }
@@ -489,7 +492,9 @@ function generateTableLiteralType(table: StorageTable): string {
 
 function generateTablesMapType(tables: Readonly<Record<string, StorageTable>>): string {
   const tableEntries: string[] = [];
-  for (const [tableName, table] of Object.entries(tables).sort(([a], [b]) => a.localeCompare(b))) {
+  for (const [tableName, table] of Object.entries(tables).sort(([a], [b]) =>
+    compareCodeUnits(a, b),
+  )) {
     tableEntries.push(
       `readonly ${serializeObjectKey(tableName)}: ${generateTableLiteralType(table)}`,
     );
@@ -506,7 +511,7 @@ function generateTablesMapType(tables: Readonly<Record<string, StorageTable>>): 
 }
 
 function generateStorageNamespacesType(namespaces: SqlStorage['namespaces']): string {
-  const entries = Object.entries(namespaces ?? {}).sort(([a], [b]) => a.localeCompare(b));
+  const entries = Object.entries(namespaces ?? {}).sort(([a], [b]) => compareCodeUnits(a, b));
   if (entries.length === 0) {
     return 'Record<string, never>';
   }
