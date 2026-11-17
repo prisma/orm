@@ -204,5 +204,24 @@ describe('globContractInputMatching', () => {
         ),
       ).toBeUndefined();
     });
+
+    it('matches a glob input whose drive letter is lowercase', () => {
+      const pattern = 'c:\\app\\prisma\\**\\*.prisma';
+
+      expect(globContractInputMatching([pattern], 'c:\\app\\prisma\\contract.prisma')).toBe(
+        pattern,
+      );
+    });
+  });
+
+  describe('on POSIX', () => {
+    withPlatform('linux');
+
+    it('keeps a backslash as the escape for a glob character', () => {
+      const pattern = '/app/\\[draft\\]/*.prisma';
+
+      expect(globContractInputMatching([pattern], '/app/[draft]/contract.prisma')).toBe(pattern);
+      expect(globContractInputMatching([pattern], '/app/d/contract.prisma')).toBeUndefined();
+    });
   });
 });
