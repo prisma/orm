@@ -57,7 +57,7 @@ Line counts are estimates, measured against the existing code. For example:
    - **Hands to:**
      - `transaction()` on a `RuntimeTransaction`, opening a savepoint.
      - The savepoint-name counter per transaction, and tracking of the innermost open level per connection.
-     - `RUNTIME.TRANSACTION_SUSPENDED`, and savepoint wording for `RUNTIME.TRANSACTION_ALREADY_OPEN`.
+     - `RUNTIME.TRANSACTION_SUSPENDED`.
      - Every level invalidated after a failed `ROLLBACK TO`.
    - **Focus:**
      - `packages/2-sql-family/5-runtime`: `sql-runtime.ts`, `activity-handle.ts`, the transaction state.

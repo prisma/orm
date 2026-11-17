@@ -13,7 +13,7 @@ const tx = await connection.transaction()      // BEGIN
 const sp = await tx.transaction()             // SAVEPOINT sp_1, a 'transaction' activity beneath tx's
 await sp.execute(plan)                         // runs on the driver savepoint
 await tx.execute(plan)                         // rejects RUNTIME.TRANSACTION_SUSPENDED (sp_1 is open)
-await tx.transaction()                         // rejects RUNTIME.TRANSACTION_ALREADY_OPEN (names sp_1)
+await tx.transaction()                         // rejects RUNTIME.TRANSACTION_SUSPENDED (names sp_1)
 await sp.rollback()                            // ROLLBACK TO SAVEPOINT sp_1, activity rolled-back at once
 await tx.execute(plan)                         // allowed again
 await tx.commit()                              // COMMIT
@@ -80,7 +80,7 @@ type TransactionState =
 **Only an entry removes itself from the stack.** A savepoint is pushed by `transaction()` on the top of the stack and popped by its own `commit()` or `rollback()`. Nothing else pops entries, so no operation has to check whether its entry was removed while it was waiting.
 
 5. **The guard** (decision 3). A transaction or savepoint has at most one open savepoint directly above it on the stack.
-   - `transaction()` on a transaction or savepoint that is not the top rejects with `RUNTIME.TRANSACTION_ALREADY_OPEN`. The message names the top of the stack (`sp_<n>`). No `SAVEPOINT` is sent and no activity is started.
+   - `transaction()` on a transaction or savepoint that is not the top rejects with `RUNTIME.TRANSACTION_SUSPENDED`, like a statement: opening a second savepoint is work on a suspended transaction. No `SAVEPOINT` is sent and no activity is started.
    - A statement or `commit()` on a transaction or savepoint that is not the top rejects with the new `RUNTIME.TRANSACTION_SUSPENDED`. Its details carry the activity ID of the top of the stack. Nothing is sent to the driver. It is usable again once the savepoints above it have settled.
    - A statement sent on the connection while its transaction is open goes through the outer transaction: the connection hands it to the transaction's route, so it is parented, checked and refused exactly as a statement on the outer transaction. The connection keeps no record of its own beyond which transaction is open on it. Otherwise it would run inside the savepoint on the database while being parented to the outer activity.
    - Once a transaction or savepoint is closed (settled, invalidated or timed out), work on it reports that, not `RUNTIME.TRANSACTION_SUSPENDED`.
@@ -97,7 +97,6 @@ type TransactionState =
 ### Errors
 
 - `RUNTIME.TRANSACTION_SUSPENDED`: new factory next to `transactionClosedError` and `transactionAlreadyOpenError`. Message names the open savepoint. Details: `{ savepointId }`, the open savepoint's activity ID. While the savepoint's `activityStarted` hooks are still running it has no activity ID yet, and `savepointId` is `undefined`; the message still names it.
-- `RUNTIME.TRANSACTION_ALREADY_OPEN`: the existing code and factory; the savepoint case gets its own message that names the open savepoint.
 
 ## Coherence rationale
 
@@ -110,7 +109,7 @@ The savepoint, its activity, the guard and the invalidation rules are one state 
 - `packages/2-sql-family/5-runtime/src`: everything in § Chosen design.
 - `packages/2-sql-family/5-runtime/test`: a new test file (or files) for savepoints, and `savepoint` support in `test/transaction-activity-fixtures.ts`'s stub driver (records `SAVEPOINT`, `RELEASE`, `ROLLBACK TO` events; configurable failures for each).
 - Other implementers of `RuntimeTransaction` or `ActivityHandle` in the workspace, if any, gain the member so the workspace typechecks. Test stubs only.
-- `docs/reference/error-reference.md`: a `RUNTIME.TRANSACTION_SUSPENDED` entry; savepoint wording for `RUNTIME.TRANSACTION_ALREADY_OPEN` (it now says transactions do not nest).
+- `docs/reference/error-reference.md`: a `RUNTIME.TRANSACTION_SUSPENDED` entry.
 - `docs/architecture docs/subsystems/4. Runtime & Middleware Framework.md` and ADR 271: the statements that a handle opened under a transaction has no `transaction`, so transactions do not nest. They stay as they are; slice 6 changes them. Slice 2's spec left these to this slice.
 
 **Out:**
@@ -125,7 +124,7 @@ Beyond CI, review and the project DoD. Each is a runtime test with the stub driv
 
 - [ ] Released savepoint: `SAVEPOINT sp_1`, statement, `RELEASE SAVEPOINT sp_1`; middleware sees a `'transaction'` activity beneath the outer one, finalized with the outer outcome. Rolled-back savepoint: finalized `rolled-back` before `rollback()` resolves, and the outer commit is `committed`.
 - [ ] A savepoint inside a savepoint gets the next name, and the next transaction on the connection starts at `sp_1` again.
-- [ ] `transaction()` with an open sibling rejects `TRANSACTION_ALREADY_OPEN` naming it, with nothing sent.
+- [ ] `transaction()` with an open sibling rejects `TRANSACTION_SUSPENDED` naming it, with nothing sent.
 - [ ] A statement and `commit()` below the top of the stack reject `TRANSACTION_SUSPENDED` with the activity ID of the top; they work again once the savepoints above have settled.
 - [ ] `rollback()` with an open savepoint above it rejects `TRANSACTION_SUSPENDED` with nothing sent. After the outer timeout, the outer `rollback()` sends `ROLLBACK` with a savepoint open; work on the savepoint then rejects `TRANSACTION_CLOSED`, its `rollback()` sends nothing, and it finalizes `rolled-back`.
 - [ ] `TransactionStack` has its own unit tests for push, pop, top, the counter and invalidation.
@@ -166,6 +165,7 @@ Beyond CI, review and the project DoD. Each is a runtime test with the stub driv
 - **After the PR opened: one wrapper for every level.** The first implementation had a separate savepoint wrapper with its own settle code, and a `TransactionLevel` class that kept a second copy of state the transaction wrapper already held. That did not use the single `SqlTransaction` shape decision 4 chose so the settle logic is written once. The operator asked for one wrapper; § Chosen design now requires it.
 - **After the PR opened: one stack per connection.** The per-level records with links to the enclosing level and the open child were replaced by one stack of open levels per connection, which the project plan described as "tracking of the innermost open level per connection". Requested by the operator.
 - **After the PR opened: a parent settles only after its savepoints.** `rollback()` on a transaction or savepoint with an open savepoint above it now rejects `TRANSACTION_SUSPENDED`, instead of closing the open savepoints. The outer transaction keeps that behaviour only after its timeout and when its connection is released or destroyed. Errors that name an open savepoint name the top of the stack. The stack becomes a class with push, pop and top, and one state field replaces the wrapper's flags. Requested by the operator; making `rollback()` reject after a commit is left to a follow-up PR, because the ORM's `runInTransaction` relies on main's behaviour.
+- **After the PR opened: a second savepoint rejects `TRANSACTION_SUSPENDED`.** Opening a savepoint below the top of the stack is work on a suspended transaction, so it gets the same error as a statement; the separate `TRANSACTION_ALREADY_OPEN` case and its message are gone. Project spec decision 3 is amended. Requested by the operator.
 - **After the PR opened: `transaction()` instead of `savepoint()` on `RuntimeTransaction`.** Every scope that can open a transaction does it with `transaction()`; on a transaction it opens a savepoint and takes no parameters. Project spec decisions 7 and 8 are amended to match. Requested by the operator.
 - **After the PR opened: the connection hands statements to its open transaction.** Instead of a record of its own with the activity and the checks, the connection sends statements through the open transaction's route. Requested by the operator.
 - **After the PR opened: activity handles unchanged; slice 6 adds `transaction()` under a transaction.** First a separate `savepoint()` on handles was dropped in favour of one `transaction()` (a transaction and a savepoint share one interface). That broke the ORM, which calls a handle's `transaction(implicitTransactionOptions)` whenever it has one, so handle changes move to slice 6 with the ORM change. Requested by the operator.

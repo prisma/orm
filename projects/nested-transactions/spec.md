@@ -51,7 +51,7 @@ Each decision was reached in a design discussion with the operator. The research
    - **No isolation level:** isolation can't change inside a transaction. Libraries that accept it silently ignore it (Knex, TypeORM, MikroORM); Rails and Sequelize reject it. Leaving it out of the type is clearer than either.
    - **No timeout:** the outer transaction's deadline already covers the savepoint, because it runs on the same connection. A timeout that rolls back only the savepoint would need statement cancellation in every driver (`pg_cancel_backend`, `KILL QUERY`). A timeout that ends the outer transaction adds nothing over the outer timeout.
 3. **Concurrency on one transaction fails fast.**
-   - **A second savepoint while one is open on the same level** (`Promise.all([tx.transaction(a), tx.transaction(b)])`) rejects with `RUNTIME.TRANSACTION_ALREADY_OPEN`, with a message that names the savepoint.
+   - **A second savepoint while one is open on the same level** (`Promise.all([tx.transaction(a), tx.transaction(b)])`) rejects with `RUNTIME.TRANSACTION_SUSPENDED`, like any other work on a transaction with a savepoint open above it, with a message that names the savepoint. (Amended after slice 3's PR opened, at the operator's request; it was `RUNTIME.TRANSACTION_ALREADY_OPEN`.)
    - **Using the parent context while a child savepoint is open** rejects with a new code, `RUNTIME.TRANSACTION_SUSPENDED`, whose details carry the open savepoint's activity ID. The parent can be used again once the child has settled.
    - **Savepoint names** come from a counter per transaction. `COMMIT` and `ROLLBACK` remove every savepoint of the transaction, so names can repeat across transactions, and only one savepoint is open per level, so names never collide within one.
    - Why: a savepoint applies to whatever runs on the connection at that moment. A sibling's `ROLLBACK TO` would undo the other sibling's statements, and outer work sent while a savepoint is open would be undone with it.
@@ -103,7 +103,7 @@ Each decision was reached in a design discussion with the operator. The research
 - **ADR 271** (the runtime middleware observes a tree of activities) already expects nested transactions "as a transaction activity under a transaction activity", with finalization waiting for the outermost. Decision 6 keeps that for released savepoints and finalizes rolled-back savepoints right away, because their outcome no longer depends on the outer transaction. The ADR, and its statement that "a handle opened under a transaction has no `transaction`, so transactions do not nest", are amended.
 - **ADR 266** (cache middleware): invalidation still happens when the outermost transaction ends for released savepoints, and not at all for rolled-back ones. The cache needs no change; it ignores transaction activities (`cache-middleware.ts:108`).
 - **Runtime & Middleware Framework subsystem doc** (`docs/architecture docs/subsystems/4. Runtime & Middleware Framework.md`): the finalization rules, the transaction runner, and the activity-handle `transaction()` paragraph that says transactions do not nest.
-- **Error reference** (`docs/reference/error-reference.md`): a new `RUNTIME.TRANSACTION_SUSPENDED` entry, and savepoint wording for `RUNTIME.TRANSACTION_ALREADY_OPEN`.
+- **Error reference** (`docs/reference/error-reference.md`): a new `RUNTIME.TRANSACTION_SUSPENDED` entry.
 - **Prior art:** prisma/prisma#15212, "Support 'nested' transactions in interactive transactions", is open on Prisma 6.
 
 ### Adapter impact
@@ -138,7 +138,7 @@ Inherits the team DoD floor in [`drive/calibration/dod.md`](../../drive/calibrat
 
 - [ ] On each of PGlite, MySQL (live) and SQLite, an integration test shows the At a glance example: A and C committed, B not.
 - [ ] A PGlite integration test shows recovery from the aborted state. A statement fails inside a nested transaction, the nested call throws, and the outer transaction then commits work done after it.
-- [ ] Tests show each guard and error path: sibling savepoint (`TRANSACTION_ALREADY_OPEN`), parent used while a child is open (`TRANSACTION_SUSPENDED`), `RELEASE` failure with recovery, `ROLLBACK TO` failure invalidating every level, and middleware refusing a savepoint start.
+- [ ] Tests show each guard and error path: sibling savepoint and parent used while a child is open (`TRANSACTION_SUSPENDED`), `RELEASE` failure with recovery, `ROLLBACK TO` failure invalidating every level, and middleware refusing a savepoint start.
 - [ ] Framework tests show finalize outcomes and order for released, rolled-back and doubly nested savepoints.
 - [ ] An ORM integration test shows that a multi-statement write that fails inside a user transaction, with its error caught, leaves none of its rows on MySQL and SQLite, and lets the outer transaction commit on Postgres.
 - [ ] ADR 271 is amended, or a new ADR records decisions 1–10, and the subsystem doc and error reference describe the shipped behaviour.
