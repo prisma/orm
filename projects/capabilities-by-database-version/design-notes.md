@@ -112,4 +112,3 @@ It is not purely additive.
 - How an extension pack's capabilities depend on the extension's own version.
 - MongoDB: the same design should apply, and has not been checked against the MongoDB family's code.
 - Whether [ADR 004](../../docs/architecture%20docs/adrs/ADR%20004%20-%20Storage%20Hash%20vs%20Profile%20Hash.md), [ADR 031](../../docs/architecture%20docs/adrs/ADR%20031%20-%20Adapter%20capability%20discovery%20&%20negotiation.md) and [ADR 065](../../docs/architecture%20docs/adrs/ADR%20065%20-%20Adapter%20capability%20schema%20&%20negotiation%20v1.md) need amending, or one new ADR replaces their capability sections.
-- The backlog ticket TML-2252 proposes removing the profile hash from the marker. This design keeps it and gives it a meaning, so that ticket should be closed or rewritten when this design is accepted.
