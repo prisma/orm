@@ -94,22 +94,34 @@ export function contractOf(models: Record<string, ModelSpec>): Contract<SqlStora
             id,
             entries: {
               table: Object.fromEntries(
-                inNamespace(id)
-                  .flatMap(([, spec]) => (spec.table === null ? [] : [spec]))
-                  .map((spec) => [
-                    spec.table,
+                [
+                  ...new Set(
+                    inNamespace(id).flatMap(([, spec]) =>
+                      spec.table === null ? [] : [spec.table],
+                    ),
+                  ),
+                ].map((table) => {
+                  const specs = inNamespace(id)
+                    .map(([, spec]) => spec)
+                    .filter((spec) => spec.table === table);
+                  const control = specs.find((spec) => spec.control !== undefined)?.control;
+                  return [
+                    table,
                     new StorageTable({
                       columns: Object.fromEntries(
-                        Object.values(spec.fields ?? {}).flatMap((column) =>
-                          column === null ? [] : [[column, text]],
+                        specs.flatMap((spec) =>
+                          Object.values(spec.fields ?? {}).flatMap((column) =>
+                            column === null ? [] : [[column, text]],
+                          ),
                         ),
                       ),
                       uniques: [],
                       indexes: [],
                       foreignKeys: [],
-                      ...(spec.control === undefined ? {} : { control: spec.control }),
+                      ...(control === undefined ? {} : { control }),
                     }),
-                  ]),
+                  ];
+                }),
               ),
             },
           }),
@@ -252,11 +264,6 @@ export function fakeTarget(
       call(`table ${rename.namespaceId}.${rename.from} -> ${rename.to}`),
     renameColumnCall: (rename: ColumnRename) =>
       call(`column ${rename.namespaceId}.${rename.table}.${rename.from} -> ${rename.to}`),
-    renderTableRename: (rename: TableRename) =>
-      `renameTable ${rename.namespaceId}.${rename.from} -> ${rename.to}`,
-    tableRenameByHand: (rename: TableRename) => [
-      `RENAME ${rename.namespaceId}.${rename.from} TO ${rename.to}`,
-    ],
     apply: ({ text }) => {
       const [kind, from, , to] = text.split(' ');
       if (kind === 'namespace' && from !== undefined) {

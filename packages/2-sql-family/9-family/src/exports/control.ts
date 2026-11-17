@@ -65,6 +65,7 @@ export {
 } from '../core/migrations/fill-value-check';
 export type { JsonKeyPath, JsonPath, JsonPathStep } from '../core/migrations/json-path';
 export { jsonPathText, keyPathOf, parseJsonPath } from '../core/migrations/json-path';
+export type { ModelTable } from '../core/migrations/model-storage';
 export { storageNameOfOperation } from '../core/migrations/operation-storage-name';
 export type {
   CallSubjects,
@@ -136,7 +137,6 @@ export type {
   FieldStatementColumns,
   FieldStorageEffect,
   ModelStorageEffect,
-  ModelTable,
   NamespaceRename,
   NamespaceStatementTarget,
   NoTable,

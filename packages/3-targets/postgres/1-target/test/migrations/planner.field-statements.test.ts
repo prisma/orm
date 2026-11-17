@@ -201,25 +201,18 @@ describe('Postgres planner, field statements', () => {
     ]);
   });
 
-  it('refuses a rename on a table the destination renames, naming the renameTable call to write by hand', () => {
+  it('renames the column on the table the plan renames for a model that keeps its name', async () => {
     const from = profileContract('from');
-    const to = profileContract('to', { table: 'User', columns: EMAIL_RENAMED });
-    const statement = renameField('Profile', 'email', 'emailAddress', 'User');
+    const to = profileContract('to', { table: 'User', model: 'Profile', columns: EMAIL_RENAMED });
+    const statement = renameField('Profile', 'email', 'emailAddress');
     const result = plan(from, to, [statement]);
-    expect(result.kind === 'failure' && result.conflicts).toEqual([
-      expect.objectContaining({
-        kind: 'statementRefused',
-        refusedStatement: statement,
-        why: expect.stringContaining(
-          'add ...this.renameTable({ table: "Profile", to: "User" }) to the operations of its migration.ts',
-        ),
-      }),
+    expect(await labelsOf(result)).toEqual([
+      'Rename table "Profile" to "User"',
+      'Rename primary key "Profile_pkey" to "User_pkey" on "User"',
+      'Rename column "User"."email" to "emailAddress"',
     ]);
-    expect(result.kind === 'failure' && result.conflicts[0]?.why).toContain(
-      'With db update, change the contract so that only the table name changes, and run prisma contract emit. Rename the table in the database yourself with ALTER TABLE "Profile" RENAME TO "User", check that prisma db update --dry-run plans no drop of a table or column, and run prisma db update to store that contract. Then emit the final contract and run prisma db update --rename User.email:User.emailAddress.',
-    );
+    expect(success(result).appliedStatements).toEqual([{ statement, operationIndexes: [2] }]);
   });
-
   it('emits the same operations as the facade call it renders, run against the same contracts', async () => {
     const objects = { emailUnique: {}, emailIndex: true };
     const from = profileContract('a'.repeat(64), { objects });

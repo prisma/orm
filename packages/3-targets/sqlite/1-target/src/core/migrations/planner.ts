@@ -381,7 +381,6 @@ export class SqliteMigrationPlanner
             frameworkComponents: options.frameworkComponents,
           }),
         apply: (call) => working.apply(call),
-        ...sqliteTableRenameByHand,
       },
     });
     if (!planned.ok) return planned;

@@ -15,11 +15,8 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { SqlModelStorage } from '@internal/sql-contract/types';
 import { ifDefined } from '@internal/utils/defined';
 import { fieldOfColumn } from './field-of-column';
-import {
-  isSqlModelStorage,
-  type TableRenameByHand,
-  type WorkingSchemaOrigins,
-} from './statement-planning';
+import { isSqlModelStorage } from './model-storage';
+import type { TableRenameByHand, WorkingSchemaOrigins } from './statement-planning';
 
 /**
  * What an operation is about, as the plan names it after its rename statements: a table, or a

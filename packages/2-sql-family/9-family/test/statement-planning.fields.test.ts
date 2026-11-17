@@ -196,26 +196,24 @@ describe('planStatements, field renames', () => {
     ).toEqual(['column app.User.name -> Name']);
   });
 
-  it('rejects a rename on a table the destination stores the model in under another name', () => {
+  it('renames the column on the table the plan renames for a model whose name both contracts keep', () => {
     const statement = renameField('User', 'name', 'fullName');
-    const conflict = rejection(
-      planStatements({
-        policy: ALL_CLASSES,
-        statements: [statement],
-        fromContract: contractOf({ User: { table: 'users', fields: { name: 'name' } } }),
-        contract: contractOf({ User: { table: 'app_users', fields: { fullName: 'fullName' } } }),
-        target: fakeTarget(['app.users'], { 'app.users': ['name'] }),
-      }),
-    );
-    expect(conflict).toMatchObject({
-      kind: 'statementRefused',
-      refusedStatement: statement,
-      summary:
-        'Cannot rename column "users"."name": the model\'s table changes from "users" to "app_users", and no statement renames the table',
+    expect(
+      planned(
+        planStatements({
+          policy: ALL_CLASSES,
+          statements: [statement],
+          fromContract: contractOf({ User: { table: 'users', fields: { name: 'name' } } }),
+          contract: contractOf({ User: { table: 'app_users', fields: { fullName: 'fullName' } } }),
+          target: fakeTarget(['app.users'], { 'app.users': ['name'] }),
+        }),
+      ),
+    ).toEqual({
+      calls: ['table app.users -> app_users', 'column app.app_users.name -> fullName'],
+      tableRenames: [{ namespaceId: 'app', from: 'users', to: 'app_users' }],
+      columnRenames: [{ namespaceId: 'app', table: 'app_users', from: 'name', to: 'fullName' }],
+      plannedStatements: [{ statement, operations: { kind: 'planned', operationIndexes: [2, 3] } }],
     });
-    expect(conflict.why).toContain(
-      'With migration plan, rename the table by hand in its own migration first. Change the contract so that only the table name changes, and run prisma contract emit. Run prisma migration new --name <name> --from <hash of the migration the database is at>, add renameTable app.users -> app_users to the operations of its migration.ts, and run node on that migration.ts to write its ops.json. Then change the contract to its final form, emit it, and plan the field rename with --from that migration. With db update, change the contract so that only the table name changes, and run prisma contract emit. Rename the table in the database yourself with RENAME app.users TO app_users, check that prisma db update --dry-run plans no drop of a table or column, and run prisma db update to store that contract. Then emit the final contract and run prisma db update --rename app.User.name:app.User.fullName.',
-    );
   });
 
   it('rejects a field that has a column on one side only', () => {

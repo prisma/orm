@@ -21,8 +21,8 @@ import { structuredError } from '@internal/utils/structured-error';
 import { buildColumnCodecRef } from './contract-to-schema-ir';
 import { handWrittenMigrationAdvice } from './hand-written-migration';
 import { jsonPathText } from './json-path';
+import { isSqlModelStorage, tableControlPolicy } from './model-storage';
 import type { SchemaTables } from './schema-tables';
-import { isSqlModelStorage, tableControlPolicy } from './statement-planning';
 import type { SqlPlannerConflict } from './types';
 import { type UnlistedValueObjectPlace, valueObjectPlaces } from './value-object-field-planning';
 

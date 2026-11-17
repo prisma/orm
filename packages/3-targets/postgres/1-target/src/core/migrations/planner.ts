@@ -912,7 +912,6 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
             frameworkComponents: options.frameworkComponents,
           }),
         apply: (call) => working.apply(call),
-        ...postgresTableRenameByHand(options.contract),
       },
     });
     if (!planned.ok) return planned;
