@@ -4,7 +4,7 @@ import type { PackageManagerId, PackageOperations } from '@prisma/cli-engine';
 import type { CliStructuredError } from '@prisma/cli-engine/protocol';
 import { dirname, join } from 'pathe';
 import {
-  isPnpmIgnoredBuildsError,
+  isOnlyPnpmIgnoredBuildsError,
   isRecognisedPnpmResolutionError,
 } from '../commands/init/pnpm-error-codes';
 import { redactSecrets } from '../commands/init/redact-secrets';
@@ -51,7 +51,7 @@ function metaString(failure: CliStructuredError, key: string): string {
 function pnpmOnlySkippedBuilds(failure: CliStructuredError): boolean {
   return (
     metaString(failure, 'manager') === 'pnpm' &&
-    isPnpmIgnoredBuildsError(metaString(failure, 'stderrTail'))
+    isOnlyPnpmIgnoredBuildsError(metaString(failure, 'stderrTail'))
   );
 }
 

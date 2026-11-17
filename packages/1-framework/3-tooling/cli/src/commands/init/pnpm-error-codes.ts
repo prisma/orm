@@ -31,7 +31,8 @@ export function isRecognisedPnpmResolutionError(output: string): boolean {
   return pnpmErrorCodes(output).some((code) => FALLBACK_PNPM_ERROR_CODES.has(code));
 }
 
-/** Whether pnpm's output says the install failed only because it skipped unapproved build scripts. */
-export function isPnpmIgnoredBuildsError(output: string): boolean {
-  return pnpmErrorCodes(output).includes(IGNORED_BUILDS_PNPM_ERROR_CODE);
+/** Whether the only pnpm error code in the output is the one for skipped, unapproved build scripts. */
+export function isOnlyPnpmIgnoredBuildsError(output: string): boolean {
+  const codes = new Set(pnpmErrorCodes(output));
+  return codes.size === 1 && codes.has(IGNORED_BUILDS_PNPM_ERROR_CODE);
 }

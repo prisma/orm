@@ -13,6 +13,7 @@ import {
   MINIMAL_MANIFEST_WARNING,
   PNPM_11_IGNORED_BUILDS,
   PNPM_12_IGNORED_BUILDS,
+  PNPM_WORKSPACE_LEAK,
   type ScriptedInstalls,
   scriptedInstalls,
 } from './init-install-fixtures';
@@ -125,6 +126,58 @@ describe('build scripts pnpm has not been told to trust', () => {
         diagnostics: [{ code: 'CLI.INIT_INSTALL_FAILED', severity: 'error' }],
       });
       expect(emit).not.toHaveBeenCalled();
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'fails the install when pnpm names another error code beside the ignored-builds one',
+    async () => {
+      installs.script = [
+        {
+          exitCode: 1,
+          stderr: `${PNPM_12_IGNORED_BUILDS}\n ERR_PNPM_FETCH_404  GET https://registry.npmjs.org/nope: Not Found - 404`,
+        },
+      ];
+
+      const run = await harness('pnpm').run([...scaffoldArgv(), '--json'], { cwd: projectDir });
+
+      expect(installSummary(run, installs.calls)).toEqual({
+        exitCode: 4,
+        calls: ['pnpm add @prisma/orm-postgres dotenv'],
+        packagesInstalled: { status: 'failed', deps: [], devDeps: [] },
+        contractEmitted: false,
+        warnings: [MINIMAL_MANIFEST_WARNING],
+      });
+      expect(emit).not.toHaveBeenCalled();
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'retries with npm when pnpm names a leaked specifier beside the ignored-builds code',
+    async () => {
+      installs.script = [
+        { exitCode: 1, stderr: `${PNPM_12_IGNORED_BUILDS}\n ${PNPM_WORKSPACE_LEAK}` },
+      ];
+
+      const run = await harness('pnpm').run(scaffoldArgv(), { cwd: projectDir });
+
+      expect(installSummary(run, installs.calls)).toEqual({
+        exitCode: 0,
+        calls: [
+          'pnpm add @prisma/orm-postgres dotenv',
+          'npm add @prisma/orm-postgres dotenv',
+          'npm add -D prisma@latest @types/node @prisma/cli-engine@latest',
+        ],
+        packagesInstalled: {
+          status: 'installed',
+          deps: ['@prisma/orm-postgres', 'dotenv'],
+          devDeps: ['prisma@latest', '@types/node', '@prisma/cli-engine@latest'],
+        },
+        contractEmitted: true,
+        warnings: [MINIMAL_MANIFEST_WARNING, expect.stringContaining('Falling back to npm')],
+      });
     },
     timeouts.coldTransformImport,
   );

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  isPnpmIgnoredBuildsError,
+  isOnlyPnpmIgnoredBuildsError,
   isRecognisedPnpmResolutionError,
 } from '../../../src/commands/init/pnpm-error-codes';
 
@@ -58,15 +58,25 @@ describe('isRecognisedPnpmResolutionError', () => {
   });
 });
 
-describe('isPnpmIgnoredBuildsError', () => {
+describe('isOnlyPnpmIgnoredBuildsError', () => {
   it.each([
     ['the pnpm 12 report', 'Error: ERR_PNPM_IGNORED_BUILDS\n\n  × adding a new package', true],
     ['the pnpm 11 report', '[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: esbuild@0.28.2', true],
     ['another pnpm code', ' ERR_PNPM_FETCH_404  GET https://registry/x: Not Found', false],
+    [
+      'the code beside another pnpm code',
+      'Error: ERR_PNPM_IGNORED_BUILDS\n ERR_PNPM_FETCH_404  GET https://registry/x: Not Found',
+      false,
+    ],
+    [
+      'the code more than once',
+      'Error: ERR_PNPM_IGNORED_BUILDS\n[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts',
+      true,
+    ],
     ['a code that only starts with it', 'ERR_PNPM_IGNORED_BUILDS_ELSEWHERE', false],
     ['an English description without the code', 'Ignored build scripts: esbuild@0.28.2', false],
     ['empty output', '', false],
   ])('answers %s', (_case, output, expected) => {
-    expect(isPnpmIgnoredBuildsError(output)).toBe(expected);
+    expect(isOnlyPnpmIgnoredBuildsError(output)).toBe(expected);
   });
 });
