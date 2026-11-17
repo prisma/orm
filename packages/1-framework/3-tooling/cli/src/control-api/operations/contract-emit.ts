@@ -192,7 +192,14 @@ export async function executeContractEmit(
     });
 
     const validationWarning = validateContractDeps(
-      emitResult.contractDts,
+      [
+        typesModule,
+        ...[
+          ...(stack.codecTypeImports ?? []),
+          ...(stack.queryOperationTypeImports ?? []),
+          ...(stack.parameterizedOutputTypeImports ?? []),
+        ].map((spec) => spec.package),
+      ],
       dirname(outputDtsPath),
     ).warning;
 

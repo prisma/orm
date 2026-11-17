@@ -1,93 +1,78 @@
-import { relative } from 'node:path';
-import { describe, expect, it } from 'vitest';
-import {
-  extractPackageSpecifiers,
-  validateContractDeps,
-} from '../../src/utils/validate-contract-deps';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, relative } from 'pathe';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { validateContractDeps } from '../../src/utils/validate-contract-deps';
 
-describe('extractPackageSpecifiers', () => {
-  it('extracts scoped package names from import type statements', () => {
-    const dts = `import type { Foo } from '@example-org/codec-types';
-import type { Bar } from '@internal/sql-contract/types';
-import type { Contract } from '@internal/contract/types';`;
+let project: string;
 
-    const result = extractPackageSpecifiers(dts);
+function writeJson(path: string, value: unknown): void {
+  mkdirSync(join(path, '..'), { recursive: true });
+  writeFileSync(path, JSON.stringify(value));
+}
 
-    expect(result).toEqual([
-      '@example-org/codec-types',
-      '@internal/sql-contract',
-      '@internal/contract',
-    ]);
+beforeEach(() => {
+  project = mkdtempSync(join(tmpdir(), 'cli-validate-contract-deps-'));
+  writeJson(join(project, 'package.json'), {
+    name: 'app',
+    imports: { '#generated-types': './src/generated-types.ts' },
   });
-
-  it('returns empty array when no imports present', () => {
-    const dts = 'export type Contract = { readonly models: {} };';
-
-    expect(extractPackageSpecifiers(dts)).toEqual([]);
+  writeJson(join(project, 'node_modules', '@acme', 'orm-db', 'package.json'), {
+    name: '@acme/orm-db',
+    exports: { './generated-types': './dist/generated-types.mjs', './codecs/*': './dist/*.mjs' },
   });
-
-  it('deduplicates repeated packages', () => {
-    const dts = `import type { A } from '@internal/contract/types';
-import type { B } from '@internal/contract/hashing';`;
-
-    expect(extractPackageSpecifiers(dts)).toEqual(['@internal/contract']);
+  writeJson(join(project, 'node_modules', 'prisma-orm-standin', 'package.json'), {
+    name: 'prisma-orm-standin',
   });
+  mkdirSync(join(project, 'src', 'prisma'), { recursive: true });
+});
 
-  it('extracts from double-quoted import specifiers', () => {
-    const dts = `import type { Foo } from "@example-org/codec-types";
-import type { Bar } from "@internal/sql-contract/types";`;
-
-    const result = extractPackageSpecifiers(dts);
-
-    expect(result).toEqual(['@example-org/codec-types', '@internal/sql-contract']);
-  });
+afterEach(() => {
+  rmSync(project, { recursive: true, force: true });
 });
 
 describe('validateContractDeps', () => {
-  it('returns no missing packages when all resolve', () => {
-    const dts = `import type { Foo } from '@internal/contract/types';`;
+  it('finds every module the generated file imports, by its package exports or the project imports', () => {
+    const result = validateContractDeps(
+      [
+        '@acme/orm-db/generated-types',
+        '@acme/orm-db/codecs/vector',
+        '#generated-types',
+        'prisma-orm-standin/anything',
+        './contract.json',
+      ],
+      join(project, 'src', 'prisma'),
+    );
 
-    const result = validateContractDeps(dts, __dirname);
-
-    expect(result.missing).toEqual([]);
+    expect(result).toEqual({ missing: [] });
   });
 
-  it('returns missing packages when they cannot be resolved', () => {
-    const dts = `import type { Foo } from '@nonexistent-scope/fake-package/types';`;
+  it('reports a package that is not installed, a subpath its package does not export, and a # import the project does not declare', () => {
+    const result = validateContractDeps(
+      [
+        '@nonexistent-scope/fake-package/types',
+        '@acme/orm-db/types',
+        '#missing-types',
+        'unscoped-missing/types',
+      ],
+      join(project, 'src', 'prisma'),
+    );
 
-    const result = validateContractDeps(dts, __dirname);
-
-    expect(result.missing).toEqual(['@nonexistent-scope/fake-package']);
+    expect(result.missing).toEqual([
+      '@nonexistent-scope/fake-package/types',
+      '@acme/orm-db/types',
+      '#missing-types',
+      'unscoped-missing/types',
+    ]);
+    expect(result.warning).toContain('  - #missing-types');
   });
 
-  it('accepts a relative project root — createRequire needs an absolute path', () => {
-    const dts = `import type { Foo } from '@internal/contract/types';`;
-    const relativeRoot = relative(process.cwd(), __dirname);
+  it('accepts a relative project root', () => {
+    const result = validateContractDeps(
+      ['@acme/orm-db/generated-types'],
+      `./${relative(process.cwd(), join(project, 'src', 'prisma'))}`,
+    );
 
-    const result = validateContractDeps(dts, `./${relativeRoot}`);
-
-    expect(result.missing).toEqual([]);
-  });
-
-  it('formats a warning message listing missing packages', () => {
-    const dts = `import type { Foo } from '@nonexistent-scope/pkg-a/types';
-import type { Bar } from '@nonexistent-scope/pkg-b/types';`;
-
-    const result = validateContractDeps(dts, __dirname);
-
-    expect(result.missing).toContain('@nonexistent-scope/pkg-a');
-    expect(result.missing).toContain('@nonexistent-scope/pkg-b');
-    expect(result.warning).toContain('@nonexistent-scope/pkg-a');
-    expect(result.warning).toContain('@nonexistent-scope/pkg-b');
-    expect(result.warning).toContain('Install them with your package manager');
-    expect(result.warning).not.toContain('pnpm add');
-  });
-
-  it('returns no warning when all packages resolve', () => {
-    const dts = `import type { Foo } from '@internal/contract/types';`;
-
-    const result = validateContractDeps(dts, __dirname);
-
-    expect(result.warning).toBeUndefined();
+    expect(result).toEqual({ missing: [] });
   });
 });
