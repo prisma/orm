@@ -160,7 +160,7 @@ describe('a question about an enum value', () => {
       origin,
       originKnown: true,
       destination: changed,
-      keepDataEditAdvice: ({ text: subject }, edits) => ({
+      keepDataEditAdvice: ({ text: subject, edits }) => ({
         lead: 'Delete loses it.',
         ways: [
           `Keep ${subject}: ${edits.map(({ remove, replaceWith }) => `${remove} -> ${replaceWith}`).join('; ')}.`,
@@ -224,7 +224,7 @@ describe('a question about an enum value', () => {
       origin: withOld,
       originKnown: true,
       destination: kept,
-      keepDataEditAdvice: ({ text: subject }, edits, subjects) => ({
+      keepDataEditAdvice: ({ text: subject, edits }, subjects) => ({
         lead: undefined,
         ways: [
           `Keep ${subject} with ${edits.length} edits among ${subjects.map(({ text }) => text).join(', ')}.`,

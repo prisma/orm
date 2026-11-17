@@ -587,18 +587,18 @@ export interface KeepDataAdvice {
   readonly ways: readonly string[];
 }
 
-/** A subject whose data a command may say how to keep, with its text as a statement names it. */
+/** A subject whose data a command may say how to keep, with its text as a statement names it and the edits the target gives to keep it. */
 export interface KeptSubject {
   readonly subject: MigrationSubject;
   readonly text: string;
+  readonly edits: readonly KeepDataEdit[];
 }
 
 /**
- * How a command says to keep the data of the subject `subject`: with `edits`, when the target gives any, or by changing a member that keeps its name. `kept` are the subjects of the round's questions whose data the command may say how to keep, `subject` among them, in question order; a plan keeps their data together.
+ * How a command says to keep the data of the subject `subject`: with its edits, when the target gives any, or by changing a member that keeps its name. `kept` are the subjects of the round's questions whose data the command may say how to keep, `subject` among them, in question order; a plan keeps their data together.
  */
 export type KeepDataEditAdvice = (
   subject: KeptSubject,
-  edits: readonly KeepDataEdit[],
   kept: readonly KeptSubject[],
 ) => KeepDataAdvice;
 
@@ -866,9 +866,8 @@ export function dataLossQuestion(
     !keepsDataByCommand(loss.subject, edits, contracts)
       ? undefined
       : contracts.keepDataEditAdvice(
-          { subject: loss.subject, text: subject },
-          edits,
-          contracts.keptSubjects ?? [{ subject: loss.subject, text: subject }],
+          { subject: loss.subject, text: subject, edits },
+          contracts.keptSubjects ?? [{ subject: loss.subject, text: subject, edits }],
         );
   const commandRoutesSharedValues =
     keepData !== undefined &&
@@ -1250,7 +1249,11 @@ export async function askPlanQuestions<TPlan extends PlannedQuestions, TFailure>
       ...contracts,
       keptSubjects: losses
         .filter((loss) => keepsDataByCommand(loss.subject, editsOf(loss), contracts))
-        .map((loss) => ({ subject: loss.subject, text: subjectText(loss.subject, contracts) })),
+        .map((loss) => ({
+          subject: loss.subject,
+          text: subjectText(loss.subject, contracts),
+          edits: editsOf(loss),
+        })),
     };
     const accessChanges = input.askAccess ? pending('allow', plan.accessChanges) : [];
     if (losses.length + accessChanges.length === 0 && round > 0) break;

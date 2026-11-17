@@ -20,7 +20,7 @@ function quoted(command: string): string {
 
 /** How `migration plan` says to keep the data of a subject: answer with a delete, then make the edits in the file it writes. */
 export function migrationPlanKeepDataEditAdvice(invocation: CliInvocation): KeepDataEditAdvice {
-  return ({ text }, edits) => ({
+  return ({ text, edits }) => ({
     lead: undefined,
     ways:
       edits.length === 0
@@ -97,22 +97,25 @@ function twoRuns(
 }
 
 /**
- * How `db update` says to keep the data of a subject: it cannot in one run. It plans the change with `migration plan` from the contract the database is at, when a migration ends there and the target gives edits, or changes the stored values in two runs through temporary members; members whose edits swap values do that only when no migration ends there.
+ * How `db update` says to keep the data of a subject: it cannot in one run. It plans the change with `migration plan` from the contract the database is at, when a migration ends there and the target gives edits, answering with `--delete` each kept subject whose edits it gives, or changes the stored values in two runs through temporary members; members whose edits swap values do that only when no migration ends there.
  */
 export function dbUpdateKeepDataEditAdvice(
   invocation: CliInvocation,
   databaseStorageHash: string | undefined,
 ): KeepDataEditAdvice {
-  return (subject, edits, kept): KeepDataAdvice => {
+  return (subject, kept): KeepDataAdvice => {
     const deleteFlag = statementFlag({ verb: 'delete', text: subject.text });
-    const swaps = edits.some(({ swapsValues }) => swapsValues === true);
+    const swaps = subject.edits.some(({ swapsValues }) => swapsValues === true);
     const lead = swaps
       ? `db update cannot keep that data in one run, because members of the enum swap stored values, and ${deleteFlag} removes it.`
       : `db update cannot keep that data in one run, and ${deleteFlag} removes it.`;
     const runs = twoRuns(invocation, subject, kept);
     const runWays = runs === undefined ? [] : [runs];
-    if (databaseStorageHash === undefined || edits.length === 0) return { lead, ways: runWays };
-    const deletes = kept.map(({ text }) => statementFlag({ verb: 'delete', text }));
+    if (databaseStorageHash === undefined || subject.edits.length === 0) {
+      return { lead, ways: runWays };
+    }
+    const edited = kept.filter(({ edits }) => edits.length > 0);
+    const deletes = edited.map(({ text }) => statementFlag({ verb: 'delete', text }));
     const plan = printedPlanCommand(invocation, databaseStorageHash, [
       ...otherStatements(invocation, [subject.text]).filter((flag) => !deletes.includes(flag)),
       ...deletes,
@@ -120,7 +123,7 @@ export function dbUpdateKeepDataEditAdvice(
     return {
       lead,
       ways: [
-        `To keep it, plan the change with ${quoted(plan)}, in the migration.ts it writes ${editsText(edits)}, ${runWrittenFile(invocation)}.`,
+        `To keep it, plan the change with ${quoted(plan)}, in the migration.ts it writes ${editsText(edited.flatMap(({ edits }) => edits))}, ${runWrittenFile(invocation)}.`,
         ...(swaps ? [] : runWays),
       ],
     };
