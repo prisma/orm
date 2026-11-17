@@ -919,6 +919,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     onDriverAnswered: () => void,
   ): AsyncGenerator<Row, void, unknown> {
     const rowDecodeContext = createDecodeContext();
+    this.checkAdmittingTransaction(run.ctx);
     await this.setupDriverExecution(exec, queryable);
 
     const startedAt = Date.now();
@@ -1109,6 +1110,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     codecCtx: SqlCodecCallContext,
     driverCall: () => Promise<SqlStatementStats>,
   ): Promise<SqlStatementStats> {
+    this.checkAdmittingTransaction(run.ctx);
     await this.setupDriverExecution(exec, queryable);
     checkAborted(codecCtx, 'stream');
 

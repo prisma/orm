@@ -1,7 +1,11 @@
 import type { SqlDriver } from '@internal/sql-relational-core/ast';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SqlMiddleware } from '../src/middleware/sql-middleware';
-import { type TransactionContext, withTransaction } from '../src/sql-runtime';
+import {
+  type RuntimeTransaction,
+  type TransactionContext,
+  withTransaction,
+} from '../src/sql-runtime';
 import { deferred } from './closed-runtime-stub';
 import { createSetup, rawPlan, type Setup } from './transaction-activity-fixtures';
 
@@ -235,4 +239,34 @@ describe('a transaction from connection.transaction()', () => {
       await connection.release();
     },
   );
+});
+
+describe('the runtime first statement, held in middleware while its transaction closes', () => {
+  const sends = {
+    execute: (transaction: RuntimeTransaction) => transaction.execute(rawPlan('update held')),
+    query: (transaction: RuntimeTransaction) => transaction.query(rawPlan('update held')).toArray(),
+  };
+
+  it.each([
+    ['commit', 'execute'],
+    ['commit', 'query'],
+    ['rollback', 'execute'],
+    ['rollback', 'query'],
+  ] as const)('sends nothing to the driver after %s() for %s()', async (end, send) => {
+    const held = holdInMiddleware('update held');
+    const readMarker = vi.fn(async () => ({ kind: 'absent' as const }));
+    const setup = createSetup({ middleware: [held.middleware], readMarker });
+    const connection = await setup.runtime.connection();
+    const transaction = await connection.transaction();
+    const pending = settled(sends[send](transaction));
+    await held.entered.promise;
+
+    await transaction[end]();
+    held.resume.resolve();
+
+    expect(await pending).toMatchObject(transactionClosed);
+    expect(readMarker).not.toHaveBeenCalled();
+    expect(sentSql(setup.driver)).toEqual([]);
+    await connection.release();
+  });
 });
