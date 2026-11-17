@@ -227,14 +227,6 @@ Running a `migration.ts` with node and no `--config` found no config that owns t
 
 The main CLI received mutually exclusive output flags: `--format pretty` together with `--json`. Use `--format json` or `--json` alone for JSON output. Payload: none.
 
-### CLI.PROJECT_MANIFEST_INVALID
-
-A `package.json` found while resolving the project import root is not valid JSON, or parses to something other than a JSON object. Emission reads the nearest manifest to decide which package names generated files should import; fix the manifest's JSON and re-run. The parse failure (when there is one) is attached as `cause`. Payload: `path`.
-
-### CLI.PROJECT_MANIFEST_UNREADABLE
-
-A `package.json` found while resolving the project import root exists but could not be read (e.g. a permissions failure). Absent manifests continue the walk up; a read failure stops it, because silently skipping would emit against the wrong project's dependencies. The read failure is attached as `cause`. Payload: `path`.
-
 ### CLI.PROMPT_REQUIRED
 
 Raised by `@prisma/cli-engine`, not by this repository: a command asked a question that has no default, and the session could not show it: stdin is not a terminal, `--no-interactive` was passed, or `--yes` was asked to answer a prompt that declares no default. The `CLI` namespace is shared with the engine (see [ADR 239](../architecture%20docs/adrs/ADR%20239%20-%20Errors%20are%20structural%20envelopes%20with%20dotted%20namespace%20codes.md)); it is listed here because it settles runs of the ORM's commands. `prisma orm init` translates it for the two prompts that stand in for a required flag, so a missing `--target` or `--authoring` still reports `CLI.INIT_MISSING_FLAGS` with the full missing list. Payload: none.
