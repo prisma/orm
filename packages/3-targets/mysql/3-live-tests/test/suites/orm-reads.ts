@@ -128,17 +128,26 @@ export function describeOrmReads(server: LiveServer): void {
         ],
         async (url) => {
           await using db = server.client({ url, verifyMarker: false });
-          const byTitle = await db.orm.Post.where({ title: 'Same' })
-            .groupBy('title')
-            .aggregate((a) => ({ mean: a.avg('authorId') }));
+          const byTitle = await db.orm.Post.groupBy('title').aggregate((a) => ({
+            mean: a.avg('authorId'),
+          }));
           const byExpression = await db.query(
             db.sql.Post.select('mean', (f, fns) => fns.avg(f.authorId))
               .where((f, fns) => fns.eq(f.title, 'Same'))
               .groupBy((f, fns) => fns.raw`${f.authorId} * 0`.returns('mysql/int@1'))
               .build(),
           );
-          expect({ byTitle, byExpression }).toEqual({
-            byTitle: [{ title: 'Same', mean: 5 / 3 }],
+          expect({
+            byTitle: [...byTitle].sort((a, b) => a.title.localeCompare(b.title)),
+            byExpression,
+          }).toEqual({
+            byTitle: [
+              { title: 'Alpha', mean: 1 },
+              { title: 'Beta', mean: 1 },
+              { title: 'Delta', mean: 2 },
+              { title: 'Gamma', mean: 1 },
+              { title: 'Same', mean: 5 / 3 },
+            ],
             byExpression: [{ mean: 5 / 3 }],
           });
         },

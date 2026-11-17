@@ -276,6 +276,8 @@ export function describeOrmIncludes(server: LiveServer): void {
           "INSERT INTO `Post` (`id`, `title`, `authorId`) VALUES (5, 'Epsilon', 2), (7, 'Eta', 2)",
           ...notesDatabase,
           "INSERT INTO `Note` VALUES (4, 'more', NULL, 1)",
+          'INSERT INTO `Author` VALUES (2)',
+          "INSERT INTO `Note` VALUES (3, 'x', NULL, 2), (5, 'y', NULL, 2), (6, 'z', NULL, 2)",
         ],
         async (url) => {
           await using db = server.client({ url, verifyMarker: false });
@@ -285,8 +287,15 @@ export function describeOrmIncludes(server: LiveServer): void {
               .first({ id: 2 }),
             unindexed: await db.orm.Author.select('id')
               .include('notes', (n) => n.avg('id'))
-              .first({ id: 1 }),
-          }).toEqual({ indexed: { id: 2, posts: 16 / 3 }, unindexed: { id: 1, notes: 7 / 3 } });
+              .orderBy((a) => a.id.asc())
+              .all(),
+          }).toEqual({
+            indexed: { id: 2, posts: 16 / 3 },
+            unindexed: [
+              { id: 1, notes: 7 / 3 },
+              { id: 2, notes: 14 / 3 },
+            ],
+          });
         },
       );
     });
