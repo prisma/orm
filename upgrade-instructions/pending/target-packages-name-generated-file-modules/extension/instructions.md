@@ -2,7 +2,7 @@
 changes:
   - id: target-package-names-generated-file-modules
     summary: |
-      A package that adds a target must name, in the config its `defineConfig` returns, the module generated contract types import from (`contract.typesModule`) and the module migration files import from (`migrations.module`), and must hand the config target and adapter descriptors whose type declarations state its own types module. Without `contract.typesModule`, every command that writes contract types fails with `CONFIG.CONTRACT_TYPES_MODULE_MISSING`: `prisma contract emit`, `prisma migration plan`, `prisma migration new`, `prisma migrate`, `prisma db init`, `prisma db update` and `prisma db sign`. Without `migrations.module`, `prisma migration plan`, `prisma migration new` and `prisma migrate` fail with `CONFIG.MIGRATION_MODULE_MISSING`.
+      A package that adds a target must name, in the config its `defineConfig` returns, the module generated contract types import from (`contract.typesModule`) and the module migration files import from (`migrations.module`), and must hand the config target and adapter descriptors whose type declarations state its own types module. Without `contract.typesModule`, every command that writes contract types fails with `CONFIG.CONTRACT_TYPES_MODULE_MISSING`: `prisma contract emit`, `prisma migration plan`, `prisma migration new`, `prisma migrate`, `prisma db init`, `prisma db update` and `prisma db sign`. Without `migrations.module`, `prisma migration plan` and `prisma migration new` fail with `CONFIG.MIGRATION_MODULE_MISSING`.
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
@@ -48,7 +48,7 @@ changes:
         - '(?<![\w$])createMysqlDefineConfig\s*\('
   - id: control-api-takes-types-module
     summary: |
-      The control client's `emit` requires `contractConfig.typesModule`, and `renderContractDts` requires `typesModule`: the module the generated contract types import from. The control API's `migrate` operation requires `migrationModule`. The `projectDir` option of the control API's contract emit, `migration new` and `migration plan` operations is removed, and `preflightRefAdvancement` takes the config in its place.
+      The control client's `emit` requires `contractConfig.typesModule`, and `renderContractDts` requires `typesModule`: the module the generated contract types import from. The `projectDir` option of the control API's contract emit, `migration new` and `migration plan` operations is removed, and `preflightRefAdvancement` takes the config in its place.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
@@ -221,7 +221,7 @@ await client.renderContractDts({ contract, typesModule });
 
 Take the value from the config: `defineConfig(...).contract.typesModule`.
 
-Code that calls the control API's operations directly, from `@prisma/orm-toolchain/cli/control-api`, removes the `projectDir` option from contract emit, `migration new` and `migration plan`, and passes the config to `preflightRefAdvancement` where it passed `projectDir`. Code that calls the `migrate` operation passes `migrationModule`, the config's `migrations.module`.
+Code that calls the control API's operations directly, from `@prisma/orm-toolchain/cli/control-api`, removes the `projectDir` option from contract emit, `migration new` and `migration plan`, and passes the config to `preflightRefAdvancement` where it passed `projectDir`.
 
 ## `component-type-import-module-is-not-a-literal-type`
 
