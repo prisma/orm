@@ -10,7 +10,14 @@ import {
   renameField,
 } from './statement-fixtures';
 
-const NOTHING = { calls: [], tableRenames: [], columnRenames: [], plannedStatements: [] };
+const NOTHING = {
+  calls: [],
+  tableRenames: [],
+  columnRenames: [],
+  madeTables: [],
+  plannedStatements: [],
+};
+const MADE_APP_USERS = { ...NOTHING, madeTables: [{ namespaceId: 'app', table: 'app_users' }] };
 
 function plan(
   origin: Record<string, ModelSpec>,
@@ -41,7 +48,7 @@ describe('planStatements against a database whose table already has its new name
       { User: users('app_users') },
       fakeTarget(['app.app_users'], { 'app.app_users': ['id', 'email'] }),
     );
-    expect(planned(result)).toEqual(NOTHING);
+    expect(planned(result)).toEqual(MADE_APP_USERS);
     expect(originTable('app_users')(result)).toEqual({ namespaceId: 'app', table: 'users' });
   });
 
@@ -57,6 +64,7 @@ describe('planStatements against a database whose table already has its new name
       columnRenames: [
         { namespaceId: 'app', table: 'app_users', from: 'email', to: 'email_address' },
       ],
+      madeTables: [{ namespaceId: 'app', table: 'app_users' }],
       plannedStatements: [],
     });
     expect(
@@ -80,6 +88,7 @@ describe('planStatements against a database whose table already has its new name
       calls: ['column app.app_users.email -> contact'],
       tableRenames: [],
       columnRenames: [{ namespaceId: 'app', table: 'app_users', from: 'email', to: 'contact' }],
+      madeTables: [{ namespaceId: 'app', table: 'app_users' }],
       plannedStatements: [{ statement, operations: { kind: 'planned', operationIndexes: [0, 1] } }],
     });
   });
@@ -106,7 +115,7 @@ describe('planStatements against a database whose table already has its new name
     ).toEqual({
       kind: 'unsupportedOperation',
       summary: 'Cannot rename table "users" to "app_users": the database has both tables',
-      why: 'The table of model "app.User" changes from "users" to "app_users", and the database has both table "users" and table "app_users". The rename may have been half done by hand, or something created table "app_users" before db update ran. Move the rows of table "app_users" into table "users", or drop table "app_users", then run again.',
+      why: 'The table of model "app.User" changes from "users" to "app_users", and the database has both table "users" and table "app_users". The rename may have been half done by hand, or something created table "app_users" before db update ran: then move the rows of table "app_users" into table "users", or drop table "app_users", and run again. Or table "users" was renamed to "app_users" by hand and the name "users" used again for another table: then rename or drop table "users", and run again.',
       location: { namespaceId: 'app', entityKind: 'table', entityName: 'users' },
     });
   });
@@ -173,7 +182,7 @@ describe('planStatements against a database whose column already has its new nam
       kind: 'unsupportedOperation',
       summary:
         'Cannot rename column "users"."email" to "email_address": the database has both columns',
-      why: 'The column of field "app.User.email" changes from "email" to "email_address", and table "users" in the database has both column "email" and column "email_address". The rename may have been half done by hand, or something created column "email_address" before db update ran. Move the values of column "email_address" into column "email", or drop column "email_address", then run again.',
+      why: 'The column of field "app.User.email" changes from "email" to "email_address", and table "users" in the database has both column "email" and column "email_address". The rename may have been half done by hand, or something created column "email_address" before db update ran: then move the values of column "email_address" into column "email", or drop column "email_address", and run again. Or column "email" was renamed to "email_address" by hand and the name "email" used again for another column: then rename or drop column "email", and run again.',
       location: { namespaceId: 'app', entityKind: 'table', entityName: 'users', column: 'email' },
     });
   });
@@ -184,7 +193,7 @@ describe('planStatements against a database whose column already has its new nam
       { User: users('app_users', { email: 'email_address' }) },
       fakeTarget(['app.app_users'], { 'app.app_users': ['id', 'email_address'] }),
     );
-    expect(planned(result)).toEqual(NOTHING);
+    expect(planned(result)).toEqual(MADE_APP_USERS);
     expect(
       result.ok &&
         result.value.origins.originColumn({ namespaceId: 'app', table: 'users' }, 'email_address'),

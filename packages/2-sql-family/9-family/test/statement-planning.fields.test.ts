@@ -78,6 +78,7 @@ describe('planStatements, field renames', () => {
       calls: ['column app.User.name -> fullName'],
       tableRenames: [],
       columnRenames: [{ namespaceId: 'app', table: 'User', from: 'name', to: 'fullName' }],
+      madeTables: [],
       plannedStatements: [
         {
           statement,
@@ -122,6 +123,7 @@ describe('planStatements, field renames', () => {
     ).toMatchObject({
       calls: [],
       columnRenames: [],
+      madeTables: [],
       plannedStatements: [{ operations: { kind: 'planned', operationIndexes: [] } }],
     });
   });
@@ -212,6 +214,7 @@ describe('planStatements, field renames', () => {
       calls: ['table app.users -> app_users', 'column app.app_users.name -> fullName'],
       tableRenames: [{ namespaceId: 'app', from: 'users', to: 'app_users' }],
       columnRenames: [{ namespaceId: 'app', table: 'app_users', from: 'name', to: 'fullName' }],
+      madeTables: [],
       plannedStatements: [{ statement, operations: { kind: 'planned', operationIndexes: [2, 3] } }],
     });
   });

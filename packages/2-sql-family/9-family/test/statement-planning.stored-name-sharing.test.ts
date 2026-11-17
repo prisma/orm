@@ -14,7 +14,13 @@ import {
 
 const ignoringCase = (left: string, right: string) => left.toLowerCase() === right.toLowerCase();
 
-const NOTHING = { calls: [], tableRenames: [], columnRenames: [], plannedStatements: [] };
+const NOTHING = {
+  calls: [],
+  tableRenames: [],
+  columnRenames: [],
+  madeTables: [],
+  plannedStatements: [],
+};
 
 function plan(
   origin: Record<string, ModelSpec>,
@@ -58,6 +64,7 @@ describe('planStatements, storage whose removed objects stay behind', () => {
       calls: ['table app.tasks -> work'],
       tableRenames: [{ namespaceId: 'app', from: 'tasks', to: 'work' }],
       columnRenames: [],
+      madeTables: [],
       plannedStatements: [],
     });
   });
@@ -84,6 +91,7 @@ describe('planStatements, storage whose removed objects stay behind', () => {
       calls: ['table app.tasks -> jobs'],
       tableRenames: [{ namespaceId: 'app', from: 'tasks', to: 'jobs' }],
       columnRenames: [],
+      madeTables: [],
       plannedStatements: [{ statement, operations: { kind: 'planned', operationIndexes: [0, 1] } }],
     });
   });
@@ -109,6 +117,7 @@ describe('planStatements, storage whose removed objects stay behind', () => {
       calls: ['column app.tasks.title -> heading'],
       tableRenames: [],
       columnRenames: [{ namespaceId: 'app', table: 'tasks', from: 'title', to: 'heading' }],
+      madeTables: [],
       plannedStatements: [],
     });
   });
@@ -242,6 +251,7 @@ describe('planStatements, a namespace rename statement', () => {
       ],
       tableRenames: [{ namespaceId: 'finance', from: 'invoices', to: 'bills' }],
       columnRenames: [{ namespaceId: 'finance', table: 'bills', from: 'total', to: 'amount' }],
+      madeTables: [],
       plannedStatements: [{ statement, operations: { kind: 'planned', operationIndexes: [0] } }],
     });
   });
@@ -261,6 +271,7 @@ describe('planStatements, a namespace rename statement', () => {
       calls: ['rename-namespace billing -> finance', 'column finance.invoices.total -> amount'],
       tableRenames: [],
       columnRenames: [{ namespaceId: 'finance', table: 'invoices', from: 'total', to: 'amount' }],
+      madeTables: [],
       plannedStatements: [{ statement, operations: { kind: 'planned', operationIndexes: [0] } }],
     });
   });

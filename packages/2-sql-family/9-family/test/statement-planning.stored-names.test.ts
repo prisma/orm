@@ -40,6 +40,7 @@ describe('planStatements, a model whose table changes and whose name both contra
       calls: ['table app.users -> app_users'],
       tableRenames: [{ namespaceId: 'app', from: 'users', to: 'app_users' }],
       columnRenames: [],
+      madeTables: [],
       plannedStatements: [],
     });
     expect(
@@ -57,6 +58,7 @@ describe('planStatements, a model whose table changes and whose name both contra
       calls: ['column app.users.email -> email_address'],
       tableRenames: [],
       columnRenames: [{ namespaceId: 'app', table: 'users', from: 'email', to: 'email_address' }],
+      madeTables: [],
       plannedStatements: [],
     });
   });
@@ -73,6 +75,7 @@ describe('planStatements, a model whose table changes and whose name both contra
       columnRenames: [
         { namespaceId: 'app', table: 'app_users', from: 'email', to: 'email_address' },
       ],
+      madeTables: [],
       plannedStatements: [],
     });
     expect(
@@ -96,6 +99,7 @@ describe('planStatements, a model whose table changes and whose name both contra
       calls: ['table app.users -> app_users', 'column app.app_users.name -> full_name'],
       tableRenames: [{ namespaceId: 'app', from: 'users', to: 'app_users' }],
       columnRenames: [{ namespaceId: 'app', table: 'app_users', from: 'name', to: 'full_name' }],
+      madeTables: [],
       plannedStatements: [{ statement, operations: { kind: 'planned', operationIndexes: [2, 3] } }],
     });
   });
@@ -115,6 +119,7 @@ describe('planStatements, a model whose table changes and whose name both contra
       calls: ['table app.profile -> users', 'column app.users.email -> email_address'],
       tableRenames: [{ namespaceId: 'app', from: 'profile', to: 'users' }],
       columnRenames: [{ namespaceId: 'app', table: 'users', from: 'email', to: 'email_address' }],
+      madeTables: [],
       plannedStatements: [{ statement, operations: { kind: 'planned', operationIndexes: [0, 1] } }],
     });
   });
@@ -137,6 +142,7 @@ describe('planStatements, a model whose table changes and whose name both contra
       calls: ['table app.tasks -> work_items'],
       tableRenames: [{ namespaceId: 'app', from: 'tasks', to: 'work_items' }],
       columnRenames: [],
+      madeTables: [],
       plannedStatements: [],
     });
   });
@@ -157,6 +163,7 @@ describe('planStatements, a model whose table changes and whose name both contra
       calls: ['table app.users -> app_users'],
       tableRenames: [{ namespaceId: 'app', from: 'users', to: 'app_users' }],
       columnRenames: [],
+      madeTables: [],
       plannedStatements: [],
     });
   });
@@ -176,6 +183,7 @@ describe('planStatements, a model whose table changes and whose name both contra
       calls: ['column app.users.email -> email_address'],
       tableRenames: [],
       columnRenames: [{ namespaceId: 'app', table: 'users', from: 'email', to: 'email_address' }],
+      madeTables: [],
       plannedStatements: [],
     });
   });
@@ -193,6 +201,7 @@ describe('planStatements, a model whose table changes and whose name both contra
       calls: ['table app.user -> User', 'column app.User.email -> Email'],
       tableRenames: [{ namespaceId: 'app', from: 'user', to: 'User' }],
       columnRenames: [{ namespaceId: 'app', table: 'User', from: 'email', to: 'Email' }],
+      madeTables: [],
       plannedStatements: [],
     });
   });
@@ -216,7 +225,13 @@ describe('planStatements, storage that does not move whole', () => {
           fakeTarget(['app.tasks'], { 'app.tasks': ['id', 'type', 'severity'] }),
         ),
       ),
-    ).toEqual({ calls: [], tableRenames: [], columnRenames: [], plannedStatements: [] });
+    ).toEqual({
+      calls: [],
+      tableRenames: [],
+      columnRenames: [],
+      madeTables: [],
+      plannedStatements: [],
+    });
   });
 
   it("renames nothing when a variant's own table folds back into its base's table", () => {
@@ -237,7 +252,13 @@ describe('planStatements, storage that does not move whole', () => {
           }),
         ),
       ),
-    ).toEqual({ calls: [], tableRenames: [], columnRenames: [], plannedStatements: [] });
+    ).toEqual({
+      calls: [],
+      tableRenames: [],
+      columnRenames: [],
+      madeTables: [],
+      plannedStatements: [],
+    });
   });
 
   it('renames nothing when one of two variant fields that share a column changes its column', () => {
@@ -255,7 +276,13 @@ describe('planStatements, storage that does not move whole', () => {
           fakeTarget(['app.tasks'], { 'app.tasks': ['id', 'title'] }),
         ),
       ),
-    ).toEqual({ calls: [], tableRenames: [], columnRenames: [], plannedStatements: [] });
+    ).toEqual({
+      calls: [],
+      tableRenames: [],
+      columnRenames: [],
+      madeTables: [],
+      plannedStatements: [],
+    });
   });
 
   it.each([
@@ -280,7 +307,13 @@ describe('planStatements, storage that does not move whole', () => {
         planned(
           plan(origin, destination, fakeTarget(['app.users'], { 'app.users': ['id', 'email'] })),
         ),
-      ).toEqual({ calls: [], tableRenames: [], columnRenames: [], plannedStatements: [] });
+      ).toEqual({
+        calls: [],
+        tableRenames: [],
+        columnRenames: [],
+        madeTables: [],
+        plannedStatements: [],
+      });
     },
   );
 
@@ -295,7 +328,13 @@ describe('planStatements, storage that does not move whole', () => {
           target: fakeTarget(['app.users'], { 'app.users': ['id', 'email'] }),
         }),
       ),
-    ).toEqual({ calls: [], tableRenames: [], columnRenames: [], plannedStatements: [] });
+    ).toEqual({
+      calls: [],
+      tableRenames: [],
+      columnRenames: [],
+      madeTables: [],
+      plannedStatements: [],
+    });
   });
 
   it('refuses a rename the policy does not allow, naming the contract change and no statement', () => {

@@ -243,6 +243,11 @@ export interface PlannedStatements<TCall extends CallWithCompanions> {
   readonly calls: readonly TCall[];
   readonly tableRenames: readonly TableRename[];
   readonly columnRenames: readonly ColumnRename[];
+  /**
+   * The tables whose model keeps its name and whose new table the working schema already has, so
+   * no rename is planned: the diff renames their constraints, which a target puts before creates.
+   */
+  readonly madeTables: readonly ModelTable[];
   readonly plannedStatements: readonly PlannedStatement[];
   readonly origins: WorkingSchemaOrigins;
 }
@@ -929,6 +934,7 @@ export function planStatements<TCall extends CallWithCompanions>(input: {
         calls: [],
         tableRenames: [],
         columnRenames: [],
+        madeTables: [],
         plannedStatements: [],
         origins: NO_RENAMED_ORIGINS,
       });
@@ -997,6 +1003,9 @@ export function planStatements<TCall extends CallWithCompanions>(input: {
     calls: planner.calls,
     tableRenames: planner.tableRenames,
     columnRenames: planner.columnRenames,
+    madeTables: storageRenames.foundTables
+      .filter(({ change }) => !storageRenames.tables.includes(change))
+      .map(({ change, name }) => ({ namespaceId: change.destination.namespaceId, table: name })),
     plannedStatements,
     origins: planner.origins(),
   });

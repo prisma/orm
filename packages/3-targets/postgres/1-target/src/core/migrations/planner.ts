@@ -548,10 +548,17 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       }),
       schemaDiffPartition.kept,
     );
+    const onMadeTable = (call: { readonly schemaName: string; readonly tableName: string }) =>
+      statements.value.madeTables.some(
+        (table) =>
+          call.schemaName === emissionSchemaForNamespace(options.contract, table.namespaceId) &&
+          call.tableName === table.table,
+      );
     const calls = [
       ...statements.value.calls,
+      ...renamePartition.kept.filter(onMadeTable),
       ...ordered.structural,
-      ...renamePartition.kept,
+      ...renamePartition.kept.filter((call) => !onMadeTable(call)),
       ...ordered.policyCalls,
       ...fieldEventPartition.kept,
     ];
