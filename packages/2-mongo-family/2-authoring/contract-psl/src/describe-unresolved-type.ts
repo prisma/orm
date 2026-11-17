@@ -1,6 +1,7 @@
 import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
 import {
   collectScalarTypeConstructors,
+  isAuthoringTypeChoiceDescriptor,
   isAuthoringTypeConstructorDescriptor,
 } from '@internal/framework-components/authoring';
 import type { AssembledAuthoringContributions } from '@internal/framework-components/control';
@@ -8,15 +9,29 @@ import type { DescribeUnresolvedType } from '@internal/psl-parser';
 import { describeRemovedFieldPreset } from '@internal/psl-parser/interpret';
 import { removedMongoFieldPresets } from './removed-field-presets';
 
-function scalarTypesSentence(types: AuthoringTypeNamespace): string {
-  const current = [...collectScalarTypeConstructors(types).keys()].filter((name) => {
+function scalarTypesToWrite(types: AuthoringTypeNamespace): readonly string[] {
+  const descriptors = [...collectScalarTypeConstructors(types).keys()].flatMap((name) => {
     const descriptor = types[name];
-    return !(
-      descriptor !== undefined &&
-      isAuthoringTypeConstructorDescriptor(descriptor) &&
-      descriptor.deprecated !== undefined
-    );
+    return descriptor === undefined ? [] : [{ name, descriptor }];
   });
+  const typeChoices = descriptors.flatMap(({ name, descriptor }) =>
+    isAuthoringTypeChoiceDescriptor(descriptor) ? [{ name, descriptor }] : [],
+  );
+  const reachedByTypeChoice = new Set(
+    typeChoices.flatMap(({ descriptor }) => descriptor.choices.map((row) => row.type)),
+  );
+  const explicitTypesNoTypeChoiceReaches = descriptors.flatMap(({ name, descriptor }) =>
+    isAuthoringTypeConstructorDescriptor(descriptor) &&
+    descriptor.deprecated === undefined &&
+    !reachedByTypeChoice.has(name)
+      ? [name]
+      : [],
+  );
+  return [...typeChoices.map(({ name }) => name), ...explicitTypesNoTypeChoiceReaches];
+}
+
+function scalarTypesSentence(types: AuthoringTypeNamespace): string {
+  const current = scalarTypesToWrite(types);
   return current.length === 0
     ? 'No Mongo scalar types are registered.'
     : `The Mongo scalar types are ${

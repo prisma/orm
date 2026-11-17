@@ -47,8 +47,8 @@ describe('the language server and the provider agree on Mongo unresolved-type wo
     const providerMessage = providerResult.failure.diagnostics.find(
       (diagnostic) => diagnostic.code === 'PSL_UNRESOLVED_REFERENCE',
     )?.message;
-    expect(providerMessage).toMatch(
-      /^Field "Post\.value" has type "Money", which is not a scalar type, an enum, a composite type or a model\. The Mongo scalar types are .*\bInt64BigInt\b/,
+    expect(providerMessage).toBe(
+      'Field "Post.value" has type "Money", which is not a scalar type, an enum, a composite type or a model. The Mongo scalar types are Int, BigInt, Float, Decimal, Boolean, Bytes, String, Json, DateTime, Date, Time, Duration, ObjectId, Bson and Vector.',
     );
 
     const project = new ProjectArtifacts({

@@ -42,7 +42,7 @@ Use `sort(field, Asc)` or `sort(field, Desc)` in `@@index`, `@@unique`, and `@@t
 
 ## Unresolved type names
 
-The family descriptor contributes `describeUnresolvedMongoType` as its `pslDiagnostics.describeUnresolvedType`, so the binder reports a field type it cannot resolve in Mongo terms. A bare name gets a message that it is not a scalar type, an enum, a composite type or a model, followed by the registered Mongo scalar types other than the deprecated ones. The names Prisma 6 used, such as `BigInt`, `Bytes` and `Decimal`, are MongoDB convenience types, so they resolve. A qualified name (`ns.Name`) or a constructor call (`Name()`) keeps the binder's default `Cannot find type "…"` message.
+The family descriptor contributes `describeUnresolvedMongoType` as its `pslDiagnostics.describeUnresolvedType`, so the binder reports a field type it cannot resolve in Mongo terms. A bare name gets a message that it is not a scalar type, an enum, a composite type or a model, followed by the scalar types to write: the type choices first, then the explicit types no type choice reaches, such as `ObjectId` and `Bson`. Explicit types a type choice reaches and deprecated names are left out. The names Prisma 6 used, such as `BigInt`, `Bytes` and `Decimal`, are MongoDB convenience types, so they resolve. A qualified name (`ns.Name`) or a constructor call (`Name()`) keeps the binder's default `Cannot find type "…"` message.
 
 ## Test helpers
 

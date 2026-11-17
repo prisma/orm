@@ -164,7 +164,7 @@ describe('deprecated Mongo PSL scalar names', () => {
     expect(result.ok).toBe(true);
   });
 
-  it('reports an unresolved type at the type, listing the scalar types', () => {
+  it('reports an unresolved type at the type, listing the type choices and then the explicit types no type choice reaches', () => {
     const { result } = interpret(schemaWith('Money'));
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -172,7 +172,7 @@ describe('deprecated Mongo PSL scalar names', () => {
       expect.objectContaining({
         code: 'PSL_UNRESOLVED_REFERENCE',
         message:
-          'Field "Post.value" has type "Money", which is not a scalar type, an enum, a composite type or a model. The Mongo scalar types are ObjectId, Int64BigInt, Binary, Int32, Double, Bool, DateTime, Int, Float and Boolean.',
+          'Field "Post.value" has type "Money", which is not a scalar type, an enum, a composite type or a model. The Mongo scalar types are Int, Float, Boolean, ObjectId, Int64BigInt, Binary and DateTime.',
         sourceId: 'schema.prisma',
         span: expect.objectContaining({
           start: expect.objectContaining({ line: 3, column: 9 }),
