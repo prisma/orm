@@ -13,7 +13,7 @@ changes:
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
-        - '\.\s*Int64\s*\('
+        - '\.\s*Int64(?![\w])'
         - '\{[^{}]*\bInt64\b[^{}]*\}\s*=\s*\w'
   - id: psl-optional-mongo-convenience-names
     summary: |
@@ -45,13 +45,13 @@ The contract does not change. A file that matches only because a comment or a st
 
 ## `ts-removed-mongo-int64-helper`
 
-In each matched file, replace every `Int64(` call on the `type` helpers with `BigInt(` or `Int64BigInt(`, including a call split across lines:
+In each matched file, replace every `Int64` read from the `type` helpers with `BigInt` or `Int64BigInt`. This covers a call, a call split across lines, and a read with no call, such as `const long = type.Int64`:
 
 ```ts
 field.scalar(type.BigInt()); // was type.Int64()
 ```
 
-A helper taken out of `type` by destructuring, such as `const { Int64 } = type`, also matches. Take out `BigInt` or `Int64BigInt` instead and rename its calls. The contract does not change. A file that matches only because a comment mentions `Int64(`, or because it uses another library's `Int64`, such as Apache Arrow's `new arrow.Int64()`, needs no change.
+A helper taken out of `type` by destructuring, such as `const { Int64 } = type`, also matches. Take out `BigInt` or `Int64BigInt` instead and rename its calls. The contract does not change. A file that matches only because a comment mentions `.Int64`, or because it uses another library's `Int64`, such as Apache Arrow's `new arrow.Int64()`, needs no change.
 
 ## `psl-optional-mongo-convenience-names`
 

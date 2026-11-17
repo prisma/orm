@@ -40,12 +40,13 @@ describe.each(GUIDES)('the renamed MongoDB Int64 detections in %s', (guidePath) 
     });
   });
 
-  it('matches a call of the Int64 helper only', () => {
+  it('matches a read of the Int64 helper only', () => {
     expect({
       builder: ts('field.scalar(type.Int64())'),
       renamedParameter: ts('({ type: t }) => f.scalar(t.Int64())'),
       spaced: ts('field.scalar(type . Int64 ())'),
       multiLine: ts('field.scalar(\n  type\n    .Int64(),\n)'),
+      readWithoutCall: ts('const long = type.Int64;'),
       destructured: ts('const { Int64 } = type;\nfield.scalar(Int64())'),
       destructuredAmongOthers: ts('const {\n  ObjectId,\n  Int64: Long,\n} = t;'),
       destructuredExplicit: ts('const { Int64BigInt, Int64Number } = type;'),
@@ -60,6 +61,7 @@ describe.each(GUIDES)('the renamed MongoDB Int64 detections in %s', (guidePath) 
       renamedParameter: true,
       spaced: true,
       multiLine: true,
+      readWithoutCall: true,
       destructured: true,
       destructuredAmongOthers: true,
       destructuredExplicit: false,
