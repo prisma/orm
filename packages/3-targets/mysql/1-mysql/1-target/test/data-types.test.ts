@@ -61,13 +61,16 @@ describe('MySQL data types', () => {
     ['text', 'mysql/text', {}],
     ['datetime', 'mysql/datetime', {}],
     ['datetime(3)', 'mysql/datetime', { precision: 3 }],
-    ['double', 'mysql/double', {}],
   ])('reads the reported type %s as %s', (text, id, typeParams) => {
     const resolved = resolveReportedSqlType(reported(text), mysqlDataTypes);
     expect({ id: resolved?.dataType.id, typeParams: resolved?.typeParams }).toEqual({
       id,
       typeParams,
     });
+  });
+
+  it('claims no reported double, which no authoring name writes yet, so introspection reads a double column as it did before mysql/double existed', () => {
+    expect(resolveReportedSqlType(reported('double'), mysqlDataTypes)).toBeUndefined();
   });
 
   it('claims no reported enum type, which is compared by its catalog text', () => {

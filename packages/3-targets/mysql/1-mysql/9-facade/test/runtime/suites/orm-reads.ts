@@ -118,6 +118,33 @@ export function describeOrmReads<TargetId extends string>(server: LiveServer<Tar
       });
     });
 
+    it('reads the mean of integers exactly when it groups by a column with no index or by an expression', async (test) => {
+      await withSeededDatabase(
+        test,
+        server,
+        [
+          ...exampleDatabase,
+          "INSERT INTO `Post` (`id`, `title`, `authorId`) VALUES (5, 'Same', 1), (6, 'Same', 2), (7, 'Same', 2)",
+        ],
+        async (url) => {
+          await using db = server.example({ url, verifyMarker: false });
+          const byTitle = await db.orm.Post.where({ title: 'Same' })
+            .groupBy('title')
+            .aggregate((a) => ({ mean: a.avg('authorId') }));
+          const byExpression = await db.query(
+            db.sql.Post.select('mean', (f, fns) => fns.avg(f.authorId))
+              .where((f, fns) => fns.eq(f.title, 'Same'))
+              .groupBy((f, fns) => fns.raw`${f.authorId} * 0`.returns('mysql/int@1'))
+              .build(),
+          );
+          expect({ byTitle, byExpression }).toEqual({
+            byTitle: [{ title: 'Same', mean: 5 / 3 }],
+            byExpression: [{ mean: 5 / 3 }],
+          });
+        },
+      );
+    });
+
     it('groups a collection and counts each group', async (test) => {
       await withSeededDatabase(test, server, exampleDatabase, async (url) => {
         await using db = server.example({ url, verifyMarker: false });

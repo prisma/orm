@@ -90,9 +90,11 @@ export const mysqlBigint = sqlDataType('mysql/bigint', {
   casts: { [mysqlInt.id]: asNumeralText },
 });
 
-/** A finite IEEE 754 double, stored as a JSON number: MySQL holds no NaN or infinity. */
+/**
+ * A finite IEEE 754 double, stored as a JSON number: MySQL holds no NaN or infinity. It types the mean of integers; no authoring name writes a column of it yet (ADR 322), so it claims no `double` column the catalog reports, which introspection and `db verify` read as they did before it existed.
+ */
 export const mysqlDouble = sqlDataType('mysql/double', {
-  texts: [{ text: 'double', written: true, catalog: true }],
+  texts: [{ text: 'double', written: true }],
   read: (json) =>
     typeof json === 'number' && Number.isFinite(json)
       ? json

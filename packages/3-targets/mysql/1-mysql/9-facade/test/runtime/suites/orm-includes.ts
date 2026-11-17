@@ -264,26 +264,27 @@ export function describeOrmIncludes<TargetId extends string>(server: LiveServer<
       });
     });
 
-    it('reads the mean of integers exactly, where MySQL and MariaDB print their decimal average to four places', async (test) => {
+    it('reads the mean of integers exactly, whether or not the join column has an index', async (test) => {
       await withSeededDatabase(
         test,
         server,
         [
           ...exampleDatabase,
           "INSERT INTO `Post` (`id`, `title`, `authorId`) VALUES (5, 'Epsilon', 2), (7, 'Eta', 2)",
+          ...notesDatabase,
+          "INSERT INTO `Note` VALUES (4, 'more', NULL, 1)",
         ],
-        async (url, driver) => {
+        async (url) => {
           await using db = server.example({ url, verifyMarker: false });
-          const user = await db.orm.User.select('id')
-            .include('posts', (p) => p.avg('id'))
-            .first({ id: 2 });
-          const printed = await driver.query<{ mean: string }>(
-            'SELECT CAST(AVG(`id`) AS CHAR) AS `mean` FROM `Post` WHERE `authorId` = 2',
-          );
-          expect({ user, printed: printed.rows }).toEqual({
-            user: { id: 2, posts: 16 / 3 },
-            printed: [{ mean: '5.3333' }],
-          });
+          await using notes = server.notes({ url, verifyMarker: false });
+          expect({
+            indexed: await db.orm.User.select('id')
+              .include('posts', (p) => p.avg('id'))
+              .first({ id: 2 }),
+            unindexed: await notes.orm.Author.select('id')
+              .include('notes', (n) => n.avg('id'))
+              .first({ id: 1 }),
+          }).toEqual({ indexed: { id: 2, posts: 16 / 3 }, unindexed: { id: 1, notes: 7 / 3 } });
         },
       );
     });

@@ -72,6 +72,8 @@ import {
 import { mysqlError, mysqlQueryNotYetSupported } from './errors';
 
 const DECIMAL_INTEGER = /^-?\d+$/;
+/** A double as MySQL and MariaDB print it: `1.5`, `-2`, `9.007199254740992e15`. */
+const DOUBLE_TEXT = /^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/i;
 const BIGINT_MIN = -(2n ** 63n);
 const BIGINT_MAX = 2n ** 63n - 1n;
 
@@ -340,7 +342,8 @@ export class MysqlDoubleCodec extends CodecImpl<
     return finiteDouble('RUNTIME.ENCODE_FAILED', value, value);
   }
   async fromWire(wire: string | number, _ctx: CodecCallContext): Promise<number> {
-    const value = typeof wire === 'number' ? wire : wire.trim() === '' ? Number.NaN : Number(wire);
+    const value =
+      typeof wire === 'number' ? wire : DOUBLE_TEXT.test(wire) ? Number(wire) : Number.NaN;
     return finiteDouble('RUNTIME.DECODE_FAILED', value, wire);
   }
   fromDataTypeValue(value: DataTypeValue<number>): number {

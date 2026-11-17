@@ -97,7 +97,11 @@ A read with includes reads every row before returning any, under both include st
 
 ## MySQL and MariaDB supply no ORM aggregates, so scalar includes do not run there (slice 6b-1 manual QA, 2026-11-17) — resolved in slice 6b-2
 
-Resolved: the MySQL target contributes aggregate descriptors as the Postgres target does (`packages/3-targets/mysql/1-mysql/1-target/src/core/aggregates.ts`), listed by the MySQL adapter and, through its metadata, the MariaDB adapter. `count` and `sum` over integers read as numbers through the new codec `mysql/bigintnumber@1`; `countBigInt` and `sumBigInt` as bigints; `avg` over an integer as `CAST(AVG(x) AS DOUBLE)` through the new codec `mysql/double@1` over the new data type `mysql/double`. Neither new codec has a PSL type yet: MySQL's explicit type names are pending under ADR 322. MySQL's live include tests cover scalar includes and `combine()`, on both servers.
+Resolved: the MySQL target contributes aggregate descriptors as the Postgres target does (`packages/3-targets/mysql/1-mysql/1-target/src/core/aggregates.ts`), listed by the MySQL adapter and, through its metadata, the MariaDB adapter. `count` and `sum` over integers read as numbers through the new codec `mysql/bigintnumber@1`; `countBigInt` and `sumBigInt` as bigints; `avg` over an integer is `CAST(SUM(x) AS DOUBLE) / COUNT(x)`, read through the new codec `mysql/double@1`, because `AVG(x)` is cut to nine decimal places when the server groups through a temporary table. MySQL's live include tests cover scalar includes and `combine()`, on both servers.
+
+## `mysql/bigintnumber@1` and `mysql/double` have no authoring name (slice 6b-2, 2026-11-18)
+
+The two codecs type aggregate results only. No PSL type or `type.*` helper writes a column of them, because MySQL's explicit type names are still to be decided under ADR 322, so no aggregate takes them as input, and `mysql/double` claims no `double` column the catalog reports: introspection and `db verify` read a `double` column as they did before it existed. When ADR 322 names them, give them catalog texts and the aggregate rows over them, as Postgres's `Int8Number` and `Float8` have.
 
 ## `deleteAll()` on a table with no row identity deletes by the caller's condition after reading (slice 6b-1, 2026-11-17)
 

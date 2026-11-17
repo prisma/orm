@@ -104,7 +104,7 @@ exports[`the statements MySQL live tests send > reads includes through the ORM 1
         "params": [
           1,
         ],
-        "sql": "SELECT \`User\`.\`email\` AS \`email\`, \`User\`.\`id\` AS \`id\`, \`User\`.\`role\` AS \`role\`, (SELECT JSON_OBJECT('value', CAST(AVG(\`Post\`.\`id\`) AS DOUBLE)) AS \`posts\` FROM \`Post\` WHERE \`Post\`.\`authorId\` = \`User\`.\`id\`) AS \`posts\` FROM \`User\` WHERE \`User\`.\`id\` = ?1 LIMIT 1",
+        "sql": "SELECT \`User\`.\`email\` AS \`email\`, \`User\`.\`id\` AS \`id\`, \`User\`.\`role\` AS \`role\`, (SELECT JSON_OBJECT('value', CAST(SUM(\`Post\`.\`id\`) AS DOUBLE) / COUNT(\`Post\`.\`id\`)) AS \`posts\` FROM \`Post\` WHERE \`Post\`.\`authorId\` = \`User\`.\`id\`) AS \`posts\` FROM \`User\` WHERE \`User\`.\`id\` = ?1 LIMIT 1",
       },
       {
         "params": [
@@ -193,7 +193,7 @@ exports[`the statements MySQL live tests send > reads through the ORM and the SQ
         "params": [
           2,
         ],
-        "sql": "SELECT COUNT(*) AS \`count\`, SUM(\`Post\`.\`authorId\`) AS \`total\`, CAST(AVG(\`Post\`.\`authorId\`) AS DOUBLE) AS \`mean\`, MIN(\`Post\`.\`title\`) AS \`first\`, MAX(\`Post\`.\`title\`) AS \`last\` FROM \`Post\` WHERE \`Post\`.\`id\` >= ?1",
+        "sql": "SELECT COUNT(*) AS \`count\`, SUM(\`Post\`.\`authorId\`) AS \`total\`, CAST(SUM(\`Post\`.\`authorId\`) AS DOUBLE) / COUNT(\`Post\`.\`authorId\`) AS \`mean\`, MIN(\`Post\`.\`title\`) AS \`first\`, MAX(\`Post\`.\`title\`) AS \`last\` FROM \`Post\` WHERE \`Post\`.\`id\` >= ?1",
       },
     ],
   },

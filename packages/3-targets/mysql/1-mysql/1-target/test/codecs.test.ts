@@ -88,7 +88,7 @@ describe('MySQL codecs read the text MySQL sends', () => {
       await codec.fromWire(2.5, ctx),
       await codec.toWire(0.1, ctx),
     ]).toEqual([5 / 3, 9007199254740992, 2.5, 0.1]);
-    for (const wire of ['', 'NaN', 'x', Number.POSITIVE_INFINITY]) {
+    for (const wire of ['', 'NaN', 'x', '0x10', '0b11', ' 1 ', '1e', Number.POSITIVE_INFINITY]) {
       await expect(codec.fromWire(wire, ctx)).rejects.toMatchObject({
         code: 'RUNTIME.DECODE_FAILED',
       });
