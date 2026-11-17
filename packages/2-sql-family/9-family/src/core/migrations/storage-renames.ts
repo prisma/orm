@@ -363,6 +363,19 @@ export class StorageRenames {
     return joined.length > 0 ? { kind: 'joined', objects: joined } : undefined;
   }
 
+  /** Whether the origin contract has `table`, as the target compares names. */
+  originHasTable(table: ModelTable): boolean {
+    const tables = this.#fromContract.storage.namespaces[table.namespaceId]?.entries.table ?? {};
+    return Object.keys(tables).some((name) => this.sameName(name, table.table));
+  }
+
+  /** Whether the origin contract has `column` on `table`, as the target compares names. */
+  originHasColumn(table: ModelTable, column: string): boolean {
+    const stored =
+      this.#fromContract.storage.namespaces[table.namespaceId]?.entries.table?.[table.table];
+    return Object.keys(stored?.columns ?? {}).some((name) => this.sameName(name, column));
+  }
+
   /** The models of the origin contract stored in `table`, as the target compares names. */
   originModelsIn(table: ModelTable): readonly ModelCoordinate[] {
     return modelsStoring(this.#fromContract, table, this.sameName).map(
@@ -485,6 +498,13 @@ function tableRenameConflict(
         location,
       );
     }
+    if (!renames.originHasTable(heldTable)) {
+      return contractChangeRefused(
+        `${label}: the database has both tables`,
+        `${changeText}, and the database has both table "${from}" and table "${held}". The rename may have been half done by hand, or something created table "${held}" before db update ran. Move the rows of table "${held}" into table "${from}", or drop table "${held}", then run again.`,
+        location,
+      );
+    }
     const holders = renames.originModelsIn(heldTable);
     return contractChangeRefused(
       `${label}: the schema being planned from already has a table "${to}"${held === to ? '' : `, as "${held}"`}`,
@@ -510,13 +530,14 @@ function tableRenameConflict(
 
 function columnRenameConflict(
   change: ColumnChange,
+  table: string,
   changes: readonly ColumnChange[],
   tables: SchemaTables,
   renames: StorageRenames,
 ): SqlPlannerConflict | undefined {
-  const { namespaceId, table } = change.origin;
+  const { namespaceId } = change.origin;
   const label = `Cannot rename column "${table}"."${change.from}" to "${change.to}"`;
-  const location = { ...change.origin, column: change.from };
+  const location = { namespaceId, table, column: change.from };
   const changeText = capitalized(columnChangeText(change));
   const misread = (column: string) =>
     `values of column "${column}" as values of ${fieldsText(change.renames.map((rename) => rename.from))}`;
@@ -533,6 +554,13 @@ function columnRenameConflict(
       return contractChangeRefused(
         `${label}: column "${held}" is renamed in the same plan`,
         `${changeText}, and ${columnChangeText(moved)}. ${ORDER}, and without the renames the plan would read the ${misread(held)}. ${TEMPORARY_NAMES_ROUTE}`,
+        location,
+      );
+    }
+    if (!renames.originHasColumn(change.origin, held)) {
+      return contractChangeRefused(
+        `${label}: the database has both columns`,
+        `${changeText}, and table "${table}" in the database has both column "${change.from}" and column "${held}". The rename may have been half done by hand, or something created column "${held}" before db update ran. Move the values of column "${held}" into column "${change.from}", or drop column "${held}", then run again.`,
         location,
       );
     }
@@ -554,10 +582,37 @@ function columnRenameConflict(
   return undefined;
 }
 
+/** A change the schema being planned from has already made: it has the new name, as `name`, and not the old one. */
+export interface AlreadyMade<TChange> {
+  readonly change: TChange;
+  readonly name: string;
+}
+
 /** The table and column renames a plan makes, those its statements ask for and those it makes for names both contracts keep. */
 export interface PlannedStorageRenames {
   readonly tables: readonly TableChange[];
   readonly columns: readonly ColumnChange[];
+  /** The changes no statement asks for that the schema being planned from has already made. */
+  readonly madeTables: readonly AlreadyMade<TableChange>[];
+  readonly madeColumns: readonly AlreadyMade<ColumnChange>[];
+}
+
+/**
+ * The name the table of a column change has in the schema being planned from: its origin name
+ * when the table stays or is renamed, its new name when the schema already has it renamed, and
+ * `undefined` when the plan does not move the table.
+ */
+function columnTableInSchema(
+  change: ColumnChange,
+  tables: readonly TableChange[],
+  madeTables: readonly AlreadyMade<TableChange>[],
+  renames: StorageRenames,
+): string | undefined {
+  if (renames.inPlace(change.origin, change.destination)) return change.origin.table;
+  const matches = (table: TableChange) =>
+    sameTable(table.origin, change.origin) && sameTable(table.destination, change.destination);
+  if (tables.some(matches)) return change.origin.table;
+  return madeTables.find((made) => matches(made.change))?.name;
 }
 
 /**
@@ -576,44 +631,93 @@ export function storageRenameConflict(
   }
   for (const change of planned.columns) {
     if (hasStatement(change)) continue;
-    const conflict = columnRenameConflict(change, planned.columns, tables, renames);
+    const table = columnTableInSchema(change, planned.tables, planned.madeTables, renames);
+    if (table === undefined) continue;
+    const conflict = columnRenameConflict(change, table, planned.columns, tables, renames);
     if (conflict !== undefined) return conflict;
   }
   return undefined;
 }
 
+type Disposition =
+  | { readonly kind: 'rename' | 'none' }
+  | { readonly kind: 'made'; readonly name: string };
+
+/**
+ * What the plan does for a change no statement asks for, from what the schema being planned from
+ * has: rename it when the old name is there; nothing when the schema already has the new name in
+ * place of the old one, which the plan records as made; nothing when the schema has neither. When
+ * the new name is one the origin contract has, it is a rename, which the conflict check refuses.
+ */
+function disposition(
+  hasOld: boolean,
+  held: string | undefined,
+  originHasHeld: (held: string) => boolean,
+): Disposition {
+  if (hasOld) return { kind: 'rename' };
+  if (held === undefined) return { kind: 'none' };
+  return originHasHeld(held) ? { kind: 'rename' } : { kind: 'made', name: held };
+}
+
 /**
  * The renames the plan makes: every change a statement asks for, and each change no statement
  * asks for whose whole table or column moves, whose control policy is `managed` in both
- * contracts, and whose table and column the schema being planned from has. A column change on a
- * table that changes needs the table change planned.
+ * contracts, and whose old table or column the schema being planned from has. A change whose new
+ * name the schema has in place of the old one is made already. A column change on a table that
+ * changes needs the table change planned or made.
  */
 export function plannedStorageRenames(
   renames: StorageRenames,
   tables: SchemaTables,
 ): PlannedStorageRenames {
-  const plannedTables = renames.tableChanges.filter(
-    (change) =>
-      hasStatement(change) ||
-      (renames.namespaceAfterRenames(change.origin.namespaceId) ===
-        change.destination.namespaceId &&
-        renames.managedOnBothSides(change) &&
-        tables.hasTable(change.origin.namespaceId, change.origin.table) &&
-        renames.sharedTable(change) === undefined),
-  );
-  const tableMoves = (change: ColumnChange) =>
-    renames.inPlace(change.origin, change.destination) ||
-    plannedTables.some(
-      (table) =>
-        sameTable(table.origin, change.origin) && sameTable(table.destination, change.destination),
+  const plannedTables: TableChange[] = [];
+  const madeTables: AlreadyMade<TableChange>[] = [];
+  for (const change of renames.tableChanges) {
+    if (hasStatement(change)) {
+      plannedTables.push(change);
+      continue;
+    }
+    if (
+      renames.namespaceAfterRenames(change.origin.namespaceId) !== change.destination.namespaceId ||
+      !renames.managedOnBothSides(change) ||
+      renames.sharedTable(change) !== undefined
+    ) {
+      continue;
+    }
+    const { namespaceId, table: from } = change.origin;
+    const [held] = tables
+      .tablesNamed(namespaceId, change.destination.table)
+      .filter((table) => table !== from);
+    const outcome = disposition(tables.hasTable(namespaceId, from), held, (name) =>
+      renames.originHasTable({ namespaceId, table: name }),
     );
-  const plannedColumns = renames.columnChanges.filter(
-    (change) =>
-      hasStatement(change) ||
-      (tableMoves(change) &&
-        renames.managedOnBothSides(change) &&
-        tables.hasColumn(change.origin.namespaceId, change.origin.table, change.from) &&
-        renames.sharedColumn(change) === undefined),
-  );
-  return { tables: plannedTables, columns: plannedColumns };
+    if (outcome.kind === 'rename') plannedTables.push(change);
+    if (outcome.kind === 'made') madeTables.push({ change, name: outcome.name });
+  }
+  const plannedColumns: ColumnChange[] = [];
+  const madeColumns: AlreadyMade<ColumnChange>[] = [];
+  for (const change of renames.columnChanges) {
+    if (hasStatement(change)) {
+      plannedColumns.push(change);
+      continue;
+    }
+    const table = columnTableInSchema(change, plannedTables, madeTables, renames);
+    if (
+      table === undefined ||
+      !renames.managedOnBothSides(change) ||
+      renames.sharedColumn(change) !== undefined
+    ) {
+      continue;
+    }
+    const { namespaceId } = change.origin;
+    const [held] = tables
+      .columnsNamed(namespaceId, table, change.to)
+      .filter((column) => column !== change.from);
+    const outcome = disposition(tables.hasColumn(namespaceId, table, change.from), held, (name) =>
+      renames.originHasColumn(change.origin, name),
+    );
+    if (outcome.kind === 'rename') plannedColumns.push(change);
+    if (outcome.kind === 'made') madeColumns.push({ change, name: outcome.name });
+  }
+  return { tables: plannedTables, columns: plannedColumns, madeTables, madeColumns };
 }

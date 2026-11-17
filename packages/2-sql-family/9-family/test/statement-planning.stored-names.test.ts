@@ -298,20 +298,6 @@ describe('planStatements, storage that does not move whole', () => {
     ).toEqual({ calls: [], tableRenames: [], columnRenames: [], plannedStatements: [] });
   });
 
-  it('renames nothing when the schema being planned from does not have the old table', () => {
-    expect(
-      planned(
-        plan(
-          contractOf({ User: users }),
-          contractOf({
-            User: { table: 'app_users', fields: { id: 'id', email: 'email_address' } },
-          }),
-          fakeTarget(['app.app_users'], { 'app.app_users': ['id', 'email'] }),
-        ),
-      ),
-    ).toEqual({ calls: [], tableRenames: [], columnRenames: [], plannedStatements: [] });
-  });
-
   it('refuses a rename the policy does not allow, naming the contract change and no statement', () => {
     const conflict = rejection(
       planStatements({

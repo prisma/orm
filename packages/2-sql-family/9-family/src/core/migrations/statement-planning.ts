@@ -443,6 +443,23 @@ class StatementPlanner<TCall extends CallWithCompanions> {
     );
   }
 
+  /**
+   * Records that a table no statement asks to rename already has its new name in the working
+   * schema, as `table`: later renames and questions find it there, as after a planned rename.
+   */
+  recordMadeTableChange(change: TableChange, table: string): Result<readonly number[], never> {
+    const current = this.#current(change.origin);
+    this.#renamedTables.set(tableKey(change.origin), { namespaceId: current.namespaceId, table });
+    this.#originTables.set(tableKey(change.origin), change.origin);
+    return ok([]);
+  }
+
+  /** Records that a column no statement asks to rename already has its new name, as `column`. */
+  recordMadeColumnChange(change: ColumnChange, column: string): Result<readonly number[], never> {
+    this.#renamedColumns.push({ origin: change.origin, from: change.from, to: column });
+    return ok([]);
+  }
+
   /** Plans one statement; the result is the operations it accounts for. */
   plan(statement: ResolvedRenameStatement): Result<StatementOperations, SqlPlannerConflict> {
     switch (statement.entity) {
@@ -941,12 +958,22 @@ export function planStatements<TCall extends CallWithCompanions>(input: {
     ...input.statements
       .filter((statement) => statement.entity === 'namespace')
       .map((statement) => () => planStatement(statement)),
+    ...storageRenames.madeTables.map(
+      ({ change, name }) =>
+        () =>
+          planner.recordMadeTableChange(change, name),
+    ),
     ...storageRenames.tables
       .filter(unstated)
       .map((change) => () => planner.planTableChange(change)),
     ...input.statements
       .filter((statement) => statement.entity !== 'namespace')
       .map((statement) => () => planStatement(statement)),
+    ...storageRenames.madeColumns.map(
+      ({ change, name }) =>
+        () =>
+          planner.recordMadeColumnChange(change, name),
+    ),
     ...storageRenames.columns
       .filter(unstated)
       .map((change) => () => planner.planColumnChange(change)),
