@@ -12,7 +12,14 @@ import { type Connection, createConnection } from 'mariadb';
 import { acquireClientQueryLock } from '../client-query-lock';
 import { mysqlConnectionOptions } from '../connection-options';
 import { mysqlDriverDescriptorMetaFor } from '../descriptor-meta';
-import { connectionFix, connectionLost, isFatal, normalizeMysqlError } from '../normalize-error';
+import {
+  connectionFix,
+  connectionLost,
+  isFatal,
+  MYSQL_CHECK_VIOLATION_ERRORS,
+  type MysqlServer,
+  normalizeMysqlError,
+} from '../normalize-error';
 import { applySessionSettings, sessionSettingsStatement } from '../session-settings';
 import { statementFor } from '../statement';
 
@@ -27,7 +34,7 @@ class MysqlControlDriverFor<TargetId extends string> implements SqlControlDriver
   constructor(
     private readonly connection: Connection,
     readonly targetId: TargetId,
-    private readonly displayName: string,
+    private readonly server: MysqlServer,
   ) {
     connection.on('error', (error: Error) => {
       this.#lost = error;
@@ -42,7 +49,7 @@ class MysqlControlDriverFor<TargetId extends string> implements SqlControlDriver
     const releaseLock = await acquireClientQueryLock(this.connection);
     try {
       if (this.#lost !== undefined) throw connectionLost(this.#lost);
-      const statement = statementFor(this.connection, sql, params ?? [], this.displayName);
+      const statement = statementFor(this.connection, sql, params ?? [], this.server.displayName);
       const result: unknown = await this.connection.query(statement.sql, statement.values);
       return {
         rows: Array.isArray(result)
@@ -56,7 +63,7 @@ class MysqlControlDriverFor<TargetId extends string> implements SqlControlDriver
         this.#lost = error;
         throw connectionLost(error);
       }
-      throw normalizeMysqlError(error, this.displayName);
+      throw normalizeMysqlError(error, this.server);
     } finally {
       releaseLock();
     }
@@ -73,16 +80,23 @@ class MysqlControlDriverFor<TargetId extends string> implements SqlControlDriver
   }
 }
 
+const mysqlServer: MysqlServer = {
+  displayName: mysqlTargetDescriptorMetaRuntime.displayName,
+  checkViolationErrors: MYSQL_CHECK_VIOLATION_ERRORS,
+};
+
 /** A MySQL connection for the control plane. */
 export class MysqlControlDriver extends MysqlControlDriverFor<'mysql'> {
   constructor(connection: Connection) {
-    super(connection, 'mysql', mysqlTargetDescriptorMetaRuntime.displayName);
+    super(connection, 'mysql', mysqlServer);
   }
 }
 
 export interface MysqlControlDriverOptions<TargetId extends string> {
   /** The target's runtime metadata: its drivers carry its id and name it by its display name in their errors. */
   readonly target: Pick<MysqlRuntimeTargetMeta<TargetId>, 'targetId' | 'displayName'>;
+  /** The error numbers the database reports a failed CHECK constraint with, which its drivers report with Postgres's SQLSTATE 23514. */
+  readonly checkViolationErrors: readonly number[];
 }
 
 /** The control driver descriptor of MySQL, or of a target that extends it. */
@@ -90,14 +104,15 @@ export function createMysqlControlDriverDescriptor<TargetId extends string>(
   options: MysqlControlDriverOptions<TargetId>,
 ): ControlDriverDescriptor<'sql', TargetId, SqlControlDriverInstance<TargetId>> {
   const { targetId, displayName } = options.target;
+  const server = { displayName, checkViolationErrors: options.checkViolationErrors };
   return {
     ...mysqlDriverDescriptorMetaFor(targetId),
     create: (url, options) =>
       connectControlDriver(
         url,
         options,
-        displayName,
-        (connection) => new MysqlControlDriverFor(connection, targetId, displayName),
+        server,
+        (connection) => new MysqlControlDriverFor(connection, targetId, server),
       ),
   };
 }
@@ -105,12 +120,12 @@ export function createMysqlControlDriverDescriptor<TargetId extends string>(
 async function connectControlDriver<Driver>(
   url: string,
   options: ControlDriverConnectOptions | undefined,
-  displayName: string,
+  server: MysqlServer,
   driverFor: (connection: Connection) => Driver,
 ): Promise<Driver> {
   const connectionOptions = mysqlConnectionOptions(url, {
     connectTimeoutMs: options?.connectTimeoutMs,
-    displayName,
+    displayName: server.displayName,
   });
   const settings = sessionSettingsStatement(options?.sessionSettings ?? {});
   try {
@@ -123,7 +138,7 @@ async function connectControlDriver<Driver>(
     }
     return driverFor(connection);
   } catch (error) {
-    const normalized = normalizeMysqlError(error, displayName);
+    const normalized = normalizeMysqlError(error, server);
     throw errorRuntime('DRIVER.CONNECTION_FAILED', 'Database connection failed', {
       why: normalized instanceof Error ? normalized.message : String(normalized),
       fix:
@@ -141,7 +156,7 @@ const mysqlDriverDescriptor: ControlDriverDescriptor<'sql', 'mysql', MysqlContro
     connectControlDriver(
       url,
       options,
-      mysqlTargetDescriptorMetaRuntime.displayName,
+      mysqlServer,
       (connection) => new MysqlControlDriver(connection),
     ),
 };

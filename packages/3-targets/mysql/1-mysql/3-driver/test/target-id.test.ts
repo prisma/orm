@@ -25,9 +25,11 @@ describe('the driver descriptors of a target that extends MySQL', () => {
   it('build control and runtime drivers that carry its target id', async () => {
     const control = createMysqlControlDriverDescriptor({
       target: { targetId: 'mariadb', displayName: 'MariaDB' },
+      checkViolationErrors: [4025],
     });
     const runtime = createMysqlRuntimeDriverDescriptor({
       target: { targetId: 'mariadb', displayName: 'MariaDB' },
+      checkViolationErrors: [4025],
     });
     const driver = await control.create('mysql://root@localhost/db');
     expect({

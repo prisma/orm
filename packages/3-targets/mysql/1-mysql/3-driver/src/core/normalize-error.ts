@@ -72,7 +72,17 @@ const FOREIGN_KEY_VIOLATION = '23503';
 const NOT_NULL_VIOLATION = '23502';
 const CHECK_VIOLATION = '23514';
 
-/** The SQLSTATE Postgres sends for each constraint MySQL reports under a shared SQLSTATE, as the SQLite driver maps its own codes, so a consumer such as `isUniqueConstraintViolation` reads them alike. */
+/** The database a driver runs on, as its errors describe it. */
+export interface MysqlServer {
+  readonly displayName: string;
+  /** The error numbers it reports a failed CHECK constraint with. MySQL and MariaDB share their error numbers below 1900 and number the rest apart, so the same number means something else on the other. */
+  readonly checkViolationErrors: readonly number[];
+}
+
+/** MySQL's error for a failed CHECK constraint, `ER_CHECK_CONSTRAINT_VIOLATED`. */
+export const MYSQL_CHECK_VIOLATION_ERRORS: readonly number[] = [3819];
+
+/** The SQLSTATE Postgres sends for each constraint violation reported under a shared SQLSTATE, by the numbers MySQL and MariaDB share, as the SQLite driver maps its own codes, so a consumer such as `isUniqueConstraintViolation` reads them alike. */
 const CONSTRAINT_SQLSTATES: ReadonlyMap<number, string> = new Map([
   [1062, UNIQUE_VIOLATION],
   [1586, UNIQUE_VIOLATION],
@@ -81,9 +91,13 @@ const CONSTRAINT_SQLSTATES: ReadonlyMap<number, string> = new Map([
   [1451, FOREIGN_KEY_VIOLATION],
   [1452, FOREIGN_KEY_VIOLATION],
   [1048, NOT_NULL_VIOLATION],
-  [3819, CHECK_VIOLATION],
-  [4025, CHECK_VIOLATION],
 ]);
+
+function constraintSqlState(errno: number, server: MysqlServer): string | undefined {
+  return server.checkViolationErrors.includes(errno)
+    ? CHECK_VIOLATION
+    : CONSTRAINT_SQLSTATES.get(errno);
+}
 
 const PUBLIC_KEY_FIX =
   'Add allowPublicKeyRetrieval=true to the URL, or connect over TLS with sslmode or ssl=true in the URL. Fetching the key over plain TCP lets a machine between the client and the server pose as the server and read the password; TLS does not.';
@@ -102,9 +116,10 @@ function publicKeyNeeded(error: MariadbError, displayName: string): SqlConnectio
   );
 }
 
-function poolTimedOut(error: MariadbError, displayName: string): unknown {
+function poolTimedOut(error: MariadbError, server: MysqlServer): unknown {
+  const { displayName } = server;
   const cause = error.cause;
-  if (connectingCannotSucceed(cause)) return normalizeMysqlError(cause, displayName);
+  if (connectingCannotSucceed(cause)) return normalizeMysqlError(cause, server);
   return new SqlConnectionError(
     cause instanceof Error
       ? `Timed out waiting for a pooled ${displayName} connection; the pool could not open one: ${serverMessage(cause)}`
@@ -114,23 +129,23 @@ function poolTimedOut(error: MariadbError, displayName: string): unknown {
 }
 
 /**
- * An error from the `mariadb` package as the driver reports it, in the family's types as the Postgres driver reports its own: a Node socket or DNS error as a `SqlConnectionError`, transient as the Postgres driver's table says; a lost connection and a pool that gave no connection in time as a transient `SqlConnectionError`; a sign-in that needs the server's public key, and session setup that fails, as a `SqlConnectionError` that is not transient; a sign-in MySQL refuses, as Postgres's 28P01, and an error MySQL reported about a statement as `SqlQueryError` with its SQLSTATE, a constraint violation with the SQLSTATE Postgres sends; and any other error unchanged. A pool that timed out because it could not connect in a way no retry can get past reports that error.
+ * An error from the `mariadb` package as the driver reports it, in the family's types as the Postgres driver reports its own: a Node socket or DNS error as a `SqlConnectionError`, transient as the Postgres driver's table says; a lost connection and a pool that gave no connection in time as a transient `SqlConnectionError`; a sign-in that needs the server's public key, and session setup that fails, as a `SqlConnectionError` that is not transient; a sign-in MySQL refuses, as Postgres's 28P01, and an error MySQL reported about a statement as `SqlQueryError` with its SQLSTATE, a constraint violation with the SQLSTATE Postgres sends, a CHECK violation by the server's own error numbers; and any other error unchanged. A pool that timed out because it could not connect in a way no retry can get past reports that error.
  */
-export function normalizeMysqlError(error: unknown, displayName: string): unknown {
+export function normalizeMysqlError(error: unknown, server: MysqlServer): unknown {
   const transient = nodeConnectionTransience(error);
   if (transient !== undefined && error instanceof Error) {
     return new SqlConnectionError(error.message, { cause: error, transient });
   }
   if (!isMariadbError(error)) return error;
-  if (error.errno === ER_CANNOT_RETRIEVE_RSA_KEY) return publicKeyNeeded(error, displayName);
+  if (error.errno === ER_CANNOT_RETRIEVE_RSA_KEY) return publicKeyNeeded(error, server.displayName);
   if (error.errno === ER_INITIAL_SQL_ERROR) {
     return new SqlConnectionError(serverMessage(error), { cause: error, transient: false });
   }
   if (isFatal(error) && !SIGN_IN_REFUSED.has(error.errno)) return connectionLost(error);
-  if (error.errno === ER_GET_CONNECTION_TIMEOUT) return poolTimedOut(error, displayName);
+  if (error.errno === ER_GET_CONNECTION_TIMEOUT) return poolTimedOut(error, server);
   if (typeof error.sqlState !== 'string') return error;
   return new SqlQueryError(error.sqlMessage ?? error.message, {
     cause: error,
-    sqlState: CONSTRAINT_SQLSTATES.get(error.errno) ?? error.sqlState,
+    sqlState: constraintSqlState(error.errno, server) ?? error.sqlState,
   });
 }

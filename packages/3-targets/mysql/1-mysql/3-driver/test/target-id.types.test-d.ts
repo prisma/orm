@@ -18,10 +18,16 @@ import mysqlRuntimeDriver, {
 
 test('the driver descriptors carry the target id they are built for, and MySQL by default', () => {
   expectTypeOf(
-    createMysqlControlDriverDescriptor({ target: { targetId: 'mariadb', displayName: 'MariaDB' } }),
+    createMysqlControlDriverDescriptor({
+      target: { targetId: 'mariadb', displayName: 'MariaDB' },
+      checkViolationErrors: [4025],
+    }),
   ).toEqualTypeOf<ControlDriverDescriptor<'sql', 'mariadb', SqlControlDriverInstance<'mariadb'>>>();
   expectTypeOf(
-    createMysqlRuntimeDriverDescriptor({ target: { targetId: 'mariadb', displayName: 'MariaDB' } }),
+    createMysqlRuntimeDriverDescriptor({
+      target: { targetId: 'mariadb', displayName: 'MariaDB' },
+      checkViolationErrors: [4025],
+    }),
   ).toEqualTypeOf<
     RuntimeDriverDescriptor<
       'sql',

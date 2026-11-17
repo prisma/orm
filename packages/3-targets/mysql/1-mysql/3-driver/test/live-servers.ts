@@ -3,6 +3,7 @@ import type { RuntimeDriverDescriptor } from '@internal/framework-components/exe
 import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
 import { mysqlTargetDescriptorMetaRuntime } from '@internal/target-mysql/descriptor-meta-runtime';
 import { createMysqlControlDriverDescriptor } from '../src/core/migrations/control-driver';
+import { MYSQL_CHECK_VIOLATION_ERRORS } from '../src/core/normalize-error';
 import type {
   MysqlDriverCreateOptions,
   MysqlRuntimeDriver,
@@ -26,16 +27,22 @@ export interface DriverServer {
   readonly cachingSha2Password: boolean;
   /** Whether the server the tests run against accepts TLS: the MySQL 8.4 image generates certificates, the MariaDB 10.11 image starts without TLS. */
   readonly tls: boolean;
+  /** The error numbers the server reports a failed CHECK constraint with, which the target's driver package gives the factories. */
+  readonly checkViolationErrors: readonly number[];
 }
 
 function serverFor(
   target: { readonly targetId: string; readonly displayName: string },
-  server: Pick<DriverServer, 'urlVariable' | 'negativeZero' | 'cachingSha2Password' | 'tls'>,
+  server: Pick<
+    DriverServer,
+    'urlVariable' | 'negativeZero' | 'cachingSha2Password' | 'tls' | 'checkViolationErrors'
+  >,
 ): DriverServer {
+  const { checkViolationErrors } = server;
   return {
     displayName: target.displayName,
-    runtime: createMysqlRuntimeDriverDescriptor({ target }),
-    control: createMysqlControlDriverDescriptor({ target }),
+    runtime: createMysqlRuntimeDriverDescriptor({ target, checkViolationErrors }),
+    control: createMysqlControlDriverDescriptor({ target, checkViolationErrors }),
     ...server,
   };
 }
@@ -47,9 +54,16 @@ export const driverServers: readonly DriverServer[] = [
     negativeZero: '-0',
     cachingSha2Password: true,
     tls: true,
+    checkViolationErrors: MYSQL_CHECK_VIOLATION_ERRORS,
   }),
   serverFor(
     { targetId: 'mariadb', displayName: 'MariaDB' },
-    { urlVariable: 'MARIADB_URL', negativeZero: '0', cachingSha2Password: false, tls: false },
+    {
+      urlVariable: 'MARIADB_URL',
+      negativeZero: '0',
+      cachingSha2Password: false,
+      tls: false,
+      checkViolationErrors: [4025],
+    },
   ),
 ];

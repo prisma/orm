@@ -131,4 +131,23 @@ export function describeRawLane(server: LiveServer): void {
       });
     });
   });
+
+  describe(`${server.displayName} constraint violations`, {
+    timeout: timeouts.databaseOperation,
+  }, () => {
+    it('reports a failed CHECK constraint with the SQLSTATE Postgres sends, 23514', async (test) => {
+      await withSeededDatabase(
+        test,
+        server,
+        [...exampleDatabase, 'CREATE TABLE `Checked` (`n` INT NOT NULL, CHECK (`n` > 0))'],
+        async (url) => {
+          await using db = server.client({ url, verifyMarker: false });
+          const failure = await db
+            .execute(db.raw.sql`INSERT INTO Checked (n) VALUES (${-1})`.affectedCount().build())
+            .catch((error: unknown) => error);
+          expect(failure).toMatchObject({ kind: 'sql_query', sqlState: '23514' });
+        },
+      );
+    });
+  });
 }

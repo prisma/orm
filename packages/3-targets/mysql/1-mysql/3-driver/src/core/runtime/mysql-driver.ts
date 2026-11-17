@@ -23,7 +23,12 @@ import {
   mysqlPoolIdleTimeoutMillis,
   mysqlPoolOptions,
 } from '../connection-options';
-import { connectingCannotSucceed, isFatal, normalizeMysqlError } from '../normalize-error';
+import {
+  connectingCannotSucceed,
+  isFatal,
+  type MysqlServer,
+  normalizeMysqlError,
+} from '../normalize-error';
 import { SessionSettingsGuard } from '../session-settings';
 import { statementFor } from '../statement';
 import { Canceller, type CancelOutcome } from './canceller';
@@ -66,13 +71,18 @@ function startStream(
   client: PoolConnection,
   request: SqlExecuteRequest,
   outcome: Outcome,
-  displayName: string,
+  server: MysqlServer,
 ): Readable {
   try {
-    const { sql, values } = statementFor(client, request.sql, request.params ?? [], displayName);
+    const { sql, values } = statementFor(
+      client,
+      request.sql,
+      request.params ?? [],
+      server.displayName,
+    );
     return client.queryStream(sql, values);
   } catch (error) {
-    settle(error, outcome, displayName);
+    settle(error, outcome, server);
   }
 }
 
@@ -95,9 +105,9 @@ interface Outcome {
 }
 
 /** The error to report for `error`, after noting in `outcome` whether it left the client unusable. */
-function settle(error: unknown, outcome: Outcome, displayName: string): never {
+function settle(error: unknown, outcome: Outcome, server: MysqlServer): never {
   if (isFatal(error)) outcome.destroy = true;
-  throw normalizeMysqlError(error, displayName);
+  throw normalizeMysqlError(error, server);
 }
 
 /**
@@ -164,8 +174,12 @@ abstract class MysqlQueryable implements SqlQueryable {
 
   constructor(
     protected readonly streams: boolean,
-    protected readonly displayName: string,
+    protected readonly server: MysqlServer,
   ) {}
+
+  protected get displayName(): string {
+    return this.server.displayName;
+  }
 
   /** Records a stream that is open, and returns the call that records its end. */
   protected streamOpened(_rows: Readable): () => void {
@@ -216,7 +230,7 @@ abstract class MysqlQueryable implements SqlQueryable {
         releaseLock();
       }
     } catch (error) {
-      settle(error, outcome, this.displayName);
+      settle(error, outcome, this.server);
     } finally {
       await this.releaseClient(client, outcome);
     }
@@ -236,7 +250,7 @@ abstract class MysqlQueryable implements SqlQueryable {
       throw error;
     }
     try {
-      const rows = startStream(client, request, outcome, this.displayName);
+      const rows = startStream(client, request, outcome, this.server);
       rows.on('error', ignoreAfterStop);
       const streamClosed = this.streamOpened(rows);
       let settled = false;
@@ -250,7 +264,7 @@ abstract class MysqlQueryable implements SqlQueryable {
         settled = true;
       } catch (error) {
         settled = true;
-        settle(error, outcome, this.displayName);
+        settle(error, outcome, this.server);
       } finally {
         if (!settled && !this.handedBack) await this.#stopEarly(client, rows, outcome);
         if (outcome.destroy) rows.destroy();
@@ -292,8 +306,7 @@ interface HeldState {
   /** The statements that are not streams and hold the client's lock, which a release lets finish. */
   readonly running: Set<Promise<unknown>>;
   readonly cancel: CancelStatement;
-  /** The database's name as messages show it. */
-  readonly displayName: string;
+  readonly server: MysqlServer;
   /** Settles once the connection is released or destroyed, which refuses every statement sent or still waiting for the client's lock. */
   readonly handedBack: { done: boolean; readonly signal: Promise<never>; refuse(): void };
 }
@@ -374,7 +387,7 @@ abstract class MysqlHeldQueryable extends MysqlQueryable {
     protected readonly held: HeldState,
     streams: boolean,
   ) {
-    super(streams, held.displayName);
+    super(streams, held.server);
   }
 
   protected async acquireClient(): Promise<PoolConnection> {
@@ -391,7 +404,7 @@ abstract class MysqlHeldQueryable extends MysqlQueryable {
     try {
       await this.runStatement(call);
     } catch (error) {
-      throw normalizeMysqlError(error, this.displayName);
+      throw normalizeMysqlError(error, this.server);
     } finally {
       releaseLock();
     }
@@ -406,7 +419,7 @@ class MysqlConnectionImpl extends MysqlHeldQueryable implements SqlConnection {
     streams: boolean,
     cancel: CancelStatement,
     onRelease: () => void,
-    displayName: string,
+    server: MysqlServer,
   ) {
     super(
       client,
@@ -415,8 +428,8 @@ class MysqlConnectionImpl extends MysqlHeldQueryable implements SqlConnection {
         cancelUnconfirmed: false,
         running: new Set(),
         cancel,
-        displayName,
-        handedBack: handedBackState(displayName),
+        server,
+        handedBack: handedBackState(server.displayName),
       },
       streams,
     );
@@ -613,8 +626,8 @@ export class MysqlDriver<TargetId extends string = 'mysql'>
   readonly #options: MysqlDriverCreateOptions;
   readonly #sessionSettings: SessionSettingsGuard;
 
-  constructor(options: MysqlDriverCreateOptions, targetId: TargetId, displayName: string) {
-    super(options.stream ?? false, displayName);
+  constructor(options: MysqlDriverCreateOptions, targetId: TargetId, server: MysqlServer) {
+    super(options.stream ?? false, server);
     this.targetId = targetId;
     this.#options = options;
     this.#sessionSettings = new SessionSettingsGuard(options.sessionSettings ?? {});
@@ -655,7 +668,7 @@ export class MysqlDriver<TargetId extends string = 'mysql'>
       this.streams,
       this.cancelStatement,
       () => this.#inUse.released(),
-      this.displayName,
+      this.server,
     );
   }
 
@@ -686,14 +699,14 @@ export class MysqlDriver<TargetId extends string = 'mysql'>
     } catch (error) {
       releaseLate(getting);
       this.#inUse.released();
-      throw normalizeMysqlError(error, this.displayName);
+      throw normalizeMysqlError(error, this.server);
     }
     try {
       await this.#sessionSettings.ensure(client);
     } catch (error) {
       client.destroy();
       this.#inUse.released();
-      throw normalizeMysqlError(error, this.displayName);
+      throw normalizeMysqlError(error, this.server);
     }
     return client;
   }

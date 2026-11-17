@@ -27,6 +27,7 @@ const mariadbComponents = {
   } satisfies SqlControlAdapterDescriptor<'mariadb'>,
   driver: createMysqlControlDriverDescriptor({
     target: { targetId: 'mariadb', displayName: 'MariaDB' },
+    checkViolationErrors: [4025],
   }),
 };
 
