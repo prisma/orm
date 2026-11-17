@@ -84,7 +84,7 @@ Both PRs are one change: the relation mutator gets the `variant()` the collectio
 **In:** `RelationMutator.variant` and the variant mutator's types (`src/types.ts`) and runtime (`src/relation-mutator.ts`); the descriptor fields; the translation in `src/mutation-graph/nested-mutations.ts` for both storage layouts on 1:N, 1:1, N:1 and M:N; the variant condition on `connect`, `disconnect`, filtered writes; type tests (`test/*.test-d.ts`); graph tests in printed form; integration tests on Postgres in `create()` and `update()`, one row and an array, on each relation layout the fixtures have, with a check that rows of another variant are left unchanged by `connect`, `disconnect`, `updateAll` and `deleteAll`; fixture additions to `test/integration/test/sql-orm-client/fixtures/polymorphism/contract.prisma` for the layouts it lacks (N:1 to a variant in its own table, M:N to `Task`, 1:1 to `Task`), regenerated with the repo's fixture commands; the package README and user-facing query docs; an upgrade-instructions entry for app authors about `t.create` on a polymorphic target.
 
 **Out:**
-- N:1 `disconnect` on the variant mutator until rebased onto `single-row-writes` (then in).
+- N:1 `disconnect` on the variant mutator: moved to slice `single-row-writes` (decided 2026-11-17, since this slice merged before that one was built).
 - Relation callbacks inside a variant create that top level refuses (a relation of the variant; any relation for a variant in its own table). The types of both levels accept them and the runtime of both levels refuses them; making the two levels agree is a follow-up for both.
 - The collection's second `create` overload (`MutationCreateInputWithRelations`), which accepts a polymorphic base's fields plus a relation callback without `variant()`; a follow-up for the top-level API.
 - `onConflict` on nested variant creates (slice `create-on-conflict`, which refuses it on variants stored in their own table).
@@ -103,7 +103,7 @@ Integration tests run on Postgres only (decided 2026-11-16 by the project owner 
 ## Slice-specific done conditions
 
 - [ ] The plan entry for slice 7 records the decisions above in place of its open questions.
-- [ ] After a rebase onto `single-row-writes`, N:1 `disconnect` on the variant mutator is implemented and tested before this slice's last PR merges.
+- N:1 `disconnect` on the variant mutator moved to slice `single-row-writes` (decided 2026-11-17).
 
 ## Open Questions
 

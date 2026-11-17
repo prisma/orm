@@ -45,5 +45,5 @@ Slice spec: `projects/nested-mutations/slices/nested-variant-creates/spec.md`. B
 
 - **Outcome:** README and query docs describe the scoping of `connect`, `disconnect`, `where`, `updateAll` and `deleteAll` on a variant and that N:1 `disconnect` is not available on a variant. The pending upgrade entry still holds. The same gates as dispatch 3 pass.
 - **Builds on:** Dispatch 5.
-- **Hands to:** PR 2 ready for review. After a rebase onto `single-row-writes`, an extra dispatch adds N:1 `disconnect` on a variant on that slice's conditional unlink (slice-DoD).
+- **Hands to:** PR 2 ready for review. N:1 `disconnect` on a variant moved to slice `single-row-writes` (decided 2026-11-17).
 - **Focus:** Docs only.
