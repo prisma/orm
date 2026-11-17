@@ -7,20 +7,38 @@ changes:
       glob: "**/*.{ts,mts,cts}"
       matches:
         - '@prisma/orm-framework/config/config-types'
+        - '@prisma/orm-toolchain/cli/config-types'
+  - id: extension-config-names-generated-file-modules
+    summary: |
+      An extension that has a contract of its own, emitted with a config it assembles from the framework's `defineConfig`, must name `contract.typesModule` and `migrations.module` in that config. `prisma contract emit` in the extension otherwise fails with `CONFIG.CONTRACT_TYPES_MODULE_MISSING`.
+    detection:
+      glob: "**/prisma.config.{ts,mts,cts}"
+      matches:
+        - '@prisma/orm-framework/config/config-types'
+        - '@prisma/orm-toolchain/cli/config-types'
   - id: family-imports-are-import-requirements
     summary: |
-      `EmissionSpi.getFamilyImports` takes the types module and returns import requirements, where it took a function that translated module names and returned lines of import text.
+      `EmissionSpi.getFamilyImports` takes the types module and returns import requirements, where it took a function that translated module names and returned lines of import text. `ImportSpecifierResolver`, `keepInternalSpecifiers` and `resolveRequirementSpecifiers` are removed from `@prisma/orm-framework/components/emission`.
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
         - '(?<![\w$])getFamilyImports\s*\('
+        - '(?<![\w$])(ImportSpecifierResolver|keepInternalSpecifiers|resolveRequirementSpecifiers)(?![\w$])'
   - id: migration-renderer-takes-the-migration-module
     summary: |
       A migration plan's `renderTypeScript` takes the module the rendered file imports from, as a string, where it took a function that translated module names. The renderer names no module of its own.
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
-        - '(?<![\w$])renderTypeScript\s*\('
+        - '(?<![\w$])renderTypeScript\s*\(\s*[^)\s]'
+  - id: emitter-takes-the-types-module
+    summary: |
+      In `@prisma/orm-toolchain/emitter`, `generateContractDts` takes the types module as a required fifth argument, `EmitOptions.typesModule` is required and `EmitOptions.resolveImportSpecifier` is removed, and `generateImportLines` is replaced by `typesImportRequirements`.
+    detection:
+      glob: "**/*.{ts,mts,cts}"
+      matches:
+        - '(?<![\w$])(generateContractDts|generateImportLines)\s*\('
+        - 'resolveImportSpecifier'
   - id: mysql-config-components-carry-family-and-module-base
     summary: |
       `MysqlConfigComponents`, the argument of `createMysqlDefineConfig` from `@prisma/orm-mysql/config`, requires `family` and `moduleBase`, and its `target` and `adapter` are used as given.
@@ -28,14 +46,15 @@ changes:
       glob: "**/*.{ts,mts,cts}"
       matches:
         - '(?<![\w$])createMysqlDefineConfig\s*\('
-  - id: control-client-emit-takes-types-module
+  - id: control-api-takes-types-module
     summary: |
-      The control client's `emit` requires `contractConfig.typesModule`, and `renderContractDts` requires `typesModule`: the module the generated contract types import from.
+      The control client's `emit` requires `contractConfig.typesModule`, and `renderContractDts` requires `typesModule`: the module the generated contract types import from. The `projectDir` option of the control API's contract emit, `migration new` and `migration plan` operations is removed, and `preflightRefAdvancement` takes the config in its place.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
         - 'contractConfig\s*:'
         - '(?<![\w$])renderContractDts\s*\('
+        - '@prisma/orm-toolchain/cli/control-api'
   - id: toolchain-publish-surface-entrypoints-removed
     summary: |
       `@prisma/orm-toolchain/publish-surface`, `@prisma/orm-toolchain/publish-surface/import-roots` and `@prisma/orm-toolchain/publish-surface/shells` are removed. Nothing replaces them.
@@ -49,11 +68,11 @@ changes:
 
 Prisma no longer works out which package a generated file should import from. The package an application installs for its target says so, in the config. Prisma's own target packages do this the same way.
 
-An extension that only contributes types, operations or codecs to an existing target needs none of the changes below, as long as each type declaration it makes states a module of its own published package.
+An extension that only contributes types, operations or codecs to an existing target, and has no contract of its own, needs none of the changes below, as long as each type declaration it makes states a module of its own published package.
 
 ## `target-package-names-generated-file-modules`
 
-This applies to a package that an application installs to use a target: one that exports a `defineConfig` built on the framework's `defineConfig` from `@prisma/orm-framework/config/config-types`. It has three things to do.
+This applies to a package that an application installs to use a target: one that exports a `defineConfig` built on the framework's `defineConfig`, from `@prisma/orm-framework/config/config-types` or `@prisma/orm-toolchain/cli/config-types`. It has three things to do.
 
 **1. Export a module with the types a generated `contract.d.ts` imports.** It only re-exports: the framework's contract types, the family's, and the target's codec and operation types.
 
@@ -105,6 +124,27 @@ Neither module may be a path or a URL. Name it the way your package is imported.
 
 Then check from outside: install your package in a scratch application from a tarball, run `prisma contract emit` and `prisma migration plan`, and typecheck with `skipLibCheck` off. Every import in the generated files should name your package, an extension's own package, or a relative path.
 
+## `extension-config-names-generated-file-modules`
+
+This applies to an extension that has a contract of its own: it has a `prisma.config.ts` that imports `defineConfig` from `@prisma/orm-toolchain/cli/config-types` or `@prisma/orm-framework/config/config-types`, possibly under another name, and passes it the family, target and adapter, and it commits a generated `contract.d.ts` and migrations.
+
+Name both modules in the object passed to that call, with a types module private to the extension package:
+
+```ts
+contract: { ...contractSource, typesModule: '#generated-types' },
+migrations: { module: '@prisma/orm-target-postgres/target/migration' },
+```
+
+```json
+{ "imports": { "#generated-types": "./src/generated-types.ts" } }
+```
+
+`src/generated-types.ts` exports the framework's contract types, the family's, and the target's codec and operation types, as in the first change above. A relative path such as `'./generated-types'` is refused: the copy of the contract kept beside each migration is written into another folder, where that path points at nothing.
+
+If your build inlines that module into a declaration file you publish, check that the built file still exports every type. A bundler can drop a whole-module `export type *` when it inlines the module; naming each type in the re-export avoids that.
+
+Then run `prisma contract emit` in the extension and commit the regenerated files.
+
 ## `family-imports-are-import-requirements`
 
 This applies to a package that implements a family's `EmissionSpi`, from `@prisma/orm-framework/components/emission`.
@@ -116,7 +156,9 @@ getFamilyImports(resolveImportSpecifier: ImportSpecifierResolver): string[];
 getFamilyImports(typesModule: string): ReadonlyArray<ImportRequirement>;
 ```
 
-Return one `ImportRequirement`, from `@prisma/orm-framework/ts-render`, for each type the family's part of `contract.d.ts` uses, each with `moduleSpecifier: typesModule` and `typeOnly: true`, and with `alias` where the generated file uses the type under another name. Do not build or return import text. `ImportSpecifierResolver` is removed.
+Return one `ImportRequirement`, from `@prisma/orm-framework/ts-render`, for each type the family's part of `contract.d.ts` uses, each with `moduleSpecifier: typesModule` and `typeOnly: true`, and with `alias` where the generated file uses the type under another name. Do not build or return import text.
+
+`ImportSpecifierResolver`, `keepInternalSpecifiers` and `resolveRequirementSpecifiers` are removed. Nothing translates a module name any more, so remove their uses.
 
 ## `migration-renderer-takes-the-migration-module`
 
@@ -130,6 +172,14 @@ renderTypeScript(migrationModule: string): string;
 ```
 
 Write every import of the migration base class, the command-line entry and your operation helpers from `migrationModule`. It is the config's `migrations.module`. Remove any module name the renderer or its operations held themselves.
+
+## `emitter-takes-the-types-module`
+
+This applies to code that calls the emitter directly, from `@prisma/orm-toolchain/emitter`.
+
+- `generateContractDts` takes the types module as its fifth argument. Pass the config's `contract.typesModule`.
+- In `EmitOptions`, pass `typesModule` and remove `resolveImportSpecifier`.
+- `generateImportLines`, which returned lines of import text, is replaced by `typesImportRequirements`, which returns import requirements. Render them with the helper in `@prisma/orm-framework/ts-render`.
 
 ## `mysql-config-components-carry-family-and-module-base`
 
@@ -152,7 +202,7 @@ export const defineConfig = createMysqlDefineConfig({
 - `moduleBase` is your package's name. The helper names `<moduleBase>/generated-types` and `<moduleBase>/migration` in the config, so your package must export both.
 - `target` and `adapter` are used as given. Restate their type declarations yourself with `restateTypeDeclarations`, as in the first change above.
 
-## `control-client-emit-takes-types-module`
+## `control-api-takes-types-module`
 
 A script or test that calls the control client passes the module the generated contract types import from:
 
@@ -161,7 +211,9 @@ await client.emit({ contractConfig: { source, output, typesModule } });
 await client.renderContractDts({ contract, typesModule });
 ```
 
-Take the value from the loaded config's `contract.typesModule`.
+Take the value from the config: `defineConfig(...).contract.typesModule`.
+
+Code that calls the control API's operations directly, from `@prisma/orm-toolchain/cli/control-api`, removes the `projectDir` option from contract emit, `migration new` and `migration plan`, and passes the config to `preflightRefAdvancement` where it passed `projectDir`.
 
 ## `toolchain-publish-surface-entrypoints-removed`
 
