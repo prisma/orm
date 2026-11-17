@@ -216,6 +216,20 @@ describe('the MySQL migration runner, refusing an apply', () => {
     },
   );
 
+  it('names the moved storage hash as the reason a marker another process advanced fails', async () => {
+    const result = await run(
+      { marker: {}, casWins: false },
+      { origin: { storageHash: ORIGIN } },
+    ).execute();
+    expect(result.ok ? undefined : result.failure.meta).toMatchObject({
+      reason: 'storageHash',
+      space: 'app',
+      expectedStorageHash: ORIGIN,
+      foundStorageHash: ORIGIN,
+      destinationStorageHash: DEST,
+    });
+  });
+
   it('refuses a space that is not the plan’s', async () => {
     await expect(run({}).mismatched()).rejects.toMatchObject({
       code: 'MIGRATION.CONTRACT_SPACE_VIOLATION',
