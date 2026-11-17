@@ -18,6 +18,7 @@ import { MYSQL_ENUM_CODEC_ID, MYSQL_INT_CODEC_ID } from '@internal/target-mysql/
 import mysql from '@internal/target-mysql/control';
 import mysqlPackRef from '@internal/target-mysql/pack';
 import { mysqlCreateNamespace } from '@internal/target-mysql/types';
+import { restateTypeDeclarations } from '@internal/target-package-config/type-declarations';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
 import { typescriptContractUnsupported } from '../errors';
@@ -61,8 +62,11 @@ function buildConfig<TargetId extends string>(
 ): PrismaNextConfig<'sql', TargetId> {
   return coreDefineConfig({
     family: sql,
-    target: components.target,
-    adapter: components.adapter,
+    target: restateTypeDeclarations(components.target, `${components.moduleBase}/generated-types`),
+    adapter: restateTypeDeclarations(
+      components.adapter,
+      `${components.moduleBase}/generated-types`,
+    ),
     driver: components.driver,
     extensions: options.extensions ?? [],
     contract: { ...contract, typesModule: `${components.moduleBase}/generated-types` },

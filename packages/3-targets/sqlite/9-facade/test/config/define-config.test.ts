@@ -3,6 +3,7 @@ import { defineConfig as coreDefineConfig } from '@internal/config/config-types'
 import sqliteDriver from '@internal/driver-sqlite/control';
 import sql from '@internal/family-sql/control';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
+import { restateTypeDeclarations } from '@internal/target-package-config/type-declarations';
 import sqlite from '@internal/target-sqlite/control';
 import sqlitePackRef from '@internal/target-sqlite/pack';
 import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
@@ -32,7 +33,9 @@ describe('defineConfig facade', () => {
 
     expect(facadeConfig.family).toBe(manualConfig.family);
     expect(facadeConfig.target).toBe(manualConfig.target);
-    expect(facadeConfig.adapter).toBe(manualConfig.adapter);
+    expect(facadeConfig.adapter).toEqual(
+      restateTypeDeclarations(sqliteAdapter, '@internal/sqlite/generated-types'),
+    );
     expect(facadeConfig.driver).toBe(manualConfig.driver);
     expect(facadeConfig.extensions).toEqual(manualConfig.extensions);
     expect(facadeConfig.contract?.output).toBe(manualConfig.contract?.output);

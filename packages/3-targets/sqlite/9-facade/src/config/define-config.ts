@@ -9,6 +9,7 @@ import sql from '@internal/family-sql/control';
 import type { ControlExtensionDescriptor } from '@internal/framework-components/control';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import { typescriptContractFromPath } from '@internal/sql-contract-ts/config-types';
+import { restateTypeDeclarations } from '@internal/target-package-config/type-declarations';
 import { SQLITE_INTEGER_CODEC_ID, SQLITE_TEXT_CODEC_ID } from '@internal/target-sqlite/codec-ids';
 import sqlite from '@internal/target-sqlite/control';
 import sqlitePackRef from '@internal/target-sqlite/pack';
@@ -50,8 +51,8 @@ export function defineConfig(options: SqliteConfigOptions): PrismaNextConfig<'sq
 
   return coreDefineConfig({
     family: sql,
-    target: sqlite,
-    adapter: sqliteAdapter,
+    target: restateTypeDeclarations(sqlite, `${moduleBase}/generated-types`),
+    adapter: restateTypeDeclarations(sqliteAdapter, `${moduleBase}/generated-types`),
     driver: sqliteDriver,
     extensions,
     contract: { ...contractConfig, typesModule: `${moduleBase}/generated-types` },

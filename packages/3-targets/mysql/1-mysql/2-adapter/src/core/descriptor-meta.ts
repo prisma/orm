@@ -1,5 +1,6 @@
 import { mysqlCodecRegistry } from '@internal/target-mysql/codecs';
 import { mysqlAdapterContractContributions } from './contract-contributions';
+import { moduleBase } from './module-base';
 
 export const mysqlAdapterDescriptorMeta = {
   kind: 'adapter',
@@ -12,7 +13,7 @@ export const mysqlAdapterDescriptorMeta = {
     codecTypes: {
       codecDescriptors: Array.from(mysqlCodecRegistry.values()),
       import: {
-        package: '@internal/adapter-mysql/codec-types',
+        package: `${moduleBase}/codec-types`,
         named: 'CodecTypes',
         alias: 'MysqlTypes',
       },

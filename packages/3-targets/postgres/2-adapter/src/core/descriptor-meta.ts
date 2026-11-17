@@ -1,4 +1,5 @@
 import { postgresCodecRegistry } from '@internal/target-postgres/codecs';
+import { moduleBase as targetModuleBase } from '@internal/target-postgres/module-base';
 import { postgresAdapterContractContributions } from './contract-contributions';
 
 // ============================================================================ Descriptor metadata ============================================================================
@@ -15,19 +16,19 @@ export const postgresAdapterDescriptorMeta = {
     codecTypes: {
       codecDescriptors: Array.from(postgresCodecRegistry.values()),
       import: {
-        package: '@internal/target-postgres/codec-types',
+        package: `${targetModuleBase}/codec-types`,
         named: 'CodecTypes',
         alias: 'PgTypes',
       },
       typeImports: [
         {
-          package: '@internal/target-postgres/codec-types',
+          package: `${targetModuleBase}/codec-types`,
           named: 'JsonValue',
           alias: 'JsonValue',
         },
       ],
       parameterizedOutputTypes: {
-        package: '@internal/target-postgres/codec-types',
+        package: `${targetModuleBase}/codec-types`,
         named: 'ParameterizedOutputTypesForTypeParams',
         alias: 'PgParameterizedOutputTypes',
       },

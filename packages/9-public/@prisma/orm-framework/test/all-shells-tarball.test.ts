@@ -45,6 +45,19 @@ const namingGeneratedModules: readonly string[] = [
   '@prisma/orm-mariadb',
   '@prisma/orm-mongo',
 ];
+const targetPlatformPackages = [...publicShells.keys()].filter((name) =>
+  name.startsWith('@prisma/orm-target-'),
+);
+/** A script fragment defining `collect(value, into)`, which gathers the module of every type declaration under `value`. */
+const COLLECT_DECLARED_MODULES = [
+  'const collect = (value, into, seen = new Set()) => {',
+  "  if (value === null || typeof value !== 'object' || seen.has(value)) return into;",
+  '  seen.add(value);',
+  "  if (typeof value.package === 'string' && typeof value.named === 'string') into.push(value.package);",
+  '  for (const child of Object.values(value)) collect(child, into, seen);',
+  '  return into;',
+  '};',
+].join('\n');
 const extensionPackages = [...publicShells]
   .filter(([, shell]) => shell.kind === 'extension')
   .map(([name]) => name);
@@ -213,6 +226,83 @@ describe('all publish shells packed and installed together', () => {
     expect(problems).toEqual([]);
   });
 
+  it('states only its own published exports as the modules its target and adapter types come from', () => {
+    const entrypoints = targetPlatformPackages.flatMap((name) =>
+      ['./target/control', './adapter/control']
+        .filter((subpath) => Object.hasOwn(installedExports(name), subpath))
+        .map((subpath) => [name, `${name}${subpath.slice(1)}`]),
+    );
+    const script = [
+      COLLECT_DECLARED_MODULES,
+      `const entrypoints = ${JSON.stringify(entrypoints)};`,
+      'const stated = {};',
+      'for (const [name, specifier] of entrypoints) {',
+      '  collect((await import(specifier)).default?.types, (stated[name] ??= []));',
+      '}',
+      'console.log(JSON.stringify(stated));',
+    ].join('\n');
+    const stated: Record<string, string[]> = JSON.parse(runInScratch(scratch, script));
+
+    const problems: string[] = [];
+    for (const name of targetPlatformPackages) {
+      const modules = stated[name] ?? [];
+      if (modules.length === 0) problems.push(`${name} states no module for its types`);
+      const exports = installedExports(name);
+      for (const module of modules) {
+        if (!module.startsWith(`${name}/`)) {
+          problems.push(`${name} states ${module}, which is not a subpath of ${name}`);
+        } else if (!Object.hasOwn(exports, `.${module.slice(name.length)}`)) {
+          problems.push(`${name} states ${module}, which ${name} does not export`);
+        }
+      }
+    }
+    expect(problems).toEqual([]);
+  });
+
+  it('names its own generated-types export in every type declaration of the config its defineConfig returns', () => {
+    const script = [
+      COLLECT_DECLARED_MODULES,
+      `const names = ${JSON.stringify(namingGeneratedModules)};`,
+      'const stated = {};',
+      'for (const name of names) {',
+      "  const { defineConfig } = await import(name + '/config');",
+      "  const config = defineConfig({ contract: './prisma/contract.prisma' });",
+      '  stated[name] = collect([config.target.types, config.adapter.types], []);',
+      '}',
+      'console.log(JSON.stringify(stated));',
+    ].join('\n');
+    const stated: Record<string, string[]> = JSON.parse(runInScratch(scratch, script));
+
+    const problems: string[] = [];
+    for (const name of namingGeneratedModules) {
+      const modules = stated[name] ?? [];
+      if (modules.length === 0) problems.push(`${name} states no module for its types`);
+      for (const module of modules) {
+        if (module !== `${name}/generated-types`) problems.push(`${name} states ${module}`);
+      }
+    }
+    expect(problems).toEqual([]);
+  });
+
+  it('ships no type declaration naming an @internal module in any built or declaration file', () => {
+    const offenders: string[] = [];
+    for (const name of allShells) {
+      const distDir = join(scratch, 'node_modules', name, 'dist');
+      const files = readdirSync(distDir, { recursive: true, encoding: 'utf8' }).filter(
+        (file) => file.endsWith('.mjs') || file.endsWith('.d.mts'),
+      );
+      expect(files.length, name).toBeGreaterThan(0);
+      for (const file of files) {
+        for (const match of readFileSync(join(distDir, file), 'utf8').matchAll(
+          /\bpackage:\s*["'`](@internal\/[^"'`]+)["'`][,;]?\s*(?:readonly\s+)?named:/g,
+        )) {
+          offenders.push(`${name}/dist/${file}: ${match[1]}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
   it('states only its own published exports as the modules extension types come from', () => {
     expect(extensionPackages).toEqual(expect.arrayContaining(statingTypeModules));
     const controlEntrypoints = extensionPackages.flatMap((name) =>
@@ -223,15 +313,10 @@ describe('all publish shells packed and installed together', () => {
     const script = [
       `const entrypoints = ${JSON.stringify(controlEntrypoints)};`,
       'const stated = {};',
-      'const collect = (value, into, seen) => {',
-      "  if (value === null || typeof value !== 'object' || seen.has(value)) return;",
-      '  seen.add(value);',
-      "  if (typeof value.package === 'string' && typeof value.named === 'string') into.push(value.package);",
-      '  for (const child of Object.values(value)) collect(child, into, seen);',
-      '};',
+      COLLECT_DECLARED_MODULES,
       'for (const [name, specifier] of entrypoints) {',
       '  const descriptor = (await import(specifier)).default;',
-      '  collect(descriptor?.types, (stated[name] ??= []), new Set());',
+      '  collect(descriptor?.types, (stated[name] ??= []));',
       '}',
       'console.log(JSON.stringify(stated));',
     ].join('\n');

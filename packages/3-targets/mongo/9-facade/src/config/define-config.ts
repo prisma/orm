@@ -16,6 +16,7 @@ import { typescriptContractFromPath } from '@internal/mongo-contract-ts/config-t
 import { MONGO_INT32_CODEC_ID, MONGO_STRING_CODEC_ID } from '@internal/target-mongo/codec-ids';
 import { mongoTargetDescriptor } from '@internal/target-mongo/control';
 import mongoTargetPack from '@internal/target-mongo/pack';
+import { restateTypeDeclarations } from '@internal/target-package-config/type-declarations';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
 import { moduleBase } from './module-base';
@@ -78,8 +79,8 @@ export function defineConfig(options: MongoConfigOptions): PrismaNextConfig<'mon
 
   return coreDefineConfig({
     family: mongoFamilyDescriptor,
-    target: mongoTargetDescriptor,
-    adapter: mongoAdapter,
+    target: restateTypeDeclarations(mongoTargetDescriptor, `${moduleBase}/generated-types`),
+    adapter: restateTypeDeclarations(mongoAdapter, `${moduleBase}/generated-types`),
     driver: mongoDriver,
     extensions,
     contract: { ...contractConfig, typesModule: `${moduleBase}/generated-types` },

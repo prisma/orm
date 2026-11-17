@@ -13,6 +13,7 @@ import sql from '@internal/family-sql/control';
 import type { ControlExtensionDescriptor } from '@internal/framework-components/control';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import { typescriptContractFromPath } from '@internal/sql-contract-ts/config-types';
+import { restateTypeDeclarations } from '@internal/target-package-config/type-declarations';
 import { PG_INT_CODEC_ID, PG_TEXT_CODEC_ID } from '@internal/target-postgres/codec-ids';
 import postgres from '@internal/target-postgres/control';
 import postgresPackRef from '@internal/target-postgres/pack';
@@ -69,8 +70,8 @@ export function defineConfig(options: PostgresConfigOptions): PrismaNextConfig<'
 
   return coreDefineConfig({
     family: sql,
-    target: postgres,
-    adapter: postgresAdapter,
+    target: restateTypeDeclarations(postgres, `${moduleBase}/generated-types`),
+    adapter: restateTypeDeclarations(postgresAdapter, `${moduleBase}/generated-types`),
     driver: postgresDriver,
     extensions,
     contract: { ...contractConfig, typesModule: `${moduleBase}/generated-types` },

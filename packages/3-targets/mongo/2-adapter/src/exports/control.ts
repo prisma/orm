@@ -9,6 +9,7 @@ export { extractDb, isMongoControlDriver } from '../core/migrations/mongo-contro
 export { createMongoAdapter } from '../mongo-adapter';
 export type { MongoControlDriverInstance };
 
+import { moduleBase as targetModuleBase } from '@internal/target-mongo/module-base';
 import { MongoControlAdapterImpl } from '../core/migrations/mongo-control-adapter';
 
 export const mongoAdapterDescriptor: MongoControlAdapterDescriptor<'mongo'> = {
@@ -20,12 +21,12 @@ export const mongoAdapterDescriptor: MongoControlAdapterDescriptor<'mongo'> = {
   types: {
     codecTypes: {
       import: {
-        package: '@internal/target-mongo/codec-types',
+        package: `${targetModuleBase}/codec-types`,
         named: 'CodecTypes',
         alias: 'MongoCodecTypes',
       },
       parameterizedOutputTypes: {
-        package: '@internal/target-mongo/codec-types',
+        package: `${targetModuleBase}/codec-types`,
         named: 'ParameterizedOutputTypesForTypeParams',
         alias: 'MongoParameterizedOutputTypes',
       },

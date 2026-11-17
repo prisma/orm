@@ -6,6 +6,7 @@ export default defineConfig({
     'src/exports/prisma6-binding.ts',
     'src/exports/codec-ids.ts',
     'src/exports/codec-types.ts',
+    'src/exports/module-base.ts',
     'src/exports/codecs.ts',
     'src/exports/control.ts',
     'src/exports/data-types.ts',

@@ -32,11 +32,12 @@
     "@internal/mongo-query-builder": "workspace:8.0.0-rc.24",
     "@internal/mongo-runtime": "workspace:8.0.0-rc.24",
     "@internal/target-mongo": "workspace:8.0.0-rc.24",
+    "@internal/target-package-config": "workspace:8.0.0-rc.24",
     "@internal/utils": "workspace:8.0.0-rc.24",
     "mongodb-connection-string-url": "catalog:",
     "pathe": "^2.0.3",
-    "tinyglobby": "catalog:",
-    "temporal-spec": "1.0.1"
+    "temporal-spec": "1.0.1",
+    "tinyglobby": "catalog:"
   },
   "devDependencies": {
     "mongodb": "catalog:",

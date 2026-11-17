@@ -5,6 +5,7 @@ import { mongoFamilyDescriptor } from '@internal/family-mongo/control';
 import { mongoContract } from '@internal/mongo-contract-psl/provider';
 import { mongoTargetDescriptor } from '@internal/target-mongo/control';
 import mongoTargetPack from '@internal/target-mongo/pack';
+import { restateTypeDeclarations } from '@internal/target-package-config/type-declarations';
 import { describe, expect, it } from 'vitest';
 import { defineConfig } from '../../src/config/define-config';
 
@@ -27,7 +28,9 @@ describe('defineConfig facade', () => {
 
     expect(facadeConfig.family).toBe(manualConfig.family);
     expect(facadeConfig.target).toBe(manualConfig.target);
-    expect(facadeConfig.adapter).toBe(manualConfig.adapter);
+    expect(facadeConfig.adapter).toEqual(
+      restateTypeDeclarations(mongoAdapter, '@internal/mongo/generated-types'),
+    );
     expect(facadeConfig.driver).toBe(manualConfig.driver);
     expect(facadeConfig.contract?.output).toBe(manualConfig.contract?.output);
     expect(facadeConfig.contract?.source.inputs).toEqual(manualConfig.contract?.source.inputs);

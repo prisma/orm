@@ -2,6 +2,7 @@ import mariadbAdapter from '@internal/adapter-mariadb/control';
 import mariadbDriver from '@internal/driver-mariadb/control';
 import sql from '@internal/family-sql/control';
 import mariadb from '@internal/target-mariadb/control';
+import { restateTypeDeclarations } from '@internal/target-package-config/type-declarations';
 import { describe, expect, it } from 'vitest';
 import { defineConfig } from '../src/config/define-config';
 import { emitFixture } from './emit';
@@ -26,7 +27,7 @@ describe('defineConfig for MariaDB', () => {
     }).toEqual({
       family: sql,
       target: mariadb,
-      adapter: mariadbAdapter,
+      adapter: restateTypeDeclarations(mariadbAdapter, '@internal/mariadb/generated-types'),
       driver: mariadbDriver,
       extensions: [],
       output: './prisma/contract.json',

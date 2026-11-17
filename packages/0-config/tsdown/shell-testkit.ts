@@ -307,14 +307,11 @@ function shellMapModules(installedPackageDir: string): ReadonlySet<string> {
  * constants* (not import specifiers), recorded when the shells were first
  * published.
  *
- * Most are emitter input: the specifiers the emitter and the migration
- * renderers hand to their import-specifier resolver before writing a user's
- * generated contract and migration files. That resolution is configurable, but
- * its default still returns them unchanged, so the constants necessarily
- * remain in the dist; changing the default to the published names retires
- * them. The rest name internal packages inside diagnostics,
- * config-validation messages, and telemetry identifiers, which go away with
- * the `@internal/*` names themselves.
+ * Some are emitter input: the framework and family modules the emitters name
+ * in a user's generated contract types, which the import-specifier resolver
+ * maps before they are written. The rest name internal packages inside
+ * diagnostics, config-validation messages, and telemetry identifiers, which go
+ * away with the `@internal/*` names themselves.
  *
  * The shell map's own contents are *not* here — see
  * {@link shellMapPackageNames} for why they are recognised as data instead.
@@ -325,37 +322,21 @@ function shellMapModules(installedPackageDir: string): ReadonlySet<string> {
  */
 export const knownInternalNamesInDist: readonly string[] = [
   '@internal/*',
-  '@internal/target-mongo/codec-types',
-  '@internal/adapter-mariadb/codec-types',
-  '@internal/adapter-mysql/codec-types',
-  '@internal/adapter-sqlite/codec-types',
   '@internal/cli',
-  '@internal/cli-telemetry',
   '@internal/cli-telemetry/sender',
   '@internal/cli/migration-cli',
   '@internal/config',
   '@internal/contract/types',
   '@internal/driver-mongo/control',
   '@internal/emitter',
-  '@internal/errors/control',
   '@internal/extension-arktype-json',
-  '@internal/extension-arktype-json/codec-types',
-  '@internal/extension-citext/codec-types',
-  '@internal/extension-paradedb/operation-types',
   '@internal/extension-pgvector',
-  '@internal/extension-pgvector/codec-types',
-  '@internal/extension-pgvector/operation-types',
   '@internal/extension-postgis',
-  '@internal/extension-postgis/codec-types',
-  '@internal/extension-postgis/operation-types',
   '@internal/family-mongo',
   '@internal/framework-components',
   '@internal/framework-components/codec',
   '@internal/framework-components/control',
   '@internal/framework-components/ir',
-  '@internal/framework-components/psl-ast',
-  '@internal/framework-components/runtime',
-  '@internal/ids',
   '@internal/middleware-cache',
   '@internal/migration-tools',
   '@internal/migration-tools/aggregate',
@@ -365,9 +346,6 @@ export const knownInternalNamesInDist: readonly string[] = [
   '@internal/mongo-orm',
   '@internal/mongo-runtime',
   '@internal/mongo/contract-builder',
-  '@internal/mongo/runtime',
-  '@internal/mariadb/migration',
-  '@internal/mysql/migration',
   '@internal/postgres',
   '@internal/postgres/contract-builder',
   '@internal/postgres/migration',
@@ -376,14 +354,10 @@ export const knownInternalNamesInDist: readonly string[] = [
   '@internal/sql-contract/types',
   '@internal/sql-relational-core/ast',
   '@internal/sql-runtime',
-  '@internal/sqlite/migration',
-  '@internal/target-mongo/migration',
   '@internal/target-mysql',
   '@internal/target-postgres',
-  '@internal/target-postgres/codec-types',
   '@internal/target-postgres/codecs',
   '@internal/target-postgres/errors',
-  '@internal/target-postgres/operation-types',
   '@internal/target-sqlite',
   '@internal/target-sqlite/errors',
   '@internal/utils',

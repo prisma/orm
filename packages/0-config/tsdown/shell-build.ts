@@ -227,17 +227,37 @@ export async function defineShellConfig(shellName: ShellName): Promise<UserConfi
   });
 }
 
+/** The identifiers every package's published module base is defined under start with this. */
+export const PUBLISHED_MODULE_BASE_PREFIX = '__PRISMA_PUBLISHED_MODULE_BASE__';
+
 /**
- * Defines `__PRISMA_PUBLISHED_MODULE_BASE__` as the published module base of the one internal package a shell bundles: the shell's name plus the entry the package is published under. A shell that bundles several packages gets no definition, because one global cannot differ between them; a package there that reads it keeps the identifier in its built code, which the all-shells tarball test reports.
+ * The identifier the published module base of the internal package `name` is defined under, for example `__PRISMA_PUBLISHED_MODULE_BASE__TARGET_POSTGRES` for `@internal/target-postgres`.
+ */
+export function publishedModuleBaseIdentifier(name: string): string {
+  return `${PUBLISHED_MODULE_BASE_PREFIX}${name
+    .replace(/^@internal\//, '')
+    .toUpperCase()
+    .replaceAll(/[^A-Z0-9]/g, '_')}`;
+}
+
+/**
+ * Defines, for each internal package a shell bundles, its published module base under its own identifier: the shell's name plus the entry the package is published under.
  */
 function publishedModuleBaseDefine(
   shellName: ShellName,
   internals: readonly InternalPackage[],
 ): Record<string, string> {
-  const [only] = internals;
-  if (only === undefined || internals.length > 1) return {};
-  const base = only.entry === '' ? shellName : `${shellName}/${only.entry}`;
-  return { __PRISMA_PUBLISHED_MODULE_BASE__: JSON.stringify(base) };
+  const define: Record<string, string> = {};
+  for (const pkg of internals) {
+    const identifier = publishedModuleBaseIdentifier(pkg.name);
+    if (define[identifier] !== undefined) {
+      throw new ShellConfigError(
+        `${shellName} bundles two packages whose module base identifier is ${identifier}`,
+      );
+    }
+    define[identifier] = JSON.stringify(pkg.entry === '' ? shellName : `${shellName}/${pkg.entry}`);
+  }
+  return define;
 }
 
 /**

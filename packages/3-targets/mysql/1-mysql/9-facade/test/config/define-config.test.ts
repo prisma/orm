@@ -2,6 +2,7 @@ import mysqlAdapter from '@internal/adapter-mysql/control';
 import mysqlDriver from '@internal/driver-mysql/control';
 import sql from '@internal/family-sql/control';
 import mysql from '@internal/target-mysql/control';
+import { restateTypeDeclarations } from '@internal/target-package-config/type-declarations';
 import { describe, expect, it } from 'vitest';
 import { defineConfig } from '../../src/config/define-config';
 
@@ -24,7 +25,7 @@ describe('defineConfig for MySQL', () => {
     }).toEqual({
       family: sql,
       target: mysql,
-      adapter: mysqlAdapter,
+      adapter: restateTypeDeclarations(mysqlAdapter, '@internal/mysql/generated-types'),
       driver: mysqlDriver,
       extensions: [],
       output: './prisma/contract.json',

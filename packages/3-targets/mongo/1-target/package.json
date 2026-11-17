@@ -72,6 +72,7 @@
     "./control": "./dist/control.mjs",
     "./data-types": "./dist/data-types.mjs",
     "./migration": "./dist/migration.mjs",
+    "./module-base": "./dist/module-base.mjs",
     "./pack": "./dist/pack.mjs",
     "./prisma6-binding": "./dist/prisma6-binding.mjs",
     "./runtime": "./dist/runtime.mjs",

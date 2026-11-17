@@ -83,6 +83,7 @@
     "./issue-planner": "./dist/issue-planner.mjs",
     "./marker-lock": "./dist/marker-lock.mjs",
     "./migration": "./dist/migration.mjs",
+    "./module-base": "./dist/module-base.mjs",
     "./native-type-normalizer": "./dist/native-type-normalizer.mjs",
     "./op-factory-call": "./dist/op-factory-call.mjs",
     "./operation-types": "./dist/operation-types.mjs",

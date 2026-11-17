@@ -3,6 +3,7 @@ import { defineConfig as coreDefineConfig } from '@internal/config/config-types'
 import postgresDriver from '@internal/driver-postgres/control';
 import sql from '@internal/family-sql/control';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
+import { restateTypeDeclarations } from '@internal/target-package-config/type-declarations';
 import postgres from '@internal/target-postgres/control';
 import postgresPackRef from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
@@ -31,8 +32,12 @@ describe('defineConfig facade', () => {
     });
 
     expect(facadeConfig.family).toBe(manualConfig.family);
-    expect(facadeConfig.target).toBe(manualConfig.target);
-    expect(facadeConfig.adapter).toBe(manualConfig.adapter);
+    expect(facadeConfig.target).toEqual(
+      restateTypeDeclarations(postgres, '@internal/postgres/generated-types'),
+    );
+    expect(facadeConfig.adapter).toEqual(
+      restateTypeDeclarations(postgresAdapter, '@internal/postgres/generated-types'),
+    );
     expect(facadeConfig.driver).toBe(manualConfig.driver);
     expect(facadeConfig.extensions).toEqual(manualConfig.extensions);
     expect(facadeConfig.contract?.output).toBe(manualConfig.contract?.output);

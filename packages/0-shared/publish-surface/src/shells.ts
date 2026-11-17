@@ -341,6 +341,11 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
           name: '@internal/type-implementations',
           entry: 'type-implementations',
         },
+        {
+          dir: 'packages/3-targets/0-shared/target-package-config',
+          name: '@internal/target-package-config',
+          entry: 'target-package-config',
+        },
       ],
     },
   ],
