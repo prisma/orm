@@ -363,14 +363,14 @@
           "import": {
             "alias": "PostgisTypes",
             "named": "CodecTypes",
-            "package": "@internal/extension-postgis/codec-types"
+            "package": "@prisma/orm-extension-postgis/codec-types"
           }
         },
         "queryOperationTypes": {
           "import": {
             "alias": "PostgisQueryOperationTypes",
             "named": "QueryOperationTypes",
-            "package": "@internal/extension-postgis/operation-types"
+            "package": "@prisma/orm-extension-postgis/operation-types"
           }
         }
       },

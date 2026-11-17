@@ -1158,7 +1158,7 @@
           "import": {
             "alias": "ArktypeJsonTypes",
             "named": "CodecTypes",
-            "package": "@internal/extension-arktype-json/codec-types"
+            "package": "@prisma/orm-extension-arktype-json/codec-types"
           }
         }
       },
@@ -1179,26 +1179,26 @@
           "import": {
             "alias": "PgVectorTypes",
             "named": "CodecTypes",
-            "package": "@internal/extension-pgvector/codec-types"
+            "package": "@prisma/orm-extension-pgvector/codec-types"
           },
           "parameterizedOutputTypes": {
             "alias": "PgVectorParameterizedOutputTypes",
             "named": "ParameterizedOutputTypesForTypeParams",
-            "package": "@internal/extension-pgvector/codec-types"
+            "package": "@prisma/orm-extension-pgvector/codec-types"
           }
         },
         "operationTypes": {
           "import": {
             "alias": "PgVectorOperationTypes",
             "named": "OperationTypes",
-            "package": "@internal/extension-pgvector/operation-types"
+            "package": "@prisma/orm-extension-pgvector/operation-types"
           }
         },
         "queryOperationTypes": {
           "import": {
             "alias": "PgVectorQueryOperationTypes",
             "named": "QueryOperationTypes",
-            "package": "@internal/extension-pgvector/operation-types"
+            "package": "@prisma/orm-extension-pgvector/operation-types"
           }
         }
       },

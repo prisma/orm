@@ -611,14 +611,14 @@ type ContractBase = Omit<
           readonly import: {
             readonly alias: 'PostgisTypes';
             readonly named: 'CodecTypes';
-            readonly package: '@internal/extension-postgis/codec-types';
+            readonly package: '@prisma/orm-extension-postgis/codec-types';
           };
         };
         readonly queryOperationTypes: {
           readonly import: {
             readonly alias: 'PostgisQueryOperationTypes';
             readonly named: 'QueryOperationTypes';
-            readonly package: '@internal/extension-postgis/operation-types';
+            readonly package: '@prisma/orm-extension-postgis/operation-types';
           };
         };
       };

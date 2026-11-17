@@ -1306,7 +1306,7 @@ type ContractBase = Omit<
           readonly import: {
             readonly alias: 'ArktypeJsonTypes';
             readonly named: 'CodecTypes';
-            readonly package: '@internal/extension-arktype-json/codec-types';
+            readonly package: '@prisma/orm-extension-arktype-json/codec-types';
           };
         };
       };
@@ -1323,26 +1323,26 @@ type ContractBase = Omit<
           readonly import: {
             readonly alias: 'PgVectorTypes';
             readonly named: 'CodecTypes';
-            readonly package: '@internal/extension-pgvector/codec-types';
+            readonly package: '@prisma/orm-extension-pgvector/codec-types';
           };
           readonly parameterizedOutputTypes: {
             readonly alias: 'PgVectorParameterizedOutputTypes';
             readonly named: 'ParameterizedOutputTypesForTypeParams';
-            readonly package: '@internal/extension-pgvector/codec-types';
+            readonly package: '@prisma/orm-extension-pgvector/codec-types';
           };
         };
         readonly operationTypes: {
           readonly import: {
             readonly alias: 'PgVectorOperationTypes';
             readonly named: 'OperationTypes';
-            readonly package: '@internal/extension-pgvector/operation-types';
+            readonly package: '@prisma/orm-extension-pgvector/operation-types';
           };
         };
         readonly queryOperationTypes: {
           readonly import: {
             readonly alias: 'PgVectorQueryOperationTypes';
             readonly named: 'QueryOperationTypes';
-            readonly package: '@internal/extension-pgvector/operation-types';
+            readonly package: '@prisma/orm-extension-pgvector/operation-types';
           };
         };
       };

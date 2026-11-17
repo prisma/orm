@@ -477,7 +477,7 @@ type ContractBase = Omit<
           readonly import: {
             readonly alias: 'ParadeDbQueryOperationTypes';
             readonly named: 'QueryOperationTypes';
-            readonly package: '@internal/extension-paradedb/operation-types';
+            readonly package: '@prisma/orm-extension-paradedb/operation-types';
           };
         };
       };
