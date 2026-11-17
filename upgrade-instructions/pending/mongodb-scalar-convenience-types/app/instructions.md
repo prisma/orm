@@ -14,6 +14,7 @@ changes:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
         - '\.\s*Int64\s*\('
+        - '\{[^{}]*\bInt64\b[^{}]*\}\s*=\s*\w'
   - id: psl-optional-mongo-convenience-names
     summary: |
       Optional: in a MongoDB schema, the explicit types `Int32`, `Double` and `Bool` may be written as the convenience types `Int`, `Float` and `Boolean`. The contract does not change.
@@ -40,7 +41,7 @@ model Post {
 }
 ```
 
-The contract does not change. A file that matches only because a comment or a string mentions `Int64` needs no change.
+The contract does not change. A file that matches only because a comment or a string mentions `Int64` needs no change. Leave the `contract.prisma` copy inside each migration folder under `migrations/` as it is: it records the schema that migration was planned from, and `Int64` still reads there as the same type.
 
 ## `ts-removed-mongo-int64-helper`
 
@@ -50,7 +51,7 @@ In each matched file, replace every `Int64(` call on the `type` helpers with `Bi
 field.scalar(type.BigInt()); // was type.Int64()
 ```
 
-A helper taken out of `type` by destructuring, such as `const { Int64 } = type`, fails type-checking; rename it where the compiler reports it. The contract does not change. A file that matches only because a comment mentions `Int64(`, or because it calls another library's `Int64(`, such as Apache Arrow's `new arrow.Int64()`, needs no change.
+A helper taken out of `type` by destructuring, such as `const { Int64 } = type`, also matches. Take out `BigInt` or `Int64BigInt` instead and rename its calls. The contract does not change. A file that matches only because a comment mentions `Int64(`, or because it uses another library's `Int64`, such as Apache Arrow's `new arrow.Int64()`, needs no change.
 
 ## `psl-optional-mongo-convenience-names`
 
