@@ -120,6 +120,34 @@ describe('withTransaction when the transaction cannot start', () => {
       'release',
     ]);
   });
+
+  it('rejects with the refusal when releasing the refused connection fails', async () => {
+    const refused = new Error('started failed');
+    const failingStart: SqlMiddleware = {
+      name: 'failing-start',
+      familyId: 'sql',
+      async activityStarted(activity) {
+        if (activity.kind === 'transaction') throw refused;
+      },
+    };
+    const { runtime } = createSetup({
+      failures: { release: new Error('release failed') },
+      middleware: [failingStart],
+    });
+
+    await expect(withTransaction(runtime, async () => undefined)).rejects.toBe(refused);
+  });
+
+  it('rejects with the BEGIN error when destroying the connection fails', async () => {
+    const beginFailure = new Error('begin failed');
+    const { runtime, events } = createSetup({
+      failures: { begin: beginFailure, destroy: new Error('destroy failed') },
+    });
+
+    await expect(withTransaction(runtime, async () => undefined)).rejects.toBe(beginFailure);
+
+    expect(names(events)).toContain('destroy');
+  });
 });
 
 describe('withTransaction with a connection the runtime did not make', () => {

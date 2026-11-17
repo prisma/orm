@@ -46,7 +46,7 @@ export interface ActivityHandle<K extends ClientActivityKind>
   readonly activity: ClientActivity<K>;
   /** Set when an `intercept.onActivity` handler supplied the result; the client then returns it without running anything. */
   readonly intercepted: { readonly result: ClientActivityResult<K> } | undefined;
-  /** Runs `fn` in a transaction beneath the activity, as `withTransaction` does. On a handle opened on a connection, the transaction runs on that connection and leaves it held. Absent on a handle opened under a transaction, or on a connection whose transaction is open. */
+  /** Runs `fn` in a transaction beneath the activity, as `withTransaction` does. On a handle opened on a connection, the transaction runs on that connection and leaves it held whatever the outcome. Absent on a handle opened under a transaction, or on a connection whose transaction is open. */
   readonly transaction?: <R>(
     fn: (tx: TransactionContext) => PromiseLike<R>,
     options?: RuntimeTransactionOptions,
