@@ -31,16 +31,36 @@ export interface UnansweredChange {
   readonly subject: MigrationSubject;
 }
 
-function subjectText(subject: MigrationSubject, contract: ContractWithDomain): string {
+/** A subject as the question names it: a field through the name a rename statement gives its model, as `subjectText` in the CLI's `plan-questions.ts` writes it. */
+function subjectText(subject: MigrationSubject, contracts: Contracts): string {
   switch (subject.kind) {
     case 'model':
-      return modelStatementText(contract, subject);
+      return modelStatementText(contracts.fromContract, subject);
+    case 'field': {
+      const renamed = renamedModelOf(subject, contracts);
+      return renamed === undefined
+        ? fieldStatementText(contracts.fromContract, subject)
+        : fieldStatementText(contracts.contract, { ...renamed, field: subject.field });
+    }
+    case 'enumValue':
+      return enumValueStatementText(contracts.fromContract, subject);
+    case 'valueObjectField':
+      return valueObjectFieldStatementText(contracts.fromContract, subject);
+    case 'storage':
+      return subject.name;
+  }
+}
+
+function newFieldText(subject: MigrationSubject, contract: ContractWithDomain): string {
+  switch (subject.kind) {
     case 'field':
       return fieldStatementText(contract, subject);
-    case 'enumValue':
-      return enumValueStatementText(contract, subject);
     case 'valueObjectField':
       return valueObjectFieldStatementText(contract, subject);
+    case 'model':
+      return modelStatementText(contract, subject);
+    case 'enumValue':
+      return enumValueStatementText(contract, subject);
     case 'storage':
       return subject.name;
   }
@@ -61,20 +81,30 @@ function removalText(subject: MigrationSubject, text: string): string {
   }
 }
 
+/** The model a rename statement gives an origin model, if any. */
+function renamedModelOf(
+  origin: ModelCoordinate,
+  contracts: Contracts,
+): ModelCoordinate | undefined {
+  for (const statement of contracts.statements) {
+    if (
+      statement.kind === 'rename' &&
+      statement.entity === 'model' &&
+      statement.from.namespaceId === origin.namespaceId &&
+      statement.from.model === origin.model
+    ) {
+      return statement.to;
+    }
+  }
+  return undefined;
+}
+
 /** The destination model an origin model is, under the name a rename statement gives it, when the destination has it. */
 function destinationModelOf(
   origin: ModelCoordinate,
   contracts: Contracts,
 ): ModelCoordinate | undefined {
-  const renamed = contracts.statements.find(
-    (statement) =>
-      statement.kind === 'rename' &&
-      statement.entity === 'model' &&
-      statement.from.namespaceId === origin.namespaceId &&
-      statement.from.model === origin.model,
-  );
-  const destination =
-    renamed?.kind === 'rename' && renamed.entity === 'model' ? renamed.to : origin;
+  const destination = renamedModelOf(origin, contracts) ?? origin;
   return modelAt(contracts.contract, destination) === undefined ? undefined : destination;
 }
 
@@ -249,7 +279,7 @@ export function unansweredChangesAdvice(
     .filter((change) => change.kind === 'removed')
     .sort((a, b) => ORDER[a.subject.kind] - ORDER[b.subject.kind])
     .map(({ subject }) => {
-      const text = subjectText(subject, contracts.fromContract);
+      const text = subjectText(subject, contracts);
       return {
         description: removalText(subject, text),
         answer: answerOf(subject, text, contracts),
@@ -260,7 +290,7 @@ export function unansweredChangesAdvice(
     .filter((change) => change.kind === 'newRequired')
     .map(
       ({ subject }) =>
-        `new required ${subject.kind === 'valueObjectField' ? 'value object field' : 'field'} "${subjectText(subject, contracts.contract)}", which the plan fills with a temporary value`,
+        `new required ${subject.kind === 'valueObjectField' ? 'value object field' : 'field'} "${newFieldText(subject, contracts.contract)}", which the plan fills with a temporary value`,
     );
   const named = [...removed.map(({ description }) => description), ...filled];
   const keeping = removed.map(({ answer }) => answer.keeping);

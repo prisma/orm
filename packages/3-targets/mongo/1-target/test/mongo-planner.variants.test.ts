@@ -443,6 +443,35 @@ describe('MongoMigrationPlanner, a discriminator renamed without its statement',
     ).toEqual([[kindRefusal], [kindRefusal], [kindRefusal]]);
   });
 
+  it("names the discriminator rename through the base's new name when the base is renamed too", () => {
+    const jobs = contract(
+      'to',
+      {
+        Job: {
+          collection: 'tasks',
+          fields: ['_id', 'kind'],
+          discriminator: 'kind',
+          variants: { Bug: 'bug', Epic: 'epic' },
+        },
+        Bug: { collection: 'tasks', fields: ['severity'], base: 'Job' },
+        Epic: { collection: 'tasks', fields: ['scope'], base: 'Job' },
+      },
+      { tasks: {} },
+    );
+    expect(
+      refusal(
+        plan({ from: BEFORE, to: jobs, schema: live, statements: [renameModel('Task', 'Job')] }),
+      ),
+    ).toEqual([
+      {
+        kind: 'unsupportedOperation',
+        summary:
+          'Cannot plan the migration: new discriminator field "Job.kind" has no value in the documents of collection tasks',
+        why: `${NO_TEMPORARY_VALUE} The documents hold their variant in "Job.type", which the plan removes: add --rename Job.type:Job.kind to keep it, and plan again.`,
+      },
+    ]);
+  });
+
   it('refuses --convert Bug when the old discriminator is deleted instead of renamed', () => {
     expect(
       refusal(plan({ from: BEFORE, to: valueChanged, schema: live, statements: [convert('Bug')] })),

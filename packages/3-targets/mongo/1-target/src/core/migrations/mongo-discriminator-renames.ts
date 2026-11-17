@@ -7,7 +7,7 @@ import {
 import { statementFlag } from './mongo-statement-flags';
 import { modelAt } from './mongo-statement-planning';
 
-/** The origin base's discriminator, as statements name it, and the `--rename` that moves its values to the destination base's discriminator. */
+/** The origin base's discriminator, named through the destination base as a field rename statement names it, and the `--rename` that moves its values to the destination base's discriminator. */
 export interface DiscriminatorRename {
   readonly from: string;
   readonly flag: string;
@@ -42,9 +42,12 @@ export function discriminatorRenameOf(
   );
   if (oldField === newField || Object.hasOwn(to.fields, oldField) || movedElsewhere)
     return undefined;
-  const text = fieldStatementText(contracts.fromContract, { ...origin, field: oldField });
+  const text = fieldStatementText(contracts.contract, { ...destination, field: oldField });
   return {
     from: text,
-    flag: statementFlag('rename', `${text}:${text.slice(0, text.lastIndexOf('.'))}.${newField}`),
+    flag: statementFlag(
+      'rename',
+      `${text}:${fieldStatementText(contracts.contract, { ...destination, field: newField })}`,
+    ),
   };
 }

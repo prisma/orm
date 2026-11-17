@@ -7,6 +7,7 @@ import {
   plan,
   planned,
   renameField,
+  renameModel,
   schemaCollection,
 } from './mongo-statement-fixtures';
 
@@ -338,6 +339,32 @@ describe('MongoMigrationPlanner, a rename onto a name the origin also stores', (
         refusedStatement: renameUser('b', 'a'),
         leaveOut: undefined,
       },
+    ]);
+  });
+
+  it("names a removed field of a renamed model through the model's new name, as the question does", () => {
+    const people = contract(
+      'to',
+      {
+        Person: {
+          collection: 'users',
+          fields: ['_id', 'a', 'c'],
+          types: { _id: OBJECT_ID, a: OPTIONAL_STRING, c: OPTIONAL_STRING },
+        },
+      },
+      { users: {} },
+    );
+    expect(
+      refused(
+        plan({
+          from: users('from', { a: OPTIONAL_STRING, b: OPTIONAL_STRING }),
+          to: people,
+          schema: live,
+          statements: [renameModel('User', 'Person'), renameField('User', 'b', 'Person', 'a')],
+        }),
+      ).map(({ why: text }) => text?.slice(0, text.indexOf(ONE_AT_A_TIME))),
+    ).toEqual([
+      'The plan holds changes that no --rename or --convert statement carries: field "Person.a", which the plan removes. To keep their data, plan again with: --rename Person.a:Person.c. ',
     ]);
   });
 

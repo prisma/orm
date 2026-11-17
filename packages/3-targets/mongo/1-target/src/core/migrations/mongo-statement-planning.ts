@@ -575,6 +575,8 @@ export function keepCollectionByHandAdvice(
 export interface FieldRemoval {
   readonly call: UnsetFieldCall;
   readonly subject: MigrationSubject;
+  /** The destination model whose documents lose the field; `undefined` without an origin contract. */
+  readonly destination: ModelCoordinate | undefined;
   /** The variant whose documents lose the field; `undefined` for a root model's documents. */
   readonly variant: SelectedVariant | undefined;
   readonly discriminatorFilter: DiscriminatorFilter | undefined;
@@ -851,6 +853,7 @@ export function planFieldRemovals(input: FieldRemovalInput): readonly FieldRemov
               {
                 call: new UnsetFieldCall(collection, storedName, lost.filter),
                 subject: { kind: 'field' as const, ...origin, field },
+                destination,
                 variant,
                 discriminatorFilter: lost.discriminatorFilter,
               },
@@ -884,6 +887,7 @@ export function planValidatorFieldRemovals(input: {
       .map((field) => ({
         call: new UnsetFieldCall(originCollection.name, field),
         subject: { kind: 'storage' as const, name: `${originCollection.name}.${field}` },
+        destination: undefined,
         variant: undefined,
         discriminatorFilter: undefined,
       }));

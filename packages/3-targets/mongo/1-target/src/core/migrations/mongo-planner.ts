@@ -759,12 +759,12 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
     if (!storedKeyFills.ok) return { kind: 'failure', conflicts: [...storedKeyFills.failure] };
     const rewrites: readonly PlannedRewrite[] = [
       ...removals.map(
-        ({ call, subject, variant }): PlannedRewrite => ({
+        ({ call, destination, variant }): PlannedRewrite => ({
           kind: 'removal',
           collection: call.collection,
           field: call.field,
           variant,
-          model: subject.kind === 'field' ? subject : undefined,
+          model: destination,
           storedKey: undefined,
         }),
       ),
