@@ -78,7 +78,7 @@ const posts = await db.orm.posts
 // → Array<{ title, authorId, createdAt, author: { name, email, ... } }>
 ```
 
-Relation names match the contract's `@relation` field names. Nested includes follow the same chaining rules as the parent collection.
+Relation names match the contract's `@relation` field names. `.include(...)` takes only the relation name: there is no refinement callback, so the included documents cannot be filtered, ordered or limited, and their own relations are not loaded. Only a reference relation on a single field can be included; an embedded relation is already part of the document, and naming one in `.include(...)` is a type error.
 
 ## Workflow — ORM writes
 

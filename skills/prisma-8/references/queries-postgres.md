@@ -9,7 +9,7 @@ Shared concepts (result consumption, script teardown, cross-target pitfalls, cap
 **Postgres** (`postgres({ contract, ... })` from `@prisma/orm-postgres/runtime`):
 
 - **`db.orm.<ns>.<Model>`** — ORM, PascalCase model name (`db.orm.public.User`). Fluent `.where(...).select(...).orderBy(...).all()`, fully typed against `Contract`. Default lane for CRUD with relations.
-- **`db.sql.<ns>.<table>`** — SQL builder, lowercase storage name (`db.sql.public.user`). Produces a *plan*. A plan that returns rows (`select`, or a write with `.returning(...)`) runs through `db.query(plan)`; a write with no `RETURNING` runs through `db.execute(plan)`, which resolves `{ affectedRows }`. Use when the ORM is too high-level — explicit `JOIN`, computed projections, set operations, window functions.
+- **`db.sql.<ns>.<table>`** — SQL builder, lowercase storage name (`db.sql.public.user`). Produces a *plan*. A plan that returns rows (`select`, or a write with `.returning(...)`) runs through `db.query(plan)`; a write with no `RETURNING` runs through `db.execute(plan)`, which resolves `{ affectedRows }`. Use when the ORM is too high-level — explicit `JOIN`, computed projections, row locks on a plan. The SQL builder has no set operations (`UNION`, `INTERSECT`, `EXCEPT`), no window functions (`OVER (...)`) and no `WITH`; write those as raw SQL with ``db.raw.sql`…` `` (see *A raw-SQL lane* in [`queries.md`](./queries.md)).
 
 Reach for the ORM first; drop to `db.sql` when the ORM can't express the shape. Lane choice is local — one query function picks one lane, not the whole app.
 
@@ -22,8 +22,9 @@ Reach for the ORM first; drop to `db.sql` when the ORM can't express the shape. 
 | Aggregate (count, sum, avg) | **ORM `.aggregate(...)`** | Typed result; works with grouping (`.groupBy(...).aggregate(...)`). |
 | `INSERT ... RETURNING` / `UPDATE ... RETURNING` typed result | **ORM mutations** (returns updated rows) or **`db.sql.<ns>.<t>.insert(...).returning(...)`** | ORM returns inserted/updated rows; SQL builder exposes `.returning(...)` explicitly. |
 | Computed projection (e.g. `ST_DistanceSphere(location, point) AS meters`) alongside model fields | **SQL builder (`db.sql.<ns>.<t>`)** | The ORM projects model fields; arbitrary expression projection is the SQL builder's seam. |
-| Complex `JOIN`, set operation, window function | **SQL builder** | The ORM doesn't express arbitrary joins. |
-| Postgres-specific feature (`LATERAL`, `FILTER`, custom aggregates) | **SQL builder**, falling back to extension operators when the extension provides them | DSL first; extensions can contribute operators (`postgis`, `pgvector`). |
+| Complex `JOIN` | **SQL builder** | The ORM doesn't express arbitrary joins. |
+| Postgres-specific feature (`LATERAL` joins, `DISTINCT ON`, row locks, custom aggregates) | **SQL builder**, falling back to extension operators when the extension provides them | DSL first; extensions can contribute operators (`postgis`, `pgvector`). |
+| Set operation (`UNION`, `INTERSECT`, `EXCEPT`), window function (`ROW_NUMBER() OVER (...)`), `WITH`, aggregate `FILTER (WHERE ...)` | **Raw SQL (``db.raw.sql`…` ``)** | Neither the ORM nor the SQL builder expresses them. Declare the result columns with `.returnsRow({ ... })` so the rows stay typed. |
 
 ## Workflow — ORM reads
 
@@ -299,7 +300,7 @@ await db.orm.public.User.include('posts', (posts) =>
 
 A reducer's result type is the one the target declares for that aggregate — the same types *Workflow — Aggregates* tabulates below, including the `null` a field-taking reducer answers for a parent with no related rows. The reducer set is read from the contract, so an operation a target or extension contributes shows up as a reducer under its own name, with no client change.
 
-Nested `1:N → 1:N` includes (e.g. `User → posts → comments`) require the contract to advertise the `lateral` + `jsonAgg` capabilities for the active target. The Postgres adapter advertises both by default, so most apps get this for free; if the type system rejects a nested include with a *missing capability* error, route to `references/contract.md` to add the required capability declarations and use `references/queries.md` for query-shape guidance.
+Nested includes (e.g. `User → posts → comments`) need no setup. On Postgres, SQLite and MySQL the ORM loads a read and all its includes in one statement. On a database whose adapter does not report the `jsonAgg`, `outerReferencesInDerivedTables` and `jsonAggWithoutTruncation` capabilities (MariaDB), it runs one statement per relation instead; `limit`, `offset`, `distinct` and reducers still run in SQL per parent there, but a `.prepared` read with includes is refused with `ORM.CAPABILITY_MISSING`.
 
 ## Workflow — ORM writes
 
