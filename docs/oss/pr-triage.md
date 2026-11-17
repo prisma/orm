@@ -69,6 +69,7 @@ Never take the title's word for whether something is a fix. `fix:` in a commit p
 3. **Reproduce it** where the cost is reasonable. A failing test on the base branch that passes with the change is the ideal. If reproduction needs a database, a specific platform, or a race, say what you could not verify instead of implying you did.
 4. **Check the fix reaches the layer that has the bug.** A change that plumbs an option through one layer is only a fix if the layer underneath already honours it. Verify that, do not assume it.
 5. **Check for a test that fails without the change.** [`CONTRIBUTING.md`](../../CONTRIBUTING.md) asks for one and the codebase expects tests written before implementation.
+6. **Check the fix covers every place the bug occurs.** An issue reports one occurrence. Search for the same mistake in the other database targets, in the other family (SQL and MongoDB), and along the other code paths the same value passes through. [`CONTRIBUTING.md`](../../CONTRIBUTING.md#fix-the-cause-everywhere-it-occurs) asks the contributor to fix them all in one PR. When some are missing, name each with its file and line, and either ask the contributor for them or add them yourself. Do not merge the partial fix and leave the rest for a later issue.
 
 A change that adds a new option, method, or behaviour is a feature even when the title says `fix`. A change that makes an already-public, already-documented option do what it says is a fix even when it adds a field to an internal node.
 

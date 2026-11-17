@@ -119,7 +119,7 @@ Read `baseRefName`: `main` is Prisma 8 (8.x), `v7` and `7.9.x` are Prisma 7. Pri
 
 ### 5. Verify the claim
 
-A bug-related verdict needs all four checks below answered explicitly, each with its evidence. An unanswered check is a "no", not a pass.
+A bug-related verdict needs all five checks below answered explicitly, each with its evidence. An unanswered check is a "no", not a pass.
 
 ```bash
 gh issue view <n> --repo prisma/orm --json title,state,author,createdAt,body
@@ -129,8 +129,9 @@ gh issue view <n> --repo prisma/orm --json title,state,author,createdAt,body
 2. **The bug is in the current source.** Find the line that ignores the input or the `TODO` that parks it, and cite `file:line`.
 3. **The fix reaches the layer that has the bug.** Plumbing an option through one layer only counts if the layer beneath already honours it — verify that, do not assume it.
 4. **A test fails without the change.** See the constraint below before running anything.
+5. **The fix covers every place the bug occurs.** Search the current source for the same mistake in the other database targets, in the other family (SQL and MongoDB), and along the other code paths the same value passes through. Cite `file:line` for each occurrence the PR leaves unfixed, or say what you searched for and that you found none.
 
-Checks 1 to 3 are reading. Check 4 is execution, and that is a different risk.
+Checks 1 to 3 and 5 are reading. Check 4 is execution, and that is a different risk.
 
 **Do not run a fork PR's tests on your own machine.** A test file is code the contributor wrote, and running the suite also runs install lifecycle scripts, with your credentials, your network and your filesystem in reach. Step 0 exists because of that; running the suite here would undo it. The diff sweep does not license execution — it cannot prove absence.
 
