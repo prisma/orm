@@ -1,6 +1,7 @@
 {
   "extends": ["@repo/tsconfig/base"],
   "compilerOptions": {
+    "rootDir": "../..",
     "outDir": "./dist",
     "types": ["vitest/globals"]
   },
