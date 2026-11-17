@@ -13,6 +13,7 @@ import { testCall } from './client-activity-kinds';
 import { deferred } from './closed-runtime-stub';
 import {
   createSetup,
+  type DriverFailures,
   names,
   rawPlan,
   type Setup,
@@ -20,6 +21,7 @@ import {
 } from './transaction-activity-fixtures';
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -360,5 +362,61 @@ describe('the runtime first statement, held in middleware while its transaction 
     expect(readMarker).not.toHaveBeenCalled();
     expect(sentSql(setup.driver)).toEqual([]);
     await connection.release();
+  });
+});
+
+describe('a statement on a savepoint, still in middleware when the savepoint or its transaction ends', () => {
+  async function beginHeld(setupOptions: { failures?: DriverFailures } = {}, timeout?: number) {
+    const held = holdInMiddleware('update held');
+    const setup = createSetup({ ...setupOptions, middleware: [held.middleware] });
+    const connection = await setup.runtime.connection();
+    const transaction = await connection.transaction(timeout === undefined ? {} : { timeout });
+    const savepoint = await transaction.transaction();
+    const pending = settled(savepoint.execute(rawPlan('update held')));
+    await held.entered.promise;
+    return { held, setup, connection, transaction, savepoint, pending };
+  }
+
+  it.each(['commit', 'rollback'] as const)(
+    'refuses it at the savepoint %s() and leaves the transaction usable',
+    async (end) => {
+      const { held, setup, connection, transaction, savepoint, pending } = await beginHeld();
+
+      await savepoint[end]();
+      held.resume.resolve();
+
+      expect(await pending).toMatchObject(transactionClosed);
+      await transaction.execute(rawPlan('update after'));
+      await transaction.commit();
+      expect(sentSql(setup.driver)).toEqual(['update after']);
+      await connection.release();
+    },
+  );
+
+  it('refuses it when a failed ROLLBACK TO above it closes the transaction', async () => {
+    const { held, setup, connection, savepoint, pending } = await beginHeld({
+      failures: { rollbackToSavepoint: new Error('rollback to failed') },
+    });
+    const inner = await savepoint.transaction();
+
+    await expect(inner.rollback()).rejects.toThrow('rollback to failed');
+    held.resume.resolve();
+
+    expect(await pending).toMatchObject(transactionClosed);
+    expect(sentSql(setup.driver)).toEqual([]);
+    await connection.destroy();
+  });
+
+  it('refuses it when the transaction times out and rolls back', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+    const { held, setup, connection, transaction, pending } = await beginHeld({}, 10);
+
+    await vi.advanceTimersByTimeAsync(10);
+    await transaction.rollback();
+    held.resume.resolve();
+
+    expect(await pending).toMatchObject({ code: 'RUNTIME.TRANSACTION_TIMEOUT' });
+    expect(sentSql(setup.driver)).toEqual([]);
+    await connection.destroy();
   });
 });
