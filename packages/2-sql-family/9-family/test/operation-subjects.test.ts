@@ -1,59 +1,21 @@
-import { asNamespaceId } from '@internal/contract/types';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { describe, expect, it } from 'vitest';
 import {
-  type CallSubjects,
   fieldEventStorage,
-  type SubjectStorage,
   subjectsOfCalls,
   unknownCallNames,
 } from '../src/core/migrations/operation-subjects';
+import { NO_RENAMED_ORIGINS } from '../src/core/migrations/statement-planning';
 import {
-  NO_RENAMED_ORIGINS,
-  type TableRenameByHand,
-} from '../src/core/migrations/statement-planning';
+  app,
+  byHand,
+  column,
+  losing,
+  origin,
+  table,
+  unchanged,
+} from './operation-subjects-fixtures';
 import { contractOf } from './statement-fixtures';
-
-const app = asNamespaceId('app');
-
-const byHand: TableRenameByHand = {
-  renderTableRename: ({ from, to }) => `this.renameTable("${from}", "${to}")`,
-  tableRenameByHand: ({ from, to }) => [`ALTER TABLE "${from}" RENAME TO "${to}"`],
-};
-
-function table(name: string, storageName = name): SubjectStorage {
-  return { storageName, table: { namespaceId: 'app', table: name, column: undefined } };
-}
-
-function column(tableName: string, columnName: string): SubjectStorage {
-  return {
-    storageName: `${tableName}.${columnName}`,
-    table: { namespaceId: 'app', table: tableName, column: columnName },
-  };
-}
-
-function losing(...targets: readonly SubjectStorage[]): CallSubjects {
-  return {
-    operationCount: 1,
-    label: 'Drop',
-    dataLoss: targets.map((target) => ({ ...target, loss: 'drop' })),
-    accessChanges: [],
-    temporaryValues: [],
-  };
-}
-
-const unchanged: CallSubjects = {
-  operationCount: 1,
-  label: 'Unchanged',
-  dataLoss: [],
-  accessChanges: [],
-  temporaryValues: [],
-};
-
-const origin = contractOf({
-  Legacy: { table: 'legacy', fields: { id: 'id' } },
-  User: { table: 'user', fields: { id: 'id', name: 'full_name' } },
-});
 
 describe('subjectsOfCalls', () => {
   it('names the model of a dropped table and the field of a dropped column', () => {
@@ -178,87 +140,6 @@ describe('subjectsOfCalls', () => {
         value: '""',
       },
     ]);
-  });
-
-  describe('a removed variant', () => {
-    const tasks = contractOf({
-      Task: { table: 'tasks', fields: { id: 'id', type: 'type' } },
-      Bug: { table: 'tasks', fields: { severity: 'severity' }, base: 'Task' },
-    });
-    const bug = { namespaceId: app, model: 'Bug' };
-
-    it('names the variant for its row deletion and its dropped columns', () => {
-      expect(
-        subjectsOfCalls(
-          [
-            {
-              ...unchanged,
-              label: 'Delete rows',
-              dataLoss: [{ ...table('tasks'), model: bug, loss: 'drop' }],
-            },
-            losing(column('tasks', 'severity')),
-          ],
-          {
-            fromContract: tasks,
-            contract: tasks,
-            byHand,
-            removedVariants: [bug],
-            origins: NO_RENAMED_ORIGINS,
-          },
-        ).dataLoss.map(({ subject }) => subject),
-      ).toEqual([
-        { kind: 'model', ...bug },
-        { kind: 'model', ...bug },
-      ]);
-    });
-
-    it('passes on the advice a target gives for a row deletion', () => {
-      expect(
-        subjectsOfCalls(
-          [
-            {
-              ...unchanged,
-              label: 'Delete rows',
-              dataLoss: [
-                {
-                  ...table('tasks'),
-                  model: bug,
-                  loss: 'drop',
-                  keepDataAdvice: 'Mind the references.',
-                },
-              ],
-            },
-          ],
-          {
-            fromContract: tasks,
-            contract: tasks,
-            byHand,
-            removedVariants: [],
-            origins: NO_RENAMED_ORIGINS,
-          },
-        ).dataLoss,
-      ).toEqual([
-        {
-          operationIndex: 0,
-          subject: { kind: 'model', ...bug },
-          loss: 'drop',
-          label: 'Delete rows',
-          keepDataAdvice: 'Mind the references.',
-        },
-      ]);
-    });
-
-    it('names the field of a dropped column of a variant the destination keeps', () => {
-      expect(
-        subjectsOfCalls([losing(column('tasks', 'severity'))], {
-          fromContract: tasks,
-          contract: tasks,
-          byHand,
-          removedVariants: [],
-          origins: NO_RENAMED_ORIGINS,
-        }).dataLoss.map(({ subject }) => subject),
-      ).toEqual([{ kind: 'field', ...bug, field: 'severity' }]);
-    });
   });
 
   it('counts every operation of a call with companions before the next call', () => {
@@ -472,41 +353,6 @@ describe('subjectsOfCalls', () => {
       temporaryValues: [],
     });
   });
-
-  describe('models that share a table', () => {
-    const sharing = contractOf({
-      Admin: { table: 'users', base: 'User', fields: { id: 'id', level: 'level' } },
-      Guest: { table: 'users', base: 'User', fields: { id: 'id' } },
-      User: { table: 'users', fields: { id: 'id', email: 'email' } },
-    });
-
-    it('names the root model of a dropped table, and the model with a field for a dropped column', () => {
-      expect(
-        subjectsOfCalls([losing(table('users')), losing(column('users', 'email'))], {
-          fromContract: sharing,
-          contract: sharing,
-          byHand,
-          removedVariants: [],
-          origins: NO_RENAMED_ORIGINS,
-        }).dataLoss.map(({ subject }) => subject),
-      ).toEqual([
-        { kind: 'model', namespaceId: app, model: 'User' },
-        { kind: 'field', namespaceId: app, model: 'User', field: 'email' },
-      ]);
-    });
-
-    it('names a field only a variant has through the variant', () => {
-      expect(
-        subjectsOfCalls([losing(column('users', 'level'))], {
-          fromContract: sharing,
-          contract: sharing,
-          byHand,
-          removedVariants: [],
-          origins: NO_RENAMED_ORIGINS,
-        }).dataLoss.map(({ subject }) => subject),
-      ).toEqual([{ kind: 'field', namespaceId: app, model: 'Admin', field: 'level' }]);
-    });
-  });
 });
 
 describe('unknownCallNames', () => {
@@ -549,71 +395,5 @@ describe('fieldEventStorage', () => {
       fieldEventStorage({ namespaceId: UNBOUND_NAMESPACE_ID, tableName: 'user', columnName: 'bio' })
         .storageName,
     ).toBe('user.bio');
-  });
-});
-
-describe('subjectsOfCalls for a table whose model keeps its name', () => {
-  const from = contractOf({ Profile: { table: 'profiles', fields: { id: 'id' } } });
-
-  it('says how to rename the table by hand to keep its rows', () => {
-    const to = contractOf({ Profile: { table: 'people', fields: { id: 'id' } } });
-
-    expect(
-      subjectsOfCalls([losing(table('profiles'))], {
-        fromContract: from,
-        contract: to,
-        origins: NO_RENAMED_ORIGINS,
-        byHand,
-        removedVariants: [],
-      }).dataLoss,
-    ).toEqual([
-      {
-        operationIndex: 0,
-        subject: { kind: 'model', namespaceId: app, model: 'Profile' },
-        loss: 'drop',
-        label: 'Drop',
-        keepDataAdvice:
-          'To keep its rows, rename table "profiles" to "people" instead. The plan does not rename it: a plan renames the table of a model that keeps its name only on a target that plans table renames, when the control policy of the table is "managed" in both contracts, every model stored in it moves to the new table, and no model moves there from another table. With db update, rename the table in the database yourself with ALTER TABLE "profiles" RENAME TO "people", then run prisma db update. With migration plan, write the rename as a migration of its own instead: run prisma migration new --name <name> --from <hash of the migration the database is at>, add this.renameTable("profiles", "people") to the operations of its migration.ts, run node on that migration.ts so it writes ops.json, then run prisma db migrate.',
-      },
-    ]);
-  });
-
-  it('gives no advice when the destination has no model of that name', () => {
-    const to = contractOf({ Person: { table: 'people', fields: { id: 'id' } } });
-
-    expect(
-      subjectsOfCalls([losing(table('profiles'))], {
-        fromContract: from,
-        contract: to,
-        origins: NO_RENAMED_ORIGINS,
-        byHand,
-        removedVariants: [],
-      }).dataLoss,
-    ).toEqual([
-      {
-        operationIndex: 0,
-        subject: { kind: 'model', namespaceId: app, model: 'Profile' },
-        loss: 'drop',
-        label: 'Drop',
-      },
-    ]);
-  });
-
-  it('gives no advice when the new table already holds another model of the origin', () => {
-    const withPeople = contractOf({
-      Profile: { table: 'profiles', fields: { id: 'id' } },
-      Person: { table: 'people', fields: { id: 'id' } },
-    });
-    const to = contractOf({ Profile: { table: 'people', fields: { id: 'id' } } });
-
-    expect(
-      subjectsOfCalls([losing(table('profiles'))], {
-        fromContract: withPeople,
-        contract: to,
-        origins: NO_RENAMED_ORIGINS,
-        byHand,
-        removedVariants: [],
-      }).dataLoss.map(({ keepDataAdvice }) => keepDataAdvice),
-    ).toEqual([undefined]);
   });
 });

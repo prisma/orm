@@ -13,8 +13,10 @@ import type {
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { ifDefined } from '@internal/utils/defined';
 import { fieldOfColumn } from './field-of-column';
-import { isSqlModelStorage, modelsStoring } from './model-storage';
+import { handWrittenMigrationSteps } from './hand-written-migration';
+import { isSqlModelStorage, type ModelTable, modelsStoring, modelTable } from './model-storage';
 import type { TableRenameByHand, WorkingSchemaOrigins } from './statement-planning';
+import { modelsText } from './storage-renames';
 
 /**
  * What an operation is about, as the plan names it after its rename statements: a table, or a
@@ -165,8 +167,57 @@ function keepTableAdvice(
   if (modelsStoring(context.fromContract, { namespaceId, table: storage.table }).length > 0) {
     return undefined;
   }
+  const sharing = sharedStorageAdvice(context.fromContract, context.contract, {
+    from: { namespaceId, table: from },
+    to: { namespaceId, table: storage.table },
+  });
+  if (sharing !== undefined) return sharing;
   const rename = { namespaceId, from, to: storage.table };
   return `To keep its rows, rename table "${from}" to "${storage.table}" instead. The plan does not rename it: a plan renames the table of a model that keeps its name only on a target that plans table renames, when the control policy of the table is "managed" in both contracts, every model stored in it moves to the new table, and no model moves there from another table. With db update, rename the table in the database yourself with ${context.byHand.tableRenameByHand(rename).join('; ')}, then run prisma db update. With migration plan, write the rename as a migration of its own instead: run prisma migration new --name <name> --from <hash of the migration the database is at>, add ${context.byHand.renderTableRename(rename)} to the operations of its migration.ts, run node on that migration.ts so it writes ops.json, then run prisma db migrate.`;
+}
+
+function sameModelTable(left: ModelTable | undefined, right: ModelTable): boolean {
+  return left?.namespaceId === right.namespaceId && left.table === right.table;
+}
+
+function byName(left: ModelCoordinate, right: ModelCoordinate): number {
+  return `${left.namespaceId}.${left.model}`.localeCompare(`${right.namespaceId}.${right.model}`);
+}
+
+/**
+ * Why the rows of table `from` cannot be kept by renaming it to `to`: the origin stores models in
+ * `from` that the destination stores in different tables, or the destination stores models in `to`
+ * that the origin stores in different tables. Keeping their rows is then a data migration.
+ */
+function sharedStorageAdvice(
+  fromContract: ContractWithDomain,
+  contract: ContractWithDomain,
+  tables: { readonly from: ModelTable; readonly to: ModelTable },
+): string | undefined {
+  const origin = modelsStoring(fromContract, tables.from).map(({ coordinate }) => coordinate);
+  const destination = modelsStoring(contract, tables.to).map(({ coordinate }) => coordinate);
+  const split = origin.some((model) => {
+    const moved = modelTable(contract, model);
+    return moved !== undefined && !sameModelTable(moved, tables.to);
+  });
+  const merged = destination.some((model) => {
+    const stored = modelTable(fromContract, model);
+    return stored !== undefined && !sameModelTable(stored, tables.from);
+  });
+  if (!split && !merged) return undefined;
+  const models = [...(split ? origin : destination)].sort(byName);
+  const into = new Map<string, ModelCoordinate[]>();
+  for (const model of models) {
+    const moved = modelTable(contract, model);
+    if (moved !== undefined) into.set(moved.table, [...(into.get(moved.table) ?? []), model]);
+  }
+  const moves = [...into]
+    .map(([table, moved]) => `the rows of ${modelsText(moved)} into table "${table}"`)
+    .join(' and ');
+  const stated = split
+    ? `The origin stores ${modelsText(models)} in table "${tables.from.table}", and the destination stores them in different tables, so their storage is being split.`
+    : `The destination stores ${modelsText(models)} in table "${tables.to.table}", and the origin stores them in different tables, so their storage is being merged.`;
+  return `${stated} Keeping their rows is a data migration, which a plan does not write. With migration plan, write this change as a hand-written migration instead: ${handWrittenMigrationSteps(moves)}`;
 }
 
 /**
