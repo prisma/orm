@@ -133,6 +133,8 @@ jobs:
         run: pnpm check:upgrade-coverage --mode pr --prev "$BASE_SHA" --head "$HEAD_SHA"
       - name: Check error-reference completeness
         run: pnpm check:error-reference
+      - name: Check contract snapshot declarations typecheck
+        run: pnpm check:snapshot-types
       - name: Check release notes
         env:
           BASE: ${{ github.base_ref || 'main' }}

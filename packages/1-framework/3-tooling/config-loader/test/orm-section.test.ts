@@ -294,6 +294,35 @@ describe('the orm section', () => {
     });
   });
 
+  describe('a generated file module named by a path', () => {
+    const source = { format: 'typescript', load: () => ({}) };
+    const withModules = (module: string) =>
+      validRaw({ contract: { source, typesModule: module }, migrations: { module } });
+
+    it.each(['./generated-types', '../generated-types', '/project/generated-types'])(
+      'refuses %s for both modules, saying why and what to name instead',
+      (module) => {
+        const raw = withModules(module);
+        const result = validateOrmSection(raw, provenanceFor(raw));
+
+        expect(result.ok ? [] : result.diagnostics.map((d) => d.meta?.['field'])).toEqual([
+          'contract.typesModule',
+          'migrations.module',
+        ]);
+        expect(result.ok ? '' : (result.diagnostics[0]?.summary ?? '')).toMatch(
+          /generated files are written into more than one folder.*`#`/,
+        );
+      },
+    );
+
+    it.each(['#generated-types', '@acme/orm-db/generated-types', 'orm-db/migration'])(
+      'accepts %s',
+      (module) => {
+        expect(fields(withModules(module))).toEqual([]);
+      },
+    );
+  });
+
   it('never throws on hostile input', () => {
     for (const raw of [
       null,

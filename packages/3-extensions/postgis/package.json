@@ -67,6 +67,9 @@
     "./runtime": "./dist/runtime.mjs",
     "./package.json": "./package.json"
   },
+  "imports": {
+    "#generated-types": "./src/generated-types.ts"
+  },
   "engines": {
     "node": ">=24"
   },

@@ -84,6 +84,9 @@
     },
     "./package.json": "./package.json"
   },
+  "imports": {
+    "#generated-types": "./src/contract/generated-types.ts"
+  },
   "engines": {
     "node": ">=24"
   },

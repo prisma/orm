@@ -63,6 +63,9 @@
     ".": "./dist/index.mjs",
     "./package.json": "./package.json"
   },
+  "imports": {
+    "#fixture-generated-types": "./test/fixtures/generated-types.ts"
+  },
   "engines": {
     "node": ">=24"
   },

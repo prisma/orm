@@ -1,4 +1,4 @@
-/** The framework and SQL family types the generated `contract.d.ts` imports. */
+/** The framework and SQL family types the generated `contract.d.ts` imports, as `#generated-types`. Each name is listed, because the type bundler drops an `export type *` when it inlines this file. */
 export type {
   Contract,
   ExecutionHashBase,

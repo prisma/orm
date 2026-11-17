@@ -156,6 +156,39 @@ export function descriptorRelationshipProblems(
 }
 
 /**
+ * Whether a module specifier is a relative or absolute path rather than the
+ * name of a package or of an import private to one: by the language's rules,
+ * a specifier that begins `./`, `../` or `/`.
+ */
+function isModulePath(specifier: string): boolean {
+  return specifier.startsWith('./') || specifier.startsWith('../') || specifier.startsWith('/');
+}
+
+/**
+ * The generated-file modules the config names by a path. Generated files are
+ * written into more than one folder, so a path resolves from at most one.
+ */
+function modulePathProblems(config: {
+  readonly contract?: { readonly typesModule?: string | undefined } | undefined;
+  readonly migrations?: { readonly module?: string | undefined } | undefined;
+}): { readonly path: readonly string[]; readonly message: string }[] {
+  const named: ReadonlyArray<readonly [readonly string[], string | undefined]> = [
+    [['contract', 'typesModule'], config.contract?.typesModule],
+    [['migrations', 'module'], config.migrations?.module],
+  ];
+  return named.flatMap(([path, module]) =>
+    module !== undefined && isModulePath(module)
+      ? [
+          {
+            path,
+            message: `Config.${path.join('.')} names the path '${module}': generated files are written into more than one folder, beside the contract and beside each migration, so a path resolves from at most one of them. Name the module the way a package is imported, or by a \`#\` import declared in the \`imports\` of the package that holds the generated files`,
+          },
+        ]
+      : [],
+  );
+}
+
+/**
  * The shape of the `orm` section of `prisma.config.ts`, declared once. The
  * CLI engine derives validation, the diagnostics naming a bad field and the
  * file to fix, and the resolution of every `path` field against the config
@@ -173,7 +206,11 @@ export const ormConfigSchema = ormSubsectionsSchema.narrow((config, ctx) => {
   for (const problem of problems) {
     ctx.error({ path: [...problem.path], expected: problem.expected, actual: problem.actual });
   }
-  return problems.length === 0;
+  const modulePaths = modulePathProblems(config);
+  for (const problem of modulePaths) {
+    ctx.reject(problem);
+  }
+  return problems.length === 0 && modulePaths.length === 0;
 });
 
 /**
