@@ -160,7 +160,7 @@ abstract class TransactionBase
 
   async transaction(): Promise<RuntimeTransaction> {
     if (this.isClosed) throw transactionClosedError();
-    if (this.stack.top !== this.entry) throw savepointAlreadyOpenError(this.stack);
+    this.assertAcceptsStatements();
     const name = this.stack.nextSavepointName();
     const entry: StackEntry = { name, activity: undefined, commitEnding: undefined, state: 'open' };
     this.stack.push(entry);
@@ -472,15 +472,6 @@ function transactionSuspendedError(stack: TransactionStack): Error {
   return runtimeError(
     'RUNTIME.TRANSACTION_SUSPENDED',
     `Savepoint ${open.name} is open on this transaction; commit or roll it back before using the transaction again.`,
-    { savepointId: open.activity?.activity.id },
-  );
-}
-
-function savepointAlreadyOpenError(stack: TransactionStack): Error {
-  const open = openSavepointOf(stack);
-  return runtimeError(
-    'RUNTIME.TRANSACTION_ALREADY_OPEN',
-    `Savepoint ${open.name} is already open on this transaction; commit or roll it back before opening another.`,
     { savepointId: open.activity?.activity.id },
   );
 }

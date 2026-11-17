@@ -94,7 +94,7 @@ describe('RuntimeTransaction.transaction()', () => {
     },
   );
 
-  it('rejects a second savepoint while one is open, naming the top of the stack and sending nothing', async () => {
+  it('suspends a second savepoint while one is open, naming the top of the stack and sending nothing', async () => {
     const { transaction, events } = await begin();
     const [opened, concurrent] = await Promise.allSettled([
       transaction.transaction(),
@@ -102,9 +102,9 @@ describe('RuntimeTransaction.transaction()', () => {
     ]);
     const before = events.length;
 
-    expect(concurrent).toMatchObject({ reason: { code: 'RUNTIME.TRANSACTION_ALREADY_OPEN' } });
+    expect(concurrent).toMatchObject({ reason: { code: 'RUNTIME.TRANSACTION_SUSPENDED' } });
     await expect(transaction.transaction()).rejects.toMatchObject({
-      code: 'RUNTIME.TRANSACTION_ALREADY_OPEN',
+      code: 'RUNTIME.TRANSACTION_SUSPENDED',
       message: expect.stringContaining('sp_1'),
     });
     expect(events.slice(before)).toEqual([]);
@@ -112,7 +112,7 @@ describe('RuntimeTransaction.transaction()', () => {
     if (opened?.status !== 'fulfilled') throw new Error('the first savepoint did not open');
     const nested = await opened.value.transaction();
     await expect(transaction.transaction()).rejects.toMatchObject({
-      code: 'RUNTIME.TRANSACTION_ALREADY_OPEN',
+      code: 'RUNTIME.TRANSACTION_SUSPENDED',
       message: expect.stringContaining('sp_2'),
       details: { savepointId: transactionIds(events)[2] },
     });
