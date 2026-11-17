@@ -600,10 +600,11 @@ const plan = db.sql.public.cafe
   .build();
 const rows = await db.query(plan);
 
-// Self-join with an alias.
+// Self-join: alias both sides, and read each side through its alias.
 db.sql.public.post
+  .as('p1')
   .innerJoin(db.sql.public.post.as('p2'), (f, fns) => fns.ne(f.p1.userId, f.p2.userId))
-  // ...
+  .select((f) => ({ first: f.p1.id, second: f.p2.id }))
   .build();
 ```
 
