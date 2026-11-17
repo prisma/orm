@@ -12,10 +12,10 @@ import {
   OFFLINE_COMMANDS,
   type OfflineProject,
   offlineConfig,
-  RENDERED_CONTRACT_DTS,
   removeOfflineProjects,
   renderContractDtsMock,
   resetRenderContractDtsMock,
+  SNAPSHOT_CONTRACT_DTS,
   seedDbRef,
   seedMigrationPackage,
 } from './fixtures/offline-project';
@@ -511,7 +511,7 @@ describe('migration new destination snapshot', () => {
       resolveImportSpecifier: expect.any(Function),
     });
     const storeDir = contractSnapshotDir(project.migrationsDir, HASH_TO);
-    expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(RENDERED_CONTRACT_DTS);
+    expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(SNAPSHOT_CONTRACT_DTS);
   });
 
   it('refuses before writing anything when the declarations cannot be rendered', async () => {

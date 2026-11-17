@@ -2,17 +2,19 @@
 
 Status: **Accepted**.
 
+**Amended 2026-10-30 (TML-3714):** the rule that a target contributes the constructors that are TypeScript `type.*` helpers holds for MongoDB too. The MongoDB target, not its adapter, contributes its scalar type constructors, and the MongoDB TypeScript builder builds `type.*` from the family, target and extension packs, as the SQL builder does. A constructor marked `deprecated` stays PSL-only and is not a `type.*` helper.
+
 Amends: [ADR 170 — Pack-provided type constructors and field presets](ADR%20170%20-%20Pack-provided%20type%20constructors%20and%20field%20presets.md).
 
 Related: [ADR 171 — Parameterized native types in contracts](ADR%20171%20-%20Parameterized%20native%20types%20in%20contracts.md), [ADR 254 — Data types and casts](ADR%20254%20-%20Data%20types%20and%20casts.md), [ADR 231 — Declarative attribute specifications](ADR%20231%20-%20Declarative%20attribute%20specifications.md).
 
 ## At a glance
 
-Every PSL storage type comes from one contributed authoring namespace. A scalar is a type constructor that can be called with no arguments, so bare `Text` means `Text()`. Parameterized storage types such as `Varchar(191)` use the same constructor descriptor and the same resolution path. A convenience type such as PostgreSQL's `String` is a type choice in the same namespace: its arguments choose one of these constructors ([ADR 279](ADR%20279%20-%20Convenience%20types%20choose%20an%20explicit%20type%20from%20their%20arguments.md), [ADR 316](ADR%20316%20-%20PostgreSQL%20scalars%20get%20convenience%20types.md)). Both forms are contributed through `AuthoringContributions.type`. A SQL target contributes every constructor of its stack, the base scalars and native types included, and each is also a TypeScript `type.*` helper. (Amended by ADR 275, 2026-10-21: until then the target's adapter contributed the base scalars and native types, so that they stayed PSL-only.) An extension pack contributes its own. There is no separate scalar-descriptor map or database-attribute channel.
+Every PSL storage type comes from one contributed authoring namespace. A scalar is a type constructor that can be called with no arguments, so bare `Text` means `Text()`. Parameterized storage types such as `Varchar(191)` use the same constructor descriptor and the same resolution path. A convenience type such as PostgreSQL's `String` is a type choice in the same namespace: its arguments choose one of these constructors ([ADR 279](ADR%20279%20-%20Convenience%20types%20choose%20an%20explicit%20type%20from%20their%20arguments.md), [ADR 316](ADR%20316%20-%20PostgreSQL%20scalars%20get%20convenience%20types.md)). Both forms are contributed through `AuthoringContributions.type`. A target contributes every constructor of its stack, the base scalars and native types included, and each is also a TypeScript `type.*` helper. (Amended by ADR 275, 2026-10-21: until then the target's adapter contributed the base scalars and native types, so that they stayed PSL-only.) An extension pack contributes its own. There is no separate scalar-descriptor map or database-attribute channel.
 
 ## Grounding example
 
-A SQL target defines its ordinary scalars and parameterized storage types with the same descriptor shape, and contributes them:
+A target defines its ordinary scalars and parameterized storage types with the same descriptor shape, and contributes them. PostgreSQL's:
 
 ```ts
 const postgresExplicitTypes = {
@@ -82,7 +84,7 @@ A bare type name `T` is semantically the zero-argument instantiation `T()`. The 
 
 Parameterized storage types use the same descriptor and resolver. Their argument declarations validate the authoring call, and their output templates place resolved values in structured `typeParams`. The data type the codec represents writes the type's name from those parameters and bounds them, as decided by [ADR 254](ADR%20254%20-%20Data%20types%20and%20casts.md), which supersedes ADR 171's expansion hooks.
 
-Storage-type ownership follows the component boundary. For a SQL target the rule has two parts. The target defines its scalar types next to the codecs they name, as one set (`postgresScalarTypes`, `sqliteScalarTypeConstructors`). On PostgreSQL that set holds the explicit types, the convenience types and the deprecated aliases ([ADR 316](ADR%20316%20-%20PostgreSQL%20scalars%20get%20convenience%20types.md)). The target contributes the set together with its other constructors, such as PostgreSQL's `pg.enum` and the namespaced `sql.*` and `temporal.*` aliases. The TypeScript contract builder builds its `type.*` helpers from the family, the target and the extension packs, so PSL and `type.*` see the same constructors, such as `type.Text()` and `type.Varchar(64)`. (Amended by ADR 275, 2026-10-21: the adapter contributed the base set before, to keep it out of `type.*`.) Extension packs contribute namespaced constructors unless the short-name policy permits otherwise. The SQL family interpreter resolves the assembled namespace generically and contains no PostgreSQL-native mapping table.
+Storage-type ownership follows the component boundary. For a target the rule has two parts. The target defines its scalar types next to the codecs they name, as one set (`postgresScalarTypes`, `sqliteScalarTypeConstructors`). On PostgreSQL that set holds the explicit types, the convenience types and the deprecated aliases ([ADR 316](ADR%20316%20-%20PostgreSQL%20scalars%20get%20convenience%20types.md)). The target contributes the set together with its other constructors, such as PostgreSQL's `pg.enum` and the namespaced `sql.*` and `temporal.*` aliases. The TypeScript contract builder builds its `type.*` helpers from the family, the target and the extension packs, so PSL and `type.*` see the same constructors, such as `type.Text()` and `type.Varchar(64)`. (Amended by ADR 275, 2026-10-21: the adapter contributed the base set before, to keep it out of `type.*`.) Extension packs contribute namespaced constructors unless the short-name policy permits otherwise. The SQL family interpreter resolves the assembled namespace generically and contains no PostgreSQL-native mapping table.
 
 PSL storage is selected only in type position. The former `@db.X(args)` channel is removed. Remaining source using that spelling fails with actionable migration guidance: rewrite `@db.X` as `X` and `@db.X(args)` as `X(args)` in type position.
 
@@ -98,7 +100,7 @@ Deriving scalar names from constructors keeps tooling aligned with interpretatio
 
 - Components contribute scalar and parameterized storage types through `AuthoringContributions.type` only. The `scalarTypeDescriptors` contribution and assembly surfaces are retired.
 - Bare type syntax and constructor-call syntax share precedence, collision handling, argument validation, and lowering.
-- A SQL target contributes the constructors that are also TypeScript `type.*` helpers. It defines its PSL-only constructors, which bind PSL type names to codecs, and its adapter contributes them. Family interpreters remain generic across targets.
+- A target contributes the constructors that are also TypeScript `type.*` helpers, on SQL and MongoDB alike. It defines its PSL-only constructors, which bind PSL type names to codecs, and its adapter contributes them. Family interpreters remain generic across targets.
 - `ControlStack.scalarTypes` remains a derived convenience view for consumers that need names, while `collectScalarTypeConstructors` provides the derived name-to-storage-output map.
 - TypeScript and PSL authoring helpers can be generated from the same descriptor namespace.
 - This decision does not change the contract representation: storage entries contain codec ids, data type ids and structured type parameters ([ADR 254](ADR%20254%20-%20Data%20types%20and%20casts.md)).

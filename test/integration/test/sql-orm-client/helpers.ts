@@ -1,3 +1,4 @@
+import { postgresAdapterCapabilities } from '@internal/adapter-postgres/adapter';
 import postgresAdapter from '@internal/adapter-postgres/runtime';
 import {
   domainModelsAtDefaultNamespace,
@@ -112,17 +113,65 @@ function unboundDomainModels(raw: {
   >;
 }
 
-const testContext: ExecutionContext<TestContract> = createExecutionContext({
-  contract: baseTestContract,
-  stack: createSqlExecutionStack({
-    target: postgresTarget,
-    adapter: postgresAdapter,
-    extensions: [pgvectorRuntime],
-  }),
-});
+/** How the ORM loads includes: in one query (`'join'`), or with one query per relation (`'query'`). */
+export type IncludeStrategy = 'join' | 'query';
 
-export function getTestContext(): ExecutionContext<TestContract> {
-  return testContext;
+export const includeStrategies: readonly IncludeStrategy[] = ['join', 'query'];
+
+type CapabilityMatrix = Readonly<Record<string, Readonly<Record<string, boolean>>>>;
+
+const strategyCapabilities: Record<IncludeStrategy, Record<string, boolean>> = {
+  join: { jsonAgg: true, outerReferencesInDerivedTables: true, jsonAggWithoutTruncation: true },
+  query: { outerReferencesInDerivedTables: false, jsonAggWithoutTruncation: false },
+};
+
+/** The Postgres adapter reporting `reported`, and under `'query'` that the database cannot run the one-query include. */
+export function postgresAdapterFor(
+  strategy: IncludeStrategy,
+  reported: CapabilityMatrix = postgresAdapterCapabilities,
+): typeof postgresAdapter {
+  return {
+    ...postgresAdapter,
+    capabilities: {
+      ...reported,
+      sql: { ...reported['sql'], ...strategyCapabilities[strategy] },
+    },
+  };
+}
+
+const testContexts: Record<IncludeStrategy, ExecutionContext<TestContract>> = {
+  join: testContextFor('join'),
+  query: testContextFor('query'),
+};
+
+function testContextFor(strategy: IncludeStrategy): ExecutionContext<TestContract> {
+  return createExecutionContext({
+    contract: baseTestContract,
+    stack: createSqlExecutionStack({
+      target: postgresTarget,
+      adapter: postgresAdapterFor(strategy),
+      extensions: [pgvectorRuntime],
+    }),
+  });
+}
+
+export function getTestContext(strategy: IncludeStrategy = 'join'): ExecutionContext<TestContract> {
+  return testContexts[strategy];
+}
+
+/** A context for a contract a test built itself, whose capabilities the adapter reports, with the include strategy's. */
+export function contextFor<TContract extends FrameworkContract<SqlStorage>>(
+  contract: TContract,
+  strategy: IncludeStrategy,
+): ExecutionContext<TContract> {
+  return createExecutionContext({
+    contract,
+    stack: createSqlExecutionStack({
+      target: postgresTarget,
+      adapter: postgresAdapterFor(strategy, contract.capabilities),
+      extensions: [pgvectorRuntime],
+    }),
+  });
 }
 
 export type { PolyContract };
@@ -144,17 +193,26 @@ export function getExecutionDefaultedTagsContract(): ExecutionDefaultedTagsContr
 
 const polyTestContract = deserializePolyContract();
 
-const polyTestContext: ExecutionContext<PolyContract> = createExecutionContext({
-  contract: polyTestContract,
-  stack: createSqlExecutionStack({
-    target: postgresTarget,
-    adapter: postgresAdapter,
-    extensions: [pgvectorRuntime],
-  }),
-});
+function polyTestContextFor(strategy: IncludeStrategy): ExecutionContext<PolyContract> {
+  return createExecutionContext({
+    contract: polyTestContract,
+    stack: createSqlExecutionStack({
+      target: postgresTarget,
+      adapter: postgresAdapterFor(strategy),
+      extensions: [pgvectorRuntime],
+    }),
+  });
+}
 
-export function getPolyTestContext(): ExecutionContext<PolyContract> {
-  return polyTestContext;
+const polyTestContexts: Record<IncludeStrategy, ExecutionContext<PolyContract>> = {
+  join: polyTestContextFor('join'),
+  query: polyTestContextFor('query'),
+};
+
+export function getPolyTestContext(
+  strategy: IncludeStrategy = 'join',
+): ExecutionContext<PolyContract> {
+  return polyTestContexts[strategy];
 }
 
 export interface MockExecution {

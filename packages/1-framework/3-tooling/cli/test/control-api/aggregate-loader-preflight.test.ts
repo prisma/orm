@@ -13,7 +13,7 @@
  * exercises the real catch branch without mocking a shared module (which is
  * unreliable under this package's `isolate: false` vitest config).
  */
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import { errorInvalidJson } from '@internal/migration-tools/errors';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildReadAggregate } from '../../src/control-api/operations/contract-space-aggregate-loader';
@@ -21,7 +21,7 @@ import { buildReadAggregate } from '../../src/control-api/operations/contract-sp
 const TARGET = 'postgres';
 const TARGET_FAMILY = 'sql';
 
-function makeConfig(familyCreate: () => unknown): PrismaNextConfig {
+function makeConfig(familyCreate: () => unknown): PrismaConfig {
   return {
     family: {
       familyId: TARGET_FAMILY,
@@ -36,7 +36,7 @@ function makeConfig(familyCreate: () => unknown): PrismaNextConfig {
     },
     adapter: { kind: 'adapter', familyId: TARGET_FAMILY, targetId: TARGET },
     contract: { output: 'contract.json' },
-  } as unknown as PrismaNextConfig;
+  } as unknown as PrismaConfig;
 }
 
 describe('buildReadAggregate — pre-flight loading failures return a structured envelope', () => {

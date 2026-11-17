@@ -6,7 +6,7 @@ import type { ExtensionPackRef, TargetPackRef } from '@internal/framework-compon
 import {
   buildSymbolTable,
   createBinder,
-  isPrismaNextSchema,
+  isPrisma8Schema,
   mapPslDiagnostics,
 } from '@internal/psl-parser';
 import type { PslInterpretCapable } from '@internal/psl-parser/interpret';
@@ -137,7 +137,7 @@ export function prismaContract(schemaPath: string, options: PrismaContractOption
           readDiagnostics.push({ code: 'PSL_SCHEMA_READ_FAILED', message, sourceId: path });
           continue;
         }
-        if (isPrismaNextSchema(text)) {
+        if (isPrisma8Schema(text)) {
           members.push({ path, text });
         } else {
           undirected.push(path);

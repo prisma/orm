@@ -14,6 +14,7 @@ import {
 } from '../../../packages/1-framework/3-tooling/cli/src/commands/init/templates/code-templates';
 import {
   defaultTsConfig,
+  mergeTsConfig,
   REQUIRED_COMPILER_OPTIONS,
 } from '../../../packages/1-framework/3-tooling/cli/src/commands/init/templates/tsconfig';
 import { createIntegrationTestDir } from './utils/cli-test-helpers';
@@ -36,6 +37,7 @@ function writeInitFiles(
   testDir: string,
   target: TargetId,
   authoring: AuthoringId,
+  tsconfig: string,
 ): { schemaPath: string; configPath: string } {
   const ext = authoring === 'typescript' ? 'ts' : 'prisma';
   const schemaPath = `prisma/contract.${ext}`;
@@ -48,7 +50,7 @@ function writeInitFiles(
   writeFileSync(configPath, configFile(target, `./${schemaPath}`), 'utf-8');
 
   writeFileSync(join(testDir, schemaDir, 'db.ts'), dbFile(target), 'utf-8');
-  writeFileSync(join(testDir, 'tsconfig.json'), defaultTsConfig(), 'utf-8');
+  writeFileSync(join(testDir, 'tsconfig.json'), tsconfig, 'utf-8');
 
   return { schemaPath, configPath };
 }
@@ -193,13 +195,13 @@ describe('init generates a typecheckable project', () => {
   // (target × authoring) cells. Each cell is the full chain `init` users
   // see: scaffolded contract source + `prisma.config.ts` (with the
   // `import 'dotenv/config'` and `process.env['DATABASE_URL']!` shape that
-  // requires `@types/node`) + `prisma/db.ts` (which imports `./contract.d`
+  // requires `@types/node`) + `prisma/db.ts` (which imports `./contract.d.js`
   // and `./contract.json`) + emitted contract artefacts.
   for (const { target, authoring, hashes } of CELLS) {
     it(
       `${target} + ${authoring}: emits the starter contract's hashes and typechecks`,
       async () => {
-        const { configPath } = writeInitFiles(testDir, target, authoring);
+        const { configPath } = writeInitFiles(testDir, target, authoring, defaultTsConfig());
         await emitContract(testDir, configPath);
 
         expect({
@@ -207,6 +209,34 @@ describe('init generates a typecheckable project', () => {
           contractDts: existsSync(join(testDir, 'prisma', 'contract.d.ts')),
         }).toMatchObject({ contractJson: true, contractDts: true });
         expect(emittedHashes(testDir)).toEqual(hashes);
+
+        await typecheck(testDir);
+      },
+      TYPECHECK_TIMEOUT,
+    );
+  }
+
+  const NODENEXT_TSCONFIG = JSON.stringify({
+    compilerOptions: {
+      target: 'ES2022',
+      module: 'nodenext',
+      moduleResolution: 'nodenext',
+      strict: true,
+      skipLibCheck: true,
+    },
+  });
+
+  for (const { target, authoring } of CELLS) {
+    it(
+      `${target} + ${authoring}: an ES module project on nodenext keeps it and typechecks`,
+      async () => {
+        const tsconfig = mergeTsConfig(NODENEXT_TSCONFIG, 'module');
+        expect(JSON.parse(tsconfig).compilerOptions).toMatchObject({
+          module: 'nodenext',
+          moduleResolution: 'nodenext',
+        });
+        const { configPath } = writeInitFiles(testDir, target, authoring, tsconfig);
+        await emitContract(testDir, configPath);
 
         await typecheck(testDir);
       },

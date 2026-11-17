@@ -1,9 +1,9 @@
-import { isPlainRecord } from '@internal/contract/is-plain-record';
 import type { ParamRefMutator } from '@internal/framework-components/runtime';
 import type { MongoLoweredDraft } from '@internal/mongo-lowering';
 import { MongoParamRef } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
+import { flattenMongoDraftLeaves, mapMongoDraftLeaves } from './draft-leaves';
 
 /**
  * Phantom brand on {@link MongoParamRefHandle} so handles produced by
@@ -98,266 +98,31 @@ export interface MongoParamRefMutatorInternal<
 
 type AnyMongoHandle = MongoParamRefHandle<string | undefined>;
 
-// ─── Internal tree-walk helpers ────────────────────────────────────────────
-// Descent mirrors resolveDraftSlot in adapter-mongo/resolve-value.ts: recurse
-// arrays and plain records; treat MongoParamRef, primitives, Date, and other
-// non-plain objects as leaves.
-
-function* flattenDraftSlot(value: unknown): Generator<MongoParamRef> {
-  if (value instanceof MongoParamRef) {
-    yield value;
-    return;
-  }
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      yield* flattenDraftSlot(item);
-    }
-    return;
-  }
-  if (isPlainRecord(value)) {
-    for (const v of Object.values(value)) {
-      yield* flattenDraftSlot(v);
-    }
-  }
-}
-
 /**
- * Flat walk over a `MongoLoweredDraft` yielding every `MongoParamRef` leaf
- * regardless of nesting — object values, array elements, filter predicate
- * values, update operator values, and pipeline stage values. Raw command
- * variants carry no `MongoParamRef` nodes so they yield zero entries.
- *
- * **Walk parity:** slot traversal matches `resolveDraftSlot` / `resolveParams`
- * — refs appear only in plain-object and array containers; `Date` and other
- * non-plain objects are leaves (not descended into), so middleware sees every
- * ref the resolve pass will encode.
+ * Yields every `MongoParamRef` in a draft, at any depth, once per position. Placeholders (`MongoPreparedParamRef`) are skipped. The walk is {@link flattenMongoDraftLeaves}, which visits raw drafts too and matches `resolveDraftSlot`, so middleware sees every parameter the resolve pass will encode.
  */
 export function* flattenMongoParamRefs(draft: MongoLoweredDraft): Generator<MongoParamRef> {
-  switch (draft.kind) {
-    case 'insertOne':
-    case 'rawInsertOne':
-      yield* flattenDraftSlot(draft.document);
-      break;
-    case 'insertMany':
-    case 'rawInsertMany':
-      for (const doc of draft.documents) {
-        yield* flattenDraftSlot(doc);
-      }
-      break;
-    case 'updateOne':
-    case 'updateMany':
-    case 'rawUpdateOne':
-    case 'rawUpdateMany':
-      yield* flattenDraftSlot(draft.filter);
-      yield* flattenDraftSlot(draft.update);
-      break;
-    case 'findOneAndUpdate':
-    case 'rawFindOneAndUpdate':
-      yield* flattenDraftSlot(draft.filter);
-      yield* flattenDraftSlot(draft.update);
-      break;
-    case 'deleteOne':
-    case 'deleteMany':
-    case 'rawDeleteOne':
-    case 'rawDeleteMany':
-      yield* flattenDraftSlot(draft.filter);
-      break;
-    case 'findOneAndDelete':
-    case 'rawFindOneAndDelete':
-      yield* flattenDraftSlot(draft.filter);
-      break;
-    case 'aggregate':
-    case 'rawAggregate':
-      for (const stage of draft.pipeline) {
-        yield* flattenDraftSlot(stage);
-      }
-      break;
-  }
-}
-
-// ─── Draft reconstruction for the mutated path ─────────────────────────────
-
-function substituteSlot(value: unknown, overrides: ReadonlyMap<MongoParamRef, unknown>): unknown {
-  if (value instanceof MongoParamRef) {
-    if (overrides.has(value)) {
-      return new MongoParamRef(overrides.get(value), {
-        ...ifDefined('name', value.name),
-        ...ifDefined('codecId', value.codecId),
-        ...ifDefined('collection', value.collection),
-      });
+  for (const leaf of flattenMongoDraftLeaves(draft)) {
+    if (leaf instanceof MongoParamRef) {
+      yield leaf;
     }
-    return value;
   }
-  if (Array.isArray(value)) {
-    return value.map((item) => substituteSlot(item, overrides));
-  }
-  if (isPlainRecord(value)) {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value)) {
-      out[k] = substituteSlot(v, overrides);
-    }
-    return out;
-  }
-  return value;
-}
-
-function substituteDoc(
-  doc: Record<string, unknown>,
-  overrides: ReadonlyMap<MongoParamRef, unknown>,
-): Record<string, unknown> {
-  return blindCast<
-    Record<string, unknown>,
-    'substituteSlot preserves plain-object shape for document inputs'
-  >(substituteSlot(doc, overrides));
-}
-
-function isUpdatePipeline(
-  update: Record<string, unknown> | ReadonlyArray<Record<string, unknown>>,
-): update is ReadonlyArray<Record<string, unknown>> {
-  return Array.isArray(update);
-}
-
-function substituteUpdate(
-  update: Record<string, unknown> | ReadonlyArray<Record<string, unknown>>,
-  overrides: ReadonlyMap<MongoParamRef, unknown>,
-): Record<string, unknown> | Array<Record<string, unknown>> {
-  if (isUpdatePipeline(update)) {
-    return update.map((stage) => substituteDoc(stage, overrides));
-  }
-  return substituteDoc(update, overrides);
 }
 
 function buildMutatedDraft(
   draft: MongoLoweredDraft,
   overrides: ReadonlyMap<MongoParamRef, unknown>,
 ): MongoLoweredDraft {
-  switch (draft.kind) {
-    case 'insertOne':
-      return {
-        kind: 'insertOne',
-        collection: draft.collection,
-        document: substituteDoc(draft.document, overrides),
-      };
-    case 'rawInsertOne':
-      return {
-        kind: 'rawInsertOne',
-        collection: draft.collection,
-        document: substituteDoc(draft.document, overrides),
-      };
-    case 'insertMany':
-      return {
-        kind: 'insertMany',
-        collection: draft.collection,
-        documents: draft.documents.map((d) => substituteDoc(d, overrides)),
-      };
-    case 'rawInsertMany':
-      return {
-        kind: 'rawInsertMany',
-        collection: draft.collection,
-        documents: draft.documents.map((d) => substituteDoc(d, overrides)),
-      };
-    case 'updateOne':
-      return {
-        kind: 'updateOne',
-        collection: draft.collection,
-        filter: substituteDoc(draft.filter, overrides),
-        update: substituteUpdate(draft.update, overrides),
-        upsert: draft.upsert,
-      };
-    case 'updateMany':
-      return {
-        kind: 'updateMany',
-        collection: draft.collection,
-        filter: substituteDoc(draft.filter, overrides),
-        update: substituteUpdate(draft.update, overrides),
-        upsert: draft.upsert,
-      };
-    case 'rawUpdateOne':
-      return {
-        kind: 'rawUpdateOne',
-        collection: draft.collection,
-        filter: substituteDoc(draft.filter, overrides),
-        update: substituteUpdate(draft.update, overrides),
-      };
-    case 'rawUpdateMany':
-      return {
-        kind: 'rawUpdateMany',
-        collection: draft.collection,
-        filter: substituteDoc(draft.filter, overrides),
-        update: substituteUpdate(draft.update, overrides),
-        bypassDocumentValidation: draft.bypassDocumentValidation,
-      };
-    case 'deleteOne':
-      return {
-        kind: 'deleteOne',
-        collection: draft.collection,
-        filter: substituteDoc(draft.filter, overrides),
-      };
-    case 'deleteMany':
-      return {
-        kind: 'deleteMany',
-        collection: draft.collection,
-        filter: substituteDoc(draft.filter, overrides),
-      };
-    case 'rawDeleteOne':
-      return {
-        kind: 'rawDeleteOne',
-        collection: draft.collection,
-        filter: substituteDoc(draft.filter, overrides),
-      };
-    case 'rawDeleteMany':
-      return {
-        kind: 'rawDeleteMany',
-        collection: draft.collection,
-        filter: substituteDoc(draft.filter, overrides),
-      };
-    case 'findOneAndUpdate':
-      return {
-        kind: 'findOneAndUpdate',
-        collection: draft.collection,
-        filter: substituteDoc(draft.filter, overrides),
-        update: substituteUpdate(draft.update, overrides),
-        upsert: draft.upsert,
-        sort: draft.sort,
-        returnDocument: draft.returnDocument,
-      };
-    case 'rawFindOneAndUpdate':
-      return {
-        kind: 'rawFindOneAndUpdate',
-        collection: draft.collection,
-        filter: substituteDoc(draft.filter, overrides),
-        update: substituteUpdate(draft.update, overrides),
-        upsert: draft.upsert,
-        sort: draft.sort,
-        returnDocument: draft.returnDocument,
-      };
-    case 'findOneAndDelete':
-      return {
-        kind: 'findOneAndDelete',
-        collection: draft.collection,
-        filter: substituteDoc(draft.filter, overrides),
-        sort: draft.sort,
-      };
-    case 'rawFindOneAndDelete':
-      return {
-        kind: 'rawFindOneAndDelete',
-        collection: draft.collection,
-        filter: substituteDoc(draft.filter, overrides),
-        sort: draft.sort,
-      };
-    case 'aggregate':
-      return {
-        kind: 'aggregate',
-        collection: draft.collection,
-        pipeline: draft.pipeline.map((s) => substituteDoc(s, overrides)),
-      };
-    case 'rawAggregate':
-      return {
-        kind: 'rawAggregate',
-        collection: draft.collection,
-        pipeline: draft.pipeline.map((s) => substituteDoc(s, overrides)),
-      };
-  }
+  return mapMongoDraftLeaves(draft, (leaf) =>
+    leaf instanceof MongoParamRef && overrides.has(leaf)
+      ? new MongoParamRef(overrides.get(leaf), {
+          ...ifDefined('name', leaf.name),
+          ...ifDefined('codecId', leaf.codecId),
+          ...ifDefined('collection', leaf.collection),
+          ...ifDefined('nullable', leaf.nullable),
+        })
+      : leaf,
+  );
 }
 
 // ─── Factory ────────────────────────────────────────────────────────────────

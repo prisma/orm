@@ -1,4 +1,5 @@
 import {
+  AndExpr,
   type AnyExpression,
   BinaryExpr,
   ColumnRef,
@@ -12,7 +13,7 @@ import { activitySource } from '@internal/sql-runtime';
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it, vi } from 'vitest';
 import { Collection } from '../src/collection';
-import { withReturningCapability } from './collection-fixtures';
+import { withoutCapabilityKeys, withReturningCapability } from './collection-fixtures';
 import {
   buildMixedPolyContract,
   buildStiPolyContract,
@@ -516,7 +517,7 @@ describe('Mixed STI+MTI polymorphic query pipeline', () => {
 
   it('deleteAll with includes after variant("feature") scopes MTI predicates through the write subquery', async () => {
     const { collection, runtime } = createReturningMixedPolyCollection();
-    runtime.setNextResults([[], []]);
+    runtime.setNextResults([[{ id: 1 }], []]);
 
     const mixedPoly = blindCast<
       MixedPolyCountCollection,
@@ -529,7 +530,7 @@ describe('Mixed STI+MTI polymorphic query pipeline', () => {
       .deleteAll()
       .toArray();
 
-    expect(rows).toEqual([]);
+    expect(rows).toEqual([{ id: 1, assignee: null }]);
     expect(runtime.executions).toHaveLength(2);
     expectSelectWithFeatureJoin(runtime.executions[0]!.plan.ast);
 
@@ -538,12 +539,16 @@ describe('Mixed STI+MTI polymorphic query pipeline', () => {
     if (writeAst.kind !== 'delete') {
       throw new Error('Expected a DELETE plan');
     }
-    const exists = expectExistsWithFeatureJoin(writeAst.where);
+    const { where } = writeAst;
+    expect(where).toBeInstanceOf(AndExpr);
+    const [condition, keys] = where instanceof AndExpr ? where.exprs : [];
+    const exists = expectExistsWithFeatureJoin(condition);
     expect(
       collectColumnRefs(exists.subquery.where).filter(
         (ref) => ref.table === 'features' && ref.column === 'priority',
       ),
     ).toHaveLength(1);
+    expect(keys).toBeDefined();
   });
 });
 
@@ -606,6 +611,27 @@ describe('MTI variant mutation guards', () => {
     const narrowed = collection.variant('feature' as never) as typeof collection;
     await expect(narrowed.createAndCount([{ title: 'X', priority: 1 } as never])).rejects.toThrow(
       /createAndCount\(\) is not supported for MTI variant/,
+    );
+  });
+
+  it('create() and createAll() of a variant stored in its own table name themselves without returning', async () => {
+    const contract = withoutCapabilityKeys(buildMixedPolyContract(), ['returning']);
+    const context = { ...getTestContext(), contract };
+    const features = new Collection({ runtime: createMockRuntime(), context }, 'Task', {
+      namespaceId: 'public',
+    }).variant('feature' as never);
+
+    await expect(features.create({ title: 'X', priority: 1 } as never)).rejects.toMatchObject({
+      code: 'ORM.CAPABILITY_MISSING',
+      message: 'create() requires contract capability "returning"',
+      meta: { capability: 'returning', action: 'create()' },
+    });
+    expect(() => features.createAll([{ title: 'X', priority: 1 } as never])).toThrow(
+      expect.objectContaining({
+        code: 'ORM.CAPABILITY_MISSING',
+        message: 'createAll() requires contract capability "returning"',
+        meta: { capability: 'returning', action: 'createAll()' },
+      }),
     );
   });
 

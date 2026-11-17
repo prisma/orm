@@ -134,7 +134,9 @@ function scanWhitespace(source: string, pos: number): Token | undefined {
 }
 
 function scanComment(source: string, pos: number): Token | undefined {
-  if (source.charAt(pos) !== '/' || source.charAt(pos + 1) !== '/') return undefined;
+  if (source.charAt(pos) !== '/') return undefined;
+  if (source.charAt(pos + 1) === '*') return scanBlockComment(source, pos);
+  if (source.charAt(pos + 1) !== '/') return undefined;
   let end = pos + 2;
   while (end < source.length) {
     const c = source.charAt(end);
@@ -142,6 +144,12 @@ function scanComment(source: string, pos: number): Token | undefined {
     end++;
   }
   return { kind: 'Comment', text: source.slice(pos, end) };
+}
+
+function scanBlockComment(source: string, pos: number): Token | undefined {
+  const close = source.indexOf('*/', pos + 2);
+  if (close === -1) return undefined;
+  return { kind: 'Comment', text: source.slice(pos, close + 2) };
 }
 
 function scanAt(source: string, pos: number): Token | undefined {

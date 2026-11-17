@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { publicShells } from '@internal/publish-surface/shells';
-import { init as initLexer, parse as parseModule } from 'es-module-lexer';
+import { init as initLexer, parse as parseModule } from 'es-module-lexer/minimal';
 
 /** A tarball-install smoke-test failure with the offending command output attached. */
 class ShellTestError extends Error {}
@@ -326,6 +326,7 @@ function shellMapModules(installedPackageDir: string): ReadonlySet<string> {
 export const knownInternalNamesInDist: readonly string[] = [
   '@internal/*',
   '@internal/target-mongo/codec-types',
+  '@internal/adapter-mariadb/codec-types',
   '@internal/adapter-mysql/codec-types',
   '@internal/adapter-sqlite/codec-types',
   '@internal/cli',
@@ -365,6 +366,7 @@ export const knownInternalNamesInDist: readonly string[] = [
   '@internal/mongo-runtime',
   '@internal/mongo/contract-builder',
   '@internal/mongo/runtime',
+  '@internal/mariadb/migration',
   '@internal/mysql/migration',
   '@internal/postgres',
   '@internal/postgres/contract-builder',

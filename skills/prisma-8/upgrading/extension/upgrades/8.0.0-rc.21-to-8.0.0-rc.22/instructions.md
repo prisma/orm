@@ -137,6 +137,13 @@ changes:
         - 'DRIVER\.ALREADY_CONNECTED'
         - '(?:Postgres|SQLite|MySQL|Mongo) client already connected'
         - 'Call connect\(\) at most once per client'
+  - id: create-extension-takes-options
+    summary: |
+      The free function `createExtension` from `@internal/target-postgres/migration` now takes an options object and an internal argument a `migration.ts` cannot pass, so a `migration.ts` that calls `createExtension('btree_gist')` fails with `Cannot read properties of undefined (reading 'lowerToExecuteRequest')`. The 8.0.0-rc.21 planner wrote this call into every migration that created an extension. Call the method on the migration class with the schema the extension is installed in, usually `public`: `this.createExtension({ schema: 'public', extension: 'btree_gist' })`, and drop `createExtension` from the import. The migration's `ops.json` does not change, so there is no need to run `node migration.ts` again.
+    detection:
+      glob: "**/migration.{ts,mts}"
+      matches:
+        - '(?<![\w$.])createExtension\s*\('
 ---
 
 # 8.0.0-rc.21 → 8.0.0-rc.22 — Extension author upgrade instructions
@@ -430,3 +437,28 @@ await expect(db.connect({ url })).rejects.toThrow('Postgres client already conne
 // After
 await expect(db.connect({ url })).rejects.toThrow('Postgres client is already bound');
 ```
+
+
+## `createExtension` is a method of the migration class
+
+In 8.0.0-rc.22 the free function `createExtension` from `@internal/target-postgres/migration` changed to take an options object and an internal argument that only the migration class can supply. A `migration.ts` that still calls it the old way fails when it runs, with `Cannot read properties of undefined (reading 'lowerToExecuteRequest')`. The 8.0.0-rc.21 planner wrote the old call into every migration that created an extension.
+
+In every `migration.ts` the detection matches, call the method instead and remove `createExtension` from the import. In 8.0.0-rc.22 the method requires `schema`: pass the schema the extension is installed in, usually `public`.
+
+```ts
+// Before
+import { createExtension, Migration, MigrationCLI } from '@internal/target-postgres/migration';
+
+override get operations() {
+  return [createExtension('btree_gist'), ...];
+}
+
+// After
+import { Migration, MigrationCLI } from '@internal/target-postgres/migration';
+
+override get operations() {
+  return [this.createExtension({ schema: 'public', extension: 'btree_gist' }), ...];
+}
+```
+
+The migration's `ops.json` does not change, and there is no need to run `node migration.ts` again: `prisma db migrate` applies `ops.json` and does not load `migration.ts`.

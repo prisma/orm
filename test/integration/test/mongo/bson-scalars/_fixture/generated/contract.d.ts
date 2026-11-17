@@ -23,7 +23,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'d9eb4195e93e0635171fe59d8bc76ea81da5edb4190111b37671eeb5ffd9b39c'>;
+  StorageHashBase<'587167f68245c71b02d0b16add544f6309946b099c767c78cfa60e0d3c68b8ce'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3'>;
@@ -138,6 +138,13 @@ export namespace Models {
     words: FieldOutputTypes['__unbound__']['Series']['words'];
     readonly [RelationKeys]?: never;
   };
+  export type unbound_Tally = {
+    hits: FieldOutputTypes['__unbound__']['Tally']['hits'];
+    id: FieldOutputTypes['__unbound__']['Tally']['id'];
+    ratio: FieldOutputTypes['__unbound__']['Tally']['ratio'];
+    total: FieldOutputTypes['__unbound__']['Tally']['total'];
+    readonly [RelationKeys]?: never;
+  };
   export type unbound_AnyAsset = unbound_Photo;
 }
 
@@ -150,6 +157,7 @@ export declare const models: {
     Post: Models.unbound_Post;
     Reading: Models.unbound_Reading;
     Series: Models.unbound_Series;
+    Tally: Models.unbound_Tally;
     AnyAsset: Models.unbound_AnyAsset;
   };
 };
@@ -421,6 +429,25 @@ type ContractBase = Omit<
                 readonly validationLevel: 'strict';
               };
             };
+            readonly tallies: {
+              readonly kind: 'mongo-collection';
+              readonly validator: {
+                readonly jsonSchema: {
+                  readonly additionalProperties: false;
+                  readonly bsonType: 'object';
+                  readonly properties: {
+                    readonly _id: { readonly bsonType: 'objectId' };
+                    readonly hits: { readonly bsonType: readonly ['null', 'int'] };
+                    readonly ratio: { readonly bsonType: readonly ['null', 'double'] };
+                    readonly total: { readonly bsonType: readonly ['null', 'long'] };
+                  };
+                  readonly required: readonly ['_id'];
+                };
+                readonly kind: 'mongo-validator';
+                readonly validationAction: 'error';
+                readonly validationLevel: 'strict';
+              };
+            };
           };
           readonly valueObject: {
             readonly Address: {
@@ -476,6 +503,7 @@ type ContractBase = Omit<
       readonly model: 'Reading';
     };
     readonly series: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Series' };
+    readonly tallies: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Tally' };
   };
   readonly domain: {
     readonly namespaces: {
@@ -788,6 +816,36 @@ type ContractBase = Omit<
                 readonly longs: { readonly field: 'longs' };
                 readonly points: { readonly field: 'points' };
                 readonly words: { readonly field: 'words' };
+              };
+            };
+          };
+          readonly Tally: {
+            readonly fields: {
+              readonly hits: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int32@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
+              };
+              readonly ratio: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/double@1' };
+              };
+              readonly total: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int64@1' };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly collection: 'tallies';
+              readonly fields: {
+                readonly hits: { readonly field: 'hits' };
+                readonly id: { readonly field: '_id' };
+                readonly ratio: { readonly field: 'ratio' };
+                readonly total: { readonly field: 'total' };
               };
             };
           };

@@ -27,6 +27,11 @@ const shoutPackMeta = {
   targetId: 'mongo',
   version: '0.0.1',
   dataTypes: [shoutType],
+  authoring: {
+    type: {
+      shout: { Text: { kind: 'typeConstructor', output: { codecId: 'shout/text@1' } } },
+    },
+  },
   types: {
     codecTypes: { codecDescriptors: [mongoCodecDescriptor(shoutCodec, { traits: ['equality'] })] },
   },

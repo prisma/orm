@@ -42,7 +42,7 @@ model Sample {
   docb        Jsonb             @default(${tagged('json', '{"b": [1, 2]}')})
   bytes       Bytes             @default(${tagged('bytea', '\\x6869')})
   varcode     Varchar(10)       @default("vc")
-  code        sql.String(10)    @default("vc")
+  code        sql.Varchar(10)    @default("vc")
   initials    Char(3)           @default("ab")
   local       TimestampTemporal(3)      @default(${tagged('timestamp', '2024-01-01T12:34:56.5')})
   precise     TimestamptzTemporal(6)    @default(${tagged('timestamptz', '2024-01-01T00:00:00.123456Z')})

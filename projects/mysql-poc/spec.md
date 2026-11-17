@@ -69,7 +69,7 @@ packages/
     sqlite/    { 1-target, 2-adapter, 3-driver, 4-codec-testkit, 9-facade }
     mongo/     { 1-target, 2-adapter, 3-driver, 9-facade }
     mysql/     { 1-target, 2-adapter, 3-driver, 4-codec-testkit, 9-facade }
-    mariadb/   { 1-target, 2-adapter, 9-facade }
+    mariadb/   { 1-target, 2-adapter, 3-driver, 9-facade }
   3-extensions/                   extension packs only
 ```
 
@@ -94,7 +94,7 @@ The reasoning and the alternatives rejected are in [`design-notes.md`](./design-
 - No row locking, isolation level controls (MySQL sessions run at READ COMMITTED, slice 4 decision 6), `distinctOn`, partial indexes or expression indexes on MySQL. Each is refused through a capability the target does not report.
 - No change to Postgres or SQLite behaviour beyond what a shared-code fix requires.
 
-**Added 2026-10-23 (Will): an example app, built first, and the public packages are in scope.** `examples/prisma-8-demo-mysql` imports only the public `@prisma/orm-mysql` facade, so the public `@prisma/orm-mysql` and `@prisma/orm-target-mysql` packages are built in this project. The example is built in slice 2c, right after migrations work, and every later slice extends it: a slice is done only when the example runs what it delivered, in CI. The MariaDB slice runs the same example against MariaDB.
+**Added 2026-10-23 (Will): an example app, built first, and the public packages are in scope.** `examples/prisma-8-demo-mysql` imports only the public `@prisma/orm-mysql` facade, so the public `@prisma/orm-mysql` and `@prisma/orm-target-mysql` packages are built in this project. The example is built in slice 2c, right after migrations work, and every later slice extends it: a slice is done only when the example runs what it delivered, in CI. The MariaDB slices copy it into `examples/prisma-8-demo-mariadb`, because the target id is part of the emitted contract and migrations (slice 6a, 2026-11-06).
 
 ## Place in the larger world
 
@@ -126,7 +126,7 @@ The reasoning and the alternatives rejected are in [`design-notes.md`](./design-
 - The commands and calls in "At a glance" succeed against MySQL 8.4 and MariaDB 10.11 in CI.
 - Every entry in `coupling.md` is fixed or filed as a Linear issue in this project, and every breaking one is fixed.
 - No package outside `3-targets/<db>/` holds target, adapter, driver or facade code, and the docs describe the new layout.
-- `examples/prisma-8-demo-mysql` runs in CI against MySQL 8.4 and MariaDB 10.11, through the public `@prisma/orm-mysql` package.
+- `examples/prisma-8-demo-mysql` runs in CI against MySQL 8.4 through the public `@prisma/orm-mysql` package, and `examples/prisma-8-demo-mariadb` against MariaDB 10.11 through `@prisma/orm-mariadb`.
 - An ADR records the layout, and ADR 212 and the Migration System doc say that each runner states what a failed migration left behind.
 - The GA plan's stream 1 row 3 is marked done, and the follow-up issues are listed for the full MySQL target.
 

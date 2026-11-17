@@ -75,6 +75,7 @@ const contracts = {
   statements: [],
   canConvert: false,
   originKnown: true,
+  temporaryValues: [],
 };
 
 /** One question of each kind, across two spaces: an extension's recorded drop is a storage subject. */
@@ -175,6 +176,7 @@ function applySuccess(mode: 'plan' | 'apply'): Record<string, unknown> {
     appliedStatements: [],
     dataLoss: [],
     accessChanges: [],
+    temporaryValues: [],
     summary: 'Database updated',
   };
 }

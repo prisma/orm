@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { field, index, model, rel, valueObject } from '../src/contract-builder';
 import { buildContractDefinition } from '../src/contract-lowering';
 import { enumType, member } from '../src/enum-type';
-import { mongoFamilyPack, mongoTargetPack } from './mongo-test-packs';
+import { mongoFamilyPack, mongoTargetPack, type } from './mongo-test-packs';
 
-const objectIdType = field.objectId().__type;
-const stringType = field.string().__type;
+const objectIdType = field.scalar(type.ObjectId()).__type;
+const stringType = field.scalar(type.String()).__type;
 
 describe('buildContractDefinition', () => {
   it('lowers models to plain data, keeping indexes in the order they are written', () => {
@@ -13,10 +13,10 @@ describe('buildContractDefinition', () => {
     const Task = model('Task', {
       collection: 'tasks',
       fields: {
-        _id: field.objectId(),
-        type: field.string(),
-        title: field.string().optional().mongo({ field: 't' }),
-        tags: field.string().many(),
+        _id: field.scalar(type.ObjectId()),
+        type: field.scalar(type.String()),
+        title: field.scalar(type.String()).optional().mongo({ field: 't' }),
+        tags: field.scalar(type.String()).many(),
         role: field.namedType(Role),
       },
       indexes: [index({ title: 1 }), index({ type: 1 }, { unique: true })],
@@ -85,14 +85,14 @@ describe('buildContractDefinition', () => {
   });
 
   it('lowers embed and reference relations, and value objects', () => {
-    const Address = valueObject('Address', { fields: { city: field.string() } });
+    const Address = valueObject('Address', { fields: { city: field.scalar(type.String()) } });
     const User = model('User', {
       collection: 'users',
-      fields: { _id: field.objectId(), home: field.valueObject(Address).optional() },
+      fields: { _id: field.scalar(type.ObjectId()), home: field.valueObject(Address).optional() },
     });
     const Post = model('Post', {
       collection: 'posts',
-      fields: { _id: field.objectId(), authorId: field.objectId() },
+      fields: { _id: field.scalar(type.ObjectId()), authorId: field.scalar(type.ObjectId()) },
       relations: {
         author: rel.belongsTo(User, { from: 'authorId', to: User.ref('_id') }),
         comments: rel.hasMany('Comment'),
@@ -132,7 +132,7 @@ describe('buildContractDefinition', () => {
   it('gives a variant the base no value names an undefined value', () => {
     const Task = model('Task', {
       collection: 'tasks',
-      fields: { _id: field.objectId(), type: field.string() },
+      fields: { _id: field.scalar(type.ObjectId()), type: field.scalar(type.String()) },
       discriminator: { field: 'type', variants: {} },
     });
     const Bug = model('Bug', { collection: 'tasks', base: Task, fields: {} });

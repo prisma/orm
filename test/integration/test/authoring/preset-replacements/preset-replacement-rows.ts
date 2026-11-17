@@ -262,8 +262,8 @@ export const postgresRows: readonly SqlRow<PostgresHelpers>[] = [
   },
   {
     model: 'JsonbColumn',
-    psl: { preset: 'json()', replacement: 'Jsonb' },
-    ts: ({ field, type }) => field.column(type.Jsonb()),
+    psl: { preset: 'json()', replacement: 'Json(storage: jsonb)' },
+    ts: ({ field, type }) => field.column(type.Json({ storage: 'jsonb' })),
   },
   {
     model: 'Bytea',
@@ -523,24 +523,26 @@ export const mongoRows: readonly MongoRow[] = [
   {
     model: 'CreatedAt',
     psl: { preset: 'temporal.createdAt()', replacement: 'temporal.CreatedAt' },
-    ts: ({ field, gen }) => field.date().onCreate(gen.now()),
+    ts: ({ field, gen, type }) => field.scalar(type.DateTime()).onCreate(gen.now()),
   },
   {
     model: 'UpdatedAt',
     psl: { preset: 'temporal.updatedAt()', replacement: 'temporal.UpdatedAt' },
-    ts: ({ field, gen }) => field.date().onCreate(gen.now()).onUpdate(gen.now()),
+    ts: ({ field, gen, type }) =>
+      field.scalar(type.DateTime()).onCreate(gen.now()).onUpdate(gen.now()),
   },
   {
     model: 'TimestampBothPhases',
     psl: {
       preset: 'temporal.timestamp(onCreate: now, onUpdate: now)',
-      replacement: 'Date @onCreate(now()) @onUpdate(now())',
+      replacement: 'DateTime @onCreate(now()) @onUpdate(now())',
     },
-    ts: ({ field, gen }) => field.date().onCreate(gen.now()).onUpdate(gen.now()),
+    ts: ({ field, gen, type }) =>
+      field.scalar(type.DateTime()).onCreate(gen.now()).onUpdate(gen.now()),
   },
   {
     model: 'TimestampOnUpdate',
-    psl: { preset: 'temporal.timestamp(onUpdate: now)', replacement: 'Date @onUpdate(now())' },
-    ts: ({ field, gen }) => field.date().onUpdate(gen.now()),
+    psl: { preset: 'temporal.timestamp(onUpdate: now)', replacement: 'DateTime @onUpdate(now())' },
+    ts: ({ field, gen, type }) => field.scalar(type.DateTime()).onUpdate(gen.now()),
   },
 ];

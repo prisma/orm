@@ -30,9 +30,12 @@ import type {
   AnyMongoCommand,
   InsertManyResult,
   InsertOneResult,
+  MongoAggLiteral,
   MongoExecutionContext,
   MongoFieldShape,
   MongoFilterExpr,
+  MongoPreparable,
+  MongoQueryExecutor,
   MongoQueryPlan,
   MongoResultShape,
 } from '@internal/mongo-query-ast/execution';
@@ -55,9 +58,14 @@ import {
 import {
   contractFieldToMongoFieldShape,
   contractModelToMongoResultShape,
+  type PagingCount,
 } from '@internal/mongo-query-builder';
 import type { MongoValue } from '@internal/mongo-value';
-import { MongoParamRef } from '@internal/mongo-value';
+import {
+  isMongoPreparedParamRef,
+  MongoParamRef,
+  type MongoPreparedParamRef,
+} from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
@@ -65,7 +73,6 @@ import type { SimplifyDeep } from '@internal/utils/simplify-deep';
 import type { MongoIncludeExpr } from './collection-state';
 import { emptyCollectionState, type MongoCollectionState } from './collection-state';
 import { compileMongoQuery } from './compile';
-import type { MongoQueryExecutor } from './executor';
 import {
   compileFieldOperations,
   createFieldAccessor,
@@ -83,6 +90,19 @@ import {
   storedPathOfCallerPath,
 } from './model-stored-names';
 import { ormError } from './orm-errors';
+import { ormParam } from './orm-param';
+import type { MongoPreparedCollection } from './prepared-collection';
+import {
+  findPlaceholder,
+  rejectExprPlaceholder,
+  rejectPlaceholder,
+  rejectPlaceholderList,
+  rejectPreparedWrite,
+  rejectUnknownPathPlaceholder,
+  rejectValueObjectPlaceholder,
+  type WherePlaceholderField,
+  wherePlaceholder,
+} from './prepared-placeholders';
 import type {
   DiscriminatorValues,
   IncludedRow,
@@ -139,14 +159,18 @@ export interface MongoCollection<
     spec: Partial<Record<ModelFieldKeys<TContract, ModelName>, 1 | -1>>,
   ): MongoCollection<TContract, ModelName, TIncludes, TVariantValue>;
   /** Limits the number of results. Returns a new immutable collection. */
-  limit(n: number): MongoCollection<TContract, ModelName, TIncludes, TVariantValue>;
+  limit(n: PagingCount<TContract>): MongoCollection<TContract, ModelName, TIncludes, TVariantValue>;
   /** Offsets the results by `n`. Returns a new immutable collection. */
-  offset(n: number): MongoCollection<TContract, ModelName, TIncludes, TVariantValue>;
+  offset(
+    n: PagingCount<TContract>,
+  ): MongoCollection<TContract, ModelName, TIncludes, TVariantValue>;
   /** Executes the query and returns all matching rows as an async iterable. */
   all(): AsyncIterableResult<IncludedRow<TContract, ModelName, TIncludes>>;
   /** Executes the query with limit 1. Returns the first matching row or `null`. */
   first(): Promise<IncludedRow<TContract, ModelName, TIncludes> | null>;
   firstOrThrow(): Promise<IncludedRow<TContract, ModelName, TIncludes>>;
+  /** The reads `prepare` can take. A placeholder goes in a scalar field of a `where`, in `limit` and in `offset`. */
+  readonly prepared: MongoPreparedCollection<IncludedRow<TContract, ModelName, TIncludes>>;
   /** Inserts the document and returns it as stored, decoded like a read, without reading it back. */
   create(
     data: ResolvedCreateInput<TContract, ModelName, TVariantValue>,
@@ -273,6 +297,31 @@ function isUnknownRecord(value: unknown): value is Record<string, unknown> {
 
 const LIST_INDEX = /^\d+$/;
 
+function rejectLiteralPlaceholder(literal: MongoAggLiteral): MongoAggLiteral {
+  rejectExprPlaceholder(literal.value);
+  return literal;
+}
+
+function placeholderInFilter(filter: MongoFilterExpr): MongoPreparedParamRef | undefined {
+  let found: MongoPreparedParamRef | undefined;
+  filter.rewrite({
+    field: (fieldFilter) => {
+      found ??= findPlaceholder(fieldFilter.value);
+      return fieldFilter;
+    },
+    expr: (exprFilter) => {
+      exprFilter.aggExpr.rewrite({
+        literal: (literal) => {
+          found ??= findPlaceholder(literal.value);
+          return literal;
+        },
+      });
+      return exprFilter;
+    },
+  });
+  return found;
+}
+
 export class MongoCollectionImpl<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
   ModelName extends string & keyof MongoModelsMap<TContract>,
@@ -354,7 +403,7 @@ export class MongoCollectionImpl<
         modelStoredNamesOf(this.#contract, this.#modelName),
         discriminator.field,
       ),
-      new MongoParamRef(value),
+      ormParam(value, discriminator.field),
     );
     return this.#cloneWithVariant<V>({ filters: [...this.#state.filters, filter] }, value);
   }
@@ -372,6 +421,7 @@ export class MongoCollectionImpl<
             exprFilter.aggExpr.rewrite({
               fieldRef: (ref) =>
                 ref.path.startsWith('$') ? ref : MongoAggFieldRef.of(this.#storedPath(ref.path)),
+              literal: rejectLiteralPlaceholder,
             }),
           ),
       });
@@ -483,11 +533,15 @@ export class MongoCollectionImpl<
     return this.#clone({ orderBy: merged });
   }
 
-  limit(n: number): MongoCollection<TContract, ModelName, TIncludes, TVariantValue> {
+  limit(
+    n: PagingCount<TContract>,
+  ): MongoCollection<TContract, ModelName, TIncludes, TVariantValue> {
     return this.#clone({ limit: n });
   }
 
-  offset(n: number): MongoCollection<TContract, ModelName, TIncludes, TVariantValue> {
+  offset(
+    n: PagingCount<TContract>,
+  ): MongoCollection<TContract, ModelName, TIncludes, TVariantValue> {
     return this.#clone({ offset: n });
   }
 
@@ -496,16 +550,19 @@ export class MongoCollectionImpl<
   }
 
   async first(): Promise<IncludedRow<TContract, ModelName, TIncludes> | null> {
-    const limited = this.#clone({ limit: 1 });
-    const result = limited.#query();
-    for await (const row of result) {
-      return row;
-    }
-    return null;
+    return this.#run(this.#describeFirst());
+  }
+
+  get prepared(): MongoPreparedCollection<IncludedRow<TContract, ModelName, TIncludes>> {
+    return {
+      all: () => this.#describeRows(),
+      first: () => this.#describeFirst(),
+      firstOrThrow: () => this.#describeFirstOrThrow(),
+    };
   }
 
   async firstOrThrow(): Promise<IncludedRow<TContract, ModelName, TIncludes>> {
-    return this.#clone({ limit: 1 }).#query().firstOrThrow();
+    return this.#run(this.#describeFirstOrThrow());
   }
 
   async create(
@@ -610,6 +667,7 @@ export class MongoCollectionImpl<
       | ((u: FieldAccessor<TContract, ModelName>) => FieldOperation[]),
   ): Promise<IncludedRow<TContract, ModelName, TIncludes> | null> {
     this.#requireFilters('update');
+    this.#rejectFilterPlaceholders('update');
     this.#rejectWindowing('update');
     this.#rejectIncludes('update');
     const filter = this.#mergeFilters();
@@ -631,6 +689,7 @@ export class MongoCollectionImpl<
       | ((u: FieldAccessor<TContract, ModelName>) => FieldOperation[]),
   ): AsyncIterableResult<IncludedRow<TContract, ModelName, TIncludes>> {
     this.#requireFilters('updateAll');
+    this.#rejectFilterPlaceholders('updateAll');
     this.#rejectWindowing('updateAll');
     const self = this;
     async function* gen(): AsyncGenerator<IncludedRow<TContract, ModelName, TIncludes>> {
@@ -644,7 +703,7 @@ export class MongoCollectionImpl<
 
       const idFilter = MongoFieldFilter.in(
         '_id',
-        ids.map((id) => new MongoParamRef(id)),
+        ids.map((id) => ormParam(id, '_id')),
       );
       yield* self.#clone({ filters: [idFilter] }).#query();
     }
@@ -657,6 +716,7 @@ export class MongoCollectionImpl<
       | ((u: FieldAccessor<TContract, ModelName>) => FieldOperation[]),
   ): Promise<number> {
     this.#requireFilters('updateAndCount');
+    this.#rejectFilterPlaceholders('updateAndCount');
     this.#rejectWindowing('updateAndCount');
     this.#rejectIncludes('updateAndCount');
     const filter = this.#mergeFilters();
@@ -668,6 +728,7 @@ export class MongoCollectionImpl<
 
   async delete(): Promise<IncludedRow<TContract, ModelName, TIncludes> | null> {
     this.#requireFilters('delete');
+    this.#rejectFilterPlaceholders('delete');
     this.#rejectWindowing('delete');
     this.#rejectIncludes('delete');
     const filter = this.#mergeFilters();
@@ -684,6 +745,7 @@ export class MongoCollectionImpl<
 
   deleteAll(): AsyncIterableResult<IncludedRow<TContract, ModelName, TIncludes>> {
     this.#requireFilters('deleteAll');
+    this.#rejectFilterPlaceholders('deleteAll');
     this.#rejectWindowing('deleteAll');
     const self = this;
     async function* gen(): AsyncGenerator<IncludedRow<TContract, ModelName, TIncludes>> {
@@ -701,6 +763,7 @@ export class MongoCollectionImpl<
 
   async deleteAndCount(): Promise<number> {
     this.#requireFilters('deleteAndCount');
+    this.#rejectFilterPlaceholders('deleteAndCount');
     this.#rejectWindowing('deleteAndCount');
     this.#rejectIncludes('deleteAndCount');
     const filter = this.#mergeFilters();
@@ -716,6 +779,7 @@ export class MongoCollectionImpl<
       | ((u: FieldAccessor<TContract, ModelName>) => FieldOperation[]);
   }): Promise<IncludedRow<TContract, ModelName, TIncludes>> {
     this.#requireFilters('upsert');
+    this.#rejectFilterPlaceholders('upsert');
     this.#rejectWindowing('upsert');
     this.#rejectIncludes('upsert');
     const filter = this.#mergeFilters();
@@ -840,28 +904,66 @@ export class MongoCollectionImpl<
     // re-read flow depends on it.
     const { resultShape: _rs, ...planWithoutShape } = idQuery.#compile();
     for await (const row of this.#executor.query(planWithoutShape)) {
-      const storageRow = blindCast<
-        Record<string, unknown>,
-        'Mongo id-prefetch plan without resultShape yields a raw storage row containing _id'
-      >(row);
-      ids.push(storageRow['_id']);
+      ids.push(row['_id']);
     }
     return ids;
   }
 
   #query(): AsyncIterableResult<IncludedRow<TContract, ModelName, TIncludes>> {
+    return this.#run(this.#describeRows());
+  }
+
+  #run<Result>(read: MongoPreparable<Record<string, unknown>, Result>): Result {
+    return read.consume(this.#executor.query(read.plan));
+  }
+
+  #describeRows(): MongoPreparable<
+    Record<string, unknown>,
+    AsyncIterableResult<IncludedRow<TContract, ModelName, TIncludes>>
+  > {
     const plan = this.#compile();
-    const documents = this.#executor.query(plan);
     const rowOf = this.#rowMapper();
-    async function* rows(): AsyncGenerator<IncludedRow<TContract, ModelName, TIncludes>> {
-      for await (const document of documents) {
-        yield blindCast<
-          IncludedRow<TContract, ModelName, TIncludes>,
-          'a document of the model read as its fields is a row of the model'
-        >(rowOf(document));
-      }
-    }
-    return new AsyncIterableResult(rows());
+    return {
+      plan,
+      consume: (documents) => {
+        async function* rows(): AsyncGenerator<IncludedRow<TContract, ModelName, TIncludes>> {
+          for await (const document of documents) {
+            yield blindCast<
+              IncludedRow<TContract, ModelName, TIncludes>,
+              'a document of the model read as its fields is a row of the model'
+            >(rowOf(document));
+          }
+        }
+        return new AsyncIterableResult(rows());
+      },
+    };
+  }
+
+  #describeFirst(): MongoPreparable<
+    Record<string, unknown>,
+    Promise<IncludedRow<TContract, ModelName, TIncludes> | null>
+  > {
+    const rows = this.#clone({ limit: 1 }).#describeRows();
+    return {
+      plan: rows.plan,
+      consume: async (documents) => {
+        for await (const row of rows.consume(documents)) {
+          return row;
+        }
+        return null;
+      },
+    };
+  }
+
+  #describeFirstOrThrow(): MongoPreparable<
+    Record<string, unknown>,
+    Promise<IncludedRow<TContract, ModelName, TIncludes>>
+  > {
+    const rows = this.#clone({ limit: 1 }).#describeRows();
+    return {
+      plan: rows.plan,
+      consume: (documents) => rows.consume(documents).firstOrThrow(),
+    };
   }
 
   #rowMapper(): (document: unknown) => unknown {
@@ -911,14 +1013,14 @@ export class MongoCollectionImpl<
     }
   }
 
-  #compile(): MongoQueryPlan<IncludedRow<TContract, ModelName, TIncludes>> {
+  #compile(): MongoQueryPlan<Record<string, unknown>> {
     const model = this.#modelWithVariantFields();
     if (!model) {
       throw ormError('ORM.MODEL_UNKNOWN', `Unknown model: "${this.#modelName}".`, {
         meta: { model: this.#modelName },
       });
     }
-    return compileMongoQuery<IncludedRow<TContract, ModelName, TIncludes>>(
+    return compileMongoQuery(
       this.#collectionName,
       this.#state,
       this.#contract.storage.storageHash,
@@ -1024,9 +1126,12 @@ export class MongoCollectionImpl<
       if (value === undefined) continue;
       const storedName = storedNameOfCallerField(this.#storedNames(), key);
       const field = fields[key];
-      filters.push(
-        whereEquality(storedName, field, this.#wrapFieldValue(value, field, key, 'filter')),
-      );
+      if (Array.isArray(value)) rejectPlaceholderList(value, key);
+      const compared =
+        isMongoPreparedParamRef(value) && field?.type.kind === 'scalar'
+          ? wherePlaceholder(value, this.#placeholderField(key, field, field.type.codecId), key)
+          : this.#wrapFieldValue(value, field, key, 'filter');
+      filters.push(whereEquality(storedName, field, compared));
     }
     return filters;
   }
@@ -1038,10 +1143,12 @@ export class MongoCollectionImpl<
     const storedPath = this.#storedPath(filter.field);
     const field = this.#fieldAtPath(filter.field);
     if (field?.type.kind !== 'scalar') {
+      this.#rejectNonScalarPlaceholder(filter.value, filter.field, field);
       return storedPath === filter.field
         ? filter
         : MongoFieldFilter.of(storedPath, filter.op, filter.value);
     }
+    const placeholderField = this.#placeholderField(filter.field, field, field.type.codecId);
     const encode = (value: MongoValue): MongoValue => {
       if (value === null) return null;
       if (value instanceof MongoParamRef) {
@@ -1052,19 +1159,59 @@ export class MongoCollectionImpl<
       if (field.many && Array.isArray(value)) return value.map(encode);
       return this.#wrapFieldValue(value, field, filter.field, 'filter');
     };
+    const operand = (value: MongoValue): MongoValue => {
+      if (isMongoPreparedParamRef(value))
+        return wherePlaceholder(value, placeholderField, filter.field);
+      if (Array.isArray(value)) rejectPlaceholderList(value, filter.field);
+      rejectPlaceholder(value, filter.field);
+      return encode(value);
+    };
     if (COMPARISON_OPERATORS.has(filter.op)) {
-      return MongoFieldFilter.of(storedPath, filter.op, encode(filter.value));
+      return MongoFieldFilter.of(storedPath, filter.op, operand(filter.value));
     }
     if (MEMBERSHIP_OPERATORS.has(filter.op) && Array.isArray(filter.value)) {
       const values = filter.value;
-      const encoded = values.map(encode);
+      const encoded = values.map(operand);
       return encoded.every((value, index) => value === values[index]) && storedPath === filter.field
         ? filter
         : MongoFieldFilter.of(storedPath, filter.op, encoded);
     }
+    rejectPlaceholder(filter.value, filter.field);
     return storedPath === filter.field
       ? filter
       : MongoFieldFilter.of(storedPath, filter.op, filter.value);
+  }
+
+  /**
+   * A path that ends in a list index names one item of the list, so a placeholder there may be null exactly when the list's items may be.
+   */
+  #placeholderField(path: string, field: ContractField, codecId: string): WherePlaceholderField {
+    const segments = path.split('.');
+    const last = segments.at(-1);
+    const list =
+      last !== undefined && LIST_INDEX.test(last)
+        ? this.#fieldAtPath(segments.slice(0, -1).join('.'))?.many
+        : undefined;
+    return {
+      codecId,
+      nullable: list ? list.elementNullable : field.nullable,
+      list: Boolean(field.many),
+    };
+  }
+
+  #rejectNonScalarPlaceholder(
+    value: unknown,
+    path: string,
+    field: ContractField | undefined,
+  ): void {
+    const [head = path] = path.split('.');
+    if (field === undefined && this.#modelFields()[head] !== undefined) {
+      rejectUnknownPathPlaceholder(value, path);
+    }
+    if (field?.type.kind === 'valueObject') {
+      rejectValueObjectPlaceholder(value, path, Boolean(field.many));
+    }
+    rejectPlaceholder(value, path);
   }
 
   #fieldAtPath(path: string): ContractField | undefined {
@@ -1091,7 +1238,7 @@ export class MongoCollectionImpl<
     path: string,
     purpose: ValuePurpose,
   ): MongoValue {
-    if (field === undefined) return new MongoParamRef(value);
+    if (field === undefined) return ormParam(value, path);
     if (value === null) return this.#nullParam(field, path, purpose);
 
     if (field.type.kind === 'scalar') {
@@ -1100,8 +1247,9 @@ export class MongoCollectionImpl<
     }
 
     if (field.type.kind === 'valueObject') {
+      rejectValueObjectPlaceholder(value, path, Boolean(field.many));
       const voDef = this.#valueObjectAt(field.type);
-      if (!voDef) return new MongoParamRef(value);
+      if (!voDef) return ormParam(value, path);
 
       if (field.many && Array.isArray(value)) {
         return value.map((item, index) =>
@@ -1129,7 +1277,7 @@ export class MongoCollectionImpl<
       );
     }
 
-    return new MongoParamRef(value);
+    return ormParam(value, path);
   }
 
   #nullParam(field: ContractField, path: string, purpose: ValuePurpose): null {
@@ -1183,7 +1331,7 @@ export class MongoCollectionImpl<
     path: string,
     purpose: ValuePurpose,
   ): MongoValue {
-    if (field.type.kind !== 'scalar') return new MongoParamRef(value);
+    if (field.type.kind !== 'scalar') return ormParam(value, path);
     const codecId = field.type.codecId;
     if (field.many && Array.isArray(value)) {
       const acceptsNull = field.many.elementNullable || purpose === 'filter';
@@ -1197,7 +1345,7 @@ export class MongoCollectionImpl<
   }
 
   #fieldParam(value: unknown, codecId: string, path: string): MongoParamRef {
-    return new MongoParamRef(value, { codecId, name: path, collection: this.#collectionName });
+    return ormParam(value, path, { codecId, name: path, collection: this.#collectionName });
   }
 
   #wrapValueObject(
@@ -1226,10 +1374,11 @@ export class MongoCollectionImpl<
         : undefined;
       if (embedStoredName !== undefined) {
         const embedded = storage.embedded(key);
-        doc[embedStoredName] = new MongoParamRef(
+        doc[embedStoredName] = ormParam(
           embedded === undefined
             ? value
             : mapEach(value, (row) => storedDocumentOfRow(row, embedded)),
+          key,
         );
         continue;
       }
@@ -1259,10 +1408,11 @@ export class MongoCollectionImpl<
       const embedded = isEmbed ? storage.embedded(key) : undefined;
       result[storedName] = !isEmbed
         ? this.#wrapFieldValue(value, fields[key], key, 'write')
-        : new MongoParamRef(
+        : ormParam(
             embedded === undefined
               ? value
               : mapEach(value, (row) => storedDocumentOfRow(row, embedded)),
+            key,
           );
     }
     return result;
@@ -1401,6 +1551,14 @@ export class MongoCollectionImpl<
         `${methodName}() requires a .where() filter. Call .where() before .${methodName}()`,
         { meta: { method: methodName } },
       );
+    }
+  }
+
+  /** A write runs at once, so a placeholder a `where` kept is refused before it is sent. */
+  #rejectFilterPlaceholders(methodName: string): void {
+    for (const filter of this.#state.filters) {
+      const placeholder = placeholderInFilter(filter);
+      if (placeholder !== undefined) rejectPreparedWrite(methodName, placeholder);
     }
   }
 

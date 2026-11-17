@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defineContract, field, index, model } from '../src/contract-builder';
-import { mongoFamilyPack, mongoTargetPack } from './mongo-test-packs';
+import { mongoFamilyPack, mongoTargetPack, type } from './mongo-test-packs';
 
 // Pins the storageHash computed for a representative authored contract.
 // The hash fingerprints the constructed storage body the builder feeds
@@ -12,8 +12,8 @@ describe('mongo builder storageHash pin', () => {
     const User = model('User', {
       collection: 'users',
       fields: {
-        _id: field.objectId(),
-        email: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        email: field.scalar(type.String()),
       },
       indexes: [index({ email: 1 }, { unique: true })],
     });
@@ -21,9 +21,9 @@ describe('mongo builder storageHash pin', () => {
     const Post = model('Post', {
       collection: 'posts',
       fields: {
-        _id: field.objectId(),
-        authorId: field.objectId(),
-        title: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        authorId: field.scalar(type.ObjectId()),
+        title: field.scalar(type.String()),
       },
     });
 

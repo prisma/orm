@@ -1,9 +1,7 @@
-import type { ResolvedMigrationStatement } from '@internal/framework-components/control';
 import { MongoSchemaCollection, MongoSchemaCollectionOptions } from '@internal/mongo-schema-ir';
 import { describe, expect, it } from 'vitest';
 import {
   contract,
-  NS,
   plan,
   planned,
   profiles,
@@ -122,29 +120,5 @@ describe('MongoMigrationPlanner, time-series options the server fills in', () =>
         }),
       ).labels,
     ).toEqual([]);
-  });
-});
-
-describe('MongoMigrationPlanner, convert and backfill statements', () => {
-  it('refuses a convert or backfill statement, which it cannot carry out', () => {
-    const field = { namespaceId: NS, model: 'Profile', field: 'name' };
-    const convert: ResolvedMigrationStatement = { kind: 'convert', entity: 'field', field };
-    const backfill: ResolvedMigrationStatement = { kind: 'backfill', entity: 'field', field };
-    const refused = (statement: ResolvedMigrationStatement) =>
-      plan({ from: profiles, to: profiles, schema: profilesSchema, statements: [statement] });
-
-    expect([refused(convert), refused(backfill)]).toEqual(
-      (['convert', 'backfill'] as const).map((verb, index) => ({
-        kind: 'failure',
-        conflicts: [
-          {
-            kind: 'statementRefused',
-            summary: `MongoDB does not apply ${verb} statements in this release, so nothing was planned: ${verb} field "Profile.name"`,
-            why: `MongoDB cannot carry out ${verb} statements in this release. Leave out the statement.`,
-            refusedStatement: [convert, backfill][index],
-          },
-        ],
-      })),
-    );
   });
 });

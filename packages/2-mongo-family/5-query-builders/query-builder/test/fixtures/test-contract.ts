@@ -283,13 +283,15 @@ export type TestContract = Omit<MongoContract<TestStorage>, 'domain'> & {
 };
 
 export type TestCodecTypes = {
-  readonly 'mongo/objectId@1': { readonly output: string };
-  readonly 'mongo/string@1': { readonly output: string };
-  readonly 'mongo/double@1': { readonly output: number };
-  readonly 'mongo/array@1': { readonly output: unknown[] };
-  readonly 'mongo/null@1': { readonly output: null };
-  readonly 'mongo/bool@1': { readonly output: boolean };
-  readonly 'mongo/date@1': { readonly output: Date };
+  readonly 'mongo/objectId@1': { readonly input: string; readonly output: string };
+  readonly 'mongo/string@1': { readonly input: string; readonly output: string };
+  readonly 'mongo/double@1': { readonly input: number; readonly output: number };
+  readonly 'mongo/int32@1': { readonly input: number; readonly output: number };
+  readonly 'mongo/int64@1': { readonly input: bigint; readonly output: bigint };
+  readonly 'mongo/array@1': { readonly input: unknown[]; readonly output: unknown[] };
+  readonly 'mongo/null@1': { readonly input: null; readonly output: null };
+  readonly 'mongo/bool@1': { readonly input: boolean; readonly output: boolean };
+  readonly 'mongo/date@1': { readonly input: Date; readonly output: Date };
 };
 
 type TestFieldOutputTypes = {

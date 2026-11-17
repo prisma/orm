@@ -283,12 +283,14 @@
                                 "properties": {
                                   "localFields": {
                                     "type": "array",
+                                    "minItems": 1,
                                     "items": {
                                       "type": "string"
                                     }
                                   },
                                   "targetFields": {
                                     "type": "array",
+                                    "minItems": 1,
                                     "items": {
                                       "type": "string"
                                     }
@@ -331,12 +333,14 @@
                                 "properties": {
                                   "localFields": {
                                     "type": "array",
+                                    "minItems": 1,
                                     "items": {
                                       "type": "string"
                                     }
                                   },
                                   "targetFields": {
                                     "type": "array",
+                                    "minItems": 1,
                                     "items": {
                                       "type": "string"
                                     }
@@ -376,12 +380,14 @@
                                 "properties": {
                                   "localFields": {
                                     "type": "array",
+                                    "minItems": 1,
                                     "items": {
                                       "type": "string"
                                     }
                                   },
                                   "targetFields": {
                                     "type": "array",
+                                    "minItems": 1,
                                     "items": {
                                       "type": "string"
                                     }
@@ -395,6 +401,7 @@
                                 "properties": {
                                   "childColumns": {
                                     "type": "array",
+                                    "minItems": 1,
                                     "items": {
                                       "type": "string"
                                     }
@@ -404,6 +411,7 @@
                                   },
                                   "parentColumns": {
                                     "type": "array",
+                                    "minItems": 1,
                                     "items": {
                                       "type": "string"
                                     }
@@ -413,6 +421,7 @@
                                   },
                                   "targetColumns": {
                                     "type": "array",
+                                    "minItems": 1,
                                     "items": {
                                       "type": "string"
                                     }

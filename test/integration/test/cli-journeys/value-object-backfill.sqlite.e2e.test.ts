@@ -256,7 +256,7 @@ withTempDir(({ createTempDir }) => {
           `${human.stdout}${human.stderr}`,
           'B2.04: names the value and the statement',
         ).toMatch(
-          /Existing rows would get "" in field "Address\.country"\. To choose the value, plan a migration with .*--backfill Address\.country instead\./s,
+          /Field "Address\.country" would get the temporary value "" where existing data has none\. To choose the value, plan a migration with .*--backfill Address\.country instead\./s,
         );
         const update = await runDbUpdate(ctx, ['--json']);
         expect(update.exitCode, `B2.05: db update: ${JSON.stringify(engineError(update))}`).toBe(0);

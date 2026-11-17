@@ -24,3 +24,4 @@ const mongoRuntimeTargetDescriptor: RuntimeTargetDescriptor<
 };
 
 export default mongoRuntimeTargetDescriptor;
+export { mongoNowGenerators } from '../core/date-time-now-generators';

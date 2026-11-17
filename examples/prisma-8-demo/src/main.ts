@@ -98,6 +98,9 @@
  * - raw-query-promote <titleTerm>
  *                              A data-modifying CTE: `UPDATE … RETURNING` composed into an
  *                              outer query, which is what row-returning embeddability buys
+ * - raw-query-copy-posts <fromEmail> <toEmail> [titlePrefix]
+ *                              `INSERT … SELECT` whose SELECT is a typed builder query
+ *                              interpolated into the raw template
  * - cross-author-similarity [limit]
  *                              SQL DSL escape-hatch: closest post pairs across different
  *                              authors via a self-join on a non-relation predicate, with
@@ -188,6 +191,7 @@ import { getUsersCached } from './queries/get-users-cached';
 import {
   rawQueryActiveAuthors,
   rawQueryBumpViews,
+  rawQueryCopyPosts,
   rawQueryPromoteAndList,
   rawQueryReport,
 } from './queries/raw-query-demo';
@@ -686,6 +690,17 @@ async function main() {
       const results = await rawQueryPromoteAndList(titleTerm);
 
       console.log(toJson(results));
+    } else if (cmd === 'raw-query-copy-posts') {
+      const [fromEmail, toEmail, titlePrefix] = args;
+      if (!fromEmail || !toEmail) {
+        console.error(
+          'Usage: pnpm start -- raw-query-copy-posts <fromEmail> <toEmail> [titlePrefix]',
+        );
+        process.exit(1);
+      }
+      const results = await rawQueryCopyPosts(fromEmail, toEmail, titlePrefix);
+
+      console.log(toJson(results));
     } else if (cmd === 'full-text-search') {
       const [query, limitStr] = args;
       if (!query) {
@@ -925,7 +940,7 @@ async function main() {
           'users-paginate [cursor] [limit] | users-paginate-back <cursor> [limit] | ' +
           'similarity-search <vec> [limit] | cross-author-similarity [limit] | raw-sql-demo [limit] | ' +
           'raw-query-report [limit] | raw-query-bump-views [kind] | raw-query-active-authors [minPosts] | ' +
-          'raw-query-promote <titleTerm> | ' +
+          'raw-query-promote <titleTerm> | raw-query-copy-posts <fromEmail> <toEmail> [titlePrefix] | ' +
           'cache-demo-user <userId> | cache-demo-users [limit] | cache-demo-sql [limit] | ' +
           'enum-priority [limit] | enum-priority-filter [member] [limit] | enum-default-demo | ' +
           'integer-representations [limit] | aggregate-precision | aggregate-stddev | ' +

@@ -1,5 +1,5 @@
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
-import type { MongoQueryPlan } from '@internal/mongo-query-ast/execution';
+import type { MongoQueryExecutor, MongoQueryPlan } from '@internal/mongo-query-ast/execution';
 import {
   MongoFieldFilter,
   type MongoLimitStage,
@@ -19,7 +19,6 @@ import type {
 } from '../../../1-foundation/mongo-contract/test/fixtures/orm-contract';
 import ormContractJson from '../../../1-foundation/mongo-contract/test/fixtures/orm-contract.json';
 import { createMongoCollection, type MongoCollection } from '../src/collection';
-import type { MongoQueryExecutor } from '../src/executor';
 import {
   compileFieldOperations,
   createFieldAccessor,

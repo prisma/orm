@@ -1,5 +1,5 @@
 import sqliteAdapter from '@internal/adapter-sqlite/control';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { FormatterConfig, PrismaConfig } from '@internal/config/config-types';
 import {
   defineConfig as coreDefineConfig,
   defaultContractOutputPath,
@@ -26,9 +26,10 @@ export interface SqliteConfigOptions {
   readonly migrations?: {
     readonly dir?: string;
   };
+  readonly formatter?: FormatterConfig;
 }
 
-export function defineConfig(options: SqliteConfigOptions): PrismaNextConfig<'sql', 'sqlite'> {
+export function defineConfig(options: SqliteConfigOptions): PrismaConfig<'sql', 'sqlite'> {
   const extensions = options.extensions ?? [];
   const output =
     options.output !== undefined
@@ -55,5 +56,6 @@ export function defineConfig(options: SqliteConfigOptions): PrismaNextConfig<'sq
     contract: contractConfig,
     ...ifDefined('db', options.db),
     ...ifDefined('migrations', options.migrations),
+    ...ifDefined('formatter', options.formatter),
   });
 }

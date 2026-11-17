@@ -125,7 +125,7 @@ describe('mongoJsonCodec encode refusals say how to store the value', () => {
     [
       'bigint',
       1n,
-      'Store it as a number in the safe-integer range or as decimal text, or declare the field Int64 or Bson.',
+      'Store it as a number in the safe-integer range or as decimal text, or declare the field BigInt or Bson.',
     ],
     [
       'NaN',
@@ -141,12 +141,22 @@ describe('mongoJsonCodec encode refusals say how to store the value', () => {
     [
       'Uint8Array',
       new Uint8Array([1]),
-      'Store the bytes as a base64 string, or declare the field Binary or Bson.',
+      'Store the bytes as a base64 string, or declare the field Bytes or Bson.',
     ],
     [
       'ObjectId',
       new ObjectId('65f000000000000000000009'),
       'Store its hex string, or declare the field ObjectId or Bson.',
+    ],
+    [
+      'Long',
+      Long.fromNumber(1),
+      'Store a number in the safe-integer range or decimal text, or declare the field BigInt or Bson.',
+    ],
+    [
+      'Decimal128',
+      Decimal128.fromString('1.5'),
+      'Store the decimal text, or declare the field Decimal or Bson.',
     ],
     ['Int32', new Int32(1), 'Pass a plain number.'],
     ['Map', new Map(), 'Convert it to a plain object or array.'],

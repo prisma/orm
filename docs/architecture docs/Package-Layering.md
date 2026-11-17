@@ -36,11 +36,16 @@ packages/
     postgres/            # 1-target, 2-adapter, 3-driver, 4-codec-testkit, 9-facade
     sqlite/              # the same
     mongo/               # 1-target, 2-adapter, 3-driver, 9-facade
+    mysql/
+      1-mysql/           # 1-target, 2-adapter, 3-driver, 9-facade
+      2-mariadb/         # 1-target, 2-adapter, 3-driver, 9-facade
 ```
 
 The numbered prefixes serve two purposes:
 1. **Visual hierarchy**: Makes domain/layer relationships clear at a glance
 2. **Dependency direction**: Lower numbers can be imported by higher numbers, never the reverse
+
+The direction rule exists to prevent cycles between packages. It adapts Clean Architecture's rule that dependencies point one way: if a package imports only from lower-numbered folders, no chain of imports can lead back to where it started. Numbers compare only between folders in the same parent.
 
 Planes are a conceptual grouping recorded in `architecture.config.json` but do not appear as intermediate subdirectories.
 
@@ -123,7 +128,7 @@ The Mongo family domain (`packages/2-mongo-family/`) contains Mongo-specific pac
 
 ### Targets Domain
 
-The targets domain (`packages/3-targets/`) holds one folder per database, for every family ([ADR 278](../adrs/ADR%20278%20-%20Each%20database's%20packages%20live%20in%20one%20folder.md)). Target, adapter, driver and facade stay separate packages, so an application can replace one of them; the folder keeps them together. Inside a database folder the numbers give dependency order: the adapter imports the target, the facade imports all three, the driver imports none of them.
+The targets domain (`packages/3-targets/`) holds one folder per database, for every family ([ADR 278](../adrs/ADR%20278%20-%20Each%20database's%20packages%20live%20in%20one%20folder.md)). Target, adapter, driver and facade stay separate packages, so an application can replace one of them; the folder keeps them together. Inside a database folder the numbers give dependency order: the adapter imports the target, the facade imports all three, the driver imports none of them. A package imports only from lower-numbered folders. Numbers compare only between folders in the same parent.
 
 `0-shared/` beside the database folders holds packages that several databases' packages share ([ADR 314](adrs/ADR%20314%20-%20Code%20shared%20by%20several%20targets'%20type%20implementations%20lives%20in%20one%20package.md)). Today that is `@internal/type-implementations`: value logic that more than one target's codecs, data types and `now()` generators use, depending on no database and no family. It is registered in the `targets` domain, plane `shared`, so both the target packs and the adapters can import it. The top-level `packages/0-shared/` is a different folder: it holds repository tooling, such as the map of published packages, registered in the framework domain.
 
@@ -139,10 +144,13 @@ The targets domain (`packages/3-targets/`) holds one folder per database, for ev
 |   |-- 9-facade          → @internal/postgres (source of @prisma/orm-postgres)
 |-- sqlite                  (the same five)
 |-- mongo
-    |-- 1-target          → @internal/target-mongo
-    |-- 2-adapter         → @internal/adapter-mongo
-    |-- 3-driver          → @internal/driver-mongo
-    |-- 9-facade          → @internal/mongo (source of @prisma/orm-mongo)
+|   |-- 1-target          → @internal/target-mongo
+|   |-- 2-adapter         → @internal/adapter-mongo
+|   |-- 3-driver          → @internal/driver-mongo
+|   |-- 9-facade          → @internal/mongo (source of @prisma/orm-mongo)
+|-- mysql
+    |-- 1-mysql           (1-target, 2-adapter, 3-driver, 9-facade; @internal/mysql is the source of @prisma/orm-mysql)
+    |-- 2-mariadb         (1-target, 2-adapter, 3-driver, 9-facade; @internal/mariadb is the source of @prisma/orm-mariadb)
 ```
 
 ### Extensions Domain

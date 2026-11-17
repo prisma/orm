@@ -36,4 +36,4 @@ A database's packages live together in `packages/3-targets/<db>/`: `1-target`, `
 4. Register `src/core/migrations/**` as `plane: migration` and `src/core/runtime/**` as `plane: runtime` *even if the directories do not exist yet* — keeps target registrations symmetric and prevents code added later from inheriting the shared registration by accident. Put control-only code in `migrations/` and runtime-only code in `runtime/`.
 5. Register any other entry point (each extra file in `src/exports/`, loose files directly in `src/`) with its own plane. `pnpm lint:deps` fails when a source file matches no glob or more than one (`scripts/lint-architecture-registration.mjs`).
 
-No new test is needed for dependency order: `scripts/lint-target-layering.mjs`, run by `pnpm lint:deps`, checks every database folder and fails when a package depends on a sibling that is not numbered lower, or on another database's packages.
+No new test is needed for dependency order: `scripts/lint-target-layering.mjs`, run by `pnpm lint:deps`, checks every database folder. A package imports only from lower-numbered folders. Numbers compare only between folders in the same parent.

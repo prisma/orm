@@ -10,5 +10,5 @@ const MONGO_DATE_CODEC_ID = 'mongo/date@1';
 export const removedMongoFieldPresets: RemovedFieldPresets = {
   'temporal.createdAt': removedPresetWrittenAs('temporal.CreatedAt', MONGO_DATE_CODEC_ID),
   'temporal.updatedAt': removedPresetWrittenAs('temporal.UpdatedAt', MONGO_DATE_CODEC_ID),
-  'temporal.timestamp': removedPresetWithPhases('Date', MONGO_DATE_CODEC_ID, false),
+  'temporal.timestamp': removedPresetWithPhases('DateTime', MONGO_DATE_CODEC_ID, false),
 };

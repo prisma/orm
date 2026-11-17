@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm';
 import {
   AggregateExpr,
   AndExpr,
@@ -185,6 +186,50 @@ describe('Postgres adapter', () => {
     expect(lowered.sql).toBe(
       `SELECT json_build_object('value', "user"."email") AS "object", json_agg("user"."email") AS "array" FROM "user"`,
     );
+  });
+
+  describe('a JSON object wider than one json_build_object call takes', () => {
+    function lowerObjectOf(width: number): string {
+      const entries = Array.from({ length: width }, (_, index) =>
+        JsonObjectExpr.entry(
+          `c${index}`,
+          new NativeJsonValueProjection(ColumnRef.of('user', `c${index}`)),
+        ),
+      );
+      const ast = SelectAst.from(TableSource.named('user')).withProjection([
+        ProjectionItem.of('object', JsonObjectExpr.fromEntries(entries)),
+      ]);
+      return adapter.lower(ast, { contract, params: [] }).sql;
+    }
+
+    function pairs(from: number, to: number): string {
+      return Array.from({ length: to - from }, (_, offset) => {
+        const index = from + offset;
+        return `'c${index}', "user"."c${index}"`;
+      }).join(', ');
+    }
+
+    function members(from: number, to: number): string {
+      return `left(substr(json_build_object(${pairs(from, to)})::text, 2), -1)`;
+    }
+
+    it('renders 50 entries as one json_build_object call', () => {
+      expect(lowerObjectOf(50)).toBe(
+        `SELECT json_build_object(${pairs(0, 50)}) AS "object" FROM "user"`,
+      );
+    });
+
+    it('joins the members of 50-entry json_build_object calls in entry order for 51 entries', () => {
+      expect(lowerObjectOf(51)).toBe(
+        `SELECT ('{' || ${members(0, 50)} || ', ' || ${members(50, 51)} || '}')::json AS "object" FROM "user"`,
+      );
+    });
+
+    it('joins three calls in entry order for 120 entries', () => {
+      expect(lowerObjectOf(120)).toBe(
+        `SELECT ('{' || ${members(0, 50)} || ', ' || ${members(50, 100)} || ', ' || ${members(100, 120)} || '}')::json AS "object" FROM "user"`,
+      );
+    });
   });
 
   it('renders nested scalar projection expressions with exact precedence', () => {
@@ -521,6 +566,19 @@ describe('Postgres adapter', () => {
     );
   });
 
+  it('renders a Date literal created in another realm as its ISO text', () => {
+    const ast = SelectAst.from(TableSource.named('user')).withProjection([
+      ProjectionItem.of(
+        'at',
+        LiteralExpr.of(runInNewContext('new Date("2024-01-01T00:00:00.000Z")')),
+      ),
+    ]);
+
+    expect(adapter.lower(ast, { contract, params: [] }).sql).toBe(
+      `SELECT '2024-01-01T00:00:00.000Z' AS "at" FROM "user"`,
+    );
+  });
+
   it('renders ROW_NUMBER() OVER (PARTITION BY … ORDER BY …)', () => {
     const ast = SelectAst.from(TableSource.named('post')).withProjection([
       ProjectionItem.of('title', ColumnRef.of('post', 'title')),
@@ -648,6 +706,9 @@ describe('Postgres adapter', () => {
     expect(adapter.profile.capabilities['sql']).toMatchObject({
       returning: true,
       insertOnConflictTarget: true,
+      jsonAgg: true,
+      outerReferencesInDerivedTables: true,
+      jsonAggWithoutTruncation: true,
     });
     expect(typeof adapter.profile.readMarker).toBe('function');
   });
@@ -857,5 +918,51 @@ describe('Postgres adapter', () => {
     expect(sql).toContain('("user"."id" = 1) IS NULL');
     expect(sql).toContain('(("user"."id" = 1)) IS NOT NULL');
     expect(sql).toContain('"user"."email" IS NULL');
+  });
+});
+
+describe('Postgres adapter of a row value IN a subquery', () => {
+  const rowValueInSubquery = SelectAst.from(TableSource.named('tag'))
+    .withProjection([ProjectionItem.of('id', ColumnRef.of('tag', 'id'))])
+    .withWhere(
+      BinaryExpr.in(
+        ListExpression.of([ColumnRef.of('tag', 'tenant_id'), ColumnRef.of('tag', 'id')]),
+        SubqueryExpr.of(
+          SelectAst.from(TableSource.named('user_tags', 'ut'))
+            .withProjection([
+              ProjectionItem.of('tenant_id', ColumnRef.of('ut', 'tenant_id')),
+              ProjectionItem.of('tag_id', ColumnRef.of('ut', 'tag_id')),
+            ])
+            .withWhere(BinaryExpr.eq(ColumnRef.of('ut', 'user_id'), LiteralExpr.of(1))),
+        ),
+      ),
+    );
+
+  it('renders the row value and the subquery', () => {
+    expect(createPostgresAdapter().lower(rowValueInSubquery, { contract }).sql).toBe(
+      'SELECT "tag"."id" AS "id" FROM "tag" WHERE ("tag"."tenant_id", "tag"."id") IN (SELECT "ut"."tenant_id" AS "tenant_id", "ut"."tag_id" AS "tag_id" FROM "user_tags" AS "ut" WHERE "ut"."user_id" = 1)',
+    );
+  });
+
+  it('refuses a subquery whose columns do not match the row value', () => {
+    const ast = SelectAst.from(TableSource.named('tag'))
+      .withProjection([ProjectionItem.of('id', ColumnRef.of('tag', 'id'))])
+      .withWhere(
+        BinaryExpr.in(
+          ListExpression.of([ColumnRef.of('tag', 'tenant_id'), ColumnRef.of('tag', 'id')]),
+          SubqueryExpr.of(
+            SelectAst.from(TableSource.named('user_tags')).withProjection([
+              ProjectionItem.of('tag_id', ColumnRef.of('user_tags', 'tag_id')),
+            ]),
+          ),
+        ),
+      );
+
+    expect(() => createPostgresAdapter().lower(ast, { contract })).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.AST_INVALID',
+        message: 'A subquery compared with a row value of 2 columns must project 2 columns',
+      }),
+    );
   });
 });

@@ -22,15 +22,18 @@ test('a SQL extension pack is refused', () => {
 });
 
 test("an extension's codec types reach the client's row types", () => {
-  const contract = defineContract({ extensions: { shout: shoutPack } }, ({ field, model }) => ({
-    models: {
-      Greeting: model('Greeting', {
-        collection: 'greetings',
-        fields: { _id: field.objectId(), text: field.scalar('shout/text@1') },
-      }),
-    },
-    roots: { greetings: 'Greeting' },
-  }));
+  const contract = defineContract(
+    { extensions: { shout: shoutPack } },
+    ({ field, model, type }) => ({
+      models: {
+        Greeting: model('Greeting', {
+          collection: 'greetings',
+          fields: { _id: field.scalar(type.ObjectId()), text: field.scalar(type.shout.Text()) },
+        }),
+      },
+      roots: { greetings: 'Greeting' },
+    }),
+  );
   const db = mongo({ contract, url: 'mongodb://localhost/db', extensions: [shoutRuntime] });
   type Row = NonNullable<Awaited<ReturnType<typeof db.orm.greetings.first>>>;
   expectTypeOf<Row['text']>().toEqualTypeOf<string>();

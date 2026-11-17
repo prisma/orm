@@ -1,6 +1,19 @@
+import { types } from 'node:util';
+
+/** Whether `value` is a `Date`, including one created in another realm such as a `vm` context or a Jest test file. */
+export function isDate(value: unknown): value is Date {
+  return types.isDate(value);
+}
+
+/** The same instant as a `Date` of this realm, which a driver that checks `instanceof Date` or the string tag recognises. */
+export function dateOfThisRealm(date: Date): Date {
+  const instant = date.getTime();
+  return date instanceof Date ? date : new Date(instant);
+}
+
 /** Whether `value` is a `Date` that holds an instant, not an Invalid Date. */
 export function isValidDate(value: unknown): value is Date {
-  return value instanceof Date && Number.isFinite(value.getTime());
+  return isDate(value) && Number.isFinite(value.getTime());
 }
 
 /** Whether ISO text has nonzero fraction digits past the first `fractionDigits`. */
@@ -18,4 +31,17 @@ export function utcIsoTextOf(value: Date, earliestMilliseconds: number): string 
   const milliseconds = value.getTime();
   if (!Number.isFinite(milliseconds) || milliseconds < earliestMilliseconds) return undefined;
   return value.toISOString();
+}
+
+/** The fraction of ISO text with any zeros past its third digit removed, so `09:30:00.500000` is the millisecond it names. */
+export function withoutZerosBelowAMillisecond(text: string): string {
+  return text.replace(/(\.\d{3})0+(?!\d)/, '$1');
+}
+
+/** The fraction of ISO text padded to exactly three digits, as `toISOString()` writes it. */
+export function withThreeFractionDigits(text: string): string {
+  return text.replace(
+    /(\d{2}:\d{2}:\d{2})(?:\.(\d{1,3}))?(?=Z?$)/,
+    (_whole, clock: string, fraction?: string) => `${clock}.${(fraction ?? '').padEnd(3, '0')}`,
+  );
 }

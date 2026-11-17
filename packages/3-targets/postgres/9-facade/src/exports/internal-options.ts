@@ -6,4 +6,5 @@ export {
 export {
   toDriverCursorOptions,
   validateCursorOptions,
+  validateTransactionOptions,
 } from '../runtime/postgres-options';

@@ -66,3 +66,43 @@ When the capability is absent the ORM sends an upsert with no conflict columns, 
 ## A statement sent after release runs on Postgres (slice 4 system-design review, D20)
 
 The MySQL driver refuses a statement sent on a held connection after `release()`, or still waiting for it then, with `DRIVER.NOT_CONNECTED`. The Postgres driver runs it on the client after it went back to the pool, possibly inside another caller's session. MySQL does not force the difference; it fixes a defect both drivers share. Linear TML-2333 ("invalidate wrappers on teardown") covers the same fix at the runtime layer; give the Postgres driver the same rule there.
+
+## Split `returning` by statement kind (slice 6a, 2026-11-06)
+
+MariaDB has `INSERT … RETURNING` and `DELETE … RETURNING` but not `UPDATE … RETURNING`. MariaDB reports `returning: false`, as MySQL does, and every ORM write works through the slice 4 read-back (probed on 10.11). Splitting the capability would save a round trip on MariaDB inserts and deletes. It touches about ten places in `sql-orm-client`, the SQL builder's typed `ReturningCapability` and its three checks, and the Postgres and SQLite capability lists: about 400–700 lines of shared code, additive only if `returning` keeps its meaning for every statement kind.
+
+## MariaDB JSON and boolean columns (slice 6a, 2026-11-06)
+
+MariaDB stores `JSON` as `longtext` with a `CHECK (json_valid(col))` constraint, and booleans as `tinyint(1)`. MySQL has neither data type yet, so nothing breaks today. When MySQL gets them, MariaDB needs its own data types that read these catalog forms.
+
+## MariaDB sessions set `tx_isolation`, which MariaDB 11.1 and later deprecate (slice 6a code review, 2026-11-06)
+
+MariaDB's target sets the isolation level with `tx_isolation`, because MariaDB 10.11 has no `transaction_isolation`. On MariaDB 11.4, `SET SESSION tx_isolation = 'READ-COMMITTED'` works but raises warning 1287: the variable is deprecated and will be removed. From 11.1 both names exist. When the oldest supported MariaDB is 11.1 or later, switch to `transaction_isolation`; before that, a future MariaDB that removes `tx_isolation` makes every connection fail, unless the driver picks the name from the server version at connect. The example README says only that it is tested on 10.11.
+
+## Errors from MySQL's shared code say `target: 'mysql'` on MariaDB (slice 6a, 2026-11-06)
+
+`mysqlQueryNotYetSupported` in `packages/3-targets/mysql/1-mysql/1-target/src/core/errors.ts` puts `target: 'mysql'` in its error metadata, and its message says MySQL, also when MariaDB reaches it through MySQL's shared code. The control plane shows these errors rarely; runtime errors reach users. Slice 6b decides whether the label follows the target id, is dropped, or stays as the name of the code that raised the error.
+
+## A key column whose codec cannot reproduce the stored value (slice 6b-1 design review, 2026-11-14)
+
+The ORM reads a key, decodes it, and sends it back encoded: in the write graphs' read-back today, and in every per-relation include from slice 6b-1. A `timestamptz(6)` or `datetime(6)` key read with a `Date` codec loses the digits below a millisecond, so the key sent back matches nothing, and the row or its children are missing without an error. Fix belongs with the codecs: a codec for a key column must reproduce the stored value, or the ORM must be able to ask whether it does. That needs a codec property the framework does not have.
+
+## Reads with includes do not stream (slice 6b-1, 2026-11-17)
+
+A read with includes reads every row before returning any, under both include strategies: one query per relation holds the parents and every level of children in memory until the read completes. Reads without includes still stream. Streaming with includes in batches, a parent query per page of identities followed by that page's children, can be added without changing the design.
+
+## `budgets` and `lints` see each per-relation statement as a bare `SELECT` (slice 6b-1, 2026-11-17)
+
+`lints` warns about a `SELECT` without a `LIMIT`, and `budgets`, where installed, fails it by default. Where includes load with one query per relation, each child statement is such a `SELECT`, so a read that passes on a database that runs the one-query include can fail with `BUDGET.ROWS_EXCEEDED` on MariaDB, as the ORM's read-backs after a write already can. Completing or removing the two middleware is stream 6, row 8 of the GA plan.
+
+## MySQL and MariaDB supply no ORM aggregates, so scalar includes do not run there (slice 6b-1 manual QA, 2026-11-17)
+
+The MySQL target and adapter contribute no aggregate definitions. `db.orm.User.include('posts', (p) => p.count()).all()` fails with `p.count is not a function`, and so does `combine()` with an aggregate branch. This is true under both include strategies and predates slice 6b-1. Manual QA ran the per-relation `GROUP BY` statements on MySQL 8.4 and MariaDB 10.11 with stand-in aggregate definitions, and they returned the right values. Slice 6b-2's requirement that MariaDB runs every ORM read needs MySQL to contribute its aggregates first, as Postgres does.
+
+## `deleteAll()` on a table with no row identity deletes by the caller's condition after reading (slice 6b-1, 2026-11-17)
+
+Where `deleteAll()` must read the rows before deleting them (rows returned on a database without `RETURNING`, or with includes under the one-query include), and the table has no primary key and no unique key of `NOT NULL` columns, it runs a `SELECT` and then a `DELETE` on the same condition. A matching row committed between the two is deleted and not returned. This is `main`'s deliberate behaviour for such tables (`sql-orm-client/test/statement-graph/table-without-identity.test.ts`), and slice 6b-1 did not change it. Slice 6b-1 does widen who meets it: a unique key with a nullable column no longer counts as an identity. With an identity, the `DELETE` is keyed by the rows read.
+
+## A stored column whose name starts with `__prisma_` can clash with an internal alias
+
+The ORM client names its internal projection aliases with the prefix `__prisma_` (`__prisma_page_rn`, `__prisma_parent_key_<n>`, `__prisma_aggregate`, and on `main` before this project `__prisma_distinct_rn` and `__prisma_polymorphic_discriminator`). Nothing rejects a stored column with such a name, so a table that has one can return a wrong value for it. The fix is one check where contract column names are validated, covering every alias. Raised by the automated review of prisma/orm#31058; not fixed there because it is not specific to per-relation includes.
