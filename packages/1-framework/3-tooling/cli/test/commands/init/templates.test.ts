@@ -5,6 +5,7 @@ import {
   configFile,
   dbFile,
   starterSchema,
+  workspaceTargetPackageName,
 } from '../../../src/commands/init/templates/code-templates';
 import {
   quickReferenceMd,
@@ -31,7 +32,7 @@ function extractPlaceholders(templateFile: string): Set<string> {
 describe('templates', () => {
   describe('starterSchema', () => {
     it('contains User and Post models for postgres PSL', () => {
-      const schema = starterSchema('postgres', 'psl');
+      const schema = starterSchema('postgres', 'psl', workspaceTargetPackageName('postgres'));
 
       expect(schema).toContain('model User');
       expect(schema).toContain('model Post');
@@ -40,14 +41,14 @@ describe('templates', () => {
     });
 
     it('includes a relation between User and Post for postgres PSL', () => {
-      const schema = starterSchema('postgres', 'psl');
+      const schema = starterSchema('postgres', 'psl', workspaceTargetPackageName('postgres'));
 
       expect(schema).toContain('posts     Post[]');
       expect(schema).toContain('author    User');
     });
 
     it('uses ObjectId ids for mongo PSL', () => {
-      const schema = starterSchema('mongo', 'psl');
+      const schema = starterSchema('mongo', 'psl', workspaceTargetPackageName('mongo'));
 
       expect(schema).toContain('model User');
       expect(schema).toContain('model Post');
@@ -57,14 +58,18 @@ describe('templates', () => {
     });
 
     it('includes @@map collection names for mongo PSL', () => {
-      const schema = starterSchema('mongo', 'psl');
+      const schema = starterSchema('mongo', 'psl', workspaceTargetPackageName('mongo'));
 
       expect(schema).toContain('@@map("users")');
       expect(schema).toContain('@@map("posts")');
     });
 
     it('uses defineContract for postgres TypeScript imported from facade', () => {
-      const schema = starterSchema('postgres', 'typescript');
+      const schema = starterSchema(
+        'postgres',
+        'typescript',
+        workspaceTargetPackageName('postgres'),
+      );
 
       expect(schema).toContain('defineContract');
       expect(schema).toContain("from '@internal/postgres/contract-builder'");
@@ -77,11 +82,13 @@ describe('templates', () => {
     });
 
     it('writes no field preset into the postgres PSL starter schema', () => {
-      expect(starterSchema('postgres', 'psl')).toContain('updatedAt temporal.UpdatedAt\n');
+      expect(starterSchema('postgres', 'psl', workspaceTargetPackageName('postgres'))).toContain(
+        'updatedAt temporal.UpdatedAt\n',
+      );
     });
 
     it('uses defineContract for mongo TypeScript imported from facade', () => {
-      const schema = starterSchema('mongo', 'typescript');
+      const schema = starterSchema('mongo', 'typescript', workspaceTargetPackageName('mongo'));
 
       expect(schema).toContain('defineContract');
       expect(schema).toContain("from '@internal/mongo/contract-builder'");
@@ -89,7 +96,11 @@ describe('templates', () => {
     });
 
     it('only imports from the facade package for postgres TypeScript', () => {
-      const schema = starterSchema('postgres', 'typescript');
+      const schema = starterSchema(
+        'postgres',
+        'typescript',
+        workspaceTargetPackageName('postgres'),
+      );
 
       const imports = schema.match(/from '@internal\/[^']+'/g) ?? [];
       expect(imports.length).toBeGreaterThan(0);
@@ -99,7 +110,7 @@ describe('templates', () => {
     });
 
     it('only imports from the facade package for mongo TypeScript', () => {
-      const schema = starterSchema('mongo', 'typescript');
+      const schema = starterSchema('mongo', 'typescript', workspaceTargetPackageName('mongo'));
 
       const imports = schema.match(/from '@internal\/[^']+'/g) ?? [];
       expect(imports.length).toBeGreaterThan(0);
@@ -114,8 +125,8 @@ describe('templates', () => {
     // called out in F17 are reconciled.
     describe('TS template reconciliation (FR5.3)', () => {
       it('both targets use the same callback-factory defineContract signature', () => {
-        const pg = starterSchema('postgres', 'typescript');
-        const mongo = starterSchema('mongo', 'typescript');
+        const pg = starterSchema('postgres', 'typescript', workspaceTargetPackageName('postgres'));
+        const mongo = starterSchema('mongo', 'typescript', workspaceTargetPackageName('mongo'));
 
         // The SQL starter uses model tokens (models first, relations attached
         // via .relations()), which needs a block-bodied callback; the mongo
@@ -131,8 +142,8 @@ describe('templates', () => {
       });
 
       it('neither target imports field/model/rel as bare top-level helpers', () => {
-        const pg = starterSchema('postgres', 'typescript');
-        const mongo = starterSchema('mongo', 'typescript');
+        const pg = starterSchema('postgres', 'typescript', workspaceTargetPackageName('postgres'));
+        const mongo = starterSchema('mongo', 'typescript', workspaceTargetPackageName('mongo'));
 
         for (const schema of [pg, mongo]) {
           expect(schema).not.toMatch(/import \{[^}]*\bfield\b[^}]*\} from/);
@@ -142,7 +153,7 @@ describe('templates', () => {
       });
 
       it('the SQL starter references models by token, the form the framework recommends', () => {
-        const pg = starterSchema('postgres', 'typescript');
+        const pg = starterSchema('postgres', 'typescript', workspaceTargetPackageName('postgres'));
 
         // String refs here would make a fresh scaffold emit
         // PN_CONTRACT_TYPED_FALLBACK_AVAILABLE warnings on its first emit.
@@ -153,7 +164,7 @@ describe('templates', () => {
       });
 
       it('the mongo starter keeps string references and inline relations — its builder has no token chain', () => {
-        const mongo = starterSchema('mongo', 'typescript');
+        const mongo = starterSchema('mongo', 'typescript', workspaceTargetPackageName('mongo'));
 
         expect(mongo).toContain("rel.belongsTo('User'");
         expect(mongo).toContain('relations: {');
@@ -164,7 +175,7 @@ describe('templates', () => {
 
   describe('configFile', () => {
     it('generates postgres config with dotenv and single import from facade', () => {
-      const config = configFile('postgres', './prisma/contract.prisma');
+      const config = configFile('./prisma/contract.prisma', workspaceTargetPackageName('postgres'));
 
       expect(config).toContain("import 'dotenv/config'");
       expect(config).toContain("from '@internal/postgres/config'");
@@ -174,7 +185,7 @@ describe('templates', () => {
     });
 
     it('generates mongo config with dotenv and single import from facade', () => {
-      const config = configFile('mongo', './prisma/contract.prisma');
+      const config = configFile('./prisma/contract.prisma', workspaceTargetPackageName('mongo'));
 
       expect(config).toContain("import 'dotenv/config'");
       expect(config).toContain("from '@internal/mongo/config'");
@@ -185,7 +196,7 @@ describe('templates', () => {
 
   describe('dbFile', () => {
     it('generates postgres db.ts with lazy facade and DATABASE_URL binding', () => {
-      const db = dbFile('postgres');
+      const db = dbFile('postgres', workspaceTargetPackageName('postgres'));
 
       expect(db).toContain("import postgres from '@internal/postgres/runtime'");
       expect(db).toContain("import { contractFromJson } from '@internal/postgres/static'");
@@ -198,7 +209,7 @@ describe('templates', () => {
     });
 
     it('generates mongo db.ts with lazy facade and DATABASE_URL binding', () => {
-      const db = dbFile('mongo');
+      const db = dbFile('mongo', workspaceTargetPackageName('mongo'));
 
       expect(db).toContain("import mongo from '@internal/mongo/runtime'");
       expect(db).toContain("import { contractFromJson } from '@internal/mongo/static'");
@@ -213,7 +224,13 @@ describe('templates', () => {
 
   describe('quickReferenceMd', () => {
     it('contains file locations for postgres', () => {
-      const md = quickReferenceMd('postgres', 'psl', 'src/prisma/contract.prisma', 'pnpm prisma');
+      const md = quickReferenceMd(
+        'postgres',
+        'psl',
+        'src/prisma/contract.prisma',
+        'pnpm prisma',
+        workspaceTargetPackageName('postgres'),
+      );
 
       expect(md).toContain('src/prisma/contract.prisma');
       expect(md).toContain('src/prisma/contract.json');
@@ -222,7 +239,13 @@ describe('templates', () => {
     });
 
     it('contains postgres-specific content', () => {
-      const md = quickReferenceMd('postgres', 'psl', 'src/prisma/contract.prisma', 'pnpm prisma');
+      const md = quickReferenceMd(
+        'postgres',
+        'psl',
+        'src/prisma/contract.prisma',
+        'pnpm prisma',
+        workspaceTargetPackageName('postgres'),
+      );
 
       expect(md).toContain('PostgreSQL');
       expect(md).toContain('@internal/postgres');
@@ -230,7 +253,13 @@ describe('templates', () => {
     });
 
     it('contains ORM query example for postgres', () => {
-      const md = quickReferenceMd('postgres', 'psl', 'src/prisma/contract.prisma', 'pnpm prisma');
+      const md = quickReferenceMd(
+        'postgres',
+        'psl',
+        'src/prisma/contract.prisma',
+        'pnpm prisma',
+        workspaceTargetPackageName('postgres'),
+      );
 
       expect(md).toContain('db.orm.public.User');
       expect(md).toContain('.where(');
@@ -238,14 +267,26 @@ describe('templates', () => {
     });
 
     it('contains common commands', () => {
-      const md = quickReferenceMd('postgres', 'psl', 'src/prisma/contract.prisma', 'pnpm prisma');
+      const md = quickReferenceMd(
+        'postgres',
+        'psl',
+        'src/prisma/contract.prisma',
+        'pnpm prisma',
+        workspaceTargetPackageName('postgres'),
+      );
 
       expect(md).toContain('contract emit');
       expect(md).toContain('db init');
     });
 
     it('contains mongo-specific content', () => {
-      const md = quickReferenceMd('mongo', 'psl', 'src/prisma/contract.prisma', 'pnpm prisma');
+      const md = quickReferenceMd(
+        'mongo',
+        'psl',
+        'src/prisma/contract.prisma',
+        'pnpm prisma',
+        workspaceTargetPackageName('mongo'),
+      );
 
       expect(md).toContain('MongoDB');
       expect(md).toContain('@internal/mongo');
@@ -253,7 +294,13 @@ describe('templates', () => {
     });
 
     it('contains lazy ORM query example for mongo (no manual connect step)', () => {
-      const md = quickReferenceMd('mongo', 'psl', 'src/prisma/contract.prisma', 'pnpm prisma');
+      const md = quickReferenceMd(
+        'mongo',
+        'psl',
+        'src/prisma/contract.prisma',
+        'pnpm prisma',
+        workspaceTargetPackageName('mongo'),
+      );
 
       expect(md).toContain('db.orm.users');
       expect(md).toContain('.where({ email:');
@@ -267,7 +314,13 @@ describe('templates', () => {
     // project does not silently lie about which servers it supports.
     describe('Requirements section (FR8.2)', () => {
       it('postgres: documents the minimum PostgreSQL version and only the postgres verify command', () => {
-        const md = quickReferenceMd('postgres', 'psl', 'src/prisma/contract.prisma', 'pnpm prisma');
+        const md = quickReferenceMd(
+          'postgres',
+          'psl',
+          'src/prisma/contract.prisma',
+          'pnpm prisma',
+          workspaceTargetPackageName('postgres'),
+        );
 
         expect(md).toMatch(/## Requirements/);
         expect(md).toMatch(/PostgreSQL \d+ or newer/);
@@ -278,7 +331,13 @@ describe('templates', () => {
       });
 
       it('mongo: documents the minimum MongoDB version and only the mongo verify command', () => {
-        const md = quickReferenceMd('mongo', 'psl', 'src/prisma/contract.prisma', 'pnpm prisma');
+        const md = quickReferenceMd(
+          'mongo',
+          'psl',
+          'src/prisma/contract.prisma',
+          'pnpm prisma',
+          workspaceTargetPackageName('mongo'),
+        );
 
         expect(md).toMatch(/## Requirements/);
         expect(md).toMatch(/MongoDB \d/);
@@ -289,21 +348,39 @@ describe('templates', () => {
       });
 
       it('mentions the --probe-db opt-in so users know init does not connect by default', () => {
-        const md = quickReferenceMd('postgres', 'psl', 'src/prisma/contract.prisma', 'pnpm prisma');
+        const md = quickReferenceMd(
+          'postgres',
+          'psl',
+          'src/prisma/contract.prisma',
+          'pnpm prisma',
+          workspaceTargetPackageName('postgres'),
+        );
 
         expect(md).toContain('--probe-db');
       });
     });
 
     it('documents the replica-set requirement for transactions and change streams', () => {
-      const md = quickReferenceMd('mongo', 'psl', 'src/prisma/contract.prisma', 'pnpm prisma');
+      const md = quickReferenceMd(
+        'mongo',
+        'psl',
+        'src/prisma/contract.prisma',
+        'pnpm prisma',
+        workspaceTargetPackageName('mongo'),
+      );
 
       expect(md).toContain('replica set');
       expect(md).toContain('TML-2313');
     });
 
     it('documents the escape hatches and steers users away from db.runtime() for mongo', () => {
-      const md = quickReferenceMd('mongo', 'psl', 'src/prisma/contract.prisma', 'pnpm prisma');
+      const md = quickReferenceMd(
+        'mongo',
+        'psl',
+        'src/prisma/contract.prisma',
+        'pnpm prisma',
+        workspaceTargetPackageName('mongo'),
+      );
 
       expect(md).toContain('db.query');
       expect(md).toContain('mongoClient');
@@ -314,7 +391,13 @@ describe('templates', () => {
     // FR5.1: schema sample block differentiates by authoring.
     describe('schema sample (FR5.1)', () => {
       it('postgres + psl: shows a PSL `model { ... }` block', () => {
-        const md = quickReferenceMd('postgres', 'psl', 'src/prisma/contract.prisma', 'pnpm prisma');
+        const md = quickReferenceMd(
+          'postgres',
+          'psl',
+          'src/prisma/contract.prisma',
+          'pnpm prisma',
+          workspaceTargetPackageName('postgres'),
+        );
 
         expect(md).toContain('```prisma');
         expect(md).toContain('model User');
@@ -328,6 +411,7 @@ describe('templates', () => {
           'typescript',
           'src/prisma/contract.ts',
           'pnpm prisma',
+          workspaceTargetPackageName('postgres'),
         );
 
         expect(md).toContain('```typescript');
@@ -338,7 +422,13 @@ describe('templates', () => {
       });
 
       it('mongo + psl: shows a PSL `model { ... }` block', () => {
-        const md = quickReferenceMd('mongo', 'psl', 'src/prisma/contract.prisma', 'pnpm prisma');
+        const md = quickReferenceMd(
+          'mongo',
+          'psl',
+          'src/prisma/contract.prisma',
+          'pnpm prisma',
+          workspaceTargetPackageName('mongo'),
+        );
 
         expect(md).toContain('```prisma');
         expect(md).toContain('model User');
@@ -347,7 +437,13 @@ describe('templates', () => {
       });
 
       it('mongo + typescript: shows a TS `defineContract` block (no PSL)', () => {
-        const md = quickReferenceMd('mongo', 'typescript', 'src/prisma/contract.ts', 'pnpm prisma');
+        const md = quickReferenceMd(
+          'mongo',
+          'typescript',
+          'src/prisma/contract.ts',
+          'pnpm prisma',
+          workspaceTargetPackageName('mongo'),
+        );
 
         expect(md).toContain('```typescript');
         expect(md).toContain('defineContract');
@@ -456,19 +552,31 @@ describe('templates', () => {
           authoring === 'typescript' ? 'src/prisma/contract.ts' : 'src/prisma/contract.prisma';
 
         it('starterSchema is stable', () => {
-          expect(starterSchema(target, authoring)).toMatchSnapshot();
+          expect(
+            starterSchema(target, authoring, workspaceTargetPackageName(target)),
+          ).toMatchSnapshot();
         });
 
         it('configFile is stable', () => {
-          expect(configFile(target, `./${schemaPath}`)).toMatchSnapshot();
+          expect(
+            configFile(`./${schemaPath}`, workspaceTargetPackageName(target)),
+          ).toMatchSnapshot();
         });
 
         it('dbFile is stable', () => {
-          expect(dbFile(target)).toMatchSnapshot();
+          expect(dbFile(target, workspaceTargetPackageName(target))).toMatchSnapshot();
         });
 
         it('quickReferenceMd is stable', () => {
-          expect(quickReferenceMd(target, authoring, schemaPath, 'pnpm prisma')).toMatchSnapshot();
+          expect(
+            quickReferenceMd(
+              target,
+              authoring,
+              schemaPath,
+              'pnpm prisma',
+              workspaceTargetPackageName(target),
+            ),
+          ).toMatchSnapshot();
         });
       });
     }

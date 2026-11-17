@@ -14,7 +14,7 @@ import { quickReferenceMd } from '../../../src/commands/init/templates/quick-ref
 function scaffold(target: TargetId, authoring: AuthoringId, targetPackage: string): string {
   return [
     starterSchema(target, authoring, targetPackage),
-    configFile(target, 'prisma/contract.ts', targetPackage),
+    configFile('prisma/contract.ts', targetPackage),
     dbFile(target, targetPackage),
     quickReferenceMd(target, authoring, 'prisma/contract.ts', 'pnpm', targetPackage),
   ].join('\n');
@@ -38,18 +38,11 @@ describe('the package a scaffold names', () => {
       expect(source).toContain(`from '@prisma/orm-${target}/runtime'`);
     });
 
-    it('is the workspace package unless the caller names one', () => {
-      expect(scaffold(target, 'typescript', workspaceTargetPackageName(target))).toEqual(
-        [
-          starterSchema(target, 'typescript'),
-          configFile(target, 'prisma/contract.ts'),
-          dbFile(target),
-          quickReferenceMd(target, 'typescript', 'prisma/contract.ts', 'pnpm'),
-        ].join('\n'),
-      );
-      expect(starterSchema(target, 'typescript')).toContain(
-        `from '@internal/${target}/contract-builder'`,
-      );
+    it('is the package the caller names, in every template', () => {
+      const source = scaffold(target, 'typescript', workspaceTargetPackageName(target));
+
+      expect(source).toContain(`from '@internal/${target}/contract-builder'`);
+      expect(source).not.toContain('@prisma/orm-');
     });
 
     it('imports no package but the target package and the CLI engine', () => {

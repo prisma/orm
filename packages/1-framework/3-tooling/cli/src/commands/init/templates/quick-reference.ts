@@ -1,11 +1,5 @@
 import { dirname } from 'pathe';
-import {
-  type AuthoringId,
-  schemaSample,
-  type TargetId,
-  targetEntrypoint,
-  workspaceTargetPackageName,
-} from './code-templates';
+import { type AuthoringId, schemaSample, type TargetId, targetEntrypoint } from './code-templates';
 import { MIN_SERVER_VERSION, TARGET_LABEL } from './env';
 import { renderTemplate } from './render';
 
@@ -27,7 +21,7 @@ export function quickReferenceMd(
   authoring: AuthoringId,
   schemaPath: string,
   pkgRun: string,
-  targetPackage: string = workspaceTargetPackageName(target),
+  targetPackage: string,
 ): string {
   const schemaDir = dirname(schemaPath);
   const pkg = targetPackage;
@@ -88,7 +82,7 @@ export function prisma7QuickReferenceMd(
   outputDir: string,
   pkgRun: string,
   prisma7Config: string | undefined,
-  targetPackage: string = workspaceTargetPackageName(target),
+  targetPackage: string,
 ): string {
   const vars: Record<(typeof prisma7Variables)[number], string> = {
     schemaPath,

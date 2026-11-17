@@ -13,9 +13,9 @@ export function targetPackageName(target: TargetId): string {
 }
 
 /**
- * The workspace package of `target`, which the templates name unless told
- * otherwise, so tests can typecheck a scaffold inside this repository; and
- * which projects scaffolded by earlier versions of `init` may still declare.
+ * The workspace package of `target`, which projects scaffolded by earlier
+ * versions of `init` may still declare. Tests pass it to the templates to
+ * typecheck a scaffold inside this repository.
  */
 export function workspaceTargetPackageName(target: TargetId): string {
   return target === 'postgres' ? '@internal/postgres' : '@internal/mongo';
@@ -49,7 +49,7 @@ export function defaultSchemaPath(authoring: AuthoringId): string {
 export function starterSchema(
   target: TargetId,
   authoring: AuthoringId,
-  targetPackage: string = workspaceTargetPackageName(target),
+  targetPackage: string,
 ): string {
   if (authoring === 'typescript') {
     const builder = targetEntrypoint(targetPackage, 'contract-builder');
@@ -70,7 +70,7 @@ export function starterSchema(
 export function schemaSample(
   target: TargetId,
   authoring: AuthoringId,
-  targetPackage: string = workspaceTargetPackageName(target),
+  targetPackage: string,
 ): string {
   if (authoring === 'typescript') {
     const builder = targetEntrypoint(targetPackage, 'contract-builder');
@@ -273,11 +273,7 @@ export const contract = defineContract(
 `;
 }
 
-export function configFile(
-  target: TargetId,
-  contractPath: string,
-  targetPackage: string = workspaceTargetPackageName(target),
-): string {
+export function configFile(contractPath: string, targetPackage: string): string {
   const configEntrypoint = targetEntrypoint(targetPackage, 'config');
   return `import 'dotenv/config';
 import { definePrismaConfig } from '@prisma/cli-engine';
@@ -301,10 +297,9 @@ export default definePrismaConfig({
  * own directory (`output` is the directory; the facade names `contract.json`).
  */
 export function prisma7ConfigFile(
-  target: TargetId,
   schemaPath: string,
   outputDir: string,
-  targetPackage: string = workspaceTargetPackageName(target),
+  targetPackage: string,
 ): string {
   const configEntrypoint = targetEntrypoint(targetPackage, 'config');
   return `import 'dotenv/config';
@@ -323,10 +318,7 @@ export default definePrismaConfig({
 `;
 }
 
-export function dbFile(
-  target: TargetId,
-  targetPackage: string = workspaceTargetPackageName(target),
-): string {
+export function dbFile(target: TargetId, targetPackage: string): string {
   const runtime = targetEntrypoint(targetPackage, 'runtime');
   const staticEntry = targetEntrypoint(targetPackage, 'static');
   const factory = target === 'postgres' ? 'postgres' : 'mongo';

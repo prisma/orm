@@ -235,7 +235,7 @@ function planScaffold(ctx: {
           },
           {
             path: CONFIG_FILE,
-            content: configFile(inputs.target, configContractPath, targetPackage),
+            content: configFile(configContractPath, targetPackage),
           },
           {
             path: join(outputDir, 'db.ts'),
@@ -255,7 +255,7 @@ function planScaffold(ctx: {
       : [
           {
             path: CONFIG_FILE,
-            content: prisma7ConfigFile(inputs.target, source.schemaPath, outputDir, targetPackage),
+            content: prisma7ConfigFile(source.schemaPath, outputDir, targetPackage),
           },
           {
             path: join(outputDir, 'db.ts'),

@@ -8,6 +8,7 @@ import {
   dbFile,
   starterSchema,
   type TargetId,
+  workspaceTargetPackageName,
 } from '../../../packages/1-framework/3-tooling/cli/src/commands/init/templates/code-templates';
 
 /**
@@ -76,7 +77,11 @@ function extractPrismaNextImports(source: string): readonly string[] {
 
 function templateSources(target: TargetId, authoring: AuthoringId): readonly string[] {
   const schemaPath = authoring === 'typescript' ? 'prisma/contract.ts' : 'prisma/contract.prisma';
-  return [starterSchema(target, authoring), dbFile(target), configFile(target, `./${schemaPath}`)];
+  return [
+    starterSchema(target, authoring, workspaceTargetPackageName(target)),
+    dbFile(target, workspaceTargetPackageName(target)),
+    configFile(`./${schemaPath}`, workspaceTargetPackageName(target)),
+  ];
 }
 
 describe('init templates only depend on the facade package (TML-2485)', () => {
