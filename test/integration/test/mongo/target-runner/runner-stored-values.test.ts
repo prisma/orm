@@ -258,6 +258,30 @@ describe('MongoMigrationRunner, replaceStoredValue', () => {
     },
     timeouts.spinUpMongoMemoryServer,
   );
+
+  it(
+    'stores null where the replacement is null, in a root field and at a path inside it',
+    async () => {
+      await db
+        .collection('users')
+        .insertMany([{ name: 'Ada', status: 'archived', profile: { status: 'archived' } }]);
+
+      const result = await run([
+        replaceStoredValue({ collection: 'users', field: 'status', from: 'archived', to: null }),
+        replaceStoredValue({
+          collection: 'users',
+          field: 'profile',
+          path: '$.status',
+          from: 'archived',
+          to: null,
+        }),
+      ]);
+
+      expect(executed(result)).toBe(2);
+      expect(await documents()).toEqual([{ name: 'Ada', status: null, profile: { status: null } }]);
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
 });
 
 describe('MongoMigrationRunner, removeStoredValue', () => {

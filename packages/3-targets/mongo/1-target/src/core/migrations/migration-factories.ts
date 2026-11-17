@@ -876,7 +876,13 @@ function storedValuePipeline(
             $cond: [
               { $isArray: held },
               inList(held),
-              { $cond: [equalsValue(held, matched), replacement ?? '$$REMOVE', held] },
+              {
+                $cond: [
+                  equalsValue(held, matched),
+                  replacement === undefined ? '$$REMOVE' : replacement,
+                  held,
+                ],
+              },
             ],
           },
         },
