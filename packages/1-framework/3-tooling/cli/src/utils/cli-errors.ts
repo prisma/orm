@@ -425,7 +425,7 @@ export function errorContractTypesModuleMissing(): ActionableCliError {
  */
 export function errorMigrationModuleMissing(): ActionableCliError {
   const fix =
-    "Build the config with your target package's `defineConfig`, such as the one from `@prisma/orm-postgres/config`, which sets `migrations.module`; a config assembled by hand sets `migrations.module` itself.";
+    "Build the config with your target package's `defineConfig`, which sets `migrations.module`; a config assembled by hand sets `migrations.module` itself.";
   return new ActionableCliError(
     'CONFIG.MIGRATION_MODULE_MISSING',
     'Config names no migration module',
