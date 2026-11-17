@@ -8,6 +8,8 @@ import { moduleBase } from './module-base';
 /** The module the generated contract types of an application on this package import from. */
 export const generatedTypesModule = `${moduleBase}/generated-types`;
 
+export const migrationModule = `${moduleBase}/migration`;
+
 /** The target and adapter descriptors this package hands on: their type declarations name its own generated-types module. */
 export const mysqlTarget: typeof mysql = restateTypeDeclarations(mysql, generatedTypesModule);
 export const mysqlControlAdapter: typeof mysqlAdapter = restateTypeDeclarations(

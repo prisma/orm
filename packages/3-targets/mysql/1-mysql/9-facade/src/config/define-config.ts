@@ -13,8 +13,7 @@ import { mysqlCreateNamespace } from '@internal/target-mysql/types';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
 import { typescriptContractUnsupported } from '../errors';
-import { controlComponents } from './components';
-import { moduleBase } from './module-base';
+import { controlComponents, generatedTypesModule, migrationModule } from './components';
 
 export interface MysqlConfigOptions<TargetId extends string = 'mysql'> {
   readonly contract: string;
@@ -36,8 +35,10 @@ export interface MysqlConfigComponents<TargetId extends string> {
   readonly target: PrismaConfig<'sql', TargetId>['target'];
   readonly adapter: PrismaConfig<'sql', TargetId>['adapter'];
   readonly driver: NonNullable<PrismaConfig<'sql', TargetId>['driver']>;
-  /** The base of the modules the target's generated files import from: `<moduleBase>/generated-types` and `<moduleBase>/migration`. */
-  readonly moduleBase: string;
+  /** The module a generated `contract.d.ts` imports the contract types from. */
+  readonly typesModule: string;
+  /** The module a generated `migration.ts` imports the migration helpers from. */
+  readonly migrationModule: string;
 }
 
 const typescriptExtensions: ReadonlySet<string> = new Set(['.ts', '.mts', '.cts', '.tsx']);
@@ -59,8 +60,8 @@ function buildConfig<TargetId extends string>(
     adapter: components.adapter,
     driver: components.driver,
     extensions: options.extensions ?? [],
-    contract: { ...contract, typesModule: `${components.moduleBase}/generated-types` },
-    migrations: { ...options.migrations, module: `${components.moduleBase}/migration` },
+    contract: { ...contract, typesModule: components.typesModule },
+    migrations: { ...options.migrations, module: components.migrationModule },
     ...ifDefined('db', options.db),
     ...ifDefined('formatter', options.formatter),
   });
@@ -92,7 +93,8 @@ export function createMysqlDefineConfig<TargetId extends string>(
 const mysqlComponents: MysqlConfigComponents<'mysql'> = {
   ...controlComponents,
   pack: mysqlPackRef,
-  moduleBase,
+  typesModule: generatedTypesModule,
+  migrationModule,
 };
 
 const mysqlPslDefineConfig = createMysqlDefineConfig(mysqlComponents);

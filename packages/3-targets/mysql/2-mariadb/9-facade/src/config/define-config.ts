@@ -1,8 +1,7 @@
 import type { PrismaConfig } from '@internal/config/config-types';
 import { createMysqlDefineConfig, type MysqlConfigOptions } from '@internal/mysql/config';
 import mariadbPackRef from '@internal/target-mariadb/pack';
-import { controlComponents } from './components';
-import { moduleBase } from './module-base';
+import { controlComponents, generatedTypesModule, migrationModule } from './components';
 
 export type MariadbConfigOptions = MysqlConfigOptions<'mariadb'>;
 
@@ -11,5 +10,6 @@ export const defineConfig: (options: MariadbConfigOptions) => PrismaConfig<'sql'
   createMysqlDefineConfig({
     ...controlComponents,
     pack: mariadbPackRef,
-    moduleBase,
+    typesModule: generatedTypesModule,
+    migrationModule,
   });
