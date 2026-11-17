@@ -1764,8 +1764,16 @@ export type VariantCreateInput<
       >
   : never;
 
-type WithoutDiscriminator<TContract extends Contract<SqlStorage>, ModelName extends string> = {
-  readonly [K in DiscriminatorFieldName<TContract, ModelName>]?: never;
+type WithoutDiscriminator<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string = never,
+> = {
+  readonly [K in DiscriminatorFieldName<
+    TContract,
+    ModelName,
+    string extends NsId ? never : NsId
+  >]?: never;
 };
 
 /**
@@ -1780,7 +1788,7 @@ export type ScalarUpdateInput<
   NsId extends string = never,
 > = ClosedWhenEmpty<
   Partial<DefaultModelInputRow<TContract, ModelName, NsId>> &
-    WithoutDiscriminator<TContract, ModelName>
+    WithoutDiscriminator<TContract, ModelName, NsId>
 >;
 
 export type ResolvedCreateInput<
@@ -1979,7 +1987,7 @@ export interface RelationMutationUpdateAll<
 > {
   readonly kind: 'updateAll';
   readonly state: CollectionState;
-  readonly data: Partial<DefaultModelInputRow<TContract, ModelName>>;
+  readonly data: RelationMutationUpdateAllData<TContract, ModelName>;
 }
 
 export interface RelationMutationDeleteAll {
@@ -2438,7 +2446,7 @@ export type MutationUpdateInput<
   NsId extends string = never,
 > = ClosedWhenEmpty<
   Partial<DefaultModelInputRow<TContract, ModelName, NsId>> &
-    WithoutDiscriminator<TContract, ModelName> &
+    WithoutDiscriminator<TContract, ModelName, NsId> &
     RelationMutationFields<TContract, ModelName, 'update'>
 >;
 
