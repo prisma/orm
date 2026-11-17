@@ -2,13 +2,7 @@ import type { TransactionActivityRun } from '@internal/framework-components/runt
 import { invariant } from '@internal/utils/assertions';
 import type { SqlMiddlewareContext } from './middleware/sql-middleware';
 
-export type TransactionState =
-  | 'open'
-  | 'committing'
-  | 'release-failed'
-  | 'rolling-back'
-  | 'committed'
-  | 'rolled-back';
+export type TransactionState = 'open' | 'commit-failed' | 'committed' | 'rolled-back';
 
 export interface StackEntry {
   readonly name: string | undefined;

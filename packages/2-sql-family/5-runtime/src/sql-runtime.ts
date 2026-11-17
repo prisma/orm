@@ -110,16 +110,19 @@ import type {
   TelemetryOutcome,
   VerifyMarkerOption,
 } from './runtime-spi';
+import {
+  OuterTransaction,
+  type QueryableTransaction,
+  type TransactionHost,
+  transactionClosedError,
+} from './runtime-transaction';
 import type { ExecutionContext } from './sql-context';
 import { SqlFamilyAdapter } from './sql-family-adapter';
 import { validateTransactionTimeout } from './transaction-deadline';
-import { type StackEntry, TransactionStack } from './transaction-stack';
 import {
   createTransactionStart,
   settlementOf,
-  type TransactionSettlementState,
   type TransactionStartTarget,
-  transactionSettlement,
   transactionStart,
   wasRefusedBeforeBegin,
 } from './transaction-state';
@@ -307,6 +310,33 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   // Decided once when the runtime is created: a transaction keeps its finished statements to finalize them only when some middleware implements activityFinalized.
   readonly #holdFinishedChildren: boolean;
   readonly #transactions = new WeakMap<SqlQueryable, QueryableTransaction>();
+  readonly #transactionHost: TransactionHost = {
+    route: (driverTx, activity, savepoint) =>
+      this.queryableRoute(driverTx, 'transaction', () => activity, {
+        transaction: undefined,
+        savepoint,
+        runtimeWork: false,
+      }),
+    startActivity: (route, activity) => this.startActivityOnRoute(route, activity, undefined),
+    planContentHash: (plan, parent) => this.planContentHashFor(plan, 'transaction', parent),
+    startTransactionActivity: (parent) =>
+      startTransactionActivity<SqlMiddlewareContext>({
+        middleware: this.middleware,
+        context: { ...this.sqlCtx, scope: 'transaction' },
+        parent,
+        holdFinishedChildren: this.#holdFinishedChildren,
+      }),
+    track: (operation) => this.#inFlight.track(operation),
+    register: (queryable, transaction) => {
+      this.#transactions.set(queryable, transaction);
+    },
+    hold: (driverTx, driverSavepoint) => {
+      if (this.#heldQueryables.has(driverTx)) this.#heldQueryables.add(driverSavepoint);
+    },
+    onRelease: (connection, teardown) => {
+      this.#transactionWorkOn.set(connection, teardown);
+    },
+  };
   private codecRegistryValidated: boolean;
   private _telemetry: RuntimeTelemetryEvent | null;
 
@@ -1473,336 +1503,14 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       throw error;
     }
     if (this.#heldQueryables.has(connection)) this.#heldQueryables.add(driverTx);
-    const stack = new TransactionStack();
-    const entry = openEntry(undefined, activity);
-    stack.push(entry);
-    const { scope, lifecycle, settlement } = this.outerTransaction(
-      driverTx,
+    return new OuterTransaction(
+      this.#transactionHost,
       connection,
-      stack,
-      entry,
+      driverTx,
+      activity,
       endTransactionWork,
       timeout,
     );
-    return Object.assign(this.wrapTransaction(driverTx, activity, stack, entry, scope, lifecycle), {
-      [transactionSettlement]: settlement,
-    });
-  }
-
-  private outerTransaction(
-    driverTx: SqlTransaction,
-    connection: SqlConnection,
-    stack: TransactionStack,
-    entry: StackEntry,
-    endTransactionWork: () => void,
-    timeout: number | undefined,
-  ): {
-    readonly scope: TransactionScope;
-    readonly lifecycle: TransactionLifecycle;
-    readonly settlement: TransactionSettlementState;
-  } {
-    const { activity } = entry;
-    invariant(activity !== undefined, 'A transaction has its activity once it has begun');
-    const logDroppedError = (error: unknown): void => {
-      try {
-        activity.ctx.log.error({ event: 'middleware.activityEnded.error', error });
-      } catch {
-        // A failing logger must not replace the error the caller receives.
-      }
-    };
-    const controller = new AbortController();
-    const onConnection: QueryableTransaction = {
-      activity,
-      guard: () => assertMayWork(stack, entry, controller.signal.aborted, true),
-      check: undefined,
-    };
-    this.#transactions.set(connection, onConnection);
-    const stopAcceptingChildren = (): void => {
-      activity.stopAcceptingChildren();
-      const onDriverTx = timeout === undefined ? this.#transactions.get(driverTx) : undefined;
-      for (const transaction of [onDriverTx, onConnection]) {
-        if (transaction?.activity === activity) transaction.activity = undefined;
-      }
-      onConnection.guard = undefined;
-    };
-    const deadline = performance.now() + (timeout ?? Number.POSITIVE_INFINITY);
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const stopDeadline = () => {
-      clearTimeout(timer);
-      timer = undefined;
-    };
-    const expire = () => {
-      if (timer === undefined) return;
-      stopDeadline();
-      activity.stopAcceptingChildren();
-      controller.abort(
-        runtimeError('RUNTIME.TRANSACTION_TIMEOUT', 'Transaction callback exceeded its timeout', {
-          timeout,
-        }),
-      );
-    };
-    const check = () => {
-      if (timeout === undefined) return;
-      if (timer !== undefined && performance.now() >= deadline) expire();
-      controller.signal.throwIfAborted();
-      if (timer === undefined) throw transactionClosedError();
-    };
-    const closeSavepoints = (): ((outcome: 'succeeded' | 'failed') => Promise<void>) => {
-      const closed: StackEntry[] = [];
-      while (stack.includes(entry) && stack.top !== entry) closed.push(stack.pop());
-      for (const savepoint of closed) savepoint.state = 'rolled-back';
-      return async (outcome) => {
-        for (const savepoint of closed) {
-          await savepoint.activity
-            ?.end({ by: 'rollback', outcome, commitAttempted: false })
-            .catch(logDroppedError);
-        }
-      };
-    };
-    if (timeout !== undefined) {
-      timer = setTimeout(expire, timeout);
-      this.#transactionWorkOn.set(connection, async () => {
-        stopDeadline();
-        stopAcceptingChildren();
-        try {
-          if (stack.includes(entry)) {
-            const commitAttempted = entry.state === 'committing';
-            const endSavepoints = closeSavepoints();
-            stack.pop();
-            entry.state = 'rolled-back';
-            await endSavepoints('failed');
-            await activity.end({ by: 'rollback', outcome: 'failed', commitAttempted });
-          }
-        } catch (error) {
-          logDroppedError(error);
-        } finally {
-          endTransactionWork();
-        }
-      });
-    }
-    return {
-      scope: { signal: controller.signal, check, logDroppedError },
-      lifecycle: {
-        beforeCommit: check,
-        stop: () => {
-          stopDeadline();
-          stopAcceptingChildren();
-        },
-        endWork: endTransactionWork,
-        closeSavepoints,
-      },
-      settlement: {
-        get committed() {
-          return entry.state === 'committed';
-        },
-        get rolledBack() {
-          return entry.state === 'rolled-back';
-        },
-        logDroppedError,
-      },
-    };
-  }
-
-  private wrapTransaction(
-    driverTx: SqlTransaction,
-    activity: TransactionActivityRun<SqlMiddlewareContext>,
-    stack: TransactionStack,
-    entry: StackEntry,
-    scope: TransactionScope,
-    lifecycle: TransactionLifecycle,
-  ): RuntimeTransaction &
-    ActivitySourceTarget &
-    PreparedStatementQueryTarget &
-    PreparedStatementExecuteTarget {
-    const outer = entry.name === undefined;
-    const assertCanWork = () => assertMayWork(stack, entry, scope.signal.aborted, outer);
-    const self = this;
-    const openSavepoint = async (parent: ActivityParent): Promise<RuntimeTransaction> => {
-      const verdict = access(stack, entry, scope.signal.aborted);
-      if (verdict === 'closed') throw transactionClosedError();
-      if (verdict === 'suspended') throw savepointAlreadyOpenError(stack);
-      const name = stack.nextSavepointName();
-      const savepoint = openEntry(name, undefined);
-      stack.push(savepoint);
-      let savepointActivity: TransactionActivityRun<SqlMiddlewareContext>;
-      try {
-        savepointActivity = await startTransactionActivity<SqlMiddlewareContext>({
-          middleware: self.middleware,
-          context: { ...self.sqlCtx, scope: 'transaction' },
-          parent,
-          holdFinishedChildren: self.#holdFinishedChildren,
-        });
-      } catch (error) {
-        if (stack.top === savepoint) stack.pop();
-        throw error;
-      }
-      savepoint.activity = savepointActivity;
-      let driverSavepoint: SqlTransaction;
-      try {
-        if (access(stack, savepoint, scope.signal.aborted) !== 'allowed') {
-          throw transactionClosedError();
-        }
-        driverSavepoint = await self.#inFlight.track(() => driverTx.savepoint(name));
-      } catch (error) {
-        if (stack.top === savepoint) stack.pop();
-        await savepointActivity.end({ by: 'rollback', outcome: 'failed', commitAttempted: false });
-        throw error;
-      }
-      if (self.#heldQueryables.has(driverTx)) self.#heldQueryables.add(driverSavepoint);
-      return self.wrapTransaction(
-        driverSavepoint,
-        savepointActivity,
-        stack,
-        savepoint,
-        scope,
-        savepointLifecycle,
-      );
-    };
-    this.#transactions.set(driverTx, { activity, guard: assertCanWork, check: scope.check });
-    return {
-      signal: scope.signal,
-      async commit(): Promise<void> {
-        lifecycle.beforeCommit();
-        assertCanWork();
-        lifecycle.stop();
-        entry.state = 'committing';
-        try {
-          await self.#inFlight.track(() => driverTx.commit());
-        } catch (error) {
-          lifecycle.endWork();
-          if (outer) {
-            await activity.end({ by: 'commit', outcome: 'failed' });
-          } else {
-            entry.state = 'release-failed';
-          }
-          throw error;
-        }
-        if (stack.top === entry) stack.pop();
-        entry.state = 'committed';
-        entry.commitEnding = activity.end({
-          by: outer ? 'commit' : 'release',
-          outcome: 'succeeded',
-        });
-        try {
-          await entry.commitEnding;
-        } finally {
-          lifecycle.endWork();
-        }
-      },
-      async rollback(): Promise<void> {
-        if (entry.state === 'committed') {
-          await entry.commitEnding?.catch(() => undefined);
-          return;
-        }
-        if (!stack.includes(entry)) return;
-        const verdict = access(stack, entry, scope.signal.aborted);
-        if (verdict === 'suspended') throw transactionSuspendedError(stack);
-        if (!outer && (entry.state === 'committing' || entry.state === 'rolling-back')) {
-          throw transactionClosedError();
-        }
-        lifecycle.stop();
-        const commitAttempted = entry.state === 'committing' || entry.state === 'release-failed';
-        const endSavepoints = lifecycle.closeSavepoints();
-        if (refusesAsClosed(stack, verdict, outer)) {
-          lifecycle.endWork();
-          await endSavepoints('failed');
-          await activity.end({ by: 'rollback', outcome: 'failed', commitAttempted });
-          throw transactionClosedError();
-        }
-        entry.state = 'rolling-back';
-        try {
-          await self.#inFlight.track(() => driverTx.rollback());
-        } catch (error) {
-          if (!outer) {
-            if (stack.top === entry) stack.pop();
-            stack.invalidate();
-          }
-          lifecycle.endWork();
-          await endSavepoints('failed');
-          await activity.end({ by: 'rollback', outcome: 'failed', commitAttempted });
-          throw error;
-        }
-        if (stack.top === entry) stack.pop();
-        entry.state = 'rolled-back';
-        try {
-          await endSavepoints('succeeded');
-          await activity.end({ by: 'rollback', outcome: 'succeeded', commitAttempted });
-        } finally {
-          lifecycle.endWork();
-        }
-      },
-      savepoint: () => openSavepoint(activity),
-      [activitySource]: {
-        startActivity: <K extends ClientActivityKind>(
-          clientActivity: StartActivity<K>,
-        ): Promise<ActivityHandle<K>> => {
-          try {
-            assertCanWork();
-          } catch (error) {
-            return Promise.reject(error);
-          }
-          return self.startActivityOnRoute(
-            self.queryableRoute(driverTx, 'transaction', () => activity, {
-              transaction: undefined,
-              savepoint: openSavepoint,
-              runtimeWork: false,
-            }),
-            clientActivity,
-            undefined,
-          );
-        },
-        planContentHash: (plan: HashablePlan): Promise<string> =>
-          self.planContentHashFor(plan, 'transaction', activity),
-      },
-      query<Row>(
-        plan: (SqlExecutionPlan<unknown> | SqlQueryPlan<unknown>) & { readonly _row?: Row },
-        options?: RuntimeExecuteOptions,
-      ): AsyncIterableResult<Row> {
-        return self.queryAgainstQueryable<Row>(plan, driverTx, {
-          ...options,
-          scope: 'transaction',
-        });
-      },
-      execute(
-        plan: SqlExecutionPlan<unknown> | SqlQueryPlan<unknown>,
-        options?: RuntimeExecuteOptions,
-      ): Promise<SqlStatementStats> {
-        return self.executeStatisticsAgainstQueryable(plan, driverTx, {
-          ...options,
-          scope: 'transaction',
-        });
-      },
-      [preparedStatementQuery]<Params, Row>(
-        ps: PreparedStatement<Params, Row>,
-        params: Params,
-        options?: RuntimeExecuteOptions,
-      ): AsyncIterableResult<Row> {
-        return self.runPreparedQueryAgainstQueryable<Params, Row>(
-          blindCast<
-            PreparedStatementImpl<Params, Row>,
-            'prepared statements are created by this runtime implementation'
-          >(ps),
-          params,
-          driverTx,
-          { ...options, scope: 'transaction' },
-        );
-      },
-      [preparedStatementExecute]<Params>(
-        ps: PreparedExecution<Params>,
-        params: Params,
-        options?: RuntimeExecuteOptions,
-      ): Promise<SqlStatementStats> {
-        return self.runPreparedExecuteAgainstQueryable<Params>(
-          blindCast<
-            PreparedExecutionImpl<Params>,
-            'prepared statements are created by this runtime implementation'
-          >(ps),
-          params,
-          driverTx,
-          { ...options, scope: 'transaction' },
-        );
-      },
-    };
   }
 
   telemetry(): RuntimeTelemetryEvent | null {
@@ -1934,93 +1642,6 @@ function transactionAlreadyOpenError(
   );
 }
 
-interface QueryableTransaction {
-  activity: TransactionActivityRun<SqlMiddlewareContext> | undefined;
-  guard: (() => void) | undefined;
-  readonly check: (() => void) | undefined;
-}
-
-interface TransactionScope {
-  readonly signal: AbortSignal;
-  check(): void;
-  logDroppedError(error: unknown): void;
-}
-
-interface TransactionLifecycle {
-  beforeCommit(): void;
-  stop(): void;
-  endWork(): void;
-  closeSavepoints(): (outcome: 'succeeded' | 'failed') => Promise<void>;
-}
-
-const savepointLifecycle: TransactionLifecycle = {
-  beforeCommit: noWork,
-  stop: noWork,
-  endWork: noWork,
-  closeSavepoints: () => async () => {},
-};
-
-type StackAccess = 'allowed' | 'suspended' | 'closed';
-
-function openEntry(
-  name: string | undefined,
-  activity: TransactionActivityRun<SqlMiddlewareContext> | undefined,
-): StackEntry {
-  return { name, activity, commitEnding: undefined, state: 'open' };
-}
-
-function access(stack: TransactionStack, entry: StackEntry, timedOut: boolean): StackAccess {
-  if (
-    stack.invalidated ||
-    timedOut ||
-    !stack.includes(entry) ||
-    entry.state === 'committing' ||
-    entry.state === 'rolling-back'
-  ) {
-    return 'closed';
-  }
-  return stack.top === entry ? 'allowed' : 'suspended';
-}
-
-function refusesAsClosed(stack: TransactionStack, verdict: StackAccess, outer: boolean): boolean {
-  return verdict === 'closed' && (!outer || stack.invalidated);
-}
-
-function assertMayWork(
-  stack: TransactionStack,
-  entry: StackEntry,
-  timedOut: boolean,
-  outer: boolean,
-): void {
-  const verdict = access(stack, entry, timedOut);
-  if (refusesAsClosed(stack, verdict, outer)) throw transactionClosedError();
-  if (verdict === 'suspended') throw transactionSuspendedError(stack);
-}
-
-function topOf(stack: TransactionStack): StackEntry {
-  const { top } = stack;
-  invariant(top !== undefined, 'A suspended transaction has a savepoint above it');
-  return top;
-}
-
-function transactionSuspendedError(stack: TransactionStack): Error {
-  const open = topOf(stack);
-  return runtimeError(
-    'RUNTIME.TRANSACTION_SUSPENDED',
-    `Savepoint ${open.name} is open on this transaction; commit or roll it back before using the transaction again.`,
-    { savepointId: open.activity?.activity.id },
-  );
-}
-
-function savepointAlreadyOpenError(stack: TransactionStack): Error {
-  const open = topOf(stack);
-  return runtimeError(
-    'RUNTIME.TRANSACTION_ALREADY_OPEN',
-    `Savepoint ${open.name} is already open on this transaction; commit or roll it back before opening another.`,
-    { savepointId: open.activity?.activity.id },
-  );
-}
-
 // Rows of a handle's statement, refused at the first read when the handle no longer accepts children, before the route takes a connection or session.
 function noWork(): void {}
 
@@ -2084,14 +1705,6 @@ class RowsBeneath<Row> implements AsyncGenerator<Row, void, unknown> {
   async [Symbol.asyncDispose](): Promise<void> {
     await this.return();
   }
-}
-
-function transactionClosedError(): Error {
-  return runtimeError(
-    'RUNTIME.TRANSACTION_CLOSED',
-    'Cannot use a transaction operation after the transaction has ended. Consume query results and await execute calls inside the transaction callback.',
-    {},
-  );
 }
 
 /**

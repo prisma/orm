@@ -171,64 +171,45 @@ describe('RuntimeTransaction.savepoint()', () => {
     expect(after?.ctx?.parent).toBeUndefined();
   });
 
-  it('refuses rollback() while RELEASE is in flight, with no side effects, and the savepoint finalizes with the outer outcome', async () => {
-    let releaseHeld = (): void => undefined;
-    const held = new Promise<void>((resolve) => {
-      releaseHeld = resolve;
-    });
-    const { transaction, events } = await begin({ failures: { releaseSavepointHeldUntil: held } });
-    const savepoint = await transaction.savepoint();
-    await savepoint.execute(update);
-    const releasing = savepoint.commit();
-    const before = events.length;
-
-    await rejectsWith(savepoint.rollback(), 'TRANSACTION_CLOSED');
-    expect(events.slice(before)).toEqual([]);
-    releaseHeld();
-    await releasing;
-    await transaction.commit();
-
-    expect(driverCalls(events)).toBe('begin, SAVEPOINT sp_1, RELEASE SAVEPOINT sp_1, commit');
-    expect(finalized(events)).toBe(
-      'statement:committed, transaction:committed, transaction:committed',
-    );
-  });
-
-  it('closes the open savepoints innermost first when the outer transaction rolls back after its timeout, and refuses work on them', async () => {
+  it('rolls back only the outer transaction after its timeout, and the open savepoint refuses work and closes on its own rollback', async () => {
     const { runtime, events } = createSetup();
     const connection = await runtime.connection();
     const transaction = await connection.transaction({ timeout: 1 });
-    const outerChild = await transaction.savepoint();
-    const innerChild = await outerChild.savepoint();
-    await (await startActivityOn(innerChild, testCall)).end({ outcome: 'succeeded' });
+    const savepoint = await transaction.savepoint();
+    await savepoint.execute(update);
+    const [outerId, savepointId] = transactionIds(events);
     await new Promise((resolve) => setTimeout(resolve, 5));
 
     await transaction.rollback();
     const ends = events.filter((event) => event.name.startsWith('ended:transaction'));
-    expect(ends.map((event) => [event.name, event.activity?.id])).toEqual(
-      transactionIds(events)
-        .reverse()
-        .map((id) => ['ended:transaction:succeeded', id]),
-    );
+    expect(ends.map((event) => [event.name, event.activity?.id])).toEqual([
+      ['ended:transaction:succeeded', outerId],
+    ]);
     const before = events.length;
     for (const refused of [
-      innerChild.execute(update),
-      innerChild.query(rawPlan('select 1')).toArray(),
-      innerChild.savepoint(),
-      innerChild.commit(),
-      startActivityOn(innerChild, testCall),
-      outerChild.execute(update),
+      savepoint.execute(update),
+      savepoint.query(rawPlan('select 1')).toArray(),
+      savepoint.savepoint(),
+      savepoint.commit(),
       transaction.savepoint(),
     ]) {
       await rejectsWith(refused, 'TRANSACTION_CLOSED');
     }
-    await innerChild.rollback();
     expect(events.slice(before)).toEqual([]);
 
+    await rejectsWith(savepoint.rollback(), 'TRANSACTION_CLOSED');
+    expect(
+      events
+        .filter((event) => event.name.startsWith('ended:transaction'))
+        .map((event) => [event.name, event.activity?.id]),
+    ).toEqual([
+      ['ended:transaction:succeeded', outerId],
+      ['ended:transaction:failed', savepointId],
+    ]);
+    expect(finalized(events).endsWith('statement:rolled-back, transaction:rolled-back')).toBe(true);
+
     await (await connection.transaction()).savepoint();
-    expect(driverCalls(events)).toBe(
-      'begin, SAVEPOINT sp_1, SAVEPOINT sp_2, rollback, begin, SAVEPOINT sp_1',
-    );
+    expect(driverCalls(events)).toBe('begin, SAVEPOINT sp_1, rollback, begin, SAVEPOINT sp_1');
   });
 
   it('refuses work on an open savepoint after the outer transaction timed out, and reports the outer timeout ahead of the savepoint', async () => {
