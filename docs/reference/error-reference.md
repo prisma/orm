@@ -1151,7 +1151,7 @@ A mutation that expected the database to return a row got none: `create()`/`upse
 
 ### ORM.OPERATION_UNSUPPORTED
 
-A valid ORM operation, including a nested relation mutation, is used where it is not supported; `reason`, when set, says why.
+A valid ORM operation, including a nested relation mutation, is used where it is not supported; `reason`, when set, says why. `reason: 'required-foreign-key'` means the operation would set a foreign key that is not nullable to null, such as `disconnect()` on a required relation; `model` and `fields` name that key.
 
 ### ORM.RELATION_ROW_MISSING
 

@@ -7,6 +7,7 @@ import {
   assertReturningCapability,
   columnOfContractField,
   modelOf as contractModelOf,
+  getModelFields,
   type ResolvedRelation,
   resolveModelTableName,
   resolvePolymorphismInfo,
@@ -203,6 +204,13 @@ export function addBeforeWrite(
       }
       if (mutation.kind === 'disconnect') {
         rejectVariantDisconnect(relationMutation.name, mutation);
+        rejectNullOnRequiredKey(
+          t.context.contract,
+          mutation.kind,
+          relationMutation.name,
+          model,
+          relationMutation.relation.on.localFields,
+        );
         for (const column of localColumnsOf(t.context.contract, model, relationMutation.relation)) {
           nullColumns[column] = null;
         }
@@ -256,6 +264,40 @@ function rejectVariantDisconnect(
     'ORM.OPERATION_UNSUPPORTED',
     `disconnect() nested mutation for relation "${name}" is not available on a variant, because the parent holds the key of the related row`,
     { meta: { kind: 'disconnect', relation: name, reason: 'variant-parent-owned' } },
+  );
+}
+
+export function rejectNullOnRequiredKey(
+  contract: Contract<SqlStorage>,
+  kind: Mutation['kind'],
+  name: string,
+  holder: Pick<Model, 'namespaceId' | 'modelName'>,
+  keyFields: readonly string[],
+): void {
+  const fields = getModelFields(contract, holder.namespaceId, holder.modelName);
+  const required = keyFields.filter((field) => {
+    const column = Object.hasOwn(fields, field) ? fields[field] : undefined;
+    return (
+      column !== undefined &&
+      storageTableForContract(contract, column.namespaceId, column.table).columns[column.column]
+        ?.nullable === false
+    );
+  });
+  if (required.length === 0) {
+    return;
+  }
+  throw ormError(
+    'ORM.OPERATION_UNSUPPORTED',
+    `${kind}() nested mutation for relation "${name}" cannot set ${required.map((field) => `"${field}"`).join(', ')} of model "${holder.modelName}" to null, because the foreign key is required`,
+    {
+      meta: {
+        kind,
+        relation: name,
+        reason: 'required-foreign-key',
+        model: holder.modelName,
+        fields: required,
+      },
+    },
   );
 }
 
@@ -423,6 +465,13 @@ function addChildOwned(
     }
     return;
   }
+  rejectNullOnRequiredKey(
+    contract,
+    mutation.kind,
+    name,
+    { namespaceId: relation.toNamespace, modelName: relation.to },
+    relation.on.targetFields,
+  );
   const unlink = Object.fromEntries(targetColumns.map((column) => [column, null]));
   const criteria = mutation.criteria ?? [];
   const wheres =

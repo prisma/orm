@@ -67,6 +67,7 @@ const contract = defineContract({
 type Collections = {
   readonly users: Collection<typeof contract, 'User'>;
   readonly posts: Collection<typeof contract, 'Post'>;
+  readonly comments: Collection<typeof contract, 'Comment'>;
   readonly rows: (sql: string) => unknown[];
 };
 
@@ -113,6 +114,7 @@ async function withDatabase(fn: (collections: Collections) => Promise<void>): Pr
     await fn({
       users: new Collection({ runtime, context }, 'User', { namespaceId }),
       posts: new Collection({ runtime, context }, 'Post', { namespaceId }),
+      comments: new Collection({ runtime, context }, 'Comment', { namespaceId }),
       rows,
     });
   } finally {
@@ -319,6 +321,52 @@ describe('integration/nested-mutations on SQLite: update()', () => {
           { user_id: 2, tag_id: 2 },
         ]);
         expect(rows('select id, user_id from posts')).toEqual([{ id: 10, user_id: null }]);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'refuses disconnect() on a relation whose foreign key is required, before any statement runs',
+    async () => {
+      await withDatabase(async ({ users, posts, comments, rows }) => {
+        await users.create({
+          id: 1,
+          name: 'Ada',
+          posts: (children) => children.create([{ id: 10, title: 'Post' }]),
+        });
+        await comments.create({ id: 100, postId: 10, body: 'Hi' });
+        const refused = (relation: string) =>
+          expect.objectContaining({
+            code: 'ORM.OPERATION_UNSUPPORTED',
+            meta: {
+              kind: 'disconnect',
+              relation,
+              reason: 'required-foreign-key',
+              model: 'Comment',
+              fields: ['postId'],
+            },
+          });
+
+        await expect(
+          comments.where({ id: 100 }).update({
+            body: 'Edited',
+            // @ts-expect-error
+            post: (post) => post.disconnect(),
+          }),
+        ).rejects.toThrow(refused('post'));
+        await expect(
+          posts.where({ id: 10 }).update({
+            title: 'Edited',
+            // @ts-expect-error
+            comments: (children) => children.disconnect(),
+          }),
+        ).rejects.toThrow(refused('comments'));
+
+        expect(rows('select id, post_id, body from comments')).toEqual([
+          { id: 100, post_id: 10, body: 'Hi' },
+        ]);
+        expect(rows('select id, title from posts')).toEqual([{ id: 10, title: 'Post' }]);
       });
     },
     timeouts.databaseOperation,

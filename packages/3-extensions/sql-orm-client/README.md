@@ -377,6 +377,8 @@ await db.User.where({ id: 1 }).update({
 
 An operation used where the table does not list it is refused with `ORM.OPERATION_UNSUPPORTED`; with an emitted `contract.d.ts` it is also a type error.
 
+`r.disconnect()` sets the foreign key of the relation to null: on a relation the record holds the key for, the record's key; on a relation the related rows hold the key for, theirs. When that key is required, `disconnect` is refused with `ORM.OPERATION_UNSUPPORTED` (`reason: 'required-foreign-key'`, with the model and fields of the key in `model` and `fields`) before any statement runs, and is a type error. Connect the related rows to another record, or delete them, instead.
+
 On a many-to-many relation, `r.disconnect()` without criteria is refused with `ORM.ARGUMENT_INVALID` and is a type error; pass the criteria of the rows to unlink. `r.create` and `r.connect` are refused with `ORM.OPERATION_UNSUPPORTED`, and are type errors, when the junction table has a column other than its link columns that is not nullable and has no default; `r.disconnect(criteria)` stays available.
 
 On a runtime that provides transactions, a write that takes more than one statement, such as a parent write with nested operations, runs in one transaction, so either all of it is applied or none of it is.
