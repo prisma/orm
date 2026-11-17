@@ -63,7 +63,7 @@ No `prisma.config.ts` (or the explicitly passed config path) could be found when
 
 ### CONFIG.MIGRATION_MODULE_MISSING
 
-`migration new` or `migration plan` was run with a config that has no `migrations.module`, the module a written `migration.ts` imports `Migration`, `MigrationCLI` and the operation helpers from. Raised before anything is written. A target package's `defineConfig` sets it; a config assembled by hand sets `migrations.module` itself. Payload: none.
+`migration new`, `migration plan` or `db migrate` was run with a config that has no `migrations.module`, the module a written `migration.ts` imports `Migration`, `MigrationCLI` and the operation helpers from, and the module `db migrate` finds an unfilled `placeholder(...)` call by. Raised before anything is written or applied. A target package's `defineConfig` sets it; a config assembled by hand sets `migrations.module` itself. Payload: none.
 
 ### CONFIG.MISSING_EXTENSION_PACKS
 

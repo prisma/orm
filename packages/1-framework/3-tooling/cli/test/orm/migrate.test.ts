@@ -153,7 +153,7 @@ function ormConfig(cwd: string, overrides: Record<string, unknown> = {}): Record
       output: join(cwd, 'contract.json'),
       typesModule: '@acme/orm-db/generated-types',
     },
-    migrations: { dir: 'migrations' },
+    migrations: { dir: 'migrations', module: '@acme/orm-db/migration' },
     ...overrides,
   };
 }

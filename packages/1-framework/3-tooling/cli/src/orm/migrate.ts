@@ -43,7 +43,7 @@ import type {
   PerSpaceExecutionEntry,
 } from '../control-api/types';
 import { errorContractValidationFailed } from '../utils/cli-errors';
-import { closeQuietly, maskConnectionUrl } from '../utils/command-helpers';
+import { closeQuietly, maskConnectionUrl, migrationModuleOf } from '../utils/command-helpers';
 import { ALL_CONTRACT_REF_FORMS } from '../utils/contract-ref-forms';
 import { contractValidationMeta } from '../utils/contract-validation-meta';
 import { toDeclaredExtensionsFromRaw } from '../utils/extension-pack-inputs';
@@ -330,6 +330,10 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         );
       }
 
+      const migrationModule = migrationModuleOf(ctx.config);
+      if (!migrationModule.ok) {
+        return notOk(normalizeError(migrationModule.failure));
+      }
       const liveTarget = isLiveMarkerRef(args.flags.to);
       const startedAt = Date.now();
       const prepared = await prepareMigrationRun({
@@ -495,6 +499,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         const applied = await client.migrate({
           contract: applyContract,
           migrationsDir,
+          migrationModule: migrationModule.value,
           invocation: {
             ...cliInvocation(ctx, args.flags.db),
             rerunArgs: [

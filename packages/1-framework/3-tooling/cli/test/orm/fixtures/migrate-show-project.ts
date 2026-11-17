@@ -190,7 +190,7 @@ export function ormConfig(
       source: { format: 'typescript', inputs: [], load: async () => ({}) },
       output: join(cwd, 'contract.json'),
     },
-    migrations: { dir: 'migrations' },
+    migrations: { dir: 'migrations', module: '@acme/orm-db/migration' },
     ...overrides,
   };
 }

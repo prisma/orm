@@ -5,7 +5,8 @@ import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { migrationWithUnfilledPlaceholders } from '../../src/control-api/operations/unfilled-placeholders';
 
-const FILLED = `import { Migration, MigrationCLI, placeholder } from '@internal/sqlite/migration';
+const MODULE = '@internal/sqlite/migration';
+const FILLED = `import { Migration, MigrationCLI, placeholder } from '${MODULE}';
 export default class M extends Migration {
   override get operations() {
     return [this.fillStoredKey({ table: 'user', column: 'address', path: '$.country', value: 'NO' })];
@@ -47,7 +48,7 @@ describe('migrationWithUnfilledPlaceholders', () => {
         ]),
       ],
     ]);
-    expect(await migrationWithUnfilledPlaceholders(plans, ['app'], migrationsDir)).toBe(
+    expect(await migrationWithUnfilledPlaceholders(plans, ['app'], migrationsDir, MODULE)).toBe(
       join(migrationsDir, 'app', '2_country'),
     );
   });
@@ -66,7 +67,9 @@ describe('migrationWithUnfilledPlaceholders', () => {
         ]),
       ],
     ]);
-    expect(await migrationWithUnfilledPlaceholders(plans, ['app'], migrationsDir)).toBeUndefined();
+    expect(
+      await migrationWithUnfilledPlaceholders(plans, ['app'], migrationsDir, MODULE),
+    ).toBeUndefined();
   });
 
   describe('reads the code of migration.ts, not its text', () => {
@@ -76,6 +79,7 @@ describe('migrationWithUnfilledPlaceholders', () => {
         new Map([['app', plan([{ dirName: '1_country', operationCount: 0 }])]]),
         ['app'],
         migrationsDir,
+        MODULE,
       );
     }
     const named = join('app', '1_country');
@@ -109,7 +113,7 @@ export default class M extends Migration {}`,
       ],
       [
         'a namespace import',
-        `import * as m from '@prisma/orm-postgres/migration';
+        `import * as m from '${MODULE}';
 export default class M extends m.Migration {
   override get operations() { return [this.fillStoredKey({ value: m.placeholder('x') })]; }
 }`,
@@ -117,6 +121,25 @@ export default class M extends m.Migration {
       ['a template expression', FILLED.replace("'NO'", `\`${'$'}{placeholder('x')}\``)],
     ])('finds a placeholder called through %s', async (_, source) => {
       expect(await unfilled(source)).toBe(join(migrationsDir, named));
+    });
+  });
+
+  describe('finds the placeholder by the module the config names', () => {
+    const STANDIN = 'prisma-orm-standin/migration';
+    const plans = new Map([['app', plan([{ dirName: '1_country', operationCount: 0 }])]]);
+
+    it('when that module is an unscoped package outside Prisma', async () => {
+      await migration('1_country', UNFILLED.replace(`'${MODULE}'`, `'${STANDIN}'`));
+      expect(await migrationWithUnfilledPlaceholders(plans, ['app'], migrationsDir, STANDIN)).toBe(
+        join(migrationsDir, 'app', '1_country'),
+      );
+    });
+
+    it('and not by a placeholder imported from a module the config does not name', async () => {
+      await migration('1_country', UNFILLED);
+      expect(
+        await migrationWithUnfilledPlaceholders(plans, ['app'], migrationsDir, STANDIN),
+      ).toBeUndefined();
     });
   });
 });
