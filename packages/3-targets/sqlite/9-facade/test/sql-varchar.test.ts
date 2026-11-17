@@ -20,7 +20,7 @@ const stack = createControlStack({
   driver: sqliteDriver,
 });
 
-function emit(schema: string) {
+function interpret(schema: string) {
   const bound = bindPslSchema(schema, {
     sourceId: 'sql-varchar.psl',
     context: contractSourceContextFromControlStack(stack),
@@ -41,8 +41,32 @@ function emit(schema: string) {
     }),
     bound.seedDiagnostics,
   );
+  return { result, warnings };
+}
+
+function emit(schema: string) {
+  const { result, warnings } = interpret(schema);
   if (!result.ok) throw new Error(JSON.stringify(result.failure.diagnostics));
   return { contract: JSON.parse(JSON.stringify(result.value)), warnings };
+}
+
+function refusals(schema: string) {
+  const { result } = interpret(schema);
+  return result.ok ? [] : result.failure.diagnostics;
+}
+
+interface EmittedStorage {
+  readonly storage: {
+    readonly namespaces: Record<
+      string,
+      { entries: { table: Record<string, { columns: object }> } }
+    >;
+  };
+}
+
+function labelColumns(contract: EmittedStorage) {
+  const [namespace] = Object.values(contract.storage.namespaces);
+  return namespace?.entries.table['Label']?.columns;
 }
 
 const model = (type: string) => `model Label {\n  id   Int @id\n  name ${type}\n}\n`;
@@ -55,13 +79,10 @@ const deprecationWarning = {
 };
 
 describe('sql.Varchar on SQLite', () => {
-  it('is a varchar column of the written length', () => {
+  it('is a varchar column of the written length, given as a number', () => {
     const { contract, warnings } = emit(model('sql.Varchar(50)'));
     expect(warnings).toEqual([]);
-    const [namespace] = Object.values<{ entries: { table: Record<string, { columns: object }> } }>(
-      contract.storage.namespaces,
-    );
-    expect(namespace?.entries.table['Label']?.columns).toMatchObject({
+    expect(labelColumns(contract)).toMatchObject({
       name: { codecId: 'sql/varchar@1', typeParams: { length: 50 } },
     });
   });
@@ -97,5 +118,67 @@ describe('sql.Varchar on SQLite', () => {
       },
     }));
     expect(throughString).toEqual(throughVarchar);
+  });
+
+  it('gives the same parameters from the TypeScript builder', () => {
+    const contract = defineContract({}, ({ field, model, type, gen }) => {
+      const name = type.sql.Varchar(50);
+      expectTypeOf(name.typeParams).toEqualTypeOf<{ readonly length: 50 }>();
+      return {
+        models: {
+          Label: model('Label', {
+            fields: {
+              id: field.column(type.sql.Char(36)).id().onCreate(gen.uuid()),
+              name: field.column(name),
+            },
+          }),
+        },
+      };
+    });
+    const [namespace] = Object.values(contract.storage.namespaces);
+    expect(namespace?.entries.table?.['Label']?.columns['name']).toMatchObject({
+      codecId: 'sql/varchar@1',
+      typeParams: { length: 50 },
+    });
+  });
+});
+
+describe('the length of sql.Varchar on SQLite, a value of sqlite/real', () => {
+  it('refuses a length with a fraction through the length’s schema, at the argument', () => {
+    const schema = model('sql.Varchar(2.5)');
+    expect(refusals(schema)).toEqual([
+      expect.objectContaining({
+        code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
+        message: expect.stringContaining('length must be an integer'),
+        span: expect.objectContaining({
+          start: expect.objectContaining({ offset: schema.indexOf('2.5') }),
+        }),
+      }),
+    ]);
+  });
+
+  it('accepts the largest length SQLite allows, which a double holds exactly', () => {
+    expect(labelColumns(emit(model('sql.Varchar(2147483647)')).contract)).toMatchObject({
+      name: { typeParams: { length: 2147483647 } },
+    });
+  });
+
+  it('refuses a length above SQLite’s maximum through the length’s schema, at the argument', () => {
+    const schema = model('sql.Varchar(2147483648)');
+    expect(refusals(schema)).toEqual([
+      expect.objectContaining({
+        code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
+        message: expect.stringContaining('length must be at most 2147483647'),
+        span: expect.objectContaining({
+          start: expect.objectContaining({ offset: schema.indexOf('2147483648') }),
+        }),
+      }),
+    ]);
+  });
+
+  it('accepts a whole number written with a zero fraction, which reads as sqlite/real', () => {
+    expect(labelColumns(emit(model('sql.Varchar(2.0)')).contract)).toMatchObject({
+      name: { typeParams: { length: 2 } },
+    });
   });
 });

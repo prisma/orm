@@ -12,7 +12,7 @@ describe.each(GUIDES)('the renamed PostgreSQL JSON column helper detection in %s
       pattern.test(content),
     );
 
-  it('matches only files that import jsonColumn from a PostgreSQL package', () => {
+  it('matches only files that import, re-export or read jsonColumn from a PostgreSQL package', () => {
     expect({
       published: matches("import { jsonColumn } from '@prisma/orm-postgres/adapter/column-types';"),
       target: matches(
@@ -23,6 +23,22 @@ describe.each(GUIDES)('the renamed PostgreSQL JSON column helper detection in %s
       ),
       typeOnly: matches(
         "import type { jsonColumn } from '@internal/adapter-postgres/column-types';",
+      ),
+      aliased: matches(
+        "import { jsonColumn as jc } from '@prisma/orm-postgres/adapter/column-types';",
+      ),
+      reExport: matches("export { jsonColumn } from '@prisma/orm-postgres/adapter/column-types';"),
+      namespace: matches(
+        "import * as columns from '@prisma/orm-postgres/adapter/column-types';\n\nfield.column(columns.jsonColumn);",
+      ),
+      namespaceOtherHelper: matches(
+        "import * as columns from '@prisma/orm-postgres/adapter/column-types';\n\nfield.column(columns.jsonbColumn);",
+      ),
+      sqliteReExport: matches(
+        "export { jsonColumn } from '@prisma/orm-sqlite/adapter/column-types';",
+      ),
+      sqliteNamespace: matches(
+        "import * as columns from '@prisma/orm-sqlite/adapter/column-types';\n\nfield.column(columns.jsonColumn);",
       ),
       renamed: matches(
         "import { plainJsonColumn } from '@prisma/orm-postgres/adapter/column-types';",
@@ -43,6 +59,12 @@ describe.each(GUIDES)('the renamed PostgreSQL JSON column helper detection in %s
       target: true,
       internal: true,
       typeOnly: true,
+      aliased: true,
+      reExport: true,
+      namespace: true,
+      namespaceOtherHelper: false,
+      sqliteReExport: false,
+      sqliteNamespace: false,
       renamed: false,
       jsonb: false,
       sqlite: false,
@@ -79,26 +101,38 @@ describe.each(GUIDES)('the renamed sql.String detections in %s', (guidePath) => 
   it('matches sql.String calls in a schema only', () => {
     expect({
       field: psl('model A {\n  name sql.String(50)\n}'),
+      spaced: psl('model A {\n  name sql . String (50)\n}'),
       alias: psl('types {\n  Name = sql.String(10)\n}'),
       varchar: psl('model A {\n  name sql.Varchar(50)\n}'),
       convenience: psl('model A {\n  name String\n}'),
       char: psl('model A {\n  code sql.Char(3)\n}'),
-    }).toEqual({ field: true, alias: true, varchar: false, convenience: false, char: false });
+    }).toEqual({
+      field: true,
+      spaced: true,
+      alias: true,
+      varchar: false,
+      convenience: false,
+      char: false,
+    });
   });
 
   it('matches sql.String calls in TypeScript only', () => {
     expect({
       builder: ts('field.column(type.sql.String(64))'),
       destructured: ts('const { sql } = type;\nfield.column(sql.String(64));'),
+      multiLine: ts('field.column(\n  type.sql\n    .String(64),\n)'),
       varchar: ts('field.column(type.sql.Varchar(64))'),
       convenience: ts('field.column(type.String())'),
       mysql: ts('mysql.String(64)'),
+      mysqlMultiLine: ts('mysql\n  .String(64)'),
     }).toEqual({
       builder: true,
       destructured: true,
+      multiLine: true,
       varchar: false,
       convenience: false,
       mysql: false,
+      mysqlMultiLine: false,
     });
   });
 });

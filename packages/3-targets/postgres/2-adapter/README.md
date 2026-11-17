@@ -144,7 +144,7 @@ flowchart TD
 
 - Exports raw JSON helpers:
   - `plainJsonColumn`, `jsonbColumn` — untyped raw JSON / JSONB column descriptors
-  - For schema-typed JSON columns, use the per-library extension package (`@internal/extension-arktype-json` for arktype). The schema-accepting `json(schema)` / `jsonb(schema)` overloads previously shipped here retired in Phase C of the codec-registry-unification project.
+  - For schema-typed JSON columns, use the per-library extension package (`@internal/extension-arktype-json` for arktype).
 
 ## Related Subsystems
 
