@@ -9,6 +9,7 @@ import { contractFromJson } from '../../src/static/contract-from-json';
 import type { Contract } from '../fixtures/generated/contract.d';
 import contractJson from '../fixtures/generated/contract.json' with { type: 'json' };
 import { exampleDatabase, withSeededDatabase } from './live-database';
+import { mysqlLiveServer } from './live-servers';
 
 const contract = contractFromJson<Contract>(contractJson);
 
@@ -47,7 +48,7 @@ function observeStarts(failure?: Error) {
 
 describe('MySQL facade transaction ownership', { timeout: timeouts.databaseOperation }, () => {
   it('uses implicit activity transactions for ORM read-back, participates in explicit transactions, and leaves manual starts unconfigured', async (test) => {
-    await withSeededDatabase(test, exampleDatabase, async (url) => {
+    await withSeededDatabase(test, mysqlLiveServer, exampleDatabase, async (url) => {
       const observed = observeStarts();
       try {
         await using db = mysql({
@@ -130,7 +131,7 @@ describe('MySQL facade transaction ownership', { timeout: timeouts.databaseOpera
   });
 
   it('discards timed callback ORM writes and uses a fresh session', async (test) => {
-    await withSeededDatabase(test, exampleDatabase, async (url) => {
+    await withSeededDatabase(test, mysqlLiveServer, exampleDatabase, async (url) => {
       const observed = observeStarts();
       try {
         await using db = mysql({
@@ -175,7 +176,7 @@ describe('MySQL facade transaction ownership', { timeout: timeouts.databaseOpera
   });
 
   it('destroys a callback-owned connection after failed setup with a pending next-transaction setting', async (test) => {
-    await withSeededDatabase(test, exampleDatabase, async (url) => {
+    await withSeededDatabase(test, mysqlLiveServer, exampleDatabase, async (url) => {
       const failure = new Error('BEGIN unavailable after SET');
       const observed = observeStarts(failure);
       try {

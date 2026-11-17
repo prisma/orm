@@ -1,7 +1,7 @@
-import type { MysqlControlDriver } from '@internal/driver-mysql/control';
-import mysqlDriver from '@internal/driver-mysql/control';
+import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
 import { withMysqlDatabase } from '@repo/test-utils/mysql-database';
 import { exampleTablesDdl } from '../example-contract';
+import type { LiveServer } from './live-servers';
 
 /** What a vitest test context offers to skip the test. */
 interface SkippableTest {
@@ -15,29 +15,34 @@ export const exampleRows = [
 ] as const;
 
 export async function runStatements(
-  driver: MysqlControlDriver,
+  driver: SqlControlDriverInstance,
   statements: readonly string[],
 ): Promise<void> {
   for (const sql of statements) await driver.query(sql);
 }
 
 /**
- * Runs `fn` against a database of its own holding `statements`, created with the control driver as a MySQL user would by hand. Skips when `MYSQL_URL` is not set.
+ * Runs `fn` against a database of its own on `server`, holding `statements`, created with the server's control driver as a user would by hand. Skips when the server's URL variable is not set.
  */
-export async function withSeededDatabase(
+export async function withSeededDatabase<TargetId extends string>(
   test: SkippableTest,
+  server: LiveServer<TargetId>,
   statements: readonly string[],
-  fn: (url: string, driver: MysqlControlDriver) => Promise<void>,
+  fn: (url: string, driver: SqlControlDriverInstance<TargetId>) => Promise<void>,
 ): Promise<void> {
-  await withMysqlDatabase(test, async ({ url }) => {
-    const driver = await mysqlDriver.create(url);
-    try {
-      await runStatements(driver, statements);
-      await fn(url, driver);
-    } finally {
-      await driver.close();
-    }
-  });
+  await withMysqlDatabase(
+    test,
+    async ({ url }) => {
+      const driver = await server.controlDriver.create(url);
+      try {
+        await runStatements(driver, statements);
+        await fn(url, driver);
+      } finally {
+        await driver.close();
+      }
+    },
+    server.urlVariable,
+  );
 }
 
 export const exampleDatabase = [...exampleTablesDdl, ...exampleRows] as const;

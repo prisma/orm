@@ -1,0 +1,6 @@
+// use prisma-8
+
+model Tick {
+  at    DateTime @id
+  label String
+}

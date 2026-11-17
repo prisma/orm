@@ -1,0 +1,14 @@
+// use prisma-8
+
+model Author {
+  id    Int    @id
+  notes Note[]
+}
+
+model Note {
+  id       Int     @id
+  body     String
+  summary  String?
+  author   Author  @relation(fields: [authorId], references: [id])
+  authorId Int
+}

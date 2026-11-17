@@ -1,0 +1,14 @@
+// use prisma-8
+
+model Account {
+  id     Int     @id
+  name   String
+  events Event[]
+}
+
+model Event {
+  id        BigInt   @id
+  at        DateTime
+  account   Account  @relation(fields: [accountId], references: [id])
+  accountId Int
+}
