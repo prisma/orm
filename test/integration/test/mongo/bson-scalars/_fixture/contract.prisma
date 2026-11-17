@@ -2,7 +2,7 @@
 
 model Post {
   id        ObjectId   @id @map("_id")
-  views     Int64
+  views     BigInt
   price     Decimal128
   thumbnail Binary
   meta      Json
@@ -22,9 +22,9 @@ model Reading {
 
 model Tally {
   id    ObjectId @id @map("_id")
-  hits  Int32?
+  hits  Int?
   ratio Double?
-  total Int64?
+  total BigInt?
 
   @@map("tallies")
 }
@@ -36,15 +36,15 @@ enum Role {
 }
 
 type Address {
-  zip  Int64
+  zip  Int64BigInt
   city String?
 }
 
 model Author {
   id      ObjectId   @id @map("_id")
-  karma   Int64
-  balance Decimal128
-  avatar  Binary?
+  karma   BigInt
+  balance Decimal
+  avatar  Bytes?
   role    Role
   address Address?
   books   Book[]
@@ -63,19 +63,19 @@ model Book {
 
 type Point {
   x    Int32
-  tags Int64[]
+  tags BigInt[]
 }
 
 model Series {
   id       ObjectId     @id @map("_id")
   ints     Int32[]
   doubles  Double[]
-  longs    Int64[]
+  longs    Int64BigInt[]
   ids      ObjectId[]
   decimals Decimal128[]
   bytes    Binary[]
   words    String[]
-  flags    Bool[]
+  flags    Boolean[]
   dates    DateTime[]
   points   Point[]
 

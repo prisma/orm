@@ -31,7 +31,7 @@ The mechanism is the type choice of ADR 279. It lives in the framework domain an
 | Part | State |
 | --- | --- |
 | PostgreSQL `Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean`, `Bytes` | Merged, prisma/orm#30942. Recorded in ADR 316. |
-| PostgreSQL `Json` | To build. This spec. |
+| PostgreSQL `Json`, and `sql.Varchar` | Merged, prisma/orm#31065. Recorded in ADR 316. |
 | SQLite, MySQL, MongoDB | To build. This spec. |
 
 ## Rules that hold on every target
