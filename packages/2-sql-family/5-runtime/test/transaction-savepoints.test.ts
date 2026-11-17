@@ -38,7 +38,7 @@ const transactionIds = (events: readonly HookEvent[]) =>
 const rejectsWith = (work: Promise<unknown>, code: string) =>
   expect(work).rejects.toMatchObject({ code: `RUNTIME.${code}` });
 
-describe('RuntimeTransaction.savepoint()', () => {
+describe('RuntimeTransaction.transaction()', () => {
   it.each([
     {
       title: 'releases',
@@ -75,7 +75,7 @@ describe('RuntimeTransaction.savepoint()', () => {
     async ({ failures, settle, sent, outcome }) => {
       const savepointWork = `statement:${outcome}, transaction:${outcome}`;
       const { transaction, events } = await begin({ failures });
-      const savepoint = await transaction.savepoint();
+      const savepoint = await transaction.transaction();
       await savepoint.execute(update);
 
       await settle(savepoint, transaction, events);
@@ -97,21 +97,21 @@ describe('RuntimeTransaction.savepoint()', () => {
   it('rejects a second savepoint while one is open, naming the top of the stack and sending nothing', async () => {
     const { transaction, events } = await begin();
     const [opened, concurrent] = await Promise.allSettled([
-      transaction.savepoint(),
-      transaction.savepoint(),
+      transaction.transaction(),
+      transaction.transaction(),
     ]);
     const before = events.length;
 
     expect(concurrent).toMatchObject({ reason: { code: 'RUNTIME.TRANSACTION_ALREADY_OPEN' } });
-    await expect(transaction.savepoint()).rejects.toMatchObject({
+    await expect(transaction.transaction()).rejects.toMatchObject({
       code: 'RUNTIME.TRANSACTION_ALREADY_OPEN',
       message: expect.stringContaining('sp_1'),
     });
     expect(events.slice(before)).toEqual([]);
 
     if (opened?.status !== 'fulfilled') throw new Error('the first savepoint did not open');
-    const nested = await opened.value.savepoint();
-    await expect(transaction.savepoint()).rejects.toMatchObject({
+    const nested = await opened.value.transaction();
+    await expect(transaction.transaction()).rejects.toMatchObject({
       code: 'RUNTIME.TRANSACTION_ALREADY_OPEN',
       message: expect.stringContaining('sp_2'),
       details: { savepointId: transactionIds(events)[2] },
@@ -119,7 +119,7 @@ describe('RuntimeTransaction.savepoint()', () => {
 
     await nested.commit();
     await opened.value.commit();
-    await expect(transaction.savepoint()).resolves.toBeDefined();
+    await expect(transaction.transaction()).resolves.toBeDefined();
   });
 
   it.each([
@@ -134,8 +134,8 @@ describe('RuntimeTransaction.savepoint()', () => {
     'suspends $title below the top of the stack until the savepoints above settle, naming the top',
     async ({ run }) => {
       const { transaction, events } = await begin();
-      const outerChild = await transaction.savepoint();
-      const innerChild = await outerChild.savepoint();
+      const outerChild = await transaction.transaction();
+      const innerChild = await outerChild.transaction();
       const before = events.length;
 
       for (const below of [outerChild, transaction]) {
@@ -154,7 +154,7 @@ describe('RuntimeTransaction.savepoint()', () => {
 
   it('suspends statements on the connection while a savepoint is open on its transaction', async () => {
     const { connection, transaction, events } = await begin();
-    const savepoint = await transaction.savepoint();
+    const savepoint = await transaction.transaction();
     const before = events.length;
 
     await rejectsWith(connection.execute(update), 'TRANSACTION_SUSPENDED');
@@ -174,7 +174,7 @@ describe('RuntimeTransaction.savepoint()', () => {
     const { runtime, events } = createSetup();
     const connection = await runtime.connection();
     const transaction = await connection.transaction({ timeout: 1 });
-    const savepoint = await transaction.savepoint();
+    const savepoint = await transaction.transaction();
     await savepoint.execute(update);
     const [outerId, savepointId] = transactionIds(events);
     await new Promise((resolve) => setTimeout(resolve, 5));
@@ -188,9 +188,9 @@ describe('RuntimeTransaction.savepoint()', () => {
     for (const refused of [
       savepoint.execute(update),
       savepoint.query(rawPlan('select 1')).toArray(),
-      savepoint.savepoint(),
+      savepoint.transaction(),
       savepoint.commit(),
-      transaction.savepoint(),
+      transaction.transaction(),
     ]) {
       await rejectsWith(refused, 'TRANSACTION_CLOSED');
     }
@@ -207,14 +207,14 @@ describe('RuntimeTransaction.savepoint()', () => {
     ]);
     expect(finalized(events).endsWith('statement:rolled-back, transaction:rolled-back')).toBe(true);
 
-    await (await connection.transaction()).savepoint();
+    await (await connection.transaction()).transaction();
     expect(driverCalls(events)).toBe('begin, SAVEPOINT sp_1, rollback, begin, SAVEPOINT sp_1');
   });
 
   it('refuses work on an open savepoint after the outer transaction timed out, and reports the outer timeout ahead of the savepoint', async () => {
     const connection = await createSetup().runtime.connection();
     const transaction = await connection.transaction({ timeout: 1 });
-    const savepoint = await transaction.savepoint();
+    const savepoint = await transaction.transaction();
 
     await new Promise((resolve) => setTimeout(resolve, 5));
 
@@ -230,14 +230,14 @@ describe('RuntimeTransaction.savepoint()', () => {
     });
     const transaction = await (await startActivityOn(setup.runtime, testCall)).transaction?.();
     if (transaction === undefined) throw new Error('the runtime handle has no transaction');
-    const outerChild = await transaction.savepoint();
-    const innerChild = await outerChild.savepoint();
+    const outerChild = await transaction.transaction();
+    const innerChild = await outerChild.transaction();
 
     await expect(innerChild.rollback()).rejects.toThrow('rollback to failed');
     const before = setup.events.length;
     for (const closed of [outerChild, transaction]) {
       await rejectsWith(closed.execute(update), 'TRANSACTION_CLOSED');
-      await rejectsWith(closed.savepoint(), 'TRANSACTION_CLOSED');
+      await rejectsWith(closed.transaction(), 'TRANSACTION_CLOSED');
       await rejectsWith(closed.commit(), 'TRANSACTION_CLOSED');
     }
     expect(setup.events.slice(before)).toEqual([]);
@@ -273,16 +273,19 @@ describe('RuntimeTransaction.savepoint()', () => {
       options: { failures: { savepoint: new Error('refused') } },
       sent: 'begin, SAVEPOINT sp_1, commit',
     },
-  ])('rejects savepoint() and leaves the parent usable when $title', async ({ options, sent }) => {
-    const { transaction, events } = await begin(options);
+  ])(
+    'rejects transaction() and leaves the parent usable when $title',
+    async ({ options, sent }) => {
+      const { transaction, events } = await begin(options);
 
-    await expect(transaction.savepoint()).rejects.toThrow('refused');
-    await transaction.execute(update);
-    await transaction.commit();
+      await expect(transaction.transaction()).rejects.toThrow('refused');
+      await transaction.execute(update);
+      await transaction.commit();
 
-    expect(driverCalls(events)).toBe(sent);
-    expect(finalized(events)).toBe(
-      'transaction:rolled-back, statement:committed, transaction:committed',
-    );
-  });
+      expect(driverCalls(events)).toBe(sent);
+      expect(finalized(events)).toBe(
+        'transaction:rolled-back, statement:committed, transaction:committed',
+      );
+    },
+  );
 });

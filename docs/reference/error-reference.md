@@ -1467,15 +1467,15 @@ The SQL runtime callback helper received a timeout outside integer milliseconds 
 
 ### RUNTIME.TRANSACTION_ALREADY_OPEN
 
-`transaction()` was called on an activity handle opened on a connection while a transaction it began on that connection is still open. A connection runs one transaction at a time; nesting goes through `savepoint()` on the transaction. Commit or roll back the open transaction first, or send the work on it. Payload: `kind`, `id`, `transactionId`.
+`transaction()` was called on an activity handle opened on a connection while a transaction it began on that connection is still open. A connection runs one transaction at a time; nesting goes through `transaction()` on the transaction, which opens a savepoint. Commit or roll back the open transaction first, or send the work on it. Payload: `kind`, `id`, `transactionId`.
 
-`savepoint()` was called on a transaction or savepoint that already has an open savepoint above it. Only one savepoint is open on a transaction or savepoint at a time, because a sibling's `ROLLBACK TO SAVEPOINT` would undo the other sibling's statements. The message names the top of the stack, the innermost open savepoint (`sp_<n>`). Nothing is sent to the database. Commit or roll back the open savepoints first. Payload: `savepointId`, the activity ID of the innermost open savepoint.
+`transaction()` was called on a transaction or savepoint that already has an open savepoint above it. Only one savepoint is open on a transaction or savepoint at a time, because a sibling's `ROLLBACK TO SAVEPOINT` would undo the other sibling's statements. The message names the top of the stack, the innermost open savepoint (`sp_<n>`). Nothing is sent to the database. Commit or roll back the open savepoints first. Payload: `savepointId`, the activity ID of the innermost open savepoint.
 
 ### RUNTIME.TRANSACTION_CLOSED
 
 Transaction work or a lazy result was used after callback completion or deadline invalidation. Consume results inside the callback and do not retain its transaction for later work.
 
-A savepoint refuses work with this code once it has been committed or rolled back, or once the transaction or a savepoint below it has settled, timed out or been invalidated. A failed `ROLLBACK TO SAVEPOINT` closes the transaction and every savepoint: their statements, `savepoint()` and `commit()` are refused with this code, and the outer `rollback()` rejects with it without sending `ROLLBACK`, so the connection is destroyed.
+A savepoint refuses work with this code once it has been committed or rolled back, or once the transaction or a savepoint below it has settled, timed out or been invalidated. A failed `ROLLBACK TO SAVEPOINT` closes the transaction and every savepoint: their statements, `transaction()` and `commit()` are refused with this code, and the outer `rollback()` rejects with it without sending `ROLLBACK`, so the connection is destroyed.
 
 ### RUNTIME.TRANSACTION_COMMIT_FAILED
 

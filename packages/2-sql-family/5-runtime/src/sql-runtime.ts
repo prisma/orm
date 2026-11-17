@@ -198,7 +198,7 @@ export interface RuntimeTransaction extends RuntimeQueryable {
   readonly signal: AbortSignal;
   commit(): Promise<void>;
   rollback(): Promise<void>;
-  savepoint(): Promise<RuntimeTransaction>;
+  transaction(): Promise<RuntimeTransaction>;
 }
 
 export interface RuntimeQueryable extends RuntimeScope {}

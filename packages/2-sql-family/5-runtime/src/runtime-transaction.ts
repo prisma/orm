@@ -158,7 +158,7 @@ abstract class TransactionBase
     );
   }
 
-  async savepoint(): Promise<RuntimeTransaction> {
+  async transaction(): Promise<RuntimeTransaction> {
     if (this.isClosed) throw transactionClosedError();
     if (this.stack.top !== this.entry) throw savepointAlreadyOpenError(this.stack);
     const name = this.stack.nextSavepointName();
