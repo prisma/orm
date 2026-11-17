@@ -1,5 +1,6 @@
 import { RawQueryAst, type SqlDriver } from '@internal/sql-relational-core/ast';
-import { planFromAst } from '@internal/sql-relational-core/plan';
+import type { AffectedCount } from '@internal/sql-relational-core/expression';
+import { planFromAst, type SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { startActivityOn } from '../src/activity-handle';
 import type { SqlMiddleware } from '../src/middleware/sql-middleware';
@@ -313,9 +314,11 @@ describe('a statement on a raw transaction, still in middleware when the transac
   it.each(ends)('refuses a prepared statement at %s()', async (end) => {
     const held = holdInMiddleware('update prepared');
     const setup = createSetup({ middleware: [held.middleware] });
-    const prepared = await setup.runtime.prepare({}, () =>
-      planFromAst(RawQueryAst.affectedCount(['update prepared']), testContract),
+    const update: SqlQueryPlan<AffectedCount> = planFromAst(
+      RawQueryAst.affectedCount(['update prepared']),
+      testContract,
     );
+    const prepared = await setup.runtime.prepare({}, () => update);
     const connection = await setup.runtime.connection();
     const transaction = await connection.transaction();
     const pending = settled(prepared.execute(transaction, {}));
