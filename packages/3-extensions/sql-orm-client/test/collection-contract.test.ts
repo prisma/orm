@@ -9,14 +9,16 @@ import {
   resolveModelRelations,
   resolveModelTableName,
   resolvePolymorphismInfo,
-  resolvePrimaryKeyColumn,
+  resolvePrimaryKeyColumns,
   resolveRowIdentityColumns,
   resolveThrough,
   resolveUpsertConflictColumns,
 } from '../src/collection-contract';
 import {
+  buildCompositeForeignKeyContract,
   buildExecutionDefaultJunctionContract,
   buildMixedPolyContract,
+  columnPassedForField,
   getTestContract,
   withPatchedDomainModels,
 } from './helpers';
@@ -101,9 +103,8 @@ describe('collection-contract capability detection', () => {
       relatedModelName: 'Post',
       relatedNamespaceId: 'public',
       relatedTableName: 'posts',
-      localTableName: 'users',
-      targetColumn: 'user_id',
-      localColumn: 'id',
+      targetColumns: ['user_id'],
+      localColumns: ['id'],
       cardinality: '1:N',
     });
   });
@@ -174,15 +175,15 @@ describe('collection-contract capability detection', () => {
     expect(resolveUpsertConflictColumns(contract, 'public', 'Post', {})).toEqual(['id']);
   });
 
-  it('resolveUpsertConflictColumns() falls back for unmapped fields and unknown models', () => {
+  it('resolveUpsertConflictColumns() refuses a name that is not a field', () => {
     const contract = getTestContract();
 
-    expect(resolveUpsertConflictColumns(contract, 'public', 'Post', { unknownField: 'x' })).toEqual(
-      ['unknownField'],
-    );
-    expect(resolveUpsertConflictColumns(contract, 'public', 'UnknownModel', { custom: 1 })).toEqual(
-      ['custom'],
-    );
+    expect(resolveUpsertConflictColumns(contract, 'public', 'Post', { userId: 1 })).toEqual([
+      'user_id',
+    ]);
+    expect(() =>
+      resolveUpsertConflictColumns(contract, 'public', 'Post', { user_id: 'x' }),
+    ).toThrow(columnPassedForField('Post', 'user_id', 'userId'));
   });
 
   it('resolveModelTableName() resolves from storage.table and throws when missing', () => {
@@ -192,8 +193,16 @@ describe('collection-contract capability detection', () => {
     expect(() => resolveModelTableName(contract, 'public', 'UnknownModel')).toThrow(
       'Model "UnknownModel" has invalid or missing storage.table in namespace "public"',
     );
-    expect(resolvePrimaryKeyColumn(contract, 'public', 'users')).toBe('id');
-    expect(resolvePrimaryKeyColumn(contract, 'public', 'unknown_table')).toBe('id');
+  });
+
+  it('resolvePrimaryKeyColumns() returns every primary-key column and throws without one', () => {
+    const composite = buildCompositeForeignKeyContract();
+
+    expect(resolvePrimaryKeyColumns(getTestContract(), 'public', 'users')).toEqual(['id']);
+    expect(resolvePrimaryKeyColumns(composite, 'public', 'customers')).toEqual(['tenant_id', 'id']);
+    expect(() => resolvePrimaryKeyColumns(composite, 'public', 'unknown_table')).toThrow(
+      'Table "unknown_table" in namespace "public" has no primary key',
+    );
   });
 
   it('resolveModelTableName() reads from storage.table and throws for invalid values', () => {
@@ -351,7 +360,7 @@ describe('resolvePolymorphismInfo()', () => {
     const contract = buildMixedPolyContract();
     const info = resolvePolymorphismInfo(contract, 'public', 'Task');
     expect(info).toBeDefined();
-    const bugVariant = info!.variants.get('Bug');
+    const bugVariant = info!.variants.get('bug');
     expect(bugVariant).toBeDefined();
     expect(bugVariant!.strategy).toBe('sti');
     expect(bugVariant!.table).toBe('tasks');
@@ -362,7 +371,7 @@ describe('resolvePolymorphismInfo()', () => {
     const contract = buildMixedPolyContract();
     const info = resolvePolymorphismInfo(contract, 'public', 'Task');
     expect(info).toBeDefined();
-    const featureVariant = info!.variants.get('Feature');
+    const featureVariant = info!.variants.get('feature');
     expect(featureVariant).toBeDefined();
     expect(featureVariant!.strategy).toBe('mti');
     expect(featureVariant!.table).toBe('features');
@@ -377,11 +386,11 @@ describe('resolvePolymorphismInfo()', () => {
     expect(info.baseTable).toBe('tasks');
   });
 
-  it('populates variantsByValue keyed by discriminator value', () => {
+  it('keys variants by discriminator value', () => {
     const contract = buildMixedPolyContract();
     const info = resolvePolymorphismInfo(contract, 'public', 'Task')!;
-    expect(info.variantsByValue.get('bug')?.modelName).toBe('Bug');
-    expect(info.variantsByValue.get('feature')?.modelName).toBe('Feature');
+    expect(info.variants.get('bug')?.modelName).toBe('Bug');
+    expect(info.variants.get('feature')?.modelName).toBe('Feature');
   });
 
   it('populates mtiVariants with only MTI variants', () => {

@@ -1,6 +1,6 @@
 # @prisma/orm-framework
 
-The target-agnostic core of Prisma Next: the contract model, the component/registry system, and the authoring surface that emitted contracts and application code reach at runtime.
+The target-agnostic core of Prisma 8: the contract model, the component/registry system, and the authoring surface that emitted contracts and application code reach at runtime.
 
 Most applications never install this package directly — it arrives as an exact-pinned dependency of a database facade (`@prisma/orm-postgres`, `@prisma/orm-sqlite`, `@prisma/orm-mongo`), which is the package app developers should install. Extension authors and decomposed installs (applications replacing part of the default wiring) depend on it directly.
 

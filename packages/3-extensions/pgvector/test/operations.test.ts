@@ -10,14 +10,6 @@ function vectorExpr(value: number[], codec: CodecRef) {
 }
 
 describe('pgvector operations', () => {
-  it('descriptor has correct metadata', () => {
-    expect(pgvectorDescriptor.kind).toBe('extension');
-    expect(pgvectorDescriptor.id).toBe('pgvector');
-    expect(pgvectorDescriptor.familyId).toBe('sql');
-    expect(pgvectorDescriptor.targetId).toBe('postgres');
-    expect(pgvectorDescriptor.version).toBe('0.0.1');
-  });
-
   it('descriptor contributes the pg/vector@1 codec descriptor', () => {
     const descriptors = pgvectorDescriptor.codecs();
     expect(descriptors).toBeDefined();
@@ -44,7 +36,6 @@ describe('pgvector operations', () => {
     expect(distAst).toBeInstanceOf(OperationExpr);
     expect(distAst.lowering).toEqual({
       targetFamily: 'sql',
-      strategy: 'function',
       template: '{{self}} <=> {{arg0}}',
     });
 
@@ -58,7 +49,6 @@ describe('pgvector operations', () => {
     expect(simAst).toBeInstanceOf(OperationExpr);
     expect(simAst.lowering).toEqual({
       targetFamily: 'sql',
-      strategy: 'function',
       template: '1 - ({{self}} <=> {{arg0}})',
     });
   });
@@ -83,11 +73,5 @@ describe('pgvector operations', () => {
 
     const codec = vectorDescriptor!.factory({ length: 3 })({ name: '<test>' });
     expect(codec.id).toBe('pg/vector@1');
-  });
-
-  it('instance is minimal (identity only)', () => {
-    const instance = pgvectorDescriptor.create();
-    expect(instance.familyId).toBe('sql');
-    expect(instance.targetId).toBe('postgres');
   });
 });

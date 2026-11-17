@@ -16,5 +16,5 @@ export async function bm25ChainDemo() {
     .orderBy((f, fns) => fns.paradeDbScore(f.id), { direction: 'desc' })
     .limit(5)
     .build();
-  return db.runtime().query(plan);
+  return db.query(plan);
 }

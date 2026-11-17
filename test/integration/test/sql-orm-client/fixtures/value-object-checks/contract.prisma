@@ -1,0 +1,62 @@
+// use prisma-8
+
+// Value objects with nested, list, enum and self-referring members, and a
+// polymorphic base whose discriminator has no enum. On Postgres each value
+// object column and the discriminator column derive a check.
+
+enum PlaceKind {
+  @@type("pg/text@1")
+  home
+  work
+}
+
+type Geo {
+  lat Float
+  lng Float
+}
+
+type Place {
+  label   String
+  kind    PlaceKind
+  note    String?
+  tags    String[]
+  ratings Int?[]
+  geo     Geo
+  stops   Geo[]
+}
+
+type NavItem {
+  title    String
+  children NavItem[]
+}
+
+model Trip {
+  id     Int       @id
+  origin Place
+  detour Place?
+  legs   Place[]
+  menu   NavItem?
+
+  @@map("trip")
+}
+
+model Shape {
+  id   Int    @id
+  kind String
+  name String
+
+  @@discriminator(kind)
+  @@map("shape")
+}
+
+model Circle {
+  radius Int?
+
+  @@base(Shape, "circle")
+}
+
+model Square {
+  side Int?
+
+  @@base(Shape, "square")
+}

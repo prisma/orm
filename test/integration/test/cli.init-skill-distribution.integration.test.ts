@@ -93,7 +93,7 @@ describe('init skill distribution (offline integration, real CLI)', () => {
     // the one that has to be installed. Naming @prisma/cli here (bin
     // `prisma-cli`) would leave the script calling a binary the project does
     // not have.
-    expect(commands).toContain('add -D prisma@next @types/node');
+    expect(commands).toContain('add -D prisma@latest @types/node');
     expect(manifestOf(testDir).scripts).toMatchObject({
       'contract:emit': 'prisma contract emit',
     });

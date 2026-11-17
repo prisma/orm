@@ -1,0 +1,13 @@
+{
+  "ts": {
+    "code": "CONTRACT.INDEX_INVALID",
+    "message": "Model \"Doc\" index {\"fields\":{\"a\":1},\"options\":{\"collation\":{\"strength\":2}}} sets a collation without a locale; a collation needs a locale."
+  },
+  "psl": [
+    {
+      "code": "PSL_INVALID_INDEX",
+      "message": "collationLocale is required when using collation options",
+      "spanText": "@@index([a], collationStrength: 2)"
+    }
+  ]
+}

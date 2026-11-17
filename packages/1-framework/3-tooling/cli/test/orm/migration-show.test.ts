@@ -4,11 +4,11 @@ import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
 import { blindCast } from '@internal/utils/casts';
-import { createTestCli } from '@prisma/cli-engine/testing';
 import { join } from 'pathe';
 import stripAnsi from 'strip-ansi';
 import { afterEach, describe, expect, it } from 'vitest';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
 import { createTestProjectDir } from '../utils/test-project-dir';
 
 const HASH_A = `4cb4256${'0'.repeat(57)}`;
@@ -91,10 +91,10 @@ async function seedProject(dir: string): Promise<void> {
 }
 
 function harness(config: Record<string, unknown>) {
-  return createTestCli({
+  return createOrmTestCli({
     commands: BIN_COMMANDS,
     groups: BIN_GROUPS,
-    config: { orm: config },
+    orm: config,
   });
 }
 
@@ -166,8 +166,29 @@ describe('migration show', () => {
         roots: [{ label: '1 operation(s)', children: [{ label: 'Add column' }] }],
       },
     ]);
-    expect(run.presented?.presentation.stdout).toEqual([]);
-    expect(run.stdout).toBe('');
+  });
+
+  it('prints key-tab-value data lines, one operation line per operation, and leaves out an absent from', async () => {
+    const dir = await projectDir();
+    await seedProject(dir);
+
+    const run = await harness(ormConfig('contract.json')).run(
+      ['migration', 'show', MIGRATION_DIR],
+      { cwd: dir },
+    );
+    const document = run.presented?.data as { migration: { hash: string } };
+
+    expect(run.stdout).toBe(
+      [
+        `name\t${MIGRATION_DIR}`,
+        'space\tapp',
+        `to\t${HASH_A}`,
+        `hash\t${document.migration.hash}`,
+        'created\t2025-01-01T00:00:00.000Z',
+        'operation\tschema.add_column\tadditive\tAdd column',
+        '',
+      ].join('\n'),
+    );
   });
 
   it('drops blank preview statements and keeps multi-line statements unwrapped', async () => {
@@ -308,7 +329,8 @@ describe('migration show', () => {
     expect(run.exitCode).toBe(2);
     expect(envelope).toMatchObject({ ok: false, error: { code: 'MIGRATION.REF_NOT_FOUND' } });
     expect(envelope?.nextActions.length).toBeGreaterThan(0);
-    expect(envelope).not.toHaveProperty('fix');
+    expect(envelope?.ok).toBe(false);
+    expect(envelope).not.toHaveProperty('error.fix');
   });
 
   it('reports no migrations when the app space is empty', async () => {

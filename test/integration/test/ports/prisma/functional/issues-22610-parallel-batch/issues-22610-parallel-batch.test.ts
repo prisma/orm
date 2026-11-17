@@ -11,7 +11,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // relation-join OR conditions) completes without timing out or throwing.
 //
 // Upstream: prisma.post.findUnique({ where: { id: X, OR: [{ author: { id: Y } }] } })
-// In prisma-next: Post.where(p => or(p.id.eq(X), p.author.some(a => a.id.eq(Y)))).first()
+// In Prisma 8: Post.where(p => or(p.id.eq(X), p.author.some(a => a.id.eq(Y)))).first()
 //
 // The subject is "batch of 25 parallel queries doesn't timeout". None will match.
 

@@ -13,6 +13,7 @@ import { mongoContract } from '@internal/mongo-contract-psl/provider';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import { mongoTargetDescriptor } from '@internal/target-mongo/control';
+import mongoTargetPack from '@internal/target-mongo/pack';
 import postgres from '@internal/target-postgres/control';
 import postgresPackRef from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
@@ -32,20 +33,26 @@ const mongoStack = createControlStack({
 
 const sqlSourceContext: ContractSourceContext = {
   composedExtensions: [],
+  defaultNamespaceId: sqlStack.target.defaultNamespaceId,
   composedExtensionContracts: new Map(),
   authoringContributions: sqlStack.authoringContributions,
   codecLookup: sqlStack.codecLookup,
+  dataTypes: sqlStack.dataTypes,
   controlMutationDefaults: sqlStack.controlMutationDefaults,
+  generatorFunctions: sqlStack.generatorFunctions,
   resolvedInputs: [],
   capabilities: sqlStack.capabilities,
 };
 
 const mongoSourceContext: ContractSourceContext = {
   composedExtensions: [],
+  defaultNamespaceId: mongoStack.target.defaultNamespaceId,
   composedExtensionContracts: new Map(),
   authoringContributions: mongoStack.authoringContributions,
   codecLookup: mongoStack.codecLookup,
+  dataTypes: mongoStack.dataTypes,
   controlMutationDefaults: mongoStack.controlMutationDefaults,
+  generatorFunctions: mongoStack.generatorFunctions,
   resolvedInputs: [],
   capabilities: mongoStack.capabilities,
 };
@@ -56,7 +63,7 @@ export const mongoFrameworkComponents = [mongoTargetDescriptor, mongoAdapter] as
 function writeSchemaToTempFile(schema: string): string {
   const dir = mkdtempSync(join(tmpdir(), 'psl-list-'));
   const path = join(dir, 'schema.prisma');
-  writeFileSync(path, schema, 'utf-8');
+  writeFileSync(path, `// use prisma-8\n\n${schema}`, 'utf-8');
   return path;
 }
 
@@ -121,7 +128,7 @@ export interface MongoAuthoringResult {
  */
 export async function authorMongoContractFromPsl(schema: string): Promise<MongoAuthoringResult> {
   const schemaPath = writeSchemaToTempFile(schema);
-  const provider = mongoContract(schemaPath);
+  const provider = mongoContract(schemaPath, { target: mongoTargetPack });
 
   const providerResult = await provider.source.load({
     ...mongoSourceContext,
@@ -167,8 +174,7 @@ export interface ListCodecRef {
  * Derives the `{ codecId, typeParams, many }` codec reference for a list column
  * straight from the authored contract, so AST params/projections match what the
  * PSL path actually emitted. Parameterized codecs (e.g. `pg/numeric@1`) carry
- * their typeParams either inline on the column or via a `typeRef` into
- * `storage.types`; both are resolved here.
+ * their typeParams on the column.
  */
 export function listCodecRefFor(contract: Contract<SqlStorage>, columnName: string): ListCodecRef {
   const column = findStorageColumn(contract, columnName);
@@ -180,13 +186,7 @@ export function listCodecRefFor(contract: Contract<SqlStorage>, columnName: stri
     throw new Error(`column "${columnName}" has no codecId`);
   }
 
-  let typeParams = column['typeParams'] as JsonValue | undefined;
-  const typeRef = column['typeRef'];
-  if (typeParams === undefined && typeof typeRef === 'string') {
-    const storageTypes = (contract.storage as unknown as { types?: Record<string, unknown> }).types;
-    const typeEntry = storageTypes?.[typeRef] as { typeParams?: JsonValue } | undefined;
-    typeParams = typeEntry?.typeParams;
-  }
+  const typeParams = column['typeParams'] as JsonValue | undefined;
 
   return {
     codecId,

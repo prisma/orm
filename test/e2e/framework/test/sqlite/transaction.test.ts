@@ -4,6 +4,7 @@ import { dirname, join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 import sqlite from '@prisma/orm-sqlite/runtime';
+import { contractFromJson } from '@prisma/orm-sqlite/static';
 import { timeouts } from '@repo/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Contract } from './fixtures/generated/contract.d';
@@ -25,7 +26,7 @@ function setupHandle(): TestHandle {
   const rawDb = new DatabaseSync(dbPath);
   rawDb.exec('PRAGMA foreign_keys = ON');
 
-  const db = sqlite<Contract>({ contractJson, path: dbPath });
+  const db = sqlite({ contract: contractFromJson<Contract>(contractJson), path: dbPath });
 
   return { db, rawDb, testDir };
 }

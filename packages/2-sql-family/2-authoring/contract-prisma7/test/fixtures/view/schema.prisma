@@ -1,0 +1,12 @@
+datasource db {
+  provider = "postgresql"
+}
+
+view ActiveUsers {
+  id    Int
+  email String
+}
+
+model User {
+  id Int
+}

@@ -1,6 +1,6 @@
 # Mongo pipeline builder
 
-The Mongo pipeline builder is a typed query API that turns chained method calls into MongoDB aggregation pipelines. It is the entry point for reads, writes, and find-and-modify operations on a Mongo-backed Prisma Next contract.
+The Mongo pipeline builder is a typed query API that turns chained method calls into MongoDB aggregation pipelines. It is the entry point for reads, writes, and find-and-modify operations on a Mongo-backed Prisma 8 contract.
 
 This page is a working reference: a concrete example to ground the mental model, then an explanation of how queries are shaped, then the surface itself.
 
@@ -9,11 +9,12 @@ This page is a working reference: a concrete example to ground the mental model,
 Imagine an `orders` collection where each document has `customerId`, `amount`, and `status`. We want the top ten customers by total spend on active orders:
 
 ```ts
-import { mongoQuery } from '@internal/mongo-query-builder';
+import mongoStatic, { contractFromJson } from '@prisma/orm-mongo/static';
+import { acc } from '@prisma/orm-mongo/query-builder';
 import type { Contract } from './contract';
 import contractJson from './contract.json' with { type: 'json' };
 
-const query = mongoQuery<Contract>({ contractJson });
+const { query } = mongoStatic({ contract: contractFromJson<Contract>(contractJson) });
 
 const plan = query
   .from('orders')
@@ -31,7 +32,7 @@ const plan = query
 
 ## The decision: aggregation-only reads
 
-Prisma Next's Mongo surface has **one read API: aggregation pipelines**. There is no `find()`. Every read — including the simple ones that would normally call `db.collection.find({...})` — is expressed as a pipeline that ends in a read terminal.
+Prisma 8's Mongo surface has **one read API: aggregation pipelines**. There is no `find()`. Every read — including the simple ones that would normally call `db.collection.find({...})` — is expressed as a pipeline that ends in a read terminal.
 
 This is a deliberate design choice ([ADR 183](../architecture%20docs/adrs/ADR%20183%20-%20Aggregation%20pipeline%20only,%20never%20find%20API.md)). It has three consequences worth keeping in mind:
 
@@ -72,7 +73,7 @@ Examples in the rest of this page assume:
 
 ```ts
 const orders = query.from('orders');
-import { acc, fn } from '@internal/mongo-query-builder';
+import { acc, fn } from '@prisma/orm-mongo/query-builder';
 ```
 
 `fn` is a namespace of typed expression helpers (`fn.toUpper(...)`, `fn.concat(...)`, `fn.literal(...)`); `acc` is the parallel namespace of accumulators (`acc.sum(...)`, `acc.count(...)`, …). Both produce `MongoAggExpr` AST nodes under the hood, but you rarely need to think about that.
@@ -143,7 +144,7 @@ orders.sortByCount((f) => f.status).build();
 For bucketing the typed surface gives you the chain entry point but the bucket boundaries / grouping expression flow as raw AST nodes (most commonly `MongoAggFieldRef.of('field')` — see [the primitives reference](./mongodb-primitives-reference.md)):
 
 ```ts
-import { MongoAggFieldRef } from '@internal/mongo-query-ast/execution';
+import { MongoAggFieldRef } from '@prisma/orm-mongo/query-ast/execution';
 
 orders
   .bucket({ groupBy: MongoAggFieldRef.of('amount'), boundaries: [0, 100, 1000] })
@@ -169,7 +170,7 @@ orders
 `graphLookup` is the recursive form. `unionWith` appends another collection's rows to the current pipeline. Both expose option objects rather than fluent chains:
 
 ```ts
-import { MongoAggFieldRef } from '@internal/mongo-query-ast/execution';
+import { MongoAggFieldRef } from '@prisma/orm-mongo/query-ast/execution';
 
 orders
   .graphLookup({
@@ -198,7 +199,7 @@ Geo, window, multi-pipeline, search, and densify/fill stages are also exposed. T
 | `$search` / `$searchMeta` | `.search(config, indexName?)`, `.searchMeta(config)` |
 | `$vectorSearch` | `.vectorSearch({ index, path, queryVector, … })` |
 
-The Atlas-only search stages take their config as an object that mirrors the MongoDB Atlas Search shape — Prisma Next does not provide a typed wrapper for those configs.
+The Atlas-only search stages take their config as an object that mirrors the MongoDB Atlas Search shape — Prisma 8 does not provide a typed wrapper for those configs.
 
 ## Writing
 
@@ -298,7 +299,7 @@ What is *not* statically guaranteed:
 Two levels of escape hatch are available when the typed surface does not reach a use case:
 
 ```ts
-import { MongoLimitStage } from '@internal/mongo-query-ast/execution';
+import { MongoLimitStage } from '@prisma/orm-mongo/query-ast/execution';
 
 // Append a raw stage; preserves the chain but collapses the shape unless
 // you supply a NewShape to pipe<NewShape>().

@@ -13,6 +13,7 @@ import {
   ormConfig,
   refPointerPath,
   refsDirIn,
+  seedForkedRefProject,
   seedProjectMissingSnapshot,
   seedRefProject,
 } from './ref-fixtures';
@@ -42,6 +43,41 @@ describe('ref set', () => {
     });
   });
 
+  it('keeps the invariants and policies of an existing ref and reports them', async () => {
+    const { dir } = await seedRefProject();
+    const policies = {
+      change: ['migrate'],
+      dataProtection: { dataLoss: 'data-loss-forbidden' },
+    } as const;
+    await writeRef(refsDirIn(dir), 'production', {
+      hash: HASH_B,
+      invariants: ['split-user-name'],
+      policies,
+    });
+
+    const run = await harness().run(['migration', 'ref', 'set', 'production', HASH_A, '--json'], {
+      cwd: dir,
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.json.at(-1)).toMatchObject({
+      envelope: {
+        result: {
+          ok: true,
+          ref: 'production',
+          hash: HASH_A,
+          invariants: ['split-user-name'],
+          policies,
+        },
+      },
+    });
+    expect(JSON.parse(await readFile(refPointerPath(dir, 'production'), 'utf-8'))).toEqual({
+      hash: HASH_A,
+      invariants: ['split-user-name'],
+      policies,
+    });
+  });
+
   it('renders one summary block naming the ref and the contract it points at', async () => {
     const { dir } = await seedRefProject();
 
@@ -64,16 +100,15 @@ describe('ref set', () => {
     ]);
   });
 
-  it('leaves stdout empty in human mode, having no machine-consumable lines', async () => {
+  it('prints the contract hash the ref now points at', async () => {
     const { dir } = await seedRefProject();
+    await writeRef(refsDirIn(dir), 'production', { hash: HASH_A, invariants: [] });
 
-    const run = await harness().run(['migration', 'ref', 'set', 'staging', HASH_A], {
+    const run = await harness().run(['migration', 'ref', 'set', 'staging', 'production'], {
       cwd: dir,
-      isTty: { stdout: true },
     });
 
-    expect(run.presented?.presentation.stdout).toEqual([]);
-    expect(run.stdout).toBe('');
+    expect(run.stdout).toBe(`${HASH_A}\n`);
   });
 
   it('resolves another ref name to its hash', async () => {
@@ -155,6 +190,41 @@ describe('ref set', () => {
     expect(existsSync(refPointerPath(dir, 'staging'))).toBe(false);
   });
 
+  it('refuses a hash outside a forked graph with the same code, not a fork error', async () => {
+    const dir = await seedForkedRefProject();
+
+    const run = await harness().run(['migration', 'ref', 'set', 'staging', HASH_ABSENT, '--json'], {
+      cwd: dir,
+    });
+
+    expect(run.exitCode).toBe(2);
+    expect(run.json.at(-1)).toMatchObject({
+      kind: 'result',
+      envelope: {
+        ok: false,
+        error: {
+          code: 'MIGRATION.HASH_NOT_IN_GRAPH',
+          meta: { reachableHashes: [HASH_A, HASH_B, EMPTY_CONTRACT_HASH].sort() },
+        },
+      },
+    });
+    expect(existsSync(refPointerPath(dir, 'staging'))).toBe(false);
+  });
+
+  it('sets a ref to either tip of a forked graph', async () => {
+    const dir = await seedForkedRefProject();
+
+    const run = await harness().run(['migration', 'ref', 'set', 'staging', HASH_B, '--json'], {
+      cwd: dir,
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(JSON.parse(await readFile(refPointerPath(dir, 'staging'), 'utf-8'))).toEqual({
+      hash: HASH_B,
+      invariants: [],
+    });
+  });
+
   it('names the empty graph and offers planning when the project has no migrations', async () => {
     const dir = await emptyProject();
 
@@ -169,7 +239,7 @@ describe('ref set', () => {
     expect(envelope).toMatchObject({
       ok: false,
       error: { code: 'MIGRATION.HASH_NOT_IN_GRAPH', why: expect.stringContaining('empty') },
-      nextActions: [{ kind: 'run-command', command: '{bin} migration plan' }],
+      nextActions: [{ kind: 'run-command', command: 'prisma-test migration plan' }],
     });
   });
 
@@ -231,7 +301,8 @@ describe('ref set', () => {
 
     expect(envelope?.ok).toBe(false);
     expect(envelope?.nextActions.length).toBeGreaterThan(0);
-    expect(envelope).not.toHaveProperty('fix');
+    expect(envelope?.ok).toBe(false);
+    expect(envelope).not.toHaveProperty('error.fix');
   });
 
   it('resolves the refs directory against the run cwd, not the process cwd', async () => {

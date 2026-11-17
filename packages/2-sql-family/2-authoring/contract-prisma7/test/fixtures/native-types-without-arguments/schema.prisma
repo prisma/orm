@@ -1,0 +1,14 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model NativeTypes {
+  id          Int      @id
+  char        String   @db.Char
+  varChar     String   @db.VarChar
+  decimal     Decimal  @db.Decimal
+  timestamp   DateTime @db.Timestamp
+  timestamptz DateTime @db.Timestamptz
+  time        DateTime @db.Time
+  timetz      DateTime @db.Timetz
+}

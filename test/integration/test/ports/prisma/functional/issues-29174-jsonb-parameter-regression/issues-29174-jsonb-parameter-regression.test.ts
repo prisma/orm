@@ -8,17 +8,17 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // (postgres matrix entry; allProviders minus sqlserver — this is the postgres port).
 //
 // Subject: `Date` objects embedded in a Json field are serialised to ISO-8601
-// strings on write and surface as those strings on read. prisma-next's JSON codec
+// strings on write and surface as those strings on read. Prisma 8's JSON codec
 // serialises via `JSON.stringify`, so a `Date` goes through `Date#toJSON` → ISO
 // string, matching upstream.
 //
 // The `$type: 'Json'` case: Prisma treats `{ $type: 'Json', ... }` as a protocol
-// tagged value. prisma-next has no such tagged-value protocol, so the object is a
+// tagged value. Prisma 8 has no such tagged-value protocol, so the object is a
 // plain JSON object; the `$type` key is stored and read back verbatim, and the
 // embedded Date still serialises to an ISO string — the same observable result the
 // upstream assertion checks.
 //
-// `Date` is not part of prisma-next's `JsonValue`, so Date-bearing inputs are cast
+// `Date` is not part of Prisma 8's `JsonValue`, so Date-bearing inputs are cast
 // (test files are cast-exempt); the cast preserves the subject (Date → ISO string).
 
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;

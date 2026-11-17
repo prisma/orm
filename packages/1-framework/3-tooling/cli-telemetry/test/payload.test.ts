@@ -4,7 +4,7 @@ import { isParentToSenderPayload, type ParentToSenderPayload } from '../src/payl
 const validPayload: ParentToSenderPayload = {
   installationId: 'install-uuid',
   version: '0.9.0',
-  command: 'prisma-next init',
+  command: 'prisma init',
   flags: ['--target'],
   projectRoot: '/abs/project',
   endpoint: 'https://example.test/events',
@@ -21,15 +21,6 @@ describe('isParentToSenderPayload', () => {
 
   it('accepts a payload with the optional databaseTarget override set to a string', () => {
     expect(isParentToSenderPayload({ ...validPayload, databaseTarget: 'postgres' })).toBe(true);
-  });
-
-  it('accepts a payload with the optional databaseTarget override omitted entirely (no override)', () => {
-    // `validPayload` doesn't carry `databaseTarget` to begin with; spelling
-    // out the invariant here so a future regression that flipped the field
-    // from optional to required would surface as a failed assertion.
-    const { ...withoutOverride } = validPayload;
-    expect('databaseTarget' in withoutOverride).toBe(false);
-    expect(isParentToSenderPayload(withoutOverride)).toBe(true);
   });
 
   it('accepts a payload carrying the run exit code', () => {

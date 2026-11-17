@@ -2,10 +2,12 @@ import { timeouts } from '@repo/test-utils';
 import { configDefaults, defineConfig } from 'vitest/config';
 
 // init-journey's 4-cell pack+install matrix runs nightly only
-// (.github/workflows/integration-nightly.yml); RUN_INIT_JOURNEY=1 opts it in.
+// (.github/workflows/init-journey-nightly.yml); RUN_INIT_JOURNEY=1 opts it in.
 export const initJourneyExclude = process.env['RUN_INIT_JOURNEY']
   ? []
   : ['test/cli-journeys/init-journey.e2e.test.ts'];
+
+export const setupFiles = ['./test/setup-temporal.ts'];
 
 export default defineConfig({
   test: {
@@ -50,7 +52,7 @@ export default defineConfig({
     execArgv: ['--no-wasm-code-gc', '--no-wasm-tier-up', '--no-memory-protection-keys'],
     globals: true,
     environment: 'node',
-    setupFiles: ['./test/setup-temporal.ts'],
+    setupFiles,
     include: ['test/**/*.test.ts'],
     exclude: [...configDefaults.exclude, ...initJourneyExclude],
     typecheck: {
@@ -70,5 +72,26 @@ export default defineConfig({
     // Note it cannot cover the JIT abort above: that kills the worker fork
     // rather than failing a test, so there is nothing for vitest to retry.
     retry: process.env['CI'] ? 2 : 0,
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'integration',
+          include: ['test/**/*.test.ts'],
+          exclude: [...configDefaults.exclude, ...initJourneyExclude, 'test/packaging/**'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'packaging',
+          include: ['test/packaging/**/*.test.ts'],
+          fileParallelism: false,
+          typecheck: { enabled: false },
+          testTimeout: 300_000,
+          hookTimeout: 300_000,
+        },
+      },
+    ],
   },
 });

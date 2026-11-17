@@ -8,10 +8,10 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // (postgres matrix entry; sqlserver opted out — does not support bytes IDs).
 //
 // Upstream verifies that Prisma Client correctly handles Bytes @unique values in
-// concurrent queries. The `$transaction([...])` array-batch form has no prisma-next
+// concurrent queries. The `$transaction([...])` array-batch form has no Prisma 8
 // equivalent and remains non-ported.
 //
-// prisma-next Bytes: typed as Uint8Array for both input and output.
+// Prisma 8 Bytes: typed as Uint8Array for both input and output.
 // The faithful `.where({ bytes })` lookup is a direct SELECT WHERE; this is a
 // separate code path from the upsert reload gap documented in bytes-upsert.
 //

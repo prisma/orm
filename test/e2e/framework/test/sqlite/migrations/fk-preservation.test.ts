@@ -449,12 +449,11 @@ describe('SQLite Migration E2E - FK preservation through recreate-table', () => 
     // Origin: Post.author_id is a plain INT with no FK.
     // Destination: Post.author_id gains a FK → User.id.
     // This emits `foreign_key_mismatch`, which `recreateTableStrategy`
-    // absorbs into a destructive recreate. The new FK postcheck (added by
+    // absorbs into a widening recreate. The new FK postcheck (added by
     // `buildRecreatePostchecks`) verifies that `pragma_foreign_key_list`
     // reports the FK after recreate — if the postcheck SQL is wrong, the
     // runner fails before the harness's schema verify would have caught
     // it.
-    const DESTRUCTIVE = { allowedOperationClasses: ['additive', 'destructive'] } as const;
     const User = model('User', { fields: { id: int.id(), name: text } });
     const PostNoFk = model('Post', {
       fields: { id: int.id(), title: text, authorId: int.column('author_id') },
@@ -473,7 +472,7 @@ describe('SQLite Migration E2E - FK preservation through recreate-table', () => 
       {
         origin: defineContract({ models: { User, Post: PostNoFk } }),
         destination: defineContract({ models: { User, Post: PostWithFk } }),
-        policy: DESTRUCTIVE,
+        policy: WIDENING,
         seed: async (driver) => {
           await driver.query('INSERT INTO "User" (id, name) VALUES (?, ?)', [1, 'Alice']);
           await driver.query('INSERT INTO "Post" (id, title, author_id) VALUES (?, ?, ?)', [

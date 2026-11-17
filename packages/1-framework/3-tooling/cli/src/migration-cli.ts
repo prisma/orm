@@ -17,9 +17,8 @@
  * 1. Detects whether the file is the direct entrypoint (no-op when imported).
  * 2. Parses CLI args (`--help`, `--dry-run`, `--config <path>`) via
  *    [clipanion](https://github.com/arcanis/clipanion).
- * 3. Loads the project's `prisma.config.ts` via the same
- *    `loadConfigForSections` the CLI commands use, walking up from the
- *    migration file's directory.
+ * 3. Loads the config `--config` names. Without it, loads the config that
+ *    owns the migration (see `loadMigrationFileConfig`).
  * 4. Probe-instantiates the migration class without a stack so it can read
  *    `targetId` and verify it matches `config.target.targetId`
  *    (`MIGRATION.TARGET_MISMATCH` on mismatch) before any stack-driven adapter
@@ -46,9 +45,8 @@
 import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import type { Writable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
-import { loadConfigForSections } from '@internal/config-loader';
 import {
-  CliStructuredError,
+  type CliStructuredError,
   errorMigrationCliInvalidConfigArg,
   errorMigrationCliUnknownFlag,
 } from '@internal/errors/control';
@@ -57,8 +55,11 @@ import { createControlStack } from '@internal/framework-components/control';
 import { errorInvalidJson } from '@internal/migration-tools/errors';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
 import { buildMigrationArtifacts, type Migration } from '@internal/migration-tools/migration';
+import { isStructuredError } from '@internal/utils/structured-error';
 import { Cli, Command, Option, UsageError } from 'clipanion';
 import { dirname, join } from 'pathe';
+import { errorFromCaught } from './control-api/operations/caught-errors';
+import { loadMigrationFileConfig } from './utils/migration-file-config';
 
 /**
  * Constructor shape accepted by `MigrationCLI.run`. `Migration` subclasses
@@ -310,11 +311,14 @@ async function orchestrate(
     await runMigration(importMetaUrl, MigrationClass, parsed, ctx);
     return 0;
   } catch (err) {
-    if (CliStructuredError.is(err)) {
-      // Migration-tools errors (e.g. `errorInvalidJson` thrown by
-      // `readExistingMetadata` when migration.json is malformed) are
-      // `CliStructuredError`s and render through the same surface.
-      writeStructuredError(ctx.stderr, err);
+    if (isStructuredError(err)) {
+      // A CLI error, such as `errorInvalidJson` for a malformed migration.json, and an error a
+      // library raised with a structured code, such as `CONTRACT.DEFAULT_INVALID` for a default the
+      // column's codec refuses, are written with their code.
+      writeStructuredError(
+        ctx.stderr,
+        errorFromCaught(err, (message) => message),
+      );
     } else {
       ctx.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
     }
@@ -439,17 +443,17 @@ function findOffendingFlag(input: readonly string[]): string {
 }
 
 /**
- * Write a `CliStructuredError` envelope to the given stream. Format
- * matches the legacy hand-rolled writer (`message: why`) so the rest of
- * the project's error rendering stays consistent across surfaces. The
+ * Write a `CliStructuredError` envelope to the given stream: the code and
+ * summary, then the why when it says more than the summary, then the fix. The
  * full PN code (`PN-<domain>-<code>`) is included so consumers can
  * grep for stable identifiers.
  */
 function writeStructuredError(stream: MigrationCliWritable, err: CliStructuredError): void {
   const envelope = err.toEnvelope();
-  const why = envelope.why ?? envelope.summary;
+  const why =
+    envelope.why === undefined || envelope.why === envelope.summary ? '' : `\n${envelope.why}`;
   const fix = envelope.fix ? `\n${envelope.fix}` : '';
-  stream.write(`${envelope.code}: ${envelope.summary}\n${why}${fix}\n`);
+  stream.write(`${envelope.code}: ${envelope.summary}${why}${fix}\n`);
 }
 
 /**
@@ -544,13 +548,12 @@ async function runMigration(
   const migrationFile = fileURLToPath(importMetaUrl);
   const migrationDir = dirname(migrationFile);
 
-  const configResult = await loadConfigForSections(parsed.config, [
-    'family',
-    'target',
-    'adapter',
-    'driver',
-    'extensions',
-  ]);
+  const configResult = await loadMigrationFileConfig({
+    configPath: parsed.config,
+    migrationFile,
+    cwd: process.cwd(),
+    sections: ['family', 'target', 'adapter', 'driver', 'extensions'],
+  });
   if (!configResult.ok) {
     throw configResult.failure;
   }

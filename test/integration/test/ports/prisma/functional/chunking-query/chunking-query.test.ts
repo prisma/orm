@@ -12,16 +12,16 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // "issues #8832 / #9326 success cases" — verifies that queries succeed when the
 // number of bind parameters reaches or exceeds the driver's maximum.
 // Prisma Client's query engine CHUNKS the IN-clause query when param count exceeds
-// the database limit. prisma-next does NOT chunk automatically.
+// the database limit. Prisma 8 does NOT chunk automatically.
 //
-//   'should succeed when "in" has MAX ids'           → NON-PORTED: prisma-next does not chunk,
+//   'should succeed when "in" has MAX ids'           → NON-PORTED: Prisma 8 does not chunk,
 //     so seeding MAX_BIND_VALUES rows and selecting them back through one un-chunked IN query
 //     terminates the connection on the real CI Postgres backend (SqlConnectionError). It only
 //     "passes" under PGlite, which does not enforce the wire limit and tolerates the large
 //     single query; the outcome is backend-dependent, so the chunking subject is inexpressible.
 //   'should succeed when "include" involves MAX …'   → NON-PORTED: subject is engine chunking
-//     for child-record IN batches; prisma-next uses LATERAL/json_agg, not a separate IN fetch,
-//     so the chunking concern is inexpressible through prisma-next's ORM.
+//     for child-record IN batches; Prisma 8 uses LATERAL/json_agg, not a separate IN fetch,
+//     so the chunking concern is inexpressible through Prisma 8's ORM.
 //   'should succeed when "in" has EXCESS ids'        → NON-PORTED: PGlite (WASM) does not
 //     enforce the 32767-param wire limit, so the failure mode cannot be reproduced; the test
 //     would pass as a regular test and is vacuously true under PGlite.
@@ -34,7 +34,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //     → PORTED: OR(id.in(ids), id.in(ids)) with (MAX-1)/2 ids each, no rows seeded (empty result)
 //   'Selecting EXCESS ids at once in two inclusive disjunct filters results in error'
 //     → NON-PORTED: PGlite does not enforce the 32767-param limit; the failure mode cannot
-//        be reproduced via PGlite even though prisma-next does not chunk.
+//        be reproduced via PGlite even though Prisma 8 does not chunk.
 
 // PostgreSQL bind-parameter constants (matches upstream `_utils.ts` for postgres).
 const MAX_BIND_VALUES = 32766;

@@ -1,3 +1,4 @@
+import { dataTypeId } from '@internal/framework-components/codec';
 import { createSqlOperationRegistry } from '@internal/sql-operations';
 import type { CodecTrait } from '@internal/sql-relational-core/ast';
 import {
@@ -17,11 +18,14 @@ import {
   TableSource,
 } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
+import { createCollectionTables } from '../src/collection-tables';
 import { createModelAccessor } from '../src/model-accessor';
 import {
   buildMixedPolyContract,
+  fieldUnknown,
   getTestContext,
   getTestContract,
+  unmappedColumnPassed,
   withPatchedDomainModels,
 } from './helpers';
 import { unboundTables } from './unbound-tables';
@@ -59,7 +63,6 @@ describe('createModelAccessor', () => {
         {
           codecId,
           traits,
-          targetTypes: [] as readonly string[],
           paramsSchema: {
             '~standard': {
               version: 1 as const,
@@ -68,6 +71,7 @@ describe('createModelAccessor', () => {
             },
           },
           isParameterized: false,
+          dataType: dataTypeId('demo/fixture'),
           // The trait-gating tests don't materialize codecs; the factory is shape-only and never invoked.
           factory: () => () => {
             throw new Error('test descriptor factory not exercised');
@@ -81,13 +85,22 @@ describe('createModelAccessor', () => {
       values: function* () {
         yield* map.values();
       },
-      byTargetType: () => Object.freeze([]),
     };
   }
 
   it('creates scalar comparison operators and maps fields to columns', () => {
-    const user = createModelAccessor(context, 'public', 'User');
-    const post = createModelAccessor(context, 'public', 'Post');
+    const user = createModelAccessor(
+      context,
+      'public',
+      'User',
+      createCollectionTables(context.contract, 'public', 'User'),
+    );
+    const post = createModelAccessor(
+      context,
+      'public',
+      'Post',
+      createCollectionTables(context.contract, 'public', 'Post'),
+    );
 
     expectBinaryParam(user['name']!.eq('Alice'), 'users', 'name', 'eq', 'Alice');
     expectBinaryParam(
@@ -106,7 +119,12 @@ describe('createModelAccessor', () => {
   });
 
   it('creates ilike as trait-matched extension operation returning predicate', () => {
-    const user = createModelAccessor(context, 'public', 'User');
+    const user = createModelAccessor(
+      context,
+      'public',
+      'User',
+      createCollectionTables(context.contract, 'public', 'User'),
+    );
     const ilike = user['name']!.ilike;
     const result = ilike('%ali%');
     expect(result).toBeInstanceOf(OperationExpr);
@@ -116,13 +134,23 @@ describe('createModelAccessor', () => {
   });
 
   it('does not expose ilike on non-textual fields', () => {
-    const post = createModelAccessor(context, 'public', 'Post');
+    const post = createModelAccessor(
+      context,
+      'public',
+      'Post',
+      createCollectionTables(context.contract, 'public', 'Post'),
+    );
     const field = post['views'] as unknown as Record<string, unknown>;
     expect(field['ilike']).toBeUndefined();
   });
 
   it('creates list literal, null check, and order directive helpers', () => {
-    const accessor = createModelAccessor(context, 'public', 'Post');
+    const accessor = createModelAccessor(
+      context,
+      'public',
+      'Post',
+      createCollectionTables(context.contract, 'public', 'Post'),
+    );
 
     expect(accessor['id']!.in([1, 2, 3])).toEqual(
       BinaryExpr.in(
@@ -143,7 +171,12 @@ describe('createModelAccessor', () => {
     expect(accessor['id']!.asc()).toEqual(OrderByItem.asc(ColumnRef.of('posts', 'id')));
     expect(accessor['id']!.desc()).toEqual(OrderByItem.desc(ColumnRef.of('posts', 'id')));
 
-    const user = createModelAccessor(context, 'public', 'User');
+    const user = createModelAccessor(
+      context,
+      'public',
+      'User',
+      createCollectionTables(context.contract, 'public', 'User'),
+    );
     expect(user['email']!.isNull()).toEqual(NullCheckExpr.isNull(ColumnRef.of('users', 'email')));
     expect(user['email']!.isNotNull()).toEqual(
       NullCheckExpr.isNotNull(ColumnRef.of('users', 'email')),
@@ -151,7 +184,12 @@ describe('createModelAccessor', () => {
   });
 
   it('creates some() relation filters as EXISTS subqueries', () => {
-    const accessor = createModelAccessor(context, 'public', 'User');
+    const accessor = createModelAccessor(
+      context,
+      'public',
+      'User',
+      createCollectionTables(context.contract, 'public', 'User'),
+    );
 
     expect(accessor['posts']!.some()).toEqual(
       ExistsExpr.exists(
@@ -163,7 +201,12 @@ describe('createModelAccessor', () => {
   });
 
   it('creates none() and every() relation filters with NOT EXISTS semantics', () => {
-    const accessor = createModelAccessor(context, 'public', 'User');
+    const accessor = createModelAccessor(
+      context,
+      'public',
+      'User',
+      createCollectionTables(context.contract, 'public', 'User'),
+    );
 
     const noneExpr = accessor['posts']!.none({ views: 10 }) as ExistsExpr;
     expect(noneExpr.notExists).toBe(true);
@@ -174,7 +217,12 @@ describe('createModelAccessor', () => {
       ]),
     );
 
-    const everyExpr = accessor['posts']!.every((post) => post['views']!.gt(10)) as ExistsExpr;
+    const everyExpr = createModelAccessor(
+      context,
+      'public',
+      'User',
+      createCollectionTables(context.contract, 'public', 'User'),
+    )['posts']!.every((post) => post['views']!.gt(10)) as ExistsExpr;
     expect(everyExpr.notExists).toBe(true);
     expect(everyExpr.subquery.where).toEqual(
       AndExpr.of([
@@ -185,11 +233,21 @@ describe('createModelAccessor', () => {
   });
 
   it('treats every({}) as vacuously true and none() as a plain anti-exists join', () => {
-    const accessor = createModelAccessor(context, 'public', 'User');
+    const accessor = createModelAccessor(
+      context,
+      'public',
+      'User',
+      createCollectionTables(context.contract, 'public', 'User'),
+    );
 
     expect(accessor['posts']!.every({})).toEqual(AndExpr.true());
 
-    const expr = accessor['posts']!.none() as ExistsExpr;
+    const expr = createModelAccessor(
+      context,
+      'public',
+      'User',
+      createCollectionTables(context.contract, 'public', 'User'),
+    )['posts']!.none() as ExistsExpr;
     expect(expr.notExists).toBe(true);
     expect(expr.subquery.where).toEqual(
       BinaryExpr.eq(ColumnRef.of('posts', 'user_id'), ColumnRef.of('users', 'id')),
@@ -197,7 +255,12 @@ describe('createModelAccessor', () => {
   });
 
   it('supports nested relation filters', () => {
-    const accessor = createModelAccessor(context, 'public', 'User');
+    const accessor = createModelAccessor(
+      context,
+      'public',
+      'User',
+      createCollectionTables(context.contract, 'public', 'User'),
+    );
     const expr = accessor['posts']!.some((post) =>
       post['comments']!.some((comment) => comment['body']!.like('%urgent%')),
     ) as ExistsExpr;
@@ -207,32 +270,123 @@ describe('createModelAccessor', () => {
     expect(where.exprs[1]!.kind).toBe('exists');
   });
 
-  it('aliases both directions of ordinary self-relation predicates', () => {
-    const children = createModelAccessor(context, 'public', 'User')['invitedUsers']!.some(
-      (invitee) => invitee['name']!.eq('Bob'),
-    ) as ExistsExpr;
-    const inviter = createModelAccessor(context, 'public', 'User')['invitedBy']!.some((invitedBy) =>
-      invitedBy['name']!.eq('Alice'),
-    ) as ExistsExpr;
+  it('gives sibling relation filters over one table distinct aliases', () => {
+    const accessor = createModelAccessor(
+      context,
+      'public',
+      'User',
+      createCollectionTables(context.contract, 'public', 'User'),
+    );
+    const first = accessor['posts']!.some((post) => post['views']!.gt(10)) as ExistsExpr;
+    const second = accessor['posts']!.none((post) => post['views']!.gt(20)) as ExistsExpr;
 
-    expect(children.subquery.from).toEqual(TableSource.named('users', '__orm_rel_1', 'public'));
-    expect(children.subquery.where).toEqual(
+    expect(first.subquery.from).toEqual(TableSource.named('posts', undefined, 'public'));
+    expect(first.subquery.where).toEqual(
       AndExpr.of([
-        BinaryExpr.eq(ColumnRef.of('__orm_rel_1', 'invited_by_id'), ColumnRef.of('users', 'id')),
-        BinaryExpr.eq(ColumnRef.of('__orm_rel_1', 'name'), paramRef('users', 'name', 'Bob')),
+        BinaryExpr.eq(ColumnRef.of('posts', 'user_id'), ColumnRef.of('users', 'id')),
+        BinaryExpr.gt(ColumnRef.of('posts', 'views'), paramRef('posts', 'views', 10)),
       ]),
     );
-    expect(inviter.subquery.from).toEqual(TableSource.named('users', '__orm_rel_1', 'public'));
+    expect(second.subquery.from).toEqual(TableSource.named('posts', 'posts_2', 'public'));
+    expect(second.subquery.projection).toEqual([
+      ProjectionItem.of('_exists', ColumnRef.of('posts_2', 'user_id')),
+    ]);
+    expect(second.subquery.where).toEqual(
+      AndExpr.of([
+        BinaryExpr.eq(ColumnRef.of('posts_2', 'user_id'), ColumnRef.of('users', 'id')),
+        BinaryExpr.gt(ColumnRef.of('posts_2', 'views'), paramRef('posts', 'views', 20)),
+      ]),
+    );
+  });
+
+  it('aliases a nested relation that returns to the root table', () => {
+    const expr = createModelAccessor(
+      context,
+      'public',
+      'User',
+      createCollectionTables(context.contract, 'public', 'User'),
+    )['posts']!.some((post) =>
+      post['author']!.some((author) => author['name']!.eq('Alice')),
+    ) as ExistsExpr;
+    const nested = (expr.subquery.where as AndExpr).exprs[1] as ExistsExpr;
+
+    expect(expr.subquery.from).toEqual(TableSource.named('posts', undefined, 'public'));
+    expect(nested.subquery.from).toEqual(TableSource.named('users', 'users_2', 'public'));
+    expect(nested.subquery.where).toEqual(
+      AndExpr.of([
+        BinaryExpr.eq(ColumnRef.of('users_2', 'id'), ColumnRef.of('posts', 'user_id')),
+        BinaryExpr.eq(ColumnRef.of('users_2', 'name'), paramRef('users', 'name', 'Alice')),
+      ]),
+    );
+  });
+
+  it('keeps a name taken inside one relation filter taken for a later sibling', () => {
+    const accessor = createModelAccessor(
+      context,
+      'public',
+      'User',
+      createCollectionTables(context.contract, 'public', 'User'),
+    );
+    accessor['posts']!.some((post) => post['author']!.some());
+    const sibling = accessor['invitedUsers']!.some() as ExistsExpr;
+
+    expect(sibling.subquery.from).toEqual(TableSource.named('users', 'users_3', 'public'));
+  });
+
+  it('gives each accessor its own aliases', () => {
+    createModelAccessor(
+      context,
+      'public',
+      'User',
+      createCollectionTables(context.contract, 'public', 'User'),
+    )['posts']!.some();
+    const expr = createModelAccessor(
+      context,
+      'public',
+      'User',
+      createCollectionTables(context.contract, 'public', 'User'),
+    )['posts']!.some() as ExistsExpr;
+
+    expect(expr.subquery.from).toEqual(TableSource.named('posts', undefined, 'public'));
+  });
+
+  it('aliases both directions of ordinary self-relation predicates', () => {
+    const children = createModelAccessor(
+      context,
+      'public',
+      'User',
+      createCollectionTables(context.contract, 'public', 'User'),
+    )['invitedUsers']!.some((invitee) => invitee['name']!.eq('Bob')) as ExistsExpr;
+    const inviter = createModelAccessor(
+      context,
+      'public',
+      'User',
+      createCollectionTables(context.contract, 'public', 'User'),
+    )['invitedBy']!.some((invitedBy) => invitedBy['name']!.eq('Alice')) as ExistsExpr;
+
+    expect(children.subquery.from).toEqual(TableSource.named('users', 'users_2', 'public'));
+    expect(children.subquery.where).toEqual(
+      AndExpr.of([
+        BinaryExpr.eq(ColumnRef.of('users_2', 'invited_by_id'), ColumnRef.of('users', 'id')),
+        BinaryExpr.eq(ColumnRef.of('users_2', 'name'), paramRef('users', 'name', 'Bob')),
+      ]),
+    );
+    expect(inviter.subquery.from).toEqual(TableSource.named('users', 'users_2', 'public'));
     expect(inviter.subquery.where).toEqual(
       AndExpr.of([
-        BinaryExpr.eq(ColumnRef.of('__orm_rel_1', 'id'), ColumnRef.of('users', 'invited_by_id')),
-        BinaryExpr.eq(ColumnRef.of('__orm_rel_1', 'name'), paramRef('users', 'name', 'Alice')),
+        BinaryExpr.eq(ColumnRef.of('users_2', 'id'), ColumnRef.of('users', 'invited_by_id')),
+        BinaryExpr.eq(ColumnRef.of('users_2', 'name'), paramRef('users', 'name', 'Alice')),
       ]),
     );
   });
 
   it('allocates distinct aliases for sibling predicates from one accessor', () => {
-    const accessor = createModelAccessor(context, 'public', 'User');
+    const accessor = createModelAccessor(
+      context,
+      'public',
+      'User',
+      createCollectionTables(context.contract, 'public', 'User'),
+    );
     const children = accessor['invitedUsers']!.some((invitee) =>
       invitee['name']!.eq('Bob'),
     ) as ExistsExpr;
@@ -240,49 +394,68 @@ describe('createModelAccessor', () => {
       invitedBy['name']!.eq('Alice'),
     ) as ExistsExpr;
 
-    expect(children.subquery.from).toEqual(TableSource.named('users', '__orm_rel_1', 'public'));
-    expect(inviter.subquery.from).toEqual(TableSource.named('users', '__orm_rel_2', 'public'));
+    expect(children.subquery.from).toEqual(TableSource.named('users', 'users_2', 'public'));
+    expect(inviter.subquery.from).toEqual(TableSource.named('users', 'users_3', 'public'));
   });
 
   it('correlates repeated self-relation predicates to the immediate parent alias', () => {
-    const expr = createModelAccessor(context, 'public', 'User')['invitedUsers']!.some((child) =>
+    const expr = createModelAccessor(
+      context,
+      'public',
+      'User',
+      createCollectionTables(context.contract, 'public', 'User'),
+    )['invitedUsers']!.some((child) =>
       child['invitedUsers']!.some((grandchild) => grandchild['name']!.eq('Dan')),
     ) as ExistsExpr;
     const outerWhere = expr.subquery.where as AndExpr;
     const nested = outerWhere.exprs[1] as ExistsExpr;
 
-    expect(expr.subquery.from).toEqual(TableSource.named('users', '__orm_rel_1', 'public'));
+    expect(expr.subquery.from).toEqual(TableSource.named('users', 'users_2', 'public'));
     expect(outerWhere.exprs[0]).toEqual(
-      BinaryExpr.eq(ColumnRef.of('__orm_rel_1', 'invited_by_id'), ColumnRef.of('users', 'id')),
+      BinaryExpr.eq(ColumnRef.of('users_2', 'invited_by_id'), ColumnRef.of('users', 'id')),
     );
-    expect(nested.subquery.from).toEqual(TableSource.named('users', '__orm_rel_2', 'public'));
+    expect(nested.subquery.from).toEqual(TableSource.named('users', 'users_3', 'public'));
     expect(nested.subquery.where).toEqual(
       AndExpr.of([
-        BinaryExpr.eq(
-          ColumnRef.of('__orm_rel_2', 'invited_by_id'),
-          ColumnRef.of('__orm_rel_1', 'id'),
-        ),
-        BinaryExpr.eq(ColumnRef.of('__orm_rel_2', 'name'), paramRef('users', 'name', 'Dan')),
+        BinaryExpr.eq(ColumnRef.of('users_3', 'invited_by_id'), ColumnRef.of('users_2', 'id')),
+        BinaryExpr.eq(ColumnRef.of('users_3', 'name'), paramRef('users', 'name', 'Dan')),
       ]),
     );
   });
 
   it('keeps proxy symbol access undefined and relation shorthand maps null and undefined', () => {
-    const user = createModelAccessor(context, 'public', 'User');
+    const user = createModelAccessor(
+      context,
+      'public',
+      'User',
+      createCollectionTables(context.contract, 'public', 'User'),
+    );
     expect((user as Record<PropertyKey, unknown>)[Symbol.iterator]).toBeUndefined();
 
     // Unknown fields in a shorthand predicate are surfaced loudly — silent skip would drop user intent (a typo'd filter would match every row).
     expect(() => user['posts']!.some({ unknown: 'value' })).toThrow(
-      /Shorthand filter on "Post\.unknown": field is not defined on the model/,
+      fieldUnknown('Post', 'unknown'),
     );
 
     // Undefined values are skipped before the field lookup, so a shorthand with an unknown field and undefined value is a no-op.
-    const someUndefined = user['posts']!.some({ unknown: undefined }) as ExistsExpr;
+    const someUndefined = createModelAccessor(
+      context,
+      'public',
+      'User',
+      createCollectionTables(context.contract, 'public', 'User'),
+    )['posts']!.some({
+      unknown: undefined,
+    }) as ExistsExpr;
     expect(someUndefined.subquery.where).toEqual(
       BinaryExpr.eq(ColumnRef.of('posts', 'user_id'), ColumnRef.of('users', 'id')),
     );
 
-    const post = createModelAccessor(context, 'public', 'Post');
+    const post = createModelAccessor(
+      context,
+      'public',
+      'Post',
+      createCollectionTables(context.contract, 'public', 'Post'),
+    );
     const nullExpr = post['comments']!.some({ body: null }) as ExistsExpr;
     expect(nullExpr.subquery.where).toEqual(
       AndExpr.of([
@@ -317,12 +490,13 @@ describe('createModelAccessor', () => {
           { ...context, contract: brokenJoinContract } as never,
           'public',
           'User',
+          createCollectionTables(brokenJoinContract, 'public', 'User'),
         ) as unknown as Record<string, { some: () => unknown }>
       )['posts']!.some(),
     ).toThrow(/missing join columns/);
   });
 
-  it('supports composite relation joins and first-target fallback projection', () => {
+  it('supports composite relation joins and refuses a join with a missing target field', () => {
     const base = getTestContract();
     const compositeContract = withPatchedDomainModels(base, (models) => {
       const user = models['User'] as {
@@ -357,6 +531,7 @@ describe('createModelAccessor', () => {
         { ...context, contract: compositeContract } as never,
         'public',
         'User',
+        createCollectionTables(compositeContract, 'public', 'User'),
       ) as unknown as Record<string, { some: () => unknown }>
     )['posts']!.some() as ExistsExpr;
     expect(compositeExpr.subquery.projection).toEqual([
@@ -397,19 +572,19 @@ describe('createModelAccessor', () => {
       };
     });
 
-    const fallbackExpr = (
-      createModelAccessor(
-        { ...context, contract: noTargetFieldsContract } as never,
-        'public',
-        'User',
-      ) as unknown as Record<string, { some: () => unknown }>
-    )['posts']!.some() as ExistsExpr;
-    expect(fallbackExpr.subquery.projection).toEqual([
-      ProjectionItem.of('_exists', ColumnRef.of('posts', 'id')),
-    ]);
+    expect(() =>
+      (
+        createModelAccessor(
+          { ...context, contract: noTargetFieldsContract } as never,
+          'public',
+          'User',
+          createCollectionTables(noTargetFieldsContract, 'public', 'User'),
+        ) as unknown as Record<string, { some: () => unknown }>
+      )['posts']!.some(),
+    ).toThrow('has no field "undefined" the contract names');
   });
 
-  it('returns undefined for fields whose storage table is not declared', () => {
+  it('fails with an internal error for a field whose storage table is not declared', () => {
     const base = getTestContract();
     const storageFallbackContract = withPatchedDomainModels(base, (models) => {
       const user = models['User'] as { storage: Record<string, unknown> };
@@ -430,11 +605,14 @@ describe('createModelAccessor', () => {
       { ...context, contract: storageFallbackContract } as never,
       'public',
       'User',
+      createCollectionTables(storageFallbackContract, 'public', 'User'),
     );
-    expect(accessor['name']).toBeUndefined();
+    expect(() => accessor['name']).toThrow(
+      'Field "User.name" maps column "name", which table "users_storage" does not have',
+    );
   });
 
-  it('resolves column when storage.table maps to a declared table with the field', () => {
+  it('refuses a field the model storage does not map, even when its table has a column of that name', () => {
     const base = getTestContract();
     const modelNameFallbackContract = withPatchedDomainModels(base, (models) => ({
       ...models,
@@ -446,16 +624,23 @@ describe('createModelAccessor', () => {
     }));
 
     expect(
-      createModelAccessor(
-        { ...context, contract: modelNameFallbackContract } as never,
-        'public',
-        'User',
-      )['name']!.isNull(),
-    ).toEqual(NullCheckExpr.isNull(ColumnRef.of('users', 'name')));
+      () =>
+        createModelAccessor(
+          { ...context, contract: modelNameFallbackContract } as never,
+          'public',
+          'User',
+          createCollectionTables(modelNameFallbackContract, 'public', 'User'),
+        )['name'],
+    ).toThrow(unmappedColumnPassed('User', 'users', 'name'));
   });
 
-  it('combines relation shorthand fields with and() and rejects missing join arrays', () => {
-    const accessor = createModelAccessor(context, 'public', 'User');
+  it('combines relation shorthand fields with and()', () => {
+    const accessor = createModelAccessor(
+      context,
+      'public',
+      'User',
+      createCollectionTables(context.contract, 'public', 'User'),
+    );
     const predicate = accessor['posts']!.some({ title: 'A', views: 1 }) as ExistsExpr;
 
     expect(predicate.subquery.where).toEqual(
@@ -467,37 +652,17 @@ describe('createModelAccessor', () => {
         ]),
       ]),
     );
-
-    const base = getTestContract();
-    const contractWithoutJoinArrays = withPatchedDomainModels(base, (models) => ({
-      ...models,
-      User: {
-        ...(models['User'] as Record<string, unknown>),
-        relations: {
-          posts: {
-            to: { model: 'Post', namespace: 'public' },
-            cardinality: '1:N',
-            on: { localFields: [], targetFields: [] },
-          },
-        },
-      },
-    }));
-
-    expect(() =>
-      (
-        createModelAccessor(
-          { ...context, contract: contractWithoutJoinArrays } as never,
-          'public',
-          'User',
-        ) as unknown as Record<string, { some: () => unknown }>
-      )['posts']!.some(),
-    ).toThrow(/missing join columns/);
   });
 
   describe('runtime trait-gating', () => {
     it('only creates equality methods when codec has equality trait', () => {
       const codecDescriptors = makeDescriptors({ 'pg/int4@1': ['equality'] });
-      const accessor = createModelAccessor({ ...context, codecDescriptors }, 'public', 'Post');
+      const accessor = createModelAccessor(
+        { ...context, codecDescriptors },
+        'public',
+        'Post',
+        createCollectionTables({ ...context, codecDescriptors }.contract, 'public', 'Post'),
+      );
       const field = accessor['id'] as unknown as Record<string, unknown>;
 
       expect(typeof field['eq']).toBe('function');
@@ -520,7 +685,12 @@ describe('createModelAccessor', () => {
       const codecDescriptors = makeDescriptors({
         'pg/text@1': ['equality', 'order', 'textual'],
       });
-      const accessor = createModelAccessor({ ...context, codecDescriptors }, 'public', 'User');
+      const accessor = createModelAccessor(
+        { ...context, codecDescriptors },
+        'public',
+        'User',
+        createCollectionTables({ ...context, codecDescriptors }.contract, 'public', 'User'),
+      );
       const field = accessor['name'] as unknown as Record<string, unknown>;
 
       for (const method of [
@@ -544,7 +714,12 @@ describe('createModelAccessor', () => {
 
     it('throws when relation shorthand filter targets a field without equality trait', () => {
       const codecDescriptors = makeDescriptors({ 'pg/int4@1': ['order'] });
-      const accessor = createModelAccessor({ ...context, codecDescriptors }, 'public', 'Post');
+      const accessor = createModelAccessor(
+        { ...context, codecDescriptors },
+        'public',
+        'Post',
+        createCollectionTables({ ...context, codecDescriptors }.contract, 'public', 'Post'),
+      );
 
       expect(() => accessor['comments']!.some({ postId: 42 })).toThrow(
         /does not support equality comparisons/,
@@ -581,7 +756,8 @@ describe('createModelAccessor', () => {
         polyContext,
         'public',
         'Task',
-        'Feature',
+        createCollectionTables(polyContext.contract, 'public', 'Task'),
+        'feature',
       ) as unknown as FieldBag;
       // `priority` lives on the joined `features` table, not the base `tasks`.
       expect(feature['priority']!.gte(3)).toEqual(
@@ -598,7 +774,8 @@ describe('createModelAccessor', () => {
         polyContext,
         'public',
         'Task',
-        'Feature',
+        createCollectionTables(polyContext.contract, 'public', 'Task'),
+        'feature',
       ) as unknown as FieldBag;
       expect(feature['title']!.eq('Dark mode')).toEqual(
         new BinaryExpr(
@@ -614,10 +791,17 @@ describe('createModelAccessor', () => {
         polyContext,
         'public',
         'Task',
-        'Feature',
+        createCollectionTables(polyContext.contract, 'public', 'Task'),
+        'feature',
       ) as unknown as FieldBag;
       expect(feature['priority']).toBeDefined();
-      const bug = createModelAccessor(polyContext, 'public', 'Task', 'Bug') as unknown as FieldBag;
+      const bug = createModelAccessor(
+        polyContext,
+        'public',
+        'Task',
+        createCollectionTables(polyContext.contract, 'public', 'Task'),
+        'bug',
+      ) as unknown as FieldBag;
       // Bug is STI — its `severity` rides the base table, never the features join.
       expect(bug['severity']!.eq('critical')).toEqual(
         new BinaryExpr(
@@ -627,16 +811,20 @@ describe('createModelAccessor', () => {
         ),
       );
       // Selecting an STI variant must not surface the MTI variant column.
-      expect(bug['priority']).toBeUndefined();
+      expect(() => bug['priority']).toThrow(fieldUnknown('Bug', 'priority'));
     });
 
     it('leaves base resolution untouched when no variant is selected', () => {
-      const task = createModelAccessor(polyContext, 'public', 'Task') as unknown as FieldBag;
+      const task = createModelAccessor(
+        polyContext,
+        'public',
+        'Task',
+        createCollectionTables(polyContext.contract, 'public', 'Task'),
+      ) as unknown as FieldBag;
       expect(task['title']!.eq('x')).toEqual(
         new BinaryExpr('eq', ColumnRef.of('tasks', 'title'), polyParam('tasks', 'title', 'x')),
       );
-      // Without a selected variant the MTI variant column is not resolvable.
-      expect(task['priority']).toBeUndefined();
+      expect(() => task['priority']).toThrow(fieldUnknown('Task', 'priority'));
     });
   });
 
@@ -653,7 +841,8 @@ describe('createModelAccessor', () => {
         polyContext,
         'public',
         'Task',
-        'Feature',
+        createCollectionTables(polyContext.contract, 'public', 'Task'),
+        'feature',
       ) as unknown as RelationBag;
 
       const expr = feature['assignee']!.some() as ExistsExpr;
@@ -673,7 +862,8 @@ describe('createModelAccessor', () => {
         polyContext,
         'public',
         'Task',
-        'Bug',
+        createCollectionTables(polyContext.contract, 'public', 'Task'),
+        'bug',
       ) as unknown as RelationBag;
 
       const expr = bug['assignee']!.some() as ExistsExpr;
@@ -686,8 +876,13 @@ describe('createModelAccessor', () => {
     });
 
     it('does not expose the variant-declared relation without narrowing', () => {
-      const task = createModelAccessor(polyContext, 'public', 'Task') as unknown as RelationBag;
-      expect(task['assignee']).toBeUndefined();
+      const task = createModelAccessor(
+        polyContext,
+        'public',
+        'Task',
+        createCollectionTables(polyContext.contract, 'public', 'Task'),
+      ) as unknown as RelationBag;
+      expect(() => task['assignee']).toThrow(fieldUnknown('Task', 'assignee'));
     });
 
     it('keeps a base relation resolving against the base table when a variant is selected', () => {
@@ -695,14 +890,15 @@ describe('createModelAccessor', () => {
         polyContext,
         'public',
         'Task',
-        'Feature',
+        createCollectionTables(polyContext.contract, 'public', 'Task'),
+        'feature',
       ) as unknown as RelationBag;
 
       const expr = feature['subtasks']!.some() as ExistsExpr;
 
-      expect(expr.subquery.from).toEqual(TableSource.named('tasks', '__orm_rel_1', 'public'));
+      expect(expr.subquery.from).toEqual(TableSource.named('tasks', 'tasks_2', 'public'));
       expect(expr.subquery.where).toEqual(
-        BinaryExpr.eq(ColumnRef.of('__orm_rel_1', 'parent_id'), ColumnRef.of('tasks', 'id')),
+        BinaryExpr.eq(ColumnRef.of('tasks_2', 'parent_id'), ColumnRef.of('tasks', 'id')),
       );
     });
 
@@ -711,22 +907,25 @@ describe('createModelAccessor', () => {
         polyContext,
         'public',
         'Task',
-        'Feature',
+        createCollectionTables(polyContext.contract, 'public', 'Task'),
+        'feature',
       ) as unknown as RelationBag;
 
       feature['assignee']!.some();
       const expr = feature['subtasks']!.some() as ExistsExpr;
 
-      expect(expr.subquery.from).toEqual(TableSource.named('tasks', '__orm_rel_1', 'public'));
+      expect(expr.subquery.from).toEqual(TableSource.named('tasks', 'tasks_2', 'public'));
     });
   });
 
   describe('M:N relation filters via junction', () => {
     it('some() emits EXISTS through junction (single-key)', () => {
-      const accessor = createModelAccessor(context, 'public', 'User') as unknown as Record<
-        string,
-        { some: (pred?: unknown) => unknown }
-      >;
+      const accessor = createModelAccessor(
+        context,
+        'public',
+        'User',
+        createCollectionTables(context.contract, 'public', 'User'),
+      ) as unknown as Record<string, { some: (pred?: unknown) => unknown }>;
 
       const expr = accessor['tags']!.some() as ExistsExpr;
 
@@ -744,10 +943,12 @@ describe('createModelAccessor', () => {
     });
 
     it('some(pred) AND-s junction correlation with predicate', () => {
-      const accessor = createModelAccessor(context, 'public', 'User') as unknown as Record<
-        string,
-        { some: (pred: (c: unknown) => unknown) => unknown }
-      >;
+      const accessor = createModelAccessor(
+        context,
+        'public',
+        'User',
+        createCollectionTables(context.contract, 'public', 'User'),
+      ) as unknown as Record<string, { some: (pred: (c: unknown) => unknown) => unknown }>;
 
       const expr = accessor['tags']!.some((c: unknown) =>
         (c as Record<string, { eq: (v: unknown) => unknown }>)['name']!.eq('Rust'),
@@ -763,10 +964,12 @@ describe('createModelAccessor', () => {
     });
 
     it('none() emits NOT EXISTS through junction', () => {
-      const accessor = createModelAccessor(context, 'public', 'User') as unknown as Record<
-        string,
-        { none: (pred?: unknown) => unknown }
-      >;
+      const accessor = createModelAccessor(
+        context,
+        'public',
+        'User',
+        createCollectionTables(context.contract, 'public', 'User'),
+      ) as unknown as Record<string, { none: (pred?: unknown) => unknown }>;
 
       const expr = accessor['tags']!.none() as ExistsExpr;
       expect(expr.notExists).toBe(true);
@@ -776,10 +979,12 @@ describe('createModelAccessor', () => {
     });
 
     it('every(pred) emits NOT EXISTS(… AND NOT(pred)) through junction', () => {
-      const accessor = createModelAccessor(context, 'public', 'User') as unknown as Record<
-        string,
-        { every: (pred: (c: unknown) => unknown) => unknown }
-      >;
+      const accessor = createModelAccessor(
+        context,
+        'public',
+        'User',
+        createCollectionTables(context.contract, 'public', 'User'),
+      ) as unknown as Record<string, { every: (pred: (c: unknown) => unknown) => unknown }>;
 
       const expr = accessor['tags']!.every((c: unknown) =>
         (c as Record<string, { eq: (v: unknown) => unknown }>)['name']!.eq('Rust'),
@@ -797,19 +1002,45 @@ describe('createModelAccessor', () => {
     });
 
     it('every({}) is vacuously true for M:N relations', () => {
-      const accessor = createModelAccessor(context, 'public', 'User') as unknown as Record<
-        string,
-        { every: (pred: unknown) => unknown }
-      >;
+      const accessor = createModelAccessor(
+        context,
+        'public',
+        'User',
+        createCollectionTables(context.contract, 'public', 'User'),
+      ) as unknown as Record<string, { every: (pred: unknown) => unknown }>;
 
       expect(accessor['tags']!.every({})).toEqual(AndExpr.true());
     });
 
+    it('gives sibling M:N filters distinct related and junction aliases', () => {
+      const accessor = createModelAccessor(
+        context,
+        'public',
+        'User',
+        createCollectionTables(context.contract, 'public', 'User'),
+      ) as unknown as Record<string, { some: () => unknown }>;
+      accessor['tags']!.some();
+      const expr = accessor['tags']!.some() as ExistsExpr;
+
+      expect(expr.subquery.from).toEqual(TableSource.named('tags', 'tags_2', 'public'));
+      expect(expr.subquery.joins).toEqual([
+        JoinAst.inner(
+          TableSource.named('user_tags', 'user_tags_2', 'public'),
+          BinaryExpr.eq(ColumnRef.of('user_tags_2', 'tag_id'), ColumnRef.of('tags_2', 'id')),
+        ),
+      ]);
+      expect(expr.subquery.where).toEqual(
+        BinaryExpr.eq(ColumnRef.of('user_tags_2', 'user_id'), ColumnRef.of('users', 'id')),
+      );
+    });
+
     it('some() emits EXISTS with composite-key AND-ed junction join', () => {
-      const accessor = createModelAccessor(context, 'public', 'Project') as unknown as Record<
-        string,
-        { some: () => unknown }
-      >;
+      const accessor = createModelAccessor(
+        context,
+        'public',
+        'Project',
+        createCollectionTables(context.contract, 'public', 'Project'),
+      ) as unknown as Record<string, { some: () => unknown }>;
 
       const expr = accessor['related']!.some() as ExistsExpr;
 
@@ -819,11 +1050,11 @@ describe('createModelAccessor', () => {
           AndExpr.of([
             BinaryExpr.eq(
               ColumnRef.of('project_links', 'dst_tenant_id'),
-              ColumnRef.of('__orm_rel_1', 'tenant_id'),
+              ColumnRef.of('projects_2', 'tenant_id'),
             ),
             BinaryExpr.eq(
               ColumnRef.of('project_links', 'dst_id'),
-              ColumnRef.of('__orm_rel_1', 'id'),
+              ColumnRef.of('projects_2', 'id'),
             ),
           ]),
         ),
@@ -840,18 +1071,20 @@ describe('createModelAccessor', () => {
     });
 
     it('aliases the related table for self-referential M:N predicates', () => {
-      const accessor = createModelAccessor(context, 'public', 'Project') as unknown as Record<
-        string,
-        { some: (pred: (c: unknown) => unknown) => unknown }
-      >;
+      const accessor = createModelAccessor(
+        context,
+        'public',
+        'Project',
+        createCollectionTables(context.contract, 'public', 'Project'),
+      ) as unknown as Record<string, { some: (pred: (c: unknown) => unknown) => unknown }>;
 
       const expr = accessor['related']!.some((c: unknown) =>
         (c as Record<string, { eq: (v: unknown) => unknown }>)['name']!.eq('Apollo'),
       ) as ExistsExpr;
 
-      expect(expr.subquery.from).toEqual(TableSource.named('projects', '__orm_rel_1', 'public'));
+      expect(expr.subquery.from).toEqual(TableSource.named('projects', 'projects_2', 'public'));
       expect(expr.subquery.projection).toEqual([
-        ProjectionItem.of('_exists', ColumnRef.of('__orm_rel_1', 'tenant_id')),
+        ProjectionItem.of('_exists', ColumnRef.of('projects_2', 'tenant_id')),
       ]);
       expect(expr.subquery.where).toEqual(
         AndExpr.of([
@@ -862,19 +1095,18 @@ describe('createModelAccessor', () => {
             ),
             BinaryExpr.eq(ColumnRef.of('project_links', 'src_id'), ColumnRef.of('projects', 'id')),
           ]),
-          BinaryExpr.eq(
-            ColumnRef.of('__orm_rel_1', 'name'),
-            paramRef('projects', 'name', 'Apollo'),
-          ),
+          BinaryExpr.eq(ColumnRef.of('projects_2', 'name'), paramRef('projects', 'name', 'Apollo')),
         ]),
       );
     });
 
     it('uses distinct child and junction aliases for repeated self-referential M:N predicates', () => {
-      const accessor = createModelAccessor(context, 'public', 'Project') as unknown as Record<
-        string,
-        { some: (pred: (c: unknown) => unknown) => unknown }
-      >;
+      const accessor = createModelAccessor(
+        context,
+        'public',
+        'Project',
+        createCollectionTables(context.contract, 'public', 'Project'),
+      ) as unknown as Record<string, { some: (pred: (c: unknown) => unknown) => unknown }>;
 
       const expr = accessor['related']!.some((related: unknown) =>
         (related as Record<string, { some: (pred: (c: unknown) => unknown) => unknown }>)[
@@ -886,34 +1118,34 @@ describe('createModelAccessor', () => {
       const outerWhere = expr.subquery.where as AndExpr;
       const nested = outerWhere.exprs[1] as ExistsExpr;
 
-      expect(expr.subquery.from).toEqual(TableSource.named('projects', '__orm_rel_1', 'public'));
+      expect(expr.subquery.from).toEqual(TableSource.named('projects', 'projects_2', 'public'));
       expect(expr.subquery.joins).toEqual([
         JoinAst.inner(
           TableSource.named('project_links', undefined, 'public'),
           AndExpr.of([
             BinaryExpr.eq(
               ColumnRef.of('project_links', 'dst_tenant_id'),
-              ColumnRef.of('__orm_rel_1', 'tenant_id'),
+              ColumnRef.of('projects_2', 'tenant_id'),
             ),
             BinaryExpr.eq(
               ColumnRef.of('project_links', 'dst_id'),
-              ColumnRef.of('__orm_rel_1', 'id'),
+              ColumnRef.of('projects_2', 'id'),
             ),
           ]),
         ),
       ]);
-      expect(nested.subquery.from).toEqual(TableSource.named('projects', '__orm_rel_2', 'public'));
+      expect(nested.subquery.from).toEqual(TableSource.named('projects', 'projects_3', 'public'));
       expect(nested.subquery.joins).toEqual([
         JoinAst.inner(
-          TableSource.named('project_links', '__orm_junction_3', 'public'),
+          TableSource.named('project_links', 'project_links_2', 'public'),
           AndExpr.of([
             BinaryExpr.eq(
-              ColumnRef.of('__orm_junction_3', 'dst_tenant_id'),
-              ColumnRef.of('__orm_rel_2', 'tenant_id'),
+              ColumnRef.of('project_links_2', 'dst_tenant_id'),
+              ColumnRef.of('projects_3', 'tenant_id'),
             ),
             BinaryExpr.eq(
-              ColumnRef.of('__orm_junction_3', 'dst_id'),
-              ColumnRef.of('__orm_rel_2', 'id'),
+              ColumnRef.of('project_links_2', 'dst_id'),
+              ColumnRef.of('projects_3', 'id'),
             ),
           ]),
         ),
@@ -922,15 +1154,15 @@ describe('createModelAccessor', () => {
         AndExpr.of([
           AndExpr.of([
             BinaryExpr.eq(
-              ColumnRef.of('__orm_junction_3', 'src_tenant_id'),
-              ColumnRef.of('__orm_rel_1', 'tenant_id'),
+              ColumnRef.of('project_links_2', 'src_tenant_id'),
+              ColumnRef.of('projects_2', 'tenant_id'),
             ),
             BinaryExpr.eq(
-              ColumnRef.of('__orm_junction_3', 'src_id'),
-              ColumnRef.of('__orm_rel_1', 'id'),
+              ColumnRef.of('project_links_2', 'src_id'),
+              ColumnRef.of('projects_2', 'id'),
             ),
           ]),
-          BinaryExpr.eq(ColumnRef.of('__orm_rel_2', 'name'), paramRef('projects', 'name', 'Gamma')),
+          BinaryExpr.eq(ColumnRef.of('projects_3', 'name'), paramRef('projects', 'name', 'Gamma')),
         ]),
       );
     });
@@ -957,6 +1189,7 @@ describe('createModelAccessor', () => {
         { ...context, contract: malformedContract } as never,
         'public',
         'Project',
+        createCollectionTables(malformedContract, 'public', 'Project'),
       ) as unknown as Record<string, { some: () => unknown }>;
 
       expect(() => accessor['related']!.some()).toThrow(
@@ -986,6 +1219,7 @@ describe('createModelAccessor', () => {
         { ...context, contract: malformedContract } as never,
         'public',
         'Project',
+        createCollectionTables(malformedContract, 'public', 'Project'),
       ) as unknown as Record<string, { some: () => unknown }>;
 
       expect(() => accessor['related']!.some()).toThrow(
@@ -1010,14 +1244,49 @@ describe('createModelAccessor', () => {
       const codecDescriptors = makeDescriptors(traitsByCodec);
 
       const ctx = { ...context, queryOperations, codecDescriptors };
-      const user = createModelAccessor(ctx, 'public', 'User');
-      const post = createModelAccessor(ctx, 'public', 'Post');
+      const user = createModelAccessor(
+        ctx,
+        'public',
+        'User',
+        createCollectionTables(ctx.contract, 'public', 'User'),
+      );
+      const post = createModelAccessor(
+        ctx,
+        'public',
+        'Post',
+        createCollectionTables(ctx.contract, 'public', 'Post'),
+      );
 
       const name = user['name'] as unknown as Record<string, unknown>;
       expect(typeof name['synthetic']).toBe('function');
 
       const views = post['views'] as unknown as Record<string, unknown>;
       expect(views['synthetic']).toBeUndefined();
+    });
+
+    it('attaches an operation without self to no field', () => {
+      const queryOperations = createSqlOperationRegistry();
+      queryOperations.register('attached', {
+        self: { traits: ['textual'] },
+        impl: () => undefined as never,
+      });
+      queryOperations.register('selfless', { impl: () => undefined as never });
+
+      const codecDescriptors = makeDescriptors({ 'pg/text@1': ['equality', 'textual'] });
+      const user = createModelAccessor(
+        { ...context, queryOperations, codecDescriptors },
+        'public',
+        'User',
+        createCollectionTables(
+          { ...context, queryOperations, codecDescriptors }.contract,
+          'public',
+          'User',
+        ),
+      );
+
+      const name = user['name'] as unknown as Record<string, unknown>;
+      expect(typeof name['attached']).toBe('function');
+      expect(name['selfless']).toBeUndefined();
     });
   });
 });

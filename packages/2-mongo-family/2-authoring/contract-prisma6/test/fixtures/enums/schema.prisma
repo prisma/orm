@@ -1,0 +1,20 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model Post {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  status Status
+  role   Role?
+}
+
+enum Status {
+  DRAFT     @map("draft")
+  PUBLISHED @map("published")
+}
+
+enum Role {
+  USER
+  ADMIN
+}

@@ -1,0 +1,14 @@
+[
+  {
+    "code": "PSL.PRISMA7_TABLE_COLLISION",
+    "file": "schema.prisma",
+    "line": 19,
+    "message": "Model \"Tagging\" and the implicit many-to-many relation \"Post.tags\" both use table \"public\".\"_PostToTag\"; Prisma 7 creates the relation's table there and never creates the model's. Rename the model's table with @@map, which makes Prisma 7's next migration create it, or give the relation its own name with @relation(\"<name>\") on both fields, which makes Prisma 7's next migration rebuild \"_PostToTag\" as the model's table and create an empty table for the relation, losing the relation's rows."
+  },
+  {
+    "code": "PSL.PRISMA7_TABLE_COLLISION",
+    "file": "schema.prisma",
+    "line": 7,
+    "message": "Model \"Tagging\" and the implicit many-to-many relation \"Post.tags\" both use table \"public\".\"_PostToTag\"; Prisma 7 creates the relation's table there and never creates the model's. Rename the model's table with @@map, which makes Prisma 7's next migration create it, or give the relation its own name with @relation(\"<name>\") on both fields, which makes Prisma 7's next migration rebuild \"_PostToTag\" as the model's table and create an empty table for the relation, losing the relation's rows."
+  }
+]

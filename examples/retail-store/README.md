@@ -1,6 +1,6 @@
-# Retail Store — Prisma Next MongoDB Example
+# Retail Store — Prisma 8 MongoDB Example
 
-An interactive e-commerce example application demonstrating Prisma Next's MongoDB capabilities with a Next.js frontend.
+An interactive e-commerce example application demonstrating Prisma 8's MongoDB capabilities with a Next.js frontend.
 
 ## What This Demonstrates
 

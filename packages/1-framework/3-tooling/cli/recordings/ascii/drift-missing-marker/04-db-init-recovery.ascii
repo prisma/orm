@@ -97,7 +97,7 @@ bash: Recovery: command not found
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
 > Recovery # initialize database from scratch [empty database, contract emitted]
 bash: Recovery: command not found
-> prisma-next db init
+> prisma db init
 
 
 
@@ -129,7 +129,7 @@ bash: Recovery: command not found
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
 > Recovery # initialize database from scratch [empty database, contract emitted]
 bash: Recovery: command not found
-> prisma-next db init
+> prisma db init
 
 
 
@@ -161,7 +161,7 @@ bash: Recovery: command not found
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
 > Recovery # initialize database from scratch [empty database, contract emitted]
 bash: Recovery: command not found
-> prisma-next db init
+> prisma db init
 
 
 
@@ -193,9 +193,9 @@ bash: Recovery: command not found
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
 > Recovery # initialize database from scratch [empty database, contract emitted]
 bash: Recovery: command not found
-> prisma-next db init
+> prisma db init
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
-prisma-next db init → Bootstrap a database to match the current contract
+prisma db init → Bootstrap a database to match the current contract
 │
 │ config:               prisma.config.ts
 │ contract:             contract.json

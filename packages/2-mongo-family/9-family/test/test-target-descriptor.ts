@@ -13,6 +13,7 @@ export const stubMongoTargetDescriptor: ControlTargetDescriptor<'mongo', 'mongo'
   id: 'mongo',
   familyId: 'mongo',
   targetId: 'mongo',
+  defaultNamespaceId: '__unbound__',
   version: '0.0.1',
   // Tests using this stub reject before any real serialization runs (the
   // family instance deserializes contracts itself, not via this slot).

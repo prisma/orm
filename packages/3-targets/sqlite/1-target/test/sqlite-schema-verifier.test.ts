@@ -1,0 +1,95 @@
+import { type ColumnDefault, type Contract, coreHash, profileHash } from '@internal/contract/types';
+import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { SqlStorage, type StorageTable } from '@internal/sql-contract/types';
+import { SqlSchemaIR, SqlTableIR } from '@internal/sql-schema-ir/types';
+import { ifDefined } from '@internal/utils/defined';
+import { applicationDomainOf } from '@repo/test-utils';
+import { describe, expect, it } from 'vitest';
+import { readSqliteDefault } from '../src/core/default-normalizer';
+import { diffSqliteSchema } from '../src/core/migrations/diff-database-schema';
+import { sqliteCreateNamespace } from '../src/core/sqlite-unbound-database';
+import { introspectedColumn, sqliteTestComponents } from './sqlite-test-types';
+
+describe('diffSqliteSchema resolves authored function defaults like introspected ones', () => {
+  function actualSchema(rawDefault: string): SqlSchemaIR {
+    return new SqlSchemaIR({
+      tables: {
+        event: new SqlTableIR({
+          name: 'event',
+          columns: {
+            at: introspectedColumn({
+              name: 'at',
+              typeText: 'text',
+              nullable: false,
+              default: rawDefault,
+              ...ifDefined('resolvedDefault', functionDefaultOf(rawDefault)),
+            }),
+          },
+          foreignKeys: [],
+          uniques: [],
+          indexes: [],
+        }),
+      },
+    });
+  }
+
+  function contractWithDefault(columnDefault: ColumnDefault): Contract<SqlStorage> {
+    const event: StorageTable = {
+      columns: {
+        at: {
+          many: false,
+          dataType: 'sqlite/text',
+          nullable: false,
+          codecId: 'sqlite/text@1',
+          default: columnDefault,
+        },
+      },
+      foreignKeys: [],
+      uniques: [],
+      indexes: [],
+    };
+    return {
+      target: 'sqlite',
+      targetFamily: 'sql',
+      profileHash: profileHash('test'),
+      storage: new SqlStorage({
+        storageHash: coreHash('c'.repeat(64)),
+        namespaces: {
+          [UNBOUND_NAMESPACE_ID]: sqliteCreateNamespace({
+            id: UNBOUND_NAMESPACE_ID,
+            entries: { table: { event } },
+          }),
+        },
+      }),
+      roots: {},
+      domain: applicationDomainOf({ models: {} }),
+      capabilities: {},
+      extensions: {},
+      meta: {},
+    };
+  }
+
+  it('reports nothing for sql`CURRENT_TIMESTAMP` against DEFAULT CURRENT_TIMESTAMP', () => {
+    const result = diffSqliteSchema({
+      contract: contractWithDefault({ kind: 'function', expression: 'CURRENT_TIMESTAMP' }),
+      schema: actualSchema('CURRENT_TIMESTAMP'),
+      frameworkComponents: sqliteTestComponents,
+    });
+    expect(result.issues).toEqual([]);
+  });
+
+  it('still reports a default that differs', () => {
+    const result = diffSqliteSchema({
+      contract: contractWithDefault({ kind: 'function', expression: 'CURRENT_TIMESTAMP' }),
+      schema: actualSchema("'2020-01-01'"),
+      frameworkComponents: sqliteTestComponents,
+    });
+    expect(result.issues).not.toEqual([]);
+  });
+});
+
+/** The function default introspection reads from `rawDefault`; a literal needs the column codec, which these schemas have none of. */
+function functionDefaultOf(rawDefault: string) {
+  const read = readSqliteDefault(rawDefault, 'text');
+  return read.kind === 'function' ? read : undefined;
+}

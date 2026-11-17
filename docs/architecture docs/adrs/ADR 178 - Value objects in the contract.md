@@ -2,6 +2,8 @@
 
 ## At a glance
 
+> **Note:** this ADR describes value objects in the domain plane, where they first lived. They are now storage entities ([ADR 309](ADR%20309%20-%20Value%20objects%20are%20storage%20entities%2C%20and%20a%20discriminator%20column%20names%20a%20value%20set.md)); the shapes of their members below are unchanged, and a field now refers to its value object by storage coordinate rather than by name.
+
 A User model with scalar fields and value object fields. Value objects are defined in a separate `valueObjects` section — they share the same field descriptor shape (`{ nullable, codecId }`) as models, but the framework makes fundamentally different promises about them.
 
 ```json
@@ -13,7 +15,7 @@ A User model with scalar fields and value object fields. Value objects are defin
         "_id": { "nullable": false, "codecId": "mongo/objectId@1" },
         "email": { "nullable": false, "codecId": "mongo/string@1" },
         "homeAddress": { "nullable": true, "type": "Address" },
-        "previousAddresses": { "nullable": false, "type": "Address", "many": true }
+        "previousAddresses": { "nullable": false, "type": "Address", "many": { "elementNullable": false } }
       },
       "relations": {},
       "storage": { "collection": "users" }
@@ -41,7 +43,7 @@ Three things to notice:
 
 1. **Value objects live in `valueObjects`, not `models`.** They are typed data structures with no framework guarantees — no identity, no lifecycle hooks, no referential integrity. Models are full framework citizens with all of those.
 2. **Fields reference value objects via `type`, not `codecId`.** `"type": "Address"` means "this field holds an Address value object." `codecId` is for scalar types with a codec. The two are mutually exclusive.
-3. **`many: true` expresses cardinality for value objects.** Value object references use `many` (one-directional) while relations use `cardinality` (bidirectional semantics like `1:N`, `N:1`).
+3. **`many: { elementNullable: false }` expresses a list of non-null value objects.** `nullable` controls whether the whole list can be null; `many.elementNullable` controls whether its elements can be null. Relations use `cardinality` for bidirectional semantics like `1:N` and `N:1`.
 
 The resulting TypeScript row type:
 
@@ -103,6 +105,8 @@ This extends the framework commitment hierarchy:
 
 ### Value objects are a top-level contract section
 
+> **Superseded:** value objects now live in the storage plane, at `storage.namespaces.<ns>.entries.valueObject`, and a domain field refers to one by its storage coordinate. See [ADR 309](ADR%20309%20-%20Value%20objects%20are%20storage%20entities%2C%20and%20a%20discriminator%20column%20names%20a%20value%20set.md).
+
 Value objects live in a `valueObjects` section alongside `models`. They use the same field shape (`{ nullable, codecId }`) as model fields. Refer to the [At a glance](#at-a-glance) example for the complete structure.
 
 **Why not inside `models`?** The `models` section carries an implicit promise: everything here is a full framework citizen. Mixing in value objects conflates two concepts with different guarantees. Consumers iterating `models` (the ORM building its graph, migration tooling planning DDL, validation checking integrity constraints) would need to filter by kind.
@@ -125,7 +129,7 @@ This applies uniformly: value object fields can appear on models *and* on other 
   "fields": {
     "label": { "nullable": false, "codecId": "mongo/string@1" },
     "url": { "nullable": false, "codecId": "mongo/string@1" },
-    "children": { "nullable": false, "type": "NavItem", "many": true }
+    "children": { "nullable": false, "type": "NavItem", "many": { "elementNullable": false } }
   }
 }
 ```
@@ -134,18 +138,22 @@ A third option, `union`, handles fields that can hold one of several types — s
 
 ### Cardinality: `many` on value objects, `cardinality` on relations
 
-Value object references use two orthogonal dimensions — **nullability** (`nullable`) and **cardinality** (`many`):
+Value object references describe cardinality with `many`: omission or `false` means one value object, while `{ elementNullable: boolean }` means a list. Whole-field nullability (`nullable`) and list-element nullability (`many.elementNullable`) are independent:
 
 ```json
-"address":   { "type": "Address", "nullable": false }
-"address":   { "type": "Address", "nullable": true }
-"addresses": { "type": "Address", "nullable": false, "many": true }
-"addresses": { "type": "Address", "nullable": true, "many": true }
+{
+  "address": { "type": "Address", "nullable": false },
+  "optionalAddress": { "type": "Address", "nullable": true },
+  "addresses": { "type": "Address", "nullable": false, "many": { "elementNullable": false } },
+  "nullableElements": { "type": "Address", "nullable": false, "many": { "elementNullable": true } },
+  "optionalAddresses": { "type": "Address", "nullable": true, "many": { "elementNullable": false } },
+  "optionalNullableElements": { "type": "Address", "nullable": true, "many": { "elementNullable": true } }
+}
 ```
 
-A nullable list (`nullable: true, many: true`) means the list itself can be null — semantically different from an empty list.
+A nullable list permits the whole value to be null, which is distinct from an empty list. Nullable elements permit null entries inside a present list without making the container nullable. The four list shapes correspond to `Address[]`, `(Address | null)[]`, `Address[] | null`, and `(Address | null)[] | null`. [ADR 258](ADR%20258%20-%20List%20cardinality%20has%20independent%20container%20and%20element%20nullability.md) describes the shared representation and family-specific enforcement.
 
-Relations keep `cardinality: "1:N" | "N:1" | "1:1"` because they encode bidirectional semantics — "I have one manager" (`N:1`) is different from "I have one passport" (`1:1`) even though both are "one from my side." Value object references have no "other side," so `many: true/false` is sufficient.
+Relations keep `cardinality: "1:N" | "N:1" | "1:1"` because they encode bidirectional semantics — "I have one manager" (`N:1`) is different from "I have one passport" (`1:1`) even though both are "one from my side." Value object references have no inverse relation; their `many` descriptor records list cardinality and element nullability without relation cardinality.
 
 ### Fixed-length lists don't need contract representation
 
@@ -163,6 +171,8 @@ If the positions have semantic meaning — and they almost always do — use nam
 You say `boundingBox.topLeft`, not `boundingBox[0]`. Length constraints on homogeneous lists are a validation concern, not a structural one.
 
 ### Value objects need no special storage mapping
+
+> **Superseded:** the value object's definition is now a storage entity, so a change to its fields changes the storage hash. See [ADR 309](ADR%20309%20-%20Value%20objects%20are%20storage%20entities%2C%20and%20a%20discriminator%20column%20names%20a%20value%20set.md).
 
 Value object fields use `storage.fields` like any other field. The storage layer maps domain field names to physical locations without knowing whether the field holds a scalar or a composite:
 

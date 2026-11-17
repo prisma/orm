@@ -13,7 +13,7 @@ function distinct(values: ReadonlyArray<{ toString: () => string }>): readonly s
 
 describe('temporal default presets', () => {
   it(
-    'both representations fill their storage default and share one generated value per operation',
+    'both representations share one client-generated value per operation',
     () =>
       withReadings(async ({ db }) => {
         await db.public.Reading.createAll([
@@ -28,6 +28,8 @@ describe('temporal default presets', () => {
         for (const row of rows) {
           expect(row.createdAt).toBeInstanceOf(Temporal.Instant);
           expect(typeof row.createdAtText).toBe('string');
+          expect(row.createdAt.toString()).toBe(row.updatedAt.toString());
+          expect(row.createdAtText).toBe(row.updatedAtText);
         }
 
         expect(distinct(rows.map((row) => row.updatedAt))).toHaveLength(1);
@@ -48,6 +50,7 @@ describe('temporal default presets', () => {
         expect(Temporal.Instant.compare(updated!.updatedAt, created.updatedAt)).toBeGreaterThan(0);
         expect(updated!.updatedAtText).not.toBe(created.updatedAtText);
         expect(updated!.createdAt.toString()).toBe(created.createdAt.toString());
+        expect(updated!.createdAtText).toBe(created.createdAtText);
       }),
     timeouts.spinUpPpgDev,
   );

@@ -51,7 +51,7 @@ describe('resolveTelemetryHooks', () => {
     expect(fired[0]).toMatchObject({
       exitCode: 2,
       command: {
-        commandPath: ['prisma-next', 'migration', 'list'],
+        commandPath: ['prisma', 'migration', 'list'],
         positionalArgs: [],
         options: [{ attributeName: 'json', longName: '--json', source: 'cli' }],
       },

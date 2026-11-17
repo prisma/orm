@@ -65,7 +65,7 @@ export interface RunTelemetryInputs {
  * the fork runs in the background and never blocks the parent. Every
  * failure mode is swallowed; the parent's stdout/stderr is untouched in
  * normal operation, the only escape valve being
- * `PRISMA_NEXT_DEBUG=1` which routes diagnostics to stderr.
+ * `PRISMA_DEBUG=1` which routes diagnostics to stderr.
  *
  * Returns the spawn outcome so debug-mode logging and the test-harness
  * probe (which verifies test runs short-circuit the fork) can inspect
@@ -115,7 +115,7 @@ export function runTelemetry(inputs: RunTelemetryInputs): TelemetryRunOutcome {
       stdio: ['pipe', 'ignore', 'ignore', 'ipc'],
     });
     child.send(payload, (err) => {
-      if (err !== null && process.env['PRISMA_NEXT_DEBUG'] === '1') {
+      if (err !== null && process.env['PRISMA_DEBUG'] === '1') {
         process.stderr.write(`[cli-telemetry] parent send error: ${String(err)}\n`);
       }
     });
@@ -123,7 +123,7 @@ export function runTelemetry(inputs: RunTelemetryInputs): TelemetryRunOutcome {
     child.unref();
     return { spawned: true };
   } catch (err) {
-    if (process.env['PRISMA_NEXT_DEBUG'] === '1') {
+    if (process.env['PRISMA_DEBUG'] === '1') {
       process.stderr.write(`[cli-telemetry] parent fork failed: ${String(err)}\n`);
     }
     return { spawned: false, reason: 'fork-failed' };

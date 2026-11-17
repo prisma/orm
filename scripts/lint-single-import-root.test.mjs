@@ -34,6 +34,10 @@ before(() => {
   });
   pkg('examples/parent', { 'src/app.ts': "import x from '@prisma/orm-mongo/runtime';" });
   pkg('examples/parent/nested', { 'src/app.ts': "import y from '@internal/mongo-orm';" });
+  pkg('test/integration', {
+    'test/query.ts': "import { budgets } from '@internal/sql-runtime';",
+    'test/packaging/tarball.test.ts': "await import('@prisma/orm-postgres/runtime');",
+  });
 });
 
 after(() => {
@@ -65,6 +69,57 @@ describe('findMixedPackages', () => {
     const [entry] = findMixedPackages(base, ['examples']).filter((e) => e.pkg === 'examples/mixed');
     assert.deepEqual([...entry.published.keys()], ['@prisma/orm-postgres/runtime']);
     assert.deepEqual([...entry.internal.keys()], ['@internal/sql-runtime']);
+  });
+
+  test('skips the packaging suites when attributing specifiers', () => {
+    const mixed = findMixedPackages(base, ['test']).map((entry) => entry.pkg);
+    assert.ok(!mixed.includes('test/integration'));
+  });
+
+  test('skips the fixtures of every upgrade script’s tests', () => {
+    const tree = mkdtempSync(join(tmpdir(), 'single-import-root-upgrade-'));
+    try {
+      const integration = join(tree, 'test/integration');
+      const fixture = join(integration, 'test/upgrade-instructions/any-script/fixtures/app/src');
+      mkdirSync(fixture, { recursive: true });
+      writeFileSync(join(integration, 'package.json'), '{"name":"fixture"}');
+      writeFileSync(
+        join(integration, 'query.ts'),
+        "import { budgets } from '@internal/sql-runtime';",
+      );
+      writeFileSync(join(fixture, 'db.ts'), "import postgres from '@prisma/orm-postgres/runtime';");
+
+      assert.deepEqual(findMixedPackages(tree, ['test']), []);
+    } finally {
+      rmSync(tree, { recursive: true, force: true });
+    }
+  });
+
+  test('skips the sample import lines of every fragment’s detection test', () => {
+    const tree = mkdtempSync(join(tmpdir(), 'single-import-root-detection-'));
+    try {
+      const integration = join(tree, 'test/integration');
+      const fragment = join(integration, 'test/upgrade-instructions/any-fragment');
+      mkdirSync(fragment, { recursive: true });
+      writeFileSync(join(integration, 'package.json'), '{"name":"fixture"}');
+      writeFileSync(
+        join(integration, 'query.ts'),
+        "import { budgets } from '@internal/sql-runtime';",
+      );
+      writeFileSync(
+        join(fragment, 'detection.test.ts'),
+        'const sample = "import postgres from \'@prisma/orm-postgres/runtime\';";',
+      );
+
+      assert.deepEqual(findMixedPackages(tree, ['test']), []);
+    } finally {
+      rmSync(tree, { recursive: true, force: true });
+    }
+  });
+
+  test('still reports the package when the same specifiers sit outside the exempt subtree', () => {
+    const mixed = findMixedPackages(base, ['test'], []).map((entry) => entry.pkg);
+    assert.ok(mixed.includes('test/integration'));
   });
 });
 

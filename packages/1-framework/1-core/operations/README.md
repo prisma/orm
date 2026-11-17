@@ -1,6 +1,6 @@
 # @internal/operations
 
-Target-neutral operation registry for Prisma Next.
+Target-neutral operation registry for Prisma 8.
 
 ## Overview
 

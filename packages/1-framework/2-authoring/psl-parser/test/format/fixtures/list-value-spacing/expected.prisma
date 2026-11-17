@@ -1,0 +1,13 @@
+datasource db {
+  extensions = [pgvector, postgis]
+}
+
+model Post {
+  id       Int      @id
+  authorId Int
+  author   User     @relation(fields: [authorId], references: [id])
+  tags     String[]
+
+  @@index(fields: [authorId, id])
+  @@index([[authorId], [id]])
+}

@@ -1,6 +1,6 @@
-# MongoDB in Prisma Next — The User Promise
+# MongoDB in Prisma 8 — The User Promise
 
-What does Prisma Next offer a MongoDB user, and why would they choose it over the `mongodb` driver or Mongoose? This document articulates the value proposition from the user's perspective — what they get, what they give up, and where PN sits in the spectrum between "raw driver" and "full ORM."
+What does Prisma 8 offer a MongoDB user, and why would they choose it over the `mongodb` driver or Mongoose? This document articulates the value proposition from the user's perspective — what they get, what they give up, and where PN sits in the spectrum between "raw driver" and "full ORM."
 
 See also: [design-questions.md](../planning/mongo-target/1-design-docs/design-questions.md), [MongoDB primitives reference](mongodb-primitives-reference.md)
 
@@ -284,7 +284,7 @@ Clarity about what's out of scope is as important as the promises:
 
 ## Where PN sits in the ecosystem
 
-| Concern | Raw `mongodb` driver | Mongoose | Prisma ORM (Mongo) | **Prisma Next** |
+| Concern | Raw `mongodb` driver | Mongoose | Prisma ORM (Mongo) | **Prisma 8** |
 |---|---|---|---|---|
 | Schema definition | ❌ None | 🟡 JS schemas, partial TS | 🟡 PSL (no embedded docs) | ✅ Contract (TS or PSL, full embedding) |
 | Type safety (queries) | 🟡 Top-level only | ❌ FilterQuery → any | 🟡 Generated (no embedding) | ✅ Full (filters, operators, nested) |

@@ -1,12 +1,11 @@
-// Emitted into `packages/2-sql/4-lanes/sql-builder/test/fixtures/generated/`.
+// Emitted into `packages/2-sql-family/4-lanes/sql-builder/test/fixtures/generated/`.
 // Identical to `contract.ts` except that it composes no pgvector: sql-builder
 // cannot depend on that package (it would close a build cycle through
 // `@internal/postgres`), and an emitted contract importing types the consuming
 // package cannot resolve degrades to `any` under `skipLibCheck`, which makes
 // every codec-resolved type assertion vacuous.
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
-import { uuidv4 } from '@internal/ids';
-import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
+import { defineContract, field, gen, model, rel, type } from '@internal/postgres/contract-builder';
 
 const UserBase = model('User', {
   fields: {
@@ -41,14 +40,14 @@ const Comment = model('Comment', {
 const Profile = model('Profile', {
   fields: {
     id: field.column(int4Column).id(),
-    userId: field.column(int4Column).column('user_id'),
+    userId: field.column(int4Column).column('user_id').unique(),
     bio: field.column(textColumn),
   },
 }).sql({ table: 'profiles' });
 
 const Article = model('Article', {
   fields: {
-    id: field.generated(uuidv4()).id(),
+    id: field.column(type.Char(36)).onCreate(gen.uuid()).id(),
     title: field.column(textColumn),
   },
 }).sql({ table: 'articles' });

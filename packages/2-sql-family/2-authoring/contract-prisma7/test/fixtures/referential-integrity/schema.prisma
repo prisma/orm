@@ -1,0 +1,17 @@
+datasource db {
+  provider             = "postgresql"
+  referentialIntegrity = "prisma"
+}
+
+model User {
+  id    Int    @id
+  posts Post[]
+}
+
+model Post {
+  id       Int  @id
+  authorId Int
+  author   User @relation(fields: [authorId], references: [id])
+
+  @@index([authorId])
+}

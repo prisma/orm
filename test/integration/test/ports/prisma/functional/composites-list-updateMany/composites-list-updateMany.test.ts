@@ -6,7 +6,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 
 // Port of prisma/prisma@a6d0155 packages/client/tests/functional/composites/list/updateMany.ts
 // (mongodb matrix entry). Upstream uses `prisma.commentRequiredList.updateMany(...)` which
-// returns `{ count: N }`. In prisma-next the equivalent is `.updateAndCount()`.
+// returns `{ count: N }`. In Prisma 8 the equivalent is `.updateAndCount()`.
 //
 // The upstream seed (commentListDataA) creates one entry with:
 //   contents: [{ text: 'Hello World', upvotes: [{ vote: true, userId: '10' }] }]
@@ -22,8 +22,8 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //   - set null shorthand
 //
 // Non-ported — see non-ported ledger:
-//   - updateMany (embedded-list per-element filtered update) — no prisma-next surface
-//   - deleteMany (embedded-list per-element filtered delete) — no prisma-next surface
+//   - updateMany (embedded-list per-element filtered update) — no Prisma 8 surface
+//   - deleteMany (embedded-list per-element filtered delete) — no Prisma 8 surface
 //   - unset — asserts Prisma-specific "Unknown argument `unset`" on required list field
 //   - upsert set / upsert update — asserts Prisma-specific "Unknown argument `upsert`"
 
@@ -32,7 +32,7 @@ function withComposites(fn: Parameters<typeof withMongoPort<Contract>>[1]) {
 }
 
 const seedA = (id: string) => ({
-  _id: id,
+  id,
   country: null,
   contents: [{ text: 'Hello World', upvotes: [{ vote: true, userId: '10' }] }],
 });
@@ -45,24 +45,7 @@ describe('ports/prisma/functional/composites/list/updateMany', () => {
         const id = new ObjectId().toHexString();
         await db.comment_required_list.create(seedA(id));
 
-        const count = await db.comment_required_list.where({ _id: id }).updateAndCount({
-          country: 'Mars',
-          contents: [{ text: 'Goodbye World', upvotes: [{ vote: false, userId: '42' }] }],
-        });
-
-        expect(count).toBe(1);
-      }),
-    timeouts.spinUpMongoMemoryServer,
-  );
-
-  it(
-    'set shorthand (same as set for ORM — no prisma set wrapper)',
-    () =>
-      withComposites(async ({ db }) => {
-        const id = new ObjectId().toHexString();
-        await db.comment_required_list.create(seedA(id));
-
-        const count = await db.comment_required_list.where({ _id: id }).updateAndCount({
+        const count = await db.comment_required_list.where({ id }).updateAndCount({
           country: 'Mars',
           contents: [{ text: 'Goodbye World', upvotes: [{ vote: false, userId: '42' }] }],
         });
@@ -73,7 +56,7 @@ describe('ports/prisma/functional/composites/list/updateMany', () => {
   );
 
   // Upstream asserts null on required `contents` is a type error and a runtime throw.
-  // Prisma Next rejects it at the type level (@ts-expect-error holds), and MongoDB
+  // Prisma 8 rejects it at the type level (@ts-expect-error holds), and MongoDB
   // rejects it through the provisioned collection validator.
   it(
     'set null',
@@ -83,24 +66,7 @@ describe('ports/prisma/functional/composites/list/updateMany', () => {
         await db.comment_required_list.create(seedA(id));
 
         // @ts-expect-error required `contents` list cannot be null
-        const promise = db.comment_required_list.where({ _id: id }).updateAndCount({
-          country: 'France',
-          contents: null,
-        });
-        await expect(promise).rejects.toThrow();
-      }),
-    timeouts.spinUpMongoMemoryServer,
-  );
-
-  it(
-    'set null shorthand',
-    () =>
-      withComposites(async ({ db }) => {
-        const id = new ObjectId().toHexString();
-        await db.comment_required_list.create(seedA(id));
-
-        // @ts-expect-error required `contents` list cannot be null
-        const promise = db.comment_required_list.where({ _id: id }).updateAndCount({
+        const promise = db.comment_required_list.where({ id }).updateAndCount({
           country: 'France',
           contents: null,
         });
@@ -116,7 +82,7 @@ describe('ports/prisma/functional/composites/list/updateMany', () => {
         const id = new ObjectId().toHexString();
         await db.comment_required_list.create(seedA(id));
 
-        const count = await db.comment_required_list.where({ _id: id }).updateAndCount({
+        const count = await db.comment_required_list.where({ id }).updateAndCount({
           country: 'Mars',
           contents: [
             {
@@ -142,7 +108,7 @@ describe('ports/prisma/functional/composites/list/updateMany', () => {
         await db.comment_required_list.create(seedA(id));
 
         const count = await db.comment_required_list
-          .where({ _id: id })
+          .where({ id })
           .updateAndCount((u) => [u.contents.push({ text: 'Goodbye World', upvotes: [] })]);
 
         expect(count).toBe(1);

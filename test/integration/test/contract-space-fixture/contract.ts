@@ -17,8 +17,8 @@ const storageBody = {
         table: {
           [TEST_BOX_TABLE]: {
             columns: {
-              x: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-              y: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
+              x: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+              y: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
             },
             uniques: [],
             indexes: [],

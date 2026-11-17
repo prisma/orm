@@ -1,6 +1,6 @@
 # Glossary
 
-User-facing terminology for Prisma Next. This is the **source of truth** for how we name things in documentation, CLI output, error messages, and public APIs.
+User-facing terminology for Prisma 8. This is the **source of truth** for how we name things in documentation, CLI output, error messages, and public APIs.
 
 Where internal terminology currently diverges from the desired user-facing term, the divergence is noted with a refactoring status.
 
@@ -16,13 +16,13 @@ The application carries its contract and the database is signed with the contrac
 
 ### Schema
 
-The structure of the database itself — tables, columns, indexes, constraints (SQL) or collections and indexes (MongoDB). The schema lives in the database; the contract lives in source code. Prisma Next manages the schema through migrations that bring the database in line with the contract.
+The structure of the database itself — tables, columns, indexes, constraints (SQL) or collections and indexes (MongoDB). The schema lives in the database; the contract lives in source code. Prisma 8 manages the schema through migrations that bring the database in line with the contract.
 
-In other ORMs, "schema" often refers to the user-authored model definitions. In Prisma Next, that's the contract. "Schema" refers specifically to the database's actual structure.
+In other ORMs, "schema" often refers to the user-authored model definitions. In Prisma 8, that's the contract. "Schema" refers specifically to the database's actual structure.
 
 ### Contract Provider
 
-The part of your config that tells Prisma Next where your contract source lives and what format it's in. Prisma Next ships two built-in providers:
+The part of your config that tells Prisma 8 where your contract source lives and what format it's in. Prisma 8 ships two built-in providers:
 
 | Provider               | Description                              |
 | ---------------------- | ---------------------------------------- |
@@ -33,23 +33,41 @@ Configured via the `contract:` property in `prisma.config.ts`.
 
 ### Extension
 
-An installable package that adds features to Prisma Next — new data types, database-specific operations, or custom behavior. For example, the pgvector extension adds vector search support. Extensions integrate across the full stack: they can extend the contract language, contribute types and capabilities, and provide runtime behavior.
+A component, installed from an npm package, that adds features to Prisma 8 — new data types, database-specific operations, or custom behavior. For example, the pgvector extension adds vector search support. Extensions integrate across the full stack: they can extend the contract language, contribute types and capabilities, and provide runtime behavior.
+
+Most packages hold one extension; `@prisma/orm-postgres-contrib` holds one for each trusted PostgreSQL contrib module it supports, under its own entrypoints. The citext extension's contract declares the `citext` database extension, so the planner creates it and `db sign` checks a database has it.
 
 Configured via the `extensions` array in `prisma.config.ts`; emitted into the contract under the top-level `extensions` key. Concept-level type names (`ExtensionPackRef`, `ControlExtensionDescriptor`) keep the "pack" vocabulary.
 
 ### Middleware
 
-A function that runs around every query, similar to middleware in Express or Koa. Middleware can inspect queries, enforce limits, collect metrics, or block unsafe operations — without changing how queries are built or executed. Examples: `budgets()` (cost limits), `lints()` (query checks).
+An object of hooks that the runtime calls for every activity: lifecycle events, which observe each activity, and interceptors, which can change or stop a statement while the runtime runs it. Middleware can inspect statements, enforce limits, collect metrics, or block unsafe operations — without changing how queries are built. Examples: `budgets()` (cost limits), `lints()` (query checks), the cache middleware.
 
 At the framework level, middleware is defined by the `RuntimeMiddleware` interface in `@internal/framework-components`. A middleware can be family-agnostic (runs in any runtime) or scoped to a specific family (`familyId: 'sql'`) and/or target (`targetId: 'postgres'`). Family-specific interfaces (`SqlMiddleware`, `MongoMiddleware`) narrow the plan and context types.
 
+### Activity
+
+One act the runtime's middleware observes: a statement sent to the database (`kind: 'statement'`), or a transaction from `transaction()` to its `commit()` or `rollback()` (`kind: 'transaction'`). An activity has an `id`, a `kind`, the `annotations` the user put on it, and may have a parent: a statement sent on an open transaction is that transaction's child. Every hook of one activity receives the same context, with `ctx.state(key)` for per-activity state. See ADR 271.
+
+### Lifecycle event
+
+One of the three hooks every activity has: `activityStarted` when the act begins, `activityEnded` when it ends (`succeeded`, `failed` or `stopped`), and `activityFinalized` when its effects are final. Lifecycle events observe: they cannot replace an activity's result, but an error thrown from `activityStarted` or `activityEnded` fails the activity.
+
+### Interceptor
+
+A hook that can change or stop a statement while the runtime runs it: `beforeCompile` (SQL only) rewrites the query tree, `beforeEncode` can block the statement or change its parameter values, `intercept.onQuery` and `intercept.onExecute` can supply its result instead of running it, and `onRow` sees each row the driver returns.
+
+### Finalized
+
+An activity is finalized when its effects are final, and `activityFinalized` reports the outcome: `committed`, `rolled-back`, or `unknown` when the runtime cannot tell whether the writes landed. A statement with no enclosing transaction is finalized right after it ends; one inside a transaction is finalized when the transaction ends, with the transaction's outcome.
+
 ### Plan
 
-The compiled form of a query. Before anything touches the database, Prisma Next compiles your query into a plan — the query payload, parameters, and metadata. Plans are inspectable, so you (or your tooling) can see exactly what will execute. Guardrails like budgets and lints operate on plans, not raw queries. Each family has its own plan type — `SqlQueryPlan` carries a SQL string and parameters; `MongoQueryPlan` carries a command (find, insert, update, delete, or aggregate pipeline).
+The compiled form of a query. Before anything touches the database, Prisma 8 compiles your query into a plan — the query payload, parameters, and metadata. Plans are inspectable, so you (or your tooling) can see exactly what will execute. Guardrails like budgets and lints operate on plans, not raw queries. Each family has its own plan type — `SqlQueryPlan` carries a SQL string and parameters; `MongoQueryPlan` carries a command (find, insert, update, delete, or aggregate pipeline).
 
 ### Adapter
 
-The piece that connects Prisma Next to a specific database. For SQL targets, the adapter translates queries into the correct dialect. For MongoDB, the adapter dispatches commands to the `mongodb` Node.js driver. Adapters also report what features the database supports, so Prisma Next can check at startup whether your contract's requirements are met.
+The piece that connects Prisma 8 to a specific database. For SQL targets, the adapter translates queries into the correct dialect. For MongoDB, the adapter dispatches commands to the `mongodb` Node.js driver. Adapters also report what features the database supports, so Prisma 8 can check at startup whether your contract's requirements are met.
 
 ### Driver
 
@@ -61,11 +79,11 @@ Which specific database you're using — Postgres, MySQL, MongoDB, etc. Each tar
 
 ### Family
 
-A category of databases that share fundamental characteristics. SQL is a family — Postgres, MySQL, and SQLite are all SQL targets that share concepts like tables, columns, and joins. MongoDB is its own family (not a target under a generic "document" family). Prisma Next defines shared behavior at the family level so individual targets only need to handle what's specific to them.
+A category of databases that share fundamental characteristics. SQL is a family — Postgres, MySQL, and SQLite are all SQL targets that share concepts like tables, columns, and joins. MongoDB is its own family (not a target under a generic "document" family). Prisma 8 defines shared behavior at the family level so individual targets only need to handle what's specific to them.
 
 ### Framework Component
 
-The umbrella term for the five kinds of building blocks that make up a Prisma Next configuration: **family**, **target**, **adapter**, **driver**, and **extension**. Each framework component follows the same structural pattern: a `ComponentDescriptor` (declarative metadata — identity, version, capabilities, type imports) plus plane-specific descriptor and instance types (see [Descriptor](#descriptor), [Instance](#instance) in the Architecture section).
+The umbrella term for the five kinds of building blocks that make up a Prisma 8 configuration: **family**, **target**, **adapter**, **driver**, and **extension**. Each framework component follows the same structural pattern: a `ComponentDescriptor` (declarative metadata — identity, version, capabilities, type imports) plus plane-specific descriptor and instance types (see [Descriptor](#descriptor), [Instance](#instance) in the Architecture section).
 
 Framework components are composed into stacks via `create*Stack()` functions. The framework-components package (`@internal/framework-components`) owns the base types and assembly logic that operate on framework components generically, without knowing which family or target they belong to.
 
@@ -127,7 +145,7 @@ The terminology used instead of "inheritance" or "subclassing" for polymorphic m
 
 ### Query Builder
 
-A type-safe interface for constructing queries that compile to plans. Each query builder is subject to the **one-query-one-statement rule**: a single builder call produces exactly one SQL statement. Prisma Next provides several query builders:
+A type-safe interface for constructing queries that compile to plans. Each query builder is subject to the **one-query-one-statement rule**: a single builder call produces exactly one SQL statement. Prisma 8 provides several query builders:
 
 - **SQL query builder** — composable, relational query construction via chained method calls (`sql().from(...).select(...).limit(...)`)
 - **Raw SQL query builder** — write SQL directly when the DSL doesn't cover your use case. Raw SQL queries still go through the same guardrails (budgets, lints, telemetry) as builder queries.
@@ -162,7 +180,7 @@ The control plane produces artifacts (contract JSON, `.d.ts`, migrations); the e
 
 A declarative, immutable object that describes *what* something is and *what it provides*, without carrying mutable state. Descriptors are configuration inputs — they declare identity, capabilities, and contributions so that the framework can compose them without executing anything.
 
-The pattern is used throughout Prisma Next, not only for [framework components](#framework-component). For example, codec descriptors declare type mappings and encoding/decoding behavior. The most prominent use is in framework components, where each component kind has a base descriptor (`FamilyDescriptor`, `TargetDescriptor`, `AdapterDescriptor`, `DriverDescriptor`, `ExtensionDescriptor`) plus plane-specific extensions (`ControlFamilyDescriptor`, `RuntimeTargetDescriptor`, etc.) that add factory methods for creating instances.
+The pattern is used throughout Prisma 8, not only for [framework components](#framework-component). For example, codec descriptors declare type mappings and encoding/decoding behavior. The most prominent use is in framework components, where each component kind has a base descriptor (`FamilyDescriptor`, `TargetDescriptor`, `AdapterDescriptor`, `DriverDescriptor`, `ExtensionDescriptor`) plus plane-specific extensions (`ControlFamilyDescriptor`, `RuntimeTargetDescriptor`, etc.) that add factory methods for creating instances.
 
 Descriptors are typically exported as singleton const values (e.g., `mongoFamilyDescriptor`, `postgresTargetDescriptor`).
 
@@ -191,15 +209,31 @@ Each plane has its own stack type:
 
 ### Capability
 
-A specific feature that a database may or may not support (e.g., `RETURNING` clauses, vector indexes). Your contract declares which capabilities it needs; the adapter reports which ones the database provides. Prisma Next checks these match at startup, so you find out about missing features immediately rather than at query time.
+A specific feature that a database may or may not support (e.g., `RETURNING` clauses, vector indexes). Your contract declares which capabilities it needs; the adapter reports which ones the database provides. Prisma 8 checks these match at startup, so you find out about missing features immediately rather than at query time.
 
 ### Codec
 
 Handles the translation between JavaScript values and database values. When you read a timestamp from the database, a codec converts it to a JavaScript `Date`; when you write it back, the codec converts it the other way. Extensions provide codecs for specialized types like vectors or geometries.
 
+### Convenience type
+
+A type, in PSL or the TypeScript builder (`type.DateTime(...)`), named for what a field means in the application, such as `DateTime`, `Date`, `Time` or `Duration`, that becomes exactly one explicit type. Optional arguments choose which, with defaults. The contract stores only the explicit type. See ADR 279.
+
+### Explicit type
+
+A type, in PSL or the TypeScript builder, that fixes one codec, so it fixes both the column type and the value the application reads. It is named after the database (ADR 257). An explicit type that a convenience type chooses is named after what stores it, with a suffix for the kind of value: the database's column type where the database has one (`TimestamptzTemporal`, `TimestamptzJsDate`), else the target's data type (SQLite's `DateString`, stored as text). It leaves the suffix off only when its column type has one codec and its bare name is not a convenience name, as PostgreSQL's `Timetz`. See ADR 279 and ADR 315.
+
 ### Marker
 
-A small record stored in the database that tracks which contract the database is currently migrated to. Before running queries or migrations, Prisma Next checks that the marker matches the contract the application is carrying. This catches situations where the database and application have drifted out of sync — for example, if a migration was run but the application wasn't redeployed.
+A small record stored in the database that tracks which contract the database is currently migrated to. Before running queries or migrations, Prisma 8 checks that the marker matches the contract the application is carrying. This catches situations where the database and application have drifted out of sync — for example, if a migration was run but the application wasn't redeployed. The marker also records the database's [change policy](#change-policy) and [data protection policy](#data-protection-policy) under `meta.policies`.
+
+### Change Policy
+
+The strategies a database may be changed by, recorded in its [marker](#marker): `migrate` (walk the migration graph with `db migrate`) and `reconcile` (plan and apply the difference to a contract with `db update`, or sign the database with `db sign`). A database that changes only through reviewed migrations, such as production, records `["migrate"]`; a database that records nothing permits both. `db update` and `db sign` refuse a database whose change policy lacks `reconcile`, and `db migrate` refuses one whose change policy lacks `migrate`, with `MIGRATION.CHANGE_POLICY_FORBIDS`. A [ref](#ref-contract-ref) declares the change policy its database should have; see [data protection policy](#data-protection-policy) for how declared and recorded policies are kept in agreement. Unrelated to [control policy](architecture%20docs/adrs/ADR%20224%20-%20Control%20Policy%20—%20framework-locked%20vocabulary%20and%20family-owned%20dispatch.md), which says whether Prisma 8 may write a given database object. See [ADR 320](architecture%20docs/adrs/ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md).
+
+### Data Protection Policy
+
+Whether a change to a database may lose data or widen who can read or write rows, recorded in its [marker](#marker) as two settings: `dataLoss` (`data-loss-forbidden`, `data-loss-with-consent`, `data-loss-permitted`) and `accessWidening` (`access-widening-forbidden`, `access-widening-with-consent`, `access-widening-permitted`). `with-consent` is the default and is today's behaviour: `db update` asks before a loss, and a migration carries the consent given when it was planned. No command enforces the data protection settings yet: they are recorded and compared with a ref's, and `forbidden` and `permitted` behave as `with-consent` until enforcement is in place. A [ref](#ref-contract-ref) declares the policies its database should have; `db migrate --to <ref>` and `db update --to <ref>` fail with `MIGRATION.POLICY_MISMATCH` when they differ from the database's, and write the ref's policies into the marker only when given `--permit-policy-change`. See [ADR 320](architecture%20docs/adrs/ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md).
 
 ### Namespace
 
@@ -207,13 +241,21 @@ A unique name that identifies an extension. Namespaces keep extensions from coll
 
 ### Naming Mode
 
-Where a database object's name comes from. An object is **wire-named** when Prisma Next derives the name (see [wire name](#wire-name)), or **exact-named** when you supply the name and Prisma Next adopts it verbatim — `map:` on an index, `@@map` on an RLS policy block. The two modes differ in how drift is detected: a wire name commits to the object's content, so comparing names is comparing content; an exact name says nothing about content, so the body is compared byte-for-byte against the database's own reprint.
+Where a database object's name comes from. An object is **wire-named** when Prisma 8 derives the name (see [wire name](#wire-name)), or **exact-named** when you supply the name and Prisma 8 adopts it verbatim — `map:` on an index, `@@map` on an RLS policy block. The two modes differ in how drift is detected: a wire name commits to the object's content, so comparing names is comparing content; an exact name says nothing about content, so the body is compared byte-for-byte against the database's own reprint.
 
-Naming mode is independent of [control policy](architecture%20docs/adrs/ADR%20224%20-%20Control%20Policy%20—%20framework-locked%20vocabulary%20and%20family-owned%20dispatch.md), which answers a different question: whether Prisma Next may write to the object at all.
+Naming mode is independent of [control policy](architecture%20docs/adrs/ADR%20224%20-%20Control%20Policy%20—%20framework-locked%20vocabulary%20and%20family-owned%20dispatch.md), which answers a different question: whether Prisma 8 may write to the object at all.
+
+### Type implementation
+
+The codecs, data types and `now()` generators that implement a target's types. Code that more than one target's type implementations share, and that depends on no database and no family, lives in `@internal/type-implementations`. See ADR 314.
+
+### Type choice
+
+The declaration a pack contributes for a convenience type: its option arguments with their values and defaults, the arguments it passes on, and a table from each allowed combination of option values to the name of an explicit type constructor. See ADR 279.
 
 ### Wire Name
 
-The name Prisma Next derives for an object it names itself: your prefix, an underscore, and eight hex characters of a hash over the object's content — `user_email_idx_46df9cad`. Because the suffix is content-addressed, an unchanged definition always produces the same name, and a name match is a content match. Renaming the prefix while leaving the definition alone keeps the suffix, which is how a rename is recognized as a rename rather than a drop and a create. See [ADR 234](architecture%20docs/adrs/ADR%20234%20-%20Content-addressed%20wire%20names%20for%20Postgres-normalized%20objects.md).
+The name Prisma 8 derives for an object it names itself: your prefix, an underscore, and eight hex characters of a hash over the object's content — `user_email_idx_46df9cad`. Because the suffix is content-addressed, an unchanged definition always produces the same name, and a name match is a content match. Renaming the prefix while leaving the definition alone keeps the suffix, which is how a rename is recognized as a rename rather than a drop and a create. See [ADR 234](architecture%20docs/adrs/ADR%20234%20-%20Content-addressed%20wire%20names%20for%20Postgres-normalized%20objects.md).
 
 ---
 
@@ -229,7 +271,7 @@ A unit of intent that takes the database from one **contract** to another. On di
 
 ### Migrate (verb)
 
-The act of advancing a *live database instance* along the migration graph. The canonical command is `prisma db migrate [--to <contract>]`: walks from the database marker's current contract to the named target contract, executing each migration on the live database. `migrate` is forward-only — it never reverses, never rewinds, never resets.
+The act of advancing a *live database instance* along the migration graph. The canonical command is `prisma db migrate [--to <contract>]`: walks from the database marker's current contract to the named target contract, executing each migration on the live database. When the target is a [ref](#ref-contract-ref) that declares policies, `migrate` also brings the database to that ref's [change policy](#change-policy) and [data protection policy](#data-protection-policy), with the consent of `--permit-policy-change`. `migrate` is forward-only — it never reverses, never rewinds, never resets.
 
 ### Migration Graph
 
@@ -237,7 +279,7 @@ The directed graph of contracts (nodes) connected by migrations (edges). Built b
 
 ### Ref (Contract Ref)
 
-A named pointer at a contract, stored as `migrations/<space>/refs/<name>.json` (`{hash, invariants}`); the contract it names resolves through the shared content-addressed store at `migrations/snapshots/<hex>/contract.json` by that hash. Refs are environment-named (`production`, `staging`) and describe *where CD will `migrate --to` next* in that environment. The default `db` ref records dev-database checkpoint state for offline planning. Managed via `prisma migration ref set|list|delete`. See [ADR 218 — Refs with paired contract snapshots](architecture%20docs/adrs/ADR%20218%20-%20Refs%20with%20paired%20contract%20snapshots%20and%20universal%20graph-node%20invariant.md) (paired-snapshot part superseded — see its Status note) and [ADR 240 — Contract snapshots live in a content-addressed store](architecture%20docs/adrs/ADR%20240%20-%20Contract%20snapshots%20live%20in%20a%20content-addressed%20store.md).
+A named pointer at a contract, stored as `migrations/<space>/refs/<name>.json` (`{hash, invariants}`, plus an optional `policies` declaring the [change policy](#change-policy) and [data protection policy](#data-protection-policy) its database should have); the contract it names resolves through the shared content-addressed store at `migrations/snapshots/<hex>/contract.json` by that hash. Refs are environment-named (`production`, `staging`) and describe *where CD will `migrate --to` next* in that environment. The default `db` ref records dev-database checkpoint state for offline planning; it is written by `db init`, `db update`, and `db sign`. Managed via `prisma migration ref set|list|delete`. See [ADR 218 — Refs with paired contract snapshots](architecture%20docs/adrs/ADR%20218%20-%20Refs%20with%20paired%20contract%20snapshots%20and%20universal%20graph-node%20invariant.md) (paired-snapshot part superseded — see its Status note) and [ADR 240 — Contract snapshots live in a content-addressed store](architecture%20docs/adrs/ADR%20240%20-%20Contract%20snapshots%20live%20in%20a%20content-addressed%20store.md).
 
 A ref is a specific kind of [contract reference](#contract-reference) — the named, file-backed, persistent kind.
 

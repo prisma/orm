@@ -121,8 +121,17 @@ withTempDir(({ createTempDir }) => {
         ]);
         expect(
           engineDocument(signJsonFail),
-          'G.05: the verify report is the document',
-        ).toMatchObject({ ok: false, code: 'CONTRACT.SCHEMA_VERIFICATION_FAILED' });
+          'G.05: the app space is reported with its verify result',
+        ).toMatchObject({
+          ok: false,
+          spaces: [
+            {
+              space: 'app',
+              status: 'failed',
+              schema: { ok: false, code: 'CONTRACT.SCHEMA_VERIFICATION_FAILED' },
+            },
+          ],
+        });
 
         swapPslContract(ctx, 'contract-base');
         const emitFixed = await runContractEmit(ctx);

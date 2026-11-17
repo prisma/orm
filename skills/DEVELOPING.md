@@ -1,10 +1,10 @@
-# Developing Prisma Next skills
+# Developing Prisma 8 skills
 
-Contributor guide for the Prisma Next skills cluster. If you are *using* the skills, read [`README.md`](./README.md) and stop here. If you are *authoring or maintaining* a skill in this cluster, read this file first.
+Contributor guide for the Prisma 8 skills cluster. If you are *using* the skills, read [`README.md`](./README.md) and stop here. If you are *authoring or maintaining* a skill in this cluster, read this file first.
 
 ## What this tree is
 
-Skills that teach an LLM agent how to operate Prisma Next end-to-end. The usage surface is one consolidated skill: [`skills/prisma-8/SKILL.md`](./prisma-8/SKILL.md) is the runtime-matched entry point (its `description:` frontmatter fires on any Prisma Next work) and routes via its routing table into workflow-scoped reference files under [`skills/prisma-8/references/`](./prisma-8/references/) — one user goal per reference file. Upgrading is part of the same skill: [`references/upgrade-app.md`](./prisma-8/references/upgrade-app.md) and [`references/upgrade-extension.md`](./prisma-8/references/upgrade-extension.md) carry the two flows, and the per-transition instructions they replay live under [`prisma-8/upgrading/app/upgrades/`](./prisma-8/upgrading/app/upgrades/) and [`prisma-8/upgrading/extension/upgrades/`](./prisma-8/upgrading/extension/upgrades/).
+Skills that teach an LLM agent how to operate Prisma 8 end-to-end. The usage surface is one consolidated skill: [`skills/prisma-8/SKILL.md`](./prisma-8/SKILL.md) is the runtime-matched entry point (its `description:` frontmatter fires on any Prisma 8 work) and routes via its routing table into workflow-scoped reference files under [`skills/prisma-8/references/`](./prisma-8/references/) — one user goal per reference file. Upgrading is part of the same skill: [`references/upgrade-app.md`](./prisma-8/references/upgrade-app.md) and [`references/upgrade-extension.md`](./prisma-8/references/upgrade-extension.md) carry the two flows, and the per-transition instructions they replay live under [`prisma-8/upgrading/app/upgrades/`](./prisma-8/upgrading/app/upgrades/) and [`prisma-8/upgrading/extension/upgrades/`](./prisma-8/upgrading/extension/upgrades/).
 
 ## Design principles
 
@@ -12,7 +12,7 @@ The consolidated shape is deliberate. These principles govern every change to th
 
 ### One skill, not a cluster
 
-The usage surface is exactly one installable skill. Agent runtimes match skills against the user's prompt by `description:` — a cluster of sibling skills forces each description to carve out its own trigger territory, and the boundaries drift, overlap, and misfire as the cluster grows. One skill means one activation decision ("is this Prisma Next work?") followed by an explicit routing step the skill itself controls.
+The usage surface is exactly one installable skill. Agent runtimes match skills against the user's prompt by `description:` — a cluster of sibling skills forces each description to carve out its own trigger territory, and the boundaries drift, overlap, and misfire as the cluster grows. One skill means one activation decision ("is this Prisma 8 work?") followed by an explicit routing step the skill itself controls.
 
 **A new top-level skill needs a structural reason, not a topical one.** The upgrade flows used to be two sibling skills because their install ref policy differed (always-`main` vs version-pinned); now that the skill ships inside the packages, every copy is version-matched by construction and that reason is gone. A new workflow, feature area, or extension is a new reference file plus a routing-table row, never a new sibling skill.
 
@@ -20,7 +20,7 @@ The usage surface is exactly one installable skill. Agent runtimes match skills 
 
 `SKILL.md` is the only always-loaded content, so it must earn its context budget. It carries three things: the activation description, the routing table, and the canonical mental model — nothing else. Everything workflow-specific lives in a reference file that is loaded only when its routing-table row matches. API detail, worked examples, pitfalls, and capability gaps all belong at the reference layer.
 
-The test for placement: *would every Prisma Next task benefit from the agent having read this?* If yes, it may live in `SKILL.md`. If only some tasks would, it goes in a reference file.
+The test for placement: *would every Prisma 8 task benefit from the agent having read this?* If yes, it may live in `SKILL.md`. If only some tasks would, it goes in a reference file.
 
 **The exception: cross-cutting gotchas.** A fact that defies a reasonable assumption — and that the agent has no obvious trigger to look up before it acts — needs to be read *before* the agent hits the situation, not after. A reference file only loads once its routing-table row matches, so a surprising fact scoped to one reference is fine there (its own *Common Pitfalls* section covers it). A surprising fact that cuts across workflows — the kind where an agent already committed to a plan under a wrong assumption has no reason to go back and check a reference it never routed to — belongs in `SKILL.md` itself. The Mongo ORM addressing rule (`db.orm.<collection>` uses storage names, not PSL model names) is the existing example: it lives in `SKILL.md`'s canonical-model paragraph, not buried in `references/queries.md`, because an agent that already assumed model-name addressing has no reason to open the queries reference to find out it's wrong. Keep this tier small — it is competing for the same ~150-line budget as everything else in `SKILL.md`.
 
@@ -38,7 +38,7 @@ The long-term direction is for versioned API documentation to ship inside the pu
 
 ## Authoring rules
 
-These rules are load-bearing for the cluster. A new skill or a skill rewrite that doesn't honour them is a defect, not a style preference. Where this list differs from the general Prisma Next contributor guide, this list takes precedence *for files under `skills/`*.
+These rules are load-bearing for the cluster. A new skill or a skill rewrite that doesn't honour them is a defect, not a style preference. Where this list differs from the general Prisma 8 contributor guide, this list takes precedence *for files under `skills/`*.
 
 ### Verify the tool surface as you author, not afterwards
 
@@ -64,7 +64,7 @@ Verifying a diagnostic code:
 rg "code: '<CODE>'" packages/1-framework/3-tooling/cli/src/commands/<file>.ts
 ```
 
-If the search returns nothing, the surface does not ship. Name the gap in *What Prisma Next doesn't do yet* and route the user to `references/feedback.md`. Do not paper over the gap with a plausible-looking incantation.
+If the search returns nothing, the surface does not ship. Name the gap in *What Prisma 8 doesn't do yet* and route the user to `references/feedback.md`. Do not paper over the gap with a plausible-looking incantation.
 
 ### Teach concepts, not procedures
 
@@ -84,7 +84,7 @@ Procedural workflow sections — *"step 1: run X; step 2: read Y; step 3: if Z, 
 
 #### Worked example — `references/migration-review.md`
 
-The pilot rewrite of [`skills/prisma-8/references/migration-review.md`](./prisma-next/references/migration-review.md) is the canonical worked example for this principle in this cluster. Before that rewrite, the skill contained:
+The pilot rewrite of [`skills/prisma-8/references/migration-review.md`](./prisma-8/references/migration-review.md) is the canonical worked example for this principle in this cluster. Before that rewrite, the skill contained:
 
 - A five-step *"diamond convergence procedure"* for resolving concurrent migrations.
 - A four-step *"detect that main advanced"* workflow.
@@ -130,11 +130,11 @@ Commit `bf742221c` (`examples: migrate to @internal/<target> façade imports`) d
 
 These are well-trodden but worth listing in one place:
 
-- **`description:` frontmatter is a runtime matcher, not marketing prose.** Only the consolidated `SKILL.md` carries frontmatter; its description fires on any Prisma Next work. Per-workflow trigger phrases — CLI flags, error codes, feature names, foreign-tool vocabulary a user would type — live in the routing table's *Triggers* column, and a new reference file must add its row there.
+- **`description:` frontmatter is a runtime matcher, not marketing prose.** Only the consolidated `SKILL.md` carries frontmatter; its description fires on any Prisma 8 work. Per-workflow trigger phrases — CLI flags, error codes, feature names, foreign-tool vocabulary a user would type — live in the routing table's *Triggers* column, and a new reference file must add its row there.
 - **One workflow per reference file.** File size is bounded by the per-file line ceiling. If a workflow grows past it, split into a companion reference (the queries → queries-postgres/queries-mongo split is the template) — don't sprawl.
 - **Provide a default, not a menu.** When more than one tool or approach would work (PSL vs. the TS builder, `db update` vs. `migration plan`, which query lane for a given target), commit to the one that's the recommended path for the common case and state it first. Mention the alternative briefly, as an escape hatch with the condition under which it applies — don't present both as equally-weighted options and leave the choice to the agent. An agent handed a menu without a default either guesses or asks; a stated default lets it proceed.
-- **Omit what the agent already knows.** Every sentence should teach something the agent wouldn't get right without it: a Prisma Next-specific convention, a non-obvious constraint, the actual verified tool surface. Don't explain what a foreign-key constraint is, what a connection pool does, or other general engineering or database knowledge the agent already has — that's editorial padding that pushes genuinely load-bearing content further from the top of the file and erodes the length budgets above. When rewriting or extending a reference file, apply the test explicitly: *would the agent get this wrong without this sentence?* If no, cut it.
-- **`What Prisma Next doesn't do yet` is mandatory.** It names a concrete gap, describes today's workaround, and routes to `references/feedback.md`. Never confabulate an API that doesn't exist.
+- **Omit what the agent already knows.** Every sentence should teach something the agent wouldn't get right without it: a Prisma 8-specific convention, a non-obvious constraint, the actual verified tool surface. Don't explain what a foreign-key constraint is, what a connection pool does, or other general engineering or database knowledge the agent already has — that's editorial padding that pushes genuinely load-bearing content further from the top of the file and erodes the length budgets above. When rewriting or extending a reference file, apply the test explicitly: *would the agent get this wrong without this sentence?* If no, cut it.
+- **`What Prisma 8 doesn't do yet` is mandatory.** It names a concrete gap, describes today's workaround, and routes to `references/feedback.md`. Never confabulate an API that doesn't exist.
 - **No cross-reference links that drift.** When a reference file links to a sibling, link by reference path (`references/<topic>.md`), not by line range.
 - **Skill content ships in lockstep with the framework.** Stale skill content is worse than no skill. When a PR touches framework surface a skill references, the skill update is part of the PR scope, not follow-up work.
 
@@ -142,7 +142,7 @@ These are well-trodden but worth listing in one place:
 
 1. Read [`README.md`](./README.md) for the user-facing scope of the skills.
 2. Read the [`skill-specialist` persona](https://github.com/prisma/ignite/blob/main/skills/.curated/drive-agent-personas/personas/skill-specialist.md) in the Ignite persona library — it's the canonical lens for skill work.
-3. Read [`skills/prisma-8/references/migration-review.md`](./prisma-next/references/migration-review.md) for the worked example of concepts-over-procedures.
+3. Read [`skills/prisma-8/references/migration-review.md`](./prisma-8/references/migration-review.md) for the worked example of concepts-over-procedures.
 4. Draft the reference file, **verifying each tool-surface claim against the framework source as you write it** (see *Verify the tool surface as you author* above for the ripgrep commands). The shape:
    - A routing-table row in `SKILL.md` as the matcher (CLI flags, error codes, feature names — all verified).
    - Preamble + canonical mental-model headline.
@@ -150,7 +150,7 @@ These are well-trodden but worth listing in one place:
    - *Key Concepts* — name the moving parts.
    - *Workflow* — for each workflow, *concept block + the query that reveals state*.
    - *Common Pitfalls*.
-   - *What Prisma Next doesn't do yet* — concrete gap + workaround + route to `references/feedback.md`.
+   - *What Prisma 8 doesn't do yet* — concrete gap + workaround + route to `references/feedback.md`.
    - *Reference Files* (when applicable; the migration-review skill omits this and points at `--help` instead).
    - *Checklist*.
 5. Re-read your workflow sections against the symptoms in *Teach concepts, not procedures*. Procedural? Rewrite as concept + query.
@@ -165,4 +165,4 @@ When you add or rewrite a skill workflow, add or update a journey test that exer
 
 - **Skill content drift / staleness** — fix in-PR or open a follow-up under this project / Linear ticket. Don't merge a framework-surface change without the skill update.
 - **Skill cluster scope or shape issues** — surface to `tech-lead` (orchestration) or the `skill-specialist` lens (cluster shape). See the [persona library](https://github.com/prisma/ignite/blob/main/skills/.curated/drive-agent-personas).
-- **Framework affordance gaps the skill is papering over** — file via the feedback flow in `references/feedback.md` or open the Linear ticket directly. Don't bury an affordance gap as a workaround in a skill body without naming it in *What Prisma Next doesn't do yet* and routing the user to feedback.
+- **Framework affordance gaps the skill is papering over** — file via the feedback flow in `references/feedback.md` or open the Linear ticket directly. Don't bury an affordance gap as a workaround in a skill body without naming it in *What Prisma 8 doesn't do yet* and routing the user to feedback.

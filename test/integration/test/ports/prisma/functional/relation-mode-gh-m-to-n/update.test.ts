@@ -272,7 +272,7 @@ describe('ports/prisma/functional/relationMode-gh-m-to-n › [update]', () => {
   // implicit default `onUpdate` for a required relation is `Cascade`, so the
   // DB-level FK is created with ON UPDATE CASCADE.
   //
-  // prisma-next's implicit default `onUpdate` (no action line) is NO ACTION,
+  // Prisma 8's implicit default `onUpdate` (no action line) is NO ACTION,
   // so updating a referenced parent id throws an FK violation instead of
   // cascading. This is a genuine implicit-default-semantics gap, not a bendable
   // assertion, so these tests are marked `it.fails`: they run the faithful
@@ -282,7 +282,7 @@ describe('ports/prisma/functional/relationMode-gh-m-to-n › [update]', () => {
   ]) {
     describe(`${label} — onUpdate: DEFAULT, SetNull (faithful divergence)`, () => {
       it.fails(
-        '[update] post id — upstream expects success (implicit onUpdate=Cascade); prisma-next default onUpdate=NoAction throws',
+        '[update] post id — upstream expects success (implicit onUpdate=Cascade); Prisma 8 default onUpdate=NoAction throws',
         () =>
           withPostgresPort<RepresentativeContract>({ contractJson }, async ({ db }) => {
             await seedTwoPostsWithTwoCategories(db);
@@ -304,7 +304,7 @@ describe('ports/prisma/functional/relationMode-gh-m-to-n › [update]', () => {
       );
 
       it.fails(
-        '[update] category id — upstream expects success (implicit onUpdate=Cascade); prisma-next default onUpdate=NoAction throws',
+        '[update] category id — upstream expects success (implicit onUpdate=Cascade); Prisma 8 default onUpdate=NoAction throws',
         () =>
           withPostgresPort<RepresentativeContract>({ contractJson }, async ({ db }) => {
             await seedTwoPostsWithTwoCategories(db);

@@ -1,5 +1,6 @@
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
+  defaultMongoIndexName,
   MongoCollection,
   type MongoCollectionOptions,
   type MongoCollectionOptionsInput,
@@ -80,7 +81,7 @@ function buildContract(
 }
 
 function ir(collections: MongoSchemaCollection[]): MongoSchemaIR {
-  return new MongoSchemaIR(collections);
+  return new MongoSchemaIR(collections, { fromDatabase: false });
 }
 
 function coll(
@@ -101,9 +102,9 @@ function coll(
 
 function idx(
   keys: Array<{ field: string; direction: 1 | -1 }>,
-  opts?: { unique?: boolean },
+  opts?: { name?: string; unique?: boolean },
 ): MongoSchemaIndex {
-  return new MongoSchemaIndex({ keys, ...opts });
+  return new MongoSchemaIndex({ name: defaultMongoIndexName(keys), keys, ...opts });
 }
 
 describe('verifyMongoSchema', () => {
@@ -129,7 +130,7 @@ describe('verifyMongoSchema', () => {
     it('passes when live schema mirrors the contract', () => {
       const contract = buildContract({
         users: {
-          indexes: [{ keys: [{ field: 'email', direction: 1 }], unique: true }],
+          indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }], unique: true }],
         },
       });
       const liveSchema = ir([
@@ -167,7 +168,7 @@ describe('verifyMongoSchema', () => {
 
     it('fails when a contract index is missing from a live collection', () => {
       const contract = buildContract({
-        users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },
+        users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] },
       });
       const liveSchema = ir([coll('users')]);
 
@@ -181,8 +182,62 @@ describe('verifyMongoSchema', () => {
       expect(result.ok).toBe(false);
       expect(result.code).toBe('CONTRACT.SCHEMA_VERIFICATION_FAILED');
       expect(result.schema.issues).toContainEqual(
-        expect.objectContaining({ path: ['users', 'index:email:1'] }),
+        expect.objectContaining({ path: ['users', 'index:email_1'] }),
       );
+    });
+
+    it('fails when a live index has the contract index content under another name', () => {
+      const email = [{ field: 'email', direction: 1 as const }];
+      const contract = buildContract({
+        users: { indexes: [{ name: 'User_email_key', keys: email, unique: true }] },
+      });
+      const live = idx(email, { unique: true });
+      const liveSchema = ir([coll('users', { indexes: [live] })]);
+
+      const result = verifyMongoSchema({
+        contract,
+        schema: liveSchema,
+        strict: false,
+        frameworkComponents: [],
+      });
+
+      expect(result.ok).toBe(false);
+      expect(result.schema.issues).toEqual([
+        expect.objectContaining({
+          path: ['users', 'index:User_email_key'],
+          expected: expect.objectContaining({ name: 'User_email_key' }),
+          actual: expect.objectContaining({ name: 'email_1' }),
+        }),
+      ]);
+    });
+
+    it('passes for a unique and a plain index on the same keys held under their contract names', () => {
+      const email = [{ field: 'email', direction: 1 as const }];
+      const contract = buildContract({
+        users: {
+          indexes: [
+            { name: 'User_email_key', keys: email, unique: true },
+            { name: 'User_email_idx', keys: email },
+          ],
+        },
+      });
+      const liveSchema = ir([
+        coll('users', {
+          indexes: [
+            idx(email, { name: 'User_email_idx' }),
+            idx(email, { name: 'User_email_key', unique: true }),
+          ],
+        }),
+      ]);
+
+      const result = verifyMongoSchema({
+        contract,
+        schema: liveSchema,
+        strict: true,
+        frameworkComponents: [],
+      });
+
+      expect({ ok: result.ok, issues: result.schema.issues }).toEqual({ ok: true, issues: [] });
     });
 
     it('fails on an extra live index in strict mode', () => {
@@ -201,7 +256,7 @@ describe('verifyMongoSchema', () => {
       expect(result.ok).toBe(false);
       expect(result.schema.issues.length).toBeGreaterThan(0);
       expect(result.schema.issues).toContainEqual(
-        expect.objectContaining({ path: ['users', 'index:email:1'] }),
+        expect.objectContaining({ path: ['users', 'index:email_1'] }),
       );
     });
 
@@ -225,7 +280,7 @@ describe('verifyMongoSchema', () => {
 
       const diff = diffFromContractAndLive(contract, liveSchema, false);
       expect(diff.warnings).toContainEqual(
-        expect.objectContaining({ path: ['users', 'index:email:1'] }),
+        expect.objectContaining({ path: ['users', 'index:email_1'] }),
       );
     });
 
@@ -390,6 +445,7 @@ describe('verifyMongoSchema', () => {
           articles: {
             indexes: [
               {
+                name: 'title_text_body_text',
                 keys: [
                   { field: 'title', direction: 'text' },
                   { field: 'body', direction: 'text' },
@@ -405,6 +461,7 @@ describe('verifyMongoSchema', () => {
           coll('articles', {
             indexes: [
               new MongoSchemaIndex({
+                name: 'title_text_body_text',
                 keys: [
                   { field: '_fts', direction: 'text' },
                   { field: '_ftsx', direction: 1 },
@@ -438,6 +495,7 @@ describe('verifyMongoSchema', () => {
           article: {
             indexes: [
               {
+                name: 'title_text_body_text',
                 keys: [
                   { field: 'title', direction: 'text' },
                   { field: 'body', direction: 'text' },
@@ -450,6 +508,7 @@ describe('verifyMongoSchema', () => {
           coll('article', {
             indexes: [
               new MongoSchemaIndex({
+                name: 'title_text_body_text',
                 keys: [
                   { field: '_fts', direction: 'text' },
                   { field: '_ftsx', direction: 1 },
@@ -478,6 +537,7 @@ describe('verifyMongoSchema', () => {
           articles: {
             indexes: [
               {
+                name: 'body_text',
                 keys: [{ field: 'body', direction: 'text' }],
                 weights: { body: 1 },
               },
@@ -488,6 +548,7 @@ describe('verifyMongoSchema', () => {
           coll('articles', {
             indexes: [
               new MongoSchemaIndex({
+                name: 'body_text',
                 keys: [
                   { field: '_fts', direction: 'text' },
                   { field: '_ftsx', direction: 1 },
@@ -521,6 +582,7 @@ describe('verifyMongoSchema', () => {
           articles: {
             indexes: [
               {
+                name: 'title_text_body_text',
                 keys: [
                   { field: 'title', direction: 'text' },
                   { field: 'body', direction: 'text' },
@@ -533,6 +595,7 @@ describe('verifyMongoSchema', () => {
           coll('articles', {
             indexes: [
               new MongoSchemaIndex({
+                name: 'title_text_body_text',
                 keys: [
                   { field: '_fts', direction: 'text' },
                   { field: '_ftsx', direction: 1 },
@@ -561,6 +624,7 @@ describe('verifyMongoSchema', () => {
           articles: {
             indexes: [
               {
+                name: 'body_text',
                 keys: [{ field: 'body', direction: 'text' }],
                 weights: { body: 1 },
               },
@@ -571,6 +635,7 @@ describe('verifyMongoSchema', () => {
           coll('articles', {
             indexes: [
               new MongoSchemaIndex({
+                name: 'body_text',
                 keys: [
                   { field: '_fts', direction: 'text' },
                   { field: '_ftsx', direction: 1 },
@@ -599,6 +664,7 @@ describe('verifyMongoSchema', () => {
           articles: {
             indexes: [
               {
+                name: 'body_text',
                 keys: [{ field: 'body', direction: 'text' }],
                 weights: { body: 1 },
               },
@@ -609,6 +675,7 @@ describe('verifyMongoSchema', () => {
           coll('articles', {
             indexes: [
               new MongoSchemaIndex({
+                name: 'body_text',
                 keys: [
                   { field: '_fts', direction: 'text' },
                   { field: '_ftsx', direction: 1 },
@@ -639,6 +706,7 @@ describe('verifyMongoSchema', () => {
           users: {
             indexes: [
               {
+                name: 'name_1',
                 keys: [{ field: 'name', direction: 1 }],
                 collation: { locale: 'en', strength: 2 },
               },
@@ -649,6 +717,7 @@ describe('verifyMongoSchema', () => {
           coll('users', {
             indexes: [
               new MongoSchemaIndex({
+                name: 'name_1',
                 keys: [{ field: 'name', direction: 1 }],
                 collation: {
                   locale: 'en',
@@ -685,13 +754,14 @@ describe('verifyMongoSchema', () => {
         // {locale: 'en'}` could slip past verify.
         const contract = buildContract({
           users: {
-            indexes: [{ keys: [{ field: 'name', direction: 1 }] }],
+            indexes: [{ name: 'name_1', keys: [{ field: 'name', direction: 1 }] }],
           },
         });
         const liveSchema = ir([
           coll('users', {
             indexes: [
               new MongoSchemaIndex({
+                name: 'name_1',
                 keys: [{ field: 'name', direction: 1 }],
                 collation: { locale: 'en', strength: 2 },
               }),
@@ -1030,6 +1100,7 @@ describe('verifyMongoSchema', () => {
         events: {
           indexes: [
             {
+              name: 'createdAt_1',
               keys: [{ field: 'createdAt', direction: 1 }],
               unique: true,
               sparse: true,
@@ -1044,6 +1115,7 @@ describe('verifyMongoSchema', () => {
         coll('events', {
           indexes: [
             new MongoSchemaIndex({
+              name: 'createdAt_1',
               keys: [{ field: 'createdAt', direction: 1 }],
               unique: true,
               sparse: true,
@@ -1075,6 +1147,7 @@ describe('verifyMongoSchema', () => {
         articles: {
           indexes: [
             {
+              name: 'title_text_body_text',
               keys: [
                 { field: 'title', direction: 'text' },
                 { field: 'body', direction: 'text' },
@@ -1096,6 +1169,7 @@ describe('verifyMongoSchema', () => {
         coll('articles', {
           indexes: [
             new MongoSchemaIndex({
+              name: 'title_text_body_text',
               keys: [
                 { field: '_fts', direction: 'text' },
                 { field: '_ftsx', direction: 1 },
@@ -1163,6 +1237,7 @@ describe('verifyMongoSchema', () => {
         coll('posts', {
           indexes: [
             new MongoSchemaIndex({
+              name: 'title_1',
               keys: [{ field: 'title', direction: 1 }],
               collation: { locale: 'en', strength: 2 },
             }),
@@ -1202,6 +1277,7 @@ describe('verifyMongoSchema', () => {
         articles: {
           indexes: [
             {
+              name: 'category_1_priority_-1_title_text_body_text',
               keys: [
                 { field: 'category', direction: 1 },
                 { field: 'priority', direction: -1 },
@@ -1217,6 +1293,7 @@ describe('verifyMongoSchema', () => {
         coll('articles', {
           indexes: [
             new MongoSchemaIndex({
+              name: 'category_1_priority_-1_title_text_body_text',
               keys: [
                 { field: 'category', direction: 1 },
                 { field: 'priority', direction: -1 },
@@ -1252,6 +1329,7 @@ describe('verifyMongoSchema', () => {
         articles: {
           indexes: [
             {
+              name: 'category_1_title_text_body_text_priority_-1',
               keys: [
                 { field: 'category', direction: 1 },
                 { field: 'title', direction: 'text' },
@@ -1267,6 +1345,7 @@ describe('verifyMongoSchema', () => {
         coll('articles', {
           indexes: [
             new MongoSchemaIndex({
+              name: 'category_1_title_text_body_text_priority_-1',
               keys: [
                 { field: 'category', direction: 1 },
                 { field: '_fts', direction: 'text' },
@@ -1302,6 +1381,7 @@ describe('verifyMongoSchema', () => {
         users: {
           indexes: [
             {
+              name: 'name_1',
               keys: [{ field: 'name', direction: 1 }],
               collation: { locale: 'en', strength: 2, caseLevel: true },
             },
@@ -1312,6 +1392,7 @@ describe('verifyMongoSchema', () => {
         coll('users', {
           indexes: [
             new MongoSchemaIndex({
+              name: 'name_1',
               keys: [{ field: 'name', direction: 1 }],
               collation: { locale: 'en', strength: 2 },
             }),
@@ -1342,13 +1423,14 @@ describe('verifyMongoSchema', () => {
       // list and surfaces as drift.
       const contract = buildContract({
         articles: {
-          indexes: [{ keys: [{ field: 'title', direction: 'text' }] }],
+          indexes: [{ name: 'title_text', keys: [{ field: 'title', direction: 'text' }] }],
         },
       });
       const liveSchema = ir([
         coll('articles', {
           indexes: [
             new MongoSchemaIndex({
+              name: 'title_text',
               keys: [
                 { field: '_fts', direction: 'text' },
                 { field: '_ftsx', direction: 1 },

@@ -1,11 +1,11 @@
 {
   "name": "@internal/contract-authoring",
   "private": true,
-  "version": "8.0.0-rc.8",
+  "version": "8.0.0-rc.24",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "Target-agnostic authored storage descriptor types for Prisma Next",
+  "description": "Target-agnostic authored storage descriptor types for Prisma 8",
   "scripts": {
     "build": "tsdown",
     "test": "vitest run",
@@ -16,12 +16,14 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/framework-components": "workspace:8.0.0-rc.8",
-    "@internal/utils": "workspace:8.0.0-rc.8"
+    "@internal/contract": "workspace:8.0.0-rc.24",
+    "@internal/errors": "workspace:8.0.0-rc.24",
+    "@internal/framework-components": "workspace:8.0.0-rc.24",
+    "@internal/utils": "workspace:8.0.0-rc.24"
   },
   "devDependencies": {
-    "@repo/tsconfig": "workspace:8.0.0-rc.8",
-    "@repo/tsdown": "workspace:8.0.0-rc.8",
+    "@repo/tsconfig": "workspace:8.0.0-rc.24",
+    "@repo/tsdown": "workspace:8.0.0-rc.24",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

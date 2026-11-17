@@ -1,3 +1,5 @@
+import { NotFoundError } from './errors';
+
 export async function firstOrNull<Row>(rows: AsyncIterable<Row>): Promise<Row | null> {
   for await (const row of rows) {
     return row;
@@ -12,7 +14,7 @@ export async function firstOrThrow<Row>(
 ): Promise<Row> {
   const row = await firstOrNull(rows);
   if (row === null) {
-    throw new Error(message);
+    throw new NotFoundError(message);
   }
 
   return row;

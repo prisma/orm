@@ -1,6 +1,6 @@
 # Journey 02e — Recover from `MIGRATION.HASH_MISMATCH`
 
-**Skills under test:** `prisma-next-debug`, `prisma-next-migrations`.
+**Skills under test:** `prisma-8-debug`, `prisma-8-migrations`.
 
 **Acceptance criterion:** AC5e.
 
@@ -13,8 +13,7 @@ Plan a migration. Edit its `migration.ts` (add a no-op comment). Do NOT self-emi
 > I get this error when I run `db migrate`:
 >
 > ```text
-> code: PN-MIG-2042
-> kind: MIGRATION.HASH_MISMATCH
+> code: MIGRATION.HASH_MISMATCH
 > message: ops.json hash does not match migration.json
 > ```
 >
@@ -24,7 +23,7 @@ Plan a migration. Edit its `migration.ts` (add a no-op comment). Do NOT self-emi
 
 - [ ] Reads the envelope, recognises `MIGRATION.HASH_MISMATCH`.
 - [ ] Names the cause: `migration.ts` edited after the initial emit.
-- [ ] Runs `node migrations/<dir>/migration.ts` (self-emit).
+- [ ] Runs `node <package dir>/migration.ts` (self-emit).
 - [ ] Re-runs `db migrate`.
 
 ## Success criteria

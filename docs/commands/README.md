@@ -1,6 +1,6 @@
 ## Commands
 
-Prisma Next command reference entrypoints.
+Prisma 8 command reference entrypoints.
 
 ### Canonical CLI command reference
 

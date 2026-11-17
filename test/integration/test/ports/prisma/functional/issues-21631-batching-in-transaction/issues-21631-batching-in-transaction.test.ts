@@ -16,7 +16,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //   - '2 concurrent findUniques'  → PORTED: the auto-batching-relevant case — two
 //     concurrent `.first(...)` via Promise.all; result sets must not interfere.
 //   - '2 findUniques in a $transaction' → NON-PORTED: array/batch `$transaction([...])` is
-//     absent; prisma-next only has the interactive `transaction(cb)` facade, a different
+//     absent; Prisma 8 only has the interactive `transaction(cb)` facade, a different
 //     execution path that does not exercise the batch request pipeline this regression depends on.
 
 async function setupData(

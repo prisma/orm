@@ -25,7 +25,13 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { publicShells, type ShellName } from '../src/shells';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
-const facades: ShellName[] = ['@prisma/orm-postgres', '@prisma/orm-sqlite', '@prisma/orm-mongo'];
+const facades: ShellName[] = [
+  '@prisma/orm-postgres',
+  '@prisma/orm-sqlite',
+  '@prisma/orm-mysql',
+  '@prisma/orm-mariadb',
+  '@prisma/orm-mongo',
+];
 const SKILL_NAME = 'prisma-8';
 
 interface Manifest {
@@ -114,6 +120,7 @@ describe.each(facades)('%s', (facade) => {
 
   it('carries the whole skill tree in its tarball, stamped with what shipped it', () => {
     const packedRoot = packAndUnpack(facade);
+    expect(existsSync(join(packedRoot, 'upgrade-instructions'))).toBe(false);
     const packedSkillDir = join(packedRoot, 'skills', SKILL_NAME);
 
     expect(

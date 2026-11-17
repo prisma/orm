@@ -1,0 +1,19 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model Post {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  title     String
+  count     Int
+  ratio     Float
+  published Boolean
+  postedAt  DateTime
+  views     BigInt
+  price     Decimal
+  thumbnail Bytes
+  meta      Json
+  authorId  String   @db.ObjectId
+  note      String?
+}

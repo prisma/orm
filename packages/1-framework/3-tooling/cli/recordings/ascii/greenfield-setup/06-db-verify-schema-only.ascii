@@ -95,7 +95,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Verify schema satisfies contract without marker checks [initialized, schema matches contract]
-> prisma-next db verify --schema-only
+> prisma db verify --schema-only
 
 
 
@@ -127,7 +127,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Verify schema satisfies contract without marker checks [initialized, schema matches contract]
-> prisma-next db verify --schema-only
+> prisma db verify --schema-only
 
 
 
@@ -159,7 +159,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Verify schema satisfies contract without marker checks [initialized, schema matches contract]
-> prisma-next db verify --schema-only
+> prisma db verify --schema-only
 
 
 
@@ -191,8 +191,8 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Verify schema satisfies contract without marker checks [initialized, schema matches contract]
-> prisma-next db verify --schema-only
-prisma-next db verify → Check whether the live database schema matches your contract
+> prisma db verify --schema-only
+prisma db verify → Check whether the live database schema matches your contract
 │
 │ config:               prisma.config.ts
 │ contract:             contract.json

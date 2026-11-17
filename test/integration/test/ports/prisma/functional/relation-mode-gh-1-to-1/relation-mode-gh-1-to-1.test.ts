@@ -30,7 +30,7 @@ import setnullPlainJson from './_fixture/setnull-plain/generated/contract.json' 
 // action (DEFAULT | Cascade | NoAction | Restrict | SetNull, applied to BOTH
 // onUpdate and onDelete) × isSchemaUsingMap (false | true).
 //
-// prisma-next uses REAL database foreign keys and has NO client-side
+// Prisma 8 uses REAL database foreign keys and has NO client-side
 // relationMode="prisma" referential-action emulation. So:
 //   - relationMode="foreignKeys" cases are ported here (the DB enforces the FK
 //     action), across every referential action, both @map variants.
@@ -84,9 +84,9 @@ async function createXUsersWithAProfile(ctx: PortContext<Contract>, count: numbe
 //
 // The upstream DEFAULT matrix cell is NON-PORTED: Prisma's implicit default
 // referential action is `onUpdate: Cascade, onDelete: Restrict`, whereas
-// prisma-next's implicit default (no `onUpdate`/`onDelete` on the relation) is
+// Prisma 8's implicit default (no `onUpdate`/`onDelete` on the relation) is
 // raw-DB `NoAction`. The DEFAULT cell exercises Prisma's implicit default, which
-// prisma-next does not reproduce. The explicit NoAction cell below covers the
+// Prisma 8 does not reproduce. The explicit NoAction cell below covers the
 // NoAction behaviour faithfully. (See _inbox ledger.)
 
 const CASCADE = {
@@ -191,7 +191,7 @@ describe('ports/prisma/functional/relationMode-1-to-1 (foreignKeys)', () => {
 
       // Upstream: `[create] child with undefined parent should throw with type error`.
       // Upstream passes `userId: undefined` (a `@ts-expect-error`) and asserts a
-      // runtime throw "Argument `user` is missing". prisma-next's create input
+      // runtime throw "Argument `user` is missing". Prisma 8's create input
       // accepts omitting the FK scalar `userId` at the TYPE level (it can be
       // supplied instead via the `user`/`profile` relation), so there is no
       // compile-time type error to assert — that half of the upstream subject is
@@ -261,7 +261,7 @@ describe('ports/prisma/functional/relationMode-1-to-1 (foreignKeys)', () => {
 
               // Upstream `upsert({where:{id:'1'}, create:{id:'3',userId:'1'}, update:{id:'3'}})`:
               // row id=1 EXISTS, so the `where` selects it and the UPDATE branch runs
-              // (id 1→3, keeping userId=1). prisma-next's upsert is INSERT … ON CONFLICT
+              // (id 1→3, keeping userId=1). Prisma 8's upsert is INSERT … ON CONFLICT
               // keyed on the create's primary key, so the conflict target is expressed
               // by making the create's `id` the existing `1`; the row is found on
               // conflict and the UPDATE branch (id→3) fires — same observable result.

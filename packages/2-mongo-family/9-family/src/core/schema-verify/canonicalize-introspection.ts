@@ -14,6 +14,7 @@
  * so either authoring style verifies.
  */
 
+import { canonicalize } from '@internal/mongo-contract';
 import type {
   MongoSchemaCollection,
   MongoSchemaCollectionOptions,
@@ -54,8 +55,8 @@ export function canonicalizeSchemasForVerification(
   );
 
   return {
-    live: new MongoSchemaIRCtor(canonicalLive),
-    expected: new MongoSchemaIRCtor(canonicalExpected),
+    live: new MongoSchemaIRCtor(canonicalLive, { fromDatabase: live.fromDatabase }),
+    expected: new MongoSchemaIRCtor(canonicalExpected, { fromDatabase: expected.fromDatabase }),
   };
 }
 
@@ -104,10 +105,21 @@ function canonicalizeExpectedCollection(
   });
 }
 
+/** A text index's weights as MongoDB lists them once some are written: every text field, 1 when not written. */
+function completeTextWeights(
+  keys: MongoSchemaIndex['keys'],
+  weights: MongoSchemaIndex['weights'],
+): MongoSchemaIndex['weights'] {
+  if (weights === undefined) return undefined;
+  const textFields = keys.filter((k) => k.direction === 'text').map((k) => k.field);
+  return Object.fromEntries(textFields.sort().map((field) => [field, weights[field] ?? 1]));
+}
+
 function canonicalizeTextIndexKeyOrder(index: MongoSchemaIndex): MongoSchemaIndex {
   const hasTextKey = index.keys.some((k) => k.direction === 'text');
   if (!hasTextKey) return index;
   return new MongoSchemaIndexCtor({
+    name: index.name,
     keys: sortTextKeys(index.keys),
     unique: index.unique,
     ...ifDefined('sparse', index.sparse),
@@ -115,7 +127,7 @@ function canonicalizeTextIndexKeyOrder(index: MongoSchemaIndex): MongoSchemaInde
     ...ifDefined('partialFilterExpression', index.partialFilterExpression),
     ...ifDefined('wildcardProjection', index.wildcardProjection),
     ...ifDefined('collation', index.collation),
-    ...ifDefined('weights', index.weights),
+    ...ifDefined('weights', completeTextWeights(index.keys, index.weights)),
     ...ifDefined('default_language', index.default_language),
     ...ifDefined('language_override', index.language_override),
   });
@@ -182,6 +194,7 @@ function canonicalizeLiveIndex(
       : liveIndex.language_override;
 
   return new MongoSchemaIndexCtor({
+    name: liveIndex.name,
     keys: projectedKeys,
     unique: liveIndex.unique,
     ...ifDefined('sparse', liveIndex.sparse),
@@ -197,25 +210,23 @@ function canonicalizeLiveIndex(
 
 /**
  * Locate the contract-side index that corresponds to a live index for the
- * purpose of contract-aware normalization. We deliberately match by the
- * *projected* (contract-shaped) key list — so a live `_fts/_ftsx` index
- * resolves to a contract `{title: 'text', body: 'text'}` index — and pick
- * the first match. Contracts very rarely contain duplicate-key indexes; if
- * we have no counterpart we fall back to no normalization for that index.
+ * purpose of contract-aware normalization. We match by the *projected*
+ * (contract-shaped) key list — so a live `_fts/_ftsx` index resolves to a
+ * contract `{title: 'text', body: 'text'}` index. Of several contract indexes
+ * on those keys, the one with the live index's name wins; without one, the
+ * first. With no counterpart we fall back to no normalization for that index.
  */
 function findExpectedIndexCounterpart(
   liveIndex: MongoSchemaIndex,
   expectedIndexes: ReadonlyArray<MongoSchemaIndex>,
 ): MongoSchemaIndex | undefined {
-  const projectedLiveKeys = sortTextKeys(projectTextIndexKeys(liveIndex));
-  const liveKeySig = projectedLiveKeys.map((k) => `${k.field}:${k.direction}`).join(',');
-  for (const expected of expectedIndexes) {
-    const expectedKeySig = sortTextKeys(expected.keys)
-      .map((k) => `${k.field}:${k.direction}`)
-      .join(',');
-    if (expectedKeySig === liveKeySig) return expected;
-  }
-  return undefined;
+  const liveKeys = keyPatternOf(projectTextIndexKeys(liveIndex));
+  const sameKeys = expectedIndexes.filter((expected) => keyPatternOf(expected.keys) === liveKeys);
+  return sameKeys.find((expected) => expected.name === liveIndex.name) ?? sameKeys[0];
+}
+
+function keyPatternOf(keys: ReturnType<typeof projectTextIndexKeys>): string {
+  return canonicalize(sortTextKeys(keys).map((k) => [k.field, k.direction]));
 }
 
 /**

@@ -1,4 +1,4 @@
-import { defineConfig } from '@prisma/cli-engine';
+import { definePrismaConfig } from '@prisma/cli-engine';
 import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
 
 function readRequiredEnv(name: string): string {
@@ -11,7 +11,7 @@ function readRequiredEnv(name: string): string {
 
 const databaseUrl = readRequiredEnv('DATABASE_URL');
 
-export default defineConfig({
+export default definePrismaConfig({
   orm: ormConfig({
     contract: './src/prisma/contract.prisma',
     db: {

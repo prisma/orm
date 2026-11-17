@@ -19,6 +19,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { emit } from '../../utils/emit';
 import { createIntegrationTestDir } from '../utils/cli-test-helpers';
 
+const TEST_INVOCATION = { cwd: process.cwd(), configPath: undefined, dbGiven: false };
+
 /**
  * Materialise pgvector's pinned contract-space artifacts under
  * `<projectRoot>/migrations/pgvector/...` so the per-space db init
@@ -35,16 +37,14 @@ async function materialisePgvectorPinnedArtifacts(projectRoot: string): Promise<
   if (!space) {
     throw new Error('pgvector descriptor must declare a contractSpace');
   }
-  const baseline = space.migrations[0];
-  if (!baseline) {
-    throw new Error('pgvector contract-space must ship at least one baseline migration');
-  }
   await emitContractSpaceArtifacts(migrationsDir, 'pgvector', {
     contract: space.contractJson,
     contractDts: '// rendered .d.ts for pgvector contract space\nexport interface Contract {}\n',
     headRef: { hash: space.headRef.hash, invariants: [...space.headRef.invariants] },
   });
-  await materialiseMigrationPackage(join(migrationsDir, 'pgvector'), baseline);
+  for (const migration of space.migrations) {
+    await materialiseMigrationPackage(join(migrationsDir, 'pgvector'), migration);
+  }
   return migrationsDir;
 }
 
@@ -75,7 +75,7 @@ describe(
 
     async function emitPgvectorContract(schemaText: string): Promise<Record<string, unknown>> {
       const schemaPath = join(testDir, 'schema.prisma');
-      writeFileSync(schemaPath, schemaText, 'utf-8');
+      writeFileSync(schemaPath, `// use prisma-8\n\n${schemaText}`, 'utf-8');
 
       process.chdir(testDir);
       const contractConfig = prismaContract('./schema.prisma', {
@@ -85,10 +85,13 @@ describe(
 
       const pslResult = await contractConfig.source.load({
         composedExtensions: [pgvector.id],
+        defaultNamespaceId: stack.target.defaultNamespaceId,
         composedExtensionContracts: new Map(),
         authoringContributions: stack.authoringContributions,
         codecLookup: stack.codecLookup,
+        dataTypes: stack.dataTypes,
         controlMutationDefaults: stack.controlMutationDefaults,
+        generatorFunctions: stack.generatorFunctions,
         resolvedInputs: [schemaPath],
         capabilities: stack.capabilities,
       });
@@ -146,13 +149,14 @@ model Document {
         await withDevDatabase(async ({ connectionString }) => {
           await withPgvectorControlClient(connectionString, async (client) => {
             const plan = await client.dbInit({
+              invocation: TEST_INVOCATION,
               contract: emittedContract,
               mode: 'plan',
               migrationsDir,
             });
             expect(plan.ok).toBe(true);
             if (!plan.ok) {
-              throw new Error(`dbInit plan failed: ${plan.failure.summary}`);
+              throw new Error(`dbInit plan failed: ${plan.failure.message}`);
             }
 
             const ddl =
@@ -164,13 +168,14 @@ model Document {
             expect(ddl).not.toContain('"vector(1536)"');
 
             const apply = await client.dbInit({
+              invocation: TEST_INVOCATION,
               contract: emittedContract,
               mode: 'apply',
               migrationsDir,
             });
             if (!apply.ok) {
               throw new Error(
-                `dbInit apply failed: ${apply.failure.summary}\n\n${JSON.stringify(apply.failure, null, 2)}`,
+                `dbInit apply failed: ${apply.failure.message}\n\n${JSON.stringify(apply.failure, null, 2)}`,
               );
             }
           });
@@ -197,13 +202,14 @@ model Document {
         await withDevDatabase(async ({ connectionString }) => {
           await withPgvectorControlClient(connectionString, async (client) => {
             const init = await client.dbInit({
+              invocation: TEST_INVOCATION,
               contract: emittedContract,
               mode: 'apply',
               migrationsDir,
             });
             if (!init.ok) {
               throw new Error(
-                `dbInit apply failed: ${init.failure.summary}\n\n${JSON.stringify(init.failure, null, 2)}`,
+                `dbInit apply failed: ${init.failure.message}\n\n${JSON.stringify(init.failure, null, 2)}`,
               );
             }
           });
@@ -211,23 +217,29 @@ model Document {
           let documentId = 0;
           await withClient(connectionString, async (client) => {
             const inserted = await client.query<{ id: number }>(
-              `INSERT INTO "document" ("embedding") VALUES ('[1,2,3]') RETURNING "id"`,
+              `INSERT INTO "Document" ("embedding") VALUES ('[1,2,3]') RETURNING "id"`,
             );
             documentId = inserted.rows[0]?.id ?? 0;
             expect(documentId).toBeGreaterThan(0);
 
-            await client.query('ALTER TABLE "document" DROP COLUMN "embedding"');
+            await client.query('ALTER TABLE "Document" DROP COLUMN "embedding"');
           });
 
           await withPgvectorControlClient(connectionString, async (client) => {
             const update = await client.dbUpdate({
+              invocation: TEST_INVOCATION,
+              answerQuestions: async (questions) =>
+                questions.map((question) => ({
+                  verb: question.verbs.includes('allow') ? ('allow' as const) : ('delete' as const),
+                  text: question.subject,
+                })),
               contract: emittedContract,
               mode: 'apply',
               migrationsDir,
             });
             if (!update.ok) {
               throw new Error(
-                `dbUpdate apply failed: ${update.failure.summary}\n\n${JSON.stringify(update.failure, null, 2)}`,
+                `dbUpdate apply failed: ${update.failure.message}\n\n${JSON.stringify(update.failure, null, 2)}`,
               );
             }
           });
@@ -235,7 +247,7 @@ model Document {
           await withClient(connectionString, async (client) => {
             const restoredRows = await client.query<{ embedding_text: string }>(
               `SELECT "embedding"::text AS embedding_text
-               FROM "document"
+               FROM "Document"
                WHERE "id" = $1`,
               [documentId],
             );
@@ -245,7 +257,7 @@ model Document {
               SELECT column_default
               FROM information_schema.columns
               WHERE table_schema = 'public'
-                AND table_name = 'document'
+                AND table_name = 'Document'
                 AND column_name = 'embedding'
             `);
             expect(defaultCheck.rows[0]?.column_default ?? null).toBeNull();

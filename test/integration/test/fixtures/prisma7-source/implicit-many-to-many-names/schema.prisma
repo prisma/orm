@@ -1,0 +1,59 @@
+datasource db {
+  provider = "postgresql"
+  schemas  = ["public", "shop"]
+}
+
+model User {
+  id        Int    @id
+  favorites Post[] @relation("Favorites")
+  followers User[] @relation("Follows")
+  following User[] @relation("Follows")
+
+  @@schema("public")
+}
+
+model Post {
+  id   Int    @id
+  tags Tag[]
+  fans User[] @relation("Favorites")
+
+  @@map("blog_posts")
+  @@schema("public")
+}
+
+model Tag {
+  id    Int    @id
+  posts Post[]
+
+  @@schema("public")
+}
+
+model Category {
+  id       Int       @id
+  products Product[]
+
+  @@schema("public")
+}
+
+model Product {
+  id         Int        @id
+  categories Category[]
+
+  @@schema("shop")
+}
+
+model A {
+  id   Int @id
+  bees B[]
+  next A[] @relation("Loop")
+  prev A[] @relation("Loop")
+
+  @@schema("public")
+}
+
+model B {
+  id  Int @id
+  ays A[]
+
+  @@schema("public")
+}

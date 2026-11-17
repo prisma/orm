@@ -1,6 +1,6 @@
 # @internal/errors
 
-> **Internal package.** This package is an implementation detail of Prisma Next and is published only to support its runtime. Its API is unstable and may change without notice. Do not depend on this package directly; install `@prisma/cli` and a database facade (e.g. `@prisma/orm-postgres`) instead.
+> **Internal package.** This package is an implementation detail of Prisma 8 and is published only to support its runtime. Its API is unstable and may change without notice. Do not depend on this package directly; install `@prisma/cli` and a database facade (e.g. `@prisma/orm-postgres`) instead.
 
 Structured error types and factories for CLI and runtime error reporting.
 
@@ -36,4 +36,4 @@ if (CliStructuredError.is(caught)) {
 | Entry point | Domain | Code range | Contents |
 |---|---|---|---|
 | `./control` | CLI | `PN-CLI-4xxx` | `CliStructuredError` class, `CliErrorEnvelope`/`CliErrorConflict` types, 14 CLI factory functions, `errorUnexpected` |
-| `./execution` | RUN | `PN-RUN-3xxx` | 8 runtime factory functions, `ERROR_CODE_DESTRUCTIVE_CHANGES` constant |
+| `./execution` | RUN | `PN-RUN-3xxx` | Runtime factory functions |

@@ -1,12 +1,12 @@
 # Architecture
 
-> For a quick overview of what Prisma Next is, see the [README](./README.md).
+> For a quick overview of what Prisma 8 is, see the [README](./README.md).
 
 ## Motivation
 
 Prisma's current ORM architecture tightly couples three layers — the Prisma Schema Language (PSL), the generated client, and runtime execution. This coupling introduces rigidity, rebuild cost, and conceptual opacity.
 
-Prisma Next rethinks Prisma's data layer around a **contract-first model**, where the schema is a stable, versioned artifact describing the database structure — not fuel for codegen, but a data contract.
+Prisma 8 rethinks Prisma's data layer around a **contract-first model**, where the schema is a stable, versioned artifact describing the database structure — not fuel for codegen, but a data contract.
 
 ## Contract-First Design
 
@@ -30,13 +30,13 @@ Prisma Next rethinks Prisma's data layer around a **contract-first model**, wher
 
 ### Extensible Middleware Framework
 
-- First-class hook system for Plan lifecycle events (`beforeCompile`, `afterExecute`, `onError`)
+- Middleware observes a tree of activities (statements, transactions, ORM calls) through the lifecycle events `activityStarted`, `activityEnded` and `activityFinalized`, and changes or stops statements, or supplies an activity's result, through the interceptors `beforeCompile` (SQL), `beforeEncode`, `intercept` and `onRow`; `intercept.onActivity` answers client activities such as ORM calls ([ADR 271](docs/architecture%20docs/adrs/ADR%20271%20-%20The%20runtime%20middleware%20observes%20a%20tree%20of%20activities%2C%20each%20started%2C%20ended%20and%20finalized.md))
 - Composable linting, telemetry, query budgets, and policy enforcement
 - Extension packs for domain-specific capabilities (vector search, geospatial, etc.)
 
 ## Architecture Model: Domains, Layers, Planes
 
-Prisma Next organizes packages using a three-dimensional architecture.
+Prisma 8 organizes packages using a three-dimensional architecture.
 
 ### Domains
 
@@ -114,7 +114,7 @@ See [`architecture.config.json`](./architecture.config.json) for the complete do
 
 ## Agent-Accessible Design
 
-Modern developer agents (Cursor, Windsurf, Claude Code) increasingly read, reason about, and modify codebases. Prisma Next is designed to be natively accessible to these tools:
+Modern developer agents (Cursor, Windsurf, Claude Code) increasingly read, reason about, and modify codebases. Prisma 8 is designed to be natively accessible to these tools:
 
 1. **PSL as explicit contract** — The IR is a deterministic JSON artifact: machine-readable, diffable, and stable
 2. **Stable query DSL** — Queries are typed, composable ASTs that agents can statically analyze or synthesize
@@ -125,7 +125,7 @@ Agents can read the schema (IR), generate valid queries (DSL), and verify them (
 
 ## Comparison with Prisma ORM
 
-| Feature | Prisma ORM | Prisma Next |
+| Feature | Prisma ORM | Prisma 8 |
 |---------|------------|-------------|
 | Schema Model | Codegen for runtime client | Contract IR + TypeScript types |
 | Code Generation | Heavy, runtime-bound | Minimal, build-time only |
@@ -142,9 +142,9 @@ Agents can read the schema (IR), generate valid queries (DSL), and verify them (
 2. Run `prisma generate` — generates executable client code
 3. Write application code using generated methods: `prisma.user.findMany()`
 
-**Prisma Next:**
+**Prisma 8:**
 1. Write `schema.psl`
-2. Run `prisma-next contract emit` — generates lightweight types + contract JSON
+2. Run `prisma contract emit` — generates lightweight types + contract JSON
 3. Write application code using composable DSL: `sql().from(t.user).select(...)`
 
 ## Deep Dives
