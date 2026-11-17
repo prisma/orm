@@ -18,9 +18,12 @@ function quoted(command: string): string {
 export function migrationPlanKeepDataEditAdvice(invocation: CliInvocation): KeepDataEditAdvice {
   return (subject, edits) => ({
     lead: undefined,
-    ways: [
-      `To keep that data, answer with ${statementFlag({ verb: 'delete', text: subject })}, then in the migration.ts this command writes ${editsText(edits)}, ${runWrittenFile(invocation)}.`,
-    ],
+    ways:
+      edits.length === 0
+        ? []
+        : [
+            `To keep that data, answer with ${statementFlag({ verb: 'delete', text: subject })}, then in the migration.ts this command writes ${editsText(edits)}, ${runWrittenFile(invocation)}.`,
+          ],
   });
 }
 
@@ -47,12 +50,9 @@ function listed(words: readonly string[]): string {
 /**
  * Two runs of `db update` that keep the data when members keep their names and only their stored values change, which no rename statement can name. The first run renames each member to a temporary member with a stored value the enum does not use, so its rename rewrites the stored values, and the second renames it back with its new stored value the same way. Passing through unused values means no rewrite writes a value another rewrite replaces, so members that swap values are kept too.
  */
-function twoRuns(invocation: CliInvocation, subject: string, others: readonly string[]): string {
+function twoRuns(invocation: CliInvocation, subject: string, kept: readonly string[]): string {
   const { enumName } = enumAndMember(subject);
-  const subjects = [
-    subject,
-    ...others.filter((other) => enumAndMember(other).enumName === enumName),
-  ];
+  const subjects = kept.filter((each) => enumAndMember(each).enumName === enumName);
   const members = subjects.map((each) => enumAndMember(each).member);
   const one = members.length === 1;
   const temporary = (member: string) =>
@@ -78,24 +78,21 @@ function twoRuns(invocation: CliInvocation, subject: string, others: readonly st
 }
 
 /**
- * How `db update` says to keep the data of a subject: it cannot in one run. It plans the change
- * with `migration plan` from the contract the database is at, when a migration ends there, or
- * changes the stored values in two runs through temporary members; members that swap values do
- * that only when no migration ends there.
+ * How `db update` says to keep the data of a subject: it cannot in one run. It plans the change with `migration plan` from the contract the database is at, when a migration ends there and the target gives edits, or changes the stored values in two runs through temporary members; members whose edits swap values do that only when no migration ends there.
  */
 export function dbUpdateKeepDataEditAdvice(
   invocation: CliInvocation,
   databaseStorageHash: string | undefined,
 ): KeepDataEditAdvice {
-  return (subject, edits, others): KeepDataAdvice => {
+  return (subject, edits, kept): KeepDataAdvice => {
     const deleteFlag = statementFlag({ verb: 'delete', text: subject });
     const swaps = edits.some(({ swapsValues }) => swapsValues === true);
     const lead = swaps
       ? `db update cannot keep that data in one run, because members of the enum swap stored values, and ${deleteFlag} removes it.`
       : `db update cannot keep that data in one run, and ${deleteFlag} removes it.`;
-    const runs = twoRuns(invocation, subject, others);
-    if (databaseStorageHash === undefined) return { lead, ways: [runs] };
-    const deletes = [subject, ...others].map((text) => statementFlag({ verb: 'delete', text }));
+    const runs = twoRuns(invocation, subject, kept);
+    if (databaseStorageHash === undefined || edits.length === 0) return { lead, ways: [runs] };
+    const deletes = kept.map((text) => statementFlag({ verb: 'delete', text }));
     const plan = printedPlanCommand(invocation, databaseStorageHash, [
       ...otherStatements(invocation, [subject]).filter((flag) => !deletes.includes(flag)),
       ...deletes,

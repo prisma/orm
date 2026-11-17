@@ -185,6 +185,69 @@ describe('a question about an enum value', () => {
     ]);
   });
 
+  it('asks the command how to keep the data of every member that keeps its name, with or without an edit, naming them in question order', async () => {
+    const withOld = contractOf({
+      app: {
+        models: { Task: { fields: ['status'] } },
+        enums: { Status: ['OPEN', 'ARCHIVED', 'OLD'] },
+      },
+    });
+    const kept = contractOf({
+      app: {
+        models: { Task: { fields: ['status'] } },
+        enums: { Status: ['OPEN', 'ARCHIVED', 'RETIRED'] },
+      },
+    });
+    const member = (name: string) => ({ ...archived, member: name });
+    const asked: PlanQuestion[] = [];
+    await askPlanQuestions({
+      plan: {
+        dataLoss: [
+          { operationIndex: 0, label: 'Remove value "archived"', loss: 'drop', subject: archived },
+          {
+            operationIndex: 1,
+            label: 'Remove value "open"',
+            loss: 'drop',
+            subject: member('OPEN'),
+            keepDataEdit: { remove: 'remove open', replaceWith: 'replace open' },
+          },
+          { operationIndex: 2, label: 'Remove value "old"', loss: 'drop', subject: member('OLD') },
+        ],
+        accessChanges: [],
+        temporaryValues: [],
+      },
+      askAccess: false,
+      canConvert: false,
+      statements: [],
+      preAnswers: [],
+      consentAll: { delete: false, allow: false },
+      origin: withOld,
+      originKnown: true,
+      destination: kept,
+      keepDataEditAdvice: (subject, edits, subjects) => ({
+        lead: undefined,
+        ways: [`Keep ${subject} with ${edits.length} edits among ${subjects.join(', ')}.`],
+      }),
+      answer: async (batch) => {
+        asked.push(...batch);
+        return batch.map(({ subject }) => ({ verb: 'delete', text: subject }));
+      },
+      replan: async () => ok({ dataLoss: [], accessChanges: [], temporaryValues: [] }),
+    });
+
+    expect(asked.map(({ subject, keepDataWays }) => ({ subject, keepDataWays }))).toEqual([
+      {
+        subject: 'Status.ARCHIVED',
+        keepDataWays: ['Keep Status.ARCHIVED with 0 edits among Status.ARCHIVED, Status.OPEN.'],
+      },
+      {
+        subject: 'Status.OPEN',
+        keepDataWays: ['Keep Status.OPEN with 1 edits among Status.ARCHIVED, Status.OPEN.'],
+      },
+      { subject: 'Status.OLD', keepDataWays: undefined },
+    ]);
+  });
+
   it('is described as an enum value when answered', () => {
     expect(consentDescription('delete', archived, 'Status.ARCHIVED', 'drop')).toBe(
       'delete enum value "Status.ARCHIVED"',

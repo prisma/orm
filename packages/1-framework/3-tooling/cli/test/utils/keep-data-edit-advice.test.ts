@@ -24,7 +24,9 @@ const EDITS_TEXT =
 
 describe('the advice that keeps the data of a member that keeps its name with a new stored value', () => {
   it('under migration plan, names every edit to make and the command that runs the file', () => {
-    expect(migrationPlanKeepDataEditAdvice(PROJECT)('Status.ARCHIVED', edits, [])).toEqual({
+    expect(
+      migrationPlanKeepDataEditAdvice(PROJECT)('Status.ARCHIVED', edits, ['Status.ARCHIVED']),
+    ).toEqual({
       lead: undefined,
       ways: [
         `To keep that data, answer with --delete Status.ARCHIVED, then in the migration.ts this command writes ${EDITS_TEXT}, run \`node <migration directory>/migration.ts\` for the directory it writes, and apply it with \`{bin} db migrate\`.`,
@@ -34,7 +36,9 @@ describe('the advice that keeps the data of a member that keeps its name with a 
 
   it('under db update, leads with planning the change from the database contract, with the run statements', () => {
     expect(
-      dbUpdateKeepDataEditAdvice(WITH_STATEMENTS, 'sha256:0123')('Status.ARCHIVED', edits, []),
+      dbUpdateKeepDataEditAdvice(WITH_STATEMENTS, 'sha256:0123')('Status.ARCHIVED', edits, [
+        'Status.ARCHIVED',
+      ]),
     ).toEqual({
       lead: 'db update cannot keep that data in one run, and --delete Status.ARCHIVED removes it.',
       ways: [
@@ -45,7 +49,9 @@ describe('the advice that keeps the data of a member that keeps its name with a 
   });
 
   it('under db update with no migration at the database contract, says plainly how db update keeps the data', () => {
-    expect(dbUpdateKeepDataEditAdvice(PROJECT, undefined)('Status.ARCHIVED', edits, [])).toEqual({
+    expect(
+      dbUpdateKeepDataEditAdvice(PROJECT, undefined)('Status.ARCHIVED', edits, ['Status.ARCHIVED']),
+    ).toEqual({
       lead: 'db update cannot keep that data in one run, and --delete Status.ARCHIVED removes it.',
       ways: [
         "To keep it with db update, change it in two runs. First rename member ARCHIVED of enum Status in the contract source to a name the enum does not have and give it a stored value the enum does not use, run `{bin} contract emit`, and run `{bin} db update --rename 'Status.ARCHIVED:Status.<temporary member>'`. Then rename that member back to ARCHIVED with its new stored value, run `{bin} contract emit`, and run `{bin} db update --rename 'Status.<temporary member>:Status.ARCHIVED'`.",
@@ -64,9 +70,10 @@ describe('the advice that keeps the data of a member that keeps its name with a 
       withMigrations: dbUpdateKeepDataEditAdvice(WITH_STATEMENTS, 'sha256:0123')(
         'Status.ARCHIVED',
         swap,
-        ['Status.ACTIVE', 'Priority.LOW'],
+        ['Status.ARCHIVED', 'Status.ACTIVE', 'Priority.LOW'],
       ),
       withoutMigrations: dbUpdateKeepDataEditAdvice(PROJECT, undefined)('Status.ARCHIVED', swap, [
+        'Status.ARCHIVED',
         'Status.ACTIVE',
         'Priority.LOW',
       ]),
@@ -78,6 +85,38 @@ describe('the advice that keeps the data of a member that keeps its name with a 
         ],
       },
       withoutMigrations: { lead, ways: [runs] },
+    });
+  });
+
+  it('under db update, names the members in the order the questions ask about them, whichever member the question is about', () => {
+    const kept = ['Status.ARCHIVED', 'Status.ACTIVE'];
+    const advice = dbUpdateKeepDataEditAdvice(PROJECT, undefined);
+
+    expect(advice('Status.ACTIVE', edits, kept).ways).toEqual(
+      advice('Status.ARCHIVED', edits, kept).ways,
+    );
+  });
+
+  it('with no edit to make, gives only the two db update runs, and nothing under migration plan', () => {
+    const runs =
+      "To keep it with db update, change it in two runs. First rename member ARCHIVED of enum Status in the contract source to a name the enum does not have and give it a stored value the enum does not use, run `{bin} contract emit`, and run `{bin} db update --rename 'Status.ARCHIVED:Status.<temporary member>'`. Then rename that member back to ARCHIVED with its new stored value, run `{bin} contract emit`, and run `{bin} db update --rename 'Status.<temporary member>:Status.ARCHIVED'`.";
+    const lead =
+      'db update cannot keep that data in one run, and --delete Status.ARCHIVED removes it.';
+
+    expect({
+      dbUpdate: dbUpdateKeepDataEditAdvice(PROJECT, 'sha256:0123')(
+        'Status.ARCHIVED',
+        [],
+        ['Status.ARCHIVED'],
+      ),
+      migrationPlan: migrationPlanKeepDataEditAdvice(PROJECT)(
+        'Status.ARCHIVED',
+        [],
+        ['Status.ARCHIVED'],
+      ),
+    }).toEqual({
+      dbUpdate: { lead, ways: [runs] },
+      migrationPlan: { lead: undefined, ways: [] },
     });
   });
 });

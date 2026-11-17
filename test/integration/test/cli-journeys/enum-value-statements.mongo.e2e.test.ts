@@ -462,4 +462,69 @@ describe('Journeys (MongoDB): enum value statements', {
       documents: DOCUMENTS,
     });
   });
+
+  it('E6: two values that trade places under db update with no migrations get the two-run route once, and following it swaps them', async () => {
+    const dbName = 'mongo_e6_update';
+    const ctx = setup(dbName);
+    await emit(ctx, BEFORE, 'E6.01');
+    expect((await runDbUpdate(ctx, ['--no-interactive'])).exitCode, 'E6.02').toBe(0);
+    await seed(dbName, DOCUMENTS);
+    await emit(ctx, SWAPPED, 'E6.03');
+
+    const refused = await runDbUpdate(ctx, ['--no-interactive', '--json']);
+    const nextActions = (engineError(refused)?.nextActions ?? []).map(({ label }) => label);
+    expect({
+      code: engineError(refused)?.code,
+      twoRuns: nextActions.filter((label) => label.startsWith('To keep it with db update')),
+      documents: await documents(dbName),
+    }).toEqual({
+      code: 'CLI.CONSENT_REQUIRED',
+      twoRuns: [
+        expect.stringMatching(
+          /^To keep it with db update, change them in two runs\. First rename members ACTIVE and ARCHIVED of enum Status .*db update --rename 'Status\.ACTIVE:Status\.<temporary member for ACTIVE>' --rename 'Status\.ARCHIVED:Status\.<temporary member for ARCHIVED>'`\. Then rename those members back to ACTIVE and ARCHIVED .*db update --rename 'Status\.<temporary member for ACTIVE>:Status\.ACTIVE' --rename 'Status\.<temporary member for ARCHIVED>:Status\.ARCHIVED'`\.$/,
+        ),
+      ],
+      documents: DOCUMENTS,
+    });
+
+    await emit(
+      ctx,
+      usersPsl('  ACTIVE_TMP = "active_tmp"\n  ARCHIVED_TMP = "archived_tmp"'),
+      'E6.04',
+    );
+    const first = await runDbUpdate(ctx, [
+      '--rename',
+      'Status.ACTIVE:Status.ACTIVE_TMP',
+      '--rename',
+      'Status.ARCHIVED:Status.ARCHIVED_TMP',
+      '--no-interactive',
+      '--json',
+    ]);
+    expect(first.exitCode, `E6.05: ${JSON.stringify(engineError(first))}`).toBe(0);
+    await emit(ctx, SWAPPED, 'E6.06');
+    const second = await runDbUpdate(ctx, [
+      '--rename',
+      'Status.ACTIVE_TMP:Status.ACTIVE',
+      '--rename',
+      'Status.ARCHIVED_TMP:Status.ARCHIVED',
+      '--no-interactive',
+      '--json',
+    ]);
+    expect(second.exitCode, `E6.07: ${JSON.stringify(engineError(second))}`).toBe(0);
+
+    expect(await documents(dbName)).toEqual([
+      {
+        email: 'a@example.com',
+        status: 'active',
+        tags: ['active', 'archived'],
+        home: { street: 'Main St', kind: 'active' },
+      },
+      { email: 'b@example.com', status: 'archived', tags: [], home: null },
+      { email: 'c@example.com', tags: ['archived'] },
+    ]);
+    await verifiedAndSettled(ctx, dbName, 'E6', async () => {
+      const further = await runDbUpdate(ctx, ['--dry-run', '--no-interactive', '--json']);
+      return parseJsonOutput<{ plan: { operations: readonly unknown[] } }>(further).plan.operations;
+    });
+  });
 });

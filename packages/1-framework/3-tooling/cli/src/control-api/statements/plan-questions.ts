@@ -575,7 +575,7 @@ type DataLossContracts = StatementContracts & {
   readonly canConvert: boolean;
   /** The command's words for the edits that keep a subject's data; none when it gives none. */
   readonly keepDataEditAdvice?: KeepDataEditAdvice;
-  /** The subjects of the round's questions that carry edits that keep their data. */
+  /** The subjects of the round's questions whose data the command may say how to keep, in question order. */
   readonly keptSubjects?: readonly string[];
   /** The fields the plan gives a temporary value, in the destination contract. */
   readonly temporaryValues: readonly { readonly subject: MigrationSubject }[];
@@ -588,14 +588,22 @@ export interface KeepDataAdvice {
 }
 
 /**
- * How a command says to make `edits` to keep the data of the subject `subject`. `others` are the
- * other subjects asked about with edits of their own, whose data a plan keeps together with it.
+ * How a command says to keep the data of the subject `subject`: with `edits`, when the target gives any, or by changing a member that keeps its name. `kept` are the subjects of the round's questions whose data the command may say how to keep, `subject` among them, in question order; a plan keeps their data together.
  */
 export type KeepDataEditAdvice = (
   subject: string,
   edits: readonly KeepDataEdit[],
-  others: readonly string[],
+  kept: readonly string[],
 ) => KeepDataAdvice;
+
+/** Whether a command may say how to keep the subject's data: the target gives edits that keep it, or it is an enum value whose member keeps its name with a new stored value. */
+function keepsDataByCommand(
+  subject: MigrationSubject,
+  edits: readonly KeepDataEdit[],
+  contracts: StatementContracts & { readonly destination: ContractWithDomain },
+): boolean {
+  return edits.length > 0 || (subject.kind === 'enumValue' && inDestination(subject, contracts));
+}
 
 /**
  * The model of a field subject, under the name a rename of the plan gives it, when the destination
@@ -787,13 +795,10 @@ export function dataLossQuestion(
   const deleteNames = namesSubject('delete', subject);
   const missingModel = missingFieldModel(loss.subject, contracts);
   const keepData =
-    edits.length === 0 || contracts.keepDataEditAdvice === undefined
+    contracts.keepDataEditAdvice === undefined ||
+    !keepsDataByCommand(loss.subject, edits, contracts)
       ? undefined
-      : contracts.keepDataEditAdvice(
-          subject,
-          edits,
-          (contracts.keptSubjects ?? []).filter((other) => other !== subject),
-        );
+      : contracts.keepDataEditAdvice(subject, edits, contracts.keptSubjects ?? [subject]);
   const lost = lossText(loss.subject, subject, contracts.originKnown, loss.loss);
   const operations = [...new Set(labels)];
   const advice = [
@@ -1160,10 +1165,14 @@ export async function askPlanQuestions<TPlan extends PlannedQuestions, TFailure>
     const losses = pending('delete', plan.dataLoss);
     const sameSubject = (loss: PlannedDataLoss) =>
       plan.dataLoss.filter((entry) => questionKey('delete', entry) === questionKey('delete', loss));
+    const editsOf = (loss: PlannedDataLoss) =>
+      sameSubject(loss).flatMap((entry) =>
+        entry.keepDataEdit === undefined ? [] : [entry.keepDataEdit],
+      );
     const roundContracts = {
       ...contracts,
       keptSubjects: losses
-        .filter((loss) => sameSubject(loss).some(({ keepDataEdit }) => keepDataEdit !== undefined))
+        .filter((loss) => keepsDataByCommand(loss.subject, editsOf(loss), contracts))
         .map((loss) => subjectText(loss.subject, contracts)),
     };
     const accessChanges = input.askAccess ? pending('allow', plan.accessChanges) : [];
@@ -1177,9 +1186,7 @@ export async function askPlanQuestions<TPlan extends PlannedQuestions, TFailure>
               dataLossQuestion(
                 loss,
                 roundContracts,
-                sameSubject(loss).flatMap((entry) =>
-                  entry.keepDataEdit === undefined ? [] : [entry.keepDataEdit],
-                ),
+                editsOf(loss),
                 sameSubject(loss).map(({ label }) => label),
               ),
               removedNamespaceOf(loss.subject, plan.namespaces),
