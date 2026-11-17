@@ -199,6 +199,50 @@ describe('MongoMigrationPlanner, a field of an embedded model', () => {
       },
     ]);
   });
+
+  it('refuses a rename of the embedded model when a rename of its field comes with it', () => {
+    const named = (seed: string, embedded: string, field: string) =>
+      contract(
+        seed,
+        {
+          User: {
+            collection: 'users',
+            fields: ['_id', 'email'],
+            types: { _id: OBJECT_ID, email: STRING },
+            embeds: { addresses: 'addresses' },
+          },
+          [embedded]: { owner: 'User', fields: [field], types: { [field]: STRING } },
+        },
+        { users: {} },
+      );
+
+    expect(
+      refusal(
+        plan({
+          from: named('from', 'Address', 'street'),
+          to: named('to', 'Location', 'line1'),
+          schema: live,
+          statements: [
+            renameModel('Address', 'Location'),
+            renameField('Location', 'street', 'Location', 'line1'),
+          ],
+        }),
+      ),
+    ).toEqual([
+      {
+        kind: 'statementRefused',
+        summary:
+          'Cannot rename model "Address" to "Location": model "Address" is embedded in the documents of model "User"',
+        why: 'Embedded models are not renamed in this release. Leave out this statement.',
+      },
+      {
+        kind: 'statementRefused',
+        summary:
+          'Cannot rename field "Location.street" to "Location.line1": model "Location" is embedded in the documents of model "User"',
+        why: 'A statement renames a field of an embedded model only while the model stays embedded. Leave out this statement.',
+      },
+    ]);
+  });
 });
 
 describe('MongoMigrationPlanner, a value object held at a root field and inside an embedded model', () => {
