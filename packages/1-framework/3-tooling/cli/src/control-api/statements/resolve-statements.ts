@@ -165,7 +165,7 @@ const LISTED_LIMIT = 20;
 const CHECK_NAMES_FIX =
   'The old name must exist in the origin contract and not in the destination contract, and the new name the other way round. Names match exactly, including case.';
 const STORED_NAME_ONLY =
-  'If only the stored name changed (@map or @@map), a statement cannot state that in this release, and a plan without it drops and creates what the model or field is stored in, with its data. With migration plan, edit the planned migration.ts to rename the stored name instead of dropping and creating it. With db update, rename it in the database yourself first, then run db update, which then finds nothing that loses data.';
+  'If only the stored name changed (@map or @@map), a statement cannot state that in this release, and a plan without it drops and creates what the model or field is stored in, with its data. With migration plan, edit the planned migration.ts to rename the stored name instead of dropping and creating it. With db update, rename it in the database yourself first, then run db update.';
 const REPEATED_NAME_FIX =
   'Give each model, field or enum value at most one statement, and each new name to one model, field or enum value only.';
 
