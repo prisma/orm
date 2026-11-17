@@ -23,8 +23,8 @@ Counts the projects marked Must in each stream. A project counts as done only wh
 | Editor and tools | 3 of 6 (50%) | `█████░░░░░` | 1 | 2 |
 | Query features | 9 of 11 (82%) | `████████░░` | 2 | 0 |
 | Docs and the new user's first hour | 1 of 5 (20%) | `██░░░░░░░░` | 3 | 1 |
-| Work found along the way | 4 of 7 (57%) | `██████░░░░` | 1 | 2 |
-| **All streams** | **31 of 44 (70%)** | `███████░░░` | **8** | **5** |
+| Work found along the way | 4 of 8 (50%) | `█████░░░░░` | 1 | 3 |
+| **All streams** | **31 of 45 (69%)** | `███████░░░` | **8** | **6** |
 
 ## Stream 1: Foundations and breaking changes
 
@@ -117,7 +117,7 @@ Test: the getting-started eval passes, in few steps and with no workarounds.
 
 ## Stream 6: Work found along the way
 
-**GA readiness:** 4 of 7 Must projects done (57%). 1 in progress, 2 not started.
+**GA readiness:** 4 of 8 Must projects done (50%). 1 in progress, 3 not started.
 
 Work found after the plan was made goes here, so the first five streams keep the scope they started with (Will, 2026-10-21).
 
@@ -133,6 +133,7 @@ Work found after the plan was made goes here, so the first five streams keep the
 | 7 | ✅ 2/2 | Convenience types `Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean` and `Bytes` on PostgreSQL, over explicit types that take the database's names | Must | Will | Done 2026-11-06. Dropping the plan to deprecate these names merged 2026-11-05, and the convenience types merged 2026-11-06. Not in this row: the other databases (TML-3790, backlog). `Json` stays `json` (decided 2026-11-11); TML-3789 was cancelled |  |
 | 8 | ⏳ | Complete or remove the `budgets` and `lints` middleware of the SQL runtime. Both check one statement at a time, so they flag any `SELECT` without a `LIMIT`, including ones the ORM client sends itself | Must | Will | Added 2026-11-13. Not started. Will leans to removing them | Decide: complete or remove |
 | 9 | ⏳ | Decimals, dates, times and durations read as values the application can compute with, not as strings | Not decided | Will | Not started. TML-3825 (`Decimal`, To-do) and TML-3828 (`Date`, `Time`, `Duration`, backlog). Changing what a field reads as is breaking, so it has to land before GA if it lands at all |  |
+| 10 | ⏳ | Capabilities by database version: a target offers one profile per supported database version, the user names the profile in the import, and a database is signed only if it provides the capabilities the contract requires | Must | Will | Added 2026-11-18. Not started; no code. Preliminary design on branch `design/capabilities-by-database-version`, in `projects/capabilities-by-database-version/design-notes.md`. No ticket. It changes contract content and the names users import, so it lands before GA | Settle the open points in the design, then spec |
 
 ## Databases
 

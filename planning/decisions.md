@@ -88,6 +88,17 @@ Stopping point for the open upgrade issues: every urgent and high issue is close
 
 Will, 2026-09-30: the emulator controls (start, stop, list, reset) are now urgent and start immediately. They were already required for GA; what changed is the order. They move to the top of the editor and tools stream. The VS Code extension work that depends on them (items 2 and 3 of that stream) waits on them. Background from 2026-09-28: several emulators of each type can run, so status is a list; the eval found that stopping `prisma dev` leaves the emulator processes running and no stop or cleanup command exists.
 
+## Changes of 2026-11-18
+
+- New Must work, owned by Will: capabilities by database version (stream 6, row 10). It lands before GA because it changes contract content and the names users import.
+- Decided by Will that day, in the preliminary design:
+  - The contract states capabilities and never a database version. Signing compares capability sets.
+  - A target offers one profile per supported database version. There is no default profile: the name the user imports carries the version, for example `postgres18`. The recommended version is what the docs and `orm init` write.
+  - The version appears at both entry points: the config and the client factory.
+  - `orm init --probe-db` writes the profile that matches the database it read.
+  - The error for a database that lacks a capability is written in versions, with two pieces of advice: select another profile, or upgrade the database.
+  - The runtime stops merging the stack's capabilities over the contract's.
+
 ## Changes of 2026-11-13
 
 - The `budgets` and `lints` middleware of the SQL runtime are either completed or removed before GA (Will, 2026-11-13). He leans to removing them: "They cannot work and any user that finds them will get a nasty surprise." They check one statement at a time, and the ORM client sends several statements for one call. Stream 6, row 8. Found while reviewing the design for loading includes with one query per relation in the MySQL proof of concept; that design no longer changes either middleware.
