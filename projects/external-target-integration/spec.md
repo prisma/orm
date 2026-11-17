@@ -48,7 +48,7 @@ Each has its own design record in this folder.
 
 ### Generated files import from the module the target package names
 
-[Generated files import from the module the target package names](../../docs/architecture%20docs/adrs/ADR%20322%20-%20Generated%20files%20import%20from%20the%20module%20the%20target%20package%20names.md)
+[Generated files import from the module the target package names](../../docs/architecture%20docs/adrs/ADR%20323%20-%20Generated%20files%20import%20from%20the%20module%20the%20target%20package%20names.md)
 
 The config a target package's `defineConfig` builds says which module `contract.d.ts` imports its types from and which module a rendered `migration.ts` imports from. The emitter writes those names. It no longer reads the application's `package.json`, and no table of Prisma's package names is consulted when a file is generated.
 
