@@ -103,7 +103,7 @@ Helpers use dot-separated names when they need a namespace.
 
 Examples:
 
-- `sql.String(length: 35)`
+- `sql.Varchar(length: 35)`
 - `ids.Uuid(4)`
 - `pgvector.Vector(1536)`
 
