@@ -2,15 +2,16 @@ import type { ContractWithDomain } from '@internal/contract/types';
 import {
   fieldStatementText,
   type ModelCoordinate,
+  modelStatementText,
   type ResolvedMigrationStatement,
 } from '@internal/framework-components/control';
 import { statementFlag } from './mongo-statement-flags';
 import { modelAt } from './mongo-statement-planning';
 
-/** The origin base's discriminator, named through the destination base as a field rename statement names it, and the `--rename` that moves its values to the destination base's discriminator. */
+/** The origin base's discriminator, named through the destination base as a field rename statement names it, and the `--rename` statements that move its values to the destination base's discriminator, after the `--rename` of the base itself when the base is renamed and no statement says so. */
 export interface DiscriminatorRename {
   readonly from: string;
-  readonly flag: string;
+  readonly flags: string;
 }
 
 /**
@@ -43,11 +44,27 @@ export function discriminatorRenameOf(
   if (oldField === newField || Object.hasOwn(to.fields, oldField) || movedElsewhere)
     return undefined;
   const text = fieldStatementText(contracts.contract, { ...destination, field: oldField });
+  const baseRenamed =
+    origin.namespaceId !== destination.namespaceId || origin.model !== destination.model;
+  const baseRenameStated = contracts.statements.some(
+    (statement) =>
+      statement.kind === 'rename' &&
+      statement.entity === 'model' &&
+      statement.from.namespaceId === origin.namespaceId &&
+      statement.from.model === origin.model,
+  );
+  const fieldRename = statementFlag(
+    'rename',
+    `${text}:${fieldStatementText(contracts.contract, { ...destination, field: newField })}`,
+  );
   return {
     from: text,
-    flag: statementFlag(
-      'rename',
-      `${text}:${fieldStatementText(contracts.contract, { ...destination, field: newField })}`,
-    ),
+    flags:
+      baseRenamed && !baseRenameStated
+        ? `${statementFlag(
+            'rename',
+            `${modelStatementText(contracts.fromContract, origin)}:${modelStatementText(contracts.contract, destination)}`,
+          )} ${fieldRename}`
+        : fieldRename,
   };
 }

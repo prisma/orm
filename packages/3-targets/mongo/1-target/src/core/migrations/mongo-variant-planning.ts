@@ -329,7 +329,7 @@ function unrenamedDiscriminatorRefusal(
   const advice =
     rename === undefined
       ? `Make the change in two migrations: first give the documents their values in field ${field} and apply that; then change the variants.`
-      : `Add ${rename.flag} and run the command again.`;
+      : `Add ${rename.flags} and run the command again.`;
   const unrenamed = `hold their discriminator value in field ${quoted(change.originField)}, which the plan does not rename to ${field}`;
   return refusedChange(
     change,

@@ -145,7 +145,7 @@ function newDiscriminatorRefusal(
   return {
     kind: 'unsupportedOperation',
     summary: `Cannot plan the migration: new discriminator field "${text}" has no value in the documents of collection ${collection}`,
-    why: `A document's discriminator value says which variant it is, and no temporary value names a variant, so the plan does not fill the field. The documents hold their variant in "${rename.from}", which the plan removes: add ${rename.flag} to keep it, and run the command again.`,
+    why: `A document's discriminator value says which variant it is, and no temporary value names a variant, so the plan does not fill the field. The documents hold their variant in "${rename.from}", which the plan removes: add ${rename.flags} to keep it, and run the command again.`,
   };
 }
 
