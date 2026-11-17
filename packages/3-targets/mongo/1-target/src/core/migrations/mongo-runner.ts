@@ -224,7 +224,7 @@ function renameOverwriteRefusal(op: MongoDmlOperation): MongoMigrationRunnerResu
     'MIGRATION.PRECHECK_FAILED',
     `Operation ${op.id} stopped: some documents in collection ${rewrite.collection} already hold ${to} as well as ${rewrite.field}`,
     {
-      why: `Renaming ${rewrite.field} to ${to} would overwrite their ${to}. Find them with ${find} in mongosh, and move or remove one of the two values in each. Nothing was renamed. Once the documents are fixed, run the command again; operations that already ran are skipped.`,
+      why: `Renaming ${rewrite.field} to ${to} would overwrite their ${to}. Find them with ${find} in mongosh, and move or remove one of the two values in each. Once the documents are fixed, run the command again; operations that already ran are skipped.`,
       meta: { operationId: op.id, name: op.name },
     },
   );
@@ -245,7 +245,7 @@ function storedKeyRenameRefusal(op: MongoDmlOperation): MongoMigrationRunnerResu
     'MIGRATION.PRECHECK_FAILED',
     `Operation ${op.id} stopped: some objects at path ${JSON.stringify(keyPath.value.objectsText)} in field ${rewrite.field} of collection ${rewrite.collection} already hold key ${to} as well as key ${from}`,
     {
-      why: `Renaming key ${from} to ${to} would overwrite their ${to}. Find them with ${precheckFind(op, rewrite.collection)} in mongosh, and remove one of the two keys from each of those objects. Nothing was renamed. Once the documents are fixed, run the command again; operations that already ran are skipped.`,
+      why: `Renaming key ${from} to ${to} would overwrite their ${to}. Find them with ${precheckFind(op, rewrite.collection)} in mongosh, and remove one of the two keys from each of those objects. Once the documents are fixed, run the command again; operations that already ran are skipped.`,
       meta: { operationId: op.id, name: op.name },
     },
   );
@@ -1334,7 +1334,7 @@ export class MongoMigrationRunner {
         why: [
           `${one ? 'It has' : 'One of them has'} _id ${mongoshValue(counted?.['documentId'])}. Find them all with ${query} in mongosh.`,
           `To keep them, add a new member to the enum and rename ${named} to it instead of removing it, or change those documents to another value first.`,
-          'Nothing was removed. Once the documents are fixed, run the command again; operations that already ran are skipped.',
+          'Once the documents are fixed, run the command again; operations that already ran are skipped.',
         ].join(' '),
         meta: {
           operationId: op.id,

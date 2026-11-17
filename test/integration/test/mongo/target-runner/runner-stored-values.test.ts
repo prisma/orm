@@ -362,7 +362,7 @@ describe('MongoMigrationRunner, removeStoredValue', () => {
         code: 'MIGRATION.PRECHECK_FAILED',
         message:
           'Operation storedValue.users.profile.$.status.remove("archived") stopped: 2 documents in collection users hold value "archived" at path "$.status" in field profile, which is required',
-        why: `One of them has _id ObjectId("64b7f0a1c2d3e4f5a6b7c8d9"). Find them all with ${find?.[1]} in mongosh. To keep them, add a new member to the enum and rename enum value "Status.ARCHIVED" to it instead of removing it, or change those documents to another value first. Nothing was removed. Once the documents are fixed, run the command again; operations that already ran are skipped. The failed apply changed nothing.`,
+        why: `One of them has _id ObjectId("64b7f0a1c2d3e4f5a6b7c8d9"). Find them all with ${find?.[1]} in mongosh. To keep them, add a new member to the enum and rename enum value "Status.ARCHIVED" to it instead of removing it, or change those documents to another value first. Once the documents are fixed, run the command again; operations that already ran are skipped. The failed apply changed nothing.`,
         rowsHoldingValue: [
           {
             enumValue: { enum: 'Status', member: 'ARCHIVED' },

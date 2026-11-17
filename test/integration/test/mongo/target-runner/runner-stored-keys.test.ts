@@ -258,7 +258,7 @@ describe('MongoMigrationRunner, renameStoredKey', () => {
         code: 'MIGRATION.PRECHECK_FAILED',
         message:
           'Operation storedKey.users.addresses.$[*].street.rename(line1) stopped: some objects at path "$[*]" in field addresses of collection users already hold key "line1" as well as key "street"',
-        why: `Renaming key "street" to "line1" would overwrite their "line1". Find them with ${find?.[1]} in mongosh, and remove one of the two keys from each of those objects. Nothing was renamed. Once the documents are fixed, run the command again; operations that already ran are skipped. The failed apply changed nothing.`,
+        why: `Renaming key "street" to "line1" would overwrite their "line1". Find them with ${find?.[1]} in mongosh, and remove one of the two keys from each of those objects. Once the documents are fixed, run the command again; operations that already ran are skipped. The failed apply changed nothing.`,
         documents: [
           { name: 'Ada', addresses: [{ street: 'a' }] },
           { name: 'Bo', addresses: [{ street: 'b' }, { street: 'c', line1: 'c' }] },

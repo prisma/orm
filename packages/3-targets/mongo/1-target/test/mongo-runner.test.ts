@@ -1051,7 +1051,7 @@ describe('MongoMigrationRunner, a field rename stopped because documents already
       code: 'MIGRATION.PRECHECK_FAILED',
       message:
         'Operation field.posts.title.rename(headline).where({"type":"bug"}) stopped: some documents in collection posts already hold headline as well as title',
-      why: 'Renaming title to headline would overwrite their headline. Find them with db.getCollection("posts").find({"$and":[{"type":"bug"},{"title":{"$exists":true}},{"headline":{"$exists":true}}]}) in mongosh, and move or remove one of the two values in each. Nothing was renamed. Once the documents are fixed, run the command again; operations that already ran are skipped. The failed apply changed nothing.',
+      why: 'Renaming title to headline would overwrite their headline. Find them with db.getCollection("posts").find({"$and":[{"type":"bug"},{"title":{"$exists":true}},{"headline":{"$exists":true}}]}) in mongosh, and move or remove one of the two values in each. Once the documents are fixed, run the command again; operations that already ran are skipped. The failed apply changed nothing.',
       meta: {
         databaseUnchanged: true,
         operationId: 'field.posts.title.rename(headline).where({"type":"bug"})',
