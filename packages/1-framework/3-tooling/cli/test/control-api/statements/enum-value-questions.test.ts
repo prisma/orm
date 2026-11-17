@@ -298,3 +298,99 @@ describe('a question about an enum value', () => {
     ).toBeUndefined();
   });
 });
+
+describe("an enum member's planner advice beside the command's own route", () => {
+  const withValues = (members: Readonly<Record<string, string>>) => {
+    const contract = contractOf({
+      app: { models: { Task: { fields: ['status'] } }, enums: { Status: Object.keys(members) } },
+    });
+    const app = contract.domain.namespaces['app'];
+    const status = app?.enum?.['Status'];
+    if (app === undefined || status === undefined) throw new Error('Expected enum Status');
+    return {
+      ...contract,
+      domain: {
+        ...contract.domain,
+        namespaces: {
+          app: {
+            ...app,
+            enum: {
+              Status: {
+                ...status,
+                members: Object.entries(members).map(([name, value]) => ({ name, value })),
+              },
+            },
+          },
+        },
+      },
+    };
+  };
+  const member = (name: string) => ({ ...archived, member: name });
+  const BEFORE = withValues({ ACTIVE: 'active', ARCHIVED: 'archived' });
+
+  async function waysOf(
+    destination: ReturnType<typeof withValues>,
+    members: readonly string[],
+    commandWays: readonly string[],
+  ) {
+    const asked: PlanQuestion[] = [];
+    await askPlanQuestions({
+      plan: {
+        dataLoss: members.map((name, index) => ({
+          operationIndex: index,
+          label: `Remove value of ${name}`,
+          loss: 'drop' as const,
+          subject: member(name),
+          keepDataAdvice: `Planner advice for ${name}.`,
+        })),
+        accessChanges: [],
+        temporaryValues: [],
+      },
+      askAccess: false,
+      canConvert: false,
+      statements: [],
+      preAnswers: [],
+      consentAll: { delete: false, allow: false },
+      origin: BEFORE,
+      originKnown: true,
+      destination,
+      keepDataEditAdvice: () => ({ lead: undefined, ways: commandWays }),
+      answer: async (batch) => {
+        asked.push(...batch);
+        return batch.map(({ subject }) => ({ verb: 'delete', text: subject }));
+      },
+      replan: async () => ok({ dataLoss: [], accessChanges: [], temporaryValues: [] }),
+    });
+    return asked.map(({ subject, question }) => ({
+      subject,
+      planner: question.includes('Planner advice'),
+    }));
+  }
+
+  it('leaves out the planner advice for members that swap stored values when the command gives its own route', async () => {
+    const swapped = withValues({ ACTIVE: 'archived', ARCHIVED: 'active' });
+    expect({
+      commandRoute: await waysOf(swapped, ['ACTIVE', 'ARCHIVED'], ['Two runs.']),
+      noCommandRoute: await waysOf(swapped, ['ACTIVE', 'ARCHIVED'], []),
+    }).toEqual({
+      commandRoute: [
+        { subject: 'Status.ACTIVE', planner: false },
+        { subject: 'Status.ARCHIVED', planner: false },
+      ],
+      noCommandRoute: [
+        { subject: 'Status.ACTIVE', planner: true },
+        { subject: 'Status.ARCHIVED', planner: true },
+      ],
+    });
+  });
+
+  it('keeps the planner advice for a member that takes the stored value of a member the destination no longer has', async () => {
+    expect(
+      await waysOf(
+        withValues({ ACTIVE: 'archived', RETIRED: 'retired' }),
+        ['ACTIVE'],
+        ['Two runs.'],
+      ),
+    ).toEqual([{ subject: 'Status.ACTIVE', planner: true }]);
+  });
+});

@@ -473,12 +473,22 @@ describe('Journeys (MongoDB): enum value statements', {
 
     const refused = await runDbUpdate(ctx, ['--no-interactive', '--json']);
     const nextActions = (engineError(refused)?.nextActions ?? []).map(({ label }) => label);
+    const lost = (member: string, value: string) =>
+      [
+        `These operations would lose enum value "Status.${member}" from the data that holds it:`,
+        `- Remove value "${value}" from field status of collection users`,
+        `- Remove value "${value}" from field tags of collection users`,
+        `- Remove value "${value}" at path "$.kind" in field home of collection users`,
+        `db update cannot keep that data in one run, and --delete Status.${member} removes it.`,
+      ].join('\n');
     expect({
       code: engineError(refused)?.code,
+      why: engineError(refused)?.why,
       twoRuns: nextActions.filter((label) => label.startsWith('To keep it with db update')),
       documents: await documents(dbName),
     }).toEqual({
       code: 'CLI.CONSENT_REQUIRED',
+      why: `${lost('ACTIVE', 'active')}\n${lost('ARCHIVED', 'archived')}`,
       twoRuns: [
         expect.stringMatching(
           /^To keep it with db update, change them in two runs\. First rename members ACTIVE and ARCHIVED of enum Status .*db update --rename 'Status\.ACTIVE:Status\.<temporary member for ACTIVE>' --rename 'Status\.ARCHIVED:Status\.<temporary member for ARCHIVED>'`\. Then rename those members back to ACTIVE and ARCHIVED .*db update --rename 'Status\.<temporary member for ACTIVE>:Status\.ACTIVE' --rename 'Status\.<temporary member for ARCHIVED>:Status\.ARCHIVED'`\.$/,

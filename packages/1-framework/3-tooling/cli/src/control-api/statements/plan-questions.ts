@@ -611,6 +611,45 @@ function keepsDataByCommand(
   return edits.length > 0 || (subject.kind === 'enumValue' && inDestination(subject, contracts));
 }
 
+function enumMembers(
+  contract: ContractWithDomain,
+  value: EnumValueCoordinate,
+): readonly { readonly name: string; readonly value: unknown }[] {
+  return contract.domain.namespaces[value.namespaceId]?.enum?.[value.enum]?.members ?? [];
+}
+
+/**
+ * Whether an enum member that keeps its name takes the stored value of another member that keeps
+ * its name, so that a command's own route for the kept members changes both together. A boolean
+ * value has no third value to pass through, so it never counts.
+ */
+function swapsWithKeptMember(
+  subject: MigrationSubject,
+  kept: readonly KeptSubject[],
+  contracts: StatementContracts & { readonly destination: ContractWithDomain },
+): boolean {
+  if (subject.kind !== 'enumValue') return false;
+  const destinationValue = renamedEnumValue(subject, contracts) ?? subject;
+  const value = enumMembers(contracts.destination, destinationValue).find(
+    ({ name }) => name === subject.member,
+  )?.value;
+  if (value === undefined || typeof value === 'boolean') return false;
+  const holder = enumMembers(contracts.origin, subject).find(
+    (member) =>
+      member.name !== subject.member && JSON.stringify(member.value) === JSON.stringify(value),
+  );
+  return (
+    holder !== undefined &&
+    kept.some(
+      ({ subject: each }) =>
+        each.kind === 'enumValue' &&
+        each.namespaceId === subject.namespaceId &&
+        each.enum === subject.enum &&
+        each.member === holder.name,
+    )
+  );
+}
+
 /**
  * The model of a field subject, under the name a rename of the plan gives it, when the destination
  * has no model of that name: a rename of the field cannot be written until a statement renames the
@@ -789,7 +828,8 @@ function quotedList(items: readonly string[]): string {
  * other renames, and its old name must be the subject. Anything else, and data no model stores,
  * can only be deleted. A field whose model the destination names differently can be renamed only
  * after a statement renames the model, so the question says to pass one. The question ends with
- * the planner's advice on keeping the data, when it gives any.
+ * the planner's advice on keeping the data, when it gives any, except for enum members that swap
+ * stored values when the command gives its own route for them.
  */
 export function dataLossQuestion(
   loss: PlannedDataLoss,
@@ -809,13 +849,17 @@ export function dataLossQuestion(
           edits,
           contracts.keptSubjects ?? [{ subject: loss.subject, text: subject }],
         );
+  const commandRoutesSwap =
+    keepData !== undefined &&
+    keepData.ways.length > 0 &&
+    swapsWithKeptMember(loss.subject, contracts.keptSubjects ?? [], contracts);
   const lost = lossText(loss.subject, subject, contracts.originKnown, loss.loss);
   const operations = [...new Set(labels)];
   const advice = [
     ...typeChangeNote(loss, contracts.canConvert),
     ...changedVariantNote(loss.subject, contracts),
     ...(missingModel === undefined ? [] : [modelRenameAdvice(missingModel, contracts)]),
-    ...(loss.keepDataAdvice === undefined ? [] : [loss.keepDataAdvice]),
+    ...(loss.keepDataAdvice === undefined || commandRoutesSwap ? [] : [loss.keepDataAdvice]),
     ...(keepData?.lead === undefined ? [] : [keepData.lead]),
     ...(keepData?.ways ?? []),
     ...newRequiredFieldNote(loss.subject, contracts),
