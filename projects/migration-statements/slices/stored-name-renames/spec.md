@@ -112,7 +112,7 @@ A rename from a pair with the same coordinate is refused when:
 1. **Its new name is held in the origin** by anything other than its own source. This is a swap, a chain or a takeover.
 2. **Its new name is the new name of a statement rename.** Two statements, or a statement and a contract change, would merge two objects' storage. (Two contract changes that move into one new name fail the shared-storage condition above, so no rename is planned and the plan is today's, with its questions.)
 3. **Its old name is the new name of a statement rename**, or the reverse. This is a chain between a statement and the contract change, in either direction.
-4. **On `db update`, its new name exists in the live database** and its old name does too (see the `db update` table).
+4. **On `db update`, the live database has both its old and its new name**, and the origin contract does not have the new name (see the `db update` table). When the origin contract has the new name, rule 1 applies as on `migration plan`.
 
 Statement renames among themselves behave as today: the user orders them.
 
