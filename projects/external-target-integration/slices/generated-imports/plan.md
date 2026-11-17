@@ -25,10 +25,12 @@ Known failure modes to check in every dispatch: destructive git operations are f
 
 Redesigned 2026-11-17 after the operator pointed out that a target and an extension are the same kind of thing, and that a declaration must never hold a workspace name. The design record's section "Every component states where its types are" is the contract. It runs as three dispatches.
 
+**Amended 2026-11-17, when the implementer stopped before 3a:** 3a cannot land alone. The translation function passes a published name through unchanged, so once a target or adapter states `@prisma/orm-target-<db>/...`, an application on a target package would get an import of a package it does not depend on directly. 3a and 3b therefore run as one dispatch. Its effect on what is emitted is accepted: for an application on a target package, the target's and adapter's types are imported from the package's `generated-types` module. The framework's and family's lines move there in 3c. The regenerated files are their own commit.
+
 ### 3a. Targets and adapters state their own published module
 
 - **Outcome:** the shell build fills in one module-base constant per workspace package, so a package in a published build that bundles several gets its own. Every target's and adapter's type declaration states its published module through it; an adapter that names its target's module takes the target's base. A pull-request check asserts, for every published package, that each module a component declares is one of that package's exports, that no declaration holds an `@internal/` name in built code or declaration files, and that no unfilled constant remains. The list of workspace names allowed in published output loses every entry this removes, and every entry that no longer has a cause.
-- **Property it preserves:** `TypesImportSpec` and every descriptor's shape are unchanged. What any command emits is unchanged, because the translation function still maps a workspace name and passes a published one through.
+- **Property it preserves:** `TypesImportSpec` and every descriptor's shape are unchanged.
 - **Builds on:** dispatches 1 and 2.
 - **Hands on:** no component in a published package declares a workspace name.
 
