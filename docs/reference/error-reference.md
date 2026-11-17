@@ -1091,7 +1091,7 @@ Cursor pagination was requested but the cursor object lacks a value for one of t
 
 ### ORM.FIELD_IMMUTABLE
 
-A Mongo mutation payload attempts to write `_id`, which is immutable. Thrown by the Mongo ORM client for create/update/upsert payloads. Payload: `field`.
+A Mongo mutation payload attempts to write `_id`, which is immutable. Thrown by the Mongo ORM client for create/update/upsert payloads. Payload: `field`. The SQL ORM client raises it, before any statement runs, for update data that sets the discriminator of a polymorphic model, with `model` and `field` in the payload.
 
 ### ORM.FIELD_UNKNOWN
 

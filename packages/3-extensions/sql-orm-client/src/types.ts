@@ -1764,6 +1764,10 @@ export type VariantCreateInput<
       >
   : never;
 
+type WithoutDiscriminator<TContract extends Contract<SqlStorage>, ModelName extends string> = {
+  readonly [K in DiscriminatorFieldName<TContract, ModelName>]?: never;
+};
+
 /**
  * An input with no keys is `Record<string, never>`, not `{}`: TypeScript accepts any object where `{}` is expected, so a model with no fields would accept any key.
  */
@@ -1774,7 +1778,10 @@ export type ScalarUpdateInput<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   NsId extends string = never,
-> = ClosedWhenEmpty<Partial<DefaultModelInputRow<TContract, ModelName, NsId>>>;
+> = ClosedWhenEmpty<
+  Partial<DefaultModelInputRow<TContract, ModelName, NsId>> &
+    WithoutDiscriminator<TContract, ModelName>
+>;
 
 export type ResolvedCreateInput<
   TContract extends Contract<SqlStorage>,
@@ -1961,9 +1968,10 @@ export type RelationMutationUpdateAllData<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   ParentLinkFields extends string = never,
-> = Partial<DefaultModelInputRow<TContract, ModelName>> & {
-  readonly [K in ParentLinkFields]?: never;
-};
+> = Partial<DefaultModelInputRow<TContract, ModelName>> &
+  WithoutDiscriminator<TContract, ModelName> & {
+    readonly [K in ParentLinkFields]?: never;
+  };
 
 export interface RelationMutationUpdateAll<
   TContract extends Contract<SqlStorage>,
@@ -2430,6 +2438,7 @@ export type MutationUpdateInput<
   NsId extends string = never,
 > = ClosedWhenEmpty<
   Partial<DefaultModelInputRow<TContract, ModelName, NsId>> &
+    WithoutDiscriminator<TContract, ModelName> &
     RelationMutationFields<TContract, ModelName, 'update'>
 >;
 
