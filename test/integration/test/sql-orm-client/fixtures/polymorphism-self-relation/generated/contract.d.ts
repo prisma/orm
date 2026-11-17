@@ -3,24 +3,19 @@
 // To regenerate, run: prisma contract emit
 import type {
   CodecTypes as PgTypes,
-  ParameterizedOutputTypesForTypeParams as PgParameterizedOutputTypes,
-  QueryOperationTypes as PgTargetQueryOps,
-} from '@internal/postgres/generated-types';
-
-import type {
   ColumnTypesFromStorage,
-  ContractWithTypeMaps,
-  RelationKeys,
-  TypeMaps as TypeMapsType,
-} from '@internal/sql-contract/types';
-import type {
   Contract as ContractType,
+  ContractWithTypeMaps,
   ExecutionHashBase,
   FieldTypesFromDomain,
   NamespaceId,
+  ParameterizedOutputTypesForTypeParams as PgParameterizedOutputTypes,
   ProfileHashBase,
+  QueryOperationTypes as PgTargetQueryOps,
+  RelationKeys,
   StorageHashBase,
-} from '@internal/contract/types';
+  TypeMaps as TypeMapsType,
+} from '@internal/postgres/generated-types';
 
 export type StorageHash =
   StorageHashBase<'819d42189875a8fbc83dedd6c2b2616a82ec5c3628dea2b618935d3597c29f95'>;

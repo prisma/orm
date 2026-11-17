@@ -7,25 +7,22 @@ import type {
 } from '@internal/extension-pgvector/codec-types';
 import type { QueryOperationTypes as PgVectorQueryOperationTypes } from '@internal/extension-pgvector/operation-types';
 import type {
-  CodecTypes as PgTypes,
-  ParameterizedOutputTypesForTypeParams as PgParameterizedOutputTypes,
-} from '@internal/target-postgres/codec-types';
-import type { QueryOperationTypes as PgTargetQueryOps } from '@internal/target-postgres/operation-types';
-
-import type {
   ColumnTypesFromStorage,
-  ContractWithTypeMaps,
-  RelationKeys,
-  TypeMaps as TypeMapsType,
-} from '@internal/sql-contract/types';
-import type {
   Contract as ContractType,
+  ContractWithTypeMaps,
   ExecutionHashBase,
   FieldTypesFromDomain,
   NamespaceId,
   ProfileHashBase,
+  RelationKeys,
   StorageHashBase,
-} from '@internal/contract/types';
+  TypeMaps as TypeMapsType,
+} from '@internal/postgres/generated-types';
+import type {
+  CodecTypes as PgTypes,
+  ParameterizedOutputTypesForTypeParams as PgParameterizedOutputTypes,
+} from '@internal/target-postgres/codec-types';
+import type { QueryOperationTypes as PgTargetQueryOps } from '@internal/target-postgres/operation-types';
 
 export type StorageHash =
   StorageHashBase<'5947b803e192c1cf30ffc28b9dd87f2e89b44bdfc449a2504a8ce64092998960'>;

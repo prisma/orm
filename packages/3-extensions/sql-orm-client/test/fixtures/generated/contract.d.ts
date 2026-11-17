@@ -6,6 +6,18 @@
 // in this package-level copy to avoid a circular Turbo build dependency.
 // (@internal/extension-pgvector → @internal/postgres → @internal/sql-orm-client)
 // The integration tests that exercise pgvector-specific operations live in test/integration/.
+import type {
+  ColumnTypesFromStorage,
+  Contract as ContractType,
+  ContractWithTypeMaps,
+  ExecutionHashBase,
+  FieldTypesFromDomain,
+  NamespaceId,
+  ProfileHashBase,
+  RelationKeys,
+  StorageHashBase,
+  TypeMaps as TypeMapsType,
+} from '../generated-types';
 // pgvector types replaced with local aliases (see note above)
 type PgVectorTypes = {
   readonly 'pg/vector@1': {
@@ -24,21 +36,6 @@ import type {
   ParameterizedOutputTypesForTypeParams as PgParameterizedOutputTypes,
 } from '@internal/target-postgres/codec-types';
 import type { QueryOperationTypes as PgTargetQueryOps } from '@internal/target-postgres/operation-types';
-
-import type {
-  ColumnTypesFromStorage,
-  ContractWithTypeMaps,
-  RelationKeys,
-  TypeMaps as TypeMapsType,
-} from '@internal/sql-contract/types';
-import type {
-  Contract as ContractType,
-  ExecutionHashBase,
-  FieldTypesFromDomain,
-  NamespaceId,
-  ProfileHashBase,
-  StorageHashBase,
-} from '@internal/contract/types';
 
 export type StorageHash =
   StorageHashBase<'eb6f84b41a504f6321cee64830fa009008d86182fc00b541b4c9b6e8e457134d'>;
