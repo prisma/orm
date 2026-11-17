@@ -1147,11 +1147,11 @@ A nested relation mutation's input is malformed: a relation field without a muta
 
 ### ORM.RELATION_MUTATION_UNSUPPORTED
 
-A nested relation mutation kind is not supported in this position: `disconnect()`, `updateAll()` or `deleteAll()` outside `update()` nested mutations, `updateAll()` or `deleteAll()` on a to-one relation (`reason: 'to-one-relation'`), an array of two or more operations on a to-one relation (`reason: 'to-one-relation'`, with `model` and the count in `operations`), or `create()`/`connect()` through a junction table with required columns the relation API cannot populate (`reason: 'junction-required-columns'`, with the table in `junction`; `disconnect()` stays available). Payload: `kind`, `relation`, `model`, `reason`, `operations`, `junction`.
+A nested relation operation is not supported where it is used; `reason`, when set, says why. Payload: `kind`, `relation`, `model`, `reason`, `operations`, `junction`.
 
 ### ORM.RELATION_ROW_MISSING
 
-A `connect()`/`disconnect()` nested mutation's criterion matched no row on the related model. Payload: `kind`, `relation`.
+A nested `connect()` or `disconnect()` found no row matching its criterion on the related model. Payload: `kind`, `relation`.
 
 ### ORM.RELATION_UNKNOWN
 
