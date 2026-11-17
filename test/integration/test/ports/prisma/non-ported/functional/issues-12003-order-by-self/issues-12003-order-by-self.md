@@ -1,5 +1,5 @@
 # Non-ported — issues-12003-order-by-self
 
-- `packages/client/tests/functional/issues/12003-order-by-self/tests.ts` › `findFirst` — orderBy across a self-relation works in findFirst — `orderBy` through `resource.dependsOn.id` requires relational-path orderBy, absent from Prisma 8 ORM
-- `packages/client/tests/functional/issues/12003-order-by-self/tests.ts` › `findMany` — orderBy across a self-relation works in findMany — same relational orderBy gap
-- `packages/client/tests/functional/issues/12003-order-by-self/tests.ts` › `aggregate` — orderBy across a self-relation works in aggregate — same relational orderBy gap
+- `packages/client/tests/functional/issues/12003-order-by-self/tests.ts` › `findFirst` — orderBy across a self-relation works in findFirst — Not yet ported; the earlier reason (no ordering through a relation) no longer holds: an ORM `orderBy` reaches a to-one relation's field one hop away, as in `(r) => r.dependsOn.id.asc()` (`packages/3-extensions/sql-orm-client/test/order-by-relation.test.ts`).
+- `packages/client/tests/functional/issues/12003-order-by-self/tests.ts` › `findMany` — orderBy across a self-relation works in findMany — Not yet ported; the earlier reason (no ordering through a relation) no longer holds: an ORM `orderBy` reaches a to-one relation's field one hop away, as in `(r) => r.dependsOn.id.asc()` (`packages/3-extensions/sql-orm-client/test/order-by-relation.test.ts`).
+- `packages/client/tests/functional/issues/12003-order-by-self/tests.ts` › `aggregate` — orderBy across a self-relation works in aggregate — the relation order is expressible (see above), but needs re-examination: the engines `count` record says the ORM's aggregate terminal does not apply an order
