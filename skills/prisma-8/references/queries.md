@@ -28,9 +28,9 @@ Prisma 8 ships **two query lanes per target** on the same `db` value from `src/p
 
 | Runtime import in `db.ts` | Load |
 | --- | --- |
-| `@internal/postgres/runtime` | [`queries-postgres.md`](./queries-postgres.md) — `db.orm.<ns>.<Model>` + `db.sql.<ns>.<table>` |
-| `@internal/mongo/runtime` | [`queries-mongo.md`](./queries-mongo.md) — `db.orm.<root>` + `db.query.from(...)` |
-| `@internal/extension-supabase/runtime` | [`queries-postgres.md`](./queries-postgres.md) — a Supabase `RoleBoundDb` is a Postgres surface (`db.orm.<ns>.<Model>` + `db.sql.<ns>.<table>`); bind a role first via `references/supabase.md` |
+| `@prisma/orm-postgres/runtime` | [`queries-postgres.md`](./queries-postgres.md) — `db.orm.<ns>.<Model>` + `db.sql.<ns>.<table>` |
+| `@prisma/orm-mongo/runtime` | [`queries-mongo.md`](./queries-mongo.md) — `db.orm.<root>` + `db.query.from(...)` |
+| `@prisma/orm-extension-supabase/runtime` | [`queries-postgres.md`](./queries-postgres.md) — a Supabase `RoleBoundDb` is a Postgres surface (`db.orm.<ns>.<Model>` + `db.sql.<ns>.<table>`); bind a role first via `references/supabase.md` |
 
 Both targets share the contract and connection on one `db` value. Reach for the ORM first; drop to the lower-level lane when the ORM can't express the shape. Lane choice is local — one query function picks one lane, not the whole app.
 
@@ -232,9 +232,9 @@ Target-specific pitfalls live in the per-target guides.
 - **TypedSQL (`.sql` files compiled into typed callables).** Not implemented. For a repeated query, use `db.prepare(...)` (see *Prepared statements* above) or a function that returns the built plan and `db.query(plan)` at the call site. If you want a `.sql`-file compile path, file a feature request via `references/feedback.md`.
 - **`EXPLAIN` / query-plan inspection.** Prisma 8 does not expose an `.explain()` method. Workaround: connect a `pg.Pool` you control via the runtime's `pg:` binding (see `references/runtime.md`) and issue `EXPLAIN ANALYZE` through it. If you want a first-class plan-inspection surface, file a feature request via `references/feedback.md`.
 - **Multi-statement batching (Prisma-7-style `db.$transaction([call1, call2])`).** Prisma 8 runs each call sequentially. Workaround: wrap atomically-related work in `db.transaction(async (tx) => { ... })` on Postgres. If you want batch-as-array semantics, file a feature request via `references/feedback.md`.
-- **Mongo façade transactions.** `@internal/mongo/runtime` does not expose `db.transaction(...)`. Multi-document atomicity is not yet wrapped in the Prisma 8 Mongo façade. Workaround: use the MongoDB driver's session API directly if you control the client binding (`mongoClient:` option). File a feature request via `references/feedback.md` if you need a first-class façade surface.
+- **Mongo façade transactions.** `@prisma/orm-mongo/runtime` does not expose `db.transaction(...)`. Multi-document atomicity is not yet wrapped in the Prisma 8 Mongo façade. Workaround: use the MongoDB driver's session API directly if you control the client binding (`mongoClient:` option). File a feature request via `references/feedback.md` if you need a first-class façade surface.
 - **Mongo ORM aggregates.** No `.aggregate(...)` / `.groupBy(...)` on `db.orm.<root>`. Workaround: express aggregations through `db.query.from(...).group(...).build()` and `runtime.query(plan)`.
-- **Mongo filter helpers on the façade.** Rich filters (`.in`, ranges, boolean composition) currently import from `@prisma/orm-mongo/query-ast/execution` (`MongoFieldFilter`, etc.) — not re-exported on `@internal/mongo/runtime`. Workaround: use object equality `.where({ field: value })` where possible; import from the internal package only when necessary. The façade does not re-export them yet.
+- **Mongo filter helpers on the façade.** Rich filters (`.in`, ranges, boolean composition) currently import from `@prisma/orm-mongo/query-ast/execution` (`MongoFieldFilter`, etc.) — not re-exported on `@prisma/orm-mongo/runtime`. Workaround: use object equality `.where({ field: value })` where possible; import from the internal package only when necessary. The façade does not re-export them yet.
 - **Automatic N+1 detection.** Prisma 8 does not warn when an `.include(...)` is missing. Workaround: be deliberate about `.include(...)` in code review; the `lints` middleware (see `references/runtime.md`) catches the more common authoring slips (missing `WHERE` on a `DELETE` / `UPDATE`, missing `LIMIT` on a `SELECT`).
 
 ## Reference Files

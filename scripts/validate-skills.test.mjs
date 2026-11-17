@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import {
+  findInternalPackageNames,
   MAX_DESCRIPTION_LENGTH,
   runCheck,
   SKILL_ROOTS,
@@ -193,5 +194,46 @@ description: Wire this skill with adapterPacks: [examplePack] for the example ta
 describe('SKILL_ROOTS', () => {
   it('covers skills-contrib plus the consolidated skills/ root prisma orm init installs from', () => {
     deepStrictEqual(SKILL_ROOTS, ['skills-contrib', 'skills']);
+  });
+});
+
+describe('findInternalPackageNames', () => {
+  function shippedSkill(files) {
+    const root = mkdtempSync(join(tmpdir(), 'validate-skills-internal-'));
+    for (const [path, content] of Object.entries(files)) {
+      mkdirSync(join(root, path, '..'), { recursive: true });
+      writeFileSync(join(root, path), content);
+    }
+    return root;
+  }
+
+  it('passes a shipped skill that names only published packages', () => {
+    const root = shippedSkill({
+      'skills/prisma-8/SKILL.md': "import postgres from '@prisma/orm-postgres/runtime';\n",
+      'skills/prisma-8/references/runtime.md': 'Install `@prisma/orm-postgres`.\n',
+    });
+    deepStrictEqual(findInternalPackageNames({ root }), []);
+  });
+
+  it('reports each line of the router or a reference that names an @internal/ package', () => {
+    const root = shippedSkill({
+      'skills/prisma-8/SKILL.md': 'Fine.\nUse `@internal/postgres/config`.\n',
+      'skills/prisma-8/references/nested/runtime.md':
+        "import x from '@internal/postgres/runtime';\n",
+    });
+    deepStrictEqual(findInternalPackageNames({ root }), [
+      {
+        file: 'skills/prisma-8/SKILL.md',
+        errors: ['line 2 names an @internal/ package, which is not published'],
+      },
+      {
+        file: 'skills/prisma-8/references/nested/runtime.md',
+        errors: ['line 1 names an @internal/ package, which is not published'],
+      },
+    ]);
+  });
+
+  it('finds no @internal/ package in the repository skill', () => {
+    deepStrictEqual(findInternalPackageNames(), []);
   });
 });

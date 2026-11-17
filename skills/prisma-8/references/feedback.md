@@ -80,7 +80,7 @@ If both — a bug *and* the user wants a related feature — file two separate i
 
 For **either** kind:
 
-- **Prisma 8 version**: `pnpm ls @internal/postgres` (or `@internal/mongo`). If the project uses a target package, that version is canonical.
+- **Prisma 8 version**: `pnpm ls @prisma/orm-postgres` (or `@prisma/orm-mongo`). If the project uses a target package, that version is canonical.
 - **Node version**: `node -v`.
 - **Package manager**: `pnpm` / `npm` / `yarn` / `bun` / `deno`.
 - **OS**: `darwin` / `linux` / `win32` and the version string is enough.
@@ -110,7 +110,7 @@ Bug-report body shape (fields named to match `.github/ISSUE_TEMPLATE/bug_report.
 ~~~markdown
 ## Package and version
 
-<e.g. @internal/postgres@0.5.2>
+<e.g. @prisma/orm-postgres@8.0.0-rc.24>
 
 ## What happened?
 
@@ -209,7 +209,7 @@ When step 1 picked the Discord channel (steps 2–7 do not apply):
    - Extension-author / partner-integration / breaking-change-coordination questions → the public extension-authors channel, or the user can ping a maintainer directly once they're in the server.
 2. **Help draft the opening message.** Prisma's Discord is searchable; a well-framed opening message gets a faster, more useful answer. The agent drafts a short message with:
    - One-sentence summary of what the user is trying to do.
-   - The Prisma 8 version (`pnpm ls @internal/postgres` or equivalent).
+   - The Prisma 8 version (`pnpm ls @prisma/orm-postgres` or equivalent).
    - A short code snippet (PSL excerpt, query, config file) where relevant — redacted the same way as a GitHub issue body (no `DATABASE_URL`, no customer schema names).
    - The specific question the user wants answered.
 3. **Do not auto-post.** The agent surfaces the drafted message to the user — *"here's an opening message you can paste into Discord; want to adjust before sending?"* — and lets the user decide whether to paste it as-is, edit it, or pick a different framing.

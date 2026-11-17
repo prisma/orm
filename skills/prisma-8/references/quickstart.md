@@ -23,16 +23,16 @@ This skill does **not** cover migrating from another ORM (Drizzle, Prisma 6/7, S
 ## When Not to Use
 
 - User already has a PN project and wants to add a model → `references/contract.md`.
-- User wants to migrate FROM a specific ORM → install `@internal/migrate-from-<orm>-skill` (separate).
+- User wants to migrate FROM another ORM → Prisma 8 has no tool for that; see *What Prisma 8 doesn't do yet* below.
 - User wants to wire `db.ts` in a project that already has a contract → `references/runtime.md`.
 - User wants to integrate Prisma 8 with a build tool (Vite plugin, Next.js, …) → `references/build.md`.
 
 ## Key Concepts
 
 - **Contract**: the data model. Authored as `contract.prisma` (PSL, the canonical surface) or `contract.ts` (TypeScript builder). The framework reads it and emits two artefacts: `contract.json` (runtime IR) and `contract.d.ts` (types).
-- **Target**: the backing store. Today: `postgres` or `mongodb`. Picked at `init` time; baked into the `@internal/<target>` façade the scaffold imports from.
+- **Target**: the backing store. Today: `postgres` or `mongodb`. Picked at `init` time; baked into the `@prisma/orm-<target>` façade the scaffold imports from.
 - **Authoring mode**: how you write the contract. `psl` (Prisma Schema Language, default) or `typescript` (programmatic builder, optionally paired with the Vite plugin for auto-emit during `vite dev` — see `references/build.md`).
-- **Façade packages.** The scaffold installs exactly one façade per target — `@internal/postgres` (or `@internal/mongo`). User code imports from façade subpaths (`@internal/postgres/config`, `@internal/postgres/runtime`, `@internal/postgres/static`, `@internal/postgres/contract-builder`). The façade bakes in the family / target / adapter / driver wiring; never reach past it. See `references/contract.md` for the full list.
+- **Façade packages.** The scaffold installs exactly one façade per target — `@prisma/orm-postgres` (or `@prisma/orm-mongo`). User code imports from façade subpaths (`@prisma/orm-postgres/config`, `@prisma/orm-postgres/runtime`, `@prisma/orm-postgres/static`, `@prisma/orm-postgres/contract-builder`). The façade bakes in the family / target / adapter / driver wiring; never reach past it. See `references/contract.md` for the full list.
 - **`db.ts`**: the runtime entry point. Lives next to the contract source at `src/prisma/db.ts`. Imports the contract artefacts and exports a `db` value the rest of the app uses.
 - **Marker**: a row in the `prisma_contract.marker` table (Postgres) or a document in the `_prisma_migrations` collection (Mongo) that records the contract hash per contract space. Lets PN detect drift between contract and live DB. Created by `db init` (greenfield / first-touch orientation) or `db sign` (brownfield).
 
@@ -96,9 +96,9 @@ If that prints `[{ id: 1, email: 'alice@example.com' }]`, the project is wired e
 
 `db.orm.<ns>.<Model>` is the default ORM lane — model-shaped, fully typed against the contract, lazily connects to the database on first use (it picks up `DATABASE_URL` from `.env` via the runtime's `dotenv/config`-loaded environment). The deeper `references/queries.md` reference covers the rest of the supported surface (filters, joins, transactions, the SQL builder, raw SQL via `db.raw.sql`, prepared statements) when the user is ready — and names the gaps (TypedSQL is not available).
 
-> **SQLite target:** `prisma orm init` scaffolds only `postgres` and `mongodb`; a SQLite project is wired by hand with the `@internal/sqlite` façade (`references/runtime.md` § *Switch between Postgres, SQLite, and Mongo*; `examples/prisma-8-demo-sqlite`). SQLite has no schemas, so that façade exposes the unbound namespace directly — write `db.orm.User` rather than `db.orm.public.User`.
+> **SQLite target:** `prisma orm init` scaffolds only `postgres` and `mongodb`; a SQLite project is wired by hand with the `@prisma/orm-sqlite` façade (`references/runtime.md` § *Switch between Postgres, SQLite, and Mongo*; `examples/prisma-8-demo-sqlite`). SQLite has no schemas, so that façade exposes the unbound namespace directly — write `db.orm.User` rather than `db.orm.public.User`.
 >
-> **Mongo target:** the snippet above is SQL-target shape. On `@internal/mongo`, `db.orm` is keyed by the collection's storage name (`@@map(...)`, or the lowercased model name if no `@@map`), so the same arc reads `await db.orm.users.create(...)` / `await db.orm.users.select('id', 'email').all()` — not `db.orm.public.User`. Full rule and rewrite recipe in `references/queries.md` § *MongoDB ORM addressing*.
+> **Mongo target:** the snippet above is SQL-target shape. On `@prisma/orm-mongo`, `db.orm` is keyed by the collection's storage name (`@@map(...)`, or the lowercased model name if no `@@map`), so the same arc reads `await db.orm.users.create(...)` / `await db.orm.users.select('id', 'email').all()` — not `db.orm.public.User`. Full rule and rewrite recipe in `references/queries.md` § *MongoDB ORM addressing*.
 
 **Prerequisites for the arc to work.** All three paths leave these in place by the time you reach the arc:
 
@@ -289,7 +289,7 @@ Switch authoring later by re-running `prisma orm init` in the same directory. Th
 
 ## What Prisma 8 doesn't do yet
 
-- **Migration from another ORM.** Prisma 8 doesn't migrate your schema *from* Drizzle / Sequelize / TypeORM / Kysely / Knex / a raw driver. A Prisma 6 MongoDB schema and a Prisma 7 Postgres schema are the exception: they can be the contract source as they are (`prisma6Schema` / `prisma7Schema`, see `references/contract.md`). For the others: install the matching `@internal/migrate-from-<orm>-skill` if one exists for your source, or treat the source as a brownfield database and `contract infer` from it. If you need a guided migration flow built-in, file a feature request via the `references/feedback.md` skill.
+- **Migration from another ORM.** Prisma 8 doesn't migrate your schema *from* Drizzle / Sequelize / TypeORM / Kysely / Knex / a raw driver. A Prisma 6 MongoDB schema and a Prisma 7 Postgres schema are the exception: they can be the contract source as they are (`prisma6Schema` / `prisma7Schema`, see `references/contract.md`). For the others, treat the source as a brownfield database and `contract infer` from it. If you need a guided migration flow built-in, file a feature request via the `references/feedback.md` skill.
 - **`prisma db push`-style production sync.** `db update` is for databases whose migration history does not need to be kept (local, development, staging, preview); for production, use migrations (`migration plan` + `db migrate`). PN deliberately does not offer a "push-to-prod-without-a-migration" surface — see `references/migrations.md`.
 - **Studio / GUI database browser.** Use `prisma db schema` for a CLI tree-style summary of the live DB. If you need an interactive UI, file a feature request via the `references/feedback.md` skill.
 

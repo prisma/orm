@@ -1,12 +1,12 @@
 # Prisma 8 — Queries (Postgres)
 
-> Load this guide when `db.ts` imports from `@internal/postgres/runtime`.
+> Load this guide when `db.ts` imports from `@prisma/orm-postgres/runtime`.
 
 Shared concepts (result consumption, script teardown, cross-target pitfalls, capability gaps) live in [`queries.md`](./queries.md).
 
 ## Key Concepts
 
-**Postgres** (`postgres({ contract, ... })` from `@internal/postgres/runtime`):
+**Postgres** (`postgres({ contract, ... })` from `@prisma/orm-postgres/runtime`):
 
 - **`db.orm.<ns>.<Model>`** — ORM, PascalCase model name (`db.orm.public.User`). Fluent `.where(...).select(...).orderBy(...).all()`, fully typed against `Contract`. Default lane for CRUD with relations.
 - **`db.sql.<ns>.<table>`** — SQL builder, lowercase storage name (`db.sql.public.user`). Produces a *plan*. A plan that returns rows (`select`, or a write with `.returning(...)`) runs through `db.query(plan)`; a write with no `RETURNING` runs through `db.execute(plan)`, which resolves `{ affectedRows }`. Use when the ORM is too high-level — explicit `JOIN`, computed projections, set operations, window functions.
@@ -677,7 +677,7 @@ Cross-namespace relations (e.g. `public.Profile` → `auth.User`) follow the sam
 2. **Using `.all()` when you wanted one row.** `.all()` issues no implicit limit. Use `.first()` or `.first({ pk })`.
 3. **Coalescing `count()` with `?? 0` "just in case".** `count()` is `number`, not `number | null` — SQL answers an empty set with `0`. The `?? 0` belongs on `sum` / `avg` / `min` / `max`, and its zero should match the aggregate's own type (`0` for an integer sum, `0n` for `sumBigInt`, `'0'` where the result is a decimal string).
 4. **Reaching for `.between(a, b)` on a field proxy.** It doesn't exist. Either chain `.where((m) => m.field.gte(a)).where((m) => m.field.lte(b))` or use `and(m.field.gte(a), m.field.lte(b))` inside one `.where()` clause.
-5. **Importing `and` / `or` / `not` from an internal package.** They are exported from `@prisma/orm-postgres/orm-client`; do not reach into `@internal/sql-orm-client`.
+5. **Importing `and` / `or` / `not` from an internal package.** They are exported from `@prisma/orm-postgres/orm-client`; do not import them from a platform package such as `@prisma/orm-family-sql`.
 6. **Trying to `db.sql.from(tables.user)`.** That surface does not exist. The builder is table-shaped: `db.sql.<ns>.<tableName>.select(...)`. There is no `db.schema.tables` either.
 7. **Reading rows with `execute`.** Plans run through the client: `db.query(plan)` for rows, `db.execute(plan)` for a non-returning write (`{ affectedRows }`). Inside a transaction, `tx.query(plan)` / `tx.execute(plan)`. `execute` never yields rows — a `select` or `.returning(...)` plan passed to it gives you statistics, not data.
 8. **Setting `capabilities: { lateral: true }` in `prisma.config.ts`.** The ORM config (`ormConfig({...})`) does not take `capabilities`. Capabilities are declared by the active adapter and become part of the emitted contract; the Postgres adapter advertises `lateral`, `jsonAgg`, and `returning` out of the box. Enable extension capabilities through `extensions: [...]` in the config (see `references/contract.md`).

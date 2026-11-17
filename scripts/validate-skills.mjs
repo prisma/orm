@@ -11,6 +11,10 @@
  * A skill whose frontmatter fails to parse is silently omitted from
  * discovery (by `skills add` or by `prisma orm init`) — this lint catches
  * that before merge.
+ *
+ * The `prisma-8` skill ships inside the published packages, so its router and
+ * references must name only published packages: an `@internal/` workspace
+ * name does not resolve in an application.
  */
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -26,6 +30,8 @@ const repoRoot = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 export const SKILLS_DIR = 'skills-contrib';
 export const SKILL_ROOTS = [SKILLS_DIR, 'skills'];
 export const MAX_DESCRIPTION_LENGTH = 1024;
+export const SHIPPED_SKILL_PATHS = ['skills/prisma-8/SKILL.md', 'skills/prisma-8/references'];
+const INTERNAL_PACKAGE_NAME = /@internal\//;
 
 export function validateSkillMd(content) {
   const errors = [];
@@ -146,9 +152,41 @@ export function runCheck({ root = repoRoot, roots = SKILL_ROOTS, files } = {}) {
   return offences;
 }
 
+function markdownFilesAt(path) {
+  let stat;
+  try {
+    stat = statSync(path);
+  } catch {
+    return [];
+  }
+  if (stat.isFile()) return [path];
+  return readdirSync(path, { recursive: true, encoding: 'utf8' })
+    .map((entry) => join(path, entry))
+    .filter((file) => file.endsWith('.md') && statSync(file).isFile())
+    .sort();
+}
+
+export function findInternalPackageNames({ root = repoRoot, paths = SHIPPED_SKILL_PATHS } = {}) {
+  const offences = [];
+  for (const path of paths) {
+    for (const file of markdownFilesAt(join(root, path))) {
+      const errors = readFileSync(file, 'utf8')
+        .split('\n')
+        .flatMap((line, index) =>
+          INTERNAL_PACKAGE_NAME.test(line)
+            ? [`line ${index + 1} names an @internal/ package, which is not published`]
+            : [],
+        );
+      if (errors.length > 0) offences.push({ file: relative(root, file), errors });
+    }
+  }
+  return offences;
+}
+
 function main() {
   const files = process.argv.slice(2).filter((arg) => !arg.startsWith('-'));
   const offences = runCheck(files.length > 0 ? { files } : {});
+  if (files.length === 0) offences.push(...findInternalPackageNames());
   if (offences.length === 0) {
     console.log(`All skills passed validation (${SKILL_ROOTS.join(', ')}).`);
     return 0;
@@ -163,7 +201,8 @@ function main() {
   console.error(
     '\nUnparseable frontmatter is silently skipped by `skills add` during pnpm prepare, ' +
       'and by `prisma orm init` when it installs the user-facing skills/ tree. ' +
-      'Use a folded block scalar (description: >) when the description contains colons.',
+      'Use a folded block scalar (description: >) when the description contains colons. ' +
+      'The shipped prisma-8 skill must name the published @prisma/orm-* package for every import.',
   );
   return 1;
 }
