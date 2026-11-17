@@ -627,6 +627,43 @@ describe('integration/nested-variant-mutations', () => {
     );
 
     it(
+      'on a relation the parent holds the key for, unlinks the parent only when the linked row is of the variant and matches the criteria',
+      async () => {
+        await withCollectionRuntime(async (runtime) => {
+          await seed(runtime);
+          const { comments } = collectionsOf(runtime);
+          await runtime.query('update task_comments set task_id = 1 where id = 1');
+
+          const otherVariant = await comments.where({ id: 1 }).update({
+            task: (task) => task.variant('feature').disconnect(),
+          });
+          const otherRow = await comments.where({ id: 1 }).update({
+            task: (task) => task.variant('bug').disconnect([{ id: 5 }]),
+          });
+          const bug = await comments.where({ id: 1 }).update({
+            task: (task) => task.variant('bug').disconnect([{ id: 5 }, { id: 1 }]),
+          });
+          await runtime.query('update task_comments set task_id = 2 where id = 1');
+          const otherFeature = await comments.where({ id: 1 }).update({
+            task: (task) => task.variant('bug').disconnect(),
+          });
+          const feature = await comments.where({ id: 1 }).update({
+            task: (task) => task.variant('feature').disconnect(),
+          });
+
+          expect([otherVariant, otherRow, bug, otherFeature, feature]).toEqual([
+            { id: 1, body: 'Seen it', taskId: 1 },
+            { id: 1, body: 'Seen it', taskId: 1 },
+            { id: 1, body: 'Seen it', taskId: null },
+            { id: 1, body: 'Seen it', taskId: 2 },
+            { id: 1, body: 'Seen it', taskId: null },
+          ]);
+        }, polyContext.contract);
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
       'on a relation through a junction, links and unlinks a row of the variant and refuses a row of another',
       async () => {
         await withCollectionRuntime(async (runtime) => {

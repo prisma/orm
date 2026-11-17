@@ -190,7 +190,7 @@ export function updateFirstGraph(
   if (Object.keys(values).length === 0 && before.keys.length === 0) {
     addAfterWrite(t, model, find, relationMutations);
     b.graph.setResult(
-      state.includes.length === 0
+      state.includes.length === 0 && !before.unlinksAfterWrite
         ? find
         : readBack(b, model, find, identityColumnsOf(collection), {
             shape: shapeOf(collection),

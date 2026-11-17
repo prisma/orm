@@ -36,7 +36,7 @@ export interface VariantCreateRow {
   readonly variant: Readonly<Record<string, unknown>>;
 }
 
-const nothingBefore: BeforeWrite = { keys: [], nullColumns: {} };
+const nothingBefore: BeforeWrite = { keys: [], nullColumns: {}, unlinksAfterWrite: false };
 
 export function modelOf(collection: DescribeCollectionRowsOptions): Model {
   const { modelName, namespaceId, state } = collection;

@@ -604,19 +604,38 @@ describe('connect and disconnect on a variant stored in its own table', () => {
 });
 
 describe('disconnect on a variant', () => {
-  it('is refused on a relation the parent holds the key for while the graph is built', () => {
+  it('unlinks the parent only when the linked row is of the variant, on a variant stored in the base table', () => {
     expect(
-      thrownBy(() =>
+      printGraph(
         updateOf('TaskComment', {
           task: (task: VariantMutator) => task.variant('bug').disconnect(),
         }),
       ),
-    ).toMatchObject({
-      code: 'ORM.OPERATION_UNSUPPORTED',
-      message:
-        'disconnect() nested mutation for relation "task" is not available on a variant, because the parent holds the key of the related row',
-      meta: { kind: 'disconnect', relation: 'task', reason: 'variant-parent-owned' },
-    });
+    ).toBe(
+      [
+        'n1 Find task_comments where id = 1',
+        "n2 Update task_comments set task_id = null where task_id in (select id from tasks where type = 'bug') <- FilterData n1 (id->id)",
+        'n3 Find task_comments <- FilterData n1 (id->id)',
+        'result: n3',
+      ].join('\n'),
+    );
+  });
+
+  it('unlinks the parent only when the linked row is of the variant and matches the criteria, on a variant stored in its own table', () => {
+    expect(
+      printGraph(
+        updateOf('TaskComment', {
+          task: (task: VariantMutator) => task.variant('feature').disconnect([{ id: 2 }]),
+        }),
+      ),
+    ).toBe(
+      [
+        'n1 Find task_comments where id = 1',
+        `n2 Update task_comments set task_id = null where task_id in (select id from tasks where ${featureTwo}) <- FilterData n1 (id->id)`,
+        'n3 Find task_comments <- FilterData n1 (id->id)',
+        'result: n3',
+      ].join('\n'),
+    );
   });
 
   it('is refused on a relation the child holds the key for when that key is required', () => {

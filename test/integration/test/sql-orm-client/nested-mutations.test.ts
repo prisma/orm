@@ -214,6 +214,41 @@ describe.each(includeStrategies)('integration/nested-mutations (%s)', (strategy)
   );
 
   it(
+    'update() disconnect() with criteria on a to-one relation the parent holds the key for unlinks only a matching linked row',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime, strategy);
+
+        await seedUsers(runtime, [
+          { id: 1, name: 'Alice', email: 'alice@example.com' },
+          { id: 2, name: 'Bob', email: 'bob@example.com', invitedById: 1 },
+          { id: 3, name: 'Carol', email: 'carol@example.com' },
+        ]);
+
+        const unmatched = await users
+          .where({ id: 2 })
+          .select('id', 'name', 'invitedById')
+          .update({
+            name: 'Bob B.',
+            invitedBy: (inviter) => inviter.disconnect([{ id: 3 }]),
+          });
+        const matched = await users
+          .where({ id: 2 })
+          .select('id', 'name', 'invitedById')
+          .update({
+            invitedBy: (inviter) => inviter.disconnect([{ id: 3 }, { email: 'alice@example.com' }]),
+          });
+
+        expect([unmatched, matched]).toEqual([
+          { id: 2, name: 'Bob B.', invitedById: 1 },
+          { id: 2, name: 'Bob B.', invitedById: null },
+        ]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
     'update() refuses disconnect() on a relation whose foreign key is required, before any statement runs',
     async () => {
       await withCollectionRuntime(async (runtime) => {

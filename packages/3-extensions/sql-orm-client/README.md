@@ -385,6 +385,8 @@ An operation used where the table does not list it is refused with `ORM.OPERATIO
 
 `r.disconnect()` sets the foreign key of the relation to null: on a relation the record holds the key for, the record's key; on a relation the related rows hold the key for, theirs. When that key is required, `disconnect` is refused with `ORM.OPERATION_UNSUPPORTED` (`reason: 'required-foreign-key'`, with the model and fields of the key in `model` and `fields`) before any statement runs, and is a type error, also when it would have changed no row. When `model` is the model being updated, the record holds the key (a many-to-one relation, such as `Post.author`): link it to another row with `connect`, or delete the record. Otherwise the related rows hold the key (one-to-many, or one-to-one from the side without the key): connect them to another record, or delete them. Or make the key optional.
 
+On a relation the record holds the key for, `r.disconnect(criteria)` unlinks the record only when the row it is linked to matches one of the criteria; otherwise it changes nothing and raises no error. `r.disconnect()` without criteria unlinks it whatever row it is linked to.
+
 On a many-to-many relation, `r.disconnect()` without criteria is refused with `ORM.ARGUMENT_INVALID` and is a type error; pass the criteria of the rows to unlink. `r.create` and `r.connect` are refused with `ORM.OPERATION_UNSUPPORTED`, and are type errors, when the junction table has a column other than its link columns that is not nullable and has no default; `r.disconnect(criteria)` stays available.
 
 On a runtime that provides transactions, a write that takes more than one statement, such as a parent write with nested operations, runs in one transaction, so either all of it is applied or none of it is.
@@ -407,7 +409,7 @@ A to-one relation takes at most one operation: an array of two or more is refuse
 
 ### Nested writes on a polymorphic model
 
-On a relation whose target is a polymorphic base model, the mutator has `variant(value)`, which takes a discriminator value the model declares. `r.variant(value)` has `create`, `connect`, `disconnect`, `where`, `updateAll` and `deleteAll`, available where the same operation is available on `r` except `disconnect` on a relation the record holds the key for, and each acts only on rows of that variant: for a variant stored in the base table, the rows whose discriminator is the variant's value; for a variant stored in its own table, the base rows with that discriminator value that have a row in the variant table.
+On a relation whose target is a polymorphic base model, the mutator has `variant(value)`, which takes a discriminator value the model declares. `r.variant(value)` has `create`, `connect`, `disconnect`, `where`, `updateAll` and `deleteAll`, available where the same operation is available on `r`, and each acts only on rows of that variant: for a variant stored in the base table, the rows whose discriminator is the variant's value; for a variant stored in its own table, the base rows with that discriminator value that have a row in the variant table.
 
 #### Creating rows
 
@@ -426,15 +428,13 @@ await db.Project.where({ id: 1 }).update({
 
 #### Connecting and disconnecting rows
 
-`r.variant(value).connect(criteria)` and `r.variant(value).disconnect(criteria?)` find only rows of the variant. A row of another variant is treated as a row that does not exist: `connect` on a relation the record holds the key for, and `connect` and `disconnect` on a many-to-many relation, refuse it with `ORM.RELATION_ROW_MISSING`; on a relation the related rows hold the key for, `connect` links nothing and `disconnect` unlinks nothing, with no error.
+`r.variant(value).connect(criteria)` and `r.variant(value).disconnect(criteria?)` find only rows of the variant. A row of another variant is treated as a row that does not exist: `connect` on a relation the record holds the key for, and `connect` and `disconnect` on a many-to-many relation, refuse it with `ORM.RELATION_ROW_MISSING`; on a relation the related rows hold the key for, `connect` links nothing and `disconnect` unlinks nothing, with no error. On a relation the record holds the key for, `disconnect` unlinks the record only when the row it is linked to is of the variant, and matches one of the criteria when they are given; otherwise it changes nothing, with no error.
 
 ```ts
 await db.Project.where({ id: 1 }).update({
   tasks: (tasks) => [tasks.variant('bug').connect({ id: 7 }), tasks.variant('feature').disconnect()],
 });
 ```
-
-On a relation the record holds the key for, `disconnect` is not available on a variant: it is a type error and is refused with `ORM.OPERATION_UNSUPPORTED` (`reason: 'variant-parent-owned'`). Use `r.disconnect()`.
 
 #### Updating and deleting rows of a variant
 

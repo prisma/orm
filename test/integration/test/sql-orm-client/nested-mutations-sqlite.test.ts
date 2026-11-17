@@ -427,6 +427,41 @@ describe('integration/nested-mutations on SQLite: update()', () => {
   );
 
   it(
+    'disconnect() with criteria on a relation the parent holds the key for unlinks only a matching linked row',
+    async () => {
+      await withDatabase(async ({ users, posts, rows }) => {
+        await users.create({
+          id: 1,
+          name: 'Ada',
+          posts: (children) => children.create([{ id: 10, title: 'Post' }]),
+        });
+        await users.create({ id: 2, name: 'Grace' });
+
+        const unmatched = await posts
+          .where({ id: 10 })
+          .select('id', 'title', 'userId')
+          .update({
+            title: 'Edited',
+            author: (author) => author.disconnect([{ id: 2 }]),
+          });
+        const matched = await posts
+          .where({ id: 10 })
+          .select('id', 'title', 'userId')
+          .update({
+            author: (author) => author.disconnect([{ id: 2 }, { id: 1 }]),
+          });
+
+        expect([unmatched, matched]).toEqual([
+          { id: 10, title: 'Edited', userId: 1 },
+          { id: 10, title: 'Edited', userId: null },
+        ]);
+        expect(rows('select id, user_id from posts')).toEqual([{ id: 10, user_id: null }]);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
     'refuses disconnect() on a relation whose foreign key is required, before any statement runs',
     async () => {
       await withDatabase(async ({ users, posts, comments, rows }) => {
