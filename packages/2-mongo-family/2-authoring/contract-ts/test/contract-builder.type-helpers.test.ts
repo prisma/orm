@@ -54,16 +54,16 @@ const { field, type } = createContractAuthoringHelpers({
 describe('the MongoDB type helpers', () => {
   it.each([
     ['ObjectId', 'mongo/objectId@1'],
-    ['String', 'mongo/string@1'],
+    ['BsonString', 'mongo/string@1'],
     ['Double', 'mongo/double@1'],
     ['Int32', 'mongo/int32@1'],
     ['Bool', 'mongo/bool@1'],
     ['DateTime', 'mongo/date@1'],
-    ['Int64', 'mongo/int64@1'],
+    ['Int64BigInt', 'mongo/int64@1'],
     ['Int64Number', 'mongo/int64Number@1'],
     ['Decimal128', 'mongo/decimal128@1'],
     ['Binary', 'mongo/binary@1'],
-    ['Json', 'mongo/json@1'],
+    ['PlainJson', 'mongo/json@1'],
     ['Bson', 'mongo/bson@1'],
     ['Vector', 'mongo/vector@1'],
   ] as const)(
@@ -73,8 +73,39 @@ describe('the MongoDB type helpers', () => {
     },
   );
 
+  it('type the field of each convenience type with the codec of the explicit type it chooses', () => {
+    expect({
+      Int: field.scalar(type.Int()).__type,
+      Float: field.scalar(type.Float()).__type,
+      Boolean: field.scalar(type.Boolean()).__type,
+      String: field.scalar(type.String()).__type,
+      Json: field.scalar(type.Json()).__type,
+    }).toStrictEqual({
+      Int: { kind: 'scalar', codecId: 'mongo/int32@1' },
+      Float: { kind: 'scalar', codecId: 'mongo/double@1' },
+      Boolean: { kind: 'scalar', codecId: 'mongo/bool@1' },
+      String: { kind: 'scalar', codecId: 'mongo/string@1' },
+      Json: { kind: 'scalar', codecId: 'mongo/json@1' },
+    });
+  });
+
   it('leave out a constructor PSL keeps only as a deprecated name', () => {
-    expect(['Int', 'Float', 'Boolean', 'Int32'].filter((name) => name in type)).toEqual(['Int32']);
+    expect(['Int64', 'Int64BigInt'].filter((name) => name in type)).toEqual(['Int64BigInt']);
+  });
+
+  it('refuse a read of a deprecated name, naming its replacement', () => {
+    expect(() => Reflect.get(type, 'Int64')).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.FIELD_HELPER_UNKNOWN',
+        message:
+          'type.Int64() was removed. Int64 is a deprecated PSL name, which has no TypeScript helper. Write type.Int64BigInt().',
+        meta: { helper: 'type.Int64' },
+      }),
+    );
+  });
+
+  it('give undefined for a read of a name that was never a type', () => {
+    expect(Reflect.get(type, 'Int65')).toBeUndefined();
   });
 
   it('give a vector its length as a type parameter', () => {

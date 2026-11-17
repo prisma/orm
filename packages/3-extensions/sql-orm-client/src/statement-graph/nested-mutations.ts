@@ -1,5 +1,6 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
+import type { AnyExpression } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { blindCast, castAs } from '@internal/utils/casts';
 import {
@@ -11,11 +12,16 @@ import {
 } from '../collection-contract';
 import {
   type CollectionTables,
+  createCollectionTables,
   createStatementTables,
   requireVariantTable,
 } from '../collection-tables';
 import { shorthandToWhereExpr } from '../filters';
-import { type InsertConflictSkip, projectTableColumn } from '../mutation-statements';
+import {
+  countMutationWhere,
+  type InsertConflictSkip,
+  projectTableColumn,
+} from '../mutation-statements';
 import { ormError } from '../orm-errors';
 import {
   assertJunctionMetadataShape,
@@ -31,7 +37,7 @@ import {
 import { storageTableForContract } from '../storage-resolution';
 import type { AliasedTable } from '../table-scope';
 import type { MutationCreateInput, MutationUpdateInput, RelationMutation } from '../types';
-import { emptyState } from '../types';
+import { type CollectionState, emptyState } from '../types';
 import { Assert } from './assert';
 import { addDeleteAll, addUpdateAll, createAllVariantGraph } from './collection-graphs';
 import type { ColumnMapping, NodeId } from './edge';
@@ -173,6 +179,7 @@ export function addBeforeWrite(
         continue;
       }
       if (mutation.kind === 'disconnect') {
+        rejectVariantDisconnect(relationMutation.name, mutation);
         for (const column of localColumnsOf(t.context.contract, model, relationMutation.relation)) {
           nullColumns[column] = null;
         }
@@ -215,6 +222,20 @@ function rejectUpdateOnly({ name, mutations }: ParsedRelationMutation): void {
   }
 }
 
+function rejectVariantDisconnect(
+  name: string,
+  mutation: Extract<Mutation, { kind: 'disconnect' }>,
+): void {
+  if (mutation.state === undefined) {
+    return;
+  }
+  throw ormError(
+    'ORM.RELATION_MUTATION_UNSUPPORTED',
+    `disconnect() nested mutation for relation "${name}" is not available on a variant, because the parent holds the key of the related row`,
+    { meta: { kind: 'disconnect', relation: name, reason: 'variant-parent-owned' } },
+  );
+}
+
 function isFilteredWrite(mutation: Mutation): mutation is FilteredWrite {
   return mutation.kind === 'updateAll' || mutation.kind === 'deleteAll';
 }
@@ -240,7 +261,7 @@ function addParentOwned(
   mutation: CreateOrConnect,
 ): KeySource[] {
   const { contract } = t.context;
-  const related = relatedModel(contract, relation);
+  const related = relatedModel(contract, relation, variantOf(mutation));
   const columns = columnMappings(
     contract,
     related.tables.root,
@@ -292,7 +313,12 @@ function addParentOwned(
       { meta: { kind: 'connect', relation: name, problem: 'missing-criterion' } },
     );
   }
-  return [{ from: addFindAndAssert(t, related, name, 'connect', criterion, columns), columns }];
+  return [
+    {
+      from: addFindAndAssert(t, { name, relation }, mutation, criterion, columns),
+      columns,
+    },
+  ];
 }
 
 function addChildOwned(
@@ -304,7 +330,7 @@ function addChildOwned(
 ): void {
   const { context } = t;
   const { contract } = context;
-  const related = relatedModel(contract, relation);
+  const related = relatedModel(contract, relation, variantOf(mutation));
   const targetColumns = resolveRelationTargetColumns(contract, relation);
   const fromParent = columnMappings(
     contract,
@@ -345,7 +371,7 @@ function addChildOwned(
         related,
         {},
         {
-          where: requiredCriterion(context, related, name, 'connect', criterion),
+          where: requiredCriterion(context, related, name, mutation, criterion),
           filters: [],
           links: [],
           payloads: [{ from: parent, columns: fromParent }],
@@ -362,10 +388,8 @@ function addChildOwned(
   const criteria = mutation.criteria ?? [];
   const wheres =
     criteria.length === 0
-      ? [undefined]
-      : criteria.map((criterion) =>
-          requiredCriterion(context, related, name, 'disconnect', criterion),
-        );
+      ? [variantWhere(contract, mutation.state, undefined)]
+      : criteria.map((criterion) => requiredCriterion(context, related, name, mutation, criterion));
   for (const where of wheres) {
     updateRows(t, related, unlink, {
       where,
@@ -390,7 +414,7 @@ function addJunctionOwned(
   const { context } = t;
   const { contract } = context;
   const { through } = relation;
-  const related = relatedModel(contract, relation);
+  const related = relatedModel(contract, relation, variantOf(mutation));
   const junction = createStatementTables({
     namespaceId: through.namespaceId,
     tableName: through.table,
@@ -453,7 +477,7 @@ function addJunctionOwned(
   if (mutation.kind === 'connect') {
     const conflict = linkKeyConflict(contract, relation);
     for (const criterion of mutation.criteria) {
-      addLink(addFindAndAssert(t, related, name, 'connect', criterion, fromTarget), conflict);
+      addLink(addFindAndAssert(t, { name, relation }, mutation, criterion, fromTarget), conflict);
     }
     return;
   }
@@ -466,7 +490,7 @@ function addJunctionOwned(
     );
   }
   for (const criterion of criteria) {
-    const target = addFindAndAssert(t, related, name, 'disconnect', criterion, fromTarget);
+    const target = addFindAndAssert(t, { name, relation }, mutation, criterion, fromTarget);
     deleteRows(t, junction, {
       where: undefined,
       filters: [
@@ -579,20 +603,28 @@ function addChildInserts(
 
 function addFindAndAssert(
   t: Translation,
-  related: Model,
-  name: string,
-  kind: 'connect' | 'disconnect',
+  { name, relation }: Pick<ParsedRelationMutation, 'name' | 'relation'>,
+  mutation: Extract<Mutation, { kind: 'connect' | 'disconnect' }>,
   criterion: Readonly<Record<string, unknown>>,
   columns: readonly ColumnMapping[],
 ): NodeId {
   const { graph, context } = t;
-  const where = requiredCriterion(context, related, name, kind, criterion);
+  const { kind } = mutation;
+  const related = relatedModel(context.contract, relation, mutation.state);
+  const where = requiredCriterion(context, related, name, mutation, criterion);
+  const withVariants =
+    mutation.state === undefined
+      ? {
+          ...related,
+          tables: createCollectionTables(context.contract, related.namespaceId, related.modelName),
+        }
+      : related;
   const find = findRows(
     t,
     selectAstOf(
       context,
-      related,
-      { ...emptyState(related.tables), filters: [where], limit: 1 },
+      withVariants,
+      { ...emptyState(withVariants.tables), filters: [where], limit: 1 },
       'selection',
     ),
     { filter: [], requires: parentRowRequired(t) },
@@ -620,9 +652,9 @@ function requiredCriterion(
   context: ExecutionContext,
   model: Model,
   name: string,
-  kind: 'connect' | 'disconnect',
+  { kind, state: variant }: Extract<Mutation, { kind: 'connect' | 'disconnect' }>,
   criterion: Readonly<Record<string, unknown>>,
-) {
+): AnyExpression {
   const where = criterionWhere(context, model, criterion);
   if (where === undefined) {
     throw ormError(
@@ -631,7 +663,28 @@ function requiredCriterion(
       { meta: { kind, relation: name, problem: 'empty-criterion' } },
     );
   }
-  return where;
+  return variantWhere(context.contract, variant, where) ?? where;
+}
+
+function variantOf(mutation: Mutation): CollectionState | undefined {
+  return mutation.kind === 'connect' || mutation.kind === 'disconnect' ? mutation.state : undefined;
+}
+
+function variantWhere(
+  contract: Contract<SqlStorage>,
+  variant: CollectionState | undefined,
+  where: AnyExpression | undefined,
+): AnyExpression | undefined {
+  if (variant === undefined) {
+    return where;
+  }
+  const { tables, filters, variantValue } = variant;
+  return countMutationWhere(
+    contract,
+    tables,
+    where === undefined ? filters : [...filters, where],
+    variantValue,
+  );
 }
 
 function parentRowRequired(t: Translation): Requires[] {
@@ -670,7 +723,14 @@ function linkKeyConflict(
   return key === undefined ? undefined : { columns: key };
 }
 
-function relatedModel(contract: Contract<SqlStorage>, relation: ResolvedRelation): Model {
+function relatedModel(
+  contract: Contract<SqlStorage>,
+  relation: ResolvedRelation,
+  variant: CollectionState | undefined,
+): Model {
+  if (variant !== undefined) {
+    return { namespaceId: relation.toNamespace, modelName: relation.to, tables: variant.tables };
+  }
   return {
     namespaceId: relation.toNamespace,
     modelName: relation.to,

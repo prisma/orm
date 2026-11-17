@@ -10,21 +10,21 @@ export const TEMPORAL_REWRITES: Readonly<Record<string, string>> = {
     'field.scalar(type.DateTime()), with .onCreate(gen.now()) and .onUpdate(gen.now()) for the phases the preset set',
 };
 
-/** Each removed scalar field helper and the type constructor its field is now written with. */
+/** Each removed scalar field helper and the `type` call its field is now written with. */
 export const REMOVED_SCALAR_HELPERS: Readonly<Record<string, string>> = {
-  objectId: 'ObjectId',
-  string: 'String',
-  double: 'Double',
-  int32: 'Int32',
-  bool: 'Bool',
-  date: 'DateTime',
-  int64: 'Int64',
-  int64Number: 'Int64Number',
-  decimal128: 'Decimal128',
-  binary: 'Binary',
-  json: 'Json',
-  bson: 'Bson',
-  vector: 'Vector',
+  objectId: 'ObjectId()',
+  string: 'String()',
+  double: 'Float()',
+  int32: 'Int()',
+  bool: 'Boolean()',
+  date: 'DateTime()',
+  int64: 'BigInt()',
+  int64Number: "BigInt({ as: 'number' })",
+  decimal128: 'Decimal()',
+  binary: 'Bytes()',
+  json: 'Json()',
+  bson: 'Bson()',
+  vector: 'Vector()',
 };
 
 function refusePreset(preset: string): never {
@@ -38,11 +38,11 @@ function refusePreset(preset: string): never {
 
 function refuseScalarHelper(name: string): never {
   const helper = `field.${name}`;
-  const typeName = REMOVED_SCALAR_HELPERS[name];
+  const typeCall = REMOVED_SCALAR_HELPERS[name];
   const length = name === 'vector' ? ', or field.scalar(type.Vector(n)) for a length n' : '';
   throw contractError(
     'CONTRACT.FIELD_HELPER_UNKNOWN',
-    `${helper}() was removed. Write field.scalar(type.${typeName}())${length}.`,
+    `${helper}() was removed. Write field.scalar(type.${typeCall})${length}.`,
     { meta: { helper } },
   );
 }
@@ -50,12 +50,12 @@ function refuseScalarHelper(name: string): never {
 /** Refuses an argument of `field.scalar()` that is not a type from the type helpers, naming the type to write when `value` is the codec id of a removed scalar helper. */
 export function refuseScalarArgument(value: unknown): never {
   const helper = Object.keys(REMOVED_SCALAR_HELPERS).find((name) => value === `mongo/${name}@1`);
-  const typeName = helper === undefined ? undefined : REMOVED_SCALAR_HELPERS[helper];
+  const typeCall = helper === undefined ? undefined : REMOVED_SCALAR_HELPERS[helper];
   throw contractError(
     'CONTRACT.ARGUMENT_INVALID',
-    typeName === undefined
+    typeCall === undefined
       ? `field.scalar() takes a type from the type helpers, such as field.scalar(type.String()), and was given ${JSON.stringify(value)}.`
-      : `field.scalar() takes a type, not the codec id "${String(value)}". Write field.scalar(type.${typeName}()).`,
+      : `field.scalar() takes a type, not the codec id "${String(value)}". Write field.scalar(type.${typeCall}).`,
     { meta: { helper: 'field.scalar' } },
   );
 }

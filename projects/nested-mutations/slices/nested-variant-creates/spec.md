@@ -39,7 +39,7 @@ Illustrative; re-verify names against shipped code.
 - The mutator's `variant` is built from the related collection's `variant(value)`. The runtime errors for an undeclared value and for a second `variant()` call are the collection's.
 - **`create` on the variant mutator** takes one row or an array, typed as `VariantCreateInput` with the nested-create relaxation `MutationCreateInput` already applies (foreign keys that link to the parent are optional). Runtime is the top-level one: the ORM sets the discriminator; relation callbacks inside the row behave as in the table above.
 - **`create` on the mutator without `variant()`** on a polymorphic target: its data becomes `never`, as the collection's `ResolvedCreateInput`. There is no runtime check, as at top level; a row passed past the types is written as today. The upgrade instructions for app authors describe the change.
-- **`connect(criteria)`** on the variant mutator finds the row by the criteria and the variant condition; a row of another variant is not found and raises `ORM.RELATION_ROW_MISSING`.
+- **`connect(criteria)`** on the variant mutator adds the variant condition to what the base mutator's `connect` does on each layout, so a row of another variant is treated as a missing row: on N:1 and M:N the `Find` does not find it and `ORM.RELATION_ROW_MISSING` is raised; on 1:N and 1:1 the `Update` of the child does not match it and nothing is linked, with no error, as the base `connect` does for a missing child today (decided 2026-11-13, replacing "raises `ORM.RELATION_ROW_MISSING`" on every layout).
 - **`disconnect`** on the variant mutator is available where the target holds the link or a junction does (1:N, 1:1, M:N): the variant condition is added to the unlink `Update` or to the junction `Find`. On a relation whose key is on the parent (N:1), `disconnect`'s parameter is `never` on the variant mutator: today the parent's `Update` sets the key to null without reading the linked row, and an unlink limited to a variant needs the conditional unlink of slice `single-row-writes`. **When this branch is rebased onto `single-row-writes`, N:1 `disconnect` on the variant mutator is built in this slice on that unlink** (decided 2026-11-13).
 - **`where`, `updateAll`, `deleteAll`** on the variant mutator: the descriptor holds the state of the variant collection, so the filter includes the variant condition. The `where` callback receives the variant-aware accessor, as `db.Task.variant(v).where(…)` does.
 - Every rejection that applies to the mutator applies to the variant mutator unchanged (`create()` context, to-one, parent-link columns, array length on to-one).
@@ -84,7 +84,7 @@ Both PRs are one change: the relation mutator gets the `variant()` the collectio
 **In:** `RelationMutator.variant` and the variant mutator's types (`src/types.ts`) and runtime (`src/relation-mutator.ts`); the descriptor fields; the translation in `src/mutation-graph/nested-mutations.ts` for both storage layouts on 1:N, 1:1, N:1 and M:N; the variant condition on `connect`, `disconnect`, filtered writes; type tests (`test/*.test-d.ts`); graph tests in printed form; integration tests on Postgres in `create()` and `update()`, one row and an array, on each relation layout the fixtures have, with a check that rows of another variant are left unchanged by `connect`, `disconnect`, `updateAll` and `deleteAll`; fixture additions to `test/integration/test/sql-orm-client/fixtures/polymorphism/contract.prisma` for the layouts it lacks (N:1 to a variant in its own table, M:N to `Task`, 1:1 to `Task`), regenerated with the repo's fixture commands; the package README and user-facing query docs; an upgrade-instructions entry for app authors about `t.create` on a polymorphic target.
 
 **Out:**
-- N:1 `disconnect` on the variant mutator until rebased onto `single-row-writes` (then in).
+- N:1 `disconnect` on the variant mutator: moved to slice `single-row-writes` (decided 2026-11-17, since this slice merged before that one was built).
 - Relation callbacks inside a variant create that top level refuses (a relation of the variant; any relation for a variant in its own table). The types of both levels accept them and the runtime of both levels refuses them; making the two levels agree is a follow-up for both.
 - The collection's second `create` overload (`MutationCreateInputWithRelations`), which accepts a polymorphic base's fields plus a relation callback without `variant()`; a follow-up for the top-level API.
 - `onConflict` on nested variant creates (slice `create-on-conflict`, which refuses it on variants stored in their own table).
@@ -103,7 +103,7 @@ Integration tests run on Postgres only (decided 2026-11-16 by the project owner 
 ## Slice-specific done conditions
 
 - [ ] The plan entry for slice 7 records the decisions above in place of its open questions.
-- [ ] After a rebase onto `single-row-writes`, N:1 `disconnect` on the variant mutator is implemented and tested before this slice's last PR merges.
+- N:1 `disconnect` on the variant mutator moved to slice `single-row-writes` (decided 2026-11-17).
 
 ## Open Questions
 
