@@ -6,6 +6,7 @@ import {
   contract,
   type EnumSpec,
   type FieldTypeSpec,
+  listedOperations,
   type ModelSpec,
   NS,
   plan,
@@ -448,7 +449,7 @@ describe('MongoMigrationPlanner, a discriminator renamed without its statement',
     ).toEqual([kindRefusal]);
   });
 
-  it('offers --backfill for a base that gains its first discriminator', () => {
+  it('plans no fill of the discriminator a base gains first, and no refusal', () => {
     const plain = contract(
       'from',
       { Task: { collection: 'tasks', fields: ['_id'] } },
@@ -457,13 +458,44 @@ describe('MongoMigrationPlanner, a discriminator renamed without its statement',
       },
     );
     expect(
-      refusal(plan({ from: plain, to: after({ Bug: BUG, Epic: EPIC }), schema: live })),
-    ).toEqual([
-      {
-        ...kindRefusal,
-        why: `${NO_TEMPORARY_VALUE} Add --backfill Task.kind and write each document's value in migration.ts.`,
-      },
+      planned(plan({ from: plain, to: after({ Bug: BUG, Epic: EPIC }), schema: live })).labels,
+    ).toEqual([]);
+  });
+
+  it('plans a backfill of the discriminator a base gains first, as the document check offers', async () => {
+    const plain = contract(
+      'from',
+      { Task: { collection: 'tasks', fields: ['_id'] } },
+      { tasks: {} },
+    );
+    const result = plan({
+      from: plain,
+      to: after({ Bug: BUG, Epic: EPIC }),
+      schema: live,
+      statements: [backfillKind],
+    });
+    if (result.kind !== 'success') throw new Error(JSON.stringify(result.conflicts, null, 2));
+    expect(await listedOperations(result.plan as PlannerProducedMongoMigration)).toEqual([
+      expect.objectContaining({ operationClass: 'data' }),
     ]);
+  });
+
+  it('plans no fill of a new discriminator when the old one stays as a field', () => {
+    const typeKept = contract(
+      'to',
+      {
+        Task: {
+          collection: 'tasks',
+          fields: ['_id', 'type', 'kind'],
+          discriminator: 'kind',
+          variants: { Bug: 'bug', Epic: 'epic' },
+        },
+        Bug: { collection: 'tasks', fields: ['severity'], base: 'Task' },
+        Epic: { collection: 'tasks', fields: ['scope'], base: 'Task' },
+      },
+      { tasks: {} },
+    );
+    expect(planned(plan({ from: BEFORE, to: typeKept, schema: live })).labels).toEqual([]);
   });
 
   it('refuses a variant convert or delete that selects documents by a discriminator the plan backfills instead of renaming', () => {

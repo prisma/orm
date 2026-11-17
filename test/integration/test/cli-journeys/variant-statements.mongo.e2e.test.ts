@@ -3,7 +3,7 @@
  *
  * `Task` is stored in collection `tasks` and discriminated by `type`. `Bug` (`bug`, with `severity`) and `Epic` (`epic`, with `scope`) are its variants.
  *
- * V1: the value of `Bug` becomes `defect`. Without a statement both commands ask, offering `--convert Bug` first and `--delete Bug` second; `--convert Bug` rewrites the documents. V2: `Bug` is renamed to `Defect`, whose value is `defect`: `--rename Bug:Defect` rewrites the documents. V3: `Bug` is removed: it is asked about as the model, and `--delete Bug` deletes its documents and keeps the others. V4: `Bug` is removed and `Epic` takes `bug`: the plan is refused with advice to use two migrations, and two migrations then delete the documents of `Bug` and move `Epic` to `bug`. V5: without a snapshot of the origin contract `db update` rewrites nothing, and the validator's document check stops it while documents hold `bug`. V6: the discriminator is renamed to `kind` and the value of `Bug` becomes `defect`: planned without statements, with `--convert Bug --delete Task.type`, or with `--delete Task.type --delete Bug`, and through `db update`, the plan is refused because a temporary value would name no variant, offering `--rename Task.type:Task.kind`, and nothing is applied; the plan with that rename and `--convert Bug` keeps every document's variant. V7: the discriminator is renamed and `Bug` is renamed to `Defect`: the refusal offers the discriminator rename, the question that follows offers `--rename Bug:Defect` before `--delete Bug`, and following both keeps every document.
+ * V1: the value of `Bug` becomes `defect`. Without a statement both commands ask, offering `--convert Bug` first and `--delete Bug` second; `--convert Bug` rewrites the documents. V2: `Bug` is renamed to `Defect`, whose value is `defect`: `--rename Bug:Defect` rewrites the documents. V3: `Bug` is removed: it is asked about as the model, and `--delete Bug` deletes its documents and keeps the others. V4: `Bug` is removed and `Epic` takes `bug`: the plan is refused with advice to use two migrations, and two migrations then delete the documents of `Bug` and move `Epic` to `bug`. V5: without a snapshot of the origin contract `db update` rewrites nothing, and the validator's document check stops it while documents hold `bug`. V6: the discriminator is renamed to `kind` and the value of `Bug` becomes `defect`: planned without statements, with `--convert Bug --delete Task.type`, or with `--delete Task.type --delete Bug`, and through `db update`, the plan is refused because a temporary value would name no variant, offering `--rename Task.type:Task.kind`, and nothing is applied; the plan with that rename and `--convert Bug` keeps every document's variant. V7: the discriminator is renamed and `Bug` is renamed to `Defect`: the refusal offers the discriminator rename, the question that follows offers `--rename Bug:Defect` before `--delete Bug`, and following both keeps every document. V8: `Task` has no discriminator and gains `type` with its variants: `db update` applies it on an empty collection, and on a collection with a document the validator's document check stops it before anything changes.
  *
  * Every journey that applies ends with an empty further plan, a clean `db verify --schema-only`, and every document accepting an update; each `migration.ts` written is run again and reproduces its `ops.json`.
  */
@@ -70,6 +70,16 @@ const REMOVED = tasksPsl([EPIC]);
 const TAKEN = tasksPsl([{ ...EPIC, value: 'bug' }]);
 const KIND_CHANGED = tasksPsl([{ ...BUG, value: 'defect' }, EPIC], 'kind');
 const KIND_RENAMED = tasksPsl([{ ...BUG, name: 'Defect', value: 'defect' }, EPIC], 'kind');
+const PLAIN = `// use prisma-8
+
+model Task {
+  id    ObjectId @id @map("_id")
+  title String
+  type  String?
+
+  @@map("tasks")
+}
+`;
 
 const DOCUMENTS: readonly Document[] = [
   { title: 'a', type: 'bug', severity: 'high' },
@@ -477,6 +487,40 @@ describe('Journeys (MongoDB): variant statements', {
       { title: 'c', kind: 'defect' },
     ]);
     await verifiedAndSettled(ctx, dbName, 'V7', furtherMigrationPlan(ctx));
+  });
+
+  it('V8: a model that gains its first discriminator is applied by db update on an empty collection, and stopped by the document check while a document has no value for it', async () => {
+    const empty = setup('mongo_v8_empty');
+    await emit(empty, PLAIN, 'V8.01');
+    expect((await runDbUpdate(empty, ['--no-interactive'])).exitCode, 'V8.02').toBe(0);
+    await emit(empty, BEFORE, 'V8.03');
+    const applied = await runDbUpdate(empty, ['--no-interactive', '--json']);
+    expect(applied.exitCode, `V8.04: ${applied.stdout}\n${applied.stderr}`).toBe(0);
+    await verifiedAndSettled(empty, 'mongo_v8_empty', 'V8', async () => {
+      const further = await runDbUpdate(empty, ['--dry-run', '--no-interactive', '--json']);
+      return parseJsonOutput<{ plan: { operations: readonly unknown[] } }>(further).plan.operations;
+    });
+
+    const held = setup('mongo_v8_held');
+    await emit(held, PLAIN, 'V8.11');
+    expect((await runDbUpdate(held, ['--no-interactive'])).exitCode, 'V8.12').toBe(0);
+    await client.db('mongo_v8_held').collection('tasks').insertOne({ title: 'a' });
+    await emit(held, BEFORE, 'V8.13');
+    const stopped = await runDbUpdate(held, ['--no-interactive', '--json']);
+    const failure = engineError(stopped);
+    expect({
+      exitCode: stopped.exitCode === 0 ? 0 : 'failed',
+      code: failure?.code,
+      summary: failure?.summary,
+      text: JSON.stringify(failure ?? {}),
+      documents: await documents('mongo_v8_held'),
+    }).toEqual({
+      exitCode: 'failed',
+      code: 'MIGRATION.PRECHECK_FAILED',
+      summary: expect.stringContaining('not fit the new validator'),
+      text: expect.stringContaining('--backfill Task.type'),
+      documents: [{ title: 'a' }],
+    });
   });
 
   it('V5: without an origin contract nothing is rewritten, and the document check stops db update while documents hold the old value', async () => {

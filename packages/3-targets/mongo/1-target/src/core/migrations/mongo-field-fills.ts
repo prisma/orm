@@ -26,7 +26,6 @@ import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { unrewritableFieldNameReason } from './migration-factories';
 import { discriminatorRenameOf } from './mongo-discriminator-renames';
-import { statementFlag } from './mongo-statement-flags';
 import {
   collectionControlPolicy,
   destinationFieldOf,
@@ -121,17 +120,18 @@ function underUniqueIndex(
 }
 
 /**
- * The refusal of a new required discriminator: a temporary value names no variant, so no fill keeps
- * a document's variant. It offers the rename of the origin's discriminator when the destination no
- * longer has it, and `--backfill` otherwise.
+ * The refusal of a new required discriminator whose values the documents hold in the origin's
+ * discriminator, which the plan removes: a temporary value names no variant, and only a rename of
+ * the old discriminator keeps each document's variant. `undefined` when the destination has no such
+ * rename to offer, such as for a base's first discriminator; the validator change then checks the
+ * documents.
  */
 function newDiscriminatorRefusal(
   input: FillInput,
   model: ModelCoordinate,
   field: string,
   collection: string,
-): MigrationPlannerConflict {
-  const text = fieldStatementText(input.contract, { ...model, field });
+): MigrationPlannerConflict | undefined {
   const rename =
     input.match === undefined
       ? undefined
@@ -140,23 +140,22 @@ function newDiscriminatorRefusal(
           contract: input.contract,
           statements: input.statements,
         });
-  const advice =
-    rename === undefined
-      ? `Add ${statementFlag('backfill', text)} and write each document's value in migration.ts.`
-      : `The documents hold their variant in "${rename.from}", which the plan removes: add ${rename.flag} to keep it, and plan again.`;
+  if (rename === undefined) return undefined;
+  const text = fieldStatementText(input.contract, { ...model, field });
   return {
     kind: 'unsupportedOperation',
     summary: `Cannot plan the migration: new discriminator field "${text}" has no value in the documents of collection ${collection}`,
-    why: `A document's discriminator value says which variant it is, and no temporary value names a variant, so the plan does not fill the field. ${advice}`,
+    why: `A document's discriminator value says which variant it is, and no temporary value names a variant, so the plan does not fill the field. The documents hold their variant in "${rename.from}", which the plan removes: add ${rename.flag} to keep it, and plan again.`,
   };
 }
 
 /**
  * Each required field of the destination that is new on a collection the plan keeps, with the
  * temporary value its type declares, unless a `--backfill` statement names it. A field whose type
- * declares none, or that a unique index covers, is left to the validator change's document check.
- * A new discriminator is refused instead: a temporary value would leave every document matched by
- * no variant.
+ * declares none, or that a unique index covers, is left to the validator change's document check,
+ * and so is a new discriminator, since a temporary value would leave every document matched by no
+ * variant; when the documents hold their variants in an old discriminator the plan removes, the
+ * plan is refused instead, offering its rename.
  */
 export function planFieldFills(
   input: FillInput,
@@ -185,7 +184,8 @@ export function planFieldFills(
         if (backfilled(input.statements, coordinate)) return [];
         if (inOrigin(input, coordinate, collection, storedName)) return [];
         if (definition.discriminator?.field === field) {
-          refusals.push(newDiscriminatorRefusal(input, model, field, collection));
+          const refusal = newDiscriminatorRefusal(input, model, field, collection);
+          if (refusal !== undefined) refusals.push(refusal);
           return [];
         }
         if (underUniqueIndex(input.destination, collection, storedName)) return [];
