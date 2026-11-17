@@ -119,6 +119,8 @@ During `prisma orm init`, the `prisma contract emit` step failed after a success
 
 During `prisma orm init`, dependency installation failed and the pnpm-to-npm fallback either did not apply or also failed. On a normal run the scaffold is already on disk, and the next actions carry the install command that was attempted and the emit that was waiting on it. On the Prisma 7 path the first install runs before anything is written, to check that the target package can read the schema; when that install fails, `filesWritten` is empty and the next action is to run `orm init` again once the dependencies install. `orm init` completes with this as a finding and exits 4. Payload: `filesWritten`, plus `install` (the attempted command, the manager, its exit code and the tail of its stderr).
 
+A pnpm `add` whose stderr names `ERR_PNPM_IGNORED_BUILDS` as its only pnpm error code is not this finding: pnpm reports that code after it has added the packages, so init checks that the first package resolves from the project, warns you to run `pnpm approve-builds`, and continues. pnpm 11 still fails here, because it prints that code on stdout and init reads only stderr.
+
 ### CLI.INIT_INVALID_FLAG_VALUE
 
 A flag passed to `prisma orm init` has a value outside its allowed set (for example `--target` with something other than `postgres` or `mongodb`). Maps to init exit code 2 (PRECONDITION). Payload: `flag`, `value`, `allowed`.

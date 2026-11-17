@@ -111,7 +111,9 @@ The other commands print no data lines and declare why with `noDataLines(reason)
 
 ### `prisma orm init`
 
-Sets a project up for Prisma ORM 8: writes `prisma.config.ts`, a starter schema (PSL or TypeScript), `src/prisma/db.ts`, `prisma-8.md`, and `.env.example`; merges `tsconfig.json`, `.gitignore`, `.gitattributes`, and `package.json`; installs the target package, the driver it declares as a peer dependency (`mongodb` for MongoDB), `dotenv`, and `prisma@latest`; then runs `prisma contract emit`. Interactively it asks for the target, the authoring style, and the schema path; `--target` and `--authoring` make it scriptable.
+Sets a project up for Prisma ORM 8: writes `prisma.config.ts`, a starter schema (PSL or TypeScript), `src/prisma/db.ts`, `prisma-8.md`, and `.env.example`; merges `tsconfig.json`, `.gitignore`, `.gitattributes`, and `package.json`; installs the target package, the driver it declares as a peer dependency (`mongodb` for MongoDB), `dotenv`, and, in one development install, `prisma@latest` and `@prisma/cli-engine` at the version the target package's `@prisma/orm-toolchain` declares as its peer dependency; then runs `prisma contract emit`. Interactively it asks for the target, the authoring style, and the schema path; `--target` and `--authoring` make it scriptable.
+
+pnpm 12 fails an install with `ERR_PNPM_IGNORED_BUILDS` when a dependency's build script has not been approved, after it has added the packages. When that is the only pnpm error code, init checks that the first package it added resolves from the project, warns you to run `pnpm approve-builds`, and continues.
 
 **Canonical command:**
 ```bash
