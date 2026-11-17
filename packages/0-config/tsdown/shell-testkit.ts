@@ -1,7 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { publicShells } from '@internal/publish-surface/shells';
+import { join } from 'node:path';
 import { init as initLexer, parse as parseModule } from 'es-module-lexer';
 
 /** A tarball-install smoke-test failure with the offending command output attached. */
@@ -240,81 +239,13 @@ export function importSubpaths(installedPackageDir: string): string[] {
 }
 
 /**
- * The internal package names the shell map states, as a set.
- *
- * The map is itself published — `@prisma/orm-toolchain/publish-surface/shells`
- * — because emission resolves generated import specifiers through it at run
- * time. Publishing it necessarily puts every internal package name into a
- * published dist as ordinary string data. Those strings are the table's
- * subject matter, not something the dist imports, and
- * {@link findInternalImportSpecifiers} — which has no allowlist — is what
- * would catch any of them turning into a real import.
- *
- * Derived from the map instead of listed, so it stays exactly the table's
- * contents: adding an internal package cannot quietly widen the check, and
- * the allowance applies only inside {@link shellMapModules}.
- */
-const shellMapPackageNames: ReadonlySet<string> = new Set(
-  [...publicShells.values()].flatMap((shell) => [
-    ...shell.packages.map((pkg) => pkg.name),
-    ...(shell.reexports ?? []).map((reexport) => reexport.package),
-  ]),
-);
-
-/** Export subpath of the published shell map, as an exports-map key suffix. */
-const SHELL_MAP_SUBPATH = '/publish-surface/shells';
-
-/**
- * The dist files carrying the shell map in an installed package, empty for
- * every shell that does not publish it.
- *
- * Found by following the package's own exports map and then the relative
- * imports that entry reaches, rather than by matching a filename: the
- * bundler decides which chunk the table lands in, and a guessed name would
- * stop matching without anyone noticing.
- */
-function shellMapModules(installedPackageDir: string): ReadonlySet<string> {
-  const exports = readManifest(installedPackageDir)['exports'];
-  if (!isRecord(exports)) return new Set();
-  const key = Object.keys(exports).find((subpath) => subpath.endsWith(SHELL_MAP_SUBPATH));
-  if (key === undefined) return new Set();
-  const entry: unknown = exports[key];
-  // Shells emit one file per entrypoint. A conditional-exports object would
-  // mean the entry moved, and silently reading nothing would turn the whole
-  // allowance off — so say so instead.
-  if (typeof entry !== 'string') {
-    throw new ShellTestError(
-      `${installedPackageDir} exports ${key} as something other than a file`,
-    );
-  }
-
-  const found = new Set<string>();
-  const pending = [resolve(installedPackageDir, entry)];
-  while (pending.length > 0) {
-    const file = pending.pop();
-    if (file === undefined || found.has(file)) continue;
-    found.add(file);
-    const [imports] = parseModule(readFileSync(file, 'utf8'));
-    for (const record of imports) {
-      if (record.n?.startsWith('.')) pending.push(resolve(dirname(file), record.n));
-    }
-  }
-  return found;
-}
-
-/**
  * Internal package names that published dists still carry as *string
  * constants* (not import specifiers), recorded when the shells were first
  * published.
  *
- * Some are emitter input: the framework and family modules the emitters name
- * in a user's generated contract types, which the import-specifier resolver
- * maps before they are written. The rest name internal packages inside
- * diagnostics, config-validation messages, and telemetry identifiers, which go
- * away with the `@internal/*` names themselves.
- *
- * The shell map's own contents are *not* here — see
- * {@link shellMapPackageNames} for why they are recognised as data instead.
+ * They name internal packages inside diagnostics, config-validation messages,
+ * the workspace defaults of templates and telemetry identifiers, and go away
+ * with the `@internal/*` names themselves.
  *
  * This is a baseline lock, not an endorsement. Anything not listed fails
  * {@link findInternalNames}, so no *new* internal name can reach a
@@ -371,15 +302,11 @@ export const knownInternalNamesInDist: readonly string[] = [
  * Scan an installed shell's dist for internal workspace package names.
  *
  * Covers every quoted string in the runtime `.mjs` files, not just import
- * specifiers, because the emitter ships import roots as ordinary string
- * constants and those land in a user's generated files. Declaration files
+ * specifiers, because a string constant can land in a file a command writes
+ * for the user. Declaration files
  * are scanned for import specifiers only — an internal name in JSDoc prose
  * is a documentation wart, not a resolution failure.
  *
- * One package publishes a table *of* internal package names, and inside the
- * modules that carry it those strings are the data rather than something the
- * dist would resolve; see {@link shellMapPackageNames}. That allowance is
- * scoped to those modules, so it cannot hide a name anywhere else.
  *
  * Returns offending `file: name` strings, excluding
  * {@link knownInternalNamesInDist}.
@@ -387,18 +314,15 @@ export const knownInternalNamesInDist: readonly string[] = [
 export async function findInternalNames(installedPackageDir: string): Promise<string[]> {
   await initLexer;
   const known = new Set(knownInternalNamesInDist);
-  const mapModules = shellMapModules(installedPackageDir);
   const offenders: string[] = [];
   const distDir = join(installedPackageDir, 'dist');
   for (const file of walk(distDir)) {
     if (file.endsWith('.mjs')) {
-      const carriesShellMap = mapModules.has(file);
       for (const match of readFileSync(file, 'utf8').matchAll(
         /["'`](@internal\/[^"'`\s\\]+)["'`\\]/g,
       )) {
         const name = match[1] ?? '';
         if (known.has(name)) continue;
-        if (carriesShellMap && shellMapPackageNames.has(name)) continue;
         offenders.push(`${file}: ${name}`);
       }
     } else if (file.endsWith('.d.mts')) {

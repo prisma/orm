@@ -1,49 +1,24 @@
 import { DEFAULT_CONTRACT_SOURCE_DIR } from '@internal/config/config-types';
-import {
-  type ImportSpecifierResolver,
-  keepInternalSpecifiers,
-} from '@internal/framework-components/emission';
-import { createScaffoldSpecifierResolver } from '@internal/publish-surface/import-roots';
 
 export type TargetId = 'postgres' | 'mongo';
 export type AuthoringId = 'psl' | 'typescript';
 
 /**
- * The resolver a scaffold for `target` is written against.
- *
- * A scaffold is always on the facade root: `init` writes an application around
- * one database package, and the workspace names are not published, so a project
- * scaffolded against them could not install (ADR 242). Both the files `init`
- * writes and the dependency it adds go through this, so they cannot disagree.
+ * The published package a scaffolded project for `target` depends on and
+ * imports from. A scaffold names only this package and its entrypoints, and
+ * `init` installs the same name, so the files and the dependency agree.
  */
-export function scaffoldSpecifierResolverFor(target: TargetId): ImportSpecifierResolver {
-  return createScaffoldSpecifierResolver({
-    mode: 'facade',
-    facade: target === 'postgres' ? '@prisma/orm-postgres' : '@prisma/orm-mongo',
-  });
+export function targetPackageName(target: TargetId): string {
+  return target === 'postgres' ? '@prisma/orm-postgres' : '@prisma/orm-mongo';
 }
 
 /**
- * The package name a scaffolded project depends on and imports from, for the
- * import root it is being scaffolded against.
- *
- * Every specifier the scaffold writes derives from this one, and `init` builds
- * a single resolver and hands it to both the file templates and the dependency
- * it installs — so the two cannot disagree. The one caller that deliberately
- * does not thread a resolver is the re-init cleanup in `inputs.ts`, which
- * inspects a manifest an earlier run wrote rather than writing one.
- *
- * Resolvers for scaffolding should come from `createScaffoldSpecifierResolver`
- * in the publish-surface package, which rejects the roots a facade-shaped
- * scaffold cannot express. (Named without its scope on purpose: JSDoc survives
- * into the published bundle, where an internal package name would trip the
- * shell tarball checks.)
+ * The workspace package of `target`, which the templates name unless told
+ * otherwise, so tests can typecheck a scaffold inside this repository; and
+ * which projects scaffolded by earlier versions of `init` may still declare.
  */
-export function targetPackageName(
-  target: TargetId,
-  resolveImportSpecifier: ImportSpecifierResolver = keepInternalSpecifiers,
-): string {
-  return resolveImportSpecifier(target === 'postgres' ? '@internal/postgres' : '@internal/mongo');
+export function workspaceTargetPackageName(target: TargetId): string {
+  return target === 'postgres' ? '@internal/postgres' : '@internal/mongo';
 }
 
 // biome-ignore lint/plugin/no-family-vocabulary: the driver the target package declares as a required peer dependency, which init installs with it
@@ -56,13 +31,8 @@ export function targetPeerPackages(target: TargetId): readonly string[] {
 }
 
 /** One entrypoint of the scaffolded project's target package. */
-export function targetEntrypoint(
-  target: TargetId,
-  subpath: string,
-  resolveImportSpecifier: ImportSpecifierResolver = keepInternalSpecifiers,
-): string {
-  const internal = target === 'postgres' ? '@internal/postgres' : '@internal/mongo';
-  return resolveImportSpecifier(`${internal}/${subpath}`);
+export function targetEntrypoint(targetPackage: string, subpath: string): string {
+  return `${targetPackage}/${subpath}`;
 }
 
 export function targetLabel(target: TargetId): string {
@@ -79,10 +49,10 @@ export function defaultSchemaPath(authoring: AuthoringId): string {
 export function starterSchema(
   target: TargetId,
   authoring: AuthoringId,
-  resolveImportSpecifier: ImportSpecifierResolver = keepInternalSpecifiers,
+  targetPackage: string = workspaceTargetPackageName(target),
 ): string {
   if (authoring === 'typescript') {
-    const builder = targetEntrypoint(target, 'contract-builder', resolveImportSpecifier);
+    const builder = targetEntrypoint(targetPackage, 'contract-builder');
     return target === 'mongo' ? starterSchemaTsMongo(builder) : starterSchemaTsPostgres(builder);
   }
   return target === 'mongo' ? starterSchemaPslMongo() : starterSchemaPslPostgres();
@@ -100,10 +70,10 @@ export function starterSchema(
 export function schemaSample(
   target: TargetId,
   authoring: AuthoringId,
-  resolveImportSpecifier: ImportSpecifierResolver = keepInternalSpecifiers,
+  targetPackage: string = workspaceTargetPackageName(target),
 ): string {
   if (authoring === 'typescript') {
-    const builder = targetEntrypoint(target, 'contract-builder', resolveImportSpecifier);
+    const builder = targetEntrypoint(targetPackage, 'contract-builder');
     return target === 'mongo' ? schemaSampleTsMongo(builder) : schemaSampleTsPostgres(builder);
   }
   return target === 'mongo' ? schemaSamplePslMongo() : schemaSamplePslPostgres();
@@ -306,9 +276,9 @@ export const contract = defineContract(
 export function configFile(
   target: TargetId,
   contractPath: string,
-  resolveImportSpecifier: ImportSpecifierResolver = keepInternalSpecifiers,
+  targetPackage: string = workspaceTargetPackageName(target),
 ): string {
-  const configEntrypoint = targetEntrypoint(target, 'config', resolveImportSpecifier);
+  const configEntrypoint = targetEntrypoint(targetPackage, 'config');
   return `import 'dotenv/config';
 import { definePrismaConfig } from '@prisma/cli-engine';
 import { defineConfig as ormConfig } from '${configEntrypoint}';
@@ -334,9 +304,9 @@ export function prisma7ConfigFile(
   target: TargetId,
   schemaPath: string,
   outputDir: string,
-  resolveImportSpecifier: ImportSpecifierResolver = keepInternalSpecifiers,
+  targetPackage: string = workspaceTargetPackageName(target),
 ): string {
-  const configEntrypoint = targetEntrypoint(target, 'config', resolveImportSpecifier);
+  const configEntrypoint = targetEntrypoint(targetPackage, 'config');
   return `import 'dotenv/config';
 import { definePrismaConfig } from '@prisma/cli-engine';
 import { defineConfig as ormConfig, prisma7Schema } from '${configEntrypoint}';
@@ -355,10 +325,10 @@ export default definePrismaConfig({
 
 export function dbFile(
   target: TargetId,
-  resolveImportSpecifier: ImportSpecifierResolver = keepInternalSpecifiers,
+  targetPackage: string = workspaceTargetPackageName(target),
 ): string {
-  const runtime = targetEntrypoint(target, 'runtime', resolveImportSpecifier);
-  const staticEntry = targetEntrypoint(target, 'static', resolveImportSpecifier);
+  const runtime = targetEntrypoint(targetPackage, 'runtime');
+  const staticEntry = targetEntrypoint(targetPackage, 'static');
   const factory = target === 'postgres' ? 'postgres' : 'mongo';
   return `import 'dotenv/config';
 import ${factory} from '${runtime}';

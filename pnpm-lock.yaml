@@ -1467,9 +1467,6 @@ importers:
       '@internal/psl-printer':
         specifier: workspace:8.0.0-rc.24
         version: link:../../2-authoring/psl-printer
-      '@internal/publish-surface':
-        specifier: workspace:8.0.0-rc.24
-        version: link:../../../0-shared/publish-surface
       '@internal/utils':
         specifier: workspace:8.0.0-rc.24
         version: link:../../0-foundation/utils
@@ -6485,9 +6482,6 @@ importers:
       '@internal/migration-tools':
         specifier: workspace:8.0.0-rc.24
         version: link:../../../1-framework/3-tooling/migration
-      '@internal/publish-surface':
-        specifier: workspace:8.0.0-rc.24
-        version: link:../../../0-shared/publish-surface
       '@internal/vite-plugin-contract-emit':
         specifier: workspace:8.0.0-rc.24
         version: link:../../../1-framework/3-tooling/vite-plugin-contract-emit

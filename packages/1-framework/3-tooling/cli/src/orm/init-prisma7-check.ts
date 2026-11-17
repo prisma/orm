@@ -16,7 +16,6 @@ import {
   packagesAddedAction,
 } from '../commands/init/errors';
 import {
-  scaffoldSpecifierResolverFor,
   type TargetId,
   targetEntrypoint,
   targetPackageName,
@@ -109,8 +108,7 @@ export function createPrisma7SourceCheck(ctx: {
   readonly importFromProject: ImportFromProject;
 }): CheckPrisma7Source {
   return async ({ target, schemaPath }) => {
-    const resolveImportSpecifier = scaffoldSpecifierResolverFor(target);
-    const packageName = targetPackageName(target, resolveImportSpecifier);
+    const packageName = targetPackageName(target);
     const warnings: string[] = [];
     let installed: readonly string[] = [];
     let added: PackagesAdded | undefined;
@@ -152,7 +150,7 @@ export function createPrisma7SourceCheck(ctx: {
     };
 
     const module = await undoable(() =>
-      ctx.importFromProject(ctx.cwd, targetEntrypoint(target, 'config', resolveImportSpecifier)),
+      ctx.importFromProject(ctx.cwd, targetEntrypoint(packageName, 'config')),
     );
     if (module === undefined) {
       if (!ctx.install) {

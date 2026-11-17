@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { platformEntrypointOf } from '@internal/publish-surface/import-roots';
+import { platformEntrypointOf } from '@internal/publish-surface/platform-entrypoints';
 import {
   excludedSubpaths,
   publicShells,
