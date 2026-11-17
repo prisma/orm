@@ -19,7 +19,8 @@ Where `migration plan` or `db update` now stops with a question, or with `CLI.CO
 
 - A field a value object or an embedded model loses: `--rename Address.street:Address.line1` if it was renamed, or `--delete Address.street` to remove the key from every object (`removeStoredKey`).
 - A stored value an enum loses: `--rename Status.ARCHIVED:Status.<new name>` to keep the documents under another member, or `--delete Status.ARCHIVED` to unset it in optional fields and take it out of lists (`removeStoredValue`). Where a required field holds it, the apply stops with `MIGRATION.PRECHECK_FAILED`, counts the documents and gives the edit that keeps them.
-- A variant whose discriminator value changes, or that the contract removes: `--convert Bug` to rewrite the value, or `--delete Bug` to delete its documents (`deleteDocuments`).
+- A variant whose discriminator value changes: `--convert Bug` to rewrite the value, or `--delete Bug` to delete its documents (`deleteDocuments`).
+- A variant the contract removes: `--rename Bug:Issue` if it was renamed, or `--delete Bug` to delete its documents (`deleteDocuments`).
 
 A script that runs these commands with `--yes` and no statements now fails with `CLI.CONSENT_REQUIRED`; add the statements it lists.
 
