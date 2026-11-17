@@ -175,7 +175,7 @@ describe('RuntimeTransaction.savepoint()', () => {
 
     await (await connection.transaction()).savepoint();
     expect(driverCalls(events)).toBe(
-      'begin, SAVEPOINT sp_1, SAVEPOINT sp_2, rollback, begin, SAVEPOINT sp_3',
+      'begin, SAVEPOINT sp_1, SAVEPOINT sp_2, rollback, begin, SAVEPOINT sp_1',
     );
   });
 

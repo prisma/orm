@@ -299,7 +299,6 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   readonly #transactionWorkOn = new WeakMap<SqlQueryable, () => void | Promise<void>>();
   readonly #transactionChecks = new WeakMap<SqlQueryable, () => void>();
   readonly #transactionGuards = new WeakMap<SqlQueryable, () => void>();
-  readonly #savepointCounts = new WeakMap<SqlQueryable, number>();
   #openActivityHandles = 0;
   #refusing = false;
   // Connections and transactions this runtime handed out. When the first query of the runtime runs on one of them, the runtime-wide marker read runs on it too, so it works while close() waits for their release, and concurrent first queries share its result. Other queryables, such as a subclass's raw connection, read the marker through the driver.
@@ -1488,7 +1487,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     return this.wrapTransaction(
       driverTx,
       activity,
-      { stack: [entry], invalidated: false },
+      { stack: [entry], invalidated: false, savepoints: 0 },
       entry,
       scope,
       outer,
@@ -1564,11 +1563,6 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       scope: {
         signal: controller.signal,
         check,
-        nextSavepointName: () => {
-          const count = (this.#savepointCounts.get(connection) ?? 0) + 1;
-          this.#savepointCounts.set(connection, count);
-          return `sp_${count}`;
-        },
         logDroppedError,
       },
       outer: {
@@ -1635,7 +1629,8 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       if (closed()) throw transactionClosedError();
       const open = above();
       if (open !== undefined) throw savepointAlreadyOpenError(open);
-      const name = scope.nextSavepointName();
+      connectionState.savepoints += 1;
+      const name = `sp_${connectionState.savepoints}`;
       const child: SavepointEntry = { name };
       stack.push(child);
       const leave = () => {
@@ -1967,12 +1962,12 @@ interface SavepointEntry {
 interface ConnectionTransactions {
   readonly stack: SavepointEntry[];
   invalidated: boolean;
+  savepoints: number;
 }
 
 interface TransactionScope {
   readonly signal: AbortSignal;
   check(): void;
-  nextSavepointName(): string;
   logDroppedError(error: unknown): void;
 }
 
