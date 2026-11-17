@@ -329,11 +329,16 @@ function unrenamedDiscriminatorRefusal(
   const advice =
     rename === undefined
       ? `Make the change in two migrations: first give the documents their values in field ${field} and apply that; then change the variants.`
-      : `Add ${rename.flag} and plan again.`;
+      : `Add ${rename.flag} and run the command again.`;
+  const unrenamed = `hold their discriminator value in field ${quoted(change.originField)}, which the plan does not rename to ${field}`;
   return refusedChange(
     change,
-    changeLabel(change, input, fromContract),
-    `its documents hold their discriminator value in field ${quoted(change.originField)}, which the plan does not rename to ${field}`,
+    change.statement === undefined
+      ? 'Cannot plan the migration'
+      : changeLabel(change, input, fromContract),
+    change.statement === undefined
+      ? `the documents of ${variantText(change.model)} ${unrenamed}`
+      : `its documents ${unrenamed}`,
     `The plan rewrites the documents of a variant by their value in field ${field}, which only a rename of field ${quoted(change.originField)} gives them. ${advice}`,
   );
 }

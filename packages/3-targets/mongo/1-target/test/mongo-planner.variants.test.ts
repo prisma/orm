@@ -432,7 +432,7 @@ describe('MongoMigrationPlanner, a discriminator renamed without its statement',
     kind: 'unsupportedOperation',
     summary:
       'Cannot plan the migration: new discriminator field "Task.kind" has no value in the documents of collection tasks',
-    why: `${NO_TEMPORARY_VALUE} The documents hold their variant in "Task.type", which the plan removes: add --rename Task.type:Task.kind to keep it, and plan again.`,
+    why: `${NO_TEMPORARY_VALUE} The documents hold their variant in "Task.type", which the plan removes: add --rename Task.type:Task.kind to keep it, and run the command again.`,
   };
 
   it('refuses the plan and offers the rename, for the rename alone, a changed variant value and a removed variant', () => {
@@ -467,7 +467,7 @@ describe('MongoMigrationPlanner, a discriminator renamed without its statement',
         kind: 'unsupportedOperation',
         summary:
           'Cannot plan the migration: new discriminator field "Job.kind" has no value in the documents of collection tasks',
-        why: `${NO_TEMPORARY_VALUE} The documents hold their variant in "Job.type", which the plan removes: add --rename Job.type:Job.kind to keep it, and plan again.`,
+        why: `${NO_TEMPORARY_VALUE} The documents hold their variant in "Job.type", which the plan removes: add --rename Job.type:Job.kind to keep it, and run the command again.`,
       },
     ]);
   });
@@ -529,7 +529,7 @@ describe('MongoMigrationPlanner, a discriminator renamed without its statement',
 
   it('refuses a variant convert or delete that selects documents by a discriminator the plan backfills instead of renaming', () => {
     const refusedWhy =
-      'The plan rewrites the documents of a variant by their value in field "kind", which only a rename of field "type" gives them. Add --rename Task.type:Task.kind and plan again.';
+      'The plan rewrites the documents of a variant by their value in field "kind", which only a rename of field "type" gives them. Add --rename Task.type:Task.kind and run the command again.';
     expect({
       converted: refusal(
         plan({
@@ -555,7 +555,7 @@ describe('MongoMigrationPlanner, a discriminator renamed without its statement',
         {
           kind: 'unsupportedOperation',
           summary:
-            'Cannot delete the documents of variant "Bug": its documents hold their discriminator value in field "type", which the plan does not rename to "kind"',
+            'Cannot plan the migration: the documents of variant "Bug" hold their discriminator value in field "type", which the plan does not rename to "kind"',
           why: refusedWhy,
         },
       ],
