@@ -1,0 +1,13 @@
+{
+  "ts": {
+    "code": "CONTRACT.DEFAULT_INVALID",
+    "message": "Field \"Doc.stamps\" generates a value on write, so it cannot be a list; remove .many()."
+  },
+  "psl": [
+    {
+      "code": "PSL_LIST_EXECUTION_DEFAULT_UNSUPPORTED",
+      "message": "Field \"Doc.stamps\" is a list and cannot use @onCreate(now()). Lists have no per-element generated values; remove @onCreate(...).",
+      "spanText": "@onCreate(now())"
+    }
+  ]
+}

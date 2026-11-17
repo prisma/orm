@@ -15,12 +15,12 @@ A rendered `migration.ts` imports the store directly:
 ```ts
 #!/usr/bin/env -S node
 import { col, Migration, MigrationCLI } from '@internal/postgres/migration';
-import type { Contract as Start } from '../../snapshots/93be6c200743261baf55f0586b1380a1c0ade3c48730c09a8fec71ba419c2464/contract';
-import startContract from '../../snapshots/93be6c200743261baf55f0586b1380a1c0ade3c48730c09a8fec71ba419c2464/contract.json' with {
+import type { Contract as Start } from '../../snapshots/6c26c85a74b9429d6bb929df0c3e5035352fdb4cc2ee0e711a7a215e490041b1/contract';
+import startContract from '../../snapshots/6c26c85a74b9429d6bb929df0c3e5035352fdb4cc2ee0e711a7a215e490041b1/contract.json' with {
   type: 'json',
 };
-import type { Contract as End } from '../../snapshots/f9a41d77df6eae57bcd25ab25df31e6e905aad034a5b813f408bf8e78e9f384a/contract';
-import endContract from '../../snapshots/f9a41d77df6eae57bcd25ab25df31e6e905aad034a5b813f408bf8e78e9f384a/contract.json' with {
+import type { Contract as End } from '../../snapshots/6b4636f85cc2d7b2f8d4a70bd2c520246b4bbe786aa55d3b77592fae5c4d458f/contract';
+import endContract from '../../snapshots/6b4636f85cc2d7b2f8d4a70bd2c520246b4bbe786aa55d3b77592fae5c4d458f/contract.json' with {
   type: 'json',
 };
 
@@ -43,10 +43,10 @@ matching the on-disk layout:
 ```text
 migrations/
   snapshots/
-    93be6c200743261baf55f0586b1380a1c0ade3c48730c09a8fec71ba419c2464/
+    6c26c85a74b9429d6bb929df0c3e5035352fdb4cc2ee0e711a7a215e490041b1/
       contract.json
       contract.d.ts
-    f9a41d77df6eae57bcd25ab25df31e6e905aad034a5b813f408bf8e78e9f384a/
+    6b4636f85cc2d7b2f8d4a70bd2c520246b4bbe786aa55d3b77592fae5c4d458f/
       contract.json
       contract.d.ts
   app/
@@ -64,11 +64,15 @@ A chain of N migrations previously stored roughly 2N copies of N+1 distinct cont
 
 The store is keyed by `storage.storageHash`, not a hash over the full contract. Because `migration.json` already carries `from` / `to` as storage hashes (ADR 199), every reader that already has a hash in hand — a migration manifest, a ref pointer, a `--to <hash>` argument — resolves the store entry directly, with no secondary index to maintain.
 
-The same content-addressed shape already exists on the Postgres control plane: `prisma_contract.contract` (`packages/3-targets/3-targets/postgres/src/contract-free/control-bootstrap.ts`) is a `core_hash text primary key` table holding one row per distinct contract, referenced by the ledger's `origin_core_hash` / `destination_core_hash` columns with no foreign key (a baseline origin has no stored contract by definition). The parallel is Postgres-only — SQLite's control plane inlines contract JSON directly into marker/ledger rows and has no content-addressed table of its own.
+The same content-addressed shape already exists on the Postgres control plane: `prisma_contract.contract` (`packages/3-targets/postgres/1-target/src/contract-free/control-bootstrap.ts`) is a `core_hash text primary key` table holding one row per distinct contract, referenced by the ledger's `origin_core_hash` / `destination_core_hash` columns with no foreign key (a baseline origin has no stored contract by definition). The parallel is Postgres-only — SQLite's control plane inlines contract JSON directly into marker/ledger rows and has no content-addressed table of its own.
 
 ## Write-if-absent, made sound by canonicalization
 
-Writing a snapshot checks only whether `snapshots/<hex>/` already exists; if it does, the write is skipped without comparing bytes. This is safe only because every write path canonicalizes first — `canonicalizeJson(contractJson)` plus a trailing newline for the JSON, and a trailing newline for the `.d.ts` — so two producers writing the entry for the same hash always agree on the bytes. Without that, write-if-absent could silently keep whichever producer wrote first even when a later producer's bytes differed from the file it walked past. Each write lands in a temporary directory under `snapshots/` and is `rename`d into place, so a concurrent or interrupted write cannot leave a partial entry visible under its real hash.
+Writing a snapshot checks only whether `snapshots/<hex>/` already exists; if it does, the write is skipped without comparing bytes. This is safe only because every write path produces the same bytes for the same hash. The JSON is canonicalized: `canonicalizeJson(contractJson)` plus a trailing newline. The `.d.ts` is deterministic rather than canonical: every writer renders it from the entry's JSON through the control client's `renderContractDts`, and the store joins its lines, so two producers writing the entry for the same hash always agree on the bytes. Without that, write-if-absent could silently keep whichever producer wrote first even when a later producer's bytes differed from the file it walked past. Each write lands in a temporary directory under `snapshots/` and is `rename`d into place, so a concurrent or interrupted write cannot leave a partial entry visible under its real hash.
+
+The `.d.ts` is written on one line to keep pull requests short: each snapshot would otherwise add hundreds of lines to the pull request that adds it. This is safe because nothing at run time and nothing in the CLI reads the file as text; only the TypeScript compiler and editors read it, through the type imports in a rendered `migration.ts`. The store keeps the generated header as one block comment and joins every other line break, with the indentation after it, into one space. It refuses text that joining would change, such as a line comment after the header. The `contract.json` / `contract.d.ts` pair that `contract emit` writes next to the project's contract source stays pretty-printed, because application code imports it and people open it.
+
+The upgrade scripts under `skills/prisma-8/upgrading/app/upgrades/` are the exception: some of them read store declarations as text, patch them, and write entries without going through the store. A store can therefore hold formatted entries written before this release beside single-line ones, since the store never rewrites an existing entry and the scripts keep the form they find. Any future upgrade step that patches store declarations must accept both forms.
 
 ## Accepted conflation trade-off
 
@@ -112,6 +116,14 @@ The store could key snapshots by a hash over the full canonicalized contract, ra
 
 Store entries could be written as `contract.json.gz`, with readers tolerating either compressed or plain bytes. Rejected: TypeScript cannot resolve a gzipped `.d.ts` import, and the emitted `migration.ts`'s ESM JSON import (`import contract from '…/contract.json' with { type: 'json' }`) cannot decompress at import time. Reader-side tolerance only ever helps a tool that reads store files directly — every committed `migration.ts` still requires plain JSON, so there is no size-reduction outcome gzip support would unlock without breaking the emitted import.
 
+### Formatted store declarations
+
+The store could keep the `.d.ts` pretty-printed, as `contract emit` writes it. Rejected: no command reads it, and each snapshot costs hundreds of lines in a pull request. The accepted cost is that "go to definition" from a `migration.ts` lands in a one-line file.
+
+### No declarations in the store
+
+The store could hold only `contract.json`. Rejected: a migration types its query builders with the `Start` and `End` contract types it imports from its snapshots (ADR 232), and those types come from the store's `.d.ts`.
+
 ## References
 
 - [ADR 197 — Migration packages snapshot their own contract](ADR%20197%20-%20Migration%20packages%20snapshot%20their%20own%20contract.md) (amended — a migration directory no longer carries its own contract copies; the property is now "the migrations *tree* is self-contained," not "the migration package is self-contained")
@@ -120,4 +132,4 @@ Store entries could be written as `contract.json.gz`, with readers tolerating ei
 - [ADR 232 — A migration is authored against its start and end contract snapshots](ADR%20232%20-%20A%20migration%20is%20authored%20against%20its%20start%20and%20end%20contract%20snapshots.md) (amended — its file-layout claims describe the pre-store sibling-copy shape)
 - [Migration System subsystem doc](../subsystems/7.%20Migration%20System.md)
 - Store implementation: `packages/1-framework/1-core/framework-components/src/control/contract-snapshot-layout.ts`, `packages/1-framework/3-tooling/migration/src/contract-snapshot-store.ts`
-- Postgres content-addressed contract table: `packages/3-targets/3-targets/postgres/src/contract-free/control-bootstrap.ts`
+- Postgres content-addressed contract table: `packages/3-targets/postgres/1-target/src/contract-free/control-bootstrap.ts`

@@ -4,127 +4,581 @@
  * Top-level per-row decoding is performed upstream in `sql-runtime`'s
  * row-yielding async generator (it `await`s `decodeRow` once per row before
  * yielding). Include aggregate aliases arrive as parsed JSON payloads, so this
- * file decodes embedded child row cells after `JSON.parse` and before mapping
- * storage columns to model fields. Every `for await` / `.toArray()` consumer
- * below therefore sees plain `T` values, not `Promise<T>`.
+ * file reads embedded child row cells with their codecs' `fromWire` after
+ * `JSON.parse` and before mapping storage columns to model fields, as the runtime
+ * reads an ordinary row (ADR 254, "Rows the database returns as JSON"). Every
+ * `for await` / `.toArray()` consumer below therefore sees plain `T` values, not
+ * `Promise<T>`.
  *
- * See `packages/2-sql/5-runtime/src/codecs/decoding.ts` for the decode-once-
+ * See `packages/2-sql-family/5-runtime/src/codecs/decoding.ts` for the decode-once-
  * per-row contract; this file is the consumer side of that contract. See also
  * ADR 030 (codecs registry & decode boundary) and `test/codec-async.types.test-d.ts`.
  */
 
-import type { Contract, JsonValue } from '@internal/contract/types';
+import type { Contract } from '@internal/contract/types';
 import {
   AsyncIterableResult,
   isRuntimeError,
   runtimeError,
 } from '@internal/framework-components/runtime';
 import type { SqlStorage, StorageColumn } from '@internal/sql-contract/types';
-import {
-  AndExpr,
-  type AnyExpression,
-  BinaryExpr,
-  type Codec,
-  ColumnRef,
-  ListExpression,
-  LiteralExpr,
-  OrExpr,
-} from '@internal/sql-relational-core/ast';
+import type { Codec, SqlCodecCallContext } from '@internal/sql-relational-core/ast';
+import type { Preparable } from '@internal/sql-relational-core/plan';
+import type { RuntimeScope } from '@internal/sql-relational-core/types';
 import { blindCast } from '@internal/utils/casts';
-import { InternalError } from '@internal/utils/internal-error';
+import { InternalError, isInternalError } from '@internal/utils/internal-error';
 import { resolveAggregate } from './aggregate-codecs';
 import { emptyAggregateResult } from './aggregate-empty-result';
 import {
+  addressedModel,
+  fieldOfColumn,
+  getColumnsReadOnTable,
+  getModelColumnFields,
   isToOneCardinality,
   resolvePolymorphismInfo,
-  resolveRowIdentityColumns,
 } from './collection-contract';
 import {
+  createPolymorphicRowMapper,
+  createStorageRowMapper,
   mapPolymorphicRow,
   mapResultRows,
   mapStorageRowToModelFields,
   type RowEnvelope,
+  stripHiddenMappedFields,
 } from './collection-runtime';
-import { ormError } from './orm-errors';
+import {
+  requireVariantTable,
+  variantColumnLabel,
+  variantColumnLabelPrefix,
+} from './collection-tables';
+import { resolveColumn } from './column-codec';
+import { type CallHashInput, planHashInput } from './orm-call';
 import { compileSelect, compileSelectWithIncludes } from './query-plan';
 import { queryPlanRows } from './query-plan-rows';
-import {
-  type CollectionContext,
-  type CollectionState,
-  emptyState,
-  type IncludeCombineBranch,
-  type IncludeExpr,
-  type IncludeScalar,
-  type RelationCardinalityTag,
+import { RELATED_AGGREGATE_ALIAS } from './query-plan-select';
+import type {
+  CollectionContext,
+  CollectionState,
+  IncludeCombineBranch,
+  IncludeExpr,
+  IncludeScalar,
 } from './types';
-import { bindWhereExpr } from './where-binding';
 
 type CodecExecutionContext = CollectionContext<Contract<SqlStorage>>['context'];
 
-interface DispatchCollectionRowsOptions {
+export interface DescribeCollectionRowsOptions {
   context: CodecExecutionContext;
-  runtime: CollectionContext<Contract<SqlStorage>>['runtime'];
   state: CollectionState;
-  tableName: string;
   modelName: string;
   namespaceId: string;
 }
 
-export function dispatchCollectionRows<Row>(
-  options: DispatchCollectionRowsOptions,
-): AsyncIterableResult<Row> {
-  const { context, runtime, state, tableName, modelName, namespaceId } = options;
-  const { contract } = context;
-  const polyInfo = resolvePolymorphismInfo(contract, namespaceId, modelName);
-
-  if (state.includes.length === 0) {
-    const compiled = compileSelect(contract, namespaceId, tableName, state, modelName);
-    const source = queryPlanRows<Record<string, unknown>>(runtime, compiled);
-    const mapper = polyInfo
-      ? (rawRow: Record<string, unknown>) =>
-          blindCast<
-            Row,
-            'collection row generic is supplied by the caller and matched to the selected model shape'
-          >(
-            mapPolymorphicRow(
-              contract,
-              namespaceId,
-              modelName,
-              polyInfo,
-              rawRow,
-              state.variantName,
-            ),
-          )
-      : (rawRow: Record<string, unknown>) =>
-          blindCast<
-            Row,
-            'collection row generic is supplied by the caller and matched to the selected model shape'
-          >(mapStorageRowToModelFields(contract, namespaceId, modelName, rawRow));
-    return mapResultRows(source, mapper);
-  }
-
-  return dispatchWithIncludes<Row>(options);
+export function describeCollectionRows<Row>(
+  options: DescribeCollectionRowsOptions,
+): Preparable<Record<string, unknown>, AsyncIterableResult<Row>> {
+  const query = describeExecutionRows<Row>(options);
+  return { ...query, consume: createPreparedRowsConsumer<Row>(options) };
 }
 
-// The correlated-subquery include builder lowers every include
-// descriptor shape (row, scalar reducers, and combine()) at any depth
-// into a single query; the read path has no multi-query fallback.
-function dispatchWithIncludes<Row>(
-  options: DispatchCollectionRowsOptions,
+function describeExecutionRows<Row>(
+  options: DescribeCollectionRowsOptions,
+): Preparable<Record<string, unknown>, AsyncIterableResult<Row>> {
+  const { context, state, modelName } = options;
+  const { contract } = context;
+  const plan =
+    state.includes.length === 0
+      ? compileSelect(contract, modelName, state)
+      : compileSelectWithIncludes(contract, context.aggregateDescriptors, modelName, state);
+  return { plan, consume: (rows) => consumeCollectionRows<Row>(options, rows) };
+}
+
+export function consumeCollectionRows<Row>(
+  options: DescribeCollectionRowsOptions,
+  rows: AsyncIterableResult<Record<string, unknown>>,
 ): AsyncIterableResult<Row> {
-  const { context, runtime, state, tableName, modelName, namespaceId } = options;
+  const { context, state, modelName, namespaceId } = options;
+  const { contract } = context;
+  if (state.includes.length > 0) {
+    return consumeIncludeRows<Row>(context, state, namespaceId, modelName, rows);
+  }
+  const polyInfo = resolvePolymorphismInfo(contract, namespaceId, modelName);
+  const mapper = polyInfo
+    ? (rawRow: Record<string, unknown>) =>
+        blindCast<
+          Row,
+          'collection row generic is supplied by the caller and matched to the selected model shape'
+        >(
+          mapPolymorphicRow(
+            contract,
+            namespaceId,
+            modelName,
+            polyInfo,
+            state.tables,
+            rawRow,
+            state.variantValue,
+          ),
+        )
+    : (rawRow: Record<string, unknown>) =>
+        blindCast<
+          Row,
+          'collection row generic is supplied by the caller and matched to the selected model shape'
+        >(mapStorageRowToModelFields(contract, namespaceId, modelName, rawRow));
+  return mapResultRows(rows, mapper);
+}
+
+/** The columns of each level of an include tree that other statements read and the caller did not select, and those of the levels below, by the key their rows are attached under. */
+export interface HiddenColumns {
+  readonly columns: readonly string[];
+  readonly nested: ReadonlyMap<string, HiddenColumns>;
+}
+
+const noHiddenColumns: HiddenColumns = { columns: [], nested: new Map() };
+
+/** One statement's worth of an include, read with one query per relation: the include itself, or one branch of a `combine()` as an include of its own. Its rows are attached to the parent row under `key`. */
+export interface RelatedRead {
+  readonly name: string;
+  readonly include: IncludeExpr;
+}
+
+export function relatedReadsOf(include: IncludeExpr): readonly RelatedRead[] {
+  if (include.combine === undefined) {
+    return [{ name: include.relationName, include }];
+  }
+  return Object.entries(include.combine).map(([branchName, branch]) => ({
+    name: `__prisma_combine__${JSON.stringify([include.relationName, branchName])}`,
+    include: {
+      ...include,
+      nested: branch.kind === 'rows' ? branch.state : branch.selector.state,
+      scalar: branch.kind === 'rows' ? undefined : branch.selector,
+      combine: undefined,
+    },
+  }));
+}
+
+export function readsNoRows(read: RelatedRead): boolean {
+  return read.include.nested.limit === 0;
+}
+
+export function consumeRowsWithAttachedIncludes<Row>(
+  options: DescribeCollectionRowsOptions,
+  rows: AsyncIterableResult<Record<string, unknown>>,
+  hidden: HiddenColumns,
+): AsyncIterableResult<Row> {
+  const { context, state, modelName, namespaceId } = options;
+  const generator = async function* (): AsyncGenerator<Row, void, unknown> {
+    const shape = await attachedIncludeRowShaper(context, namespaceId, modelName, state, hidden);
+    for await (const row of rows) {
+      yield blindCast<Row, 'collection row generic matches the selected model shape'>(shape(row));
+    }
+  };
+  return new AsyncIterableResult(generator());
+}
+
+type RowShaper = (row: Record<string, unknown>) => Record<string, unknown>;
+type ReadShaper = (row: Record<string, unknown>) => unknown;
+
+async function attachedIncludeRowShaper(
+  context: CodecExecutionContext,
+  namespaceId: string,
+  modelName: string,
+  state: CollectionState,
+  hidden: HiddenColumns,
+): Promise<RowShaper> {
+  const { contract } = context;
+  const mapRow = createPreparedMapper(contract, namespaceId, modelName, state);
+  const includes: { readonly name: string; readonly shape: ReadShaper }[] = [];
+  for (const include of state.includes) {
+    includes.push({
+      name: include.relationName,
+      shape: await relatedIncludeShaper(context, include, hidden),
+    });
+  }
+  return (row) => {
+    const mapped = mapRow(row);
+    stripHiddenMappedFields(contract, namespaceId, modelName, mapped, hidden.columns);
+    for (const { name, shape } of includes) {
+      mapped[name] = shape(row);
+    }
+    return mapped;
+  };
+}
+
+async function relatedIncludeShaper(
+  context: CodecExecutionContext,
+  include: IncludeExpr,
+  hidden: HiddenColumns,
+): Promise<ReadShaper> {
+  const reads = relatedReadsOf(include);
+  const shapers: ReadShaper[] = [];
+  for (const read of reads) {
+    shapers.push(await relatedReadShaper(context, read, hidden));
+  }
+  const [only] = shapers;
+  if (include.combine === undefined && only !== undefined) {
+    return only;
+  }
+  const branchNames = Object.keys(include.combine ?? {});
+  return (row) =>
+    Object.fromEntries(branchNames.map((name, index) => [name, shapers[index]?.(row)]));
+}
+
+async function relatedReadShaper(
+  context: CodecExecutionContext,
+  read: RelatedRead,
+  hidden: HiddenColumns,
+): Promise<ReadShaper> {
+  const { include } = read;
+  if (include.scalar !== undefined) {
+    const { resolved, codec } = resolveScalarIncludeMetadata(
+      context.contract,
+      context,
+      include,
+      include.scalar,
+    );
+    const empty = await emptyAggregateResult(resolved, codec);
+    return (row) => {
+      const value = attachedRowsOf(row, read)[0]?.[RELATED_AGGREGATE_ALIAS];
+      return value === null || value === undefined ? empty : value;
+    };
+  }
+  const shapeChild = await attachedIncludeRowShaper(
+    context,
+    include.relatedNamespaceId,
+    include.relatedModelName,
+    include.nested,
+    hidden.nested.get(read.name) ?? noHiddenColumns,
+  );
+  const toOne = isToOneCardinality(include.cardinality);
+  return (row) => {
+    const children = attachedRowsOf(row, read).map(shapeChild);
+    return toOne ? (children[0] ?? null) : children;
+  };
+}
+
+function attachedRowsOf(
+  row: Record<string, unknown>,
+  read: RelatedRead,
+): readonly Record<string, unknown>[] {
+  const related = row[read.name];
+  if (Array.isArray(related)) {
+    return related;
+  }
+  if (related === undefined && readsNoRows(read)) {
+    return [];
+  }
+  throw new InternalError(
+    `The rows of include "${read.include.relationName}" were not attached to their parent row`,
+  );
+}
+
+function deferResolution<T>(resolve: () => T): () => T {
+  try {
+    const value = resolve();
+    return () => value;
+  } catch (error) {
+    return () => {
+      throw error;
+    };
+  }
+}
+
+function createPreparedMapper(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  modelName: string,
+  state: CollectionState,
+): StorageRowMapper {
+  const resolved = deferResolution(() => {
+    const polyInfo = resolvePolymorphismInfo(contract, namespaceId, modelName);
+    return polyInfo
+      ? createPolymorphicRowMapper(
+          contract,
+          namespaceId,
+          modelName,
+          polyInfo,
+          state.tables,
+          state.variantValue,
+        )
+      : createStorageRowMapper(contract, namespaceId, modelName);
+  });
+  return (row) => resolved()(row);
+}
+
+function createPreparedRowsConsumer<Row>(
+  options: DescribeCollectionRowsOptions,
+): Preparable<Record<string, unknown>, AsyncIterableResult<Row>>['consume'] {
+  const { context, state, namespaceId, modelName } = options;
+  const mapRow = createPreparedMapper(context.contract, namespaceId, modelName, state);
+  const includes = state.includes.map((include) => createPreparedIncludeConsumer(context, include));
+  const castRow = (row: Record<string, unknown>) =>
+    blindCast<Row, 'collection row generic matches the selected model shape'>(row);
+  if (includes.length === 0) {
+    return (rows) => mapResultRows(rows, (row) => castRow(mapRow(row)));
+  }
+  return (rows) =>
+    new AsyncIterableResult(
+      (async function* () {
+        const parents = (await rows.toArray()).map((raw) => ({ raw, mapped: mapRow(raw) }));
+        for (const parent of parents) {
+          for (const include of includes) {
+            parent.mapped[include.alias] = await include.consume(parent.raw[include.alias]);
+          }
+        }
+        for (const parent of parents) yield castRow(parent.mapped);
+      })(),
+    );
+}
+
+function createPreparedIncludeConsumer(
+  context: CodecExecutionContext,
+  include: IncludeExpr,
+): IncludeConsumer {
+  const { contract } = context;
+  const alias = include.relationName;
+  if (include.scalar) {
+    return { alias, consume: createPreparedScalarConsumer(context, include, include.scalar) };
+  }
+  if (include.combine) {
+    const branches = Object.entries(include.combine).map(([name, branch]) => ({
+      name,
+      consume:
+        branch.kind === 'rows'
+          ? createPreparedIncludeConsumer(context, {
+              ...include,
+              nested: branch.state,
+              scalar: undefined,
+              combine: undefined,
+            }).consume
+          : createPreparedScalarConsumer(context, include, branch.selector),
+    }));
+    return {
+      alias,
+      consume: async (raw) => {
+        const parsed = parseCombineEnvelope(include, raw);
+        const result: Record<string, unknown> = {};
+        for (const branch of branches) {
+          result[branch.name] = await branch.consume(parsed[branch.name]);
+        }
+        return result;
+      },
+    };
+  }
+  const mapRow = createPreparedMapper(
+    contract,
+    include.relatedNamespaceId,
+    include.relatedModelName,
+    include.nested,
+  );
+  const bindings = deferResolution(() => {
+    const namespace = include.relatedNamespaceId;
+    const keys = new Set(
+      getColumnsReadOnTable(
+        contract,
+        ...addressedModel(
+          contract,
+          namespace,
+          include.relatedModelName,
+          include.nested.variantValue,
+        ),
+        include.relatedTableName,
+        namespace,
+      ),
+    );
+    const polyInfo = resolvePolymorphismInfo(contract, namespace, include.relatedModelName);
+    for (const variant of polyInfo?.mtiVariants ?? []) {
+      const variantTable = requireVariantTable(include.nested.tables, variant.value);
+      for (const column of getColumnsReadOnTable(
+        contract,
+        variantTable.storage.namespaceId,
+        variant.modelName,
+        variantTable.storage.tableName,
+      )) {
+        keys.add(variantColumnLabel(variantTable, column));
+      }
+    }
+    return new Map(
+      [...keys].map((key) => [
+        key,
+        deferResolution(() => resolveIncludedColumnBinding(contract, context, include, key)),
+      ]),
+    );
+  });
+  const bindingFor = (key: string) => bindings().get(key)?.() ?? null;
+  const nested = include.nested.includes.map((child) =>
+    createPreparedIncludeConsumer(context, child),
+  );
+  const toOne = isToOneCardinality(include.cardinality);
+  const fused = deferResolution(() =>
+    createPreparedIncludedRowDecoder(contract, include, bindingFor),
+  );
+  return {
+    alias,
+    consume: async (raw) => {
+      const rows = parseIncludedRows(include, raw);
+      if (rows.length === 0) return toOne ? null : [];
+      const decoder = fused();
+      if (!decoder || !rows.every(decoder.matches)) {
+        return consumeRowInclude(rows, mapRow, bindingFor, nested, toOne);
+      }
+      const mapped: Record<string, unknown>[] = [];
+      for (const row of rows) {
+        const result = await decoder.decode(row);
+        for (const child of nested) result[child.alias] = await child.consume(row[child.alias]);
+        mapped.push(result);
+      }
+      return toOne ? (mapped[0] ?? null) : mapped;
+    },
+  };
+}
+
+interface PreparedIncludedRowDecoder {
+  readonly matches: (row: Record<string, unknown>) => boolean;
+  readonly decode: (row: Record<string, unknown>) => Promise<Record<string, unknown>>;
+}
+
+function createPreparedIncludedRowDecoder(
+  contract: Contract<SqlStorage>,
+  include: IncludeExpr,
+  bindingFor: (key: string) => IncludedColumnBinding | null,
+): PreparedIncludedRowDecoder | undefined {
+  const namespace = include.relatedNamespaceId;
+  const model = include.relatedModelName;
+  if (resolvePolymorphismInfo(contract, namespace, model)) return undefined;
+  const columnToField = getModelColumnFields(contract, namespace, model);
+  const columns =
+    include.nested.selectedFields ??
+    getColumnsReadOnTable(contract, namespace, model, include.relatedTableName);
+  const aliases = include.nested.includes.map((child) => child.relationName);
+  const table = contract.storage.namespaces[namespace]?.entries.table?.[include.relatedTableName];
+  if (aliases.some((alias) => table?.columns[alias] !== undefined)) return undefined;
+  const keys = [...columns, ...aliases];
+  if (keys.includes('__proto__') || new Set(keys).size !== keys.length) return undefined;
+  const fieldOf = (key: string): string =>
+    aliases.includes(key) ? key : fieldOfColumn(columnToField, model, key);
+  const operations = keys.map((key) => {
+    const binding = deferResolution(() => bindingFor(key));
+    return {
+      key,
+      field: fieldOf(key),
+      async decode(value: unknown): Promise<unknown> {
+        if (value === null || value === undefined) return value;
+        const resolved = binding();
+        return resolved ? decodeIncludedColumnValue(resolved, value) : value;
+      },
+    };
+  });
+  return {
+    matches(row) {
+      const actual = Object.keys(row);
+      return actual.length === keys.length && actual.every((key, index) => key === keys[index]);
+    },
+    async decode(row) {
+      const result: Record<string, unknown> = {};
+      for (const operation of operations) {
+        result[operation.field] = await operation.decode(row[operation.key]);
+      }
+      return result;
+    },
+  };
+}
+
+function createPreparedScalarConsumer(
+  context: CodecExecutionContext,
+  include: IncludeExpr,
+  scalar: IncludeScalar<unknown>,
+): IncludeConsumer['consume'] {
+  const metadata = deferResolution(() =>
+    resolveScalarIncludeMetadata(context.contract, context, include, scalar),
+  );
+  return (raw) => {
+    const { resolved, codec } = metadata();
+    return consumeScalarInclude(include, resolved, codec, raw);
+  };
+}
+
+export async function consumeFirstRow<Row>(rows: AsyncIterableResult<Row>): Promise<Row | null> {
+  const result = await rows.toArray();
+  return result[0] ?? null;
+}
+
+export function describeCollectionFirst<Row>(
+  options: DescribeCollectionRowsOptions,
+): Preparable<Record<string, unknown>, Promise<Row | null>> {
+  const rows = describeCollectionRows<Row>(options);
+  return {
+    ...rows,
+    consume: (source) => consumeFirstRow(rows.consume(source)),
+  };
+}
+
+export function describeCollectionFirstOrThrow<Row>(
+  options: DescribeCollectionRowsOptions,
+): Preparable<Record<string, unknown>, Promise<Row>> {
+  const rows = describeCollectionRows<Row>(options);
+  return {
+    ...rows,
+    consume: (source) => rows.consume(source).firstOrThrow(),
+  };
+}
+
+/** The statements a collection read sends. Without includes they are compiled now; with includes, on first use. */
+export interface CollectionQuery<Row> {
+  /** What the read's cache key digests. */
+  readonly hashInput: CallHashInput;
+  rows(scope: RuntimeScope): AsyncIterableResult<Row>;
+}
+
+export function describeCollectionQuery<Row>(
+  options: DescribeCollectionRowsOptions,
+): CollectionQuery<Row> {
+  const { context, state, modelName, namespaceId } = options;
+  if (state.includes.length === 0) {
+    const query = describeExecutionRows<Row>(options);
+    return { hashInput: planHashInput(() => query.plan), rows: (scope) => runQuery(scope, query) };
+  }
+  resolvePolymorphismInfo(context.contract, namespaceId, modelName);
+  let compiled: Preparable<Record<string, unknown>, AsyncIterableResult<Row>> | undefined;
+  const query = () => {
+    compiled ??= describeExecutionRows<Row>(options);
+    return compiled;
+  };
+  return {
+    hashInput: planHashInput(() => query().plan),
+    rows: (scope) => {
+      const generator = async function* (): AsyncGenerator<Row, void, unknown> {
+        yield* runQuery(scope, query());
+      };
+      return new AsyncIterableResult(generator());
+    },
+  };
+}
+
+export function runQuery<Result>(
+  scope: RuntimeScope,
+  query: Preparable<Record<string, unknown>, Result>,
+): Result {
+  return query.consume(queryPlanRows(scope, query.plan));
+}
+
+export function dispatchCollectionRows<Row>(
+  options: DescribeCollectionRowsOptions & {
+    runtime: CollectionContext<Contract<SqlStorage>>['runtime'];
+  },
+): AsyncIterableResult<Row> {
+  const { runtime, ...descriptionOptions } = options;
+  return describeCollectionQuery<Row>(descriptionOptions).rows(runtime);
+}
+
+function consumeIncludeRows<Row>(
+  context: CodecExecutionContext,
+  state: CollectionState,
+  namespaceId: string,
+  modelName: string,
+  rows: AsyncIterableResult<Record<string, unknown>>,
+): AsyncIterableResult<Row> {
   const { contract } = context;
   const generator = async function* (): AsyncGenerator<Row, void, unknown> {
-    const compiled = compileSelectWithIncludes(
-      contract,
-      context.aggregateDescriptors,
-      namespaceId,
-      tableName,
-      state,
-      modelName,
-    );
-
-    const parentRowsRaw = await queryPlanRows<Record<string, unknown>>(runtime, compiled).toArray();
+    const parentRowsRaw = await rows.toArray();
     if (parentRowsRaw.length === 0) {
       return;
     }
@@ -132,11 +586,20 @@ function dispatchWithIncludes<Row>(
     const polyInfo = resolvePolymorphismInfo(contract, namespaceId, modelName);
     const parentRows: RowEnvelope[] = parentRowsRaw.map((row) => {
       const mapped = polyInfo
-        ? mapPolymorphicRow(contract, namespaceId, modelName, polyInfo, row, state.variantName)
+        ? mapPolymorphicRow(
+            contract,
+            namespaceId,
+            modelName,
+            polyInfo,
+            state.tables,
+            row,
+            state.variantValue,
+          )
         : mapStorageRowToModelFields(contract, namespaceId, modelName, row);
       return { raw: row, mapped };
     });
 
+    const bindings: IncludedColumnBindings = new WeakMap();
     for (const parent of parentRows) {
       for (const include of state.includes) {
         parent.mapped[include.relationName] = await decodeIncludePayload(
@@ -144,6 +607,7 @@ function dispatchWithIncludes<Row>(
           context,
           include,
           parent.raw[include.relationName],
+          bindings,
         );
       }
     }
@@ -177,108 +641,6 @@ function dispatchWithIncludes<Row>(
  * include query can't observe an already-deleted row, so delete reads
  * its snapshot before issuing the DELETE (see `collection.ts`).
  */
-export function reloadMutationRowsByIdentities<Row>(options: {
-  context: CodecExecutionContext;
-  runtime: CollectionContext<Contract<SqlStorage>>['runtime'];
-  tableName: string;
-  modelName: string;
-  namespaceId: string;
-  identityRows: readonly Record<string, unknown>[];
-  selectedFields: readonly string[] | undefined;
-  includes: readonly IncludeExpr[];
-}): AsyncIterableResult<Row> {
-  const {
-    context,
-    runtime,
-    tableName,
-    modelName,
-    namespaceId,
-    identityRows,
-    selectedFields,
-    includes,
-  } = options;
-  const { contract } = context;
-  if (identityRows.length === 0) {
-    return emptyResult<Row>();
-  }
-
-  const identityColumns = resolveRowIdentityColumns(contract, namespaceId, tableName);
-  if (identityColumns.length === 0) {
-    throw ormError(
-      'ORM.ROW_IDENTITY_MISSING',
-      `Cannot load includes for the mutation result on model "${modelName}": table "${tableName}" has no primary key or unique constraint to key the include read-back on.`,
-      { meta: { model: modelName, table: tableName } },
-    );
-  }
-
-  const identityFilter = buildIdentityInFilter(
-    contract,
-    namespaceId,
-    tableName,
-    identityColumns,
-    identityRows,
-  );
-  if (!identityFilter) {
-    return emptyResult<Row>();
-  }
-
-  return dispatchCollectionRows<Row>({
-    context,
-    runtime,
-    state: {
-      ...emptyState(),
-      filters: [identityFilter],
-      selectedFields,
-      includes,
-    },
-    tableName,
-    modelName,
-    namespaceId,
-  });
-}
-
-function emptyResult<Row>(): AsyncIterableResult<Row> {
-  return new AsyncIterableResult((async function* (): AsyncGenerator<Row, void, unknown> {})());
-}
-
-// Identity values come straight from the mutation's `RETURNING`, so they
-// are unique by construction — no JS-side dedup; the database evaluates
-// the `IN` list (or the composite-key `OR` of equality tuples) directly.
-function buildIdentityInFilter(
-  contract: Contract<SqlStorage>,
-  namespaceId: string,
-  tableName: string,
-  identityColumns: readonly string[],
-  identityRows: readonly Record<string, unknown>[],
-): AnyExpression | undefined {
-  const [singleColumn, ...rest] = identityColumns;
-  if (singleColumn !== undefined && rest.length === 0) {
-    const values = identityRows
-      .map((row) => row[singleColumn])
-      .filter((value) => value !== undefined);
-    if (values.length === 0) {
-      return undefined;
-    }
-    return bindWhereExpr(
-      contract,
-      BinaryExpr.in(ColumnRef.of(tableName, singleColumn), ListExpression.fromValues(values)),
-      namespaceId,
-    );
-  }
-
-  if (identityRows.length === 0) {
-    return undefined;
-  }
-  const tuples = identityRows.map((row) =>
-    AndExpr.of(
-      identityColumns.map((column) =>
-        BinaryExpr.eq(ColumnRef.of(tableName, column), LiteralExpr.of(row[column])),
-      ),
-    ),
-  );
-  return bindWhereExpr(contract, OrExpr.of(tuples), namespaceId);
-}
-
 /**
  * Decode a single-query include payload from a parent row's raw cell
  * into the model-shaped value that downstream consumers see. Recurses
@@ -305,14 +667,13 @@ async function decodeIncludePayload(
   context: CodecExecutionContext,
   include: IncludeExpr,
   raw: unknown,
+  bindings: IncludedColumnBindings,
 ): Promise<unknown> {
   if (include.scalar) {
-    return Promise.resolve(
-      decodeScalarIncludePayload(contract, context, include, include.scalar, raw),
-    );
+    return decodeScalarIncludePayload(contract, context, include, include.scalar, raw);
   }
   if (include.combine) {
-    return decodeCombineIncludePayload(contract, context, include, include.combine, raw);
+    return decodeCombineIncludePayload(contract, context, include, include.combine, raw, bindings);
   }
   const rawChildren = parseIncludedRows(include, raw);
   const polyInfo = resolvePolymorphismInfo(
@@ -327,35 +688,63 @@ async function decodeIncludePayload(
           include.relatedNamespaceId,
           include.relatedModelName,
           polyInfo,
+          include.nested.tables,
           childRow,
-          include.nested.variantName,
+          include.nested.variantValue,
         )
-    : (childRow: Record<string, unknown>) =>
-        mapStorageRowToModelFields(
-          contract,
-          include.relatedNamespaceId,
-          include.relatedModelName,
-          childRow,
-        );
+    : createStorageRowMapper(contract, include.relatedNamespaceId, include.relatedModelName);
+  let columns = bindings.get(include);
+  if (!columns) {
+    columns = new Map();
+    bindings.set(include, columns);
+  }
+  const columnBindings = columns;
+  return consumeRowInclude(
+    rawChildren,
+    mapChildRow,
+    (key) => {
+      let binding = columnBindings.get(key);
+      if (binding === undefined) {
+        binding = resolveIncludedColumnBinding(contract, context, include, key);
+        columnBindings.set(key, binding);
+      }
+      return binding;
+    },
+    include.nested.includes.map((nested) => ({
+      alias: nested.relationName,
+      consume: (value: unknown) => decodeIncludePayload(contract, context, nested, value, bindings),
+    })),
+    isToOneCardinality(include.cardinality),
+  );
+}
+
+type StorageRowMapper = (row: Record<string, unknown>) => Record<string, unknown>;
+interface IncludeConsumer {
+  readonly alias: string;
+  readonly consume: (raw: unknown) => Promise<unknown>;
+}
+
+async function consumeRowInclude(
+  rawChildren: readonly Record<string, unknown>[],
+  mapChildRow: StorageRowMapper,
+  bindingFor: (key: string) => IncludedColumnBinding | null,
+  nested: readonly IncludeConsumer[],
+  toOne: boolean,
+): Promise<Record<string, unknown>[] | Record<string, unknown> | null> {
   const mappedChildren: Record<string, unknown>[] = [];
   for (const childRow of rawChildren) {
-    const decodedChildRow = await decodeIncludedStorageRow(contract, context, include, childRow);
+    const decodedChildRow = await decodeIncludedStorageRow(childRow, bindingFor);
     const mapped = mapChildRow(decodedChildRow);
     // Source each nested-include payload from the RAW child row: it always
     // carries the payload under its relation alias. `mapChildRow` may be the
     // polymorphic mapper, which keeps only variant model-field columns and so
     // drops the relation alias — reading from `mapped` would lose it.
-    for (const nestedInclude of include.nested.includes) {
-      mapped[nestedInclude.relationName] = await decodeIncludePayload(
-        contract,
-        context,
-        nestedInclude,
-        decodedChildRow[nestedInclude.relationName],
-      );
+    for (const child of nested) {
+      mapped[child.alias] = await child.consume(decodedChildRow[child.alias]);
     }
     mappedChildren.push(mapped);
   }
-  return coerceSingleQueryIncludeResult(mappedChildren, include.cardinality);
+  return toOne ? (mappedChildren[0] ?? null) : mappedChildren;
 }
 
 /** How a decoded value is named when its decode fails. */
@@ -365,14 +754,22 @@ interface DecodedValueRef {
 }
 
 interface IncludedColumnRef extends DecodedValueRef {
+  readonly namespaceId: string;
   readonly storageColumn: StorageColumn;
 }
 
+interface IncludedColumnBinding {
+  readonly ref: IncludedColumnRef;
+  readonly codec: Codec;
+  readonly codecId: string;
+  readonly ctx: SqlCodecCallContext;
+}
+
+type IncludedColumnBindings = WeakMap<IncludeExpr, Map<string, IncludedColumnBinding | null>>;
+
 async function decodeIncludedStorageRow(
-  contract: Contract<SqlStorage>,
-  context: CodecExecutionContext,
-  include: IncludeExpr,
   row: Record<string, unknown>,
+  bindingFor: (key: string) => IncludedColumnBinding | null,
 ): Promise<Record<string, unknown>> {
   const decoded: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(row)) {
@@ -381,35 +778,33 @@ async function decodeIncludedStorageRow(
       continue;
     }
 
-    const ref = resolveIncludedColumnRef(contract, include, key);
-    if (!ref) {
-      decoded[key] = value;
-      continue;
-    }
-
-    const codec = context.contractCodecs.forColumn(
-      include.relatedNamespaceId,
-      ref.table,
-      ref.column,
-    );
-    if (!codec) {
-      decoded[key] = value;
-      continue;
-    }
-
-    const codecRef = context.codecDescriptors.codecRefForColumn(
-      include.relatedNamespaceId,
-      ref.table,
-      ref.column,
-    );
-    decoded[key] = await decodeIncludedColumnValue(
-      ref,
-      codecRef?.codecId ?? ref.storageColumn.codecId,
-      codec,
-      value,
-    );
+    const binding = bindingFor(key);
+    decoded[key] = binding ? await decodeIncludedColumnValue(binding, value) : value;
   }
   return decoded;
+}
+
+function resolveIncludedColumnBinding(
+  contract: Contract<SqlStorage>,
+  context: CodecExecutionContext,
+  include: IncludeExpr,
+  key: string,
+): IncludedColumnBinding | null {
+  const ref = resolveIncludedColumnRef(contract, include, key);
+  if (!ref) return null;
+  const codec = context.contractCodecs.forColumn(ref.namespaceId, ref.table, ref.column);
+  if (!codec) return null;
+  const codecRef = context.codecDescriptors.codecRefForColumn(
+    ref.namespaceId,
+    ref.table,
+    ref.column,
+  );
+  return {
+    ref,
+    codec,
+    codecId: codecRef?.codecId ?? ref.storageColumn.codecId,
+    ctx: { column: { table: ref.table, name: ref.column } },
+  };
 }
 
 function resolveIncludedColumnRef(
@@ -417,14 +812,19 @@ function resolveIncludedColumnRef(
   include: IncludeExpr,
   key: string,
 ): IncludedColumnRef | undefined {
-  const baseColumn = resolveStorageColumn(
+  const baseColumn = resolveColumn(
     contract,
     include.relatedNamespaceId,
     include.relatedTableName,
     key,
   );
   if (baseColumn) {
-    return { table: include.relatedTableName, column: key, storageColumn: baseColumn };
+    return {
+      namespaceId: include.relatedNamespaceId,
+      table: include.relatedTableName,
+      column: key,
+      storageColumn: baseColumn,
+    };
   }
 
   const polyInfo = resolvePolymorphismInfo(
@@ -437,42 +837,29 @@ function resolveIncludedColumnRef(
   }
 
   for (const variant of polyInfo.mtiVariants) {
-    const prefix = `${variant.table}__`;
+    const variantTable = requireVariantTable(include.nested.tables, variant.value);
+    const prefix = variantColumnLabelPrefix(variantTable);
     if (!key.startsWith(prefix)) {
       continue;
     }
 
     const column = key.slice(prefix.length);
-    const variantColumn = resolveStorageColumn(
-      contract,
-      include.relatedNamespaceId,
-      variant.table,
-      column,
-    );
+    const { namespaceId, tableName } = variantTable.storage;
+    const variantColumn = resolveColumn(contract, namespaceId, tableName, column);
     if (variantColumn) {
-      return { table: variant.table, column, storageColumn: variantColumn };
+      return { namespaceId, table: tableName, column, storageColumn: variantColumn };
     }
   }
 
   return undefined;
 }
 
-function resolveStorageColumn(
-  contract: Contract<SqlStorage>,
-  namespaceId: string,
-  tableName: string,
-  columnName: string,
-): StorageColumn | undefined {
-  return contract.storage.namespaces[namespaceId]?.entries.table?.[tableName]?.columns[columnName];
-}
-
 async function decodeIncludedColumnValue(
-  ref: IncludedColumnRef,
-  codecId: string,
-  codec: Codec,
+  binding: IncludedColumnBinding,
   value: unknown,
 ): Promise<unknown> {
-  if (ref.storageColumn.many === true) {
+  const { ref, codecId } = binding;
+  if (ref.storageColumn.many !== false) {
     if (!Array.isArray(value)) {
       wrapIncludedDecodeFailure(
         new TypeError(
@@ -489,25 +876,29 @@ async function decodeIncludedColumnValue(
         decoded.push(null);
         continue;
       }
-      decoded.push(decodeIncludedJsonValue(ref, codecId, codec, element));
+      decoded.push(await decodeIncludedJsonValue(binding, element));
     }
     return decoded;
   }
 
-  return decodeIncludedJsonValue(ref, codecId, codec, value);
+  return decodeIncludedJsonValue(binding, value);
 }
 
-/** `ref` names the value for a decode failure; an aggregate names its relation where a column would name itself. */
-function decodeIncludedJsonValue(
-  ref: DecodedValueRef,
-  codecId: string,
-  codec: Codec,
+/**
+ * Reads a value the database put into JSON with its codec's `fromWire`, with the call context an ordinary row's cell gets. `ref` names the value for a decode failure; an aggregate names its relation where a column would name itself.
+ */
+async function decodeIncludedJsonValue(
+  binding: {
+    readonly ref: DecodedValueRef;
+    readonly codecId: string;
+    readonly codec: Codec;
+    readonly ctx: SqlCodecCallContext;
+  },
   value: unknown,
-): unknown {
+): Promise<unknown> {
+  const { ref, codecId, codec, ctx } = binding;
   try {
-    return codec.decodeJson(
-      blindCast<JsonValue, 'SQL JSON aggregate values are JSON values'>(value),
-    );
+    return await codec.fromWire(value, ctx);
   } catch (error) {
     if (isRuntimeError(error)) throw error;
     wrapIncludedDecodeFailure(error, ref, codecId);
@@ -515,6 +906,7 @@ function decodeIncludedJsonValue(
 }
 
 function wrapIncludedDecodeFailure(error: unknown, ref: DecodedValueRef, codecId: string): never {
+  if (isInternalError(error)) throw error;
   const message = error instanceof Error ? error.message : String(error);
   const wrapped = runtimeError(
     'RUNTIME.DECODE_FAILED',
@@ -555,6 +947,7 @@ async function decodeCombineIncludePayload(
   include: IncludeExpr,
   branches: Readonly<Record<string, IncludeCombineBranch>>,
   raw: unknown,
+  bindings: IncludedColumnBindings,
 ): Promise<Record<string, unknown>> {
   const parsed = parseCombineEnvelope(include, raw);
   const result: Record<string, unknown> = {};
@@ -572,9 +965,10 @@ async function decodeCombineIncludePayload(
         context,
         syntheticInclude,
         branchRaw,
+        bindings,
       );
     } else {
-      result[branchName] = decodeScalarIncludePayload(
+      result[branchName] = await decodeScalarIncludePayload(
         contract,
         context,
         include,
@@ -640,7 +1034,17 @@ function decodeScalarIncludePayload(
   include: IncludeExpr,
   scalar: IncludeScalar<unknown>,
   raw: unknown,
-): unknown {
+): Promise<unknown> {
+  const { resolved, codec } = resolveScalarIncludeMetadata(contract, context, include, scalar);
+  return consumeScalarInclude(include, resolved, codec, raw);
+}
+
+function resolveScalarIncludeMetadata(
+  contract: Contract<SqlStorage>,
+  context: CodecExecutionContext,
+  include: IncludeExpr,
+  scalar: IncludeScalar<unknown>,
+): { resolved: ReturnType<typeof resolveAggregate>; codec: Codec } {
   const resolved = resolveAggregate({
     aggregates: context.aggregateDescriptors,
     contract,
@@ -649,8 +1053,15 @@ function decodeScalarIncludePayload(
     fn: scalar.fn,
     column: scalar.column,
   });
-  const codec = context.contractCodecs.forCodecRef(resolved.codec);
+  return { resolved, codec: context.contractCodecs.forCodecRef(resolved.codec) };
+}
 
+async function consumeScalarInclude(
+  include: IncludeExpr,
+  resolved: ReturnType<typeof resolveAggregate>,
+  codec: Codec,
+  raw: unknown,
+): Promise<unknown> {
   if (raw === null || raw === undefined) {
     return emptyAggregateResult(resolved, codec);
   }
@@ -665,9 +1076,12 @@ function decodeScalarIncludePayload(
   if (value === null || value === undefined) return emptyAggregateResult(resolved, codec);
 
   return decodeIncludedJsonValue(
-    { table: include.relatedTableName, column: include.relationName },
-    resolved.codec.codecId,
-    codec,
+    {
+      ref: { table: include.relatedTableName, column: include.relationName },
+      codecId: resolved.codec.codecId,
+      codec,
+      ctx: {},
+    },
     value,
   );
 }
@@ -705,11 +1119,4 @@ function parseIncludePayload(value: unknown): unknown {
   } catch {
     return [];
   }
-}
-
-function coerceSingleQueryIncludeResult(
-  rows: Record<string, unknown>[],
-  cardinality: RelationCardinalityTag | undefined,
-): Record<string, unknown>[] | Record<string, unknown> | null {
-  return isToOneCardinality(cardinality) ? (rows[0] ?? null) : rows;
 }

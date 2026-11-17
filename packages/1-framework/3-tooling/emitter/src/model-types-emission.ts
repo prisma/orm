@@ -6,12 +6,8 @@ import type {
   CrossReference,
 } from '@internal/contract/types';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import {
-  type ModelFieldTypeResolvers,
-  resolveModelFieldType,
-  serializeObjectKey,
-  serializeValue,
-} from './domain-type-generation';
+import { UNBOUND_PSL_NAMESPACE_NAME } from '@internal/framework-components/psl-ast';
+import { serializeObjectKey, serializeValue } from './domain-type-generation';
 import { emitterError } from './emitter-errors';
 
 type ModelRef = {
@@ -45,7 +41,7 @@ type ModelIndex = {
 };
 
 function namespacedMemberName(namespaceId: string, modelName: string): string {
-  const segment = namespaceId === UNBOUND_NAMESPACE_ID ? 'unbound' : namespaceId;
+  const segment = namespaceId === UNBOUND_NAMESPACE_ID ? UNBOUND_PSL_NAMESPACE_NAME : namespaceId;
   return `${segment}_${modelName}`;
 }
 
@@ -84,21 +80,13 @@ function isPolymorphicBase(model: ContractModelBase): boolean {
   return model.discriminator !== undefined && model.variants !== undefined;
 }
 
-function findModelByName(
-  namespaces: readonly NamespaceModels[],
-  namespaceId: string,
-  modelName: string,
-): ModelRef | undefined {
-  return namespaces
-    .find((ns) => ns.namespaceId === namespaceId)
-    ?.models.find((m) => m.modelName === modelName);
-}
-
 function findModel(
   namespaces: readonly NamespaceModels[],
   ref: CrossReference,
 ): ModelRef | undefined {
-  return findModelByName(namespaces, ref.namespace, ref.model);
+  return namespaces
+    .find((ns) => ns.namespaceId === ref.namespace)
+    ?.models.find((m) => m.modelName === ref.model);
 }
 
 function requireRelationTarget(
@@ -148,33 +136,33 @@ function requireBase(
 function requireVariant(
   namespaces: readonly NamespaceModels[],
   base: ModelRef,
-  variantName: string,
+  variantRef: CrossReference,
 ): ModelRef {
-  const variant = findModelByName(namespaces, base.namespaceId, variantName);
+  const variant = findModel(namespaces, variantRef);
   if (variant !== undefined) return variant;
   const baseSource = `${base.namespaceId}.${base.modelName}`;
+  const variantSource = `${variantRef.namespace}.${variantRef.model}`;
   throw emitterError(
     'CONTRACT.MODEL_VARIANT_MISSING',
-    `Polymorphic base ${baseSource} names variant "${variantName}", which is not in the contract`,
+    `Polymorphic base ${baseSource} names variant ${variantSource}, which is not in the contract`,
     {
-      why: 'The Any<Base> union is the union of the variant model types, so every variant a base declares must be a model in the same namespace.',
-      fix: "Declare the variant model in the same namespace as the base, or remove it from the base's variants.",
-      meta: { base: baseSource, variantName },
+      why: 'The Any<Base> union is the union of the variant model types, so every variant a base declares must be a model in the contract.',
+      fix: "Declare the variant model, or remove it from the base's variants.",
+      meta: { base: baseSource, variant: variantSource },
     },
   );
 }
 
 function collectFieldLines(
   ref: ModelRef,
-  resolvers: ModelFieldTypeResolvers,
   discriminatorType: { readonly field: string; readonly type: string } | undefined,
 ): Map<string, string> {
   const lines = new Map<string, string>();
-  for (const [fieldName, field] of Object.entries(ref.model.fields)) {
+  for (const fieldName of Object.keys(ref.model.fields)) {
     const type =
       discriminatorType !== undefined && fieldName === discriminatorType.field
         ? discriminatorType.type
-        : resolveModelFieldType(ref.modelName, fieldName, field, ref.model, resolvers).output;
+        : `FieldOutputTypes[${serializeValue(ref.namespaceId)}][${serializeValue(ref.modelName)}][${serializeValue(fieldName)}]`;
     lines.set(fieldName, `${serializeObjectKey(fieldName)}: ${type};`);
   }
   return lines;
@@ -220,20 +208,18 @@ function collectRelationLines(ref: ModelRef, index: ModelIndex): Map<string, Rel
 }
 
 function discriminatorUnion(base: ContractModelBase): string {
-  const values = Object.values(base.variants ?? {}).map((v) => serializeValue(v.value));
+  const values = Object.keys(base.variants ?? {}).map((value) => serializeValue(value));
   return values.length > 0 ? values.join(' | ') : 'never';
 }
 
-function memberLines(
-  ref: ModelRef,
-  index: ModelIndex,
-  resolvers: ModelFieldTypeResolvers,
-): MemberLines {
+function memberLines(ref: ModelRef, index: ModelIndex): MemberLines {
   const base =
     ref.model.base !== undefined ? requireBase(index.namespaces, ref, ref.model.base) : undefined;
   if (base !== undefined && isPolymorphicBase(base.model)) {
     const discriminatorField = base.model.discriminator?.field ?? '';
-    const variantValue = base.model.variants?.[ref.modelName]?.value;
+    const variantValue = Object.entries(base.model.variants ?? {}).find(
+      ([, variant]) => variant.namespace === ref.namespaceId && variant.model === ref.modelName,
+    )?.[0];
     const discriminatorType = {
       field: discriminatorField,
       type:
@@ -241,8 +227,8 @@ function memberLines(
     };
     return {
       fieldsByName: new Map([
-        ...collectFieldLines(base, resolvers, discriminatorType),
-        ...collectFieldLines(ref, resolvers, undefined),
+        ...collectFieldLines(base, discriminatorType),
+        ...collectFieldLines(ref, undefined),
       ]),
       relationsByName: new Map([
         ...collectRelationLines(base, index),
@@ -254,7 +240,7 @@ function memberLines(
     ? { field: ref.model.discriminator?.field ?? '', type: discriminatorUnion(ref.model) }
     : undefined;
   return {
-    fieldsByName: collectFieldLines(ref, resolvers, discriminatorType),
+    fieldsByName: collectFieldLines(ref, discriminatorType),
     relationsByName: collectRelationLines(ref, index),
   };
 }
@@ -290,11 +276,7 @@ function namespaceModelsOf(contract: Contract): NamespaceModels[] {
   }));
 }
 
-export function generateModelTypesBlock(
-  contract: Contract,
-  resolvers: ModelFieldTypeResolvers,
-  supportsNamespaces: boolean,
-): string {
+export function generateModelTypesBlock(contract: Contract, supportsNamespaces: boolean): string {
   const memberNameOf: MemberNamer = supportsNamespaces ? namespacedMemberName : bareMemberName;
   const namespaces = namespaceModelsOf(contract);
   const index: ModelIndex = { namespaces, memberNameOf };
@@ -326,15 +308,15 @@ export function generateModelTypesBlock(
     for (const ref of ns.models) {
       const memberName = memberNameOf(ns.namespaceId, ref.modelName);
       members.push(
-        renderMember(memberName, memberLines(ref, index, resolvers), ref.model.owner !== undefined),
+        renderMember(memberName, memberLines(ref, index), ref.model.owner !== undefined),
       );
       keys.push(`${serializeObjectKey(ref.modelName)}: Models.${memberName};`);
     }
     for (const ref of ns.models) {
       if (!isPolymorphicBase(ref.model)) continue;
       const unionName = memberNameOf(ns.namespaceId, `Any${ref.modelName}`);
-      const variantMembers = Object.keys(ref.model.variants ?? {}).map((variantName) => {
-        const variant = requireVariant(namespaces, ref, variantName);
+      const variantMembers = Object.values(ref.model.variants ?? {}).map((variantRef) => {
+        const variant = requireVariant(namespaces, ref, variantRef);
         return memberNameOf(variant.namespaceId, variant.modelName);
       });
       members.push(

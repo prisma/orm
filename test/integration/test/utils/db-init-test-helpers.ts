@@ -64,8 +64,8 @@ export async function runDbInit(
     loadConfig: (configPath) =>
       loadOrmConfig({ cwd: testSetup.testDir, ...ifDefined('configPath', configPath) }),
   });
-  // Format auto-selection is the engine's: json off a TTY. A step that asks for
-  // human output has to say its streams are terminals, as the journey harness does.
+  // Both streams are one terminal, as in the journey harness, so stdout carries
+  // no data lines. A step that wants the JSON frames passes --json.
   const run = await cli.run(['db', 'init', ...args], {
     cwd: testSetup.testDir,
     isTty: { stdout: true, stderr: true },

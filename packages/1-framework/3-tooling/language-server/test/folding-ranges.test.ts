@@ -9,9 +9,8 @@ describe('computeFoldingRanges', () => {
   id Int @id
   email String
 }`;
-    const { document, sourceFile } = parse(source);
-
-    const ranges = computeFoldingRanges(document, sourceFile);
+    const { document, sources } = parse(source, 'language-server-test.psl');
+    const ranges = computeFoldingRanges(document, sources);
 
     expect(ranges).toEqual([{ startLine: 0, endLine: 3, kind: FoldingRangeKind.Region }]);
   });
@@ -21,9 +20,8 @@ describe('computeFoldingRanges', () => {
   street String
   city String
 }`;
-    const { document, sourceFile } = parse(source);
-
-    const ranges = computeFoldingRanges(document, sourceFile);
+    const { document, sources } = parse(source, 'language-server-test.psl');
+    const ranges = computeFoldingRanges(document, sources);
 
     expect(ranges).toEqual([{ startLine: 0, endLine: 3, kind: FoldingRangeKind.Region }]);
   });
@@ -31,9 +29,8 @@ describe('computeFoldingRanges', () => {
   it('returns one range for a flat namespace declaration', () => {
     const source = `namespace billing {
 }`;
-    const { document, sourceFile } = parse(source);
-
-    const ranges = computeFoldingRanges(document, sourceFile);
+    const { document, sources } = parse(source, 'language-server-test.psl');
+    const ranges = computeFoldingRanges(document, sources);
 
     expect(ranges).toEqual([{ startLine: 0, endLine: 1, kind: FoldingRangeKind.Region }]);
   });
@@ -44,9 +41,8 @@ describe('computeFoldingRanges', () => {
     id Int @id
   }
 }`;
-    const { document, sourceFile } = parse(source);
-
-    const ranges = computeFoldingRanges(document, sourceFile);
+    const { document, sources } = parse(source, 'language-server-test.psl');
+    const ranges = computeFoldingRanges(document, sources);
 
     expect(ranges).toEqual([
       { startLine: 0, endLine: 4, kind: FoldingRangeKind.Region },
@@ -58,9 +54,8 @@ describe('computeFoldingRanges', () => {
     const source = `generator client {
   provider = "prisma-client-js"
 }`;
-    const { document, sourceFile } = parse(source);
-
-    const ranges = computeFoldingRanges(document, sourceFile);
+    const { document, sources } = parse(source, 'language-server-test.psl');
+    const ranges = computeFoldingRanges(document, sources);
 
     expect(ranges).toEqual([{ startLine: 0, endLine: 2, kind: FoldingRangeKind.Region }]);
   });
@@ -70,9 +65,8 @@ describe('computeFoldingRanges', () => {
   provider = "postgresql"
   url = env("DATABASE_URL")
 }`;
-    const { document, sourceFile } = parse(source);
-
-    const ranges = computeFoldingRanges(document, sourceFile);
+    const { document, sources } = parse(source, 'language-server-test.psl');
+    const ranges = computeFoldingRanges(document, sources);
 
     expect(ranges).toEqual([{ startLine: 0, endLine: 3, kind: FoldingRangeKind.Region }]);
   });
@@ -81,18 +75,16 @@ describe('computeFoldingRanges', () => {
     const source = `types {
   MyInt = Int
 }`;
-    const { document, sourceFile } = parse(source);
-
-    const ranges = computeFoldingRanges(document, sourceFile);
+    const { document, sources } = parse(source, 'language-server-test.psl');
+    const ranges = computeFoldingRanges(document, sources);
 
     expect(ranges).toEqual([{ startLine: 0, endLine: 2, kind: FoldingRangeKind.Region }]);
   });
 
   it('returns an empty array for an empty document', () => {
     const source = '';
-    const { document, sourceFile } = parse(source);
-
-    const ranges = computeFoldingRanges(document, sourceFile);
+    const { document, sources } = parse(source, 'language-server-test.psl');
+    const ranges = computeFoldingRanges(document, sources);
 
     expect(ranges).toEqual([]);
   });
@@ -100,18 +92,16 @@ describe('computeFoldingRanges', () => {
   it('returns an empty array for a document with only comments', () => {
     const source = `// This is a comment
 // Another comment`;
-    const { document, sourceFile } = parse(source);
-
-    const ranges = computeFoldingRanges(document, sourceFile);
+    const { document, sources } = parse(source, 'language-server-test.psl');
+    const ranges = computeFoldingRanges(document, sources);
 
     expect(ranges).toEqual([]);
   });
 
   it('returns an empty array for a document with only whitespace', () => {
     const source = '   \n\n   ';
-    const { document, sourceFile } = parse(source);
-
-    const ranges = computeFoldingRanges(document, sourceFile);
+    const { document, sources } = parse(source, 'language-server-test.psl');
+    const ranges = computeFoldingRanges(document, sources);
 
     expect(ranges).toEqual([]);
   });
@@ -128,14 +118,39 @@ model User {
 type Address {
   street String
 }`;
-    const { document, sourceFile } = parse(source);
-
-    const ranges = computeFoldingRanges(document, sourceFile);
+    const { document, sources } = parse(source, 'language-server-test.psl');
+    const ranges = computeFoldingRanges(document, sources);
 
     expect(ranges).toEqual([
       { startLine: 0, endLine: 2, kind: FoldingRangeKind.Region },
       { startLine: 4, endLine: 6, kind: FoldingRangeKind.Region },
       { startLine: 8, endLine: 10, kind: FoldingRangeKind.Region },
+    ]);
+  });
+
+  it('returns a range for a mixin declaration and for a block that includes a mixin', () => {
+    const source = `model mixin Timestamps {
+  createdAt DateTime
+}
+
+namespace auth {
+  enum mixin BaseRoles {
+    ADMIN
+  }
+}
+
+model User {
+  id Int @id
+  +Timestamps
+}`;
+    const { document, sources } = parse(source, 'language-server-test.psl');
+    const ranges = computeFoldingRanges(document, sources);
+
+    expect(ranges).toEqual([
+      { startLine: 0, endLine: 2, kind: FoldingRangeKind.Region },
+      { startLine: 4, endLine: 8, kind: FoldingRangeKind.Region },
+      { startLine: 5, endLine: 7, kind: FoldingRangeKind.Region },
+      { startLine: 10, endLine: 13, kind: FoldingRangeKind.Region },
     ]);
   });
 });

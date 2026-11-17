@@ -5,12 +5,6 @@ import { orm } from '../src/orm';
 import type { TestContract } from './helpers';
 import { createMockRuntime, getTestContext } from './helpers';
 
-class UserCollection extends Collection<TestContract, 'User'> {
-  named(name: string) {
-    return this.where((user) => user.name.eq(name));
-  }
-}
-
 class PostCollection extends Collection<TestContract, 'Post'> {
   popular() {
     return this.where((p) => p.views.gt(1000));
@@ -52,10 +46,31 @@ describe('orm()', () => {
     expect(results).toHaveLength(1);
   });
 
+  it('refuses an invalid limit or offset before any query runs', async () => {
+    const runtime = createMockRuntime();
+    const db = orm({ runtime, context });
+
+    await expect(async () => db.public.User.limit(Number.NaN).all()).rejects.toThrow(
+      expect.objectContaining({
+        code: 'ORM.ARGUMENT_INVALID',
+        message: `limit must be an integer from 0 to ${Number.MAX_SAFE_INTEGER}, got NaN`,
+        meta: { argument: 'limit' },
+      }),
+    );
+    await expect(async () => db.public.User.offset(1.5).all()).rejects.toThrow(
+      expect.objectContaining({
+        code: 'ORM.ARGUMENT_INVALID',
+        message: `offset must be an integer from 0 to ${Number.MAX_SAFE_INTEGER}, got 1.5`,
+        meta: { argument: 'offset' },
+      }),
+    );
+    expect(runtime.executions).toEqual([]);
+  });
+
   it('returns undefined for symbol-based property lookups on the proxy', () => {
     const runtime = createMockRuntime();
     const db = orm({ runtime, context });
-    expect((db as Record<PropertyKey, unknown>)[Symbol.toStringTag]).toBeUndefined();
+    expect((db as unknown as Record<PropertyKey, unknown>)[Symbol.toStringTag]).toBeUndefined();
   });
 
   it('caches lazily created collections', () => {
@@ -70,28 +85,6 @@ describe('orm()', () => {
     const runtime = createMockRuntime();
     const db = orm({ runtime, context });
     expect((db.public as Record<string, unknown>)['unknown']).toBeUndefined();
-  });
-
-  it('custom collection overrides default for same key', () => {
-    const runtime = createMockRuntime();
-    const db = orm({
-      runtime,
-      context,
-      collections: { Post: PostCollection },
-    });
-
-    expect(db.public.Post).toBeInstanceOf(PostCollection);
-  });
-
-  it('resolves User to custom collection instance', () => {
-    const runtime = createMockRuntime();
-    const db = orm({
-      runtime,
-      context,
-      collections: { User: UserCollection },
-    });
-
-    expect(db.public.User).toBeInstanceOf(UserCollection);
   });
 
   it('instantiates custom collections lazily and caches by model', () => {

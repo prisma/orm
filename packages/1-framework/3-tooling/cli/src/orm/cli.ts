@@ -1,4 +1,5 @@
 import { fstatSync } from 'node:fs';
+import process from 'node:process';
 import { ifDefined } from '@internal/utils/defined';
 import type { Cli, HostProcess, MountedTree, Runtime } from '@prisma/cli-engine';
 import { createCli, telemetryCommandGroup } from '@prisma/cli-engine';
@@ -7,6 +8,7 @@ import { createControlClient } from '../control-api/client';
 import type { CreateControlClient } from '../control-api/types';
 import { contractEmitCommand } from './contract/emit';
 import { contractInferCommand } from './contract/infer';
+import { contractPrintCommand } from './contract/print';
 import { createDbInitCommand } from './db/init';
 import { createDbSchemaCommand } from './db/schema';
 import { createDbSignCommand } from './db/sign';
@@ -22,8 +24,8 @@ import { migrationCheckCommand } from './migration/check';
 import { migrationGraphCommand } from './migration/graph';
 import { migrationListCommand } from './migration/list';
 import { migrationLogCommand } from './migration/log';
-import { migrationNewCommand } from './migration/new';
-import { migrationPlanCommand } from './migration/plan';
+import { createMigrationNewCommand } from './migration/new';
+import { createMigrationPlanCommand } from './migration/plan';
 import { migrationShowCommand } from './migration/show';
 import { migrationStatusCommand } from './migration/status';
 import { normalizeError } from './normalize-error';
@@ -95,6 +97,7 @@ export const BIN_GROUPS = {
  */
 export function createBinCommands(createClient: CreateControlClient): MountedTree {
   return {
+    'contract print': contractPrintCommand,
     'contract emit': contractEmitCommand,
     'contract format': formatCommand,
     'contract infer': contractInferCommand,
@@ -109,8 +112,8 @@ export function createBinCommands(createClient: CreateControlClient): MountedTre
     'migration graph': migrationGraphCommand,
     'migration list': migrationListCommand,
     'migration log': migrationLogCommand,
-    'migration new': migrationNewCommand,
-    'migration plan': migrationPlanCommand,
+    'migration new': createMigrationNewCommand(createClient),
+    'migration plan': createMigrationPlanCommand(createClient),
     'migration ref delete': refDeleteCommand,
     'migration ref list': refListCommand,
     'migration ref set': refSetCommand,
@@ -227,4 +230,15 @@ export async function runOrmCli(proc: HostProcess): Promise<number> {
   } catch (error) {
     return reportStartupFailure(proc, error);
   }
+}
+
+/**
+ * Runs the CLI as this process's `prisma` command: the exit code becomes `process.exitCode`, and
+ * stdin is released so the process exits once the run settles. A command that read stdin leaves it
+ * referenced — `lsp` reads it for its whole run — and with fd 0 closed Node substitutes a stream
+ * that has no `unref`.
+ */
+export async function runOrmBin(): Promise<void> {
+  process.exitCode = await runOrmCli(process);
+  process.stdin.unref?.();
 }

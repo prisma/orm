@@ -8,5 +8,5 @@ export async function bm25Fuzzy(term: string, distance: number, limit = 20) {
     .orderBy((f, fns) => fns.paradeDbScore(f.id), { direction: 'desc' })
     .limit(limit)
     .build();
-  return db.runtime().query(plan);
+  return db.query(plan);
 }

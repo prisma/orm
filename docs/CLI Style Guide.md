@@ -29,28 +29,20 @@ For the architectural view of the CLI (distribution, command surface, init pipel
 
 ## Output Conventions: Composable CLI Output
 
-The CLI follows the Unix convention of separating human-readable decoration from machine-readable data:
+The CLI follows the Unix convention of separating human-readable decoration from machine-readable data. `@prisma/cli-engine` renders every command, and the output format depends only on flags, never on whether stdout is a terminal:
 
-- **stdout** — the data the caller asked for. This is what scripts and pipes capture. Includes successful `ui.output()` payloads, `--version` output, and explicitly-requested `--help` (see below).
-- **stderr** — decoration around some other operation (Clack spinners, logs, notes, intro/outro), warnings, errors, and help printed as part of an error (e.g. unknown-command usage hints). Visible in terminal, invisible in pipes.
+- **Without `--json`**: the human card (fields, trees, summaries, spinners, warnings, errors) goes to stderr, and the command's data lines go to stdout. A pipe, a file or `$(…)` receives only the data lines. When stdout and stderr are the same terminal, the engine leaves the data lines out so the screen does not show the result twice.
+- **With `--json`**: stdout carries the JSON frames, ending in the result envelope. A pipe never switches to JSON on its own.
 
 ### Rules
 
-1. **All `TerminalUI` methods except `output()` write to stderr** via Clack's `{ output: process.stderr }` option — but only in interactive mode.
-2. **`ui.output(data)` always writes to stdout** — call it only when there is data to emit (e.g., `--json` responses). Commands gate `ui.output()` behind `if (flags.json)`.
-3. **When stdout is piped, ALL decoration is suppressed** — `isInteractive` (`process.stdout.isTTY`) gates every decoration method. Only `ui.output()` writes in piped mode. This keeps `prisma db verify | jq` completely silent.
-4. **Action commands** (sign, init) produce no stdout data — they are purely decorative.
-5. **Data commands** (verify, emit, introspect, status) call both decoration (stderr) and `ui.output()` (stdout). In interactive mode, decoration is visible on stderr; `ui.output()` writes to stdout only when the command has data to emit (gated by `--json`).
-6. **Never write data to stderr** — decoration methods are for human context only.
-7. **Never write decoration to stdout** — it breaks pipes, `$(...)` captures, and `> file` redirects.
-8. **`--help` and `--version` are data when explicitly requested.** When the user invokes `prisma --help` (or any subcommand `--help`) or `prisma --version`, the rendered text **is** the data the caller asked for and goes to **stdout** with exit code 0. This makes `prisma --help | less`, `prisma --help > usage.txt`, and `diff <(prisma --help) <(prisma --version)` all work as expected — matching POSIX, GNU coreutils, git, and npm. **Help printed as part of an error** (unknown command, missing subcommand, bad flag) is decoration around that error and goes to **stderr** with the corresponding non-zero exit code. The user did not invoke `--help` in those cases — the CLI is voluntarily showing usage to help them recover, which is decoration. Same printed bytes; different invocation intent; different stream.
+1. **Each command declares its data lines** in its presentation's `stdout`. A command that prints none declares `noDataLines(reason)` and says why. `test/orm/command-stdout.test.ts` fails on an empty `stdout` without a reason.
+2. **Data lines are a stable interface.** Fields are tab-separated and come in the order the [CLI README](../packages/1-framework/3-tooling/cli/README.md#piped-output) documents. Build them with `dataLine` and `fieldLines` from `src/orm/data-lines.ts`, which leave an absent value as an empty field and escape a backslash, tab, newline or carriage return inside a value. Paths are relative to the working directory. New fields are only appended; changing or reordering a field is a breaking change.
+3. **Never write data to stderr** — the human card is context for a person.
+4. **Never write decoration to stdout** — it breaks pipes, `$(...)` captures, and `> file` redirects.
+5. **`--help` and `--version` are data when explicitly requested.** When the user invokes `prisma --help` (or any subcommand `--help`) or `prisma --version`, the rendered text **is** the data the caller asked for and goes to **stdout** with exit code 0. This makes `prisma --help | less`, `prisma --help > usage.txt`, and `diff <(prisma --help) <(prisma --version)` all work as expected — matching POSIX, GNU coreutils, git, and npm. **Help printed as part of an error** (unknown command, missing subcommand, bad flag) is decoration around that error and goes to **stderr** with the corresponding non-zero exit code. The user did not invoke `--help` in those cases — the CLI is voluntarily showing usage to help them recover, which is decoration. Same printed bytes; different invocation intent; different stream.
 
-### How it works in practice
-
-The CLI checks `process.stdout.isTTY` once at startup to determine the output mode:
-
-- **Interactive** (`stdout` is TTY): decoration visible on stderr. `ui.output()` writes to stdout when called (commands gate it behind `--json`).
-- **Piped** (`stdout` is NOT TTY): decoration suppressed, `ui.output()` writes raw data to stdout.
+The engine's own convention is in the `@prisma/cli-engine` README.
 
 ## Verbosity & Flags
 - Defaults: concise informational output in TTY with tasteful color/spinners.
@@ -117,33 +109,40 @@ The CLI checks `process.stdout.isTTY` once at startup to determine the output mo
 
 ### Destructive operation confirmation
 
-Destructive operations (drops, type changes, overwriting generated files, overwriting an existing signature marker, …) require **explicit consent**: the user types the name of the thing being changed, or passes that name as `--confirm <token>`. Consent is separate from the `-y` "accept prompt defaults" mechanism, and no command invents a flag that skips it.
+Operations that lose data (dropping a table or a column, a type change that can change values), operations that change who can read or write data, overwriting generated files, and overwriting an existing signature marker require **explicit consent**. Dropping an object that holds no data, such as an index or a constraint, is `widening` and asks nothing. Consent takes one of two forms:
+
+- **Statements**, for a plan that would lose data or change access. The command asks one question per model, field or storage name at stake, and each is answered with a statement naming it: `--delete <subject>`, `--rename <subject>:<new name>` or `--allow <subject>`. `migration plan` and `db update` use this form.
+- **A consent token**, for a command with one thing at stake. The user types the name of the thing being changed, or passes that name as `--confirm <token>`. `init` uses this form.
+
+Consent is separate from the `-y` "accept prompt defaults" mechanism, and no command invents a flag that skips it.
 
 This is a deliberate divergence from clig.dev §Arguments §Confirmation. AI agents and CI scripts routinely pass `-y` to suppress prompts on long-running pipelines; conflating "skip prompts" with "consent to destruction" is a footgun the project has decided to avoid. Typing a name also rules out the other accident a yes/no prompt allows — consenting to the right operation against the wrong database.
 
 #### Rules
 
-- A command that performs a destructive action MUST ask for it with `ctx.prompt.consent(question, { token })`. The token is the natural noun of what is at stake: the database name for `db update`, the working directory's basename for an `init` re-scaffold. Interactively the user types the token; non-interactively `--confirm <token>` grants it. There is no `--force`.
+- A command whose plan can lose data or change access MUST ask about each subject with `ctx.prompt.statements(questions)`, one question per subject, before it writes or applies anything. A statement that answers no question fails the run with the engine's `CLI.CONSENT_UNUSED`; non-interactively, unanswered questions fail it with `CLI.CONSENT_REQUIRED`, listing each question and the flags that answer it. `--confirm` answers none of these questions.
+- A command with one thing at stake MUST ask for it with `ctx.prompt.consent(question, { token })`. The token is the natural noun of what is at stake: the working directory's basename for an `init` re-scaffold. Interactively the user types the token; non-interactively `--confirm <token>` grants it. There is no `--force`.
 - The question MUST list the destructive operations (or describe them concretely, e.g. "this will overwrite all generated files") so the user can decline knowing what's at stake. A command that cannot fill the list, or cannot derive a token, MUST fail with a structured error rather than ask a question that says nothing or accepts anything.
 - The token MUST identify the thing being changed as precisely as the invocation allows. Falling back to something a whole class of runs shares — a target id, a product name — makes one `--confirm` value grant data loss in every project that shares it.
 - Non-interactively (closed stdin, CI, `--no-interactive`) without `--confirm`: no prompt is shown; the command fails with the engine's `CLI.CONSENT_REQUIRED` (exit `2`), whose `meta.consentToken` and `nextActions` name the token to pass. A cancelled prompt is `CLI.PROMPT_CANCELLED` (exit `3`); a mistyped token is `CLI.PROMPT_INVALID` (exit `2`).
 - `--confirm` is read only when the run is non-interactive or `--yes` is set. A script that runs from a terminal must pass `--no-interactive --confirm <token>`, or it will stop at the prompt.
 - Each `--confirm` value grants at most one consent; a command that asks twice needs two.
-- The internal control API retains a programmatic equivalent (e.g. `acceptDataLoss: boolean`) for consumers that drive the planner directly; `--confirm` is the user-facing CLI form. Note that consent authorises the operations the user was shown, and the plan is recomputed on the call that carries it — a command that cannot bind the two SHOULD report what it applied beyond what was consented to.
+- The control API takes the same consent programmatically: `migration plan` and `db update` take an answer callback for their questions, and `db update`'s `acceptDataLoss: true` answers every data-loss question and `acceptAccessChanges: true` every access question.
 
 #### Examples
 
-- `db update`: when the plan includes destructive ops, asks the user to type the database name; `--no-interactive --confirm <database>` applies without a prompt. The name is the `database` a driver connection object carries, or the connection URL's first path segment, else its host, falling back to the target id.
+- `db update`: asks one question per model, field or storage name an operation would lose data from, answered by `--delete` or `--rename`, and one per operation that would change who can read or write a model's data, answered by `--allow`; `--no-interactive --delete Legacy --allow User` applies without a prompt.
 - `init`: re-running `init` in a directory with a generated `prisma.config.ts` asks the user to type the directory's basename; `-y` alone is not sufficient to authorise overwriting generated files. (The commander-era `--force` retired with the commander shell in the S5 cutover; the engine-hosted `init` uses the consent form above.)
 - `db sign`: overwriting a marker that holds a different hash happens without consent (the previous hash is reported). This is an intentional exception to the rule above: `db sign` verifies the live schema against the contract before writing, so the overwrite only ever records a contract the database already satisfies. If that ever grows a switch, it takes the consent form above — not a `--force`.
 
 ## Config & Environment
 - Config file names: `prisma.config.ts|.mjs|.js` (ESM); optional CJS fallback.
 - Discovery precedence: `--config <path>` > `PRISMA_CONFIG` > nearest `prisma.config.*` in CWD (no upward search).
+- Relative paths inside the config file (`contract` source inputs, `contract.output`, `migrations.dir`) are relative to the config file that wrote them, not to CWD, so `--config ./sub/prisma.config.ts` reads and writes under `sub/`.
 - Precedence: flags > config > defaults.
 - Env policy: the CLI does not auto‑load `.env`. Apps may do so in `prisma.config.*` and pass values (e.g., `db.connection`).
 - Contract source: defined in config; no flag override.
-- Contract output directory: `--output-path <dir>` on `contract emit` sets the directory where `contract.json` and `contract.d.ts` are written. The filenames are canonical and not user-controlled. Precedence: `--output-path` flag > `output` in config > derived default (directory of the contract source file). The path is resolved relative to CWD. Extension wrappers (`defineConfig` from `@internal/mongo` and `@internal/postgres`) expose an `output?: string` option that maps directly to this config field.
+- Contract output directory: `--output-path <dir>` on `contract emit` sets the directory where `contract.json` and `contract.d.ts` are written. The filenames are canonical and not user-controlled. Precedence: `--output-path` flag > `output` in config > derived default (directory of the contract source file). The flag is resolved relative to CWD; `output` in config, like every relative path in `prisma.config.ts`, is resolved relative to the config file that wrote it, whichever directory the command runs from. Extension wrappers (`defineConfig` from `@internal/mongo` and `@internal/postgres`) expose an `output?: string` option that maps directly to this config field.
 - Migration directory: defined in config; no flag override.
 - DB Connection: `--db=<URL>` or `config.db.connection`.
 
@@ -224,7 +223,7 @@ Concrete examples (from the migration CLI verb refactor, TML-2546). Each entry b
 
 ## JSON Semantics
 - `--json` outputs a single JSON object for the command result to stdout regardless of TTY mode.
-- When piped (`!isTTY`), no decoration is visible — only JSON data on stdout.
+- Without `--json`, a pipe receives only the command's data lines on stdout: tab-separated fields for a list, `key<TAB>value` lines for a show, or a bare value. The human card still goes to stderr. Piping does not enable JSON; JSON needs `--json`.
 - **Each command's `--json` success shape MUST be defined as a schema** (arktype or equivalent) co-located with the command (e.g. `src/commands/<command>/output.ts`) and exported on the package's public surface, so downstream consumers can validate the output. The error envelope schema is shared (see [Errors](#errors)). Hand-writing JSON without a co-located schema is not allowed.
 - Success and error documents on the same command SHOULD share a discriminator field (typically `ok: boolean`) so consumers can branch without inspecting the structure.
 
@@ -240,21 +239,21 @@ Concrete examples (from the migration CLI verb refactor, TML-2546). Each entry b
   - `--marker-only` cannot be combined with `--schema-only` or `--strict` (exit code 2, `CLI.INVALID_VERIFY_MODE`). `--schema-only --strict` is valid.
   - Non‑interactive; single JSON with `--json`.
 - `db sign` (canonical):
-  - Runs the schema verification that `db verify --schema-only` runs (non-strict) and skips the marker checks, since the database being signed usually has no marker yet; a failing verification refuses to sign and writes nothing (exit code 4, the verify findings as the document).
-  - On success writes or updates the marker: missing marker → insert; same hash → no‑op; different hash → overwrite, reporting the previous hash.
-  - Then writes the signed contract into the snapshot store and advances the `db` ref to the signed hash (`--advance-ref <name>` picks another ref). Unlike `db init` / `db update`, `--db` does not suppress this — signing never mutates the schema, and adoption normally runs against the real database via `--db`. `--no-advance-ref` signs without writing any ref or snapshot; combining it with `--advance-ref` is `CLI.ADVANCE_REF_ARG_CONFLICT` (exit code 2). Human output names the advanced ref and, when it existed, the previous hash; JSON carries `advancedRef: { name, hash }` or `null`.
+  - For every contract space (the application's and each extension's), runs the schema verification that `db verify --schema-only` runs (non-strict) and skips the marker checks, since the database being signed usually has no marker yet. A space that fails is not signed and is reported with its findings; the other spaces are still signed, and the command exits 4.
+  - Writes or updates the marker of every space that verified, in one transaction on PostgreSQL and SQLite: missing marker → insert; same hash → no‑op; different hash → overwrite, reporting the previous hash.
+  - Then writes each signed space's contract into its snapshot store and advances its `db` ref to the signed hash (`--advance-ref <name>` picks another ref). Unlike `db init` / `db update`, `--db` does not suppress this — signing never mutates the schema, and adoption normally runs against the real database via `--db`. `--no-advance-ref` signs without writing any ref or snapshot; combining it with `--advance-ref` is `CLI.ADVANCE_REF_ARG_CONFLICT` (exit code 2). Human output names the advanced ref and, when it existed, the previous hash; JSON is `{ ok, summary, spaces, advancedRefs }`: one outcome per space (`signed`, `unchanged` or `failed`) and one `{ space, name, hash }` per advanced ref.
   - No migration package is written.
-  - Options: `[contract]` positional or `--contract <ref>` (hash, prefix, ref name, migration dir name, `<dir>^`, or `./path`; the positional accepts only the first four; defaults to the emitted `contract.json`; both together is `CLI.CONTRACT_ARG_CONFLICT`), `--db <url>`, `--advance-ref <name>`, `--no-advance-ref`.
-  - Exit codes: 0 signed; 2 the command could not run (unresolvable contract reference, no emitted contract, unreachable database, conflicting flags); 4 verification refused.
+  - Options: `[contract]` positional or `--contract <ref>` (hash, prefix, ref name, migration dir name, or `<dir>^`; both accept the same forms; defaults to the emitted `contract.json`; both together is `CLI.CONTRACT_ARG_CONFLICT`), `--db <url>`, `--advance-ref <name>`, `--no-advance-ref`.
+  - Exit codes: 0 signed; 2 the command could not run (unresolvable contract reference, no emitted contract, unreachable database, conflicting flags); 4 verification failed for at least one space.
 
 ## Init Flow
 - `prisma orm init` is the greenfield-app entry point (distinct from `prisma db init`, which adopts an existing database).
 - Prompts: target (Postgres or Mongo, default Postgres) and schema location (default `prisma/contract.prisma`). The contract output path is derived from the schema path (replace extension with `.json`); no separate prompt.
 - Detects the package manager from lockfiles (`pnpm-lock.yaml`, `yarn.lock`, `bun.lock`/`bun.lockb`, `package.json#packageManager`, falls back to npm), installs the target facade package as a dependency and `@prisma/cli` (from the `next` dist-tag) plus `@prisma/cli-engine` as dev dependencies, then runs `prisma contract emit` programmatically to produce `contract.json` and `contract.d.ts`.
 - Scaffolds (all colocated; no `src/prisma/` split):
-  - `prisma.config.ts` at the project root — the engine envelope: `defineConfig` from `@prisma/cli-engine` wrapping the target facade's `defineConfig` (e.g. `@prisma/orm-postgres/config`) under an `orm` key.
+  - `prisma.config.ts` at the project root — the engine envelope: `definePrismaConfig` from `@prisma/cli-engine` wrapping the target facade's `defineConfig` (e.g. `@prisma/orm-postgres/config`) under an `orm` key.
   - `prisma/contract.prisma` (PSL) — starter schema with two related models so the user has something to query immediately.
-  - `prisma/db.ts` — runtime client (e.g. `postgres<Contract>({ contractJson })`) typed against the emitted contract.
+  - `prisma/db.ts` — runtime client typed against the emitted contract (e.g. `contractFromJson<Contract>(contractJson)` passed to `postgres({ contract, url })`).
   - `prisma/contract.json` and `prisma/contract.d.ts` — emitted by the post-install `contract emit` step.
   - `prisma-8.md` — short human-facing quick reference (file locations, common commands, minimal query example).
   - `.agents/skills/prisma-8/SKILL.md` — agent skill so AI tooling in the project knows the layout and conventions.
@@ -284,10 +283,10 @@ Concrete examples (from the migration CLI verb refactor, TML-2546). Each entry b
 
 ## Loading Indicators & Spinners
 - **When to use**: Show spinners for remote operations (database connections, network requests) that may take time.
-- **Implementation**: Use `@clack/prompts` spinner on stderr via `TerminalUI.spinner()`. Spinners are automatically suppressed when piped (`!isTTY`), in `--quiet` mode, or with `--json` output.
+- **Implementation**: Report progress through the command's progress reporter (`src/orm/progress.ts`); the engine draws the spinner on stderr. Spinners are automatically suppressed when piped (`!isTTY`), in `--quiet` mode, or with `--json` output.
 - **Delay threshold**: Spinners use a 100ms delay threshold — they only appear if the operation takes longer, avoiding flicker for fast operations.
 - **Output format**: Success message with elapsed time: `✔ Operation name (123ms)`. Failure: `✖ Operation name (failed)`.
-- **Nested operations**: Rendered as step lines via `ui.step()` rather than separate spinners.
+- **Nested operations**: Rendered as step lines rather than separate spinners.
 
 ## Graceful Shutdown
 - SIGINT (Ctrl+C) and SIGTERM are handled at CLI startup via a shared AbortController.
@@ -316,7 +315,6 @@ Concrete examples (from the migration CLI verb refactor, TML-2546). Each entry b
   - `ref set production abc123`
 
 ## Internal Architecture
-- **TerminalUI** (`src/utils/terminal-ui.ts`): Composable output abstraction. All decoration goes to stderr via `@clack/prompts`, data goes to stdout. Accepts `color` and `interactive` overrides.
 - **GlobalFlags / CommonCommandOptions** (`src/utils/global-flags.ts`): Parsed flags shared by all commands. `CommonCommandOptions` is the base interface for command option types.
 - **addGlobalOptions()** (`src/utils/command-helpers.ts`): Registers global flags and help formatter on any Command. All commands use this instead of inline `.option()` calls.
 - **Shutdown** (`src/utils/shutdown.ts`): Global AbortController for SIGINT/SIGTERM. Exposes `shutdownSignal` for cancellable async operations.

@@ -1,5 +1,4 @@
 import type { ControlPolicy } from '@internal/contract/types';
-import { effectiveControlPolicy } from '@internal/contract/types';
 import type {
   SchemaDiffIssue,
   SchemaVerifier,
@@ -7,8 +6,11 @@ import type {
   SchemaVerifyResult,
 } from '@internal/framework-components/control';
 import type { Namespace } from '@internal/framework-components/ir';
-import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import type { MongoCollection, MongoStorage } from '@internal/mongo-contract';
+import {
+  collectionControlPoliciesOf,
+  collectionControlPolicyOf,
+  type MongoStorage,
+} from '@internal/mongo-contract';
 
 /**
  * Mongo family `SchemaVerifier` abstract base. Commits the Mongo family
@@ -46,20 +48,11 @@ export abstract class MongoSchemaVerifierBase<
     return { ok: issues.length === 0, issues };
   }
 
-  protected effectiveCollectionControlPolicy(
-    contract: TContract,
-    collection: MongoCollection | undefined,
-  ): ControlPolicy {
-    return effectiveControlPolicy(collection?.control, contract.defaultControlPolicy);
-  }
-
   protected collectionControlPolicyForName(
     contract: TContract,
     collectionName: string,
   ): ControlPolicy {
-    const namespace = contract.storage.namespaces[UNBOUND_NAMESPACE_ID];
-    const collection = namespace?.entries.collection?.[collectionName];
-    return this.effectiveCollectionControlPolicy(contract, collection);
+    return collectionControlPolicyOf(collectionName, collectionControlPoliciesOf(contract));
   }
 
   protected verifyCommonMongoSchema(

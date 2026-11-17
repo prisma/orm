@@ -1,0 +1,10 @@
+// use prisma-8
+
+model Doc {
+  id ObjectId @id @map("_id")
+  a  String
+  b  String
+
+  @@index([a], include: ["b"])
+  @@map("docs")
+}

@@ -1,0 +1,8 @@
+datasource db {
+  provider     = "postgresql"
+  relationMode = "prisma"
+}
+
+model User {
+  id Int
+}

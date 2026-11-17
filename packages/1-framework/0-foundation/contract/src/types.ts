@@ -172,15 +172,18 @@ export function isExecutionMutationDefaultValue(
   return true;
 }
 
+/**
+ * A generator that fills a stored field on create, on update, or both. `ref.entry` names the storage entry that holds the field (a table or a collection) and `ref.field` the stored field in it (a column or a document field).
+ */
 export type ExecutionMutationDefault = {
-  readonly ref: { readonly namespace: string; readonly table: string; readonly column: string };
+  readonly ref: { readonly namespace: string; readonly entry: string; readonly field: string };
   readonly onCreate?: ExecutionMutationDefaultValue;
   readonly onUpdate?: ExecutionMutationDefaultValue;
 };
 
 /**
  * `ExecutionMutationDefault` minus its `ref` — the per-field phases value
- * authoring layers attach to a column before the column ref is known.
+ * authoring layers attach to a field before its ref is known.
  */
 export type ExecutionMutationDefaultPhases = Omit<ExecutionMutationDefault, 'ref'>;
 

@@ -18,9 +18,9 @@ import stripAnsi from 'strip-ansi';
 import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
 import {
-  consentTokenFor,
   engineDiagnosticCodes,
   type JourneyContext,
+  parseJsonOutput,
   runContractEmit,
   runDbInit,
   runDbSchema,
@@ -82,7 +82,7 @@ withTempDir(({ createTempDir }) => {
 
         // M.05: db update recovers by re-adding the NOT NULL column with a temporary default,
         // then dropping that default so future inserts must provide an explicit value.
-        const update = await runDbUpdate(ctx, ['--confirm', consentTokenFor(db.connectionString)]);
+        const update = await runDbUpdate(ctx);
         expect(update.exitCode, 'M.05: db update recovers dropped column drift').toBe(0);
 
         // M.06: db verify passes after reconciliation
@@ -161,15 +161,18 @@ withTempDir(({ createTempDir }) => {
 
         // N.06: db update --no-interactive rejects (drift from unmanaged 'age' column
         // makes the planner classify this as destructive)
-        const update = await runDbUpdate(ctx, ['--no-interactive']);
+        const update = await runDbUpdate(ctx, ['--json', '--no-interactive']);
         expect(update.exitCode, 'N.06: --no-interactive rejects destructive').toBe(2);
+        expect(parseJsonOutput(update), 'N.06: the unmanaged column is the question').toMatchObject(
+          {
+            code: 'CLI.CONSENT_REQUIRED',
+            meta: { unanswered: [{ subject: 'public.user.age', verbs: ['delete'] }] },
+          },
+        );
 
-        // N.07: db update --confirm <database> explicitly accepts the destructive plan
-        const updateConfirmed = await runDbUpdate(ctx, [
-          '--confirm',
-          consentTokenFor(db.connectionString),
-        ]);
-        expect(updateConfirmed.exitCode, 'N.07: db update --confirm accepts').toBe(0);
+        // N.07: db update --delete names the storage no model stores, and applies
+        const updateConfirmed = await runDbUpdate(ctx, ['--delete', 'public.user.age']);
+        expect(updateConfirmed.exitCode, 'N.07: db update --delete applies').toBe(0);
 
         // N.08: db verify --schema-only tolerant (passes — all contract columns present; 'age' tolerated as extra)
         const tolerantAfter = await runDbVerify(ctx, ['--schema-only']);

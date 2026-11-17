@@ -9,7 +9,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // deletes it by id, then asserts `count === 0` via a follow-up count().
 //
 // Prisma 8 has no read-side count(), so the "row is gone" post-condition is
-// verified faithfully by re-reading the row: `.where({ _id }).first()` returns null.
+// verified faithfully by re-reading the row: `.where({ id }).first()` returns null.
 // The subject under test is delete(), not count().
 //
 // This suite is not matrix-parameterised upstream (content is always set), so this
@@ -26,7 +26,7 @@ describe('ports/prisma/functional/composites/object/delete', () => {
       withComposites(async ({ db }) => {
         const id = new ObjectId().toHexString();
         await db.comments_required.create({
-          _id: id,
+          id,
           country: 'France',
           content: {
             text: 'Hello World',
@@ -34,9 +34,9 @@ describe('ports/prisma/functional/composites/object/delete', () => {
           },
         });
 
-        await db.comments_required.where({ _id: id }).delete();
+        await db.comments_required.where({ id }).delete();
 
-        const stillThere = await db.comments_required.where({ _id: id }).first();
+        const stillThere = await db.comments_required.where({ id }).first();
         expect(stillThere).toBeNull();
       }),
     timeouts.spinUpMongoMemoryServer,

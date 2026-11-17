@@ -10,7 +10,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import { bindWhereExpr } from '../src/where-binding';
 import { baseContract, createCollectionFor } from './collection-fixtures';
-import { isSelectAst, type MockRuntime } from './helpers';
+import { isSelectAst, type MockRuntime, publicTables } from './helpers';
 
 function selectAstOf(runtime: MockRuntime) {
   const ast = runtime.executions[0]?.plan.ast;
@@ -197,6 +197,7 @@ describe('aggregate pagination', () => {
       bindWhereExpr(
         baseContract,
         BinaryExpr.gt(ColumnRef.of('posts', 'views'), LiteralExpr.of(100)),
+        publicTables('posts'),
       ),
     );
   });
@@ -338,6 +339,7 @@ describe('aggregate pagination', () => {
         bindWhereExpr(
           baseContract,
           BinaryExpr.gt(ColumnRef.of('posts', 'views'), LiteralExpr.of(100)),
+          publicTables('posts'),
         ),
       );
     });

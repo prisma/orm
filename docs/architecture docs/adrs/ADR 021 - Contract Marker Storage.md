@@ -1,5 +1,7 @@
 # ADR 021 — Contract marker storage & verification modes
 
+**Status:** Accepted. [ADR 320](ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md) adds `meta.policies`, the policies in force, and requires every marker write to preserve the `meta` keys it does not own.
+
 ## Context
 
 The runtime and the migration runner must know which data contract a database currently satisfies. Plans carry meta.coreHash and meta.target and must be verified against the database before execution. We need a durable, unambiguous marker in the database plus clear verification modes suited to dev, CI, and production.
@@ -40,15 +42,7 @@ The marker was originally a singleton — one row keyed by `id smallint primary 
 - Each extension's row uses its declared space identifier (e.g. `'cipherstash'`, `'pgvector'`).
 - Space identifiers are constrained to `[a-z][a-z0-9_-]{0,63}`.
 
-The migration is **idempotent** across three states (verified by dedicated integration tests on both Postgres and SQLite drivers):
-
-- **Fresh** — table doesn't exist; created at the new shape.
-- **Legacy single-row** — the old `id`-keyed shape, with one row. The migration adds the `space` column with `'app'` default, drops the old `marker_pkey`, recreates it on `(space)`, and drops the `id` column.
-- **Already migrated** — no-op.
-
-The migration runs inside `ensureControlTables` (one-shot framework-internal migration applied before any user / extension migrations on framework boot). Concurrency is handled by Postgres's transactional DDL (concurrent runs serialize on the table lock); SQLite uses `BEGIN EXCLUSIVE`.
-
-Note that ADR 029's shadow-DB preflight is user-DDL-scoped and does not cover `ensureControlTables`; the three-state idempotency tests are the validation gate for this transition.
+Prisma 8 does not convert a marker of the singleton shape: the project keeps no code for databases an earlier pre-release wrote. A database that still has one fails when the marker is read, as `CONTRACT.MARKER_READ_FAILED`.
 
 ### Notes
 - One row per loaded contract space, primary-keyed by `space`. The application has one row (`space = 'app'`); each loaded extension has one row.
@@ -62,7 +56,7 @@ Note that ADR 029's shadow-DB preflight is user-DDL-scoped and does not cover `e
 
 ### Other targets
 - **MySQL**: same table in prisma_contract database or current schema
-- **SQLite**: `prisma_contract_marker` table with the same columns (including the `space` PK); the runner merges the `invariants` set inside `BEGIN EXCLUSIVE` (no native text-array merge in SQL). Same three-state idempotent migration as Postgres.
+- **SQLite**: `prisma_contract_marker` table with the same columns (including the `space` PK); the runner merges the `invariants` set inside `BEGIN EXCLUSIVE` (no native text-array merge in SQL). A singleton-shape marker fails when read, as on Postgres.
 - **Mongo**: `_prisma_migrations` collection with one marker document per loaded contract space, keyed `{_id: <spaceId>, space: <spaceId>, ...}` (see [ADR 212](./ADR%20212%20-%20Contract%20spaces.md) and [Subsystem 10 — Contract spaces](../subsystems/10.%20MongoDB%20Family.md#contract-spaces)). Ledger entries gain a `space` field too. `invariants` is read as `doc.invariants ?? []` so docs without the field transparently report the empty set (natural schemaless behaviour, not a compat shim).
 - Adapters must provide DDL for creating and reading the marker consistently
 

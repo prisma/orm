@@ -1,0 +1,16 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Left {
+  a      Int
+  b      Int
+  rights Right[]
+
+  @@id([a, b])
+}
+
+model Right {
+  id    Int    @id
+  lefts Left[]
+}

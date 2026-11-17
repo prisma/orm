@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA6_MONGO_SCHEMA_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 9,
+    "message": "Model \"Post\": \"@@schema\" is not supported; a MongoDB contract has one database, bound by the connection string. Remove @@schema."
+  }
+]

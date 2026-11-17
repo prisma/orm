@@ -19,8 +19,8 @@ export default defineConfig({
     // real pg into it (or the mock into the integration files).
     pool: 'forks',
     maxWorkers: 1,
-    testTimeout: timeouts.default,
-    hookTimeout: timeouts.default,
+    testTimeout: timeouts.vitestPackageDefault,
+    hookTimeout: timeouts.vitestPackageDefault,
     // Residual PGlite (WASM) abort on slower CI runners that
     // --no-memory-protection-keys only partially suppresses; a re-run with
     // a fresh dev database clears it. Does not reproduce locally.

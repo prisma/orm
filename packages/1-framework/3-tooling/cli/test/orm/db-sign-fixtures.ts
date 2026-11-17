@@ -2,32 +2,39 @@ import { existsSync } from 'node:fs';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import type {
   SchemaDiffIssue,
-  SignDatabaseResult,
   VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
 import { readRef } from '@internal/migration-tools/refs';
 import { blindCast } from '@internal/utils/casts';
+import { ok } from '@internal/utils/result';
 import type { MountedTree, PresentedResult } from '@prisma/cli-engine';
 import type { Diagnostic } from '@prisma/cli-engine/protocol';
-import { createTestCli } from '@prisma/cli-engine/testing';
 import { join } from 'pathe';
 import { type Mock, vi } from 'vitest';
+import type { DbSignSpaceOutcome } from '../../src/control-api/operations/db-sign';
 import type { ControlClient } from '../../src/control-api/types';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createDbSignCommand } from '../../src/orm/db/sign';
-import { createTestProjectDir } from '../utils/test-project-dir';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
+import { createTestProjectDir, writeProjectManifest } from '../utils/test-project-dir';
 
 export const HASH_A = `4cb4256${'0'.repeat(57)}`;
 export const HASH_PREVIOUS = `9d0f118${'2'.repeat(57)}`;
+export const HASH_EXT = `e7a0c3d${'3'.repeat(57)}`;
+export const PROFILE_HASH = `7b11e2c${'4'.repeat(57)}`;
+export const HASH_MOVED = `5a6b7c8${'5'.repeat(57)}`;
 export const CONNECTION = 'postgres://user:secret@localhost:5432/appdb';
 export const MASKED_CONNECTION = 'postgres://****:****@localhost:5432/appdb';
 export const EMITTED_CONTRACT_DTS = 'export type Contract = unknown;\n';
+/** What the fake client renders for any contract: the snapshot must carry this, not the file on disk. */
+export const RENDERED_CONTRACT_DTS = '// rendered\nexport type Contract = { rendered: true };\n';
+export const SNAPSHOT_CONTRACT_DTS = '/* rendered */ export type Contract = { rendered: true };\n';
 
-export const mocks: Record<'connect' | 'close' | 'schemaVerify' | 'sign', Mock> = {
+export const mocks: Record<'connect' | 'close' | 'dbSign' | 'renderContractDts', Mock> = {
   connect: vi.fn(),
   close: vi.fn(),
-  schemaVerify: vi.fn(),
-  sign: vi.fn(),
+  dbSign: vi.fn(),
+  renderContractDts: vi.fn(),
 };
 
 /**
@@ -39,8 +46,8 @@ const commands: MountedTree = {
   'db sign': createDbSignCommand(() =>
     blindCast<ControlClient, 'the fake implements only what db sign touches'>({
       connect: mocks.connect,
-      schemaVerify: mocks.schemaVerify,
-      sign: mocks.sign,
+      dbSign: mocks.dbSign,
+      renderContractDts: mocks.renderContractDts,
       close: mocks.close,
     }),
   ),
@@ -52,6 +59,7 @@ const dirs: string[] = [];
 export async function projectDir(options: { readonly contract?: boolean } = {}): Promise<string> {
   const dir = createTestProjectDir('orm-db-sign');
   dirs.push(dir);
+  writeProjectManifest(dir);
   if (options.contract !== false) {
     await mkdir(join(dir, 'output'), { recursive: true });
     await writeFile(
@@ -70,13 +78,17 @@ export async function cleanupProjectDirs(): Promise<void> {
   }
 }
 
-export function refsDirOf(dir: string): string {
-  return join(dir, 'migrations', 'app', 'refs');
+export function refsDirOf(dir: string, space = 'app'): string {
+  return join(dir, 'migrations', space, 'refs');
 }
 
-export async function refHashOf(dir: string, name: string): Promise<string | undefined> {
-  return existsSync(join(refsDirOf(dir), `${name}.json`))
-    ? (await readRef(refsDirOf(dir), name)).hash
+export async function refHashOf(
+  dir: string,
+  name: string,
+  space = 'app',
+): Promise<string | undefined> {
+  return existsSync(join(refsDirOf(dir, space), `${name}.json`))
+    ? (await readRef(refsDirOf(dir, space), name)).hash
     : undefined;
 }
 
@@ -111,13 +123,24 @@ export function ormConfig(overrides: Record<string, unknown> = {}): Record<strin
 }
 
 export function harness(config: Record<string, unknown>) {
-  return createTestCli({ commands, groups, config: { orm: config } });
+  return createOrmTestCli({ commands, groups, orm: config });
 }
 
 export const MISSING_COLUMN = blindCast<
   SchemaDiffIssue,
   'The renderer reads the path and which side is present'
 >({ path: ['public', 'users', 'email'], expected: { id: 'email', nodeKind: 'column' } });
+
+export const DRIFTED: VerifyDatabaseSchemaResult = {
+  ok: false,
+  code: 'CONTRACT.SCHEMA_VERIFICATION_FAILED',
+  summary: 'Database schema does not satisfy contract',
+  contract: { storageHash: HASH_A },
+  target: { expected: 'postgres' },
+  schema: { issues: [MISSING_COLUMN] },
+  meta: { strict: false },
+  timings: { total: 1 },
+};
 
 export function schemaResult(
   overrides: Partial<VerifyDatabaseSchemaResult> = {},
@@ -134,29 +157,49 @@ export function schemaResult(
   };
 }
 
-export function signResult(storageHash = HASH_A): SignDatabaseResult {
+export function signedSpace(space: string, storageHash: string): DbSignSpaceOutcome {
   return {
-    ok: true,
-    summary: 'Database signed',
-    contract: { storageHash },
-    target: { expected: 'postgres' },
-    marker: { created: false, updated: true, previous: { storageHash: HASH_PREVIOUS } },
-    timings: { total: 2 },
+    space,
+    status: 'updated',
+    contract: { storageHash, profileHash: PROFILE_HASH },
+    previous: { storageHash: HASH_PREVIOUS, profileHash: PROFILE_HASH },
+  };
+}
+
+export function conflictSpace(space: string, storageHash: string): DbSignSpaceOutcome {
+  return {
+    space,
+    status: 'conflict',
+    reason: 'storageHash',
+    contract: { storageHash, profileHash: PROFILE_HASH },
+    expected: { storageHash: HASH_PREVIOUS, profileHash: PROFILE_HASH },
+    found: { storageHash: HASH_MOVED, profileHash: PROFILE_HASH },
+  };
+}
+
+export function failedSpace(space: string, storageHash: string): DbSignSpaceOutcome {
+  return {
+    space,
+    status: 'failed',
+    contract: { storageHash, profileHash: PROFILE_HASH },
+    schema: DRIFTED,
   };
 }
 
 /** The family signs the contract it is handed, so the fake reports that contract's hash. */
-interface SignInput {
+interface DbSignInput {
   readonly contract: { readonly storage: { readonly storageHash: string } };
 }
 
 export function resetMocks(): void {
   mocks.connect.mockReset().mockResolvedValue(undefined);
   mocks.close.mockReset().mockResolvedValue(undefined);
-  mocks.schemaVerify.mockReset().mockResolvedValue(schemaResult());
-  mocks.sign.mockReset().mockImplementation(async (input: SignInput) => {
-    return signResult(input.contract.storage.storageHash);
-  });
+  mocks.renderContractDts.mockReset().mockResolvedValue(ok({ contractDts: RENDERED_CONTRACT_DTS }));
+  mocks.dbSign
+    .mockReset()
+    .mockImplementation(async (input: DbSignInput) =>
+      ok({ spaces: [signedSpace('app', input.contract.storage.storageHash)] }),
+    );
 }
 
 export function diagnosticsOf(run: {

@@ -3,8 +3,10 @@
 model User {
   id Int @id
   posts Post[]
+  @@map("user")
 }
 
 model Post {
   id Int @id
+  @@map("post")
 }

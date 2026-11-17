@@ -14,7 +14,7 @@
  *      sqlite target packages, etc., without re-declaring the literal.
  *
  *   2. **No raw `'app'` / `"app"` string literals** as space identifiers
- *      inside `packages/2-sql/**` / `packages/3-targets/**` source
+ *      inside `packages/2-sql-family/**` / `packages/3-targets/**` source
  *      files. Use `APP_SPACE_ID` (or template-string interpolation
  *      `${APP_SPACE_ID}` inside SQL templates) instead. Test files are
  *      out of scope — the literal `'app'` is often the test data.
@@ -43,7 +43,7 @@ const CANONICAL_FILE = join(
 
 const SCAN_ROOTS_FOR_DECLARATIONS = [join(repoRoot, 'packages')];
 const SCAN_ROOTS_FOR_LITERALS = [
-  join(repoRoot, 'packages', '2-sql'),
+  join(repoRoot, 'packages', '2-sql-family'),
   join(repoRoot, 'packages', '3-targets'),
 ];
 

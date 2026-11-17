@@ -59,6 +59,42 @@ async function inferAndEmit(
   return ctx;
 }
 
+async function withRuntime(
+  contract: Contract<SqlStorage>,
+  connectionString: string,
+  use: (session: {
+    readonly runtime: PostgresRuntimeImpl;
+    readonly context: ReturnType<typeof createExecutionContext>;
+    readonly client: Client;
+  }) => Promise<void>,
+): Promise<void> {
+  const stack = createSqlExecutionStack({
+    target: postgresTarget,
+    adapter: postgresAdapter,
+    driver: postgresDriver,
+  });
+  const context = createExecutionContext({ contract, stack });
+  const stackInstance = instantiateExecutionStack(stack);
+  const adapter = stackInstance.adapter;
+  const driver = stackInstance.driver;
+  if (!adapter || !driver) {
+    throw new Error('Adapter or driver descriptor missing from execution stack');
+  }
+  const client = new Client({ connectionString });
+  await client.connect();
+  try {
+    await driver.connect({ kind: 'pgClient', client, ownedByDriver: false });
+    const runtime = new PostgresRuntimeImpl({ context, adapter, driver, closeRefusal: undefined });
+    try {
+      await use({ runtime, context, client });
+    } finally {
+      await runtime.close();
+    }
+  } finally {
+    await client.end();
+  }
+}
+
 withTempDir(({ createTempDir }) => {
   describe('Runtime: unbounded numeric crashes ExecutionContext construction', () => {
     let database: Awaited<ReturnType<typeof createDevDatabase>>;
@@ -163,7 +199,7 @@ withTempDir(({ createTempDir }) => {
     );
   });
 
-  describe('Runtime: date columns decode via pg/date-temporal@1 in both top-level select and include()', () => {
+  describe('Runtime: inferred date and time columns decode as the convenience defaults read them, in both top-level select and include()', () => {
     let database: Awaited<ReturnType<typeof createDevDatabase>>;
 
     beforeAll(async () => {
@@ -176,10 +212,14 @@ withTempDir(({ createTempDir }) => {
           CREATE TABLE record (
             id int4 PRIMARY KEY,
             owner_id int4 NOT NULL REFERENCES owner(id),
-            noted_on date NOT NULL
+            noted_on date NOT NULL,
+            logged_at timestamp(3) NOT NULL,
+            seen_at timestamptz NOT NULL,
+            opens_at time NOT NULL
           );
           INSERT INTO owner (id) VALUES (1);
-          INSERT INTO record (id, owner_id, noted_on) VALUES (1, 1, '2024-01-15');
+          INSERT INTO record (id, owner_id, noted_on, logged_at, seen_at, opens_at)
+            VALUES (1, 1, '2024-01-15', '2024-01-15 10:00:00.5', '2024-01-15 10:00:00+00', '08:30:00');
         `),
       );
     }, timeouts.spinUpPpgDev);
@@ -189,59 +229,99 @@ withTempDir(({ createTempDir }) => {
     }, timeouts.spinUpPpgDev);
 
     it(
-      'top-level select and include() both decode the date column',
+      'top-level select and include() both decode the date and time columns, in any session time zone, and refuse another DateStyle',
       async () => {
         const ctx = await inferAndEmit(database.connectionString, createTempDir);
         const contract = readEmittedContract(ctx);
+        const stored = {
+          notedOn: '2024-01-15',
+          loggedAt: new Date('2024-01-15T10:00:00.500Z'),
+          seenAt: new Date('2024-01-15T10:00:00Z'),
+          opensAt: '08:30:00',
+        };
 
-        const stack = createSqlExecutionStack({
-          target: postgresTarget,
-          adapter: postgresAdapter,
-          driver: postgresDriver,
-        });
-        const context = createExecutionContext({ contract, stack });
-        const stackInstance = instantiateExecutionStack(stack);
-        const adapter = stackInstance.adapter;
-        const driver = stackInstance.driver;
-        if (!adapter || !driver) {
-          throw new Error('Adapter or driver descriptor missing from execution stack');
-        }
-
-        const client = new Client({ connectionString: database.connectionString });
-        await client.connect();
-        try {
-          await driver.connect({ kind: 'pgClient', client });
-          const runtime = new PostgresRuntimeImpl({ context, adapter, driver });
-          try {
+        await withRuntime(
+          contract,
+          database.connectionString,
+          async ({ runtime, context, client }) => {
             const records = new Collection({ runtime, context }, 'Record', {
               namespaceId: 'public',
             });
-            const rows = await records.select('id', 'notedOn').all();
-            expect(rows).toEqual([{ id: 1, notedOn: Temporal.PlainDate.from('2024-01-15') }]);
-
             const owners = new Collection({ runtime, context }, 'Owner', {
               namespaceId: 'public',
             });
-            const includeResult = await owners
-              .select('id')
-              // `contract` is a dynamically-introspected `Contract<SqlStorage>`
-              // with no literal domain shape (it doesn't exist until this test
-              // runs infer + emit), so `include`'s relation-name type inference
-              // has nothing to key off; test files are exempt from the
-              // no-bare-casts rule.
-              .include('records' as never, (record) => record.select('notedOn'))
-              .all();
-            // `pg/date-temporal@1.decodeJson` accepts the bare `YYYY-MM-DD` that
-            // `json_agg` renders.
-            expect(includeResult).toEqual([
-              { id: 1, records: [{ notedOn: Temporal.PlainDate.from('2024-01-15') }] },
-            ]);
-          } finally {
-            await runtime.close();
-          }
-        } finally {
-          await client.end();
-        }
+            const flat = () =>
+              records.select('id', 'notedOn', 'loggedAt', 'seenAt', 'opensAt').all();
+            const included = () =>
+              owners
+                .select('id')
+                // `contract` is a dynamically-introspected `Contract<SqlStorage>`
+                // with no literal domain shape (it doesn't exist until this test
+                // runs infer + emit), so `include`'s relation-name type inference
+                // has nothing to key off; test files are exempt from the
+                // no-bare-casts rule.
+                .include('records' as never, (record) =>
+                  record.select('notedOn', 'loggedAt', 'seenAt', 'opensAt'),
+                )
+                .all();
+            const expected = {
+              flat: [{ id: 1, ...stored }],
+              included: [{ id: 1, records: [stored] }],
+            };
+
+            expect({ flat: await flat(), included: await included() }).toEqual(expected);
+
+            await client.query("SET TimeZone = 'Asia/Tokyo'");
+            expect({ flat: await flat(), included: await included() }).toEqual(expected);
+
+            await client.query("SET DateStyle = 'German, DMY'");
+            const refusal = { code: 'RUNTIME.DATE_STYLE_NOT_ISO' };
+            await expect(flat()).rejects.toMatchObject(refusal);
+            await expect(included()).rejects.toMatchObject({
+              code: 'RUNTIME.DECODE_FAILED',
+              cause: refusal,
+            });
+          },
+        );
+      },
+      timeouts.spinUpPpgDev,
+    );
+  });
+
+  describe('Runtime: a timestamp column whose default a Date cannot hold', () => {
+    let database: Awaited<ReturnType<typeof createDevDatabase>>;
+
+    beforeAll(async () => {
+      database = await createDevDatabase();
+      await withClient(database.connectionString, (client) =>
+        client.query(`
+          CREATE TABLE horizon (
+            id int4 PRIMARY KEY,
+            ends_at timestamp(3) NOT NULL DEFAULT 'infinity',
+            began_at timestamptz NOT NULL DEFAULT '-infinity'
+          );
+          INSERT INTO horizon (id) VALUES (1);
+        `),
+      );
+    }, timeouts.spinUpPpgDev);
+
+    afterAll(async () => {
+      if (database) await database.close();
+    }, timeouts.spinUpPpgDev);
+
+    it(
+      'reads a row created with the default, which infer types as a string',
+      async () => {
+        const ctx = await inferAndEmit(database.connectionString, createTempDir);
+        const contract = readEmittedContract(ctx);
+        await withRuntime(contract, database.connectionString, async ({ runtime, context }) => {
+          const horizons = new Collection({ runtime, context }, 'Horizon', {
+            namespaceId: 'public',
+          });
+          expect(await horizons.select('id', 'endsAt', 'beganAt').all()).toEqual([
+            { id: 1, endsAt: 'infinity', beganAt: '-infinity' },
+          ]);
+        });
       },
       timeouts.spinUpPpgDev,
     );

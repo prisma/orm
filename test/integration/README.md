@@ -20,6 +20,11 @@ This package contains integration tests that verify the complete flow from contr
 - `test/*.test-d.ts` - Type-only test files (for testing TypeScript types)
 - `test/*.helpers.ts` - Shared test helpers for related test files
 - `test/fixtures/` - Test fixtures (contract JSON, type definitions, CLI fixture apps)
+- `test/packaging/` - Tarball suites that `pnpm pack` real workspace packages
+
+### Packaging suites run sequentially
+
+The suites under `test/packaging/` pack overlapping real package directories (both pack the Postgres facade, whose `prepack` rewrites its `skills/` tree in place), so two of them packing concurrently corrupt each other's tarballs. `vitest.config.ts` therefore isolates them in a dedicated `packaging` project with `fileParallelism: false`: Vitest runs every such project in one shared sequential group while the `integration` project keeps its normal file parallelism.
 
 **Note**: Integration tests that depend on multiple packages (for example SQL authoring, emission, and runtime packages together) are placed here to avoid cyclic dependencies.
 

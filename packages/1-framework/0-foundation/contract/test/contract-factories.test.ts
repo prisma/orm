@@ -39,7 +39,7 @@ describe('createContract', () => {
         mutations: {
           defaults: [
             {
-              ref: { namespace: 'public', table: 'user', column: 'id' },
+              ref: { namespace: 'public', entry: 'user', field: 'id' },
               onCreate: { kind: 'generator', id: 'uuidv4' },
             },
           ],
@@ -106,7 +106,7 @@ describe('createSqlContract', () => {
               table: {
                 user: {
                   columns: {
-                    id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
+                    id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
                   },
                 },
               },

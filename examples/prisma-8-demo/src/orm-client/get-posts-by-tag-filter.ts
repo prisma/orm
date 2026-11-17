@@ -1,5 +1,4 @@
-import type { Runtime } from '@prisma/orm-postgres/family-runtime';
-import { createOrmClient } from './client';
+import type { DemoOrm } from '../prisma/db';
 
 /**
  * Many-to-many filter example: list posts using relation filter predicates
@@ -13,10 +12,9 @@ import { createOrmClient } from './client';
 export async function ormClientGetPostsByTagFilter(
   mode: 'some' | 'none' | 'every',
   label: string,
-  runtime: Runtime,
+  orm: DemoOrm,
 ) {
-  const db = createOrmClient(runtime);
-  const posts = db.Post.select('id', 'title').orderBy((p) => p.title.asc());
+  const posts = orm.Post.select('id', 'title').orderBy((p) => p.title.asc());
 
   if (mode === 'some') {
     return posts.where((p) => p.tags.some((t) => t.label.eq(label))).all();

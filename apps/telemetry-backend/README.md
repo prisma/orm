@@ -112,12 +112,7 @@ Postgres on `localhost:5433` for local-dev use.
 
 ## Deploy hand-off
 
-Deployment goes through Prisma Compute via `pnpm run deploy`, which
-runs `scripts/deploy.ts`. The script uses `@prisma/compute-sdk`'s
-`BunBuild` strategy to build the package from `src/server.ts`, archive
-and upload it, create a new version, and promote it on the configured
-service. The assigned `*.prisma.build` URL is the build-time constant
-the CLI client embeds.
+Deployment goes through Prisma Compute via `pnpm run deploy`, which runs `scripts/deploy.ts`. The script uses `@prisma/compute-sdk`'s `BunBuild` strategy to build the package from `src/server.ts`, archive and upload it, create a new deployment, and promote it on the configured app. The assigned `*.prisma.build` URL is the build-time constant the CLI client embeds.
 
 `scripts/deploy.ts` reads three env vars (in addition to `DATABASE_URL`,
 which is only needed for the migrate step):
@@ -126,7 +121,7 @@ which is only needed for the migrate step):
 | --- | --- | --- |
 | `TELEMETRY_DEPLOY_SERVICE_TOKEN` | yes | Prisma Management API token. |
 | `TELEMETRY_DEPLOY_PROJECT_ID` | yes | Prisma Compute project ID. |
-| `TELEMETRY_DEPLOY_SERVICE_ID` | yes | Prisma Compute service ID. |
+| `TELEMETRY_DEPLOY_SERVICE_ID` | yes | Prisma Compute app ID. |
 
 In CI, the canonical entry point is
 [`.github/workflows/deploy-telemetry-backend.yml`](../../.github/workflows/deploy-telemetry-backend.yml),
@@ -142,7 +137,7 @@ run the same two commands from `apps/telemetry-backend/`:
 DATABASE_URL=<production-postgres-url> \
   TELEMETRY_DEPLOY_SERVICE_TOKEN=<token> \
   TELEMETRY_DEPLOY_PROJECT_ID=<project-id> \
-  TELEMETRY_DEPLOY_SERVICE_ID=<service-id> \
+  TELEMETRY_DEPLOY_SERVICE_ID=<app-id> \
   pnpm run migrate && pnpm run deploy
 ```
 

@@ -25,17 +25,16 @@ That facade pulls in everything else — the framework, the SQL family, the Post
 └── @prisma/orm-toolchain       CLI (bin), emitter, config-loader, LSP
 ```
 
-Every published package lives under the single `@prisma` scope, apart from the unscoped bin shim. The full public surface is **17 packages** — 3 database facades, 6 extension packs, 7 platform packages, the bin shim, and nothing else. Every other workspace package is `"private": true`: it exists for code organization and layering guardrails, and reaches npm only as a subpath entrypoint of a published package (for example, the SQL runtime is importable as `@prisma/orm-family-sql/runtime`).
+Every published package lives under the single `@prisma` scope. Every other workspace package is `"private": true`: it exists for code organization and layering guardrails, and reaches npm only as a subpath entrypoint of a published package (for example, the SQL runtime is importable as `@prisma/orm-family-sql/runtime`).
 
 | Published package | Role |
 |---|---|
-| `prisma-next` | bin-only shim carrying the `prisma-next` command (ADR 211 mechanics) |
-| `@prisma/orm-postgres`, `orm-sqlite`, `orm-mongo` | database facades — an app installs exactly one |
-| `@prisma/orm-extension-postgis`, `-pgvector`, `-paradedb`, `-supabase`, `-arktype-json`, `-middleware-cache` | optional capability packs, additive installs |
+| `@prisma/orm-postgres`, `orm-sqlite`, `orm-mysql`, `orm-mariadb`, `orm-mongo` | database facades — an app installs exactly one |
+| `@prisma/orm-extension-postgis`, `-pgvector`, `-paradedb`, `-supabase`, `-arktype-json`, `-middleware-cache`, `@prisma/orm-postgres-contrib` | optional capability packs, additive installs |
 | `@prisma/orm-framework` | target-agnostic runtime: contract, components, authoring surface |
 | `@prisma/orm-toolchain` | dev/build tooling: CLI (carries the bin), emitter, config-loader, language server, telemetry, vite plugin |
 | `@prisma/orm-family-sql`, `@prisma/orm-family-mongo` | family domains |
-| `@prisma/orm-target-postgres`, `orm-target-sqlite`, `orm-target-mongo` | concrete targets, each exposing `/target`, `/adapter`, `/driver` entrypoints |
+| `@prisma/orm-target-postgres`, `orm-target-sqlite`, `orm-target-mysql`, `orm-target-mariadb`, `orm-target-mongo` | concrete targets, each exposing `/target`, `/adapter`, `/driver` entrypoints; `orm-target-mariadb` publishes only MariaDB's own packages and depends on `orm-target-mysql` for the MySQL packages it extends |
 
 ## What an application depends on
 
@@ -75,10 +74,19 @@ Platform package names are strict and symmetric: `orm-family-sql`, not `orm-sql`
 A facade is thin: real wiring code plus exact-pinned dependencies. It bundles nothing. An application that outgrows the default wiring — say it needs a custom Postgres adapter — installs the facade's own dependencies directly and recomposes them:
 
 ```ts
-import { createTarget } from '@prisma/orm-target-postgres/target'
-import { driver } from '@prisma/orm-target-postgres/driver'
-import { myPooledAdapter } from './my-adapter' // replaces @prisma/orm-target-postgres/adapter
+import { createSqlExecutionStack } from '@prisma/orm-family-sql/runtime'
+import postgresDriver from '@prisma/orm-target-postgres/driver/runtime'
+import postgresTarget from '@prisma/orm-target-postgres/target/runtime'
+import { myPooledAdapter } from './my-adapter' // replaces @prisma/orm-target-postgres/adapter/runtime
+
+const stack = createSqlExecutionStack({
+  target: postgresTarget,
+  adapter: myPooledAdapter,
+  driver: postgresDriver,
+})
 ```
+
+An application imports the runtime entries, as here, and not the `/target`, `/adapter` or `/driver` aggregates, because each aggregate re-exports every entry of its namespace, the control-plane entries included.
 
 Because the facade's dependencies are ordinary published packages pinned to one lockstep version, the decomposed install reproduces exactly the combination the facade would have provided, minus the part being replaced. (Versioning is lockstep repo-wide — one root version, `workspace:` pins, `scripts/set-version-utils` — and this ADR leaves that model untouched.)
 
@@ -97,10 +105,10 @@ So `@prisma/orm-family-sql` is a shell whose entrypoints map 1:1 onto the intern
 | `packages/1-framework/0-foundation/contract` | `@prisma/orm-framework/contract` |
 | `packages/1-framework/1-core/framework-components` | `@prisma/orm-framework/components` |
 | `packages/1-framework/2-authoring/psl-parser` | `@prisma/orm-framework/psl-parser` |
-| `packages/2-sql/1-core/contract` | `@prisma/orm-family-sql/contract` |
-| `packages/2-sql/5-runtime` | `@prisma/orm-family-sql/runtime` |
-| `packages/3-targets/6-adapters/postgres` | `@prisma/orm-target-postgres/adapter` |
-| `packages/3-targets/7-drivers/postgres` | `@prisma/orm-target-postgres/driver` |
+| `packages/2-sql-family/1-core/contract` | `@prisma/orm-family-sql/contract` |
+| `packages/2-sql-family/5-runtime` | `@prisma/orm-family-sql/runtime` |
+| `packages/3-targets/postgres/2-adapter` | `@prisma/orm-target-postgres/adapter` |
+| `packages/3-targets/postgres/3-driver` | `@prisma/orm-target-postgres/driver` |
 | `packages/1-framework/3-tooling/cli` | `@prisma/orm-toolchain/cli` |
 
 (The complete mapping lives in `docs/reference/Package Naming Conventions.md`.)
@@ -154,7 +162,7 @@ packages/9-public/
 
 ## Consequences
 
-- The npm registry carries 17 Prisma Next packages, each with a stated audience; internals are structurally absent rather than "present but discouraged".
+- Every Prisma Next package on the npm registry has a stated audience; internals are structurally absent rather than "present but discouraged".
 - Generated code and documentation reference only published names; the private workspace names cannot leak because they do not resolve outside the repo. Those names are `@internal/*`, with `@repo/*` for the repository's own tooling — two scopes that cannot be mistaken for a published `@prisma/*` name, which the single old scope could not offer once it stopped matching what shipped.
 - Extension packs peer-depend on target packages (e.g. `@prisma/orm-target-postgres`), which are always installed — directly or via a facade — so peer resolution is satisfied in both the facade and decomposed configurations.
 - Publishing remains a lockstep, whole-train operation; the release process is unchanged apart from the package list.

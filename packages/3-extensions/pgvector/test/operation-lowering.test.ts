@@ -13,7 +13,7 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import { TestSqlContractSerializer as SqlContractSerializer } from '../../../2-sql/9-family/test/test-sql-contract-serializer';
+import { TestSqlContractSerializer as SqlContractSerializer } from '../../../2-sql-family/9-family/test/test-sql-contract-serializer';
 import pgvectorRuntime from '../src/exports/runtime';
 import { createComposedPostgresAdapter } from './helpers/composed-adapter';
 
@@ -34,10 +34,14 @@ const contract = new SqlContractSerializer().deserializeContract({
           table: {
             user: {
               columns: {
-                id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-                email: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
-                vector: { codecId: 'pg/vector@1', nativeType: 'vector', nullable: false },
-                otherVector: { codecId: 'pg/vector@1', nativeType: 'vector', nullable: false },
+                id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+                email: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
+                vector: { codecId: 'pg/vector@1', dataType: 'pgvector/vector', nullable: false },
+                otherVector: {
+                  codecId: 'pg/vector@1',
+                  dataType: 'pgvector/vector',
+                  nullable: false,
+                },
               },
               uniques: [],
               indexes: [],
@@ -70,7 +74,6 @@ describe('Operation lowering', () => {
       returns: { codecId: 'core/float8', nullable: false },
       lowering: {
         targetFamily: 'sql',
-        strategy: 'infix',
         template: '{{self}} <=> {{arg0}}',
       },
     });
@@ -102,7 +105,6 @@ describe('Operation lowering', () => {
       returns: { codecId: 'core/float8', nullable: false },
       lowering: {
         targetFamily: 'sql',
-        strategy: 'function',
         template: 'cosine_similarity({{self}}, {{arg0}}, {{arg1}}, {{arg2}})',
       },
     });
@@ -141,7 +143,6 @@ describe('Operation lowering', () => {
       returns: { codecId: 'core/bool', nullable: false },
       lowering: {
         targetFamily: 'sql',
-        strategy: 'function',
         template: 'contains({{self}}, {{arg0}})',
       },
     });
@@ -165,7 +166,6 @@ describe('Operation lowering', () => {
       returns: { codecId: 'pg/text@1', nullable: false },
       lowering: {
         targetFamily: 'sql',
-        strategy: 'function',
         template: 'echo({{self}}, {{arg0}})',
       },
     });
@@ -185,7 +185,6 @@ describe('Operation lowering', () => {
       returns: { codecId: 'core/bool', nullable: false },
       lowering: {
         targetFamily: 'sql',
-        strategy: 'function',
         template: 'partial({{self}}, {{arg0}}, {{arg1}})',
       },
     });

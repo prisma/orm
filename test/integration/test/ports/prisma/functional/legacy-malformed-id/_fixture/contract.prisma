@@ -13,4 +13,5 @@ model User {
   id   ObjectId   @id @map("_id")
   name String?
   ids  ObjectId[]
+  @@map("user")
 }

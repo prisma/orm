@@ -45,6 +45,8 @@ The runtime layer is contract-bound by construction: every plan carries the stor
 
 So the facade holds two runtimes — app-bound and extension-bound — sharing one pool and one `service_role` session-binding mechanism (the session-coupled connections of [ADR 230](ADR%20230%20-%20Runtime%20target%20layer%20session-coupled%20connections.md)). Each contract keeps its own codec registry, its own hashes, its own verification posture. The seam between them is the pool, which is exactly the resource that is safe to share.
 
+Because they share the driver, they close together. Neither runtime owns the driver. `close()` closes both, which makes both refuse new work at once and waits for the work in flight on both, then closes the driver once, and only when the client created the pool.
+
 ## Consequences
 
 - **No transaction spans the two roots.** The app root and the `.supabase` root are separate runtimes that do not share a pinned connection; `RoleBoundDb.transaction(...)` exists on the app root only. Work that must be atomic across app and `auth.*` tables doesn't fit this surface.

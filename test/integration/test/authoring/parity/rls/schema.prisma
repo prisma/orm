@@ -19,51 +19,51 @@ namespace public {
   policy_select profile_owner_read {
     target = Profile
     roles  = [authenticated]
-    using  = "\"userId\"::uuid = auth.uid()"
+    using  = sql`"userId"::uuid = auth.uid()`
   }
 
   policy_select profile_public_read {
     target = Profile
     roles  = [anon]
-    using  = "true"
+    using  = sql`true`
   }
 
   policy_update profile_owner_write {
     target    = Profile
     roles     = [authenticated]
-    using     = "\"userId\"::uuid = auth.uid()"
-    withCheck = "\"userId\"::uuid = auth.uid()"
+    using     = sql`"userId"::uuid = auth.uid()`
+    withCheck = sql`"userId"::uuid = auth.uid()`
   }
 
   policy_insert profile_owner_insert {
     target    = Profile
     roles     = [authenticated]
-    withCheck = "\"userId\"::uuid = auth.uid()"
+    withCheck = sql`"userId"::uuid = auth.uid()`
   }
 
   policy_delete profile_owner_delete {
     target = Profile
     roles  = [authenticated]
-    using  = "\"userId\"::uuid = auth.uid()"
+    using  = sql`"userId"::uuid = auth.uid()`
   }
 
   policy_all profile_admin_all {
     target    = Profile
     roles     = [anon, authenticated]
-    using     = "true"
-    withCheck = "true"
+    using     = sql`true`
+    withCheck = sql`true`
   }
 
   policy_update profile_touch_write {
     target = Profile
     roles  = [authenticated]
-    using  = "\"userId\"::uuid = auth.uid()"
+    using  = sql`"userId"::uuid = auth.uid()`
   }
 
   policy_select audit_read {
     target = AuditLog
     roles  = [authenticated]
-    using  = "true"
+    using  = sql`true`
   }
 }
 

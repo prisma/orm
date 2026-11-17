@@ -1,0 +1,13 @@
+{
+  "ts": {
+    "code": "CONTRACT.NAME_DUPLICATE",
+    "message": "Variant model \"Bug\" field \"sev\" is stored as \"type\", which its base \"Task\" stores field \"type\" under. A variant's documents hold its base's fields too, so give the field another stored name."
+  },
+  "psl": [
+    {
+      "code": "PSL_DUPLICATE_STORED_NAME",
+      "message": "Fields \"Task.type\" and \"Bug.sev\" are both stored as \"type\", and a variant's documents hold its base's fields too. Give each field its own stored name with @map.",
+      "spanText": "sev String @map(\"type\")"
+    }
+  ]
+}

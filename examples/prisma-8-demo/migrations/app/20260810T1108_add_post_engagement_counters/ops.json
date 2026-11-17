@@ -16,7 +16,11 @@
       {
         "description": "ensure column \"impressionCount\" is missing",
         "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
-        "params": ["public", "post", "impressionCount"]
+        "params": ["public", "post", "impressionCount"],
+        "expectation": {
+          "expects": "absent",
+          "object": "column \"impressionCount\" on \"post\""
+        }
       }
     ],
     "execute": [
@@ -29,7 +33,16 @@
       {
         "description": "verify column \"impressionCount\" exists",
         "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
-        "params": ["public", "post", "impressionCount"]
+        "params": ["public", "post", "impressionCount"],
+        "expectation": {
+          "expects": "present",
+          "object": "column \"impressionCount\" on \"post\""
+        }
+      },
+      {
+        "description": "verify column \"impressionCount\" has type \"bigint\"",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_attribute\" AS \"a\" INNER JOIN \"pg_class\" AS \"c\" ON \"c\".\"oid\" = \"a\".\"attrelid\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"relnamespace\" WHERE (\"n\".\"nspname\" = $1 AND \"c\".\"relname\" = $2 AND \"a\".\"attname\" = $3 AND (format_type(\"a\".\"atttypid\", \"a\".\"atttypmod\")) = $4 AND NOT (\"a\".\"attisdropped\"))) AS \"result\"",
+        "params": ["public", "post", "impressionCount", "bigint"]
       }
     ]
   },
@@ -50,7 +63,11 @@
       {
         "description": "ensure column \"reachScore\" is missing",
         "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
-        "params": ["public", "post", "reachScore"]
+        "params": ["public", "post", "reachScore"],
+        "expectation": {
+          "expects": "absent",
+          "object": "column \"reachScore\" on \"post\""
+        }
       }
     ],
     "execute": [
@@ -63,7 +80,16 @@
       {
         "description": "verify column \"reachScore\" exists",
         "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
-        "params": ["public", "post", "reachScore"]
+        "params": ["public", "post", "reachScore"],
+        "expectation": {
+          "expects": "present",
+          "object": "column \"reachScore\" on \"post\""
+        }
+      },
+      {
+        "description": "verify column \"reachScore\" has type \"numeric\"",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_attribute\" AS \"a\" INNER JOIN \"pg_class\" AS \"c\" ON \"c\".\"oid\" = \"a\".\"attrelid\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"relnamespace\" WHERE (\"n\".\"nspname\" = $1 AND \"c\".\"relname\" = $2 AND \"a\".\"attname\" = $3 AND (format_type(\"a\".\"atttypid\", \"a\".\"atttypmod\")) = $4 AND NOT (\"a\".\"attisdropped\"))) AS \"result\"",
+        "params": ["public", "post", "reachScore", "numeric"]
       }
     ]
   },
@@ -84,7 +110,11 @@
       {
         "description": "ensure column \"viewCount\" is missing",
         "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
-        "params": ["public", "post", "viewCount"]
+        "params": ["public", "post", "viewCount"],
+        "expectation": {
+          "expects": "absent",
+          "object": "column \"viewCount\" on \"post\""
+        }
       }
     ],
     "execute": [
@@ -97,7 +127,16 @@
       {
         "description": "verify column \"viewCount\" exists",
         "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
-        "params": ["public", "post", "viewCount"]
+        "params": ["public", "post", "viewCount"],
+        "expectation": {
+          "expects": "present",
+          "object": "column \"viewCount\" on \"post\""
+        }
+      },
+      {
+        "description": "verify column \"viewCount\" has type \"bigint\"",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_attribute\" AS \"a\" INNER JOIN \"pg_class\" AS \"c\" ON \"c\".\"oid\" = \"a\".\"attrelid\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"relnamespace\" WHERE (\"n\".\"nspname\" = $1 AND \"c\".\"relname\" = $2 AND \"a\".\"attname\" = $3 AND (format_type(\"a\".\"atttypid\", \"a\".\"atttypmod\")) = $4 AND NOT (\"a\".\"attisdropped\"))) AS \"result\"",
+        "params": ["public", "post", "viewCount", "bigint"]
       }
     ]
   }

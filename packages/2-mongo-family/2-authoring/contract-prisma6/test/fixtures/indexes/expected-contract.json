@@ -1,0 +1,177 @@
+{
+  "targetFamily": "mongo",
+  "target": "mongo",
+  "roots": {
+    "Post": {
+      "namespace": "__unbound__",
+      "model": "Post"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "__unbound__": {
+        "models": {
+          "Post": {
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/objectId@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "slug": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/string@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "rank": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/int64Number@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "title": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/string@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "authorId": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/objectId@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "createdAt": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/date@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "Post",
+              "fields": {
+                "id": {
+                  "field": "_id"
+                },
+                "slug": {
+                  "field": "slug"
+                },
+                "rank": {
+                  "field": "rank"
+                },
+                "title": {
+                  "field": "post_title"
+                },
+                "authorId": {
+                  "field": "authorId"
+                },
+                "createdAt": {
+                  "field": "createdAt"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
+  "meta": {},
+  "storage": {
+    "storageHash": "c2121b18447a7f303d360e3f34a3295dcce495934ec2070656e0b6578bb27441",
+    "namespaces": {
+      "__unbound__": {
+        "id": "__unbound__",
+        "kind": "mongo-database",
+        "entries": {
+          "collection": {
+            "Post": {
+              "kind": "mongo-collection",
+              "indexes": [
+                {
+                  "kind": "mongo-index",
+                  "name": "slug_key",
+                  "keys": [
+                    {
+                      "field": "slug",
+                      "direction": 1
+                    }
+                  ],
+                  "unique": true
+                },
+                {
+                  "kind": "mongo-index",
+                  "name": "Post_rank_key",
+                  "keys": [
+                    {
+                      "field": "rank",
+                      "direction": -1
+                    }
+                  ],
+                  "unique": true
+                },
+                {
+                  "kind": "mongo-index",
+                  "name": "Post_authorId_post_title_key",
+                  "keys": [
+                    {
+                      "field": "authorId",
+                      "direction": 1
+                    },
+                    {
+                      "field": "post_title",
+                      "direction": 1
+                    }
+                  ],
+                  "unique": true
+                },
+                {
+                  "kind": "mongo-index",
+                  "name": "by_author",
+                  "keys": [
+                    {
+                      "field": "authorId",
+                      "direction": 1
+                    },
+                    {
+                      "field": "createdAt",
+                      "direction": -1
+                    }
+                  ]
+                },
+                {
+                  "kind": "mongo-index",
+                  "name": "Post_post_title_idx",
+                  "keys": [
+                    {
+                      "field": "post_title",
+                      "direction": 1
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

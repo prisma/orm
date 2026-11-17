@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type NotOk, notOk, type Ok, ok, okVoid } from '../src/result';
+import { and, type NotOk, notOk, type Ok, ok, okVoid, or } from '../src/result';
 
 describe('result', () => {
   describe('ok()', () => {
@@ -90,6 +90,64 @@ describe('result', () => {
       expect(() => (result as unknown as Ok<number>).value).toThrow(
         'Cannot access value on NotOk result',
       );
+    });
+  });
+
+  describe('and()', () => {
+    it('is ok when both sides are ok', () => {
+      expect(and(ok(1), ok('two'))).toMatchObject({ ok: true });
+    });
+
+    it('takes the failure when the right side fails', () => {
+      expect(and(ok(1), notOk(['right']))).toMatchObject({ ok: false, failure: ['right'] });
+    });
+
+    it('takes the failure when the left side fails', () => {
+      expect(and(notOk(['left']), ok(1))).toMatchObject({ ok: false, failure: ['left'] });
+    });
+
+    it('keeps both sides details in order when both fail', () => {
+      expect(and(notOk(['left']), notOk(['right']))).toMatchObject({
+        ok: false,
+        failure: ['left', 'right'],
+      });
+    });
+
+    it('keeps a detail-less failure a failure', () => {
+      expect(and(ok(1), notOk([]))).toMatchObject({ ok: false, failure: [] });
+    });
+  });
+
+  describe('or()', () => {
+    it('takes the left value when both sides are ok', () => {
+      expect(or(ok('left'), ok('right'))).toMatchObject({ ok: true, value: 'left' });
+    });
+
+    it('takes the right value when only the right side is ok', () => {
+      expect(or(notOk(['left']), ok('right'))).toMatchObject({ ok: true, value: 'right' });
+    });
+
+    it('takes the left value when only the left side is ok', () => {
+      expect(or(ok('left'), notOk(['right']))).toMatchObject({ ok: true, value: 'left' });
+    });
+
+    it('pools both sides details in order when both fail loudly', () => {
+      expect(or(notOk(['left']), notOk(['right']))).toMatchObject({
+        ok: false,
+        failure: ['left', 'right'],
+      });
+    });
+
+    it('lets a detail-less failure absorb the left side', () => {
+      expect(or(notOk([]), notOk(['right']))).toMatchObject({ ok: false, failure: [] });
+    });
+
+    it('lets a detail-less failure absorb the right side', () => {
+      expect(or(notOk(['left']), notOk([]))).toMatchObject({ ok: false, failure: [] });
+    });
+
+    it('stays detail-less when both sides are detail-less', () => {
+      expect(or(notOk([]), notOk([]))).toMatchObject({ ok: false, failure: [] });
     });
   });
 });

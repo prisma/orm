@@ -135,21 +135,21 @@ types {
 }
 
 model Cafe {
-  id       Char(36)    @id @default(uuid())
+  id       Char(36)    @id @onCreate(uuid())
   name     String
   location WgsGeometry
   @@map("cafe")
 }
 
 model Route {
-  id   Char(36)    @id @default(uuid())
+  id   Char(36)    @id @onCreate(uuid())
   name String
   path WgsGeometry
   @@map("route")
 }
 
 model Neighborhood {
-  id       Char(36)    @id @default(uuid())
+  id       Char(36)    @id @onCreate(uuid())
   name     String
   boundary WgsGeometry
   @@map("neighborhood")
@@ -285,7 +285,8 @@ extensions: [postgis];
 ```typescript
 // src/prisma/db.ts (runtime)
 import postgis from '@internal/extension-postgis/runtime';
-export const db = postgres<Contract>({ contractJson, extensions: [postgis] });
+export const contract = contractFromJson<Contract>(contractJson);
+export const db = postgres({ contract, extensions: [postgis] });
 ```
 
 The control descriptor declares `CREATE EXTENSION IF NOT EXISTS postgis`

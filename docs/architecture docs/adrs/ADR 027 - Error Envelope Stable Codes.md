@@ -112,7 +112,6 @@ NAMESPACE.SUBCODE where NAMESPACE ∈ { PLAN, RUNTIME, ADAPTER, BUDGET, LINT, MI
 #### MIGRATION
 - **MIGRATION.PRECHECK_FAILED**: preconditions not met
 - **MIGRATION.POSTCHECK_FAILED**: postconditions not satisfied
-- **MIGRATION.IDEMPOTENT_ALREADY_APPLIED**: safe no-op replay
 - **MIGRATION.CONFLICT**: state differs in conflicting ways
 - **MIGRATION.NON_TRANSACTIONAL_STEP**: requires compensation plan
 - **MIGRATION.DIR_EXISTS**: migration directory already exists on disk
@@ -121,7 +120,6 @@ NAMESPACE.SUBCODE where NAMESPACE ∈ { PLAN, RUNTIME, ADAPTER, BUDGET, LINT, MI
 - **MIGRATION.INVALID_MANIFEST**: migration manifest missing required fields or has invalid values
 - **MIGRATION.INVALID_NAME**: migration name/slug empty after sanitization
 - **MIGRATION.SAME_SOURCE_AND_TARGET**: migration edge has from === to (graph invariant violation)
-- **MIGRATION.AMBIGUOUS_TARGET**: multiple branch tips in migration graph (diverged branches)
 
 #### PN-MIG (Migration Authoring)
 

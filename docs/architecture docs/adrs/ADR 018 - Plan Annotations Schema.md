@@ -1,5 +1,7 @@
 # ADR 018 — Plan Annotations Schema and Validation
 
+> **Update — the hook is removed.** The middleware hook `beforeExecute` this ADR describes no longer exists. [ADR 271](ADR%20271%20-%20The%20runtime%20middleware%20observes%20a%20tree%20of%20activities%2C%20each%20started%2C%20ended%20and%20finalized.md) replaced it with lifecycle events and interceptors on a tree of activities.
+
 ## Context
 
 - Raw SQL Plans intentionally do not carry an AST, so guardrails must rely on explicit annotations

@@ -1,0 +1,17 @@
+// use prisma-8
+
+types {
+  TouchedAt = DateTime @onUpdate(now())
+}
+
+model Post {
+  id        ObjectId           @id @map("_id")
+  title     String             @map("t")
+  createdAt temporal.CreatedAt
+  updatedAt temporal.UpdatedAt @map("updated_at")
+  seenAt    DateTime               @onCreate(now())
+  touchedAt TouchedAt
+  stamp     DateTime
+
+  @@map("posts")
+}

@@ -13,6 +13,7 @@ Prints Prisma Schema Language (PSL) from `PslDocumentAst` (`@internal/framework-
 - Convert structured AST (`model`, `field`, `enum`, `types`) into valid PSL output.
 - Preserve `@map` / `@@map` and relation attributes from AST nodes.
 - Generate deterministic output so snapshot-based tests remain stable.
+- Open every printed file with the `// use prisma-8` marker. A caller adds one line saying where the file came from with the `description` option; `contract infer` and `contract print` each pass their own.
 
 ## Related Docs
 

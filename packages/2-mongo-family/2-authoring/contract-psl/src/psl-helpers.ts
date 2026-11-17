@@ -3,9 +3,9 @@ import { parseQuotedStringLiteral } from '@internal/psl-parser';
 
 export { parseQuotedStringLiteral };
 
-export function lowerFirst(value: string): string {
-  if (value.length === 0) return value;
-  return value[0]?.toLowerCase() + value.slice(1);
+/** Storage collection name of a model that declares no `@@map`: the model name, verbatim. */
+export function defaultCollectionName(modelName: string): string {
+  return modelName;
 }
 
 export function getAttribute(

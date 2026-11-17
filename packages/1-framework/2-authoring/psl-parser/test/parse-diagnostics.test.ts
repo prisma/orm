@@ -17,7 +17,7 @@ function greenText(element: GreenElement): string {
 }
 
 function diagnosticFor(source: string, code: string) {
-  const result = parse(source);
+  const result = parse(source, 'test.psl');
   const diagnostic = result.diagnostics.find((d) => d.code === code);
   if (!diagnostic) {
     throw new Error(
@@ -34,7 +34,9 @@ describe('parse() syntactic diagnostics', () => {
     const source = 'model User {\n  id Int';
     const { result, message, diagnostic } = diagnosticFor(source, 'PSL_UNTERMINATED_BLOCK');
     expect(message).toBe('Unterminated block declaration');
-    expect(highlight(result.sourceFile, diagnostic.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
       "
       model User {
                  ~
@@ -49,7 +51,9 @@ describe('parse() syntactic diagnostics', () => {
     const source = 'oops';
     const { result, message, diagnostic } = diagnosticFor(source, 'PSL_INVALID_DECLARATION');
     expect(message).toBe('Expected "{" to open the "oops" block');
-    expect(highlight(result.sourceFile, diagnostic.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
       "
       oops
           ~
@@ -65,7 +69,9 @@ describe('parse() syntactic diagnostics', () => {
     const source = 'model {\n}';
     const { result, message, diagnostic } = diagnosticFor(source, 'PSL_INVALID_DECLARATION');
     expect(message).toBe('Expected a name after "model"');
-    expect(highlight(result.sourceFile, diagnostic.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
       "
       model {
       ~~~~~
@@ -85,7 +91,9 @@ describe('parse() syntactic diagnostics', () => {
       'PSL_UNSUPPORTED_TOP_LEVEL_BLOCK',
     );
     expect(message).toBe('Unsupported top-level declaration "§"');
-    expect(highlight(result.sourceFile, diagnostic.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
       "
       §
       ~
@@ -100,7 +108,9 @@ describe('parse() syntactic diagnostics', () => {
     expect(message).toBe(
       'Recursive "namespace inner" block is not allowed; namespace blocks may not nest',
     );
-    expect(highlight(result.sourceFile, diagnostic.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
       "
       namespace outer {
       namespace inner {
@@ -118,7 +128,9 @@ describe('parse() syntactic diagnostics', () => {
     expect(message).toBe(
       'Namespace name "__unspecified__" is reserved for the parser-synthesised bucket for top-level declarations',
     );
-    expect(highlight(result.sourceFile, diagnostic.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
       "
       namespace __unspecified__ {
                 ~~~~~~~~~~~~~~~
@@ -133,7 +145,9 @@ describe('parse() syntactic diagnostics', () => {
     expect(message).toBe(
       '`types` blocks must be declared at the document top level, not inside a namespace block',
     );
-    expect(highlight(result.sourceFile, diagnostic.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
       "
       namespace outer {
       types {
@@ -148,7 +162,9 @@ describe('parse() syntactic diagnostics', () => {
     const source = 'model M {\n  123\n  id Int\n}';
     const { result, message, diagnostic } = diagnosticFor(source, 'PSL_INVALID_MODEL_MEMBER');
     expect(message).toBe('Invalid model member declaration "123"');
-    expect(highlight(result.sourceFile, diagnostic.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
       "
       model M {
         123
@@ -164,7 +180,9 @@ describe('parse() syntactic diagnostics', () => {
     const source = 'model Foo {\n  field\n}';
     const { result, message, diagnostic } = diagnosticFor(source, 'PSL_INVALID_MODEL_MEMBER');
     expect(message).toBe('Expected a type after field "field"');
-    expect(highlight(result.sourceFile, diagnostic.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
       "
       model Foo {
         field
@@ -175,11 +193,21 @@ describe('parse() syntactic diagnostics', () => {
     expect(greenText(result.document.syntax.green)).toBe(source);
   });
 
+  it('refuses a second type constructor call on one field', () => {
+    const result = parse('model M {\n  f Timestamp(3) Timestamptz(3)\n}', 'test.psl');
+    expect(result.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      { code: 'PSL_INVALID_MODEL_MEMBER', message: 'Expected a type after field "Timestamptz"' },
+      { code: 'PSL_INVALID_MODEL_MEMBER', message: 'Invalid model member declaration "("' },
+    ]);
+  });
+
   it('reports a composite-type field missing its type, anchored on the field name', () => {
     const source = 'type Foo {\n  field\n}';
     const { result, message, diagnostic } = diagnosticFor(source, 'PSL_INVALID_MODEL_MEMBER');
     expect(message).toBe('Expected a type after field "field"');
-    expect(highlight(result.sourceFile, diagnostic.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
       "
       type Foo {
         field
@@ -194,7 +222,9 @@ describe('parse() syntactic diagnostics', () => {
     const source = 'types {\n  123\n  Ok = Int\n}';
     const { result, message, diagnostic } = diagnosticFor(source, 'PSL_INVALID_TYPES_MEMBER');
     expect(message).toBe('Invalid types declaration "123"');
-    expect(highlight(result.sourceFile, diagnostic.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
       "
       types {
         123
@@ -212,7 +242,9 @@ describe('parse() syntactic diagnostics', () => {
       'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
     );
     expect(message).toBe('Invalid block entry');
-    expect(highlight(result.sourceFile, diagnostic.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
       "
       datasource db {
         123
@@ -242,7 +274,7 @@ describe('parse() syntactic diagnostics', () => {
 
   it('accepts a bare generic-block key with no value as a bare-member entry', () => {
     const source = 'datasource db {\n  provider\n}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     // A bare key carries no value and is not a diagnostic: the domain-enum
     // member shape `enum Status { Active }` relies on this entry.
     expect(result.diagnostics).toEqual([]);
@@ -261,7 +293,9 @@ describe('parse() syntactic diagnostics', () => {
     const source = 'types {\n  UserId Int\n}';
     const { result, message, diagnostic } = diagnosticFor(source, 'PSL_INVALID_TYPES_MEMBER');
     expect(message).toBe('Expected "=" after "UserId"');
-    expect(highlight(result.sourceFile, diagnostic.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
       "
       types {
         UserId Int
@@ -278,6 +312,44 @@ describe('parse() syntactic diagnostics', () => {
     }
     expect(greenText(result.document.syntax.green)).toBe(source);
   });
+
+  it('reports a malformed `?` in a types-block member as a types diagnostic', () => {
+    const source = 'types {\n  Foo = Bar??\n}';
+    const { result, message, diagnostic } = diagnosticFor(source, 'PSL_INVALID_TYPES_MEMBER');
+    expect(message).toBe(
+      'Unexpected "?"; a type may be optional (`Foo?`), a list (`Foo[]`), have nullable elements (`Foo?[]`), or both (`Foo?[]?`)',
+    );
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
+      "
+      types {
+        Foo = Bar??
+                  ~
+      }
+      "
+    `);
+    expect(greenText(result.document.syntax.green)).toBe(source);
+  });
+
+  it('reports a malformed `?` in a model field as a model diagnostic', () => {
+    const source = 'model M {\n  x Bar??\n}';
+    const { result, message, diagnostic } = diagnosticFor(source, 'PSL_INVALID_MODEL_MEMBER');
+    expect(message).toBe(
+      'Unexpected "?"; a type may be optional (`Foo?`), a list (`Foo[]`), have nullable elements (`Foo?[]`), or both (`Foo?[]?`)',
+    );
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
+      "
+      model M {
+        x Bar??
+              ~
+      }
+      "
+    `);
+    expect(greenText(result.document.syntax.green)).toBe(source);
+  });
 });
 
 describe('parse() commits reserved declaration keywords on the keyword alone', () => {
@@ -285,7 +357,9 @@ describe('parse() commits reserved declaration keywords on the keyword alone', (
     const source = 'model {\n}';
     const { result, message, diagnostic } = diagnosticFor(source, 'PSL_INVALID_DECLARATION');
     expect(message).toBe('Expected a name after "model"');
-    expect(highlight(result.sourceFile, diagnostic.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
       "
       model {
       ~~~~~
@@ -300,7 +374,9 @@ describe('parse() commits reserved declaration keywords on the keyword alone', (
     const source = 'model User';
     const { result, message, diagnostic } = diagnosticFor(source, 'PSL_INVALID_DECLARATION');
     expect(message).toBe('Expected "{" to open the "model" block');
-    expect(highlight(result.sourceFile, diagnostic.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
       "
       model User
                 ~
@@ -314,7 +390,9 @@ describe('parse() commits reserved declaration keywords on the keyword alone', (
     const source = 'model';
     const { result, message, diagnostic } = diagnosticFor(source, 'PSL_INVALID_DECLARATION');
     expect(message).toBe('Expected a name after "model"');
-    expect(highlight(result.sourceFile, diagnostic.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
       "
       model
       ~~~~~
@@ -330,7 +408,7 @@ describe('parse() commits reserved declaration keywords on the keyword alone', (
     // generic block. Whether a name is required is a resolve-time descriptor
     // concern, not a parse-time one.
     const source = 'enum {\n}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(result.diagnostics).toEqual([]);
     expect(Array.from(result.document.declarations())[0]).toBeInstanceOf(
       GenericBlockDeclarationAst,
@@ -352,7 +430,9 @@ describe('parse() commits reserved declaration keywords on the keyword alone', (
     const source = 'namespace {\n}';
     const { result, message, diagnostic } = diagnosticFor(source, 'PSL_INVALID_DECLARATION');
     expect(message).toBe('Expected a name after "namespace"');
-    expect(highlight(result.sourceFile, diagnostic.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
       "
       namespace {
       ~~~~~~~~~
@@ -367,7 +447,9 @@ describe('parse() commits reserved declaration keywords on the keyword alone', (
     const source = 'namespace outer';
     const { result, message, diagnostic } = diagnosticFor(source, 'PSL_INVALID_DECLARATION');
     expect(message).toBe('Expected "{" to open the "namespace" block');
-    expect(highlight(result.sourceFile, diagnostic.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
       "
       namespace outer
                      ~
@@ -381,7 +463,9 @@ describe('parse() commits reserved declaration keywords on the keyword alone', (
     const source = 'namespace';
     const { result, message, diagnostic } = diagnosticFor(source, 'PSL_INVALID_DECLARATION');
     expect(message).toBe('Expected a name after "namespace"');
-    expect(highlight(result.sourceFile, diagnostic.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
       "
       namespace
       ~~~~~~~~~
@@ -395,7 +479,9 @@ describe('parse() commits reserved declaration keywords on the keyword alone', (
     const source = 'type Address';
     const { result, message, diagnostic } = diagnosticFor(source, 'PSL_INVALID_DECLARATION');
     expect(message).toBe('Expected "{" to open the "type" block');
-    expect(highlight(result.sourceFile, diagnostic.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
       "
       type Address
                   ~
@@ -411,7 +497,9 @@ describe('parse() commits reserved declaration keywords on the keyword alone', (
     const source = 'type';
     const { result, message, diagnostic } = diagnosticFor(source, 'PSL_INVALID_DECLARATION');
     expect(message).toBe('Expected a name after "type"');
-    expect(highlight(result.sourceFile, diagnostic.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
       "
       type
       ~~~~
@@ -427,7 +515,9 @@ describe('parse() commits reserved declaration keywords on the keyword alone', (
     const source = 'types';
     const { result, message, diagnostic } = diagnosticFor(source, 'PSL_INVALID_DECLARATION');
     expect(message).toBe('Expected "{" to open the "types" block');
-    expect(highlight(result.sourceFile, diagnostic.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
       "
       types
            ~
@@ -439,7 +529,7 @@ describe('parse() commits reserved declaration keywords on the keyword alone', (
 
   it('keeps parsing later declarations after a malformed reserved header', () => {
     const source = 'model User\nmodel Order {\n}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     const diagnostic = result.diagnostics.find((d) => d.code === 'PSL_INVALID_DECLARATION');
     expect(diagnostic).toBeDefined();
     expect(printTree(result.document.syntax.green)).toMatchInlineSnapshot(`
@@ -460,7 +550,9 @@ describe('parse() commits reserved declaration keywords on the keyword alone', (
           Newline "\\n"
           RBrace "}""
     `);
-    expect(highlight(result.sourceFile, diagnostic!.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic!.range),
+    ).toMatchInlineSnapshot(`
       "
       model User
                 ~
@@ -500,7 +592,9 @@ describe('parse() diagnoses unterminated string literals', () => {
     const source = 'model M {\n  id Int @default("oops';
     const { result, message, diagnostic } = diagnosticFor(source, 'PSL_UNTERMINATED_STRING');
     expect(message).toBe('Unterminated string literal');
-    expect(highlight(result.sourceFile, diagnostic.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
       "
       model M {
         id Int @default("oops
@@ -514,7 +608,9 @@ describe('parse() diagnoses unterminated string literals', () => {
     const source = 'model M {\n  id Int @default("oops\n}';
     const { result, message, diagnostic } = diagnosticFor(source, 'PSL_UNTERMINATED_STRING');
     expect(message).toBe('Unterminated string literal');
-    expect(highlight(result.sourceFile, diagnostic.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
       "
       model M {
         id Int @default("oops
@@ -527,7 +623,7 @@ describe('parse() diagnoses unterminated string literals', () => {
 
   it('does not flag a well-formed string literal', () => {
     const source = 'model M {\n  id Int @default("ok")\n}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(result.diagnostics.find((d) => d.code === 'PSL_UNTERMINATED_STRING')).toBeUndefined();
     expect(greenText(result.document.syntax.green)).toBe(source);
   });
@@ -541,7 +637,7 @@ describe('parse() diagnoses unterminated string literals', () => {
 
   it('does not flag a literal whose escaped quote precedes a real closing quote', () => {
     const source = 'model M {\n  id Int @default("a\\"")\n}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(result.diagnostics.find((d) => d.code === 'PSL_UNTERMINATED_STRING')).toBeUndefined();
     expect(greenText(result.document.syntax.green)).toBe(source);
   });
@@ -553,7 +649,7 @@ describe('parse() attribute attachment is newline-insensitive', () => {
   // current behaviour so any future change has a signal; no code change.
   it('attaches a standalone attribute on the next line to the preceding field', () => {
     const source = 'model M {\n  id Int\n  @id\n}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(result.diagnostics).toHaveLength(0);
     expect(printTree(result.document.syntax.green)).toMatchInlineSnapshot(`
       "Document
@@ -587,5 +683,244 @@ describe('parse() attribute attachment is newline-insensitive', () => {
     const model = Array.from(result.document.declarations())[0];
     expect(model).toBeInstanceOf(ModelDeclarationAst);
     expect(greenText(result.document.syntax.green)).toBe(source);
+  });
+});
+
+function memberTexts(result: ReturnType<typeof parse>): string[] {
+  const [declaration] = Array.from(result.document.syntax.childNodes());
+  return Array.from(
+    declaration?.childNodes() ?? [],
+    (member) => `${member.kind} ${greenText(member.green)}`,
+  );
+}
+
+function messagesOf(result: ReturnType<typeof parse>): string[] {
+  return result.diagnostics.map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`);
+}
+
+describe('parse() keeps the rest of a line in a member whose arguments or value fail to parse', () => {
+  it('reports the argument error of a field attribute, anchored on the first token it cannot read', () => {
+    const source = 'model User {\n  id Int @default(+foo)\n  name String\n}';
+    const { result, message, diagnostic } = diagnosticFor(source, 'PSL_INVALID_ATTRIBUTE_SYNTAX');
+    expect(message).toBe('Unexpected "+" in attribute arguments');
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
+      "
+      model User {
+        id Int @default(+foo)
+                        ~
+        name String
+      }
+      "
+    `);
+    expect(result.diagnostics).toHaveLength(1);
+    expect(memberTexts(result)).toEqual([
+      'Identifier User',
+      'FieldDeclaration id Int @default(+foo)',
+      'FieldDeclaration name String',
+    ]);
+  });
+
+  it('does not read a name left on the line as another field', () => {
+    const result = parse(
+      'model User {\n  id Int @default(1 extra String)\n  name String\n}',
+      'test.psl',
+    );
+    expect(messagesOf(result)).toEqual([
+      'PSL_INVALID_ATTRIBUTE_SYNTAX: Unexpected "extra" in attribute arguments',
+    ]);
+    expect(memberTexts(result)).toEqual([
+      'Identifier User',
+      'FieldDeclaration id Int @default(1 extra String)',
+      'FieldDeclaration name String',
+    ]);
+  });
+
+  it('does not read a block attribute left on the line as a member', () => {
+    const result = parse('model User {\n  id Int @default(1 @@map("x"))\n}', 'test.psl');
+    expect(messagesOf(result)).toEqual([
+      'PSL_INVALID_ATTRIBUTE_SYNTAX: Unexpected "@@" in attribute arguments',
+    ]);
+    expect(memberTexts(result)).toEqual([
+      'Identifier User',
+      'FieldDeclaration id Int @default(1 @@map("x"))',
+    ]);
+  });
+
+  it('keeps the rest of the line after a failure in a nested list or call', () => {
+    const result = parse(
+      'model User {\n  id Int @default(fn([1 +a], 2))\n  name String\n}',
+      'test.psl',
+    );
+    expect(messagesOf(result)).toEqual([
+      'PSL_INVALID_ATTRIBUTE_SYNTAX: Unexpected "+" in attribute arguments',
+    ]);
+    expect(memberTexts(result)).toEqual([
+      'Identifier User',
+      'FieldDeclaration id Int @default(fn([1 +a], 2))',
+      'FieldDeclaration name String',
+    ]);
+  });
+
+  it('reports type arguments that fail to parse with the member code', () => {
+    const source = 'model User {\n  embedding Vector(+dims) @unique\n  name String\n}';
+    const { result, message, diagnostic } = diagnosticFor(source, 'PSL_INVALID_MODEL_MEMBER');
+    expect(message).toBe('Unexpected "+" in type arguments');
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
+      "
+      model User {
+        embedding Vector(+dims) @unique
+                         ~
+        name String
+      }
+      "
+    `);
+    expect(result.diagnostics).toHaveLength(1);
+    expect(memberTexts(result)).toEqual([
+      'Identifier User',
+      'FieldDeclaration embedding Vector(+dims) @unique',
+      'FieldDeclaration name String',
+    ]);
+  });
+
+  it('reports nothing for arguments left open at the end of a line', () => {
+    const result = parse(
+      'model User {\n  name String @default("anonymous"\n  active Boolean\n}',
+      'test.psl',
+    );
+    expect(result.diagnostics).toEqual([]);
+    expect(memberTexts(result)).toEqual([
+      'Identifier User',
+      'FieldDeclaration name String @default("anonymous"',
+      'FieldDeclaration active Boolean',
+    ]);
+  });
+
+  it('leaves the closing brace of the block to the block', () => {
+    const result = parse('model User { id Int @default(1 }', 'test.psl');
+    const [model] = Array.from(result.document.declarations());
+    expect(result.diagnostics).toEqual([]);
+    expect(model).toBeInstanceOf(ModelDeclarationAst);
+    if (model instanceof ModelDeclarationAst) expect(model.rbrace()).toBeDefined();
+  });
+
+  it('keeps the rest of the line in a block attribute of a model', () => {
+    const result = parse(
+      'model User {\n  id Int\n  @@index([id +other])\n  name String\n}',
+      'test.psl',
+    );
+    expect(messagesOf(result)).toEqual([
+      'PSL_INVALID_ATTRIBUTE_SYNTAX: Unexpected "+" in attribute arguments',
+    ]);
+    expect(memberTexts(result)).toEqual([
+      'Identifier User',
+      'FieldDeclaration id Int',
+      'ModelAttribute @@index([id +other])',
+      'FieldDeclaration name String',
+    ]);
+  });
+
+  it('keeps the rest of the line in a block attribute of a generic block', () => {
+    const result = parse('policy P {\n  @@map("p" +other)\n  k = 1\n}', 'test.psl');
+    expect(messagesOf(result)).toEqual([
+      'PSL_INVALID_ATTRIBUTE_SYNTAX: Unexpected "+" in attribute arguments',
+    ]);
+    expect(memberTexts(result)).toEqual([
+      'Identifier P',
+      'ModelAttribute @@map("p" +other)',
+      'KeyValuePair k = 1',
+    ]);
+  });
+
+  it('reports an entry value left unclosed, anchored on the first token it cannot read', () => {
+    const source = 'policy P {\n  roles = [a +b]\n  k = 1\n}';
+    const { result, message, diagnostic } = diagnosticFor(
+      source,
+      'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
+    );
+    expect(message).toBe('Unexpected "+" in the entry value');
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
+      "
+      policy P {
+        roles = [a +b]
+                   ~
+        k = 1
+      }
+      "
+    `);
+    expect(result.diagnostics).toHaveLength(1);
+    expect(memberTexts(result)).toEqual([
+      'Identifier P',
+      'KeyValuePair roles = [a +b]',
+      'KeyValuePair k = 1',
+    ]);
+  });
+
+  it('keeps the rest of the line after an entry value that is an unclosed call', () => {
+    const result = parse('policy P {\n  using = check(+owner)\n  k = 1\n}', 'test.psl');
+    expect(messagesOf(result)).toEqual([
+      'PSL_INVALID_EXTENSION_BLOCK_MEMBER: Unexpected "+" in the entry value',
+    ]);
+    expect(memberTexts(result)).toEqual([
+      'Identifier P',
+      'KeyValuePair using = check(+owner)',
+      'KeyValuePair k = 1',
+    ]);
+  });
+
+  it('reports a missing entry value once and keeps what follows on the line', () => {
+    const result = parse('policy P {\n  using = +owner\n  k = 1\n}', 'test.psl');
+    expect(messagesOf(result)).toEqual([
+      'PSL_INVALID_EXTENSION_BLOCK_MEMBER: Expected a value after "="',
+    ]);
+    expect(memberTexts(result)).toEqual([
+      'Identifier P',
+      'KeyValuePair using = +owner',
+      'KeyValuePair k = 1',
+    ]);
+  });
+
+  it('reports an unterminated object value once', () => {
+    const result = parse('policy P {\n  opts = { a: 1 +b\n  k = 1\n}', 'test.psl');
+    expect(messagesOf(result)).toEqual(['PSL_INVALID_OBJECT_LITERAL: Unterminated object literal']);
+    expect(memberTexts(result)).toEqual([
+      'Identifier P',
+      'KeyValuePair opts = { a: 1 +b',
+      'KeyValuePair k = 1',
+    ]);
+  });
+
+  it('keeps the rest of the line in an attribute of an enum member', () => {
+    const result = parse('enum Role {\n  ADMIN @map("admin" +x)\n  USER\n}', 'test.psl');
+    expect(messagesOf(result)).toEqual([
+      'PSL_INVALID_ATTRIBUTE_SYNTAX: Unexpected "+" in attribute arguments',
+    ]);
+    expect(memberTexts(result)).toEqual([
+      'Identifier Role',
+      'KeyValuePair ADMIN @map("admin" +x)',
+      'KeyValuePair USER',
+    ]);
+  });
+
+  it('still reads two fields on one line and two entries on one line', () => {
+    const model = parse('model User { id Int @id name String @default("a") }', 'test.psl');
+    const block = parse('policy P { a = [1, 2] b = fn(3) }', 'test.psl');
+    expect(model.diagnostics).toEqual([]);
+    expect(block.diagnostics).toEqual([]);
+    expect(memberTexts(model)).toEqual([
+      'Identifier User',
+      'FieldDeclaration id Int @id',
+      'FieldDeclaration name String @default("a")',
+    ]);
+    expect(memberTexts(block)).toEqual([
+      'Identifier P',
+      'KeyValuePair a = [1, 2]',
+      'KeyValuePair b = fn(3)',
+    ]);
   });
 });

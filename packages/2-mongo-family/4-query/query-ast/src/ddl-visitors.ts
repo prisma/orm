@@ -4,6 +4,7 @@ import type {
   CreateIndexCommand,
   DropCollectionCommand,
   DropIndexCommand,
+  RenameCollectionCommand,
 } from './ddl-commands';
 import type { ListCollectionsCommand, ListIndexesCommand } from './inspection-commands';
 
@@ -12,6 +13,7 @@ export interface MongoDdlCommandVisitor<R> {
   dropIndex(command: DropIndexCommand): R;
   createCollection(command: CreateCollectionCommand): R;
   dropCollection(command: DropCollectionCommand): R;
+  renameCollection(command: RenameCollectionCommand): R;
   collMod(command: CollModCommand): R;
 }
 
