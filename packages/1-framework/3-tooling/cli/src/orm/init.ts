@@ -323,6 +323,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
               nextActions: [
                 ...extraActions,
                 ...buildInitNextActions({
+                  target: outputTarget(inputs.target),
                   contractEmitted,
                   schemaPath: inputs.schemaPath,
                   prisma7: prisma7Steps,
