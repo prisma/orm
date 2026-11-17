@@ -354,6 +354,33 @@ describe('all publish shells packed and installed together', () => {
     expect(offenders).toEqual([]);
   });
 
+  // A `#` import is private to the package that declares it. A workspace
+  // package's own `#` names are inlined when a shell is built; one left in a
+  // shell's output resolves only if that shell's own manifest declares it.
+  it('imports no # module in any built or declaration file that its own package does not declare', () => {
+    const offenders: string[] = [];
+    for (const name of allShells) {
+      const installedDir = join(scratch, 'node_modules', name);
+      const manifest: { imports?: Record<string, unknown> } = JSON.parse(
+        readFileSync(join(installedDir, 'package.json'), 'utf8'),
+      );
+      const declared = new Set(Object.keys(manifest.imports ?? {}));
+      const distDir = join(installedDir, 'dist');
+      const files = readdirSync(distDir, { recursive: true, encoding: 'utf8' }).filter(
+        (file) => file.endsWith('.mjs') || file.endsWith('.d.mts'),
+      );
+      expect(files.length, name).toBeGreaterThan(0);
+      for (const file of files) {
+        for (const match of readFileSync(join(distDir, file), 'utf8').matchAll(
+          /(?:\bfrom\s*|\bimport\s*\(\s*|^\s*import\s*)(["'])(#[^"']+)\1/gm,
+        )) {
+          if (!declared.has(match[2] ?? '')) offenders.push(`${name}/dist/${file}: ${match[2]}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
   it('states only its own published exports as the modules extension types come from', () => {
     expect(extensionPackages).toEqual(expect.arrayContaining(statingTypeModules));
     const controlEntrypoints = extensionPackages.flatMap((name) =>
