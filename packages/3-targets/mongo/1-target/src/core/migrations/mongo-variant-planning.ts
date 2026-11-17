@@ -1,6 +1,7 @@
 import { asNamespaceId, type ContractWithDomain } from '@internal/contract/types';
 import {
   describeMigrationStatement,
+  fieldStatementText,
   type MigrationPlannerConflict,
   type ModelCoordinate,
   modelDisplayName,
@@ -329,10 +330,18 @@ function unrenamedDiscriminatorRefusal(
           statements: input.statements,
         });
   const field = quoted(change.field);
+  const discriminator =
+    destinationBase === undefined
+      ? undefined
+      : modelAt(input.contract, destinationBase)?.discriminator?.field;
+  const backfill =
+    destinationBase === undefined || discriminator === undefined
+      ? '--backfill'
+      : `--backfill ${fieldStatementText(input.contract, { ...destinationBase, field: discriminator })}`;
   const advice =
     rename === undefined
       ? inTwoSteps(
-          `add field ${field} and give every document its value there (under migration plan, with --backfill)`,
+          `make ${field} the discriminator with the variants' current values, giving every document its value there (under migration plan, with ${backfill})`,
           'change the variants',
         )
       : `Add ${rename.flags} and run the command again.`;

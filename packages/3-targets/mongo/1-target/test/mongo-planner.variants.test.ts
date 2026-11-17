@@ -522,15 +522,15 @@ describe('MongoMigrationPlanner, a discriminator renamed without its statement',
   });
 
   describe('with the old discriminator kept as a field', () => {
-    const kindBesideType = (bug: ModelSpec) =>
+    const kindBesideType = (bug: ModelSpec, bugValue = 'bug', seed = 'to') =>
       contract(
-        'to',
+        seed,
         {
           Task: {
             collection: 'tasks',
             fields: ['_id', 'type', 'kind'],
             discriminator: 'kind',
-            variants: { Bug: 'bug', Epic: 'epic' },
+            variants: { Bug: bugValue, Epic: 'epic' },
           },
           Bug: { collection: 'tasks', base: 'Task', ...bug },
           Epic: { collection: 'tasks', fields: ['scope'], base: 'Task' },
@@ -547,6 +547,41 @@ describe('MongoMigrationPlanner, a discriminator renamed without its statement',
         (operation) => Reflect.get(operation ?? {}, 'id'),
       );
     };
+
+    it('refuses a changed variant value until the new discriminator holds the current values, and plans each of the two steps it gives', async () => {
+      const valueChangedBesideType = kindBesideType({ fields: ['severity'] }, 'defect');
+      const kindHolds = kindBesideType({ fields: ['severity'] }, 'bug', 'from');
+      expect({
+        refused: refusal(
+          plan({
+            from: BEFORE,
+            to: valueChangedBesideType,
+            schema: live,
+            statements: [convert('Bug')],
+          }),
+        ),
+        first: await ids([backfillKind], kindHolds),
+        second: planned(
+          plan({
+            from: kindHolds,
+            to: valueChangedBesideType,
+            schema: live,
+            statements: [convert('Bug')],
+          }),
+        ).labels,
+      }).toEqual({
+        refused: [
+          {
+            kind: 'statementRefused',
+            summary:
+              'Cannot convert variant "Bug": its documents hold their discriminator value in field "type", which the plan does not rename to "kind"',
+            why: `The plan rewrites the documents of a variant by their value in field "kind", which only a rename of field "type" gives them. Make the change as two changes to the contract, and apply the first, by a migration or by db update, before you make the second: first make "kind" the discriminator with the variants' current values, giving every document its value there (under migration plan, with --backfill Task.kind); then change the variants.`,
+          },
+        ],
+        first: ['data_transform.Task.kind'],
+        second: [replaceLabel('bug', 'defect', 'kind')],
+      });
+    });
 
     it('backfills the discriminator before a backfill of a variant field selected by it, in either order of the statements', async () => {
       const to = kindBesideType({ fields: ['severity', 'level'] });
