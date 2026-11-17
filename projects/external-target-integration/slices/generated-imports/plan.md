@@ -35,7 +35,8 @@ Known failure modes to check in every dispatch: destructive git operations are f
 
 ## 5. Module names recorded inside the emitted contract
 
-- **Outcome:** the `package` string in codec metadata either is gone from the emitted contract (if nothing reads it) or holds the module the matching import line names. The dispatch reports which, with the evidence.
+- **Outcome:** the emitted contract no longer records where an extension's types are imported from. Research on 2026-11-17 found that nothing reads it: the only writer is `enrichContract` in the CLI's control API, it writes for extensions only, no validation schema looks inside `extensions`, and `extensions` is outside every hash. So the design record's rule for an unread value applies: remove it.
+- **Order:** run before dispatch 3. It does not depend on it, and dispatch 3 is waiting on a decision.
 - **Builds on:** dispatch 3.
 - **Hands on:** no emitted artifact holds a private workspace name.
 
