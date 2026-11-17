@@ -73,17 +73,27 @@ function invalidBinding(reason: string, parameters: readonly string[]): Error {
   });
 }
 
-/** Parses `url` as the Postgres facade does, refusing it without the parser's error, which carries the whole URL. */
-function parseUrl(url: string): URL {
+/** Parses `url` as the Postgres facade does, refusing it without the parser's error, which carries the whole URL. A URL that leaves the host blank parses with a placeholder host, and `hostGiven` says the URL named none, so the connector falls back to its default. */
+function parseUrl(url: string): { readonly parsed: URL; readonly hostGiven: boolean } {
   try {
-    return new URL(url);
+    const parsed = new URL(url);
+    return { parsed, hostGiven: parsed.hostname !== '' };
   } catch {
-    throw invalidBinding('the URL cannot be parsed', []);
+    const withHost = url.replace(/^([^:/?#]+:\/\/[^/?#]*@)(\/|$|\?|#)/, '$1localhost$2');
+    try {
+      return { parsed: new URL(withHost), hostGiven: false };
+    } catch {
+      throw invalidBinding('the URL cannot be parsed', []);
+    }
   }
 }
 
-function readUrl(url: string): { readonly parsed: URL; readonly parameters: UrlParameters } {
-  const parsed = parseUrl(url);
+function readUrl(url: string): {
+  readonly parsed: URL;
+  readonly parameters: UrlParameters;
+  readonly hostGiven: boolean;
+} {
+  const { parsed, hostGiven } = parseUrl(url);
   if (parsed.searchParams.has('charset')) {
     throw invalidBinding(
       'the driver always uses utf8mb4, because it reads each statement as utf8mb4 to find its placeholders; remove the charset parameter',
@@ -107,7 +117,7 @@ function readUrl(url: string): { readonly parsed: URL; readonly parameters: UrlP
       ['sslcert'],
     );
   }
-  return { parsed, parameters };
+  return { parsed, parameters, hostGiven };
 }
 
 function readPem(parameter: 'sslcert' | 'sslkey' | 'sslrootcert', path: string): string {
@@ -139,11 +149,15 @@ function connectionOptions(
   parsed: URL,
   parameters: UrlParameters,
   connectTimeoutMs: number | undefined,
+  hostGiven: boolean,
 ): ConnectionConfig {
   return {
-    host: decodeURIComponent(parsed.hostname).replace(/^\[(.*)\]$/, '$1'),
+    ...ifDefined(
+      'host',
+      hostGiven ? decodeURIComponent(parsed.hostname).replace(/^\[(.*)\]$/, '$1') : undefined,
+    ),
     ...ifDefined('port', parsed.port === '' ? undefined : Number(parsed.port)),
-    user: decodeURIComponent(parsed.username),
+    ...ifDefined('user', parsed.username === '' ? undefined : decodeURIComponent(parsed.username)),
     password: decodeURIComponent(parsed.password),
     database: decodeURIComponent(parsed.pathname.slice(1)),
     ...ifDefined('ssl', tlsOptions(parameters)),
@@ -159,8 +173,8 @@ export function mysqlConnectionOptions(
   url: string,
   settings?: { readonly connectTimeoutMs?: number | undefined },
 ): ConnectionConfig {
-  const { parsed, parameters } = readUrl(url);
-  return connectionOptions(parsed, parameters, settings?.connectTimeoutMs);
+  const { parsed, parameters, hostGiven } = readUrl(url);
+  return connectionOptions(parsed, parameters, settings?.connectTimeoutMs, hostGiven);
 }
 
 /** How long a connection may stay idle before the pool, and the driver's cancel connection, close it. */
@@ -172,10 +186,10 @@ export function mysqlPoolIdleTimeoutMillis(poolOptions?: MysqlPoolOptions): numb
  * The `mariadb` pool options for a `mysql://` URL, sized and timed as the Postgres driver's `pg.Pool`: it opens a connection only when one is needed (`minimumIdle: 0`), closes one idle for `idleTimeoutMillis`, and waits `connectionTimeoutMillis` both to open a connection and for a pooled one to come free.
  */
 export function mysqlPoolOptions(url: string, poolOptions?: MysqlPoolOptions): PoolConfig {
-  const { parsed, parameters } = readUrl(url);
+  const { parsed, parameters, hostGiven } = readUrl(url);
   const timeoutMs = poolOptions?.connectionTimeoutMillis ?? DEFAULT_CONNECT_TIMEOUT_MILLIS;
   return {
-    ...connectionOptions(parsed, parameters, timeoutMs),
+    ...connectionOptions(parsed, parameters, timeoutMs, hostGiven),
     acquireTimeout: timeoutMs,
     minimumIdle: 0,
     idleTimeout: Math.ceil(mysqlPoolIdleTimeoutMillis(poolOptions) / 1000),
