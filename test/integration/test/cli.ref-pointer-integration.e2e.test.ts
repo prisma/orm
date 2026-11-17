@@ -88,7 +88,7 @@ withTempDir(({ createTempDir }) => {
       ctx: JourneyContext,
       args: readonly string[],
     ): Promise<EngineCommandResult> {
-      return runOnEngine(ctx, ['ref', ...args]);
+      return runOnEngine(ctx, ['migration', 'ref', ...args]);
     }
 
     it(

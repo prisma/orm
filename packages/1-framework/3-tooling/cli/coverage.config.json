@@ -1,0 +1,28 @@
+{
+  "include": ["src/**/*.ts"],
+  "exclude": [
+    "dist/**",
+    "test/**",
+    "**/*.test.ts",
+    "**/*.test-d.ts",
+    "**/*.config.ts",
+    "**/exports/**",
+    "src/utils/formatters/migrations.ts",
+    "src/utils/formatters/verify.ts",
+    "src/utils/command-helpers.ts",
+    "src/utils/cli-errors.ts",
+    "src/utils/migration-types.ts",
+    "src/commands/init/**",
+    "src/migration-cli.ts",
+    "src/utils/publish-contract-artifact-pair.ts",
+    "src/utils/validate-contract-deps.ts",
+    "src/load-ts-contract.ts",
+    "src/control-api/**"
+  ],
+  "thresholds": {
+    "lines": 95,
+    "branches": 95,
+    "functions": 95,
+    "statements": 95
+  }
+}

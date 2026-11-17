@@ -16,7 +16,7 @@ function planOf(runtime: MockRuntime) {
 
 const numericField = 'views' as never;
 
-// Aggregate chains that name no aggregate input (no take/skip/cursor/distinct)
+// Aggregate chains that name no aggregate input (no limit/offset/cursor/distinct)
 // compile through the unchanged plain-filters path today. These snapshots
 // pin that output before any input-select machinery lands, so a later change
 // that widens the input-wrap condition too far shows up as a diff here

@@ -18,7 +18,7 @@ function isControlPolicy(value: unknown): value is ControlPolicy {
  * This is the precondition for advancing a contract space's marker without
  * any migrations (the declared-state resolution the db-init aggregate
  * planner and `migrate` share): only when nothing in the space is
- * Prisma-Next-managed can the storage structure be correct without a
+ * Prisma 8-managed can the storage structure be correct without a
  * migration having produced it. Any space that declares a managed element
  * but ships no migration graph is an authoring bug and must fail loudly.
  */

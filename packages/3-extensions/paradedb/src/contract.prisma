@@ -1,0 +1,5 @@
+// use prisma-8
+
+namespace unbound {
+  extension pg_search {}
+}

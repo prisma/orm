@@ -1,3 +1,5 @@
+// use prisma-8
+
 // PSL contract source for the internal `audit` contract-space package.
 // See ../README.md for the emit + migration-authoring workflow.
 

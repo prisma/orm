@@ -16,10 +16,22 @@ import type { EmitOptions, EmitResult, EmitStackInput } from '../src/exports';
 import { emit as emitImpl } from '../src/exports';
 
 const identitySerialize = (c: Contract): JsonObject => c as unknown as JsonObject;
+const identityDeserialize = (json: Record<string, unknown>): Contract => {
+  const contract = structuredClone(json) as unknown as Contract;
+  for (const namespace of Object.values(contract.domain.namespaces)) {
+    for (const entity of Object.values(namespace.models)) {
+      for (const [name, field] of Object.entries(entity.fields)) {
+        entity.fields[name] = { ...field, many: field.many ?? false };
+      }
+    }
+  }
+  return contract;
+};
 
 const sqlPreserveEmptyPatterns = [
   ['storage', 'namespaces', '*', 'entries', 'table'],
   ['storage', 'namespaces', '*', 'entries', 'table', '*'],
+  ['storage', 'namespaces', '*', 'entries', 'table', '*', 'columns', '*', 'many'],
   ['storage', 'namespaces', '*', 'entries', 'table', '*', ['uniques', 'indexes', 'foreignKeys']],
   ['storage', 'namespaces', '*', 'entries', 'table', '*', 'foreignKeys', ['constraint', 'index']],
 ] as const satisfies readonly PathPattern[];
@@ -45,12 +57,13 @@ export function emit(
   contract: Contract,
   stack: EmitStackInput,
   family: EmissionSpi,
-  options?: Omit<EmitOptions, 'serializeContract'>,
+  options?: Omit<EmitOptions, 'serializeContract' | 'deserializeContract'>,
 ): Promise<EmitResult> {
   return emitImpl(contract, stack, family, {
     ...SQL_EMIT_HOOKS,
     ...options,
     serializeContract: identitySerialize,
+    deserializeContract: identityDeserialize,
   });
 }
 
@@ -59,6 +72,10 @@ type TestContractOverrides = {
   targetFamily?: string;
   roots?: Record<string, CrossReference>;
   models?: Record<string, unknown>;
+  /** Named domain namespaces; replaces the single unbound namespace `models` fills. */
+  namespaces?: Record<string, unknown>;
+  /** SQL storage tables keyed by namespace id, then table name; builds `storage.namespaces`. */
+  tables?: Record<string, Record<string, unknown>>;
   valueObjects?: Record<string, unknown>;
   enum?: Record<string, unknown>;
   storage?: Record<string, unknown>;
@@ -95,13 +112,26 @@ export function modelsFromCanonicalContract(
 }
 
 export function createTestContract(overrides: TestContractOverrides = {}): Contract {
-  const { storageHash: _sh, schemaVersion: _sv, sources: _src, storage, ...rest } = overrides;
+  const {
+    storageHash: _sh,
+    schemaVersion: _sv,
+    sources: _src,
+    storage,
+    tables,
+    ...rest
+  } = overrides;
   const cleanStorage = storage
     ? (() => {
         const { storageHash: _innerSh, ...storageRest } = storage as Record<string, unknown>;
         return storageRest;
       })()
-    : undefined;
+    : tables
+      ? {
+          namespaces: Object.fromEntries(
+            Object.entries(tables).map(([id, table]) => [id, { id, entries: { table } }]),
+          ),
+        }
+      : undefined;
   return createContract({
     ...rest,
     ...(cleanStorage ? { storage: cleanStorage } : {}),

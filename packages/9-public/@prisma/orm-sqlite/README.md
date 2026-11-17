@@ -2,9 +2,8 @@
 
 The one package a SQLite application installs. It wires the framework, the SQL family, and the SQLite target into a single lazy client, and brings the rest of the stack along as exact-pinned dependencies:
 
-```jsonc
-// package.json
-{ "dependencies": { "@prisma/orm-sqlite": "0.16.0" } }
+```sh
+pnpm add @prisma/orm-sqlite
 ```
 
 ```
@@ -16,6 +15,8 @@ The one package a SQLite application installs. It wires the framework, the SQL f
 ```
 
 The driver is Node's built-in `node:sqlite`, so there is no native module to compile.
+
+`temporal-polyfill` is a required peer dependency. The control plane, such as the `prisma` commands, loads it as a fallback `Temporal` when the runtime has none, and a project that already installs it for its own code has one copy. npm, pnpm and bun install it automatically; with Yarn, add `temporal-polyfill` to your dependencies.
 
 ## Entrypoints
 
@@ -46,7 +47,3 @@ This package ships no bin. The ORM commands run inside the unified `prisma` CLI,
 ## Responsibilities
 
 Composition only. Every behavior it exposes lives in the platform packages; this package chooses the default combination of them and gives it one name.
-
-## Dependencies
-
-`@prisma/orm-framework`, `@prisma/orm-family-sql`, `@prisma/orm-target-sqlite`, and `@prisma/orm-toolchain` at exact lockstep versions, plus `pathe`.

@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Real emitted fixture for the sql-orm-client PSL many-to-many parity tests.
 //
 // It mirrors the TS-builder fixture's `User ↔ Tag` many-to-many (through the

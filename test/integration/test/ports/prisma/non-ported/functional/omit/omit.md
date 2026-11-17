@@ -1,21 +1,21 @@
 # Non-ported — omit
 
-- `packages/client/tests/functional/omit/test.ts` › `non-existing true field in omit throw validation error` — runtime validation error for unknown omit field — prisma-next has no omit clause
-- `packages/client/tests/functional/omit/test.ts` › `non-existing false field in omit throw validation error` — runtime validation error for unknown omit field (false) — prisma-next has no omit clause
-- `packages/client/tests/functional/omit/test.ts` › `omit + select throws validation error` — runtime error when omit and select are both provided — prisma-next has no omit clause
-- `packages/client/tests/functional/omit/test.ts` › `deeply nested omit + select throws validation error` — nested omit+select validation error — prisma-next has no omit clause
-- `packages/client/tests/functional/omit/test.ts` › `excluding all fields of a model throws validation error` — omit all fields validation error — prisma-next has no omit clause
-- `packages/client/tests/functional/omit/test.ts` › `create` — `create({ omit: { password: true } })` excludes field from result — prisma-next has no omit clause
-- `packages/client/tests/functional/omit/test.ts` › `createManyAndReturn` — `createManyAndReturn({ omit: { password: true } })` — prisma-next has no omit clause
-- `packages/client/tests/functional/omit/test.ts` › `findUnique` — `findUnique({ omit: { password: true } })` — prisma-next has no omit clause
-- `packages/client/tests/functional/omit/test.ts` › `findFirst` — `findFirst({ omit: { password: true } })` — prisma-next has no omit clause
-- `packages/client/tests/functional/omit/test.ts` › `findFirstOrThrow` — `findFirstOrThrow({ omit: { password: true } })` — prisma-next has no omit clause
-- `packages/client/tests/functional/omit/test.ts` › `findUniqueOrThrow` — `findUniqueOrThrow({ omit: { password: true } })` — prisma-next has no omit clause
-- `packages/client/tests/functional/omit/test.ts` › `update` — `update({ omit: { password: true } })` — prisma-next has no omit clause
-- `packages/client/tests/functional/omit/test.ts` › `upsert` — `upsert({ omit: { password: true } })` — prisma-next has no omit clause
-- `packages/client/tests/functional/omit/test.ts` › `false value` — `omit: { password: false }` (explicit include via omit=false) — prisma-next has no omit clause
-- `packages/client/tests/functional/omit/test.ts` › `omit combined with include` — `include + omit` combination — prisma-next has no omit clause
-- `packages/client/tests/functional/omit/test.ts` › `omit nested in select` — `select: { author: { omit: { password: true } } }` — prisma-next has no omit clause
-- `packages/client/tests/functional/omit/test.ts` › `omit nested in include` — `include: { author: { omit: { password: true } } }` — prisma-next has no omit clause
-- `packages/client/tests/functional/omit/test.ts` › `excluding computed fields` — omit on `$extends({ result })` computed field — prisma-next has no omit clause and no $extends
-- `packages/client/tests/functional/omit/test.ts` › `excluding dependency of a computed field` — omit a field that a computed field depends on — prisma-next has no omit clause and no $extends
+- `packages/client/tests/functional/omit/test.ts` › `non-existing true field in omit throw validation error` — runtime validation error for unknown omit field — Prisma 8 has no omit clause
+- `packages/client/tests/functional/omit/test.ts` › `non-existing false field in omit throw validation error` — runtime validation error for unknown omit field (false) — Prisma 8 has no omit clause
+- `packages/client/tests/functional/omit/test.ts` › `omit + select throws validation error` — runtime error when omit and select are both provided — Prisma 8 has no omit clause
+- `packages/client/tests/functional/omit/test.ts` › `deeply nested omit + select throws validation error` — nested omit+select validation error — Prisma 8 has no omit clause
+- `packages/client/tests/functional/omit/test.ts` › `excluding all fields of a model throws validation error` — omit all fields validation error — Prisma 8 has no omit clause
+- `packages/client/tests/functional/omit/test.ts` › `create` — `create({ omit: { password: true } })` excludes field from result — Prisma 8 has no omit clause
+- `packages/client/tests/functional/omit/test.ts` › `createManyAndReturn` — `createManyAndReturn({ omit: { password: true } })` — Prisma 8 has no omit clause
+- `packages/client/tests/functional/omit/test.ts` › `findUnique` — `findUnique({ omit: { password: true } })` — Prisma 8 has no omit clause
+- `packages/client/tests/functional/omit/test.ts` › `findFirst` — `findFirst({ omit: { password: true } })` — Prisma 8 has no omit clause
+- `packages/client/tests/functional/omit/test.ts` › `findFirstOrThrow` — `findFirstOrThrow({ omit: { password: true } })` — Prisma 8 has no omit clause
+- `packages/client/tests/functional/omit/test.ts` › `findUniqueOrThrow` — `findUniqueOrThrow({ omit: { password: true } })` — Prisma 8 has no omit clause
+- `packages/client/tests/functional/omit/test.ts` › `update` — `update({ omit: { password: true } })` — Prisma 8 has no omit clause
+- `packages/client/tests/functional/omit/test.ts` › `upsert` — `upsert({ omit: { password: true } })` — Prisma 8 has no omit clause
+- `packages/client/tests/functional/omit/test.ts` › `false value` — `omit: { password: false }` (explicit include via omit=false) — Prisma 8 has no omit clause
+- `packages/client/tests/functional/omit/test.ts` › `omit combined with include` — `include + omit` combination — Prisma 8 has no omit clause
+- `packages/client/tests/functional/omit/test.ts` › `omit nested in select` — `select: { author: { omit: { password: true } } }` — Prisma 8 has no omit clause
+- `packages/client/tests/functional/omit/test.ts` › `omit nested in include` — `include: { author: { omit: { password: true } } }` — Prisma 8 has no omit clause
+- `packages/client/tests/functional/omit/test.ts` › `excluding computed fields` — omit on `$extends({ result })` computed field — Prisma 8 has no omit clause and no $extends
+- `packages/client/tests/functional/omit/test.ts` › `excluding dependency of a computed field` — omit a field that a computed field depends on — Prisma 8 has no omit clause and no $extends

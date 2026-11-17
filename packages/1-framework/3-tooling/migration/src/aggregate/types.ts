@@ -18,14 +18,12 @@ export type ContractAtResult =
       readonly provenance: 'ref';
       readonly hash: string;
       readonly contractJson: unknown;
-      readonly contractDts: string;
       readonly contract: Contract;
     }
   | {
       readonly provenance: 'graph-node';
       readonly hash: string;
       readonly contractJson: unknown;
-      readonly contractDts: string;
       readonly contract: Contract;
     };
 

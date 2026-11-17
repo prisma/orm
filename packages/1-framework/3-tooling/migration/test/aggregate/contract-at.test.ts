@@ -1,5 +1,6 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { ContractValidationError } from '@internal/contract/contract-validation-error';
 import type { Contract } from '@internal/contract/types';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -103,7 +104,6 @@ describe('AggregateContractSpace.contractAt', () => {
 
     expect(result.hash).toBe(HASH_A);
     expect(result.provenance).toBe('ref');
-    expect(result.contractDts).toBe(sampleContractDts('ref'));
     expect((result.contractJson as { storage: { storageHash: string } }).storage.storageHash).toBe(
       HASH_A,
     );
@@ -133,7 +133,6 @@ describe('AggregateContractSpace.contractAt', () => {
     expect(result.hash).toBe(HASH_B);
     expect(result.provenance).toBe('graph-node');
     if (result.provenance !== 'graph-node') throw new Error('expected graph-node provenance');
-    expect(result.contractDts).toBe(sampleContractDts('bundle'));
     expect((result.contractJson as { storage: { storageHash: string } }).storage.storageHash).toBe(
       HASH_B,
     );
@@ -147,8 +146,6 @@ describe('AggregateContractSpace.contractAt', () => {
     const result = await space.contractAt(HASH_B, { refName: 'staging' });
 
     expect(result.provenance).toBe('graph-node');
-    if (result.provenance !== 'graph-node') throw new Error('expected graph-node provenance');
-    expect(result.contractDts).toBe(sampleContractDts('bundle'));
   });
 
   it('throws when the hash is a graph node but no bundle ends at that hash', async () => {
@@ -212,6 +209,31 @@ describe('AggregateContractSpace.contractAt', () => {
     });
   });
 
+  it('keeps the refused defaults of a snapshot the family refuses to load', async () => {
+    const refusedDefaults = [
+      {
+        namespaceId: 'public',
+        table: 'users',
+        column: 'id',
+        dataType: 'pg/int4',
+        value: 'x',
+        message: 'not an integer',
+        reason: 'type-refused-default',
+      },
+    ];
+    const space = spaceWithPackages(
+      [createAttestedPackage('20260101T0000_init', { from: null, to: HASH_B })],
+      () => {
+        throw new ContractValidationError('refused', 'storage', { refusedDefaults });
+      },
+    );
+
+    await expect(space.contractAt(HASH_B)).rejects.toMatchObject({
+      code: 'MIGRATION.CONTRACT_DESERIALIZATION_FAILED',
+      meta: { refusedDefaults },
+    });
+  });
+
   it('throws ref not resolvable when refName is set and hash is not a graph node', async () => {
     const space = spaceWithPackages([
       createAttestedPackage('20260101T0000_init', { from: null, to: HASH_B }),
@@ -257,6 +279,6 @@ describe('AggregateContractSpace.contractAt', () => {
     expect(fromRef).not.toBe(fromBundle);
     expect(fromRef.provenance).toBe('ref');
     expect(fromBundle.provenance).toBe('graph-node');
-    expect(fromRef.contractDts).toBe(fromBundle.contractDts);
+    expect(fromRef.contractJson).toEqual(fromBundle.contractJson);
   });
 });

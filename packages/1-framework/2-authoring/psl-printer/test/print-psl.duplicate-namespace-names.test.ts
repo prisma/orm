@@ -40,8 +40,9 @@ const BLOCK_DESCRIPTORS = {
     keyword: 'widget',
     discriminator: 'widget',
     name: { required: true },
-    parameters: {},
-    variadicParameters: true,
+    spec: () => {
+      throw new Error('printer must not execute the "widget" spec factory');
+    },
   },
 } as const;
 
@@ -70,7 +71,7 @@ function widgetBlock(name: string, member: string): PslExtensionBlock {
     kind: 'widget',
     keyword: 'widget',
     name,
-    parameters: { [member]: { kind: 'value', raw: JSON.stringify(member), span: ZERO_SPAN } },
+    parameters: { [member]: { expression: JSON.stringify(member), span: ZERO_SPAN } },
     blockAttributes: [],
     span: ZERO_SPAN,
   };

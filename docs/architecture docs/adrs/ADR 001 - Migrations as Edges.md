@@ -1,5 +1,7 @@
 # ADR 001 — Migrations as Edges
 
+> **Update — 2026-10:** the planner hints this ADR anticipates for renames are not built. A rename is stated on the command line as a statement, `--rename <old>:<new>`, which never enters the contract or the migration edge. See [Migration System § Statements](../subsystems/7.%20Migration%20System.md#statements).
+
 ## Context
 
 Traditional migration systems rely on the order of files on disk to decide what to run next. That creates coupling to file sequencing, makes squashing brittle, and complicates collaboration when branches diverge. Agents and CI need deterministic, machine-verifiable answers to basic questions like “is it safe to apply this change” and “how do I get from here to there.”

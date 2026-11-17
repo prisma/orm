@@ -17,7 +17,7 @@ When you're sizing a new unit (dispatch, slice, or project), run the INVEST chec
 | **Valuable** | The dispatch moves the slice's outcome materially. "Wire up scaffolding I'll use in dispatch 2" is rarely a dispatch on its own; bundle it into the dispatch that consumes it. |
 | **Estimable** | A `Completed when` checklist of 1–3 items can be written, each binary and verifiable (a command, a grep gate, a file-existence check, or a specific fact about the codebase). If you can't write the checklist, the dispatch isn't shaped yet. |
 | **Small** | The brief plus its references fit in one executor session. As a rough heuristic: if the executor would need to evict the slice spec from context to load the dispatch's references, the dispatch is too big. |
-| **Testable** | A small set of gates verifies the outcome. The typical gate vocabulary in this codebase: `pnpm typecheck`, `pnpm lint:deps`, `pnpm fixtures:check`, `pnpm test:packages -- <pkg>`, plus targeted `rg` greps for retired/added literals. |
+| **Testable** | A small set of gates verifies the outcome. The typical gate vocabulary in this codebase: `pnpm typecheck`, `pnpm lint:deps`, `pnpm fixtures:check`, `pnpm --filter <pkg> test`, plus targeted `rg` greps for retired/added literals. |
 
 ### Dispatch-shape patterns this repo runs cleanly
 
@@ -47,7 +47,7 @@ When a dispatch matches one of these shapes, run INVEST again — usually the fi
 | **Valuable** | The slice closes a real gap in the project's purpose. A slice whose only value is "preparation for slice 3" is a sequencing artifact — fold it into slice 3 or surface why the prep needs to ship on its own. |
 | **Estimable** | The slice-DoD lists conditions that a CI run + reviewer pass can verify at PR-open time. |
 | **Small** | **Manageable in a single code review.** One reviewer reads the PR in one sitting, holds the coherence in their head, and reaches a verdict without needing to re-orient mid-review. The test is *coherence*, not LoC: a 2000-LoC mechanical migration with one outcome passes; a 200-LoC PR spanning a substrate change + a fixture regen + a new error type fails. |
-| **Testable** | The slice-DoD plus the project-DoD floor compose into a passable bar at PR-open time. Validation gates: full `pnpm test:packages` (or scoped to affected packages), `pnpm fixtures:check`, plus any slice-specific grep gates the spec names. |
+| **Testable** | The slice-DoD plus the project-DoD floor compose into a passable bar at PR-open time. Validation gates: the affected packages' own tests (whole suites run in CI), `pnpm fixtures:check`, plus any slice-specific grep gates the spec names. |
 
 ### Slice-shape patterns this repo runs cleanly
 

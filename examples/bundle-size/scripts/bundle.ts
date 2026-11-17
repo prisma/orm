@@ -13,7 +13,7 @@ const require_ = createRequire(import.meta.url);
 const pkg: { dependencies?: Record<string, string> } = require_(resolve(root, 'package.json'));
 
 // Only mark the Node-runtime drivers (`pg`, `mongodb`) external. Everything
-// Prisma Next owns is inlined into the bundle — that's the realistic shape of
+// Prisma 8 owns is inlined into the bundle — that's the realistic shape of
 // a serverless / single-binary deployment.
 const external = ['pg', 'pg-native', 'mongodb'];
 

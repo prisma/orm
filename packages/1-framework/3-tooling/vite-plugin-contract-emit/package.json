@@ -1,7 +1,7 @@
 {
   "name": "@internal/vite-plugin-contract-emit",
   "private": true,
-  "version": "8.0.0-rc.4",
+  "version": "8.0.0-rc.24",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -12,7 +12,6 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --project tsconfig.json --noEmit && tsc --project tsconfig.test.json --noEmit",
     "lint": "biome check . --error-on-warnings",
     "lint:fix": "biome check --write .",
@@ -20,15 +19,15 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/cli": "workspace:8.0.0-rc.4",
-    "@internal/config-loader": "workspace:8.0.0-rc.4",
-    "@internal/emitter": "workspace:8.0.0-rc.4",
+    "@internal/cli": "workspace:8.0.0-rc.24",
+    "@internal/config-loader": "workspace:8.0.0-rc.24",
+    "@internal/emitter": "workspace:8.0.0-rc.24",
     "pathe": "^2.0.3"
   },
   "devDependencies": {
-    "@internal/utils": "workspace:8.0.0-rc.4",
-    "@repo/tsconfig": "workspace:8.0.0-rc.4",
-    "@repo/tsdown": "workspace:8.0.0-rc.4",
+    "@internal/utils": "workspace:8.0.0-rc.24",
+    "@repo/tsconfig": "workspace:8.0.0-rc.24",
+    "@repo/tsdown": "workspace:8.0.0-rc.24",
     "@types/node": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:",
@@ -49,7 +48,7 @@
   "types": "./dist/index.d.mts",
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/1-framework/3-tooling/vite-plugin-contract-emit"
   },
   "peerDependenciesMeta": {

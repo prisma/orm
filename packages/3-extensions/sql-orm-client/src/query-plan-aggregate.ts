@@ -6,7 +6,6 @@ import {
   type AnyExpression,
   BinaryExpr,
   type CodecRef,
-  ColumnRef,
   LiteralExpr,
   NotExpr,
   NullCheckExpr,
@@ -20,20 +19,25 @@ import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import type { SqlAggregateDescriptorRegistry } from '@internal/sql-relational-core/query-lane-context';
 import { plainAggregateExpr, resolveAggregate } from './aggregate-codecs';
 import { assertDistinctOnCapability, resolvePolymorphismInfo } from './collection-contract';
+import { assertDistinctOnCompatibleOrder } from './order-by-guards';
 import { ormError } from './orm-errors';
 import { buildOrmQueryPlan, deriveParamsFromAst } from './query-plan-meta';
 import { buildAggregateInput, buildMtiJoins, buildStateWhere } from './query-plan-source';
-import { tableSourceForContract } from './storage-resolution';
-import type { AggregateSelector, CollectionState } from './types';
-import { combineWhereExprs } from './where-utils';
+import type { AliasedTable } from './table-scope';
+import {
+  type AggregateSelector,
+  type CollectionState,
+  emptyGroupPagingState,
+  type GroupPagingState,
+} from './types';
 
 function toAggregateProjection(
   contract: Contract<SqlStorage>,
   aggregates: SqlAggregateDescriptorRegistry,
-  namespaceId: string,
-  tableName: string,
+  root: AliasedTable,
   selector: AggregateSelector<unknown>,
 ): { expr: AnyExpression; codec: CodecRef | undefined } {
+  const { namespaceId, tableName } = root.storage;
   // The result's codec is the target's to declare: `count` is a wide integer,
   // `sum` widens or preserves per input, and `min`/`max` keep the column's own
   // codec — all of which the aggregate registry answers per operation and input.
@@ -55,8 +59,7 @@ function toAggregateProjection(
     column: selector.column,
   });
 
-  const inputExpr =
-    selector.column === undefined ? undefined : ColumnRef.of(tableName, selector.column);
+  const inputExpr = selector.column === undefined ? undefined : root.column(selector.column);
   const expr =
     lower !== undefined
       ? lower({ expr: inputExpr, inputCodec })
@@ -65,9 +68,6 @@ function toAggregateProjection(
   return { expr, codec };
 }
 
-// ORM HAVING filters use literal binding (values inlined at plan-build time),
-// not parameterized binding. ParamRef is rejected because the ORM's grouped
-// collection API always produces literal comparisons for having() predicates.
 function validateGroupedComparable(value: AnyExpression): AnyExpression {
   switch (value.kind) {
     case 'param-ref':
@@ -76,6 +76,7 @@ function validateGroupedComparable(value: AnyExpression): AnyExpression {
         'ParamRef is not supported in grouped having expressions',
         { meta: { kind: value.kind } },
       );
+    case 'prepared-param-ref':
     case 'literal':
     case 'column-ref':
     case 'identifier-ref':
@@ -183,11 +184,12 @@ function validateGroupedHavingExpr(expr: AnyExpression): AnyExpression {
 
 // `__row` covers a bare `count()` with no orderBy column — SQL needs an output column.
 function aggregateInputColumns(
-  tableName: string,
+  root: AliasedTable,
   entries: ReadonlyArray<[string, AggregateSelector<unknown>]>,
   orderBy: ReadonlyArray<OrderByItem> | undefined,
+  groupByColumns: ReadonlyArray<string> = [],
 ): ProjectionItem[] {
-  const columns = new Set<string>();
+  const columns = new Set<string>(groupByColumns);
   for (const [, selector] of entries) {
     if (selector.column !== undefined) {
       columns.add(selector.column);
@@ -204,20 +206,18 @@ function aggregateInputColumns(
     return [ProjectionItem.of('__row', LiteralExpr.of(1))];
   }
 
-  return Array.from(columns, (column) =>
-    ProjectionItem.of(column, ColumnRef.of(tableName, column)),
-  );
+  return Array.from(columns, (column) => ProjectionItem.of(column, root.column(column)));
 }
 
 export function compileAggregate(
   contract: Contract<SqlStorage>,
   aggregates: SqlAggregateDescriptorRegistry,
-  namespaceId: string,
-  tableName: string,
   state: CollectionState,
   aggregateSpec: Record<string, AggregateSelector<unknown>>,
   modelName?: string,
 ): SqlQueryPlan<Record<string, unknown>> {
+  const { root } = state.tables;
+  const { namespaceId, tableName } = root.storage;
   const entries = Object.entries(aggregateSpec);
   if (entries.length === 0) {
     throw ormError(
@@ -229,6 +229,7 @@ export function compileAggregate(
 
   if (state.distinctOn !== undefined && state.distinctOn.length > 0) {
     assertDistinctOnCapability(contract, 'distinctOn');
+    assertDistinctOnCompatibleOrder(state.orderBy, state.distinctOn.length);
   }
 
   const hasPagination = state.limit !== undefined || state.offset !== undefined;
@@ -240,20 +241,12 @@ export function compileAggregate(
   if (needsInputSelect) {
     const { source } = buildAggregateInput(
       contract,
-      namespaceId,
-      tableName,
       state,
       modelName,
-      aggregateInputColumns(tableName, entries, state.orderBy),
+      aggregateInputColumns(root, entries, state.orderBy),
     );
     const projection: ProjectionItem[] = entries.map(([alias, selector]) => {
-      const { expr, codec } = toAggregateProjection(
-        contract,
-        aggregates,
-        namespaceId,
-        tableName,
-        selector,
-      );
+      const { expr, codec } = toAggregateProjection(contract, aggregates, root, selector);
       return ProjectionItem.of(alias, expr, codec);
     });
     const ast = SelectAst.from(source).withProjection(projection);
@@ -267,23 +260,15 @@ export function compileAggregate(
     : undefined;
   const variantJoins =
     polyInfo && polyInfo.mtiVariants.length > 0
-      ? buildMtiJoins(contract, namespaceId, polyInfo, state.variantName, undefined).joins
+      ? buildMtiJoins(contract, state.tables, polyInfo, state.variantValue, undefined).joins
       : [];
-  const where = buildStateWhere(contract, tableName, state, { namespaceId });
+  const where = buildStateWhere(contract, state);
 
   const projection: ProjectionItem[] = entries.map(([alias, selector]) => {
-    const { expr, codec } = toAggregateProjection(
-      contract,
-      aggregates,
-      namespaceId,
-      tableName,
-      selector,
-    );
+    const { expr, codec } = toAggregateProjection(contract, aggregates, root, selector);
     return ProjectionItem.of(alias, expr, codec);
   });
-  let ast = SelectAst.from(tableSourceForContract(contract, namespaceId, tableName)).withProjection(
-    projection,
-  );
+  let ast = SelectAst.from(root.tableSource(contract)).withProjection(projection);
   if (variantJoins.length > 0) {
     ast = ast.withJoins(variantJoins);
   }
@@ -298,13 +283,15 @@ export function compileAggregate(
 export function compileGroupedAggregate(
   contract: Contract<SqlStorage>,
   aggregates: SqlAggregateDescriptorRegistry,
-  namespaceId: string,
-  tableName: string,
-  filters: readonly AnyExpression[],
+  preGroupState: CollectionState,
   groupByColumns: readonly string[],
   aggregateSpec: Record<string, AggregateSelector<unknown>>,
   havingExpr: AnyExpression | undefined,
+  modelName?: string,
+  postGroup: GroupPagingState = emptyGroupPagingState(),
 ): SqlQueryPlan<Record<string, unknown>> {
+  const { root } = preGroupState.tables;
+  const { namespaceId, tableName } = root.storage;
   if (groupByColumns.length === 0) {
     throw ormError('ORM.GROUP_BY_FIELD_MISSING', 'groupBy() requires at least one field', {
       meta: { namespaceId, tableName },
@@ -320,36 +307,76 @@ export function compileGroupedAggregate(
     );
   }
 
+  if (preGroupState.distinctOn !== undefined && preGroupState.distinctOn.length > 0) {
+    assertDistinctOnCapability(contract, 'distinctOn');
+    assertDistinctOnCompatibleOrder(preGroupState.orderBy, preGroupState.distinctOn.length);
+  }
+
   const projection: ProjectionItem[] = [
     ...groupByColumns.map((column) =>
       ProjectionItem.of(
         column,
-        ColumnRef.of(tableName, column),
+        root.column(column),
         codecRefForStorageColumn(contract.storage, namespaceId, tableName, column),
       ),
     ),
     ...entries.map(([alias, selector]) => {
-      const { expr, codec } = toAggregateProjection(
-        contract,
-        aggregates,
-        namespaceId,
-        tableName,
-        selector,
-      );
+      const { expr, codec } = toAggregateProjection(contract, aggregates, root, selector);
       return ProjectionItem.of(alias, expr, codec);
     }),
   ];
 
-  let ast = SelectAst.from(tableSourceForContract(contract, namespaceId, tableName))
-    .withProjection(projection)
-    .withGroupBy(groupByColumns.map((column) => ColumnRef.of(tableName, column)));
-  const where = combineWhereExprs(filters);
-  if (where) {
-    ast = ast.withWhere(where);
+  const hasPagination = preGroupState.limit !== undefined || preGroupState.offset !== undefined;
+  const hasDistinct =
+    (preGroupState.distinct !== undefined && preGroupState.distinct.length > 0) ||
+    (preGroupState.distinctOn !== undefined && preGroupState.distinctOn.length > 0);
+  const needsInputSelect = hasPagination || hasDistinct;
+
+  let ast: SelectAst;
+  if (needsInputSelect) {
+    const { source } = buildAggregateInput(
+      contract,
+      preGroupState,
+      modelName,
+      aggregateInputColumns(root, entries, preGroupState.orderBy, groupByColumns),
+    );
+    ast = SelectAst.from(source)
+      .withProjection(projection)
+      .withGroupBy(groupByColumns.map((column) => root.column(column)));
+  } else {
+    const polyInfo = modelName
+      ? resolvePolymorphismInfo(contract, namespaceId, modelName)
+      : undefined;
+    const { tables, variantValue } = preGroupState;
+    const variantJoins =
+      polyInfo && polyInfo.mtiVariants.length > 0
+        ? buildMtiJoins(contract, tables, polyInfo, variantValue, undefined).joins
+        : [];
+
+    ast = SelectAst.from(root.tableSource(contract))
+      .withProjection(projection)
+      .withGroupBy(groupByColumns.map((column) => root.column(column)));
+    if (variantJoins.length > 0) {
+      ast = ast.withJoins(variantJoins);
+    }
+    const where = buildStateWhere(contract, preGroupState);
+    if (where) {
+      ast = ast.withWhere(where);
+    }
   }
 
   if (havingExpr) {
     ast = ast.withHaving(validateGroupedHavingExpr(havingExpr));
+  }
+
+  if (postGroup.orderBy.length > 0) {
+    ast = ast.withOrderBy(postGroup.orderBy);
+  }
+  if (postGroup.limit !== undefined) {
+    ast = ast.withLimit(postGroup.limit);
+  }
+  if (postGroup.offset !== undefined) {
+    ast = ast.withOffset(postGroup.offset);
   }
 
   const { params } = deriveParamsFromAst(ast);

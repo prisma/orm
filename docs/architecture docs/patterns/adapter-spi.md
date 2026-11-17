@@ -54,8 +54,8 @@ Framework code that needs target-specific behaviour calls a method on the `Adapt
 
 | Implementation | Path | Demonstrates |
 |---|---|---|
-| Framework `Adapter` interface | [`packages/2-sql/4-lanes/relational-core/src/ast/adapter-types.ts`](../../../packages/2-sql/4-lanes/relational-core/src/ast/adapter-types.ts) | The SQL family's adapter interface; the framework's only contract for SQL targets. |
-| `PostgresAdapter` (canonical example) | [`packages/3-targets/6-adapters/postgres/src/core/adapter.ts`](../../../packages/3-targets/6-adapters/postgres/src/core/adapter.ts) | The Postgres implementation; private `PostgresAdapterImpl`, factory-exposed; capability profile, marker SQL, and lowering all live here. |
+| Framework `Adapter` interface | [`packages/2-sql-family/4-lanes/relational-core/src/ast/adapter-types.ts`](../../../packages/2-sql-family/4-lanes/relational-core/src/ast/adapter-types.ts) | The SQL family's adapter interface; the framework's only contract for SQL targets. |
+| `PostgresAdapter` (canonical example) | [`packages/3-targets/postgres/2-adapter/src/core/adapter.ts`](../../../packages/3-targets/postgres/2-adapter/src/core/adapter.ts) | The Postgres implementation; private `PostgresAdapterImpl`, factory-exposed; capability profile, marker SQL, and lowering all live here. |
 | Visitor-as-SPI variant | per [ADR 198](../adrs/ADR%20198%20-%20Runner%20decoupled%20from%20driver%20via%20visitor%20SPIs.md) | The runtime layer applies the same shape as a visitor SPI: the runner depends on a visitor interface and the driver implements it. |
 
 ## Related ADRs

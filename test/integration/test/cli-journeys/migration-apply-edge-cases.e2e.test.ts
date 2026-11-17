@@ -184,6 +184,8 @@ withTempDir(({ createTempDir }) => {
           'drop-email',
           '--from',
           latestMigrationDirName(ctx),
+          '--delete',
+          'User.email',
         ]);
         expect(plan1.exitCode, 'plan drop-email').toBe(0);
 
@@ -264,6 +266,10 @@ withTempDir(({ createTempDir }) => {
           'drop-email',
           '--from',
           latestMigrationDirName(ctx),
+          '--delete',
+          'User.email',
+          '--delete',
+          'User.name',
         ]);
         expect(plan2.exitCode, 'plan drop-email').toBe(0);
 

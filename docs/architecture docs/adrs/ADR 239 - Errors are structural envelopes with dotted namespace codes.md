@@ -135,16 +135,16 @@ This ADR collapsed five parallel error systems — a numeric `PN-DOMAIN-NNNN` cl
 
 ## The scheme
 
-**Format.** `NAMESPACE.SUBCODE`. `NAMESPACE` is one of the closed list below. `SUBCODE` is `UPPER_SNAKE_CASE`, noun-first (`MARKER_MISSING`, `HASH_MISMATCH`, `RUNNER_FAILED`) so codes group by subject. A quoted exact-match search for a code finds every occurrence.
+**Format.** `NAMESPACE.SUBCODE`. `NAMESPACE` is one of the closed list below. `SUBCODE` is `UPPER_SNAKE_CASE`, noun-first (`MARKER_MISSING`, `HASH_MISMATCH`, `SCHEMA_VERIFY_FAILED`) so codes group by subject. A quoted exact-match search for a code finds every occurrence.
 
 **Namespaces are meaning-based and closed.** The list is governed by this ADR; each namespace has exactly one owning module that declares its code union. Ownership and meaning coincide: an error detected by the CLI but *about* the contract↔DB relationship is `CONTRACT`, not `CLI`; a runner apply failure surfaced through the CLI is `MIGRATION`, not `CLI`.
 
 | Namespace | Meaning | Owning module |
 |---|---|---|
 | `CONFIG` | Config file load + validation, missing required config | `1-core/config` |
-| `CLI` | Invocation: flag parsing, output format, `init`, command usage | `1-core/errors` + `cli`; shared with `@prisma/cli-engine` since the S5 cutover — the engine mints its own `CLI.*` codes (`CLI.UNKNOWN_COMMAND`, `CLI.INVALID_ARGUMENTS`, `CLI.PROMPT_CANCELLED`, `CLI.INTERNAL_ERROR`, …) while this repo keeps `CLI.INIT_*` and the other ORM-tooling codes |
+| `CLI` | Invocation: flag parsing, output format, `init`, command usage | `1-core/errors` + `cli`; shared with `@prisma/cli-engine` since the S5 cutover — the engine mints its own `CLI.*` codes (`CLI.UNKNOWN_COMMAND`, `CLI.INVALID_ARGUMENTS`, `CLI.PROMPT_CANCELLED`, `CLI.INTERNAL_ERROR`, …) while this repo keeps `CLI.INIT_*` and the other ORM-tooling codes; this repo's commands and control API also raise the engine's `CLI.INVALID_ARGUMENTS`, with their own payload, for an option combination the engine cannot see, such as `--permit-policy-change` without a ref |
 | `CONTRACT` | Contract authoring (TS builders), emit, validation, marker/sign/verify | `0-foundation/contract` + `1-core/errors` + sql runtime |
-| `PSL` | PSL parse / format / interpret | `psl-parser` + `contract-psl` |
+| `PSL` | PSL parse / format / interpret, and interpretation of an earlier Prisma schema language | `psl-parser` + `contract-psl` + `contract-prisma7`, which declares the `PSL.PRISMA7_*` codes |
 | `PLAN` | Query planning | `relational-core` + `1-core/errors` |
 | `RUNTIME` | Query execution: codecs, transactions, prepare, streams, middleware wiring | `framework-components` + sql runtime |
 | `ORM` | ORM client API misuse | `sql-orm-client` + mongo orm |
@@ -165,7 +165,7 @@ One module owns the shared shape. It exports:
 - `NextAction` and `Diagnostic` — the two shapes above.
 - `isStructuredError(e): e is StructuredError` — structural predicate. It checks the identifying fields only (the code shape and a message); it is identification, not schema validation, so it deliberately does not probe `nextActions` or the optional fields. Completeness is the serializing side's job: a boundary that emits or rehydrates an envelope normalizes a missing `nextActions` to `[]` before handing the value to typed consumers.
 - `structuredError(code, message, options?)` — the convenience factory. Brands a plain `Error` with the fields (via `Object.assign` + a non-enumerable `name`), returning `Error & StructuredError`. Usable as a throw target or a `Result` failure value.
-- `docsUrlFor(code)` — returns `` `${DOCS_BASE}#${code}` ``, where `DOCS_BASE` is `https://docs.prisma.io/docs/orm/next/reference/error-reference` — one errors page, the dotted code as the fragment (e.g. `…/error-reference#CONTRACT.MARKER_MISSING`). The version segment is a single token (`next`) that flips to `v8` when the RC ships; a factory may override `docsUrl` for a code with its own page. Centralizing the URL makes that flip a one-line edit. `scripts/list-error-codes.mjs` enumerates every published code from source and has a `--verify <page>` mode the docs site uses to prove the reference page lists all of them.
+- `docsUrlFor(code)` — returns `` `${DOCS_BASE}#${code}` ``, where `DOCS_BASE` is `https://docs.prisma.io/docs/orm/v8/reference/error-reference` — one errors page, the dotted code as the fragment (e.g. `…/error-reference#CONTRACT.MARKER_MISSING`). The version segment is a single token (`v8`, flipped from `next` when the RC shipped); a factory may override `docsUrl` for a code with its own page. Centralizing the URL made that flip a one-line edit. `scripts/list-error-codes.mjs` enumerates every published code from source and has a `--verify <page>` mode the docs site uses to prove the reference page lists all of them.
 
 `severity` defaults to `error`. `cause` carries the provenance chain — a driver's `sqlState`, the wrapped original error — and is what the driver-error mapping populates. Redaction is a policy, not a field: `meta` must be redaction-safe and secrets are excluded.
 
@@ -251,7 +251,7 @@ type ErroredEnvelope = {
 
 ## Banning bare throws
 
-A `throw new Error(...)` is neither a structured failure nor a labeled bug — it is an unrecognizable string. A Biome GritQL plugin `no-bare-throw.grit` flags `throw new Error(` at severity `info`, and a CI ratchet (`scripts/lint-throws.mjs`, modeled on the cast ratchet) counts the diagnostics at HEAD versus the merge base and fails if the count rises. The count only falls; each sweep converts a cluster to `StructuredError` (user-facing) or `InternalError` (bug) and ratchets down.
+A `throw new Error(...)` is neither a structured failure nor a labeled bug — it is an unrecognizable string. A Biome GritQL plugin `no-bare-throw.grit` flags `throw new Error(` at severity `info`, and a CI ratchet (`scripts/lint-ratchets.mjs`, shared with the cast ratchet) counts the diagnostics at HEAD versus the merge base and fails if the count rises. The count only falls; each sweep converts a cluster to `StructuredError` (user-facing) or `InternalError` (bug) and ratchets down.
 
 Scope of the ban:
 
@@ -315,7 +315,7 @@ The 46 numeric codes. Grouped by destination namespace; a `↦ merges` note mark
 | PN-RUN-3001 | `errorMarkerMissing` | `CONTRACT.MARKER_MISSING` ↦ merges with existing runtime code |
 | PN-RUN-3002 | `errorHashMismatch` | `CONTRACT.MARKER_MISMATCH` ↦ merges with existing runtime code |
 | PN-RUN-3003 | `errorTargetMismatch` | `CONTRACT.TARGET_MISMATCH` |
-| PN-RUN-3004 | `errorSchemaVerificationFailed` | `CONTRACT.SCHEMA_VERIFICATION_FAILED` |
+| PN-RUN-3004 | `errorSchemaVerificationFailed` (since removed; `db verify` and `db sign` raise the code as a diagnostic) | `CONTRACT.SCHEMA_VERIFICATION_FAILED` |
 | PN-RUN-3005 | `errorMarkerRowCorrupt` | `CONTRACT.MARKER_ROW_CORRUPT` |
 | PN-RUN-3006 | `errorMarkerReadFailed` | `CONTRACT.MARKER_READ_FAILED` |
 | PN-RUN-3010 | `errorMarkerRequired` | `CONTRACT.MARKER_REQUIRED` |
@@ -326,7 +326,7 @@ The 46 numeric codes. Grouped by destination namespace; a `↦ merges` note mark
 |---|---|---|
 | PN-CLI-4020 | `errorMigrationPlanningFailed` | `MIGRATION.PLANNING_FAILED` |
 | PN-CLI-4021 | `errorTargetMigrationNotSupported` | `MIGRATION.TARGET_UNSUPPORTED` |
-| PN-RUN-3020 | `errorRunnerFailed` | `MIGRATION.RUNNER_FAILED` |
+| PN-RUN-3020 | `errorRunnerFailed` | `MIGRATION.RUNNER_FAILED` (since removed: `db init`, `db update` and `db migrate` report the runner's own code) |
 | PN-RUN-3030 | `errorDestructiveChanges` | `MIGRATION.DESTRUCTIVE_CHANGES` |
 | PN-MIG-2001 | `errorUnfilledPlaceholder` / `placeholder` | `MIGRATION.UNFILLED_PLACEHOLDER` |
 | PN-MIG-2002 | `errorMigrationFileMissing` | `MIGRATION.FILE_MISSING` ↦ merges with existing tooling code |
@@ -376,7 +376,7 @@ The `migration check` failure catalogue (`PN-MIG-CHECK-NNN`) converts to self-de
 
 - `DRIVER.*` — already dotted; `DRIVER` becomes a real namespace. No code strings change.
 - `RUNTIME.MISSING_MUTATION_DEFAULT_GENERATOR` and `RUNTIME.MUTATION_DEFAULT_GENERATOR_MISSING` (near-duplicates) → single `RUNTIME.MUTATION_DEFAULT_GENERATOR_MISSING`.
-- The migration runner's bare-word enum values `EXECUTION_FAILED`, `SCHEMA_VERIFY_FAILED`, `PRECHECK_FAILED`, `POSTCHECK_FAILED`, `POLICY_VIOLATION`, `FOREIGN_KEY_VIOLATION`, `DESTINATION_CONTRACT_MISMATCH`, `LEGACY_MARKER_SHAPE`, `MARKER_ORIGIN_MISMATCH`, `MARKER_CAS_FAILURE` → `MIGRATION.<VALUE>` on the `Result` failure (the failure already carries a summary and details; only the code string changes).
+- The migration runner's bare-word enum values `EXECUTION_FAILED`, `SCHEMA_VERIFY_FAILED`, `PRECHECK_FAILED`, `POSTCHECK_FAILED`, `POLICY_VIOLATION`, `FOREIGN_KEY_VIOLATION`, `DESTINATION_CONTRACT_MISMATCH`, `MARKER_ORIGIN_MISMATCH`, `MARKER_CAS_FAILURE` → `MIGRATION.<VALUE>` on the `Result` failure (the failure already carries a summary and details; only the code string changes).
 - `PLAN.INVALID` / `PLAN.UNSUPPORTED` had no production callers and are deleted rather than migrated.
 - The remaining `MIGRATION.*` / `RUNTIME.*` / `PLAN.*` / `CONTRACT.*` / `LINT.*` / `BUDGET.*` codes already conform; no rename.
 

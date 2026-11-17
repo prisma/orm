@@ -95,7 +95,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Infer a PSL contract from the live database [initialized with user(id, email)]
-> prisma-next contract infer
+> prisma contract infer
 
 
 
@@ -127,7 +127,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Infer a PSL contract from the live database [initialized with user(id, email)]
-> prisma-next contract infer
+> prisma contract infer
 
 
 
@@ -159,7 +159,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Infer a PSL contract from the live database [initialized with user(id, email)]
-> prisma-next contract infer
+> prisma contract infer
 
 
 
@@ -191,8 +191,8 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Infer a PSL contract from the live database [initialized with user(id, email)]
-> prisma-next contract infer
-prisma-next contract infer → Infer a PSL contract from the live database schema
+> prisma contract infer
+prisma contract infer → Infer a PSL contract from the live database schema
 │
 │ config:               prisma.config.ts
 │ database:             postgres://****:****@127.0.0.1:5433/postgres

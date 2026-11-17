@@ -1,16 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { EMPTY_CONTRACT_HASH } from '../src/constants';
-import { MigrationToolsError } from '../src/errors';
 import type { MigrationEdge } from '../src/graph';
 import { computeMigrationHash } from '../src/hash';
 import {
   detectCycles,
   detectOrphans,
-  findLatestMigration,
-  findLeaf,
   findPath,
   findPathWithDecision,
-  findReachableLeaves,
   reconstructGraph,
 } from '../src/migration-graph';
 import type { OnDiskMigrationPackage } from '../src/package';
@@ -198,105 +194,6 @@ describe('reconstructGraph', () => {
     const graph = reconstructGraph([first, second]);
     expect(graph.migrationByHash.get(first.metadata.migrationHash)?.dirName).toBe('m1');
     expect(graph.migrationByHash.size).toBe(1);
-  });
-});
-
-describe('findLeaf', () => {
-  it('returns null for empty graph', () => {
-    const graph = reconstructGraph([]);
-    expect(findLeaf(graph)).toBeNull();
-  });
-
-  it('returns H1 for single migration', () => {
-    const packages = chain([E, 'H1', 'm1']);
-    const graph = reconstructGraph(packages);
-    expect(findLeaf(graph)).toBe('H1');
-  });
-
-  it('returns H3 for linear chain', () => {
-    const packages = chain([E, 'H1', 'm1'], ['H1', 'H2', 'm2'], ['H2', 'H3', 'm3']);
-    const graph = reconstructGraph(packages);
-    expect(findLeaf(graph)).toBe('H3');
-  });
-
-  it('throws NO_TARGET on cycle-without-exit (A→B→A)', () => {
-    const packages = chain([E, 'H1', 'm1'], ['H1', 'H2', 'm2'], ['H2', 'H1', 'm3']);
-    const graph = reconstructGraph(packages);
-    try {
-      findLeaf(graph);
-      expect.fail('expected error');
-    } catch (e) {
-      expect(MigrationToolsError.is(e)).toBe(true);
-      const mte = e as MigrationToolsError;
-      expect(mte.code).toBe('MIGRATION.NO_TARGET');
-      expect(mte.fix).toContain('--from');
-      expect(mte.meta).toHaveProperty('reachableHashes');
-    }
-  });
-
-  it('handles cycle with an exit node', () => {
-    const packages = chain(
-      [E, 'H1', 'm1'],
-      ['H1', 'H2', 'm2'],
-      ['H2', 'H1', 'm3'],
-      ['H1', 'H3', 'm4'],
-    );
-    const graph = reconstructGraph(packages);
-    expect(findLeaf(graph)).toBe('H3');
-  });
-
-  it('errors on branching with code MIGRATION.AMBIGUOUS_TARGET', () => {
-    const packages = chain([E, 'H1', 'm1'], ['H1', 'H2a', 'm2a'], ['H1', 'H2b', 'm2b']);
-    const graph = reconstructGraph(packages);
-    try {
-      findLeaf(graph);
-      expect.fail('expected error');
-    } catch (e) {
-      expect(MigrationToolsError.is(e)).toBe(true);
-      const mte = e as MigrationToolsError;
-      expect(mte.code).toBe('MIGRATION.AMBIGUOUS_TARGET');
-      expect(mte.category).toBe('MIGRATION');
-      expect(mte.meta).toHaveProperty('branchTips');
-      expect(mte.fix).toContain('--from');
-    }
-  });
-});
-
-describe('findReachableLeaves', () => {
-  it('returns single leaf for linear chain', () => {
-    const packages = chain([E, 'H1', 'm1'], ['H1', 'H2', 'm2']);
-    const graph = reconstructGraph(packages);
-    expect(findReachableLeaves(graph, E)).toEqual(['H2']);
-  });
-
-  it('returns multiple leaves for branching graph', () => {
-    const packages = chain([E, 'H1', 'm1'], ['H1', 'H2', 'm2'], ['H1', 'H3', 'm3']);
-    const graph = reconstructGraph(packages);
-    const leaves = findReachableLeaves(graph, E);
-    expect(leaves).toHaveLength(2);
-    expect(leaves).toContain('H2');
-    expect(leaves).toContain('H3');
-  });
-
-  it('returns start node if it has no outgoing edges', () => {
-    const graph = reconstructGraph([]);
-    expect(findReachableLeaves(graph, 'orphan')).toEqual(['orphan']);
-  });
-});
-
-describe('findLatestMigration', () => {
-  it('returns null for empty graph', () => {
-    const graph = reconstructGraph([]);
-    expect(findLatestMigration(graph)).toBeNull();
-  });
-
-  it('returns the latest migration', () => {
-    const packages = chain([E, 'H1', 'm1'], ['H1', 'H2', 'm2']);
-    const graph = reconstructGraph(packages);
-    const latest = findLatestMigration(graph);
-    expect(latest).not.toBeNull();
-    expect(latest!.dirName).toBe('m2');
-    expect(latest!.to).toBe('H2');
   });
 });
 

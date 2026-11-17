@@ -1,0 +1,38 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Author {
+  id         Int                                                          @id(map: "author_primary")
+  posts      Post[]
+  longThings ThisModelNameIsLongEnoughThatPrismaSevenCutsItsKeyNamesAbcde[]
+}
+
+model Post {
+  id       Int    @id
+  authorId Int
+  author   Author @relation(fields: [authorId], references: [id], map: "post_written_by")
+}
+
+model Membership {
+  userId  Int
+  groupId Int
+
+  @@id([userId, groupId], map: "membership_pair")
+}
+
+model ThisModelNameIsLongEnoughThatPrismaSevenCutsItsKeyNamesAbcde {
+  id                                      Int    @id
+  authorIdentifierWithAVeryLongColumnName Int
+  author                                  Author @relation(fields: [authorIdentifierWithAVeryLongColumnName], references: [id])
+}
+
+model AnotherModelNameLongEnoughThatPrismaSevenCutsItsKeyNamesXyz {
+  id Int @id
+}
+
+model MultibyteName {
+  id Int @id
+
+  @@map("Ünïcödé_täble_nämé_thät_ïs_löng_ënöügh_tö_cüt")
+}

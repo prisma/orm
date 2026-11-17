@@ -1,0 +1,8 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Timestamps {
+  id           Int      @id
+  updatedAtNow DateTime @default(now()) @updatedAt
+}

@@ -51,8 +51,8 @@ export default async function ProductCatalog({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {products.map((product) => (
           <Link
-            key={product._id}
-            href={`/products/${product._id}`}
+            key={product.id}
+            href={`/products/${product.id}`}
             className="no-underline text-inherit"
           >
             <Card className="h-full hover:shadow-md transition-shadow">

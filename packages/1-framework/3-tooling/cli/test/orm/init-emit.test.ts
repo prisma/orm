@@ -20,26 +20,26 @@ afterEach(() => {
 });
 
 /**
- * Installs a fake `@prisma/cli` package into the project's `node_modules`,
+ * Installs a fake `prisma` package into the project's `node_modules`,
  * with a bin entry pointing at the given script — the shape the registry
  * package has, without the registry.
  */
 function installFakePrismaCli(
   binSource: string,
-  bin: string | Record<string, string> = { 'prisma-cli': './bin/prisma-cli.mjs' },
+  bin: string | Record<string, string> = { prisma: './bin/prisma.mjs' },
 ): void {
-  const packageDir = join(projectDir, 'node_modules/@prisma/cli');
+  const packageDir = join(projectDir, 'node_modules/prisma');
   mkdirSync(join(packageDir, 'bin'), { recursive: true });
   writeFileSync(
     join(packageDir, 'package.json'),
     JSON.stringify({
-      name: '@prisma/cli',
+      name: 'prisma',
       version: '0.0.0-test',
       type: 'module',
       bin,
     }),
   );
-  writeFileSync(join(packageDir, 'bin/prisma-cli.mjs'), binSource);
+  writeFileSync(join(packageDir, 'bin/prisma.mjs'), binSource);
 }
 
 async function emitFailure(): Promise<Error> {
@@ -54,7 +54,7 @@ async function emitFailure(): Promise<Error> {
 
 describe('emitScaffoldedContract', () => {
   it(
-    'runs the project-local prisma-cli bin with `contract emit` in the project directory',
+    'runs the project-local prisma bin with `contract emit` in the project directory',
     async () => {
       installFakePrismaCli(
         [
@@ -69,8 +69,42 @@ describe('emitScaffoldedContract', () => {
       const invocation = JSON.parse(
         readFileSync(join(projectDir, 'emit-invocation.json'), 'utf-8'),
       ) as { argv: string[]; cwd: string };
-      expect(invocation.argv).toEqual(['contract', 'emit']);
+      expect(invocation.argv).toEqual(['contract', 'emit', '--json']);
       expect(realpathSync(invocation.cwd)).toBe(realpathSync(projectDir));
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'reports the error envelope the child printed instead of whatever stderr said last',
+    async () => {
+      const envelope = {
+        kind: 'result',
+        envelope: {
+          ok: false,
+          commandId: 'contract.emit',
+          error: {
+            code: 'CLI.CONFIG_UNREADABLE',
+            summary: 'prisma.config.ts could not be evaluated: prisma7Schema is not a function',
+            why: 'The config imports prisma7Schema from a package that does not export it.',
+          },
+          exitCode: 2,
+        },
+      };
+      installFakePrismaCli(
+        [
+          `process.stdout.write(${JSON.stringify(`${JSON.stringify(envelope)}\n`)});`,
+          "process.stderr.write('Prisma agent skills are out of date. Run: prisma skills sync\\n');",
+          'process.exit(2);',
+        ].join('\n'),
+      );
+
+      const error = await emitFailure();
+
+      expect(error.message).toBe(
+        '`prisma contract emit` exited with code 2: CLI.CONFIG_UNREADABLE: prisma.config.ts could not be evaluated: prisma7Schema is not a function — The config imports prisma7Schema from a package that does not export it.',
+      );
+      expect(error.message).not.toContain('skills');
     },
     timeouts.databaseOperation,
   );
@@ -92,7 +126,7 @@ describe('emitScaffoldedContract', () => {
 
       expect(error.message).toContain('line-39');
       expect(error.message).not.toContain('line-00');
-      expect(error.message).toContain('***@registry.example.com');
+      expect(error.message).toContain('https://****:****@registry.example.com/');
       expect(error.message).not.toContain('hunter2');
       expect(error.message).toContain('3');
     },
@@ -126,7 +160,7 @@ describe('emitScaffoldedContract', () => {
           "writeFileSync('emit-invocation.json', JSON.stringify({ argv: process.argv.slice(2) }));",
           '',
         ].join('\n'),
-        './bin/prisma-cli.mjs',
+        './bin/prisma.mjs',
       );
 
       await emitScaffoldedContract({ cwd: projectDir });
@@ -134,7 +168,7 @@ describe('emitScaffoldedContract', () => {
       const invocation = JSON.parse(
         readFileSync(join(projectDir, 'emit-invocation.json'), 'utf-8'),
       ) as { argv: string[] };
-      expect(invocation.argv).toEqual(['contract', 'emit']);
+      expect(invocation.argv).toEqual(['contract', 'emit', '--json']);
     },
     timeouts.databaseOperation,
   );
@@ -173,9 +207,9 @@ describe('emitScaffoldedContract', () => {
   );
 
   it(
-    'reports that @prisma/cli is not installed when resolution fails',
+    'reports that prisma is not installed when resolution fails',
     async () => {
-      // vitest wraps `createRequire` and resolves the workspace @prisma/cli
+      // vitest wraps `createRequire` and resolves the workspace prisma package
       // package from any directory, so a genuinely missing install cannot be
       // produced with real resolution here — the seam stands in for the
       // MODULE_NOT_FOUND a real Node process raises.
@@ -183,33 +217,33 @@ describe('emitScaffoldedContract', () => {
         { cwd: projectDir },
         {
           resolveFromBaseDir: () => {
-            throw new Error("Cannot find module '@prisma/cli/package.json'");
+            throw new Error("Cannot find module 'prisma/package.json'");
           },
         },
       ).catch((thrown: unknown) => thrown);
 
       expect(error).toBeInstanceOf(Error);
       const message = (error as Error).message;
-      expect(message).toMatch(/`@prisma\/cli` is not installed/);
+      expect(message).toMatch(/`prisma` is not installed/);
       expect(message).toContain(projectDir);
-      expect(message).toContain("Cannot find module '@prisma/cli/package.json'");
+      expect(message).toContain("Cannot find module 'prisma/package.json'");
     },
     timeouts.databaseOperation,
   );
 
   it(
-    'reports an installed @prisma/cli that declares no bin',
+    'reports an installed prisma that declares no bin',
     async () => {
-      const packageDir = join(projectDir, 'node_modules/@prisma/cli');
+      const packageDir = join(projectDir, 'node_modules/prisma');
       mkdirSync(packageDir, { recursive: true });
       writeFileSync(
         join(packageDir, 'package.json'),
-        JSON.stringify({ name: '@prisma/cli', version: '0.0.0-test' }),
+        JSON.stringify({ name: 'prisma', version: '0.0.0-test' }),
       );
 
       const error = await emitFailure();
 
-      expect(error.message).toMatch(/declares no `prisma-cli` bin/);
+      expect(error.message).toMatch(/declares no `prisma` bin/);
     },
     timeouts.databaseOperation,
   );

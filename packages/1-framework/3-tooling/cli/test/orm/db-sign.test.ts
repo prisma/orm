@@ -1,165 +1,51 @@
-import { mkdir, rm, writeFile } from 'node:fs/promises';
-import type {
-  MigrationPlanOperation,
-  SchemaDiffIssue,
-  SignDatabaseResult,
-  VerifyDatabaseSchemaResult,
-} from '@internal/framework-components/control';
-import { writeContractSnapshot } from '@internal/migration-tools/contract-snapshot-store';
-import { computeMigrationHash } from '@internal/migration-tools/hash';
-import { writeMigrationPackage } from '@internal/migration-tools/io';
-import type { MigrationMetadata } from '@internal/migration-tools/metadata';
-import { blindCast } from '@internal/utils/casts';
-import type { MountedTree, PresentedResult } from '@prisma/cli-engine';
-import type { Diagnostic } from '@prisma/cli-engine/protocol';
-import { createTestCli } from '@prisma/cli-engine/testing';
-import { join } from 'pathe';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ControlClient } from '../../src/control-api/types';
-import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
-import { createDbSignCommand } from '../../src/orm/db/sign';
-import { createTestProjectDir } from '../utils/test-project-dir';
+import { DEFAULT_DATABASE_POLICIES } from '@internal/framework-components/control';
+import { writeRef } from '@internal/migration-tools/refs';
+import { notOk, ok } from '@internal/utils/result';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { CliStructuredError } from '../../src/utils/cli-errors';
+import { errorDatabasePoliciesMovedDuringSign } from '../../src/utils/policy-errors';
+import type { CliInvocation } from '../../src/utils/printed-command';
+import {
+  CONNECTION,
+  cleanupProjectDirs,
+  diagnosticsOf,
+  envelopeOf,
+  failedSpace,
+  HASH_A,
+  HASH_EXT,
+  HASH_PREVIOUS,
+  harness,
+  MASKED_CONNECTION,
+  MISSING_COLUMN,
+  mocks,
+  ormConfig,
+  PROFILE_HASH,
+  projectDir,
+  refsDirOf,
+  resetMocks,
+  signedSpace,
+} from './db-sign-fixtures';
+import {
+  refusedConnection,
+  refusedWithDiagnostics,
+  reportedDiagnostics,
+  reportedRefusedConnection,
+} from './unreachable-database';
 
-const HASH_A = `4cb4256${'0'.repeat(57)}`;
-const HASH_PREVIOUS = `9d0f118${'2'.repeat(57)}`;
-const CONNECTION = 'postgres://user:secret@localhost:5432/appdb';
-const MASKED_CONNECTION = 'postgres://****:****@localhost:5432/appdb';
+beforeEach(resetMocks);
+afterEach(cleanupProjectDirs);
 
-const mocks = {
-  connect: vi.fn(),
-  close: vi.fn(),
-  schemaVerify: vi.fn(),
-  sign: vi.fn(),
+const HEADER = {
+  kind: 'fields',
+  rail: true,
+  rows: [
+    { label: 'contract', value: 'output/contract.json' },
+    { label: 'database', value: MASKED_CONNECTION },
+  ],
 };
-
-/**
- * The command is mounted over a fake control client instead of the module
- * being mocked: `createDbSignCommand` takes the client factory as its seam.
- */
-const commands: MountedTree = {
-  ...BIN_COMMANDS,
-  'db sign': createDbSignCommand(() =>
-    blindCast<ControlClient, 'the fake implements only what db sign touches'>({
-      connect: mocks.connect,
-      schemaVerify: mocks.schemaVerify,
-      sign: mocks.sign,
-      close: mocks.close,
-    }),
-  ),
-};
-const groups = BIN_GROUPS;
-
-const dirs: string[] = [];
-
-async function projectDir(options: { readonly contract?: boolean } = {}): Promise<string> {
-  const dir = createTestProjectDir('orm-db-sign');
-  dirs.push(dir);
-  if (options.contract !== false) {
-    await mkdir(join(dir, 'output'), { recursive: true });
-    await writeFile(
-      join(dir, 'output', 'contract.json'),
-      JSON.stringify({ storage: { storageHash: HASH_A }, target: 'postgres' }),
-      'utf-8',
-    );
-  }
-  return dir;
-}
-
-afterEach(async () => {
-  for (const dir of dirs.splice(0)) {
-    await rm(dir, { recursive: true, force: true });
-  }
-});
-
-const DESCRIPTOR = { familyId: 'sql', targetId: 'postgres', version: '1.0.0', create: () => ({}) };
-
-/**
- * The fake family stamps every contract it hydrates, so a test can tell a
- * value that crossed the `deserializeContract` seam from a bare `JSON.parse`.
- */
-function ormConfig(overrides: Record<string, unknown> = {}): Record<string, unknown> {
-  return {
-    family: {
-      kind: 'family',
-      id: 'sql',
-      familyId: 'sql',
-      version: '1.0.0',
-      emission: {},
-      create: () => ({
-        deserializeContract: (json: unknown) => ({ ...Object(json), hydrated: true }),
-      }),
-    },
-    target: { ...DESCRIPTOR, kind: 'target', id: 'postgres', migrations: {} },
-    adapter: { ...DESCRIPTOR, kind: 'adapter', id: 'pg' },
-    driver: { ...DESCRIPTOR, kind: 'driver', id: 'pg-driver' },
-    db: { connection: CONNECTION },
-    contract: {
-      source: { format: 'typescript', inputs: [], load: async () => ({}) },
-      output: 'output/contract.json',
-    },
-    ...overrides,
-  };
-}
-
-function harness(config: Record<string, unknown>) {
-  return createTestCli({ commands, groups, config: { orm: config } });
-}
-
-const MISSING_COLUMN = blindCast<
-  SchemaDiffIssue,
-  'The renderer reads the path and which side is present'
->({ path: ['public', 'users', 'email'], expected: { id: 'email', nodeKind: 'column' } });
-
-function schemaResult(
-  overrides: Partial<VerifyDatabaseSchemaResult> = {},
-): VerifyDatabaseSchemaResult {
-  return {
-    ok: true,
-    summary: 'Database schema satisfies contract',
-    contract: { storageHash: HASH_A },
-    target: { expected: 'postgres' },
-    schema: { issues: [] },
-    meta: { strict: false },
-    timings: { total: 1 },
-    ...overrides,
-  };
-}
-
-function signResult(): SignDatabaseResult {
-  return {
-    ok: true,
-    summary: 'Database signed',
-    contract: { storageHash: HASH_A },
-    target: { expected: 'postgres' },
-    marker: { created: false, updated: true, previous: { storageHash: HASH_PREVIOUS } },
-    timings: { total: 2 },
-  };
-}
-
-beforeEach(() => {
-  mocks.connect.mockReset().mockResolvedValue(undefined);
-  mocks.close.mockReset().mockResolvedValue(undefined);
-  mocks.schemaVerify.mockReset().mockResolvedValue(schemaResult());
-  mocks.sign.mockReset().mockResolvedValue(signResult());
-});
-
-function diagnosticsOf(run: {
-  readonly presented: PresentedResult<unknown> | undefined;
-}): readonly Diagnostic[] {
-  return run.presented?.diagnostics ?? [];
-}
-
-function envelopeOf(run: { readonly json: readonly { readonly kind: string }[] }) {
-  const terminal = run.json.at(-1);
-  return terminal !== undefined && terminal.kind === 'result'
-    ? blindCast<{ ok: boolean; error?: { code: string }; exitCode?: number }, 'terminal frame'>(
-        Reflect.get(terminal, 'envelope'),
-      )
-    : undefined;
-}
 
 describe('db sign', () => {
-  describe('verification passes', () => {
+  describe('every space verifies', () => {
     it('signs and completes at exit 0 with no diagnostics', async () => {
       const dir = await projectDir();
 
@@ -167,140 +53,117 @@ describe('db sign', () => {
 
       expect(run.exitCode).toBe(0);
       expect(diagnosticsOf(run)).toEqual([]);
-      expect(mocks.sign).toHaveBeenCalledTimes(1);
-      expect(run.presented?.data).toEqual(signResult());
+      expect(mocks.dbSign).toHaveBeenCalledTimes(1);
+      expect(run.presented?.data).toEqual({
+        ok: true,
+        summary: 'Database signed',
+        spaces: [signedSpace('app', HASH_A)],
+        advancedRefs: [{ space: 'app', name: 'db', hash: HASH_A }],
+      });
     });
 
-    it('reads the contract through the family seam rather than a bare JSON.parse', async () => {
+    it('hands the operation the contract read through the family seam and the connection', async () => {
       const dir = await projectDir();
 
       await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
 
-      expect(mocks.schemaVerify).toHaveBeenCalledWith(
+      expect(mocks.dbSign).toHaveBeenCalledWith(
         expect.objectContaining({
           contract: expect.objectContaining({ hydrated: true }),
-          strict: false,
+          connection: CONNECTION,
         }),
       );
     });
 
-    it('heads the human output with the contract and the masked database', async () => {
+    it('names each space and what signing did to it', async () => {
       const dir = await projectDir();
+      mocks.dbSign.mockResolvedValue(
+        ok({
+          spaces: [
+            signedSpace('app', HASH_A),
+            {
+              space: 'pgvector',
+              status: 'unchanged',
+              contract: { storageHash: HASH_EXT, profileHash: PROFILE_HASH },
+            },
+          ],
+        }),
+      );
 
-      const run = await harness(ormConfig()).run(['db', 'sign'], {
+      const run = await harness(ormConfig()).run(['db', 'sign', '--no-advance-ref'], {
         cwd: dir,
         isTty: { stdout: true },
       });
 
       expect(run.presented?.presentation.human).toEqual([
+        HEADER,
         {
-          kind: 'fields',
-          rail: true,
-          rows: [
-            { label: 'contract', value: 'output/contract.json' },
-            { label: 'database', value: MASKED_CONNECTION },
+          kind: 'tree',
+          roots: [
+            {
+              label: [
+                { text: 'app: signed ' },
+                { text: HASH_A, tone: 'identifier' },
+                { text: ' (was ', tone: 'muted' },
+                { text: HASH_PREVIOUS, tone: 'identifier' },
+                { text: ')', tone: 'muted' },
+              ],
+              status: 'ok',
+            },
+            {
+              label: [
+                { text: 'pgvector: unchanged, already signed with ' },
+                { text: HASH_EXT, tone: 'identifier' },
+              ],
+              status: 'ok',
+            },
           ],
         },
         { kind: 'summary', status: 'ok', text: 'Database signed' },
         {
-          kind: 'fields',
-          rows: [
-            { label: 'from', value: [{ text: HASH_PREVIOUS, tone: 'identifier' }] },
-            { label: 'to', value: [{ text: HASH_A, tone: 'identifier' }] },
+          kind: 'summary',
+          status: 'info',
+          tone: 'muted',
+          text: 'Left ref "db" untouched (--no-advance-ref)',
+        },
+      ]);
+    });
+
+    it('prints one data line per space: space, status and the contract storage hash', async () => {
+      const dir = await projectDir();
+      mocks.dbSign.mockResolvedValue(
+        ok({
+          spaces: [
+            signedSpace('app', HASH_A),
+            {
+              space: 'pgvector',
+              status: 'unchanged',
+              contract: { storageHash: HASH_EXT, profileHash: PROFILE_HASH },
+            },
           ],
-        },
-      ]);
-      expect(run.presented?.presentation.stdout).toEqual([]);
-      expect(run.stdout).toBe('');
-    });
-  });
+        }),
+      );
 
-  describe('the family reports it did not sign', () => {
-    it('reaches the engine as an internal error rather than claiming success', async () => {
+      const run = await harness(ormConfig()).run(['db', 'sign', '--no-advance-ref'], { cwd: dir });
+
+      expect(run.stdout).toBe(`app\tupdated\t${HASH_A}\npgvector\tunchanged\t${HASH_EXT}\n`);
+    });
+
+    it('says when a space had no marker before', async () => {
       const dir = await projectDir();
-      mocks.sign.mockResolvedValue({ ...signResult(), ok: false, summary: 'Marker not written' });
+      mocks.dbSign.mockResolvedValue(
+        ok({
+          spaces: [
+            {
+              space: 'app',
+              status: 'created',
+              contract: { storageHash: HASH_A, profileHash: PROFILE_HASH },
+            },
+          ],
+        }),
+      );
 
-      const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
-
-      expect(run.exitCode).toBe(1);
-      expect(envelopeOf(run)).toMatchObject({ ok: false, error: { code: 'CLI.INTERNAL_ERROR' } });
-    });
-
-    it('does not present "Database signed"', async () => {
-      const dir = await projectDir();
-      mocks.sign.mockResolvedValue({ ...signResult(), ok: false, summary: 'Marker not written' });
-
-      const run = await harness(ormConfig()).run(['db', 'sign'], {
-        cwd: dir,
-        isTty: { stdout: true },
-      });
-
-      expect(run.stderr).not.toContain('Database signed');
-    });
-  });
-
-  describe('verification fails', () => {
-    const DRIFTED = schemaResult({
-      ok: false,
-      code: 'CONTRACT.SCHEMA_VERIFICATION_FAILED',
-      summary: 'Database schema does not satisfy contract',
-      schema: { issues: [MISSING_COLUMN] },
-    });
-
-    it('completes at exit 4 without writing a signature', async () => {
-      const dir = await projectDir();
-      mocks.schemaVerify.mockResolvedValue(DRIFTED);
-
-      const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
-
-      expect(run.exitCode).toBe(4);
-      expect(mocks.sign).not.toHaveBeenCalled();
-      expect(envelopeOf(run)).toMatchObject({ ok: true, exitCode: 4 });
-    });
-
-    it('carries the verdict as one error diagnostic', async () => {
-      const dir = await projectDir();
-      mocks.schemaVerify.mockResolvedValue(DRIFTED);
-
-      const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
-
-      expect(
-        diagnosticsOf(run).map((entry) => ({
-          code: entry.code,
-          severity: entry.severity,
-          summary: entry.summary,
-        })),
-      ).toEqual([
-        {
-          code: 'CONTRACT.SCHEMA_VERIFICATION_FAILED',
-          severity: 'error',
-          summary: 'Database schema does not satisfy contract',
-        },
-      ]);
-      expect(diagnosticsOf(run)[0]?.nextActions).toEqual([
-        {
-          kind: 'run-command',
-          label: 'Bring the database up to the contract, then sign again',
-          command: 'prisma-cli db update',
-        },
-      ]);
-    });
-
-    it('reports the schema-verify document as the --json payload', async () => {
-      const dir = await projectDir();
-      mocks.schemaVerify.mockResolvedValue(DRIFTED);
-
-      const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
-
-      expect(run.presented?.data).toEqual(DRIFTED);
-      expect(run.presented?.data).not.toHaveProperty('unclaimed');
-    });
-
-    it('draws the drift as a tree and closes with the failing summary', async () => {
-      const dir = await projectDir();
-      mocks.schemaVerify.mockResolvedValue(DRIFTED);
-
-      const run = await harness(ormConfig()).run(['db', 'sign'], {
+      const run = await harness(ormConfig()).run(['db', 'sign', '--no-advance-ref'], {
         cwd: dir,
         isTty: { stdout: true },
       });
@@ -309,17 +172,158 @@ describe('db sign', () => {
         kind: 'tree',
         roots: [
           {
-            label: 'Schema issues',
-            status: 'error',
-            children: [{ label: 'missing: public/users/email', status: 'error' }],
+            label: [
+              { text: 'app: signed ' },
+              { text: HASH_A, tone: 'identifier' },
+              { text: ' (no marker before)', tone: 'muted' },
+            ],
+            status: 'ok',
           },
         ],
       });
-      expect(run.presented?.presentation.human.at(-1)).toEqual({
-        kind: 'summary',
-        status: 'error',
-        text: 'Database schema does not satisfy contract',
+    });
+  });
+
+  describe('a space fails verification', () => {
+    function appFailsExtensionSigns() {
+      mocks.dbSign.mockResolvedValue(
+        ok({ spaces: [failedSpace('app', HASH_A), signedSpace('pgvector', HASH_EXT)] }),
+      );
+    }
+
+    it('completes at exit 4 and reports every space', async () => {
+      const dir = await projectDir();
+      appFailsExtensionSigns();
+
+      const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
+
+      expect(run.exitCode).toBe(4);
+      expect(envelopeOf(run)).toMatchObject({ ok: true, exitCode: 4 });
+      expect(run.presented?.data).toEqual({
+        ok: false,
+        summary: 'Database schema does not satisfy contract for space "app"; signed "pgvector"',
+        spaces: [failedSpace('app', HASH_A), signedSpace('pgvector', HASH_EXT)],
+        advancedRefs: [{ space: 'pgvector', name: 'db', hash: HASH_EXT }],
       });
+    });
+
+    it('prints a failed space with status failed', async () => {
+      const dir = await projectDir();
+      appFailsExtensionSigns();
+
+      const run = await harness(ormConfig()).run(['db', 'sign'], { cwd: dir });
+
+      expect(run.stdout).toBe(`app\tfailed\t${HASH_A}\npgvector\tupdated\t${HASH_EXT}\n`);
+    });
+
+    it('says nothing was signed when no space verified', async () => {
+      const dir = await projectDir();
+      mocks.dbSign.mockResolvedValue(ok({ spaces: [failedSpace('app', HASH_A)] }));
+
+      const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
+
+      expect(run.exitCode).toBe(4);
+      expect(run.presented?.data).toMatchObject({
+        summary: 'Database schema does not satisfy contract for space "app"; signed nothing',
+        advancedRefs: [],
+      });
+    });
+
+    it('carries one error diagnostic per failed space', async () => {
+      const dir = await projectDir();
+      appFailsExtensionSigns();
+
+      const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
+
+      expect(
+        diagnosticsOf(run).map((entry) => ({
+          code: entry.code,
+          severity: entry.severity,
+          summary: entry.summary,
+          meta: entry.meta,
+        })),
+      ).toEqual([
+        {
+          code: 'CONTRACT.SCHEMA_VERIFICATION_FAILED',
+          severity: 'error',
+          summary: 'Database schema does not satisfy contract',
+          meta: { space: 'app', schemaIssues: [MISSING_COLUMN] },
+        },
+      ]);
+      expect(diagnosticsOf(run)[0]?.nextActions).toEqual([
+        {
+          kind: 'run-command',
+          label: 'Change the database to match the contract, then sign again',
+          command: 'prisma-test db update',
+        },
+        {
+          kind: 'user-choice',
+          label:
+            'Or change the contract source to describe the database as it is, re-run contract emit, then sign again',
+        },
+      ]);
+    });
+
+    it('aims db update at the ref being signed, and the contract change at the emitted contract', async () => {
+      const dir = await projectDir();
+      await writeRef(refsDirOf(dir), 'staging', { hash: HASH_A, invariants: [] });
+      mocks.dbSign.mockResolvedValue(ok({ spaces: [failedSpace('app', HASH_A)] }));
+
+      const run = await harness(ormConfig()).run(['db', 'sign', 'staging', '--json'], {
+        cwd: dir,
+      });
+
+      expect(run.exitCode).toBe(4);
+      expect(diagnosticsOf(run)[0]?.nextActions).toEqual([
+        {
+          kind: 'run-command',
+          label: 'Change the database to match the contract, then sign again',
+          command: 'prisma-test db update --to "staging"',
+        },
+        {
+          kind: 'user-choice',
+          label:
+            'Or change the contract source to describe the database as it is, re-run contract emit, then sign the emitted contract instead of "staging"',
+        },
+      ]);
+    });
+
+    it('draws the drift under the failed space and closes with the failing summary', async () => {
+      const dir = await projectDir();
+      appFailsExtensionSigns();
+
+      const run = await harness(ormConfig()).run(['db', 'sign', '--no-advance-ref'], {
+        cwd: dir,
+        isTty: { stdout: true },
+      });
+
+      expect(run.presented?.presentation.human.slice(1, 3)).toEqual([
+        {
+          kind: 'tree',
+          roots: [
+            {
+              label: 'app: not signed, the schema does not satisfy its contract',
+              status: 'error',
+              children: [{ label: 'missing: public/users/email', status: 'error' }],
+            },
+            {
+              label: [
+                { text: 'pgvector: signed ' },
+                { text: HASH_EXT, tone: 'identifier' },
+                { text: ' (was ', tone: 'muted' },
+                { text: HASH_PREVIOUS, tone: 'identifier' },
+                { text: ')', tone: 'muted' },
+              ],
+              status: 'ok',
+            },
+          ],
+        },
+        {
+          kind: 'summary',
+          status: 'error',
+          text: 'Database schema does not satisfy contract for space "app"; signed "pgvector"',
+        },
+      ]);
     });
   });
 
@@ -337,7 +341,7 @@ describe('db sign', () => {
         ok: false,
         error: { code: 'CLI.CONTRACT_ARG_CONFLICT' },
       });
-      expect(mocks.schemaVerify).not.toHaveBeenCalled();
+      expect(mocks.dbSign).not.toHaveBeenCalled();
     });
 
     it('errors at exit 2 when the contract has not been emitted', async () => {
@@ -377,48 +381,6 @@ describe('db sign', () => {
       });
     });
 
-    it('signs against the destination contract of a named migration dir', async () => {
-      const dir = await projectDir();
-      const HASH_B = `55bada2${'0'.repeat(57)}`;
-      const dirName = '20260102T0000_add_users';
-      const ops = [
-        blindCast<MigrationPlanOperation, 'db sign reads only the destination hash'>({
-          id: 'table.users',
-          label: 'Create users',
-          operationClass: 'additive',
-        }),
-      ];
-      const base = blindCast<
-        Omit<MigrationMetadata, 'migrationHash'>,
-        'db sign reads only from/to'
-      >({
-        from: HASH_A,
-        to: HASH_B,
-        providedInvariants: [],
-        createdAt: '2026-01-02T10:00:00.000Z',
-      });
-      const metadata: MigrationMetadata = {
-        ...base,
-        migrationHash: computeMigrationHash(base, ops),
-      };
-      await writeMigrationPackage(join(dir, 'migrations', 'app', dirName), metadata, ops);
-      await writeContractSnapshot(join(dir, 'migrations'), HASH_B, {
-        contractJson: { storage: { storageHash: HASH_B }, target: 'postgres' },
-        contractDts: 'export type Contract = unknown;\n',
-      });
-
-      const run = await harness(ormConfig()).run(['db', 'sign', dirName, '--json'], {
-        cwd: dir,
-      });
-
-      expect(run.exitCode).toBe(0);
-      expect(mocks.sign).toHaveBeenCalledTimes(1);
-      const signArg = mocks.sign.mock.calls[0]?.[0] as {
-        contract: { storage: { storageHash: string } };
-      };
-      expect(signArg.contract.storage.storageHash).toBe(HASH_B);
-    });
-
     it('errors at exit 2 when the named contract reference resolves against nothing', async () => {
       const dir = await projectDir();
 
@@ -431,12 +393,57 @@ describe('db sign', () => {
         ok: false,
         error: { code: 'MIGRATION.REF_NOT_FOUND' },
       });
-      expect(mocks.schemaVerify).not.toHaveBeenCalled();
+      expect(mocks.dbSign).not.toHaveBeenCalled();
+    });
+
+    it.each(['@empty', '@contract', '@db'])(
+      'refuses the reserved reference %s with the wrong-grammar envelope',
+      async (input) => {
+        const dir = await projectDir();
+
+        const run = await harness(ormConfig()).run(['db', 'sign', input, '--json'], { cwd: dir });
+
+        expect(run.exitCode).toBe(2);
+        expect(envelopeOf(run)).toMatchObject({
+          ok: false,
+          error: {
+            code: 'MIGRATION.REF_WRONG_GRAMMAR',
+            why: `"${input}" is a reserved reference; the contract argument takes a contract recorded in the migrations directory (hash, prefix, ref name, migration dir name, or <dir>^)`,
+            meta: { input, expectedGrammar: 'contract' },
+          },
+        });
+        expect(mocks.connect).not.toHaveBeenCalled();
+        expect(mocks.dbSign).not.toHaveBeenCalled();
+      },
+    );
+
+    it('reports a refused connection as every command does, with its driver code', async () => {
+      const dir = await projectDir();
+      mocks.dbSign.mockRejectedValue(refusedConnection());
+
+      const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
+
+      expect(run.exitCode).toBe(2);
+      expect(envelopeOf(run)?.error).toEqual(reportedRefusedConnection('db sign'));
+    });
+
+    it('keeps the diagnostics of a structured driver error, without the connection string', async () => {
+      const dir = await projectDir();
+      mocks.dbSign.mockRejectedValue(refusedWithDiagnostics());
+
+      const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
+
+      expect(envelopeOf(run)).toMatchObject({
+        ok: false,
+        error: { code: 'DRIVER.CONNECTION_FAILED' },
+        diagnostics: reportedDiagnostics,
+      });
+      expect(JSON.stringify(run.json.at(-1))).not.toContain('secret');
     });
 
     it('errors at exit 2 when the driver throws, without leaking the connection string', async () => {
       const dir = await projectDir();
-      mocks.schemaVerify.mockRejectedValue(new Error(`connect ECONNREFUSED for ${CONNECTION}`));
+      mocks.dbSign.mockRejectedValue(new Error(`connect ECONNREFUSED for ${CONNECTION}`));
 
       const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
 
@@ -444,6 +451,26 @@ describe('db sign', () => {
       expect(envelopeOf(run)).toMatchObject({ ok: false, error: { code: 'CLI.UNEXPECTED' } });
       expect(JSON.stringify(run.json.at(-1))).not.toContain('secret');
       expect(mocks.close).toHaveBeenCalled();
+    });
+  });
+
+  it('errors at exit 2 when the contract spaces cannot be loaded', async () => {
+    const dir = await projectDir();
+    mocks.dbSign.mockResolvedValue(
+      notOk(
+        new CliStructuredError(
+          'MIGRATION.CONTRACT_SPACE_LAYOUT_VIOLATION',
+          'Contract-space layout violation detected',
+        ),
+      ),
+    );
+
+    const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
+
+    expect(run.exitCode).toBe(2);
+    expect(envelopeOf(run)).toMatchObject({
+      ok: false,
+      error: { code: 'MIGRATION.CONTRACT_SPACE_LAYOUT_VIOLATION' },
     });
   });
 
@@ -463,5 +490,39 @@ describe('db sign', () => {
 
     expect(run.exitCode).toBe(0);
     expect(envelopeOf(run)?.ok).toBe(true);
+  });
+});
+
+describe('db sign when the policies move while it runs', () => {
+  it('advises signing again with the contract and ref flags the user gave', async () => {
+    mocks.dbSign.mockImplementation(async (options: { invocation: CliInvocation }) =>
+      notOk(
+        errorDatabasePoliciesMovedDuringSign({
+          spaceId: 'app',
+          checked: DEFAULT_DATABASE_POLICIES,
+          found: { ...DEFAULT_DATABASE_POLICIES, change: ['migrate'] },
+          invocation: options.invocation,
+        }),
+      ),
+    );
+    const dir = await projectDir();
+    await writeRef(refsDirOf(dir), 'production', { hash: HASH_A, invariants: [] });
+
+    const run = await harness(ormConfig()).run(
+      ['db', 'sign', '--contract', 'production', '--no-advance-ref', '--json'],
+      { cwd: dir },
+    );
+
+    expect(run.exitCode).toBe(2);
+    expect(envelopeOf(run)?.error).toMatchObject({
+      code: 'MIGRATION.MARKER_CAS_FAILURE',
+      nextActions: [
+        {
+          kind: 'run-command',
+          label: 'Sign again',
+          command: 'prisma-test db sign --contract production --no-advance-ref',
+        },
+      ],
+    });
   });
 });

@@ -1,0 +1,14 @@
+[
+  {
+    "code": "PSL.PRISMA7_VIEW_UNSUPPORTED",
+    "file": "c-views.prisma",
+    "line": 1,
+    "message": "View \"ActiveUsers\" is not supported; Prisma 8 has no views. Remove the view or replace it with a model over the underlying table."
+  },
+  {
+    "code": "PSL.PRISMA7_UNKNOWN_ATTRIBUTE",
+    "file": "b-models.prisma",
+    "line": 3,
+    "message": "Field \"User.email\": attribute \"@shardKey\" is not supported yet by the Prisma 7 contract source."
+  }
+]

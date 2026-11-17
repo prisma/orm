@@ -1,6 +1,6 @@
 import { ObjectId } from 'mongodb';
 import { describe, expect, it } from 'vitest';
-import { timeouts, withMongoPort } from '../../../_harness/mongo';
+import { timeouts, withMongoPort } from '../../../../_harness/mongo';
 import type { Contract } from './_fixture/generated/contract';
 import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
 
@@ -23,8 +23,8 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 
 function withDollarSearch(fn: Parameters<typeof withMongoPort<Contract>>[1]) {
   return withMongoPort<Contract>({ contractJson }, async (ctx) => {
-    await ctx.db.users.create({ _id: new ObjectId().toHexString(), firstName: 'foo' });
-    await ctx.db.users.create({ _id: new ObjectId().toHexString(), firstName: '$foo' });
+    await ctx.db.users.create({ id: new ObjectId().toHexString(), firstName: 'foo' });
+    await ctx.db.users.create({ id: new ObjectId().toHexString(), firstName: '$foo' });
     await fn(ctx);
   });
 }

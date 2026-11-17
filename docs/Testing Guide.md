@@ -15,7 +15,7 @@ These principles drive all testing decisions, from test structure to helper desi
 
 ## Testing Pyramid
 
-Prisma Next follows the testing pyramid model with three layers:
+Prisma 8 follows the testing pyramid model with three layers:
 
 ### Unit Tests
 
@@ -53,7 +53,7 @@ it('creates runtime with contract and adapter', () => {
 // test/integration/test/contract-emission.test.ts
 it('emits contract and executes query', async () => {
   const { contractJson, contractDts } = await emit(ir, options, sqlEmission);
-  const contract = validateContract<Contract>(JSON.parse(contractJson));
+  const contract = validateSqlContractFully<Contract>(JSON.parse(contractJson));
   const runtime = createRuntime({ contract, adapter });
   const plan = sql({ contract, adapter }).from(tables.user).select({ id: t.user.id }).build();
   const results = await collectAsync(runtime.execute(plan));
@@ -143,9 +143,15 @@ it('emits contract and verifies it matches on-disk artifacts', async () => {
 
 ---
 
-## Coverage thresholds (local vs CI)
+## Package coverage
 
-`pnpm test` does **not** enforce per-package coverage thresholds — only CI's **Coverage** job (`scripts/coverage-report.mjs`) does. So a package can pass `pnpm test` locally and still fail CI on Coverage. When you add or remove code in a package that has coverage thresholds (most do; see its `vitest.config.ts`), run `pnpm --filter <pkg> test:coverage` (or `pnpm coverage:packages`) locally before pushing, so a threshold miss surfaces at your desk rather than after a CI round-trip. Fix a miss by covering the genuinely-untested branches — never by lowering the threshold.
+Package coverage policy lives in each Vitest project's adjacent `coverage.config.json`. `pnpm coverage:packages` first builds the same package-only prerequisites as `pnpm test:packages`, then runs every package Vitest project with coverage in one root process. Ordinary `pnpm test` and `pnpm test:packages` remain the faster noncoverage paths.
+
+CI divides that same root project set into four Vitest shards. Each shard uploads a native blob report with coverage thresholds disabled for the partial run. The `Coverage` job downloads all matching artifacts into one directory, verifies all four expected blobs are present, runs `pnpm coverage:packages:merge`, and only then applies the full coverage policy. A final lightweight `Test` job preserves the required status name and requires package shards, coverage, and examples to pass. In the merge queue it also requires the four `Integration Tests` shards to pass, unless the diff is inert; pull requests do not run them (see [CI pipeline](oss/ci-pipeline.md#integration-tests-run-only-in-the-merge-queue)). Missing or failed shards therefore cannot produce a passing gate.
+
+Each entry in the merged `coverage/coverage-final.json` is attributed to the package that owns the entry's source path, not to a test project. Examples are not coverage projects and remain separately exercised by `pnpm test:examples`.
+
+`pnpm coverage:report` reads `coverage/coverage-final.json`, prints package-level threshold diagnostics, and exits nonzero when the policy fails. CI runs this report in `Coverage` after the native Vitest merge even when merged tests or coverage failed, so available diagnostics are still shown. Root `coverage.config.json` warning-only entries temporarily relax coverage thresholds only; they never suppress assertion failures, which block both their shard and the final `Test` gate. Fix a threshold miss by covering genuinely untested branches, never by lowering the threshold.
 
 ---
 
@@ -401,14 +407,15 @@ it('should throw error when contract is invalid');
 
 **Location:** `test/fixtures/contract.json` + `contract.d.ts`
 
-**Pattern:** Use fully qualified type IDs, validate with `validateContract`
+**Pattern:** Use fully qualified type IDs, validate with `validateSqlContractFully`
 
 ```typescript
 // ✅ CORRECT: Load and validate contract
+import { validateSqlContractFully } from '@internal/sql-contract/validators';
 import contractJson from './fixtures/contract.json' assert { type: 'json' };
 import type { Contract } from './fixtures/contract.d';
 
-const contract = validateContract<Contract>(contractJson);
+const contract = validateSqlContractFully<Contract>(contractJson);
 ```
 
 **Why?** Contracts must have fully qualified type IDs (`pg/int4@1`, not `int4`). Validation ensures structure is correct.
@@ -982,6 +989,8 @@ it('reads user', async () => {
 
 ### Test Commands
 
+Agents run only their own packages' tests and the files that cover their change, and leave the full suites to CI: see [`running-tests.mdc`](../.agents/rules/running-tests.mdc).
+
 ```bash
 # Run all tests (packages + examples)
 pnpm test
@@ -1002,15 +1011,20 @@ pnpm --filter @internal/sql-runtime test --watch
 ### Coverage Commands
 
 ```bash
-# Run tests with coverage for all packages (excluding examples)
+# Build package prerequisites and run one root package-coverage process
 pnpm coverage:packages
 
-# Run tests with coverage for a specific package
-pnpm --filter @internal/sql-runtime test:coverage
-
-# Run tests with coverage for all packages (including examples)
+# Alias for the same package-only coverage path
 pnpm test:coverage
+
+# CI fan-in only: merge native shard blobs and generate coverage-final.json
+pnpm coverage:packages:merge
+
+# Report policy results from coverage/coverage-final.json
+pnpm coverage:report
 ```
+
+Examples do not contribute to package coverage and continue to run separately with `pnpm test:examples`.
 
 ### Type Checking Tests
 
@@ -1060,9 +1074,19 @@ MongoDB tests use `mongodb-memory-server` to run a real MongoDB instance in-proc
 
 ### Dependencies
 
-- `mongodb-memory-server` (`^10.4.0`) — in-process MongoDB server
-- `mongodb` (`^6.16.0`, via pnpm catalog) — MongoDB driver
-- Listed in `pnpm-workspace.yaml` under `allowBuilds`
+- `mongodb-memory-server` (via pnpm catalog) — in-process MongoDB server
+- `mongodb` (via pnpm catalog) — MongoDB driver
+- Listed in `pnpm-workspace.yaml` under `allowBuilds`, so `pnpm install` downloads the `mongod` binary once
+
+### The `mongod` binary in CI
+
+Each CI job that runs MongoDB tests uses `.github/actions/mongod-binary` after installing. It restores the binary from the Actions cache, or downloads it with `scripts/download-mongod-binary.mjs`, before any test starts. Tests then never download it. Without this, test packages that start in parallel each download the binary into one folder and fail on its lock file (`Cannot unlock file …/mongodb-binaries/<version>.lock`).
+
+The script retries a failed download up to four times. Before each retry it deletes lock files and any binary that does not run.
+
+### Retrying CI setup steps
+
+CI setup steps that fetch over the network run through `scripts/retry-command.mjs`, which runs a command up to three times. Its `--before-retry` option undoes what a failed attempt left behind, as `supabase stop --no-backup` does before `supabase start` runs again. `pnpm install` retries failed package downloads five times (`fetchRetries` in `pnpm-workspace.yaml`). Wrap any new setup step that downloads or pulls images the same way.
 
 ### Test setup helpers
 

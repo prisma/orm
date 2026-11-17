@@ -22,21 +22,21 @@ src/
 │   ├── contract.ts                  # single Note model with a single id column
 │   ├── main.ts                      # no-emit:  postgres({ contract })
 │   ├── main-emit.ts                 # emit:     wraps src/postgres/generated/db.ts
-│   └── generated/                   # produced by `pnpm emit:pg`
-│       ├── contract.json
-│       ├── contract.d.ts
-│       └── db.ts                    # postgres<Contract>({ contractJson })
+│   └── generated/
+│       ├── contract.json            # written by `pnpm emit:pg`
+│       ├── contract.d.ts            # written by `pnpm emit:pg`
+│       └── db.ts                    # checked in, not generated: postgres({ contract: contractFromJson<Contract>(contractJson) })
 ├── mongo/                           # Node target, @internal/mongo/runtime
 │   ├── contract.ts                  # single Note model with a single _id field
 │   ├── main.ts                      # no-emit:  mongo({ contract })
 │   ├── main-emit.ts                 # emit:     wraps src/mongo/generated/db.ts
-│   └── generated/                   # produced by `pnpm emit:mongo`
-│       ├── contract.json
-│       ├── contract.d.ts
-│       └── db.ts                    # mongo<Contract>({ contractJson })
+│   └── generated/
+│       ├── contract.json            # written by `pnpm emit:mongo`
+│       ├── contract.d.ts            # written by `pnpm emit:mongo`
+│       └── db.ts                    # checked in, not generated: mongo({ contract: contractFromJson<Contract>(contractJson) })
 └── postgres-worker/                 # CF Workers target, @internal/postgres/serverless
     ├── worker.ts                    # no-emit:  postgresServerless({ contract }) + fetch handler
-    └── worker-emit.ts               # emit:     postgresServerless<Contract>({ contractJson })
+    └── worker-emit.ts               # emit:     postgresServerless({ contract: contractFromJson<Contract>(contractJson) })
                                        # reuses ../postgres/{contract.ts, generated/}
 
 prisma.config.postgres.ts       # `--config` for emit:pg
@@ -77,7 +77,7 @@ pnpm bundle
 For each of the four Node entries the script writes an unminified
 (`*.bundle.mjs`) and a minified (`*.bundle.min.mjs`) artefact to `dist/` via
 esbuild; only `pg`, `pg-native`, and `mongodb` are marked external,
-everything Prisma Next owns is inlined.
+everything Prisma 8 owns is inlined.
 
 For each of the two cf-worker entries the script runs
 `wrangler deploy --dry-run --metafile [--minify]` which uses esbuild
@@ -111,7 +111,7 @@ because the binary downloader has no matching artefact — this is an upstream
 limitation, not a regression in the example.
 
 The cf-worker entries are bundle-only: there is no miniflare runtime test in
-this example. The Cloudflare Workers + Prisma Next functional coverage lives
+this example. The Cloudflare Workers + Prisma 8 functional coverage lives
 in [`examples/prisma-8-cloudflare-worker`](../prisma-8-cloudflare-worker/)
 which runs against `@cloudflare/vitest-pool-workers`.
 

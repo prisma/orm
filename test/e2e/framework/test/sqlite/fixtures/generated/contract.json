@@ -149,6 +149,7 @@
             "relations": {
               "author": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "userId"
@@ -348,6 +349,7 @@
               },
               "profile": {
                 "cardinality": "1:1",
+                "nullable": true,
                 "on": {
                   "localFields": [
                     "id"
@@ -394,17 +396,17 @@
               "columns": {
                 "body": {
                   "codecId": "sqlite/text@1",
-                  "nativeType": "text",
+                  "dataType": "sqlite/text",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "sqlite/integer@1",
-                  "nativeType": "integer",
+                  "dataType": "sqlite/integer",
                   "nullable": false
                 },
                 "post_id": {
                   "codecId": "sqlite/integer@1",
-                  "nativeType": "integer",
+                  "dataType": "sqlite/integer",
                   "nullable": false
                 }
               },
@@ -421,21 +423,21 @@
               "columns": {
                 "id": {
                   "codecId": "sqlite/integer@1",
-                  "nativeType": "integer",
+                  "dataType": "sqlite/integer",
                   "nullable": false
                 },
                 "label": {
                   "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
                   "default": {
                     "kind": "literal",
                     "value": "unnamed"
                   },
-                  "nativeType": "text",
                   "nullable": false
                 },
                 "name": {
                   "codecId": "sqlite/text@1",
-                  "nativeType": "text",
+                  "dataType": "sqlite/text",
                   "nullable": false
                 }
               },
@@ -452,22 +454,22 @@
               "columns": {
                 "id": {
                   "codecId": "sqlite/integer@1",
-                  "nativeType": "integer",
+                  "dataType": "sqlite/integer",
                   "nullable": false
                 },
                 "title": {
                   "codecId": "sqlite/text@1",
-                  "nativeType": "text",
+                  "dataType": "sqlite/text",
                   "nullable": false
                 },
                 "user_id": {
                   "codecId": "sqlite/integer@1",
-                  "nativeType": "integer",
+                  "dataType": "sqlite/integer",
                   "nullable": false
                 },
                 "views": {
                   "codecId": "sqlite/integer@1",
-                  "nativeType": "integer",
+                  "dataType": "sqlite/integer",
                   "nullable": false
                 }
               },
@@ -484,17 +486,17 @@
               "columns": {
                 "bio": {
                   "codecId": "sqlite/text@1",
-                  "nativeType": "text",
+                  "dataType": "sqlite/text",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "sqlite/integer@1",
-                  "nativeType": "integer",
+                  "dataType": "sqlite/integer",
                   "nullable": false
                 },
                 "user_id": {
                   "codecId": "sqlite/integer@1",
-                  "nativeType": "integer",
+                  "dataType": "sqlite/integer",
                   "nullable": false
                 }
               },
@@ -505,33 +507,39 @@
                   "id"
                 ]
               },
-              "uniques": []
+              "uniques": [
+                {
+                  "columns": [
+                    "user_id"
+                  ]
+                }
+              ]
             },
             "typed_rows": {
               "columns": {
                 "active": {
                   "codecId": "sqlite/integer@1",
-                  "nativeType": "integer",
+                  "dataType": "sqlite/integer",
                   "nullable": false
                 },
                 "created_at": {
                   "codecId": "sqlite/datetime@1",
-                  "nativeType": "text",
+                  "dataType": "sqlite/datetime",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "sqlite/integer@1",
-                  "nativeType": "integer",
+                  "dataType": "sqlite/integer",
                   "nullable": false
                 },
                 "label": {
                   "codecId": "sqlite/text@1",
-                  "nativeType": "text",
+                  "dataType": "sqlite/text",
                   "nullable": false
                 },
                 "metadata": {
                   "codecId": "sqlite/json@1",
-                  "nativeType": "text",
+                  "dataType": "sqlite/json",
                   "nullable": true
                 }
               },
@@ -548,22 +556,22 @@
               "columns": {
                 "email": {
                   "codecId": "sqlite/text@1",
-                  "nativeType": "text",
+                  "dataType": "sqlite/text",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "sqlite/integer@1",
-                  "nativeType": "integer",
+                  "dataType": "sqlite/integer",
                   "nullable": false
                 },
                 "invited_by_id": {
                   "codecId": "sqlite/integer@1",
-                  "nativeType": "integer",
+                  "dataType": "sqlite/integer",
                   "nullable": true
                 },
                 "name": {
                   "codecId": "sqlite/text@1",
-                  "nativeType": "text",
+                  "dataType": "sqlite/text",
                   "nullable": false
                 }
               },
@@ -581,14 +589,19 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "4a6ab3206062fc2061c13fc5362978dd0d0245fd37c26df94a294ec78692b5c6"
+    "storageHash": "348cfda3e550656d13ba752be2b612bafe9c9ec57529992a4fcdc49e543ff2f2"
   },
   "capabilities": {
     "sql": {
       "foreignKeys": true,
+      "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
+      "insertOnConflictWithoutTarget": true,
       "jsonAgg": true,
+      "jsonAggWithoutTruncation": true,
       "limit": true,
       "orderBy": true,
+      "outerReferencesInDerivedTables": true,
       "returning": true
     }
   },

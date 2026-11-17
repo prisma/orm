@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { MongoControlAdapterImpl } from '@internal/adapter-mongo/control';
 import { coreHash, crossRef, profileHash } from '@internal/contract/types';
@@ -13,6 +13,9 @@ import { runOnEngine, setupTestDirectoryFromFixtures, withTempDir } from './util
 
 const controlAdapter = new MongoControlAdapterImpl();
 
+const SIGNED_STORAGE_HASH = `a1b2c3d${'0'.repeat(57)}`;
+const UPDATED_STORAGE_HASH = `e5f6a7b${'1'.repeat(57)}`;
+
 const testContract: MongoContract = {
   target: 'mongo',
   targetFamily: 'mongo',
@@ -23,11 +26,22 @@ const testContract: MongoContract = {
         models: {
           User: {
             fields: {
-              _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
-              email: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+              _id: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+              },
+              email: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
             },
             relations: {},
-            storage: { collection: 'users' },
+            storage: {
+              collection: 'users',
+              fields: { _id: { field: '_id' }, email: { field: 'email' } },
+            },
           },
         },
       },
@@ -42,14 +56,18 @@ const testContract: MongoContract = {
           collection: {
             users: new MongoCollection({
               indexes: [
-                new MongoIndex({ keys: [{ field: 'email', direction: 1 as const }], unique: true }),
+                new MongoIndex({
+                  name: 'email_1',
+                  keys: [{ field: 'email', direction: 1 as const }],
+                  unique: true,
+                }),
               ],
             }),
           },
         },
       },
     },
-    storageHash: coreHash('mongo-sign-test'),
+    storageHash: coreHash(SIGNED_STORAGE_HASH),
   },
   capabilities: {},
   extensions: {},
@@ -61,6 +79,13 @@ function writeContractJson(testDir: string, contract: MongoContract): void {
   const outputDir = resolve(testDir, 'output');
   mkdirSync(outputDir, { recursive: true });
   writeFileSync(resolve(outputDir, 'contract.json'), JSON.stringify(contract, null, 2), 'utf-8');
+  writeFileSync(resolve(outputDir, 'contract.d.ts'), 'export type Contract = unknown;\n', 'utf-8');
+}
+
+function dbRefHash(testDir: string): string | undefined {
+  const pointerPath = resolve(testDir, 'migrations', 'app', 'refs', 'db.json');
+  if (!existsSync(pointerPath)) return undefined;
+  return (JSON.parse(readFileSync(pointerPath, 'utf-8')) as { hash: string }).hash;
 }
 
 describe('mongo db sign command (e2e)', { timeout: timeouts.spinUpMongoMemoryServer }, () => {
@@ -117,13 +142,14 @@ describe('mongo db sign command (e2e)', { timeout: timeouts.spinUpMongoMemorySer
       expect(run.exitCode).toBe(0);
       expect(run.presented?.data).toMatchObject({
         ok: true,
-        summary: expect.stringContaining('marker created'),
-        marker: { created: true, updated: false },
+        summary: 'Database signed',
+        spaces: [{ space: 'app', status: 'created' }],
       });
 
       const marker = await controlAdapter.readMarker(new MongoControlDriver(db, client), 'app');
       expect(marker).not.toBeNull();
       expect(marker!.storageHash).toBe(testContract.storage.storageHash);
+      expect(dbRefHash(testSetup.testDir)).toBe(testContract.storage.storageHash);
     });
 
     it('re-sign is idempotent', async () => {
@@ -146,8 +172,8 @@ describe('mongo db sign command (e2e)', { timeout: timeouts.spinUpMongoMemorySer
       expect(secondSign.exitCode).toBe(0);
       expect(secondSign.presented?.data).toMatchObject({
         ok: true,
-        summary: expect.stringContaining('already signed'),
-        marker: { created: false, updated: false },
+        summary: 'Database signed',
+        spaces: [{ space: 'app', status: 'unchanged' }],
       });
     });
 
@@ -170,7 +196,7 @@ describe('mongo db sign command (e2e)', { timeout: timeouts.spinUpMongoMemorySer
         ...testContract,
         storage: {
           ...testContract.storage,
-          storageHash: coreHash('mongo-sign-test-updated'),
+          storageHash: coreHash(UPDATED_STORAGE_HASH),
         },
         profileHash: profileHash('mongo-sign-test-updated'),
       };
@@ -181,8 +207,8 @@ describe('mongo db sign command (e2e)', { timeout: timeouts.spinUpMongoMemorySer
       expect(secondSign.exitCode).toBe(0);
       expect(secondSign.presented?.data).toMatchObject({
         ok: true,
-        summary: expect.stringContaining('marker updated'),
-        marker: { created: false, updated: true },
+        summary: 'Database signed',
+        spaces: [{ space: 'app', status: 'updated' }],
       });
 
       const marker = await controlAdapter.readMarker(new MongoControlDriver(db, client), 'app');

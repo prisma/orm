@@ -1,0 +1,16 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Account {
+  id        Int       @id
+  status    String    @default("active") @ignore
+  createdAt DateTime  @default(now()) @ignore
+  token     String    @default(uuid()) @ignore
+  ref       String?   @default(cuid()) @ignore
+  touchedAt DateTime  @updatedAt @ignore
+  seenAt    DateTime? @updatedAt @ignore
+  labels    String[]  @ignore
+  day       DateTime  @updatedAt @db.Date @ignore
+  stamp     DateTime  @default(now()) @updatedAt @ignore
+}

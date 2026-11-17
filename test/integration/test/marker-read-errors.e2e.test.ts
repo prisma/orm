@@ -52,8 +52,9 @@ withTempDir(({ createTempDir }) => {
             why: expect.stringContaining('Invalid contract marker row'),
           },
         });
-        expect(JSON.stringify(envelope)).toContain('{bin} db sign --db <url>');
-        expect(envelope).not.toHaveProperty('fix');
+        expect(JSON.stringify(envelope)).toContain('prisma-test db sign --db <url>');
+        expect(envelope?.ok).toBe(false);
+        expect(envelope).not.toHaveProperty('error.fix');
       },
       timeouts.spinUpPpgDev,
     );

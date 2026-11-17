@@ -1,7 +1,7 @@
 // use prisma-next
 
 type Price {
-  amount   Float
+  amount   Double
   currency String
 }
 
@@ -20,7 +20,7 @@ type CartItem {
   productId String
   name      String
   brand     String
-  amount    Int
+  amount    Int32
   price     Price
   image     Image
 }
@@ -29,7 +29,7 @@ type OrderLineItem {
   productId String
   name      String
   brand     String
-  amount    Int
+  amount    Int32
   price     Price
   image     Image
 }
@@ -41,9 +41,9 @@ type StatusEntry {
 
 type InvoiceLineItem {
   name      String
-  amount    Int
-  unitPrice Float
-  lineTotal Float
+  amount    Int32
+  unitPrice Double
+  lineTotal Double
 }
 
 model Product {
@@ -58,7 +58,7 @@ model Product {
   price          Price
   image          Image
   @@map("products")
-  @@textIndex([name, description], weights: "{\"name\": 10, \"description\": 1}")
+  @@textIndex([name, description], weights: { name: 10, description: 1 })
   @@index([brand, subCategory])
   @@index([code], type: "hashed")
 }
@@ -110,14 +110,14 @@ model Invoice {
   id       ObjectId          @id @map("_id")
   orderId  ObjectId
   items    InvoiceLineItem[]
-  subtotal Float
-  tax      Float
-  total    Float
+  subtotal Double
+  tax      Double
+  total    Double
   issuedAt DateTime
   order    Order             @relation(fields: [orderId], references: [id])
   @@map("invoices")
   @@index([orderId])
-  @@index([issuedAt(sort: Desc)], sparse: true)
+  @@index([sort(issuedAt, Desc)], sparse: true)
 }
 
 model Event {
@@ -128,7 +128,7 @@ model Event {
   timestamp DateTime
   @@map("events")
   @@discriminator(type)
-  @@index([userId, timestamp(sort: Desc)])
+  @@index([userId, sort(timestamp, Desc)])
   @@index([timestamp], expireAfterSeconds: 7776000)
 }
 

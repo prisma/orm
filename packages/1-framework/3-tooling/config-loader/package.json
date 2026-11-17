@@ -1,15 +1,14 @@
 {
   "name": "@internal/config-loader",
   "private": true,
-  "version": "8.0.0-rc.4",
+  "version": "8.0.0-rc.24",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "Prisma Next config loader: discovers, validates, and finalizes prisma.config.ts",
+  "description": "Prisma 8 config loader: discovers, validates, and finalizes prisma.config.ts",
   "scripts": {
     "build": "tsdown",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --project tsconfig.json --noEmit",
     "lint": "biome check . --error-on-warnings",
     "lint:fix": "biome check --write .",
@@ -17,23 +16,27 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/config": "workspace:8.0.0-rc.4",
-    "@internal/emitter": "workspace:8.0.0-rc.4",
-    "@internal/errors": "workspace:8.0.0-rc.4",
-    "@internal/utils": "workspace:8.0.0-rc.4",
+    "@internal/config": "workspace:8.0.0-rc.24",
+    "@internal/emitter": "workspace:8.0.0-rc.24",
+    "@internal/errors": "workspace:8.0.0-rc.24",
+    "@internal/utils": "workspace:8.0.0-rc.24",
+    "arktype": "^2.2.2",
     "c12": "^3.3.4",
-    "pathe": "^2.0.3"
+    "pathe": "^2.0.3",
+    "tinyglobby": "catalog:"
   },
   "devDependencies": {
-    "@repo/test-utils": "workspace:8.0.0-rc.4",
-    "@repo/tsconfig": "workspace:8.0.0-rc.4",
-    "@repo/tsdown": "workspace:8.0.0-rc.4",
+    "@prisma/cli-engine": "0.10.0",
+    "@repo/test-utils": "workspace:8.0.0-rc.24",
+    "@repo/tsconfig": "workspace:8.0.0-rc.24",
+    "@repo/tsdown": "workspace:8.0.0-rc.24",
     "@types/node": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
   "peerDependencies": {
+    "@prisma/cli-engine": "0.10.0",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {
@@ -57,7 +60,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/1-framework/3-tooling/config-loader"
   }
 }

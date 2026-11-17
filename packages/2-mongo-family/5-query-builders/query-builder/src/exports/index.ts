@@ -42,6 +42,7 @@ export { CollectionHandle, FilteredCollection } from '../state-classes';
 export type {
   ArrayField,
   BooleanField,
+  BsonDateField,
   DateField,
   DocField,
   DocShape,
@@ -53,6 +54,7 @@ export type {
   NullableDocField,
   NullableNumericField,
   NumericField,
+  PagingCount,
   ProjectedShape,
   ResolveRow,
   SortSpec,

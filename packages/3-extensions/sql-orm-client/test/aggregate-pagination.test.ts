@@ -10,7 +10,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import { bindWhereExpr } from '../src/where-binding';
 import { baseContract, createCollectionFor } from './collection-fixtures';
-import { isSelectAst, type MockRuntime } from './helpers';
+import { isSelectAst, type MockRuntime, publicTables } from './helpers';
 
 function selectAstOf(runtime: MockRuntime) {
   const ast = runtime.executions[0]?.plan.ast;
@@ -27,22 +27,21 @@ function expectDerivedTableSource(source: unknown): asserts source is DerivedTab
 const numericField = 'views' as never;
 
 // Pagination composes through to the aggregate input on a nested scalar
-// refine — `include('posts', (p) => p.skip(5).take(10).count())` aggregates
+// refine — `include('posts', (p) => p.offset(5).limit(10).count())` aggregates
 // over a derived table carrying the LIMIT/OFFSET. The root-level `aggregate()`
-// terminal now does the same: `take`/`skip` wrap the source in a derived
+// terminal now does the same: `limit`/`offset` wrap the source in a derived
 // table aliased back to `tableName` (the same trick the plain-select path
 // uses for `distinct(cols)`) so the outer aggregate reduces over exactly
-// the rows the chain describes. `groupBy()` still forwards only
-// `baseFilters`, silently dropping pagination — that terminal is the next
-// slice's, so its case below is still `it.fails`.
+// the rows the chain describes. Clauses before `groupBy()` go through the
+// same wrap, scoping the rows that get grouped.
 describe('aggregate pagination', () => {
-  it('aggregate() wraps take()/skip() in an input derived table', async () => {
+  it('aggregate() wraps limit()/offset() in an input derived table', async () => {
     const { collection, runtime } = createCollectionFor('Post');
     runtime.setNextResults([[{ totalViews: 500 }]]);
 
     await collection
-      .skip(5)
-      .take(10)
+      .offset(5)
+      .limit(10)
       .aggregate((aggregate) => ({ totalViews: aggregate.sum(numericField) }));
 
     const ast = selectAstOf(runtime);
@@ -70,8 +69,8 @@ describe('aggregate pagination', () => {
 
     await collection
       .orderBy((post) => post.views.desc())
-      .skip(5)
-      .take(10)
+      .offset(5)
+      .limit(10)
       .aggregate((aggregate) => ({ totalViews: aggregate.sum(numericField) }));
 
     const ast = selectAstOf(runtime);
@@ -85,8 +84,8 @@ describe('aggregate pagination', () => {
     runtime.setNextResults([[{ total: 3, sumViews: 500, avgViews: 166.67 }]]);
 
     await collection
-      .skip(5)
-      .take(10)
+      .offset(5)
+      .limit(10)
       .aggregate((aggregate) => ({
         total: aggregate.count(),
         sumViews: aggregate.sum(numericField),
@@ -108,34 +107,70 @@ describe('aggregate pagination', () => {
     const paginated = createCollectionFor('Post');
     paginated.runtime.setNextResults([[{ total: 3 }]]);
     await paginated.collection
-      .skip(5)
-      .take(10)
+      .offset(5)
+      .limit(10)
       .aggregate((aggregate) => ({ total: aggregate.count() }));
 
     expect(selectAstOf(paginated.runtime)).not.toEqual(selectAstOf(unpaginated.runtime));
   });
 
-  it.fails('groupBy().aggregate() applies take()/skip() to the compiled plan', async () => {
+  it('groupBy().aggregate() wraps pre-group limit()/offset() in an input derived table', async () => {
     const { collection, runtime } = createCollectionFor('Post');
-    runtime.setNextResults([[{ user_id: 1, totalViews: 500 }]]);
+    runtime.setNextResults([[{ userId: 1, totalViews: 500 }]]);
 
     await collection
-      .skip(5)
-      .take(10)
+      .offset(5)
+      .limit(10)
       .groupBy('userId')
       .aggregate((aggregate) => ({ totalViews: aggregate.sum(numericField) }));
 
     const ast = selectAstOf(runtime);
-    expect(ast.limit).toBe(10);
-    expect(ast.offset).toBe(5);
+    expect(ast.limit).toBeUndefined();
+    expect(ast.offset).toBeUndefined();
+    expectDerivedTableSource(ast.from);
+    expect(ast.from.alias).toBe('posts');
+    expect(ast.groupBy).toEqual([ColumnRef.of('posts', 'user_id')]);
+
+    const innerSelect = ast.from.query;
+    expect(innerSelect.limit).toBe(10);
+    expect(innerSelect.offset).toBe(5);
+    // The group key travels through the wrap alongside the aggregated
+    // column — GROUP BY posts.user_id needs it in the wrap's projection.
+    expect(innerSelect.projection).toEqual([
+      ProjectionItem.of('user_id', ColumnRef.of('posts', 'user_id')),
+      ProjectionItem.of('views', ColumnRef.of('posts', 'views')),
+    ]);
   });
 
-  it('skip() without take() emits OFFSET with no LIMIT', async () => {
+  // Discriminating case: pre-group and post-group pagination are separate
+  // clauses at separate levels. If they merged, one of these two `limit()`
+  // values would win and the other would vanish.
+  it('pre-group and post-group pagination land in separate places, not merged', async () => {
+    const { collection, runtime } = createCollectionFor('Post');
+    runtime.setNextResults([[{ userId: 1, totalViews: 500 }]]);
+
+    await collection
+      .orderBy((post) => post.views.desc())
+      .limit(10)
+      .groupBy('userId')
+      .orderBy((group) => group.userId.asc())
+      .limit(2)
+      .aggregate((aggregate) => ({ totalViews: aggregate.sum(numericField) }));
+
+    const ast = selectAstOf(runtime);
+    expect(ast.limit).toBe(2);
+    expect(ast.orderBy).toEqual([OrderByItem.asc(ColumnRef.of('posts', 'user_id'))]);
+    expectDerivedTableSource(ast.from);
+    expect(ast.from.query.limit).toBe(10);
+    expect(ast.from.query.orderBy).toEqual([OrderByItem.desc(ColumnRef.of('posts', 'views'))]);
+  });
+
+  it('offset() without limit() emits OFFSET with no LIMIT', async () => {
     const { collection, runtime } = createCollectionFor('Post');
     runtime.setNextResults([[{ totalViews: 500 }]]);
 
     await collection
-      .skip(5)
+      .offset(5)
       .aggregate((aggregate) => ({ totalViews: aggregate.sum(numericField) }));
 
     const ast = selectAstOf(runtime);
@@ -162,6 +197,7 @@ describe('aggregate pagination', () => {
       bindWhereExpr(
         baseContract,
         BinaryExpr.gt(ColumnRef.of('posts', 'views'), LiteralExpr.of(100)),
+        publicTables('posts'),
       ),
     );
   });
@@ -172,8 +208,8 @@ describe('aggregate pagination', () => {
 
     await collection
       .where((post) => post.views.gte(100))
-      .skip(5)
-      .take(10)
+      .offset(5)
+      .limit(10)
       .aggregate((aggregate) => ({ totalViews: aggregate.sum(numericField) }));
 
     const execution = runtime.executions[0];
@@ -188,7 +224,7 @@ describe('aggregate pagination', () => {
     const { collection, runtime } = createCollectionFor('Post');
     runtime.setNextResults([[{ total: 3 }]]);
 
-    await collection.take(10).aggregate((aggregate) => ({ total: aggregate.count() }));
+    await collection.limit(10).aggregate((aggregate) => ({ total: aggregate.count() }));
 
     const ast = selectAstOf(runtime);
     expectDerivedTableSource(ast.from);
@@ -241,7 +277,7 @@ describe('aggregate pagination', () => {
       ]);
     });
 
-    // Discriminating case: `take(2)` must slice the ordered, deduped rows
+    // Discriminating case: `limit(2)` must slice the ordered, deduped rows
     // — the top 2 by views — not an arbitrarily-ordered set.
     it('orderBy resolves directly through the ranked-input alias, no reapplication needed', async () => {
       const { collection, runtime } = createCollectionFor('Post');
@@ -250,7 +286,7 @@ describe('aggregate pagination', () => {
       await collection
         .distinct('title')
         .orderBy((post) => post.views.desc())
-        .take(2)
+        .limit(2)
         .aggregate((aggregate) => ({ totalViews: aggregate.sum(numericField) }));
 
       const ast = selectAstOf(runtime);
@@ -264,13 +300,13 @@ describe('aggregate pagination', () => {
       expect(aggregateInput.orderBy).toEqual([OrderByItem.desc(ColumnRef.of('posts', 'views'))]);
     });
 
-    it('distinct() combined with skip() (no take()) emits OFFSET with no LIMIT on the deduped select', async () => {
+    it('distinct() combined with offset() (no limit()) emits OFFSET with no LIMIT on the deduped select', async () => {
       const { collection, runtime } = createCollectionFor('Post');
       runtime.setNextResults([[{ totalViews: 500 }]]);
 
       await collection
         .distinct('title')
-        .skip(3)
+        .offset(3)
         .aggregate((aggregate) => ({ totalViews: aggregate.sum(numericField) }));
 
       const ast = selectAstOf(runtime);
@@ -303,6 +339,7 @@ describe('aggregate pagination', () => {
         bindWhereExpr(
           baseContract,
           BinaryExpr.gt(ColumnRef.of('posts', 'views'), LiteralExpr.of(100)),
+          publicTables('posts'),
         ),
       );
     });

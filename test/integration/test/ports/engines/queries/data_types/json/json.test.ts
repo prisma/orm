@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { timeouts, withPostgresPort } from '../../../../_harness/postgres';
+import { timeouts, withPostgresPort } from '../../../../../_harness/postgres';
 import type { Contract as ScalarContract } from './_fixture/scalar/generated/contract';
 import scalarContractJson from './_fixture/scalar/generated/contract.json' with { type: 'json' };
 
@@ -16,7 +16,7 @@ async function seedScalar(
 }
 
 describe('ports/engines/queries/data_types/json', () => {
-  it.fails(
+  it(
     'read_one',
     () =>
       withPostgresPort<ScalarContract>({ contractJson: scalarContractJson }, async ({ db }) => {
@@ -26,7 +26,7 @@ describe('ports/engines/queries/data_types/json', () => {
     timeouts.spinUpPpgDev,
   );
 
-  it.fails(
+  it(
     'read_many',
     () =>
       withPostgresPort<ScalarContract>({ contractJson: scalarContractJson }, async ({ db }) => {
@@ -49,7 +49,7 @@ describe('ports/engines/queries/data_types/json', () => {
     ['read_plain_int', 3, 1],
     ['read_plain_bool', 7, true],
   ] as const) {
-    it.fails(
+    it(
       name,
       () =>
         withPostgresPort<ScalarContract>({ contractJson: scalarContractJson }, async ({ db }) => {
@@ -60,7 +60,7 @@ describe('ports/engines/queries/data_types/json', () => {
     );
   }
 
-  it.fails(
+  it(
     'json_null_must_not_be_confused_with_literal_string',
     () =>
       withPostgresPort<ScalarContract>({ contractJson: scalarContractJson }, async ({ db }) => {

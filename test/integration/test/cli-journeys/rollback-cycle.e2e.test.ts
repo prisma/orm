@@ -79,6 +79,8 @@ withTempDir(({ createTempDir }) => {
           addPhoneDir,
           '--to',
           rollbackTarget,
+          '--delete',
+          'User.phone',
           '--json',
         ]);
         expect(planRollback.exitCode, 'plan rollback --to <dir>^').toBe(0);
@@ -91,7 +93,7 @@ withTempDir(({ createTempDir }) => {
         expect(rollback.to, 'rollback to predecessor C1').toBe(c1Hash);
         expect(
           rollback.operations.some((op) => op.operationClass === 'destructive'),
-          'reverse delta drops the added column (destructive), no refusal',
+          'reverse delta drops the added column (destructive), answered by --delete',
         ).toBe(true);
         const contractSource = readFileSync(join(ctx.testDir, 'contract.ts'), 'utf-8');
         expect(contractSource, 'contract source untouched (still phone variant)').toContain(

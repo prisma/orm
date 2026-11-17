@@ -168,5 +168,5 @@ Commands below use the `bin/rails db:…` / `bin/rails generate …` style from 
 
 ## See also
 
-- [`../../10-domains/migration/`](../../10-domains/migration/) — the Prisma Next migration domain model, which builds on the conventions surveyed here.
+- [`../../10-domains/migration/`](../../10-domains/migration/) — the Prisma 8 migration domain model, which builds on the conventions surveyed here.
 - [`./README.md`](./README.md) — index of migration-system inspirations with one-line takeaways per system.

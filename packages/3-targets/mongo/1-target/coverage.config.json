@@ -1,0 +1,20 @@
+{
+  "include": ["src/**/*.{ts,tsx,js,jsx}"],
+  "exclude": [
+    "dist/**",
+    "test/**",
+    "**/*.test.ts",
+    "**/*.test-d.ts",
+    "**/*.spec.ts",
+    "**/*.d.ts",
+    "**/*.config.ts",
+    "**/exports/**",
+    "**/mongo-runner.ts"
+  ],
+  "thresholds": {
+    "statements": 100,
+    "branches": 100,
+    "functions": 100,
+    "lines": 100
+  }
+}

@@ -1,6 +1,5 @@
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { MigrationGraph } from '@internal/migration-tools/graph';
-import type { MigrationListEntry } from './migration-list-types';
 
 export type MigrationEdgeKind = 'forward' | 'rollback' | 'self';
 
@@ -306,25 +305,6 @@ function classifyNormalizedEdges(edges: readonly NormalizedEdge[]): MigrationLis
     forwardInDegree,
     forwardOutDegree,
   };
-}
-
-function canonicalFrom(from: string | null): string {
-  return from ?? EMPTY_CONTRACT_HASH;
-}
-
-/**
- * Classify forward/rollback/self for a Tier-2 `MigrationListEntry[]` edge set.
- */
-export function classifyMigrationListGraphTopology(
-  entries: readonly MigrationListEntry[],
-): MigrationListGraphTopology {
-  const normalized: NormalizedEdge[] = entries.map((entry) => ({
-    hash: entry.hash,
-    from: canonicalFrom(entry.fromContract),
-    to: entry.toContract,
-    dirName: entry.name,
-  }));
-  return classifyNormalizedEdges(normalized);
 }
 
 /**

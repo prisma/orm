@@ -124,7 +124,7 @@ withTempDir(({ createTempDir }) => {
 
           expect(status.exitCode).toBe(0);
           expect(out).toMatch(/pending/);
-          expect(out).toContain('prisma-cli migrate');
+          expect(out).toContain('prisma-test db migrate');
         },
         timeouts.spinUpPpgDev,
       );
@@ -207,7 +207,7 @@ withTempDir(({ createTempDir }) => {
 
           expect(status.exitCode).toBe(0);
           expect(out).toMatch(/1 pending/);
-          expect(out).toContain('prisma-cli migrate');
+          expect(out).toContain('prisma-test db migrate');
         },
         timeouts.spinUpPpgDev,
       );
@@ -281,7 +281,7 @@ withTempDir(({ createTempDir }) => {
           expect(status.exitCode).toBe(0);
           expect(out).toContain('@contract');
           expect(out).toContain("to the application's contract");
-          expect(out).toContain('prisma-cli migration plan --name');
+          expect(out).toContain('prisma-test migration plan --name');
         },
         timeouts.spinUpPpgDev,
       );
@@ -291,16 +291,15 @@ withTempDir(({ createTempDir }) => {
      * Scenario: the database was updated directly via `db update` instead
      * of through the migration system.
      *
-     * The DB marker matches the live contract after db update, but that
-     * hash may not be a migration-graph node. Status defaults to the live
-     * contract as target (same as migrate); when DB and contract align,
-     * the headline is up to date while MARKER_NOT_IN_HISTORY still warns.
+     * The DB marker matches the live contract after db update, but no
+     * migration ends at that hash. Status warns MARKER_NOT_IN_HISTORY and
+     * says so in the headline, as `db migrate` refuses in the same state.
      */
     describe('DB updated directly — marker ahead of graph', () => {
       const db = useDevDatabase();
 
       it(
-        'emit → plan → apply → swap → emit → db update → up to date with divergence warn',
+        'emit → plan → apply → swap → emit → db update → marker-not-in-history warning',
         async () => {
           const ctx: JourneyContext = setupJourney({
             connectionString: db.connectionString,
@@ -325,7 +324,9 @@ withTempDir(({ createTempDir }) => {
 
           expect(status.exitCode).toBe(0);
           expect(out).toContain('@contract @db (db)');
-          expect(out).toContain('Up to date');
+          expect(out).toContain('is not in the on-disk migration graph');
+          expect(out).toContain('MIGRATION.MARKER_NOT_IN_HISTORY');
+          expect(out).not.toContain('Up to date');
         },
         timeouts.spinUpPpgDev,
       );
@@ -501,7 +502,7 @@ withTempDir(({ createTempDir }) => {
           expect(status.exitCode).toBe(0);
           const json = parseMigrationStatusJson(status);
           expect(json.summary).toContain("to the application's contract");
-          expect(json.summary).toContain('prisma-cli migration plan --name');
+          expect(json.summary).toContain('{bin} migration plan --name');
         },
         timeouts.spinUpPpgDev,
       );
@@ -574,7 +575,7 @@ withTempDir(({ createTempDir }) => {
           expect(status.exitCode).toBe(0);
           expect(out).toContain('No migration path from the database state');
           expect(out).toContain('via `production`');
-          expect(out).toContain('prisma-cli migration plan');
+          expect(out).toContain('prisma-test migration plan');
         },
         timeouts.spinUpPpgDev,
       );
@@ -596,14 +597,19 @@ withTempDir(({ createTempDir }) => {
           const plan0 = await planMigrationAndSelfEmit(ctx, ['--name', 'init', '--json']);
           expect(plan0.exitCode, 'plan0').toBe(0);
 
+          const hashA = parseJsonOutput(plan0)?.['to'] as string;
+          expect(hashA, 'plan0 must produce a target hash').toBeTruthy();
+
           await swapContract(ctx, 'contract-additive');
           const emit1 = await runContractEmit(ctx);
           expect(emit1.exitCode, 'emit1').toBe(0);
-          const plan1 = await planMigrationAndSelfEmit(ctx, ['--name', 'additive']);
+          const plan1 = await planMigrationAndSelfEmit(ctx, [
+            '--name',
+            'additive',
+            '--from',
+            hashA,
+          ]);
           expect(plan1.exitCode, 'plan1').toBe(0);
-
-          const hashA = parseJsonOutput(plan0)?.['to'] as string;
-          expect(hashA, 'plan0 must produce a target hash').toBeTruthy();
 
           const status = await runMigrationStatus(ctx, ['--from', hashA, '--json']);
           expect(status.exitCode).toBe(0);

@@ -10,23 +10,21 @@ import type { Runtime } from '@prisma/orm-postgres/family-runtime';
 import postgres from '@prisma/orm-postgres/runtime';
 import { timeouts, withDevDatabase } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import type { Contract } from '../src/prisma/contract';
-import contractJson from '../src/prisma/contract.json' with { type: 'json' };
-import { db } from '../src/prisma/db';
+import { contract, db } from '../src/prisma/db';
 import {
   rawQueryActiveAuthors,
   rawQueryBumpViews,
+  rawQueryCopyPosts,
   rawQueryPromoteAndList,
   rawQueryReport,
 } from '../src/queries/raw-query-demo';
 import { initTestDatabase } from './utils/control-client';
 
 const context = db.context;
-const { contract } = context;
 
 async function getRuntime(connectionString: string): Promise<Runtime> {
-  const client = postgres<Contract>({
-    contractJson,
+  const client = postgres({
+    contract,
     url: connectionString,
     extensions: db.stack.extensions,
   });
@@ -53,21 +51,21 @@ async function seed(runtime: Runtime): Promise<void> {
       id: userIds.ada,
       email: 'ada@example.com',
       displayName: 'Ada',
-      createdAt: new Date('2024-05-01T00:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-05-01T00:00:00.000Z'),
       kind: 'admin' as const,
     },
     {
       id: userIds.grace,
       email: 'grace@example.com',
       displayName: 'Grace',
-      createdAt: new Date('2024-05-02T00:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-05-02T00:00:00.000Z'),
       kind: 'admin' as const,
     },
     {
       id: userIds.linus,
       email: 'linus@example.com',
       displayName: 'Linus',
-      createdAt: new Date('2024-05-03T00:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-05-03T00:00:00.000Z'),
       kind: 'user' as const,
     },
   ];
@@ -81,7 +79,7 @@ async function seed(runtime: Runtime): Promise<void> {
       title: 'Analytical engine notes',
       userId: userIds.ada,
       priority: db.enums.public.Priority.members.Low,
-      createdAt: new Date('2024-05-10T10:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-05-10T10:00:00.000Z'),
       viewCount: 10,
     },
     {
@@ -89,7 +87,7 @@ async function seed(runtime: Runtime): Promise<void> {
       title: 'Bernoulli numbers',
       userId: userIds.ada,
       priority: db.enums.public.Priority.members.Low,
-      createdAt: new Date('2024-05-11T10:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-05-11T10:00:00.000Z'),
       viewCount: 20,
     },
     {
@@ -97,7 +95,7 @@ async function seed(runtime: Runtime): Promise<void> {
       title: 'Compiler design',
       userId: userIds.grace,
       priority: db.enums.public.Priority.members.Low,
-      createdAt: new Date('2024-05-12T10:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-05-12T10:00:00.000Z'),
       viewCount: 30,
     },
   ];
@@ -185,6 +183,50 @@ describe('whole-query raw demos', () => {
           const rows = await rawQueryPromoteAndList('numbers', runtime);
 
           expect(rows).toEqual([{ title: 'Bernoulli numbers', email: 'ada@example.com' }]);
+        } finally {
+          await runtime.close();
+        }
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'rawQueryCopyPosts inserts the rows of an embedded builder query',
+    async () => {
+      await withDevDatabase(async ({ connectionString }) => {
+        await initTestDatabase({ connection: connectionString, contract });
+        const runtime = await getRuntime(connectionString);
+        try {
+          await seed(runtime);
+
+          const rows = await rawQueryCopyPosts(
+            'ada@example.com',
+            'linus@example.com',
+            'Copy of ',
+            runtime,
+          );
+
+          expect([...rows].sort((a, b) => a.title.localeCompare(b.title))).toEqual([
+            {
+              id: expect.any(String),
+              title: 'Copy of Analytical engine notes',
+              userId: userIds.linus,
+            },
+            { id: expect.any(String), title: 'Copy of Bernoulli numbers', userId: userIds.linus },
+          ]);
+
+          const linusPosts = await runtime.query(
+            sql({ context, rawCodecInferer: { inferCodec: () => 'pg/text@1' } })
+              .public.post.select('title')
+              .where((f, fns) => fns.eq(f.userId, userIds.linus))
+              .orderBy('title')
+              .build(),
+          );
+          expect(linusPosts).toEqual([
+            { title: 'Copy of Analytical engine notes' },
+            { title: 'Copy of Bernoulli numbers' },
+          ]);
         } finally {
           await runtime.close();
         }

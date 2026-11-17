@@ -1,6 +1,9 @@
+// use prisma-8
+
 model TestModel {
   id         Int     @id
   json       Jsonb?
   json_list  Jsonb[]
   json_list2 Jsonb[]
+  @@map("testModel")
 }

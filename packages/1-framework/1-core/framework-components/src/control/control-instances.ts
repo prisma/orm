@@ -7,11 +7,14 @@ import type {
   TargetBoundComponentDescriptor,
   TargetInstance,
 } from '../shared/framework-components';
+import type { MigrationPlanOperation } from './control-migration-types';
 import type {
-  SignDatabaseResult,
+  SpaceSignature,
+  SpaceToSign,
   VerifyDatabaseResult,
   VerifyDatabaseSchemaResult,
 } from './control-operation-results';
+import type { DatabasePolicies } from './database-policies';
 
 export interface ControlFamilyInstance<TFamilyId extends string, TSchemaIR>
   extends FamilyInstance<TFamilyId> {
@@ -24,6 +27,12 @@ export interface ControlFamilyInstance<TFamilyId extends string, TSchemaIR>
    * `pnpm lint:no-contract-cast`.
    */
   deserializeContract(contractJson: unknown): Contract;
+
+  /** The name the database knows the object an operation acts on by. */
+  storageNameOf(operation: MigrationPlanOperation): string;
+
+  /** Where the database keeps the contract markers, as messages name it to the user, such as `prisma_contract.marker`. The control adapter names it. */
+  readonly markerLocation: string;
 
   verify(options: {
     readonly driver: ControlDriverInstance<TFamilyId, string>;
@@ -51,12 +60,17 @@ export interface ControlFamilyInstance<TFamilyId extends string, TSchemaIR>
     readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<TFamilyId, string>>;
   }): VerifyDatabaseSchemaResult;
 
-  sign(options: {
+  /**
+   * Writes the marker of every space in `spaces` with its contract's hashes. Does not check the schema: callers verify each space first. A space whose marker no longer holds `expected`, when it is read or when it is written, is reported as a conflict and its marker is left as it was. A family whose database can write every marker in one transaction takes the migration runner's marker lock and does so, so a failed write leaves every marker as it was. A family that cannot writes the markers one by one, so a failed write can leave earlier markers written; running the command again finishes the job.
+   */
+  signSpaces(options: {
     readonly driver: ControlDriverInstance<TFamilyId, string>;
-    readonly contract: unknown;
-    readonly contractPath: string;
-    readonly configPath?: string;
-  }): Promise<SignDatabaseResult>;
+    readonly spaces: readonly SpaceToSign[];
+    /**
+     * The database's policies as the caller read them when it checked the signature. The family compares them with the application space's marker before it writes any marker, under its lock where it has one, and writes the application space's marker only while it still records them. When they no longer hold it returns a `databasePolicies` conflict for the application space and signs nothing further.
+     */
+    readonly expectedDatabasePolicies?: DatabasePolicies;
+  }): Promise<readonly SpaceSignature[]>;
 
   /**
    * Reads the contract marker for `space` from the database, returning

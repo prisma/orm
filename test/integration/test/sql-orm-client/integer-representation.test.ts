@@ -1,4 +1,3 @@
-import postgresAdapter from '@internal/adapter-postgres/runtime';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget, { PostgresContractSerializer } from '@internal/target-postgres/runtime';
@@ -8,14 +7,15 @@ import type { Contract } from './fixtures/integer-representation/generated/contr
 import contractJson from './fixtures/integer-representation/generated/contract.json' with {
   type: 'json',
 };
+import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
 import { timeouts, withCollectionRuntime } from './integration-helpers';
 import type { PgIntegrationRuntime } from './runtime-helpers';
 
 /**
  * End-to-end proof of the integer-representation types on PostgreSQL, driven
  * through the real emitted fixture (`fixtures/integer-representation/generated/`):
- * `Meter.peak` is `BigIntNumber` (`pg/int8number@1`, int8 read as a JS number)
- * and `Meter.lifetime` is `UnboundedInt` (`pg/unboundedint@1`, unconstrained
+ * `Meter.peak` is `Int8Number` (`pg/int8number@1`, int8 read as a JS number)
+ * and `Meter.lifetime` is `NumericBigInt` (`pg/unboundedint@1`, unconstrained
  * numeric read as a bigint). Boundary values only — a value inside the safe
  * range proves nothing about the guard.
  */
@@ -28,21 +28,27 @@ const FIRST_UNSAFE = 9007199254740992;
 const PAST_TWO_63 = 18446744073709551617n;
 
 const contract = new PostgresContractSerializer().deserializeContract<Contract>(contractJson);
-const context = createExecutionContext<Contract>({
-  contract,
-  stack: createSqlExecutionStack({
-    target: postgresTarget,
-    adapter: postgresAdapter,
-    extensions: [],
-  }),
-});
-
-function createMeters(runtime: PgIntegrationRuntime) {
-  return new Collection({ runtime, context }, 'Meter', { namespaceId: 'public' });
+function contextOf(strategy: IncludeStrategy) {
+  return createExecutionContext<Contract>({
+    contract,
+    stack: createSqlExecutionStack({
+      target: postgresTarget,
+      adapter: postgresAdapterFor(strategy),
+      extensions: [],
+    }),
+  });
 }
 
-function createSamples(runtime: PgIntegrationRuntime) {
-  return new Collection({ runtime, context }, 'Sample', { namespaceId: 'public' });
+function createMeters(runtime: PgIntegrationRuntime, strategy: IncludeStrategy) {
+  return new Collection({ runtime, context: contextOf(strategy) }, 'Meter', {
+    namespaceId: 'public',
+  });
+}
+
+function createSamples(runtime: PgIntegrationRuntime, strategy: IncludeStrategy) {
+  return new Collection({ runtime, context: contextOf(strategy) }, 'Sample', {
+    namespaceId: 'public',
+  });
 }
 
 async function setupTables(runtime: PgIntegrationRuntime): Promise<void> {
@@ -64,13 +70,13 @@ async function setupTables(runtime: PgIntegrationRuntime): Promise<void> {
   `);
 }
 
-describe('integration/integer representation types', () => {
+describe.each(includeStrategies)('integration/integer representation types (%s)', (strategy) => {
   it(
     'writes and reads both types at the safe-range boundary and past 2^63',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         await setupTables(runtime);
-        const meters = createMeters(runtime);
+        const meters = createMeters(runtime, strategy);
 
         await meters.create({ id: 1, peak: MAX_SAFE, lifetime: PAST_TWO_63 });
         await meters.create({ id: 2, peak: -MAX_SAFE, lifetime: -PAST_TWO_63 });
@@ -98,12 +104,12 @@ describe('integration/integer representation types', () => {
   // number rather than decimal text — the boundary value proves that
   // projection survives the nested-document path exactly.
   it(
-    'carries a BigIntNumber column through an include at the safe-range boundary',
+    'carries an Int8Number column through an include at the safe-range boundary',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         await setupTables(runtime);
-        const meters = createMeters(runtime);
-        const samples = createSamples(runtime);
+        const meters = createMeters(runtime, strategy);
+        const samples = createSamples(runtime, strategy);
 
         await meters.create({ id: 1, peak: 0, lifetime: 0n });
         await samples.create({ id: 1, meterId: 1, reading: MAX_SAFE });
@@ -130,7 +136,7 @@ describe('integration/integer representation types', () => {
   );
 
   it(
-    'reading a stored value past the safe range through BigIntNumber raises RUNTIME.DECODE_FAILED',
+    'reading a stored value past the safe range through Int8Number raises RUNTIME.DECODE_FAILED',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         await setupTables(runtime);
@@ -140,7 +146,7 @@ describe('integration/integer representation types', () => {
         await runtime.query(
           `insert into int_repr_meters (id, peak, lifetime) values (10, ${FIRST_UNSAFE}, 0)`,
         );
-        const meters = createMeters(runtime);
+        const meters = createMeters(runtime, strategy);
 
         const shape = await rejectionShape(
           meters
@@ -160,57 +166,11 @@ describe('integration/integer representation types', () => {
   );
 
   it(
-    'reading a stored value past the safe range through an include raises RUNTIME.DECODE_FAILED',
+    'writing past the safe range through Int8Number raises RUNTIME.ENCODE_FAILED',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         await setupTables(runtime);
-        const meters = createMeters(runtime);
-        await meters.create({ id: 1, peak: 0, lifetime: 0n });
-        // Out of band on purpose: the encode guard refuses to write this
-        // value, so only raw SQL can arrange the stored state the decode
-        // guard exists for.
-        await runtime.query(
-          `insert into int_repr_samples (id, meter_id, reading) values (10, 1, ${FIRST_UNSAFE})`,
-        );
-
-        const shape = await rejectionShape(
-          meters
-            .select('id')
-            .where((meter) => meter.id.eq(1))
-            .include('samples', (sample) => sample.select('id', 'reading'))
-            .all(),
-        );
-        // The include decode wraps the codec's structured error in the
-        // runtime's column-context envelope, with the codec error on `cause`.
-        expect(shape).toEqual({
-          name: 'RuntimeError',
-          message: `Failed to decode column int_repr_samples.reading with codec 'pg/int8number@1': pg/int8number@1 value must be an integer within the safe integer range, got ${FIRST_UNSAFE}`,
-          code: 'RUNTIME.DECODE_FAILED',
-          category: 'RUNTIME',
-          severity: 'error',
-          details: {
-            table: 'int_repr_samples',
-            column: 'reading',
-            codec: 'pg/int8number@1',
-          },
-          cause: {
-            name: 'StructuredError',
-            message: `pg/int8number@1 value must be an integer within the safe integer range, got ${FIRST_UNSAFE}`,
-            code: 'RUNTIME.DECODE_FAILED',
-            meta: { codecId: 'pg/int8number@1', received: String(FIRST_UNSAFE) },
-          },
-        });
-      }, contract);
-    },
-    timeouts.spinUpPpgDev,
-  );
-
-  it(
-    'writing past the safe range through BigIntNumber raises RUNTIME.ENCODE_FAILED',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        await setupTables(runtime);
-        const meters = createMeters(runtime);
+        const meters = createMeters(runtime, strategy);
 
         const shape = await rejectionShape(
           meters.create({ id: 20, peak: FIRST_UNSAFE, lifetime: 0n }),
@@ -227,11 +187,11 @@ describe('integration/integer representation types', () => {
   );
 
   it(
-    'writing a non-integral number through BigIntNumber raises RUNTIME.ENCODE_FAILED',
+    'writing a non-integral number through Int8Number raises RUNTIME.ENCODE_FAILED',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         await setupTables(runtime);
-        const meters = createMeters(runtime);
+        const meters = createMeters(runtime, strategy);
 
         const shape = await rejectionShape(meters.create({ id: 21, peak: 1.5, lifetime: 0n }));
         expect(shape).toEqual({
@@ -254,11 +214,11 @@ describe('integration/integer representation types', () => {
   // `pg/unboundedint@1` stays unbounded, since that column's author chose the
   // exact representation. `min`/`max` resolve to the input codec itself.
   it(
-    'reduces BigIntNumber and UnboundedInt columns through their declared result codecs',
+    'reduces Int8Number and NumericBigInt columns through their declared result codecs',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         await setupTables(runtime);
-        const meters = createMeters(runtime);
+        const meters = createMeters(runtime, strategy);
 
         await meters.create({ id: 1, peak: 10, lifetime: PAST_TWO_63 });
         await meters.create({ id: 2, peak: 30, lifetime: PAST_TWO_63 });
@@ -310,7 +270,7 @@ describe('integration/integer representation types', () => {
     async () => {
       await withCollectionRuntime(async (runtime) => {
         await setupTables(runtime);
-        const meters = createMeters(runtime);
+        const meters = createMeters(runtime, strategy);
 
         await meters.create({ id: 1, peak: MAX_SAFE, lifetime: 0n });
         await meters.create({ id: 2, peak: MAX_SAFE, lifetime: 0n });
@@ -327,54 +287,8 @@ describe('integration/integer representation types', () => {
     timeouts.spinUpPpgDev,
   );
 
-  // The include path is the subtler one: the total is projected as a JSON
-  // number, so `JSON.parse` has already rounded it by the time the codec reads
-  // it. Rounding is monotone, which is what makes the post-parse guard
-  // un-foolable — the rounded value is still outside the safe range.
-  it(
-    'refuses a bare sum past the safe range through the include path too',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        await setupTables(runtime);
-        const meters = createMeters(runtime);
-        const samples = createSamples(runtime);
-
-        await meters.create({ id: 1, peak: 0, lifetime: 0n });
-        await samples.create({ id: 1, meterId: 1, reading: MAX_SAFE });
-        await samples.create({ id: 2, meterId: 1, reading: MAX_SAFE });
-
-        const shape = await rejectionShape(
-          meters
-            .select('id')
-            .include('samples', (sample) => sample.sum('reading'))
-            .all(),
-        );
-        // The include decode wraps the codec's structured error in the
-        // runtime's column-context envelope, naming the reducer's alias where a
-        // scalar include names the column, with the codec error on `cause`.
-        expect(shape).toEqual({
-          name: 'RuntimeError',
-          message: `Failed to decode column int_repr_samples.samples with codec 'pg/int8number@1': pg/int8number@1 value must be an integer within the safe integer range, got ${2 * MAX_SAFE}`,
-          code: 'RUNTIME.DECODE_FAILED',
-          category: 'RUNTIME',
-          severity: 'error',
-          details: {
-            table: 'int_repr_samples',
-            column: 'samples',
-            codec: 'pg/int8number@1',
-          },
-          cause: {
-            name: 'StructuredError',
-            message: `pg/int8number@1 value must be an integer within the safe integer range, got ${2 * MAX_SAFE}`,
-            code: 'RUNTIME.DECODE_FAILED',
-            meta: { codecId: 'pg/int8number@1', received: String(2 * MAX_SAFE) },
-          },
-        });
-      }, contract);
-    },
-    timeouts.spinUpPpgDev,
-  );
-
+  // The include path reads the total out of the JSON the database returns,
+  // with the same `fromWire` an ordinary row uses, so it refuses the same total.
   // The lossless variant is the escape hatch the guard points at, and over a
   // 64-bit column it reads PostgreSQL's `numeric` total rather than casting
   // back to `int8` — so 2^63 is not a wall either.
@@ -383,7 +297,7 @@ describe('integration/integer representation types', () => {
     async () => {
       await withCollectionRuntime(async (runtime) => {
         await setupTables(runtime);
-        const meters = createMeters(runtime);
+        const meters = createMeters(runtime, strategy);
 
         await meters.create({ id: 1, peak: MAX_SAFE, lifetime: PAST_TWO_63 });
         await meters.create({ id: 2, peak: MAX_SAFE, lifetime: PAST_TWO_63 });
@@ -420,7 +334,7 @@ describe('integration/integer representation types', () => {
     async () => {
       await withCollectionRuntime(async (runtime) => {
         await setupTables(runtime);
-        const meters = createMeters(runtime);
+        const meters = createMeters(runtime, strategy);
 
         await meters.create({ id: 1, peak: 10, lifetime: 0n });
         await meters.create({ id: 2, peak: 10, lifetime: 0n });
@@ -446,3 +360,109 @@ describe('integration/integer representation types', () => {
     timeouts.spinUpPpgDev,
   );
 });
+
+describe.each(includeStrategies)(
+  'integration/integer representation types, include decode errors (%s)',
+  (strategy) => {
+    it(
+      'reading a stored value past the safe range through an include raises RUNTIME.DECODE_FAILED',
+      async () => {
+        await withCollectionRuntime(async (runtime) => {
+          await setupTables(runtime);
+          const meters = createMeters(runtime, strategy);
+          await meters.create({ id: 1, peak: 0, lifetime: 0n });
+          // Out of band on purpose: the encode guard refuses to write this
+          // value, so only raw SQL can arrange the stored state the decode
+          // guard exists for.
+          await runtime.query(
+            `insert into int_repr_samples (id, meter_id, reading) values (10, 1, ${FIRST_UNSAFE})`,
+          );
+
+          const shape = await rejectionShape(
+            meters
+              .select('id')
+              .where((meter) => meter.id.eq(1))
+              .include('samples', (sample) => sample.select('id', 'reading'))
+              .all(),
+          );
+          // The one-query include wraps the codec's error in a column envelope; a
+          // per-relation read gets it as an ordinary row's decode does.
+          const codecError = {
+            name: 'StructuredError',
+            message: `pg/int8number@1 value must be an integer within the safe integer range, got ${FIRST_UNSAFE}`,
+            code: 'RUNTIME.DECODE_FAILED',
+            meta: { codecId: 'pg/int8number@1', received: String(FIRST_UNSAFE) },
+          };
+          expect(shape).toEqual(
+            {
+              join: {
+                name: 'RuntimeError',
+                message: `Failed to decode column int_repr_samples.reading with codec 'pg/int8number@1': pg/int8number@1 value must be an integer within the safe integer range, got ${FIRST_UNSAFE}`,
+                code: 'RUNTIME.DECODE_FAILED',
+                category: 'RUNTIME',
+                severity: 'error',
+                details: {
+                  table: 'int_repr_samples',
+                  column: 'reading',
+                  codec: 'pg/int8number@1',
+                },
+                cause: codecError,
+              },
+              query: codecError,
+            }[strategy],
+          );
+        }, contract);
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'refuses a bare sum past the safe range through the include path too',
+      async () => {
+        await withCollectionRuntime(async (runtime) => {
+          await setupTables(runtime);
+          const meters = createMeters(runtime, strategy);
+          const samples = createSamples(runtime, strategy);
+
+          await meters.create({ id: 1, peak: 0, lifetime: 0n });
+          await samples.create({ id: 1, meterId: 1, reading: MAX_SAFE });
+          await samples.create({ id: 2, meterId: 1, reading: MAX_SAFE });
+
+          const shape = await rejectionShape(
+            meters
+              .select('id')
+              .include('samples', (sample) => sample.sum('reading'))
+              .all(),
+          );
+          // The one-query include wraps the codec's error in an envelope naming the
+          // reducer's alias; a per-relation read gets it as an ordinary row's decode does.
+          const codecError = {
+            name: 'StructuredError',
+            message: `pg/int8number@1 value must be an integer within the safe integer range, got ${2 * MAX_SAFE}`,
+            code: 'RUNTIME.DECODE_FAILED',
+            meta: { codecId: 'pg/int8number@1', received: String(2 * MAX_SAFE) },
+          };
+          expect(shape).toEqual(
+            {
+              join: {
+                name: 'RuntimeError',
+                message: `Failed to decode column int_repr_samples.samples with codec 'pg/int8number@1': pg/int8number@1 value must be an integer within the safe integer range, got ${2 * MAX_SAFE}`,
+                code: 'RUNTIME.DECODE_FAILED',
+                category: 'RUNTIME',
+                severity: 'error',
+                details: {
+                  table: 'int_repr_samples',
+                  column: 'samples',
+                  codec: 'pg/int8number@1',
+                },
+                cause: codecError,
+              },
+              query: codecError,
+            }[strategy],
+          );
+        }, contract);
+      },
+      timeouts.spinUpPpgDev,
+    );
+  },
+);

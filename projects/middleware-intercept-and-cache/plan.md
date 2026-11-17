@@ -124,7 +124,7 @@ Adds the user-facing `.annotate(...)` surface on both query lanes. After this mi
 
 - [ ] **2.8 Unit tests for ORM annotations.** In `sql-orm-client/test/`:
   - `db.User.first({ id }, cacheAnnotation({ ttl: 60 }))` produces a plan with `meta.annotations.cache`.
-  - `db.User.where({active: true}).take(10).all(cacheAnnotation({ ttl: 60 }))` likewise.
+  - `db.User.where({active: true}).limit(10).all(cacheAnnotation({ ttl: 60 }))` likewise.
   - `db.User.create(input, writeAnnotation(...))` produces a plan with the annotation.
   - Annotation survives `.include(...)` (relation queries) and grouped paths when attached at the appropriate terminal.
   - Multiple annotations on a single terminal call coexist; duplicate namespace last-wins.

@@ -1,23 +1,29 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Coverage Warning Configuration",
-  "description": "Configuration for packages with time-limited coverage/test warning exceptions",
+  "description": "Configuration for packages with time-limited coverage warning exceptions and coverage exclusions",
   "type": "object",
   "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Path to this JSON schema"
+    },
     "description": {
       "type": "string",
-      "description": "Overall description of the warning-only package system"
+      "description": "Overall description of the coverage warning-only package system"
     },
     "warningOnly": {
       "type": "array",
-      "description": "List of packages with coverage warnings that don't block CI (until expiry)",
+      "description": "List of packages whose coverage thresholds don't block CI through their expiry date",
       "items": {
         "type": "object",
         "required": ["package", "reason", "addedDate", "expiryDays"],
         "properties": {
           "package": {
             "type": "string",
-            "description": "Package path relative to packages/ directory"
+            "description": "Package path relative to packages/ directory",
+            "minLength": 1,
+            "pattern": "^(?!packages/)(?!/)(?!\\.?/)(?![A-Za-z]:)(?!.*(?://|/\\.(?:/|$)))(?!.*\\.\\.)(?!.*[*?{}\\[\\]])[^\\\\]+$"
           },
           "reason": {
             "type": "string",
@@ -31,7 +37,7 @@
             "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
           },
           "expiryDays": {
-            "type": "number",
+            "type": "integer",
             "description": "Days until expiry (typically 90)",
             "minimum": 1,
             "maximum": 180
@@ -51,8 +57,18 @@
         },
         "additionalProperties": false
       }
+    },
+    "excludedPackages": {
+      "type": "array",
+      "description": "Package paths relative to packages/ that are omitted from coverage collection and threshold composition",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^(?!packages/)(?!/)(?!\\.?/)(?![A-Za-z]:)(?!.*(?://|/\\.(?:/|$)))(?!.*\\.\\.)(?!.*[*?{}\\[\\]])[^\\\\]+$"
+      },
+      "uniqueItems": true
     }
   },
-  "required": ["warningOnly"],
+  "required": ["warningOnly", "excludedPackages"],
   "additionalProperties": false
 }

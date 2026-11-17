@@ -31,7 +31,7 @@ If output directory is omitted, derive:
    - `<output-dir>/summary.txt`
    - `<output-dir>/review-targets.json`
 2. Ensure `<output-dir>` exists.
-3. Enforce artifact safety before generation (must be ignored by git):
+3. Enforce artifact safety before generation (the artifacts must stay untracked). In a git checkout the guard asks git directly; in a Jujutsu workspace with no git directory it accepts a directory under the workspace root's ignored `wip/` tree:
 
 ```bash
 node ./scripts/guard-review-artifacts-ignored.mjs --dir <output-dir>

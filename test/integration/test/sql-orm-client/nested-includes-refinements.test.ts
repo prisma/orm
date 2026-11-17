@@ -1,5 +1,5 @@
 // Integration coverage for nested includes (depth >= 2) when the
-// nested level carries refinements (`orderBy`, `take`, `where`,
+// nested level carries refinements (`orderBy`, `limit`, `where`,
 // `select`) or runs against degenerate data (empty parents, missing
 // grandchildren, unsatisfied FKs).
 //
@@ -8,23 +8,29 @@
 // prisma/dev PGlite infrastructure).
 
 import { describe, expect, it } from 'vitest';
-import { createUsersCollection, timeouts, withCollectionRuntime } from './integration-helpers';
+import { includeStrategies } from './helpers';
+import {
+  createUsersCollection,
+  expectPerRelationStatements,
+  timeouts,
+  withCollectionRuntime,
+} from './integration-helpers';
 import { collectionWithCapabilities } from './nested-includes-helpers';
 import { seedComments, seedPosts, seedUsers } from './runtime-helpers';
 
-describe('integration/nested-includes/refinements', () => {
+describe.each(includeStrategies)('integration/nested-includes/refinements (%s)', (strategy) => {
   // ===========================================================================
-  // Refinements at depth 2: orderBy / take / where / select on the nested
+  // Refinements at depth 2: orderBy / limit / where / select on the nested
   // level must be honoured by the inner SELECT, not silently dropped by
   // the recursion.
   // ===========================================================================
 
   describe('depth-2 with refinements', () => {
     it(
-      'orderBy + take on depth-2 child applies inside the nested aggregate',
+      'orderBy + limit on depth-2 child applies inside the nested aggregate',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const users = createUsersCollection(runtime);
+          const users = createUsersCollection(runtime, strategy);
           await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
           await seedPosts(runtime, [{ id: 10, title: 'P', userId: 1, views: 1 }]);
           await seedComments(runtime, [
@@ -33,11 +39,13 @@ describe('integration/nested-includes/refinements', () => {
             { id: 101, body: 'second', postId: 10 },
           ]);
 
+          runtime.resetExecutions();
           const rows = await users
             .include('posts', (posts) =>
-              posts.include('comments', (c) => c.orderBy((cc) => cc.id.asc()).take(2)),
+              posts.include('comments', (c) => c.orderBy((cc) => cc.id.asc()).limit(2)),
             )
             .all();
+          expectPerRelationStatements(runtime, strategy, 3);
 
           expect(rows).toEqual([
             {
@@ -70,7 +78,7 @@ describe('integration/nested-includes/refinements', () => {
       'where() filter on depth-2 child only includes matching rows',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const users = createUsersCollection(runtime);
+          const users = createUsersCollection(runtime, strategy);
           await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
           await seedPosts(runtime, [
             { id: 10, title: 'Low', userId: 1, views: 10 },
@@ -81,6 +89,7 @@ describe('integration/nested-includes/refinements', () => {
             { id: 101, body: 'on high', postId: 11 },
           ]);
 
+          runtime.resetExecutions();
           const rows = await users
             .include('posts', (posts) =>
               posts
@@ -89,6 +98,7 @@ describe('integration/nested-includes/refinements', () => {
                 .include('comments'),
             )
             .all();
+          expectPerRelationStatements(runtime, strategy, 3);
 
           expect(rows).toEqual([
             {
@@ -118,7 +128,7 @@ describe('integration/nested-includes/refinements', () => {
       'orderBy on parent and on depth-2 child both apply',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const users = createUsersCollection(runtime);
+          const users = createUsersCollection(runtime, strategy);
           await seedUsers(runtime, [
             { id: 2, name: 'Bob', email: 'bob@example.com' },
             { id: 1, name: 'Alice', email: 'alice@example.com' },
@@ -133,6 +143,7 @@ describe('integration/nested-includes/refinements', () => {
             { id: 102, body: 'b2', postId: 11 },
           ]);
 
+          runtime.resetExecutions();
           const rows = await users
             .orderBy((u) => u.id.asc())
             .include('posts', (posts) =>
@@ -141,6 +152,7 @@ describe('integration/nested-includes/refinements', () => {
                 .include('comments', (c) => c.orderBy((cc) => cc.id.desc())),
             )
             .all();
+          expectPerRelationStatements(runtime, strategy, 3);
 
           expect(rows).toEqual([
             {
@@ -194,17 +206,19 @@ describe('integration/nested-includes/refinements', () => {
         // must mirror it. A regression that hardcodes the full column set
         // would surface here as extra keys on the depth-2 row.
         await withCollectionRuntime(async (runtime) => {
-          const users = createUsersCollection(runtime);
+          const users = createUsersCollection(runtime, strategy);
           await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
           await seedPosts(runtime, [{ id: 10, title: 'A', userId: 1, views: 1 }]);
           await seedComments(runtime, [{ id: 100, body: 'hi', postId: 10 }]);
 
+          runtime.resetExecutions();
           const rows = await users
             .select('name')
             .include('posts', (posts) =>
               posts.select('title').include('comments', (c) => c.select('body')),
             )
             .all();
+          expectPerRelationStatements(runtime, strategy, 3);
 
           expect(rows).toEqual([
             { name: 'Alice', posts: [{ title: 'A', comments: [{ body: 'hi' }] }] },
@@ -224,10 +238,12 @@ describe('integration/nested-includes/refinements', () => {
       'parent with no children yields an empty array at depth 1 (no depth-2 fired)',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const users = createUsersCollection(runtime);
+          const users = createUsersCollection(runtime, strategy);
           await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
 
+          runtime.resetExecutions();
           const rows = await users.include('posts', (posts) => posts.include('comments')).all();
+          expectPerRelationStatements(runtime, strategy, 2);
 
           expect(rows).toEqual([
             {
@@ -248,12 +264,14 @@ describe('integration/nested-includes/refinements', () => {
       'depth-1 child present but no depth-2 grandchildren yields empty array',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const users = createUsersCollection(runtime);
+          const users = createUsersCollection(runtime, strategy);
           await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
           await seedPosts(runtime, [{ id: 10, title: 'A', userId: 1, views: 1 }]);
           // No comments seeded.
 
+          runtime.resetExecutions();
           const rows = await users.include('posts', (posts) => posts.include('comments')).all();
+          expectPerRelationStatements(runtime, strategy, 3);
 
           expect(rows).toEqual([
             {
@@ -281,15 +299,17 @@ describe('integration/nested-includes/refinements', () => {
         // omits it, the join lookup reads `undefined` and the depth-2
         // arrays come back empty.
         await withCollectionRuntime(async (runtime) => {
-          const users = collectionWithCapabilities(runtime, 'User', {});
+          const users = collectionWithCapabilities(runtime, 'User', {}, strategy);
           await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
           await seedPosts(runtime, [{ id: 10, title: 'A', userId: 1, views: 1 }]);
           await seedComments(runtime, [{ id: 100, body: 'hi', postId: 10 }]);
 
+          runtime.resetExecutions();
           const rows = await users
             .orderBy((u) => u.id.asc())
             .include('posts', (posts) => posts.select('title').include('comments'))
             .all();
+          expectPerRelationStatements(runtime, strategy, 3);
 
           expect(rows).toEqual([
             {
@@ -310,14 +330,16 @@ describe('integration/nested-includes/refinements', () => {
       'depth-2 to-one with unsatisfied FK yields null (not error)',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const users = createUsersCollection(runtime);
+          const users = createUsersCollection(runtime, strategy);
           await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
           await seedPosts(runtime, [{ id: 10, title: 'Orphan', userId: null, views: 1 }]);
 
           // Alice has no posts (userId: null on the post). The depth-2
           // `author` resolution should not run because there are no
           // depth-1 children to recurse into.
+          runtime.resetExecutions();
           const rows = await users.include('posts', (posts) => posts.include('author')).all();
+          expectPerRelationStatements(runtime, strategy, 2);
 
           expect(rows).toEqual([
             {

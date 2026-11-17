@@ -2,14 +2,7 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-  findInternalImportSpecifiers,
-  findInternalNames,
-  importSubpaths,
-  installShells,
-  packShell,
-  runInScratch,
-} from '@repo/tsdown/shell-testkit';
+import { importSubpaths, installShells, packShell, runInScratch } from '@repo/tsdown/shell-testkit';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const publicRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -59,6 +52,34 @@ describe('cross-shell tarball chain (target-postgres -> family-sql -> framework,
     expect(runInScratch(scratch, script)).toContain('prepared-query bridge ok');
   });
 
+  it('exports the activity-starting functions from the public runtime entry', () => {
+    const script = `
+      import { strict as assert } from 'node:assert';
+      const runtime = await import('@prisma/orm-family-sql/runtime');
+      const preparedQuery = await import('@prisma/orm-family-sql/runtime/internal/prepared-query');
+      assert.deepEqual(
+        {
+          startActivityOn: typeof runtime.startActivityOn,
+          planContentHashOn: typeof runtime.planContentHashOn,
+          findActivitySource: typeof runtime.findActivitySource,
+          delegatingActivitySource: typeof runtime.delegatingActivitySource,
+          activitySource: typeof runtime.activitySource,
+          internalActivitySource: typeof preparedQuery.activitySource,
+        },
+        {
+          startActivityOn: 'function',
+          planContentHashOn: 'function',
+          findActivitySource: 'function',
+          delegatingActivitySource: 'function',
+          activitySource: 'symbol',
+          internalActivitySource: 'undefined',
+        },
+      );
+      console.log('activity exports ok');
+    `;
+    expect(runInScratch(scratch, script)).toContain('activity exports ok');
+  });
+
   it('keeps framework modules identical when reached through family-sql', () => {
     const script = `
       import { strict as assert } from 'node:assert';
@@ -78,19 +99,5 @@ describe('cross-shell tarball chain (target-postgres -> family-sql -> framework,
     // command family at ./cli for the unified `prisma` CLI to import, and
     // no shell forwards a launcher.
     expect(existsSync(join(scratch, 'node_modules', '.bin', 'prisma-next'))).toBe(false);
-  });
-
-  it('ships no unrecorded internal package name in any shell dist', async () => {
-    for (const shell of chain) {
-      const installedDir = join(scratch, 'node_modules', '@prisma', shell);
-      expect(await findInternalNames(installedDir)).toEqual([]);
-    }
-  });
-
-  it('ships no @internal import specifier in any shell dist', async () => {
-    for (const shell of chain) {
-      const installedDir = join(scratch, 'node_modules', '@prisma', shell);
-      expect(await findInternalImportSpecifiers(installedDir)).toEqual([]);
-    }
   });
 });

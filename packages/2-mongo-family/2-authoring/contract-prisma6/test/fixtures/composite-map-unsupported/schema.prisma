@@ -1,0 +1,13 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model Post {
+  id      String  @id @default(auto()) @map("_id") @db.ObjectId
+  address Address
+}
+
+type Address {
+  street String @map("street_name")
+}

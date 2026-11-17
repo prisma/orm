@@ -52,7 +52,13 @@ withTempDir(({ createTempDir }) => {
         swapContract(ctx, 'contract-phone');
         const emit1 = await runContractEmit(ctx);
         expect(emit1.exitCode, 'L.02: emit C2').toBe(0);
-        const plan1 = await planMigrationAndSelfEmit(ctx, ['--name', 'add-phone', '--json']);
+        const plan1 = await planMigrationAndSelfEmit(ctx, [
+          '--name',
+          'add-phone',
+          '--from',
+          c1Hash,
+          '--json',
+        ]);
         expect(plan1.exitCode, 'L.02: plan C1→C2').toBe(0);
         const c2Hash = parseJsonOutput<{ to: string }>(plan1).to;
 

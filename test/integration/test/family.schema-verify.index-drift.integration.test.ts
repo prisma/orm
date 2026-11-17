@@ -7,13 +7,14 @@
  * object was created from exactly the authored text (Postgres reprints
  * `lower(email || 'x')` as `lower((email || 'x'::text))`). The authoring-time
  * warning half of this behavior is pinned in
- * packages/2-sql/1-core/contract/test/index-naming.test.ts.
+ * packages/2-sql-family/1-core/contract/test/index-naming.test.ts.
  *
  * An out-of-band `ALTER INDEX … SET (fillfactor = 70)` on a
  * wire-named index is real drift: the live options bag no longer matches the
  * contract and verify reports the index not-equal.
  */
 
+import { sql } from '@internal/postgres/contract-builder';
 import { describe, expect, it } from 'vitest';
 import {
   defineContract,
@@ -58,7 +59,7 @@ describe('index drift', () => {
               table: 'user',
               indexes: [
                 constraints.index({
-                  expression: "lower(email || 'x')",
+                  expression: sql`lower(email || 'x')`,
                   map: 'user_email_expr_exact',
                 }),
               ],

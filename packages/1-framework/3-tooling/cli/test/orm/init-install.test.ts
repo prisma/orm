@@ -2,10 +2,11 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import type { MountedTree, PackageManagerId, PackageManagerRunner } from '@prisma/cli-engine';
 import { createTestCli } from '@prisma/cli-engine/testing';
 import { timeouts } from '@repo/test-utils';
-import { join } from 'pathe';
+import { basename, join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
+import { importFromProject } from '../../src/orm/init-prisma7-check';
 import { createTestProjectDir } from '../utils/test-project-dir';
 
 const emit = vi.fn();
@@ -13,7 +14,7 @@ const emit = vi.fn();
 /** The production tree, with `init` rebuilt around the injected fake emit. */
 const commands: MountedTree = {
   ...BIN_COMMANDS,
-  'orm init': createInitCommand({ emitScaffoldedContract: emit }),
+  'orm init': createInitCommand({ emitScaffoldedContract: emit, importFromProject }),
 };
 const groups = BIN_GROUPS;
 
@@ -72,19 +73,19 @@ function envelopeOf(run: { readonly json: readonly { readonly kind: string }[] }
 }
 
 function skillCalls(): readonly RunnerCall[] {
-  return calls.filter((call) => call.args.includes('skills@latest'));
+  return calls.filter((call) => call.args.includes('skills'));
 }
 
 describe('init installs', () => {
   it(
-    'pins the engine to the exact version the installed @prisma/cli declares',
+    'pins the engine to the exact version the installed prisma package declares',
     async () => {
-      const cliManifestDir = join(projectDir, 'node_modules', '@prisma', 'cli');
+      const cliManifestDir = join(projectDir, 'node_modules', 'prisma');
       mkdirSync(cliManifestDir, { recursive: true });
       writeFileSync(
         join(cliManifestDir, 'package.json'),
         JSON.stringify({
-          name: '@prisma/cli',
+          name: 'prisma',
           version: '8.0.0-rc.4',
           dependencies: { '@prisma/cli-engine': '0.1.1' },
         }),
@@ -117,12 +118,12 @@ describe('init installs', () => {
         },
         {
           file: expect.any(String),
-          args: ['add', '-D', '@prisma/cli@next', '@types/node'],
+          args: ['add', '-D', 'prisma@latest', '@types/node'],
           cwd: projectDir,
         },
         {
           file: expect.any(String),
-          args: ['add', '-D', '@prisma/cli-engine@next'],
+          args: ['add', '-D', '@prisma/cli-engine@latest'],
           cwd: projectDir,
         },
       ]);
@@ -131,7 +132,7 @@ describe('init installs', () => {
         packagesInstalled: {
           status: 'installed',
           deps: ['@prisma/orm-postgres', 'dotenv'],
-          devDeps: ['@prisma/cli@next', '@types/node', '@prisma/cli-engine@next'],
+          devDeps: ['prisma@latest', '@types/node', '@prisma/cli-engine@latest'],
         },
         contractEmitted: true,
       });
@@ -143,7 +144,7 @@ describe('init installs', () => {
   it(
     'announces each package-manager run as a step',
     async () => {
-      const run = await harness().run(scaffoldArgv('--skip-skills'), { cwd: projectDir });
+      const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
 
       expect(run.events).toContainEqual(
         expect.objectContaining({
@@ -160,7 +161,7 @@ describe('init installs', () => {
     async () => {
       script = [{ exitCode: 1, stderr: 'ENOTFOUND registry.npmjs.org' }];
 
-      const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
+      const run = await harness().run([...scaffoldArgv(), '--json'], { cwd: projectDir });
 
       expect(run.exitCode).toBe(4);
       expect(envelopeOf(run)).toMatchObject({
@@ -179,7 +180,7 @@ describe('init installs', () => {
     async () => {
       script = [{ exitCode: 1, stderr: 'ENOTFOUND registry.npmjs.org' }];
 
-      const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
+      const run = await harness().run([...scaffoldArgv(), '--json'], { cwd: projectDir });
 
       expect(run.presented?.data).toMatchObject({
         ok: true,
@@ -200,7 +201,7 @@ describe('init installs', () => {
     async () => {
       emit.mockRejectedValue(new Error('contract source is not readable'));
 
-      const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
+      const run = await harness().run([...scaffoldArgv(), '--json'], { cwd: projectDir });
 
       expect(run.exitCode).toBe(5);
       expect(envelopeOf(run)).toMatchObject({
@@ -215,186 +216,59 @@ describe('init installs', () => {
   );
 
   it(
-    'completes at exit 6 when the agent-skill install fails',
+    'runs no skills command — the family-level `prisma init` owns skills setup',
     async () => {
-      script = [
-        { exitCode: 0, stderr: '' },
-        { exitCode: 0, stderr: '' },
-        { exitCode: 0, stderr: '' },
-        { exitCode: 1, stderr: 'skills: registry unreachable' },
-      ];
+      const run = await harness().run([...scaffoldArgv(), '--json'], { cwd: projectDir });
 
-      const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
+      expect(run.exitCode).toBe(0);
+      expect(skillCalls()).toEqual([]);
+      expect(calls).toHaveLength(3);
+      expect(JSON.stringify(run.presented?.data)).not.toContain('skills sync');
+    },
+    timeouts.coldTransformImport,
+  );
 
-      expect(run.exitCode).toBe(6);
+  it(
+    'runs a failed pnpm install once and reports it, whatever pnpm said',
+    async () => {
+      script = [{ exitCode: 1, stderr: PNPM_WORKSPACE_LEAK }];
+
+      const run = await harness('pnpm').run([...scaffoldArgv(), '--json'], { cwd: projectDir });
+
+      expect(run.exitCode).toBe(4);
       expect(envelopeOf(run)).toMatchObject({
-        ok: true,
-        exitCode: 6,
-        diagnostics: [{ code: 'CLI.INIT_SKILL_INSTALL_FAILED', severity: 'error' }],
+        diagnostics: [{ code: 'CLI.INIT_INSTALL_FAILED' }],
       });
-      expect(skillCalls()).toHaveLength(1);
+      expect(calls.map((call) => `${call.file} ${call.args.join(' ')}`)).toEqual([
+        'pnpm add @prisma/orm-postgres dotenv',
+      ]);
     },
     timeouts.coldTransformImport,
   );
 
   it(
-    'sends a failed skill install to the skill commands, never back through init',
+    'installs the driver the Mongo package declares as a peer dependency',
     async () => {
-      script = [
-        { exitCode: 0, stderr: '' },
-        { exitCode: 0, stderr: '' },
-        { exitCode: 0, stderr: '' },
-        { exitCode: 1, stderr: 'skills: registry unreachable' },
-      ];
-
-      const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
-      const finding = envelopeOf(run)?.diagnostics?.[0];
-
-      expect(finding?.nextActions).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            kind: 'run-command',
-            command: expect.stringContaining('skills@latest add'),
-          }),
-        ]),
+      const run = await harness().run(
+        ['orm', 'init', '--target', 'mongodb', '--authoring', 'psl'],
+        { cwd: projectDir },
       );
-      expect(JSON.stringify(finding?.nextActions)).not.toContain('prisma-next init');
+
+      expect(run.exitCode).toBe(0);
+      expect(calls[0]).toEqual({
+        file: expect.any(String),
+        args: ['add', '@prisma/orm-mongo', 'dotenv', 'mongodb'],
+        cwd: projectDir,
+      });
     },
     timeouts.coldTransformImport,
   );
 
-  it(
-    'runs one skill install per source, naming the skill and the agents',
-    async () => {
-      await harness().run(scaffoldArgv(), { cwd: projectDir });
-
-      const first = skillCalls()[0];
-
-      expect(skillCalls()).toHaveLength(3);
-      expect(first).toMatchObject({ cwd: projectDir });
-      expect(first?.args).toEqual(
-        expect.arrayContaining(['skills@latest', 'add', '--skill', 'prisma-8']),
-      );
-      expect(first?.args.at(-1)).toBe('-y');
-    },
-    timeouts.coldTransformImport,
-  );
-
-  describe('the pnpm fallback', () => {
+  describe('--skip-install', () => {
     it(
-      'retries the pair with npm when pnpm leaks a workspace specifier',
+      'installs nothing and emits nothing',
       async () => {
-        script = [{ exitCode: 1, stderr: PNPM_WORKSPACE_LEAK }];
-
-        const run = await harness('pnpm').run(scaffoldArgv('--skip-skills'), { cwd: projectDir });
-
-        expect(run.exitCode).toBe(0);
-        expect(calls.map((call) => `${call.file} ${call.args.join(' ')}`)).toEqual([
-          'pnpm add @prisma/orm-postgres dotenv',
-          'npm add @prisma/orm-postgres dotenv',
-          'npm add -D @prisma/cli@next @types/node',
-          'npm add -D @prisma/cli-engine@next',
-        ]);
-        expect(run.events).toContainEqual(
-          expect.objectContaining({
-            kind: 'message',
-            severity: 'warn',
-            text: expect.stringContaining('package-lock.json'),
-          }),
-        );
-      },
-      timeouts.coldTransformImport,
-    );
-
-    it(
-      'keeps registry credentials out of the fallback warning',
-      async () => {
-        script = [
-          {
-            exitCode: 1,
-            stderr: `${PNPM_WORKSPACE_LEAK} https://alice:hunter2@registry.example.com/ //registry.npmjs.org/:_authToken=npm_realsecret`,
-          },
-        ];
-
-        const run = await harness('pnpm').run(scaffoldArgv('--skip-skills'), { cwd: projectDir });
-        const warnings = run.presented?.data;
-
-        expect(JSON.stringify(warnings)).not.toContain('hunter2');
-        expect(JSON.stringify(warnings)).not.toContain('npm_realsecret');
-        expect(warnings).toMatchObject({
-          warnings: expect.arrayContaining([expect.stringContaining('ERR_PNPM_WORKSPACE')]),
-        });
-      },
-      timeouts.coldTransformImport,
-    );
-
-    it(
-      'drives the agent-skill install with the manager that worked',
-      async () => {
-        script = [{ exitCode: 1, stderr: PNPM_WORKSPACE_LEAK }];
-
-        await harness('pnpm').run(scaffoldArgv(), { cwd: projectDir });
-
-        expect(skillCalls()[0]?.file).toBe('npx');
-      },
-      timeouts.coldTransformImport,
-    );
-
-    it(
-      'completes at exit 4 when npm fails too',
-      async () => {
-        script = [
-          { exitCode: 1, stderr: PNPM_WORKSPACE_LEAK },
-          { exitCode: 1, stderr: 'npm ERR! 404 Not Found' },
-        ];
-
-        const run = await harness('pnpm').run(scaffoldArgv(), { cwd: projectDir });
-
-        expect(run.exitCode).toBe(4);
-        expect(envelopeOf(run)).toMatchObject({
-          diagnostics: [{ code: 'CLI.INIT_INSTALL_FAILED' }],
-        });
-        expect(run.presented?.data).toMatchObject({
-          warnings: expect.arrayContaining([
-            expect.stringContaining('ERR_PNPM_WORKSPACE_PKG_NOT_FOUND'),
-          ]),
-        });
-      },
-      timeouts.coldTransformImport,
-    );
-
-    it(
-      'does not retry a pnpm failure it does not recognise',
-      async () => {
-        script = [{ exitCode: 1, stderr: 'EACCES: permission denied' }];
-
-        const run = await harness('pnpm').run(scaffoldArgv(), { cwd: projectDir });
-
-        expect(run.exitCode).toBe(4);
-        expect(calls).toHaveLength(1);
-      },
-      timeouts.coldTransformImport,
-    );
-
-    it(
-      'does not retry a manager other than pnpm',
-      async () => {
-        script = [{ exitCode: 1, stderr: PNPM_WORKSPACE_LEAK }];
-
-        const run = await harness('yarn').run(scaffoldArgv(), { cwd: projectDir });
-
-        expect(run.exitCode).toBe(4);
-        expect(calls).toHaveLength(1);
-      },
-      timeouts.coldTransformImport,
-    );
-  });
-
-  describe('the skip flags', () => {
-    it(
-      'installs nothing and emits nothing under --skip-install',
-      async () => {
-        const run = await harness().run(scaffoldArgv('--skip-install', '--skip-skills'), {
+        const run = await harness().run(scaffoldArgv('--skip-install'), {
           cwd: projectDir,
         });
 
@@ -406,37 +280,111 @@ describe('init installs', () => {
           contractEmitted: false,
         });
         expect(run.presented?.presentation.next).toContainEqual(
-          expect.objectContaining({ kind: 'run-command', command: 'prisma-cli contract emit' }),
+          expect.objectContaining({ kind: 'run-command', command: 'prisma contract emit' }),
         );
       },
       timeouts.coldTransformImport,
     );
+  });
+
+  describe('on the Prisma 7 path', () => {
+    const PRISMA7_SCHEMA =
+      'datasource db {\n  provider = "postgresql"\n}\nmodel User {\n  id String @id\n}\n';
+
+    function writePrisma7Project(manifest: Record<string, unknown>): void {
+      mkdirSync(join(projectDir, 'prisma'), { recursive: true });
+      writeFileSync(join(projectDir, 'prisma/schema.prisma'), PRISMA7_SCHEMA, 'utf-8');
+      writeFileSync(join(projectDir, 'package.json'), `${JSON.stringify(manifest)}\n`, 'utf-8');
+    }
+
+    function prisma7Argv(): string[] {
+      return [
+        'orm',
+        'init',
+        '--from-prisma7-schema',
+        'prisma/schema.prisma',
+        '--confirm',
+        basename(projectDir),
+      ];
+    }
 
     it(
-      'still installs the agent skills when only the dependencies are skipped',
+      'installs the target package for the check first, then @prisma/client@7, @prisma/prisma7, and prisma@latest',
       async () => {
-        const run = await harness().run(scaffoldArgv('--skip-install'), { cwd: projectDir });
+        writePrisma7Project({
+          name: 'app',
+          devDependencies: { prisma: '^7.4.0' },
+          dependencies: { '@prisma/client': '^6.0.0' },
+        });
+
+        const run = await harness().run(prisma7Argv(), { cwd: projectDir });
 
         expect(run.exitCode).toBe(0);
-        expect(skillCalls()).toHaveLength(3);
+        expect(calls.map((call) => call.args)).toEqual([
+          ['add', '@prisma/orm-postgres', 'dotenv'],
+          ['add', '@prisma/client@7'],
+          ['add', '-D', 'prisma@latest', '@types/node', '@prisma/prisma7@7'],
+          ['add', '-D', '@prisma/cli-engine@latest'],
+        ]);
       },
       timeouts.coldTransformImport,
     );
 
     it(
-      'warns about the skipped skills under --skip-skills, naming the install commands',
+      'leaves @prisma/client alone when it is already on the Prisma 7 line',
       async () => {
-        const run = await harness().run(scaffoldArgv('--skip-skills'), { cwd: projectDir });
-        const warnings = run.presented?.presentation.json;
-
-        expect(skillCalls()).toEqual([]);
-        expect(warnings).toMatchObject({
-          warnings: expect.arrayContaining([
-            expect.stringContaining('--skip-skills'),
-            expect.stringContaining('skills@latest add'),
-          ]),
+        writePrisma7Project({
+          name: 'app',
+          devDependencies: { prisma: '^7.4.0' },
+          dependencies: { '@prisma/client': '^7.4.0' },
         });
-        expect(JSON.stringify(warnings)).not.toContain('prisma-next init --skip-install');
+
+        const run = await harness().run(prisma7Argv(), { cwd: projectDir });
+
+        expect(run.exitCode).toBe(0);
+        expect(calls[0]?.args).toEqual(['add', '@prisma/orm-postgres', 'dotenv']);
+        expect(calls[1]?.args).toContain('@prisma/prisma7@7');
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it.each([
+      ['never declared @prisma/client', {}],
+      ['declares @prisma/client through the workspace', { '@prisma/client': 'workspace:*' }],
+    ])(
+      'does not add @prisma/client when the project %s',
+      async (_case, dependencies) => {
+        writePrisma7Project({
+          name: 'app',
+          devDependencies: { prisma: '^7.4.0' },
+          dependencies,
+        });
+
+        const run = await harness().run(prisma7Argv(), { cwd: projectDir });
+
+        expect(run.exitCode).toBe(0);
+        expect(calls[0]?.args).toEqual(['add', '@prisma/orm-postgres', 'dotenv']);
+        expect(calls[1]?.args).toContain('@prisma/prisma7@7');
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
+      'installs only the usual packages when @prisma/prisma7 is already declared',
+      async () => {
+        writePrisma7Project({
+          name: 'app',
+          devDependencies: { prisma: '^8.0.0', '@prisma/prisma7': '^7.10.0' },
+        });
+
+        const run = await harness().run(prisma7Argv().slice(0, 4), { cwd: projectDir });
+
+        expect(run.exitCode).toBe(0);
+        expect(calls.map((call) => call.args)).toEqual([
+          ['add', '@prisma/orm-postgres', 'dotenv'],
+          ['add', '-D', 'prisma@latest', '@types/node'],
+          ['add', '-D', '@prisma/cli-engine@latest'],
+        ]);
       },
       timeouts.coldTransformImport,
     );
@@ -446,7 +394,7 @@ describe('init installs', () => {
     it(
       'reports the install failure rather than pretending it installed',
       async () => {
-        const run = await createTestCli({ commands, groups }).run(scaffoldArgv(), {
+        const run = await createTestCli({ commands, groups }).run([...scaffoldArgv(), '--json'], {
           cwd: projectDir,
         });
 

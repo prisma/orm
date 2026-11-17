@@ -1,9 +1,12 @@
-export type { MongoQueryPlan } from '@internal/mongo-query-ast/execution';
+export type {
+  MongoPreparable,
+  MongoQueryExecutor,
+  MongoQueryPlan,
+} from '@internal/mongo-query-ast/execution';
 export type { SimplifyDeep } from '@internal/utils/simplify-deep';
-export type { MongoCollection } from '../collection';
+export type { MongoCollection, MongoCollectionContext } from '../collection';
 export { createMongoCollection } from '../collection';
 export { compileMongoQuery } from '../compile';
-export type { MongoQueryExecutor } from '../executor';
 export type {
   DotPath,
   FieldAccessor,
@@ -17,10 +20,12 @@ export type { MongoOrmClient, MongoOrmOptions } from '../mongo-orm';
 export { mongoOrm } from '../mongo-orm';
 export type { MongoRawClient } from '../mongo-raw';
 export { mongoRaw } from '../mongo-raw';
+export type { MongoPreparedCollection } from '../prepared-collection';
 export type { RawMongoCollection } from '../raw-collection';
 export type {
   CreateInput,
   DefaultModelRow,
+  DiscriminatorValues,
   IncludedRow,
   IncludeResultFields,
   InferFullRow,
@@ -29,7 +34,8 @@ export type {
   MongoWhereFilter,
   NoIncludes,
   ResolvedCreateInput,
+  UpdateInput,
   VariantCreateInput,
   VariantModelRow,
-  VariantNames,
+  VariantSelectable,
 } from '../types';

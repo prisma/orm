@@ -1,13 +1,13 @@
+import { structuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
 import { CliStructuredError } from '../src/control';
 import {
-  errorDestructiveChanges,
   errorHashMismatch,
   errorMarkerMissing,
+  errorMarkerPoliciesCorrupt,
   errorMarkerReadFailed,
   errorMarkerRequired,
   errorMarkerRowCorrupt,
-  errorRunnerFailed,
   errorRuntime,
   errorTargetMismatch,
   parseMarkerRowSafely,
@@ -83,46 +83,6 @@ describe('Runtime Errors', () => {
     expect(error.fix).toBe('Custom fix');
   });
 
-  it('errorRunnerFailed creates correct error', () => {
-    const error = errorRunnerFailed('Runner failed');
-    expect(error.code).toBe('MIGRATION.RUNNER_FAILED');
-    expect(error.message).toBe('Runner failed');
-  });
-
-  it('errorRunnerFailed with all options', () => {
-    const error = errorRunnerFailed('Runner failed', {
-      why: 'Custom why',
-      fix: 'Custom fix',
-      meta: { key: 'value' },
-    });
-    expect(error.why).toBe('Custom why');
-    expect(error.fix).toBe('Custom fix');
-    expect(error.meta).toEqual({ key: 'value' });
-  });
-
-  it('errorRunnerFailed forwards cause', () => {
-    const cause = new Error('underlying failure');
-    const error = errorRunnerFailed('Runner failed', { cause });
-    expect(error.cause).toBe(cause);
-  });
-
-  it('errorDestructiveChanges creates correct error', () => {
-    const error = errorDestructiveChanges('Destructive changes detected');
-    expect(error.code).toBe('MIGRATION.DESTRUCTIVE_CHANGES');
-    expect(error.message).toBe('Destructive changes detected');
-  });
-
-  it('errorDestructiveChanges with all options', () => {
-    const error = errorDestructiveChanges('Destructive changes detected', {
-      why: 'Custom why',
-      fix: 'Custom fix',
-      meta: { key: 'value' },
-    });
-    expect(error.why).toBe('Custom why');
-    expect(error.fix).toBe('Custom fix');
-    expect(error.meta).toEqual({ key: 'value' });
-  });
-
   it('errorRuntime carries the caller-provided code', () => {
     const error = errorRuntime('MIGRATION.SPACE_NOT_FOUND', 'Something failed');
     expect(error.code).toBe('MIGRATION.SPACE_NOT_FOUND');
@@ -154,6 +114,33 @@ describe('Runtime Errors', () => {
     expect(Object.hasOwn(error, 'cause')).toBe(false);
   });
 
+  it('errorMarkerPoliciesCorrupt keeps the marker, whatever the database stores it in', () => {
+    const error = errorMarkerPoliciesCorrupt({
+      why: 'meta.policies is not a valid policy declaration',
+      space: 'app',
+      markerLocation: '_prisma_migrations',
+    });
+    expect({
+      code: error.code,
+      message: error.message,
+      fix: error.fix,
+      nextActions: error.nextActions,
+      meta: error.meta,
+    }).toEqual({
+      code: 'CONTRACT.MARKER_ROW_CORRUPT',
+      message: "The marker's policies cannot be read",
+      fix: 'Ask whoever owns this database to correct meta.policies in the marker; do not delete the marker. The marker for space "app" in _prisma_migrations also records the database\'s contract and invariants.',
+      nextActions: [
+        {
+          kind: 'user-choice',
+          label:
+            'Ask whoever owns this database to correct meta.policies in the marker; do not delete the marker.',
+        },
+      ],
+      meta: { space: 'app' },
+    });
+  });
+
   it('errorMarkerRowCorrupt creates CONTRACT.MARKER_ROW_CORRUPT envelope', () => {
     const error = errorMarkerRowCorrupt({
       why: 'Invalid contract marker row: invariants must be string[]',
@@ -163,7 +150,7 @@ describe('Runtime Errors', () => {
     expect(error.toEnvelope().code).toBe('CONTRACT.MARKER_ROW_CORRUPT');
     expect(error.message).toBe('Marker row is corrupt or incompatible');
     expect(error.fix).toContain('space "app"');
-    expect(error.fix).toContain('prisma db sign');
+    expect(error.fix).toContain('{bin} db sign');
   });
 
   it('errorMarkerReadFailed creates CONTRACT.MARKER_READ_FAILED envelope', () => {
@@ -179,23 +166,26 @@ describe('Runtime Errors', () => {
     expect(error.meta).toEqual({ space: 'app' });
   });
 
-  it('rethrowMarkerReadError maps parse failures to CONTRACT.MARKER_ROW_CORRUPT', () => {
-    expect(() =>
-      rethrowMarkerReadError(new Error('Invalid contract marker row: core_hash must be string'), {
-        space: 'app',
-        markerLocation: 'prisma_contract.marker',
-      }),
-    ).toThrow(CliStructuredError);
+  it('rethrowMarkerReadError maps a CONTRACT.MARKER_ROW_CORRUPT error to the corrupt-row error, whatever its message', () => {
+    const corrupt = structuredError('CONTRACT.MARKER_ROW_CORRUPT', 'the marker is broken');
 
-    try {
-      rethrowMarkerReadError(new Error('Invalid contract marker row: core_hash must be string'), {
-        space: 'app',
-        markerLocation: 'prisma_contract.marker',
-      });
-    } catch (err) {
-      expect(CliStructuredError.is(err)).toBe(true);
-      expect((err as CliStructuredError).toEnvelope().code).toBe('CONTRACT.MARKER_ROW_CORRUPT');
-    }
+    expect(() =>
+      rethrowMarkerReadError(corrupt, { space: 'app', markerLocation: 'prisma_contract.marker' }),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.MARKER_ROW_CORRUPT',
+        why: 'the marker is broken',
+        cause: corrupt,
+      }),
+    );
+  });
+
+  it('rethrowMarkerReadError reads a plain Error as a read failure, even when its message names a corrupt row', () => {
+    const plain = new Error('Invalid contract marker row: core_hash must be string');
+
+    expect(() =>
+      rethrowMarkerReadError(plain, { space: 'app', markerLocation: 'prisma_contract.marker' }),
+    ).toThrow(expect.objectContaining({ code: 'CONTRACT.MARKER_READ_FAILED', cause: plain }));
   });
 
   it('rethrowMarkerReadError maps driver failures to CONTRACT.MARKER_READ_FAILED', () => {
@@ -218,23 +208,8 @@ describe('Runtime Errors', () => {
     }
   });
 
-  it('rethrowMarkerReadError maps legacy marker shape to MIGRATION.RUNNER_FAILED', () => {
-    try {
-      rethrowMarkerReadError(new Error('column "space" does not exist'), {
-        space: 'app',
-        markerLocation: 'prisma_contract.marker',
-      });
-    } catch (err) {
-      const envelope = (err as CliStructuredError).toEnvelope();
-      expect(envelope.code).toBe('MIGRATION.RUNNER_FAILED');
-      expect(envelope.fix).toContain('Legacy marker-table shape detected');
-      expect(envelope.fix).toContain('prisma_contract.marker');
-      expect(envelope.fix).toContain('prisma db init');
-    }
-  });
-
   it('rethrowMarkerReadError preserves cause on the corrupt-row path', () => {
-    const original = new Error('Invalid contract marker row: core_hash must be string');
+    const original = structuredError('CONTRACT.MARKER_ROW_CORRUPT', 'core_hash must be string');
     expect(() =>
       rethrowMarkerReadError(original, {
         space: 'app',
@@ -253,16 +228,6 @@ describe('Runtime Errors', () => {
     ).toThrow(expect.objectContaining({ cause: original }));
   });
 
-  it('rethrowMarkerReadError preserves cause on the legacy-shape path', () => {
-    const original = new Error('column "space" does not exist');
-    expect(() =>
-      rethrowMarkerReadError(original, {
-        space: 'app',
-        markerLocation: 'prisma_contract.marker',
-      }),
-    ).toThrow(expect.objectContaining({ cause: original }));
-  });
-
   it('rethrowMarkerReadError rethrows existing CliStructuredError', () => {
     const existing = errorMarkerMissing();
     expect(() =>
@@ -271,6 +236,68 @@ describe('Runtime Errors', () => {
         markerLocation: 'prisma_contract.marker',
       }),
     ).toThrow(existing);
+  });
+
+  it('rethrowMarkerReadError passes a DRIVER error through unchanged', () => {
+    const driverError = Object.assign(new Error('Postgres driver is closed'), {
+      code: 'DRIVER.NOT_CONNECTED',
+      category: 'DRIVER',
+      severity: 'error',
+    });
+    const invoke = () =>
+      rethrowMarkerReadError(driverError, {
+        space: 'app',
+        markerLocation: 'prisma_contract.marker',
+      });
+
+    expect(invoke).toThrow(
+      expect.objectContaining({
+        code: 'DRIVER.NOT_CONNECTED',
+        category: 'DRIVER',
+        message: 'Postgres driver is closed',
+      }),
+    );
+    expect(invoke).not.toThrow(CliStructuredError);
+  });
+
+  it('withMarkerReadErrorHandling passes a DRIVER error through unchanged', async () => {
+    const driverError = Object.assign(new Error('connection lost'), {
+      code: 'DRIVER.NOT_CONNECTED',
+      category: 'DRIVER',
+    });
+
+    await expect(
+      withMarkerReadErrorHandling(
+        async () => {
+          throw driverError;
+        },
+        { space: 'app', markerLocation: 'prisma_contract.marker' },
+      ),
+    ).rejects.toBe(driverError);
+  });
+
+  it('rethrowMarkerReadError passes a DRIVER-namespace structured error without a category through unchanged', () => {
+    const closed = structuredError('DRIVER.NOT_CONNECTED', 'Runtime is closed');
+
+    expect(() =>
+      rethrowMarkerReadError(closed, { space: 'app', markerLocation: 'prisma_contract.marker' }),
+    ).toThrow(closed);
+  });
+
+  it('rethrowMarkerReadError wraps a structured error outside the DRIVER namespace', () => {
+    const other = structuredError('RUNTIME.ENCODE_FAILED', 'encode failed');
+
+    expect(() =>
+      rethrowMarkerReadError(other, { space: 'app', markerLocation: 'prisma_contract.marker' }),
+    ).toThrow(expect.objectContaining({ code: 'CONTRACT.MARKER_READ_FAILED', cause: other }));
+  });
+
+  it('rethrowMarkerReadError wraps a plain Error', () => {
+    const plain = new Error('socket reset');
+
+    expect(() =>
+      rethrowMarkerReadError(plain, { space: 'app', markerLocation: 'prisma_contract.marker' }),
+    ).toThrow(expect.objectContaining({ code: 'CONTRACT.MARKER_READ_FAILED', cause: plain }));
   });
 
   it('withMarkerReadErrorHandling wraps async query failures', async () => {
@@ -289,10 +316,10 @@ describe('Runtime Errors', () => {
       parseMarkerRowSafely(
         {},
         () => {
-          throw new Error('Invalid contract marker row: invariants must be string[]');
+          throw structuredError('CONTRACT.MARKER_ROW_CORRUPT', 'invariants must be string[]');
         },
         { space: 'ext', markerLocation: '_prisma_marker' },
       ),
-    ).toThrow(CliStructuredError);
+    ).toThrow(expect.objectContaining({ code: 'CONTRACT.MARKER_ROW_CORRUPT' }));
   });
 });

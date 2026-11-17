@@ -3,7 +3,7 @@
  */
 
 import { readFile } from 'node:fs/promises';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import {
   contractSnapshotDir,
   readContractSnapshotJson,
@@ -12,8 +12,14 @@ import {
   errorContractDeserializationFailed,
   MigrationToolsError,
 } from '@internal/migration-tools/errors';
-import { parseContractRef } from '@internal/migration-tools/ref-resolution';
+import {
+  isReservedContractRef,
+  parseContractRef,
+  type RefResolutionWrongGrammar,
+} from '@internal/migration-tools/ref-resolution';
+import type { NamedRef } from '@internal/migration-tools/refs';
 import { blindCast, castAs } from '@internal/utils/casts';
+import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { join } from 'pathe';
 import {
@@ -23,6 +29,9 @@ import {
   errorUnexpected,
   mapRefResolutionError,
 } from '../../utils/cli-errors';
+import { RECORDED_CONTRACT_REF_FORMS } from '../../utils/contract-ref-forms';
+import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
+import { errorFromCaught } from './caught-errors';
 import { buildReadAggregate } from './contract-space-aggregate-loader';
 
 function isEnoent(error: unknown): boolean {
@@ -30,26 +39,27 @@ function isEnoent(error: unknown): boolean {
 }
 
 interface ResolveContractRefToSnapshotBaseOptions {
-  readonly config: PrismaNextConfig;
+  readonly config: PrismaConfig;
   readonly migrationsDir: string;
-  /** User-supplied contract reference (hash, prefix, ref name, migration dir name, <dir>^, or ./path). */
+  /** User-supplied contract reference (hash, prefix, ref name, migration dir name, or <dir>^). */
   readonly refInput: string;
-  /** Absolute path of the emitted contract.json (fallback source + snapshot-path derivation). */
-  readonly contractPathAbsolute: string;
+  /** How errors name the argument that carried `refInput`, for example `--to`. */
+  readonly argument: string;
 }
 
 /**
- * `fallbackToEmitted` discriminates the missing-bundle behavior:
- * true (db sign): fall back to the emitted contract when no bundle matches and its
- * storage.storageHash matches; else the 'No contract file found for hash "<hash>"' errorRuntime.
- * false (db update --to): missing bundle = the errorUnexpected 'No migration bundle found for
- * <flag> "<input>" (resolved hash: <hash>)' envelope, so `missingBundleFlag` (the flag label
- * for that message) is required in this branch.
+ * `fallbackToEmitted` decides what happens when no migration bundle ends at the resolved hash:
+ * true (db sign) falls back to the emitted contract when its storage hash matches; false
+ * (db update --to) fails, because the argument must name a migration destination.
  */
 export type ResolveContractRefToSnapshotOptions = ResolveContractRefToSnapshotBaseOptions &
   (
-    | { readonly fallbackToEmitted: true; readonly missingBundleFlag?: never }
-    | { readonly fallbackToEmitted: false; readonly missingBundleFlag: '--to' }
+    | {
+        readonly fallbackToEmitted: true;
+        /** Absolute path of the emitted contract.json, the fallback source. */
+        readonly contractPathAbsolute: string;
+      }
+    | { readonly fallbackToEmitted: false }
   );
 
 export interface ResolveContractRefToSnapshotSuccess {
@@ -58,11 +68,30 @@ export interface ResolveContractRefToSnapshotSuccess {
   /** snapshot → join(contractSnapshotDir(migrationsDir, hash), 'contract.json'); emitted → contractPathAbsolute. */
   readonly contractJsonPath: string;
   readonly source: 'snapshot' | 'emitted';
+  /** The ref the input named, with everything it declares; absent when the input named no ref. */
+  readonly ref?: NamedRef;
+}
+
+function reservedRefRefusal(
+  options: ResolveContractRefToSnapshotOptions,
+): RefResolutionWrongGrammar {
+  const { refInput: input, argument } = options;
+  const accepted = `${options.fallbackToEmitted ? 'a contract' : 'a migration destination'} recorded in the migrations directory`;
+  return {
+    kind: 'wrong-grammar',
+    input,
+    expectedGrammar: 'contract',
+    message: `"${input}" is a reserved reference; ${argument} takes ${accepted} (${RECORDED_CONTRACT_REF_FORMS})`,
+    fix: `Name ${accepted}, or omit ${argument} to use the emitted contract.`,
+  };
 }
 
 export async function resolveContractRefToSnapshot(
   options: ResolveContractRefToSnapshotOptions,
 ): Promise<Result<ResolveContractRefToSnapshotSuccess, CliStructuredError>> {
+  if (isReservedContractRef(options.refInput)) {
+    return notOk(mapRefResolutionError(reservedRefRefusal(options)));
+  }
   try {
     const loaded = await buildReadAggregate(options.config, {
       migrationsDir: options.migrationsDir,
@@ -78,12 +107,24 @@ export async function resolveContractRefToSnapshot(
       return notOk(mapRefResolutionError(refResult.failure));
     }
     const targetHash = refResult.value.hash;
+    const { provenance } = refResult.value;
+    const refEntry = provenance.kind === 'ref' ? refs[provenance.refName] : undefined;
+    const namedRef =
+      provenance.kind === 'ref' && refEntry !== undefined
+        ? { name: provenance.refName, ...refEntry }
+        : undefined;
     const matchingBundle = bundles.find((p) => p.metadata.to === targetHash);
     if (matchingBundle) {
       const contractJson = blindCast<
         Record<string, unknown>,
         'contract snapshot store entries are JSON objects written by writeContractSnapshot'
-      >(await readContractSnapshotJson(options.migrationsDir, targetHash));
+      >(
+        await readContractSnapshotJson(
+          options.migrationsDir,
+          targetHash,
+          snapshotVerifierFor(options.config),
+        ),
+      );
       return ok({
         hash: targetHash,
         contractJson,
@@ -92,12 +133,13 @@ export async function resolveContractRefToSnapshot(
           'contract.json',
         ),
         source: 'snapshot',
+        ...ifDefined('ref', namedRef),
       });
     }
     if (!options.fallbackToEmitted) {
       return notOk(
         errorUnexpected(
-          `No migration bundle found for ${options.missingBundleFlag} "${options.refInput}" (resolved hash: ${targetHash})`,
+          `No migration bundle found for ${options.argument} "${options.refInput}" (resolved hash: ${targetHash})`,
           {
             why: `The ref resolved successfully but no on-disk migration package has a destination (\`to\`) hash matching ${targetHash}.`,
             fix: 'Provide a ref or hash that corresponds to an existing migration package, or run `migration list` to see available migrations.',
@@ -113,17 +155,12 @@ export async function resolveContractRefToSnapshot(
         return notOk(
           errorFileNotFound(options.contractPathAbsolute, {
             why: `Contract file not found at ${options.contractPathAbsolute}`,
-            fix: 'Run `prisma-cli contract emit` first to generate the contract',
+            fix: 'Run `{bin} contract emit` first to generate the contract',
             cause: error,
           }),
         );
       }
-      return notOk(
-        errorUnexpected(error instanceof Error ? error.message : String(error), {
-          why: `Failed to read contract file: ${error instanceof Error ? error.message : String(error)}`,
-          cause: error,
-        }),
-      );
+      return notOk(errorFromCaught(error, (message) => `Failed to read contract file: ${message}`));
     }
     let parsed: unknown;
     try {
@@ -162,6 +199,7 @@ export async function resolveContractRefToSnapshot(
         contractJson: defaultContract,
         contractJsonPath: options.contractPathAbsolute,
         source: 'emitted',
+        ...ifDefined('ref', namedRef),
       });
     }
     return notOk(

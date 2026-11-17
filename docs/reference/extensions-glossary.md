@@ -1,6 +1,6 @@
 # Extensions Glossary
 
-This glossary defines key terms related to Prisma Next's extensions, packs, and capabilities model.
+This glossary defines key terms related to Prisma 8's extensions, packs, and capabilities model.
 
 ## Core Concepts
 
@@ -20,7 +20,7 @@ A SHA-256 hash of the pinned capability profile derived from declared requiremen
 A canonical identifier for a database or extension feature (e.g., `sql.lateral`, `sql.returning`, `pgvector.ivfflat`). Capability keys are namespaced and follow a stability contract where core capabilities are reserved and extension capabilities are prefixed by pack namespace. Used for adapter negotiation and feature gating.
 
 ### Extension Pack
-A versioned, installable npm package that extends Prisma Next with domain-specific features like vector search (pgvector) or geospatial operations (PostGIS). Packs declare a namespace, provide schemas for contract decorations, and implement SPIs for authoring, runtime, and migration integration.
+A versioned, installable npm package that extends Prisma 8 with domain-specific features like vector search (pgvector) or geospatial operations (PostGIS). Packs declare a namespace, provide schemas for contract decorations, and implement SPIs for authoring, runtime, and migration integration.
 
 ### Bundle
 A self-contained artifact for hosted preflight containing `contract.json`, migration edges, pack code as ESM files, and pack manifests. Bundles ensure deterministic execution with all dependencies inlined and no network access, enabling safe execution in sandboxed environments.
@@ -52,7 +52,7 @@ Extension-owned entities referenced by name within a namespace (e.g., operator c
 The process by which adapters advertise supported capabilities and runtimes verify that contract requirements are satisfied. Occurs at `connect()` time and fails early with stable error codes if required capabilities are missing.
 
 ### Pack Manifest
-A JSON document declaring pack metadata including namespace, version, supported targets, capabilities, entry points, and security policies. Required for pack discovery, validation, and integration with the Prisma Next toolchain.
+A JSON document declaring pack metadata including namespace, version, supported targets, capabilities, entry points, and security policies. Required for pack discovery, validation, and integration with the Prisma 8 toolchain.
 
 ## Runtime Integration
 
@@ -108,4 +108,4 @@ Privacy controls for extension diagnostics including parameter masking, column n
 Structured logging of extension usage including capability checks, codec operations, and policy enforcement decisions. Enables compliance reporting and security monitoring.
 
 ### Trust Model
-Security boundaries between core Prisma Next, extension packs, and hosted services. Defines what code can execute where and under what constraints.
+Security boundaries between core Prisma 8, extension packs, and hosted services. Defines what code can execute where and under what constraints.

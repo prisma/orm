@@ -1,0 +1,17 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Post {
+  id   Int   @id
+  tags Tag[] @ignore
+}
+
+model Tag {
+  id    Int    @id
+  label String @unique
+  posts Post[]
+
+  @@map("tags")
+  @@ignore
+}

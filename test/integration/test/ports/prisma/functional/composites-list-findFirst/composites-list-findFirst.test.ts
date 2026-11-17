@@ -1,6 +1,6 @@
 import { ObjectId } from 'mongodb';
 import { describe, expect, it } from 'vitest';
-import { timeouts, withMongoPort } from '../../../_harness/mongo';
+import { timeouts, withMongoPort } from '../../../../_harness/mongo';
 import type { Contract } from './_fixture/generated/contract';
 import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
 
@@ -10,11 +10,11 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // Upstream has 3 tests: `simple`, `select`, `orderBy`.
 //   - simple  → PORTED: `.where().first()` returns the full row.
 //   - select  → NON-PORTED: upstream projects a subfield of the composite
-//               (`contents: { select: { text: true } }`). prisma-next `select()`
+//               (`contents: { select: { text: true } }`). Prisma 8 `select()`
 //               only projects top-level model fields, not embedded value-object
 //               subfields. See _inbox ledger.
 //   - orderBy → NON-PORTED: upstream orders by the embedded list count
-//               (`orderBy: { contents: { _count } }`). prisma-next `orderBy` only
+//               (`orderBy: { contents: { _count } }`). Prisma 8 `orderBy` only
 //               accepts scalar model fields with 1 | -1. See _inbox ledger.
 
 function withComposites(fn: Parameters<typeof withMongoPort<Contract>>[1]) {
@@ -28,7 +28,7 @@ describe('ports/prisma/functional/composites/list/findFirst', () => {
       withComposites(async ({ db }) => {
         const id = new ObjectId().toHexString();
         await db.comment_required_list.create({
-          _id: id,
+          id,
           country: 'France',
           contents: [
             {
@@ -38,10 +38,10 @@ describe('ports/prisma/functional/composites/list/findFirst', () => {
           ],
         });
 
-        const comment = await db.comment_required_list.where({ _id: id }).first();
+        const comment = await db.comment_required_list.where({ id }).first();
 
         expect(comment).toEqual({
-          _id: id,
+          id,
           country: 'France',
           contents: [
             {

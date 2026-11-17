@@ -101,13 +101,13 @@ export function renderMigrateShowGraph(
 
   const sections: string[] = [];
   for (const { space, isApp, rowModel, grid, edgeAnnotations } of spaceLayouts) {
-    const liveMarkerHash = plan.renderMarkerHashBySpace.get(space.spaceId);
+    const databaseMarkerHash = plan.databaseMarkerHashBySpace?.get(space.spaceId);
     const tree = renderMigrationGraphCommand({
       grid,
       rowModel,
       contractHash,
       isAppSpace: isApp,
-      ...(plan.usedLiveMarker && liveMarkerHash !== undefined ? { dbHash: liveMarkerHash } : {}),
+      ...(databaseMarkerHash === undefined ? {} : { dbHash: databaseMarkerHash }),
       refsByHash: listRefsByContractHash(space),
       edgeAnnotationsByHash: edgeAnnotations,
       colorize: options.colorize,

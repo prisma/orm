@@ -1,4 +1,5 @@
 import type { CrossReference } from './cross-reference';
+import type { EntityCoordinate } from './entity-coordinate';
 import type { JsonValue } from './types';
 import type { ValueSetRef } from './value-set-ref';
 
@@ -8,22 +9,22 @@ export type ScalarFieldType = {
   readonly typeParams?: Record<string, unknown>;
 };
 
-export type ValueObjectFieldType = {
+/** The type of a field that refers to a value object: the coordinate of the value object in storage (ADR 309). Not to be confused with {@link ContractValueObjectField}, a field of a value object. */
+export interface ValueObjectReference extends EntityCoordinate<'storage', 'valueObject'> {
   readonly kind: 'valueObject';
-  readonly name: string;
-};
+}
 
 export type UnionFieldType = {
   readonly kind: 'union';
-  readonly members: ReadonlyArray<ScalarFieldType | ValueObjectFieldType>;
+  readonly members: ReadonlyArray<ScalarFieldType | ValueObjectReference>;
 };
 
-export type ContractFieldType = ScalarFieldType | ValueObjectFieldType | UnionFieldType;
+export type ContractFieldType = ScalarFieldType | ValueObjectReference | UnionFieldType;
 
 export type ContractField = {
   readonly nullable: boolean;
   readonly type: ContractFieldType;
-  readonly many?: true;
+  readonly many?: false | { readonly elementNullable: boolean };
   readonly dict?: true;
   readonly valueSet?: ValueSetRef;
 };
@@ -58,12 +59,26 @@ export type ContractManyToManyRelation = {
   readonly through: ContractRelationThrough;
 };
 
-export type ContractNonJunctionRelation = {
+/**
+ * A to-one reference relation. `nullable` records whether the related row may be
+ * absent, as stated by the schema (`author User?` versus `author User`).
+ */
+export type ContractToOneRelation = {
   readonly to: CrossReference;
-  readonly cardinality: '1:1' | '1:N' | 'N:1';
+  readonly cardinality: '1:1' | 'N:1';
+  readonly nullable: boolean;
   readonly on: ContractRelationOn;
   readonly through?: never;
 };
+
+export type ContractToManyRelation = {
+  readonly to: CrossReference;
+  readonly cardinality: '1:N';
+  readonly on: ContractRelationOn;
+  readonly through?: never;
+};
+
+export type ContractNonJunctionRelation = ContractToOneRelation | ContractToManyRelation;
 
 export type ContractReferenceRelation = ContractManyToManyRelation | ContractNonJunctionRelation;
 
@@ -78,12 +93,15 @@ export type ContractDiscriminator = {
   readonly field: string;
 };
 
-export type ContractVariantEntry = {
-  readonly value: string;
-};
+/**
+ * A field of a value object, which is a storage entity (ADR 309). Storage never refers to the domain plane, so a member an enum types refers to the enum's storage value set.
+ */
+export interface ContractValueObjectField extends Omit<ContractField, 'valueSet'> {
+  readonly valueSet?: EntityCoordinate<'storage', 'valueSet'> & { readonly spaceId?: string };
+}
 
 export type ContractValueObject = {
-  readonly fields: Record<string, ContractField>;
+  readonly fields: Record<string, ContractValueObjectField>;
 };
 
 export type ModelStorageBase = Readonly<Record<string, unknown>>;
@@ -93,7 +111,7 @@ export interface ContractModelBase<TModelStorage extends ModelStorageBase = Mode
   readonly relations: Record<string, ContractRelation>;
   readonly storage: TModelStorage;
   readonly discriminator?: ContractDiscriminator;
-  readonly variants?: Record<string, ContractVariantEntry>;
+  readonly variants?: Record<string, CrossReference>;
   readonly base?: CrossReference;
   readonly owner?: string;
 }

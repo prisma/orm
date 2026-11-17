@@ -1,0 +1,273 @@
+import type { JsonValue } from '@internal/contract/types';
+import {
+  type AnyCodecDescriptor,
+  type AnyCodecDescriptorTemplate,
+  type Codec,
+  type CodecDescriptor,
+  CodecDescriptorImpl,
+  type CodecDescriptorTemplate,
+  type CodecInstanceContext,
+  type CodecRef,
+  type CodecTrait,
+  type DataType,
+  type DataTypeId,
+  validateCodecTypeParams,
+} from '@internal/framework-components/codec';
+import type { ProjectionExpr } from '@internal/sql-relational-core/ast';
+import { blindCast } from '@internal/utils/casts';
+import { InternalError } from '@internal/utils/internal-error';
+import { structuredError } from '@internal/utils/structured-error';
+import type { StandardSchemaV1 } from '@standard-schema/spec';
+
+const SQLITE_CODEC_DESCRIPTOR_KIND = 'sqlite-codec' as const;
+
+export interface AnySqliteCodecDescriptor extends AnyCodecDescriptor {
+  readonly descriptorKind: typeof SQLITE_CODEC_DESCRIPTOR_KIND;
+  projectJson(expression: ProjectionExpr, ref: CodecRef): ProjectionExpr;
+}
+
+export abstract class SqliteCodecDescriptor<P = void>
+  extends CodecDescriptorImpl<P>
+  implements AnySqliteCodecDescriptor
+{
+  readonly descriptorKind = SQLITE_CODEC_DESCRIPTOR_KIND;
+
+  protected abstract jsonProjection(expression: ProjectionExpr, params: P): ProjectionExpr;
+
+  projectJson(expression: ProjectionExpr, ref: CodecRef): ProjectionExpr {
+    if (ref.many === true) {
+      throw structuredError(
+        'RUNTIME.CODEC_DESCRIPTOR_ARRAY_UNSUPPORTED',
+        `Codec '${ref.codecId}' uses CodecRef.many, but SQLite codec descriptors do not support stored scalar arrays.`,
+        {
+          why: 'SQLite has no stored scalar-array codec protocol, so applying a scalar projection to the whole stored array would be ambiguous.',
+          fix: 'Use a scalar CodecRef or introduce an explicit target representation before projecting stored arrays.',
+          meta: { codecId: ref.codecId },
+        },
+      );
+    }
+
+    return this.jsonProjection(expression, this.validateParams(ref));
+  }
+
+  private validateParams(ref: CodecRef): P {
+    return blindCast<
+      P,
+      'validateCodecTypeParams synchronously validates this descriptor schema before the typed hook'
+    >(validateCodecTypeParams(this, ref));
+  }
+}
+
+type DescriptorParams<D extends AnyCodecDescriptorTemplate> =
+  D extends CodecDescriptorTemplate<infer P> ? P : never;
+
+/** The codec the family descriptor's factory builds, which a `factory` option's codec extends. */
+type DescriptorCodec<D extends AnyCodecDescriptorTemplate> = ReturnType<ReturnType<D['factory']>>;
+
+export interface SqliteCodecOptions<
+  P,
+  C extends Codec<string, readonly CodecTrait[], unknown, unknown> = Codec<
+    string,
+    readonly CodecTrait[],
+    unknown,
+    unknown
+  >,
+> {
+  /**
+   * The data type the adapted codec represents here. A template names none; this target does. The
+   * adapted codec's parameter schema is this data type's, not the template's.
+   */
+  readonly dataType: DataType;
+  /** Renders the literal of the value the codec reads from a stored value of `dataType`. A family template renders no literal, because only the target knows the form its data type stores a value in, so the adapted codec renders with this and never with a renderer on the template. */
+  readonly renderValueLiteral?: (value: JsonValue, side: 'output' | 'input') => string | undefined;
+  readonly jsonProjection: (expression: ProjectionExpr, params: P) => ProjectionExpr;
+  /**
+   * Builds the codec: the family codec, or a subclass with SQLite's own rules, constructed with `dataType` and the column's parameters, because a family template names no data type and so builds no codec of its own.
+   */
+  readonly factory: (
+    descriptor: SqliteCodecDescriptor<P>,
+    dataType: DataType,
+    params: P,
+  ) => (ctx: CodecInstanceContext) => C;
+}
+
+export type AdaptedSqliteCodecDescriptor<D extends AnyCodecDescriptorTemplate> = Pick<
+  D,
+  keyof CodecDescriptorTemplate<DescriptorParams<D>>
+> &
+  Pick<CodecDescriptor, 'dataType'> &
+  Pick<AnySqliteCodecDescriptor, 'descriptorKind' | 'projectJson'>;
+
+class SqliteCodecDescriptorAdapter<
+  D extends AnyCodecDescriptorTemplate,
+> extends SqliteCodecDescriptor<DescriptorParams<D>> {
+  override readonly dataType: DataTypeId;
+  override readonly codecId: string;
+  override readonly traits: readonly CodecTrait[];
+  override readonly paramsSchema: StandardSchemaV1<DescriptorParams<D>> | undefined;
+  override readonly renderOutputType?: (params: DescriptorParams<D>) => string | undefined;
+  override readonly renderInputType?: (params: DescriptorParams<D>) => string | undefined;
+  override readonly renderValueLiteral?: (
+    value: JsonValue,
+    side: 'output' | 'input',
+  ) => string | undefined;
+
+  constructor(
+    descriptor: D,
+    private readonly options: SqliteCodecOptions<DescriptorParams<D>>,
+  ) {
+    super();
+    this.dataType = options.dataType.id;
+    this.codecId = descriptor.codecId;
+    this.traits = descriptor.traits;
+    this.paramsSchema = blindCast<
+      StandardSchemaV1<DescriptorParams<D>> | undefined,
+      'the data type the codec represents declares the parameters the codec takes'
+    >(options.dataType.params);
+
+    const renderOutputType = descriptor.renderOutputType;
+    if (renderOutputType !== undefined) {
+      this.renderOutputType = (params) => renderOutputType.call(descriptor, params);
+    }
+
+    const renderInputType = descriptor.renderInputType;
+    if (renderInputType !== undefined) {
+      this.renderInputType = (params) => renderInputType.call(descriptor, params);
+    }
+
+    if (descriptor.renderValueLiteral !== undefined) {
+      throw new InternalError(
+        `${descriptor.codecId} is a family codec template with its own renderValueLiteral. A family template renders no literal, because only the target knows the form its data type stores a value in; pass renderValueLiteral in the options instead.`,
+      );
+    }
+    if (options.renderValueLiteral !== undefined) {
+      this.renderValueLiteral = options.renderValueLiteral;
+    }
+  }
+
+  override readonly factory = (
+    params: DescriptorParams<D>,
+  ): ((ctx: CodecInstanceContext) => Codec<string, readonly CodecTrait[], unknown, unknown>) =>
+    this.options.factory(this, this.options.dataType, params);
+
+  protected override jsonProjection(
+    expression: ProjectionExpr,
+    params: DescriptorParams<D>,
+  ): ProjectionExpr {
+    return this.options.jsonProjection(expression, params);
+  }
+}
+
+export function sqliteCodec<D extends AnyCodecDescriptorTemplate>(
+  descriptor: D,
+  options: SqliteCodecOptions<DescriptorParams<D>, DescriptorCodec<D>>,
+): AdaptedSqliteCodecDescriptor<D> {
+  return blindCast<
+    AdaptedSqliteCodecDescriptor<D>,
+    'the adapter delegates every ordinary descriptor member while adding the validated SQLite protocol'
+  >(new SqliteCodecDescriptorAdapter(descriptor, options));
+}
+
+export function defineSqliteCodecs<const Descriptors extends readonly AnySqliteCodecDescriptor[]>(
+  descriptors: Descriptors,
+): Descriptors {
+  return descriptors;
+}
+
+export function isSqliteCodecDescriptor(value: unknown): value is AnySqliteCodecDescriptor {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'descriptorKind' in value &&
+    value.descriptorKind === SQLITE_CODEC_DESCRIPTOR_KIND &&
+    'codecId' in value &&
+    typeof value.codecId === 'string' &&
+    'traits' in value &&
+    Array.isArray(value.traits) &&
+    'paramsSchema' in value &&
+    (value.paramsSchema === undefined ||
+      (isObjectLike(value.paramsSchema) &&
+        '~standard' in value.paramsSchema &&
+        isObjectLike(value.paramsSchema['~standard']) &&
+        'validate' in value.paramsSchema['~standard'] &&
+        typeof value.paramsSchema['~standard'].validate === 'function')) &&
+    'isParameterized' in value &&
+    typeof value.isParameterized === 'boolean' &&
+    'factory' in value &&
+    typeof value.factory === 'function' &&
+    'projectJson' in value &&
+    typeof value.projectJson === 'function'
+  );
+}
+
+function isObjectLike(value: unknown): value is object {
+  return (typeof value === 'object' && value !== null) || typeof value === 'function';
+}
+
+export interface SqliteCodecDescriptorRegistry {
+  descriptorFor(codecId: string): AnySqliteCodecDescriptor | undefined;
+  values(): IterableIterator<AnySqliteCodecDescriptor>;
+}
+
+class SqliteCodecDescriptorRegistryImpl implements SqliteCodecDescriptorRegistry {
+  readonly #descriptors: ReadonlyMap<string, AnySqliteCodecDescriptor>;
+
+  constructor(descriptors: ReadonlyMap<string, AnySqliteCodecDescriptor>) {
+    this.#descriptors = descriptors;
+    Object.freeze(this);
+  }
+
+  descriptorFor(codecId: string): AnySqliteCodecDescriptor | undefined {
+    return this.#descriptors.get(codecId);
+  }
+
+  *values(): IterableIterator<AnySqliteCodecDescriptor> {
+    yield* this.#descriptors.values();
+  }
+}
+
+export function buildSqliteCodecDescriptorRegistry(
+  descriptors: ReadonlyArray<unknown>,
+): SqliteCodecDescriptorRegistry {
+  const byId = new Map<string, AnySqliteCodecDescriptor>();
+
+  for (const descriptor of descriptors) {
+    if (!isSqliteCodecDescriptor(descriptor)) {
+      const codecId = candidateCodecId(descriptor);
+      throw structuredError(
+        'RUNTIME.CODEC_DESCRIPTOR_INVALID',
+        `Codec descriptor '${codecId}' is not a valid SQLite codec descriptor.`,
+        {
+          why: 'SQLite codec registries require the sqlite-codec discriminant and complete target descriptor methods.',
+          fix: 'Extend SqliteCodecDescriptor or adapt a generic descriptor with sqliteCodec().',
+          meta: { codecId },
+        },
+      );
+    }
+
+    if (byId.has(descriptor.codecId)) {
+      throw structuredError(
+        'RUNTIME.DUPLICATE_CODEC',
+        `Duplicate SQLite codec descriptor id '${descriptor.codecId}'.`,
+        {
+          why: 'Each codecId must resolve to exactly one SQLite descriptor during registry composition.',
+          fix: 'Remove the duplicate target, adapter, or extension contribution.',
+          meta: { codecId: descriptor.codecId, target: 'sqlite' },
+        },
+      );
+    }
+
+    byId.set(descriptor.codecId, descriptor);
+  }
+
+  return new SqliteCodecDescriptorRegistryImpl(byId);
+}
+
+function candidateCodecId(value: unknown): string {
+  return typeof value === 'object' &&
+    value !== null &&
+    'codecId' in value &&
+    typeof value.codecId === 'string'
+    ? value.codecId
+    : '<unknown>';
+}

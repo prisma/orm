@@ -1,0 +1,18 @@
+{
+  "include": ["src/**/*.ts"],
+  "exclude": [
+    "dist/**",
+    "test/**",
+    "**/*.test.ts",
+    "**/*.test-d.ts",
+    "**/*.config.ts",
+    "**/exports/**",
+    "src/mongo-middleware.ts"
+  ],
+  "thresholds": {
+    "statements": 100,
+    "branches": 100,
+    "functions": 100,
+    "lines": 100
+  }
+}

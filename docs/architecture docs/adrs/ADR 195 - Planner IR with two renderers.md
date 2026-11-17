@@ -1,11 +1,15 @@
 # ADR 195 — Planner IR with two renderers (OpFactoryCall pattern)
 
+> **Note (2026-10-07).** A MongoDB validator change and a change-stream image setting are now classed `widening` whatever they change, because neither removes a document; the planner no longer runs `classifyValidatorUpdate`. The planner still chooses the class where it depends on the origin: a Postgres type change is `widening` when it keeps every value and `destructive` otherwise, so `AlterColumnTypeCall` carries a computed `operationClass` too.
+
+> **Note (2026-10-16).** The planner is no longer the only site with origin context. A migration carries its start contract ([ADR 232](ADR%20232%20-%20A%20migration%20is%20authored%20against%20its%20start%20and%20end%20contract%20snapshots.md)), and a hand-written Postgres migration reads the column there, after renames made earlier in the same migration. `this.setDefault` takes no `operationClass` and derives it the way the planner does: `widening` when the column has a default, and `additive` otherwise. `this.alterColumnType` reads whether the column has an `autoincrement()` default, so it also changes the sequence the column owns, and refuses a conversion with `using` to the type the column already has. See [ADR 038](ADR%20038%20-%20Operation%20idempotency%20classification%20&%20enforcement.md).
+
 ## At a glance
 
 The planner diffs two contracts and determines that a unique ascending index on `users.email` needs to be created. Rather than directly constructing the full operation ([ADR 188](ADR%20188%20-%20MongoDB%20migration%20operation%20model.md)), it produces an IR node:
 
 ```ts
-const call = new CreateIndexCall('users', [{ field: 'email', direction: 1 }], { unique: true });
+const call = new CreateIndexCall('users', [{ field: 'email', direction: 1 }], { name: 'email_1', unique: true });
 ```
 
 Two renderers interpret this node.
@@ -14,7 +18,7 @@ The **operation renderer** calls the `createIndex` factory function and produces
 
 ```ts
 renderOps([call]);
-// → [{ id: 'index.users.create(email:1)', operationClass: 'additive',
+// → [{ id: 'index.users.create(email_1)', operationClass: 'additive',
 //      precheck: [...], execute: [...], postcheck: [...] }]
 ```
 
@@ -23,7 +27,7 @@ The **TypeScript renderer** produces a line of source code that calls the same f
 ```ts
 renderCallsToTypeScript([call], meta);
 // → ...
-//   createIndex('users', [{ field: 'email', direction: 1 }], { unique: true })
+//   createIndex('users', [{ field: 'email', direction: 1 }], { name: 'email_1', unique: true })
 //   ...
 ```
 
@@ -125,6 +129,14 @@ TypeScript rendering is compositional: `renderCallsToTypeScript` doesn't just re
 Factory function signatures in `migration-factories.ts` are aligned 1:1 with `OpFactoryCall` argument shapes. `CreateIndexCall` carries `(collection, keys, options?)` — exactly the parameters of `createIndex(collection, keys, options?)`. Factories are "dumb": they take arguments and produce a `MongoMigrationPlanOperation` directly, assembling DDL commands, inspection commands, and filter expressions. They do not produce another IR.
 
 This alignment is what makes the TypeScript renderer possible. The rendered source code calls the same functions with the same argument shapes, so a user reading or editing `migration.ts` is working with the same API that the planner uses internally.
+
+## Recorded exception: SQL migration files pass `sql` values
+
+The rendered SQL `migration.ts` passes raw SQL fragments as `` sql`...` `` values where the IR holds strings. `CreateIndexCall` holds its `extras.where` as a string, and the file writes `` extras: { where: sql`"archivedAt" IS NULL` } ``. So the methods a migration file calls are wider than the IR's types: each takes a string or a `sql` value and reads the text with `sqlTextOf`.
+
+This is safe because of one rule in the renderer: it writes a `sql` template only when canonicalizing the text leaves it unchanged, and the `sql` tag canonicalizes. The method therefore receives exactly the IR's text, and `ops.json` is the same as `renderOps` produces. Where canonicalization would change the text, or the text holds characters a template cannot carry safely, the file passes a string, which is the IR's own shape.
+
+The exception exists so that a migration file writes SQL the way a contract does, with no escaped quotes and with multi-line text on its own lines ([ADR 268](ADR%20268%20-%20Raw%20SQL%20is%20a%20value%20of%20the%20data%20type%20sql-expression.md)). It covers SQL fragments that a method places inside a DDL statement. Whole statements and queries, such as `rawSql` and the SQLite `recreateTable` postchecks, stay strings.
 
 ## References
 

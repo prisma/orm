@@ -1,6 +1,7 @@
-// use prisma-next
+// use prisma-8
 
 model Document {
   id Int @id
   embedding pgvector.Vector(1536)
+  @@map("document")
 }

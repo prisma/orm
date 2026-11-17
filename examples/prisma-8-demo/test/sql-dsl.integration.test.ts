@@ -11,18 +11,16 @@ import type { Runtime } from '@prisma/orm-postgres/family-runtime';
 import postgres from '@prisma/orm-postgres/runtime';
 import { timeouts, withDevDatabase } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import type { Contract } from '../src/prisma/contract';
-import contractJson from '../src/prisma/contract.json' with { type: 'json' };
-import { db } from '../src/prisma/db';
+import { contract, db } from '../src/prisma/db';
 import { crossAuthorSimilarity } from '../src/queries/cross-author-similarity';
+import { fullTextSearch } from '../src/queries/full-text-search';
 import { initTestDatabase } from './utils/control-client';
 
 const context = db.context;
-const { contract } = context;
 
 async function getRuntime(connectionString: string): Promise<Runtime> {
-  const client = postgres<Contract>({
-    contractJson,
+  const client = postgres({
+    contract,
     url: connectionString,
     extensions: db.stack.extensions,
   });
@@ -64,21 +62,21 @@ async function seedCrossAuthorSimilarity(runtime: Runtime): Promise<void> {
       id: seededUserIds.alice,
       email: 'alice@example.com',
       displayName: 'Alice',
-      createdAt: new Date('2024-03-01T00:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-03-01T00:00:00.000Z'),
       kind: 'admin' as const,
     },
     {
       id: seededUserIds.bob,
       email: 'bob@example.com',
       displayName: 'Bob',
-      createdAt: new Date('2024-03-02T00:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-03-02T00:00:00.000Z'),
       kind: 'user' as const,
     },
     {
       id: seededUserIds.carol,
       email: 'carol@example.com',
       displayName: 'Carol',
-      createdAt: new Date('2024-03-03T00:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-03-03T00:00:00.000Z'),
       kind: 'user' as const,
     },
   ];
@@ -97,7 +95,7 @@ async function seedCrossAuthorSimilarity(runtime: Runtime): Promise<void> {
       title: 'Alice close',
       userId: seededUserIds.alice,
       priority: db.enums.public.Priority.members.Low,
-      createdAt: new Date('2024-03-10T10:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-03-10T10:00:00.000Z'),
       embedding: makeVector([1, 0, 0]),
     },
     {
@@ -105,7 +103,7 @@ async function seedCrossAuthorSimilarity(runtime: Runtime): Promise<void> {
       title: 'Alice far',
       userId: seededUserIds.alice,
       priority: db.enums.public.Priority.members.Low,
-      createdAt: new Date('2024-03-11T10:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-03-11T10:00:00.000Z'),
       embedding: makeVector([0.7, 0.3, 0]),
     },
     {
@@ -113,7 +111,7 @@ async function seedCrossAuthorSimilarity(runtime: Runtime): Promise<void> {
       title: 'Bob close',
       userId: seededUserIds.bob,
       priority: db.enums.public.Priority.members.Low,
-      createdAt: new Date('2024-03-12T10:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-03-12T10:00:00.000Z'),
       embedding: makeVector([0.5, 0.5, 0]),
     },
     {
@@ -121,7 +119,7 @@ async function seedCrossAuthorSimilarity(runtime: Runtime): Promise<void> {
       title: 'Bob mid',
       userId: seededUserIds.bob,
       priority: db.enums.public.Priority.members.Low,
-      createdAt: new Date('2024-03-13T10:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-03-13T10:00:00.000Z'),
       embedding: makeVector([0, 1, 0]),
     },
     {
@@ -129,7 +127,7 @@ async function seedCrossAuthorSimilarity(runtime: Runtime): Promise<void> {
       title: 'Bob far',
       userId: seededUserIds.bob,
       priority: db.enums.public.Priority.members.Low,
-      createdAt: new Date('2024-03-14T10:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-03-14T10:00:00.000Z'),
       embedding: makeVector([-1, 0, 0]),
     },
     {
@@ -137,7 +135,7 @@ async function seedCrossAuthorSimilarity(runtime: Runtime): Promise<void> {
       title: 'Carol unembedded',
       userId: seededUserIds.carol,
       priority: db.enums.public.Priority.members.Low,
-      createdAt: new Date('2024-03-15T10:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-03-15T10:00:00.000Z'),
     },
   ];
 
@@ -194,6 +192,35 @@ describe('SQL DSL standalone query execution (TML-2160)', () => {
             topPairKeys.has(unorderedPairKey(seededPostIds.aliceFar, seededPostIds.bobClose)),
           ).toBe(true);
           expect(topTwo[0]!.distance).toBeLessThan(0.1);
+        } finally {
+          await runtime.close();
+        }
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'fullTextSearch returns matching posts with a rank and a highlighted headline',
+    async () => {
+      await withDevDatabase(async ({ connectionString }) => {
+        await initTestDatabase({ connection: connectionString, contract });
+        const runtime = await getRuntime(connectionString);
+
+        try {
+          await seedCrossAuthorSimilarity(runtime);
+
+          const results = await fullTextSearch('alice', 10, runtime);
+
+          expect(results.map((row) => ({ id: row.id, headline: row.headline }))).toEqual([
+            { id: seededPostIds.aliceClose, headline: '<mark>Alice</mark> close' },
+            { id: seededPostIds.aliceFar, headline: '<mark>Alice</mark> far' },
+          ]);
+          for (const row of results) {
+            expect(row.rank).toBeGreaterThan(0);
+          }
+
+          expect(await fullTextSearch('alice -far', 10, runtime)).toHaveLength(1);
         } finally {
           await runtime.close();
         }

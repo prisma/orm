@@ -6,5 +6,5 @@ export async function getUserPosts(userId: string, limit = 100) {
     .where((f, fns) => fns.eq(f.userId, userId))
     .limit(limit)
     .build();
-  return db.runtime().query(plan);
+  return db.query(plan);
 }

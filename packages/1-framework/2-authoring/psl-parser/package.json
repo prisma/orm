@@ -1,7 +1,7 @@
 {
   "name": "@internal/psl-parser",
   "private": true,
-  "version": "8.0.0-rc.4",
+  "version": "8.0.0-rc.24",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -9,7 +9,6 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --project tsconfig.json --noEmit",
     "lint": "biome check . --error-on-warnings",
     "lint:fix": "biome check --write .",
@@ -17,14 +16,14 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/config": "workspace:8.0.0-rc.4",
-    "@internal/contract": "workspace:8.0.0-rc.4",
-    "@internal/framework-components": "workspace:8.0.0-rc.4",
-    "@internal/utils": "workspace:8.0.0-rc.4"
+    "@internal/config": "workspace:8.0.0-rc.24",
+    "@internal/contract": "workspace:8.0.0-rc.24",
+    "@internal/framework-components": "workspace:8.0.0-rc.24",
+    "@internal/utils": "workspace:8.0.0-rc.24"
   },
   "devDependencies": {
-    "@repo/tsconfig": "workspace:8.0.0-rc.4",
-    "@repo/tsdown": "workspace:8.0.0-rc.4",
+    "@repo/tsconfig": "workspace:8.0.0-rc.24",
+    "@repo/tsdown": "workspace:8.0.0-rc.24",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
@@ -47,6 +46,7 @@
     "./format": "./dist/format.mjs",
     "./interpret": "./dist/interpret.mjs",
     "./syntax": "./dist/syntax.mjs",
+    "./test": "./dist/test.mjs",
     "./tokenizer": "./dist/tokenizer.mjs",
     "./package.json": "./package.json"
   },
@@ -55,7 +55,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/1-framework/2-authoring/psl-parser"
   }
 }

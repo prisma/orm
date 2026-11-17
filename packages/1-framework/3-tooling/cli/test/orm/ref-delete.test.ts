@@ -19,7 +19,9 @@ describe('ref delete', () => {
     const { dir } = await seedRefProject();
     await writeRef(refsDirIn(dir), 'staging', { hash: HASH_A, invariants: [] });
 
-    const run = await harness().run(['ref', 'delete', 'staging', '--json'], { cwd: dir });
+    const run = await harness().run(['migration', 'ref', 'delete', 'staging', '--json'], {
+      cwd: dir,
+    });
 
     expect(run.exitCode).toBe(0);
     expect(run.json.at(-1)).toMatchObject({
@@ -33,7 +35,7 @@ describe('ref delete', () => {
     const { dir } = await seedRefProject();
     await writeRef(refsDirIn(dir), 'staging', { hash: HASH_A, invariants: [] });
 
-    const run = await harness().run(['ref', 'delete', 'staging'], {
+    const run = await harness().run(['migration', 'ref', 'delete', 'staging'], {
       cwd: dir,
       isTty: { stdin: true, stdout: true },
       answers: [],
@@ -47,7 +49,7 @@ describe('ref delete', () => {
     const { dir } = await seedRefProject();
     await writeRef(refsDirIn(dir), 'staging', { hash: HASH_A, invariants: [] });
 
-    const run = await harness().run(['ref', 'delete', 'staging'], {
+    const run = await harness().run(['migration', 'ref', 'delete', 'staging'], {
       cwd: dir,
       isTty: { stdout: true },
     });
@@ -61,12 +63,24 @@ describe('ref delete', () => {
     ]);
   });
 
+  it('prints nothing to stdout, its exit code being the result', async () => {
+    const { dir } = await seedRefProject();
+    await writeRef(refsDirIn(dir), 'staging', { hash: HASH_A, invariants: [] });
+
+    const run = await harness().run(['migration', 'ref', 'delete', 'staging'], { cwd: dir });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toBe('');
+  });
+
   it('leaves the contract snapshot the ref pointed at in place', async () => {
     const { dir } = await seedRefProject();
     await writeRef(refsDirIn(dir), 'staging', { hash: HASH_A, invariants: [] });
     const snapshot = join(contractSnapshotDir(join(dir, 'migrations'), HASH_A), 'contract.json');
 
-    const run = await harness().run(['ref', 'delete', 'staging', '--json'], { cwd: dir });
+    const run = await harness().run(['migration', 'ref', 'delete', 'staging', '--json'], {
+      cwd: dir,
+    });
 
     expect(run.exitCode).toBe(0);
     expect(existsSync(snapshot)).toBe(true);
@@ -76,7 +90,7 @@ describe('ref delete', () => {
     const { dir } = await seedRefProject();
     await writeRef(refsDirIn(dir), 'db', { hash: HASH_A, invariants: [] });
 
-    const run = await harness().run(['ref', 'delete', 'db', '--json'], { cwd: dir });
+    const run = await harness().run(['migration', 'ref', 'delete', 'db', '--json'], { cwd: dir });
 
     expect(run.exitCode).toBe(0);
     expect(existsSync(refPointerPath(dir, 'db'))).toBe(false);
@@ -85,7 +99,9 @@ describe('ref delete', () => {
   it('refuses an unknown ref', async () => {
     const { dir } = await seedRefProject();
 
-    const run = await harness().run(['ref', 'delete', 'missing', '--json'], { cwd: dir });
+    const run = await harness().run(['migration', 'ref', 'delete', 'missing', '--json'], {
+      cwd: dir,
+    });
 
     expect(run.exitCode).toBe(2);
     expect(run.json.at(-1)).toMatchObject({
@@ -97,7 +113,9 @@ describe('ref delete', () => {
   it('refuses an invalid ref name', async () => {
     const { dir } = await seedRefProject();
 
-    const run = await harness().run(['ref', 'delete', 'bad//name', '--json'], { cwd: dir });
+    const run = await harness().run(['migration', 'ref', 'delete', 'bad//name', '--json'], {
+      cwd: dir,
+    });
 
     expect(run.exitCode).toBe(2);
     expect(run.json.at(-1)).toMatchObject({

@@ -1,13 +1,16 @@
 import postgres from '@internal/postgres/runtime';
+import { contractFromJson } from '@internal/postgres/static';
 import { Client, type Pool, type PoolClient } from 'pg';
 import { describe, expect, it, vi } from 'vitest';
 import type { Contract } from './_fixture/generated/contract';
 import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
 
+const contract = contractFromJson<Contract>(contractJson);
+
 function clientRejectingQueries(error: Error) {
   const pg = new Client();
   vi.spyOn(pg, 'query').mockRejectedValue(error);
-  return postgres<Contract>({ contractJson, pg, verifyMarker: false });
+  return postgres({ contract, pg, verifyMarker: false });
 }
 
 function clientRejectingTransactionStart(error: Error) {
@@ -21,7 +24,7 @@ function clientRejectingTransactionStart(error: Error) {
     connect: vi.fn().mockResolvedValue(transactionClient as unknown as PoolClient),
     on: vi.fn(),
   } as unknown as Pool;
-  return postgres<Contract>({ contractJson, pg: pool, verifyMarker: false });
+  return postgres({ contract, pg: pool, verifyMarker: false });
 }
 
 describe('ports/prisma/functional/driver-adapters/error-forwarding', () => {

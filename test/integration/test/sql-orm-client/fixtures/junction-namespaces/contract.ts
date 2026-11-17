@@ -1,6 +1,5 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
-import { uuidv4 } from '@internal/ids';
-import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
+import { defineContract, field, gen, model, rel, type } from '@internal/postgres/contract-builder';
 
 // Two domain namespaces (`public` + `shadow`) each declare the SAME junction
 // table `user_roles` with the SAME payload column `token`, but only the
@@ -22,7 +21,7 @@ const PublicUserRole = model('UserRole', {
   fields: {
     userId: field.column(int4Column).column('user_id'),
     roleId: field.column(textColumn).column('role_id'),
-    token: field.generated(uuidv4()),
+    token: field.column(type.Char(36)).onCreate(gen.uuid()),
   },
 })
   .attributes(({ fields, constraints }) => ({

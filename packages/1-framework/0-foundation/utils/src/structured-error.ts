@@ -10,7 +10,7 @@ import { ifDefined } from './defined';
  * human edit), `done` (nothing further is required).
  *
  * A `command` never hardcodes a binary name. Write `{bin}` where the binary
- * goes — `{bin} ref set <name> <hash>` — and the surface that renders the
+ * goes — `{bin} migration ref set <name> <hash>` — and the surface that renders the
  * action substitutes the name of the binary the user actually ran. Angle
  * brackets mark a value only the user can supply; everything outside them is
  * literal and runnable.
@@ -31,6 +31,18 @@ export interface StructuredError extends Error {
   readonly nextActions?: readonly NextAction[];
   readonly where?: { readonly path?: string; readonly line?: number };
   readonly severity?: 'error' | 'warn' | 'info';
+  readonly meta?: Record<string, unknown>;
+  readonly docsUrl?: string;
+}
+
+/** A finding: a structured error's fields as data, never thrown; `summary` is its message. */
+export interface Diagnostic {
+  readonly code: `${string}.${string}`;
+  readonly severity: 'error' | 'warn' | 'info';
+  readonly summary: string;
+  readonly why?: string;
+  readonly nextActions: readonly NextAction[];
+  readonly where?: { readonly path?: string; readonly line?: number };
   readonly meta?: Record<string, unknown>;
   readonly docsUrl?: string;
 }
@@ -87,7 +99,7 @@ export function structuredError(
   });
 }
 
-export const DOCS_ERRORS_VERSION = 'next';
+export const DOCS_ERRORS_VERSION = 'v8';
 export const DOCS_BASE = `https://docs.prisma.io/docs/orm/${DOCS_ERRORS_VERSION}/reference/error-reference`;
 
 export function docsUrlFor(code: string): string {

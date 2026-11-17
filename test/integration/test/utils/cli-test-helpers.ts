@@ -38,7 +38,7 @@ export interface EngineRunResult {
 }
 
 export interface RunOnEngineOptions {
-  /** Simulate piped stdout (isTTY=false) to exercise the engine's json auto-selection. */
+  /** Simulate piped stdout (isTTY=false), which receives the command's data lines. */
   readonly isTTY?: boolean;
 }
 
@@ -58,22 +58,16 @@ function groupsFor(commands: MountedTree): Record<string, { readonly brief: stri
 }
 
 /**
- * The ORM family mounted the way the real host mounts it: the commands at the
- * top level and `init` under `orm` (the host reserves top-level `init` for
- * the compute config). Shared by every helper that builds a test CLI over the
- * family.
+ * The ORM family mounted the way the real host mounts it: every command at
+ * its family key, which spells the unified CLI's mount path. Shared by every
+ * helper that builds a test CLI over the family.
  */
 export function ormEngineMount(): {
   readonly commands: MountedTree;
   readonly groups: Record<string, { readonly brief: string }>;
 } {
   if (cachedMount === undefined) {
-    const commands = Object.fromEntries(
-      Object.entries(ormCommandFamily.commands).map(([path, command]) => [
-        path === 'init' ? 'orm init' : path,
-        command,
-      ]),
-    );
+    const commands = { ...ormCommandFamily.commands };
     cachedMount = { commands, groups: groupsFor(commands) };
   }
   return cachedMount;
@@ -500,9 +494,9 @@ class CapturingWritable extends Writable {
  * own tests use.
  *
  * Two process globals are saved and restored around the run, because the
- * migration-file CLI is written for a process it owns: config discovery walks
- * up from `process.cwd()` (so the helper chdirs to `cwd`, exactly where the
- * old spawn pointed the child), and a failing run sets `process.exitCode`
+ * migration-file CLI is written for a process it owns: config discovery falls
+ * back to the config in `process.cwd()` (so the helper chdirs to `cwd`,
+ * exactly where the old spawn pointed the child), and a failing run sets `process.exitCode`
  * (which must not leak into the vitest worker's exit status when a test
  * asserts on a migration failure). Tests within a worker run sequentially
  * under the forks pool, so the temporary chdir cannot interleave with another

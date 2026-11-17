@@ -33,6 +33,7 @@ It also includes diagnostics coverage from invalid PSL fixture inputs.
 - `contract.ts` — TS authoring equivalent
 - `packs.ts` — shared pack composition used by both providers
 - `expected.contract.json` — expected canonical artifact snapshot
+- `prisma.config.parity-ts.ts` and `prisma.config.parity-psl.ts` — optional; a case on a target other than Postgres brings its own configs in place of the ones in `templates/`
 
 `diagnostics/<case>/` contains invalid PSL inputs used to assert diagnostics behavior.
 

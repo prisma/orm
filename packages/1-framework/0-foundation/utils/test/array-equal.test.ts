@@ -24,10 +24,4 @@ describe('isArrayEqual', () => {
     expect(isArrayEqual([Number.NaN], [Number.NaN])).toBe(true);
     expect(isArrayEqual([+0], [+0])).toBe(true);
   });
-
-  it('handles readonly arrays', () => {
-    const readonlyA: readonly string[] = ['a', 'b'];
-    const readonlyB: readonly string[] = ['a', 'b'];
-    expect(isArrayEqual(readonlyA, readonlyB)).toBe(true);
-  });
 });

@@ -12,8 +12,12 @@
  */
 import { extensionModel, field } from '@internal/sql-contract-ts/contract-builder';
 
-const pgText = { codecId: 'pg/text@1', nativeType: 'text' } as const;
-const pgTimestamptz = { codecId: 'pg/timestamptz@1', nativeType: 'timestamptz' } as const;
+const pgText = { codecId: 'pg/text@1' } as const;
+// Supabase's `auth` tables are read by application code, so these carry the Temporal
+// representation, the codec of the explicit type `TimestamptzTemporal`.
+const pgTimestamptz = {
+  codecId: 'pg/timestamptz-temporal@1',
+} as const;
 
 export const AuthUser = extensionModel(
   'AuthUser',

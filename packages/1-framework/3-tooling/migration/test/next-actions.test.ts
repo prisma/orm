@@ -24,7 +24,7 @@ describe('errors.ts — converted factories carry typed nextActions', () => {
     const error = errorInvalidRefValue('not-a-hash');
 
     expect(error.fix).toBe(
-      'Use a valid storage hash from `prisma contract emit` output or an existing migration.',
+      'Use a valid storage hash from `{bin} contract emit` output or an existing migration.',
     );
     expect(error.nextActions).toEqual([
       {
@@ -47,7 +47,7 @@ describe('errors.ts — converted factories carry typed nextActions', () => {
       {
         kind: 'run-command',
         label: 'Create the ref "staging"',
-        command: '{bin} ref set staging <hash>',
+        command: '{bin} migration ref set staging <hash>',
       },
       {
         kind: 'run-command',
@@ -118,7 +118,7 @@ describe('refs.ts — converted raise sites carry typed nextActions', () => {
         {
           kind: 'run-command',
           label: 'Create the ref "staging"',
-          command: '{bin} ref set staging <hash>',
+          command: '{bin} migration ref set staging <hash>',
         },
       ],
     });
@@ -128,7 +128,11 @@ describe('refs.ts — converted raise sites carry typed nextActions', () => {
     await expect(deleteRef(refsDir, 'staging')).rejects.toMatchObject({
       code: 'MIGRATION.UNKNOWN_REF',
       nextActions: [
-        { kind: 'run-command', label: 'List the available refs', command: '{bin} ref list' },
+        {
+          kind: 'run-command',
+          label: 'List the available refs',
+          command: '{bin} migration ref list',
+        },
       ],
     });
   });
@@ -146,34 +150,9 @@ describe('refs.ts — converted raise sites carry typed nextActions', () => {
       {
         kind: 'run-command',
         label: 'Create the ref "staging"',
-        command: '{bin} ref set staging <hash>',
+        command: '{bin} migration ref set staging <hash>',
         reason: 'Available refs: production.',
       },
     ]);
   });
-});
-
-describe('no converted action hardcodes a binary name', () => {
-  const converted = [
-    errorInvalidRefValue('v'),
-    errorRefNotResolvable('staging'),
-    errorHashNotInGraph('abc123', emptyGraph),
-    errorContractSnapshotMissing('abc123', 'path'),
-  ];
-
-  it.each(converted.map((error) => [error.code, error] as const))(
-    '%s writes {bin} rather than a literal binary',
-    (_code, error) => {
-      const commands = (error.nextActions ?? []).flatMap((action) => [
-        ...(action.command === undefined ? [] : [action.command]),
-        ...(action.commands ?? []),
-      ]);
-
-      expect(commands.length).toBeGreaterThan(0);
-      for (const command of commands) {
-        expect(command).toContain('{bin}');
-        expect(command).not.toContain('prisma-next');
-      }
-    },
-  );
 });

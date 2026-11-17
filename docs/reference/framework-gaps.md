@@ -1,8 +1,8 @@
-# Framework Gaps — what Prisma Next is missing for an extension like CipherStash
+# Framework Gaps — what Prisma 8 is missing for an extension like CipherStash
 
 > Companion to [system-design-review.md](./system-design-review.md), [code-review.md](./code-review.md), and [walkthrough.md](./walkthrough.md).
 >
-> Audience: the **Prisma Next framework team**. The CipherStash integration is the first non-trivial real-world consumer of the post-#379 / [ADR 204](../../../docs/architecture%20docs/adrs/ADR%20204%20-%20Single-Path%20Async%20Codec%20Runtime.md) extension surface. This document collects every place where the integration paid a measurable tax — code it had to write, types it had to vendor, behavior it had to document around — because of a missing or under-specified framework seam. Each gap names the workaround the integration ships today and what the framework should provide so the workaround can be deleted.
+> Audience: the **Prisma 8 framework team**. The CipherStash integration is the first non-trivial real-world consumer of the post-#379 / [ADR 204](../../../docs/architecture%20docs/adrs/ADR%20204%20-%20Single-Path%20Async%20Codec%20Runtime.md) extension surface. This document collects every place where the integration paid a measurable tax — code it had to write, types it had to vendor, behavior it had to document around — because of a missing or under-specified framework seam. Each gap names the workaround the integration ships today and what the framework should provide so the workaround can be deleted.
 >
 > Scope: branch `prisma-next` of `cipherstash/stack` vs `origin/main`, head commit `8e8e5a2`. Integration code under [reference/cipherstash/stack/packages/stack/src/prisma/](../../../reference/cipherstash/stack/packages/stack/src/prisma/).
 
@@ -60,7 +60,7 @@ function indexSchemasByDataType(
 The JSDoc on `createEncryptionBinding` calls this out explicitly:
 
 ```17:31:reference/cipherstash/stack/packages/stack/src/prisma/core/encryption-client.ts
- * Upstream gap (documented in audit F-10/F-30): Prisma Next's
+ * Upstream gap (documented in audit F-10/F-30): Prisma 8's
  * `encodeParam` / `decodeRow` doesn't currently surface column
  * metadata to `codec.encode` / `codec.decode`. Phase 3 approximates
  * this by dispatching by JS-runtime data type and picking the first
@@ -396,9 +396,9 @@ Applicability: **narrower than G6/G7**. Most extensions can express their operat
 
 ### G9 — Trait-gated redaction in error envelopes (cleartext-leakage policy)
 
-**Symptom.** A codec failure carries the underlying SDK `cause` chain through Prisma Next's error envelope and into the user's logs. The CipherStash integration is careful not to log plaintext deliberately, but `cause: { message: 'bulkEncrypt failed for "user@example.com"' }` from the SDK can leak. The integration can't redact upstream because the framework owns the envelope policy.
+**Symptom.** A codec failure carries the underlying SDK `cause` chain through Prisma 8's error envelope and into the user's logs. The CipherStash integration is careful not to log plaintext deliberately, but `cause: { message: 'bulkEncrypt failed for "user@example.com"' }` from the SDK can leak. The integration can't redact upstream because the framework owns the envelope policy.
 
-**Why the extension needs this.** Encrypted columns are **secret in both directions**: the input value (plaintext: `'a@b.com'`) is sensitive, and the output value (ciphertext bytes) is also sensitive (revealing structure can aid attacks). When something fails — codec error, runtime error, query error — Prisma Next's default error envelope and any default debug-logging may surface either the input value (`wirePreview` of the failed cell) or the output value (in retries, in cause chains). The extension cannot intercept upstream because:
+**Why the extension needs this.** Encrypted columns are **secret in both directions**: the input value (plaintext: `'a@b.com'`) is sensitive, and the output value (ciphertext bytes) is also sensitive (revealing structure can aid attacks). When something fails — codec error, runtime error, query error — Prisma 8's default error envelope and any default debug-logging may surface either the input value (`wirePreview` of the failed cell) or the output value (in retries, in cause chains). The extension cannot intercept upstream because:
 
 - The error envelope is constructed inside the runtime, after the codec rejects.
 - The wirePreview policy is owned by the runtime, not the codec.
@@ -446,7 +446,7 @@ Applicability: **broadly applicable to IO-bound codecs**. Any codec that talks t
 
 ### G11 — ~~Pre-publish API: extensions must vendor types~~ (corrected: extension-author surface)
 
-> **Correction (2026-04-29).** This gap was originally filed citing the comment in CipherStash's `internal-types/prisma-next.ts` that says *"Prisma Next is pre-publish on npm at the time of writing"*. That comment is **stale**: `@internal/sql-runtime`, `@internal/contract-authoring`, `@internal/family-sql` and the rest of the public packages have been on npm for hundreds of versions (latest stable `0.4.2`, plus `dev` and PR-tagged channels). The CipherStash integration's `package.json` takes **zero** `@internal/`* dependencies — they vendored types despite published packages being available, not because they had no choice. The original framing ("force every external extension author to vendor") doesn't reflect reality. The original framework ticket [TML-2343](https://linear.app/prisma-company/issue/TML-2343) was filed against the false premise and has been canceled.
+> **Correction (2026-04-29).** This gap was originally filed citing the comment in CipherStash's `internal-types/prisma-next.ts` that says *"Prisma 8 is pre-publish on npm at the time of writing"*. That comment is **stale**: `@internal/sql-runtime`, `@internal/contract-authoring`, `@internal/family-sql` and the rest of the public packages have been on npm for hundreds of versions (latest stable `0.4.2`, plus `dev` and PR-tagged channels). The CipherStash integration's `package.json` takes **zero** `@internal/`* dependencies — they vendored types despite published packages being available, not because they had no choice. The original framing ("force every external extension author to vendor") doesn't reflect reality. The original framework ticket [TML-2343](https://linear.app/prisma-company/issue/TML-2343) was filed against the false premise and has been canceled.
 
 **Symptom (corrected).** The integration ships a 376-line vendored `internal-types/prisma-next.ts` that hand-mirrors a curated subset of the public types from six different `@internal/`* packages (`framework-components/codec`, `sql-relational-core/ast`, `sql-runtime`, `family-sql/control`, `sql-operations`, `contract-authoring`). Vendored shapes can drift from upstream.
 
@@ -477,7 +477,7 @@ Applicability of the curated-surface story (reason 1): every third-party extensi
  codecId: 'core/bool@1',
 ```
 
-If Prisma Next ever versions the codec to `core/bool@2`, the integration silently breaks at lowering time with a registry "codec not found" error.
+If Prisma 8 ever versions the codec to `core/bool@2`, the integration silently breaks at lowering time with a registry "codec not found" error.
 
 **Why the extension needs this.** The integration registers operator descriptors like:
 

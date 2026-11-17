@@ -7,10 +7,15 @@ import {
   type SelectAst,
 } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
-import { compileAggregate } from '../src/query-plan';
-import { emptyState } from '../src/types';
+import { compileAggregate, compileGroupedAggregate } from '../src/query-plan';
 import { bindWhereExpr } from '../src/where-binding';
-import { buildMixedPolyContract, getTestAggregates, isSelectAst } from './helpers';
+import {
+  buildMixedPolyContract,
+  getTestAggregates,
+  isSelectAst,
+  publicTables,
+  tableState,
+} from './helpers';
 import { featureJoin } from './variant-include.query-plan-fixtures';
 
 function expectSelectAst(ast: unknown): asserts ast is SelectAst {
@@ -21,7 +26,7 @@ function expectDerivedTableSource(source: unknown): asserts source is DerivedTab
   expect(source).toBeInstanceOf(DerivedTableSource);
 }
 
-// A `.variant('Feature')`-narrowed Task resolves `priority` (variant-owned,
+// A `.variant('feature')`-narrowed Task resolves `priority` (variant-owned,
 // MTI) to a ColumnRef qualified against `features`, mirroring what the
 // model accessor produces (`model-accessor.ts:222-229`). Root
 // `compileAggregate` must join `features` into its FROM the same way
@@ -34,14 +39,13 @@ describe('MTI variant join in compileAggregate', () => {
     const filter = bindWhereExpr(
       contract,
       BinaryExpr.gte(ColumnRef.of('features', 'priority'), LiteralExpr.of(3)),
+      publicTables('features'),
     );
 
     const plan = compileAggregate(
       contract,
       getTestAggregates(),
-      'public',
-      'tasks',
-      { ...emptyState(), variantName: 'Feature', filters: [filter] },
+      tableState(contract, 'tasks', { variantValue: 'feature', filters: [filter] }),
       { total: { kind: 'aggregate', fn: 'count' } },
       'Task',
     );
@@ -55,14 +59,13 @@ describe('MTI variant join in compileAggregate', () => {
     const filter = bindWhereExpr(
       contract,
       BinaryExpr.gte(ColumnRef.of('features', 'priority'), LiteralExpr.of(3)),
+      publicTables('features'),
     );
 
     const plan = compileAggregate(
       contract,
       getTestAggregates(),
-      'public',
-      'tasks',
-      { ...emptyState(), variantName: 'Feature', filters: [filter], limit: 10 },
+      tableState(contract, 'tasks', { variantValue: 'feature', filters: [filter], limit: 10 }),
       { total: { kind: 'aggregate', fn: 'count' } },
       'Task',
     );
@@ -83,14 +86,11 @@ describe('MTI variant join in compileAggregate', () => {
     const plan = compileAggregate(
       contract,
       getTestAggregates(),
-      'public',
-      'tasks',
-      {
-        ...emptyState(),
-        variantName: 'Feature',
+      tableState(contract, 'tasks', {
+        variantValue: 'feature',
         orderBy: [OrderByItem.desc(ColumnRef.of('features', 'priority'))],
         limit: 10,
-      },
+      }),
       { total: { kind: 'aggregate', fn: 'count' } },
       'Task',
     );
@@ -112,15 +112,12 @@ describe('MTI variant join in compileAggregate', () => {
     const plan = compileAggregate(
       contract,
       getTestAggregates(),
-      'public',
-      'tasks',
-      {
-        ...emptyState(),
-        variantName: 'Feature',
+      tableState(contract, 'tasks', {
+        variantValue: 'feature',
         distinct: ['title'],
         orderBy: [OrderByItem.desc(ColumnRef.of('features', 'priority'))],
         limit: 10,
-      },
+      }),
       { total: { kind: 'aggregate', fn: 'count' } },
       'Task',
     );
@@ -142,15 +139,89 @@ describe('MTI variant join in compileAggregate', () => {
     const filter = bindWhereExpr(
       contract,
       BinaryExpr.gte(ColumnRef.of('tasks', 'severity'), LiteralExpr.of('major')),
+      publicTables('tasks'),
     );
 
     const plan = compileAggregate(
       contract,
       getTestAggregates(),
-      'public',
-      'tasks',
-      { ...emptyState(), variantName: 'Bug', filters: [filter] },
+      tableState(contract, 'tasks', { variantValue: 'bug', filters: [filter] }),
       { total: { kind: 'aggregate', fn: 'count' } },
+      'Task',
+    );
+
+    expectSelectAst(plan.ast);
+    expect(plan.ast.joins).toBeUndefined();
+  });
+});
+
+// compileGroupedAggregate has never taken a modelName — grouped aggregates
+// have never resolved MTI variant joins, wrapped or not. A pre-group
+// scoping clause is what forces the wrap; without one the grouped path
+// takes `tasks` unwrapped, so both branches are covered below.
+describe('MTI variant join in compileGroupedAggregate', () => {
+  const contract = buildMixedPolyContract();
+
+  it('joins the variant table for a variant-owned filter, wrapped by a pre-group scoping clause', () => {
+    const filter = bindWhereExpr(
+      contract,
+      BinaryExpr.gte(ColumnRef.of('features', 'priority'), LiteralExpr.of(3)),
+      publicTables('features'),
+    );
+
+    const plan = compileGroupedAggregate(
+      contract,
+      getTestAggregates(),
+      tableState(contract, 'tasks', { variantValue: 'feature', filters: [filter], limit: 10 }),
+      ['project_id'],
+      { total: { kind: 'aggregate', fn: 'count' } },
+      undefined,
+      'Task',
+    );
+
+    expectSelectAst(plan.ast);
+    expectDerivedTableSource(plan.ast.from);
+    const inner = plan.ast.from.query;
+    expect(inner.joins).toEqual([featureJoin]);
+    expect(inner.where).toEqual(filter);
+  });
+
+  it('joins the variant table for a variant-owned filter, unwrapped (no pre-group scoping)', () => {
+    const filter = bindWhereExpr(
+      contract,
+      BinaryExpr.gte(ColumnRef.of('features', 'priority'), LiteralExpr.of(3)),
+      publicTables('features'),
+    );
+
+    const plan = compileGroupedAggregate(
+      contract,
+      getTestAggregates(),
+      tableState(contract, 'tasks', { variantValue: 'feature', filters: [filter] }),
+      ['project_id'],
+      { total: { kind: 'aggregate', fn: 'count' } },
+      undefined,
+      'Task',
+    );
+
+    expectSelectAst(plan.ast);
+    expect(plan.ast.joins).toEqual([featureJoin]);
+    expect(plan.ast.where).toEqual(filter);
+  });
+
+  it('adds no join for an STI variant', () => {
+    const filter = bindWhereExpr(
+      contract,
+      BinaryExpr.gte(ColumnRef.of('tasks', 'severity'), LiteralExpr.of('major')),
+      publicTables('tasks'),
+    );
+
+    const plan = compileGroupedAggregate(
+      contract,
+      getTestAggregates(),
+      tableState(contract, 'tasks', { variantValue: 'bug', filters: [filter] }),
+      ['project_id'],
+      { total: { kind: 'aggregate', fn: 'count' } },
+      undefined,
       'Task',
     );
 

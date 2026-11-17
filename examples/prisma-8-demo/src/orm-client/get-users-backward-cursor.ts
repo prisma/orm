@@ -1,15 +1,9 @@
-import type { Runtime } from '@prisma/orm-postgres/family-runtime';
-import { createOrmClient } from './client';
+import type { DemoOrm } from '../prisma/db';
 
-export async function ormClientGetUsersBackwardCursor(
-  cursor: string,
-  limit: number,
-  runtime: Runtime,
-) {
-  const db = createOrmClient(runtime);
-  return db.User.orderBy((user) => user.id.desc())
+export async function ormClientGetUsersBackwardCursor(cursor: string, limit: number, orm: DemoOrm) {
+  return orm.User.orderBy((user) => user.id.desc())
     .cursor({ id: cursor })
     .select('id', 'email', 'kind')
-    .take(limit)
+    .limit(limit)
     .all();
 }

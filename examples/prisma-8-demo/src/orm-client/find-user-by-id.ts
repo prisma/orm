@@ -1,15 +1,5 @@
-import type { Runtime } from '@prisma/orm-postgres/family-runtime';
-import type { DefaultModelRow } from '@prisma/orm-postgres/orm-client';
-import type { Contract } from '../prisma/contract.d';
-import { createOrmClient } from './client';
+import type { DemoOrm } from '../prisma/db';
 
-type UserId = DefaultModelRow<Contract, 'User'>['id'];
-
-export async function ormClientFindUserById(id: string, runtime: Runtime) {
-  const db = createOrmClient(runtime);
-  return db.User.first({ id: toUserId(id) });
-}
-
-function toUserId(value: string): UserId {
-  return value as UserId;
+export async function ormClientFindUserById(id: string, orm: DemoOrm) {
+  return orm.User.first({ id });
 }

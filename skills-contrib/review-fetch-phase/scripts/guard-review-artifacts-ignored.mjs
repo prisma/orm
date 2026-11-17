@@ -62,22 +62,76 @@ function isTracked(path) {
   return result.status === 0;
 }
 
+/**
+ * The workspace root jj reports for the process working directory, or null
+ * when jj is unavailable or the working directory is not in a jj workspace.
+ */
+function findJjWorkspaceRoot() {
+  const result = spawnSync('jj', ['workspace', 'root', '--ignore-working-copy'], {
+    encoding: 'utf8',
+  });
+  if (result.status !== 0) {
+    return null;
+  }
+  const root = result.stdout.trim();
+  return root === '' ? null : root;
+}
+
+function isInside(parentPath, childPath) {
+  const relativePath = relative(parentPath, childPath);
+  return (
+    relativePath !== '' &&
+    relativePath !== '..' &&
+    !relativePath.startsWith(`..${sep}`) &&
+    !isAbsolute(relativePath)
+  );
+}
+
+/**
+ * In a Jujutsu workspace with no git directory, git cannot answer whether a
+ * path is ignored. The repo ignores its whole `wip/` tree, so an artifact dir
+ * under `<workspace-root>/wip/` is covered by construction — that is what this
+ * checks, and it is the only case it accepts.
+ *
+ * The artifact path is resolved to its real path, so it must exist (the
+ * workflows create it before this guard runs; a missing path fails with
+ * ENOENT) and cannot escape through a symlink. The `wip` boundary is the
+ * literal `wip` entry under the real workspace root, so a symlinked `wip`
+ * cannot move the boundary to a directory the ignore rule does not cover.
+ */
+function ensureUnderIgnoredWipTree(path) {
+  const absolutePath = resolve(path);
+  const workspaceRoot = findJjWorkspaceRoot();
+  if (workspaceRoot === null) {
+    throw new Error('error: not in a git repository or a jj workspace');
+  }
+  const canonicalWorkspaceRoot = realpathSync(workspaceRoot);
+  const canonicalPath = realpathSync(absolutePath);
+  if (!isInside(canonicalWorkspaceRoot, canonicalPath)) {
+    throw new Error(
+      `error: review artifacts must stay inside the workspace: ${absolutePath} resolves to ${canonicalPath}, outside ${canonicalWorkspaceRoot}`,
+    );
+  }
+  const wipBoundary = join(canonicalWorkspaceRoot, 'wip');
+  if (!isInside(wipBoundary, canonicalPath)) {
+    throw new Error(
+      `error: without git, review artifacts must live under the ignored wip/ tree: ${wipBoundary}`,
+    );
+  }
+  return true;
+}
+
 function ensureInsideRepo(path) {
   const root = spawnSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' });
   if (root.status !== 0) {
-    throw new Error('error: not in a git repository');
+    return ensureUnderIgnoredWipTree(path);
   }
   const repoRoot = root.stdout.trim();
   const absolutePath = resolve(path);
-  const relativePath = relative(repoRoot, absolutePath);
-  if (
-    relativePath === '' ||
-    relativePath === '..' ||
-    relativePath.startsWith(`..${sep}`) ||
-    isAbsolute(relativePath)
-  ) {
+  if (!isInside(repoRoot, absolutePath)) {
     throw new Error(`error: output dir must be inside repo: ${repoRoot}`);
   }
+  return false;
 }
 
 async function main() {
@@ -87,7 +141,13 @@ async function main() {
     process.exit(EXIT_SUCCESS);
   }
 
-  ensureInsideRepo(args.outputDir);
+  const ignoredByWorkspaceLayout = ensureInsideRepo(args.outputDir);
+  if (ignoredByWorkspaceLayout) {
+    process.stdout.write(
+      `ok: review artifacts are under the ignored wip/ tree: ${args.outputDir}\n`,
+    );
+    process.exit(EXIT_SUCCESS);
+  }
 
   const tracked = [];
   const notIgnored = [];
