@@ -1,7 +1,7 @@
 /**
  * `--convert` and `--backfill` write a data transform to fill in (MongoDB).
  *
- * Journey D1 changes `User.age` from `String` to `Int` and plans it with `--convert User.age`: `migration.ts` has the data transform with its check and filter written and its update as a placeholder. The journey fills the update, runs the file, and applies it; the validator change's document check then passes. Journey D2 adds a required `User.plan` and plans it with `--backfill User.plan` the same way. Journey D3 gives both statements to `db update`, which refuses them, since only a migration file can hold the code to fill in. Journey D4 adds a required `Int64` field without `--backfill`: the plan fills it with a temporary value and reports it.
+ * Journey D1 changes `User.age` from `String` to `Int` and plans it with `--convert User.age`: `migration.ts` has the data transform with its check and filter written and its update as a placeholder. The journey fills the update, runs the file, and applies it; the validator change's document check then passes. Journey D2 adds a required `User.plan` and plans it with `--backfill User.plan` the same way. Journey D3 gives both statements to `db update`, which refuses them, since only a migration file can hold the code to fill in. Journey D4 adds a required `BigInt` field without `--backfill`: the plan fills it with a temporary value and reports it.
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -229,7 +229,7 @@ describe('Journeys (MongoDB): --convert and --backfill write a data transform to
         },
       );
 
-    await emitFields(ctx, '  visits Int64', 'D4.01');
+    await emitFields(ctx, '  visits BigInt', 'D4.01');
     const planned = await runMigrationPlan(ctx, ['--name', 'visits', '--from', origin, '--json']);
     expect(planned.exitCode, `D4.02: plan: ${planned.stderr}`).toBe(0);
     expect(

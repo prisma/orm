@@ -101,7 +101,7 @@ describe('the namespaces of a TypeScript contract', () => {
           namespace: 'auth',
           fields: {
             id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
-            label: field.column(type.sql.String(50)),
+            label: field.column(type.sql.Varchar(50)),
             expiresAt: field.column(type.TimestamptzJsDate()).optional(),
           },
         }).sql({ table: 'sessions' }),

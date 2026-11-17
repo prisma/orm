@@ -12,6 +12,7 @@ import type {
   SqlMigrationRunnerSuccessValue,
 } from '@internal/family-sql/control';
 import {
+  checkDatabasePoliciesHeld,
   convertedColumnOf,
   keepRowsEdit,
   type RequiredColumn,
@@ -32,6 +33,7 @@ import type {
 } from '@internal/framework-components/control';
 import {
   APP_SPACE_ID,
+  type DatabasePolicies,
   failedPostcheckWhy,
   failedPrecheckWhy,
   schemaCheckWhy,
@@ -236,9 +238,16 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
     const isSelfEdgeNoOp =
       isSelfEdge && applyValue.operationsExecuted === 0 && incomingIsSubsetOfExisting;
 
-    if (!isSelfEdgeNoOp) {
+    if (!isSelfEdgeNoOp || options.databasePolicies !== undefined) {
       const markerResult = await this.upsertMarker(driver, options, existingMarker, space);
       if (!markerResult.ok) return markerResult;
+    }
+    const recordsPoliciesOnly =
+      options.databasePolicies !== undefined &&
+      applyValue.operationsExecuted === 0 &&
+      markerAtDestination &&
+      incomingIsSubsetOfExisting;
+    if (!isSelfEdgeNoOp && !recordsPoliciesOnly) {
       await this.recordLedgerEntries(
         driver,
         options,
@@ -258,6 +267,7 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
     readonly perSpaceOptions: ReadonlyArray<
       SqlMigrationRunnerExecuteOptions<PostgresPlanTargetDetails>
     >;
+    readonly expectedDatabasePolicies?: DatabasePolicies;
   }): Promise<MigrationRunnerResult> {
     const driver = options.driver;
     const perSpaceOptions = options.perSpaceOptions;
@@ -269,7 +279,7 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
     await this.beginTransaction(driver);
     let result: MigrationRunnerResult;
     try {
-      result = await this.executeSpaces(driver, perSpaceOptions);
+      result = await this.executeSpaces(driver, perSpaceOptions, options.expectedDatabasePolicies);
     } catch (error) {
       await this.rollbackAfterFailure(driver);
       throw error;
@@ -298,7 +308,17 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
   private async executeSpaces(
     driver: SqlControlDriverInstance<string>,
     perSpaceOptions: ReadonlyArray<SqlMigrationRunnerExecuteOptions<PostgresPlanTargetDetails>>,
+    expectedDatabasePolicies: DatabasePolicies | undefined,
   ): Promise<MigrationRunnerResult> {
+    if (expectedDatabasePolicies !== undefined) {
+      await this.acquireLock(driver);
+      const policiesCheck = await checkDatabasePoliciesHeld(
+        this.family,
+        driver,
+        expectedDatabasePolicies,
+      );
+      if (!policiesCheck.ok) return policiesCheck;
+    }
     const perSpaceResults: Array<{
       space: string;
       value: SqlMigrationRunnerSuccessValue;
@@ -840,6 +860,7 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
         options.destinationContract.profileHash ??
         options.plan.destination.storageHash,
       invariants: options.plan.providedInvariants ?? [],
+      ...ifDefined('databasePolicies', options.databasePolicies),
     };
     if (!existingMarker) {
       await this.family.initMarker({ driver, space, destination });
@@ -858,6 +879,7 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
         'Marker was modified by another process during migration execution.',
         {
           meta: {
+            reason: 'storageHash',
             space,
             expectedStorageHash: existingMarker.storageHash,
             foundStorageHash: found?.storageHash ?? null,

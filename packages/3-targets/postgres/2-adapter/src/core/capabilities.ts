@@ -24,5 +24,8 @@ export const postgresAdapterCapabilities = Object.freeze({
     lockOf: true,
     lockNowait: true,
     lockSkipLocked: true,
+    jsonAgg: true,
+    outerReferencesInDerivedTables: true,
+    jsonAggWithoutTruncation: true,
   },
 } as const);

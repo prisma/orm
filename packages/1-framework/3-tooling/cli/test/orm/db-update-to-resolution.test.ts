@@ -4,6 +4,7 @@ import { writeContractSnapshot } from '@internal/migration-tools/contract-snapsh
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { formatMigrationDirName, writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
+import { writeRef } from '@internal/migration-tools/refs';
 import { ok } from '@internal/utils/result';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -186,20 +187,33 @@ describe('db update --to bundle resolution', () => {
     { flags: ['--advance-ref', 'staging'], command: 'db update', after: ' --advance-ref staging' },
     { flags: ['--dry-run'], command: 'db update --dry-run', after: '' },
     {
+      flags: ['--permit-policy-change'],
+      command: 'db update',
+      after: ' --permit-policy-change',
+      ref: 'production',
+    },
+    {
       flags: ['--rename', 'Profile:User', '--rename', 'User.name:User.fullName'],
       command: 'db update',
       after: ' --rename Profile:User --rename User.name:User.fullName',
     },
   ])(
     'keeps --to and $flags in the retry command when no connection is configured',
-    async ({ flags, command, after }) => {
+    async ({ flags, command, after, ref }) => {
       const { cwd, dirNext } = await setupFixture();
+      if (ref !== undefined) {
+        await writeRef(join(cwd, 'migrations', 'app', 'refs'), ref, {
+          hash: HASH_B,
+          invariants: [],
+        });
+      }
+      const to = ref ?? dirNext;
 
       const run = await createOrmTestCli({
         commands,
         groups: BIN_GROUPS,
         orm: { ...ormConfig(cwd), db: undefined },
-      }).run(['db', 'update', '--to', dirNext, ...flags, '--json'], { cwd });
+      }).run(['db', 'update', '--to', to, ...flags, '--json'], { cwd });
 
       expect(run.exitCode).toBe(2);
       expect(run.json.at(-1)).toMatchObject({
@@ -212,7 +226,7 @@ describe('db update --to bundle resolution', () => {
             nextActions: [
               expect.objectContaining({
                 label: expect.stringContaining(
-                  `Run \`prisma-test ${command} --to ${dirNext}${after} --db $DATABASE_URL\``,
+                  `Run \`prisma-test ${command} --to ${to}${after} --db $DATABASE_URL\``,
                 ),
               }),
             ],
@@ -299,6 +313,134 @@ describe('db update --to bundle resolution', () => {
       plannedAdvanceRef: { name: 'db', hash: HASH_B },
       summary: 'Plan ready',
       timings: { total: expect.any(Number) },
+    });
+  });
+
+  it('repeats --to and --permit-policy-change in the apply a dry run suggests', async () => {
+    const { cwd } = await setupFixture();
+    await writeRef(join(cwd, 'migrations', 'app', 'refs'), 'production', {
+      hash: HASH_B,
+      invariants: [],
+      policies: { change: ['migrate'] },
+    });
+    mocks.dbUpdate.mockResolvedValue(
+      ok({
+        ok: true,
+        mode: 'plan',
+        plan: { operations: [ADDITIVE_OP], preview: undefined },
+        destination: { storageHash: HASH_B },
+        appliedStatements: [],
+        dataLoss: [],
+        accessChanges: [],
+        summary: 'Plan ready',
+      }),
+    );
+
+    const run = await harness(cwd).run(
+      ['db', 'update', '--to', 'production', '--permit-policy-change', '--dry-run'],
+      { cwd, isTty: { stdout: true } },
+    );
+
+    expect(run.presented?.presentation.next).toEqual([
+      {
+        kind: 'run-command',
+        label: 'Apply the planned operations',
+        command: 'prisma-test db update --to production --permit-policy-change',
+      },
+    ]);
+  });
+
+  it('hands the client the whole ref --to names, and no ref for a migration name', async () => {
+    const { cwd, dirNext } = await setupFixture();
+    const policies = { change: ['migrate'] } as const;
+    await writeRef(join(cwd, 'migrations', 'app', 'refs'), 'production', {
+      hash: HASH_B,
+      invariants: [],
+      policies,
+    });
+    mocks.dbUpdate.mockResolvedValue(
+      ok({
+        ok: true,
+        mode: 'plan',
+        plan: { operations: [], preview: undefined },
+        destination: { storageHash: HASH_B },
+        appliedStatements: [],
+        dataLoss: [],
+        accessChanges: [],
+        summary: 'Plan ready',
+      }),
+    );
+
+    await harness(cwd).run(['db', 'update', '--to', 'production', '--dry-run', '--json'], { cwd });
+    await harness(cwd).run(['db', 'update', '--to', dirNext, '--dry-run', '--json'], { cwd });
+    await harness(cwd).run(
+      ['db', 'update', '--to', 'production', '--permit-policy-change', '--dry-run', '--json'],
+      { cwd },
+    );
+
+    expect(
+      mocks.dbUpdate.mock.calls.map(([options]) => [
+        options.ref,
+        options.permitPolicyChange,
+        options.invocation.rerunArgs,
+      ]),
+    ).toEqual([
+      [
+        { name: 'production', hash: HASH_B, invariants: [], policies },
+        undefined,
+        ['--to', 'production'],
+      ],
+      [undefined, undefined, ['--to', dirNext]],
+      [
+        { name: 'production', hash: HASH_B, invariants: [], policies },
+        true,
+        ['--to', 'production', '--permit-policy-change'],
+      ],
+    ]);
+  });
+});
+
+describe('db update --permit-policy-change without a ref', () => {
+  it.each([
+    { to: 'a hash', arg: () => HASH_B },
+    { to: 'a migration', arg: (dirNext: string) => dirNext },
+    { to: 'nothing', arg: () => undefined },
+  ])('refuses the flag before it connects when --to names $to', async ({ arg }) => {
+    const { cwd, dirNext } = await setupFixture();
+    const to = arg(dirNext);
+    const recovery =
+      'Name the ref whose policies to write with --to <ref>, or leave out --permit-policy-change.';
+
+    const run = await harness(cwd).run(
+      [
+        'db',
+        'update',
+        ...(to === undefined ? [] : ['--to', to]),
+        '--permit-policy-change',
+        '--dry-run',
+        '--json',
+      ],
+      { cwd },
+    );
+
+    expect({ exitCode: run.exitCode, connected: mocks.connect.mock.calls.length }).toEqual({
+      exitCode: 2,
+      connected: 0,
+    });
+    expect(run.json.at(-1)).toMatchObject({
+      envelope: {
+        ok: false,
+        error: {
+          code: 'CLI.INVALID_ARGUMENTS',
+          summary: '--permit-policy-change needs --to <ref>',
+          why:
+            to === undefined
+              ? 'No ref was given, so there are no policies to write.'
+              : `${to} is not a ref, so it declares no policies to write.`,
+          nextActions: [{ kind: 'user-choice', label: recovery }],
+          meta: { command: 'db update', ...(to === undefined ? {} : { to }) },
+        },
+      },
     });
   });
 });

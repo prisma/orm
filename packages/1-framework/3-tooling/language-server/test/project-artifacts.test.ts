@@ -623,7 +623,7 @@ describe('ProjectArtifacts diagnostics', () => {
     expect(project.diagnostics(aliasUri)).toEqual([
       {
         range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
-        code: 'PRISMA_NEXT_INTERPRETATION_FAILED',
+        code: 'PRISMA_INTERPRETATION_FAILED',
         message:
           'Semantic diagnostics are unavailable because of an internal error. A subsequent diagnostic request or edit will retry.',
         severity: 1,

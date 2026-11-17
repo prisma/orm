@@ -2,7 +2,7 @@ import type {
   ContractSourceDiagnostic,
   ContractSourceDiagnostics,
   ContractSourceProvider,
-  PrismaNextConfig,
+  PrismaConfig,
 } from '@internal/config/config-types';
 import { expandContractInputs } from '@internal/config-loader';
 import type { Contract } from '@internal/contract/types';
@@ -362,10 +362,10 @@ async function askSource(
   return validateProviderResult(providerResult, inputs.cwd);
 }
 
-type ContractConfig = NonNullable<PrismaNextConfig['contract']>;
+type ContractConfig = NonNullable<PrismaConfig['contract']>;
 
 /** @throws {CliStructuredError} `CONFIG.CONTRACT_MISSING` when the config has no contract section */
-export function requireContractConfig(config: PrismaNextConfig): ContractConfig {
+export function requireContractConfig(config: PrismaConfig): ContractConfig {
   if (!config.contract) {
     throw errorContractConfigMissing({
       why: 'Config.contract is required for emit. Define it in your config: contract: { source: ..., output: ... }',
@@ -402,7 +402,7 @@ export interface ContractSourceFailure {
  * @throws {DOMException} `AbortError` if cancelled via `signal`
  */
 export async function loadContractSource(
-  config: PrismaNextConfig,
+  config: PrismaConfig,
   options: { readonly signal?: AbortSignal } = {},
 ): Promise<Result<LoadedContractSource, ContractSourceFailure>> {
   const contractConfig = requireContractConfig(config);

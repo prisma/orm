@@ -598,8 +598,10 @@
       "insertOnConflictTarget": true,
       "insertOnConflictWithoutTarget": true,
       "jsonAgg": true,
+      "jsonAggWithoutTruncation": true,
       "limit": true,
       "orderBy": true,
+      "outerReferencesInDerivedTables": true,
       "returning": true
     }
   },

@@ -311,7 +311,37 @@ const OperationMetaJson = type({
     collection: 'string',
     field: 'string',
     to: 'string',
-  }).or({ kind: '"fill"', collection: 'string', field: 'string' }),
+  })
+    .or({ kind: '"fill"', collection: 'string', field: 'string' })
+    .or({
+      kind: '"renameStoredKey"',
+      collection: 'string',
+      field: 'string',
+      path: 'string',
+      to: 'string',
+    })
+    .or({
+      kind: '"removeStoredKey" | "fillStoredKey"',
+      collection: 'string',
+      field: 'string',
+      path: 'string',
+    })
+    .or({
+      kind: '"replaceStoredValue"',
+      collection: 'string',
+      field: 'string',
+      'path?': 'string',
+    })
+    .or({
+      kind: '"removeStoredValue"',
+      collection: 'string',
+      field: 'string',
+      'path?': 'string',
+      value: 'string | number | boolean',
+      'required?': 'boolean',
+      'filter?': 'Record<string, unknown>',
+      'enumValue?': { 'namespaceId?': 'string', enum: 'string', member: 'string' },
+    }),
 });
 
 const DdlOperationJson = type({

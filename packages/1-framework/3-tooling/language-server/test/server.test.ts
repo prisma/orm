@@ -4046,7 +4046,7 @@ describe('language server interpreter diagnostics', { timeout: timeouts.database
       ...parserItems,
       {
         range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
-        code: 'PRISMA_NEXT_INTERPRETATION_FAILED',
+        code: 'PRISMA_INTERPRETATION_FAILED',
         message:
           'Semantic diagnostics are unavailable because of an internal error. A subsequent diagnostic request or edit will retry.',
         severity: DiagnosticSeverity.Error,
@@ -4071,7 +4071,7 @@ describe('language server interpreter diagnostics', { timeout: timeouts.database
     const failed = pull
       ? fullReportItems(await requestPullDiagnostics(harness, schemaUri))
       : await harness.waitForDiagnostics(schemaUri);
-    expect(failed.map((item) => item.code)).toEqual(['PRISMA_NEXT_INTERPRETATION_FAILED']);
+    expect(failed.map((item) => item.code)).toEqual(['PRISMA_INTERPRETATION_FAILED']);
     harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
       textDocument: { uri: schemaUri, version: 2 },
       contentChanges: [{ text: cleanSchema }],

@@ -3,7 +3,7 @@
  */
 
 import { readFile } from 'node:fs/promises';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import type { Contract, ContractWithDomain } from '@internal/contract/types';
 import {
   createControlStack,
@@ -11,6 +11,7 @@ import {
   type MigrationPlanNamespaces,
   type MigrationPlannerConflict,
   type MigrationPlanOperation,
+  type MigrationTemporaryValue,
   migrationSubjectKey,
   type OperationPreview,
   planOriginOf,
@@ -91,7 +92,7 @@ function isEnoent(error: unknown): boolean {
 }
 
 export interface MigrationPlanOptions {
-  readonly config: PrismaNextConfig;
+  readonly config: PrismaConfig;
   /** Directory the command was invoked from. */
   readonly cwd: string;
   /** The project's directory, normally the validated config's `baseDir`; locates the project manifest. */
@@ -129,6 +130,8 @@ type PlannerSuccess = {
   /** The operations that would lose data, positioned in the plan's operations. */
   readonly dataLoss: readonly PlannedDataLoss[];
   readonly temporaryValues: readonly TemporaryValueReport[];
+  /** The new required fields the plan gives a temporary value, as the planner reports them. */
+  readonly plannedTemporaryValues: readonly MigrationTemporaryValue[];
   /** The namespaces the plan removes and adds, when the planner reports them. */
   readonly namespaces?: MigrationPlanNamespaces;
   /** What the planner flagged without refusing to plan it. */
@@ -276,6 +279,7 @@ async function runPlannerLeg(
       0,
     ),
     temporaryValues: reportTemporaryValues(plannerResult.temporaryValues, contract),
+    plannedTemporaryValues: plannerResult.temporaryValues,
     ...ifDefined('namespaces', plannerResult.namespaces),
     plannerWarnings: plannerResult.warnings ?? [],
   });
@@ -372,6 +376,7 @@ async function answerPlannedDataLoss(input: {
     dataLoss: [...(input.baseline?.dataLoss ?? []), ...(delta?.dataLoss ?? [])],
     accessChanges: [],
     ...ifDefined('namespaces', delta?.namespaces),
+    temporaryValues: delta?.plannedTemporaryValues ?? [],
   });
   const answered = await askPlanQuestions({
     plan: legs(input.delta),

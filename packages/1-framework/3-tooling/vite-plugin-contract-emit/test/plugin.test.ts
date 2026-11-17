@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 import { disposeEmitQueue, executeContractEmit } from '@internal/cli/control-api';
-import type { PrismaNextConfig } from '@internal/config-loader';
+import type { PrismaConfig } from '@internal/config-loader';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { prismaVitePlugin } from '../src/plugin';
 
@@ -53,7 +53,7 @@ const successfulEmitResult = {
   pinnedFiles: [],
 } satisfies Awaited<ReturnType<typeof executeContractEmit>>;
 
-type LoadedConfig = PrismaNextConfig;
+type LoadedConfig = PrismaConfig;
 type SourceInputs = NonNullable<LoadedConfig['contract']>['source']['inputs'];
 
 interface MockModuleNode {

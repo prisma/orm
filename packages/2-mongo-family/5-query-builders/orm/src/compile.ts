@@ -59,13 +59,13 @@ function compileIncludes(includes: readonly MongoIncludeExpr[]): MongoPipelineSt
   return stages;
 }
 
-export function compileMongoQuery<Row = unknown>(
+export function compileMongoQuery(
   collection: string,
   state: MongoCollectionState,
   storageHash: string,
   model: ContractModel<MongoModelStorage>,
   storage: Pick<StorageBase, 'namespaces'>,
-): MongoQueryPlan<Row> {
+): MongoQueryPlan<Record<string, unknown>> {
   const stages: MongoPipelineStage[] = [];
 
   const singleFilter = state.filters.length === 1 ? state.filters[0] : undefined;

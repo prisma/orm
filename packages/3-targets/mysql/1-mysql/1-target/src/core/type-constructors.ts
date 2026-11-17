@@ -44,7 +44,7 @@ export const mysqlScalarAuthoringTypes = {
   },
 } as const satisfies AuthoringTypeNamespace;
 
-/** The size type of a `precision` argument: an int, as for the family's `sql.String(length)`. */
+/** The size type of a `precision` argument: an int, as for the family's `sql.Varchar(length)`. */
 const MYSQL_SIZE_TYPE = 'mysql/int' as const;
 
 const precision = {

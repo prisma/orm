@@ -5,7 +5,6 @@ import {
   intervalPartsColumn,
   numericStringColumn,
 } from '@internal/adapter-postgres/column-types';
-import postgresAdapter from '@internal/adapter-postgres/runtime';
 import { vector } from '@internal/extension-pgvector/column-types';
 import pgvector from '@internal/extension-pgvector/pack';
 import pgvectorRuntime from '@internal/extension-pgvector/runtime';
@@ -14,7 +13,12 @@ import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
-import { timeouts, withCollectionRuntime } from './integration-helpers';
+import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
+import {
+  expectPerRelationStatements,
+  timeouts,
+  withCollectionRuntime,
+} from './integration-helpers';
 import type { PgIntegrationRuntime } from './runtime-helpers';
 
 /**
@@ -71,14 +75,16 @@ const contract = defineContract({
   extensions: { pgvector },
   models: { Reading: ReadingWithStations, Station },
 });
-const context = createExecutionContext({
-  contract,
-  stack: createSqlExecutionStack({
-    target: postgresTarget,
-    adapter: postgresAdapter,
-    extensions: [pgvectorRuntime],
-  }),
-});
+function contextOf(strategy: IncludeStrategy) {
+  return createExecutionContext({
+    contract,
+    stack: createSqlExecutionStack({
+      target: postgresTarget,
+      adapter: postgresAdapterFor(strategy),
+      extensions: [pgvectorRuntime],
+    }),
+  });
+}
 
 async function setupTables(runtime: PgIntegrationRuntime): Promise<void> {
   await runtime.query('create extension if not exists vector');
@@ -111,7 +117,8 @@ async function setupTables(runtime: PgIntegrationRuntime): Promise<void> {
   await runtime.query('insert into canonical_stations (id, reading_id) values (1, 1)');
 }
 
-describe('integration/include canonical JSON', () => {
+describe.each(includeStrategies)('integration/include canonical JSON (%s)', (strategy) => {
+  const context = contextOf(strategy);
   it(
     'each codec survives an ORM include exactly',
     async () => {
@@ -140,12 +147,14 @@ describe('integration/include canonical JSON', () => {
         const stations = new Collection({ runtime, context }, 'Station', {
           namespaceId: 'public',
         });
+        runtime.resetExecutions();
         const rows = await stations
           .select('id')
           .include('reading', (reading) =>
             reading.select('amount', 'padded', 'counter', 'payload', 'elapsed', 'embedding'),
           )
           .all();
+        expectPerRelationStatements(runtime, strategy, 2);
 
         expect(rows).toEqual([
           {
@@ -188,10 +197,12 @@ describe('integration/include canonical JSON', () => {
         const stations = new Collection({ runtime, context }, 'Station', {
           namespaceId: 'public',
         });
+        runtime.resetExecutions();
         const rows = await stations
           .select('id')
           .include('reading', (reading) => reading.select('padded'))
           .all();
+        expectPerRelationStatements(runtime, strategy, 2);
 
         expect(rows).toEqual([{ id: 1, reading: { padded: '1.50' } }]);
       }, contract);
@@ -210,12 +221,14 @@ describe('integration/include canonical JSON', () => {
         const stations = new Collection({ runtime, context }, 'Station', {
           namespaceId: 'public',
         });
+        runtime.resetExecutions();
         const rows = await stations
           .select('id')
           .include('reading', (reading) =>
             reading.select('amount', 'counter', 'payload', 'elapsed', 'embedding'),
           )
           .all();
+        expectPerRelationStatements(runtime, strategy, 2);
 
         expect(rows[1]).toEqual({
           id: 3,
@@ -261,11 +274,13 @@ describe('integration/include canonical JSON', () => {
         expect(BigInt(Number(stats.total))).not.toBe(stats.total);
         expect(BigInt(Number(stats.peak))).not.toBe(9007199254740993n);
 
+        runtime.resetExecutions();
         const withStations = await readings
           .where((reading) => reading.id.eq(1))
           .select('id')
           .include('stations', (stations) => stations.max('weight'))
           .all();
+        expectPerRelationStatements(runtime, strategy, 2);
 
         // The include carries its value inside a JSON document, where a number
         // would have rounded it on the way out of the database.

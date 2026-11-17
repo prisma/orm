@@ -100,6 +100,7 @@ describe('SqliteMigrationRunner marker compare-and-swap', {
     expect(result.assertNotOk()).toMatchObject({
       code: 'MIGRATION.MARKER_CAS_FAILURE',
       meta: {
+        reason: 'storageHash',
         space: APP_SPACE_ID,
         expectedStorageHash: 'origin',
         foundStorageHash: 'moved',

@@ -3,7 +3,7 @@
  *
  * Proves that `supabasePack` (and `supabasePackWith(...)`) satisfies the
  * `ControlExtensionDescriptor<'sql', 'postgres'>` element type that
- * `extensions` in `PrismaNextConfig` accepts — i.e. the `/pack` export
+ * `extensions` in `PrismaConfig` accepts — i.e. the `/pack` export
  * is assignable to the config contract without a type error.
  *
  * This file is intentionally type-level only (no runtime assertions).

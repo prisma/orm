@@ -1,5 +1,5 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import type { MigrationPlanOperation } from '@internal/framework-components/control';
 import {
   contractSnapshotDir,
@@ -36,7 +36,7 @@ describe('resolveContractRefToSnapshot', () => {
   let appMigrationsDir: string;
   let refsDir: string;
   let contractPathAbsolute: string;
-  let config: PrismaNextConfig;
+  let config: PrismaConfig;
 
   async function seedBaselineMigration(): Promise<void> {
     const timestamp = new Date(2026, 0, 1, 10, 0);
@@ -85,7 +85,7 @@ describe('resolveContractRefToSnapshot', () => {
       },
       contract: { output: contractPathAbsolute },
       migrations: { dir: 'migrations' },
-    } as unknown as PrismaNextConfig;
+    } as unknown as PrismaConfig;
   });
 
   afterEach(async () => {
@@ -131,6 +131,7 @@ describe('resolveContractRefToSnapshot', () => {
         contractJson: contractJsonForHash(HASH_FLOAT),
         contractJsonPath: contractPathAbsolute,
         source: 'emitted',
+        ref: { name: 'floating', hash: HASH_FLOAT, invariants: [] },
       });
     }
   });

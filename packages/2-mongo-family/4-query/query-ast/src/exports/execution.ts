@@ -39,7 +39,7 @@ export {
   MongoOrExpr,
 } from '../filter-expressions';
 export type { MongoQueryExecutor } from '../query-executor';
-export type { MongoQueryPlan } from '../query-plan';
+export type { MongoPreparable, MongoQueryPlan } from '../query-plan';
 export type { RawMongoCommand } from '../raw-commands';
 export {
   RawAggregateCommand,
