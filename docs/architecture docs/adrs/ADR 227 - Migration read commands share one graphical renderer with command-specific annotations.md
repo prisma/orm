@@ -110,7 +110,7 @@ The tree is for people. `--json` output is per-command and flat, shaped for tool
 - `migration graph --json` → `{ nodes, edges }`, the deduplicated contract topology.
 - `migration status --json` → the list shape plus a per-migration `status` field.
 
-The tree is never part of machine output, and this costs nothing to enforce: a non-TTY invocation auto-switches to JSON, so the renderer never runs in a pipe or script in the first place.
+The tree is never part of machine output. The tree is a human block on stderr; a pipe receives the command's tab-separated data lines on stdout, and `--json` gives the JSON shapes above. The data lines follow the same relationship as the JSON: `migration status` prints the `migration list` fields plus `status` as the last field.
 
 ## Consequences
 

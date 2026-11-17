@@ -1,10 +1,12 @@
-// use prisma-next
+// use prisma-8
 
 model User {
   id Int @id
   posts Post[]
+  @@map("user")
 }
 
 model Post {
   id Int @id
+  @@map("post")
 }

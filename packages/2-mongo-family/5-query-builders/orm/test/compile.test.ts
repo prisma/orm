@@ -1,4 +1,5 @@
-import type { MongoModelDefinition } from '@internal/mongo-contract';
+import type { ContractModel } from '@internal/contract/types';
+import type { MongoModelStorage } from '@internal/mongo-contract';
 import type { MongoQueryPlan } from '@internal/mongo-query-ast/execution';
 import {
   type MongoAndExpr,
@@ -17,62 +18,93 @@ import type { MongoCollectionState } from '../src/collection-state';
 import { emptyCollectionState } from '../src/collection-state';
 import { compileMongoQuery } from '../src/compile';
 
-const testUserModel: MongoModelDefinition = {
-  storage: { collection: 'users' },
+const testUserModel: ContractModel<MongoModelStorage> = {
+  storage: {
+    fields: {
+      _id: { field: '_id' },
+      name: { field: 'name' },
+      email: { field: 'email' },
+      age: { field: 'age' },
+      active: { field: 'active' },
+      tags: { field: 'tags' },
+      address: { field: 'address' },
+    },
+    collection: 'users',
+  },
   relations: {},
   fields: {
     _id: {
       nullable: false,
+      many: false,
       type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
     },
     name: {
       nullable: false,
+      many: false,
       type: { kind: 'scalar', codecId: 'mongo/string@1' },
     },
     email: {
       nullable: false,
+      many: false,
       type: { kind: 'scalar', codecId: 'mongo/string@1' },
     },
     age: {
       nullable: false,
+      many: false,
       type: { kind: 'scalar', codecId: 'mongo/int32@1' },
     },
     active: {
       nullable: true,
+      many: false,
       type: { kind: 'scalar', codecId: 'mongo/boolean@1' },
     },
     tags: {
       nullable: false,
       type: { kind: 'scalar', codecId: 'mongo/string@1' },
-      many: true,
+      many: { elementNullable: false },
     },
     address: {
       nullable: false,
-      type: { kind: 'valueObject', name: 'Address' },
+      many: false,
+      type: {
+        kind: 'valueObject',
+        plane: 'storage',
+        namespaceId: '__unbound__',
+        entityKind: 'valueObject',
+        entityName: 'Address',
+      },
     },
   },
 };
 
-const testPostModel: MongoModelDefinition = {
-  storage: { collection: 'posts' },
+const testPostModel: ContractModel<MongoModelStorage> = {
+  storage: {
+    fields: { _id: { field: '_id' }, title: { field: 'title' }, authorId: { field: 'authorId' } },
+    collection: 'posts',
+  },
   relations: {},
   fields: {
     _id: {
       nullable: false,
+      many: false,
       type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
     },
     title: {
       nullable: false,
+      many: false,
       type: { kind: 'scalar', codecId: 'mongo/string@1' },
     },
     authorId: {
       nullable: false,
+      many: false,
       type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
     },
   },
 };
 
 const testHash = 'test-hash';
+
+const noStorage = { namespaces: {} };
 
 function stages(plan: MongoQueryPlan): ReadonlyArray<MongoPipelineStage> {
   if (plan.command.kind !== 'aggregate')
@@ -82,7 +114,13 @@ function stages(plan: MongoQueryPlan): ReadonlyArray<MongoPipelineStage> {
 
 describe('compileMongoQuery', () => {
   it('produces empty pipeline from empty state', () => {
-    const plan = compileMongoQuery('users', emptyCollectionState(), testHash, testUserModel);
+    const plan = compileMongoQuery(
+      'users',
+      emptyCollectionState(),
+      testHash,
+      testUserModel,
+      noStorage,
+    );
     expect(plan.collection).toBe('users');
     expect(plan.command.kind).toBe('aggregate');
     expect(stages(plan)).toEqual([]);
@@ -95,7 +133,7 @@ describe('compileMongoQuery', () => {
       ...emptyCollectionState(),
       filters: [MongoFieldFilter.eq('name', 'Alice')],
     };
-    const plan = compileMongoQuery('users', state, testHash, testUserModel);
+    const plan = compileMongoQuery('users', state, testHash, testUserModel, noStorage);
     expect(stages(plan)).toHaveLength(1);
     const match = stages(plan)[0] as MongoMatchStage;
     expect(match).toBeInstanceOf(MongoMatchStage);
@@ -107,7 +145,7 @@ describe('compileMongoQuery', () => {
       ...emptyCollectionState(),
       filters: [MongoFieldFilter.eq('name', 'Alice'), MongoFieldFilter.gte('age', 18)],
     };
-    const plan = compileMongoQuery('users', state, testHash, testUserModel);
+    const plan = compileMongoQuery('users', state, testHash, testUserModel, noStorage);
     expect(stages(plan)).toHaveLength(1);
     const match = stages(plan)[0] as MongoMatchStage;
     expect(match.filter.kind).toBe('and');
@@ -119,7 +157,7 @@ describe('compileMongoQuery', () => {
       ...emptyCollectionState(),
       selectedFields: ['name', 'email'],
     };
-    const plan = compileMongoQuery('users', state, testHash, testUserModel);
+    const plan = compileMongoQuery('users', state, testHash, testUserModel, noStorage);
     expect(stages(plan)).toHaveLength(1);
     const project = stages(plan)[0] as MongoProjectStage;
     expect(project).toBeInstanceOf(MongoProjectStage);
@@ -131,7 +169,7 @@ describe('compileMongoQuery', () => {
       ...emptyCollectionState(),
       selectedFields: ['_id', 'name'],
     };
-    const plan = compileMongoQuery('users', state, testHash, testUserModel);
+    const plan = compileMongoQuery('users', state, testHash, testUserModel, noStorage);
     const project = stages(plan)[0] as MongoProjectStage;
     expect(project.projection).toEqual({ _id: 1, name: 1 });
   });
@@ -141,7 +179,7 @@ describe('compileMongoQuery', () => {
       ...emptyCollectionState(),
       selectedFields: [],
     };
-    const plan = compileMongoQuery('users', state, testHash, testUserModel);
+    const plan = compileMongoQuery('users', state, testHash, testUserModel, noStorage);
     expect(stages(plan)).toEqual([]);
   });
 
@@ -150,7 +188,7 @@ describe('compileMongoQuery', () => {
       ...emptyCollectionState(),
       orderBy: { age: -1, name: 1 },
     };
-    const plan = compileMongoQuery('users', state, testHash, testUserModel);
+    const plan = compileMongoQuery('users', state, testHash, testUserModel, noStorage);
     expect(stages(plan)).toHaveLength(1);
     const sort = stages(plan)[0] as MongoSortStage;
     expect(sort).toBeInstanceOf(MongoSortStage);
@@ -162,7 +200,7 @@ describe('compileMongoQuery', () => {
       ...emptyCollectionState(),
       limit: 10,
     };
-    const plan = compileMongoQuery('users', state, testHash, testUserModel);
+    const plan = compileMongoQuery('users', state, testHash, testUserModel, noStorage);
     expect(stages(plan)).toHaveLength(1);
     const limit = stages(plan)[0] as MongoLimitStage;
     expect(limit).toBeInstanceOf(MongoLimitStage);
@@ -174,7 +212,7 @@ describe('compileMongoQuery', () => {
       ...emptyCollectionState(),
       offset: 5,
     };
-    const plan = compileMongoQuery('users', state, testHash, testUserModel);
+    const plan = compileMongoQuery('users', state, testHash, testUserModel, noStorage);
     expect(stages(plan)).toHaveLength(1);
     const skip = stages(plan)[0] as MongoSkipStage;
     expect(skip).toBeInstanceOf(MongoSkipStage);
@@ -187,6 +225,8 @@ describe('compileMongoQuery', () => {
       includes: [
         {
           relationName: 'author',
+          targetModelName: 'User',
+          targetModel: testUserModel,
           from: 'users',
           localField: 'authorId',
           foreignField: '_id',
@@ -194,7 +234,7 @@ describe('compileMongoQuery', () => {
         },
       ],
     };
-    const plan = compileMongoQuery('posts', state, testHash, testPostModel);
+    const plan = compileMongoQuery('posts', state, testHash, testPostModel, noStorage);
     expect(stages(plan)).toHaveLength(2);
     const lookup = stages(plan)[0] as MongoLookupStage;
     expect(lookup).toBeInstanceOf(MongoLookupStage);
@@ -214,6 +254,8 @@ describe('compileMongoQuery', () => {
       includes: [
         {
           relationName: 'posts',
+          targetModelName: 'Post',
+          targetModel: testPostModel,
           from: 'posts',
           localField: '_id',
           foreignField: 'authorId',
@@ -221,7 +263,7 @@ describe('compileMongoQuery', () => {
         },
       ],
     };
-    const plan = compileMongoQuery('users', state, testHash, testUserModel);
+    const plan = compileMongoQuery('users', state, testHash, testUserModel, noStorage);
     expect(stages(plan)).toHaveLength(1);
     expect(stages(plan)[0]).toBeInstanceOf(MongoLookupStage);
   });
@@ -232,6 +274,8 @@ describe('compileMongoQuery', () => {
       includes: [
         {
           relationName: 'posts',
+          targetModelName: 'Post',
+          targetModel: testPostModel,
           from: 'posts',
           localField: '_id',
           foreignField: 'authorId',
@@ -243,7 +287,7 @@ describe('compileMongoQuery', () => {
       limit: 5,
       selectedFields: ['_id', 'name', 'email'],
     };
-    const plan = compileMongoQuery('users', state, testHash, testUserModel);
+    const plan = compileMongoQuery('users', state, testHash, testUserModel, noStorage);
 
     const stageKinds = stages(plan).map((s) => s.kind);
     expect(stageKinds).toEqual(['match', 'lookup', 'sort', 'skip', 'limit', 'project']);
@@ -251,7 +295,13 @@ describe('compileMongoQuery', () => {
 
   describe('resultShape from contract', () => {
     it('full model maps scalar fields to leaf codec shapes', () => {
-      const plan = compileMongoQuery('users', emptyCollectionState(), testHash, testUserModel);
+      const plan = compileMongoQuery(
+        'users',
+        emptyCollectionState(),
+        testHash,
+        testUserModel,
+        noStorage,
+      );
       expect(plan.resultShape?.kind).toBe('document');
       if (plan.resultShape?.kind !== 'document') return;
       expect(plan.resultShape.fields['name']).toEqual({
@@ -263,7 +313,13 @@ describe('compileMongoQuery', () => {
     });
 
     it('scalar many field is array with leaf element', () => {
-      const plan = compileMongoQuery('users', emptyCollectionState(), testHash, testUserModel);
+      const plan = compileMongoQuery(
+        'users',
+        emptyCollectionState(),
+        testHash,
+        testUserModel,
+        noStorage,
+      );
       if (plan.resultShape?.kind !== 'document') throw new Error('expected document');
       expect(plan.resultShape.fields['tags']).toEqual({
         kind: 'array',
@@ -277,17 +333,19 @@ describe('compileMongoQuery', () => {
         ...emptyCollectionState(),
         selectedFields: ['name', 'email'],
       };
-      const plan = compileMongoQuery('users', state, testHash, testUserModel);
+      const plan = compileMongoQuery('users', state, testHash, testUserModel, noStorage);
       if (plan.resultShape?.kind !== 'document') throw new Error('expected document');
       expect(Object.keys(plan.resultShape.fields).sort()).toEqual(['email', 'name']);
     });
 
-    it('include adds unknown relation field', () => {
+    it('include describes the related document with the target model`s fields', () => {
       const state: MongoCollectionState = {
         ...emptyCollectionState(),
         includes: [
           {
             relationName: 'author',
+            targetModelName: 'User',
+            targetModel: testUserModel,
             from: 'users',
             localField: 'authorId',
             foreignField: '_id',
@@ -295,9 +353,67 @@ describe('compileMongoQuery', () => {
           },
         ],
       };
-      const plan = compileMongoQuery('posts', state, testHash, testPostModel);
+      const plan = compileMongoQuery('posts', state, testHash, testPostModel, noStorage);
       if (plan.resultShape?.kind !== 'document') throw new Error('expected document');
-      expect(plan.resultShape.fields['author']?.kind).toBe('unknown');
+      expect(plan.resultShape.fields['author']).toMatchObject({
+        kind: 'document',
+        nullable: true,
+        fields: {
+          _id: { kind: 'leaf', codecId: 'mongo/objectId@1', nullable: false },
+          age: { kind: 'leaf', codecId: 'mongo/int32@1', nullable: false },
+        },
+      });
+    });
+  });
+
+  describe('select combined with include', () => {
+    it('$project retains to-many relation alias from includes', () => {
+      const state: MongoCollectionState = {
+        ...emptyCollectionState(),
+        selectedFields: ['name'],
+        includes: [
+          {
+            relationName: 'posts',
+            targetModelName: 'Post',
+            targetModel: testPostModel,
+            from: 'posts',
+            localField: '_id',
+            foreignField: 'authorId',
+            cardinality: '1:N',
+          },
+        ],
+      };
+      const plan = compileMongoQuery('users', state, testHash, testUserModel, noStorage);
+      const projectStage = stages(plan).find((s) => s.kind === 'project') as
+        | MongoProjectStage
+        | undefined;
+      expect(projectStage).toBeDefined();
+      expect(projectStage!.projection).toEqual({ name: 1, posts: 1, _id: 0 });
+    });
+
+    it('$project retains to-one relation alias from includes', () => {
+      const state: MongoCollectionState = {
+        ...emptyCollectionState(),
+        selectedFields: ['title'],
+        includes: [
+          {
+            relationName: 'author',
+            targetModelName: 'User',
+            targetModel: testUserModel,
+            from: 'users',
+            localField: 'authorId',
+            foreignField: '_id',
+            cardinality: 'N:1',
+          },
+        ],
+      };
+      const plan = compileMongoQuery('posts', state, testHash, testPostModel, noStorage);
+      expect(stages(plan).map((s) => s.kind)).toEqual(['lookup', 'unwind', 'project']);
+      const projectStage = stages(plan).find((s) => s.kind === 'project') as
+        | MongoProjectStage
+        | undefined;
+      expect(projectStage).toBeDefined();
+      expect(projectStage!.projection).toEqual({ title: 1, author: 1, _id: 0 });
     });
   });
 });

@@ -1,5 +1,4 @@
 import mongoStatic from '@prisma/orm-mongo/static';
-import type { Contract } from './contract';
-import contractJson from './contract.json' with { type: 'json' };
+import { contract } from './contract-value';
 
-export const enums = mongoStatic<Contract>({ contractJson }).enums;
+export const enums = mongoStatic({ contract }).enums;

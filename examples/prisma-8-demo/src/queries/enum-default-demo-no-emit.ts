@@ -1,4 +1,5 @@
 import type { Runtime } from '@prisma/orm-postgres/family-runtime';
+import { NotFoundError } from '../errors';
 import { sql } from '../prisma-no-emit/context';
 
 const demoPostId = '00000000-feed-0000-0000-000000000001';
@@ -27,7 +28,7 @@ export async function enumDefaultDemoNoEmit(runtime: Runtime): Promise<void> {
       .build(),
   );
   const row = rows[0];
-  if (!row) throw new Error('Demo post not found after insert');
+  if (!row) throw new NotFoundError('Demo post not found after insert');
 
   console.log(`priority read back from DB: ${row.priority}`);
   console.log(`Expected 0 (the .default(Priority.members.Low) value): ${row.priority === 0}`);

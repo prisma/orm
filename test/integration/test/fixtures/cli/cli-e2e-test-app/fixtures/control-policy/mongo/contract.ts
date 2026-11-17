@@ -1,4 +1,4 @@
-import { defineContract, field, index, model } from '@internal/mongo/contract-builder';
+import { defineContract, field, index, model, type } from '@internal/mongo/contract-builder';
 
 export const contract = defineContract({
   models: {
@@ -6,8 +6,8 @@ export const contract = defineContract({
       collection: 'catalog',
       controlPolicy: 'managed',
       fields: {
-        _id: field.objectId(),
-        sku: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        sku: field.scalar(type.String()),
       },
       indexes: [index({ sku: 1 }, { unique: true })],
     }),
@@ -16,8 +16,8 @@ export const contract = defineContract({
       collection: 'audit_log',
       controlPolicy: 'tolerated',
       fields: {
-        _id: field.objectId(),
-        ts: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        ts: field.scalar(type.String()),
       },
       indexes: [index({ ts: 1 })],
     }),
@@ -26,8 +26,8 @@ export const contract = defineContract({
       collection: 'auth_users',
       controlPolicy: 'external',
       fields: {
-        _id: field.objectId(),
-        email: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        email: field.scalar(type.String()),
       },
       indexes: [index({ email: 1 }, { unique: true })],
     }),
@@ -36,8 +36,8 @@ export const contract = defineContract({
       collection: 'legacy_jobs',
       controlPolicy: 'observed',
       fields: {
-        _id: field.objectId(),
-        status: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        status: field.scalar(type.String()),
       },
       indexes: [index({ status: 1 })],
     }),

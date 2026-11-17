@@ -1,6 +1,6 @@
 # @prisma/orm-extension-pgvector
 
-Embedding columns and vector similarity search for Prisma Next on PostgreSQL, powered by [pgvector](https://github.com/pgvector/pgvector).
+Embedding columns and vector similarity search for Prisma 8 on PostgreSQL, powered by [pgvector](https://github.com/pgvector/pgvector).
 
 ```bash
 pnpm add @prisma/orm-extension-pgvector

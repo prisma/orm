@@ -8,8 +8,6 @@
     { "path": "./packages/1-framework/1-core/operations" },
     { "path": "./packages/1-framework/1-core/framework-components" },
     { "path": "./packages/1-framework/1-core/ts-render" },
-    { "path": "./packages/1-framework/1-core/control-plane" },
-    { "path": "./packages/1-framework/1-core/execution-plane" },
 
     { "path": "./packages/1-framework/2-authoring/contract" },
     { "path": "./packages/1-framework/2-authoring/psl-parser" },
@@ -18,28 +16,26 @@
     { "path": "./packages/1-framework/3-tooling/emitter" },
     { "path": "./packages/1-framework/3-tooling/eslint-plugin" },
 
-    { "path": "./packages/1-framework/4-runtime/runtime-executor" },
+    { "path": "./packages/2-sql-family/1-core/contract" },
+    { "path": "./packages/2-sql-family/1-core/errors" },
+    { "path": "./packages/2-sql-family/1-core/operations" },
+    { "path": "./packages/2-sql-family/1-core/schema-ir" },
 
-    { "path": "./packages/2-sql/1-core/contract" },
-    { "path": "./packages/2-sql/1-core/errors" },
-    { "path": "./packages/2-sql/1-core/operations" },
-    { "path": "./packages/2-sql/1-core/schema-ir" },
+    { "path": "./packages/2-sql-family/2-authoring/contract-ts" },
 
-    { "path": "./packages/2-sql/2-authoring/contract-ts" },
+    { "path": "./packages/2-sql-family/3-tooling/emitter" },
 
-    { "path": "./packages/2-sql/3-tooling/emitter" },
-    { "path": "./packages/2-sql/3-tooling/family" },
+    { "path": "./packages/2-sql-family/4-lanes/relational-core" },
+    { "path": "./packages/2-sql-family/4-lanes/sql-builder" },
 
-    { "path": "./packages/2-sql/4-lanes/relational-core" },
-    { "path": "./packages/2-sql/4-lanes/sql-builder" },
-
-    { "path": "./packages/2-sql/5-runtime" },
+    { "path": "./packages/2-sql-family/5-runtime" },
 
     { "path": "./packages/3-extensions/pgvector" },
 
-    { "path": "./packages/3-targets/3-targets/postgres" },
-    { "path": "./packages/3-targets/6-adapters/postgres" },
-    { "path": "./packages/3-targets/7-drivers/postgres" },
-    { "path": "./packages/3-extensions/postgres" }
+    { "path": "./packages/3-targets/0-shared/type-implementations" },
+    { "path": "./packages/3-targets/postgres/1-target" },
+    { "path": "./packages/3-targets/postgres/2-adapter" },
+    { "path": "./packages/3-targets/postgres/3-driver" },
+    { "path": "./packages/3-targets/postgres/9-facade" }
   ]
 }

@@ -1,0 +1,9 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Odd {
+  id    Int    @id
+  value String @default(sequence())
+  role  String @default(USER)
+}

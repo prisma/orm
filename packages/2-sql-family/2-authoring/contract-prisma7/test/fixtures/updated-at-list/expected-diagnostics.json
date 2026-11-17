@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA7_UPDATED_AT_FIELD_INVALID",
+    "file": "schema.prisma",
+    "line": 7,
+    "message": "Field \"Post.touched\" is a list, but @updatedAt is not allowed on a list field. Prisma 7 refuses this schema too: \"Fields that are marked with @updatedAt cannot be lists.\" Remove @updatedAt, or make the field a single DateTime."
+  }
+]

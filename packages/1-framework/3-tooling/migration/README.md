@@ -1,8 +1,8 @@
 # @internal/migration-tools
 
-> **Internal package.** This package is an implementation detail of Prisma Next and is published only to support its runtime. Its API is unstable and may change without notice. Do not depend on this package directly; install `@prisma/cli` and a database facade (e.g. `@prisma/orm-postgres`) instead.
+> **Internal package.** This package is an implementation detail of Prisma 8 and is published only to support its runtime. Its API is unstable and may change without notice. Do not depend on this package directly; install `@prisma/cli` and a database facade (e.g. `@prisma/orm-postgres`) instead.
 
-On-disk migration persistence, hash verification, and history reconstruction for Prisma Next.
+On-disk migration persistence, hash verification, and history reconstruction for Prisma 8.
 
 ## Responsibilities
 
@@ -76,7 +76,7 @@ graph TD
 | `./graph` | `MigrationGraph`, `MigrationEdge` |
 | `./io` | `writeMigrationPackage`, `readMigrationPackage`, `readMigrationsDir`, `formatMigrationDirName` |
 | `./hash` | `computeMigrationHash`, `verifyMigrationHash` |
-| `./migration-graph` | `reconstructGraph`, `findLeaf`, `findPath`, `detectCycles`, `detectOrphans` |
+| `./migration-graph` | `reconstructGraph`, `findPath`, `detectCycles`, `detectOrphans` |
 | `./errors` | `MigrationToolsError` |
 | `./constants` | `EMPTY_CONTRACT_HASH` |
 

@@ -1,0 +1,24 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Scalars {
+  id       Int      @id
+  tsZ      DateTime @default("2024-01-02T03:04:05.000Z")
+  tsMs     DateTime @default("2024-01-02T03:04:05.123Z")
+  tsPlus   DateTime @default("2024-01-02T03:04:05+02:00")
+  tsMinus  DateTime @default("2024-01-02T23:04:05-05:00")
+  tsMicro  DateTime @default("2024-01-02T03:04:05.123456Z") @db.Timestamp(6)
+  tzZ      DateTime @default("2024-01-02T03:04:05.000Z") @db.Timestamptz(6)
+  tzPlus   DateTime @default("2024-01-02T03:04:05+02:00") @db.Timestamptz(6)
+  dZ       DateTime @default("2024-01-02T03:04:05.000Z") @db.Date
+  dMidnight DateTime @default("2024-01-02T00:00:00.000Z") @db.Date
+  dMinus   DateTime @default("2024-01-02T23:04:05-05:00") @db.Date
+  tZ       DateTime @default("1970-01-01T12:34:56.000Z") @db.Time(6)
+  tMs      DateTime @default("1970-01-01T12:34:56.789Z") @db.Time(6)
+  tPlus    DateTime @default("2024-01-02T03:04:05+02:00") @db.Time(6)
+  ttzZ     DateTime @default("1970-01-01T12:34:56.000Z") @db.Timetz(6)
+  ttzPlus  DateTime @default("2024-01-02T03:04:05+02:00") @db.Timetz(6)
+  bytes    Bytes    @default("aGVsbG8=")
+}
+

@@ -33,7 +33,7 @@ export default function LoginPage() {
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">Retail Store</CardTitle>
-          <CardDescription>Prisma Next MongoDB Demo</CardDescription>
+          <CardDescription>Prisma 8 MongoDB Demo</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <p className="text-sm text-muted text-center">

@@ -8,6 +8,7 @@
  * composition.
  */
 
+import { AsyncIterableResult } from '@internal/framework-components/runtime';
 import type { SqlAggregateDescriptor } from '@internal/sql-relational-core/aggregate-descriptor-registry';
 import { buildSqlAggregateDescriptorRegistry } from '@internal/sql-relational-core/aggregate-descriptor-registry';
 import {
@@ -16,29 +17,28 @@ import {
   FunctionCallExpr,
 } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createAggregateBuilder } from '../src/aggregate-builder';
 import { Collection, reservedCollectionMemberNames } from '../src/collection';
 import { orm } from '../src/orm';
 import type { AggregateSelector } from '../src/types';
-import { emptyState } from '../src/types';
-import { createMockRuntime, getTestContext, type TestContract } from './helpers';
+import { createMockRuntime, emptyTableState, getTestContext, type TestContract } from './helpers';
 
 const countAny: SqlAggregateDescriptor = {
   operation: 'count',
   input: { kind: 'any' },
   output: { kind: 'codec', codecId: 'pg/int8@1' },
   nullable: false,
-  emptyResultJson: '0',
+  emptyResultWire: '0',
 };
 
-/** A tally whose result codec reads a JSON number rather than decimal text. */
+/** A tally whose result codec produces a JavaScript number from the digit text `pg/int8` stores. */
 const headcountAny: SqlAggregateDescriptor = {
   operation: 'headcount',
   input: { kind: 'any' },
   output: { kind: 'codec', codecId: 'pg/int8number@1' },
   nullable: false,
-  emptyResultJson: 0,
+  emptyResultWire: '0',
   lower: ({ expr }) => new AggregateExpr('count', expr),
 };
 
@@ -55,7 +55,7 @@ const tallyWithoutInput: SqlAggregateDescriptor = {
   input: { kind: 'none' },
   output: { kind: 'codec', codecId: 'pg/int8@1' },
   nullable: false,
-  emptyResultJson: '0',
+  emptyResultWire: '0',
   lower: () => FunctionCallExpr.of('tally', []),
 };
 
@@ -142,11 +142,55 @@ describe('derived aggregate builder', () => {
 });
 
 describe('empty-input answers', () => {
-  // Each non-nullable row declares its empty answer in its own result codec's
-  // canonical JSON, so the two rows below answer in different forms from the
-  // same zero: decimal text reads back as a `bigint`, a JSON number as a
-  // `number`. Reading either through the other's form is what the declaration
-  // exists to prevent.
+  it('prepared consumers retain metadata but convert contributed empty values separately', async () => {
+    const runtime = createMockRuntime();
+    const lower = vi.fn(headcountAny.lower!);
+    const context = contextWith([{ ...headcountAny, lower }]);
+    const resolve = vi.spyOn(context.aggregateDescriptors, 'resolve');
+    const original = context.contractCodecs.forCodecRef.bind(context.contractCodecs);
+    const fromWire = vi.fn(async () => ({ value: 0 }));
+    const codecs = vi.spyOn(context.contractCodecs, 'forCodecRef').mockImplementation((ref) => ({
+      ...original(ref),
+      fromWire,
+    }));
+    const posts = new Collection({ runtime, context }, 'Post', { namespaceId: 'public' });
+    const description = posts.prepared.aggregate((agg) => ({
+      total: (agg as unknown as DynamicAggregateMethods)['headcount']!(),
+    }));
+    const resolutions = resolve.mock.calls.length;
+    const bindings = codecs.mock.calls.length;
+    expect(resolutions).toBeGreaterThan(0);
+    expect(bindings).toBeGreaterThan(0);
+    expect(lower).toHaveBeenCalledOnce();
+    expect(fromWire).not.toHaveBeenCalled();
+    const rows = (values: Record<string, unknown>[]) =>
+      new AsyncIterableResult(
+        (async function* () {
+          yield* values;
+        })(),
+      );
+    const [a, b] = await Promise.all([
+      description.consume(rows([])),
+      description.consume(rows([{ total: null }])),
+    ]);
+    expect(a).toEqual({ total: { value: 0 } });
+    expect(b).toEqual(a);
+    expect(a.total).not.toBe(b.total);
+    expect(fromWire).toHaveBeenCalledTimes(2);
+    const decoded = { value: 7 };
+    expect(await description.consume(rows([{ total: decoded }]))).toEqual({ total: decoded });
+    expect(fromWire).toHaveBeenCalledTimes(2);
+    expect(resolve).toHaveBeenCalledTimes(resolutions);
+    expect(codecs).toHaveBeenCalledTimes(bindings);
+    expect(lower).toHaveBeenCalledOnce();
+    expect(runtime.executions).toEqual([]);
+    codecs.mockRestore();
+    resolve.mockRestore();
+  });
+
+  // Each non-nullable row declares its empty answer as a wire value of its own
+  // result codec, read with that codec's `fromWire`, so the same zero reads back
+  // as a `bigint` through one codec and as a `number` through the other.
   it('derive from the declared row: its own zero for a non-nullable result, null for a nullable one', async () => {
     const runtime = createMockRuntime();
     const context = contextWith([countAny, headcountAny, medianOverNumeric]);
@@ -197,7 +241,7 @@ describe('reserved operation names', () => {
     input: { kind: 'any' },
     output: { kind: 'codec', codecId: 'pg/int8@1' },
     nullable: false,
-    emptyResultJson: '0',
+    emptyResultWire: '0',
     lower: ({ expr }) => FunctionCallExpr.of('shadow', expr === undefined ? [] : [expr]),
   };
   const shadowingInstanceMember: SqlAggregateDescriptor = {
@@ -216,6 +260,47 @@ describe('reserved operation names', () => {
     );
   });
 
+  it('a contributed operation named with is rejected at composition', () => {
+    const context = contextWith([{ ...shadowingBuilderMethod, operation: 'with' }]);
+
+    expect(() => orm({ runtime: createMockRuntime(), context })).toThrow(
+      expect.objectContaining({
+        code: 'ORM.AGGREGATE_OPERATION_RESERVED',
+        meta: { operation: 'with' },
+      }),
+    );
+  });
+
+  it('a contributed operation named fragment is rejected at composition', () => {
+    const context = contextWith([{ ...shadowingBuilderMethod, operation: 'fragment' }]);
+
+    expect(() => orm({ runtime: createMockRuntime(), context })).toThrow(
+      expect.objectContaining({
+        code: 'ORM.AGGREGATE_OPERATION_RESERVED',
+        meta: { operation: 'fragment' },
+      }),
+    );
+  });
+
+  it('a contributed operation named using is rejected at composition', () => {
+    const context = contextWith([{ ...shadowingBuilderMethod, operation: 'using' }]);
+
+    expect(() => orm({ runtime: createMockRuntime(), context })).toThrow(
+      expect.objectContaining({
+        code: 'ORM.AGGREGATE_OPERATION_RESERVED',
+        meta: { operation: 'using' },
+      }),
+    );
+  });
+
+  it('a contributed operation named scope is accepted and installed as a reducer', () => {
+    const context = contextWith([{ ...headcountAny, operation: 'scope' }]);
+
+    const client = orm({ runtime: createMockRuntime(), context });
+
+    expect(typeof Reflect.get(client.public.Post, 'scope')).toBe('function');
+  });
+
   it('a contributed operation shadowing an instance member is rejected at composition', () => {
     const context = contextWith([shadowingInstanceMember]);
 
@@ -231,7 +316,7 @@ describe('reserved operation names', () => {
     const context = contextWith([]);
     const posts = new Collection({ runtime: createMockRuntime(), context }, 'Post', {
       namespaceId: 'public',
-      state: emptyState(),
+      state: emptyTableState(context.contract, 'posts'),
     });
     const reserved = reservedCollectionMemberNames();
 

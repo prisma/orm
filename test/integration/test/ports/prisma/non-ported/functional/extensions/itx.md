@@ -5,9 +5,9 @@ Source: `packages/client/tests/functional/extensions/itx.ts`
 Every test in this file exercises `$extends` extension behavior inside interactive transactions
 (`$transaction(async tx => ...)`): extension propagation into the tx client, rollback/commit via
 custom extension methods, client-component availability on the tx client, and denylist/isolation-level
-typing of the extended tx client. Interactive transactions themselves ARE supported in prisma-next
+typing of the extended tx client. Interactive transactions themselves ARE supported in Prisma 8
 (the `postgres(...).transaction(async tx => ...)` facade), but the SUBJECT of each of these tests is
-the `$extends` extension interacting with the tx — and prisma-next has no `$extends` client-extension
+the `$extends` extension interacting with the tx — and Prisma 8 has no `$extends` client-extension
 surface (zero hits for `$extends`/`getExtensionContext`/`defineExtension` across `packages/` outside
 node_modules/dist). Without an extension mechanism there is no faithful subject to exercise.
 

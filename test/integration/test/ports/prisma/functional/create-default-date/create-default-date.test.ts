@@ -7,7 +7,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // (postgres matrix entry).
 //
 // Upstream: creates a Visit with no explicit data; asserts visitTime is a Date instance.
-// prisma-next: same — create({}) relies on @default(now()) and @default(autoincrement()).
+// Prisma 8: same — create({}) relies on @default(now()) and @default(autoincrement()).
 //
 // Upstream opts out of Mongo/CockroachDB (autoincrement not supported there).
 // This port is postgres-only by construction.

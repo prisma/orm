@@ -83,7 +83,6 @@ export class ParadeDbProximityChain
       returns: this.returnType,
       lowering: {
         targetFamily: 'sql',
-        strategy: 'function',
         template,
       },
     });

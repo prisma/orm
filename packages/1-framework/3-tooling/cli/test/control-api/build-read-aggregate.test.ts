@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
 import type { MigrationPlanOperation } from '@internal/framework-components/control';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
@@ -23,7 +23,7 @@ const ADDITIVE_OPS: readonly MigrationPlanOperation[] = [
   { id: 'table.users', label: 'Create users', operationClass: 'additive' },
 ];
 
-function makeConfig(contractOutput: string): PrismaNextConfig {
+function makeConfig(contractOutput: string): PrismaConfig {
   return {
     family: {
       familyId: TARGET_FAMILY,
@@ -40,7 +40,7 @@ function makeConfig(contractOutput: string): PrismaNextConfig {
     },
     adapter: { kind: 'adapter', familyId: TARGET_FAMILY, targetId: TARGET },
     contract: { output: contractOutput },
-  } as unknown as PrismaNextConfig;
+  } as unknown as PrismaConfig;
 }
 
 async function writeContractFile(path: string, storageHash: string): Promise<void> {

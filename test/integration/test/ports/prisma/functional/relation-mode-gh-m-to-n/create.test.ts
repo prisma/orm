@@ -20,7 +20,7 @@ import { allCategories, allJunction, allPosts } from './_shared';
 //   → describe('[create]') block, m:n mandatory (explicit) — SQL Databases.
 //
 // Scope: relationMode=foreignKeys only. relationMode=prisma matrix entries are
-// non-ported — prisma-next relies on real DB foreign keys and has no
+// non-ported — Prisma 8 relies on real DB foreign keys and has no
 // client-side relationMode=prisma referential-action emulation.
 //
 // Only isSchemaUsingMap=false (`-nomap`) variants run here. @map changes only

@@ -1,7 +1,7 @@
 {
   "from": null,
-  "to": "7e98a4d9437e6be2f2fa7fca02fbc01c245586997a937f97cab60788612512e5",
+  "to": "2db551a8a5619d0d97710f29130eaea0eccbdd5238f015ee9d18408d438e0f8a",
   "providedInvariants": ["postgis:install-postgis-v1"],
   "createdAt": "2026-06-01T00:00:00.000Z",
-  "migrationHash": "f91b562a2f1a82f299a3690c001027729607c631c9b2d847aa3f6162539f0eff"
+  "migrationHash": "5dd437b3077585a4e39b1be8ebc30b699e75c4ff30c5ee4177659e0d0de948bd"
 }

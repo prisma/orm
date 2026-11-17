@@ -30,7 +30,7 @@ import setnullPlainJson from './_fixture/setnull-plain/generated/contract.json' 
 // action (DEFAULT | Cascade | NoAction | Restrict | SetNull, on BOTH onUpdate and
 // onDelete) × isSchemaUsingMap (false | true).
 //
-// prisma-next uses REAL database foreign keys and has NO client-side
+// Prisma 8 uses REAL database foreign keys and has NO client-side
 // relationMode="prisma" referential-action emulation:
 //   - relationMode="foreignKeys" cases are ported here across every action, both
 //     @map variants.
@@ -81,9 +81,9 @@ const SETNULL = {
 };
 // The upstream DEFAULT matrix cell is NON-PORTED: Prisma's implicit default
 // referential action is `onUpdate: Cascade, onDelete: Restrict`, whereas
-// prisma-next's implicit default (relation without `onUpdate`/`onDelete`) is
+// Prisma 8's implicit default (relation without `onUpdate`/`onDelete`) is
 // raw-DB `NoAction`. The DEFAULT cell exercises Prisma's implicit default, which
-// prisma-next does not reproduce; the explicit NoAction cell covers NoAction.
+// Prisma 8 does not reproduce; the explicit NoAction cell covers NoAction.
 // (See _inbox ledger.)
 
 const ALL_VARIANTS: Variant[] = [
@@ -166,7 +166,7 @@ describe('ports/prisma/functional/relationMode-1-to-n (foreignKeys)', () => {
       }
 
       // Upstream: `[create] child with undefined parent should throw with type error`
-      // (passes `authorId: undefined` behind a `@ts-expect-error`). prisma-next's
+      // (passes `authorId: undefined` behind a `@ts-expect-error`). Prisma 8's
       // create input accepts omitting the FK scalar `authorId` at the TYPE level
       // (it can be supplied via the `author`/`posts` relation), so there is no
       // compile-time type error to assert — that half of the upstream subject is

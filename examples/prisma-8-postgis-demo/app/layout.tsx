@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Prisma Next · PostGIS demo',
+  title: 'Prisma 8 · PostGIS demo',
   description: 'Geospatial queries over San Francisco cafes, neighborhoods, and routes.',
 };
 

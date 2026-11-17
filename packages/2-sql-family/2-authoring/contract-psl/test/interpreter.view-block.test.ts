@@ -1,0 +1,51 @@
+import { describe, expect, it } from 'vitest';
+import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
+import { fixtureDataTypeSupport } from './fixture-data-types';
+import {
+  createBuiltinLikeControlMutationDefaults,
+  fixturePostgresTypeNamespace,
+  interpretSqlContract,
+  postgresNativeScalarTypeDescriptors,
+  postgresTarget,
+} from './fixtures';
+
+function interpret(schema: string) {
+  return interpretSqlContract(schema, {
+    target: postgresTarget,
+    scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
+    authoringContributions: {
+      type: fixturePostgresTypeNamespace,
+      dataTypes: fixtureDataTypeSupport.entries,
+    },
+    ...fixtureInterpreterTypes,
+    composedExtensionContracts: new Map(),
+    createNamespace: createTestSqlNamespace,
+    capabilities: { sql: { scalarList: true } },
+    controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
+  });
+}
+
+describe('interpretPslDocumentToSqlContract given a view block', () => {
+  it.each([
+    ['plain fields', 'view ActiveUsers {\n  id Int\n}\n'],
+    ['field attributes', 'view ActiveUsers {\n  id Int @unique\n\n  @@map("active")\n}\n'],
+  ])(
+    'reports a view block with %s as an unsupported top-level block, whatever the parser reported',
+    (_, view) => {
+      const result = interpret(`${view}model User {\n  id Int @id\n}\n`);
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.diagnostics).toContainEqual({
+        code: 'PSL_UNSUPPORTED_TOP_LEVEL_BLOCK',
+        message: 'Unsupported top-level block "view"',
+        sourceId: 'schema.prisma',
+        span: {
+          start: { offset: 0, line: 1, column: 1 },
+          end: { offset: 4, line: 1, column: 5 },
+        },
+      });
+    },
+  );
+});

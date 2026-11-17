@@ -1,9 +1,9 @@
-import type { ArgType, AttributeCtx, OptionalArgType } from './types';
+import type { AnyArgType, CtxOf, OptionalArgType, OutOf } from './types';
 
-export function optional<T, Ctx extends AttributeCtx>(
-  type: ArgType<T, Ctx>,
-  ...rest: [defaultValue: T] | []
-): OptionalArgType<T, Ctx> {
+export function optional<Type extends AnyArgType>(
+  type: Type,
+  ...rest: [] | [defaultValue: OutOf<Type> | undefined]
+): OptionalArgType<OutOf<Type>, CtxOf<Type>, Type> {
   if (rest.length === 0) {
     return { ...type, optional: true, hasDefault: false };
   }

@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { ormConfigSection } from '@internal/config-loader';
 import type { Contract } from '@internal/contract/types';
 import {
   APP_SPACE_ID,
@@ -17,6 +18,7 @@ import { notOk, ok } from '@prisma/cli-engine/protocol';
 import { relative } from 'pathe';
 import type { MigrationShowResult, ShowMigration } from '../../commands/json/schemas';
 import { createControlClient } from '../../control-api/client';
+import { errorFromCaught } from '../../control-api/operations/caught-errors';
 import { loadContractSpaceAggregateForCli } from '../../control-api/operations/contract-space-aggregate-loader';
 import { resolveMigrationRef } from '../../control-api/operations/ref-resolution';
 import {
@@ -25,15 +27,16 @@ import {
   errorFileNotFound,
   errorMigrationPackageNotFound,
   errorNoMigrations,
-  errorUnexpected,
 } from '../../utils/cli-errors';
+import { contractValidationMeta } from '../../utils/contract-validation-meta';
 import { previewBlockHeader, renderPreviewStatement } from '../../utils/formatters/migrations';
 import {
   findPackageByDirPath,
   looksLikePath,
   resolveAppTargetPath,
 } from '../../utils/migration-path-target';
-import { ormConfigSection } from '../config-section';
+import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
+import { dataLine, fieldLines } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
 import { appMigrationsDirFor, contractPathFor, displayPath, migrationsDirFor } from './paths';
@@ -106,7 +109,19 @@ function showPresentations(inputs: {
 }): Presentations {
   const migration = inputs.document.migration;
   return {
-    stdout: () => [],
+    stdout: () => [
+      ...fieldLines([
+        ['name', migration.name],
+        ['space', migration.space],
+        ['from', migration.fromContract],
+        ['to', migration.toContract],
+        ['hash', migration.hash],
+        ['created', migration.createdAt],
+      ]),
+      ...migration.operations.map((operation) =>
+        dataLine(['operation', operation.id, operation.operationClass, operation.label]),
+      ),
+    ],
     next: () => [],
     human: (): readonly Block[] => [
       {
@@ -223,7 +238,7 @@ export const migrationShowCommand = defineOrmCommand({
   needs: { config: ormConfigSection },
   handler: async (args, ctx) => {
     const { target } = args.positionals;
-    const contractPath = contractPathFor(ctx.config, ctx.cwd);
+    const contractPath = contractPathFor(ctx.config);
     if (contractPath === undefined) {
       return notOk(
         normalizeError(
@@ -234,8 +249,8 @@ export const migrationShowCommand = defineOrmCommand({
         ),
       );
     }
-    const migrationsDir = migrationsDirFor(ctx.config, ctx.cwd);
-    const appMigrationsDir = appMigrationsDirFor(ctx.config, ctx.cwd);
+    const migrationsDir = migrationsDirFor(ctx.config);
+    const appMigrationsDir = appMigrationsDirFor(ctx.config);
     const appMigrationsRelative = displayPath(appMigrationsDir, ctx.cwd);
 
     let contractJson: string;
@@ -250,9 +265,7 @@ export const migrationShowCommand = defineOrmCommand({
                 why: `Contract file not found at ${contractPath}`,
                 fix: `Run \`{bin} contract emit\` to generate ${relative(ctx.cwd, contractPath)}`,
               })
-            : errorUnexpected(error instanceof Error ? error.message : String(error), {
-                why: 'Failed to read contract file',
-              }),
+            : errorFromCaught(error, () => 'Failed to read contract file'),
         ),
       );
     }
@@ -266,7 +279,7 @@ export const migrationShowCommand = defineOrmCommand({
         normalizeError(
           errorContractValidationFailed(
             `Contract at ${contractPath} failed to deserialize: ${error instanceof Error ? error.message : String(error)}`,
-            { where: { path: contractPath } },
+            { where: { path: contractPath }, meta: contractValidationMeta(error) },
           ),
         ),
       );
@@ -278,6 +291,7 @@ export const migrationShowCommand = defineOrmCommand({
       appContract,
       extensions: [],
       deserializeContract: (json) => familyInstance.deserializeContract(json),
+      ...ifDefined('verifySnapshotContent', snapshotVerifierFor(ctx.config)),
     });
     if (!loaded.ok) {
       return notOk(normalizeError(loaded.failure));

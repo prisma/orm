@@ -191,7 +191,7 @@ changes:
       compares the predicate byte-for-byte, and warns whenever the body was not captured from the
       database — including on contracts `contract infer` wrote, which warn on the next
       `contract emit`. `contract infer` now writes the `map:` form for you: pulling a database
-      emits `@@check` for every live check Prisma Next did not derive, so a hand-written constraint
+      emits `@@check` for every live check Prisma 8 did not derive, so a hand-written constraint
       is declared from the first pull instead of reading as an undeclared extra that a plan allowing
       destructive changes would drop. Nothing is required of an existing contract — the surface is
       additive.
@@ -502,7 +502,7 @@ data all along. Grep the first plan for `dropCheckConstraint` and check every co
 - to keep it, run plans for that table under an additive-only policy. The constraint stays in
   place and keeps enforcing; plain `db verify` tolerates it, and only `--strict` reports it as
   an undeclared extra. Better: declare it with `@@check(expression: "…", map: "<physical name>")`,
-  or re-run `contract infer`, which now emits exactly that for every live check Prisma Next did
+  or re-run `contract infer`, which now emits exactly that for every live check Prisma 8 did
   not derive — the constraint becomes declared and stops being an extra at all;
 - if it was already dead, let the drop through under the destructive plan.
 

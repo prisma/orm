@@ -1,0 +1,20 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Composite {
+  a Int
+  b String @map("b_col")
+
+  @@id([a, b])
+  @@unique([b, a])
+}
+
+model Single {
+  id   String @id @map("pk")
+  code Int    @unique
+  x    Int
+  y    Int
+
+  @@unique(fields: [x, y], name: "xy")
+}

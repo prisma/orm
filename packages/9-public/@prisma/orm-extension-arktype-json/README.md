@@ -1,6 +1,6 @@
 # @prisma/orm-extension-arktype-json
 
-JSON columns with a validated, typed shape for Prisma Next, built on [arktype](https://arktype.io).
+JSON columns with a validated, typed shape for Prisma 8, built on [arktype](https://arktype.io).
 
 ```bash
 pnpm add @prisma/orm-extension-arktype-json

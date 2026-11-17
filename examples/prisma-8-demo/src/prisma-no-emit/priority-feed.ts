@@ -1,4 +1,5 @@
 import type { Runtime } from '@prisma/orm-postgres/family-runtime';
+import { MissingNamespaceError } from '../errors';
 import { enums, sql } from './context';
 
 /**
@@ -19,10 +20,10 @@ export async function getPostsByPriority(runtime: Runtime) {
 export function getPriorityEnum() {
   // The no-emit contract types its domain namespaces loosely (index
   // signature), so `enums['public']` is reached with bracket access and a
-  // runtime guard rather than a cast — the same shape `createOrmClient` uses.
+  // runtime guard rather than a cast — the same shape `connectClient` uses for the ORM namespace.
   const publicEnums = enums['public'];
   if (publicEnums === undefined) {
-    throw new Error("Contract is missing the 'public' namespace enums");
+    throw new MissingNamespaceError('public', 'Contract enums');
   }
   return publicEnums.Priority;
 }

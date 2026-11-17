@@ -1,0 +1,39 @@
+# @internal/sqlite-codec-testkit
+
+Database-backed conformance harness for SQLite codec JSON projections.
+
+## Purpose
+
+A codec descriptor's `projectJson()` renders SQL whose JSON value the codec's `fromWire` reads as it reads an ordinary row of the column. This package runs that claim against a live SQLite: it writes a representative value through `toWire`, stores it in a column of the case's declared storage type, reads it back as an ordinary row and through the projection inside a JSON constructor, and checks that `fromWire` reads both to the value the case started from. For every case it also checks that `toDataTypeValue(fromDataTypeValue(v))` equals `v`.
+
+It is dev-only tooling, not a runtime dependency — extension authors install it to verify their own codec descriptors the same way this package's own `test/` suite verifies every built-in SQLite codec descriptor.
+
+## Usage
+
+```ts
+import { runSqliteCodecProjection } from '@internal/sqlite-codec-testkit';
+import type { SqliteCodecConformanceCase } from '@internal/sqlite-codec-testkit';
+
+const conformanceCase: SqliteCodecConformanceCase = {
+  codecId: 'my-extension/my-codec@1',
+  // A codec an extension contributes rather than the target registering —
+  // the built-in registry only knows the built-ins.
+  descriptor: myCodecDescriptor,
+  label: 'representative value',
+  value: someApplicationValue,
+  storageType: 'TEXT',
+};
+
+const outcome = await runSqliteCodecProjection(connection, conformanceCase);
+// outcome.failure is undefined when the projection conforms.
+```
+
+`connection` is any object satisfying `ConformanceConnection` — `{ query(sql, params?) }` — so the caller supplies whichever SQLite client it already owns. Its rows must carry each value as the runtime driver returns it, because the harness reads an ordinary row with the codec's `fromWire` and compares it with the projected value.
+
+## Scope
+
+The harness, case types, and runner are the public API — the `dist`/`src` this package ships. The built-in SQLite codec catalogue is not part of that surface: it lives in this package's own `test/` directory (excluded from the published tarball by `files`), where it exercises the same harness an extension author consumes, rather than being general-purpose vocabulary.
+
+A SQLite codec descriptor carries no native type, so `storageType` states the column's declared SQLite type directly.
+
+Values are compared with `isDeepStrictEqual`. A value that is not deep-equal to its copy, or is deep-equal to every value of its kind as every `Temporal` value is, needs the case's `valueEquality` (the row against the case's value) and `projectionEquality` (the projection against the row).

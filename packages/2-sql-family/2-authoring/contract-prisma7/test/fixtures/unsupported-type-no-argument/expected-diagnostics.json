@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA7_UNSUPPORTED_TYPE",
+    "file": "schema.prisma",
+    "line": 7,
+    "message": "Field \"Post.search\": Unsupported(...) takes one string, the column's type as the database prints it, such as Unsupported(\"tsvector\")."
+  }
+]

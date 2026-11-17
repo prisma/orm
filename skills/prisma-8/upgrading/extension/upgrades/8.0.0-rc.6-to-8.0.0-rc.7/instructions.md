@@ -21,7 +21,7 @@ changes:
 
 ## `rename-orm-pagination-methods`
 
-Find calls on Prisma Next ORM collections in extension source and tests, then apply these translations:
+Find calls on Prisma 8 ORM collections in extension source and tests, then apply these translations:
 
 - `.take(n)` → `.limit(n)`
 - `.skip(n)` → `.offset(n)`

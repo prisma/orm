@@ -30,7 +30,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // Dispositions:
 //   "[create] creating a table with SetDefault is accepted"   → ported (passing)
 //   "[update] changing existing user id to a new one triggers NoAction under the hood" (mysql only)
-//       → non-ported: MySQL-only test; prisma-next targets postgres in this batch
+//       → non-ported: MySQL-only test; Prisma 8 targets postgres in this batch
 //   "[update] changing existing user id to a new one triggers SetDefault" (without mysql)
 //       → ported (passing)
 //   "[update] removing user with default id and changing existing user id to a new one triggers SetDefault in post, which throws"

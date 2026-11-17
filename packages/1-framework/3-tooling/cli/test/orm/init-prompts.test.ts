@@ -81,7 +81,7 @@ describe('init prompts', () => {
     it(
       'rejects a schema path whose extension contradicts the authoring style',
       async () => {
-        const run = await harness().run(['orm', 'init', ...NO_PACKAGE_WORK], {
+        const run = await harness().run(['orm', 'init', ...NO_PACKAGE_WORK, '--json'], {
           cwd: projectDir,
           isTty: { stdin: true },
           answers: ['postgres', 'psl', 'db/schema.ts', false],
@@ -129,7 +129,7 @@ describe('init prompts', () => {
     it(
       'cannot answer the target prompt, which has no default',
       async () => {
-        const run = await harness().run(['orm', 'init', '--yes', ...NO_PACKAGE_WORK], {
+        const run = await harness().run(['orm', 'init', '--yes', ...NO_PACKAGE_WORK, '--json'], {
           cwd: projectDir,
           isTty: { stdin: true },
         });
@@ -182,9 +182,12 @@ describe('init prompts', () => {
     it(
       'names every missing required flag rather than prompting',
       async () => {
-        const run = await harness().run(['orm', 'init', '--authoring', 'psl', ...NO_PACKAGE_WORK], {
-          cwd: projectDir,
-        });
+        const run = await harness().run(
+          ['orm', 'init', '--authoring', 'psl', ...NO_PACKAGE_WORK, '--json'],
+          {
+            cwd: projectDir,
+          },
+        );
 
         expect(run.exitCode).toBe(2);
         expect(envelopeOf(run)).toMatchObject({
@@ -197,24 +200,10 @@ describe('init prompts', () => {
     );
 
     it(
-      'falls back to the default schema path instead of asking for one',
-      async () => {
-        const run = await harness().run(
-          ['orm', 'init', '--target', 'postgres', '--authoring', 'psl', ...NO_PACKAGE_WORK],
-          { cwd: projectDir },
-        );
-
-        expect(run.exitCode).toBe(0);
-        expect(run.presented?.data).toMatchObject({ schemaPath: 'src/prisma/contract.prisma' });
-      },
-      timeouts.coldTransformImport,
-    );
-
-    it(
       'rejects an unknown --target value with the allowed set',
       async () => {
         const run = await harness().run(
-          ['orm', 'init', '--target', 'sqlite', '--authoring', 'psl', ...NO_PACKAGE_WORK],
+          ['orm', 'init', '--target', 'sqlite', '--authoring', 'psl', ...NO_PACKAGE_WORK, '--json'],
           { cwd: projectDir },
         );
 
@@ -243,6 +232,7 @@ describe('init prompts', () => {
             'psl',
             '--strict-probe',
             ...NO_PACKAGE_WORK,
+            '--json',
           ],
           { cwd: projectDir },
         );
@@ -264,7 +254,16 @@ describe('init prompts', () => {
         writeFileSync(join(projectDir, 'package.json'), '{ not json', 'utf-8');
 
         const run = await harness().run(
-          ['orm', 'init', '--target', 'postgres', '--authoring', 'psl', ...NO_PACKAGE_WORK],
+          [
+            'orm',
+            'init',
+            '--target',
+            'postgres',
+            '--authoring',
+            'psl',
+            ...NO_PACKAGE_WORK,
+            '--json',
+          ],
           { cwd: projectDir },
         );
 
@@ -284,7 +283,16 @@ describe('init prompts', () => {
         writeFileSync(join(projectDir, 'tsconfig.json'), '{ "compilerOptions": ', 'utf-8');
 
         const run = await harness().run(
-          ['orm', 'init', '--target', 'postgres', '--authoring', 'psl', ...NO_PACKAGE_WORK],
+          [
+            'orm',
+            'init',
+            '--target',
+            'postgres',
+            '--authoring',
+            'psl',
+            ...NO_PACKAGE_WORK,
+            '--json',
+          ],
           { cwd: projectDir },
         );
 
@@ -320,8 +328,24 @@ describe('init prompts', () => {
         });
         expect(blocks.some((block) => block.kind === 'tree')).toBe(true);
         expect(blocks.at(-1)).toMatchObject({ kind: 'summary', status: 'ok' });
-        expect(run.presented?.presentation.stdout).toEqual([]);
         expect(run.presented?.presentation.next.length).toBeGreaterThan(0);
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
+      'prints each file it wrote, relative to the working directory, as a data line',
+      async () => {
+        const run = await harness().run(
+          ['orm', 'init', '--target', 'postgres', '--authoring', 'psl', ...NO_PACKAGE_WORK],
+          { cwd: projectDir },
+        );
+        const lines = run.stdout.trimEnd().split('\n');
+
+        expect(lines).toEqual(
+          expect.arrayContaining(['prisma.config.ts', 'src/prisma/contract.prisma']),
+        );
+        expect(run.presented?.data).toMatchObject({ filesWritten: lines });
       },
       timeouts.coldTransformImport,
     );
@@ -330,7 +354,16 @@ describe('init prompts', () => {
       'writes the success document as the json presentation',
       async () => {
         const run = await harness().run(
-          ['orm', 'init', '--target', 'postgres', '--authoring', 'psl', ...NO_PACKAGE_WORK],
+          [
+            'orm',
+            'init',
+            '--target',
+            'postgres',
+            '--authoring',
+            'psl',
+            ...NO_PACKAGE_WORK,
+            '--json',
+          ],
           { cwd: projectDir },
         );
 
@@ -339,8 +372,10 @@ describe('init prompts', () => {
           target: 'postgres',
           authoring: 'psl',
           schemaPath: 'src/prisma/contract.prisma',
+          filesRenamed: [],
           packagesInstalled: { status: 'skipped', deps: [], devDeps: [] },
           contractEmitted: false,
+          prisma7: null,
         });
       },
       timeouts.coldTransformImport,

@@ -1,0 +1,9 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model NativeType {
+  id    Int       @id
+  value Decimal   @db.Money
+  list  Decimal[] @db.Money
+}

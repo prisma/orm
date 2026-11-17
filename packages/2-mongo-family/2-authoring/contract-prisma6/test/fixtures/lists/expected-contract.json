@@ -1,0 +1,168 @@
+{
+  "target": "mongo",
+  "targetFamily": "mongo",
+  "roots": {
+    "Post": {
+      "namespace": "__unbound__",
+      "model": "Post"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "__unbound__": {
+        "models": {
+          "Post": {
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/objectId@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "tags": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/string@1"
+                },
+                "nullable": false,
+                "many": {
+                  "elementNullable": false
+                }
+              },
+              "scores": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/int64Number@1"
+                },
+                "nullable": false,
+                "many": {
+                  "elementNullable": false
+                }
+              },
+              "refs": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/objectId@1"
+                },
+                "nullable": false,
+                "many": {
+                  "elementNullable": false
+                }
+              },
+              "roles": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/string@1"
+                },
+                "nullable": false,
+                "many": {
+                  "elementNullable": false
+                },
+                "valueSet": {
+                  "plane": "domain",
+                  "entityKind": "enum",
+                  "namespaceId": "__unbound__",
+                  "entityName": "Role"
+                }
+              },
+              "address": {
+                "type": {
+                  "kind": "valueObject",
+                  "plane": "storage",
+                  "namespaceId": "__unbound__",
+                  "entityKind": "valueObject",
+                  "entityName": "Address"
+                },
+                "nullable": false,
+                "many": {
+                  "elementNullable": false
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "Post",
+              "fields": {
+                "id": {
+                  "field": "_id"
+                },
+                "tags": {
+                  "field": "tags"
+                },
+                "scores": {
+                  "field": "scores"
+                },
+                "refs": {
+                  "field": "refs"
+                },
+                "roles": {
+                  "field": "roles"
+                },
+                "address": {
+                  "field": "address"
+                }
+              }
+            }
+          }
+        },
+        "enum": {
+          "Role": {
+            "codecId": "mongo/string@1",
+            "members": [
+              {
+                "name": "USER",
+                "value": "USER"
+              },
+              {
+                "name": "ADMIN",
+                "value": "ADMIN"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "capabilities": {},
+  "extensions": {},
+  "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
+  "meta": {},
+  "storage": {
+    "storageHash": "e6d057cae9c68e89ed7207907298557efb1fdf16c57f31373bd9cffaec8b65be",
+    "namespaces": {
+      "__unbound__": {
+        "id": "__unbound__",
+        "kind": "mongo-database",
+        "entries": {
+          "collection": {
+            "Post": {
+              "kind": "mongo-collection"
+            }
+          },
+          "valueSet": {
+            "Role": {
+              "kind": "valueSet",
+              "values": ["USER", "ADMIN"]
+            }
+          },
+          "valueObject": {
+            "Address": {
+              "fields": {
+                "street": {
+                  "type": {
+                    "kind": "scalar",
+                    "codecId": "mongo/string@1"
+                  },
+                  "nullable": false,
+                  "many": false
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

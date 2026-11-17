@@ -10,11 +10,11 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //   1. composites are selected by default    → ported
 //   2. composites can be selected explicitly → ported (select('profile') returns whole profile)
 //   3. composites can be selected on multiple nesting levels (profile sub-field select) → non-ported
-//      — prisma-next's mongo ORM has no nested sub-field select for composite value objects.
+//      — Prisma 8's mongo ORM has no nested sub-field select for composite value objects.
 //   4. composites are included on default types → ported via contract.d.ts exported types
 //      (FieldOutputTypes['__unbound__']['User'] ≈ upstream `User`; ProfileOutput ≈ upstream `Profile`)
 //
-// Upstream test 4 uses Prisma-generated `User` and `Profile` types; prisma-next's equivalents
+// Upstream test 4 uses Prisma-generated `User` and `Profile` types; Prisma 8's equivalents
 // are `FieldOutputTypes['__unbound__']['User']` and `ProfileOutput` from the emitted contract.d.ts.
 
 function withComposites(fn: Parameters<typeof withMongoPort<Contract>>[1]) {
@@ -89,7 +89,7 @@ describe('ports/prisma/functional/composites/selection', () => {
 
   // Upstream test 4: `composites are included on default types`
   // Uses Prisma-generated `User` and `Profile` type-level assertions.
-  // In prisma-next, FieldOutputTypes['__unbound__']['User'] ≈ upstream `User`,
+  // In Prisma 8, FieldOutputTypes['__unbound__']['User'] ≈ upstream `User`,
   // and ProfileOutput ≈ upstream `Profile`.
   it('composites are included on default types', () => {
     type UserRow = FieldOutputTypes['__unbound__']['User'];

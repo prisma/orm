@@ -1,4 +1,7 @@
+// use prisma-8
+
 model TestModel {
   id   Int @id
   json Jsonb?
+  @@map("testModel")
 }

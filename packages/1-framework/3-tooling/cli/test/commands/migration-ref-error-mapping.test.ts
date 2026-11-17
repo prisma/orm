@@ -1,17 +1,16 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { PrismaNextConfig } from '@internal/config-loader';
+import type { PrismaConfig } from '@internal/config-loader';
 import { timeouts } from '@repo/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 const HASH_A = `${'a'.repeat(64)}`;
 
-const config = { migrations: { dir: 'migrations' } } as unknown as PrismaNextConfig;
+const config = { migrations: { dir: 'migrations' } } as unknown as PrismaConfig;
 
 describe('migration-ref MigrationToolsError envelope passthrough', () => {
   let tempDir: string;
-  let configPath: string;
 
   beforeEach(async () => {
     tempDir = join(
@@ -26,7 +25,6 @@ describe('migration-ref MigrationToolsError envelope passthrough', () => {
       `${JSON.stringify({ hash: HASH_A, invariants: [] }, null, 2)}\n`,
       'utf-8',
     );
-    configPath = join(tempDir, 'prisma.config.ts');
   });
 
   afterEach(async () => {
@@ -41,7 +39,6 @@ describe('migration-ref MigrationToolsError envelope passthrough', () => {
       const result = await executeRefDeleteCommand('does-not-exist', {
         config,
         cwd: tempDir,
-        configPath,
       });
 
       expect(result.ok).toBe(false);

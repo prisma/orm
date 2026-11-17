@@ -116,7 +116,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Show db update help
-> prisma-next db update --help
+> prisma db update --help
 
 
 
@@ -155,7 +155,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Show db update help
-> prisma-next db update --help
+> prisma db update --help
 
 
 
@@ -194,7 +194,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Show db update help
-> prisma-next db update --help
+> prisma db update --help
 
 
 
@@ -233,8 +233,8 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Show db update help
-> prisma-next db update --help
-prisma-next db update → Update your database schema to match your contract
+> prisma db update --help
+prisma db update → Update your database schema to match your contract
 │
 │ --json                Output as JSON
 │ -q, --quiet           Quiet mode: errors only
@@ -253,8 +253,8 @@ prisma-next db update → Update your database schema to match your contract
 │ Read more             https://pris.ly/db-update
 │
 │ Examples:
-│   $ prisma-next db update --db $DATABASE_URL
-│   $ prisma-next db update --db $DATABASE_URL --dry-run
+│   $ prisma db update --db $DATABASE_URL
+│   $ prisma db update --db $DATABASE_URL --dry-run
 │
 │ Compares your database schema to the emitted contract and applies the necessary
 │ changes. Works on any database, whether or not it has been initialized with `db init`.

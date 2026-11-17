@@ -95,7 +95,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Verify marker + schema (JSON output for CI/agents) [initialized, marker matches contract]
-> prisma-next db verify --json
+> prisma db verify --json
 
 
 
@@ -127,7 +127,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Verify marker + schema (JSON output for CI/agents) [initialized, marker matches contract]
-> prisma-next db verify --json
+> prisma db verify --json
 
 
 
@@ -159,7 +159,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Verify marker + schema (JSON output for CI/agents) [initialized, marker matches contract]
-> prisma-next db verify --json
+> prisma db verify --json
 
 
 
@@ -191,7 +191,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Verify marker + schema (JSON output for CI/agents) [initialized, marker matches contract]
-> prisma-next db verify --json
+> prisma db verify --json
 {
   "ok": true,
   "summary": "Database marker and schema match contract",

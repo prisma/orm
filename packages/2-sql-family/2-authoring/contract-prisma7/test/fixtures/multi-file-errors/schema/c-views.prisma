@@ -1,0 +1,3 @@
+view ActiveUsers {
+  id Int
+}

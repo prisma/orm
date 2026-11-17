@@ -588,7 +588,7 @@ changes:
 
 ## `strip-sha256-hash-prefixes`
 
-Starting at the 0.17 release, every content hash Prisma Next mints or accepts is bare lowercase hex — the `sha256:` prefix is removed across the board: emitted `contract.json` / `contract.d.ts` (including the `StorageHashBase<'…'>` / `ProfileHashBase<'…'>` branded type literals), migration manifests, refs, CLI output, and the marker/ledger bookkeeping tables in your database. The prefix carried no information (the algorithm never varied per hash), and the hash **value** — not an in-band tag — signals a format change. Loaders and validators now reject the legacy prefixed form outright.
+Starting at the 0.17 release, every content hash Prisma 8 mints or accepts is bare lowercase hex — the `sha256:` prefix is removed across the board: emitted `contract.json` / `contract.d.ts` (including the `StorageHashBase<'…'>` / `ProfileHashBase<'…'>` branded type literals), migration manifests, refs, CLI output, and the marker/ledger bookkeeping tables in your database. The prefix carried no information (the algorithm never varied per hash), and the hash **value** — not an in-band tag — signals a format change. Loaders and validators now reject the legacy prefixed form outright.
 
 Two distinct effects on your checked-in artefacts:
 
@@ -717,23 +717,23 @@ The two fields could disagree — a `prefix` that is not what `name` ends with w
 
 ## Incidental dependency and lint-config bumps
 
-Routine dev-dependency bumps and biome `$schema` version alignment in `examples/` (dependabot `dev-deps` group, PR #1058) require no Prisma Next-specific upgrade action; review and test the affected examples as with any routine dependency update.
+Routine dev-dependency bumps and biome `$schema` version alignment in `examples/` (dependabot `dev-deps` group, PR #1058) require no Prisma 8-specific upgrade action; review and test the affected examples as with any routine dependency update.
 
 ## Incidental dependency bumps in examples
 
-Routine runtime dependency bumps in `examples/` (dependabot `runtime-deps` group, PR #1065) require no Prisma Next-specific upgrade action; review and test the affected examples as with any routine dependency update.
+Routine runtime dependency bumps in `examples/` (dependabot `runtime-deps` group, PR #1065) require no Prisma 8-specific upgrade action; review and test the affected examples as with any routine dependency update.
 
 ## Incidental runtime dependency bumps in examples (August 2026)
 
-Routine runtime dependency bumps in `examples/` (dependabot `runtime-deps` group, PR #29872) require no Prisma Next-specific upgrade action; review and test the affected examples as with any routine dependency update.
+Routine runtime dependency bumps in `examples/` (dependabot `runtime-deps` group, PR #29872) require no Prisma 8-specific upgrade action; review and test the affected examples as with any routine dependency update.
 
 ## Incidental dev-dependency bumps in examples (August 2026)
 
-Routine dev-dependency bumps in `examples/` (dependabot `dev-deps` group, PR #29877) require no Prisma Next-specific upgrade action; review and test the affected examples as with any routine dependency update.
+Routine dev-dependency bumps in `examples/` (dependabot `dev-deps` group, PR #29877) require no Prisma 8-specific upgrade action; review and test the affected examples as with any routine dependency update.
 
 ## Incidental example dependency bumps (react-router 8)
 
-The `react-router-demo` example moves its `react-router`, `@react-router/dev`, `@react-router/node`, and `@react-router/serve` dependencies from 7.x to 8.x. This is an example-local framework upgrade and requires no Prisma Next-specific upgrade action; the Prisma Next surfaces the example uses are unchanged.
+The `react-router-demo` example moves its `react-router`, `@react-router/dev`, `@react-router/node`, and `@react-router/serve` dependencies from 7.x to 8.x. This is an example-local framework upgrade and requires no Prisma 8-specific upgrade action; the Prisma 8 surfaces the example uses are unchanged.
 
 ## `pg-int8-application-values-are-bigint`
 

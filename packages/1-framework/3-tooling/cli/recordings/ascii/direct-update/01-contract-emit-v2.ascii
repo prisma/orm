@@ -96,7 +96,7 @@ bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file o
 ────────────────────────────────────────────────────────────────────────────────
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
 > # Emit updated contract with new nullable column [initialized with base contract]
-> prisma-next contract emit
+> prisma contract emit
 
 
 
@@ -128,7 +128,7 @@ bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file o
 ────────────────────────────────────────────────────────────────────────────────
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
 > # Emit updated contract with new nullable column [initialized with base contract]
-> prisma-next contract emit
+> prisma contract emit
 
 
 
@@ -160,7 +160,7 @@ bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file o
 ────────────────────────────────────────────────────────────────────────────────
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
 > # Emit updated contract with new nullable column [initialized with base contract]
-> prisma-next contract emit
+> prisma contract emit
 
 
 
@@ -192,9 +192,9 @@ bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file o
 ────────────────────────────────────────────────────────────────────────────────
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
 > # Emit updated contract with new nullable column [initialized with base contract]
-> prisma-next contract emit
+> prisma contract emit
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
-prisma-next contract emit → Emit your contract artifacts
+prisma contract emit → Emit your contract artifacts
 │
 │ config:               prisma.config.ts
 │ contract:             contract.json

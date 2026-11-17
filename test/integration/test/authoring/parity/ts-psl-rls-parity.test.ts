@@ -9,11 +9,11 @@
  * `role('app_role')` in `entities` vs PSL `namespace unbound { role app_role {} }`
  * — and lands the same `PostgresRole` in `__unbound__.entries.role`.
  */
+
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
 import postgresAdapter from '@internal/adapter-postgres/control';
 import { anon, authenticated } from '@internal/extension-supabase/contract';
 import sqlFamilyControl from '@internal/family-sql/control';
-import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
 import { createControlStack } from '@internal/framework-components/control';
 import {
   defineContract,
@@ -26,10 +26,12 @@ import {
   policyUpdate,
   rlsEnabled,
   role,
+  sql,
 } from '@internal/postgres/contract-builder';
-import { buildSymbolTable } from '@internal/psl-parser';
-import { parse } from '@internal/psl-parser/syntax';
+import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
+import { bindPslSchema, contractSourceContextFromControlStack } from '@internal/psl-parser/test';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import { sqlContextInput } from '@internal/sql-contract-psl/test';
 import postgresControl from '@internal/target-postgres/control';
 import postgresPack from '@internal/target-postgres/pack';
 import type { PostgresSchema } from '@internal/target-postgres/types';
@@ -43,34 +45,26 @@ const stack = createControlStack({
   extensions: [],
 });
 
-function buildColumnDescriptorMap() {
-  return collectScalarTypeConstructors(stack.authoringContributions.type);
-}
-
 function interpretWithRealPacks(schema: string) {
-  const scalarColumnDescriptors = buildColumnDescriptorMap();
-  const { document, sourceFile } = parse(schema);
-  const { table } = buildSymbolTable({
-    document,
-    sourceFile,
-    pslBlockDescriptors: stack.authoringContributions.pslBlockDescriptors,
+  const bound = bindPslSchema(schema, {
+    sourceId: 'rls-parity.prisma',
+    context: contractSourceContextFromControlStack(stack),
   });
-  return interpretPslDocumentToSqlContract({
-    symbolTable: table,
-    sourceFile,
-    sourceId: 'schema.prisma',
-    target: postgresPack,
-    scalarColumnDescriptors,
-    controlMutationDefaults: stack.controlMutationDefaults,
-    authoringContributions: stack.authoringContributions,
-    composedExtensionContracts: new Map(),
-    createNamespace: postgresCreateNamespace,
-    capabilities: stack.capabilities,
-    codecLookup: stack.codecLookup,
-  });
+  return withSeedDiagnostics(
+    interpretPslDocumentToSqlContract({
+      documents: bound.documents,
+      sources: bound.sources,
+      symbolTable: bound.symbolTable,
+      binder: bound.binder,
+      ...sqlContextInput(bound.context),
+      target: postgresPack,
+      createNamespace: postgresCreateNamespace,
+    }),
+    bound.seedDiagnostics,
+  );
 }
 
-const OWNER_PREDICATE = '"userId"::uuid = auth.uid()';
+const OWNER_PREDICATE = sql`"userId"::uuid = auth.uid()`;
 
 function buildTsModels() {
   return {
@@ -99,7 +93,7 @@ function buildTsEntities(models: ReturnType<typeof buildTsModels>) {
       roles: [authenticated],
       using: OWNER_PREDICATE,
     }),
-    policySelect(Profile, { name: 'profile_public_read', roles: [anon], using: 'true' }),
+    policySelect(Profile, { name: 'profile_public_read', roles: [anon], using: sql`true` }),
     policyUpdate(Profile, {
       name: 'profile_owner_write',
       roles: [authenticated],
@@ -120,8 +114,8 @@ function buildTsEntities(models: ReturnType<typeof buildTsModels>) {
     policyAll(Profile, {
       name: 'profile_admin_all',
       roles: [anon, authenticated],
-      using: 'true',
-      withCheck: 'true',
+      using: sql`true`,
+      withCheck: sql`true`,
     }),
     // Single-predicate update (PSL accepts using-only; hash omits withCheck).
     policyUpdate(Profile, {
@@ -130,7 +124,7 @@ function buildTsEntities(models: ReturnType<typeof buildTsModels>) {
       using: OWNER_PREDICATE,
     }),
     // Policy on the @@map'd model (storage name not derivable from the name).
-    policySelect(AuditLog, { name: 'audit_read', roles: [authenticated], using: 'true' }),
+    policySelect(AuditLog, { name: 'audit_read', roles: [authenticated], using: sql`true` }),
     // A declared role — lands in `__unbound__.entries.role`, identical to the
     // PSL `namespace unbound { role app_role {} }` block below.
     role('app_role'),
@@ -156,51 +150,51 @@ const PSL_SOURCE = `namespace public {
   policy_select profile_owner_read {
     target = Profile
     roles  = [authenticated]
-    using  = "\\"userId\\"::uuid = auth.uid()"
+    using  = sql\`"userId"::uuid = auth.uid()\`
   }
 
   policy_select profile_public_read {
     target = Profile
     roles  = [anon]
-    using  = "true"
+    using  = sql\`true\`
   }
 
   policy_update profile_owner_write {
     target    = Profile
     roles     = [authenticated]
-    using     = "\\"userId\\"::uuid = auth.uid()"
-    withCheck = "\\"userId\\"::uuid = auth.uid()"
+    using     = sql\`"userId"::uuid = auth.uid()\`
+    withCheck = sql\`"userId"::uuid = auth.uid()\`
   }
 
   policy_insert profile_owner_insert {
     target    = Profile
     roles     = [authenticated]
-    withCheck = "\\"userId\\"::uuid = auth.uid()"
+    withCheck = sql\`"userId"::uuid = auth.uid()\`
   }
 
   policy_delete profile_owner_delete {
     target = Profile
     roles  = [authenticated]
-    using  = "\\"userId\\"::uuid = auth.uid()"
+    using  = sql\`"userId"::uuid = auth.uid()\`
   }
 
   policy_all profile_admin_all {
     target    = Profile
     roles     = [anon, authenticated]
-    using     = "true"
-    withCheck = "true"
+    using     = sql\`true\`
+    withCheck = sql\`true\`
   }
 
   policy_update profile_touch_write {
     target = Profile
     roles  = [authenticated]
-    using  = "\\"userId\\"::uuid = auth.uid()"
+    using  = sql\`"userId"::uuid = auth.uid()\`
   }
 
   policy_select audit_read {
     target = AuditLog
     roles  = [authenticated]
-    using  = "true"
+    using  = sql\`true\`
   }
 }
 

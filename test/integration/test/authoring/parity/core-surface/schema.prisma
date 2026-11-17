@@ -1,4 +1,4 @@
-// use prisma-next
+// use prisma-8
 
 types {
   Email = String
@@ -14,9 +14,10 @@ model User {
   id Int @id @default(autoincrement())
   email Email @unique
   role Role
-  createdAt DateTime @default(now())
+  createdAt TimestamptzTemporal @default(now())
   isActive Boolean @default(true)
   profile Jsonb?
+  @@map("user")
 }
 
 model Post {
@@ -27,4 +28,5 @@ model Post {
   author User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   @@index([userId])
   @@unique([title, userId])
+  @@map("post")
 }

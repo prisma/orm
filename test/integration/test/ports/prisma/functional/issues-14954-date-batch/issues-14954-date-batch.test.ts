@@ -8,14 +8,14 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //
 // Upstream seeds two Resource rows (date @unique) at 2011-01-01 and 2022-02-02 and
 // reads them back concurrently, asserting each round-trips to the matching `Date`.
-// prisma-next DateTime is `pg/timestamptz-temporal@1`, whose application value is a
+// Prisma 8 DateTime is `pg/timestamptz-temporal@1`, whose application value is a
 // `Temporal.Instant` rather than a `Date`.
 //
 // Dispositions (per upstream test):
 //   - 'findUnique date with Promise.all'      → PORTED: two concurrent `.first({date})`.
 //   - 'findFirst  date with Promise.all'      → PORTED: two concurrent `.where({date}).first()`.
 //   - 'findUnique date with $transaction([])' → NON-PORTED: array/batch `$transaction([...])`
-//     is absent; prisma-next only has the interactive `transaction(cb)` facade, a different
+//     is absent; Prisma 8 only has the interactive `transaction(cb)` facade, a different
 //     execution path that does not exercise the batch request pipeline this regression depends on.
 //   - 'findFirst  date with $transaction([])' → NON-PORTED (same reason).
 

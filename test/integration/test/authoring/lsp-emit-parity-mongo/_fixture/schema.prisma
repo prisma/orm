@@ -1,0 +1,6 @@
+// use prisma-8
+
+model Post {
+  id    ObjectId @id @map("_id")
+  value BigInt
+}

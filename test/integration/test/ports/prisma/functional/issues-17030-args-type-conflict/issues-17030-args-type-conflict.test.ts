@@ -19,7 +19,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //   - include: { details: true } → .include('details')
 //   - expectTypeOf(info!).toHaveProperty('details') → inline type assertion
 //
-// Note: prisma-next uses structural types with no codegen naming conflicts,
+// Note: Prisma 8 uses structural types with no codegen naming conflicts,
 // so this test verifies the same runtime + type behavior directly.
 
 describe('ports/prisma/functional/issues-17030-args-type-conflict', () => {

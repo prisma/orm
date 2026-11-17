@@ -1,4 +1,9 @@
-import { parse } from '@internal/psl-parser/syntax';
+import {
+  FieldDeclarationAst,
+  GenericBlockDeclarationAst,
+  ModelDeclarationAst,
+  parse,
+} from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import { classifyPslCompletionContext } from '../src/completion-context';
 
@@ -6,7 +11,8 @@ function classify(markedSource: string): ReturnType<typeof classifyPslCompletion
   const cursorOffset = markedSource.indexOf('|');
   expect(cursorOffset).toBeGreaterThanOrEqual(0);
   const source = `${markedSource.slice(0, cursorOffset)}${markedSource.slice(cursorOffset + 1)}`;
-  const { document, sourceFile } = parse(source);
+  const { document, sources } = parse(source, 'language-server-test.psl');
+  const sourceFile = sources.sourceFileFor(document.syntax);
 
   return classifyPslCompletionContext({
     document,
@@ -20,6 +26,36 @@ function expectUnsupported(markedSource: string): void {
 }
 
 describe('classifyPslCompletionContext', () => {
+  it.each([
+    {
+      args: 'flag: true,| collection: []',
+      path: [],
+      positionalIndex: 0,
+      keys: ['flag', 'collection'],
+    },
+    {
+      args: 'call: nested("a",| flag: true)',
+      path: [
+        { kind: 'namedArgument', name: 'call' },
+        { kind: 'functionCall', name: 'nested' },
+      ],
+      positionalIndex: 1,
+      keys: ['flag'],
+    },
+  ])(
+    'preserves completion slots before existing named arguments: $args',
+    ({ args, path, positionalIndex, keys }) => {
+      expect(classify(`model Example { value String @probe(${args}) }`)).toMatchObject({
+        kind: 'fieldAttributeArgumentSlot',
+        attributeName: 'probe',
+        path,
+        positionalIndex,
+        existingNamedKeys: keys,
+        hasColon: false,
+      });
+    },
+  );
+
   it('classifies blank document-level declaration keyword positions', () => {
     const context = classify('|');
 
@@ -119,12 +155,13 @@ describe('classifyPslCompletionContext', () => {
     });
   });
 
-  it('returns unsupported once the cursor is past a field attribute on a typeless field', () => {
-    expectUnsupported(['model Post {', '  author @id|', '}'].join('\n'));
-  });
-
-  it('returns unsupported when the cursor sits inside a typeless field attribute', () => {
-    expectUnsupported(['model Post {', '  author @i|d', '}'].join('\n'));
+  it('classifies a field attribute on a typeless field', () => {
+    expect(classify(['model Post {', '  author @id|', '}'].join('\n'))).toMatchObject({
+      kind: 'fieldAttributeName',
+    });
+    expect(classify(['model Post {', '  author @i|d', '}'].join('\n'))).toMatchObject({
+      kind: 'fieldAttributeName',
+    });
   });
 
   it('does not treat the cursor glued to the field name as a type slot', () => {
@@ -217,23 +254,153 @@ describe('classifyPslCompletionContext', () => {
     expectUnsupported(['model Post {', '  |', '  id Int', '}'].join('\n'));
   });
 
-  it('returns unsupported for ordinary field and block attributes', () => {
-    expectUnsupported(['model Post {', '  id Int @|', '}'].join('\n'));
-    expectUnsupported(['model Post {', '  id Int', '  @@|', '}'].join('\n'));
+  it('classifies field, model, and block attribute names as distinct concrete kinds with concrete owners', () => {
+    const fieldContext = classify(['model Post {', '  id Int @|', '}'].join('\n'));
+    expect(fieldContext).toMatchObject({
+      kind: 'fieldAttributeName',
+      ownerKind: 'field',
+    });
+    if (fieldContext.kind !== 'fieldAttributeName') {
+      throw new Error('expected fieldAttributeName');
+    }
+    expect(fieldContext.model.name()?.name()).toBe('Post');
+    expect(fieldContext.field.name()?.name()).toBe('id');
+    expect(fieldContext).not.toHaveProperty('block');
+    expect(fieldContext).not.toHaveProperty('blockKeyword');
+
+    const modelContext = classify(['model Post {', '  id Int', '  @@|', '}'].join('\n'));
+    expect(modelContext).toMatchObject({
+      kind: 'modelAttributeName',
+      ownerKind: 'model',
+    });
+    if (modelContext.kind !== 'modelAttributeName') {
+      throw new Error('expected modelAttributeName');
+    }
+    expect(modelContext.model.name()?.name()).toBe('Post');
+    expect(modelContext).not.toHaveProperty('field');
+    expect(modelContext).not.toHaveProperty('block');
+    expect(modelContext).not.toHaveProperty('blockKeyword');
+
+    const blockContext = classify(['policy Foo {', '  @@|', '}'].join('\n'));
+    expect(blockContext).toMatchObject({
+      kind: 'blockAttributeName',
+      ownerKind: 'block',
+      blockKeyword: 'policy',
+    });
+    if (blockContext.kind !== 'blockAttributeName') {
+      throw new Error('expected blockAttributeName');
+    }
+    expect(blockContext.block.keyword()?.text).toBe('policy');
+    expect(blockContext).not.toHaveProperty('model');
+    expect(blockContext).not.toHaveProperty('field');
   });
 
-  it('returns unsupported inside attribute arguments', () => {
-    expectUnsupported(['model Post {', '  id Int @default(|)', '}'].join('\n'));
-    expectUnsupported(['model Post {', '  authorId Int @relation(fields: [|])', '}'].join('\n'));
+  it('classifies partial attribute names with a replace range over the typed segment', () => {
+    const context = classify(['model Post {', '  id Int @uni|', '}'].join('\n'));
+
+    expect(context).toMatchObject({
+      kind: 'fieldAttributeName',
+      replacementStartOffset: 23,
+      offset: 26,
+    });
   });
 
-  it('returns unsupported inside an attribute within a generic block', () => {
-    expectUnsupported(['policy Foo {', '  @@bar(baz|)', '}'].join('\n'));
+  it('classifies top-level attribute named keys as distinct concrete kinds with concrete owners', () => {
+    const fieldContext = classify(['model M {', '  id Int @map(na|me: "")', '}'].join('\n'));
+    expect(fieldContext).toMatchObject({
+      kind: 'fieldAttributeNamedKey',
+      attributeName: 'map',
+    });
+    if (fieldContext.kind !== 'fieldAttributeNamedKey') {
+      throw new Error('expected fieldAttributeNamedKey');
+    }
+    expect(fieldContext.model.name()?.name()).toBe('M');
+    expect(fieldContext.field.name()?.name()).toBe('id');
+    expect(fieldContext).not.toHaveProperty('block');
+    expect(fieldContext).not.toHaveProperty('blockKeyword');
+
+    const modelContext = classify(
+      ['model M {', '  @@index(fields: [id], na|me: "")', '}'].join('\n'),
+    );
+    expect(modelContext).toMatchObject({
+      kind: 'modelAttributeNamedKey',
+      attributeName: 'index',
+    });
+    if (modelContext.kind !== 'modelAttributeNamedKey') {
+      throw new Error('expected modelAttributeNamedKey');
+    }
+    expect(modelContext.model.name()?.name()).toBe('M');
+    expect(modelContext).not.toHaveProperty('field');
+    expect(modelContext).not.toHaveProperty('block');
+    expect(modelContext).not.toHaveProperty('blockKeyword');
+
+    const blockContext = classify(['policy Foo {', '  @@audit(ena|bled: true)', '}'].join('\n'));
+    expect(blockContext).toMatchObject({
+      kind: 'blockAttributeNamedKey',
+      attributeName: 'audit',
+      blockKeyword: 'policy',
+    });
+    if (blockContext.kind !== 'blockAttributeNamedKey') {
+      throw new Error('expected blockAttributeNamedKey');
+    }
+    expect(blockContext.block.keyword()?.text).toBe('policy');
+    expect(blockContext).not.toHaveProperty('model');
+    expect(blockContext).not.toHaveProperty('field');
   });
 
-  it('returns unsupported inside field and model attribute arguments', () => {
-    expectUnsupported(['model M {', '  id Int @map(baz|)', '}'].join('\n'));
-    expectUnsupported(['model M {', '  @@map(baz|)', '}'].join('\n'));
+  it('does not classify closed attribute argument list end positions as named keys', () => {
+    expectUnsupported(['model Post {', '  id Int @map()|', '}'].join('\n'));
+    expectUnsupported(['model Post {', '  id Int', '  @@index()|', '}'].join('\n'));
+    expectUnsupported(['policy Rule {', '  @@audit()|', '}'].join('\n'));
+  });
+
+  it('preserves ambiguous slots inside closed and unfinished attribute argument lists', () => {
+    for (const source of ['model Post { id Int @map(|) }', 'model Post { id Int @map(|']) {
+      expect(classify(source)).toMatchObject({
+        kind: 'fieldAttributeArgumentSlot',
+        attributeName: 'map',
+        path: [],
+        positionalIndex: 0,
+        existingNamedKeys: [],
+      });
+    }
+  });
+
+  it('distinguishes values from nested ambiguous argument slots', () => {
+    expect(classify(['model Post {', '  id Int @map(name: value|)', '}'].join('\n'))).toMatchObject(
+      { kind: 'fieldAttributeValue' },
+    );
+    expect(
+      classify(['model Post {', '  id Int @default(autoincrement(|))', '}'].join('\n')),
+    ).toMatchObject({
+      kind: 'fieldAttributeArgumentSlot',
+      path: [
+        { kind: 'positionalArgument', index: 0 },
+        { kind: 'functionCall', name: 'autoincrement' },
+      ],
+      positionalIndex: 0,
+      existingNamedKeys: [],
+    });
+    expect(
+      classify(['model Post {', '  authorId Int @relation(fields: [|])', '}'].join('\n')),
+    ).toMatchObject({ kind: 'fieldAttributeValue' });
+  });
+
+  it('bounds field attribute completion to the active attribute span', () => {
+    expectUnsupported(['model Post {', '  id Int @id |', '}'].join('\n'));
+  });
+
+  it('keeps attribute completion active at the attribute end offset', () => {
+    expect(classify(['model Post {', '  id Int @id|', '}'].join('\n'))).toMatchObject({
+      kind: 'fieldAttributeName',
+    });
+    expect(classify(['model Post {', '  id Int', '  @@id|', '}'].join('\n'))).toMatchObject({
+      kind: 'modelAttributeName',
+    });
+    expect(classify(['policy Foo {', '  @@audit|', '}'].join('\n'))).toMatchObject({
+      kind: 'blockAttributeName',
+      blockKeyword: 'policy',
+    });
   });
 
   it('classifies a composite-type field type position', () => {
@@ -269,24 +436,115 @@ describe('classifyPslCompletionContext', () => {
     expect([...context.block.entries()].map((entry) => entry.key()?.name())).toEqual(['on', 'wh']);
   });
 
-  it('classifies generic block value positions after the equals sign', () => {
-    expect(classify(['datasource db {', '  provider = |', '}'].join('\n'))).toMatchObject({
-      kind: 'genericBlockValue',
+  function blockValueAt(marked: string) {
+    const offset = marked.indexOf('|');
+    return {
+      ownerKind: 'blockValue',
+      block: expect.any(GenericBlockDeclarationAst),
+      offset,
+      replacementStartOffset: offset,
+      replacementEndOffset: offset,
+    };
+  }
+
+  it.each([
+    ['provider = |', 'provider'],
+    ['provider =|', 'provider'],
+  ])('classifies an empty generic block value position: %s', (entry, key) => {
+    const marked = ['datasource db {', `  ${entry}`, '}'].join('\n');
+    expect(classify(marked)).toEqual({
+      ...blockValueAt(marked),
+      kind: 'blockValue',
       blockKeyword: 'datasource',
+      key,
+      path: [],
+      syntax: 'scalar',
     });
   });
 
-  it('classifies a generic block value position flush against the equals sign', () => {
-    expect(classify(['datasource db {', '  provider =|', '}'].join('\n'))).toMatchObject({
-      kind: 'genericBlockValue',
+  it('replaces a partially typed generic block value identifier', () => {
+    const marked = ['datasource db {', '  provider = fo|', '}'].join('\n');
+    expect(classify(marked)).toEqual({
+      ...blockValueAt(marked),
+      kind: 'blockValue',
       blockKeyword: 'datasource',
+      key: 'provider',
+      path: [],
+      syntax: 'scalar',
+      replacementStartOffset: marked.indexOf('fo|'),
     });
   });
 
-  it('classifies a partial generic block value prefix', () => {
-    expect(classify(['datasource db {', '  provider = fo|', '}'].join('\n'))).toMatchObject({
-      kind: 'genericBlockValue',
-      blockKeyword: 'datasource',
+  it.each([
+    ['roles = [|', [{ kind: 'listElement' }]],
+    ['roles = [admin, |]', [{ kind: 'listElement' }]],
+    ['options = { mode: | }', [{ kind: 'recordValue' }]],
+  ])('classifies nested generic block value positions: %s', (entry, path) => {
+    const marked = ['policy_select read_own {', `  ${entry}`, '}'].join('\n');
+    expect(classify(marked)).toEqual({
+      ...blockValueAt(marked),
+      kind: 'blockValue',
+      blockKeyword: 'policy_select',
+      key: entry.slice(0, entry.indexOf(' ')),
+      path,
+      syntax: 'scalar',
+    });
+  });
+
+  it('classifies an unclosed list followed by the next entry as a list element slot', () => {
+    const marked = [
+      'policy_select read_own {',
+      '  roles = [admin, |',
+      '  permissive = true',
+      '}',
+    ].join('\n');
+    expect(classify(marked)).toEqual({
+      ...blockValueAt(marked),
+      kind: 'blockValue',
+      blockKeyword: 'policy_select',
+      key: 'roles',
+      path: [{ kind: 'listElement' }],
+      syntax: 'scalar',
+    });
+  });
+
+  it('classifies function-call argument slots and named keys inside a generic block value', () => {
+    const slot = ['schedule nightly {', '  run = every(|)', '}'].join('\n');
+    expect(classify(slot)).toEqual({
+      ...blockValueAt(slot),
+      kind: 'blockValueArgumentSlot',
+      blockKeyword: 'schedule',
+      key: 'run',
+      path: [{ kind: 'functionCall', name: 'every' }],
+      positionalIndex: 0,
+      existingNamedKeys: [],
+      hasColon: false,
+    });
+
+    const namedKey = ['schedule nightly {', '  run = every(5, un|: seconds)', '}'].join('\n');
+    expect(classify(namedKey)).toEqual({
+      ...blockValueAt(namedKey),
+      kind: 'blockValueNamedKey',
+      blockKeyword: 'schedule',
+      key: 'run',
+      path: [{ kind: 'functionCall', name: 'every' }],
+      existingNamedKeys: [],
+      hasColon: true,
+      replacementStartOffset: namedKey.indexOf('un|'),
+      replacementEndOffset: namedKey.indexOf('|'),
+    });
+
+    const named = ['schedule nightly {', '  run = every(5, unit: |)', '}'].join('\n');
+    expect(classify(named)).toEqual({
+      ...blockValueAt(named),
+      kind: 'blockValue',
+      blockKeyword: 'schedule',
+      key: 'run',
+      path: [
+        { kind: 'functionCall', name: 'every' },
+        { kind: 'namedArgument', name: 'unit' },
+      ],
+      syntax: 'scalar',
     });
   });
 
@@ -313,8 +571,220 @@ describe('classifyPslCompletionContext', () => {
     expectUnsupported(['model Post {', '  id Int |', '}'].join('\n'));
   });
 
+  it.each([
+    ['model M { value String @probe(', ') }', 'fieldAttributeValue'],
+    ['model M { @@probe(', ') }', 'modelAttributeValue'],
+    ['policy M { @@probe(', ') }', 'blockAttributeValue'],
+  ])('preserves the full nested value position for %s', (prefix, suffix, kind) => {
+    const marked = `${prefix}nested: wrap([ordered(direction: A|sc)])${suffix}`;
+    const context = classify(marked);
+    expect(context).toEqual({
+      kind,
+      ...(kind === 'fieldAttributeValue'
+        ? {
+            ownerKind: 'field',
+            field: expect.any(FieldDeclarationAst),
+            model: expect.any(ModelDeclarationAst),
+          }
+        : kind === 'modelAttributeValue'
+          ? { ownerKind: 'model', model: expect.any(ModelDeclarationAst) }
+          : {
+              ownerKind: 'block',
+              block: expect.any(GenericBlockDeclarationAst),
+              blockKeyword: 'policy',
+            }),
+      attributeName: 'probe',
+      path: [
+        { kind: 'namedArgument', name: 'nested' },
+        { kind: 'functionCall', name: 'wrap' },
+        { kind: 'positionalArgument', index: 0 },
+        { kind: 'listElement' },
+        { kind: 'functionCall', name: 'ordered' },
+        { kind: 'namedArgument', name: 'direction' },
+      ],
+      syntax: 'scalar',
+      offset: marked.indexOf('|'),
+      replacementStartOffset: marked.indexOf('A|'),
+      replacementEndOffset: marked.indexOf('|') + 2,
+    });
+    expect(context).not.toHaveProperty('attribute');
+  });
+
+  it.each([
+    [
+      'model M { value String @probe(',
+      'fieldAttribute',
+      {
+        ownerKind: 'field',
+        field: expect.any(FieldDeclarationAst),
+        model: expect.any(ModelDeclarationAst),
+      },
+    ],
+    [
+      'model M { @@probe(',
+      'modelAttribute',
+      { ownerKind: 'model', model: expect.any(ModelDeclarationAst) },
+    ],
+    [
+      'policy M { @@probe(',
+      'blockAttribute',
+      { ownerKind: 'block', block: expect.any(GenericBlockDeclarationAst), blockKeyword: 'policy' },
+    ],
+  ])('preserves exact nested keys and ambiguous slots for %s', (prefix, ownerKind, owner) => {
+    for (const args of [
+      'optional: true, req|uired: []',
+      'optional: true, |',
+      'optional: true, Asc, |',
+      'optional: true, A|sc',
+    ]) {
+      const marked = `${prefix}choice: ordered(${args})) }`;
+      const namedKey = args.includes('req|');
+      const identifier = args.includes('A|');
+      const offset = marked.indexOf('|');
+      expect(classify(marked)).toEqual({
+        ...owner,
+        kind: `${ownerKind}${namedKey ? 'NamedKey' : 'ArgumentSlot'}`,
+        attributeName: 'probe',
+        path: [
+          { kind: 'namedArgument', name: 'choice' },
+          { kind: 'functionCall', name: 'ordered' },
+        ],
+        existingNamedKeys: ['optional'],
+        hasColon: namedKey,
+        ...(!namedKey ? { positionalIndex: args.includes('Asc,') ? 1 : 0 } : {}),
+        offset,
+        replacementStartOffset: namedKey ? offset - 3 : identifier ? offset - 1 : offset,
+        replacementEndOffset: namedKey ? offset + 5 : identifier ? offset + 2 : offset,
+      });
+    }
+  });
+
+  it.each(['flags: [true |]', 'scalar: true |', 'call: f |(x: true)', 'flags: []|'])(
+    'rejects completed expression boundaries during classification: %s',
+    (args) => {
+      expectUnsupported(`model M { value String @probe(${args}) }`);
+    },
+  );
+
+  it.each(['flags: [, |]', 'flags: [true,, |]'])(
+    'classifies recovered nested comma gaps: %s',
+    (args) => {
+      const marked = `model M { value String @probe(${args}) }`;
+      expect(classify(marked)).toMatchObject({
+        kind: 'fieldAttributeValue',
+        attributeName: 'probe',
+        path: [{ kind: 'namedArgument', name: 'flags' }, { kind: 'listElement' }],
+        syntax: 'scalar',
+        offset: marked.indexOf('|'),
+        replacementStartOffset: marked.indexOf('|'),
+        replacementEndOffset: marked.indexOf('|'),
+      });
+    },
+  );
+
+  it.each([
+    ['choice: or|dered(true)', 'choice', 'functionName', 'ordered'],
+    ['fixed: "ol|d"', 'fixed', 'scalar', '"old"'],
+    ['fixed: -1|2', 'fixed', 'scalar', '-12'],
+  ])('captures the exact leaf and replacement for %s', (args, name, syntax, token) => {
+    const marked = `model M { value String @probe(${args}) }`;
+    const source = marked.replace('|', '');
+    expect(classify(marked)).toEqual({
+      kind: 'fieldAttributeValue',
+      model: expect.any(ModelDeclarationAst),
+      field: expect.any(FieldDeclarationAst),
+      attributeName: 'probe',
+      path: [{ kind: 'namedArgument', name }],
+      ownerKind: 'field',
+      syntax,
+      offset: marked.indexOf('|'),
+      replacementStartOffset: source.indexOf(token),
+      replacementEndOffset: source.indexOf(token) + token.length,
+    });
+  });
+
+  it.each(['()', '(', ''])('captures name edit boundaries and existing arguments: %s', (suffix) => {
+    const marked = `model M { value String @pr|obe${suffix}`;
+    expect(classify(marked)).toEqual({
+      kind: 'fieldAttributeName',
+      model: expect.any(ModelDeclarationAst),
+      field: expect.any(FieldDeclarationAst),
+      offset: marked.indexOf('|'),
+      replacementStartOffset: marked.indexOf('pr|'),
+      replacementEndOffset: marked.indexOf('|') + 3,
+      hasArgumentList: suffix.length > 0,
+      ownerKind: 'field',
+    });
+  });
+
+  it('retains the entire recovered record/list path at EOF', () => {
+    const marked = 'model M { value String @probe(records: { key: [, |';
+    expect(classify(marked)).toEqual({
+      kind: 'fieldAttributeValue',
+      model: expect.any(ModelDeclarationAst),
+      field: expect.any(FieldDeclarationAst),
+      attributeName: 'probe',
+      ownerKind: 'field',
+      path: [
+        { kind: 'namedArgument', name: 'records' },
+        { kind: 'recordValue' },
+        { kind: 'listElement' },
+      ],
+      syntax: 'scalar',
+      offset: marked.indexOf('|'),
+      replacementStartOffset: marked.indexOf('|'),
+      replacementEndOffset: marked.indexOf('|'),
+    });
+  });
+
+  it.each([
+    ['mo|de', false],
+    ['mo|de:   Asc', true],
+    ['mo|de :   Asc', true],
+  ])('captures colon presence without changing the full key edit: %s', (args, hasColon) => {
+    const marked = `model M { value String @probe(${args}) }`;
+    expect(classify(marked)).toMatchObject({
+      kind: hasColon ? 'fieldAttributeNamedKey' : 'fieldAttributeArgumentSlot',
+      hasColon,
+      path: [],
+      replacementStartOffset: marked.indexOf('mo|'),
+      replacementEndOffset: marked.indexOf('|') + 2,
+    });
+  });
+
   it('returns unsupported for invalid over-qualified names', () => {
     expectUnsupported(['model Post {', '  owner auth.domain.U|', '}'].join('\n'));
     expectUnsupported(['model Post {', '  owner supabase:auth:U|', '}'].join('\n'));
+  });
+});
+
+describe('classifyPslCompletionContext at an inclusion', () => {
+  const inclusionAt = (markedSource: string): string => {
+    const context = classify(markedSource);
+    if (context.kind !== 'mixinInclusion') return context.kind;
+    return context.namespace === undefined ? 'inclusion' : `inclusion in ${context.namespace}`;
+  };
+
+  it.each([
+    ['after the plus', 'model User {\n  +|\n}', 'inclusion'],
+    ['in the name', 'model User {\n  +Tim|\n}', 'inclusion'],
+    ['after a qualifier', 'model User {\n  +auth.|\n}', 'inclusion in auth'],
+    ['in a qualified name', 'model User {\n  +auth.Tim|\n}', 'inclusion in auth'],
+    ['after two qualifiers', 'model User {\n  +a.b.|\n}', 'unsupported'],
+    ['after a plus and a space', 'model User {\n  + |\n}', 'inclusion'],
+    ['in the name after a plus and a space', 'model User {\n  + Tim|\n}', 'inclusion'],
+    ['in the name on the line of the opening brace', 'model User { +Tim| }', 'inclusion'],
+    ['after the plus at the end of the file', 'model User {\n  +|', 'inclusion'],
+    ['in the qualifier of a qualified name', 'model User {\n  +au|th.Tim\n}', 'inclusion'],
+  ])('is an inclusion position %s', (_position, source, expected) => {
+    expect(inclusionAt(source)).toBe(expected);
+  });
+
+  it.each([
+    ['on the line after a lone plus', 'model User {\n  +\n  |\n}'],
+    ['after a complete inclusion and a space', 'model User {\n  +Foo |\n}'],
+    ['after a contract-space qualifier', 'model User {\n  +other:|\n}'],
+  ])('is not an inclusion position %s', (_position, source) => {
+    expect(inclusionAt(source)).not.toContain('inclusion');
   });
 });

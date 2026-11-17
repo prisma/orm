@@ -1,6 +1,6 @@
 # ADR 029 — Shadow DB preflight semantics
 
-**Status:** Superseded. The team has decided Prisma Next will never use a shadow database: every migration's bookend contracts are stored as on-disk snapshots, so diffing is fully offline, and no sandbox-execution (`preflight`) verb exists. See [CI Integration § No shadow database](../subsystems/8.%20CI%20Integration.md#no-shadow-database). The content below is preserved as a historical record of the superseded design.
+**Status:** Superseded. The Prisma Next CLI never provisions or replays against a shadow database: every migration's bookend contracts are stored as on-disk snapshots, so diffing is fully offline, and no core sandbox-execution (`preflight`) verb exists. Rehearsing a migration against a fork of a real database is a hook a database extension may provide, and the CLI exposes it only when the configured extension implements one. See [CI Integration § No shadow database](../subsystems/8.%20CI%20Integration.md#no-shadow-database). The content below is preserved as a historical record of the superseded design.
 
 ## Context
 
@@ -102,7 +102,7 @@ Both modes share the same job envelope, diagnostics schema, and exit codes, enab
 - Resolve path by reconstructing graph from migration files per ADR 028 and optional graph.index.json per ADR 039
 - If fromHash cannot be derived, emit CONTRACT.MARKER_MISSING and refuse shadow mode unless policy allows reset to zero
 - Apply migrations with advisory locks, respecting per-op transactional boundaries and compensation plans per ADR 037
-- Idempotency classification per ADR 038 determines whether a repeated migration is safe no-op or a conflict
+- The runner decides whether a repeated operation is already applied from its postchecks, per [ADR 038](ADR%20038%20-%20Operation%20idempotency%20classification%20&%20enforcement.md)
 
 ### Canonical JSON consumption
 - Preflight jobs must consume canonical JSON; if TS is provided, a trusted emitter step produces JSON inside the job sandbox

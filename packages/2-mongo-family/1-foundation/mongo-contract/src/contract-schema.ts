@@ -1,31 +1,13 @@
-import { CrossReferenceSchema } from '@internal/contract/types';
+import {
+  ContractExecutionSectionSchema,
+  ContractFieldTypeSchema,
+  ContractValueObjectSchema,
+  CrossReferenceSchema,
+} from '@internal/contract/types';
 import { type Type, type } from 'arktype';
 import type { MongoJsonObject, MongoJsonPrimitive, MongoJsonValue } from './contract-types';
 
 const ControlPolicySchema = type("'managed' | 'tolerated' | 'external' | 'observed'");
-
-const ScalarFieldTypeSchema = type({
-  '+': 'reject',
-  kind: "'scalar'",
-  codecId: 'string',
-  'typeParams?': 'Record<string, unknown>',
-});
-
-const ValueObjectFieldTypeSchema = type({
-  '+': 'reject',
-  kind: "'valueObject'",
-  name: 'string',
-});
-
-const UnionFieldTypeSchema = type({
-  '+': 'reject',
-  kind: "'union'",
-  members: ScalarFieldTypeSchema.or(ValueObjectFieldTypeSchema).array(),
-});
-
-const FieldTypeSchema = ScalarFieldTypeSchema.or(ValueObjectFieldTypeSchema).or(
-  UnionFieldTypeSchema,
-);
 
 const DomainEnumRefSchema = type({
   plane: "'domain'",
@@ -49,9 +31,9 @@ const ContractEnumSchema = type({
 
 const RawFieldSchema = type({
   '+': 'reject',
-  type: FieldTypeSchema,
+  type: ContractFieldTypeSchema,
   'nullable?': 'boolean',
-  'many?': 'boolean',
+  'many?': type('false').or({ elementNullable: 'boolean' }),
   'dict?': 'boolean',
   'valueSet?': DomainEnumRefSchema,
 });
@@ -59,6 +41,7 @@ const RawFieldSchema = type({
 const FieldSchema = RawFieldSchema.pipe((field) => ({
   ...field,
   nullable: field.nullable ?? false,
+  many: field.many ?? false,
 }));
 
 const RelationOnSchema = type({
@@ -67,14 +50,37 @@ const RelationOnSchema = type({
   targetFields: 'string[]',
 });
 
-const RelationSchema = type({
+const ToOneReferenceRelationSchema = type({
   '+': 'reject',
   to: CrossReferenceSchema,
-  cardinality: "'1:1' | '1:N' | 'N:1'",
-  'on?': RelationOnSchema,
+  cardinality: "'1:1' | 'N:1'",
+  'nullable?': 'boolean',
+  on: RelationOnSchema,
 });
 
+const ToManyReferenceRelationSchema = type({
+  '+': 'reject',
+  to: CrossReferenceSchema,
+  cardinality: "'1:N'",
+  on: RelationOnSchema,
+});
+
+const EmbedRelationSchema = type({
+  '+': 'reject',
+  to: CrossReferenceSchema,
+  cardinality: "'1:1' | '1:N'",
+});
+
+const RelationSchema = ToOneReferenceRelationSchema.or(ToManyReferenceRelationSchema).or(
+  EmbedRelationSchema,
+);
+
 const StorageRelationEntrySchema = type({
+  '+': 'reject',
+  field: 'string',
+});
+
+const StorageFieldEntrySchema = type({
   '+': 'reject',
   field: 'string',
 });
@@ -213,6 +219,7 @@ const CollectionOptionsSchema = type({
 const ModelStorageSchema = type({
   '+': 'reject',
   'collection?': 'string',
+  fields: type({ '[string]': StorageFieldEntrySchema }),
   'relations?': type({ '[string]': StorageRelationEntrySchema }),
 });
 
@@ -221,18 +228,13 @@ const DiscriminatorSchema = type({
   field: 'string',
 });
 
-const VariantEntrySchema = type({
-  '+': 'reject',
-  value: 'string',
-});
-
 const ModelDefinitionSchema = type({
   '+': 'reject',
   fields: type({ '[string]': FieldSchema }),
   storage: ModelStorageSchema,
   'relations?': type({ '[string]': RelationSchema }),
   'discriminator?': DiscriminatorSchema,
-  'variants?': type({ '[string]': VariantEntrySchema }),
+  'variants?': type({ '[string]': CrossReferenceSchema }),
   'base?': CrossReferenceSchema,
   'owner?': 'string',
 });
@@ -279,6 +281,7 @@ const MongoIndexKeySchema = type({
 const MongoStorageIndexSchema = type({
   '+': 'reject',
   'kind?': "'mongo-index'",
+  name: 'string > 0',
   keys: MongoIndexKeySchema.array().atLeastLength(1),
   'unique?': 'boolean',
   'sparse?': 'boolean',
@@ -398,6 +401,7 @@ export function createMongoNamespaceEnvelopeSchema(
     entries: type({
       'collection?': type({ '[string]': collectionEntrySchema(fragments) }),
       'valueSet?': type({ '[string]': StorageValueSetSchema }),
+      'valueObject?': type({ '[string]': ContractValueObjectSchema }),
     }),
   }).narrow((ns, ctx) => {
     if (typeof ns !== 'object' || ns === null || Array.isArray(ns)) {
@@ -426,7 +430,7 @@ export function createMongoContractSchema(
     '+': 'reject',
     targetFamily: "'mongo'",
     'schemaVersion?': 'string',
-    'target?': 'string',
+    target: 'string',
     'storageHash?': 'string',
     'profileHash?': 'string',
     roots: type({ '[string]': CrossReferenceSchema }),
@@ -434,15 +438,14 @@ export function createMongoContractSchema(
     'extensions?': 'Record<string, unknown>',
     'meta?': 'Record<string, unknown>',
     'defaultControlPolicy?': ControlPolicySchema,
+    'execution?': ContractExecutionSectionSchema,
     'sources?': 'Record<string, unknown>',
     '_generated?': 'Record<string, unknown>',
     domain: type({
       namespaces: type({
         '[string]': type({
+          '+': 'reject',
           models: type({ '[string]': ModelDefinitionSchema }),
-          'valueObjects?': type({
-            '[string]': type({ '+': 'reject', fields: type({ '[string]': FieldSchema }) }),
-          }),
           'enum?': type({ '[string]': ContractEnumSchema }),
         }),
       }),

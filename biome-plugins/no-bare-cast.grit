@@ -6,7 +6,7 @@
 // (`import type { Contract as End }`, `export { X as Y }`), which are NOT
 // type-assertion casts. The migration-scaffold generator (TML-2892) emits
 // `import type { Contract as End }` / `as Start`, so the token pattern produced
-// false positives that tripped the CI cast ratchet (scripts/lint-casts.mjs).
+// false positives that tripped the CI cast ratchet (scripts/lint-ratchets.mjs).
 // `TsAsExpression` only matches real casts, so import aliases are not counted.
 //
 // `$ty` is the target-type child; `as const` is excluded by the `^const$`

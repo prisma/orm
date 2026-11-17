@@ -1,10 +1,14 @@
-import { domainModelsAtDefaultNamespace, type PlanMeta } from '@internal/contract/types';
+import {
+  type ContractModel,
+  domainModelsAtDefaultNamespace,
+  type PlanMeta,
+} from '@internal/contract/types';
 import type {
   AnyMongoTypeMaps,
   ExtractMongoCodecTypes,
   MongoContract,
   MongoContractWithTypeMaps,
-  MongoModelDefinition,
+  MongoModelStorage,
   MongoModelsMap,
   RootModelName,
 } from '@internal/mongo-contract';
@@ -646,7 +650,7 @@ export function createCollectionHandle<
     throw ormError('ORM.MODEL_UNKNOWN', `Unknown root: "${rootName}". Valid roots: ${validRoots}`);
   }
   const model = domainModelsAtDefaultNamespace(c.domain)[modelName] as
-    | MongoModelDefinition
+    | ContractModel<MongoModelStorage>
     | undefined;
   if (!model) {
     throw contractError(

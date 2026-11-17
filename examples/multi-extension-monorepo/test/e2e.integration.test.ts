@@ -236,6 +236,7 @@ describe('multi-extension-monorepo end-to-end (PGlite)', {
 
     client = createClient(database.connectionString, 'natural');
     const result = await client.dbInit({
+      invocation: { cwd: process.cwd(), configPath: undefined, dbGiven: false },
       contract: appContractJson,
       mode: 'plan',
       migrationsDir: project.migrationsDir,
@@ -266,6 +267,7 @@ describe('multi-extension-monorepo end-to-end (PGlite)', {
 
     client = createClient(database.connectionString, 'natural');
     const result = await client.dbInit({
+      invocation: { cwd: process.cwd(), configPath: undefined, dbGiven: false },
       contract: appContractJson,
       mode: 'apply',
       migrationsDir: project.migrationsDir,
@@ -352,6 +354,7 @@ describe('multi-extension-monorepo end-to-end (PGlite)', {
 
     client = createClient(database.connectionString, 'reverse');
     const result = await client.dbInit({
+      invocation: { cwd: process.cwd(), configPath: undefined, dbGiven: false },
       contract: appContractJson,
       mode: 'apply',
       migrationsDir: project.migrationsDir,

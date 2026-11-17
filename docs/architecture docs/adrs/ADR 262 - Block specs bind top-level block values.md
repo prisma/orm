@@ -1,0 +1,209 @@
+# ADR 262 — Block specs bind top-level block values
+
+**Status:** Accepted. Amended 2026-09-30: block specs may read the stack's data types, so a policy's predicates take `sql` literals ([ADR 268](ADR%20268%20-%20Raw%20SQL%20is%20a%20value%20of%20the%20data%20type%20sql-expression.md)).
+**Date:** 2026-09-22
+**Builds on:** [ADR 231 — Declarative attribute specifications](ADR%20231%20-%20Declarative%20attribute%20specifications.md), [ADR 126 — PSL top-level block SPI](ADR%20126%20-%20PSL%20top-level%20block%20SPI.md), [ADR 249 — Central attribute-spec registry](ADR%20249%20-%20Central%20attribute-spec%20registry.md)
+
+---
+
+## At a glance
+
+A contributed top-level PSL block declares its member-value grammar with the same argument combinators attributes use (ADR 231), through one of two constructors. A closed key set is a `structBlock`; the Postgres `policy_select` keyword declares exactly the keys a SELECT policy takes:
+
+```ts
+import {
+  type BlockSpecContext,
+  bool,
+  dataTypeValue,
+  entityRef,
+  identifier,
+  list,
+  oneOf,
+  optional,
+  structBlock,
+} from '@internal/psl-parser';
+import { SQL_EXPRESSION_DATA_TYPE_ID } from '@internal/sql-contract/sql-expression';
+
+export function policyUsingOnlySpec(ctx: BlockSpecContext) {
+  return structBlock({
+    parameters: {
+      target: {
+        type: entityRef({ kind: 'model' }),
+        documentation: 'The model protected by this policy; it must declare @@rls.',
+      },
+      roles: {
+        type: optional(list(oneOf(entityRef({ kind: 'block', keyword: 'role' }), identifier()))),
+        documentation: 'The database roles to which this policy applies.',
+      },
+      using: {
+        type: optional(dataTypeValue(SQL_EXPRESSION_DATA_TYPE_ID, ctx.dataTypes)),
+        documentation: 'A SQL predicate controlling which rows this policy permits.',
+      },
+      permissive: {
+        type: optional(bool()),
+        documentation:
+          'Whether the policy is permissive (combined with OR) rather than restrictive (combined with AND).',
+      },
+    },
+  });
+}
+```
+
+An arbitrary key set is a `mapBlock`, one reusable rule applied to every member; the SQL family enum accepts native JSON-compatible literals and bare members:
+
+```ts
+import { mapBlock, jsonValue } from '@internal/psl-parser';
+
+export function sqlFamilyEnumSpec() {
+  return mapBlock({
+    value: {
+      type: jsonValue(),
+      documentation: 'The stored member value; a bare member stores its own name.',
+    },
+    allowBare: true,
+  });
+}
+```
+
+`InferBlock` extracts the spec's output type, so the lowering factory's input is derived from the grammar rather than maintained by hand:
+
+```ts
+type EnumBlockValues = InferBlock<ReturnType<typeof sqlFamilyEnumSpec>>;
+// Record<string, JsonValue | undefined> — undefined is the bare-member sentinel
+```
+
+The descriptor registers the spec factory next to the keyword it claims:
+
+```ts
+export const sqlFamilyPslBlockDescriptors = {
+  enum: {
+    kind: 'pslBlock',
+    keyword: 'enum',
+    documentation:
+      'Defines an enum with named values and an inferred or explicitly selected storage codec.',
+    discriminator: 'enum',
+    name: { required: true },
+    spec: sqlFamilyEnumSpec,
+    attributes: { type: () => enumTypeBlockAttribute },
+  } satisfies PslBlockSpecDescriptor,
+} as const satisfies AuthoringPslBlockDescriptorNamespace;
+```
+
+---
+
+## Decision
+
+Top-level extension blocks have one value grammar: a **block spec** built from the shared argument combinators. The spec is a factory — `(ctx: BlockSpecContext) => BlockSpec` with `BlockSpecContext = { symbols: SymbolTable; dataTypes: DataTypeSupport }` — registered on the block's `AuthoringPslBlockDescriptor` as the `spec` field. Symbol-table construction collects every declaration without interpreting blocks. The snapshot's binder, built by the caller from a context that carries the registered block descriptors ([psl-parser README § Binder](../../../packages/1-framework/2-authoring/psl-parser/README.md#binder)), binds the blocks' references, and consumers interpret each registered block's member expressions and `@@` attributes directly against the expression AST. Only blocks whose values and attributes all interpret successfully publish a **typed envelope** (`ParsedPslExtensionBlock`), and lowering consumes envelopes exclusively. Parsed AST is never rendered back to text: `PslExtensionBlock` is a **producer-only print shape**, constructed by generators whose text is born from their own values (database inference among them) and consumed by the printer alone; no validator, classifier, or lowering path reads it.
+
+Two constructors cover the block shapes PSL has:
+
+- `structBlock({ parameters })` — a closed set of declared keys. Unknown keys are rejected; a key is required unless its rule is `optional(...)`. Required/optional property inference reuses the named-argument machinery (`NamedOut`), so a fixed spec's output type carries exactly the declared keys.
+- `mapBlock({ value, allowBare? })` — arbitrary keys, each bound through one shared value rule. With `allowBare: true`, a member may stand alone on its line; the output record then carries the key with an `undefined` value — the bare sentinel, distinct from an explicit JSON `null`.
+
+`InferBlock<S>` extracts a spec's output type, and `jsonValue()` is the shared rule for native JSON-compatible literals (strings, numbers, booleans, `null`, arrays, object literals, recursively). It recognizes the expression AST directly; `json()`, which decodes a quoted JSON object string, remains the deliberate text exception (ADR 231).
+
+### The descriptor carries the spec erased; the parser restores it
+
+Framework core registers descriptors without importing parser types: `AuthoringPslBlockDescriptor.spec` is `unknown`, validated at registration as a function. The parser-facing `PslBlockSpecDescriptor` narrows `spec` to the real factory type, and authoring code declares descriptors with `satisfies PslBlockSpecDescriptor` so the field stays typed at the source. `blockSpecFactoryOf(descriptor)` is the single point that restores the callable type from the erased field. Core stays parser-independent; the parser owns the grammar vocabulary.
+
+### Collect first; consumers resolve
+
+`buildSymbolTable({ documents, sources })` collects all declarations with stable symbol identities and reports collection-level failures (duplicate declarations, malformed syntax) — it interprets no blocks. Consumers resolve blocks against the collected table, exactly as attributes are resolved by their consumers:
+
+```ts
+const { parsedBlocks, diagnostics } = interpretExtensionBlocks({
+  symbolTable,
+  sources,
+  pslBlockDescriptors,
+  binder,
+});
+```
+
+Because every declaration is collected first, references — forward references included — resolve against the complete table. The snapshot's binder (`createBinder`, whose context carries the registered `pslBlockDescriptors` among the authoring contributions) eagerly binds the reference-kinded rules of every registered block's value entries and `@@` attribute arguments in the same pass that binds attribute arguments, under the same scope chain — declaring namespace, then top level, then the contributed-type scope; siblings never. Reference rules (`entityRef`) read the binder's resolutions; an unresolved block-entry reference is reported once in the binder's voice (`PSL_UNRESOLVED_REFERENCE`, `Cannot find entity "..."`), except where the rule's grammar also accepts an unrestricted identifier — an undeclared name is then legal and binds silently. The spec context does not carry the block. A block attribute's parse and refine receive the block being interpreted as `BlockAttributeCtx.selfBlock`.
+
+Only successful blocks enter `parsedBlocks`. An invalid block has no entry — its symbol keeps its syntax node, keyword, name, and span for recovery and editor tooling, but it cannot lower. An unregistered keyword is never interpreted and gains no grammar. Diagnostics have one owner per pass. The caller that builds the snapshot's binder — covering attributes and block entries alike — reports the binder's diagnostics and passes the binder to `interpret` ([psl-parser README § Binder](../../../packages/1-framework/2-authoring/psl-parser/README.md#binder)). Each family interpreter calls `interpretExtensionBlocks` once at its entry with that binder, surfacing the returned diagnostics with its other authoring failures, anchored to the original expression and entry spans. Block-value squiggles reach the editor through interpreter diagnostics when an interpreter is configured.
+
+### The typed envelope
+
+```ts
+export interface ParsedPslExtensionBlock<Values = Readonly<Record<string, unknown>>> {
+  readonly kind: string; // storage identity — the descriptor's discriminator
+  readonly keyword: string; // parse identity — the source PSL keyword
+  readonly name: string;
+  readonly values: Values;
+  readonly parameterSpans: Readonly<Record<string, PslSpan>>;
+  readonly attributes: Readonly<Record<string, PslExtensionBlockParsedAttribute>>;
+  readonly span: PslSpan;
+}
+```
+
+The envelope is parser-independent (it is declared in framework core's shared plane) and generic over `Values`, so a concrete consumer can carry parser-owned results — a resolved model reference, a decoded literal — through the type parameter without core depending on those types. `parameterSpans` lets consumers anchor semantic diagnostics without reparsing; `attributes` are the block's interpreted `@@` attributes, produced by the same lifecycle (`resolveEnumCodecId`, for example, reads `block.attributes['type']` and `block.values`).
+
+### Printing consumes producer-built print shapes only
+
+`PslExtensionBlock` holds ordered `parameters: Record<string, PslExtensionBlockPrintEntry>` — expression text and span per entry, a missing `expression` rendering as a bare line — plus generically captured `@@` attribute lines. Only producers without an AST construct it: inference producers (Postgres policy and native-enum inference) synthesize blocks whose text is born from a live database's values, and the printer renders that shape without consulting descriptors, codecs, or JSON re-encoding. Parsed source is never converted into this shape — a consumer needing the authored text of a parsed block reads the syntax tree or the source file at its own boundary. Round-trip tests parse and validate inferred documents through the actual spec pipeline; inference does not manufacture resolved symbols, and lowering never accepts printable entries.
+
+### SQL files placement rows through an opt-in hook
+
+SQL projects a block's already-selected model references onto storage coordinates once — `ResolvedPslModelRefs`, keyed by parameter name, carrying `{ namespaceId, tableName }` read from the selected declaration's identity, never from a second name lookup. An entity-type factory output may additionally implement the SQL-owned placement hook:
+
+```ts
+export interface SqlPslEntityPlacementOutput {
+  pslPlacement(entity: unknown): Pick<LoweredPackEntity, 'namespaceId'>;
+}
+```
+
+Outputs without the hook keep the block's lexical owner namespace. Postgres policies opt in with their target's coordinate, so a policy is filed at the namespace of the table it protects:
+
+```ts
+const policyEntityTypeOutput = {
+  factory: lowerRlsPolicyFromBlock,
+  pslPlacement: (entity: PostgresRlsPolicy) => ({ namespaceId: entity.namespaceId }),
+} satisfies AuthoringEntityTypeFactoryOutput<RlsPolicyExtensionBlock, PostgresRlsPolicy | undefined> &
+  SqlPslEntityPlacementOutput;
+```
+
+The hook picks only the destination namespace — entity kind and key stay fixed by the walk — and collision checks run at the destination, so two policies from different lexical namespaces that converge on one key still collide. The hook is SQL-family surface; framework entity factories keep their return contract, and no serialized format changes.
+
+### Cross-declaration requirements stay declarative
+
+`AuthoringPslBlockDescriptor.requiresModelAttribute: { parameter, attribute }` declares that the model selected by a ref parameter must carry a bare `@@` attribute (Postgres policies require `@@rls` on their target). The family interpreter enforces it generically over the whole document — declaration order does not matter — and anchors `PSL_EXTENSION_TARGET_MODEL_MISSING_ATTRIBUTE` on the original parameter span.
+
+### Block specs may read the stack's data types
+
+A block spec may depend on the stack's data types. `BlockSpecContext.dataTypes` is the same value as `AttributeSpecContext.dataTypes`, and `interpretExtensionBlocks` and the binder put it into every block spec and block attribute context they build. This is how a policy's `using` and `withCheck` receive `sql/expression` through `dataTypeValue`, so they take only a `sql` literal ([ADR 268](ADR%20268%20-%20Raw%20SQL%20is%20a%20value%20of%20the%20data%20type%20sql-expression.md)). Admitting a value of a data type chooses no codec and no stored representation, so the reason below for keeping codec registries out of parsing does not apply.
+
+---
+
+## Consequences
+
+- One grammar, three consumers. The spec a block validates against is the spec the language server inspects for key completion and documentation and the spec the lowering factory's input type derives from (`InferBlock`). None of the three can drift, because all three read the same value.
+- Lowering paths receive decoded values and spans. Family enum lowering keeps codec selection, decoding, emptiness, and decoded-value-uniqueness checks — semantic concerns over typed values — while member recognition belongs to the grammar.
+- Alternate producers construct envelopes, not text. A producer that already holds decoded values (an earlier Prisma version's schema reader, per ADR 252) builds a trusted `ParsedPslExtensionBlock` directly rather than synthesizing source for reparsing.
+- Editor metadata binds specs with the same `{ symbols, dataTypes }` context. Fixed keys complete with their documentation; arbitrary-key blocks invent no candidates. Because the context needs no declared block, a snippet for a not-yet-written block lists the spec's required keys.
+- The cost is one more registration concept: a block author writes a spec factory instead of a parameter table, and decides per rule whether a constraint is grammar (a combinator or `optional`), block interpretation, or family semantics.
+
+---
+
+## Alternatives considered
+
+**Describe parameters as data — a typed parameter table on the descriptor.** A descriptor-owned map of parameter kinds (`ref` / `value` / `option` / `list`) with a generic validator interpreting it. Rejected: a closed kind vocabulary cannot express the grammars blocks actually need — alternatives with checked-reference preference (`oneOf(entityRef(...), identifier())`), nested JSON literals, bare-member sentinels — so families grow hand-written validation beside the table, and the interpreter-facing types drift from the declared kinds. ADR 231's combinators already express these grammars with inferred output types; block values reuse them instead of maintaining a second, weaker description language. ADR 126's parameter-kind sections record the superseded shape.
+
+**Carry block values through the codec JSON medium.** A `value` parameter naming a `codecId`, decoded during parsing. Rejected: codec choice for enum members is a family lowering concern over the decoded literal (an integer member may store through `int4` or `int8` depending on the target), and parsing must not depend on codec registries. The grammar recognizes native JSON literals (`jsonValue()`); codecs interpret them afterwards.
+
+**Validate blocks from flattened source text.** Keeping raw expression strings on the parsed block and reparsing them in each consumer. Rejected: it duplicates the expression grammar in every consumer, loses spans, and makes diagnostics inconsistent. Parsed AST is never stringified at all; only producers without an AST write print text.
+
+**A variadic flag on fixed parameter tables.** Marking a descriptor as accepting arbitrary extra keys next to declared ones. Rejected: arbitrary-key blocks and closed-key blocks are different shapes with different output types; `mapBlock` gives the former its own constructor and inferred `Record` output instead of weakening unknown-key rejection for the latter.
+
+**Injected reference resolvers in the spec context.** Passing a resolver object to spec factories. Rejected: the snapshot's binder already owns every resolution, so an injected resolver adds a second owner without adding a capability.
+
+---
+
+## References
+
+- [ADR 231 — Declarative attribute specifications](ADR%20231%20-%20Declarative%20attribute%20specifications.md)
+- [ADR 249 — Central attribute-spec registry](ADR%20249%20-%20Central%20attribute-spec%20registry.md)
+- [ADR 126 — PSL top-level block SPI](ADR%20126%20-%20PSL%20top-level%20block%20SPI.md)
+- [ADR 253 — PSL red-root source ownership](ADR%20253%20-%20PSL%20red-root%20source%20ownership.md)
+- [ADR 252 — An earlier Prisma version's schema is a contract source](ADR%20252%20-%20An%20earlier%20Prisma%20version%27s%20schema%20is%20a%20contract%20source.md)
+- [ADR 225 — Three-layer extensibility for pack-contributed entity kinds](ADR%20225%20-%20Three-layer%20extensibility%20for%20pack-contributed%20entity%20kinds.md)

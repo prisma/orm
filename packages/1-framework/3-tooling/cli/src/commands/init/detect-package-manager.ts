@@ -23,8 +23,8 @@ function isPackageManager(name: string): name is PackageManager {
  *  2. **`getUserAgent()`** — parses `npm_config_user_agent`, the env var
  *     every PM sets when it spawns a script. This catches the
  *     bare-directory case where there's no project to walk up to but the
- *     user invoked us via `pnpm dlx prisma@next orm init` / `bunx
- *     prisma@next orm init` / `yarn dlx …`. Same signal used by every
+ *     user invoked us via `pnpm dlx prisma@latest orm init` / `bunx
+ *     prisma@latest orm init` / `yarn dlx …`. Same signal used by every
  *     `create-*` tool in the ecosystem (`create-vite`, `create-next-app`,
  *     `create-astro`, `@antfu/ni`, …).
  *
@@ -73,6 +73,11 @@ export function formatRunScriptCommand(pm: PackageManager, scriptName: string): 
     default:
       return `npm run ${scriptName}`;
   }
+}
+
+export function formatRemoveCommand(pm: PackageManager, packages: readonly string[]): string {
+  const verb = pm === 'npm' ? 'uninstall' : 'remove';
+  return [pm, verb, ...packages].join(' ');
 }
 
 export function formatAddArgs(pm: PackageManager, packages: string[]): string[] {

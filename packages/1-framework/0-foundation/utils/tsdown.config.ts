@@ -17,6 +17,7 @@ export default defineConfig({
     'src/exports/simplify-deep.ts',
     'src/exports/structured-error.ts',
     'src/exports/suppress-idle-connection-errors.ts',
+    'src/exports/text.ts',
     'src/exports/types.ts',
   ],
 });

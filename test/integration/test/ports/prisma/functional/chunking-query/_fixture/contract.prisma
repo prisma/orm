@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma functional suite `chunking-query`
 // (packages/client/tests/functional/chunking-query, postgres matrix entry).
 //
@@ -40,4 +42,5 @@ model TagsOnPosts {
   tag    Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([postId, tagId])
+  @@map("tagsOnPosts")
 }

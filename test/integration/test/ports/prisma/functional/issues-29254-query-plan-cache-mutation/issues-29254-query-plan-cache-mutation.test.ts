@@ -17,16 +17,16 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // Cursor semantics gap:
 //   Prisma cursor is INCLUSIVE (starts FROM the cursor row); skip=1 skips
 //   the cursor row itself, yielding the next row.
-//   prisma-next cursor is EXCLUSIVE (starts AFTER the cursor row); skip=1
+//   Prisma 8 cursor is EXCLUSIVE (starts AFTER the cursor row); skip=1
 //   skips one MORE row after the cursor.
 //
 //   Query 1: cursor=id1, skip=1, take=1
 //     Prisma:      starts FROM id1 (price=10), skip 1 → id2 (price=20) ✓
-//     prisma-next: starts AFTER id1, skip 1 → id3 (price=30) ✗
+//     Prisma 8: starts AFTER id1, skip 1 → id3 (price=30) ✗
 //
 //   Query 2: cursor=id2, skip=1, take=1
 //     Prisma:      starts FROM id2 (price=20), skip 1 → id3 (price=30) ✓
-//     prisma-next: starts AFTER id2, skip 1 → beyond end → [] ✗
+//     Prisma 8: starts AFTER id2, skip 1 → beyond end → [] ✗
 //
 // A faithful port runs both queries with `.orderBy().cursor().offset(1).limit(1).all()`
 // but the assertions from the upstream test will fail → it.fails (semantics gap).
@@ -50,7 +50,7 @@ describe('ports/prisma/functional/issues-29254-query-plan-cache-mutation', () =>
         ]);
 
         // Upstream orderBy: [{ price: 'asc' }, { id: 'asc' }].
-        // prisma-next: array of callbacks for multi-column orderBy.
+        // Prisma 8: array of callbacks for multi-column orderBy.
         const result1 = await db.public.Item.orderBy([(i) => i.price.asc(), (i) => i.id.asc()])
           .cursor({ id: id1, price: 10 })
           .offset(1)
@@ -58,7 +58,7 @@ describe('ports/prisma/functional/issues-29254-query-plan-cache-mutation', () =>
           .all();
 
         // Prisma (inclusive cursor + skip=1): [{ id: id2, price: 20 }]
-        // prisma-next (exclusive cursor + skip=1): [{ id: id3, price: 30 }]
+        // Prisma 8 (exclusive cursor + skip=1): [{ id: id3, price: 30 }]
         expect(result1).toEqual([{ id: id2, price: 20 }]);
 
         const result2 = await db.public.Item.orderBy([(i) => i.price.asc(), (i) => i.id.asc()])
@@ -68,7 +68,7 @@ describe('ports/prisma/functional/issues-29254-query-plan-cache-mutation', () =>
           .all();
 
         // Prisma (inclusive cursor + skip=1): [{ id: id3, price: 30 }]
-        // prisma-next (exclusive cursor + skip=1): [] (past the end)
+        // Prisma 8 (exclusive cursor + skip=1): [] (past the end)
         expect(result2).toEqual([{ id: id3, price: 30 }]);
       }),
     timeouts.spinUpPpgDev,

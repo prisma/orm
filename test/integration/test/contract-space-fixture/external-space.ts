@@ -27,7 +27,7 @@ const storageBody = {
         table: {
           platform_users: {
             columns: {
-              id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
+              id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
             },
             uniques: [],
             indexes: [],

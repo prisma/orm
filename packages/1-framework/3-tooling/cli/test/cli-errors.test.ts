@@ -1,19 +1,20 @@
+import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { docsUrlFor } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
 import {
   buildNeverPlannedFailure,
   buildPathNotFoundFailure,
 } from '../src/control-api/operations/migrate';
-import type { MigrateFailure } from '../src/control-api/types';
 import {
   errorDriverRequired,
   errorFamilyReadMarkerSqlRequired,
-  errorMarkerMismatch,
   errorPathUnreachable,
+  errorPlanOriginUnknown,
   errorRefSetEmptySentinel,
   errorRefSetHashNotInGraph,
   errorSpaceNotFound,
   mapRefResolutionError,
+  type PathUnreachable,
 } from '../src/utils/cli-errors';
 
 describe('CliStructuredError.toEnvelope()', () => {
@@ -47,8 +48,7 @@ describe('errorPathUnreachable', () => {
   const fromHash = `${'b'.repeat(64)}`;
 
   it('emits a fully-qualified --from --to --name plan step plus a migrate apply step for the pathUnreachable runner kind', () => {
-    const failure: MigrateFailure = {
-      code: 'MIGRATION_PATH_NOT_FOUND',
+    const failure: PathUnreachable = {
       summary: 'Current contract has no planned migration path',
       why: 'Cannot reach target.',
       meta: { spaceId: 'app', kind: 'pathUnreachable', fromHash, targetHash },
@@ -62,15 +62,14 @@ describe('errorPathUnreachable', () => {
     expect(envelope.fix).toContain('{bin} migration list');
     expect(envelope.fix).toContain('{bin} migration show');
     expect((envelope.fix ?? '').toLowerCase()).toContain('destructive');
-    expect((envelope.fix ?? '').toLowerCase()).toContain('hint');
+    expect(envelope.fix ?? '').toContain('Plan a rename with --rename old:new');
   });
 
   it('prescribes a bare plan command when the runner kind is neverPlanned (no graph to resolve --to against)', () => {
-    const failure: MigrateFailure = {
-      code: 'MIGRATION_PATH_NOT_FOUND',
+    const failure: PathUnreachable = {
       summary: 'No on-disk migrations for contract space "app"',
       why: 'migrate is replay-only.',
-      meta: { spaceId: 'app', kind: 'neverPlanned', target: targetHash },
+      meta: { spaceId: 'app', kind: 'neverPlanned', targetHash },
     };
     const envelope = errorPathUnreachable(failure).toEnvelope();
     // A never-planned space has an EMPTY graph, and `--to <hash>` only
@@ -78,20 +77,6 @@ describe('errorPathUnreachable', () => {
     expect(envelope.fix).toContain('{bin} migration plan --name <slug>');
     expect(envelope.fix).not.toContain('--to');
     expect(envelope.fix).not.toContain('--from');
-    expect(envelope.fix).not.toContain('<unknown>');
-  });
-
-  it('falls back to a bare `migration plan` suggestion when both hashes are absent', () => {
-    const failure: MigrateFailure = {
-      code: 'MIGRATION_PATH_NOT_FOUND',
-      summary: 'Migration runner reported an unreachable target',
-      why: 'No detail available.',
-      meta: { spaceId: 'app' },
-    };
-    const envelope = errorPathUnreachable(failure).toEnvelope();
-    expect(envelope.fix).toContain('{bin} migration plan');
-    expect(envelope.fix).not.toContain('--from');
-    expect(envelope.fix).not.toContain('--to');
     expect(envelope.fix).not.toContain('<unknown>');
   });
 
@@ -104,7 +89,7 @@ describe('errorPathUnreachable', () => {
       { storageHash: fromHash, invariants: [] },
       targetHash,
     );
-    const envelope = errorPathUnreachable(failure).toEnvelope();
+    const envelope = failure.toEnvelope();
 
     // why: names both endpoints + the absence of an edge; does NOT itself
     // prescribe running the planner (that is the fix's job).
@@ -119,22 +104,24 @@ describe('errorPathUnreachable', () => {
     );
     expect(envelope.fix).toContain(`{bin} db migrate --to ${targetHash}`);
     expect((envelope.fix ?? '').toLowerCase()).toContain('destructive');
-    expect((envelope.fix ?? '').toLowerCase()).toContain('hint');
+    expect(envelope.fix ?? '').toContain('Plan a rename with --rename old:new');
   });
 
-  it('omits --from in the fix when buildPathNotFoundFailure uses the empty-marker sentinel', () => {
-    const failure = buildPathNotFoundFailure('app', null, targetHash);
-    const envelope = errorPathUnreachable(failure).toEnvelope();
+  it('omits --from in the fix and names the empty contract when the space has no marker', () => {
+    const envelope = buildPathNotFoundFailure('app', null, targetHash).toEnvelope();
 
-    expect(envelope.why).toContain('<empty>');
+    expect(envelope.why).toContain('No migration edge connects the empty contract to the target');
+    expect(envelope.meta?.['fromHash']).toBe(EMPTY_CONTRACT_HASH);
     expect(envelope.fix).toContain(`{bin} migration plan --to ${targetHash} --name <slug>`);
-    expect(envelope.fix).not.toContain('--from <empty>');
     expect(envelope.fix).not.toMatch(/--from\s/);
   });
 
   it('composes buildNeverPlannedFailure why with the fix into one plan-then-apply sequence', () => {
-    const failure = buildNeverPlannedFailure('app', targetHash, 'migrations-postgres');
-    const envelope = errorPathUnreachable(failure).toEnvelope();
+    const envelope = buildNeverPlannedFailure(
+      'app',
+      targetHash,
+      'migrations-postgres',
+    ).toEnvelope();
 
     expect(envelope.why).toContain(targetHash);
     expect(envelope.why).toContain('migrations-postgres/app/');
@@ -147,32 +134,34 @@ describe('errorPathUnreachable', () => {
     expect(envelope.fix).toContain('{bin} db migrate');
     expect(envelope.fix).not.toContain('--to');
     expect((envelope.fix ?? '').toLowerCase()).toContain('destructive');
-    expect((envelope.fix ?? '').toLowerCase()).toContain('hint');
+    expect(envelope.fix ?? '').toContain('Plan a rename with --rename old:new');
   });
 });
 
 describe('errorRefSetHashNotInGraph', () => {
   const resolvedHash = `${'x'.repeat(64)}`;
   const reachableHashes = [`${'a'.repeat(64)}`, `${'b'.repeat(64)}`];
-  const graphTip = reachableHashes[1]!;
 
-  it('emits MIGRATION.HASH_NOT_IN_GRAPH with reachable hashes and graph tip', () => {
-    const envelope = errorRefSetHashNotInGraph(
-      resolvedHash,
-      reachableHashes,
-      graphTip,
-    ).toEnvelope();
+  it('emits MIGRATION.HASH_NOT_IN_GRAPH with the reachable hashes', () => {
+    const envelope = errorRefSetHashNotInGraph(resolvedHash, reachableHashes).toEnvelope();
     expect(envelope.code).toBe('MIGRATION.HASH_NOT_IN_GRAPH');
-    expect(envelope.meta?.['resolvedHash']).toBe(resolvedHash);
-    expect(envelope.meta?.['reachableHashes']).toEqual(reachableHashes);
-    expect(envelope.meta?.['graphTipHash']).toBe(graphTip);
-    expect(envelope.fix).toContain(graphTip);
+    expect(envelope.meta).toEqual({ resolvedHash, reachableHashes });
+    expect(envelope.fix).toContain('`to` hash of an on-disk migration');
+    expect(envelope.fix).toContain('{bin} migration list');
   });
 
   it('describes an empty migration graph in the why line', () => {
-    const envelope = errorRefSetHashNotInGraph(resolvedHash, [], null).toEnvelope();
+    const envelope = errorRefSetHashNotInGraph(resolvedHash, []).toEnvelope();
     expect(envelope.why).toContain('empty');
     expect(envelope.fix).toContain('migration plan');
+  });
+});
+
+describe('errorPlanOriginUnknown', () => {
+  it('offers db update only for a database whose migration history does not need to be kept', () => {
+    expect(errorPlanOriginUnknown([]).fix?.split('\n')[0]).toBe(
+      'Set the `db` ref to the contract your database is at (`{bin} migration ref set db <contract>`), or, on a database whose migration history does not need to be kept, advance it via `{bin} db update`.',
+    );
   });
 });
 
@@ -185,16 +174,16 @@ describe('errorRefSetEmptySentinel', () => {
 });
 
 describe('typed next actions on the CLI factories', () => {
-  it('spells the ref-set remediation as a runnable command', () => {
-    const error = errorRefSetHashNotInGraph('x'.repeat(64), ['a'.repeat(64)], 'a'.repeat(64));
+  it('sends the ref-set remediation through migration list', () => {
+    const error = errorRefSetHashNotInGraph('x'.repeat(64), ['a'.repeat(64)]);
 
     expect(error.nextActions).toEqual([
-      { kind: 'user-choice', label: `Set the ref to a graph-node hash such as ${'a'.repeat(64)}` },
       {
         kind: 'run-command',
-        label: 'Extend the migration graph',
-        command: '{bin} migration plan',
+        label: 'List the migrations and their destination hashes',
+        command: '{bin} migration list',
       },
+      { kind: 'user-choice', label: 'Set the ref to the `to` hash of one of them' },
     ]);
   });
 
@@ -211,35 +200,10 @@ describe('typed next actions on the CLI factories', () => {
     ]);
   });
 
-  it('turns each marker-mismatch remedy into its own action', () => {
-    const markerHash = 'c'.repeat(64);
-    const graphTip = 'd'.repeat(64);
-
-    const error = errorMarkerMismatch(markerHash, [graphTip], graphTip);
-
-    expect(error.nextActions).toEqual([
-      {
-        kind: 'run-command',
-        label: 'Catch the on-disk graph up to the live marker',
-        command: `{bin} migration plan --from ${graphTip}`,
-      },
-      {
-        kind: 'run-command',
-        label: 'Point the local db ref at the live marker',
-        command: `{bin} migration ref set db ${markerHash}`,
-      },
-      {
-        kind: 'user-choice',
-        label: 'Investigate whether the database was migrated by an out-of-band process',
-      },
-    ]);
-  });
-
   it('keeps the plan-then-apply sequence in order as two run-command actions', () => {
     const targetHash = 'a'.repeat(64);
     const fromHash = 'b'.repeat(64);
-    const failure: MigrateFailure = {
-      code: 'MIGRATION_PATH_NOT_FOUND',
+    const failure: PathUnreachable = {
       summary: 'Current contract has no planned migration path',
       why: 'Cannot reach target.',
       meta: { spaceId: 'app', kind: 'pathUnreachable', fromHash, targetHash },

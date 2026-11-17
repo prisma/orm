@@ -95,7 +95,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Schema-only verification (JSON output for CI/agents) [initialized, schema matches contract]
-> prisma-next db verify --schema-only --json
+> prisma db verify --schema-only --json
 
 
 
@@ -127,7 +127,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Schema-only verification (JSON output for CI/agents) [initialized, schema matches contract]
-> prisma-next db verify --schema-only --json
+> prisma db verify --schema-only --json
 
 
 
@@ -159,7 +159,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Schema-only verification (JSON output for CI/agents) [initialized, schema matches contract]
-> prisma-next db verify --schema-only --json
+> prisma db verify --schema-only --json
 
 
 
@@ -191,7 +191,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Schema-only verification (JSON output for CI/agents) [initialized, schema matches contract]
-> prisma-next db verify --schema-only --json
+> prisma db verify --schema-only --json
 {
   "ok": true,
   "summary": "Database schema satisfies contract",
