@@ -62,13 +62,21 @@ const MIGRATE_CASES: readonly AdviceCase[] = [
   },
   {
     kind: 'a backfill that missed rows',
-    facts: { rowsWithoutValue: [{ field: 'User.age', reason: 'backfillMissedRows', rows: 2 }] },
+    facts: {
+      rowsWithoutValue: [
+        { field: 'User.age', reason: 'backfillMissedRows', rows: 2, discriminator: false },
+      ],
+    },
     failed: FAILED,
     reruns: [true],
   },
   {
     kind: 'rows that hold NULL',
-    facts: { rowsWithoutValue: [{ field: 'User.age', reason: 'nullValues', rows: 2 }] },
+    facts: {
+      rowsWithoutValue: [
+        { field: 'User.age', reason: 'nullValues', rows: 2, discriminator: false },
+      ],
+    },
     failed: FAILED,
     reruns: [true, true, false],
   },

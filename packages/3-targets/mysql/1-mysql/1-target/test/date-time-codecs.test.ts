@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import { codecDescriptors, mysqlDatetimeDescriptor } from '../src/core/codecs';
 import { mysqlDatetime, mysqlTime, mysqlTimestamp } from '../src/core/data-types';
@@ -39,6 +40,16 @@ describe('the MySQL date and time codecs', () => {
       ['mysql/time-temporal@1', 'mysql/time'],
       ['mysql/duration-string@1', 'mysql/duration'],
     ]);
+  });
+
+  it('write a Date created in another realm', async () => {
+    const value: Date = runInNewContext('new Date("2024-01-02T03:04:05.678Z")');
+    const datetime = mysqlDatetimeDescriptor.factory({ precision: 3 })(instance);
+    const timestamp = mysqlTimestampDateDescriptor.factory({ precision: 3 })(instance);
+    expect({
+      datetime: await datetime.toWire(value, ctx),
+      timestamp: await timestamp.toWire(value, ctx),
+    }).toEqual({ datetime: '2024-01-02 03:04:05.678', timestamp: '2024-01-02 03:04:05.678' });
   });
 
   it('refuse a Date outside the years a datetime holds', async () => {

@@ -12,12 +12,15 @@ import {
   compareMarkerDatabasePolicies,
   type DatabasePolicies,
   databasePoliciesMovedFailure,
+  enumValueCoordinateFromJson,
+  enumValueStatementText,
   expectAbsent,
   expectPresent,
   type FailedCheck,
   failedPostcheckWhy,
   failedPrecheckWhy,
   fieldStatementText,
+  type KeepDataEdit,
   type MarkerDestination,
   type MigrationOperationPolicy,
   type MigrationPlan,
@@ -29,7 +32,9 @@ import {
   type MigrationRunnerPerSpaceSuccessValue,
   type MigrationSubject,
   migrationRunnerFailure,
+  migrationSubjectKey,
   type OperationContext,
+  type RowsWithoutValue,
   schemaCheckWhy,
   type VerifyDatabaseSchemaResult,
   withDatabaseUnchanged,
@@ -41,9 +46,12 @@ import {
   type MongoContract,
   modelFieldStoredAs,
   propertyBsonTypesOf,
+  sameKindOfDocumentIn,
+  selectedVariantOf,
+  type ValidatorDiscriminator,
   type ValidatorDocumentShape,
   validatorDocumentShapesOf,
-  variantFilterOf,
+  validatorRootShapesOf,
 } from '@internal/mongo-contract';
 import type { MongoAdapter, MongoQueryable } from '@internal/mongo-lowering';
 import type {
@@ -75,9 +83,23 @@ import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, okVoid, type Result } from '@internal/utils/result';
 import { type MongoMigrationRunnerErrorCode, mongoTargetError } from '../mongo-target-errors';
 import { FilterEvaluator } from './filter-evaluator';
-import { unrewritableFieldNameReason } from './migration-factories';
+import {
+  type RemoveStoredValueOptions,
+  unrewritableFieldNameReason,
+  unrewritableKeyReason,
+} from './migration-factories';
 import { deserializeMongoOps } from './mongo-ops-serializer';
 import { type RewriteCollection, rewriteRefusals } from './mongo-rewrite-refusals';
+import { storedKeyFieldAt } from './mongo-stored-key-fills';
+import { callInSentence, RemoveStoredValueCall, ReplaceStoredValueCall } from './op-factory-call';
+import {
+  documentsWithObject,
+  type JsonPathStep,
+  jsonPathText,
+  keysOf,
+  lacksKey,
+  storedKeyPath,
+} from './stored-key-path';
 
 const READ_ONLY_CHECK_COMMAND_KINDS: ReadonlySet<string> = new Set(['aggregate', 'rawAggregate']);
 
@@ -230,6 +252,16 @@ function markerChangedFailure(
   );
 }
 
+/** The mongosh query that finds the documents a DML operation's first precheck matches. */
+function precheckFind(op: MongoDmlOperation, collection: string): string {
+  const source = op.precheck[0]?.source.command;
+  const match: unknown =
+    source instanceof RawAggregateCommand
+      ? Reflect.get(source.pipeline[0] ?? {}, '$match')
+      : undefined;
+  return `db.getCollection(${JSON.stringify(collection)}).find(${JSON.stringify(match ?? {})})`;
+}
+
 /**
  * The failure when a field rename's before-check finds documents that already hold the new name,
  * which `$rename` would overwrite: what to look for and fix, and that the plan resumes.
@@ -243,18 +275,33 @@ function renameOverwriteRefusal(op: MongoDmlOperation): MongoMigrationRunnerResu
       ? Reflect.get(renames, rewrite.field)
       : undefined;
   if (typeof to !== 'string') return undefined;
-  const [check] = op.precheck;
-  const source = check?.source.command;
-  const match: unknown =
-    source instanceof RawAggregateCommand
-      ? Reflect.get(source.pipeline[0] ?? {}, '$match')
-      : undefined;
-  const find = `db.getCollection(${JSON.stringify(rewrite.collection)}).find(${JSON.stringify(match ?? {})})`;
+  const find = precheckFind(op, rewrite.collection);
   return runnerFailure(
     'MIGRATION.PRECHECK_FAILED',
     `Operation ${op.id} stopped: some documents in collection ${rewrite.collection} already hold ${to} as well as ${rewrite.field}`,
     {
-      why: `Renaming ${rewrite.field} to ${to} would overwrite their ${to}. Find them with ${find} in mongosh, and move or remove one of the two values in each. Nothing was renamed. Once the documents are fixed, run the command again; operations that already ran are skipped.`,
+      why: `Renaming ${rewrite.field} to ${to} would overwrite their ${to}. Find them with ${find} in mongosh, and move or remove one of the two values in each. Once the documents are fixed, run the command again; operations that already ran are skipped.`,
+      meta: { operationId: op.id, name: op.name },
+    },
+  );
+}
+
+/**
+ * The failure when a key rename's before-check finds objects that already hold the new key, which
+ * the rename would overwrite: how to find them, and that the plan resumes.
+ */
+function storedKeyRenameRefusal(op: MongoDmlOperation): MongoMigrationRunnerResult | undefined {
+  const rewrite = op.meta?.rewrite;
+  if (rewrite?.kind !== 'renameStoredKey') return undefined;
+  const keyPath = storedKeyPath(rewrite.field, rewrite.path);
+  if (!keyPath.ok) return undefined;
+  const from = JSON.stringify(keyPath.value.key);
+  const to = JSON.stringify(rewrite.to);
+  return runnerFailure(
+    'MIGRATION.PRECHECK_FAILED',
+    `Operation ${op.id} stopped: some objects at path ${JSON.stringify(keyPath.value.objectsText)} in field ${rewrite.field} of collection ${rewrite.collection} already hold key ${to} as well as key ${from}`,
+    {
+      why: `Renaming key ${from} to ${to} would overwrite their ${to}. Find them with ${precheckFind(op, rewrite.collection)} in mongosh, and remove one of the two keys from each of those objects. Once the documents are fixed, run the command again; operations that already ran are skipped.`,
       meta: { operationId: op.id, name: op.name },
     },
   );
@@ -278,7 +325,7 @@ function renameTargetExistsRefusal(
     'MIGRATION.PRECHECK_FAILED',
     `Operation ${op.id} stopped: collection ${to} already exists, so collection ${from} cannot be renamed to it`,
     {
-      why: `Nothing was renamed. If ${to} holds nothing you need, drop it, then run the command again; operations that already ran are skipped. If an earlier operation of the same migration created ${to}, as a createIndex on ${to} does, make renameCollection(${JSON.stringify(from)}, ${JSON.stringify(to)}) the first operation of its migration.ts, run node on that migration.ts, and then drop ${to} and run the command again.`,
+      why: `If ${to} holds nothing you need, drop it, then run the command again; operations that already ran are skipped. If an earlier operation of the same migration created ${to}, as a createIndex on ${to} does, make renameCollection(${JSON.stringify(from)}, ${JSON.stringify(to)}) the first operation of its migration.ts, run node on that migration.ts, and then drop ${to} and run the command again.`,
       meta: { operationId: op.id },
     },
   );
@@ -407,20 +454,155 @@ function joinedList(items: readonly string[]): string {
 
 /**
  * The `--backfill` statements that let the user choose values for the fields a change makes
- * required: one for each field the planner would accept the statement for, as its rewrite refusals
- * and stored name rules say.
+ * required, one for each field the planner would accept the statement for, as its rewrite refusals
+ * and stored name rules say; and each such field as `rowsWithoutValue`, from which the caller gives
+ * the steps that plan the change with them. A field only new variants require gets its value in
+ * the update of the discriminator's backfill, or later by its own.
  */
 function backfillAdvice(
   contract: MongoContract,
-  collection: string,
-  requires: readonly string[],
+  lacking: { readonly collection: string; readonly documents: ReadonlyMap<string, number> },
+  touched: TouchedFields,
   rewriteCollection: RewriteCollection,
+  position: { readonly operationIndex: number; readonly renamed: ReadonlySet<string> },
+): {
+  readonly sentences: readonly string[];
+  readonly rowsWithoutValue: readonly RowsWithoutValue[];
+} {
+  const lackingFields = [...lacking.documents.keys()].filter(
+    (field) => !position.renamed.has(field),
+  );
+  const accepted = backfillStatements(
+    contract,
+    lacking.collection,
+    lackingFields.filter((field) => !touched.ofNewVariants.has(field)),
+    touched.keys,
+    rewriteCollection,
+  );
+  if (accepted.length === 0) return { sentences: [], rowsWithoutValue: [] };
+  const statements = [...new Set(accepted.map(({ statement }) => `--backfill ${statement}`))];
+  const subjects = new Map(
+    accepted.map(({ stored, subject }) => [
+      migrationSubjectKey(subject),
+      { subject, documents: lacking.documents.get(stored) ?? 0 },
+    ]),
+  );
+  return {
+    sentences: [
+      `To give ${quotedList(accepted.map(({ stored }) => stored))} values you choose, plan the change with ${statements.join(' ')}, as the steps to take describe.`,
+      ...newVariantFieldsAdvice(
+        contract,
+        lacking.collection,
+        lackingFields.flatMap((field) => {
+          const discriminator = touched.ofNewVariants.get(field);
+          return discriminator === undefined ? [] : [{ field, discriminator }];
+        }),
+        accepted,
+      ),
+    ],
+    rowsWithoutValue: [...subjects.values()].map(({ subject, documents }) => ({
+      field: subject,
+      reason: 'newField',
+      rows: documents,
+      operationIndex: position.operationIndex,
+    })),
+  };
+}
+
+/**
+ * How fields that only new variants require get values: the update of the discriminator's
+ * `--backfill` sets them where it gives a variant's value, or they stay optional until a later
+ * change, when their variant has documents, makes them required with their own `--backfill`.
+ */
+function newVariantFieldsAdvice(
+  contract: MongoContract,
+  collection: string,
+  fields: readonly { readonly field: string; readonly discriminator: ValidatorDiscriminator }[],
+  accepted: readonly { readonly stored: string; readonly statement: string }[],
 ): readonly string[] {
-  const accepted = backfillStatements(contract, collection, requires, rewriteCollection);
-  if (accepted.length === 0) return [];
+  const [first] = fields;
+  const discriminatorBackfill =
+    first === undefined
+      ? undefined
+      : accepted.find(({ stored }) => stored === first.discriminator.field);
+  if (first === undefined || discriminatorBackfill === undefined) return [];
+  const values = [...new Set(fields.map(({ discriminator }) => discriminator.value))];
+  const where = values.map((value) => {
+    const named = fields.filter(({ discriminator }) => discriminator.value === value);
+    return `${quotedList(named.map(({ field }) => field))} in the documents it gives value ${JSON.stringify(value)}`;
+  });
+  const example = fields
+    .filter(({ discriminator }) => discriminator.value === first.discriminator.value)
+    .map(({ field }) => `${field}: <value>`);
+  const later = fields.flatMap(({ field }) => {
+    const subject = fieldStoredAt(contract, collection, field);
+    return subject.kind === 'field' ? [`--backfill ${fieldStatementText(contract, subject)}`] : [];
+  });
+  const them = fields.length === 1 ? 'it' : 'them';
   return [
-    `To give ${quotedList(accepted.map(({ stored }) => stored))} values you choose, plan the change with migration plan ${accepted.map(({ statement }) => `--backfill ${statement}`).join(' ')}.`,
+    `The update you write for --backfill ${discriminatorBackfill.statement} can also set ${joinedList(where)}, such as { $set: { ${first.discriminator.field}: ${JSON.stringify(first.discriminator.value)}, ${example.join(', ')} } }.`,
+    `Or keep ${quotedList(fields.map(({ field }) => field))} optional until a later change, which can make ${them} required${later.length === 0 ? '' : ` with ${later.join(' ')}`}.`,
   ];
+}
+
+/**
+ * The fields and nested keys, by their dotted stored paths such as `home.line1`, to which a rename
+ * of the plan gives its new name in `collection`. Such a field was required under its old name, so
+ * a document without it lacked the old one too: it needs fixing, not a `--backfill`.
+ */
+function renamedInto(
+  operations: readonly AnyMongoMigrationOperation[],
+  collection: string,
+): ReadonlySet<string> {
+  return new Set(
+    operations.flatMap((operation): readonly string[] => {
+      if (!isMongoDmlOperation(operation)) return [];
+      const rewrite = operation.meta?.rewrite;
+      if (rewrite?.kind === 'renameStoredKey') {
+        if (rewrite.collection !== collection) return [];
+        const parsed = storedKeyPath(rewrite.field, rewrite.path);
+        if (!parsed.ok) return [];
+        return [[rewrite.field, ...keysOf(parsed.value).slice(0, -1), rewrite.to].join('.')];
+      }
+      const renamed = fieldRewriteOf(operation);
+      if (renamed === undefined || renamed.collection !== collection) return [];
+      const names: unknown = Reflect.get(renamed.command.update, '$rename');
+      return isRecord(names)
+        ? Object.values(names).filter((name): name is string => typeof name === 'string')
+        : [];
+    }),
+  );
+}
+
+/** The `--backfill` statement of a nested key, by the field of a value object or an embedded model stored there, and that field, when the planner would accept it. */
+function nestedBackfillStatement(
+  contract: MongoContract,
+  collection: string,
+  key: RequiredKey,
+  rewriteCollection: RewriteCollection,
+): { readonly statement: string; readonly subject: MigrationSubject } | undefined {
+  const parsed = storedKeyPath(key.field, key.path);
+  if (!parsed.ok) return undefined;
+  const names = [
+    key.field,
+    ...parsed.value.path.steps.flatMap((step) => (step.kind === 'member' ? [step.name] : [])),
+  ];
+  if (names.some((name) => unrewritableKeyReason(name) !== undefined)) return undefined;
+  const found = storedKeyFieldAt(contract, { collection, ...key });
+  if (found === undefined) return undefined;
+  const refusals = rewriteRefusals(
+    {
+      kind: 'fillStoredKey',
+      collection,
+      field: key.field,
+      variant: found.place.variant,
+      model: found.place.model,
+      storedKey: { key: found.text, together: [] },
+    },
+    contract,
+    rewriteCollection,
+  );
+  return refusals.length === 0 ? { statement: found.text, subject: found.subject } : undefined;
 }
 
 /** The `--backfill` statement of each of `fields` the planner would accept it for, with the field's stored name. */
@@ -428,9 +610,19 @@ function backfillStatements(
   contract: MongoContract,
   collection: string,
   fields: readonly string[],
+  keys: ReadonlyMap<string, RequiredKey>,
   rewriteCollection: RewriteCollection,
-): readonly { readonly stored: string; readonly statement: string }[] {
+): readonly {
+  readonly stored: string;
+  readonly statement: string;
+  readonly subject: MigrationSubject;
+}[] {
   return fields.flatMap((stored) => {
+    const key = keys.get(stored);
+    if (key !== undefined) {
+      const found = nestedBackfillStatement(contract, collection, key, rewriteCollection);
+      return found === undefined ? [] : [{ stored, ...found }];
+    }
     if (unrewritableFieldNameReason(stored) !== undefined) return [];
     const field = fieldStoredAt(contract, collection, stored);
     if (field.kind !== 'field') return [];
@@ -440,14 +632,15 @@ function backfillStatements(
         kind: 'backfill',
         collection,
         field: stored,
-        filter: variantFilterOf(contract.domain, model),
+        variant: selectedVariantOf(contract.domain, model),
         model,
+        storedKey: undefined,
       },
       contract,
       rewriteCollection,
     );
     return refusals.length === 0
-      ? [{ stored, statement: fieldStatementText(contract, field) }]
+      ? [{ stored, statement: fieldStatementText(contract, field), subject: field }]
       : [];
   });
 }
@@ -490,59 +683,160 @@ function mongoshValue(value: unknown): string {
   return JSON.stringify(value) ?? String(value);
 }
 
-/** The required fields and the property schemas, in canonical form, of one kind of document a validator describes. */
-interface DocumentShape {
-  readonly key: string;
-  readonly required: ReadonlySet<string>;
-  readonly properties: ReadonlyMap<string, string>;
-}
-
-function documentShapes(jsonSchema: unknown): readonly DocumentShape[] {
-  return validatorDocumentShapesOf(jsonSchema).map((shape) => ({
-    key: shape.key,
-    required: new Set(shape.required),
-    properties: new Map(
-      Object.entries(shape.properties).map(
-        ([field, schema]) => [field, canonicalize(schema)] as const,
-      ),
-    ),
-  }));
-}
-
 const ANY_VALUE = canonicalize({});
 
-const NO_SHAPE: DocumentShape = { key: '', required: new Set(), properties: new Map() };
+/** A key inside a root field's value that a validator change makes required: the root field, and the JSONPath from its value to the key. */
+interface RequiredKey {
+  readonly field: string;
+  readonly path: string;
+  readonly steps: readonly JsonPathStep[];
+}
+
+/** What a validator change touches: the fields and nested keys it makes required, each by its dotted stored path such as `home.seen`, and the fields whose accepted values it changes. */
+interface TouchedFields {
+  readonly requires: readonly string[];
+  readonly retypes: readonly string[];
+  /** Each nested key of `requires`, by its dotted path. */
+  readonly keys: ReadonlyMap<string, RequiredKey>;
+  /**
+   * Each field of `requires` that only variants new to the collection require, with the
+   * discriminator of the first such variant. Its documents become that variant only when they get
+   * its discriminator value, so no `--backfill` of the field has documents to fill yet.
+   */
+  readonly ofNewVariants: ReadonlyMap<string, ValidatorDiscriminator>;
+  /** The fields whose list elements the new validator accepts only as objects. */
+  readonly objectLists: ReadonlySet<string>;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** The object schemas a property schema accepts: itself, or the branches of its `oneOf` or `anyOf`. */
+function objectSchemasOf(schema: unknown): readonly Record<string, unknown>[] {
+  if (!isRecord(schema)) return [];
+  if (isRecord(schema['properties'])) return [schema];
+  return [schema['oneOf'], schema['anyOf']]
+    .flatMap((branches) => (Array.isArray(branches) ? branches : []))
+    .flatMap(objectSchemasOf);
+}
+
+/** The element schema a property schema gives a list, itself or through its `oneOf` or `anyOf` branches. */
+function itemsOf(schema: unknown): unknown {
+  if (!isRecord(schema)) return undefined;
+  if (schema['items'] !== undefined) return schema['items'];
+  return [schema['oneOf'], schema['anyOf']]
+    .flatMap((branches) => (Array.isArray(branches) ? branches : []))
+    .map(itemsOf)
+    .find((items) => items !== undefined);
+}
+
+function requiredOf(schema: Record<string, unknown>): ReadonlySet<string> {
+  const required = schema['required'];
+  return new Set(Array.isArray(required) ? required.filter((key) => typeof key === 'string') : []);
+}
+
+/** The keys below a property that the new schema requires and the old one, which also describes the objects there, did not. A union of object schemas is not compared. */
+function nestedRequiredKeys(
+  before: unknown,
+  after: unknown,
+  steps: readonly JsonPathStep[],
+): readonly (readonly JsonPathStep[])[] {
+  const [objectBefore, ...otherBefore] = objectSchemasOf(before);
+  const [objectAfter, ...otherAfter] = objectSchemasOf(after);
+  const inObjects =
+    objectBefore === undefined ||
+    objectAfter === undefined ||
+    otherBefore.length > 0 ||
+    otherAfter.length > 0
+      ? []
+      : [
+          ...[...requiredOf(objectAfter)]
+            .filter((key) => !requiredOf(objectBefore).has(key))
+            .map((key): readonly JsonPathStep[] => [...steps, { kind: 'member', name: key }]),
+          ...Object.entries(isRecord(objectAfter['properties']) ? objectAfter['properties'] : {})
+            .filter(
+              ([key]) =>
+                isRecord(objectBefore['properties']) &&
+                Object.hasOwn(objectBefore['properties'], key),
+            )
+            .flatMap(([key, schema]) =>
+              nestedRequiredKeys(Reflect.get(objectBefore['properties'] ?? {}, key), schema, [
+                ...steps,
+                { kind: 'member', name: key },
+              ]),
+            ),
+        ];
+  const itemsBefore = itemsOf(before);
+  const itemsAfter = itemsOf(after);
+  return [
+    ...inObjects,
+    ...(itemsBefore === undefined || itemsAfter === undefined
+      ? []
+      : nestedRequiredKeys(itemsBefore, itemsAfter, [...steps, { kind: 'wildcard' }])),
+  ];
+}
 
 /**
  * The fields a validator change makes required, and those whose accepted values it changes, each
- * kind of document compared with the same kind under the validator the collection has. A kind the
- * collection's validator does not describe is not compared; with no validator, every field it
- * requires is new.
+ * kind of document compared with the same kind under the validator the collection has. Inside a field both validators describe, a
+ * key of its objects or list elements that the change makes required is named by its dotted path. A kind the collection's validator does not describe is not
+ * compared; with no validator, every field it requires is new.
  */
-function fieldsTouched(
-  before: unknown,
-  after: unknown,
-): { readonly requires: readonly string[]; readonly retypes: readonly string[] } {
-  const shapesBefore = documentShapes(before);
+function fieldsTouched(before: unknown, after: unknown): TouchedFields {
+  const shapesBefore = validatorDocumentShapesOf(before);
   const requires = new Set<string>();
   const retypes = new Set<string>();
-  for (const shape of documentShapes(after)) {
-    const previous =
-      shapesBefore.length === 0 ? NO_SHAPE : shapesBefore.find(({ key }) => key === shape.key);
-    if (previous === undefined) continue;
+  const keys = new Map<string, RequiredKey>();
+  const ofOldKinds = new Set<string>();
+  const ofNewVariants = new Map<string, ValidatorDiscriminator>();
+  const objectLists = new Set<string>();
+  const rootsAfter = validatorRootShapesOf(after);
+  for (const shape of validatorDocumentShapesOf(after)) {
+    const same = shapesBefore.length === 0 ? undefined : sameKindOfDocumentIn(shapesBefore, shape);
+    if (shapesBefore.length > 0 && same === undefined) continue;
+    const previous: Pick<ValidatorDocumentShape, 'required' | 'properties'> = same?.shape ?? {
+      required: [],
+      properties: {},
+    };
+    const ownedByRoot = new Set([
+      ...(rootsAfter[shape.rootIndex]?.required ?? []),
+      ...(shape.discriminator === undefined ? [] : [shape.discriminator.field]),
+    ]);
     for (const field of shape.required) {
-      if (field !== '_id' && !previous.required.has(field)) requires.add(field);
+      if (field === '_id' || previous.required.includes(field)) continue;
+      requires.add(field);
+      if (
+        same?.matchedBy === 'root' &&
+        shape.discriminator !== undefined &&
+        !ownedByRoot.has(field)
+      ) {
+        if (!ofNewVariants.has(field)) ofNewVariants.set(field, shape.discriminator);
+      } else {
+        ofOldKinds.add(field);
+      }
     }
-    for (const [field, schema] of shape.properties) {
-      const schemaBefore = previous.properties.get(field);
-      if (schemaBefore !== undefined && schemaBefore !== schema && schema !== ANY_VALUE) {
-        retypes.add(field);
+    for (const [field, schema] of Object.entries(shape.properties)) {
+      const items = itemsOf(schema);
+      if (isRecord(items) && isRecord(items['properties'])) objectLists.add(field);
+      if (!Object.hasOwn(previous.properties, field)) continue;
+      const schemaBefore = previous.properties[field];
+      const canonical = canonicalize(schema);
+      if (canonicalize(schemaBefore) !== canonical && canonical !== ANY_VALUE) retypes.add(field);
+      for (const steps of nestedRequiredKeys(schemaBefore, schema, [])) {
+        const names = steps.flatMap((step) => (step.kind === 'member' ? [step.name] : []));
+        const dotted = [field, ...names].join('.');
+        requires.add(dotted);
+        keys.set(dotted, { field, path: jsonPathText(steps), steps });
       }
     }
   }
   return {
     requires: [...requires].sort(),
     retypes: [...retypes].filter((field) => !requires.has(field)).sort(),
+    keys,
+    ofNewVariants: new Map([...ofNewVariants].filter(([field]) => !ofOldKinds.has(field))),
+    objectLists,
   };
 }
 
@@ -553,15 +847,70 @@ function quotedList(fields: readonly string[]): string {
     : `${quoted.slice(0, -1).join(', ')} and ${quoted.at(-1)}`;
 }
 
-/** What a validator change touches, in words: `This validator change makes "plan" required.` */
-function touchedSentence(touched: ReturnType<typeof fieldsTouched>): string {
+/** What a document holds at the objects a required key's steps lead to: an object without the key, or a list element that is not an object. */
+function keyFindingsOf(
+  value: unknown,
+  steps: readonly JsonPathStep[],
+): ReadonlySet<'lacks' | 'notObject'> {
+  const [step, ...rest] = steps;
+  if (step === undefined) return new Set();
+  if (step.kind === 'wildcard') {
+    if (!Array.isArray(value)) return new Set();
+    return new Set(
+      value.flatMap((element): ('lacks' | 'notObject')[] =>
+        rest[0]?.kind === 'member' && !isRecord(element)
+          ? ['notObject']
+          : [...keyFindingsOf(element, rest)],
+      ),
+    );
+  }
+  if (!isRecord(value)) return new Set();
+  if (!Object.hasOwn(value, step.name)) return new Set(rest.length === 0 ? ['lacks'] : []);
+  return keyFindingsOf(value[step.name], rest);
+}
+
+/**
+ * Of the nested keys a validator change makes required, those the document shown lacks, and the
+ * fields whose list elements must be objects, or hold keys the change requires, that hold an
+ * element that is not an object.
+ */
+function nestedFindings(
+  touched: TouchedFields,
+  shown: ReadonlyMap<string, DocumentField>,
+): { readonly lacking: readonly string[]; readonly notObjects: readonly string[] } {
+  const lacking: string[] = [];
+  const notObjects = new Set<string>();
+  for (const [dotted, key] of touched.keys) {
+    const findings = keyFindingsOf(shown.get(key.field)?.value, key.steps);
+    if (findings.has('lacks')) lacking.push(dotted);
+    if (findings.has('notObject')) notObjects.add(key.field);
+  }
+  for (const field of touched.objectLists) {
+    const value = shown.get(field)?.value;
+    if (Array.isArray(value) && value.some((element) => !isRecord(element))) notObjects.add(field);
+  }
+  return { lacking, notObjects: [...notObjects].sort() };
+}
+
+/**
+ * What a validator change touches, in words: `This validator change makes "plan" required.` Only
+ * what the document shown breaks is named: the fields and nested keys it lacks, and the fields it
+ * holds whose accepted values change.
+ */
+function touchedSentence(
+  touched: TouchedFields,
+  shown: ReadonlyMap<string, DocumentField>,
+): string {
+  const lackingNested = new Set(nestedFindings(touched, shown).lacking);
+  const lacking = touched.requires.filter((field) =>
+    touched.keys.has(field) ? lackingNested.has(field) : !shown.has(field),
+  );
+  const retypes = touched.retypes.filter((field) => shown.has(field));
   const parts = [
-    ...(touched.requires.length === 0 ? [] : [`makes ${quotedList(touched.requires)} required`]),
-    ...(touched.retypes.length === 0
+    ...(lacking.length === 0 ? [] : [`makes ${quotedList(lacking)} required`]),
+    ...(retypes.length === 0
       ? []
-      : [
-          `changes what ${quotedList(touched.retypes)} ${touched.retypes.length === 1 ? 'accepts' : 'accept'}`,
-        ]),
+      : [`changes what ${quotedList(retypes)} ${retypes.length === 1 ? 'accepts' : 'accept'}`]),
   ];
   return parts.length === 0 ? '' : `This validator change ${parts.join(' and ')}. `;
 }
@@ -802,6 +1151,17 @@ function rewriteFailure(
   );
 }
 
+/** The edit that keeps the documents a failed removal found: the removal, replaced by a replacement whose new value is the placeholder `"<stored value>"`. */
+function keepRemovedValueEdit(options: RemoveStoredValueOptions): KeepDataEdit {
+  const { value, required: _required, enumValue: _enumValue, ...at } = options;
+  return {
+    remove: callInSentence(new RemoveStoredValueCall(options)),
+    replaceWith: callInSentence(
+      new ReplaceStoredValueCall({ ...at, from: value, to: '<stored value>' }),
+    ),
+  };
+}
+
 export class MongoMigrationRunner {
   constructor(private readonly deps: MongoRunnerDependencies) {}
 
@@ -897,6 +1257,7 @@ export class MongoMigrationRunner {
                 operation,
                 failing,
                 options.destinationContract,
+                { operationIndex, plan: operations },
               )) ??
               runnerFailure(
                 'MIGRATION.PRECHECK_FAILED',
@@ -921,6 +1282,7 @@ export class MongoMigrationRunner {
                 options.destinationContract,
                 command.collection,
                 fields,
+                new Map(),
                 inPlace.rewrite,
               ).map(({ statement }) => `--backfill ${statement}`),
             );
@@ -1113,6 +1475,8 @@ export class MongoMigrationRunner {
           executed: false,
           failure:
             renameOverwriteRefusal(op) ??
+            storedKeyRenameRefusal(op) ??
+            (await this.documentsHoldingRemovedValueRefusal(op, position)) ??
             runnerFailure(
               'MIGRATION.PRECHECK_FAILED',
               `Operation ${op.id} failed during precheck`,
@@ -1166,6 +1530,92 @@ export class MongoMigrationRunner {
   }
 
   /**
+   * The failure when a stored value removal's precheck finds documents whose required field or key
+   * holds the value: how many, one `_id`, the query that finds them all, and how to keep them.
+   */
+  private async documentsHoldingRemovedValueRefusal(
+    op: MongoDmlOperation,
+    position: { readonly operationIndex: number; readonly contract: MongoContract },
+  ): Promise<MongoMigrationRunnerResult | undefined> {
+    const rewrite = op.meta?.rewrite;
+    const [check] = op.precheck;
+    if (rewrite?.kind !== 'removeStoredValue' || check === undefined) return undefined;
+    const { command } = check.source;
+    if (!(command instanceof RawAggregateCommand)) return undefined;
+    const match: unknown = Reflect.get(command.pipeline[0] ?? {}, '$match');
+    if (typeof match !== 'object' || match === null) return undefined;
+    const counted = await this.firstRow({
+      ...check.source,
+      command: new RawAggregateCommand(command.collection, [
+        { $match: match },
+        { $group: { _id: null, documents: { $sum: 1 }, documentId: { $first: '$_id' } } },
+      ]),
+    });
+    const documents = Number(counted?.['documents'] ?? 0);
+    if (documents === 0) return undefined;
+    const one = documents === 1;
+    const { collection, field, path, value, enumValue, required, filter } = rewrite;
+    const place =
+      path === undefined
+        ? `in field ${field}`
+        : `at path ${JSON.stringify(path)} in field ${field}`;
+    const query = `db.getCollection(${JSON.stringify(collection)}).find(${JSON.stringify(match)})`;
+    const coordinate =
+      enumValue === undefined
+        ? undefined
+        : {
+            ...ifDefined(
+              'namespaceId',
+              enumValue.namespaceId === undefined
+                ? undefined
+                : asNamespaceId(enumValue.namespaceId),
+            ),
+            enum: enumValue.enum,
+            member: enumValue.member,
+          };
+    const named =
+      coordinate === undefined
+        ? 'the enum value'
+        : `enum value "${enumValueStatementText(position.contract, enumValueCoordinateFromJson(coordinate))}"`;
+    return runnerFailure(
+      'MIGRATION.PRECHECK_FAILED',
+      `Operation ${op.id} stopped: ${documents} ${one ? 'document' : 'documents'} in collection ${collection} ${one ? 'holds' : 'hold'} value ${JSON.stringify(value)} ${place}, which is required`,
+      {
+        why: [
+          `${one ? 'It has' : 'One of them has'} _id ${mongoshValue(counted?.['documentId'])}. Find them all with ${query} in mongosh.`,
+          `To keep them, add a new member to the enum and rename ${named} to it instead of removing it, or change those documents to another value first.`,
+          'Once the documents are fixed, run the command again; operations that already ran are skipped.',
+        ].join(' '),
+        meta: {
+          operationId: op.id,
+          name: op.name,
+          ...(coordinate === undefined || typeof value === 'boolean'
+            ? {}
+            : {
+                rowsHoldingValue: [
+                  {
+                    enumValue: coordinate,
+                    value,
+                    rows: documents,
+                    operationIndex: position.operationIndex,
+                    keepDataEdit: keepRemovedValueEdit({
+                      collection,
+                      field,
+                      ...ifDefined('path', path),
+                      ...ifDefined('filter', filter),
+                      value,
+                      ...ifDefined('required', required),
+                      ...ifDefined('enumValue', enumValue),
+                    }),
+                  },
+                ],
+              }),
+        },
+      },
+    );
+  }
+
+  /**
    * The failure when a validator change's precheck finds documents the new validator rejects: how
    * many, one `_id`, and the query that finds them all.
    */
@@ -1173,7 +1623,12 @@ export class MongoMigrationRunner {
     op: MongoMigrationPlanOperation,
     failed: MongoMigrationCheck,
     contract: MongoContract,
+    position: {
+      readonly operationIndex: number;
+      readonly plan: readonly AnyMongoMigrationOperation[];
+    },
   ): Promise<MongoMigrationRunnerResult | undefined> {
+    const { operationIndex, plan } = position;
     if (isInspectionCheckSource(failed.source)) return undefined;
     const collMod = validatorSetBy(op);
     if (collMod?.validator === undefined) return undefined;
@@ -1217,34 +1672,46 @@ export class MongoMigrationRunner {
             shape,
             '',
           );
+    const nested = nestedFindings(touched, fields);
+    const shownProblems = [
+      ...problems,
+      ...[
+        ...nested.lacking.map((key) => `has no ${JSON.stringify(key)}`),
+        ...nested.notObjects.map(
+          (field) => `holds an element in ${JSON.stringify(field)} that is not an object`,
+        ),
+      ]
+        .filter((text) => !problems.some((problem) => problem.text === text))
+        .map((text) => ({ text, uncheckable: false })),
+    ];
     const hadValidator = typeof validatorBefore === 'object' && validatorBefore !== null;
     const found = [
-      `${touchedSentence(touched)}${one ? 'It has' : 'One of them has'} _id ${documentId}.`,
-      ...(problems.length === 0
+      `${touchedSentence(touched, fields)}${one ? 'It has' : 'One of them has'} _id ${documentId}.`,
+      ...(shownProblems.length === 0
         ? []
-        : [`That document ${joinedList(problems.map(({ text }) => text))}.`]),
+        : [`That document ${joinedList(shownProblems.map(({ text }) => text))}.`]),
       `Find them all with ${query} in mongosh.`,
     ];
     const uncheckable = problems.length > 0 && problems.every((problem) => problem.uncheckable);
+    const backfills =
+      uncheckable || !hadValidator
+        ? { sentences: [], rowsWithoutValue: [] }
+        : backfillAdvice(
+            contract,
+            {
+              collection,
+              documents: await this.documentsLacking(failed.source, collection, failing, touched),
+            },
+            touched,
+            inPlace.rewrite,
+            { operationIndex, renamed: renamedInto(plan, collection) },
+          );
     const advice = uncheckable
       ? [
           'A document that holds such a field can never fit the validator, so changing the documents does not help: store the field under a name without "." that does not start with "$".',
         ]
       : hadValidator
-        ? [
-            ...backfillAdvice(
-              contract,
-              collection,
-              await this.fieldsSomeDocumentLacks(
-                failed.source,
-                collection,
-                failing,
-                touched.requires,
-              ),
-              inPlace.rewrite,
-            ),
-            byHandAdvice(collection),
-          ]
+        ? [...backfills.sentences, byHandAdvice(collection)]
         : ['Change them with a dataTransform in migration.ts, or with an update in mongosh.'];
     const why = [
       ...found,
@@ -1268,6 +1735,9 @@ export class MongoMigrationRunner {
             requires: touched.requires,
             retypes: touched.retypes,
           },
+          ...(backfills.rowsWithoutValue.length === 0
+            ? {}
+            : { rowsWithoutValue: backfills.rowsWithoutValue }),
         },
       },
     );
@@ -1371,28 +1841,39 @@ export class MongoMigrationRunner {
     };
   }
 
-  /** Each of `fields` that a document matching `failing` lacks or holds as `null`. */
-  private async fieldsSomeDocumentLacks(
+  /** Each field or nested key the change makes required that documents matching `failing` lack or hold as `null`, with how many do; a nested key counts only in an object that the document holds. */
+  private async documentsLacking(
     source: MongoQueryPlan,
     collection: string,
     failing: Readonly<Record<string, unknown>>,
-    fields: readonly string[],
-  ): Promise<readonly string[]> {
+    touched: TouchedFields,
+  ): Promise<ReadonlyMap<string, number>> {
+    const lackingFilter = (field: string): Record<string, unknown> | undefined => {
+      const key = touched.keys.get(field);
+      if (key === undefined) {
+        return unrewritableFieldNameReason(field) === undefined ? { [field]: null } : undefined;
+      }
+      const parsed = storedKeyPath(key.field, key.path);
+      return parsed.ok
+        ? documentsWithObject(parsed.value, (object) => lacksKey(object, parsed.value.key))
+        : undefined;
+    };
     const lacking = await Promise.all(
-      fields.map(async (field) =>
-        unrewritableFieldNameReason(field) === undefined &&
-        (await this.firstRow({
+      touched.requires.map(async (field): Promise<readonly (readonly [string, number])[]> => {
+        const filter = lackingFilter(field);
+        if (filter === undefined) return [];
+        const counted = await this.firstRow({
           ...source,
           command: new RawAggregateCommand(collection, [
-            { $match: { $and: [failing, { [field]: null }] } },
-            { $limit: 1 },
+            { $match: { $and: [failing, filter] } },
+            { $count: 'documents' },
           ]),
-        })) !== undefined
-          ? [field]
-          : [],
-      ),
+        });
+        const documents = Number(counted?.['documents'] ?? 0);
+        return documents === 0 ? [] : [[field, documents]];
+      }),
     );
-    return lacking.flat();
+    return new Map(lacking.flat());
   }
 
   /**

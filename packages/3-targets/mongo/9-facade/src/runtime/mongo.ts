@@ -3,13 +3,12 @@ import mongoRuntimeDriver, { type MongoBinding } from '@internal/driver-mongo/ru
 import { AsyncIterableResult, type RuntimeMode } from '@internal/framework-components/runtime';
 import type {
   AnyMongoTypeMaps,
-  ExtractMongoCodecTypes,
   MongoContract,
   MongoContractWithTypeMaps,
 } from '@internal/mongo-contract';
 import type { MongoOrmClient, MongoQueryPlan, MongoRawClient } from '@internal/mongo-orm';
 import { mongoOrm } from '@internal/mongo-orm';
-import type { MongoMiddleware, MongoPrepareMember, MongoRuntime } from '@internal/mongo-runtime';
+import type { MongoMiddleware, MongoRuntime } from '@internal/mongo-runtime';
 import {
   createMongoExecutionStack,
   createMongoRuntime,
@@ -28,6 +27,7 @@ import {
 } from './binding';
 import { mongoError } from './mongo-errors';
 import type { MongoTargetId } from './mongo-target-id';
+import { type MongoPrepareMember, prepareMongoQuery } from './prepared-row-query';
 
 type UnboundEnums<TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>> =
   MongoStaticContext<TContract>['enums'];
@@ -37,7 +37,7 @@ type UnboundEnums<TContract extends MongoContractWithTypeMaps<MongoContract, Any
  */
 export interface MongoClient<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
-> extends MongoPrepareMember<ExtractMongoCodecTypes<TContract>> {
+> extends MongoPrepareMember<TContract> {
   readonly orm: MongoOrmClient<TContract>;
   readonly query: MongoStaticContext<TContract>['query'];
   readonly raw: MongoRawClient<TContract>;
@@ -224,7 +224,7 @@ export default function mongo<
       if (closed) {
         throw closedError();
       }
-      return createRuntime().runtime.prepare(declaration, callback);
+      return prepareMongoQuery(createRuntime().runtime, declaration, callback);
     },
 
     async close(): Promise<void> {

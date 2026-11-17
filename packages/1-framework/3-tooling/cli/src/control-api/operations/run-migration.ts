@@ -32,6 +32,7 @@ import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { schemaCheckIssues } from '../../utils/schema-check-issues';
 import { subjectText } from '../statements/plan-questions';
+import { isDiscriminatorField } from '../statements/variants';
 import type {
   FailedPrecheckReport,
   FailedTypeChangeReport,
@@ -138,6 +139,9 @@ function failureReports(
         field: field === undefined ? undefined : fieldText(field),
         reason,
         rows,
+        discriminator:
+          field?.kind === 'field' &&
+          isDiscriminatorField(resolution.entry.destinationContract, field),
       })),
     ),
     ...ifDefined(

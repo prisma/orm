@@ -86,6 +86,8 @@ describe('contract print writes a scalar column as the convenience type it becom
     [scalar('pg/char', 'sql/char@1', { length: 3 }), 'String(storage: char, length: 3)'],
     [scalar('pg/bool', 'pg/bool@1'), 'Boolean'],
     [scalar('pg/bytea', 'pg/bytea@1'), 'Bytes'],
+    [scalar('pg/json', 'pg/json@1'), 'Json'],
+    [scalar('pg/jsonb', 'pg/jsonb@1'), 'Json(storage: jsonb)'],
   ])('%j prints as %s', (shape, expected) => {
     expect(printedType(shape)).toBe(expected);
   });

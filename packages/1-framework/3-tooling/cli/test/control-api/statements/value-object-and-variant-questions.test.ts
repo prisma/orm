@@ -5,11 +5,20 @@ import { describe, expect, it } from 'vitest';
 import {
   askPlanQuestions,
   consentDescription,
+  type PlannedQuestions,
   type PlanQuestion,
 } from '../../../src/control-api/statements/plan-questions';
 import { contractOf } from './statement-fixtures';
 
 const app = asNamespaceId('app');
+
+function geoPointField(field: string): MigrationSubject {
+  return { kind: 'valueObjectField', namespaceId: app, valueObject: 'GeoPoint', field };
+}
+
+function lineField(field: string): MigrationSubject {
+  return { kind: 'field', namespaceId: app, model: 'Line', field };
+}
 
 async function questionsOf(input: {
   readonly origin: ContractWithDomain;
@@ -20,9 +29,11 @@ async function questionsOf(input: {
   readonly canConvert?: boolean;
   readonly statements?: readonly { readonly verb: 'backfill'; readonly text: string }[];
   readonly preAnswers?: readonly { readonly verb: 'delete'; readonly text: string }[];
+  /** The fields the plan gives a temporary value; none when left out. */
+  readonly temporaryValues?: readonly MigrationSubject[];
 }) {
   const asked: PlanQuestion[] = [];
-  const result = await askPlanQuestions({
+  const result = await askPlanQuestions<PlannedQuestions, never>({
     plan: {
       dataLoss: (input.labels ?? ['Remove key']).map((label, operationIndex) => ({
         operationIndex,
@@ -32,6 +43,11 @@ async function questionsOf(input: {
         ...(input.keepDataAdvice === undefined ? {} : { keepDataAdvice: input.keepDataAdvice }),
       })),
       accessChanges: [],
+      temporaryValues: (input.temporaryValues ?? []).map((subject, operationIndex) => ({
+        operationIndex,
+        subject,
+        value: '""',
+      })),
     },
     askAccess: false,
     canConvert: input.canConvert ?? false,
@@ -45,7 +61,7 @@ async function questionsOf(input: {
       asked.push(...batch);
       return batch.map(({ subject }) => ({ verb: 'delete', text: subject }));
     },
-    replan: async () => ok({ dataLoss: [], accessChanges: [] }),
+    replan: async () => ok({ dataLoss: [], accessChanges: [], temporaryValues: [] }),
   });
   return { asked, consented: result.ok ? result.value.consented : undefined };
 }
@@ -73,15 +89,60 @@ describe('a question about a value object field', () => {
       [true, false].map(async (canConvert) => {
         const {
           asked: [question],
-        } = await questionsOf({ origin, destination, subject: lat, canConvert });
+        } = await questionsOf({
+          origin,
+          destination,
+          subject: lat,
+          canConvert,
+          temporaryValues: canConvert ? [] : [geoPointField('latitude')],
+        });
         return question?.question;
       }),
     );
 
     expect(asked).toEqual([
-      'Remove key would lose the values of value object field "GeoPoint.lat". With --delete GeoPoint.lat, the new required field "GeoPoint.latitude" still needs a value: add --backfill GeoPoint.latitude to write it in migration.ts.',
-      'Remove key would lose the values of value object field "GeoPoint.lat". With --delete GeoPoint.lat, the existing objects get a temporary value in the new required field "GeoPoint.latitude".',
+      'Remove key would lose the values of value object field "GeoPoint.lat". If you answer delete, the new required field "GeoPoint.latitude" still needs a value: add --backfill GeoPoint.latitude to write it in migration.ts.',
+      'Remove key would lose the values of value object field "GeoPoint.lat". If you answer delete, the existing objects get a temporary value in the new required field "GeoPoint.latitude".',
     ]);
+  });
+
+  it('says what --delete leaves in the new required field as the plan fills it, whatever the command', async () => {
+    const asked = await Promise.all(
+      [
+        { canConvert: true, temporaryValues: [geoPointField('latitude')] },
+        { canConvert: false, temporaryValues: [] },
+      ].map(async ({ canConvert, temporaryValues }) => {
+        const {
+          asked: [question],
+        } = await questionsOf({ origin, destination, subject: lat, canConvert, temporaryValues });
+        return question?.question;
+      }),
+    );
+
+    expect(asked).toEqual([
+      'Remove key would lose the values of value object field "GeoPoint.lat". If you answer delete, the existing objects get a temporary value in the new required field "GeoPoint.latitude".',
+      'Remove key would lose the values of value object field "GeoPoint.lat". If you answer delete, the new required field "GeoPoint.latitude" gets no temporary value: plan the change with migration plan --backfill GeoPoint.latitude to write its value in migration.ts.',
+    ]);
+  });
+
+  it('names the new field as the destination contract does, which the reported temporary values use', async () => {
+    const twoNamespaces = contractOf({
+      app: { models: { Place: place }, valueObjects: { GeoPoint: ['latitude', 'lng'] } },
+      other: { models: { Tag: { fields: ['id'] } } },
+    });
+    const {
+      asked: [question],
+    } = await questionsOf({
+      origin,
+      destination: twoNamespaces,
+      subject: lat,
+      canConvert: true,
+      temporaryValues: [geoPointField('latitude')],
+    });
+
+    expect(question?.question).toBe(
+      'Remove key would lose the values of value object field "GeoPoint.lat". If you answer delete, the existing objects get a temporary value in the new required field "app.GeoPoint.latitude".',
+    );
   });
 
   it('leaves out the note under migration plan when the run already backfills the new field', async () => {
@@ -114,20 +175,27 @@ describe('a question about a value object field', () => {
     ) {
       const {
         asked: [question],
-      } = await questionsOf({ origin, destination: gained, subject: lat, canConvert, statements });
+      } = await questionsOf({
+        origin,
+        destination: gained,
+        subject: lat,
+        canConvert,
+        statements,
+        temporaryValues: canConvert ? [] : [geoPointField('latitude'), geoPointField('longitude')],
+      });
       return question?.question;
     }
 
     it('names every new required field', async () => {
       expect([await questionText(true), await questionText(false)]).toEqual([
-        'Remove key would lose the values of value object field "GeoPoint.lat". With --delete GeoPoint.lat, the new required fields "GeoPoint.latitude" and "GeoPoint.longitude" still need a value: add --backfill GeoPoint.latitude --backfill GeoPoint.longitude to write them in migration.ts.',
-        'Remove key would lose the values of value object field "GeoPoint.lat". With --delete GeoPoint.lat, the existing objects get a temporary value in the new required fields "GeoPoint.latitude" and "GeoPoint.longitude".',
+        'Remove key would lose the values of value object field "GeoPoint.lat". If you answer delete, the new required fields "GeoPoint.latitude" and "GeoPoint.longitude" still need a value: add --backfill GeoPoint.latitude --backfill GeoPoint.longitude to write them in migration.ts.',
+        'Remove key would lose the values of value object field "GeoPoint.lat". If you answer delete, the existing objects get a temporary value in the new required fields "GeoPoint.latitude" and "GeoPoint.longitude".',
       ]);
     });
 
     it('names under migration plan only the new required fields the run does not backfill', async () => {
       expect(await questionText(true, [{ verb: 'backfill', text: 'GeoPoint.latitude' }])).toBe(
-        'Remove key would lose the values of value object field "GeoPoint.lat". With --delete GeoPoint.lat, the new required field "GeoPoint.longitude" still needs a value: add --backfill GeoPoint.longitude to write it in migration.ts.',
+        'Remove key would lose the values of value object field "GeoPoint.lat". If you answer delete, the new required field "GeoPoint.longitude" still needs a value: add --backfill GeoPoint.longitude to write it in migration.ts.',
       );
     });
   });
@@ -140,12 +208,13 @@ describe('a question about a value object field', () => {
       destination,
       subject: lat,
       labels: ['Remove key "lat" from "place"."location"', 'Remove key "lat" from "trip"."stops"'],
+      temporaryValues: [geoPointField('latitude')],
     });
 
     expect(question).toMatchObject({
       subject: 'GeoPoint.lat',
       question:
-        'These operations would lose the values of value object field "GeoPoint.lat":\n- Remove key "lat" from "place"."location"\n- Remove key "lat" from "trip"."stops"\nWith --delete GeoPoint.lat, the existing objects get a temporary value in the new required field "GeoPoint.latitude".',
+        'These operations would lose the values of value object field "GeoPoint.lat":\n- Remove key "lat" from "place"."location"\n- Remove key "lat" from "trip"."stops"\nIf you answer delete, the existing objects get a temporary value in the new required field "GeoPoint.latitude".',
       verbs: ['rename', 'delete'],
       forms: { rename: 'GeoPoint.lat:GeoPoint.latitude' },
     });
@@ -240,6 +309,8 @@ describe('a question about a variant whose discriminator value changed', () => {
       subject: 'Bug',
       verbs: ['convert', 'delete'],
       forms: { convert: 'Bug' },
+      question:
+        'Delete rows of "task" whose "type" is "bug" would lose the data of model "Bug". Its discriminator value changes from "bug" to "defect": --convert Bug rewrites the stored value to "defect" and keeps the data.',
     });
     expect(question?.validate('convert', 'Bug')).toBeUndefined();
     expect(question?.validate('convert', 'Epic')).toContain('--convert Bug');
@@ -323,5 +394,77 @@ describe('a question about a removed variant', () => {
       asked: [],
       consented: [{ verb: 'delete', subject: bug, text: 'Bug', operationIndex: 1, loss: 'drop' }],
     });
+  });
+});
+
+describe('a question about a field removed by several operations', () => {
+  it('lists every operation that loses its values', async () => {
+    const origin = contractOf({ app: { models: { Line: { fields: ['sku', 'note'] } } } });
+    const destination = contractOf({ app: { models: { Line: { fields: ['sku'] } } } });
+    const { asked } = await questionsOf({
+      origin,
+      destination,
+      subject: { kind: 'field', namespaceId: app, model: 'Line', field: 'note' },
+      labels: [
+        'Remove key "note" at path "$[*]" in field lines of collection orders',
+        'Remove key "note" at path "$[*]" in field pastLines of collection orders',
+      ],
+    });
+    expect(asked.map(({ question }) => question)).toEqual([
+      expect.stringContaining(
+        '- Remove key "note" at path "$[*]" in field lines of collection orders\n- Remove key "note" at path "$[*]" in field pastLines of collection orders',
+      ),
+    ]);
+  });
+});
+
+describe('a question about a field of an embedded model', () => {
+  const models = (line: readonly string[]) => ({
+    Order: { fields: ['id'] },
+    Line: { fields: line, owner: 'Order' },
+  });
+  const origin = contractOf({ app: { models: models(['sku', 'qty']) } });
+  const destination = contractOf({ app: { models: models(['code', 'qty']) } });
+  const sku = { kind: 'field', namespaceId: app, model: 'Line', field: 'sku' } as const;
+
+  it('says what delete leaves in the one new required field, as each command fills it', async () => {
+    const asked = await Promise.all(
+      [
+        { canConvert: true, temporaryValues: [] },
+        { canConvert: false, temporaryValues: [lineField('code')] },
+      ].map(async ({ canConvert, temporaryValues }) => {
+        const {
+          asked: [question],
+        } = await questionsOf({
+          origin,
+          destination,
+          subject: sku,
+          labels: ['Remove key'],
+          canConvert,
+          temporaryValues,
+        });
+        return question?.question;
+      }),
+    );
+
+    expect(asked).toEqual([
+      'Remove key would lose the values of field "Line.sku". If you answer delete, the new required field "Line.code" still needs a value: add --backfill Line.code to write it in migration.ts.',
+      'Remove key would lose the values of field "Line.sku". If you answer delete, the existing objects get a temporary value in the new required field "Line.code".',
+    ]);
+  });
+
+  it('says nothing for a field of a model no other model embeds', async () => {
+    const roots = (fields: readonly string[]) =>
+      contractOf({ app: { models: { Line: { fields } } } });
+    const {
+      asked: [question],
+    } = await questionsOf({
+      origin: roots(['sku', 'qty']),
+      destination: roots(['code', 'qty']),
+      subject: sku,
+      temporaryValues: [lineField('code')],
+    });
+
+    expect(question?.question).toBe('Remove key would lose the values of field "Line.sku".');
   });
 });

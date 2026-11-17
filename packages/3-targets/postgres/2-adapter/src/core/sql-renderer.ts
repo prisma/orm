@@ -75,6 +75,7 @@ import {
   pgVarchar,
 } from '@internal/target-postgres/data-types';
 import { escapeLiteral, quoteIdentifier } from '@internal/target-postgres/sql-utils';
+import { isDate } from '@internal/type-implementations/date';
 import { ifDefined } from '@internal/utils/defined';
 import { assertNever, InternalError } from '@internal/utils/internal-error';
 import { adapterError } from './adapter-errors';
@@ -726,18 +727,27 @@ function projectJsonThroughCodec(
   return descriptor.projectJson(value, codec);
 }
 
+// A PostgreSQL function takes at most 100 arguments, two per entry. A wider object joins the members of several calls as text, which keeps the entries in order; merging jsonb would sort the keys.
+const JSON_BUILD_OBJECT_MAX_ENTRIES = 50;
+
 function renderJsonObjectExpr(
   expr: JsonObjectExpr,
   contract: PostgresContract,
   pim: ParamIndexMap,
 ): string {
-  const args = expr.entries
-    .flatMap((entry): [string, string] => {
-      const key = `'${escapeLiteral(entry.key)}'`;
-      return [key, renderJsonValueProjection(entry.value, contract, pim)];
-    })
-    .join(', ');
-  return `json_build_object(${args})`;
+  const pairs = expr.entries.map((entry) => {
+    const key = `'${escapeLiteral(entry.key)}'`;
+    return `${key}, ${renderJsonValueProjection(entry.value, contract, pim)}`;
+  });
+  if (pairs.length <= JSON_BUILD_OBJECT_MAX_ENTRIES) {
+    return `json_build_object(${pairs.join(', ')})`;
+  }
+  const members: string[] = [];
+  for (let start = 0; start < pairs.length; start += JSON_BUILD_OBJECT_MAX_ENTRIES) {
+    const chunk = pairs.slice(start, start + JSON_BUILD_OBJECT_MAX_ENTRIES);
+    members.push(`left(substr(json_build_object(${chunk.join(', ')})::text, 2), -1)`);
+  }
+  return `('{' || ${members.join(" || ', ' || ")} || '}')::json`;
 }
 
 function renderOrderByItems(
@@ -893,7 +903,7 @@ function renderLiteral(expr: LiteralExpr): string {
   if (expr.value === undefined) {
     return 'NULL';
   }
-  if (expr.value instanceof Date) {
+  if (isDate(expr.value)) {
     return `'${escapeLiteral(expr.value.toISOString())}'`;
   }
   if (Array.isArray(expr.value)) {

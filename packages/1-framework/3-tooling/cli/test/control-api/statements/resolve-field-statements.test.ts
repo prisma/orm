@@ -187,6 +187,7 @@ describe('resolveStatements, field renames', () => {
         resolve(['User.name:User.fullName'], origin, destination),
         UNRESOLVED,
         'field "fullName" already exists on the origin model "app.User"',
+        'If another field holds the name "fullName" in the origin and this change renames or removes it, make the change in two migrations: first change the contract so that field has its new name or is gone, and plan only that; then give "name" the name "fullName" and plan it with --rename User.name:User.fullName.',
       );
     });
 
@@ -199,6 +200,7 @@ describe('resolveStatements, field renames', () => {
         resolve(['User.name:User.fullName'], origin, destination),
         UNRESOLVED,
         'field "name" still exists on the destination model "app.User"',
+        'If "name" in the destination is another field that takes the name, make the change in two migrations: first change the contract so that "name" is renamed to "fullName" and no field has the name "name", and plan it with --rename User.name:User.fullName; then add or rename the field that takes the name "name" and plan that.',
       );
     });
 

@@ -459,8 +459,11 @@ type ContractBase = Omit<
       readonly defaultInInsert: true;
       readonly enums: true;
       readonly foreignKeys: true;
+      readonly jsonAgg: true;
+      readonly jsonAggWithoutTruncation: true;
       readonly limit: true;
       readonly orderBy: true;
+      readonly outerReferencesInDerivedTables: true;
     };
   };
   readonly extensions: {};

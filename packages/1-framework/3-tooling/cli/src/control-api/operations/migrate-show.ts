@@ -2,7 +2,7 @@
  * Read-only preview core for `migrate --show`: computes the migration path through the same planSpacePath seam the real apply uses, stopping before any write boundary.
  */
 
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import {
   type AggregateContractSpace,
   type ContractSpaceAggregate,
@@ -48,7 +48,7 @@ export interface MigrateShowMigration {
 }
 
 export interface ExecuteMigrateShowPlanOptions {
-  readonly config: PrismaNextConfig;
+  readonly config: PrismaConfig;
   /** Directory the command was invoked from. */
   readonly cwd: string;
   readonly db?: string;

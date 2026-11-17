@@ -1143,6 +1143,46 @@ describe('MongoMigrationPlanner', () => {
       });
     });
 
+    it('names the variant fields a validator update changes when the fields of the whole collection stay the same', () => {
+      const tasks = (bug: string, epic: string) => ({
+        bsonType: 'object',
+        required: ['_id', 'type'],
+        properties: { _id: { bsonType: 'objectId' }, type: { bsonType: 'string' } },
+        oneOf: [
+          {
+            required: ['type'],
+            properties: { type: { enum: ['bug'] }, [bug]: { bsonType: 'string' } },
+            additionalProperties: false,
+          },
+          {
+            required: ['type'],
+            properties: { type: { enum: ['epic'] }, [epic]: { bsonType: 'string' } },
+            additionalProperties: false,
+          },
+        ],
+      });
+      const validator = (jsonSchema: Record<string, unknown>) => ({
+        jsonSchema,
+        validationLevel: 'strict' as const,
+        validationAction: 'error' as const,
+      });
+      const contract = makeContract({ tasks: { validator: validator(tasks('y', 'x')) } });
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'tasks',
+            validator: new MongoSchemaValidator(validator(tasks('x', 'y'))),
+          }),
+        ],
+        { fromDatabase: false },
+      );
+      expect(
+        planSuccess(planner, contract, origin).operations.map((operation) => operation.label),
+      ).toEqual([
+        'Update validator on tasks (added: y in documents whose type is "bug", x in documents whose type is "epic"; removed: x in documents whose type is "bug", y in documents whose type is "epic")',
+      ]);
+    });
+
     it('classifies adding a non-required property as widening', () => {
       const contract = makeContract({
         users: {

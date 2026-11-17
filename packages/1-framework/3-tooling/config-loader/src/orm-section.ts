@@ -1,4 +1,4 @@
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import { blindCast } from '@internal/utils/casts';
 import type { ConfigSection as EngineConfigSection, SectionProvenance } from '@prisma/cli-engine';
 import {
@@ -181,9 +181,9 @@ export const ormConfigSchema = ormSubsectionsSchema.narrow((config, ctx) => {
  * handler the value: absolute paths, `migrations.dir` defaulted, `baseDir`
  * recorded.
  */
-export const ormConfigSection: EngineConfigSection<PrismaNextConfig> = blindCast<
-  EngineConfigSection<PrismaNextConfig>,
-  'the schema declares the shape PrismaNextConfig describes; descriptor generics are erased by validation'
+export const ormConfigSection: EngineConfigSection<PrismaConfig> = blindCast<
+  EngineConfigSection<PrismaConfig>,
+  'the schema declares the shape PrismaConfig describes; descriptor generics are erased by validation'
 >(defineConfigSection({ name: ORM_CONFIG_SECTION_NAME, schema: ormConfigSchema }));
 
 /**
@@ -196,7 +196,7 @@ export function validateOrmSection(
 ): ReturnType<typeof ormConfigSection.validate> {
   return blindCast<
     ReturnType<typeof ormConfigSection.validate>,
-    'the schema declares the shape PrismaNextConfig describes; descriptor generics are erased by validation'
+    'the schema declares the shape PrismaConfig describes; descriptor generics are erased by validation'
   >(validateSectionWithSchema(ORM_CONFIG_SECTION_NAME, ormConfigSchema, raw, provenance));
 }
 

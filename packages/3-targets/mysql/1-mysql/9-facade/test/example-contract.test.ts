@@ -14,7 +14,16 @@ describe('the example contract on MySQL', () => {
     expect({ target: contract.target, capabilities: contract.capabilities }).toEqual({
       target: 'mysql',
       capabilities: {
-        sql: { defaultInInsert: true, enums: true, foreignKeys: true, limit: true, orderBy: true },
+        sql: {
+          defaultInInsert: true,
+          enums: true,
+          foreignKeys: true,
+          jsonAgg: true,
+          jsonAggWithoutTruncation: true,
+          limit: true,
+          orderBy: true,
+          outerReferencesInDerivedTables: true,
+        },
       },
     });
   });

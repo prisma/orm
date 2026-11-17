@@ -1,8 +1,10 @@
 import type { SqlMiddleware } from '@internal/sql-runtime';
 import { describe, expect, it } from 'vitest';
+import { includeStrategies } from './helpers';
 import {
   createReturningUsersCollection,
   createUsersCollection,
+  expectPerRelationStatements,
   timeouts,
   withCollectionRuntime,
 } from './integration-helpers';
@@ -24,7 +26,7 @@ function statisticsStatementObserver(name: string, observed: string[]): SqlMiddl
   };
 }
 
-describe('integration/delete', () => {
+describe.each(includeStrategies)('integration/delete (%s)', (strategy) => {
   it(
     'deleteAndCount() returns matched row count and deletes data',
     async () => {
@@ -32,7 +34,7 @@ describe('integration/delete', () => {
       const observer = statisticsStatementObserver('delete-count-observer', observedStatements);
       await withCollectionRuntime(
         async (runtime) => {
-          const users = createUsersCollection(runtime);
+          const users = createUsersCollection(runtime, strategy);
 
           await seedUsers(runtime, [
             { id: 1, name: 'Remove', email: 'a@example.com' },
@@ -63,7 +65,7 @@ describe('integration/delete', () => {
     'delete() returns deleted row and null when no row matches',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [
           { id: 1, name: 'Remove', email: 'a@example.com' },
@@ -95,7 +97,7 @@ describe('integration/delete', () => {
     'delete() affects only one row even when where() matches several',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [
           { id: 1, name: 'Remove', email: 'a@example.com' },
@@ -125,7 +127,7 @@ describe('integration/delete', () => {
     'deleteAll() returns all deleted rows',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [
           { id: 1, name: 'Remove', email: 'a@example.com' },
@@ -155,7 +157,7 @@ describe('integration/delete', () => {
     'delete() with include() returns the deleted row with a pre-delete snapshot of its relations',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
         await seedPosts(runtime, [
@@ -163,10 +165,12 @@ describe('integration/delete', () => {
           { id: 11, title: 'Post B', userId: 1, views: 200 },
         ]);
 
+        runtime.resetExecutions();
         const deleted = await users
           .where({ id: 1 })
           .include('posts', (posts) => posts.orderBy((post) => post.id.asc()))
           .delete();
+        expectPerRelationStatements(runtime, strategy, 3);
 
         // The relations are read together with the row before the DELETE
         // is issued, so the deleted row carries the posts it owned.
@@ -193,7 +197,7 @@ describe('integration/delete', () => {
     'deleteAll() with include() returns every deleted row with its relations',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [
           { id: 1, name: 'Remove', email: 'a@example.com' },
@@ -205,10 +209,12 @@ describe('integration/delete', () => {
           { id: 11, title: 'Post B', userId: 2, views: 200 },
         ]);
 
+        runtime.resetExecutions();
         const deleted = await users
           .where({ name: 'Remove' })
           .include('posts', (posts) => posts.orderBy((post) => post.id.asc()))
           .deleteAll();
+        expectPerRelationStatements(runtime, strategy, 3);
 
         expect(deleted).toEqual(
           expect.arrayContaining([

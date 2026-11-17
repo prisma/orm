@@ -2,7 +2,7 @@ import type {
   ContractSourceDiagnostic,
   ContractSourceDiagnostics,
   ContractSourceProvider,
-  PrismaNextConfig,
+  PrismaConfig,
 } from '@internal/config/config-types';
 import type { Contract, ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
@@ -580,6 +580,8 @@ export interface RowsWithoutValueReport {
   readonly reason: 'nullValues' | 'newField' | 'backfillMissedRows';
   /** How many rows have no value. */
   readonly rows: number;
+  /** Whether the field is its model's discriminator, which the contract cannot make optional. */
+  readonly discriminator: boolean;
 }
 
 /** The result of `db update`: a failure is the structured error the command reports. */
@@ -799,7 +801,7 @@ export type MigrateResult = Result<MigrateSuccess, CliStructuredError>;
  */
 export interface ContractEmitOptions {
   /** The already-loaded config. Callers own loading; this operation never reads it from disk. */
-  readonly config: PrismaNextConfig;
+  readonly config: PrismaConfig;
   /** Directory the caller was invoked from. */
   readonly cwd: string;
   /**
