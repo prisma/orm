@@ -6,6 +6,7 @@ import {
 } from '@internal/framework-components/control';
 import type { SelectedVariant } from '@internal/mongo-contract';
 import { InternalError } from '@internal/utils/internal-error';
+import { type UnansweredChange, unansweredChangesAdvice } from './mongo-unanswered-changes';
 import type {
   CastFieldCall,
   DataTransformCall,
@@ -104,13 +105,15 @@ export type OrderedRewrite = {
     readonly statements: readonly ResolvedMigrationStatement[];
     /** How to make a change of stored values in two migrations; `undefined` for keys and fields. */
     readonly twoMigrationsAdvice: string | undefined;
+    /** The change the call makes when no statement carries it; `undefined` when a statement does, or the call answers no question. */
+    readonly unanswered: UnansweredChange | undefined;
   } & FactsOf<Name>;
 }[RewriteCall['factoryName']];
 
-/** An `OrderedRewrite` without what the planner adds to every call: the statements and the advice. */
+/** An `OrderedRewrite` without what the planner adds to every call: the statements, the advice and the unanswered change. */
 export type RewriteFacts = OrderedRewrite extends infer Each
   ? Each extends OrderedRewrite
-    ? Omit<Each, 'statements' | 'twoMigrationsAdvice'>
+    ? Omit<Each, 'statements' | 'twoMigrationsAdvice' | 'unanswered'>
     : never
   : never;
 
@@ -420,13 +423,28 @@ function refusal(
  * never meet. Also refused: an operation whose filter reads what an earlier operation empties or a
  * later one writes, which the planner's order of the rewrites does not avoid. The refusal names the first statement
  * involved and lists the operations. It does not offer to leave the statements out and write the
- * operations by hand, since one hand-written migration would meet the same re-run.
+ * operations by hand, since one hand-written migration would meet the same re-run. When an operation
+ * involved makes a change no statement answers, and a statement could keep the data of a removal,
+ * the refusal names the plan's unanswered changes and the statements that answer them instead of a
+ * route that applies those changes.
  */
 export function overlapRefusal(
   rewrites: readonly OrderedRewrite[],
-  contracts: { readonly fromContract: ContractWithDomain; readonly contract: ContractWithDomain },
+  contracts: {
+    readonly fromContract: ContractWithDomain;
+    readonly contract: ContractWithDomain;
+    /** The statements the plan carries out. */
+    readonly statements: readonly ResolvedMigrationStatement[];
+  },
 ): MigrationPlannerConflict | undefined {
   const accessed = rewrites.map((rewrite) => ({ rewrite, access: accessOf(rewrite) }));
+  const unansweredAdvice = (involved: readonly OrderedRewrite[]) =>
+    involved.some(({ unanswered }) => unanswered !== undefined)
+      ? unansweredChangesAdvice(
+          rewrites.flatMap(({ unanswered }) => (unanswered === undefined ? [] : [unanswered])),
+          contracts,
+        )
+      : undefined;
   const overlaps = overlapsOf(accessed);
   const [first] = overlaps;
   if (first !== undefined) {
@@ -437,10 +455,12 @@ export function overlapRefusal(
     );
     const noun = placeNoun(first.place);
     const operations = involved.map(({ call }) => call.label).join('; ');
+    const unanswered = unansweredAdvice(involved);
+    const advice = adviceOf(first);
     return refusal(
       involved,
       `the migration writes a ${noun} that another of its operations reads (${operations})`,
-      `${ONE_AT_A_TIME} An operation that reads a ${noun} another operation of the same migration writes acts on what that operation wrote: at once when it runs later, and when the migration runs again after a later operation stops. ${adviceOf(first)}`,
+      `${ONE_AT_A_TIME} An operation that reads a ${noun} another operation of the same migration writes acts on what that operation wrote: at once when it runs later, and when the migration runs again after a later operation stops. ${unanswered === undefined ? advice : `${unanswered} If every answer is --delete, the plan stays as it is: ${advice.charAt(0).toLowerCase()}${advice.slice(1)}`}`,
       contracts,
     );
   }
@@ -450,7 +470,7 @@ export function overlapRefusal(
   return refusal(
     involved,
     `the filter of one of its operations reads what another changes (${involved.map(({ call }) => call.label).join('; ')})`,
-    `An operation selects its documents by its filter when it runs, so it must run after the operations that write what its filter reads and before those that empty it, and these operations need both. Make the change in two migrations: first only "${conflict.later.rewrite.call.label}" and apply that; then the rest.`,
+    `An operation selects its documents by its filter when it runs, so it must run after the operations that write what its filter reads and before those that empty it, and these operations need both. ${unansweredAdvice(involved) ?? `Make the change in two migrations: first only "${conflict.later.rewrite.call.label}" and apply that; then the rest.`}`,
     contracts,
   );
 }

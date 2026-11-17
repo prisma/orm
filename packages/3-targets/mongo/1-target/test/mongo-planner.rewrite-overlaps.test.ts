@@ -341,6 +341,24 @@ describe('MongoMigrationPlanner, a rename onto a name the origin also stores', (
     ]);
   });
 
+  it('names the removal no statement answers when the destination has a field it can be renamed to', () => {
+    expect(
+      refused(
+        plan({
+          from: users('from', { a: OPTIONAL_STRING, b: OPTIONAL_STRING }),
+          to: users('to', { a: OPTIONAL_STRING, c: OPTIONAL_STRING }),
+          schema: live,
+          statements: [renameUser('b', 'a')],
+        }),
+      ).map(({ why: text }) => text),
+    ).toEqual([
+      why(
+        'field',
+        `The plan holds changes that no statement answers yet: field "User.a", which the plan removes. Answer them and plan again: --rename User.a:User.c or --delete User.a. If every answer is --delete, the plan stays as it is: m${REMOVE_ADVICE('field').slice(1)}`,
+      ),
+    ]);
+  });
+
   describe('when a variant stores that name itself', () => {
     const tasks = (
       seed: string,

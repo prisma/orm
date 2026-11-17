@@ -79,6 +79,7 @@ import {
   unrewritableTypeChangeRefusals,
 } from './mongo-type-changes';
 import { mongoTypeLookupsOf } from './mongo-type-lookups';
+import type { UnansweredChange } from './mongo-unanswered-changes';
 import { planVariantDocumentRewrites, VARIANT_TWO_MIGRATIONS } from './mongo-variant-planning';
 import type { OpFactoryCall } from './op-factory-call';
 import {
@@ -835,13 +836,35 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         (rewrite) => [rewrite.call, VARIANT_TWO_MIGRATIONS] as const,
       ),
     ]);
-    const rewriteOf = (facts: RewriteFacts): OrderedRewrite => ({
-      ...facts,
-      statements: options.statements.filter((statement) =>
-        (callsOf.get(statement) ?? []).includes(facts.call),
+    const changeOfCall = new Map<OpFactoryCall, UnansweredChange>([
+      ...removals.map(({ call, subject }) => [call, { kind: 'removed', subject }] as const),
+      ...variantDeletes.map(
+        ({ call, model }) =>
+          [call, { kind: 'removed', subject: { kind: 'model', ...model } }] as const,
       ),
-      twoMigrationsAdvice: twoMigrationsAdvice.get(facts.call),
-    });
+      ...storedKeys.value.removals.map(
+        ({ call, subject }) => [call, { kind: 'removed', subject }] as const,
+      ),
+      ...valueRemovals.map(
+        ({ call, enumValue }) =>
+          [call, { kind: 'removed', subject: { kind: 'enumValue', ...enumValue } }] as const,
+      ),
+      ...fills.map(({ call, subject }) => [call, { kind: 'newRequired', subject }] as const),
+      ...storedKeyFills.value.flatMap(({ call, subject, text }) =>
+        text === undefined ? [] : [[call, { kind: 'newRequired', subject }] as const],
+      ),
+    ]);
+    const rewriteOf = (facts: RewriteFacts): OrderedRewrite => {
+      const statements = options.statements.filter((statement) =>
+        (callsOf.get(statement) ?? []).includes(facts.call),
+      );
+      return {
+        ...facts,
+        statements,
+        twoMigrationsAdvice: twoMigrationsAdvice.get(facts.call),
+        unanswered: statements.length === 0 ? changeOfCall.get(facts.call) : undefined,
+      };
+    };
     const transformRewrites = (kind: 'convert' | 'backfill') =>
       transforms.flatMap(({ statement, outcome }) =>
         statement.kind === kind && outcome.kind === 'transform'
@@ -937,7 +960,10 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         }),
       ),
     ];
-    const overlap = overlapRefusal(orderedRewrites, contracts);
+    const overlap = overlapRefusal(orderedRewrites, {
+      ...contracts,
+      statements: options.statements,
+    });
     if (overlap !== undefined) return { kind: 'failure', conflicts: [overlap] };
     const result = this.planCalls({
       ...options,

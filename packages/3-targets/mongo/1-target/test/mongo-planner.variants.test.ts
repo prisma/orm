@@ -415,6 +415,41 @@ describe('MongoMigrationPlanner, a removed variant whose base renames its discri
   });
 });
 
+describe('MongoMigrationPlanner, a discriminator rename planned without its statement', () => {
+  const renameType = renameField('Task', 'type', 'Task', 'kind');
+  const fillKind = 'Fill field kind in collection tasks where it is missing or null';
+  const after = (variants: Readonly<Record<string, VariantSpec>>) =>
+    tasks('to', variants, {}, { discriminator: 'kind' });
+  const valueChanged = after({ Bug: { ...BUG, value: 'defect' }, Epic: EPIC });
+
+  it('names the changes no statement answers and the statements that answer them, the rename first', () => {
+    expect(refusal(plan({ from: BEFORE, to: valueChanged, schema: live }))).toEqual([
+      {
+        kind: 'unsupportedOperation',
+        summary: `Cannot plan the migration: the filter of one of its operations reads what another changes (${deleteLabel('bug', 'kind')}; ${fillKind})`,
+        why: 'An operation selects its documents by its filter when it runs, so it must run after the operations that write what its filter reads and before those that empty it, and these operations need both. The plan holds changes that no statement answers yet: field "Task.type", which the plan removes; model "Bug", whose documents the plan deletes; new required field "Task.kind", which the plan fills with a temporary value. Answer them and plan again: --rename Task.type:Task.kind or --delete Task.type; --convert Bug or --delete Bug.',
+      },
+    ]);
+  });
+
+  it('plans the change with the rename', () => {
+    expect(
+      planned(plan({ from: BEFORE, to: valueChanged, schema: live, statements: [renameType] }))
+        .labels,
+    ).toEqual(['Rename field type to kind in collection tasks', deleteLabel('bug', 'kind')]);
+  });
+
+  it('names a removed variant the same way', () => {
+    expect(
+      refusal(plan({ from: BEFORE, to: after({ Epic: EPIC }), schema: live })).map(({ why }) =>
+        why?.slice(why.indexOf('The plan holds')),
+      ),
+    ).toEqual([
+      'The plan holds changes that no statement answers yet: field "Task.type", which the plan removes; model "Bug", whose documents the plan deletes; new required field "Task.kind", which the plan fills with a temporary value. Answer them and plan again: --rename Task.type:Task.kind or --delete Task.type; --delete Bug.',
+    ]);
+  });
+});
+
 describe('MongoMigrationPlanner, a variant field renamed with its base discriminator', () => {
   const renameType = renameField('Task', 'type', 'Task', 'kind');
   const renameSeverity = renameField('Bug', 'severity', 'Bug', 'level');

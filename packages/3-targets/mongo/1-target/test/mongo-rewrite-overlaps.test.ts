@@ -13,10 +13,10 @@ import {
 import { contract } from './mongo-statement-fixtures';
 
 const tasks = contract('tasks', { Task: { collection: 'tasks', fields: ['_id'] } }, { tasks: {} });
-const contracts = { fromContract: tasks, contract: tasks };
+const contracts = { fromContract: tasks, contract: tasks, statements: [] };
 
 function rewrite(facts: RewriteFacts): OrderedRewrite {
-  return { ...facts, statements: [], twoMigrationsAdvice: undefined };
+  return { ...facts, statements: [], twoMigrationsAdvice: undefined, unanswered: undefined };
 }
 
 const renameZ = rewrite({
