@@ -57,7 +57,7 @@ const issues = collectConfigIssues(config);
 The CLI writes `contract.d.ts` beside the contract and a `migration.ts` into each migration folder. Two config members name the modules those files import from:
 
 - `contract.typesModule`: the module `contract.d.ts` imports the framework's and the family's contract types from.
-- `migrations.module`: the module `migration.ts` imports `Migration`, `MigrationCLI` and the target's operation helpers from. `db migrate` also finds an unfilled `placeholder(...)` call by this module.
+- `migrations.module`: the module `migration.ts` imports `Migration`, `MigrationCLI` and the target's operation helpers from.
 
 A target package's `defineConfig` sets both to modules of that package. A config assembled by hand sets them itself. A command that writes one of these files stops when the member it needs is missing.
 

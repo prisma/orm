@@ -128,6 +128,7 @@ export default class M extends m.Migration {
       ['a Prisma module', '@prisma/orm-mongo/migration'],
       ['a module an earlier release wrote', '@prisma/orm-mongo/target/migration'],
       ['an unscoped package outside Prisma', 'prisma-orm-standin/migration'],
+      ['a name private to the package the migration is in', '#migration'],
     ])('%s', async (_, module) => {
       await migration('1_country', UNFILLED.replace(`'${MODULE}'`, `'${module}'`));
       expect(await migrationWithUnfilledPlaceholders(plans, ['app'], migrationsDir)).toBe(

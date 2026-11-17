@@ -2,7 +2,7 @@
 changes:
   - id: target-package-names-generated-file-modules
     summary: |
-      A package that adds a target must name, in the config its `defineConfig` returns, the module generated contract types import from (`contract.typesModule`) and the module migration files import from (`migrations.module`), and must hand the config target and adapter descriptors whose type declarations state its own types module. Without `contract.typesModule`, every command that writes contract types fails with `CONFIG.CONTRACT_TYPES_MODULE_MISSING`: `prisma contract emit`, `prisma migration plan`, `prisma migration new`, `prisma migrate`, `prisma db init`, `prisma db update` and `prisma db sign`. Without `migrations.module`, `prisma migration plan` and `prisma migration new` fail with `CONFIG.MIGRATION_MODULE_MISSING`.
+      A package that adds a target must name, in the config its `defineConfig` returns, the module generated contract types import from (`contract.typesModule`) and the module migration files import from (`migrations.module`), and must hand the config target and adapter descriptors whose type declarations state its own types module. Without `contract.typesModule`, every command that writes contract types fails with `CONFIG.CONTRACT_TYPES_MODULE_MISSING`: `prisma contract emit`, `prisma migration plan` and `prisma migration new` always, and `prisma db migrate`, `prisma db init`, `prisma db update` and `prisma db sign` when they advance a ref. Without `migrations.module`, `prisma migration plan` and `prisma migration new` fail with `CONFIG.MIGRATION_MODULE_MISSING`.
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
@@ -57,7 +57,7 @@ changes:
         - '@prisma/orm-toolchain/cli/control-api'
   - id: component-type-import-module-is-not-a-literal-type
     summary: |
-      On the Postgres and MongoDB target and adapter descriptors, the type of a type import's `package` is a template string type such as `` `${string}/codec-types` ``, where it was one string literal. Code that depends on the literal type compares the value instead.
+      On every Prisma target and adapter descriptor, the type of a type import's `package` is a template string type such as `` `${string}/codec-types` ``, where it was one string literal. Code that depends on the literal type compares the value instead.
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
