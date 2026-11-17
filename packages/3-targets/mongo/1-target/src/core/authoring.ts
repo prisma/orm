@@ -34,7 +34,7 @@ const int64BigInt = {
 /**
  * The explicit MongoDB scalar types, each named after the BSON type that stores it, which PSL writes as field types and the TypeScript builder calls as `type.X()`. Each names a codec; the collection validator reads the BSON types from the data type the codec represents, not from the constructor.
  */
-export const mongoExplicitScalarTypes = {
+const mongoExplicitScalarTypes = {
   BsonString: {
     kind: 'typeConstructor',
     documentation: 'Text, stored as BSON string.',
@@ -105,7 +105,7 @@ export const mongoExplicitScalarTypes = {
 /**
  * The explicit types' former names, kept for one release line as deprecated aliases. Each gives the same codec as its replacement, and the PSL interpreter warns where one is written. A deprecated name has no `type.*` helper. ADR 257.
  */
-export const mongoDeprecatedScalarTypes = {
+const mongoDeprecatedScalarTypes = {
   Int64: {
     ...int64BigInt,
     documentation: `Deprecated: use Int64BigInt. ${int64BigInt.documentation}`,
@@ -126,7 +126,7 @@ function storageOption<const Storage extends string>(storage: Storage) {
 /**
  * The convenience types of MongoDB's scalars. Each is a type choice: `storage` names the BSON type that stores the value and, for `BigInt`, `as` chooses the application value. ADR 279.
  */
-export const mongoConvenienceScalarTypes = {
+const mongoConvenienceScalarTypes = {
   Int: {
     kind: 'typeChoice',
     documentation: 'An integer read as a JavaScript number, stored as BSON int, a 32-bit integer.',
@@ -193,7 +193,7 @@ export const mongoConvenienceScalarTypes = {
 } as const satisfies AuthoringTypeNamespace;
 
 /**
- * MongoDB's scalar types: the explicit types, the convenience types and the deprecated aliases.
+ * MongoDB's scalar types other than the date and time types: the explicit types, the convenience types and the deprecated aliases. `mongoScalarTypeConstructors` adds the date and time types.
  */
 export const mongoScalarAuthoringTypes = {
   ...mongoExplicitScalarTypes,
@@ -204,7 +204,7 @@ export const mongoScalarAuthoringTypes = {
 /**
  * The explicit date and time types. Each name says what the field stores and what the application reads. ADR 315.
  */
-export const mongoDateTimeTypeConstructors = {
+export const mongoExplicitDateTimeTypes = {
   DateJsDate: {
     kind: 'typeConstructor',
     documentation:
@@ -255,22 +255,6 @@ export const mongoDateTimeTypeConstructors = {
   },
 } as const satisfies AuthoringTypeNamespace;
 
-const dateStorage = {
-  kind: 'option',
-  name: 'storage',
-  values: ['date'],
-  default: 'date',
-  optional: true,
-} as const;
-
-const stringStorage = {
-  kind: 'option',
-  name: 'storage',
-  values: ['string'],
-  default: 'string',
-  optional: true,
-} as const;
-
 /**
  * The convenience date and time types. Each is a type choice: its `as` argument chooses the explicit type it becomes. ADR 279, ADR 315.
  */
@@ -287,7 +271,7 @@ export const mongoConvenienceDateTimeTypes = {
         default: 'jsDate',
         optional: true,
       },
-      dateStorage,
+      storageOption('date'),
     ],
     choices: [
       { when: { as: 'jsDate', storage: 'date' }, type: 'DateJsDate' },
@@ -307,7 +291,7 @@ export const mongoConvenienceDateTimeTypes = {
         default: 'string',
         optional: true,
       },
-      dateStorage,
+      storageOption('date'),
     ],
     choices: [
       { when: { as: 'string', storage: 'date' }, type: 'DateString' },
@@ -326,7 +310,7 @@ export const mongoConvenienceDateTimeTypes = {
         default: 'string',
         optional: true,
       },
-      stringStorage,
+      storageOption('string'),
     ],
     choices: [
       { when: { as: 'string', storage: 'string' }, type: 'TimeString' },
@@ -339,18 +323,18 @@ export const mongoConvenienceDateTimeTypes = {
       'A length of time, stored as BSON string. `as` is what the application reads: string, an ISO 8601 duration such as "PT1H30M".',
     args: [
       { kind: 'option', name: 'as', values: ['string'], default: 'string', optional: true },
-      stringStorage,
+      storageOption('string'),
     ],
     choices: [{ when: { as: 'string', storage: 'string' }, type: 'DurationString' }],
   },
 } as const satisfies AuthoringTypeNamespace;
 
 /**
- * The base scalars, the explicit date and time types and the convenience date and time types, as PSL writes them as field types and the TypeScript builder calls them as `type.X()`.
+ * All of MongoDB's scalar types, including the date and time types, explicit and convenience, as PSL writes them as field types and the TypeScript builder calls them as `type.X()`.
  */
 export const mongoScalarTypeConstructors = {
   ...mongoScalarAuthoringTypes,
-  ...mongoDateTimeTypeConstructors,
+  ...mongoExplicitDateTimeTypes,
   ...mongoConvenienceDateTimeTypes,
 } as const satisfies AuthoringTypeNamespace;
 
