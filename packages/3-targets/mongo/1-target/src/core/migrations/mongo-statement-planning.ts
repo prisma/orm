@@ -597,32 +597,64 @@ function sameModel(a: ModelCoordinate, b: ModelCoordinate): boolean {
 
 /**
  * The destination model an origin model became: the one a statement renamed it to, else the one of
- * the same name, else the only new model stored the same way (same collection, same variant value).
+ * the same name, else the only new model stored the same way (same collection, same variant value)
+ * that no statement names and that no other origin model is stored like, so no two origin models
+ * become one.
  */
 export function destinationModelOf(
   origin: ModelCoordinate,
   input: ModelMatchInput,
 ): ModelCoordinate | undefined {
-  const renamed = input.statements.find(
-    (statement): statement is ResolvedModelRenameStatement =>
-      statement.entity === 'model' && sameModel(statement.from, origin),
+  const renames = input.statements.filter(
+    (statement): statement is ResolvedModelRenameStatement => statement.entity === 'model',
   );
+  const renamed = renames.find((statement) => sameModel(statement.from, origin));
   if (renamed !== undefined) return renamed.to;
-  if (modelAt(input.contract, origin) !== undefined) return origin;
-  if (embeddingModelOf(input.fromContract.domain, origin) !== undefined) return undefined;
-  const originCollection = collectionOfModel(input.fromContract.domain, origin);
-  if (originCollection === undefined) return undefined;
-  const collection = input.collectionAfterRenames(originCollection);
-  const variant = selectedVariantOf(input.fromContract.domain, origin);
+  if (!unmatchedByName(origin, renames, input)) return origin;
+  const unmatched = modelCoordinates(input.fromContract).filter((other) =>
+    unmatchedByName(other, renames, input),
+  );
   const stored = modelCoordinates(input.contract).filter(
     (candidate) =>
       modelAt(input.fromContract, candidate) === undefined &&
-      embeddingModelOf(input.contract.domain, candidate) === undefined &&
-      collectionOfModel(input.contract.domain, candidate) === collection &&
-      sameVariant(selectedVariantOf(input.contract.domain, candidate), variant),
+      !renames.some((statement) => sameModel(statement.to, candidate)) &&
+      storedAlike(origin, candidate, input) &&
+      unmatched.filter((other) => storedAlike(other, candidate, input)).length === 1,
   );
   const [only] = stored;
   return stored.length === 1 ? only : undefined;
+}
+
+/** Whether an origin model has no destination by statement or by name. */
+function unmatchedByName(
+  origin: ModelCoordinate,
+  renames: readonly ResolvedModelRenameStatement[],
+  input: ModelMatchInput,
+): boolean {
+  return (
+    modelAt(input.contract, origin) === undefined &&
+    !renames.some((statement) => sameModel(statement.from, origin))
+  );
+}
+
+/** Whether an origin model and a destination model are stored the same way: neither embedded, the same collection after renames, the same variant value. */
+function storedAlike(
+  origin: ModelCoordinate,
+  candidate: ModelCoordinate,
+  input: ModelMatchInput,
+): boolean {
+  if (embeddingModelOf(input.fromContract.domain, origin) !== undefined) return false;
+  if (embeddingModelOf(input.contract.domain, candidate) !== undefined) return false;
+  const originCollection = collectionOfModel(input.fromContract.domain, origin);
+  return (
+    originCollection !== undefined &&
+    collectionOfModel(input.contract.domain, candidate) ===
+      input.collectionAfterRenames(originCollection) &&
+    sameVariant(
+      selectedVariantOf(input.contract.domain, candidate),
+      selectedVariantOf(input.fromContract.domain, origin),
+    )
+  );
 }
 
 function sameVariant(a: SelectedVariant | undefined, b: SelectedVariant | undefined): boolean {

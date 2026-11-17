@@ -267,6 +267,72 @@ describe('MongoMigrationPlanner, a variant renamed with its discriminator value 
   });
 });
 
+describe('MongoMigrationPlanner, a new variant that takes the value of a removed one', () => {
+  const saga = tasks('to', { Saga: { value: 'bug', fields: ['scope'] } });
+
+  it('refuses a rename onto it, which would merge the removed variant into the renamed one', () => {
+    const result = plan({
+      from: BEFORE,
+      to: saga,
+      schema: live,
+      statements: [renameModel('Epic', 'Saga')],
+    });
+    expect(refusal(result)).toEqual([
+      {
+        kind: 'statementRefused',
+        summary: `Cannot rename model "Epic" to "Saga": the migration writes a value that another of its operations reads (${deleteLabel('bug')}; ${replaceLabel('epic', 'bug')})`,
+        why: TWO_MIGRATIONS,
+      },
+    ]);
+  });
+
+  it('without a statement, keeps the documents of the variant stored the same way and asks about the other', () => {
+    const result = plan({ from: BEFORE, to: saga, schema: live });
+    expect(planned(result).dataLoss.map(({ subject }) => subject)).toEqual([
+      { kind: 'model', namespaceId: NS, model: 'Epic' },
+      { kind: 'field', namespaceId: NS, model: 'Bug', field: 'severity' },
+    ]);
+    expect(planned(result).labels[0]).toBe(deleteLabel('epic'));
+  });
+});
+
+describe('MongoMigrationPlanner, a base renamed without a statement', () => {
+  const renamedBase = (discriminator: string) =>
+    contract(
+      'to',
+      {
+        Ticket: {
+          collection: 'tasks',
+          fields: ['_id', discriminator],
+          discriminator,
+          variants: { Epic: 'epic' },
+        },
+        Epic: { collection: 'tasks', fields: ['scope'], base: 'Ticket' },
+      },
+      { tasks: {} },
+    );
+
+  it('deletes the documents of a removed variant and asks about it', () => {
+    expect(planned(plan({ from: BEFORE, to: renamedBase('type'), schema: live }))).toEqual({
+      labels: [deleteLabel('bug')],
+      classes: ['destructive'],
+      applied: [],
+      dataLoss: [{ operationIndex: 0, subject: bugModel, loss: 'drop', label: deleteLabel('bug') }],
+    });
+  });
+
+  it('refuses the plan when the discriminator is renamed too, offering both renames', () => {
+    expect(refusal(plan({ from: BEFORE, to: renamedBase('kind'), schema: live }))).toEqual([
+      {
+        kind: 'unsupportedOperation',
+        summary:
+          'Cannot plan the migration: new discriminator field "Ticket.kind" has no value in the documents of collection tasks',
+        why: 'A document\'s discriminator value says which variant it is, and no temporary value names a variant, so the plan does not fill the field. The documents hold their variant in "Task.type", which the plan removes: add --rename Task:Ticket --rename Ticket.type:Ticket.kind to keep it, and run the command again.',
+      },
+    ]);
+  });
+});
+
 describe('MongoMigrationPlanner, discriminator values one operation frees and another writes', () => {
   it('refuses a removed variant whose value another variant takes', () => {
     const result = plan({
