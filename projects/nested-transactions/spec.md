@@ -31,8 +31,8 @@ Layers, from the database up:
 flowchart BT
   D["Driver: SqlTransaction.savepoint(name) → SqlTransaction<br/>commit() = RELEASE, rollback() = ROLLBACK TO"]
   F["Framework: a savepoint is a 'transaction' activity<br/>beneath the outer transaction activity"]
-  R["SQL runtime: RuntimeTransaction.savepoint(), name counter,<br/>suspend guard, withSavepoint(txCtx, fn, buildMembers)"]
-  O["ORM: run-graph uses savepoint() inside a transaction"]
+  R["SQL runtime: transaction() on a transaction opens a savepoint, name counter,<br/>suspend guard, withSavepoint(txCtx, fn, buildMembers)"]
+  O["ORM: run-graph calls transaction() inside a transaction too, without options"]
   P["Facades (Postgres, MySQL, SQLite, Supabase):<br/>tx.transaction(cb) wired to withSavepoint"]
   D --> R
   F --> R
@@ -51,9 +51,9 @@ Each decision was reached in a design discussion with the operator. The research
    - **No isolation level:** isolation can't change inside a transaction. Libraries that accept it silently ignore it (Knex, TypeORM, MikroORM); Rails and Sequelize reject it. Leaving it out of the type is clearer than either.
    - **No timeout:** the outer transaction's deadline already covers the savepoint, because it runs on the same connection. A timeout that rolls back only the savepoint would need statement cancellation in every driver (`pg_cancel_backend`, `KILL QUERY`). A timeout that ends the outer transaction adds nothing over the outer timeout.
 3. **Concurrency on one transaction fails fast.**
-   - **A second savepoint while one is open on the same level** (`Promise.all([tx.transaction(a), tx.transaction(b)])`) rejects with `RUNTIME.TRANSACTION_ALREADY_OPEN`, with a message that names the savepoint.
+   - **A second savepoint while one is open on the same level** (`Promise.all([tx.transaction(a), tx.transaction(b)])`) rejects with `RUNTIME.TRANSACTION_SUSPENDED`, like any other work on a transaction with a savepoint open above it, with a message that names the savepoint. (Amended after slice 3's PR opened, at the operator's request; it was `RUNTIME.TRANSACTION_ALREADY_OPEN`.)
    - **Using the parent context while a child savepoint is open** rejects with a new code, `RUNTIME.TRANSACTION_SUSPENDED`, whose details carry the open savepoint's activity ID. The parent can be used again once the child has settled.
-   - **Savepoint names** come from a counter per connection. Only one savepoint is open per level, so names never collide.
+   - **Savepoint names** come from a counter per transaction. `COMMIT` and `ROLLBACK` remove every savepoint of the transaction, so names can repeat across transactions, and only one savepoint is open per level, so names never collide within one.
    - Why: a savepoint applies to whatever runs on the connection at that moment. A sibling's `ROLLBACK TO` would undo the other sibling's statements, and outer work sent while a savepoint is open would be undone with it.
    - Rejected: making siblings wait for each other (Knex). It hides the bug: statements run in a different order from the one the code reads in.
 4. **Driver interface: one recursive `SqlTransaction`.**
@@ -71,11 +71,12 @@ Each decision was reached in a design discussion with the operator. The research
    - **No new field on `TransactionActivity`.** A middleware tells a savepoint apart with `activity.kind === 'transaction' && ctx.inTransaction()`.
    - Why: without this, writes undone by a savepoint would be finalized `committed`, and one recovered failure would make every statement in the outer transaction `unknown`.
    - Rejected: savepoints invisible to middleware. That needs no framework change but gives the two inaccurate outcomes above.
-7. **ORM multi-statement writes run in a savepoint inside a transaction.** `run-graph` uses `transaction(implicitTransactionOptions)` when the queryable has it, otherwise `savepoint()`, otherwise runs flattened. This applies wherever a transaction is open on the connection, whichever API opened it.
-8. **The runtime-level member is `savepoint()`, separate from `transaction(options)`.**
-   - It goes on `RuntimeTransaction`, on the activity handle opened on a transaction, and on the ORM's structural `RuntimeQueryable`. These runtime types are internal, not public API.
-   - Why: the MySQL facade sets `implicitTransactionOptions: { isolationLevel: 'ReadCommitted' }` (`mysql.ts:326`). With one `transaction(options)` name, the ORM would pass an isolation level to a savepoint.
-   - The user-facing call stays `tx.transaction(cb)`.
+7. **ORM multi-statement writes run in a savepoint inside a transaction.** `run-graph` calls `transaction()` on its scope wherever it runs: outside a transaction it passes `implicitTransactionOptions` and gets a transaction, inside one it passes no options and gets a savepoint. It tells the two apart from its activity (`ctx.inTransaction()`). This applies wherever a transaction is open on the connection, whichever API opened it.
+8. **The runtime-level member is `transaction()` on every scope that can open one.** A connection's `transaction(options)` begins a transaction; a transaction's or savepoint's `transaction()` opens a savepoint; an activity handle's `transaction()` does whichever its scope does.
+   - On a transaction or savepoint, `transaction()` takes no parameters (decision 2). An activity handle's `transaction(options)` keeps its options parameter, because a handle on the runtime takes them; inside a transaction it rejects them with `RUNTIME.SAVEPOINT_OPTIONS_UNSUPPORTED` and sends nothing, so a caller never gets an isolation level or timeout other than the one it asked for. The handle change lands in slice 6.
+   - The MySQL facade's `implicitTransactionOptions: { isolationLevel: 'ReadCommitted' }` (`mysql.ts:326`) is why the ORM leaves options out inside a transaction (decision 7).
+   - These runtime types are internal, not public API. The user-facing call is `tx.transaction(cb)` as well.
+   - Amended after slice 3's PR opened, at the operator's request: the first version named the member `savepoint()`, separate from `transaction(options)`, so that the ORM chose between two methods instead of passing or omitting options.
 9. **Settle failures reuse `RUNTIME.TRANSACTION_COMMIT_FAILED` and `RUNTIME.TRANSACTION_ROLLBACK_FAILED`.**
    - **Callback throws:** `ROLLBACK TO`, then the callback's error is rethrown, and the outer transaction stays usable.
    - **`RELEASE` fails:** try `ROLLBACK TO`. If it succeeds, the outer transaction stays usable and the nested call throws `TRANSACTION_COMMIT_FAILED`.
@@ -102,7 +103,7 @@ Each decision was reached in a design discussion with the operator. The research
 - **ADR 271** (the runtime middleware observes a tree of activities) already expects nested transactions "as a transaction activity under a transaction activity", with finalization waiting for the outermost. Decision 6 keeps that for released savepoints and finalizes rolled-back savepoints right away, because their outcome no longer depends on the outer transaction. The ADR, and its statement that "a handle opened under a transaction has no `transaction`, so transactions do not nest", are amended.
 - **ADR 266** (cache middleware): invalidation still happens when the outermost transaction ends for released savepoints, and not at all for rolled-back ones. The cache needs no change; it ignores transaction activities (`cache-middleware.ts:108`).
 - **Runtime & Middleware Framework subsystem doc** (`docs/architecture docs/subsystems/4. Runtime & Middleware Framework.md`): the finalization rules, the transaction runner, and the activity-handle `transaction()` paragraph that says transactions do not nest.
-- **Error reference** (`docs/reference/error-reference.md`): a new `RUNTIME.TRANSACTION_SUSPENDED` entry, and savepoint wording for `RUNTIME.TRANSACTION_ALREADY_OPEN`.
+- **Error reference** (`docs/reference/error-reference.md`): a new `RUNTIME.TRANSACTION_SUSPENDED` entry.
 - **Prior art:** prisma/prisma#15212, "Support 'nested' transactions in interactive transactions", is open on Prisma 6.
 
 ### Adapter impact
@@ -137,7 +138,7 @@ Inherits the team DoD floor in [`drive/calibration/dod.md`](../../drive/calibrat
 
 - [ ] On each of PGlite, MySQL (live) and SQLite, an integration test shows the At a glance example: A and C committed, B not.
 - [ ] A PGlite integration test shows recovery from the aborted state. A statement fails inside a nested transaction, the nested call throws, and the outer transaction then commits work done after it.
-- [ ] Tests show each guard and error path: sibling savepoint (`TRANSACTION_ALREADY_OPEN`), parent used while a child is open (`TRANSACTION_SUSPENDED`), `RELEASE` failure with recovery, `ROLLBACK TO` failure invalidating every level, and middleware refusing a savepoint start.
+- [ ] Tests show each guard and error path: sibling savepoint and parent used while a child is open (`TRANSACTION_SUSPENDED`), `RELEASE` failure with recovery, `ROLLBACK TO` failure invalidating every level, and middleware refusing a savepoint start.
 - [ ] Framework tests show finalize outcomes and order for released, rolled-back and doubly nested savepoints.
 - [ ] An ORM integration test shows that a multi-statement write that fails inside a user transaction, with its error caught, leaves none of its rows on MySQL and SQLite, and lets the outer transaction commit on Postgres.
 - [ ] ADR 271 is amended, or a new ADR records decisions 1–10, and the subsystem doc and error reference describe the shipped behaviour.

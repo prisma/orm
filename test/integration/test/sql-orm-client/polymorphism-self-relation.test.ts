@@ -1,4 +1,3 @@
-import postgresAdapter from '@internal/adapter-postgres/runtime';
 import { Collection } from '@internal/sql-orm-client';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
@@ -8,20 +7,33 @@ import type { Contract } from './fixtures/polymorphism-self-relation/generated/c
 import contractJson from './fixtures/polymorphism-self-relation/generated/contract.json' with {
   type: 'json',
 };
-import { timeouts, withPushedContractRuntime } from './integration-helpers';
+import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
+import {
+  expectPerRelationStatements,
+  timeouts,
+  withPushedContractRuntime,
+} from './integration-helpers';
 import type { PgIntegrationRuntime } from './runtime-helpers';
 
 const contract = new PostgresContractSerializer().deserializeContract<Contract>(contractJson);
-const context: ExecutionContext<Contract> = createExecutionContext({
-  contract,
-  stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),
-});
+function contextOf(strategy: IncludeStrategy): ExecutionContext<Contract> {
+  return createExecutionContext({
+    contract,
+    stack: createSqlExecutionStack({
+      target: postgresTarget,
+      adapter: postgresAdapterFor(strategy),
+    }),
+  });
+}
 
-function tasksOf(runtime: PgIntegrationRuntime) {
-  return new Collection({ runtime, context }, 'Task', { namespaceId: 'public' });
+function tasksOf(runtime: PgIntegrationRuntime, strategy: IncludeStrategy) {
+  return new Collection({ runtime, context: contextOf(strategy) }, 'Task', {
+    namespaceId: 'public',
+  });
 }
 
 async function withTaskTree(
+  strategy: IncludeStrategy,
   fn: (runtime: PgIntegrationRuntime, tasks: ReturnType<typeof tasksOf>) => Promise<void>,
 ): Promise<void> {
   await withPushedContractRuntime(contract, async (runtime) => {
@@ -39,7 +51,7 @@ async function withTaskTree(
         (2, 20, 1),
         (5, 50, 3)
     `);
-    await fn(runtime, tasksOf(runtime));
+    await fn(runtime, tasksOf(runtime, strategy));
   });
 }
 
@@ -47,15 +59,17 @@ async function taskTitles(runtime: PgIntegrationRuntime): Promise<readonly unkno
   return runtime.query('select id, title from tasks order by id');
 }
 
-describe('integration/polymorphism-self-relation', () => {
+describe.each(includeStrategies)('integration/polymorphism-self-relation (%s)', (strategy) => {
   it(
     'default projection: include() of the same hierarchy decodes MTI variant children through their own table alias',
     async () => {
-      await withTaskTree(async (runtime, tasks) => {
+      await withTaskTree(strategy, async (runtime, tasks) => {
+        runtime.resetExecutions();
         const rows = await tasks
           .orderBy((task) => task.id.asc())
           .include('subtasks', (subtasks) => subtasks.orderBy((subtask) => subtask.id.asc()))
           .all();
+        expectPerRelationStatements(runtime, strategy, 2);
 
         expect(rows).toEqual([
           {
@@ -106,7 +120,7 @@ describe('integration/polymorphism-self-relation', () => {
           },
         ]);
 
-        const sql = runtime.executions[0]?.sql;
+        const sql = runtime.executions.at(-1)?.sql;
         expect(sql).toContain('"features_2"."priority" AS "features_2__priority"');
         expect(sql).toContain('"tasks_2"."parent_id" = "tasks"."id"');
       });
@@ -117,12 +131,14 @@ describe('integration/polymorphism-self-relation', () => {
   it(
     'default projection: include() from a selected MTI variant to its own hierarchy keeps parent and child variant rows apart',
     async () => {
-      await withTaskTree(async (_runtime, tasks) => {
+      await withTaskTree(strategy, async (runtime, tasks) => {
+        runtime.resetExecutions();
         const rows = await tasks
           .orderBy((task) => task.id.asc())
           .include('subtasks', (subtasks) => subtasks.orderBy((subtask) => subtask.id.asc()))
           .variant('feature')
           .all();
+        expectPerRelationStatements(runtime, strategy, 2);
 
         expect(rows).toEqual([
           {
@@ -171,12 +187,14 @@ describe('integration/polymorphism-self-relation', () => {
   it(
     'default projection: include() of a variant-declared relation to the same hierarchy correlates to the parent variant row',
     async () => {
-      await withTaskTree(async (runtime, tasks) => {
+      await withTaskTree(strategy, async (runtime, tasks) => {
+        runtime.resetExecutions();
         const rows = await tasks
           .variant('feature')
           .orderBy((task) => task.id.asc())
           .include('blockedBy')
           .all();
+        expectPerRelationStatements(runtime, strategy, 2);
 
         expect(rows).toEqual([
           {
@@ -221,7 +239,7 @@ describe('integration/polymorphism-self-relation', () => {
           },
         ]);
 
-        const sql = runtime.executions[0]?.sql;
+        const sql = runtime.executions.at(-1)?.sql;
         expect(sql).toContain('"tasks_2"."id" = "features"."blocked_by_id"');
         expect(sql).toContain('"features_2"."priority" AS "features_2__priority"');
       });
@@ -232,7 +250,7 @@ describe('integration/polymorphism-self-relation', () => {
   it(
     'updateAndCount() filtered by a relation over the root table updates only the matching rows',
     async () => {
-      await withTaskTree(async (runtime, tasks) => {
+      await withTaskTree(strategy, async (runtime, tasks) => {
         const count = await tasks
           .where((task) => task.subtasks.some((subtask) => subtask.type.eq('bug')))
           .updateAndCount({ title: 'Has bugs' });
@@ -253,7 +271,7 @@ describe('integration/polymorphism-self-relation', () => {
   it(
     'updateAndCount() on an MTI variant filtered by a relation over the root table updates only the matching rows',
     async () => {
-      await withTaskTree(async (runtime, tasks) => {
+      await withTaskTree(strategy, async (runtime, tasks) => {
         const count = await tasks
           .variant('feature')
           .where((task) => task.subtasks.some((subtask) => subtask.type.eq('feature')))
@@ -267,7 +285,7 @@ describe('integration/polymorphism-self-relation', () => {
           { id: 4, title: 'Typo' },
           { id: 5, title: 'Backlog' },
         ]);
-        const sql = runtime.executions[0]?.sql;
+        const sql = runtime.executions.at(-1)?.sql;
         expect(sql).toContain('FROM "public"."tasks" AS "tasks_3"');
         expect(sql).toContain('FROM "public"."tasks" AS "tasks_2"');
         expect(sql).toContain('"tasks"."type" = $2');

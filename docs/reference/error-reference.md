@@ -1147,11 +1147,11 @@ A nested relation mutation's input is malformed: a relation field without a muta
 
 ### ORM.RELATION_MUTATION_UNSUPPORTED
 
-A nested relation mutation kind is not supported in this position: `disconnect()`, `updateAll()` or `deleteAll()` outside `update()` nested mutations, `updateAll()` or `deleteAll()` on a to-one relation (`reason: 'to-one-relation'`), an array of two or more operations on a to-one relation (`reason: 'to-one-relation'`, with `model` and the count in `operations`), or `create()`/`connect()` through a junction table with required columns the relation API cannot populate (`reason: 'junction-required-columns'`, with the table in `junction`; `disconnect()` stays available). Payload: `kind`, `relation`, `model`, `reason`, `operations`, `junction`.
+A nested relation operation is not supported where it is used; `reason`, when set, says why. Payload: `kind`, `relation`, `model`, `reason`, `operations`, `junction`.
 
 ### ORM.RELATION_ROW_MISSING
 
-A `connect()`/`disconnect()` nested mutation's criterion matched no row on the related model. Payload: `kind`, `relation`.
+A nested `connect()` or `disconnect()` found no row matching its criterion on the related model. Payload: `kind`, `relation`.
 
 ### ORM.RELATION_UNKNOWN
 
@@ -1473,6 +1473,8 @@ The SQL runtime callback helper received a timeout outside integer milliseconds 
 
 Transaction work or a lazy result was used after callback completion or deadline invalidation, or a statement started beneath a transaction had not reached the driver when the transaction's `commit()` or `rollback()` was called. This includes a statement sent on the transaction's connection while the transaction was open. The statement is not sent. Await every statement before the callback returns, or before calling `commit()` or `rollback()`. Consume results inside the callback and do not retain its transaction for later work.
 
+A savepoint refuses work with this code once it has been committed or rolled back, or once the transaction or a savepoint below it has settled, timed out or been invalidated. A failed `ROLLBACK TO SAVEPOINT` closes the transaction and every savepoint: their statements, `transaction()` and `commit()` are refused with this code, and the outer `rollback()` rejects with it without sending `ROLLBACK`, so the connection is destroyed.
+
 ### RUNTIME.TRANSACTION_COMMIT_FAILED
 
 Committing a transaction failed; the runtime attempts a cleanup rollback and destroys the connection if that also fails. The driver's commit error is attached as `cause`. Payload: `commitError`.
@@ -1480,6 +1482,10 @@ Committing a transaction failed; the runtime attempts a cleanup rollback and des
 ### RUNTIME.TRANSACTION_ROLLBACK_FAILED
 
 Rolling back after callback failure itself failed; the connection is destroyed rather than returned to the pool. The callback error is the wrapper `cause`; payload `rollbackError` is the actual underlying rollback failure, unchanged. Destruction failures do not replace this error. Timeout skips rollback and destroys the connection directly.
+
+### RUNTIME.TRANSACTION_SUSPENDED
+
+A statement, `commit()`, `rollback()` or `transaction()` was sent on a transaction or savepoint while a savepoint opened above it is still open, or a statement was sent on the connection while its transaction has an open savepoint. Work sent below an open savepoint would be undone by its `ROLLBACK TO SAVEPOINT`, and a second savepoint opened beside it would be undone the same way. The message names the top of the stack, the innermost open savepoint. Nothing is sent to the database, and the transaction or savepoint can be used again once the savepoints above it commit or roll back. The outer transaction's `rollback()` after its timeout is the exception: it sends `ROLLBACK` while savepoints are open, and those savepoints then refuse work with `RUNTIME.TRANSACTION_CLOSED`. Payload: `savepointId`, the activity ID of the innermost open savepoint; `undefined` while that savepoint's `activityStarted` hooks run.
 
 ### RUNTIME.TRANSACTION_TIMEOUT
 

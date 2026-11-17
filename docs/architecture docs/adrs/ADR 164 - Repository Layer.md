@@ -51,10 +51,12 @@ Repository operations compose these primitives to implement multi-query workflow
 | UPDATE / DELETE without RETURNING | Target lacks RETURNING | SELECT the matching keys; write with the caller's filter (many rows) or by the selected key (one row); then SELECT by those keys, with any new key value the update set, or return the rows read first (DELETE) |
 | UPSERT without RETURNING | Target lacks RETURNING | INSERT with an update on conflict, then SELECT by the create's values for the conflict columns |
 | Nested creates | Parent + children across tables | Ordered INSERTs within a transaction, propagating generated keys |
+| Includes where the contract lacks `sql.jsonAgg`, `sql.outerReferencesInDerivedTables` or `sql.jsonAggWithoutTruncation` | The database cannot run the one-query include correctly: it rejects the outer reference inside the include's derived table, or it can shorten an oversized JSON array without an error | One query per relation: SELECT the parent rows, then for each include one SELECT of the related rows of all those parents, filtered by the parents' identity, and attach each related row to its parent in memory. Paging, `distinct` and aggregates still run in SQL, per parent. Every parent table needs a primary key or a unique key with no nullable column; without one the read fails with `ORM.ROW_IDENTITY_MISSING`. A very large set of parents is split across several statements per include |
 
 ### 6) Transaction policy
 
-- **Mutations** spanning multiple statements default to transactional (wrap in `transaction`)
+- **Mutations** spanning multiple statements default to transactional (wrap in `transaction`), including the statements that load the includes of the rows they return
+- **Reads** spanning multiple statements, such as a read whose includes load with one query per relation, open no transaction: each statement runs on its own, and inside a caller's transaction they run on it
 - Detailed transaction policy, isolation level selection, and retry semantics are deferred to a follow-up ADR
 
 ### 7) Relationship to ORM lane
@@ -79,6 +81,7 @@ The repository layer reads **contract capabilities** (ADR 031) to choose between
 
 - When `RETURNING` is available, a CREATE can be lowered to a single statement; when absent, the repository issues INSERT + SELECT. A database without `RETURNING` reports at most one generated value per statement, so an operation that would need several generated keys back (a multi-row create returning rows) is refused before it runs
 - When CTE-based nested mutations are feasible (e.g., writable CTEs on Postgres), prefer single-statement lowering via the lane; otherwise, fall back to multi-statement orchestration
+- Includes load with the one-query include, a correlated subquery per include that aggregates the related rows into JSON, when the contract's `sql` group reports `jsonAgg`, `outerReferencesInDerivedTables` and `jsonAggWithoutTruncation`. When it lacks any of them, includes load with one query per relation, and a prepared read with includes is refused, because a prepared read is one statement. There is no user switch between the two (ADR 296)
 - Strategy selection is deterministic given the same contract and capabilities — no runtime feature detection
 
 ## Consequences
