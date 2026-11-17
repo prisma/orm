@@ -164,23 +164,28 @@ The `mongo()` client has no `query(plan)` method, because `db.query` is the quer
 - Run params are `MongoParamsFromDeclaration<D, CT>`: each codec's `input` type, plus `null` when nullable.
 - `CT` is the contract's codec types from `ExtractMongoCodecTypes`. Its constraint mentions `output` only, but the codec types it returns carry `input`. A conditional type, `MongoCodecInput<CT, Id>`, reads `input` from them. It lives in `@internal/mongo-contract` beside `ExtractMongoCodecTypes`, so the facade and the ORM (D9) use one definition. Unknown codec ids fail to compile.
 
-### D9. ORM reads: `.prepared.all()` and `.prepared.first()` (slice 2)
+### D9. ORM reads: `.prepared.all()`, `.prepared.first()` and `.prepared.firstOrThrow()` (slice 2)
 
-As on Postgres, the client's `prepare` also takes an ORM read description. The MongoDB ORM has `all()` and `first()` reads and no aggregates, so its collections get `.prepared.all()` and `.prepared.first()`.
+As on Postgres, the client's `prepare` also takes an ORM read description. The MongoDB ORM has `all()`, `first()` and `firstOrThrow()` reads and no aggregates, so its collections get `.prepared.all()`, `.prepared.first()` and `.prepared.firstOrThrow()`, as the SQL ORM's `.prepared` has.
 
-- They return a `MongoPreparable<Row, Result>`: the plan, and a consumer that turns each run's rows into the result (a row stream for `all`, `Row | null` for `first`). It lives in `@internal/mongo-query-ast/execution` beside `MongoQueryPlan`, where SQL keeps `Preparable`.
+- They return a `MongoPreparable<Row, Result>`: the plan, and a consumer that turns each run's rows into the result (a row stream for `all`, `Row | null` for `first`, `Row` for `firstOrThrow`, which rejects as the ad-hoc `firstOrThrow()` does when no document matches). It lives in `@internal/mongo-query-ast/execution` beside `MongoQueryPlan`, where SQL keeps `Preparable`.
 - The client passes only the plan to `runtime.prepare` and wraps the handle with the consumer, as SQL's `prepareQuery` does. The wrapper's `query(target, params)` returns the consumer's result directly.
 - The MongoDB ORM has no activity source, so there is no counterpart to SQL's prepared ORM call record.
 
 Positions that take a placeholder:
 
-- **Where the pass-through sits.** The code that keeps a placeholder as it is goes in the two `where` entry points only: `#compileWhereObject` and `#encodeFieldFilter`, before `#wrapFieldValue` is called. `#wrapFieldValue` and `#wrapValueObject` stay as they are; `#fieldParam` refuses any placeholder that reaches it. So a placeholder is accepted only as a top-level field value in a `where`.
+- **Where the pass-through sits.** The code that keeps a placeholder as it is goes in the two `where` entry points only: `#compileWhereObject` and `#encodeFieldFilter`, before `#wrapFieldValue` is called. `#wrapFieldValue` refuses a placeholder given as a whole value object, and `#fieldParam` refuses any other placeholder that reaches it. So a placeholder is accepted only as a top-level field value in a `where`.
 - **Object-form `where`** (`{ status: p.status }`). The ORM keeps the placeholder as it is instead of wrapping it in a second `MongoParamRef`. The types require the placeholder's codec to be the field's codec.
   - A nullable placeholder is accepted only on a nullable field, as a literal `null` is. MongoDB's `$eq: null` matches `null` and missing, which is what the ORM sends for a literal `null`. SQL needs `IS NOT DISTINCT FROM` for this; MongoDB does not.
   - On a list field, a placeholder means "the list holds this item" (`$elemMatch: { $eq: … }`), as a single literal does. Its codec must be the element codec, and it must not be nullable, because a literal `null` on a list field means "not a list", which a placeholder cannot express. A whole-list placeholder is not possible: a declaration has no list form.
 - **Filter-expression `where`** (`where((f) => f.status.eq(p.status))`). `#encodeFieldFilter` keeps a placeholder as it is, as it keeps a `MongoParamRef` that has a codec, for comparison and membership operators.
+- **The codec is checked when the `where` is built.** A filter expression is not typed against the model, so the types cannot check a placeholder there. In both `where` forms, a placeholder on a scalar field whose codec id is not the field's codec id is refused with `ORM.ARGUMENT_INVALID`, and so is a nullable placeholder on a field that is not nullable, or on a list field. Without this, a placeholder declared `mongo/string@1` and compared with an ObjectId field would send a string and match nothing, with no error, where a literal in the same position is encoded with the field's codec.
+- **Filter-expression `where` on a field that is not a scalar** (a whole value object, or a path below a value object that the contract does not know). A placeholder there is refused with `ORM.ARGUMENT_INVALID` when the `where` is built. A path whose first segment is not a field of the model fails with `ORM.FIELD_UNKNOWN`, as it does for a literal. A declaration names a scalar codec, so it cannot stand for a value object. A scalar inside a value object (`address.city`) is a scalar field and takes a placeholder.
+- **Every other position in a filter expression refuses a placeholder** with `ORM.ARGUMENT_INVALID` when the `where` is built: any operator other than a comparison or a `$in`/`$nin` list, a `$in`/`$nin` whose whole value is a placeholder, an array holding a placeholder compared with a list field, and anything inside `$expr`.
+- **An indexed list path** (`tags.0`) names one item. A placeholder there takes the element codec, and may be nullable exactly when the list's items are nullable.
+- **A write on a collection whose `where` holds a placeholder** (`where({ name: p.name }).deleteAll()`) is refused with `ORM.ARGUMENT_INVALID` when the write is called.
 - **`limit` and `offset`** (D5). `MongoCollectionState.limit` and `offset` widen to accept a placeholder.
-- **`first()`** sets `limit` to 1. A declared `limit` placeholder that this replaces fails as unused, as on SQL.
+- **`first()` and `firstOrThrow()`** set `limit` to 1. A declared `limit` placeholder that this replaces fails as unused, as on SQL.
 - **Includes, `orderBy` and `select`** carry relation names, field names and directions, not values. Nothing changes.
 
 ### D10. Errors
@@ -193,6 +198,7 @@ Positions that take a placeholder:
 | Declared name not used | `RUNTIME.PREPARE_UNUSED_PARAM` | `prepare` |
 | Closed client | `DRIVER.NOT_CONNECTED` | `db.prepare` |
 | Placeholder in an ORM write or value-object literal | `ORM.ARGUMENT_INVALID` (existing) | when the write runs, or when the `where` is built |
+| Placeholder in an ORM `where` whose codec or nullability does not fit the field | `ORM.ARGUMENT_INVALID` (existing) | when the `where` is built |
 | Name missing at run, or params not an object | `RUNTIME.PREPARE_MISSING_PARAM` | run |
 | `limit` value not a positive integer, or `skip` value not a non-negative integer | `ORM.ARGUMENT_INVALID` (existing) | run, after `beforeEncode` |
 | Target without the bridge | invariant error | run |
@@ -225,7 +231,7 @@ Nothing under `packages/1-framework` changes. The MongoDB runtime already import
 - A new ADR: MongoDB prepared statements. It records D1 to D9, the known difference in D4, and links ADR 210. ADR 210 gets an update note: its "SQL-only" line now points to the new ADR. The next free number on `main` is 318; check open PRs before using it.
 - `ADR-INDEX.md`, the MongoDB family subsystem doc (runtime section), the runtime and middleware subsystem doc, the error reference, the facade README, the `@prisma/orm-mongo` README, `skills/prisma-8/references/queries.md` and `queries-mongo.md`.
 - Adding a member to `MongoValue` breaks no code in the repo, because nothing switches on every `MongoValue` kind. So no upgrade note, unless the implementer finds an exported type whose shape changes for users.
-- A release-note fragment.
+- No release-note fragment: the repo has none, and release notes are drafted when a release is cut.
 
 ## Slices
 
