@@ -51,11 +51,11 @@
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
-    "temporal-polyfill": "^1.0.4"
+    "temporal-polyfill": "^1.0.8"
   },
   "peerDependencies": {
     "mongodb": "^7.0.0",
-    "temporal-polyfill": "^1.0.4",
+    "temporal-polyfill": "^1.0.8",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {
