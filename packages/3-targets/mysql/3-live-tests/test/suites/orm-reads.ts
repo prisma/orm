@@ -154,6 +154,27 @@ export function describeOrmReads(server: LiveServer): void {
       );
     });
 
+    it('keeps the groups whose mean of integers passes a having, and reads that mean exactly', async (test) => {
+      await withSeededDatabase(
+        test,
+        server,
+        [
+          ...exampleDatabase,
+          "INSERT INTO `Post` (`id`, `title`, `authorId`) VALUES (5, 'Same', 1), (6, 'Same', 2), (7, 'Same', 2)",
+        ],
+        async (url) => {
+          await using db = server.client({ url, verifyMarker: false });
+          const groups = await db.orm.Post.groupBy('title')
+            .having((h) => h.avg('authorId').gt(1.5))
+            .aggregate((a) => ({ mean: a.avg('authorId') }));
+          expect([...groups].sort((a, b) => a.title.localeCompare(b.title))).toEqual([
+            { title: 'Delta', mean: 2 },
+            { title: 'Same', mean: 5 / 3 },
+          ]);
+        },
+      );
+    });
+
     it('groups a collection and counts each group', async (test) => {
       await withSeededDatabase(test, server, exampleDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
