@@ -214,7 +214,11 @@ export default defineConfig({
   target: postgres,
   adapter: postgresAdapter,
   extensions: [],
-  contract: typescriptContract(contract, 'src/prisma/contract.json'),
+  contract: {
+    ...typescriptContract(contract, 'src/prisma/contract.json'),
+    typesModule: '@internal/postgres/generated-types',
+  },
+  migrations: { module: '@internal/postgres/migration' },
 });
 ```
 
@@ -303,7 +307,11 @@ export default defineConfig({
   adapter: postgresAdapter,
   driver: postgresDriver,
   extensions: [],
-  contract: typescriptContract(contract, 'src/prisma/contract.json'),
+  contract: {
+    ...typescriptContract(contract, 'src/prisma/contract.json'),
+    typesModule: '@internal/postgres/generated-types',
+  },
+  migrations: { module: '@internal/postgres/migration' },
   db: {
     connection: process.env.DATABASE_URL, // Optional: can also use --db flag
   },
@@ -878,7 +886,11 @@ export default defineConfig({
   adapter: postgresAdapter,
   driver: postgresDriver,
   extensions: [],
-  contract: typescriptContract(contract, 'src/prisma/contract.json'),
+  contract: {
+    ...typescriptContract(contract, 'src/prisma/contract.json'),
+    typesModule: '@internal/postgres/generated-types',
+  },
+  migrations: { module: '@internal/postgres/migration' },
   db: {
     connection: process.env.DATABASE_URL, // Optional: can also use --db flag
   },
@@ -1048,7 +1060,11 @@ export default defineConfig({
   target: postgres,
   adapter: postgresAdapter,
   extensions: [],
-  contract: typescriptContract(contract, 'src/prisma/contract.json'),
+  contract: {
+    ...typescriptContract(contract, 'src/prisma/contract.json'),
+    typesModule: '@internal/postgres/generated-types',
+  },
+  migrations: { module: '@internal/postgres/migration' },
 });
 ```
 
