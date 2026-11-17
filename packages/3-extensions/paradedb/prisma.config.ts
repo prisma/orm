@@ -31,7 +31,7 @@ export default definePrismaConfig({
     }),
     migrations: {
       dir: 'migrations',
-      module: '@internal/postgres/migration',
+      module: '@internal/target-postgres/migration',
     },
   }),
 });
