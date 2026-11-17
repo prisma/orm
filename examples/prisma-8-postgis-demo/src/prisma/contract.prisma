@@ -8,7 +8,7 @@ types {
 
 /// A point-of-interest. `location` is a Point geometry in WGS84.
 model Cafe {
-  id       Char(36)    @id @default(uuid())
+  id       Char(36)    @id @onCreate(uuid())
   name     String
   location WgsGeometry
 
@@ -17,7 +17,7 @@ model Cafe {
 
 /// A delivery route, captured as a single LineString in WGS84.
 model Route {
-  id   Char(36)    @id @default(uuid())
+  id   Char(36)    @id @onCreate(uuid())
   name String
   path WgsGeometry
 
@@ -26,7 +26,7 @@ model Route {
 
 /// A neighborhood boundary, stored as a Polygon in WGS84.
 model Neighborhood {
-  id       Char(36)    @id @default(uuid())
+  id       Char(36)    @id @onCreate(uuid())
   name     String
   boundary WgsGeometry
 

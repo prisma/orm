@@ -34,7 +34,7 @@ So `fixtures:check` answers "does the contract emitter still produce identical c
 
 When you change the planner and need to prove the emitted operations are unchanged, use these instead:
 
-- **The planner suites** — e.g. `packages/3-targets/3-targets/postgres/test/migrations/{rls-planner,rls-ops,op-factory-call}.test.ts`, `packages/3-targets/6-adapters/*/test/migrations/planner.*`, and the cross-package `test/integration/test/cross-package/*-issue-planner*.test.ts` — where they assert the **exact** op / SQL output.
+- **The planner suites** — e.g. `packages/3-targets/postgres/1-target/test/migrations/{rls-planner,rls-ops,op-factory-call}.test.ts`, `packages/3-targets/*/2-adapter/test/migrations/planner.*`, and the cross-package `test/integration/test/cross-package/*-issue-planner*.test.ts` — where they assert the **exact** op / SQL output.
 - **The `migration plan` e2e tests** — `cli.migration-plan-ref-aware.e2e`, `cli-journeys/{migration-plan-details,multi-step-migration,drift-migration-dag}.e2e` — which run the real planner end-to-end.
 - **A golden diff of real planner output against the committed example ops.** Run `migration plan --from <prior-migration-dir>` (offline mis-detects the baseline without `--from`) against an example's contract chain and compare the emitted operations to the committed `migration.ts` `operations`. This is the closest thing to a fixture-level byte gate for the planner; there is no automatic one.
 

@@ -39,11 +39,13 @@ async function interpret(schemaPath: string): Promise<Contract<SqlStorage>> {
   });
   const loaded = await prisma7Schema(schemaPath).source.load({
     composedExtensions: [],
+    defaultNamespaceId: stack.target.defaultNamespaceId,
     composedExtensionContracts: stack.extensionContracts,
     authoringContributions: stack.authoringContributions,
     codecLookup: stack.codecLookup,
-    dataTypeLookup: stack.dataTypeLookup,
+    dataTypes: stack.dataTypes,
     controlMutationDefaults: stack.controlMutationDefaults,
+    generatorFunctions: stack.generatorFunctions,
     resolvedInputs: [schemaPath],
     capabilities: stack.capabilities,
   });
@@ -118,7 +120,7 @@ async function junctionFieldNames(
         driver,
         contract: new PostgresContractSerializer().serializeContract(contract),
       });
-      return flatPslModels(family.inferPslContract(schema));
+      return flatPslModels(await family.inferPslContract(schema));
     });
     return {
       interpreted: interpretedJunctionFields(contract, namespaceIds),

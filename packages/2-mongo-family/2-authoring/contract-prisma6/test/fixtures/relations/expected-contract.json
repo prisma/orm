@@ -21,19 +21,21 @@
         "models": {
           "User": {
             "fields": {
-              "_id": {
+              "id": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "email": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/string@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             },
             "relations": {
@@ -44,7 +46,7 @@
                 },
                 "cardinality": "1:N",
                 "on": {
-                  "localFields": ["_id"],
+                  "localFields": ["id"],
                   "targetFields": ["authorId"]
                 }
               },
@@ -56,7 +58,7 @@
                 "cardinality": "1:1",
                 "nullable": true,
                 "on": {
-                  "localFields": ["_id"],
+                  "localFields": ["id"],
                   "targetFields": ["userId"]
                 }
               },
@@ -67,37 +69,48 @@
                 },
                 "cardinality": "1:N",
                 "on": {
-                  "localFields": ["_id"],
-                  "targetFields": ["coauthor_id"]
+                  "localFields": ["id"],
+                  "targetFields": ["coauthorId"]
                 }
               }
             },
             "storage": {
-              "collection": "User"
+              "collection": "User",
+              "fields": {
+                "id": {
+                  "field": "_id"
+                },
+                "email": {
+                  "field": "email"
+                }
+              }
             }
           },
           "Post": {
             "fields": {
-              "_id": {
+              "id": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "authorId": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
-              "coauthor_id": {
+              "coauthorId": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": true
+                "nullable": true,
+                "many": false
               }
             },
             "relations": {
@@ -110,7 +123,7 @@
                 "nullable": false,
                 "on": {
                   "localFields": ["authorId"],
-                  "targetFields": ["_id"]
+                  "targetFields": ["id"]
                 }
               },
               "coauthor": {
@@ -121,30 +134,43 @@
                 "cardinality": "N:1",
                 "nullable": true,
                 "on": {
-                  "localFields": ["coauthor_id"],
-                  "targetFields": ["_id"]
+                  "localFields": ["coauthorId"],
+                  "targetFields": ["id"]
                 }
               }
             },
             "storage": {
-              "collection": "Post"
+              "collection": "Post",
+              "fields": {
+                "id": {
+                  "field": "_id"
+                },
+                "authorId": {
+                  "field": "authorId"
+                },
+                "coauthorId": {
+                  "field": "coauthor_id"
+                }
+              }
             }
           },
           "Profile": {
             "fields": {
-              "_id": {
+              "id": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "userId": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             },
             "relations": {
@@ -157,12 +183,20 @@
                 "nullable": false,
                 "on": {
                   "localFields": ["userId"],
-                  "targetFields": ["_id"]
+                  "targetFields": ["id"]
                 }
               }
             },
             "storage": {
-              "collection": "Profile"
+              "collection": "Profile",
+              "fields": {
+                "id": {
+                  "field": "_id"
+                },
+                "userId": {
+                  "field": "userId"
+                }
+              }
             }
           }
         }
@@ -174,7 +208,7 @@
   "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
   "meta": {},
   "storage": {
-    "storageHash": "7e2f23ac6ee6027cc787d4ea8ec7e40d7cc950ec891a4e0edec81e7f73315f4b",
+    "storageHash": "1f9627f7b4b1f564e1a141ae9a59068771907656768dc33918bef27d9b5f99d9",
     "namespaces": {
       "__unbound__": {
         "id": "__unbound__",
@@ -186,6 +220,7 @@
               "indexes": [
                 {
                   "kind": "mongo-index",
+                  "name": "User_email_key",
                   "keys": [
                     {
                       "field": "email",
@@ -204,6 +239,7 @@
               "indexes": [
                 {
                   "kind": "mongo-index",
+                  "name": "Profile_userId_key",
                   "keys": [
                     {
                       "field": "userId",

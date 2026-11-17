@@ -7,6 +7,7 @@ import type {
 } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
 import { notOk, type Result } from '@internal/utils/result';
+import type { Binder } from './binder';
 import type { PslSources } from './source-file';
 import type { SymbolTable } from './symbol-table';
 import type { DocumentAst } from './syntax/ast/declarations';
@@ -20,6 +21,7 @@ export interface PslInterpretInput {
   readonly documents: readonly DocumentAst[];
   readonly sources: PslSources;
   readonly symbolTable: SymbolTable;
+  readonly binder: Binder;
 }
 
 /**

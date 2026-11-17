@@ -1,6 +1,6 @@
 // use prisma-8
 
 model User {
-  id Char(26) @id @default(ulid())
+  id Char(26) @id @onCreate(ulid())
   @@map("user")
 }

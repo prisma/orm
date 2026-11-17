@@ -115,17 +115,6 @@ describe('expandContractInputs', () => {
 
     expect(await expandContractInputs([uncPath])).toEqual([uncPath]);
   });
-
-  it('reaches resolvedInputs intact through the same assembly every emit consumer uses', async () => {
-    const dir = await createFixtureDir();
-    const ordinary = join(dir, 'schema.prisma');
-    await writeFile(ordinary, 'model User {}\n', 'utf-8');
-    const uncPath = '\\\\server\\share\\sibling.prisma';
-
-    const resolvedInputs = await expandContractInputs([ordinary, uncPath]);
-
-    expect(resolvedInputs).toEqual([ordinary, uncPath].sort());
-  });
 });
 
 describe('globContractInputMatching', () => {

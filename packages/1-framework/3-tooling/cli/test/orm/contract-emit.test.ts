@@ -33,6 +33,7 @@ function emitResult(overrides: Record<string, unknown> = {}): ContractEmitResult
       json: join(OUTPUT_DIR, 'contract.json'),
       dts: join(OUTPUT_DIR, 'contract.d.ts'),
     },
+    pinnedFiles: [],
     ...overrides,
   } as ContractEmitResult;
 }
@@ -125,6 +126,7 @@ describe('contract emit', () => {
         json: join(OUTPUT_DIR, 'contract.json'),
         dts: join(OUTPUT_DIR, 'contract.d.ts'),
       },
+      pinnedFiles: [],
       timings: { total: expect.any(Number) },
     });
   });
@@ -219,22 +221,10 @@ describe('contract emit', () => {
     });
   });
 
-  it('writes the emitted paths to stdout and the prose to stderr', async () => {
-    // Only stdout is a terminal. Marking stderr one too makes the engine read
-    // the pair as a single screen and drop the stdout mirror to avoid drawing
-    // it twice; leaving stdout off a terminal switches it to the JSON stream.
-    const run = await harness().run(['contract', 'emit'], {
-      cwd: PROJECT_DIR,
-      isTty: { stdout: true },
-    });
+  it('writes the emitted paths, relative to the working directory, to stdout and the prose to stderr', async () => {
+    const run = await harness().run(['contract', 'emit'], { cwd: PROJECT_DIR });
 
-    expect(run.presented?.presentation.stdout).toEqual([
-      join(OUTPUT_DIR, 'contract.json'),
-      join(OUTPUT_DIR, 'contract.d.ts'),
-    ]);
-    expect(run.stdout).toBe(
-      `${join(OUTPUT_DIR, 'contract.json')}\n${join(OUTPUT_DIR, 'contract.d.ts')}\n`,
-    );
+    expect(run.stdout).toBe('generated/contract.json\ngenerated/contract.d.ts\n');
   });
 
   it('ships the header, the outcome and the hashes as blocks', async () => {
@@ -279,6 +269,61 @@ describe('contract emit', () => {
     expect(storage).toBeDefined();
     expect(profile).toBeDefined();
     expect(storage?.indexOf('storage-hash')).toBe(profile?.indexOf('profile-hash'));
+  });
+
+  describe('a pack space it writes under migrations/', () => {
+    const pinnedFiles = [
+      {
+        spaceId: 'pgvector',
+        path: join(PROJECT_DIR, 'migrations', 'pgvector', 'refs', 'head.json'),
+      },
+      {
+        spaceId: 'pgvector',
+        path: join(PROJECT_DIR, 'migrations', 'pgvector', '20261029T0000_declare_vector'),
+      },
+    ];
+
+    beforeEach(() => {
+      executeContractEmit.mockResolvedValue(emitResult({ pinnedFiles }));
+    });
+
+    it('lists each written path after the hashes', async () => {
+      const run = await harness().run(['contract', 'emit'], {
+        cwd: PROJECT_DIR,
+        isTty: { stdout: true },
+      });
+
+      expect(run.presented?.presentation.human.at(-1)).toEqual({
+        kind: 'fields',
+        rows: [
+          { label: 'space pgvector', value: 'migrations/pgvector/refs/head.json' },
+          {
+            label: 'space pgvector',
+            value: 'migrations/pgvector/20261029T0000_declare_vector',
+          },
+        ],
+      });
+    });
+
+    it('writes each written path to stdout after the contract files', async () => {
+      const run = await harness().run(['contract', 'emit'], { cwd: PROJECT_DIR });
+
+      expect(run.stdout).toBe(
+        [
+          'generated/contract.json',
+          'generated/contract.d.ts',
+          'migrations/pgvector/refs/head.json',
+          'migrations/pgvector/20261029T0000_declare_vector',
+          '',
+        ].join('\n'),
+      );
+    });
+
+    it('carries the written paths in the JSON document', async () => {
+      const run = await harness().run(['contract', 'emit', '--json'], { cwd: PROJECT_DIR });
+
+      expect(run.presented?.data).toMatchObject({ pinnedFiles });
+    });
   });
 
   it('omits the execution hash the emitter did not produce', async () => {
@@ -346,8 +391,7 @@ describe('contract emit', () => {
     };
     const warning = (sourceId: string) => ({
       code: 'PSL_DEPRECATED_SCALAR_NAME',
-      message:
-        'Scalar type "Int" is deprecated and will be removed; use "Int32" (stored as BSON int).',
+      message: 'Scalar type "Int" is deprecated and will be removed; use "Int32".',
       sourceId,
       span,
       severity: 'warning',
@@ -356,7 +400,7 @@ describe('contract emit', () => {
       code: 'CONTRACT.SOURCE_DIAGNOSTIC',
       severity: 'warn',
       summary:
-        'prisma/schema.prisma:3:9 PSL_DEPRECATED_SCALAR_NAME: Scalar type "Int" is deprecated and will be removed; use "Int32" (stored as BSON int).',
+        'prisma/schema.prisma:3:9 PSL_DEPRECATED_SCALAR_NAME: Scalar type "Int" is deprecated and will be removed; use "Int32".',
       nextActions: [],
       where: { path: 'prisma/schema.prisma', line: 3 },
       meta: { code: 'PSL_DEPRECATED_SCALAR_NAME', span },
@@ -379,6 +423,51 @@ describe('contract emit', () => {
         run.events.filter((event) => event.kind === 'message' && event.severity === 'warn'),
       ).toEqual([]);
     });
+
+    it.each([false, true])(
+      'are reported with the failure of a source that then refused, for json=%s',
+      async (json) => {
+        const refusal = {
+          code: 'CONTRACT.SOURCE_DIAGNOSTIC' as const,
+          severity: 'error' as const,
+          summary:
+            'prisma/schema.prisma:5:3 PSL_DUPLICATE_STORED_NAME: Field "Dog.label" is stored as "name"',
+          nextActions: [],
+          where: { path: 'prisma/schema.prisma', line: 5 },
+          meta: { code: 'PSL_DUPLICATE_STORED_NAME' },
+        };
+        const warningFinding = {
+          ...diagnostic,
+          code: 'CONTRACT.SOURCE_DIAGNOSTIC' as const,
+          severity: 'warn' as const,
+          nextActions: [],
+        };
+        executeContractEmit.mockRejectedValue(
+          new CliStructuredError(
+            'CONTRACT.SOURCE_LOAD_FAILED',
+            'Failed to resolve contract source',
+            {
+              why: 'Source interpretation failed',
+              diagnostics: [refusal, warningFinding],
+            },
+          ),
+        );
+
+        const run = await harness().run(['contract', 'emit', ...(json ? ['--json'] : [])], {
+          cwd: PROJECT_DIR,
+          isTty: { stdout: true, stderr: true },
+        });
+
+        expect(run.exitCode).toBe(2);
+        if (json) {
+          expect(erroredEnvelope(run).diagnostics).toEqual([refusal, warningFinding]);
+        } else {
+          const stderr = stripAnsi(run.stderr);
+          expect(stderr).toContain('PSL_DUPLICATE_STORED_NAME');
+          expect(stderr).toContain('Scalar type "Int" is deprecated');
+        }
+      },
+    );
 
     it('name a file under the working directory by its relative path', async () => {
       executeContractEmit.mockResolvedValue(

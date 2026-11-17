@@ -35,8 +35,9 @@ function blocksOf(source: string) {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
+    defaultNamespaceId: 'public',
   });
-  return { blocks: symbolTable.topLevel.blocks, sources };
+  return { blocks: symbolTable.defaultNamespace.blocks, sources };
 }
 
 describe('claimedBlockKeywords', () => {

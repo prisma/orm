@@ -3,6 +3,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { ContractSourceContext } from '@internal/config/config-types';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
+import {
+  assembleAuthoringContributions,
+  assembleControlMutationDefaults,
+} from '@internal/framework-components/control';
+import {
+  buildSymbolTable,
+  createBinder,
+  type DescribeUnsupportedAttribute,
+  diagnosticSource,
+  fieldAttribute,
+} from '@internal/psl-parser';
 import type { PslInterpretCapable } from '@internal/psl-parser/interpret';
 import { parse } from '@internal/psl-parser/syntax';
 import { notOk, ok } from '@internal/utils/result';
@@ -12,6 +24,7 @@ import type { ProjectInterpretation } from '../src/config-resolution';
 import { mapParseDiagnostics } from '../src/diagnostic-mapping';
 import { DocumentSnapshot } from '../src/document-snapshot';
 import { DocumentStore } from '../src/document-store';
+import type { LspControlStack } from '../src/lsp-control-stack';
 import { ProjectArtifacts } from '../src/project-artifacts';
 import { canonicalFileIdentity, resolveSchemaInputs } from '../src/schema-inputs';
 
@@ -39,9 +52,72 @@ const bothInputs = await resolveSchemaInputs(
   () => directive,
 );
 
-const interpretContext = { composedExtensions: [] } as unknown as ContractSourceContext;
+const interpretContext = {
+  composedExtensions: [],
+  authoringContributions: {
+    type: {
+      Int: { kind: 'typeConstructor', output: { codecId: 'test/Int@1' } },
+    },
+    entityTypes: {},
+    pslBlockDescriptors: {},
+    generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
+    modelAttributes: {},
+    attributeSpecs: { model: {}, field: {} },
+    dataTypes: {},
+  },
+  controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
+} as unknown as ContractSourceContext;
+const controlStack = {
+  scalarTypes: ['Int'],
+  defaultNamespaceId: 'public',
+  pslBlockDescriptors: {},
+  generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
+  authoringContributions: assembleAuthoringContributions([
+    {
+      id: 'fixture',
+      authoring: {
+        type: {
+          Int: { kind: 'typeConstructor', output: { codecId: 'int' } },
+        },
+        attributeSpecs: {
+          model: {},
+          field: { id: () => fieldAttribute('id', { documentation: '' }) },
+        },
+      },
+    },
+  ]),
+  controlMutationDefaults: assembleControlMutationDefaults([]),
+};
 
-function interpretationDouble(interpret: PslInterpretCapable['interpret']): {
+function describeUnsupportedTestAttribute(
+  sources: Parameters<typeof diagnosticSource>[0],
+): DescribeUnsupportedAttribute {
+  return ({ attribute, level, owner, field }) => {
+    if (level === 'model') {
+      return {
+        code: 'PSL_UNSUPPORTED_MODEL_ATTRIBUTE',
+        message: `Model "${owner.name}" uses unsupported attribute "@@${attribute.name}"`,
+        ...diagnosticSource(sources, owner.node.syntax).at(attribute.span),
+      };
+    }
+    if (field === undefined) return undefined;
+    return {
+      code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
+      message: `Field "${owner.name}.${field.name}" uses unsupported attribute "@${attribute.name}"`,
+      ...diagnosticSource(sources, field.node.syntax).at(attribute.span),
+    };
+  };
+}
+
+const interpretContextWithUnsupportedAttribute = {
+  ...interpretContext,
+  pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedTestAttribute },
+} as unknown as ContractSourceContext;
+
+function interpretationDouble(
+  interpret: PslInterpretCapable['interpret'],
+  context: ContractSourceContext = interpretContext,
+): {
   readonly interpretation: ProjectInterpretation;
   readonly spy: ReturnType<typeof vi.fn<PslInterpretCapable['interpret']>>;
 } {
@@ -51,10 +127,14 @@ function interpretationDouble(interpret: PslInterpretCapable['interpret']): {
     load: async () => ok({} as never),
     interpret: spy,
   } as unknown as PslInterpretCapable;
-  return { interpretation: { source, context: interpretContext }, spy };
+  return { interpretation: { source, context }, spy };
 }
 
-function projectWithSnapshots(interpretation?: ProjectInterpretation, multi = false) {
+function projectWithSnapshots(
+  interpretation?: ProjectInterpretation,
+  multi = false,
+  stack: LspControlStack = controlStack,
+) {
   const snapshots = new Map<string, DocumentSnapshot>();
   const set = (uri: string, text: string) => {
     const snapshot = new DocumentSnapshot(uri, text);
@@ -64,6 +144,7 @@ function projectWithSnapshots(interpretation?: ProjectInterpretation, multi = fa
   const readSnapshot = vi.fn((uri: string) => snapshots.get(canonicalFileIdentity(uri)));
   const onInterpretationError = vi.fn();
   const project = new ProjectArtifacts({
+    controlStack: stack,
     inputs: multi ? bothInputs : inputs,
     readSnapshot,
     onInterpretationError,
@@ -71,6 +152,102 @@ function projectWithSnapshots(interpretation?: ProjectInterpretation, multi = fa
   });
   return { project, snapshots, set, readSnapshot, onInterpretationError };
 }
+
+describe('ProjectArtifacts binder', () => {
+  it('rebuilds the binder on edits and takes contributed types from the configuration', () => {
+    const first = projectWithSnapshots();
+    first.set(schemaUri, cleanSource);
+    const initial = first.project.binder();
+    first.set(schemaUri, siblingSource);
+    first.project.documentChanged(schemaUri);
+    expect(first.project.binder()).not.toBe(initial);
+    const next = projectWithSnapshots(undefined, false, {
+      ...controlStack,
+      authoringContributions: assembleAuthoringContributions([
+        {
+          id: 'replacement',
+          authoring: {
+            type: {
+              Int: { kind: 'typeConstructor', output: { codecId: 'other' } },
+            },
+          },
+        },
+      ]),
+    });
+    const nextSnapshot = next.set(schemaUri, cleanSource);
+    expect(
+      next.project.binder().scopeAt(nextSnapshot.parse().document.syntax).lookup('Int'),
+    ).toMatchObject({
+      kind: 'contributedType',
+      symbol: { descriptor: { output: { codecId: 'other' } } },
+    });
+  });
+
+  it('shares a binder for a snapshot and replaces it on edits, membership and close', () => {
+    const { project, set } = projectWithSnapshots(undefined, true);
+    set(schemaUri, cleanSource);
+    set(siblingUri, siblingSource);
+    const first = project.binder();
+    const user = project.symbolTable().defaultNamespace.models['User']!;
+    expect(first.declaredSymbol(user.node.syntax)).toBe(user);
+    expect(project.binder()).toBe(first);
+    project.updateInputs(inputs);
+    const second = project.binder();
+    expect(second).not.toBe(first);
+    expect(second.scopeAt(user.node.syntax).lookup('Post')).toBeUndefined();
+    set(schemaUri, `${directive}model Changed { id Int }`);
+    project.documentChanged(schemaUri);
+    const third = project.binder();
+    expect(third).not.toBe(second);
+    expect(third.declaredSymbol(user.node.syntax)).toBeUndefined();
+    const changed = project.symbolTable().defaultNamespace.models['Changed']!;
+    expect(third.scopeAt(changed.node.syntax).lookup('Changed')?.symbol).toBe(changed);
+    expect(third.scopeAt(changed.node.syntax).lookup('User')).toBeUndefined();
+    project.documentClosed(schemaUri);
+    expect(project.binder()).not.toBe(third);
+  });
+
+  it('reports binder diagnostics with or without an interpreter', () => {
+    const missing = `${directive}model User { id Missing }`;
+    const fallback = projectWithSnapshots();
+    fallback.set(schemaUri, missing);
+    expect(fallback.project.diagnostics(schemaUri).map(({ code }) => code)).toEqual([
+      'PSL_UNRESOLVED_REFERENCE',
+    ]);
+    const successful = projectWithSnapshots(
+      interpretationDouble(() => ok({} as never)).interpretation,
+    );
+    successful.set(schemaUri, missing);
+    expect(successful.project.diagnostics(schemaUri).map(({ code }) => code)).toEqual([
+      'PSL_UNRESOLVED_REFERENCE',
+    ]);
+    const failed = projectWithSnapshots(
+      interpretationDouble(() =>
+        notOk({
+          summary: 'refused',
+          diagnostics: [{ sourceId: schemaUri, code: 'INTERPRETER_REFUSAL', message: 'refused' }],
+        }),
+      ).interpretation,
+    );
+    failed.set(schemaUri, missing);
+    expect(failed.project.diagnostics(schemaUri).map(({ code }) => code)).toEqual([
+      'PSL_UNRESOLVED_REFERENCE',
+      'INTERPRETER_REFUSAL',
+    ]);
+  });
+
+  it('describes unsupported attributes with the family describer without an interpreter', () => {
+    const schema = `${directive}model User {\n  id Int\n  @@bogus\n}\n`;
+    const { project, set } = projectWithSnapshots(undefined, false, {
+      ...controlStack,
+      pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedTestAttribute },
+    });
+    set(schemaUri, schema);
+    expect(project.diagnostics(schemaUri).map(({ code }) => code)).toEqual([
+      'PSL_UNSUPPORTED_MODEL_ATTRIBUTE',
+    ]);
+  });
+});
 
 describe('ProjectArtifacts snapshots', () => {
   it('returns the actual snapshot lazily and preserves normalized identity', () => {
@@ -129,7 +306,7 @@ describe('ProjectArtifacts snapshots', () => {
         const snapshot = set(uri, cleanSource);
         project.documentChanged(uri);
         expect(project.document(uri)).toBe(snapshot);
-        expect(Object.keys(project.symbolTable().topLevel.models)).toEqual(['User']);
+        expect(Object.keys(project.symbolTable().defaultNamespace.models)).toEqual(['User']);
       }
     },
   );
@@ -146,6 +323,7 @@ describe('ProjectArtifacts snapshots', () => {
     );
     const create = (interpretation: ProjectInterpretation) =>
       new ProjectArtifacts({
+        controlStack,
         inputs,
         readSnapshot: documents.readSnapshot,
         onInterpretationError: vi.fn(),
@@ -170,12 +348,14 @@ describe('ProjectArtifacts snapshots', () => {
     documents.open({ uri: schemaUri, languageId: 'prisma', version: 1, text: view });
     const parserOptions = { grammar: 'prisma-7' } as const;
     const withOptions = new ProjectArtifacts({
+      controlStack,
       inputs,
       readSnapshot: documents.readSnapshot,
       onInterpretationError: vi.fn(),
       parserOptions,
     });
     const withoutOptions = new ProjectArtifacts({
+      controlStack,
       inputs,
       readSnapshot: documents.readSnapshot,
       onInterpretationError: vi.fn(),
@@ -217,7 +397,7 @@ describe('ProjectArtifacts snapshots', () => {
     expect(parse).toHaveBeenCalledTimes(2);
     const edited = set(siblingUri, `${directive}model Other { id Int }`);
     project.diagnostics(schemaUri);
-    expect(Object.keys(project.symbolTable().topLevel.models)).toEqual(['User', 'Other']);
+    expect(Object.keys(project.symbolTable().defaultNamespace.models)).toEqual(['User', 'Other']);
     expect(project.document(siblingUri)).toBe(edited);
     expect(() => project.sources.sourceFileFor(sibling.parse().document.syntax)).toThrow(
       /No SourceFile/,
@@ -240,6 +420,7 @@ describe('ProjectArtifacts snapshots', () => {
       text: cleanSource,
     });
     const project = new ProjectArtifacts({
+      controlStack,
       inputs,
       readSnapshot: documents.readSnapshot,
       onInterpretationError: vi.fn(),
@@ -269,6 +450,7 @@ describe('ProjectArtifacts snapshots', () => {
       const documents = new DocumentStore();
       if (watched) documents.setWatchCoverage('project', [uri]);
       const project = new ProjectArtifacts({
+        controlStack,
         inputs: await resolveSchemaInputs(
           { contract: { source: { format: 'psl', inputs: [path] } } },
           (uri) => documents.text(uri),
@@ -286,7 +468,7 @@ describe('ProjectArtifacts snapshots', () => {
         documents.invalidate(uri);
       }
       expect(project.document(uri)).not.toBe(first);
-      expect(Object.keys(project.symbolTable().topLevel.models)).toEqual(['Post']);
+      expect(Object.keys(project.symbolTable().defaultNamespace.models)).toEqual(['Post']);
       expect(parse).toHaveBeenCalledTimes(2);
     } finally {
       await rm(dir, { recursive: true, force: true });
@@ -441,7 +623,7 @@ describe('ProjectArtifacts diagnostics', () => {
     expect(project.diagnostics(aliasUri)).toEqual([
       {
         range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
-        code: 'PRISMA_NEXT_INTERPRETATION_FAILED',
+        code: 'PRISMA_INTERPRETATION_FAILED',
         message:
           'Semantic diagnostics are unavailable because of an internal error. A subsequent diagnostic request or edit will retry.',
         severity: 1,
@@ -492,7 +674,67 @@ describe('ProjectArtifacts diagnostics', () => {
     const { project } = projectWithSnapshots();
     expect(project.diagnostics(schemaUri)).toEqual([]);
     expect(project.symbolDiagnostics()).toEqual([]);
-    expect(Object.keys(project.symbolTable().topLevel.models)).toEqual([]);
+    expect(Object.keys(project.symbolTable().defaultNamespace.models)).toEqual([]);
     expect(parse).not.toHaveBeenCalled();
+  });
+});
+
+describe('ProjectArtifacts binder', () => {
+  it('reports the same single unsupported-attribute diagnostic as createBinder produces directly', () => {
+    const schema = `${directive}model User {\n  id Int\n  @@bogus\n}\n`;
+    const { interpretation } = interpretationDouble(
+      () => ok({} as never),
+      interpretContextWithUnsupportedAttribute,
+    );
+    const { project, set } = projectWithSnapshots(interpretation);
+    set(schemaUri, schema);
+
+    const { document, sources } = parse(schema, schemaUri);
+    const { symbolTable } = buildSymbolTable({
+      documents: [document],
+      sources,
+      defaultNamespaceId: 'public',
+    });
+    const { diagnostics: expected } = createBinder({
+      symbolTable,
+      sources,
+      context: interpretContextWithUnsupportedAttribute,
+    });
+
+    expect(expected).toHaveLength(1);
+    expect(project.diagnostics(schemaUri)).toEqual(mapParseDiagnostics(expected));
+  });
+
+  it('reports the same single unknown-type diagnostic as createBinder produces directly', () => {
+    const schema = `${directive}model User {\n  id Int @id\n  role Role\n}\n`;
+    const { interpretation } = interpretationDouble(() => ok({} as never));
+    const { project, set } = projectWithSnapshots(interpretation);
+    set(schemaUri, schema);
+
+    const { document, sources } = parse(schema, schemaUri);
+    const { symbolTable } = buildSymbolTable({
+      documents: [document],
+      sources,
+      defaultNamespaceId: 'public',
+    });
+    const { diagnostics: expected } = createBinder({
+      symbolTable,
+      sources,
+      context: interpretContext,
+    });
+
+    expect(expected).toHaveLength(1);
+    expect(project.diagnostics(schemaUri)).toEqual(mapParseDiagnostics(expected));
+  });
+
+  it('serves the same binder instance across repeated reads and to interpret', () => {
+    const { interpretation, spy } = interpretationDouble(() => ok({} as never));
+    const { project, set } = projectWithSnapshots(interpretation);
+    set(schemaUri, cleanSource);
+    const first = project.binder();
+    expect(first).toBeDefined();
+    expect(project.binder()).toBe(first);
+    project.diagnostics(schemaUri);
+    expect(spy.mock.calls[0]?.[0].binder).toBe(first);
   });
 });

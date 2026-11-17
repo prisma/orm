@@ -3,6 +3,7 @@ import type {
   OperationPreview,
 } from '@internal/framework-components/control';
 import type {
+  AnyMongoDdlCommand,
   CollModCommand,
   CreateCollectionCommand,
   CreateIndexCommand,
@@ -10,7 +11,10 @@ import type {
   DropIndexCommand,
   MongoDdlCommandVisitor,
   MongoIndexKey,
+  RenameCollectionCommand,
 } from '@internal/mongo-query-ast/control';
+import type { RawUpdateManyCommand } from '@internal/mongo-query-ast/execution';
+import { fieldRewriteOf } from './field-rewrite';
 
 function formatKeySpec(keys: ReadonlyArray<MongoIndexKey>): string {
   const entries = keys.map((k) => `${JSON.stringify(k.field)}: ${JSON.stringify(k.direction)}`);
@@ -35,17 +39,21 @@ function formatCreateCollectionOptions(cmd: CreateCollectionCommand): string | u
   return formatOptionEntries(cmd);
 }
 
+function collectionRef(name: string): string {
+  return `db.getCollection(${JSON.stringify(name)})`;
+}
+
 class MongoDdlCommandFormatter implements MongoDdlCommandVisitor<string> {
   createIndex(cmd: CreateIndexCommand): string {
     const keySpec = formatKeySpec(cmd.keys);
     const opts = formatOptions(cmd);
     return opts
-      ? `db.${cmd.collection}.createIndex(${keySpec}, ${opts})`
-      : `db.${cmd.collection}.createIndex(${keySpec})`;
+      ? `${collectionRef(cmd.collection)}.createIndex(${keySpec}, ${opts})`
+      : `${collectionRef(cmd.collection)}.createIndex(${keySpec})`;
   }
 
   dropIndex(cmd: DropIndexCommand): string {
-    return `db.${cmd.collection}.dropIndex(${JSON.stringify(cmd.name)})`;
+    return `${collectionRef(cmd.collection)}.dropIndex(${JSON.stringify(cmd.name)})`;
   }
 
   createCollection(cmd: CreateCollectionCommand): string {
@@ -56,7 +64,11 @@ class MongoDdlCommandFormatter implements MongoDdlCommandVisitor<string> {
   }
 
   dropCollection(cmd: DropCollectionCommand): string {
-    return `db.${cmd.collection}.drop()`;
+    return `${collectionRef(cmd.collection)}.drop()`;
+  }
+
+  renameCollection(cmd: RenameCollectionCommand): string {
+    return `${collectionRef(cmd.collection)}.renameCollection(${JSON.stringify(cmd.to)})`;
   }
 
   collMod(cmd: CollModCommand): string {
@@ -71,22 +83,36 @@ class MongoDdlCommandFormatter implements MongoDdlCommandVisitor<string> {
 
 const formatter = new MongoDdlCommandFormatter();
 
-interface MongoExecuteStep {
-  readonly command: { readonly accept: <R>(visitor: MongoDdlCommandVisitor<R>) => R };
+function formatUpdateMany(cmd: RawUpdateManyCommand): string {
+  const args = [JSON.stringify(cmd.filter), JSON.stringify(cmd.update)];
+  if (cmd.bypassDocumentValidation) args.push('{ bypassDocumentValidation: true }');
+  return `${collectionRef(cmd.collection)}.updateMany(${args.join(', ')})`;
+}
+
+function arrayAt(value: object, key: string): readonly unknown[] {
+  const entry: unknown = Reflect.get(value, key);
+  return Array.isArray(entry) ? entry : [];
+}
+
+function objectAt(value: unknown, key: string): object | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const entry: unknown = Reflect.get(value, key);
+  return typeof entry === 'object' && entry !== null ? entry : undefined;
+}
+
+function isDdlCommand(value: object | undefined): value is AnyMongoDdlCommand {
+  return value !== undefined && typeof Reflect.get(value, 'accept') === 'function';
 }
 
 export function formatMongoOperations(operations: readonly MigrationPlanOperation[]): string[] {
   const statements: string[] = [];
   for (const operation of operations) {
-    const candidate = operation as unknown as Record<string, unknown>;
-    if (!('execute' in candidate) || !Array.isArray(candidate['execute'])) {
-      continue;
+    for (const step of arrayAt(operation, 'execute')) {
+      const command = objectAt(step, 'command');
+      if (isDdlCommand(command)) statements.push(command.accept(formatter));
     }
-    for (const step of candidate['execute'] as MongoExecuteStep[]) {
-      if (step.command && typeof step.command.accept === 'function') {
-        statements.push(step.command.accept(formatter));
-      }
-    }
+    const rewrite = fieldRewriteOf(operation);
+    if (rewrite !== undefined) statements.push(formatUpdateMany(rewrite.command));
   }
   return statements;
 }

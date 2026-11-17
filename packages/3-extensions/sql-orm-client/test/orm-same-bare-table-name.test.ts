@@ -12,6 +12,18 @@ import { describe, expect, it } from 'vitest';
 import { orm } from '../src/orm';
 import { createMockRuntime, getTestAggregates, getTestContext, type MockRuntime } from './helpers';
 
+const DATA_TYPE_OF_CODEC: Readonly<Record<string, string>> = {
+  'pg/int4@1': 'pg/int4',
+  'pg/text@1': 'pg/text',
+  'pg/varchar@1': 'pg/varchar',
+};
+
+function dataTypeOf(codecId: string): string {
+  const dataType = DATA_TYPE_OF_CODEC[codecId];
+  if (dataType === undefined) throw new Error(`no data type listed for codec ${codecId}`);
+  return dataType;
+}
+
 function model(table: string, fieldColumns: Record<string, string>) {
   const fields: Record<string, { type: { kind: string; codecId: string } }> = {};
   const storageFields: Record<string, { column: string }> = {};
@@ -23,9 +35,9 @@ function model(table: string, fieldColumns: Record<string, string>) {
 }
 
 function storageTable(columnCodecs: Record<string, string>) {
-  const cols: Record<string, { codecId: string; nativeType: string; nullable: boolean }> = {};
+  const cols: Record<string, { codecId: string; dataType: string; nullable: boolean }> = {};
   for (const [column, codecId] of Object.entries(columnCodecs)) {
-    cols[column] = { codecId, nativeType: codecId, nullable: false };
+    cols[column] = { codecId, dataType: dataTypeOf(codecId), nullable: false };
   }
   return {
     columns: cols,
@@ -160,6 +172,11 @@ function lastWriteAst(runtime: MockRuntime): WriteAst {
   return blindCast<WriteAst, 'write plan ast'>((plan as { ast: unknown }).ast);
 }
 
+function findAst(runtime: MockRuntime, fromEnd: number): SelectAst {
+  const plan = runtime.executions[runtime.executions.length - fromEnd]?.plan;
+  return blindCast<SelectAst, 'find plan ast'>((plan as { ast: unknown }).ast);
+}
+
 function returningCodecByColumn(ast: WriteAst): Record<string, string | undefined> {
   return codecByColumnOfProjection(ast.returning ?? []);
 }
@@ -250,14 +267,16 @@ describe('orm same bare table name across namespaces', () => {
     const { db, runtime } = setup();
 
     runtime.setNextResults([[{ id: 1 }], [{ id: 1, email_addr: 'b@example.com' }]]);
-    const publicUpdated = await db.public.User.where({ id: 1 }).update({ email: 'b@example.com' });
+    const publicUpdated = await db.public.User.where({ email: 'a@example.com' }).update({
+      email: 'b@example.com',
+    });
     expect(publicUpdated).toEqual({ id: 1, email: 'b@example.com' });
     const publicAst = lastWriteAst(runtime);
     expect(publicAst.table.namespaceId).toBe('public');
     expect(returningCodecByColumn(publicAst)).toEqual({ id: 'pg/int4@1', email_addr: 'pg/text@1' });
 
     runtime.setNextResults([[{ id: 2 }], [{ id: 2, token_col: 'tok2' }]]);
-    const authUpdated = await db.auth.User.where({ id: 2 }).update({ token: 'tok2' });
+    const authUpdated = await db.auth.User.where({ token: 'tok' }).update({ token: 'tok2' });
     expect(authUpdated).toEqual({ id: 2, token: 'tok2' });
     const authAst = lastWriteAst(runtime);
     expect(authAst.table.namespaceId).toBe('auth');
@@ -267,19 +286,20 @@ describe('orm same bare table name across namespaces', () => {
   it('resolves identity columns within the namespace for singular delete, discriminating by namespace', async () => {
     const { db, runtime } = setup();
 
-    runtime.setNextResults([[{ id: 1 }], [{ id: 1, email_addr: 'a@example.com' }]]);
-    const publicDeleted = await db.public.User.where({ id: 1 }).delete();
+    runtime.setNextResults([[{ id: 1, email_addr: 'a@example.com' }], []]);
+    const publicDeleted = await db.public.User.where({ email: 'a@example.com' }).delete();
     expect(publicDeleted).toEqual({ id: 1, email: 'a@example.com' });
-    const publicAst = lastWriteAst(runtime);
-    expect(publicAst.table.namespaceId).toBe('public');
-    expect(returningCodecByColumn(publicAst)).toEqual({ id: 'pg/int4@1', email_addr: 'pg/text@1' });
+    expect(codecByAlias(findAst(runtime, 2))).toEqual({ id: 'pg/int4@1', email_addr: 'pg/text@1' });
+    expect(lastWriteAst(runtime).table.namespaceId).toBe('public');
 
-    runtime.setNextResults([[{ id: 2 }], [{ id: 2, token_col: 'tok' }]]);
-    const authDeleted = await db.auth.User.where({ id: 2 }).delete();
+    runtime.setNextResults([[{ id: 2, token_col: 'tok' }], []]);
+    const authDeleted = await db.auth.User.where({ token: 'tok' }).delete();
     expect(authDeleted).toEqual({ id: 2, token: 'tok' });
-    const authAst = lastWriteAst(runtime);
-    expect(authAst.table.namespaceId).toBe('auth');
-    expect(returningCodecByColumn(authAst)).toEqual({ id: 'pg/int4@1', token_col: 'pg/varchar@1' });
+    expect(codecByAlias(findAst(runtime, 2))).toEqual({
+      id: 'pg/int4@1',
+      token_col: 'pg/varchar@1',
+    });
+    expect(lastWriteAst(runtime).table.namespaceId).toBe('auth');
   });
 
   it('resolves the PK-default conflict target within the namespace for upsert, discriminating by namespace', async () => {

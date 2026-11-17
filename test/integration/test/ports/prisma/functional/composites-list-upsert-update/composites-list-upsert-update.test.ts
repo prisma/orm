@@ -38,7 +38,7 @@ function withComposites(fn: Parameters<typeof withMongoPort<Contract>>[1]) {
 }
 
 const seedB = (id: string) => ({
-  _id: id,
+  id,
   country: 'France',
   contents: [
     { text: 'Goodbye World', upvotes: [{ vote: false, userId: '11' }] },
@@ -55,8 +55,8 @@ describe('ports/prisma/functional/composites/list/upsert-update', () => {
         const id = new ObjectId().toHexString();
         await db.comment_required_list.create(seedB(id));
 
-        const comment = await db.comment_required_list.where({ _id: id }).upsert({
-          create: { _id: id, country: null, contents: [] },
+        const comment = await db.comment_required_list.where({ id }).upsert({
+          create: { id, country: null, contents: [] },
           update: {
             country: 'Mars',
             contents: [{ text: 'Goodbye World', upvotes: [{ vote: false, userId: '42' }] }],
@@ -67,7 +67,7 @@ describe('ports/prisma/functional/composites/list/upsert-update', () => {
           contents: [{ text: 'Goodbye World', upvotes: [{ userId: '42', vote: false }] }],
           country: 'Mars',
         });
-        expect(comment._id).toEqual(expect.any(String));
+        expect(comment.id).toEqual(expect.any(String));
       }),
     timeouts.spinUpMongoMemoryServer,
   );
@@ -79,8 +79,8 @@ describe('ports/prisma/functional/composites/list/upsert-update', () => {
         const id = new ObjectId().toHexString();
         await db.comment_required_list.create(seedB(id));
 
-        const comment = await db.comment_required_list.where({ _id: id }).upsert({
-          create: { _id: id, country: null, contents: [] },
+        const comment = await db.comment_required_list.where({ id }).upsert({
+          create: { id, country: null, contents: [] },
           update: {
             country: 'Mars',
             contents: [{ text: 'Goodbye World', upvotes: [{ vote: false, userId: '42' }] }],
@@ -106,28 +106,8 @@ describe('ports/prisma/functional/composites/list/upsert-update', () => {
         await db.comment_required_list.create(seedB(id));
 
         // @ts-expect-error required `contents` list cannot be null
-        const promise = db.comment_required_list.where({ _id: id }).upsert({
-          create: { _id: id, country: null, contents: [] },
-          update: {
-            country: 'France',
-            contents: null,
-          },
-        });
-        await expect(promise).rejects.toThrow();
-      }),
-    timeouts.spinUpMongoMemoryServer,
-  );
-
-  it(
-    'set null shorthand',
-    () =>
-      withComposites(async ({ db }) => {
-        const id = new ObjectId().toHexString();
-        await db.comment_required_list.create(seedB(id));
-
-        // @ts-expect-error required `contents` list cannot be null
-        const promise = db.comment_required_list.where({ _id: id }).upsert({
-          create: { _id: id, country: null, contents: [] },
+        const promise = db.comment_required_list.where({ id }).upsert({
+          create: { id, country: null, contents: [] },
           update: {
             country: 'France',
             contents: null,
@@ -145,8 +125,8 @@ describe('ports/prisma/functional/composites/list/upsert-update', () => {
         const id = new ObjectId().toHexString();
         await db.comment_required_list.create(seedB(id));
 
-        const comment = await db.comment_required_list.where({ _id: id }).upsert({
-          create: { _id: id, country: null, contents: [] },
+        const comment = await db.comment_required_list.where({ id }).upsert({
+          create: { id, country: null, contents: [] },
           update: {
             country: 'Mars',
             contents: [
@@ -184,8 +164,8 @@ describe('ports/prisma/functional/composites/list/upsert-update', () => {
         const id = new ObjectId().toHexString();
         await db.comment_required_list.create(seedB(id));
 
-        const comment = await db.comment_required_list.where({ _id: id }).upsert({
-          create: { _id: id, country: null, contents: [] },
+        const comment = await db.comment_required_list.where({ id }).upsert({
+          create: { id, country: null, contents: [] },
           update: (u) => [u.contents.push({ text: 'Goodbye World', upvotes: [] })],
         });
 

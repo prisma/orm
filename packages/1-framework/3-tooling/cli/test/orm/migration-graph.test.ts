@@ -144,8 +144,16 @@ describe('migration graph', () => {
     });
     expect(drawing?.kind).toBe('drawing');
     expect(JSON.stringify(drawing)).toContain(MIGRATION_DIR);
-    expect(run.presented?.presentation.stdout).toEqual([]);
     expect(run.stdout).toBe('');
+  });
+
+  it('prints one data line per migration: space, name, from and to', async () => {
+    const dir = await projectDir();
+    await seedMigration(join(dir, 'migrations'));
+
+    const run = await harness(ormConfig()).run(['migration', 'graph'], { cwd: dir });
+
+    expect(run.stdout).toBe(`app\t${MIGRATION_DIR}\t\t${HASH_A}\n`);
   });
 
   it('paints the drawing, keeping the tree aligned once colour is stripped', async () => {

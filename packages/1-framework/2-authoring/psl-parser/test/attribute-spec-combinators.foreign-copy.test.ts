@@ -19,6 +19,7 @@ import { parse } from '../src/parse';
 import { buildSymbolTable } from '../src/symbol-table';
 import type { ExpressionAst } from '../src/syntax/ast/expressions';
 import type { SyntaxNode } from '../src/syntax/red';
+import { binderContext } from './support';
 
 class ForeignCopyOfAnAstNode {
   readonly syntax: SyntaxNode;
@@ -32,8 +33,9 @@ function foreignArg(source: string): { arg: ExpressionAst; ctx: ModelAttributeCt
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
+    defaultNamespaceId: 'public',
   });
-  const selfModel = symbolTable.topLevel.models['M'];
+  const selfModel = symbolTable.defaultNamespace.models['M'];
   if (selfModel === undefined) throw new Error('expected model M');
   const node = selfModel.fields['id']?.node.attributes()[Symbol.iterator]().next().value;
   const value = node?.argList()?.args()[Symbol.iterator]().next().value?.value();
@@ -41,12 +43,7 @@ function foreignArg(source: string): { arg: ExpressionAst; ctx: ModelAttributeCt
   const { binder } = createBinder({
     sources,
     symbolTable,
-    typeConstructors: {},
-    attributeSpecs: { model: {}, field: {} },
-    controlMutationDefaults: {
-      defaultFunctionRegistry: new Map(),
-      dataTypeEntries: {},
-    },
+    context: binderContext(),
   });
   return {
     arg: new ForeignCopyOfAnAstNode(value.syntax) as unknown as ExpressionAst,

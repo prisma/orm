@@ -19,6 +19,28 @@
           "collection": {
             "tasks": {},
             "users": {}
+          },
+          "valueObject": {
+            "HomeAddress": {
+              "fields": {
+                "city": {
+                  "type": {
+                    "kind": "scalar",
+                    "codecId": "mongo/string@1"
+                  },
+                  "nullable": false,
+                  "many": false
+                },
+                "country": {
+                  "type": {
+                    "kind": "scalar",
+                    "codecId": "mongo/string@1"
+                  },
+                  "nullable": false,
+                  "many": false
+                }
+              }
+            }
           }
         }
       }
@@ -32,6 +54,20 @@
           "Task": {
             "storage": {
               "collection": "tasks",
+              "fields": {
+                "_id": {
+                  "field": "_id"
+                },
+                "title": {
+                  "field": "title"
+                },
+                "type": {
+                  "field": "type"
+                },
+                "assigneeId": {
+                  "field": "assigneeId"
+                }
+              },
               "relations": {
                 "comments": {
                   "field": "comments"
@@ -44,28 +80,32 @@
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "title": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/string@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "type": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/string@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "assigneeId": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             },
             "relations": {
@@ -93,17 +133,24 @@
               "field": "type"
             },
             "variants": {
-              "Bug": {
-                "value": "bug"
+              "bug": {
+                "model": "Bug",
+                "namespace": "__unbound__"
               },
-              "Feature": {
-                "value": "feature"
+              "feature": {
+                "model": "Feature",
+                "namespace": "__unbound__"
               }
             }
           },
           "Bug": {
             "storage": {
-              "collection": "tasks"
+              "collection": "tasks",
+              "fields": {
+                "severity": {
+                  "field": "severity"
+                }
+              }
             },
             "fields": {
               "severity": {
@@ -111,7 +158,8 @@
                   "kind": "scalar",
                   "codecId": "mongo/string@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             },
             "relations": {},
@@ -122,7 +170,15 @@
           },
           "Feature": {
             "storage": {
-              "collection": "tasks"
+              "collection": "tasks",
+              "fields": {
+                "priority": {
+                  "field": "priority"
+                },
+                "targetRelease": {
+                  "field": "targetRelease"
+                }
+              }
             },
             "fields": {
               "priority": {
@@ -130,14 +186,16 @@
                   "kind": "scalar",
                   "codecId": "mongo/string@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "targetRelease": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/string@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             },
             "relations": {},
@@ -149,6 +207,26 @@
           "User": {
             "storage": {
               "collection": "users",
+              "fields": {
+                "_id": {
+                  "field": "_id"
+                },
+                "name": {
+                  "field": "name"
+                },
+                "email": {
+                  "field": "email"
+                },
+                "loginCount": {
+                  "field": "loginCount"
+                },
+                "tags": {
+                  "field": "tags"
+                },
+                "homeAddress": {
+                  "field": "homeAddress"
+                }
+              },
               "relations": {
                 "addresses": {
                   "field": "addresses"
@@ -161,28 +239,32 @@
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "name": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/string@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "email": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/string@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "loginCount": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/int32@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "tags": {
                 "type": {
@@ -190,14 +272,20 @@
                   "codecId": "mongo/string@1"
                 },
                 "nullable": false,
-                "many": true
+                "many": {
+                  "elementNullable": false
+                }
               },
               "homeAddress": {
                 "type": {
                   "kind": "valueObject",
-                  "name": "HomeAddress"
+                  "plane": "storage",
+                  "namespaceId": "__unbound__",
+                  "entityKind": "valueObject",
+                  "entityName": "HomeAddress"
                 },
-                "nullable": true
+                "nullable": true,
+                "many": false
               }
             },
             "relations": {
@@ -222,80 +310,90 @@
             }
           },
           "Address": {
-            "storage": {},
+            "storage": {
+              "fields": {
+                "street": {
+                  "field": "street"
+                },
+                "city": {
+                  "field": "city"
+                },
+                "zip": {
+                  "field": "zip"
+                }
+              }
+            },
             "fields": {
               "street": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/string@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "city": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/string@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "zip": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/string@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             },
             "relations": {},
             "owner": "User"
           },
           "Comment": {
-            "storage": {},
+            "storage": {
+              "fields": {
+                "_id": {
+                  "field": "_id"
+                },
+                "text": {
+                  "field": "text"
+                },
+                "createdAt": {
+                  "field": "createdAt"
+                }
+              }
+            },
             "fields": {
               "_id": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "text": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/string@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "createdAt": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/date@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             },
             "relations": {},
             "owner": "Task"
-          }
-        },
-        "valueObjects": {
-          "HomeAddress": {
-            "fields": {
-              "city": {
-                "type": {
-                  "kind": "scalar",
-                  "codecId": "mongo/string@1"
-                },
-                "nullable": false
-              },
-              "country": {
-                "type": {
-                  "kind": "scalar",
-                  "codecId": "mongo/string@1"
-                },
-                "nullable": false
-              }
-            }
           }
         }
       }

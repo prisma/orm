@@ -1,8 +1,4 @@
-import {
-  CreateCollectionCommand,
-  CreateIndexCommand,
-  defaultMongoIndexName,
-} from '@internal/mongo-query-ast/control';
+import { CreateCollectionCommand, CreateIndexCommand } from '@internal/mongo-query-ast/control';
 import { describe, expect, it } from 'vitest';
 import { collection } from '../src/contract-free/collection';
 
@@ -82,7 +78,7 @@ describe('collection().createIndex()', () => {
   });
 
   it('passes unique and name options through', () => {
-    const name = defaultMongoIndexName(keys);
+    const name = 'email_1';
     const opts = { unique: true, name };
     const cmd = col.createIndex(keys, opts);
     expect(cmd).toEqual(new CreateIndexCommand(COLL, keys, opts));

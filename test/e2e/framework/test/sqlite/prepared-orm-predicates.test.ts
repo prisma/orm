@@ -19,6 +19,7 @@ import {
   TableSource,
 } from '@prisma/orm-sqlite/relational-core/ast';
 import sqlite from '@prisma/orm-sqlite/runtime';
+import { contractFromJson } from '@prisma/orm-sqlite/static';
 import { expect, expectTypeOf, it, vi } from 'vitest';
 import type { Contract } from './fixtures/generated/contract.d';
 import contractJson from './fixtures/generated/contract.json' with { type: 'json' };
@@ -38,7 +39,8 @@ it('prepares ORM predicates and pagination through the public SQLite facade with
   );
   const beforeCompile = vi.fn<NonNullable<SqlMiddleware['beforeCompile']>>(async () => undefined);
   const executions: Array<{ sql: string; params: readonly unknown[] }> = [];
-  const labels: Array<{ label: string } | undefined> = [];
+  const callLabels: Array<{ label: string } | undefined> = [];
+  const planLabels: Array<{ label: string } | undefined> = [];
   const create = sqliteAdapter.create;
   const createSpy = vi.spyOn(sqliteAdapter, 'create').mockImplementation((...args) => {
     const adapter = create(...args);
@@ -51,17 +53,20 @@ it('prepares ORM predicates and pagination through the public SQLite facade with
       },
     };
   });
-  const db = sqlite<Contract>({
-    contractJson,
+  const db = sqlite({
+    contract: contractFromJson<Contract>(contractJson),
     path,
     verifyMarker: false,
     middleware: [
       {
         name: 'record',
         beforeCompile,
-        beforeQuery(plan) {
+        async activityStarted(activity) {
+          if (activity.kind === 'orm-call') callLabels.push(annotation.read(activity));
+        },
+        beforeEncode(plan) {
           executions.push({ sql: plan.sql, params: plan.params });
-          labels.push(annotation.read(plan));
+          planLabels.push(annotation.read(plan));
         },
       },
     ],
@@ -108,8 +113,8 @@ it('prepares ORM predicates and pagination through the public SQLite facade with
     ]);
     expect(await query.query(runtime, second)).toEqual([{ id: 2, posts: [] }]);
     expect(executions.map((execution) => execution.params)).toEqual([
-      [5, 9, 1, 999, 2, 1, 'Match'],
-      [7, 9, 2, 999, 3, 2, 'Match'],
+      [5, 9, 1, 999, 2, 'Match'],
+      [7, 9, 2, 999, 3, 'Match'],
     ]);
     expect(executions[0]?.sql).toBe(executions[1]?.sql);
     expect(lower).toHaveBeenCalledOnce();
@@ -303,11 +308,11 @@ it('prepares ORM predicates and pagination through the public SQLite facade with
     const paginationExecutions = executions.slice(paginationStart);
     expect(new Set(paginationExecutions.map((execution) => execution.sql)).size).toBe(1);
     expect(paginationExecutions.map((execution) => execution.params)).toEqual([
-      [2, 0, 0, 2, 0, 2, 0],
-      [1, 0, 0, 1, 0, 1, 0],
-      [1, 1, 1, 1, 1, 1, 1],
-      [0, 0, 0, 0, 0, 0, 0],
-      [2, 9, 9, 2, 9, 2, 9],
+      [2, 0],
+      [1, 0],
+      [1, 1],
+      [0, 0],
+      [2, 9],
     ]);
     expect(paginationCallback).toHaveBeenCalledOnce();
     expect(lower.mock.calls.length).toBe(lowerCount + 1);
@@ -334,7 +339,10 @@ it('prepares ORM predicates and pagination through the public SQLite facade with
         .prepared.all((meta) => meta.annotate(annotation({ label: 'all' }))),
     );
     expect(await annotated.query(runtime, { id: 1 })).toEqual([{ id: 1 }]);
-    expect(labels.at(-1)).toEqual({ label: 'all' });
+    expect({ call: callLabels.at(-1), plan: planLabels.at(-1) }).toEqual({
+      call: { label: 'all' },
+      plan: undefined,
+    });
     database.exec(
       "create table typed_rows (id integer primary key, active integer, created_at text, metadata text, label text); insert into typed_rows values (1, 1, '2024-03-15T10:30:00.000Z', '{\"count\":42}', 'typed')",
     );

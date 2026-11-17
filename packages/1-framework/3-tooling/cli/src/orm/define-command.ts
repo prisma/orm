@@ -8,6 +8,7 @@ import type {
   NeedsSpec,
   PositionalSpec,
   SpawnDeclarations,
+  StatementSpec,
 } from '@prisma/cli-engine';
 import { defineCommand } from '@prisma/cli-engine';
 import { notOk } from '@prisma/cli-engine/protocol';
@@ -44,6 +45,8 @@ export function defineOrmCommand<
     readonly needs?: NeedsSpec<TConfig>;
     readonly exitCodes?: Readonly<Record<TCode, string>>;
     readonly installsPackages?: TInstallsPackages;
+    /** The statement verbs the command may ask with; see the engine README § Statement prompts. */
+    readonly statements?: Readonly<Record<string, StatementSpec>>;
     readonly handler: Handler<TFlags, TPositionals, TConfig, TCode, false, TInstallsPackages>;
   } & SpawnDeclarations,
 ): CommandDefinition<TFlags, TPositionals, TConfig, TCode, false, TInstallsPackages> {

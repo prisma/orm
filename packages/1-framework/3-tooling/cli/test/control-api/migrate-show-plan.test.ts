@@ -1,5 +1,5 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises';
-import type { PrismaNextConfig } from '@internal/config-loader';
+import type { PrismaConfig } from '@internal/config-loader';
 import type { MigrationPlanOperation } from '@internal/framework-components/control';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { computeMigrationHash } from '@internal/migration-tools/hash';
@@ -35,7 +35,7 @@ describe('executeMigrateShowPlan', () => {
   let tempDir: string;
   let migrationsDir: string;
   let appMigrationsDir: string;
-  let config: PrismaNextConfig;
+  let config: PrismaConfig;
   let firstDirName: string;
   let firstMigrationHash: string;
   let secondDirName: string;
@@ -111,7 +111,7 @@ describe('executeMigrateShowPlan', () => {
       },
       contract: { output: join(tempDir, 'contract.json') },
       migrations: { dir: 'migrations' },
-    } as unknown as PrismaNextConfig;
+    } as unknown as PrismaConfig;
   });
 
   afterEach(async () => {
@@ -122,6 +122,7 @@ describe('executeMigrateShowPlan', () => {
     const result = await executeMigrateShowPlan({
       config,
       cwd: tempDir,
+      invocation: { cwd: tempDir, configPath: undefined, dbGiven: false },
       from: HASH_A,
     });
     expect(result.ok).toBe(true);
@@ -136,21 +137,21 @@ describe('executeMigrateShowPlan', () => {
         },
       ]);
       expect(result.value.summary).toBe('1 migration will run');
-      expect(result.value.usedLiveMarker).toBe(false);
+      expect(result.value.databaseMarkerHashBySpace).toBeUndefined();
       expect(result.value.contractHash).toBe(HASH_B);
     }
     expect(mocks.createControlClient).not.toHaveBeenCalled();
   });
 
-  it('defaults the per-space render marker hash to the empty sentinel', async () => {
+  it('plans every migration from the empty contract offline', async () => {
     const result = await executeMigrateShowPlan({
       config,
       cwd: tempDir,
+      invocation: { cwd: tempDir, configPath: undefined, dbGiven: false },
       from: EMPTY_CONTRACT_HASH,
     });
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.value.renderMarkerHashBySpace.get('app')).toBe(EMPTY_CONTRACT_HASH);
       expect(result.value.migrations.map((m) => m.dirName)).toEqual([firstDirName, secondDirName]);
       expect(result.value.migrations.map((m) => m.migrationHash)).toEqual([
         firstMigrationHash,
@@ -164,6 +165,7 @@ describe('executeMigrateShowPlan', () => {
     const result = await executeMigrateShowPlan({
       config,
       cwd: tempDir,
+      invocation: { cwd: tempDir, configPath: undefined, dbGiven: false },
       from: HASH_A,
       onPreflightComplete,
     });

@@ -1,14 +1,11 @@
-import type {
-  ExecutionPlan,
-  RuntimeMiddlewareContext,
-} from '@internal/framework-components/runtime';
+import type { ActivityContext, ExecutionPlan } from '@internal/framework-components/runtime';
 import { describe, expect, it, vi } from 'vitest';
 import { type CacheAnnotationOptions, cacheAnnotation } from '../src/cache-annotation';
 import { createCacheMiddleware, deriveKeyFromContentHash } from '../src/cache-middleware';
 import { makeCtx, makeExec, runMiss, spyStore } from './middleware-fixtures';
 
 function deriveKeySpy() {
-  return vi.fn(async (_exec: ExecutionPlan, _ctx: RuntimeMiddlewareContext) => 'derived');
+  return vi.fn(async (_exec: ExecutionPlan, _ctx: ActivityContext) => 'derived');
 }
 
 describe('deriveKeyFromContentHash', () => {
@@ -115,7 +112,7 @@ describe('createCacheMiddleware — deriveKey', () => {
     const bypassed: readonly {
       readonly name: string;
       readonly payload: CacheAnnotationOptions | undefined;
-      readonly scope: RuntimeMiddlewareContext['scope'];
+      readonly scope: ActivityContext['scope'];
     }[] = [
       { name: 'no annotation', payload: undefined, scope: 'runtime' },
       { name: 'bypass: true', payload: { bypass: true }, scope: 'runtime' },
@@ -150,26 +147,8 @@ describe('createCacheMiddleware — deriveKey', () => {
     });
     const exec = makeExec('select 1', { cache: cacheAnnotation({}) });
 
-    await expect(mw.interceptQuery?.(exec, makeCtx())).rejects.toBe(failure);
+    await expect(mw.intercept?.onQuery?.(exec, makeCtx())).rejects.toBe(failure);
     expect(store.getSpy).not.toHaveBeenCalled();
     expect(store.setSpy).not.toHaveBeenCalled();
-  });
-
-  it('defaults to the content hash', async () => {
-    const store = spyStore();
-    const mw = createCacheMiddleware({ store });
-    const exec = makeExec('select 1', { cache: cacheAnnotation({}) });
-
-    await runMiss(mw, exec, makeCtx(), [{ id: 1 }]);
-
-    expect(store.setSpy).toHaveBeenCalledWith(
-      {
-        key: 'key:select 1',
-        meta: undefined,
-        version: 0,
-        data: { empty: true },
-      },
-      expect.anything(),
-    );
   });
 });

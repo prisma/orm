@@ -1,5 +1,5 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
-import { defineContract, field, model } from '@internal/postgres/contract-builder';
+import { defineContract, field, model, sql } from '@internal/postgres/contract-builder';
 
 export const contract = defineContract({
   models: {
@@ -13,17 +13,17 @@ export const contract = defineContract({
       table: 'user',
       indexes: [
         constraints.index({
-          expression: 'eql_v3.eq_term(email)',
+          expression: sql`eql_v3.eq_term(email)`,
           name: 'users_email_eq',
           type: 'btree',
           options: {},
         }),
         constraints.index([cols.email], {
-          where: '(archived_at IS NULL)',
+          where: sql`(archived_at IS NULL)`,
           name: 'users_email_active',
         }),
         constraints.index({
-          expression: 'lower(email)',
+          expression: sql`lower(email)`,
           unique: true,
           name: 'users_email_lower_key',
         }),

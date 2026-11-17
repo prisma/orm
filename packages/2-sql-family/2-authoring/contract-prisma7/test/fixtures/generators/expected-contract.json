@@ -1,0 +1,307 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "Generated": {
+            "storage": {
+              "table": "Generated",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "uuid4": {
+                  "column": "uuid4"
+                },
+                "uuid4Again": {
+                  "column": "uuid4Again"
+                },
+                "uuid7": {
+                  "column": "uuid7"
+                },
+                "cuid1": {
+                  "column": "cuid1"
+                },
+                "cuid2": {
+                  "column": "cuid2"
+                },
+                "ulid": {
+                  "column": "ulid"
+                },
+                "nanoid": {
+                  "column": "nanoid"
+                },
+                "nanoidSized": {
+                  "column": "nanoidSized"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "uuid4": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "uuid4Again": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "uuid7": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "cuid1": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "cuid2": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "ulid": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "nanoid": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "nanoidSized": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "Generated": {
+      "namespace": "public",
+      "model": "Generated"
+    }
+  },
+  "execution": {
+    "executionHash": "3ffb3a7f78cf83a59f574f0ed6019a052f3863f26923834d83bbd88214b7062b",
+    "mutations": {
+      "defaults": [
+        {
+          "ref": {
+            "namespace": "public",
+            "entry": "Generated",
+            "field": "cuid1"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "cuid2"
+          }
+        },
+        {
+          "ref": {
+            "namespace": "public",
+            "entry": "Generated",
+            "field": "cuid2"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "cuid2"
+          }
+        },
+        {
+          "ref": {
+            "namespace": "public",
+            "entry": "Generated",
+            "field": "nanoid"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "nanoid"
+          }
+        },
+        {
+          "ref": {
+            "namespace": "public",
+            "entry": "Generated",
+            "field": "nanoidSized"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "nanoid",
+            "params": {
+              "size": 10
+            }
+          }
+        },
+        {
+          "ref": {
+            "namespace": "public",
+            "entry": "Generated",
+            "field": "ulid"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "ulid"
+          }
+        },
+        {
+          "ref": {
+            "namespace": "public",
+            "entry": "Generated",
+            "field": "uuid4"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "uuidv4"
+          }
+        },
+        {
+          "ref": {
+            "namespace": "public",
+            "entry": "Generated",
+            "field": "uuid4Again"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "uuidv4"
+          }
+        },
+        {
+          "ref": {
+            "namespace": "public",
+            "entry": "Generated",
+            "field": "uuid7"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "uuidv7"
+          }
+        }
+      ]
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "c0b34cb80b2ad58e1f545442aba7aa0159da0c0fba4b9b63fb05940413ca3d6b",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "Generated": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "uuid4": {
+                  "dataType": "pg/text",
+                  "codecId": "pg/text@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "uuid4Again": {
+                  "dataType": "pg/text",
+                  "codecId": "pg/text@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "uuid7": {
+                  "dataType": "pg/text",
+                  "codecId": "pg/text@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "cuid1": {
+                  "dataType": "pg/text",
+                  "codecId": "pg/text@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "cuid2": {
+                  "dataType": "pg/text",
+                  "codecId": "pg/text@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "ulid": {
+                  "dataType": "pg/text",
+                  "codecId": "pg/text@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "nanoid": {
+                  "dataType": "pg/text",
+                  "codecId": "pg/text@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "nanoidSized": {
+                  "dataType": "pg/text",
+                  "codecId": "pg/text@1",
+                  "nullable": false,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

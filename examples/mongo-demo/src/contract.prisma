@@ -19,6 +19,8 @@ model User {
   name    String
   email   String
   bio     String?
+  birthday Date?
+  availableFrom Time?
   role    UserRole
   address Address?
   posts   Post[]
@@ -31,11 +33,11 @@ model Post {
   content   String
   kind      String
   authorId  ObjectId
-  createdAt Date
+  createdAt DateTime
   author    User @relation(fields: [authorId], references: [id])
   @@discriminator(kind)
   @@index([authorId])
-  @@index([createdAt(sort: Desc), authorId])
+  @@index([sort(createdAt, Desc), authorId])
   @@map("posts")
 }
 

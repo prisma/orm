@@ -17,19 +17,21 @@
         "models": {
           "Post": {
             "fields": {
-              "_id": {
+              "id": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "authorId": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             },
             "relations": {
@@ -42,22 +44,31 @@
                 "nullable": false,
                 "on": {
                   "localFields": ["authorId"],
-                  "targetFields": ["_id"]
+                  "targetFields": ["id"]
                 }
               }
             },
             "storage": {
-              "collection": "Post"
+              "collection": "Post",
+              "fields": {
+                "id": {
+                  "field": "_id"
+                },
+                "authorId": {
+                  "field": "authorId"
+                }
+              }
             }
           },
           "User": {
             "fields": {
-              "_id": {
+              "id": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             },
             "relations": {
@@ -68,13 +79,18 @@
                 },
                 "cardinality": "1:N",
                 "on": {
-                  "localFields": ["_id"],
+                  "localFields": ["id"],
                   "targetFields": ["authorId"]
                 }
               }
             },
             "storage": {
-              "collection": "User"
+              "collection": "User",
+              "fields": {
+                "id": {
+                  "field": "_id"
+                }
+              }
             }
           }
         }

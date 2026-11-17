@@ -1,46 +1,52 @@
 import type { JsonValue } from '@internal/contract/types';
-import { decodeJsonString } from '@internal/framework-components/codec';
+import { type DataTypeValue, dataType, readJsonString } from '@internal/framework-components/codec';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
 import { newMongoCodecRegistry } from '../src/codec-registry';
 import { type MongoCodec, mongoCodec } from '../src/codecs';
 
+const textType = dataType('test/text', { read: (json) => readJsonString('test/text', json) });
+const jsonType = dataType('test/json', { read: (json) => json });
+
 describe('mongoCodec()', () => {
   it('creates a codec with the given config', async () => {
     const codec = mongoCodec({
       typeId: 'test/string@1',
-      decode: (wire: string) => wire,
-      encode: (value: string) => value,
-      decodeJson: (json) => decodeJsonString('test/string@1', json),
+      fromWire: (wire: string) => wire,
+      toWire: (value: string) => value,
+      dataType: textType,
+      fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
     });
 
     expect(codec.id).toBe('test/string@1');
-    expect(await codec.decode('hello', {})).toBe('hello');
-    expect(await codec.encode('hello', {})).toBe('hello');
+    expect(await codec.fromWire('hello', {})).toBe('hello');
+    expect(await codec.toWire('hello', {})).toBe('hello');
   });
 
   it('creates a codec with encode and decode', async () => {
     const codec = mongoCodec({
       typeId: 'test/upper@1',
-      decode: (wire: string) => wire.toUpperCase(),
-      encode: (value: string) => value.toLowerCase(),
-      decodeJson: (json) => decodeJsonString('test/upper@1', json),
+      fromWire: (wire: string) => wire.toUpperCase(),
+      toWire: (value: string) => value.toLowerCase(),
+      dataType: textType,
+      fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
     });
 
-    expect(await codec.decode('hello', {})).toBe('HELLO');
-    expect(await codec.encode('HELLO', {})).toBe('hello');
+    expect(await codec.fromWire('hello', {})).toBe('HELLO');
+    expect(await codec.toWire('HELLO', {})).toBe('hello');
   });
 
   it('lifts sync author functions to Promise-returning methods', () => {
     const codec = mongoCodec({
       typeId: 'test/sync@1',
-      decode: (wire: string) => wire,
-      encode: (value: string) => value,
-      decodeJson: (json) => decodeJsonString('test/sync@1', json),
+      fromWire: (wire: string) => wire,
+      toWire: (value: string) => value,
+      dataType: textType,
+      fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
     });
 
-    const decoded = codec.decode('x', {});
-    const encoded = codec.encode('y', {});
+    const decoded = codec.fromWire('x', {});
+    const encoded = codec.toWire('y', {});
     expect(typeof (decoded as { then?: unknown }).then).toBe('function');
     expect(typeof (encoded as { then?: unknown }).then).toBe('function');
   });
@@ -48,13 +54,14 @@ describe('mongoCodec()', () => {
   it('accepts async author functions and uses them directly', async () => {
     const codec = mongoCodec({
       typeId: 'test/async@1',
-      decode: async (wire: string) => `decoded:${wire}`,
-      encode: async (value: string) => `encoded:${value}`,
-      decodeJson: (json) => decodeJsonString('test/async@1', json),
+      fromWire: async (wire: string) => `decoded:${wire}`,
+      toWire: async (value: string) => `encoded:${value}`,
+      dataType: textType,
+      fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
     });
 
-    expect(await codec.decode('a', {})).toBe('decoded:a');
-    expect(await codec.encode('b', {})).toBe('encoded:b');
+    expect(await codec.fromWire('a', {})).toBe('decoded:a');
+    expect(await codec.toWire('b', {})).toBe('encoded:b');
   });
 });
 
@@ -62,8 +69,9 @@ describe('MongoCodecRegistry', () => {
   function makeCodec(id: string): MongoCodec<string> {
     return mongoCodec<string, readonly [], JsonValue, JsonValue>({
       typeId: id,
-      decode: (wire: JsonValue) => wire,
-      encode: (value: JsonValue) => value,
+      dataType: jsonType,
+      fromWire: (wire: JsonValue) => wire,
+      toWire: (value: JsonValue) => value,
     });
   }
 

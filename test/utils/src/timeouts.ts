@@ -6,6 +6,7 @@ const BASE_TIMEOUTS = {
   coldTransformImport: 30000,
   databaseOperation: 5000,
   pslRoundTrip: 5000,
+  repeatedScriptRuns: 60000,
   default: 100,
   /**
    * Vitest `testTimeout` / `hookTimeout` when a package uses mostly local I/O
@@ -118,6 +119,13 @@ export const timeouts = {
    */
   get pslRoundTrip(): number {
     return Math.round(BASE_TIMEOUTS.pslRoundTrip * getMultiplier());
+  },
+  /**
+   * Timeout for a test that runs a script in a child process many times, for example once per
+   * point at which a run can be interrupted.
+   */
+  get repeatedScriptRuns(): number {
+    return Math.round(BASE_TIMEOUTS.repeatedScriptRuns * getMultiplier());
   },
 
   /**

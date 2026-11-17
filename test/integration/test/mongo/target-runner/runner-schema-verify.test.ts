@@ -51,6 +51,7 @@ function makeContract(
     string,
     {
       indexes?: Array<{
+        name: string;
         keys: Array<{ field: string; direction: 1 | -1 }>;
         unique?: boolean;
         sparse?: boolean;
@@ -84,7 +85,7 @@ function makeContract(
 
 function planForContract(
   contract: ReturnType<typeof makeContract>,
-  origin: MongoSchemaIR = new MongoSchemaIR([]),
+  origin: MongoSchemaIR = new MongoSchemaIR([], { fromDatabase: false }),
 ): MigrationPlan {
   const planner = new MongoMigrationPlanner();
   const result = planner.plan({
@@ -92,6 +93,8 @@ function planForContract(
     schema: origin,
     policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
     fromContract: null,
+    origin: null,
+    statements: [],
     frameworkComponents: [],
     snapshotsImportPath: '../../snapshots',
   });
@@ -128,7 +131,9 @@ function synthEdges(plan: MigrationPlan): readonly AggregateMigrationEdgeRef[] {
 describe('MongoMigrationRunner schema verification (integration)', () => {
   it('verifies the live schema, then writes marker + ledger when it matches the contract', async () => {
     const contract = makeContract({
-      users: { indexes: [{ keys: [{ field: 'email', direction: 1 }], unique: true }] },
+      users: {
+        indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }], unique: true }],
+      },
     });
     const plan = serializePlan(planForContract(contract));
 
@@ -162,7 +167,9 @@ describe('MongoMigrationRunner schema verification (integration)', () => {
     await db.collection('users').createIndex({ legacy_field: 1 }, { name: 'legacy_field_1' });
 
     const contract = makeContract({
-      users: { indexes: [{ keys: [{ field: 'email', direction: 1 }], unique: true }] },
+      users: {
+        indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }], unique: true }],
+      },
     });
     const plan = serializePlan(planForContract(contract));
 
@@ -178,9 +185,15 @@ describe('MongoMigrationRunner schema verification (integration)', () => {
     expect(tamperedResult.ok).toBe(false);
     if (!tamperedResult.ok) {
       expect(tamperedResult.failure.code).toBe('MIGRATION.SCHEMA_VERIFY_FAILED');
-      const issues = tamperedResult.failure.meta?.['issues'];
-      expect(Array.isArray(issues)).toBe(true);
-      expect((issues as readonly unknown[]).length).toBeGreaterThan(0);
+      expect({
+        metaKeys: Object.keys(tamperedResult.failure.meta).sort(),
+        databaseUnchanged: tamperedResult.failure.meta.databaseUnchanged,
+        found: (tamperedResult.failure.meta.schemaIssues?.length ?? 0) > 0,
+      }).toEqual({
+        metaKeys: ['databaseUnchanged', 'schemaIssues'],
+        databaseUnchanged: false,
+        found: true,
+      });
     }
 
     const markerAfterFailure = await controlAdapter.readMarker(
@@ -228,7 +241,9 @@ describe('MongoMigrationRunner schema verification (integration)', () => {
     await db.collection('users').createIndex({ legacy_field: 1 }, { name: 'legacy_field_1' });
 
     const contract = makeContract({
-      users: { indexes: [{ keys: [{ field: 'email', direction: 1 }], unique: true }] },
+      users: {
+        indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }], unique: true }],
+      },
     });
     const plan = serializePlan(planForContract(contract));
 

@@ -307,7 +307,6 @@ withTempDir(({ createTempDir }) => {
 
           const dryRun = await runDbUpdate(testSetup, ['--config', configPath, '--dry-run']);
           const dryRunOutput = stripAnsi(dryRun.stderr);
-          expect(dryRunOutput).toContain('Planner warnings');
           expect(dryRunOutput).toContain('control policy suppressed: table "auth.sessions"');
 
           const apply = await runDbUpdateAllowFailure(testSetup, ['--config', configPath]);

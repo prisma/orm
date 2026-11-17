@@ -28,9 +28,6 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //   - upsert() does not support nested relation callbacks; where the
 //     upstream upsert create clause uses `payment: { create: {} }` we
 //     instead pre-create the Payment and provide paymentId directly.
-//   - update({}) with no fields returns null (ORM skips the SQL round-trip),
-//     so the faithful empty-data update ('update with where 1 unique (PK)')
-//     is an it.fails (see failing.md).
 //   - 'create with connect 2 uniques' is non-ported: Prisma 8's connect
 //     criterion accepts a single unique key, not a compound { id, referralId }
 //     (see non-ported.md).
@@ -376,15 +373,13 @@ describe('ports/prisma/functional/extended-where', () => {
 
   // ─── update ──────────────────────────────────────────────────────────────
 
-  it.fails(
+  it(
     'update with where 1 unique (PK)',
     () =>
       withExtendedWhere(async ({ db }) => {
         const { userId } = await createTestData(db);
         // Faithful port: upstream update({ where: { id }, data: {} }) — empty
         // no-op update still returns the addressed row (update.ts:15-22).
-        // Prisma 8's update({}) skips the SQL round-trip and returns null,
-        // so data?.id is undefined → assertion fails. Recorded in failing.md.
         const data = await db.public.User.where({ id: userId }).update({});
         expect(data?.id).toBe(userId);
       }),

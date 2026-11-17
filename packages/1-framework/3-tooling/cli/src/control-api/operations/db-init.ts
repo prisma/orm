@@ -9,7 +9,8 @@ import type {
 } from '@internal/framework-components/control';
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
 import { ifDefined } from '@internal/utils/defined';
-import type { DbInitResult, OnControlProgress } from '../types';
+import type { CliInvocation } from '../../utils/printed-command';
+import type { DbInitResult, OnControlProgress, PlannerWarningsListener } from '../types';
 import { executeRun } from './db-run';
 
 /**
@@ -23,13 +24,14 @@ import { executeRun } from './db-run';
  * 2. The aggregate planner runs with `callerPolicy.ignoreGraphFor`
  *    locked to the app space — synth strategy for the app, graph-walk
  *    for every extension.
- * 3. The runner's `execute` applies the per-space plans
- *    inside one outer transaction.
+ * 3. The runner's `execute` applies the per-space plans; a failure
+ *    says whether the database changed.
  *
  * `extensions` mirrors `Config.extensions` (descriptor list).
  * The loader (sub-spec § Loader) is the sole descriptor-import boundary.
  */
-export interface ExecuteDbInitOptions<TFamilyId extends string, TTargetId extends string> {
+export interface ExecuteDbInitOptions<TFamilyId extends string, TTargetId extends string>
+  extends PlannerWarningsListener {
   readonly driver: ControlDriverInstance<TFamilyId, TTargetId>;
   readonly adapter: ControlAdapterInstance<TFamilyId, TTargetId>;
   readonly familyInstance: ControlFamilyInstance<TFamilyId, unknown>;
@@ -59,6 +61,8 @@ export interface ExecuteDbInitOptions<TFamilyId extends string, TTargetId extend
   readonly extensions?: ReadonlyArray<ControlExtensionDescriptor<TFamilyId, TTargetId>>;
   /** Content check for contract snapshots the aggregate loader resolves. */
   readonly verifySnapshotContent?: SnapshotContentVerifier;
+  /** The command line the advice of a failure repeats. */
+  readonly invocation: CliInvocation;
   /** Optional progress callback for observing operation progress */
   readonly onProgress?: OnControlProgress;
 }
@@ -85,8 +89,10 @@ export async function executeDbInit<TFamilyId extends string, TTargetId extends 
     targetId: options.targetId,
     extensions: options.extensions ?? [],
     policy: { allowedOperationClasses: ['additive'] },
+    invocation: options.invocation,
     action: 'dbInit',
     ...ifDefined('verifySnapshotContent', options.verifySnapshotContent),
+    ...ifDefined('onPlannerWarnings', options.onPlannerWarnings),
     ...ifDefined('onProgress', options.onProgress),
   });
   return result as DbInitResult;

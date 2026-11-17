@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'pathe';
 
 export interface EmittedColumn {
+  readonly codecId?: string;
   readonly default?: unknown;
 }
 

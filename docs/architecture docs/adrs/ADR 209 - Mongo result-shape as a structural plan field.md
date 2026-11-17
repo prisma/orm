@@ -209,5 +209,5 @@ This is the same shape SQL already uses, applied to Mongo — not a new pattern.
 - [ADR 030 — Result decoding & codecs registry](./ADR%20030%20-%20Result%20decoding%20%26%20codecs%20registry.md). Registry model and error-mapping codes (still in force; this ADR refines decoding for Mongo specifically).
 - [ADR 152 — Execution Plane Descriptors and Instances](./ADR%20152%20-%20Execution%20Plane%20Descriptors%20and%20Instances.md). The execution-stack composition model Mongo joins for codec aggregation.
 - [ADR 204 — Single-Path Async Codec Runtime](./ADR%20204%20-%20Single-Path%20Async%20Codec%20Runtime.md). Always-await, one-`Promise.all`-per-row invocation pattern preserved here. Originally deferred Mongo decode; this ADR closes that.
-- SQL reference for runtime invocation parity: `packages/2-sql/5-runtime/src/codecs/decoding.ts` and `packages/2-sql/4-lanes/sql-builder/src/runtime/builder-base.ts`.
+- SQL reference for runtime invocation parity: `packages/2-sql-family/5-runtime/src/codecs/decoding.ts` and `packages/2-sql-family/4-lanes/sql-builder/src/runtime/builder-base.ts`.
 - Existing type-level shape vocabulary: `packages/2-mongo-family/5-query-builders/query-builder/src/{types,resolve-path}.ts` (`DocField`, `DocShape`, `NestedDocShape`, `ObjectField`).

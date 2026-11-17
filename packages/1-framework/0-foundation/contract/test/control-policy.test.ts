@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applySpecifierDefaultControlPolicy } from '../src/apply-specifier-default-control-policy';
 import type { Contract } from '../src/contract-types';
-import { effectiveControlPolicy } from '../src/control-policy';
+import { effectiveControlPolicy, governingControlPolicy } from '../src/control-policy';
 
 describe('applySpecifierDefaultControlPolicy', () => {
   const minimalContract = {
@@ -43,38 +43,22 @@ describe('effectiveControlPolicy', () => {
       expect(effectiveControlPolicy(undefined, undefined)).toBe('managed');
     });
   });
+});
 
-  describe('each policy value resolves through', () => {
-    it('resolves managed via node', () => {
-      expect(effectiveControlPolicy('managed', undefined)).toBe('managed');
-    });
+describe('governingControlPolicy', () => {
+  it('keeps every object of an external-default contract external, whatever it declares', () => {
+    expect([
+      governingControlPolicy({ explicitNodeControlPolicy: 'managed' }, 'external'),
+      governingControlPolicy({ explicitNodeControlPolicy: 'observed' }, 'external'),
+      governingControlPolicy(undefined, 'external'),
+    ]).toEqual(['external', 'external', 'external']);
+  });
 
-    it('resolves tolerated via node', () => {
-      expect(effectiveControlPolicy('tolerated', undefined)).toBe('tolerated');
-    });
-
-    it('resolves external via node', () => {
-      expect(effectiveControlPolicy('external', undefined)).toBe('external');
-    });
-
-    it('resolves observed via node', () => {
-      expect(effectiveControlPolicy('observed', undefined)).toBe('observed');
-    });
-
-    it('resolves managed via default', () => {
-      expect(effectiveControlPolicy(undefined, 'managed')).toBe('managed');
-    });
-
-    it('resolves tolerated via default', () => {
-      expect(effectiveControlPolicy(undefined, 'tolerated')).toBe('tolerated');
-    });
-
-    it('resolves external via default', () => {
-      expect(effectiveControlPolicy(undefined, 'external')).toBe('external');
-    });
-
-    it('resolves observed via default', () => {
-      expect(effectiveControlPolicy(undefined, 'observed')).toBe('observed');
-    });
+  it('otherwise takes the object policy, then the contract default, then managed', () => {
+    expect([
+      governingControlPolicy({ explicitNodeControlPolicy: 'external' }, 'observed'),
+      governingControlPolicy({}, 'tolerated'),
+      governingControlPolicy(undefined, undefined),
+    ]).toEqual(['external', 'tolerated', 'managed']);
   });
 });

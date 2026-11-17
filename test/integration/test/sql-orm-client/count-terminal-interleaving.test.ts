@@ -89,7 +89,7 @@ describe('SQL count terminal write-derived interleaving', () => {
       const interleave: SqlMiddleware = {
         name: 'insert-before-count-terminal-dml',
         familyId: 'sql',
-        async beforeExecute(exec) {
+        async beforeEncode(exec) {
           if (!armed || !exec.sql.trimStart().toLowerCase().startsWith('update')) return;
           armed = false;
           interleavings++;

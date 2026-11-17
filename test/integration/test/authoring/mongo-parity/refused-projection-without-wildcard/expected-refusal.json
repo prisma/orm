@@ -1,0 +1,13 @@
+{
+  "ts": {
+    "code": "CONTRACT.INDEX_INVALID",
+    "message": "Model \"Doc\" index {\"fields\":{\"a\":1},\"options\":{\"wildcardProjection\":{\"b\":1}}} sets wildcardProjection but has no wildcard key; a wildcard projection needs a wildcard index."
+  },
+  "psl": [
+    {
+      "code": "PSL_INVALID_INDEX",
+      "message": "include/exclude options are only valid when the index contains a wildcard() field",
+      "spanText": "@@index([a], include: [\"b\"])"
+    }
+  ]
+}

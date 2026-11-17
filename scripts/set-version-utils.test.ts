@@ -195,13 +195,6 @@ describe('stampSkillMetadata', () => {
     '',
   ].join('\n');
 
-  it('rewrites the stamp inside the metadata block, quoted', () => {
-    assert.match(
-      stampSkillMetadata(skillMd, 'library_version', '8.1.0'),
-      /^ {2}library_version: '8\.1\.0'$/m,
-    );
-  });
-
   it('leaves everything but the stamp alone', () => {
     const stamped = stampSkillMetadata(skillMd, 'library_version', '8.1.0');
     assert.equal(stamped, skillMd.replace("library_version: '0.16.0'", "library_version: '8.1.0'"));

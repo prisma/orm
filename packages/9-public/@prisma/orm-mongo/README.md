@@ -16,6 +16,8 @@ pnpm add @prisma/orm-mongo mongodb
 
 `mongodb` is a peer dependency: the driver is the application's, so a single connection pool and a single BSON implementation serve both Prisma 8 and any direct `mongodb` use in the same process.
 
+`temporal-polyfill` is a required peer dependency. The control plane, such as the `prisma` commands, loads it as a fallback `Temporal` when the runtime has none, and a project that already installs it for its own code has one copy. npm, pnpm and bun install it automatically; with Yarn, add `temporal-polyfill` to your dependencies.
+
 ## Entrypoints
 
 | Namespace | Surface |
@@ -39,6 +41,31 @@ Generated contract files import their types from the facade, so an application n
 | `/adapter`, `/adapter/*` | `@prisma/orm-target-mongo/adapter` |
 
 These forward; they do not copy. `@prisma/orm-mongo/contract/types` and `@prisma/orm-framework/contract/types` are the same module, so shared registries and `instanceof` checks hold across the boundary.
+
+## Prepared statements
+
+`db.prepare(declaration, callback)` builds a query once and runs it many times with different values. Run the handle against `await db.runtime()`:
+
+```ts
+const byEmail = await db.prepare({ email: 'mongo/string@1' }, (p) =>
+  db.query
+    .from('users')
+    .match((f) => f.email.eq(p.email))
+    .build(),
+);
+const users = await byEmail.query(await db.runtime(), { email: 'alice@example.com' }).toArray();
+```
+
+ORM reads are prepared through `.prepared.all()`, `.prepared.first()` and `.prepared.firstOrThrow()`, and the handle's `query` returns what the ad-hoc read returns:
+
+```ts
+const userByEmail = await db.prepare({ email: 'mongo/string@1' }, (p) =>
+  db.orm.users.where({ email: p.email }).prepared.first(),
+);
+const user = await userByEmail.query(await db.runtime(), { email: 'alice@example.com' });
+```
+
+The handle and declaration types (`MongoPreparedStatement`, `MongoPreparedExecution`, `MongoDeclaration`, `MongoParamsFromDeclaration`) are exported from `@prisma/orm-mongo/family-runtime`. The ORM read handle types (`MongoPreparedRowQuery`, `MongoPreparedFrom`) and `MongoPrepareMember`, the type that has the client's `prepare` method, are exported from `@prisma/orm-mongo/runtime`.
 
 ## The CLI
 

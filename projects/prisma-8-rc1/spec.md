@@ -49,7 +49,7 @@ New queries are written against the v8 client; old code paths stay on v7. At the
 
 # Place in the larger world
 
-- **prisma/prisma** currently holds Prisma 7. This project merges prisma-next's content in **on a `v8` branch early** (CI running there for weeks) and merges to `main` in the final week. v7 history moves to a `v7` maintenance branch (bug fixes for 12 months from 8.0.0 final). At merge time, open v7 issues and PRs are closed except v7 bugs, with a pinned explanation issue.
+- **prisma/prisma** currently holds Prisma 7. This project merges prisma-next's content in **on a `v8` branch early** (CI running there for weeks) and merges to `main` in the final week. v7 history moves to a `v7` maintenance branch (bug fixes and security updates for 18 months from 8.0.0 final). At merge time, open v7 issues and PRs are closed except v7 bugs, with a pinned explanation issue.
 - **The `prisma` npm package** is currently v7's. The RC publishes under a non-`latest` dist-tag; `latest` stays v7 until 8.0.0 final. Publishing requires npm rights + trusted-publisher (OIDC) configuration on that package — an external dependency chased first.
 - **prisma/prisma-cli (`@prisma/cli`)** is the long-term CLI home; out of scope here but the bin strategy must not conflict with it.
 - **EA shipped June 1** with good sentiment but little uptake — which means production feedback is thin, and the mined-from-P7 test suite plus the side-by-side fixture do the confidence work that adoption otherwise would.
@@ -73,7 +73,7 @@ New queries are written against the v8 client; old code paths stay on v7. At the
 - [ ] `prisma@8.0.0-rc.1` is published from the merged `prisma/prisma` repository under a non-`latest` dist-tag; `npm install prisma` still resolves to v7.
 - [ ] The announcement is live, and every claim in it maps to a receipt (matrix, Bencher, fixture).
 - [ ] The parallel-install recipe in the upgrade guide is backed by a green e2e fixture (both versions, one database, v7 owns DDL, adoption loop exercised after a v7 migration).
-- [ ] The `v7` maintenance branch exists in `prisma/prisma` with working CI, and the 12-months-from-final support statement is published.
+- [ ] The `v7` maintenance branch exists in `prisma/prisma` with working CI, and the 18-months-from-final support statement is published.
 - [ ] User-facing error codes follow one consistent scheme, with a crosswalk for renamed codes; codes are frozen.
 - [ ] `extensionPacks` → `extensions` rename (TML-2462) and the Pool error-listener fix (TML-2655) are merged.
 - [ ] Migration contract snapshots are centralized under `migrations/snapshots/` (content-addressed); the reader accepts `.json.gz`.

@@ -31,5 +31,5 @@ export function findCafesNearPoint(point: Geometry, limit: number) {
     .orderBy((f) => f.id, { direction: 'asc' })
     .limit(limit)
     .build();
-  return db.runtime().query(plan);
+  return db.query(plan);
 }

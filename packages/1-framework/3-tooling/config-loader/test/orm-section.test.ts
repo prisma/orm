@@ -1,10 +1,6 @@
 import type { SectionProvenance } from '@prisma/cli-engine';
 import { describe, expect, it } from 'vitest';
-import {
-  descriptorRelationshipProblems,
-  ormConfigSection,
-  validateOrmSection,
-} from '../src/orm-section';
+import { descriptorRelationshipProblems, validateOrmSection } from '../src/orm-section';
 
 const FILE = '/project/prisma.config.ts';
 
@@ -43,10 +39,6 @@ function fields(raw: Record<string, unknown>): readonly string[] {
 }
 
 describe('the orm section', () => {
-  it('is the section the commands declare', () => {
-    expect(ormConfigSection.name).toBe('orm');
-  });
-
   it('supplies the default contract output next to the default source directory', () => {
     const raw = validRaw({ contract: { source: { format: 'typescript', load: () => ({}) } } });
 

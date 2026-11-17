@@ -53,7 +53,7 @@ export function quickReferenceMd(
  * Renders the FR8.2 "Requirements" block injected into `prisma-8.md`
  * (the user-facing quick reference). Sources the minimum server
  * version from `MIN_SERVER_VERSION` — itself mirrored from each
- * target package's `package.json#prismaNext.minServerVersion`
+ * target package's `server-version` export
  * (FR8.1).
  *
  * The verification command is target-specific — Postgres scaffolds

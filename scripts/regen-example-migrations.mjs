@@ -63,6 +63,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -77,34 +78,28 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const biome = join(repoRoot, 'node_modules', '.bin', 'biome');
 
 /**
- * The workspace modules the temp config below needs, as absolute `file://`
- * URLs into the live sources.
+ * The modules the temp config below needs, as absolute `file://` URLs into the
+ * built public shells, each resolved through its shell's own exports map.
  *
  * Bare specifiers would be resolved from the example the temp config is written
  * into, and an example depends on one published `@prisma/orm-*` package and
- * nothing else — it has no reason to resolve the workspace internals a
- * regeneration script happens to want. Naming the files directly keeps this
- * script's needs out of the examples' dependencies. Same reasoning, and the
- * same shape, as the fixture config in
- * `packages/3-targets/6-adapters/postgres/test/migrations/render-typescript.roundtrip.test.ts`.
+ * nothing else — it has no reason to resolve the shells a regeneration script
+ * happens to want. Resolving them here keeps this script's needs out of the
+ * examples' dependencies. They are the same shell files the example's own
+ * config loads, so the temp config, the example and its `prisma` bin share one
+ * framework copy.
  */
-const workspaceModule = (relativePath) => pathToFileURL(resolve(repoRoot, relativePath)).href;
+const shellModule = (shell, subpath) => {
+  const manifest = resolve(repoRoot, 'packages/9-public/@prisma', shell, 'package.json');
+  return pathToFileURL(createRequire(manifest).resolve(`@prisma/${shell}/${subpath}`)).href;
+};
 
-const sqlContractPslProvider = workspaceModule(
-  'packages/2-sql/2-authoring/contract-psl/src/exports/provider.ts',
-);
-const mongoContractPslProvider = workspaceModule(
-  'packages/2-mongo-family/2-authoring/contract-psl/src/exports/provider.ts',
-);
-const targetPostgresPack = workspaceModule(
-  'packages/3-targets/3-targets/postgres/src/exports/pack.ts',
-);
-const targetPostgresTypes = workspaceModule(
-  'packages/3-targets/3-targets/postgres/src/exports/types.ts',
-);
-const frameworkConfigTypes = workspaceModule(
-  'packages/1-framework/1-core/config/src/exports/config-types.ts',
-);
+const sqlContractPslProvider = shellModule('orm-family-sql', 'contract-psl/provider');
+const mongoContractPslProvider = shellModule('orm-family-mongo', 'contract-psl/provider');
+const targetMongoPack = shellModule('orm-target-mongo', 'target/pack');
+const targetPostgresPack = shellModule('orm-target-postgres', 'target/pack');
+const targetPostgresTypes = shellModule('orm-target-postgres', 'target/types');
+const frameworkConfigTypes = shellModule('orm-framework', 'config/config-types');
 
 // Some example configs guard against a missing DATABASE_URL at module load time.
 // Contract emit and migration serialization don't actually connect to the DB, but
@@ -287,7 +282,7 @@ function rewriteContractSnapshotSpecifiers(source, snapshotsImportPath, toHash, 
 /**
  * Build the TypeScript source for the temporary regen config.
  *
- * For mongo chains the override uses `mongoContract(schemaPath)`.
+ * For mongo chains the override uses `mongoContract(schemaPath, { target })`.
  * For sql chains it uses `prismaContract(schemaPath, { target, createNamespace })`
  * — the same options the postgres `defineConfig` helper passes — so the emitted
  * contract is identical in shape to what the real config would produce.
@@ -326,11 +321,12 @@ function buildTempConfigSource(schemaSrc, realConfigAbsPath, contractFamily) {
     `import { definePrismaConfig } from '@prisma/cli-engine';\n` +
     `import { defineConfig } from '${frameworkConfigTypes}';\n` +
     `import { mongoContract } from '${mongoContractPslProvider}';\n` +
+    `import mongoTargetPack from '${targetMongoPack}';\n` +
     `import realConfig from '${realConfigAbsPath}';\n\n` +
     'export default definePrismaConfig({\n' +
     '  orm: defineConfig({\n' +
     '    ...realConfig.orm,\n' +
-    `    contract: mongoContract('${schemaSrc}'),\n` +
+    `    contract: mongoContract('${schemaSrc}', { target: mongoTargetPack }),\n` +
     '  }),\n' +
     '});\n'
   );
@@ -356,9 +352,9 @@ function buildTempConfigSource(schemaSrc, realConfigAbsPath, contractFamily) {
  * Returns `{ storageHash, contractJson, contractDts }`.
  */
 function emitMigrationContract(exampleDir, migrationDir, realConfigAbsPath, contractFamily) {
-  // The workspace root carries the local prisma bin (examples name no
-  // @internal/* package, per lint:consumer-internal-imports).
-  const prismaBin = join(repoRoot, 'node_modules', '.bin', 'prisma');
+  // The example's own prisma bin runs the CLI from the built toolchain, so it
+  // and the example's @prisma/orm-* packages load one framework copy.
+  const prismaBin = join(exampleDir, 'node_modules', '.bin', 'prisma');
   if (!existsSync(prismaBin)) {
     throw new Error(
       `regen-example-migrations: prisma bin not found at ${prismaBin}; run pnpm install`,
@@ -386,7 +382,16 @@ function emitMigrationContract(exampleDir, migrationDir, realConfigAbsPath, cont
   try {
     emitOutput = execFileSync(
       prismaBin,
-      ['contract', 'emit', '--config', tmpConfigPath, '--output-path', tmpEmitDir, '--quiet'],
+      [
+        'contract',
+        'emit',
+        '--config',
+        tmpConfigPath,
+        '--output-path',
+        tmpEmitDir,
+        '--quiet',
+        '--json',
+      ],
       { cwd: exampleDir, encoding: 'utf8', env: childEnv },
     );
   } finally {
@@ -397,7 +402,7 @@ function emitMigrationContract(exampleDir, migrationDir, realConfigAbsPath, cont
     }
   }
 
-  // The engine bin emits NDJSON events; the last line is the result envelope.
+  // With --json the engine bin emits NDJSON events; the last line is the result envelope.
   let parsed;
   try {
     const lines = emitOutput.trim().split('\n');

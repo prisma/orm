@@ -106,15 +106,15 @@ function buildStiIncludeContract(): TestContract {
   user.fields['accountId'] = { nullable: true, type: { kind: 'scalar', codecId: 'pg/int4@1' } };
   user.storage.fields['accountId'] = { column: 'account_id' };
   tables['users']!.columns['account_id'] = {
-    nativeType: 'int4',
+    dataType: 'pg/int4',
     codecId: 'pg/int4@1',
     nullable: true,
   };
 
   models['Account'] = {
     fields: {
-      id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
-      name: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+      id: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+      name: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
     },
     relations: {
       members: {
@@ -127,8 +127,8 @@ function buildStiIncludeContract(): TestContract {
   };
   tables['accounts'] = {
     columns: {
-      id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-      name: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+      id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+      name: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
     },
     primaryKey: { columns: ['id'] },
     uniques: [],
@@ -149,15 +149,15 @@ function buildMtiIncludeContract(): TestContract {
   task.fields['projectId'] = { nullable: true, type: { kind: 'scalar', codecId: 'pg/int4@1' } };
   task.storage.fields['projectId'] = { column: 'project_id' };
   tables['tasks']!.columns['project_id'] = {
-    nativeType: 'int4',
+    dataType: 'pg/int4',
     codecId: 'pg/int4@1',
     nullable: true,
   };
 
   models['Project'] = {
     fields: {
-      id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
-      name: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+      id: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+      name: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
     },
     relations: {
       tasks: {
@@ -170,8 +170,8 @@ function buildMtiIncludeContract(): TestContract {
   };
   tables['projects_tbl'] = {
     columns: {
-      id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-      name: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+      id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+      name: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
     },
     primaryKey: { columns: ['id'] },
     uniques: [],
@@ -451,7 +451,7 @@ describe('integration/polymorphism-include', () => {
           .orderBy((project) => project.id.asc())
           .include('tasks', (tasks) =>
             tasks
-              .variant('Bug')
+              .variant('bug')
               .where((task) => task.severity.eq('critical'))
               .select('id', 'title', 'type', 'severity')
               .orderBy((task) => task.id.asc()),
@@ -486,7 +486,7 @@ describe('integration/polymorphism-include', () => {
           .orderBy((project) => project.id.asc())
           .include('tasks', (tasks) =>
             tasks
-              .variant('Feature')
+              .variant('feature')
               .where((task) => task.priority.gte(3))
               .select('id', 'title', 'type')
               .orderBy((task) => task.id.asc()),
@@ -519,7 +519,7 @@ describe('integration/polymorphism-include', () => {
           .orderBy((project) => project.id.asc())
           .include('tasks', (tasks) =>
             tasks
-              .variant('Feature')
+              .variant('feature')
               .select('id', 'title', 'type')
               .orderBy((task) => task.id.asc()),
           )
@@ -620,7 +620,7 @@ describe('integration/polymorphism-include', () => {
         // (priority 1) and id=4 (priority 3), so `priority.desc()` yields 4
         // before 3.
         const rows = await tasks
-          .variant('Feature')
+          .variant('feature')
           .orderBy((task) => task.priority.desc())
           .all();
 
@@ -650,7 +650,7 @@ describe('integration/polymorphism-include', () => {
           .select('id', 'name')
           .orderBy((project) => project.id.asc())
           .include('tasks', (tasks) =>
-            tasks.variant('Feature').orderBy((task) => task.priority.desc()),
+            tasks.variant('feature').orderBy((task) => task.priority.desc()),
           )
           .all();
 
@@ -683,7 +683,7 @@ describe('integration/polymorphism-include', () => {
           .orderBy((account) => account.id.asc())
           .include('members', (members) =>
             members
-              .variant('Admin')
+              .variant('admin')
               .select('id', 'kind', 'role')
               .orderBy((member) => member.id.asc()),
           )

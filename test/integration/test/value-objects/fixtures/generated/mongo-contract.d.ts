@@ -50,43 +50,37 @@ type ContractBase = {
         readonly models: {
           readonly Shop: {
             readonly fields: {
-              readonly _id: {
+              readonly _id: { readonly many: false;
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
               };
-              readonly name: {
+              readonly name: { readonly many: false;
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
               };
-              readonly location: {
+              readonly location: { readonly many: false;
                 readonly nullable: false;
-                readonly type: { readonly kind: 'valueObject'; readonly name: 'Location' };
+                readonly type: {
+                  readonly kind: 'valueObject';
+                  readonly plane: 'storage';
+                  readonly namespaceId: '__unbound__';
+                  readonly entityKind: 'valueObject';
+                  readonly entityName: 'Location';
+                };
               };
-              readonly notes: {
+              readonly notes: { readonly many: false;
                 readonly nullable: true;
-                readonly type: { readonly kind: 'valueObject'; readonly name: 'Location' };
+                readonly type: {
+                  readonly kind: 'valueObject';
+                  readonly plane: 'storage';
+                  readonly namespaceId: '__unbound__';
+                  readonly entityKind: 'valueObject';
+                  readonly entityName: 'Location';
+                };
               };
             };
             readonly relations: Record<string, never>;
-            readonly storage: { readonly collection: 'shops' };
-          };
-        };
-        readonly valueObjects: {
-          readonly Location: {
-            readonly fields: {
-              readonly street: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-              };
-              readonly city: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-              };
-              readonly zip: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-              };
-            };
+            readonly storage: { readonly collection: 'shops'; readonly fields: { readonly _id: { readonly field: '_id' }; readonly name: { readonly field: 'name' }; readonly location: { readonly field: 'location' }; readonly notes: { readonly field: 'notes' } } };
           };
         };
       };
@@ -100,6 +94,24 @@ type ContractBase = {
         readonly entries: {
           readonly collection: {
             readonly shops: { readonly kind: 'mongo-collection' };
+          };
+          readonly valueObject: {
+            readonly Location: {
+              readonly fields: {
+                readonly street: { readonly many: false;
+                  readonly nullable: false;
+                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+                };
+                readonly city: { readonly many: false;
+                  readonly nullable: false;
+                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+                };
+                readonly zip: { readonly many: false;
+                  readonly nullable: false;
+                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+                };
+              };
+            };
           };
         };
       };

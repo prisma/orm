@@ -1,8 +1,7 @@
-import type { Runtime } from '@prisma/orm-postgres/family-runtime';
 import type { DefaultModelRow } from '@prisma/orm-postgres/orm-client';
 import { blindCast } from '@prisma/orm-postgres/utils/casts';
 import type { Contract } from '../prisma/contract.d';
-import { createOrmClient } from './client';
+import type { DemoOrm } from '../prisma/db';
 
 type PostRow = DefaultModelRow<Contract, 'Post'>;
 
@@ -18,12 +17,8 @@ export interface CreatePostWithTagsInput {
  * create + link new tags via the callback mutator. Demonstrates
  * `t.create([...])` on an N:M relation from inside a `create()` call.
  */
-export async function ormClientCreatePostWithTags(
-  input: CreatePostWithTagsInput,
-  runtime: Runtime,
-) {
-  const db = createOrmClient(runtime);
-  return db.Post.create({
+export async function ormClientCreatePostWithTags(input: CreatePostWithTagsInput, orm: DemoOrm) {
+  return orm.Post.create({
     id: toPostId(input.id),
     title: input.title,
     userId: input.userId,

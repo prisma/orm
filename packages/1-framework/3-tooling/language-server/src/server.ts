@@ -1,25 +1,30 @@
 import { fileURLToPath } from 'node:url';
-import { isPrismaNextSchema, type SymbolTable } from '@internal/psl-parser';
+import { isPrisma8Schema, type SymbolTable } from '@internal/psl-parser';
 import {
   type CompletionItem,
   type Connection,
   type DocumentDiagnosticReport,
   DocumentDiagnosticReportKind,
   type FoldingRange,
+  type Hover,
   type InitializeParams,
   type InitializeResult,
+  type Location,
+  type LocationLink,
   type Position,
   type Range,
   type SemanticTokens,
   type SignatureHelp,
   TextDocumentSyncKind,
   type TextEdit,
+  type WorkspaceEdit,
 } from 'vscode-languageserver';
 import type { DocumentSnapshot } from './document-snapshot';
 import { DocumentStore } from './document-store';
 import { guardedConnection } from './guarded-connection';
 import type { ProjectArtifacts } from './project-artifacts';
 import { ProjectRegistry } from './project-registry';
+import type { PrepareRenameResult } from './rename';
 import { normalizeFileUri } from './schema-inputs';
 import { semanticTokensLegend } from './semantic-tokens';
 
@@ -46,7 +51,7 @@ function createServerOn(connection: Connection): LanguageServer {
     const document = getOpenDocument(uri);
     if (document === undefined) return [];
     const source = document.getText();
-    if (!isPrismaNextSchema(source)) return [];
+    if (!isPrisma8Schema(source)) return [];
     const project = await projects.nearestProject(uri);
     const formatted = await project?.formatDocument(uri, source);
     if (formatted === undefined || formatted === source) return [];
@@ -83,6 +88,50 @@ function createServerOn(connection: Connection): LanguageServer {
     return project?.signatureHelp(uri, position, clientCapabilities.signatureLabelOffsets) ?? null;
   }
 
+  async function hoverForDocument(uri: string, position: Position): Promise<Hover | null> {
+    if (getOpenDocument(uri) === undefined) return null;
+    const project = await projects.nearestProject(uri);
+    return project?.hover(uri, position) ?? null;
+  }
+
+  async function definitionForDocument(
+    uri: string,
+    position: Position,
+  ): Promise<LocationLink[] | Location[] | null> {
+    if (getOpenDocument(uri) === undefined) return null;
+    const project = await projects.nearestProject(uri);
+    return project?.definition(uri, position, clientCapabilities.definitionLinks) ?? null;
+  }
+
+  async function referencesForDocument(
+    uri: string,
+    position: Position,
+    includeDeclaration: boolean,
+  ): Promise<Location[]> {
+    if (getOpenDocument(uri) === undefined) return [];
+    const project = await projects.nearestProject(uri);
+    return project?.references(uri, position, includeDeclaration) ?? [];
+  }
+
+  async function prepareRenameForDocument(
+    uri: string,
+    position: Position,
+  ): Promise<PrepareRenameResult | null> {
+    if (getOpenDocument(uri) === undefined) return null;
+    const project = await projects.nearestProject(uri);
+    return project?.prepareRename(uri, position) ?? null;
+  }
+
+  async function renameForDocument(
+    uri: string,
+    position: Position,
+    newName: string,
+  ): Promise<WorkspaceEdit | null> {
+    if (getOpenDocument(uri) === undefined) return null;
+    const project = await projects.nearestProject(uri);
+    return project?.rename(uri, position, newName) ?? null;
+  }
+
   connection.onInitialize(async (params): Promise<InitializeResult> => {
     rootPath = resolveRootPath(params);
     clientCapabilities = resolveClientCapabilities(params);
@@ -93,8 +142,12 @@ function createServerOn(connection: Connection): LanguageServer {
         documentFormattingProvider: true,
         foldingRangeProvider: true,
         semanticTokensProvider: { legend: semanticTokensLegend, full: true, range: true },
-        completionProvider: { triggerCharacters: ['.', '@', '[', '(', '{', ':', ','] },
+        completionProvider: { triggerCharacters: ['.', '@', '[', '(', '{', ':', ',', '+'] },
         signatureHelpProvider: { triggerCharacters: ['(', ','] },
+        hoverProvider: true,
+        definitionProvider: true,
+        referencesProvider: true,
+        renameProvider: clientCapabilities.renamePrepareSupport ? { prepareProvider: true } : true,
         ...(clientCapabilities.pullDiagnostics
           ? { diagnosticProvider: { interFileDependencies: true, workspaceDiagnostics: false } }
           : {}),
@@ -110,6 +163,23 @@ function createServerOn(connection: Connection): LanguageServer {
   connection.onSignatureHelp((params) =>
     signatureHelpForDocument(params.textDocument.uri, params.position),
   );
+  connection.onDefinition((params) =>
+    definitionForDocument(params.textDocument.uri, params.position),
+  );
+  connection.onReferences((params) =>
+    referencesForDocument(
+      params.textDocument.uri,
+      params.position,
+      params.context.includeDeclaration,
+    ),
+  );
+  connection.onPrepareRename((params) =>
+    prepareRenameForDocument(params.textDocument.uri, params.position),
+  );
+  connection.onRenameRequest((params) =>
+    renameForDocument(params.textDocument.uri, params.position, params.newName),
+  );
+  connection.onHover((params) => hoverForDocument(params.textDocument.uri, params.position));
   connection.languages.semanticTokens.on((params) =>
     semanticTokensForDocument(params.textDocument.uri),
   );
@@ -171,6 +241,8 @@ interface ResolvedClientCapabilities {
   readonly watchedFilesRegistration: boolean;
   readonly completionSnippets: boolean;
   readonly signatureLabelOffsets: boolean;
+  readonly definitionLinks: boolean;
+  readonly renamePrepareSupport: boolean;
   readonly completionTriggerSuggestCommand: boolean;
   readonly completionTriggerParameterHintsCommand: boolean;
   readonly pullDiagnostics: boolean;
@@ -181,6 +253,8 @@ const noClientCapabilities: ResolvedClientCapabilities = {
   watchedFilesRegistration: false,
   completionSnippets: false,
   signatureLabelOffsets: false,
+  definitionLinks: false,
+  renamePrepareSupport: false,
   completionTriggerSuggestCommand: false,
   completionTriggerParameterHintsCommand: false,
   pullDiagnostics: false,
@@ -196,6 +270,8 @@ function resolveClientCapabilities(params: InitializeParams): ResolvedClientCapa
     signatureLabelOffsets:
       params.capabilities.textDocument?.signatureHelp?.signatureInformation?.parameterInformation
         ?.labelOffsetSupport === true,
+    definitionLinks: params.capabilities.textDocument?.definition?.linkSupport === true,
+    renamePrepareSupport: params.capabilities.textDocument?.rename?.prepareSupport === true,
     completionTriggerSuggestCommand: supportsCompletionCommand(
       params.initializationOptions,
       'supportsTriggerSuggestCommand',

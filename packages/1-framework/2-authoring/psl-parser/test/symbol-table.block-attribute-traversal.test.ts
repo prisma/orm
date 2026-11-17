@@ -1,5 +1,6 @@
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
 import { describe, expect, it, vi } from 'vitest';
+import { EMPTY_DATA_TYPES } from '../src/attribute-spec/spec-context';
 import { blockAttribute, interpretExtensionBlocks, str, structBlock } from '../src/exports';
 import { parse } from '../src/parse';
 import { type BlockSymbol, buildSymbolTable } from '../src/symbol-table';
@@ -25,7 +26,7 @@ function fixture(
     positional: [{ key: 'name', type: str(), documentation: 'The storage name.' }],
     refine: (_args, ctx) => {
       const scope =
-        namespace === undefined ? ctx.symbols.topLevel : ctx.symbols.topLevel.namespaces[namespace];
+        namespace === undefined ? ctx.symbols.defaultNamespace : ctx.symbols.namespaces[namespace];
       interpretedSymbols.push(scope?.blocks[name]);
       return [];
     },
@@ -50,6 +51,7 @@ function fixture(
   const result = buildSymbolTable({
     documents: [document],
     sources,
+    defaultNamespaceId: 'public',
   });
   const blocks = interpretExtensionBlocks({
     symbolTable: result.symbolTable,
@@ -60,11 +62,12 @@ function fixture(
       symbolTable: result.symbolTable,
       pslBlockDescriptors: descriptors,
     }),
+    dataTypes: EMPTY_DATA_TYPES,
   });
   const scope =
     namespace === undefined
-      ? result.symbolTable.topLevel
-      : result.symbolTable.topLevel.namespaces[namespace];
+      ? result.symbolTable.defaultNamespace
+      : result.symbolTable.namespaces[namespace];
   return {
     ...result,
     diagnostics: [...result.diagnostics, ...blocks.diagnostics],

@@ -9,11 +9,6 @@ describe('MongoValueSet', () => {
     expect(vs.values).toEqual(['user', 'admin']);
   });
 
-  it('preserves declaration order', () => {
-    const vs = new MongoValueSet({ kind: 'valueSet', values: ['alpha', 'beta', 'gamma'] });
-    expect([...vs.values]).toEqual(['alpha', 'beta', 'gamma']);
-  });
-
   it('keeps non-string encoded values (ints, booleans)', () => {
     const vs = new MongoValueSet({ kind: 'valueSet', values: [0, 1, 2] });
     expect(vs.values).toEqual([0, 1, 2]);

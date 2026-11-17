@@ -1,9 +1,11 @@
 import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
-import { buildSymbolTable } from '@internal/psl-parser';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
+import { buildSymbolTable, createBinder } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import { classifyPslCompletionContext } from '../src/completion-context';
 import { localFieldNames, referencedFieldNames } from '../src/completion-symbols';
+import { binderContextFromStack } from '../src/lsp-control-stack';
 
 function fields(
   sourceWithCursor: string,
@@ -16,6 +18,7 @@ function fields(
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
+    defaultNamespaceId: 'public',
   });
   const context = classifyPslCompletionContext({
     document,
@@ -25,9 +28,34 @@ function fields(
   if (context.kind !== 'fieldAttributeValue' && context.kind !== 'modelAttributeValue') {
     throw new Error(`Unexpected context: ${context.kind}`);
   }
+  const emptyContext = binderContextFromStack({
+    scalarTypes: [],
+    defaultNamespaceId: 'public',
+    pslBlockDescriptors: {},
+    generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
+  });
+  const { binder } = createBinder({
+    sources,
+    symbolTable,
+    context: {
+      ...emptyContext,
+      authoringContributions: {
+        ...emptyContext.authoringContributions,
+        type: {
+          ...Object.fromEntries(
+            scalarTypes.map((name) => [
+              name,
+              { kind: 'typeConstructor', output: { codecId: 'scalar' } },
+            ]),
+          ),
+          ...typeConstructors,
+        },
+      },
+    },
+  });
   return {
-    local: localFieldNames(context, symbolTable, scalarTypes, typeConstructors),
-    referenced: referencedFieldNames(context, symbolTable, scalarTypes, typeConstructors),
+    local: localFieldNames(context, binder),
+    referenced: referencedFieldNames(context, binder),
   };
 }
 
@@ -55,10 +83,25 @@ const mixedFields = `id Int
 const scalarFields = ['id', 'optional', 'many', 'refined'];
 
 describe('scalar field reference candidates', () => {
+  it('classifies alias bases at their definition rather than the referencing namespace', () => {
+    expect(
+      fields(`types { Alias = String }
+namespace app {
+  model String { id Int }
+  model Owner { value Alias\n @@probe(fields: [|]) }
+}`),
+    ).toEqual({ local: ['value'], referenced: [] });
+    expect(
+      fields(`model String { id Int }
+types { Alias = String }
+model Owner { value Alias\n @@probe(fields: [|]) }`),
+    ).toEqual({ local: [], referenced: [] });
+  });
+
   it('includes registered inline and aliased scalar constructors in local and referenced fields', () => {
     const typeConstructors: AuthoringTypeNamespace = {
       sql: {
-        String: { kind: 'typeConstructor', output: { codecId: 'text', nativeType: 'varchar' } },
+        String: { kind: 'typeConstructor', output: { codecId: 'text' } },
       },
       pg: {
         enum: {
@@ -84,6 +127,7 @@ model Owner {
   unknownInline missing.Value()
   notAConstructor sql()
   notACall sql.String
+  notAliasConstructor Name()
   external foreign:sql.String(100)
   self Owner @probe(fields: [|])
 }`;

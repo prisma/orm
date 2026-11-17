@@ -162,6 +162,23 @@ export class DropCollectionCommand extends MongoAstNode {
   }
 }
 
+export class RenameCollectionCommand extends MongoAstNode {
+  readonly kind = 'renameCollection' as const;
+  readonly collection: string;
+  readonly to: string;
+
+  constructor(collection: string, to: string) {
+    super();
+    this.collection = collection;
+    this.to = to;
+    this.freeze();
+  }
+
+  accept<R>(visitor: MongoDdlCommandVisitor<R>): R {
+    return visitor.renameCollection(this);
+  }
+}
+
 export interface CollModOptions {
   readonly validator?: Record<string, unknown>;
   readonly validationLevel?: 'strict' | 'moderate';
@@ -198,4 +215,5 @@ export type AnyMongoDdlCommand =
   | DropIndexCommand
   | CreateCollectionCommand
   | DropCollectionCommand
+  | RenameCollectionCommand
   | CollModCommand;

@@ -13,38 +13,56 @@
         "models": {
           "Post": {
             "fields": {
-              "_id": {
+              "id": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "createdAt": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/date@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "updatedAt": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/date@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "touchedAt": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/date@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             },
             "relations": {},
             "storage": {
-              "collection": "Post"
+              "collection": "Post",
+              "fields": {
+                "id": {
+                  "field": "_id"
+                },
+                "createdAt": {
+                  "field": "createdAt"
+                },
+                "updatedAt": {
+                  "field": "updatedAt"
+                },
+                "touchedAt": {
+                  "field": "touchedAt"
+                }
+              }
             }
           }
         }

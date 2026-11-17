@@ -1,5 +1,5 @@
 import { realpath, stat } from 'node:fs/promises';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import { basename, dirname, join, normalize, resolve } from 'pathe';
 
 /** The file `contract infer` writes when nothing names another. */
@@ -11,7 +11,7 @@ const INFERRED_CONTRACT_FILENAME = 'contract.prisma';
  * invocation directory.
  */
 export function inferredContractPathFor(inputs: {
-  readonly config: PrismaNextConfig;
+  readonly config: PrismaConfig;
   readonly cwd: string;
   readonly output: string | undefined;
 }): string {
@@ -59,7 +59,7 @@ function withCaseSwapped(path: string): string {
 
 /** Whether `existingPath` names the same file with the case of its letters swapped. */
 async function volumeIgnoresCase(existingPath: string): Promise<boolean> {
-  const swapped = withCaseSwapped(existingPath);
+  const swapped = join(dirname(existingPath), withCaseSwapped(basename(existingPath)));
   if (swapped === existingPath) {
     return false;
   }

@@ -35,20 +35,34 @@
  * @see docs/architecture docs/adrs/ADR 212 - Contract spaces.md
  */
 
-import { defineContract } from '@internal/postgres/contract-builder';
+import { assembleDataTypes } from '@internal/framework-components/codec';
+import { defineContract, extension, unbound } from '@internal/postgres/contract-builder';
+import { assemblePostgresCodecRegistryWithBuiltins } from '@internal/target-postgres/codecs';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { POSTGIS_GEOMETRY_CODEC_ID } from './core/constants';
-import { POSTGIS_NATIVE_TYPE } from './core/contract-space-constants';
+import { POSTGIS_EXTENSION_NAME, POSTGIS_NATIVE_TYPE } from './core/contract-space-constants';
+import { postgisDataTypes } from './core/data-types';
+import { postgisCodecRegistry } from './core/registry';
 
-export const contract = defineContract({}, () => ({
-  types: {
+const dataTypeLookup = assembleDataTypes([
+  { id: 'postgres', dataTypes: postgresDataTypes },
+  { id: 'postgis', dataTypes: postgisDataTypes },
+]).lookup;
+const codecLookup = assemblePostgresCodecRegistryWithBuiltins(
+  [{ types: { codecTypes: { codecDescriptors: [...postgisCodecRegistry.values()] } } }],
+  dataTypeLookup,
+);
+
+export const contract = defineContract({ codecLookup, dataTypeLookup }, () => ({
+  databaseTypes: {
     [POSTGIS_NATIVE_TYPE]: {
       kind: 'codec-instance',
       codecId: POSTGIS_GEOMETRY_CODEC_ID,
-      nativeType: POSTGIS_NATIVE_TYPE,
       typeParams: {},
     },
   },
   models: {},
+  entities: [extension(POSTGIS_EXTENSION_NAME, { namespace: unbound })],
 }));
 
 export default contract;

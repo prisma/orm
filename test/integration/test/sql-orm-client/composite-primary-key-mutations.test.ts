@@ -123,7 +123,7 @@ async function seedTrucks(runtime: PgIntegrationRuntime): Promise<void> {
 
 async function readTrucks(vehicles: Collection<Contract<SqlStorage>, string>) {
   return vehicles
-    .variant('Truck' as never)
+    .variant('truck' as never)
     .select('tenantId', 'id', 'name', 'payload')
     .orderBy([(v) => v['tenantId']!.asc(), (v) => v['id']!.asc()])
     .all();
@@ -219,7 +219,7 @@ describe('integration/mutations on a composite primary key', () => {
         await seedTrucks(runtime);
 
         const created = await vehicles
-          .variant('Truck' as never)
+          .variant('truck' as never)
           .create({ tenantId: 1, id: 3, name: 'Loader', payload: 7 } as never);
 
         expect(created).toEqual({ tenantId: 1, id: 3, kind: 'truck', name: 'Loader', payload: 7 });
@@ -241,7 +241,7 @@ describe('integration/mutations on a composite primary key', () => {
         await seedTrucks(runtime);
 
         const count = await vehicles
-          .variant('Truck' as never)
+          .variant('truck' as never)
           .where((v) => v['payload']!.eq(9))
           .updateAndCount({ name: 'Renamed' } as never);
 
@@ -263,7 +263,7 @@ describe('integration/mutations on a composite primary key', () => {
         await seedTrucks(runtime);
 
         const count = await vehicles
-          .variant('Truck' as never)
+          .variant('truck' as never)
           .where((v) => v['payload']!.eq(9))
           .deleteAndCount();
 

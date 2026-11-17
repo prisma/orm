@@ -76,7 +76,7 @@ export interface ContractSpaceHeadRecord {
 }
 
 /**
- * Marker row read from `prisma_contract.marker` (one per `space`).
+ * Marker row read from the target's marker store (one per `space`).
  * Caller resolves these via the family runtime's marker reader before
  * invoking {@link verifyContractSpaces}.
  */
@@ -112,10 +112,12 @@ export interface VerifyContractSpacesInputs {
   readonly headRefsBySpace: ReadonlyMap<string, ContractSpaceHeadRecord>;
 
   /**
-   * Marker rows keyed by `space`. Caller reads them from the
-   * `prisma_contract.marker` table.
+   * Marker rows keyed by `space`, read from the target's marker store.
    */
   readonly markerRowsBySpace: ReadonlyMap<string, SpaceMarkerRecord>;
+
+  /** Where the target keeps the markers, as the remediation names it: the target's `markerLocation`. */
+  readonly markerLocation: string;
 }
 
 export type SpaceVerifierViolation =
@@ -247,7 +249,7 @@ export function verifyContractSpaces(
       violations.push({
         kind: 'orphanMarker',
         spaceId: space,
-        remediation: `Orphan marker row for space '${space}' (no longer in extensions); remediation: manually delete the row from \`prisma_contract.marker\`.`,
+        remediation: `Orphan marker row for space '${space}' (no longer in extensions); remediation: manually delete the row from \`${inputs.markerLocation}\`.`,
       });
     }
   }

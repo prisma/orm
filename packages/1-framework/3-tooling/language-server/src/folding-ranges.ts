@@ -17,6 +17,7 @@ type Declaration = NamespaceMemberAst | TypesBlockAst | NamespaceDeclarationAst;
  * - composite type (e.g., `type Address { ... }`)
  * - namespace (e.g., `namespace billing { ... }`)
  * - generic blocks (generator, datasource, extension blocks)
+ * - mixin declarations (e.g., `model mixin Timestamps { ... }`)
  * - types block (e.g., `types { ... }`)
  *
  * The range spans from the line containing `{` to the line containing `}`.

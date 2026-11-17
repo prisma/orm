@@ -5,12 +5,6 @@ import { orm } from '../src/orm';
 import type { TestContract } from './helpers';
 import { createMockRuntime, getTestContext } from './helpers';
 
-class UserCollection extends Collection<TestContract, 'User'> {
-  named(name: string) {
-    return this.where((user) => user.name.eq(name));
-  }
-}
-
 class PostCollection extends Collection<TestContract, 'Post'> {
   popular() {
     return this.where((p) => p.views.gt(1000));
@@ -76,7 +70,7 @@ describe('orm()', () => {
   it('returns undefined for symbol-based property lookups on the proxy', () => {
     const runtime = createMockRuntime();
     const db = orm({ runtime, context });
-    expect((db as Record<PropertyKey, unknown>)[Symbol.toStringTag]).toBeUndefined();
+    expect((db as unknown as Record<PropertyKey, unknown>)[Symbol.toStringTag]).toBeUndefined();
   });
 
   it('caches lazily created collections', () => {
@@ -91,28 +85,6 @@ describe('orm()', () => {
     const runtime = createMockRuntime();
     const db = orm({ runtime, context });
     expect((db.public as Record<string, unknown>)['unknown']).toBeUndefined();
-  });
-
-  it('custom collection overrides default for same key', () => {
-    const runtime = createMockRuntime();
-    const db = orm({
-      runtime,
-      context,
-      collections: { Post: PostCollection },
-    });
-
-    expect(db.public.Post).toBeInstanceOf(PostCollection);
-  });
-
-  it('resolves User to custom collection instance', () => {
-    const runtime = createMockRuntime();
-    const db = orm({
-      runtime,
-      context,
-      collections: { User: UserCollection },
-    });
-
-    expect(db.public.User).toBeInstanceOf(UserCollection);
   });
 
   it('instantiates custom collections lazily and caches by model', () => {

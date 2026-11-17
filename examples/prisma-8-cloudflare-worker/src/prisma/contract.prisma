@@ -14,10 +14,10 @@ enum user_type {
 }
 
 model User {
-  id          String    @id @default(uuid())
+  id          String    @id @onCreate(uuid())
   email       String
   displayName String
-  createdAt   DateTime  @default(now())
+  createdAt   DateTime(as: temporal)  @default(now())
   kind        user_type
   address     Address?
   posts       Post[]
@@ -27,10 +27,10 @@ model User {
 }
 
 model Post {
-  id        String   @id @default(uuid())
+  id        String   @id @onCreate(uuid())
   title     String
   userId    String
-  createdAt DateTime @default(now())
+  createdAt DateTime(as: temporal) @default(now())
 
   user User @relation(fields: [userId], references: [id])
 
@@ -38,13 +38,13 @@ model Post {
 }
 
 model Task {
-  id          String   @id @default(uuid())
+  id          String   @id @onCreate(uuid())
   title       String
   description String?
   status      String   @default("open")
   type        String
   userId      String
-  createdAt   DateTime @default(now())
+  createdAt   DateTime(as: temporal) @default(now())
 
   user User @relation(fields: [userId], references: [id])
 

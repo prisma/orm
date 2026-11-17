@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { executeFormat, resolveNewline } from '../../src/control-api/operations/format';
 
 function mockConfig(overrides: Record<string, unknown>) {
-  return overrides as unknown as configLoader.PrismaNextConfig;
+  return overrides as unknown as configLoader.PrismaConfig;
 }
 
 function pslConfig(

@@ -18,20 +18,20 @@ function source(rows: Record<string, unknown>[]) {
 describe('collection row query', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it('ignores inherited field and column mappings in prepared child decoders', async () => {
+  it('refuses a selected child column whose field mapping is only inherited from the prototype', async () => {
     const { collection } = createCollectionFor('User');
     const state = collection
       .select('name')
       .include('posts', (posts) => posts.select('title')).state;
-    const fieldMap = collectionContract.getFieldToColumnMap;
-    const columnMap = collectionContract.getColumnToFieldMap;
-    vi.spyOn(collectionContract, 'getFieldToColumnMap').mockImplementation(
+    const fieldMap = collectionContract.getOwnFieldColumns;
+    const columnMap = collectionContract.getModelColumnFields;
+    vi.spyOn(collectionContract, 'getOwnFieldColumns').mockImplementation(
       (contract, namespace, model) =>
         model === 'Post'
           ? Object.setPrototypeOf({}, { title: 'user_id' })
           : fieldMap(contract, namespace, model),
     );
-    vi.spyOn(collectionContract, 'getColumnToFieldMap').mockImplementation(
+    vi.spyOn(collectionContract, 'getModelColumnFields').mockImplementation(
       (contract, namespace, model) =>
         model === 'Post'
           ? Object.setPrototypeOf({ user_id: 'userId' }, { title: Object.prototype.toString })
@@ -40,13 +40,12 @@ describe('collection row query', () => {
     const query = describeCollectionRows({
       context: collection.ctx.context,
       state,
-      tableName: collection.tableName,
       modelName: collection.modelName,
       namespaceId: 'public',
     });
-    expect(await query.consume(source([{ name: 'A', posts: [{ title: 'P' }] }]))).toEqual([
-      { name: 'A', posts: [{ title: 'P' }] },
-    ]);
+    await expect(query.consume(source([{ name: 'A', posts: [{ title: 'P' }] }]))).rejects.toThrow(
+      'Column "title" of model "Post" is mapped by no field',
+    );
   });
 
   it('fuses fixed prepared child selections and falls back for unexpected row shapes', async () => {
@@ -71,7 +70,6 @@ describe('collection row query', () => {
     const query = describeCollectionRows({
       context: collection.ctx.context,
       state: selected.state,
-      tableName: collection.tableName,
       modelName: collection.modelName,
       namespaceId: 'public',
     });
@@ -92,9 +90,7 @@ describe('collection row query', () => {
           { name: 'A', posts: [{ title: null, user_id: undefined, extra: true, comments: [] }] },
         ]),
       ),
-    ).toEqual([
-      { name: 'A', posts: [{ title: null, userId: undefined, extra: true, comments: [] }] },
-    ]);
+    ).toEqual([{ name: 'A', posts: [{ title: null, userId: undefined, comments: [] }] }]);
     expect(childMapper).toHaveBeenCalledOnce();
   });
 
@@ -103,7 +99,6 @@ describe('collection row query', () => {
     const query = describeCollectionRows({
       context: collection.ctx.context,
       state: collection.select('name').include('invitedBy', (user) => user.select('name')).state,
-      tableName: collection.tableName,
       modelName: collection.modelName,
       namespaceId: 'public',
     });
@@ -127,14 +122,13 @@ describe('collection row query', () => {
     const codec = collection.ctx.context.contractCodecs.forColumn('public', 'posts', 'title');
     if (!codec) throw new Error('Missing title codec');
     const later = { title: 'second' };
-    vi.spyOn(codec, 'decodeJson').mockImplementation((value) => {
+    vi.spyOn(codec, 'fromWire').mockImplementation(async (wire) => {
       later.title = 'changed';
-      return String(value).toUpperCase();
+      return String(wire).toUpperCase();
     });
     const query = describeCollectionRows({
       context: collection.ctx.context,
       state: collection.select('name').include('posts', (posts) => posts.select('title')).state,
-      tableName: collection.tableName,
       modelName: collection.modelName,
       namespaceId: 'public',
     });
@@ -147,11 +141,10 @@ describe('collection row query', () => {
     const { collection } = createCollectionFor('User');
     const codec = collection.ctx.context.contractCodecs.forColumn('public', 'posts', 'title');
     if (!codec) throw new Error('Missing title codec');
-    const decode = vi.spyOn(codec, 'decodeJson');
+    const decode = vi.spyOn(codec, 'fromWire');
     const query = describeCollectionRows({
       context: collection.ctx.context,
       state: collection.select('name').include('posts', (posts) => posts.select('title')).state,
-      tableName: collection.tableName,
       modelName: collection.modelName,
       namespaceId: 'public',
     });
@@ -161,7 +154,7 @@ describe('collection row query', () => {
     expect(decode).not.toHaveBeenCalled();
   });
 
-  it('does not create Promise resources per nested JSON include', async () => {
+  it('creates 24 Promise resources for each included row with a nested include, and no more as rows grow', async () => {
     const { collection } = createCollectionFor('User');
     const selected = collection
       .select('name')
@@ -171,7 +164,6 @@ describe('collection row query', () => {
     const query = describeCollectionRows({
       context: collection.ctx.context,
       state: selected.state,
-      tableName: collection.tableName,
       modelName: collection.modelName,
       namespaceId: 'public',
     });
@@ -205,9 +197,13 @@ describe('collection row query', () => {
       return promises;
     }
     await measure(1);
-    const small = await measure(1);
-    const large = await measure(100);
-    expect(large).toBe(small);
+    const one = await measure(1);
+    const two = await measure(2);
+    const hundred = await measure(100);
+    expect({ perPost: two - one, growth: hundred - one }).toEqual({
+      perPost: 24,
+      growth: 99 * (two - one),
+    });
   });
 
   it('precomputes known but unselected bindings and decodes fresh cells after empty and null payloads', async () => {
@@ -216,13 +212,12 @@ describe('collection row query', () => {
     const context = collection.ctx.context;
     const codec = context.contractCodecs.forColumn('public', 'posts', 'views');
     if (!codec) throw new Error('Missing views codec');
-    const decode = vi.spyOn(codec, 'decodeJson');
+    const decode = vi.spyOn(codec, 'fromWire');
     const columns = vi.spyOn(context.contractCodecs, 'forColumn');
     const descriptors = vi.spyOn(context.codecDescriptors, 'codecRefForColumn');
     const query = describeCollectionRows({
       context,
       state: selected.state,
-      tableName: collection.tableName,
       modelName: collection.modelName,
       namespaceId: 'public',
     });
@@ -238,7 +233,7 @@ describe('collection row query', () => {
     const raw = [{ name: 'A', posts: [{ user_id: 1, views: 2, custom: true }] }];
     const first = await query.consume(source(raw));
     const second = await query.consume(source(raw));
-    expect(first).toEqual([{ name: 'A', posts: [{ userId: 1, views: 2, custom: true }] }]);
+    expect(first).toEqual([{ name: 'A', posts: [{ userId: 1, views: 2 }] }]);
     expect(second).toEqual(first);
     expect(second).not.toBe(first);
     expect(second[0]).not.toBe(first[0]);
@@ -262,7 +257,6 @@ describe('collection row query', () => {
     const query = describeCollectionRows({
       context,
       state: selected.state,
-      tableName: collection.tableName,
       modelName: collection.modelName,
       namespaceId: 'public',
     });
@@ -286,13 +280,12 @@ describe('collection row query', () => {
     const codec = context.contractCodecs.forColumn('public', 'posts', 'views');
     if (!codec) throw new Error('Missing views codec');
     const cause = new Error('bad cell');
-    const decode = vi.spyOn(codec, 'decodeJson').mockImplementation(() => {
+    const decode = vi.spyOn(codec, 'fromWire').mockImplementation(async () => {
       throw cause;
     });
     const query = describeCollectionRows({
       context,
       state: selected.state,
-      tableName: collection.tableName,
       modelName: collection.modelName,
       namespaceId: 'public',
     });
@@ -322,7 +315,6 @@ describe('collection row query', () => {
     const query = describeCollectionRows({
       context,
       state: selected.state,
-      tableName: collection.tableName,
       modelName: collection.modelName,
       namespaceId: 'public',
     });
@@ -343,7 +335,6 @@ describe('collection row query', () => {
     const query = describeCollectionRows({
       context,
       state: selected.state,
-      tableName: collection.tableName,
       modelName: collection.modelName,
       namespaceId: 'public',
     });
@@ -377,7 +368,6 @@ describe('collection row query', () => {
     const query = describeCollectionRows({
       context,
       state: selected.state,
-      tableName: collection.tableName,
       modelName: collection.modelName,
       namespaceId: 'public',
     });
@@ -397,7 +387,6 @@ describe('collection row query', () => {
     const query = describeCollectionRows<{ userId: number }>({
       context: collection.ctx.context,
       state: collection.select('userId').state,
-      tableName: collection.tableName,
       modelName: collection.modelName,
       namespaceId: 'public',
     });
@@ -429,7 +418,6 @@ describe('collection row query', () => {
     const query = describeCollectionRows({
       context: collection.ctx.context,
       state: selected.state,
-      tableName: collection.tableName,
       modelName: collection.modelName,
       namespaceId: 'public',
     });

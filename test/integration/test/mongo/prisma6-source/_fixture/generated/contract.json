@@ -19,17 +19,17 @@
         "models": {
           "Counter": {
             "fields": {
-              "_id": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/objectId@1",
-                  "kind": "scalar"
-                }
-              },
               "hits": {
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/int64Number@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
                   "kind": "scalar"
                 }
               },
@@ -57,31 +57,56 @@
             },
             "relations": {},
             "storage": {
-              "collection": "Counter"
+              "collection": "Counter",
+              "fields": {
+                "hits": {
+                  "field": "hits"
+                },
+                "id": {
+                  "field": "_id"
+                },
+                "large": {
+                  "field": "large"
+                },
+                "name": {
+                  "field": "name"
+                },
+                "small": {
+                  "field": "small"
+                }
+              }
             }
           },
           "Tally": {
             "fields": {
-              "_id": {
+              "address": {
+                "nullable": true,
+                "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "Address",
+                  "kind": "valueObject",
+                  "namespaceId": "__unbound__",
+                  "plane": "storage"
+                }
+              },
+              "addresses": {
+                "many": {
+                  "elementNullable": false
+                },
+                "nullable": false,
+                "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "Address",
+                  "kind": "valueObject",
+                  "namespaceId": "__unbound__",
+                  "plane": "storage"
+                }
+              },
+              "id": {
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/objectId@1",
                   "kind": "scalar"
-                }
-              },
-              "address": {
-                "nullable": true,
-                "type": {
-                  "kind": "valueObject",
-                  "name": "Address"
-                }
-              },
-              "addresses": {
-                "many": true,
-                "nullable": false,
-                "type": {
-                  "kind": "valueObject",
-                  "name": "Address"
                 }
               },
               "name": {
@@ -92,7 +117,9 @@
                 }
               },
               "scores": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/int64Number@1",
@@ -102,18 +129,22 @@
             },
             "relations": {},
             "storage": {
-              "collection": "Tally"
-            }
-          }
-        },
-        "valueObjects": {
-          "Address": {
-            "fields": {
-              "zip": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/int64Number@1",
-                  "kind": "scalar"
+              "collection": "Tally",
+              "fields": {
+                "address": {
+                  "field": "address"
+                },
+                "addresses": {
+                  "field": "addresses"
+                },
+                "id": {
+                  "field": "_id"
+                },
+                "name": {
+                  "field": "name"
+                },
+                "scores": {
+                  "field": "scores"
                 }
               }
             }
@@ -133,13 +164,26 @@
             "Tally": {
               "kind": "mongo-collection"
             }
+          },
+          "valueObject": {
+            "Address": {
+              "fields": {
+                "zip": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/int64Number@1",
+                    "kind": "scalar"
+                  }
+                }
+              }
+            }
           }
         },
         "id": "__unbound__",
         "kind": "mongo-database"
       }
     },
-    "storageHash": "4437f81a7adbcbf818bc57a01eeae876338e847c850fca1b59a3de9110919258"
+    "storageHash": "a0963d77119ea552aa28834b70bc7ce8969caaae10055d4d07deec4ad11ff5be"
   },
   "capabilities": {},
   "extensions": {},

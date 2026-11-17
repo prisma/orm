@@ -1,8 +1,4 @@
-import type {
-  AfterQueryResult,
-  CrossFamilyMiddleware,
-  RuntimeMiddlewareContext,
-} from '@internal/framework-components/runtime';
+import type { CrossFamilyMiddleware } from '@internal/framework-components/runtime';
 import { cacheAnnotation, createCacheMiddleware } from '@internal/middleware-cache';
 import { sql } from '@internal/sql-builder/runtime';
 import {
@@ -27,9 +23,9 @@ import { useMiddlewareCacheDatabase } from './middleware-cache-database';
  * - Composition with a `beforeCompile`-style rewriter (soft-delete):
  *   the rewritten SQL contributes to the cache key.
  * - Composition with an inline observer middleware: the `source` field
- *   on `afterQuery` round-trips driver vs middleware fetches.
+ *   on `activityEnded` round-trips driver vs middleware fetches.
  * - Concurrency: two parallel calls of the same plan don't cross-talk
- *   through the per-exec WeakMap buffer.
+ *   through the per-statement buffer in `ctx.state`.
  *
  * Invalidation is covered in `middleware-cache-invalidation.test.ts`.
  */
@@ -216,26 +212,27 @@ describe('integration: middleware-cache against real Postgres', {
      * package.
      */
     interface ObservedEvent {
-      readonly phase: 'beforeQuery' | 'afterQuery';
+      readonly phase: 'beforeEncode' | 'activityEnded';
       readonly source?: 'driver' | 'middleware';
       readonly rowCount?: number;
       readonly latencyMs?: number;
-      readonly completed?: boolean;
+      readonly outcome?: string;
     }
 
     function createObserver(events: ObservedEvent[]): CrossFamilyMiddleware {
       return {
         name: 'observer',
-        async beforeQuery(_plan, _ctx: RuntimeMiddlewareContext) {
-          events.push({ phase: 'beforeQuery' });
+        async beforeEncode() {
+          events.push({ phase: 'beforeEncode' });
         },
-        async afterQuery(_plan, result: AfterQueryResult, _ctx: RuntimeMiddlewareContext) {
+        async activityEnded(_activity, result) {
+          if (result.kind !== 'statement' || result.returns !== 'rows') return;
           events.push({
-            phase: 'afterQuery',
+            phase: 'activityEnded',
             source: result.source,
             rowCount: result.rowCount,
             latencyMs: result.latencyMs,
-            completed: result.completed,
+            outcome: result.outcome,
           });
         },
       };
@@ -245,8 +242,8 @@ describe('integration: middleware-cache against real Postgres', {
       const events: ObservedEvent[] = [];
       const observer = createObserver(events);
       const cache = createCacheMiddleware();
-      // Cache first so its `interceptQuery` runs upstream of the observer in
-      // the interceptQuery chain. The observer's `afterQuery` still fires on
+      // Cache first so its `intercept.onQuery` runs upstream of the observer in
+      // the intercept chain. The observer's `activityEnded` still fires on
       // both paths and observes the `source` field, which is the
       // canonical hit-vs-miss signal.
       const runtime = buildRuntime([cache, observer]);
@@ -264,15 +261,13 @@ describe('integration: middleware-cache against real Postgres', {
       await runtime.query(buildPlan()).toArray();
 
       const missEvents = events.slice();
-      // `beforeQuery` fires on every execution: the framework runs
-      // `runBeforeQueryChain` before `runQueryWithMiddleware`'s interceptQuery
-      // loop so middleware that mutates ParamRef values stays visible
-      // to encode regardless of whether a downstream interceptQueryor wins
-      // (see `before-execute-chain.ts`). The `source` field on
-      // `afterQuery` is what distinguishes driver vs middleware
-      // paths.
-      expect(missEvents.find((e) => e.phase === 'beforeQuery')).toBeDefined();
-      const missAfter = missEvents.find((e) => e.phase === 'afterQuery');
+      // `beforeEncode` fires on every statement, before the intercept
+      // chain, so middleware that mutates ParamRef values stays visible
+      // to encode regardless of whether a downstream interceptor wins.
+      // The `source` field on `activityEnded` is what distinguishes
+      // driver vs middleware paths.
+      expect(missEvents.find((e) => e.phase === 'beforeEncode')).toBeDefined();
+      const missAfter = missEvents.find((e) => e.phase === 'activityEnded');
       expect(missAfter).toBeDefined();
       expect(missAfter!.source).toBe('driver');
       expect(missAfter!.rowCount).toBe(4);
@@ -283,12 +278,12 @@ describe('integration: middleware-cache against real Postgres', {
       // Hit path.
       await runtime.query(buildPlan()).toArray();
 
-      // `beforeQuery` still fires on the interceptQueryed hit path —
-      // it runs unconditionally before `runQueryWithMiddleware`'s interceptQuery
-      // loop. The canonical hit signal is `afterQuery.source ===
-      // 'middleware'`, paired with the driver not being invoked.
-      expect(events.find((e) => e.phase === 'beforeQuery')).toBeDefined();
-      const hitAfter = events.find((e) => e.phase === 'afterQuery');
+      // `beforeEncode` still fires on the intercepted hit path — it runs
+      // unconditionally before the intercept chain. The canonical hit
+      // signal is `activityEnded` with `source === 'middleware'`, paired
+      // with the driver not being invoked.
+      expect(events.find((e) => e.phase === 'beforeEncode')).toBeDefined();
+      const hitAfter = events.find((e) => e.phase === 'activityEnded');
       expect(hitAfter).toBeDefined();
       expect(hitAfter!.source).toBe('middleware');
       expect(hitAfter!.rowCount).toBe(4);
@@ -314,16 +309,16 @@ describe('integration: middleware-cache against real Postgres', {
       events.length = 0;
       await runtime.query(buildPlan()).toArray();
 
-      const after = events.find((e) => e.phase === 'afterQuery');
+      const after = events.find((e) => e.phase === 'activityEnded');
       expect(after).toBeDefined();
       expect(after!.rowCount).toBe(4);
       expect(typeof after!.latencyMs).toBe('number');
-      expect(after!.completed).toBe(true);
+      expect(after!.outcome).toBe('succeeded');
     });
   });
 
   describe('concurrency regression', () => {
-    it('two parallel queries of the same plan do not cross-talk via the per-exec buffer', async () => {
+    it('two parallel queries of the same plan do not cross-talk via their per-statement buffers', async () => {
       const cache = createCacheMiddleware();
       const runtime = buildRuntime([cache]);
       const db = sql({
@@ -339,11 +334,10 @@ describe('integration: middleware-cache against real Postgres', {
 
       database.driverQuerySpy.mockClear();
 
-      // Two parallel executions of the same logical plan. Each
-      // produces its own frozen `exec` object inside the runtime
-      // (`prepareExecution` freezes per-call), and the cache
-      // middleware keys its WeakMap on that identity — so the two
-      // calls' miss buffers must not interfere.
+      // Two parallel executions of the same logical plan. Each is its
+      // own statement activity with its own `ctx.state`, where the cache
+      // middleware keeps its miss buffer — so the two calls' buffers
+      // must not interfere.
       const [a, b] = await Promise.all([
         runtime.query(buildPlan()).toArray(),
         runtime.query(buildPlan()).toArray(),
