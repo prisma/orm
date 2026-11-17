@@ -126,14 +126,20 @@ function envelopeOf(run: { readonly json: readonly { readonly kind: string }[] }
     : undefined;
 }
 
+/** The test project sits inside this repository, so init also sees the repository's own pnpm catalog. */
+function isRepositoryCatalogWarning(text: string): boolean {
+  return text.startsWith('pnpm workspace catalog overrides detected');
+}
+
 function installSummary(run: Awaited<ReturnType<ReturnType<typeof harness>['run']>>) {
   const data = Object(run.presented?.data);
+  const warnings: readonly string[] = Reflect.get(data, 'warnings');
   return {
     exitCode: run.exitCode,
     calls: calls.map((call) => `${call.file} ${call.args.join(' ')}`),
     packagesInstalled: Reflect.get(data, 'packagesInstalled'),
     contractEmitted: Reflect.get(data, 'contractEmitted'),
-    warnings: Reflect.get(data, 'warnings'),
+    warnings: warnings.filter((text) => !isRepositoryCatalogWarning(text)),
   };
 }
 

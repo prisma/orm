@@ -3,12 +3,14 @@ import { ifDefined } from '@internal/utils/defined';
 import type { PackageManagerId, PackageOperations } from '@prisma/cli-engine';
 import type { CliStructuredError } from '@prisma/cli-engine/protocol';
 import { dirname, join } from 'pathe';
-import { isRecognisedPnpmResolutionError } from '../commands/init/pnpm-fallback';
+import {
+  isPnpmIgnoredBuildsError,
+  isRecognisedPnpmResolutionError,
+} from '../commands/init/pnpm-fallback';
 import { redactSecrets } from '../commands/init/redact-secrets';
 
 const ENGINE_PACKAGE = '@prisma/cli-engine';
 const TOOLCHAIN_PACKAGE = '@prisma/orm-toolchain';
-const MODULES_MANIFEST = 'node_modules/.modules.yaml';
 
 /** What one install pair produced. */
 export interface InstallOutcome {
@@ -29,8 +31,7 @@ type InstallRequest = Parameters<PackageOperations['install']>[0];
 
 interface StepResult {
   readonly failure: CliStructuredError | undefined;
-  /** The pnpm failure let through because only unapproved build scripts were skipped. */
-  readonly skippedBuilds: CliStructuredError | undefined;
+  readonly skippedBuilds: boolean;
 }
 
 interface PairResult extends StepResult {
@@ -42,92 +43,23 @@ function metaString(failure: CliStructuredError, key: string): string {
   return typeof value === 'string' ? value : '';
 }
 
-function readManifest(cwd: string): string | undefined {
-  try {
-    return readFileSync(join(cwd, 'package.json'), 'utf-8');
-  } catch {
-    return undefined;
-  }
-}
-
 /**
- * Whether pnpm named packages whose scripts it skipped in the modules manifest
- * it writes beside the tree it linked — `undefined` when this directory holds
- * no manifest to read. pnpm 11 and 12 write it as JSON, which is the YAML its
- * name promises; pnpm 10, which has no such gate, wrote real YAML.
+ * pnpm installed the packages and then failed only because it skipped build scripts nobody
+ * approved. Only pnpm 12 is recognised: pnpm 11 prints the code on stdout, and the capability
+ * returns stderr alone.
  */
-function ignoredBuildsRecordedIn(dir: string): boolean | undefined {
-  let manifest: unknown;
-  try {
-    manifest = JSON.parse(readFileSync(join(dir, MODULES_MANIFEST), 'utf-8'));
-  } catch {
-    return undefined;
-  }
-  const ignored =
-    typeof manifest === 'object' && manifest !== null
-      ? Reflect.get(manifest, 'ignoredBuilds')
-      : undefined;
-  return Array.isArray(ignored) && ignored.length > 0;
+function pnpmOnlySkippedBuilds(failure: CliStructuredError): boolean {
+  return (
+    metaString(failure, 'manager') === 'pnpm' &&
+    isPnpmIgnoredBuildsError(metaString(failure, 'stderrTail'))
+  );
 }
 
-/** The modules manifest belongs to the tree pnpm linked, which in a workspace is the root's. */
-function pnpmRecordedIgnoredBuilds(cwd: string): boolean {
-  let dir = cwd;
-  for (;;) {
-    const recorded = ignoredBuildsRecordedIn(dir);
-    if (recorded !== undefined) {
-      return recorded;
-    }
-    const parent = dirname(dir);
-    if (parent === dir) {
-      return false;
-    }
-    dir = parent;
-  }
-}
-
-/**
- * pnpm 11 and later fail an `add` whose dependencies carry build scripts
- * nobody approved (`ERR_PNPM_IGNORED_BUILDS`) — after the packages are added
- * and linked, so the scripts are all that did not run. pnpm 12 names the code
- * on stderr, which settles it.
- *
- * pnpm 11 prints it on stdout, which the capability does not hand back, so
- * that version is read from two records pnpm leaves on disk, and it takes both:
- *
- * - pnpm named packages it skipped in the modules manifest — its own statement
- *   that scripts went unrun, which an earlier install in the same tree can
- *   equally have left behind;
- * - `package.json` changed across the call — `pnpm add` writes it only once
- *   resolution, linking and every approved script have landed, and the
- *   ignored-builds gate is the one thing it raises afterwards.
- *
- * Either alone admits a real failure: a manifest rewrite names no gate, and a
- * failed approved script exits non-zero in a tree whose record already stands.
- */
-function pnpmOnlySkippedBuilds(
-  failure: CliStructuredError,
-  manifestBefore: string | undefined,
-  cwd: string,
-): boolean {
-  if (metaString(failure, 'manager') !== 'pnpm') {
-    return false;
-  }
-  if (metaString(failure, 'stderrTail').includes('ERR_PNPM_IGNORED_BUILDS')) {
-    return true;
-  }
-  return readManifest(cwd) !== manifestBefore && pnpmRecordedIgnoredBuilds(cwd);
-}
-
-function skippedBuildsWarning(failure: CliStructuredError): string {
-  const exitCode = failure.meta?.['exitCode'];
-  const exited = typeof exitCode === 'number' ? `exited with code ${exitCode}` : 'exited non-zero';
-  return [
-    `pnpm ${exited} after adding the packages, which is how pnpm 11 and later report dependency build scripts it has not been told to trust (ERR_PNPM_IGNORED_BUILDS).`,
-    'The packages are installed but those scripts did not run; init continued without them.',
-    'Run `pnpm approve-builds` to review which dependencies may run their scripts.',
-  ].join('\n');
-}
+const SKIPPED_BUILDS_WARNING = [
+  'pnpm did not run the build scripts of some dependencies, because they are not approved (ERR_PNPM_IGNORED_BUILDS).',
+  'pnpm reports that as a failure, but it had already installed the packages, so init continued.',
+  'Run `pnpm approve-builds` to choose which dependencies may run their build scripts.',
+].join('\n');
 
 /**
  * pnpm reported a specifier the published artifact leaked, which npm installs
@@ -237,16 +169,15 @@ export async function installProjectDependencies(ctx: {
 }): Promise<InstallOutcome> {
   const install = async (request: InstallRequest): Promise<StepResult> => {
     if (request.packages.length === 0) {
-      return { failure: undefined, skippedBuilds: undefined };
+      return { failure: undefined, skippedBuilds: false };
     }
-    const manifestBefore = readManifest(ctx.cwd);
     const result = await ctx.packages.install(request);
     if (result.ok) {
-      return { failure: undefined, skippedBuilds: undefined };
+      return { failure: undefined, skippedBuilds: false };
     }
-    return pnpmOnlySkippedBuilds(result.failure, manifestBefore, ctx.cwd)
-      ? { failure: undefined, skippedBuilds: result.failure }
-      : { failure: result.failure, skippedBuilds: undefined };
+    return pnpmOnlySkippedBuilds(result.failure)
+      ? { failure: undefined, skippedBuilds: true }
+      : { failure: result.failure, skippedBuilds: false };
   };
 
   const pair = async (manager?: PackageManagerId): Promise<PairResult> => {
@@ -271,7 +202,7 @@ export async function installProjectDependencies(ctx: {
     });
     return {
       failure: developmentDeps.failure,
-      skippedBuilds: developmentDeps.skippedBuilds ?? runtimeDeps.skippedBuilds,
+      skippedBuilds: developmentDeps.skippedBuilds || runtimeDeps.skippedBuilds,
       devDeps,
     };
   };
@@ -282,10 +213,9 @@ export async function installProjectDependencies(ctx: {
       failure: undefined,
       devDeps: first.devDeps,
       manager: undefined,
-      warnings:
-        first.skippedBuilds === undefined
-          ? ctx.catalogWarnings
-          : [...ctx.catalogWarnings, skippedBuildsWarning(first.skippedBuilds)],
+      warnings: first.skippedBuilds
+        ? [...ctx.catalogWarnings, SKIPPED_BUILDS_WARNING]
+        : ctx.catalogWarnings,
     };
   }
   if (!pnpmLeakedASpecifier(first.failure)) {

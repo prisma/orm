@@ -11,14 +11,27 @@ const FALLBACK_PNPM_ERROR_CODES: ReadonlySet<string> = new Set([
   'ERR_PNPM_SPEC_NOT_SUPPORTED_BY_ANY_RESOLVER',
 ]);
 
+/**
+ * pnpm 11 and later fail an install that reached a dependency build script nobody approved, after
+ * the packages are already added and linked. pnpm 12 reports it on stderr, pnpm 11 on stdout.
+ */
+const IGNORED_BUILDS_PNPM_ERROR_CODE = 'ERR_PNPM_IGNORED_BUILDS';
+
 const PNPM_ERROR_CODE = /\bERR_PNPM_[A-Z0-9_]+\b/g;
+
+function pnpmErrorCodes(output: string): readonly string[] {
+  return Array.from(output.matchAll(PNPM_ERROR_CODE), ([code]) => code);
+}
 
 /**
  * Whether pnpm's output names an error code that justifies the npm fallback. `init` reads it
  * from the output the package-manager capability returns on a failed install.
  */
 export function isRecognisedPnpmResolutionError(output: string): boolean {
-  return Array.from(output.matchAll(PNPM_ERROR_CODE), ([code]) => code).some((code) =>
-    FALLBACK_PNPM_ERROR_CODES.has(code),
-  );
+  return pnpmErrorCodes(output).some((code) => FALLBACK_PNPM_ERROR_CODES.has(code));
+}
+
+/** Whether pnpm's output says the install failed only because it skipped unapproved build scripts. */
+export function isPnpmIgnoredBuildsError(output: string): boolean {
+  return pnpmErrorCodes(output).includes(IGNORED_BUILDS_PNPM_ERROR_CODE);
 }
