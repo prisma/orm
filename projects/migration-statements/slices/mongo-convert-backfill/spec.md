@@ -93,7 +93,7 @@ Today every row of this table is planned as a validator change and nothing else.
 5. Key renames. They come after the discriminator replacements because a variant's filter names its new value.
 6. Enum value replacements.
 7. Casts and scaffolded conversions.
-8. Fills and scaffolded backfills.
+8. Scaffolded backfills of a discriminator, then fills and the other scaffolded backfills, which can filter on it.
 9. Removals of fields, keys and enum values.
 
 This order is the only one the planner uses. It puts an operation whose filter reads a discriminator field or value after any operation that writes it and before any that empties it, so the filter selects the documents it was written for: a variant field rename filtered on the origin's discriminator runs before the rename of the discriminator, and a base field rename filtered on the destination's discriminator and values runs after it and after the value replacements. The plan-wide check refuses a plan in which this order still puts a filter on the wrong side of such an operation (decision 8).

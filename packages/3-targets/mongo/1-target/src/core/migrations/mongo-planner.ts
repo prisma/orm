@@ -29,6 +29,7 @@ import {
   embeddingModelOf,
   indexLookupKey,
   type MongoContract,
+  mongoModelsOf,
   validatorDocumentShapesOf,
 } from '@internal/mongo-contract';
 import type {
@@ -868,8 +869,15 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         unanswered: statements.length === 0 ? changeOfCall.get(facts.call) : undefined,
       };
     };
-    const transformRewrites = (kind: 'convert' | 'backfill') =>
-      transforms.flatMap(({ statement, outcome }) =>
+    const writesDiscriminator = ({ statement }: PlannedTransform) => {
+      const { namespaceId, model, field } = statement.field;
+      return mongoModelsOf(contract.domain, namespaceId)[model]?.discriminator?.field === field;
+    };
+    const transformRewrites = (
+      kind: 'convert' | 'backfill',
+      selected: (transform: PlannedTransform) => boolean = () => true,
+    ) =>
+      transforms.filter(selected).flatMap(({ statement, outcome }) =>
         statement.kind === kind && outcome.kind === 'transform'
           ? [
               rewriteOf({
@@ -930,6 +938,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         }),
       ),
       ...transformRewrites('convert'),
+      ...transformRewrites('backfill', writesDiscriminator),
       ...fills.map(({ call, variant }) =>
         rewriteOf({
           kind: 'fillField',
@@ -944,7 +953,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
           discriminatorFilter: variantDiscriminatorFilter(variant),
         }),
       ),
-      ...transformRewrites('backfill'),
+      ...transformRewrites('backfill', (transform) => !writesDiscriminator(transform)),
       ...removals.map(({ call, discriminatorFilter }) =>
         rewriteOf({ kind: 'unsetField', call, discriminatorFilter }),
       ),

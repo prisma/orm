@@ -509,6 +509,35 @@ describe('MongoMigrationPlanner, a discriminator renamed without its statement',
     ]);
   });
 
+  it('backfills the discriminator a base gains first before a backfill of a variant field selected by it, in either order of the statements', async () => {
+    const plain = contract(
+      'from',
+      { Task: { collection: 'tasks', fields: ['_id'] } },
+      { tasks: {} },
+    );
+    const backfillSeverity: ResolvedMigrationStatement = {
+      kind: 'backfill',
+      entity: 'field',
+      field: { namespaceId: NS, model: 'Bug', field: 'severity' },
+    };
+    const operationsFor = async (statements: readonly ResolvedMigrationStatement[]) => {
+      const result = plan({
+        from: plain,
+        to: after({ Bug: BUG, Epic: EPIC }),
+        schema: live,
+        statements,
+      });
+      if (result.kind !== 'success') throw new Error(JSON.stringify(result.conflicts, null, 2));
+      return listedOperations(result.plan as PlannerProducedMongoMigration);
+    };
+    const kindFirst = await operationsFor([backfillKind, backfillSeverity]);
+
+    expect({
+      count: kindFirst.length,
+      severityFirst: await operationsFor([backfillSeverity, backfillKind]),
+    }).toEqual({ count: 2, severityFirst: kindFirst });
+  });
+
   it('plans no fill of a new discriminator when the old one stays as a field', () => {
     const typeKept = contract(
       'to',
