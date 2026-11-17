@@ -811,6 +811,12 @@
       "plane": "runtime"
     },
     {
+      "glob": "packages/3-targets/postgres/9-facade/src/exports/generated-types.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-targets/postgres/9-facade/src/exports/migration.ts",
       "domain": "extensions",
       "layer": "adapters",

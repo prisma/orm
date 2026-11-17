@@ -6,6 +6,7 @@ export default defineConfig({
     'contract-builder': 'src/exports/contract-builder.ts',
     control: 'src/exports/control.ts',
     family: 'src/exports/family.ts',
+    'generated-types': 'src/exports/generated-types.ts',
     migration: 'src/exports/migration.ts',
     runtime: 'src/exports/runtime.ts',
     serverless: 'src/exports/serverless.ts',
