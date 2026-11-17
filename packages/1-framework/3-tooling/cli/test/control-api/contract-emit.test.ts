@@ -639,7 +639,7 @@ describe('executeContractEmit', () => {
       expect(mockedEmit.mock.calls.at(-1)?.[3]?.typesModule).toBe(TYPES_MODULE);
     });
 
-    it('warns when it does not resolve from the folder the file is written to', async () => {
+    it('warns when its package is not installed where the file is written', async () => {
       const outputJsonPath = join(tmpDir, 'generated/contract.json');
       mockedEmit.mockResolvedValueOnce(createEmitResult('unresolved'));
 
@@ -647,7 +647,7 @@ describe('executeContractEmit', () => {
         emitOptions(createSuccessfulConfig(outputJsonPath)),
       );
 
-      expect(result.validationWarning).toContain(`  - ${TYPES_MODULE}`);
+      expect(result.validationWarning).toContain('  - @acme/orm-db\n');
     });
 
     it('refuses a config that names none, before anything is written', async () => {
