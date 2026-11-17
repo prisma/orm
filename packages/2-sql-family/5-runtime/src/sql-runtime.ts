@@ -241,8 +241,6 @@ export interface ActivityRoute {
   readonly transaction:
     | ((parent: ActivityParent, options?: RuntimeTransactionOptions) => Promise<RuntimeTransaction>)
     | undefined;
-  /** Opens a savepoint beneath `parent`; present only where the route is a transaction or a savepoint. */
-  readonly savepoint?: ((parent: ActivityParent) => Promise<RuntimeTransaction>) | undefined;
   /** Whether an open activity on the route is runtime work that `close()` waits for. */
   readonly runtimeWork: boolean;
 }
@@ -311,10 +309,9 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   readonly #holdFinishedChildren: boolean;
   readonly #transactions = new WeakMap<SqlQueryable, OpenTransaction>();
   readonly #transactionRuntime: TransactionRuntime = {
-    route: (driverTx, activity, savepoint) =>
+    route: (driverTx, activity) =>
       this.queryableRoute(driverTx, 'transaction', () => activity, {
         transaction: undefined,
-        savepoint,
         runtimeWork: false,
       }),
     startActivity: (route, activity) => this.startActivityOnRoute(route, activity, undefined),
@@ -607,7 +604,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     queryable: SqlQueryable,
     scope: ActivityRoute['scope'],
     parent: () => ActivityParent | undefined,
-    options: Pick<ActivityRoute, 'transaction' | 'savepoint' | 'runtimeWork'>,
+    options: Pick<ActivityRoute, 'transaction' | 'runtimeWork'>,
   ): ActivityRoute {
     return {
       scope,
@@ -774,15 +771,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
         });
       },
     };
-    const { transaction: beginTransaction, savepoint: openSavepoint } = route;
-    if (openSavepoint !== undefined) {
-      return Object.assign(handle, {
-        savepoint: async (): Promise<RuntimeTransaction> => {
-          run.assertAcceptsChildren();
-          return openSavepoint(run);
-        },
-      });
-    }
+    const beginTransaction = route.transaction;
     if (beginTransaction === undefined) return handle;
     return Object.assign(handle, {
       transaction: async (options?: RuntimeTransactionOptions): Promise<RuntimeTransaction> => {

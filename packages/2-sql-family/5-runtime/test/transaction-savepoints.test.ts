@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { startActivityOn } from '../src/activity-handle';
-import { withTransaction } from '../src/sql-runtime';
 import { testCall } from './client-activity-kinds';
 import {
   afterHookNames,
@@ -285,43 +284,5 @@ describe('RuntimeTransaction.savepoint()', () => {
     expect(finalized(events)).toBe(
       'transaction:rolled-back, statement:committed, transaction:committed',
     );
-  });
-});
-
-describe('ActivityHandle.savepoint', () => {
-  it('opens a savepoint beneath a handle on a transaction and on a savepoint', async () => {
-    const { transaction, events } = await begin();
-    const onTransaction = await startActivityOn(transaction, testCall);
-
-    const savepoint = await onTransaction.savepoint?.();
-    if (savepoint === undefined) throw new Error('the transaction handle has no savepoint');
-    const onSavepoint = await startActivityOn(savepoint, testCall);
-    await (await onSavepoint.savepoint?.())?.commit();
-    await onSavepoint.end({ outcome: 'succeeded' });
-    await savepoint.commit();
-    await onTransaction.end({ outcome: 'succeeded' });
-    await transaction.commit();
-
-    const parents = events
-      .filter((event) => event.name === 'started:transaction')
-      .map((event) => event.ctx?.parent);
-    const calls = events.filter((event) => event.name === 'started:test-call');
-    expect(parents).toHaveLength(3);
-    expect(parents[1]).toBe(calls[0]?.ctx);
-    expect(parents[2]).toBe(calls[1]?.ctx);
-    expect(driverCalls(events)).toBe(
-      'begin, SAVEPOINT sp_1, SAVEPOINT sp_2, RELEASE SAVEPOINT sp_2, RELEASE SAVEPOINT sp_1, commit',
-    );
-  });
-
-  it('is absent on handles opened on the runtime, a connection and in withTransaction', async () => {
-    const { runtime } = createSetup();
-    const handles = [
-      await startActivityOn(runtime, testCall),
-      await startActivityOn(await runtime.connection(), testCall),
-      await withTransaction(runtime, (tx) => startActivityOn(tx, testCall)),
-    ];
-
-    expect(handles.map((handle) => handle.savepoint)).toEqual([undefined, undefined, undefined]);
   });
 });

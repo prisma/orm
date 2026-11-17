@@ -48,8 +48,6 @@ export interface ActivityHandle<K extends ClientActivityKind>
   readonly intercepted: { readonly result: ClientActivityResult<K> } | undefined;
   /** Starts a transaction beneath the activity. Absent on a handle opened under a transaction, or on a connection whose transaction is open. */
   readonly transaction?: (options?: RuntimeTransactionOptions) => Promise<RuntimeTransaction>;
-  /** Opens a savepoint beneath the activity. Present only on a handle opened under a transaction or a savepoint. */
-  readonly savepoint?: () => Promise<RuntimeTransaction>;
   /** Ends the activity. Rejects with `RUNTIME.ACTIVITY_CHILDREN_OPEN` when a statement or activity beneath it has not ended, after ending it `failed`. */
   end(end: ClientActivityEnd<K>): Promise<void>;
 }

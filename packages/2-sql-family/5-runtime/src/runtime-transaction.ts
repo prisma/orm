@@ -51,11 +51,7 @@ export interface OpenTransaction {
 }
 
 export interface TransactionRuntime {
-  route(
-    driverTx: SqlTransaction,
-    activity: TransactionRun,
-    savepoint: (parent: ActivityParent) => Promise<RuntimeTransaction>,
-  ): ActivityRoute;
+  route(driverTx: SqlTransaction, activity: TransactionRun): ActivityRoute;
   startActivity<K extends ClientActivityKind>(
     route: ActivityRoute,
     activity: StartActivity<K>,
@@ -97,7 +93,7 @@ abstract class TransactionBase
     this.activity = activity;
     this.stack = stack;
     this.entry = entry;
-    this.route = runtime.route(driverTx, activity, (parent) => this.savepoint(parent));
+    this.route = runtime.route(driverTx, activity);
     this.openTransaction = {
       activity,
       assertAcceptsStatements: () => this.assertAcceptsStatements(),
@@ -161,7 +157,7 @@ abstract class TransactionBase
     );
   }
 
-  async savepoint(parent: ActivityParent = this.activity): Promise<RuntimeTransaction> {
+  async savepoint(): Promise<RuntimeTransaction> {
     if (this.isClosed) throw transactionClosedError();
     if (this.stack.top !== this.entry) throw savepointAlreadyOpenError(this.stack);
     const name = this.stack.nextSavepointName();
@@ -169,7 +165,7 @@ abstract class TransactionBase
     this.stack.push(entry);
     let activity: TransactionRun;
     try {
-      activity = await this.runtime.startTransactionActivity(parent);
+      activity = await this.runtime.startTransactionActivity(this.activity);
     } catch (error) {
       this.stack.pop();
       throw error;
