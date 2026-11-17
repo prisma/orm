@@ -22,6 +22,9 @@ const CONNECTION_SETTINGS = [
   'query_timeout',
 ] as const;
 
+/** The connection settings a blank value in the URL leaves unset, so pg falls back to its own defaults: the operating-system user and the local host. */
+const DEFAULTED_WHEN_BLANK: ReadonlySet<string> = new Set(['user', 'host']);
+
 function startupOptions(sessionSettings: SessionSettings): string {
   return Object.entries(sessionSettings)
     .map(([name, value]) => `-c ${name}=${value.replace(/[\\ ]/g, '\\$&')}`)
@@ -41,7 +44,8 @@ export function pgConnectionConfig(
     const parsed = parse(connectionString);
     for (const setting of CONNECTION_SETTINGS) {
       const value: unknown = Reflect.get(parsed, setting);
-      if (value !== undefined) Object.assign(merged, { [setting]: value });
+      if (value === undefined || (value === '' && DEFAULTED_WHEN_BLANK.has(setting))) continue;
+      Object.assign(merged, { [setting]: value });
     }
   }
   const startup = startupOptions(sessionSettings);
