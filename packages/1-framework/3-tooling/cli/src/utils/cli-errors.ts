@@ -408,7 +408,7 @@ export function errorSpaceNotFound(
  */
 export function errorContractTypesModuleMissing(): ActionableCliError {
   const fix =
-    "Build the config with your target package's `defineConfig`, which sets `contract.typesModule`; a config assembled by hand sets `contract.typesModule` itself, to a module that exports the framework's and family's contract types.";
+    "A config assembled by hand sets `contract.typesModule` to a module that exports the framework's and family's contract types. If the config comes from a target package's `defineConfig`, that package is older than this requirement: upgrade it to a release that sets the member.";
   return new ActionableCliError(
     'CONFIG.CONTRACT_TYPES_MODULE_MISSING',
     'Config names no contract types module',
@@ -425,7 +425,7 @@ export function errorContractTypesModuleMissing(): ActionableCliError {
  */
 export function errorMigrationModuleMissing(): ActionableCliError {
   const fix =
-    "Build the config with your target package's `defineConfig`, which sets `migrations.module`; a config assembled by hand sets `migrations.module` itself.";
+    "A config assembled by hand sets `migrations.module` to the module that exports the target's migration helpers. If the config comes from a target package's `defineConfig`, that package is older than this requirement: upgrade it to a release that sets the member.";
   return new ActionableCliError(
     'CONFIG.MIGRATION_MODULE_MISSING',
     'Config names no migration module',

@@ -39,7 +39,7 @@ The `contract` section is missing (or incomplete) in `prisma.config.ts` when a c
 
 ### CONFIG.CONTRACT_TYPES_MODULE_MISSING
 
-`contract emit`, the Vite plugin, or a command that writes a contract snapshot (`db init`, `db update`, `db sign`, `migrate`, `migration new`, `migration plan`) was run with a config that has no `contract.typesModule`, the module a generated `contract.d.ts` imports the framework and family contract types from. Raised before anything is written. A target package's `defineConfig` sets it; a config assembled by hand sets `contract.typesModule` itself. Payload: none.
+`contract emit`, the Vite plugin, or a command that writes a contract snapshot (`db init`, `db update`, `db sign`, `migrate`, `migration new`, `migration plan`) was run with a config that has no `contract.typesModule`, the module a generated `contract.d.ts` imports the framework and family contract types from. Raised before anything is written. A target package's `defineConfig` sets it, so a config from one that does not was built against an older release of that package; a config assembled by hand sets `contract.typesModule` itself. Payload: none.
 
 ### CONFIG.DB_CONNECTION_REQUIRED
 
@@ -63,7 +63,7 @@ No `prisma.config.ts` (or the explicitly passed config path) could be found when
 
 ### CONFIG.MIGRATION_MODULE_MISSING
 
-`migration new`, `migration plan` or `db migrate` was run with a config that has no `migrations.module`, the module a written `migration.ts` imports `Migration`, `MigrationCLI` and the operation helpers from, and the module `db migrate` finds an unfilled `placeholder(...)` call by. Raised before anything is written or applied. A target package's `defineConfig` sets it; a config assembled by hand sets `migrations.module` itself. Payload: none.
+`migration new`, `migration plan` or `db migrate` was run with a config that has no `migrations.module`, the module a written `migration.ts` imports `Migration`, `MigrationCLI` and the operation helpers from, and the module `db migrate` finds an unfilled `placeholder(...)` call by. Raised before anything is written or applied. A target package's `defineConfig` sets it, so a config from one that does not was built against an older release of that package; a config assembled by hand sets `migrations.module` itself. Payload: none.
 
 ### CONFIG.MISSING_EXTENSION_PACKS
 
