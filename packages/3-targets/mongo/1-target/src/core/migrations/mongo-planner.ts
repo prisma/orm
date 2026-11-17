@@ -930,6 +930,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
               }),
             ],
       ),
+      ...transformRewrites('backfill', writesDiscriminator),
       ...casts.map(({ call, variant }) =>
         rewriteOf({
           kind: 'castField',
@@ -938,7 +939,6 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         }),
       ),
       ...transformRewrites('convert'),
-      ...transformRewrites('backfill', writesDiscriminator),
       ...fills.map(({ call, variant }) =>
         rewriteOf({
           kind: 'fillField',

@@ -521,33 +521,67 @@ describe('MongoMigrationPlanner, a discriminator renamed without its statement',
     ]);
   });
 
-  it('backfills the discriminator a base gains first before a backfill of a variant field selected by it, in either order of the statements', async () => {
-    const plain = contract(
-      'from',
-      { Task: { collection: 'tasks', fields: ['_id'] } },
-      { tasks: {} },
-    );
-    const backfillSeverity: ResolvedMigrationStatement = {
-      kind: 'backfill',
-      entity: 'field',
-      field: { namespaceId: NS, model: 'Bug', field: 'severity' },
-    };
-    const operationsFor = async (statements: readonly ResolvedMigrationStatement[]) => {
-      const result = plan({
-        from: plain,
-        to: after({ Bug: BUG, Epic: EPIC }),
-        schema: live,
-        statements,
-      });
+  describe('with the old discriminator kept as a field', () => {
+    const kindBesideType = (bug: ModelSpec) =>
+      contract(
+        'to',
+        {
+          Task: {
+            collection: 'tasks',
+            fields: ['_id', 'type', 'kind'],
+            discriminator: 'kind',
+            variants: { Bug: 'bug', Epic: 'epic' },
+          },
+          Bug: { collection: 'tasks', base: 'Task', ...bug },
+          Epic: { collection: 'tasks', fields: ['scope'], base: 'Task' },
+        },
+        { tasks: {} },
+      );
+    const ids = async (
+      statements: readonly ResolvedMigrationStatement[],
+      to: ReturnType<typeof contract>,
+    ) => {
+      const result = plan({ from: BEFORE, to, schema: live, statements });
       if (result.kind !== 'success') throw new Error(JSON.stringify(result.conflicts, null, 2));
-      return listedOperations(result.plan as PlannerProducedMongoMigration);
+      return (await listedOperations(result.plan as PlannerProducedMongoMigration)).map(
+        (operation) => Reflect.get(operation ?? {}, 'id'),
+      );
     };
-    const kindFirst = await operationsFor([backfillKind, backfillSeverity]);
 
-    expect({
-      count: kindFirst.length,
-      severityFirst: await operationsFor([backfillSeverity, backfillKind]),
-    }).toEqual({ count: 2, severityFirst: kindFirst });
+    it('backfills the discriminator before a backfill of a variant field selected by it, in either order of the statements', async () => {
+      const to = kindBesideType({ fields: ['severity', 'level'] });
+      const backfillLevel: ResolvedMigrationStatement = {
+        kind: 'backfill',
+        entity: 'field',
+        field: { namespaceId: NS, model: 'Bug', field: 'level' },
+      };
+      expect({
+        kindFirst: await ids([backfillKind, backfillLevel], to),
+        levelFirst: await ids([backfillLevel, backfillKind], to),
+      }).toEqual({
+        kindFirst: ['data_transform.Task.kind', 'data_transform.Bug.level'],
+        levelFirst: ['data_transform.Task.kind', 'data_transform.Bug.level'],
+      });
+    });
+
+    it('backfills the discriminator before a conversion of a variant field selected by it, in either order of the statements', async () => {
+      const to = kindBesideType({
+        fields: ['severity'],
+        types: { severity: { codecId: 'mongo/int32@1' } },
+      });
+      const convertSeverity: ResolvedMigrationStatement = {
+        kind: 'convert',
+        entity: 'field',
+        field: { namespaceId: NS, model: 'Bug', field: 'severity' },
+      };
+      expect({
+        kindFirst: await ids([backfillKind, convertSeverity], to),
+        convertFirst: await ids([convertSeverity, backfillKind], to),
+      }).toEqual({
+        kindFirst: ['data_transform.Task.kind', 'data_transform.Bug.severity'],
+        convertFirst: ['data_transform.Task.kind', 'data_transform.Bug.severity'],
+      });
+    });
   });
 
   it('plans no fill of a new discriminator when the old one stays as a field', () => {
