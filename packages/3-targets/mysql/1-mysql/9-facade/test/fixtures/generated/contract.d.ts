@@ -13,7 +13,7 @@ import type {
   RelationKeys,
   StorageHashBase,
   TypeMaps as TypeMapsType,
-} from '@internal/mysql/generated-types';
+} from '@internal/mysql/contract-types';
 
 export type StorageHash =
   StorageHashBase<'429ca5218dc113a8f28a4e8890ff6764e9810dff5c9a4c3924969488fb9dbb33'>;

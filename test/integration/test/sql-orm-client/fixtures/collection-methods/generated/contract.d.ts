@@ -12,7 +12,7 @@ import type {
   RelationKeys,
   StorageHashBase,
   TypeMaps as TypeMapsType,
-} from '#fixture-generated-types';
+} from '#fixture-contract-types';
 import type {
   CodecTypes as PgVectorTypes,
   ParameterizedOutputTypesForTypeParams as PgVectorParameterizedOutputTypes,

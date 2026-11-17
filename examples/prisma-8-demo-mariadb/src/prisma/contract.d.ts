@@ -13,7 +13,7 @@ import type {
   RelationKeys,
   StorageHashBase,
   TypeMaps as TypeMapsType,
-} from '@prisma/orm-mariadb/generated-types';
+} from '@prisma/orm-mariadb/contract-types';
 
 export type StorageHash =
   StorageHashBase<'a79b2f48d08a4ba5bd11c7307b331a418e1f63f4e922bd68fe767b90f28c16c2'>;

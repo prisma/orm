@@ -15,7 +15,7 @@ import type {
   RelationKeys,
   StorageHashBase,
   ValueObjectTypesFromStorage,
-} from '@internal/mongo/generated-types';
+} from '@internal/mongo/contract-types';
 
 export type StorageHash =
   StorageHashBase<'d21d62bad0c6f37a80ff22bff4936a8336d4a20cb2361cec4342553b0fbd8af0'>;

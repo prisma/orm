@@ -12,7 +12,7 @@ import type {
   ProfileHashBase,
   RelationKeys,
   StorageHashBase,
-} from '@internal/mongo/generated-types';
+} from '@internal/mongo/contract-types';
 import type {
   CodecTypes as MongoCodecTypes,
   ParameterizedOutputTypesForTypeParams as MongoParameterizedOutputTypes,

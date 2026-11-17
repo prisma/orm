@@ -15,7 +15,7 @@ import type {
   RelationKeys,
   StorageHashBase,
   ValueObjectTypesFromStorage,
-} from '@prisma/orm-mongo/generated-types';
+} from '@prisma/orm-mongo/contract-types';
 
 export type StorageHash =
   StorageHashBase<'4a982736e89b99615c530abbd19d92cf955a27063db9ec4dcf0bddcc2dcc6595'>;

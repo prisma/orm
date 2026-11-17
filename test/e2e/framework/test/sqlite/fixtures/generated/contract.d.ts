@@ -13,7 +13,7 @@ import type {
   RelationKeys,
   StorageHashBase,
   TypeMaps as TypeMapsType,
-} from '@prisma/orm-sqlite/generated-types';
+} from '@prisma/orm-sqlite/contract-types';
 
 export type StorageHash =
   StorageHashBase<'348cfda3e550656d13ba752be2b612bafe9c9ec57529992a4fcdc49e543ff2f2'>;

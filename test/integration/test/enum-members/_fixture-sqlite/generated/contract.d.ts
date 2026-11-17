@@ -13,7 +13,7 @@ import type {
   RelationKeys,
   StorageHashBase,
   TypeMaps as TypeMapsType,
-} from '@internal/sqlite/generated-types';
+} from '@internal/sqlite/contract-types';
 
 export type StorageHash =
   StorageHashBase<'d5cad1234972d613b97cf4c6b1469ee2273c23fc70fc8a07bc853c14ab00179b'>;

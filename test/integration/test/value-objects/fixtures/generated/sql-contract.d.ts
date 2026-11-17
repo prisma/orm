@@ -13,7 +13,7 @@ import type {
   StorageHashBase,
   TypeMaps as TypeMapsType,
   ValueObjectTypesFromStorage,
-} from '@internal/postgres/generated-types';
+} from '@internal/postgres/contract-types';
 import type {
   CodecTypes as PgTypes,
   ParameterizedOutputTypesForTypeParams as PgParameterizedOutputTypes,

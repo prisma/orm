@@ -16,7 +16,7 @@ import type {
   RelationKeys,
   StorageHashBase,
   TypeMaps as TypeMapsType,
-} from '@prisma/orm-postgres/generated-types';
+} from '@prisma/orm-postgres/contract-types';
 
 export type StorageHash =
   StorageHashBase<'504f70472e4d50e1f0c634058f6e4ef9966d34c019e7778b58c0f35d2091b1cb'>;

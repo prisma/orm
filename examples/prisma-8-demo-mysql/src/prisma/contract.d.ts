@@ -13,7 +13,7 @@ import type {
   RelationKeys,
   StorageHashBase,
   TypeMaps as TypeMapsType,
-} from '@prisma/orm-mysql/generated-types';
+} from '@prisma/orm-mysql/contract-types';
 
 export type StorageHash =
   StorageHashBase<'e5204ea7419455b72c116d69a1487d13716cb36a17aaf355fd880275065a9a23'>;

@@ -15,7 +15,7 @@ import type {
   RelationKeys,
   StorageHashBase,
   TypeMaps as TypeMapsType,
-} from '@internal/postgres/generated-types';
+} from '@internal/postgres/contract-types';
 
 export type StorageHash =
   StorageHashBase<'dc1c17d3ee9bb94cdcf6c1a0d3036973425c61aa3a7a623f6c2a58fd079c0d15'>;
