@@ -57,9 +57,14 @@ export function validatePostgresUrl(url: string, extension = 'postgres'): string
   try {
     parsed = new URL(trimmed);
   } catch {
-    throw postgresError('RUNTIME.BINDING_INVALID', 'Postgres URL must be a valid URL', {
-      meta: { extension, reason: 'unparseable url' },
-    });
+    const withHost = trimmed.replace(/^([^:/?#]+:\/\/[^/?#]*@)(\/|$|\?|#)/, '$1localhost$2');
+    try {
+      parsed = new URL(withHost);
+    } catch {
+      throw postgresError('RUNTIME.BINDING_INVALID', 'Postgres URL must be a valid URL', {
+        meta: { extension, reason: 'unparseable url' },
+      });
+    }
   }
 
   if (parsed.protocol !== 'postgres:' && parsed.protocol !== 'postgresql:') {
