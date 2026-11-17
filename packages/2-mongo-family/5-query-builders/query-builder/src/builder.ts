@@ -1,4 +1,4 @@
-import { domainValueObjectsAtDefaultNamespace, type PlanMeta } from '@internal/contract/types';
+import type { PlanMeta } from '@internal/contract/types';
 import {
   type AnyMongoTypeMaps,
   defaultMongoDomainNamespaceId,
@@ -77,6 +77,7 @@ import type {
   ExtractDocShape,
   GroupedDocShape,
   GroupSpec,
+  PagingCount,
   ProjectedShape,
   ResolveRow,
   SortSpec,
@@ -210,7 +211,7 @@ export class PipelineChain<
    * semantics (so `.limit(...)` adds no meaning, only ambiguity).
    */
   limit(
-    n: number,
+    n: PagingCount<TContract>,
   ): PipelineChain<TContract, Shape, 'update-cleared', 'fam-cleared', 'past-leading', N> {
     return this.#withStage<Shape, 'update-cleared', 'fam-cleared', 'past-leading', N>(
       new MongoLimitStage(n),
@@ -224,7 +225,7 @@ export class PipelineChain<
    * system reflect the same constraint (see ADR 201 marker table).
    */
   skip(
-    n: number,
+    n: PagingCount<TContract>,
   ): PipelineChain<TContract, Shape, 'update-cleared', 'fam-cleared', 'past-leading', N> {
     return this.#withStage<Shape, 'update-cleared', 'fam-cleared', 'past-leading', N>(
       new MongoSkipStage(n),
@@ -832,9 +833,7 @@ export class PipelineChain<
       resultShape = model
         ? computePipelineResultShape(
             this.#state.stages,
-            contractModelToMongoResultShape(model, {
-              valueObjects: domainValueObjectsAtDefaultNamespace(contractNarrow.domain) ?? {},
-            }),
+            contractModelToMongoResultShape(model, { storage: contractNarrow.storage }),
           )
         : { kind: 'unknown' as const };
     }

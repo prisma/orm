@@ -13,7 +13,7 @@ import type { SqlStorage } from './ir/sql-storage';
  * `valueSet` are promoted to top-level view accessors; pack-contributed kinds
  * (e.g. `policy`) stay under `.entries`.
  */
-export const SQL_BUILTIN_KINDS = ['table', 'valueSet'] as const;
+export const SQL_BUILTIN_KINDS = ['table', 'valueSet', 'valueObject'] as const;
 export type SqlBuiltinKind = (typeof SQL_BUILTIN_KINDS)[number];
 
 type SqlEntries<TContract extends Contract<SqlStorage>> = DefaultNamespaceEntries<

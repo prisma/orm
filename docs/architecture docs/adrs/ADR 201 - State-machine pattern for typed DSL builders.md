@@ -38,7 +38,7 @@ The chain has three qualitatively different vocabularies, so it gets three class
 - **`FilteredCollection<TContract, ModelName>`** — reached by `.match(...)` on a `CollectionHandle` (or chained match). Filtered writes (`updateMany`, `updateOne`, `deleteMany`, `deleteOne`), `upsertOne(updater)`, `findOneAndUpdate`, `findOneAndDelete`. Further `.match(...)` calls stay on `FilteredCollection` (AND-folded); any pipeline-stage method moves to `PipelineChain`.
 - **`PipelineChain<TContract, Shape, U, F, L>`** — reached by any pipeline-stage method on either earlier state. Pipeline stages (`.sort`, `.limit`, `.group`, `.lookup`, …), `$merge`/`$out` write terminals, and read terminals (`.build()`, `.aggregate()`). Pipeline-style writes and find-and-modify are *conditional* — available only when the capability markers `U` and `F` are still "enabled"; `L` is a prefix tracker that conditions what a further `.match(...)` does to `U`. See § 2.
 
-The user-facing entry point `mongoQuery({ contract }).from(name)` returns a `CollectionHandle`. Everything else is reached from there.
+The user-facing entry point `db.query.from(name)` (or `mongoStatic({ contract }).query.from(name)`) returns a `CollectionHandle`. Everything else is reached from there.
 
 > Throughout this ADR a **terminal** is a method that ends the chain by returning a `MongoQueryPlan` (e.g. `.build()`, `.updateMany()`, `.findOneAndUpdate(...)`). A **stage** is a method that extends the chain and returns another builder class.
 

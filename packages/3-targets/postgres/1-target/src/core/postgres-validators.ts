@@ -32,3 +32,10 @@ export const PostgresNativeEnumSchema = type({
   members: type.string.array().readonly(),
   'control?': "'managed' | 'tolerated' | 'external' | 'observed'",
 });
+
+export const PostgresExtensionSchema = type({
+  '+': 'reject',
+  kind: "'extension'",
+  name: 'string',
+  'control?': "'managed' | 'tolerated' | 'external' | 'observed'",
+});

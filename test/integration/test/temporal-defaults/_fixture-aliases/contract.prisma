@@ -1,11 +1,9 @@
 // use prisma-8
 
 model Reading {
-  id             Int    @id
-  label          String
-  createdAt      temporal.CreatedAt
-  updatedAt      temporal.UpdatedAt
-  createdAtText  temporal.CreatedAtString
-  updatedAtText  temporal.UpdatedAtString
+  id        Int                @id
+  label     String
+  createdAt temporal.CreatedAt
+  updatedAt temporal.UpdatedAt
   @@map("reading")
 }

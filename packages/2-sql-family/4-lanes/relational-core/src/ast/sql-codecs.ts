@@ -75,6 +75,7 @@ export class SqlTextCodec extends CodecImpl<
 }
 
 export class SqlTextDescriptor extends CodecDescriptorTemplateImpl<void> {
+  readonly jsonType = 'string' as const;
   override readonly codecId = SQL_TEXT_CODEC_ID;
   override readonly traits = ['equality', 'order', 'textual'] as const;
   override readonly paramsSchema = undefined;
@@ -113,6 +114,7 @@ export class SqlIntCodec extends CodecImpl<
 }
 
 export class SqlIntDescriptor extends CodecDescriptorTemplateImpl<void> {
+  readonly jsonType = 'number' as const;
   override readonly codecId = SQL_INT_CODEC_ID;
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly paramsSchema = undefined;
@@ -150,6 +152,7 @@ export class SqlFloatCodec extends CodecImpl<
 }
 
 export class SqlFloatDescriptor extends CodecDescriptorTemplateImpl<void> {
+  readonly jsonType = 'number' as const;
   override readonly codecId = SQL_FLOAT_CODEC_ID;
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly paramsSchema = undefined;
@@ -187,6 +190,7 @@ export class SqlCharCodec extends CodecImpl<
 }
 
 export class SqlCharDescriptor extends CodecDescriptorTemplateImpl<LengthParams> {
+  readonly jsonType = 'string' as const;
   override readonly codecId = SQL_CHAR_CODEC_ID;
   override readonly traits = ['equality', 'order', 'textual'] as const;
   override readonly paramsSchema = undefined;
@@ -224,6 +228,7 @@ export class SqlVarcharCodec extends CodecImpl<
 }
 
 export class SqlVarcharDescriptor extends CodecDescriptorTemplateImpl<LengthParams> {
+  readonly jsonType = 'string' as const;
   override readonly codecId = SQL_VARCHAR_CODEC_ID;
   override readonly traits = ['equality', 'order', 'textual'] as const;
   override readonly paramsSchema = undefined;
@@ -285,6 +290,7 @@ export class SqlRawCodec extends CodecImpl<typeof SQL_RAW_CODEC_ID, readonly [],
 }
 
 export class SqlRawDescriptor extends CodecDescriptorTemplateImpl<RawParams> {
+  readonly jsonType = 'any' as const;
   override readonly codecId = SQL_RAW_CODEC_ID;
   override readonly traits = [] as const;
   override readonly enumRefusal =

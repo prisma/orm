@@ -16,8 +16,10 @@ const mocks = vi.hoisted(() => ({
   createMongoExecutionStack: vi.fn(),
   createMongoExecutionContext: vi.fn(),
   createMongoRuntime: vi.fn(),
-  driverFromConnection: vi.fn(),
-  driverFromDb: vi.fn(),
+  mongoRuntimeDriver: { id: 'mongo-runtime-driver' },
+  createDriver: vi.fn(),
+  driverConnect: vi.fn(),
+  driverClose: vi.fn(),
   deserializeContract: vi.fn(),
   mongoOrm: vi.fn(),
   mongoQuery: vi.fn(),
@@ -33,17 +35,14 @@ vi.mock('@internal/target-mongo/runtime', () => ({
 }));
 
 vi.mock('@internal/mongo-runtime', async (importOriginal) => ({
-  buildMongoEnums: (await importOriginal<typeof MongoRuntime>()).buildMongoEnums,
+  enumMemberCodecFor: (await importOriginal<typeof MongoRuntime>()).enumMemberCodecFor,
   createMongoExecutionStack: mocks.createMongoExecutionStack,
   createMongoExecutionContext: mocks.createMongoExecutionContext,
   createMongoRuntime: mocks.createMongoRuntime,
 }));
 
-vi.mock('@internal/driver-mongo', () => ({
-  MongoDriverImpl: {
-    fromConnection: mocks.driverFromConnection,
-    fromDb: mocks.driverFromDb,
-  },
+vi.mock('@internal/driver-mongo/runtime', () => ({
+  default: mocks.mongoRuntimeDriver,
 }));
 
 vi.mock('@internal/family-mongo/ir', () => ({
@@ -71,11 +70,25 @@ const fakeContract = {
   domain: { namespaces: { [UNBOUND_NAMESPACE_ID]: { models: {} } } },
 } as unknown as AnyMongoContract;
 const fakeRuntime = { id: 'runtime-instance', close: vi.fn().mockResolvedValue(undefined) };
-const fakeDriverClose = vi.fn().mockResolvedValue(undefined);
-const fakeDriverFromDbClose = vi.fn().mockResolvedValue(undefined);
+const fakeDriver = {
+  id: 'driver-instance',
+  connect: mocks.driverConnect,
+  close: mocks.driverClose,
+};
 const fakeOrm = { id: 'orm-instance' };
 const fakeQuery = { id: 'query-instance' };
 const fakeRaw = { id: 'raw-instance', collection: vi.fn() };
+const fakeAdapter = { id: 'adapter-instance' };
+const fakeContext = {
+  id: 'context-instance',
+  contract: fakeContract,
+  codecs: { get: () => undefined },
+};
+const fakeStack = {
+  id: 'stack-instance',
+  adapter: { create: () => fakeAdapter },
+  driver: { create: mocks.createDriver },
+};
 
 describe('mongo() facade', () => {
   beforeEach(() => {
@@ -84,21 +97,17 @@ describe('mongo() facade', () => {
     }
 
     mocks.deserializeContract.mockReturnValue(fakeContract);
-    mocks.createMongoExecutionStack.mockReturnValue({ id: 'stack-instance' });
-    mocks.createMongoExecutionContext.mockReturnValue({ id: 'context-instance' });
-    mocks.driverFromConnection.mockResolvedValue({
-      id: 'driver-from-url',
-      close: fakeDriverClose,
-    });
-    mocks.driverFromDb.mockReturnValue({ id: 'driver-from-db', close: fakeDriverFromDbClose });
+    mocks.createMongoExecutionStack.mockReturnValue(fakeStack);
+    mocks.createMongoExecutionContext.mockReturnValue(fakeContext);
+    mocks.createDriver.mockReturnValue(fakeDriver);
+    mocks.driverConnect.mockResolvedValue(undefined);
+    mocks.driverClose.mockResolvedValue(undefined);
     mocks.createMongoRuntime.mockReturnValue(fakeRuntime);
     mocks.mongoOrm.mockReturnValue(fakeOrm);
     mocks.mongoQuery.mockReturnValue(fakeQuery);
     mocks.mongoRaw.mockReturnValue(fakeRaw);
     fakeRaw.collection.mockClear();
     fakeRuntime.close.mockClear();
-    fakeDriverClose.mockClear();
-    fakeDriverFromDbClose.mockClear();
   });
 
   it('exposes orm and query eagerly without connecting the driver', () => {
@@ -109,8 +118,8 @@ describe('mongo() facade', () => {
     expect(mocks.mongoOrm).toHaveBeenCalledTimes(1);
     expect(mocks.mongoQuery).toHaveBeenCalledTimes(1);
 
-    expect(mocks.driverFromConnection).not.toHaveBeenCalled();
-    expect(mocks.driverFromDb).not.toHaveBeenCalled();
+    expect(mocks.createDriver).not.toHaveBeenCalled();
+    expect(mocks.driverConnect).not.toHaveBeenCalled();
     expect(mocks.createMongoRuntime).not.toHaveBeenCalled();
   });
 
@@ -122,33 +131,39 @@ describe('mongo() facade', () => {
 
     expect(first).toBe(fakeRuntime);
     expect(second).toBe(fakeRuntime);
-    expect(mocks.driverFromConnection).toHaveBeenCalledTimes(1);
-    expect(mocks.driverFromConnection).toHaveBeenCalledWith(
-      'mongodb://localhost:27017/mydb',
-      'mydb',
-    );
+    expect(mocks.createDriver).toHaveBeenCalledTimes(1);
+    expect(mocks.driverConnect).toHaveBeenCalledTimes(1);
+    expect(mocks.driverConnect).toHaveBeenCalledWith({
+      kind: 'url',
+      url: 'mongodb://localhost:27017/mydb',
+      dbName: 'mydb',
+    });
 
     // Stack and context are built upfront at construction time; each appears exactly once.
     expect(mocks.createMongoExecutionStack).toHaveBeenCalledTimes(1);
     expect(mocks.createMongoExecutionStack).toHaveBeenCalledWith({
       target: mocks.mongoRuntimeTarget,
       adapter: mocks.mongoRuntimeAdapter,
+      driver: mocks.mongoRuntimeDriver,
+      extensions: [],
     });
     expect(mocks.createMongoExecutionContext).toHaveBeenCalledTimes(1);
     expect(mocks.createMongoExecutionContext).toHaveBeenCalledWith({
       contract: fakeContract,
-      stack: { id: 'stack-instance' },
+      stack: fakeStack,
     });
     expect(mocks.createMongoRuntime).toHaveBeenCalledTimes(1);
     expect(mocks.createMongoRuntime).toHaveBeenCalledWith(
       expect.objectContaining({
-        context: { id: 'context-instance' },
+        context: fakeContext,
+        adapter: fakeAdapter,
+        driver: fakeDriver,
       }),
     );
     // The user-facing options bag never sees `codecs`.
     const runtimeArgs = mocks.createMongoRuntime.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(runtimeArgs).not.toHaveProperty('codecs');
-    expect(runtimeArgs).not.toHaveProperty('adapter');
+    expect(runtimeArgs).not.toHaveProperty('stack');
     expect(runtimeArgs).not.toHaveProperty('targetId');
   });
 
@@ -160,11 +175,11 @@ describe('mongo() facade', () => {
     expect(a).toBe(fakeRuntime);
     expect(b).toBe(fakeRuntime);
     expect(c).toBe(fakeRuntime);
-    expect(mocks.driverFromConnection).toHaveBeenCalledTimes(1);
+    expect(mocks.driverConnect).toHaveBeenCalledTimes(1);
     expect(mocks.createMongoRuntime).toHaveBeenCalledTimes(1);
   });
 
-  it('accepts uri+dbName and uses fromConnection with the supplied dbName', async () => {
+  it('accepts uri+dbName and connects the driver to the supplied dbName', async () => {
     const db = mongo({
       contract: fakeContract,
       uri: 'mongodb://localhost:27017',
@@ -173,25 +188,24 @@ describe('mongo() facade', () => {
 
     await db.runtime();
 
-    expect(mocks.driverFromConnection).toHaveBeenCalledWith(
-      'mongodb://localhost:27017',
-      'override_db',
-    );
+    expect(mocks.driverConnect).toHaveBeenCalledWith({
+      kind: 'url',
+      url: 'mongodb://localhost:27017',
+      dbName: 'override_db',
+    });
   });
 
-  it('accepts a pre-built mongoClient and uses fromDb', async () => {
-    const fakeClient = { db: vi.fn().mockReturnValue({ id: 'db-handle' }) };
-    const db = mongo({
-      contract: fakeContract,
-      mongoClient: fakeClient as unknown as import('mongodb').MongoClient,
-      dbName: 'my_db',
-    });
+  it('accepts a pre-built mongoClient and connects the driver to it', async () => {
+    const fakeClient = { db: vi.fn() } as unknown as import('mongodb').MongoClient;
+    const db = mongo({ contract: fakeContract, mongoClient: fakeClient, dbName: 'my_db' });
 
     await db.runtime();
 
-    expect(fakeClient.db).toHaveBeenCalledWith('my_db');
-    expect(mocks.driverFromDb).toHaveBeenCalledWith({ id: 'db-handle' });
-    expect(mocks.driverFromConnection).not.toHaveBeenCalled();
+    expect(mocks.driverConnect).toHaveBeenCalledWith({
+      kind: 'mongoClient',
+      client: fakeClient,
+      dbName: 'my_db',
+    });
   });
 
   it('accepts an explicit binding object', async () => {
@@ -202,24 +216,26 @@ describe('mongo() facade', () => {
 
     await db.runtime();
 
-    expect(mocks.driverFromConnection).toHaveBeenCalledWith(
-      'mongodb://localhost:27017/mydb',
-      'mydb',
-    );
+    expect(mocks.driverConnect).toHaveBeenCalledWith({
+      kind: 'url',
+      url: 'mongodb://localhost:27017/mydb',
+      dbName: 'mydb',
+    });
   });
 
   it('allows deferred binding via connect() after construction', async () => {
     const db = mongo({ contract: fakeContract });
 
-    expect(mocks.driverFromConnection).not.toHaveBeenCalled();
+    expect(mocks.driverConnect).not.toHaveBeenCalled();
 
     await db.connect({ url: 'mongodb://localhost:27017/lazy_db' });
 
-    expect(mocks.driverFromConnection).toHaveBeenCalledTimes(1);
-    expect(mocks.driverFromConnection).toHaveBeenCalledWith(
-      'mongodb://localhost:27017/lazy_db',
-      'lazy_db',
-    );
+    expect(mocks.driverConnect).toHaveBeenCalledTimes(1);
+    expect(mocks.driverConnect).toHaveBeenCalledWith({
+      kind: 'url',
+      url: 'mongodb://localhost:27017/lazy_db',
+      dbName: 'lazy_db',
+    });
   });
 
   it('throws when connect() is called twice with explicit bindings', async () => {
@@ -227,7 +243,7 @@ describe('mongo() facade', () => {
 
     await db.connect({ url: 'mongodb://localhost:27017/first' });
     await expect(db.connect({ url: 'mongodb://localhost:27017/second' })).rejects.toThrow(
-      'Mongo client already connected',
+      'Mongo client is already bound',
     );
   });
 
@@ -248,27 +264,54 @@ describe('mongo() facade', () => {
       dbName: '  padded_db  ',
     });
     await db.runtime();
-    expect(mocks.driverFromConnection).toHaveBeenCalledWith(
-      'mongodb://localhost:27017',
-      'padded_db',
-    );
+    expect(mocks.driverConnect).toHaveBeenCalledWith({
+      kind: 'url',
+      url: 'mongodb://localhost:27017',
+      dbName: 'padded_db',
+    });
   });
 
-  it('close() releases the facade-constructed driver when binding is { url }', async () => {
+  it('close() closes the runtime, which owns the driver it created from the stack', async () => {
     const db = mongo({ contract: fakeContract, url: 'mongodb://localhost:27017/mydb' });
 
     await db.runtime();
     await db.close();
 
-    expect(fakeDriverClose).toHaveBeenCalledTimes(1);
-    expect(fakeRuntime.close).not.toHaveBeenCalled();
+    expect(fakeRuntime.close).toHaveBeenCalledTimes(1);
   });
 
-  it('close() does NOT touch a caller-supplied mongoClient', async () => {
-    const fakeClient = {
-      close: vi.fn(),
-      db: vi.fn().mockReturnValue({ id: 'db-handle' }),
-    };
+  it('creates the runtime before it connects the driver', async () => {
+    const order: string[] = [];
+    mocks.createMongoRuntime.mockImplementation(() => {
+      order.push('runtime');
+      return fakeRuntime;
+    });
+    mocks.driverConnect.mockImplementation(async () => {
+      order.push('connect');
+    });
+    const db = mongo({ contract: fakeContract, url: 'mongodb://localhost:27017/mydb' });
+
+    await db.runtime();
+
+    expect(order).toEqual(['runtime', 'connect']);
+  });
+
+  it('reports a runtime construction failure on every try and connects nothing', async () => {
+    const failure = new Error('incompatible middleware');
+    mocks.createMongoRuntime.mockImplementation(() => {
+      throw failure;
+    });
+    const db = mongo({ contract: fakeContract, url: 'mongodb://localhost:27017/mydb' });
+
+    await expect(db.runtime()).rejects.toBe(failure);
+    await expect(db.runtime()).rejects.toBe(failure);
+    await db.close();
+
+    expect(mocks.driverConnect).not.toHaveBeenCalled();
+  });
+
+  it('close() leaves a caller-supplied mongoClient to the driver, which keeps it open', async () => {
+    const fakeClient = { close: vi.fn(), db: vi.fn() };
     const db = mongo({
       contract: fakeContract,
       mongoClient: fakeClient as unknown as import('mongodb').MongoClient,
@@ -278,11 +321,9 @@ describe('mongo() facade', () => {
     await db.runtime();
     await db.close();
 
+    expect(fakeRuntime.close).toHaveBeenCalledTimes(1);
     expect(fakeClient.close).not.toHaveBeenCalled();
-    expect(fakeDriverFromDbClose).not.toHaveBeenCalled();
-    expect(fakeRuntime.close).not.toHaveBeenCalled();
-    fakeClient.db('other_db');
-    expect(fakeClient.db).toHaveBeenCalledWith('other_db');
+    expect(fakeClient.db).not.toHaveBeenCalled();
   });
 
   it('close() is a no-op when no runtime has been built', async () => {
@@ -290,7 +331,7 @@ describe('mongo() facade', () => {
 
     await db.close();
 
-    expect(fakeDriverClose).not.toHaveBeenCalled();
+    expect(mocks.driverClose).not.toHaveBeenCalled();
     expect(fakeRuntime.close).not.toHaveBeenCalled();
   });
 
@@ -301,25 +342,34 @@ describe('mongo() facade', () => {
     await db.close();
     await db.close();
 
-    expect(fakeDriverClose).toHaveBeenCalledTimes(1);
-    expect(fakeRuntime.close).not.toHaveBeenCalled();
+    expect(fakeRuntime.close).toHaveBeenCalledTimes(1);
   });
 
   it('clears the cached runtime promise after a failed first build, so a later call can retry', async () => {
-    mocks.driverFromConnection
+    mocks.driverConnect
       .mockReset()
       .mockRejectedValueOnce(new Error('connection refused'))
-      .mockResolvedValueOnce({ id: 'driver-from-url' });
+      .mockResolvedValueOnce(undefined);
 
     const db = mongo({ contract: fakeContract, url: 'mongodb://localhost:27017/mydb' });
 
     await expect(db.runtime()).rejects.toThrow('connection refused');
-    expect(mocks.createMongoRuntime).not.toHaveBeenCalled();
 
     const runtime = await db.runtime();
     expect(runtime).toBe(fakeRuntime);
-    expect(mocks.driverFromConnection).toHaveBeenCalledTimes(2);
+    expect(mocks.driverConnect).toHaveBeenCalledTimes(2);
+    expect(mocks.createDriver).toHaveBeenCalledTimes(1);
     expect(mocks.createMongoRuntime).toHaveBeenCalledTimes(1);
+  });
+
+  it('close() after a failed connect closes the runtime it created', async () => {
+    mocks.driverConnect.mockReset().mockRejectedValueOnce(new Error('connection refused'));
+    const db = mongo({ contract: fakeContract, url: 'mongodb://localhost:27017/mydb' });
+
+    await expect(db.runtime()).rejects.toThrow('connection refused');
+    await db.close();
+
+    expect(fakeRuntime.close).toHaveBeenCalledTimes(1);
   });
 
   it('close() before any build is a no-op and locks the client', async () => {
@@ -327,7 +377,7 @@ describe('mongo() facade', () => {
 
     await db.close();
 
-    expect(fakeDriverClose).not.toHaveBeenCalled();
+    expect(mocks.driverClose).not.toHaveBeenCalled();
     expect(fakeRuntime.close).not.toHaveBeenCalled();
     await expect(db.runtime()).rejects.toThrow('Mongo client is closed');
   });
@@ -336,7 +386,7 @@ describe('mongo() facade', () => {
     'the ORM %s on a closed client rejects instead of throwing at the call',
     async (member) => {
       const db = mongo({ contract: fakeContract, url: 'mongodb://localhost:27017/mydb' });
-      const executor = mocks.mongoOrm.mock.calls.at(-1)?.[0].executor;
+      const executor = mocks.mongoOrm.mock.calls.at(-1)?.[0].runtime;
       await db.close();
 
       let result: PromiseLike<unknown> | undefined;
@@ -347,8 +397,8 @@ describe('mongo() facade', () => {
     },
   );
 
-  it('close() while a build is in flight still locks the client and skips driver-close on a failed build', async () => {
-    mocks.driverFromConnection.mockReset().mockRejectedValueOnce(new Error('connection refused'));
+  it('close() while a build is in flight locks the client and still closes the runtime after the build fails', async () => {
+    mocks.driverConnect.mockReset().mockRejectedValueOnce(new Error('connection refused'));
 
     const db = mongo({ contract: fakeContract, url: 'mongodb://localhost:27017/mydb' });
 
@@ -356,8 +406,7 @@ describe('mongo() facade', () => {
     await db.close();
     await inflight;
 
-    expect(fakeDriverClose).not.toHaveBeenCalled();
-    expect(fakeRuntime.close).not.toHaveBeenCalled();
+    expect(fakeRuntime.close).toHaveBeenCalledTimes(1);
     await expect(db.runtime()).rejects.toThrow('Mongo client is closed');
   });
 
@@ -368,8 +417,7 @@ describe('mongo() facade', () => {
     }
 
     await run();
-    expect(fakeDriverClose).toHaveBeenCalledTimes(1);
-    expect(fakeRuntime.close).not.toHaveBeenCalled();
+    expect(fakeRuntime.close).toHaveBeenCalledTimes(1);
   });
 
   describe('db.runtime().query', () => {
@@ -393,7 +441,7 @@ describe('mongo() facade', () => {
         collected.push(row);
       }
       expect(collected).toEqual(fakeRows);
-      expect(mocks.driverFromConnection).toHaveBeenCalledTimes(1);
+      expect(mocks.driverConnect).toHaveBeenCalledTimes(1);
       expect(fakeRuntimeWithQuery.query).toHaveBeenCalledWith(fakePlan);
     });
 
@@ -457,6 +505,7 @@ describe('mongo() facade', () => {
       mocks.deserializeContract.mockReturnValue(contractWithEnum);
       mocks.createMongoExecutionContext.mockReturnValue({
         id: 'context-instance',
+        contract: contractWithEnum,
         codecs: { get: (id: string) => (id === 'mongo/string@1' ? stringCodec : undefined) },
       });
     });
@@ -469,6 +518,7 @@ describe('mongo() facade', () => {
     it('refuses to build a client whose runtime has no codec for an enum', () => {
       mocks.createMongoExecutionContext.mockReturnValue({
         id: 'context-instance',
+        contract: contractWithEnum,
         codecs: { get: () => undefined },
       });
       expect(() =>
@@ -490,7 +540,7 @@ describe('mongo() facade', () => {
       const db = mongo({ contract: contractWithEnum, url: 'mongodb://localhost:27017/mydb' });
 
       expect(db.enums['Role']!.values).toEqual(['user', 'admin']);
-      expect(mocks.driverFromConnection).not.toHaveBeenCalled();
+      expect(mocks.driverConnect).not.toHaveBeenCalled();
       expect(mocks.createMongoRuntime).not.toHaveBeenCalled();
     });
   });
@@ -499,12 +549,21 @@ describe('mongo() facade', () => {
     it('exposes a context object before any driver connection', () => {
       const db = mongo({ contract: fakeContract, url: 'mongodb://localhost:27017/mydb' });
       expect(db.context).toBeDefined();
-      expect(mocks.driverFromConnection).not.toHaveBeenCalled();
+      expect(mocks.driverConnect).not.toHaveBeenCalled();
     });
 
     it('context matches what createMongoExecutionContext returns', () => {
       const db = mongo({ contract: fakeContract, url: 'mongodb://localhost:27017/mydb' });
-      expect(db.context).toEqual({ id: 'context-instance' });
+      expect(db.context).toEqual(fakeContext);
+    });
+
+    it('builds query, raw and orm from the one execution context', () => {
+      mongo({ contract: fakeContract, url: 'mongodb://localhost:27017/mydb' });
+      const context = fakeContext;
+      expect(mocks.mongoQuery).toHaveBeenCalledWith({ context });
+      expect(mocks.mongoRaw).toHaveBeenCalledWith({ context });
+      expect(mocks.mongoOrm).toHaveBeenCalledWith(expect.objectContaining({ context }));
+      expect(mocks.mongoOrm.mock.calls[0]?.[0]).not.toHaveProperty('contract');
     });
 
     it('createMongoExecutionContext is called upfront (before runtime()) with the resolved contract', () => {
@@ -512,7 +571,7 @@ describe('mongo() facade', () => {
       expect(mocks.createMongoExecutionContext).toHaveBeenCalledTimes(1);
       expect(mocks.createMongoExecutionContext).toHaveBeenCalledWith({
         contract: fakeContract,
-        stack: { id: 'stack-instance' },
+        stack: fakeStack,
       });
     });
 
@@ -526,7 +585,7 @@ describe('mongo() facade', () => {
       const db = mongo({ contract: fakeContract, url: 'mongodb://localhost:27017/mydb' });
       await db.runtime();
       expect(mocks.createMongoRuntime).toHaveBeenCalledWith(
-        expect.objectContaining({ context: { id: 'context-instance' } }),
+        expect.objectContaining({ context: fakeContext }),
       );
     });
   });

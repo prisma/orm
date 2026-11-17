@@ -37,12 +37,12 @@ export type {
 export {
   contractFieldToMongoFieldShape,
   contractModelToMongoResultShape,
-  type MongoValueObjects,
 } from '../result-shape';
 export { CollectionHandle, FilteredCollection } from '../state-classes';
 export type {
   ArrayField,
   BooleanField,
+  BsonDateField,
   DateField,
   DocField,
   DocShape,
@@ -54,6 +54,7 @@ export type {
   NullableDocField,
   NullableNumericField,
   NumericField,
+  PagingCount,
   ProjectedShape,
   ResolveRow,
   SortSpec,

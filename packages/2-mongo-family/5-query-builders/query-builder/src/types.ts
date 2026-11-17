@@ -1,13 +1,16 @@
 import type {
   AnyMongoTypeMaps,
+  ExtractMongoCodecTypes,
   ExtractMongoTypeMaps,
   InferModelRow,
+  MongoCodecInput,
   MongoContract,
   MongoContractWithTypeMaps,
   MongoModelsMap,
   OwnStoredNameOf,
 } from '@internal/mongo-contract';
 import type { MongoAggAccumulator, MongoAggExpr } from '@internal/mongo-query-ast/execution';
+import type { MongoPreparedParamRef } from '@internal/mongo-value';
 import type { ModelArrayField, ModelOriginBrand, ModelOriginBranded } from './resolve-path';
 
 export interface DocField {
@@ -21,6 +24,16 @@ export type StringField = { readonly codecId: 'mongo/string@1'; readonly nullabl
 export type ArrayField = { readonly codecId: 'mongo/array@1'; readonly nullable: false };
 export type BooleanField = { readonly codecId: 'mongo/bool@1'; readonly nullable: false };
 export type DateField = { readonly codecId: 'mongo/date@1'; readonly nullable: false };
+/** A field of any codec stored as a BSON date: an instant or a calendar date, in any representation. MongoDB's date operators take it. */
+export type BsonDateField = {
+  readonly codecId:
+    | 'mongo/date@1'
+    | 'mongo/date-instant@1'
+    | 'mongo/date-instant-string@1'
+    | 'mongo/date-string@1'
+    | 'mongo/date-temporal@1';
+  readonly nullable: false;
+};
 export type NullableDocField = { readonly codecId: string; readonly nullable: true };
 
 export type LiteralValue<F extends DocField> = F extends StringField
@@ -34,6 +47,15 @@ export type LiteralValue<F extends DocField> = F extends StringField
         : unknown;
 
 export type DocShape = Record<string, DocField>;
+
+type NumericInputCodecId<CT> = {
+  [K in keyof CT & string]: [MongoCodecInput<CT, K>] extends [number] ? K : never;
+}[keyof CT & string];
+
+/** A `limit` or `skip` count: a number, or a non-nullable placeholder whose codec takes a number. */
+export type PagingCount<TContract> =
+  | number
+  | MongoPreparedParamRef<NumericInputCodecId<ExtractMongoCodecTypes<TContract>>, false>;
 
 type ExtractCodecId<F> = F extends { type: { kind: 'scalar'; codecId: infer C } }
   ? C

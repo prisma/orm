@@ -13,6 +13,19 @@
   },
   "storage": {
     "namespaces": {
+      "__unbound__": {
+        "entries": {
+          "extension": {
+            "postgis": {
+              "kind": "extension",
+              "name": "postgis"
+            }
+          },
+          "table": {}
+        },
+        "id": "__unbound__",
+        "kind": "postgres-unbound-schema"
+      },
       "public": {
         "entries": {
           "table": {}
@@ -21,7 +34,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "2db551a8a5619d0d97710f29130eaea0eccbdd5238f015ee9d18408d438e0f8a",
+    "storageHash": "eb97f4c11af6a9444c3f8d1e1c2071f8cf7c8643b44ba9ba51752b10c639b8dc",
     "types": {
       "geometry": {
         "codecId": "pg/geometry@1",
@@ -48,6 +61,7 @@
       "forShare": true,
       "forUpdate": true,
       "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
       "insertOnConflictWithoutTarget": true,
       "lateral": true,
       "lockNowait": true,

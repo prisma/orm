@@ -9,8 +9,8 @@ import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
+  fixturePostgresTypeNamespace,
   interpretSqlContract,
-  postgresScalarAuthoringTypes,
   postgresScalarTypeDescriptors,
   postgresTarget,
   testEnumEntityContributions,
@@ -40,7 +40,7 @@ const guardDescriptor = {
 } satisfies PslBlockSpecDescriptor;
 
 const authoringContributions: AuthoringContributions = {
-  type: postgresScalarAuthoringTypes,
+  type: fixturePostgresTypeNamespace,
   entityTypes: {
     ...testEnumEntityContributions,
     guard: {

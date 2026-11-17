@@ -6,6 +6,8 @@ import { generateDataContractJsonSchema } from '../src/data-contract-json-schema
 import { validSqlContractJson } from './sql-contract-json-fixture';
 import { storageWithNamespacedTables } from './storage-with-namespaced-tables';
 
+const text = { kind: 'scalar', codecId: 'pg/text@1' };
+
 const checkedInSchemaPath = join(import.meta.dirname, '..', 'schemas', 'data-contract-sql-v1.json');
 
 function compileGeneratedSchema() {
@@ -58,7 +60,7 @@ describe('data contract JSON schema', () => {
               models: {
                 User: {
                   storage: { namespaceId: '__unbound__', table: 'User', fields: {} },
-                  fields: { tags: { type: 'String', nullable: false, many } },
+                  fields: { tags: { type: text, nullable: false, many } },
                 },
               },
             }
@@ -169,6 +171,32 @@ describe('data contract JSON schema', () => {
       }),
     });
     expect(validate(contract)).toBe(false);
+  });
+
+  it.each([
+    { kind: 'a scalar', member: { nullable: false, type: text }, valid: true },
+    {
+      kind: 'a union',
+      member: { nullable: false, type: { kind: 'union', members: [text] } },
+      valid: false,
+    },
+    { kind: 'a dictionary', member: { nullable: false, type: text, dict: true }, valid: false },
+  ])('validates a storage value object member that is $kind as $valid', ({ member, valid }) => {
+    const validate = new Ajv2020({ strict: false }).compile(
+      JSON.parse(readFileSync(checkedInSchemaPath, 'utf8')),
+    );
+    const contract = validSqlContractJson({
+      storage: {
+        storageHash: 'test',
+        namespaces: {
+          __unbound__: {
+            id: '__unbound__',
+            entries: { table: {}, valueObject: { Shape: { fields: { either: member } } } },
+          },
+        },
+      },
+    });
+    expect(validate(contract)).toBe(valid);
   });
 
   it('accepts pack-contributed entry kinds as generic entity maps', () => {

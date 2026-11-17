@@ -4,15 +4,11 @@ import type {
   ContractSourceDiagnostics,
 } from '@internal/config/config-types';
 import type { Contract, JsonValue } from '@internal/contract/types';
-import {
-  domainModelsAtDefaultNamespace,
-  domainValueObjectsAtDefaultNamespace,
-} from '@internal/contract/types';
+import { type ContractValueObject, domainModelsAtDefaultNamespace } from '@internal/contract/types';
 import {
   type AuthoringContributions,
   type AuthoringEntityContext,
   type AuthoringEntityTypeNamespace,
-  type AuthoringFieldPresetDescriptor,
   type AuthoringTypeConstructorDescriptor,
   type AuthoringTypeNamespace,
   collectScalarTypeConstructors,
@@ -38,6 +34,7 @@ import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import type { DocumentAst, PslSources, SourceFile } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
 import { bindPslSchema } from '@internal/psl-parser/test';
+import type { CheckExpressionInput } from '@internal/sql-contract/check-expressions';
 import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract/types';
 import { type EnumTypeHandle, enumType } from '@internal/sql-contract-ts/contract-builder';
 import type { Result } from '@internal/utils/result';
@@ -131,13 +128,7 @@ export const sqliteEnumInferenceCodecs = {
  * fixture without one emits no checks at all and every assertion about checks
  * would hold vacuously — the PSL/TS parity test in particular.
  */
-export function testRenderCheckExpressions(input: {
-  readonly tableName: string;
-  readonly columnName: string;
-  readonly many: boolean;
-  readonly elementNullable: boolean;
-  readonly memberValues: readonly (string | number)[] | undefined;
-}): ReadonlyArray<{
+export function testRenderCheckExpressions(input: CheckExpressionInput): ReadonlyArray<{
   readonly kind: 'membership' | 'elementNotNull';
   readonly columnName: string;
   readonly expression: string;
@@ -163,7 +154,7 @@ export function testRenderCheckExpressions(input: {
         : `${column} IN (${members})`,
     });
   }
-  if (input.many && !input.elementNullable) {
+  if (input.many !== false && !input.many.elementNullable) {
     candidates.push({
       kind: 'elementNotNull',
       columnName: input.columnName,
@@ -198,7 +189,7 @@ export const postgresTargetRenderingChecks = {
   version: '0.0.1',
   capabilities: {},
   defaultNamespaceId: 'public',
-  authoring: { field: {}, renderCheckExpressions: testRenderCheckExpressions },
+  authoring: { type: {}, renderCheckExpressions: testRenderCheckExpressions },
 } as const;
 
 export const sqliteTarget: TargetPackRef<'sql', 'sqlite'> = {
@@ -244,7 +235,10 @@ export const postgresScalarTypeDescriptors = collectScalarTypeConstructors(
   postgresBaseScalarAuthoringTypes,
 );
 
-export const postgresScalarAuthoringTypes: AuthoringTypeNamespace = {
+/**
+ * A hand-built PostgreSQL-like `type` namespace for the interpreter tests, so they do not depend on the target package. Its names are not the target's names.
+ */
+export const fixturePostgresTypeNamespace: AuthoringTypeNamespace = {
   ...postgresBaseScalarAuthoringTypes,
   Uuid: { kind: 'typeConstructor', output: { codecId: 'pg/uuid@1' } },
   Inet: { kind: 'typeConstructor', output: { codecId: 'pg/inet@1' } },
@@ -316,7 +310,7 @@ export const postgresScalarAuthoringTypes: AuthoringTypeNamespace = {
 };
 
 export const postgresNativeScalarTypeDescriptors = collectScalarTypeConstructors(
-  postgresScalarAuthoringTypes,
+  fixturePostgresTypeNamespace,
 );
 
 /**
@@ -325,12 +319,11 @@ export const postgresNativeScalarTypeDescriptors = collectScalarTypeConstructors
 export const pgvectorAuthoringContributions = {
   dataTypes: {},
   entityTypes: {},
-  field: {},
   pslBlockDescriptors: {},
   modelAttributes: {},
   attributeSpecs: sqlAttributeSpecs,
   type: {
-    ...postgresScalarAuthoringTypes,
+    ...fixturePostgresTypeNamespace,
     pgvector: {
       Vector: {
         kind: 'typeConstructor',
@@ -438,7 +431,6 @@ function contextForInterpretOptions(
     composedExtensionContracts: options.composedExtensionContracts,
     authoringContributions: {
       type: { ...scalarsFromColumnDescriptors, ...authoring?.type },
-      field: authoring?.field ?? {},
       entityTypes: authoring?.entityTypes ?? {},
       pslBlockDescriptors: authoring?.pslBlockDescriptors ?? {},
       modelAttributes: authoring?.modelAttributes ?? {},
@@ -486,6 +478,7 @@ export function interpretSqlContract(
         ? { composedExtensionPackRefs: options.composedExtensionPackRefs }
         : {}),
       enumInferenceCodecs: options.enumInferenceCodecs ?? postgresEnumInferenceCodecs,
+      ...(options.reportWarning === undefined ? {} : { reportWarning: options.reportWarning }),
     }),
     bound.seedDiagnostics,
   );
@@ -527,8 +520,7 @@ export function createPostgresTestContext(
     composedExtensionContracts: new Map(),
     authoringContributions: {
       dataTypes: fixtureDataTypeSupport.entries,
-      field: {},
-      type: postgresScalarAuthoringTypes,
+      type: fixturePostgresTypeNamespace,
       entityTypes: {},
       pslBlockDescriptors: {},
       modelAttributes: {},
@@ -598,8 +590,25 @@ export function modelsOf(contract: Contract) {
   return domainModelsAtDefaultNamespace(contract.domain);
 }
 
-export function valueObjectsOf(contract: Contract) {
-  return domainValueObjectsAtDefaultNamespace(contract.domain);
+/** A field type that refers to the storage value object `entityName` in `namespaceId`. */
+export function valueObjectRef(entityName: string, namespaceId = 'public') {
+  return {
+    kind: 'valueObject',
+    plane: 'storage',
+    namespaceId,
+    entityKind: 'valueObject',
+    entityName,
+  } as const;
+}
+
+/** The storage value objects of every namespace, as plain JSON; `undefined` when the contract has none. */
+export function valueObjectsOf(
+  contract: Contract,
+): Record<string, ContractValueObject> | undefined {
+  const slots = Object.values(contract.storage.namespaces).flatMap((namespace) =>
+    namespace.entries['valueObject'] === undefined ? [] : [namespace.entries['valueObject']],
+  );
+  return slots.length === 0 ? undefined : JSON.parse(JSON.stringify(Object.assign({}, ...slots)));
 }
 
 export function documentScopedTypes(contract: { readonly storage?: unknown }) {
@@ -630,171 +639,3 @@ export function buildEnumCapturingFactory(): {
   };
   return { createNamespace, capturedEnumTypes };
 }
-
-/**
- * Hand-written mirrors of family-sql's temporal authoring factories —
- * `temporalCodecPresetWithPrecision` / `temporalCodecPreset` below, and
- * `temporalAuthoringPresets` (the `createdAt`/`updatedAt` convenience pair)
- * further down.
- *
- * They are hand-written because this package cannot import family-sql:
- * family-sql declares `@internal/sql-contract-psl` as a devDependency, so
- * the reverse import would be a cycle.
- *
- * They are kept honest by `family-sql/test/temporal-codec-presets.test.ts`,
- * which imports each mirror below and asserts it deep-equals the factory
- * output. That assertion — not the target-pack registration tests, whose two
- * sides both derive from the factory — is what fails if a factory change
- * leaves these stale.
- */
-const TEMPORAL_MIRROR_PRECISION_ARG = {
-  name: 'precision',
-  kind: 'value',
-  dataType: 'pg/int4',
-  optional: true,
-} as const;
-const TEMPORAL_MIRROR_ON_CREATE_ARG = {
-  name: 'onCreate',
-  kind: 'option',
-  values: ['now'],
-  optional: true,
-} as const;
-const TEMPORAL_MIRROR_ON_UPDATE_ARG = {
-  name: 'onUpdate',
-  kind: 'option',
-  values: ['now'],
-  optional: true,
-} as const;
-const TEMPORAL_MIRROR_NOW_PHASE = { kind: 'generator', id: 'timestampNow' } as const;
-
-export const temporalCodecPresetMirrors = {
-  pgTimestamp: {
-    kind: 'fieldPreset',
-    args: [
-      TEMPORAL_MIRROR_PRECISION_ARG,
-      TEMPORAL_MIRROR_ON_CREATE_ARG,
-      TEMPORAL_MIRROR_ON_UPDATE_ARG,
-    ],
-    output: {
-      codecId: 'pg/timestamp-temporal@1',
-      typeParams: { precision: { kind: 'arg', index: 0 } },
-      executionDefaults: {
-        onCreate: { kind: 'select', index: 1, cases: { now: TEMPORAL_MIRROR_NOW_PHASE } },
-        onUpdate: { kind: 'select', index: 2, cases: { now: TEMPORAL_MIRROR_NOW_PHASE } },
-      },
-    },
-  },
-  pgTimestamptz: {
-    kind: 'fieldPreset',
-    args: [
-      TEMPORAL_MIRROR_PRECISION_ARG,
-      TEMPORAL_MIRROR_ON_CREATE_ARG,
-      TEMPORAL_MIRROR_ON_UPDATE_ARG,
-    ],
-    output: {
-      codecId: 'pg/timestamptz-temporal@1',
-      typeParams: { precision: { kind: 'arg', index: 0 } },
-      executionDefaults: {
-        onCreate: { kind: 'select', index: 1, cases: { now: TEMPORAL_MIRROR_NOW_PHASE } },
-        onUpdate: { kind: 'select', index: 2, cases: { now: TEMPORAL_MIRROR_NOW_PHASE } },
-      },
-    },
-  },
-  pgTimestampString: {
-    kind: 'fieldPreset',
-    args: [
-      TEMPORAL_MIRROR_PRECISION_ARG,
-      TEMPORAL_MIRROR_ON_CREATE_ARG,
-      TEMPORAL_MIRROR_ON_UPDATE_ARG,
-    ],
-    output: {
-      codecId: 'pg/timestamp-string@1',
-      typeParams: { precision: { kind: 'arg', index: 0 } },
-      executionDefaults: {
-        onCreate: {
-          kind: 'select',
-          index: 1,
-          cases: { now: { kind: 'generator', id: 'timestampStringNow' } },
-        },
-        onUpdate: {
-          kind: 'select',
-          index: 2,
-          cases: { now: { kind: 'generator', id: 'timestampStringNow' } },
-        },
-      },
-    },
-  },
-  sqliteDatetime: {
-    kind: 'fieldPreset',
-    args: [TEMPORAL_MIRROR_ON_CREATE_ARG, TEMPORAL_MIRROR_ON_UPDATE_ARG],
-    output: {
-      codecId: 'sqlite/datetime@1',
-      executionDefaults: {
-        onCreate: { kind: 'select', index: 0, cases: { now: TEMPORAL_MIRROR_NOW_PHASE } },
-        onUpdate: { kind: 'select', index: 1, cases: { now: TEMPORAL_MIRROR_NOW_PHASE } },
-      },
-    },
-  },
-} as const satisfies Record<string, AuthoringFieldPresetDescriptor>;
-
-/**
- * Mirrors of `temporalAuthoringPresets(...)` — the `createdAt`/`updatedAt`
- * convenience pair — per target codec. Anchored by the same family-sql test as
- * {@link temporalCodecPresetMirrors}.
- *
- * The slice's headline guarantee (`temporal.updatedAt()` is byte-identical to
- * `temporal.timestamptz(onCreate: now, onUpdate: now)`) is asserted through
- * these, so an unanchored mirror here would let the parity tests prove a
- * fiction of `updatedAt` identical to the real `timestamptz`.
- */
-export const temporalConvenienceMirrors = {
-  postgres: {
-    createdAt: {
-      kind: 'fieldPreset',
-      output: {
-        codecId: 'pg/timestamptz-temporal@1',
-        executionDefaults: { onCreate: TEMPORAL_MIRROR_NOW_PHASE },
-      },
-    },
-    updatedAt: {
-      kind: 'fieldPreset',
-      output: {
-        codecId: 'pg/timestamptz-temporal@1',
-        executionDefaults: {
-          onCreate: TEMPORAL_MIRROR_NOW_PHASE,
-          onUpdate: TEMPORAL_MIRROR_NOW_PHASE,
-        },
-      },
-    },
-  },
-  sqlite: {
-    createdAt: {
-      kind: 'fieldPreset',
-      output: {
-        codecId: 'sqlite/datetime@1',
-        executionDefaults: { onCreate: TEMPORAL_MIRROR_NOW_PHASE },
-      },
-    },
-    updatedAt: {
-      kind: 'fieldPreset',
-      output: {
-        codecId: 'sqlite/datetime@1',
-        executionDefaults: {
-          onCreate: TEMPORAL_MIRROR_NOW_PHASE,
-          onUpdate: TEMPORAL_MIRROR_NOW_PHASE,
-        },
-      },
-    },
-  },
-} as const satisfies Record<string, Record<string, AuthoringFieldPresetDescriptor>>;
-
-/**
- * Mirrors of two presets that are not temporal: the SQL family's `uuidString` and the Postgres target's `json`. This package cannot import either. family-sql's `authoring-field-presets.test.ts` asserts `uuidString` deep-equals the preset that ships; the Postgres target's `authoring-field-presets.test.ts` asserts `json` equals the same literal as `pgJson`, because the target's tests cannot import this file.
- */
-export const nonTemporalPresetMirrors = {
-  uuidString: {
-    kind: 'fieldPreset',
-    output: { codecId: 'sql/char@1', typeParams: { length: 36 } },
-  },
-  pgJson: { kind: 'fieldPreset', output: { codecId: 'pg/jsonb@1' } },
-} as const;

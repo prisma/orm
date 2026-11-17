@@ -1,7 +1,7 @@
 import { coreHash } from '@internal/contract/types';
 import { SqlStorage } from '@internal/sql-contract/types';
 import type { SqlRuntimeExtensionDescriptor } from '@internal/sql-runtime';
-import { sqliteCreateNamespace } from '@internal/target-sqlite/control';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { createContract } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import sqlite from '../src/runtime/sqlite';

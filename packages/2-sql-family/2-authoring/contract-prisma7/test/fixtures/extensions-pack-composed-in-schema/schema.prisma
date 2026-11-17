@@ -1,0 +1,17 @@
+datasource db {
+  provider   = "postgresql"
+  schemas    = ["public", "extensions"]
+  extensions = [vector(schema: "extensions")]
+}
+
+generator client {
+  provider        = "prisma-client"
+  output          = "../generated/prisma"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+model User {
+  id Int @id
+
+  @@schema("public")
+}

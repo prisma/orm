@@ -17,6 +17,7 @@ import {
   MongoFieldFilter,
   type MongoFilterExpr,
   type MongoMigrationCheck,
+  type MongoMigrationCheckSource,
   type MongoMigrationPlanOperation,
   type MongoMigrationStep,
   MongoNotExpr,
@@ -304,10 +305,50 @@ const StepJson = type({
   command: 'Record<string, unknown>',
 });
 
+const OperationMetaJson = type({
+  'rewrite?': type({
+    kind: '"cast"',
+    collection: 'string',
+    field: 'string',
+    to: 'string',
+  })
+    .or({ kind: '"fill"', collection: 'string', field: 'string' })
+    .or({
+      kind: '"renameStoredKey"',
+      collection: 'string',
+      field: 'string',
+      path: 'string',
+      to: 'string',
+    })
+    .or({
+      kind: '"removeStoredKey" | "fillStoredKey"',
+      collection: 'string',
+      field: 'string',
+      path: 'string',
+    })
+    .or({
+      kind: '"replaceStoredValue"',
+      collection: 'string',
+      field: 'string',
+      'path?': 'string',
+    })
+    .or({
+      kind: '"removeStoredValue"',
+      collection: 'string',
+      field: 'string',
+      'path?': 'string',
+      value: 'string | number | boolean',
+      'required?': 'boolean',
+      'filter?': 'Record<string, unknown>',
+      'enumValue?': { 'namespaceId?': 'string', enum: 'string', member: 'string' },
+    }),
+});
+
 const DdlOperationJson = type({
   id: 'string',
   label: 'string',
   operationClass: '"additive" | "widening" | "destructive"',
+  'meta?': OperationMetaJson,
   precheck: 'Record<string, unknown>[]',
   execute: 'Record<string, unknown>[]',
   postcheck: 'Record<string, unknown>[]',
@@ -325,6 +366,7 @@ const DmlOperationJson = type({
   label: 'string',
   operationClass: '"additive" | "widening" | "destructive" | "data"',
   name: 'string',
+  'meta?': OperationMetaJson,
   precheck: 'Record<string, unknown>[]',
   run: 'Record<string, unknown>[]',
   postcheck: 'Record<string, unknown>[]',
@@ -734,11 +776,16 @@ function deserializeInspectionCommand(json: unknown): AnyMongoInspectionCommand 
   }
 }
 
+/** An inspection command has a `kind`, which its deserializer checks; a query plan has none. */
+function deserializeCheckSource(json: Record<string, unknown>): MongoMigrationCheckSource {
+  return 'kind' in json ? deserializeInspectionCommand(json) : deserializeMongoQueryPlan(json);
+}
+
 function deserializeCheck(json: unknown): MongoMigrationCheck {
   const data = validate(CheckJson, json, 'migration check');
   return {
     description: data.description,
-    source: deserializeInspectionCommand(data.source),
+    source: deserializeCheckSource(data.source),
     filter: deserializeFilterExpr(data.filter),
     expect: data.expect,
     ...ifDefined('object', data.object),
@@ -763,6 +810,7 @@ function deserializeDdlOp(json: unknown): MongoMigrationPlanOperation {
     id: data.id,
     label: data.label,
     operationClass: data.operationClass,
+    ...ifDefined('meta', data.meta),
     precheck: data.precheck.map(deserializeCheck),
     execute: data.execute.map(deserializeStep),
     postcheck: data.postcheck.map(deserializeCheck),
@@ -786,6 +834,7 @@ function deserializeDmlOp(json: unknown): MongoDmlOperation {
     label: data.label,
     operationClass: data.operationClass,
     name: data.name,
+    ...ifDefined('meta', data.meta),
     precheck: data.precheck.map(deserializeDmlCheck),
     run: data.run.map(deserializeMongoQueryPlan),
     postcheck: data.postcheck.map(deserializeDmlCheck),

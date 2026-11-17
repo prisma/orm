@@ -131,6 +131,7 @@ function actualSchema(checks: readonly LooseCheck[]): PostgresDatabaseSchemaNode
     );
   }
   return new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces: {
       public: new PostgresNamespaceSchemaNode({ schemaName: 'public', tables }),
     },

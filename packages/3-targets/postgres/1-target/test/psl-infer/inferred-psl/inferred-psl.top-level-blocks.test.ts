@@ -43,7 +43,7 @@ import {
 import { sqlContextInput } from '@internal/sql-contract-psl/test';
 import { SqlSchemaIR } from '@internal/sql-schema-ir/types';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
-import { assert, describe, expect, it } from 'vitest';
+import { assert, beforeAll, describe, expect, it } from 'vitest';
 import {
   postgresAuthoringEntityTypes,
   postgresAuthoringPslBlockDescriptors,
@@ -312,12 +312,15 @@ describe('buildPslDocumentAst and the top-level bucket', () => {
     },
   });
 
-  const printerOptions: PostgresPslInferOptions = {
-    columnDefaults: inferredColumnDefaults(inferBuildContext),
-    columnTypes: inferredColumnTypesOf(schemaIR.tables),
-    defaultMapping: createPostgresDefaultMapping(),
-    defaultOf: noInferredDefaults,
-  };
+  let printerOptions: PostgresPslInferOptions;
+  beforeAll(async () => {
+    printerOptions = {
+      columnDefaults: inferredColumnDefaults(inferBuildContext),
+      columnTypes: await inferredColumnTypesOf(schemaIR.tables),
+      defaultMapping: createPostgresDefaultMapping(),
+      defaultOf: noInferredDefaults,
+    };
+  });
 
   const foreignKeyExtras = {
     extraRelationsByTable: new Map(),

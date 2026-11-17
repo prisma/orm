@@ -56,3 +56,13 @@ export function positionalArg(value: string): PslAttributeArgument {
 export function namedArg(name: string, value: string): PslAttributeArgument {
   return { kind: 'named', name, value, span: SYNTHETIC_SPAN };
 }
+
+/** A type call argument, by name when it has one. */
+export function typeArgument(argument: {
+  readonly name: string | undefined;
+  readonly text: string;
+}): PslAttributeArgument {
+  return argument.name === undefined
+    ? positionalArg(argument.text)
+    : namedArg(argument.name, argument.text);
+}

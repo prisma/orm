@@ -18,6 +18,7 @@ export const postgresAdapterCapabilities = Object.freeze({
     checkConstraint: true,
     insertOnConflictSkip: true,
     insertOnConflictWithoutTarget: true,
+    insertOnConflictTarget: true,
     forUpdate: true,
     forShare: true,
     lockOf: true,

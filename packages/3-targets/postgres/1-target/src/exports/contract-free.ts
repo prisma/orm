@@ -10,6 +10,7 @@ export {
   constraintExistsAst,
   type ExtensionExistsCheckBuilder,
   extensionExistsAst,
+  extensionInSchemaAst,
   type IndexExistsCheckBuilder,
   indexExistsAst,
   noNullValuesAst,

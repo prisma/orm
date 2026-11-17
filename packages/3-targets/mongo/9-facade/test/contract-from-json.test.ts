@@ -5,7 +5,15 @@ import type { Contract } from '../../../../2-mongo-family/1-foundation/mongo-con
 import fixtureContractJson from '../../../../2-mongo-family/1-foundation/mongo-contract/test/fixtures/orm-contract.json' with {
   type: 'json',
 };
-import { defineContract, enumType, field, member, model } from '../src/exports/contract-builder';
+import {
+  defineContract,
+  enumType,
+  field,
+  member,
+  model,
+  type,
+  valueObject,
+} from '../src/exports/contract-builder';
 import mongo from '../src/exports/runtime';
 import mongoStatic, { contractFromJson } from '../src/exports/static';
 
@@ -20,7 +28,7 @@ function authoredContract() {
     models: {
       Account: model('Account', {
         collection: 'accounts',
-        fields: { _id: field.objectId(), role: field.namedType(Role) },
+        fields: { _id: field.scalar(type.ObjectId()), role: field.namedType(Role) },
       }),
     },
   });
@@ -39,10 +47,51 @@ describe('contractFromJson', () => {
     );
   });
 
+  it('refuses a contract without a target, as SQL contract validation does', () => {
+    const { target: _target, ...withoutTarget } = fixtureContractJson;
+    expect(() => contractFromJson(withoutTarget)).toThrow(
+      expect.objectContaining({ code: 'CONTRACT.VALIDATION_FAILED' }),
+    );
+  });
+
   it('throws the structured validation error for invalid JSON', () => {
     expect(() => contractFromJson({ target: 'mongo' })).toThrow(
       expect.objectContaining({ code: 'CONTRACT.VALIDATION_FAILED' }),
     );
+  });
+});
+
+describe('the query builder of a static context', () => {
+  it('is never built for a malformed contract, because mongoStatic validates it first', () => {
+    expect(() => mongoStatic({ contract: { target: 'mongo' } as unknown as Contract })).toThrow(
+      expect.objectContaining({ code: 'CONTRACT.VALIDATION_FAILED' }),
+    );
+  });
+
+  it('rejects a malformed contract with the same code and message as mongo()', () => {
+    const malformed = { target: 'mongo' } as unknown as Contract;
+    const validationFailure = expect.objectContaining({
+      code: 'CONTRACT.VALIDATION_FAILED',
+      message: [
+        'Contract structural validation failed: domain must be an object (was missing)',
+        'roots must be an object (was missing)',
+        'storage must be an object (was missing)',
+        'targetFamily must be "mongo" (was missing)',
+      ].join('\n'),
+    });
+
+    expect(() => mongo({ contract: malformed })).toThrow(validationFailure);
+    expect(() => mongoStatic({ contract: malformed })).toThrow(validationFailure);
+  });
+
+  it('builds queries over the contract of its context', () => {
+    const { query, contract } = mongoStatic({ contract: authoredContract() });
+    const root = Object.keys(contract.roots)[0] as keyof typeof contract.roots & string;
+
+    expect(query.from(root).build()).toMatchObject({
+      collection: 'accounts',
+      meta: { storageHash: contract.storage.storageHash, lane: 'mongo-query' },
+    });
   });
 });
 
@@ -81,5 +130,43 @@ describe('validating a contract once', () => {
     expect(deserialize).toHaveBeenCalledTimes(1);
     expect(second.contract).toBe(first.contract);
     expect(fromFirst.contract).toBe(first.contract);
+  });
+
+  it('takes a TypeScript-authored contract with a value object', () => {
+    const Address = valueObject('Address', {
+      fields: { street: field.scalar(type.String()), zip: field.scalar(type.String()).optional() },
+    });
+    const authored = defineContract({
+      valueObjects: { Address },
+      models: {
+        Shop: model('Shop', {
+          collection: 'shops',
+          fields: { _id: field.scalar(type.ObjectId()), address: field.valueObject(Address) },
+        }),
+      },
+    });
+
+    const { contract } = mongo({ contract: authored });
+
+    expect(
+      JSON.parse(
+        JSON.stringify(
+          Object.values(contract.storage.namespaces).map(
+            (namespace) => namespace.entries['valueObject'],
+          ),
+        ),
+      ),
+    ).toContainEqual({
+      Address: {
+        fields: {
+          street: {
+            nullable: false,
+            many: false,
+            type: { kind: 'scalar', codecId: 'mongo/string@1' },
+          },
+          zip: { nullable: true, many: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+        },
+      },
+    });
   });
 });

@@ -1,9 +1,5 @@
-export {
-  type PostgresCheckExpressionCandidate,
-  type PostgresCheckExpressionInput,
-  type PostgresCheckKind,
-  postgresRenderCheckExpressions,
-} from '../core/check-expressions';
+export { postgresRenderCheckExpressions } from '../core/check-expressions';
+export { PostgresExtension, type PostgresExtensionInput } from '../core/postgres-extension';
 export { PostgresNativeEnum, type PostgresNativeEnumInput } from '../core/postgres-native-enum';
 export {
   PostgresRlsEnablement,
@@ -27,6 +23,10 @@ export {
   PostgresDatabaseSchemaNode,
   type PostgresDatabaseSchemaNodeInput,
 } from '../core/schema-ir/postgres-database-schema-node';
+export {
+  PostgresExtensionSchemaNode,
+  type PostgresExtensionSchemaNodeInput,
+} from '../core/schema-ir/postgres-extension-schema-node';
 export {
   PostgresNamespaceSchemaNode,
   type PostgresNamespaceSchemaNodeInput,

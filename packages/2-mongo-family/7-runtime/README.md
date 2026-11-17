@@ -22,7 +22,7 @@ Example:
 
 ```ts
 import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
-import { createMongoDriver } from '@internal/driver-mongo';
+import mongoRuntimeDriver from '@internal/driver-mongo/runtime';
 import {
   createMongoExecutionContext,
   createMongoExecutionStack,
@@ -33,26 +33,32 @@ import mongoRuntimeTarget from '@internal/target-mongo/runtime';
 const stack = createMongoExecutionStack({
   target: mongoRuntimeTarget,
   adapter: mongoRuntimeAdapter,
+  driver: mongoRuntimeDriver,
 });
 const context = createMongoExecutionContext({ contract, stack });
 
+const driver = stack.driver.create();
+await driver.connect({ kind: 'url', url, dbName });
+
 const runtime = createMongoRuntime({
   context,
-  driver: await createMongoDriver(url, dbName),
+  adapter: stack.adapter.create(stack),
+  driver,
 });
 ```
 
-Custom or third-party codecs (encryption, vendor scalars) are contributed via an extension-pack descriptor whose `codecs` slot returns the codec descriptors; `createMongoExecutionContext` folds them into the same registry. Duplicate codec ids across contributors throw `RUNTIME.DUPLICATE_CODEC` at composition time.
+Custom or third-party codecs (encryption, vendor scalars) are contributed by an extension descriptor, which declares each codec once as a codec descriptor in `types.codecTypes.codecDescriptors`, built with `mongoCodecDescriptor` from `@internal/mongo-codec`, beside the data types in `dataTypes`. The target declares its codecs the same way. `createMongoExecutionContext` takes the codec from every descriptor of the target, the adapter and the extensions into one `MongoCodecRegistry` with `assembleMongoCodecRegistry`, and the adapter encodes writes with the same registry. Duplicate codec ids across contributors throw `RUNTIME.DUPLICATE_CODEC` at composition time, naming both contributors.
+
+Before it composes anything, `createMongoExecutionContext` checks the contract against the stack, as SQL's `createExecutionContext` does. A contract of another family throws `RUNTIME.CONTRACT_FAMILY_MISMATCH`, a contract of another target throws `RUNTIME.CONTRACT_TARGET_MISMATCH`, and a contract that requires an extension pack the stack does not hold throws `RUNTIME.MISSING_EXTENSION_PACK`.
 
 ## Responsibilities
 
-- **Stack/context composition**: `createMongoExecutionStack` and `createMongoExecutionContext` mirror SQL's `createSqlExecutionStack` / `createExecutionContext`. The context aggregates codec contributions from `[stack.target, stack.adapter, ...stack.extensions]` into a single `MongoCodecRegistry`.
-- **Enum accessors**: `buildMongoEnums(contract, context.codecs)` builds the contract's enum accessors by namespace: what `db.enums` holds and what `mongoOrm({ enums })` checks a written enum value against. A contract whose enum codec the context lacks is refused here with `RUNTIME.CODEC_DESCRIPTOR_MISSING`.
-- **Runtime executor**: `createMongoRuntime({ context, driver, ... })` composes context and driver into a `MongoRuntime` with separate `query(plan)` and `execute(plan)` operations accepting `MongoQueryPlan<Row>` from `@internal/mongo-query-ast`. `query()` yields decoded rows, while `execute()` returns statement statistics. Both operations reach the adapter via `context.stack.adapter` (instantiated lazily through the stack's `create(stack)` factory), lower the plan, and run the wire command on the driver; `query()` **optionally decodes** each row when `plan.resultShape` is present.
+- **Stack/context composition**: `createMongoExecutionStack` and `createMongoExecutionContext` mirror SQL's `createSqlExecutionStack` / `createExecutionContext`. Given a driver descriptor, `createMongoExecutionStack` returns a `MongoExecutionStackWithDriver`, whose `driver.create()` passes the target's session settings to the descriptor, as `SqlExecutionStackWithDriver` does. Without one it returns a `MongoExecutionStack`, which `mongoStatic` uses so that it never loads `mongodb`. The context aggregates codec contributions from `[stack.target, stack.adapter, ...stack.extensions]` into a single `MongoCodecRegistry`. The `MongoExecutionContext` type is declared in `@internal/mongo-query-ast`, as SQL's `ExecutionContext` is declared in relational-core, and holds no stack: the query lanes build against it, and the runtime receives the adapter as its own option.
+- **Runtime executor**: `createMongoRuntime({ context, adapter, driver, ... })` composes context, adapter and driver into a `MongoRuntime`, as the SQL runtime does. The caller creates the adapter with `stack.adapter.create(stack)`, and the runtime checks middleware against the target named by `context.contract.target`. The runtime has separate `query(plan)` and `execute(plan)` operations accepting `MongoQueryPlan<Row>` from `@internal/mongo-query-ast`. `query()` yields decoded rows, while `execute()` returns statement statistics. Both operations lower the plan with the adapter, and run the wire command on the driver; `query()` **optionally decodes** each row when `plan.resultShape` is present.
 - **Operation flow**: Row-producing work uses `query(plan)` and the query middleware lifecycle; statistics-producing work uses `execute(plan)` and the execute middleware lifecycle. Each operation allocates its own `CodecCallContext` and threads it through its codec dispatches.
 - **Lowering**: Happens in the adapter (`lower(plan)`), wrapped by the runtime's `lower` override into a `MongoExecutionPlan`.
 - **Middleware lifecycle inheritance**: `MongoRuntime` extends `RuntimeCore<MongoQueryPlan, MongoExecutionPlan, MongoMiddleware>` and runs every `query()` and `execute()` as a statement activity: `activityStarted`, `beforeEncode` (before `resolveParams`), `intercept.onQuery` / `intercept.onExecute`, `onRow`, `activityEnded`, then `activityFinalized` right away, because Mongo has no transactions. Mongo does **not** override `runBeforeCompile` (Mongo middleware has no `beforeCompile` hook today).
-- **Lifecycle management**: Connection lifecycle via `close()`.
+- **Lifecycle management**: `close()` closes the driver. After it, `query()` and `execute()` reject with `DRIVER.NOT_CONNECTED` "Runtime is closed", the error the SQL runtime gives.
 
 ## Architecture
 

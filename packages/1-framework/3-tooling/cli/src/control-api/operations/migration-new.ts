@@ -3,7 +3,7 @@
  */
 
 import { readFile } from 'node:fs/promises';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
 import { APP_SPACE_ID, createControlStack } from '@internal/framework-components/control';
 import { loadContractSpaceAggregate } from '@internal/migration-tools/aggregate';
@@ -40,7 +40,7 @@ import { resolveDefaultOriginHash } from './plan-resolution';
 import { renderSnapshotDeclarations } from './snapshot-declarations';
 
 export interface MigrationNewOptions {
-  readonly config: PrismaNextConfig;
+  readonly config: PrismaConfig;
   /** Directory the command was invoked from. */
   readonly cwd: string;
   /** The project's directory, normally the validated config's `baseDir`; locates the project manifest. */

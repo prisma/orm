@@ -5,14 +5,15 @@ import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
+  fixturePostgresTypeNamespace,
   interpretSqlContract,
   modelsOf,
   postgresNativeScalarTypeDescriptors,
-  postgresScalarAuthoringTypes,
   postgresScalarTypeDescriptors,
   postgresTarget,
   testEnumEntityContributions,
   testEnumPslBlockDescriptor,
+  valueObjectsOf,
 } from './fixtures';
 
 const numeric = {
@@ -22,10 +23,10 @@ const numeric = {
 } as const;
 
 const varCharishTypes = {
-  ...postgresScalarAuthoringTypes,
+  ...fixturePostgresTypeNamespace,
   VarCharish: {
     kind: 'typeConstructor',
-    args: [{ kind: 'number', name: 'length', integer: true, minimum: 1 }],
+    args: [{ kind: 'value', dataType: 'pg/int4', name: 'length' }],
     output: {
       codecId: 'sql/varchar@1',
       typeParams: { length: { kind: 'arg', index: 0 } },
@@ -82,7 +83,7 @@ namespace public {
         target: postgresTarget,
         scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
         authoringContributions: {
-          type: postgresScalarAuthoringTypes,
+          type: fixturePostgresTypeNamespace,
           dataTypes: fixtureDataTypeSupport.entries,
         },
         ...fixtureInterpreterTypes,
@@ -129,7 +130,7 @@ model Product {
         target: postgresTarget,
         scalarColumnDescriptors: postgresScalarTypeDescriptors,
         authoringContributions: {
-          type: postgresScalarAuthoringTypes,
+          type: fixturePostgresTypeNamespace,
           valueObjectStorageType: 'Jsonb',
         },
         ...fixtureInterpreterTypes,
@@ -142,7 +143,7 @@ model Product {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.domain.namespaces['public']?.valueObjects?.['Price']?.fields).toEqual({
+    expect(valueObjectsOf(result.value)?.['Price']?.fields).toEqual({
       one: { nullable: false, type: numeric, many: false },
       many: { nullable: false, type: numeric, many: { elementNullable: false } },
     });

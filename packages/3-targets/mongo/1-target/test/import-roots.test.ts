@@ -18,7 +18,12 @@ const TO_HASH = 'b'.repeat(64);
 
 function render(root: ImportRoot): string {
   return renderCallsToTypeScript(
-    [new CreateIndexCall('users', [{ field: 'email', direction: 1 }], { unique: true })],
+    [
+      new CreateIndexCall('users', [{ field: 'email', direction: 1 }], {
+        name: 'email_1',
+        unique: true,
+      }),
+    ],
     {
       from: FROM_HASH,
       to: TO_HASH,

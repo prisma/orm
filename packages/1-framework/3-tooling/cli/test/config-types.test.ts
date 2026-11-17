@@ -1,4 +1,4 @@
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import { defineConfig } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
 import { ok } from '@internal/utils/result';
@@ -22,7 +22,7 @@ describe('defineConfig', () => {
       `export type Contract = ${base} & { typeMaps: ${tm} };`,
   };
 
-  const baseConfig: PrismaNextConfig = {
+  const baseConfig: PrismaConfig = {
     family: {
       kind: 'family',
       id: 'sql',
@@ -96,7 +96,7 @@ describe('defineConfig', () => {
   };
 
   it('preserves omitted contract inputs', () => {
-    const config: PrismaNextConfig = {
+    const config: PrismaConfig = {
       ...baseConfig,
       contract: {
         source: createSourceProvider(),
@@ -109,7 +109,7 @@ describe('defineConfig', () => {
 
   it('validates contract source accepts provider objects', () => {
     const sourceProvider = createSourceProvider();
-    const config: PrismaNextConfig = {
+    const config: PrismaConfig = {
       ...baseConfig,
       contract: {
         source: sourceProvider,

@@ -8,34 +8,26 @@ import { createTestSqlNamespace } from '../../../1-core/contract/test/test-suppo
 import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
+  fixturePostgresTypeNamespace,
   interpretSqlContract,
-  postgresScalarAuthoringTypes,
   postgresTarget,
 } from './fixtures';
 import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contract-storage';
 import { unboundTables } from './unbound-tables';
 
 const authoringTypes = {
-  ...postgresScalarAuthoringTypes,
+  ...fixturePostgresTypeNamespace,
   VarCharish: {
     kind: 'typeConstructor',
-    args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, optional: true }],
+    args: [{ kind: 'value', dataType: 'pg/int4', name: 'length', optional: true }],
     output: {
       codecId: 'sql/varchar@1',
       typeParams: { length: { kind: 'arg', index: 0 } },
     },
   },
-  Defaulted: {
-    kind: 'typeConstructor',
-    args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, optional: true }],
-    output: {
-      codecId: 'sql/varchar@1',
-      typeParams: { length: { kind: 'arg', index: 0, default: 191 } },
-    },
-  },
   Vector: {
     kind: 'typeConstructor',
-    args: [{ kind: 'number', name: 'length', integer: true, minimum: 1 }],
+    args: [{ kind: 'value', dataType: 'pg/int4', name: 'length' }],
     output: {
       codecId: 'pg/vector@1',
       typeParams: { length: { kind: 'arg', index: 0 } },
@@ -50,7 +42,6 @@ const authoringTypes = {
 
 const authoringContributions = {
   entityTypes: {},
-  field: {},
   pslBlockDescriptors: {},
   modelAttributes: {},
   type: authoringTypes,
@@ -89,33 +80,11 @@ describe('bare-name sugar (T ≡ T())', () => {
     });
   });
 
-  it('applies a defaulted template value in bare form, same as the zero-arg call', () => {
-    const result = interpretSqlContract(
-      `model Doc {
-  id Int @id
-  bare Defaulted
-  called Defaulted()
-}
-`,
-      { ...baseInput },
-    );
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-
-    const columns = unboundTables(sqlStorageFromSuccessfulSqlInterpretation(result.value))['Doc']
-      ?.columns;
-    expect(columns?.['bare']).toEqual(columns?.['called']);
-    expect(columns?.['bare']).toMatchObject({
-      codecId: 'sql/varchar@1',
-      typeParams: { length: 191 },
-    });
-  });
-
   it('expands a named type with a bare base as one with its zero-arg call', () => {
     const result = interpretSqlContract(
       `types {
-  Slug = Defaulted
-  SlugCalled = Defaulted()
+  Slug = VarCharish
+  SlugCalled = VarCharish()
 }
 
 model Doc {
@@ -137,7 +106,6 @@ model Doc {
       dataType: 'pg/varchar',
       nullable: false,
       many: false,
-      typeParams: { length: 191 },
     });
   });
 

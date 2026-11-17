@@ -13,11 +13,13 @@ import type {
 } from '@internal/family-sql/control';
 import {
   convertedColumnOf,
+  keepRowsEdit,
   type RequiredColumn,
+  removalsOfMigration,
   requiredColumnOf,
   requiredColumnsOfMigration,
+  rowsHoldingValueFailure,
   rowsHoldingValueOf,
-  rowsHoldingValueSummary,
   rowsWithoutValueFailure,
   runnerFailure,
   runnerSuccess,
@@ -27,7 +29,6 @@ import type {
   BlockingObject,
   FailedTypeChange,
   MigrationRunnerResult,
-  RowsHoldingValue,
 } from '@internal/framework-components/control';
 import {
   APP_SPACE_ID,
@@ -53,15 +54,17 @@ import {
   dependentsSummary,
 } from './dependent-objects';
 import { MARKER_LOCK_KEY, MARKER_LOCK_SQL } from './marker-lock';
+import { holdingStoredValue } from './operations/stored-values';
 import { qualifyTableName } from './planner-sql-checks';
 import type { PostgresPlanTargetDetails } from './planner-target-details';
+import { CHECK_VIOLATION, rowsFailingCheckOf } from './rows-failing-check';
 import {
   SCHEMA_OBJECTS_SQL,
   schemaBlockingObjects,
   schemaContentsOf,
   schemaObjectsSummary,
 } from './schema-contents';
-import { keepRowsEdit } from './stored-value-calls';
+import { postgresMarkedRemoval, postgresStoredValueCallClasses } from './stored-value-calls';
 
 interface ApplyPlanSuccessValue {
   readonly operationsExecuted: number;
@@ -445,12 +448,12 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
         };
         const holding =
           phase === 'precheck'
-            ? await this.rowsHoldingValue(driver, step, operation, plan.operationIndex)
+            ? await this.rowsHoldingValue(driver, step, operation, plan)
             : undefined;
         if (holding !== undefined) {
           return runnerFailure(code, holding.summary, {
             why: failed,
-            meta: { failedCheck, rowsHoldingValue: holding.report },
+            meta: { failedCheck, rowsHoldingValue: holding.reports },
           });
         }
         return runnerFailure(code, rowsWithoutValue?.summary ?? failed, {
@@ -474,40 +477,44 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
 
   /**
    * Counts the rows that hold the stored value a removal check guards, as `rowsHoldingValueMeta`
-   * marks the check. A count that fails leaves the failure without it.
+   * marks the check, then those of every other removal of its migration whose check fails. A count
+   * of the failed check that fails leaves the failure without it.
    */
-  private async rowsHoldingValue(
+  private rowsHoldingValue(
     driver: SqlMigrationRunnerExecuteOptions<PostgresPlanTargetDetails>['driver'],
     step: SqlMigrationPlanOperationStep,
     operation: SqlMigrationPlanOperation<PostgresPlanTargetDetails>,
-    operationIndex: number,
-  ): Promise<{ readonly summary: string; readonly report: RowsHoldingValue } | undefined> {
+    plan: PlanPosition,
+  ): ReturnType<typeof rowsHoldingValueFailure> {
     const mark = rowsHoldingValueOf(step);
-    const details = operation.target.details;
-    const stored = step.params?.[0];
-    if (mark === undefined || details?.table === undefined) return undefined;
-    if (typeof stored !== 'string' && typeof stored !== 'number') return undefined;
-    const { table } = details;
-    let rows: number;
-    try {
-      const counted = await driver.query<{ rows: number }>(
-        `SELECT COUNT(*)::int AS rows FROM ${qualifyTableName(details.schema, table)} WHERE ${quoteIdentifier(details.name)} = $1`,
-        [stored],
-      );
-      rows = counted.rows[0]?.rows ?? 0;
-    } catch {
-      return undefined;
-    }
-    return {
-      summary: rowsHoldingValueSummary(table, details.name, stored, rows),
-      report: {
-        enumValue: mark.enumValue,
-        value: stored,
-        rows,
-        operationIndex,
-        keepDataEdit: keepRowsEdit({ ...details, table }, mark),
-      },
+    if (mark === undefined) return Promise.resolve(undefined);
+    const schemaOf = (marked: SqlMigrationPlanOperation<PostgresPlanTargetDetails>) => {
+      const schema = marked.target.details?.schema;
+      if (schema === undefined) {
+        throw new InternalError('A stored value removal names the schema of its table');
+      }
+      return schema;
     };
+    return rowsHoldingValueFailure({
+      failed: { operation, operationIndex: plan.operationIndex, check: step, mark },
+      others: removalsOfMigration(plan.operations, plan.edges, plan.operationIndex),
+      checkFails: async ({ check }) =>
+        !this.stepResultIsTrue((await driver.query(check.sql, check.params ?? [])).rows),
+      count: async ({ operation: counted, mark: { table, column, storedValue, path } }) => {
+        const holding = holdingStoredValue(column, storedValue, path);
+        const rows = await driver.query<{ rows: number }>(
+          `SELECT COUNT(*)::int AS rows FROM ${qualifyTableName(schemaOf(counted), table)} WHERE ${holding.condition}`,
+          holding.params,
+        );
+        return rows.rows[0]?.rows ?? 0;
+      },
+      keepDataEdit: ({ operation: kept, mark: keptMark }) =>
+        keepRowsEdit(
+          postgresMarkedRemoval(schemaOf(kept), keptMark),
+          keptMark,
+          postgresStoredValueCallClasses,
+        ),
+    });
   }
 
   /**
@@ -540,7 +547,7 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
   private async runExecuteSteps(
     driver: SqlMigrationRunnerExecuteOptions<PostgresPlanTargetDetails>['driver'],
     operation: SqlMigrationPlanOperation<PostgresPlanTargetDetails>,
-    plan: { readonly contract: Contract<SqlStorage>; readonly operationIndex: number },
+    plan: PlanPosition,
   ): Promise<Result<void, SqlMigrationRunnerFailure>> {
     for (const step of operation.execute) {
       try {
@@ -564,6 +571,29 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
           );
         }
         if (SqlQueryError.is(error)) {
+          const failingCheck =
+            error.sqlState === CHECK_VIOLATION
+              ? rowsFailingCheckOf({
+                  operation,
+                  constraint: error.constraint,
+                  storage: plan.contract.storage,
+                  operations: plan.operations,
+                  operationIndex: plan.operationIndex,
+                })
+              : undefined;
+          if (failingCheck !== undefined) {
+            return runnerFailure('MIGRATION.EXECUTION_FAILED', failingCheck.summary, {
+              why: failingCheck.why,
+              meta: {
+                rowsFailingCheck: failingCheck.fact,
+                operationId: operation.id,
+                stepDescription: step.description,
+                sqlState: error.sqlState,
+                constraint: error.constraint,
+                table: error.table,
+              },
+            });
+          }
           const dependents =
             error.sqlState === DEPENDENT_OBJECTS_STILL_EXIST ? dependentsOf(error.detail) : [];
           const details = operation.target.details;

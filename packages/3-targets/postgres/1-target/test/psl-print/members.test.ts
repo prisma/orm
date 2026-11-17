@@ -45,9 +45,21 @@ describe('value-object members are written as the type their domain type reads b
       deserialize(
         widgetContract({
           columns: { price: { dataType: 'pg/jsonb', codecId: 'pg/jsonb@1', nullable: false } },
-          fields: { price: { nullable: false, type: { kind: 'valueObject', name: 'Price' } } },
-          domain: {
-            valueObjects: {
+          table: { control: 'external' },
+          fields: {
+            price: {
+              nullable: false,
+              type: {
+                kind: 'valueObject',
+                plane: 'storage',
+                namespaceId: 'public',
+                entityKind: 'valueObject',
+                entityName: 'Price',
+              },
+            },
+          },
+          entries: {
+            valueObject: {
               Price: {
                 fields: {
                   amount: { nullable: false, type: numeric },
@@ -65,7 +77,10 @@ describe('value-object members are written as the type their domain type reads b
       document.namespaces.flatMap((namespace) =>
         namespace.compositeTypes.flatMap((compositeType) => compositeType.fields.map(fieldText)),
       ),
-    ).toEqual(['amount Numeric(65, 30)', 'history Numeric(65, 30)[]']);
+    ).toEqual([
+      'amount Decimal(precision: 65, scale: 30)',
+      'history Decimal(precision: 65, scale: 30)[]',
+    ]);
   });
 
   it('writes a value-object member typed by a domain enum as the enum name, single and list', () => {

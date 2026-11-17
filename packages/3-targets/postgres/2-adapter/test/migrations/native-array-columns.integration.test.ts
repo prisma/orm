@@ -4,7 +4,6 @@ import { APP_SPACE_ID } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { CheckConstraint, SqlStorage } from '@internal/sql-contract/types';
 import { composeCheckWirePrefix, computeCheckContentHash } from '@internal/sql-schema-ir/naming';
-
 import { parsePostgresListText } from '@internal/target-postgres/control';
 import {
   postgresCreateNamespace,
@@ -43,6 +42,7 @@ function declaredArrayElementChecks(): CheckConstraint[] {
       columnName,
       many: { elementNullable: false },
       memberValues: undefined,
+      valueObject: undefined,
     }).map(
       (candidate) =>
         new CheckConstraint({

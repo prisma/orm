@@ -12,7 +12,7 @@ import {
   type StorageTableInput,
 } from '@internal/sql-contract/types';
 import {
-  type CheckKind,
+  CHECK_KINDS,
   composeCheckWirePrefix,
   derivedCheckPrefixes,
 } from '@internal/sql-schema-ir/naming';
@@ -22,8 +22,6 @@ import type { CheckNode, IndexNode } from './contract-definition';
 import { contractError } from './contract-errors';
 import { type ColumnLoweringContext, lowerColumn } from './lower-column';
 import type { TableDescription } from './storage-description';
-
-const DERIVABLE_CHECK_KINDS: readonly CheckKind[] = ['membership', 'elementNotNull'];
 
 /**
  * Which of `columnNames` could have produced `prefix` for some
@@ -38,9 +36,7 @@ function columnsProducingCheckPrefix(
   prefix: string,
 ): readonly string[] {
   return columnNames.filter((columnName) =>
-    DERIVABLE_CHECK_KINDS.some(
-      (kind) => composeCheckWirePrefix(tableName, columnName, kind) === prefix,
-    ),
+    CHECK_KINDS.some((kind) => composeCheckWirePrefix(tableName, columnName, kind) === prefix),
   );
 }
 
@@ -117,7 +113,7 @@ export function lowerTable(
 /**
  * The checks sorted by name in UTF-16 code-unit order, the order contract canonicalization gives them. The table's storage is then the same whichever declaration each column came from and in whatever order the columns were listed.
  */
-function inCanonicalOrder(checks: readonly CheckConstraint[]): readonly CheckConstraint[] {
+export function inCanonicalOrder(checks: readonly CheckConstraint[]): readonly CheckConstraint[] {
   return [...checks].sort((a, b) => compareCodeUnits(a.name, b.name));
 }
 

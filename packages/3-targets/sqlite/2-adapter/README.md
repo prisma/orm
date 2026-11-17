@@ -25,7 +25,7 @@ Provide SQLite-specific adapter implementation, codecs, and capabilities. Enable
   - Provide target-specific marker SQL via `readMarkerStatement()` on `AdapterProfile`
   - Map SQLite errors to `RuntimeError` envelope
 - **Codec Definitions**: Define SQLite codecs for type conversion
-  - 8 codecs: TEXT, INTEGER, REAL, BLOB, BOOLEAN (INTEGER 0/1), DATETIME (TEXT ISO8601), JSON (TEXT), BIGINT (INTEGER)
+  - Codecs for TEXT, INTEGER, REAL, BLOB, BOOLEAN (INTEGER 0/1), JSON (TEXT), BIGINT (INTEGER), and the date and time types, each stored as TEXT: an instant read as a `Date`, a `Temporal.Instant` or its text, a date and a time of day read as text or Temporal, and an ISO 8601 duration
   - Wire format to JavaScript type decoding
   - JavaScript type to wire format encoding
 - **Codec Types**: Export TypeScript types for SQLite codecs
@@ -101,7 +101,7 @@ flowchart TD
 - SQLite codec definitions
 - Type conversion between wire format and JavaScript
 - SQL base codecs reused: `char`, `varchar`, `int`, `float`
-- SQLite-specific codecs: `text`, `integer`, `real`, `blob`, `boolean` (0/1), `datetime` (ISO8601), `json` (TEXT), `bigint`
+- SQLite-specific codecs: `text`, `integer`, `real`, `blob`, `boolean` (0/1), `datetime` (ISO8601), the date and time codecs, `json` (TEXT), `bigint`
 
 **SQL Utilities (`sql-utils.ts`)**
 - Identifier quoting with double quotes
@@ -118,7 +118,7 @@ flowchart TD
 - Used in `contract.d.ts` generation
 
 **Column Types Export (`column-types.ts`)**
-- Exports column descriptors for built-in types: `textColumn`, `integerColumn`, `realColumn`, `blobColumn`, `datetimeColumn`, `jsonColumn`, `bigintColumn`, and ``rawColumn(sql`geometry`)`` for a column of any other type, its type written as a `sql` literal and used as given (ADR 273)
+- Exports column descriptors for built-in types: `textColumn`, `integerColumn`, `realColumn`, `blobColumn`, `datetimeColumn`, `datetimeTemporalColumn`, `datetimeStringColumn`, `dateStringColumn`, `dateTemporalColumn`, `timeStringColumn`, `timeTemporalColumn`, `durationStringColumn`, `jsonColumn`, `bigintColumn`, and ``rawColumn(sql`geometry`)`` for a column of any other type, its type written as a `sql` literal and used as given (ADR 273)
 - Uses `as const` to preserve literal `codecId` types through the type system
 
 **Types Export (`types.ts`)**
@@ -187,7 +187,7 @@ Parameters are written as numbered placeholders (`?1`, `?2`, ...). The number is
 ## Exports
 
 - `./codec-types`: SQLite codec types (`CodecTypes`, `JsonValue`)
-- `./column-types`: Column type descriptors (`textColumn`, `integerColumn`, `realColumn`, `blobColumn`, `datetimeColumn`, `jsonColumn`, `bigintColumn`, `rawColumn`)
+- `./column-types`: Column type descriptors (`textColumn`, `integerColumn`, `realColumn`, `blobColumn`, the date and time columns such as `datetimeColumn` and `dateStringColumn`, `jsonColumn`, `bigintColumn`, `rawColumn`)
 - `./types`: SQLite-specific types
 - `./control`: Control-plane entry point (stubbed for future migration support)
 - `./runtime`: Runtime-plane entry point (runtime adapter descriptor)

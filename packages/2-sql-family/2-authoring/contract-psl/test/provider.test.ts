@@ -827,7 +827,6 @@ model User {
         createPostgresTestContext({
           authoringContributions: {
             dataTypes: {},
-            field: {},
             type: {
               Int: {
                 kind: 'typeConstructor',

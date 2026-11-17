@@ -1,14 +1,19 @@
 import {
   type InferredTypeConstructors,
-  writtenTypeArguments,
+  type PslTypeArgument,
+  writtenTypeChoiceCall,
 } from '@internal/family-sql/psl-build';
 import {
   type AuthoringTypeConstructorCall,
   type AuthoringTypeNamespace,
+  type AuthoringTypeNamespaceMember,
   authoringTypeConstructorArguments,
   type DataTypeSupport,
   findAuthoringTypeConstructorCall,
   getAuthoringTypeConstructor,
+  isAuthoringTypeConstructorDescriptor,
+  isAuthoringTypeDescriptor,
+  writtenTypeArguments,
 } from '@internal/framework-components/authoring';
 import type { DataTypeLookup } from '@internal/framework-components/codec';
 import { dataTypeParams } from '@internal/framework-components/codec';
@@ -16,7 +21,7 @@ import type { PslTypeConstructorCall } from '@internal/framework-components/psl-
 import { isSqlDataType, unquotedSqlBaseName } from '@internal/sql-contract/data-type';
 import type { StorageColumn } from '@internal/sql-contract/types';
 import { PG_ENUM_CODEC_ID } from '../codec-ids';
-import { positionalArg, SYNTHETIC_SPAN } from '../psl-build/psl-literals';
+import { positionalArg, SYNTHETIC_SPAN, typeArgument } from '../psl-build/psl-literals';
 import { refuseColumnWithoutPslType, refuseUnwritableTypeArgument } from './refusals';
 
 /**
@@ -50,13 +55,16 @@ function typeArgumentTexts(
   authoringTypes: AuthoringTypeNamespace,
   dataTypes: DataTypeSupport,
   coordinate: string,
-): readonly string[] {
+): readonly PslTypeArgument[] {
   const descriptor = getAuthoringTypeConstructor({ type: authoringTypes }, call.path);
   const written = descriptor && writtenTypeArguments(descriptor, call.args, dataTypes);
-  return written ?? refuseUnwritableTypeArgument(call, coordinate);
+  return (
+    written?.map((text) => ({ name: undefined, text })) ??
+    refuseUnwritableTypeArgument(call, coordinate)
+  );
 }
 
-function typeCall(path: readonly string[], args: readonly string[]): PslColumnType {
+function typeCall(path: readonly string[], args: readonly PslTypeArgument[]): PslColumnType {
   const name = path.join('.');
   const isNamespaced = path.length > 1;
   if (args.length === 0 && !isNamespaced) {
@@ -68,7 +76,7 @@ function typeCall(path: readonly string[], args: readonly string[]): PslColumnTy
     typeConstructor: {
       kind: 'typeConstructor',
       path,
-      args: args.map(positionalArg),
+      args: args.map(typeArgument),
       span: SYNTHETIC_SPAN,
     },
   };
@@ -87,12 +95,27 @@ function inferredConstructorCall(
   return marked && args && { path: marked.path, args };
 }
 
+/** `namespace` without its deprecated type constructors, which print never writes (ADR 257). */
+function withoutDeprecatedConstructors(namespace: AuthoringTypeNamespace): AuthoringTypeNamespace {
+  const kept: Record<string, AuthoringTypeNamespaceMember> = {};
+  for (const [name, member] of Object.entries(namespace)) {
+    if (!isAuthoringTypeDescriptor(member)) {
+      kept[name] = withoutDeprecatedConstructors(member);
+    } else if (!isAuthoringTypeConstructorDescriptor(member) || member.deprecated === undefined) {
+      kept[name] = member;
+    }
+  }
+  return kept;
+}
+
 /**
  * The PSL type position for a storage column: a call to a type constructor the configured stack
  * contributes that produces exactly the column's codec, native type and type parameters. The
  * constructor `contract infer` writes for the column's data type comes first; otherwise
- * the first one in the stack that produces them, such as `DateTime` for a `timestamptz` column read
- * as a `Temporal.Instant`, or `pgvector.Vector(3)`. An enum-typed column takes the
+ * the first one in the stack that produces them and is not deprecated, such as `TimestamptzTemporal` or
+ * `pgvector.Vector(3)`. Where a type choice call becomes that call exactly, the type choice is
+ * written instead, by name with only the arguments that differ from its defaults: `DateTime` for
+ * `TimestamptzJsDate(3)`, `DateTime(as: temporal)` for `TimestamptzTemporal` (ADR 279). An enum-typed column takes the
  * `pg.enum(<Block>)` constructor, named after the value set the column points at; a column typed by
  * a domain enum takes that enum's name. A column no PSL type reads back is refused.
  */
@@ -135,12 +158,17 @@ export function buildColumnType(input: {
 
   const call =
     inferredConstructorCall(column, inferredConstructors) ??
-    findAuthoringTypeConstructorCall(authoringTypes, column);
+    findAuthoringTypeConstructorCall(withoutDeprecatedConstructors(authoringTypes), column);
   if (call !== undefined) {
-    return typeCall(
-      call.path,
-      typeArgumentTexts(call, authoringTypes, input.dataTypes, coordinate),
-    );
+    const convenience = writtenTypeChoiceCall({
+      authoringTypes,
+      call,
+      dataTypes: input.dataTypes,
+      sameOutput: undefined,
+    });
+    return convenience !== undefined
+      ? typeCall(convenience.path, convenience.args)
+      : typeCall(call.path, typeArgumentTexts(call, authoringTypes, input.dataTypes, coordinate));
   }
 
   refuseColumnWithoutPslType(column, coordinate);

@@ -9,7 +9,10 @@ import type {
   SqlQueryable,
   SqlStatementStats,
   SqlTransaction,
+  SqlTransactionOptions,
 } from '@internal/sql-relational-core/ast';
+import { validateSqliteIsolationLevel } from '@internal/target-sqlite/runtime';
+import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
 import { closeDatabase, wasClosedByDriver } from './database-state';
 import { normalizeSqliteError } from './normalize-error';
@@ -72,7 +75,7 @@ abstract class SqliteQueryable implements SqlQueryable {
     try {
       const stmt = this.db.prepare(request.sql);
       for (const row of stmt.iterate(...sqliteParams(request.params))) {
-        yield row as Row;
+        yield blindCast<Row, 'SQLite rows follow the caller query shape'>(row);
       }
     } catch (error) {
       throw normalizeSqliteError(error, wasClosedByDriver(this.db));
@@ -85,7 +88,11 @@ abstract class SqliteQueryable implements SqlQueryable {
       if (stmt.columns().length !== 0) {
         throw new InternalError('SQLite cannot execute statements that return rows.');
       }
-      return { affectedRows: Number(stmt.run(...sqliteParams(request.params)).changes) };
+      const { changes, lastInsertRowid } = stmt.run(...sqliteParams(request.params));
+      const affectedRows = Number(changes);
+      return affectedRows === 1
+        ? { affectedRows, insertId: String(lastInsertRowid) }
+        : { affectedRows };
     } catch (error) {
       throw normalizeSqliteError(error, wasClosedByDriver(this.db));
     }
@@ -94,9 +101,7 @@ abstract class SqliteQueryable implements SqlQueryable {
   async explain(request: SqlExecuteRequest): Promise<SqlExplainResult> {
     try {
       const stmt = this.db.prepare(`EXPLAIN QUERY PLAN ${request.sql}`);
-      const rows = stmt.all(...sqliteParams(request.params)) as ReadonlyArray<
-        Record<string, unknown>
-      >;
+      const rows = stmt.all(...sqliteParams(request.params));
       return { rows };
     } catch (error) {
       throw normalizeSqliteError(error, wasClosedByDriver(this.db));
@@ -105,7 +110,10 @@ abstract class SqliteQueryable implements SqlQueryable {
 }
 
 export class SqliteConnectionImpl extends SqliteQueryable implements SqlConnection {
-  async beginTransaction(): Promise<SqlTransaction> {
+  async beginTransaction(start?: SqlTransactionOptions): Promise<SqlTransaction> {
+    if (start?.isolationLevel !== undefined) {
+      validateSqliteIsolationLevel(start.isolationLevel);
+    }
     try {
       this.db.exec('BEGIN');
       return new SqliteTransactionImpl(this.db);
@@ -143,6 +151,44 @@ class SqliteTransactionImpl extends SqliteQueryable implements SqlTransaction {
       throw normalizeSqliteError(error, wasClosedByDriver(this.db));
     }
   }
+
+  async savepoint(name: string): Promise<SqlTransaction> {
+    return openSqliteSavepoint(this.db, name);
+  }
+}
+
+class SqliteSavepointImpl extends SqliteQueryable implements SqlTransaction {
+  constructor(
+    db: DatabaseSync,
+    private readonly name: string,
+  ) {
+    super(db);
+  }
+
+  async commit(): Promise<void> {
+    execSavepointStatement(this.db, `RELEASE SAVEPOINT ${this.name}`);
+  }
+
+  async rollback(): Promise<void> {
+    execSavepointStatement(this.db, `ROLLBACK TO SAVEPOINT ${this.name}`);
+  }
+
+  async savepoint(name: string): Promise<SqlTransaction> {
+    return openSqliteSavepoint(this.db, name);
+  }
+}
+
+function execSavepointStatement(db: DatabaseSync, sql: string): void {
+  try {
+    db.exec(sql);
+  } catch (error) {
+    throw normalizeSqliteError(error, wasClosedByDriver(db));
+  }
+}
+
+function openSqliteSavepoint(db: DatabaseSync, name: string): SqliteSavepointImpl {
+  execSavepointStatement(db, `SAVEPOINT ${name}`);
+  return new SqliteSavepointImpl(db, name);
 }
 
 interface ConnectedState {

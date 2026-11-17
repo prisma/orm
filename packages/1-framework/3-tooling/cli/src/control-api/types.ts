@@ -2,7 +2,7 @@ import type {
   ContractSourceDiagnostic,
   ContractSourceDiagnostics,
   ContractSourceProvider,
-  PrismaNextConfig,
+  PrismaConfig,
 } from '@internal/config/config-types';
 import type { Contract, ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
@@ -26,6 +26,7 @@ import type {
   MigrationPlanOperation,
   MigrationPlanSubjects,
   OperationPreview,
+  RowsFailingCheck,
   VerifyDatabaseResult,
   VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
@@ -34,6 +35,7 @@ import type { AggregateMigrationEdgeRef } from '@internal/migration-tools/aggreg
 import type { Result } from '@internal/utils/result';
 import type { CliStructuredError } from '../utils/cli-errors';
 import type { CliInvocation } from '../utils/printed-command';
+import type { ChangedStorageEntity } from './operations/changed-storage-entities';
 import type { ExecuteDbSignResult } from './operations/db-sign';
 import type { ExecuteDbVerifyResult } from './operations/db-verify';
 import type { RenderContractDtsOptions, RenderContractDtsResult } from './render-contract-dts';
@@ -497,6 +499,8 @@ export interface DbUpdateSuccess
    * graph ends at it: the origin a `migration plan` for this database starts from.
    */
   readonly databaseStorageHash?: string;
+  /** The storage entities that changed, when the run signed the database with a changed contract and ran no operation. */
+  readonly changedStorageEntities?: readonly ChangedStorageEntity[];
   readonly summary: string;
 }
 
@@ -527,11 +531,16 @@ export interface RunnerFailureFacts {
   readonly rowsWithoutValue?: readonly RowsWithoutValueReport[];
   /** The check that failed before its operation ran. */
   readonly failedPrecheck?: FailedPrecheckReport;
-  /** The data that still holds a stored enum value whose removal its storage cannot take. */
-  readonly rowsHoldingValue?: RowsHoldingValueReport;
+  /** The data that still holds stored enum values whose removal its storage cannot take; the failed one first. */
+  readonly rowsHoldingValue?: readonly RowsHoldingValueReport[];
+  /** The existing rows that a check the failed operation adds refuses. */
+  readonly rowsFailingCheck?: RowsFailingCheckReport;
   /** The written migration of the failed operation, when the runner named the operation, or the last one applied when the schema check after apply failed. */
   readonly failedMigration?: { readonly spaceId: string; readonly edge: AggregateMigrationEdgeRef };
 }
+
+/** The existing rows that a check the failed operation adds refuses, as the advice names them. */
+export type RowsFailingCheckReport = Omit<RowsFailingCheck, 'operationIndex'>;
 
 /** The data that still holds the stored value of an enum value the plan removes from storage that cannot do without it. */
 export interface RowsHoldingValueReport {
@@ -558,6 +567,8 @@ export interface RowsWithoutValueReport {
   readonly reason: 'nullValues' | 'newField' | 'backfillMissedRows';
   /** How many rows have no value. */
   readonly rows: number;
+  /** Whether the field is its model's discriminator, which the contract cannot make optional. */
+  readonly discriminator: boolean;
 }
 
 /** The result of `db update`: a failure is the structured error the command reports. */
@@ -778,7 +789,7 @@ export type MigrateResult = Result<MigrateSuccess, CliStructuredError>;
  */
 export interface ContractEmitOptions {
   /** The already-loaded config. Callers own loading; this operation never reads it from disk. */
-  readonly config: PrismaNextConfig;
+  readonly config: PrismaConfig;
   /** Directory the caller was invoked from. */
   readonly cwd: string;
   /**
@@ -823,6 +834,8 @@ export interface ContractEmitResult {
     /** Path to the emitted contract.d.ts file */
     readonly dts: string;
   };
+  /** Each file or directory written under the migrations directory for a composed extension pack's space, with that space's id. Empty when nothing there changed or the contract went to an output path of its own. */
+  readonly pinnedFiles: readonly { readonly spaceId: string; readonly path: string }[];
   /**
    * Warning surfaced by `validateContractDeps` after a successful publication.
    * Callers (CLI, Vite plugin) decide how to render this; the operation does

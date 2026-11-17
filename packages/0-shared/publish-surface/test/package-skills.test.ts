@@ -29,6 +29,7 @@ const facades: ShellName[] = [
   '@prisma/orm-postgres',
   '@prisma/orm-sqlite',
   '@prisma/orm-mysql',
+  '@prisma/orm-mariadb',
   '@prisma/orm-mongo',
 ];
 const SKILL_NAME = 'prisma-8';

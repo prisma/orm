@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
 import type {
   ControlExtensionDescriptor,
@@ -104,6 +104,26 @@ function describeIntegrityViolation(violation: IntegrityViolation): string {
  * target mismatch, then disjointness, then a contract-validation
  * failure, then any remaining structural integrity violation.
  */
+function layoutFix(
+  layout: readonly Extract<
+    IntegrityViolation,
+    { kind: 'orphanSpaceDir' | 'declaredButUnmigrated' }
+  >[],
+  migrationsDir: string,
+): string {
+  const spaceDir = `\`${migrationsDir}/<space>/\``;
+  return [
+    layout.some((v) => v.kind === 'declaredButUnmigrated')
+      ? `Run \`prisma contract emit\` or \`prisma migration plan\` to write the pinned files of each declared extension pack under ${spaceDir}.`
+      : [],
+    layout.some((v) => v.kind === 'orphanSpaceDir')
+      ? `For a directory no extension declares, declare its extension in \`extensions\` or remove ${spaceDir}.`
+      : [],
+  ]
+    .flat()
+    .join(' ');
+}
+
 export function mapIntegrityViolations(
   violations: readonly IntegrityViolation[],
   migrationsDir: string,
@@ -122,7 +142,7 @@ export function mapIntegrityViolations(
         : `Contract-space layout violations detected (${layout.length})`;
     return new CliStructuredError('MIGRATION.CONTRACT_SPACE_LAYOUT_VIOLATION', summary, {
       why: `The on-disk \`${migrationsDir}/\` directory and your \`extensions\` declaration are not in agreement.\n${lines.join('\n')}`,
-      fix: `Declare the extension in \`extensions\` and re-emit its contract-space artefacts, or remove the orphan \`${migrationsDir}/<space>\` directory.`,
+      fix: layoutFix(layout, migrationsDir),
       docsUrl: CONTRACT_SPACES_DOCS_URL,
       meta: { violations: layout },
     });
@@ -356,7 +376,7 @@ export async function loadContractRawSafely(config: {
  * load without requiring a readable contract.
  */
 export async function buildReadAggregate(
-  config: PrismaNextConfig,
+  config: PrismaConfig,
   options: {
     readonly migrationsDir: string;
     /** Command-scoped verifier to share the verified-hash memo; defaults to one built from `config`. */

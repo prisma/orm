@@ -1,11 +1,11 @@
 {
   "name": "@internal/sql-contract",
   "private": true,
-  "version": "8.0.0-rc.20",
+  "version": "8.0.0-rc.24",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "SQL contract types, validators, and IR factories for Prisma 8",
+  "description": "SQL contract types, validators, IR factories and shared authoring definitions for Prisma 8",
   "scripts": {
     "build": "tsdown",
     "test": "vitest run",
@@ -16,16 +16,16 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/contract": "workspace:8.0.0-rc.20",
-    "@internal/framework-components": "workspace:8.0.0-rc.20",
-    "@internal/sql-schema-ir": "workspace:8.0.0-rc.20",
-    "@internal/utils": "workspace:8.0.0-rc.20",
+    "@internal/contract": "workspace:8.0.0-rc.24",
+    "@internal/framework-components": "workspace:8.0.0-rc.24",
+    "@internal/sql-schema-ir": "workspace:8.0.0-rc.24",
+    "@internal/utils": "workspace:8.0.0-rc.24",
     "arktype": "^2.2.2"
   },
   "devDependencies": {
-    "@repo/test-utils": "workspace:8.0.0-rc.20",
-    "@repo/tsconfig": "workspace:8.0.0-rc.20",
-    "@repo/tsdown": "workspace:8.0.0-rc.20",
+    "@repo/test-utils": "workspace:8.0.0-rc.24",
+    "@repo/tsconfig": "workspace:8.0.0-rc.24",
+    "@repo/tsdown": "workspace:8.0.0-rc.24",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
@@ -45,6 +45,8 @@
   "exports": {
     "./authored-check-naming": "./dist/authored-check-naming.mjs",
     "./canonicalization-hooks": "./dist/canonicalization-hooks.mjs",
+    "./check-expressions": "./dist/check-expressions.mjs",
+    "./codec-json-type": "./dist/codec-json-type.mjs",
     "./contract-view": "./dist/contract-view.mjs",
     "./data-type": "./dist/data-type.mjs",
     "./data-type-support": "./dist/data-type-support.mjs",
@@ -52,6 +54,7 @@
     "./entity-kinds": "./dist/entity-kinds.mjs",
     "./factories": "./dist/factories.mjs",
     "./foreign-key-materialization": "./dist/foreign-key-materialization.mjs",
+    "./generated-id-column-aliases": "./dist/generated-id-column-aliases.mjs",
     "./index-naming": "./dist/index-naming.mjs",
     "./index-type-validation": "./dist/index-type-validation.mjs",
     "./index-types": "./dist/index-types.mjs",

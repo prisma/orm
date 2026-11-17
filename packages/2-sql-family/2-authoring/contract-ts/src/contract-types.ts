@@ -1618,7 +1618,8 @@ export type SqlContractResult<Definition> = ContractWithTypeMaps<
         CodecTypesFromDefinition<Definition>,
         ParameterizedOutputTypesFromDefinition<Definition>,
         FieldTypeOverrides<Definition>,
-        'output'
+        'output',
+        BuiltStorage<Definition>['namespaces']
       >
     >;
     readonly fieldInputTypes: ResolvedTypeMap<
@@ -1627,7 +1628,8 @@ export type SqlContractResult<Definition> = ContractWithTypeMaps<
         CodecTypesFromDefinition<Definition>,
         ParameterizedOutputTypesFromDefinition<Definition>,
         FieldTypeOverrides<Definition>,
-        'input'
+        'input',
+        BuiltStorage<Definition>['namespaces']
       >
     >;
     readonly storageColumnTypes: ResolvedTypeMap<

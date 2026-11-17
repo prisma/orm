@@ -3,7 +3,7 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import { isInternalError } from '@internal/utils/internal-error';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { createContract } from '@repo/test-utils';
-import type { Client } from 'pg';
+import { type Client, Pool } from 'pg';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('pg', () => {
@@ -139,6 +139,20 @@ describe('binding validation raises RUNTIME.BINDING_INVALID', () => {
     });
   });
 
+  it('never copies part of a url with no scheme into the error', () => {
+    const error = capture(() => resolvePostgresBinding({ url: 'admin:hunter2@db.internal/app' }));
+    expect(error).toMatchObject({
+      code: 'RUNTIME.BINDING_INVALID',
+      message: 'Postgres URL must use postgres:// or postgresql://',
+      meta: { extension: 'postgres', reason: 'wrong scheme' },
+    });
+    const descriptors = JSON.stringify(Object.getOwnPropertyDescriptors(error));
+    expect(
+      ['admin', 'hunter2', 'db.internal'].filter((part) => descriptors.includes(part)),
+    ).toEqual([]);
+    expect(error).not.toHaveProperty('meta.received');
+  });
+
   it('unrecognizable pg object', () => {
     const error = capture(() =>
       resolvePostgresBinding({
@@ -147,6 +161,138 @@ describe('binding validation raises RUNTIME.BINDING_INVALID', () => {
     );
     expect(isStructuredError(error)).toBe(true);
     expect(error).toMatchObject({ code: 'RUNTIME.BINDING_INVALID' });
+  });
+});
+
+describe('postgres() given null as its database input', () => {
+  type Options = Parameters<typeof postgres<typeof contract>>[0];
+
+  it.each([
+    ['pg', { pg: null }, 'The pg option must be a pg.Pool or a pg.Client'],
+    ['url', { url: null }, 'The url option must be a string'],
+    ['binding', { binding: null }, 'The binding option must be an object with a kind'],
+  ])('raises RUNTIME.BINDING_INVALID for %s: null', (_name, input, message) => {
+    const error = capture(() => postgres({ contract, ...input } as unknown as Options));
+    expect(isStructuredError(error)).toBe(true);
+    expect(error).toMatchObject({
+      code: 'RUNTIME.BINDING_INVALID',
+      message,
+      why: expect.any(String),
+      fix: expect.any(String),
+      meta: { extension: 'postgres', receivedType: 'null' },
+    });
+  });
+
+  it.each([
+    ['an object with no kind', {}, 'undefined'],
+    ['an unknown kind', { kind: 'bogus' }, 'bogus'],
+    ['an array', [], 'undefined'],
+  ])('raises RUNTIME.BINDING_INVALID for a binding that is %s', (_name, binding, receivedKind) => {
+    const error = capture(() => postgres({ contract, binding } as unknown as Options));
+    expect(error).toMatchObject({
+      code: 'RUNTIME.BINDING_INVALID',
+      message: "The binding option must have kind 'url', 'pgPool' or 'pgClient'",
+      why: expect.any(String),
+      fix: expect.any(String),
+      meta: { extension: 'postgres', receivedKind },
+    });
+  });
+
+  it('does not echo a binding kind that is not a short identifier, so a connection string never reaches the error', () => {
+    const error = capture(() =>
+      postgres({
+        contract,
+        binding: { kind: 'postgres://user:secret@host/db' },
+      } as unknown as Options),
+    );
+    expect(error).toMatchObject({
+      code: 'RUNTIME.BINDING_INVALID',
+      message: "The binding option must have kind 'url', 'pgPool' or 'pgClient'",
+      meta: { extension: 'postgres', reason: 'unknown binding kind', receivedType: 'string' },
+    });
+    const { message, why, meta } = error as { message: string; why: string; meta: object };
+    expect(JSON.stringify({ message, why, meta })).not.toContain('secret');
+    expect(meta).not.toHaveProperty('receivedKind');
+  });
+
+  it('reports the null input, not the input count, when another input is also given', () => {
+    const error = capture(() =>
+      postgres({ contract, url: null, pg: new Pool() } as unknown as Options),
+    );
+    expect(error).toMatchObject({
+      code: 'RUNTIME.BINDING_INVALID',
+      message: 'The url option must be a string',
+    });
+  });
+
+  it('never copies a wrongly typed input into the error', () => {
+    const secret = 's3cret-password';
+    const error = capture(() =>
+      postgres({ contract, pg: `postgres://user:${secret}@host/db` } as unknown as Options),
+    );
+    expect(error).toMatchObject({
+      code: 'RUNTIME.BINDING_INVALID',
+      message: 'The pg option must be a pg.Pool or a pg.Client',
+      meta: { receivedType: 'string' },
+    });
+    expect(JSON.stringify(error)).not.toContain(secret);
+    expect(String(error)).not.toContain(secret);
+    expect(JSON.stringify(Object.getOwnPropertyDescriptors(error))).not.toContain(secret);
+  });
+});
+
+describe('postgres() given a binding whose contents are wrong', () => {
+  type Options = Parameters<typeof postgres<typeof contract>>[0];
+
+  it.each([
+    ['an empty url', { kind: 'url', url: '  ' }, 'Postgres URL must be a non-empty string', {}],
+    [
+      'a url with another scheme',
+      { kind: 'url', url: 'mysql://user:secret@host/db' },
+      'Postgres URL must use postgres:// or postgresql://',
+      {},
+    ],
+    [
+      'a url that is null',
+      { kind: 'url', url: null },
+      'The url in the binding option must be a string',
+      { receivedType: 'null' },
+    ],
+    [
+      'a url that is a number',
+      { kind: 'url', url: 5432 },
+      'The url in the binding option must be a string',
+      { receivedType: 'number' },
+    ],
+    [
+      'a pool that is missing',
+      { kind: 'pgPool', pool: undefined },
+      'The pool in the binding option must be a pg.Pool',
+      { receivedType: 'undefined' },
+    ],
+    [
+      'a client that is a string',
+      { kind: 'pgClient', client: 'postgres://user:secret@host/db' },
+      'The client in the binding option must be a pg.Client',
+      { receivedType: 'string' },
+    ],
+  ])(
+    'raises RUNTIME.BINDING_INVALID for %s, with no value in the error',
+    (_name, binding, message, meta) => {
+      const error = capture(() => postgres({ contract, binding } as unknown as Options));
+      expect(error).toMatchObject({
+        code: 'RUNTIME.BINDING_INVALID',
+        message,
+        meta: { extension: 'postgres', ...meta },
+      });
+      expect(JSON.stringify(Object.getOwnPropertyDescriptors(error))).not.toContain('secret');
+    },
+  );
+
+  it('keeps the trimmed url of a url binding', () => {
+    expect(
+      resolvePostgresBinding({ binding: { kind: 'url', url: ' postgres://localhost/db ' } }),
+    ).toEqual({ kind: 'url', url: 'postgres://localhost/db' });
   });
 });
 
@@ -161,14 +307,22 @@ describe('facade lifecycle codes', () => {
     });
   });
 
-  it('second connect() raises DRIVER.ALREADY_CONNECTED', async () => {
+  it('second connect() resolves with the same runtime', async () => {
+    const db = postgres({ contract, url: 'postgres://localhost:5432/db' });
+    const first = await db.connect();
+    await expect(db.connect()).resolves.toBe(first);
+  });
+
+  it('connect(options) after connect() raises DRIVER.ALREADY_CONNECTED', async () => {
     const db = postgres({ contract, url: 'postgres://localhost:5432/db' });
     await db.connect();
-    const error = await captureAsync(() => db.connect().then(() => undefined));
+    const error = await captureAsync(() =>
+      db.connect({ url: 'postgres://localhost:5432/db' }).then(() => undefined),
+    );
     expect(isStructuredError(error)).toBe(true);
     expect(error).toMatchObject({
       code: 'DRIVER.ALREADY_CONNECTED',
-      message: 'Postgres client already connected',
+      message: 'Postgres client is already bound',
     });
   });
 

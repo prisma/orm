@@ -22,20 +22,22 @@ export default defineConfig({
 
 ```typescript
 // prisma/contract.ts
-import { defineContract, field, model } from '@internal/sqlite/contract-builder';
+import { defineContract } from '@internal/sqlite/contract-builder';
 
-export default defineContract({
+export default defineContract({}, ({ field, model, gen, type }) => ({
   models: {
-    User: model('User', { fields: { id: field.id.uuidv4String() } }),
+    User: model('User', {
+      fields: { id: field.column(type.sql.UuidString()).id().onCreate(gen.uuid()) },
+    }),
   },
-});
+}));
 ```
 
 ## Exports
 
 ### `@internal/sqlite/config`
 
-Simplified `defineConfig` that pre-wires all SQLite internals (family, target, adapter, driver, contract providers). Accepts `contract`, `db.connection`, `extensions`, and `migrations.dir`.
+Simplified `defineConfig` that pre-wires all SQLite internals (family, target, adapter, driver, contract providers). Accepts `contract`, `db.connection`, `extensions`, `migrations.dir`, and `formatter` (the indent and line endings `contract format` and the language server use for PSL files).
 
 ```typescript
 import { defineConfig } from '@internal/sqlite/config';
@@ -52,14 +54,18 @@ export default defineConfig({
 TypeScript contract authoring DSL (`defineContract`, `field`, `model`, `rel`, …). The `defineContract` facade pre-binds `family` and `target` — callers do not pass those fields.
 
 ```typescript
-import { defineContract, field, model } from '@internal/sqlite/contract-builder';
+import { defineContract } from '@internal/sqlite/contract-builder';
 
-export default defineContract({
+export default defineContract({}, ({ field, model, gen, type }) => ({
   models: {
-    User: model('User', { fields: { id: field.id.uuidv4String() } }),
+    User: model('User', {
+      fields: { id: field.column(type.sql.UuidString()).id().onCreate(gen.uuid()) },
+    }),
   },
-});
+}));
 ```
+
+The entry also exports `field`, `type` and `gen`, the same helpers the callback receives, for code outside a contract, such as the fields of a query fragment: `field.column(type.sql.UuidString()).id().onCreate(gen.uuid())`.
 
 ### `@internal/sqlite/control`
 
@@ -93,6 +99,8 @@ Re-exports all migration operation helpers from `@internal/target-sqlite/migrati
 
 Composes the SQLite execution stack and returns typed query roots (`db.sql`, `db.raw`, `db.orm`, `db.query(plan)`, `db.execute(plan)`, `db.toSql(plan)`, `db.context`, `db.stack`). Creating a client has no side effects; the database opens on the first query, `db.runtime()` or `db.connect(...)`.
 
+Reads stream row by row: the driver steps through each result with `StatementSync.iterate()`, so a `for await` over a read gets each row as SQLite produces it, without loading the whole result first. That is what the `cursor` option of `postgres()` gives, so `sqlite()` has no `cursor` option. It has no `poolOptions` or `url`, `pg` and `binding` either: the database is an embedded file, and `path` names it.
+
 Pass `collections` to give models custom collection classes: `sqlite({ contract, path, collections: { Post: PostCollection } })`, where `PostCollection` extends `Collection<Contract, 'Post'>` from `@prisma/orm-sqlite/orm-client`. `db.orm.Post`, and the ORM inside `db.transaction(...)`, then return a `PostCollection`. The client's type carries the classes as its second type parameter, which defaults to no classes.
 
 Pass `log` (an object with `info`, `warn`, `error` and an optional `debug` method, each taking one event object; `console` works, and the type is `Log` from `@prisma/orm-sqlite/family-runtime`) to receive what the runtime logs: the marker-verification warnings `CONTRACT.MARKER_MISSING` and `CONTRACT.MARKER_MISMATCH` from the first query, the warnings `lints()` emits for rules whose severity is `warn`, and the errors a middleware's `activityEnded` or `activityFinalized` hook throws, which the runtime logs and swallows. It also receives the warning `runtime.close.waiting-for-activities` when `close()` is waiting only for activities whose handles were never ended or for transactions still open, with the counts `openActivities` and `openTransactions`; `close()` waits for each such transaction until it commits or rolls back, and the error `runtime.connection.release.error` when the connection taken for an activity's own transaction fails to release after the transaction settles. If `log` has a `debug` method, it also receives debug events, for example when a middleware intercepts a statement. `budgets()` violations reach `log` only in `mode: 'permissive'` (see *Running plans and rendering SQL*). Without `log`, the runtime drops these events.
@@ -108,7 +116,7 @@ await db.orm.Post.with(titled).all();
 
 ### Running plans and rendering SQL
 
-`db.query(plan)` runs a plan from `db.sql`, `db.raw` or the ORM and returns its rows as an `AsyncIterableResult`; `await` it for an array. `db.execute(plan)` runs a plan and resolves its statistics, `{ affectedRows }`, with no rows. Both have the types `tx.query` and `tx.execute` have inside `db.transaction(...)`. For an ORM plan such as `db.orm.Post.where({ title: 'Hello' }).prepared.all().plan`, `db.query` yields the database rows, not the result the ORM builds from them.
+`db.query(plan)` runs a plan from `db.sql`, `db.raw` or the ORM and returns its rows as an `AsyncIterableResult`; `await` it for an array. `db.execute(plan)` runs a plan and resolves its statistics, `{ affectedRows }`, with no rows; a statement that changed one row also reports `insertId`, which names the row only after a one-row insert (see the [driver README](../3-driver/README.md)). Both have the types `tx.query` and `tx.execute` have inside `db.transaction(...)`. For an ORM plan such as `db.orm.Post.where({ title: 'Hello' }).prepared.all().plan`, `db.query` yields the database rows, not the result the ORM builds from them.
 
 `db.toSql(plan)` returns the SQL and parameters the plan would run, `{ sql, params }`, with no database. `params` are the values the plan holds, before codecs encode them for the driver. Middleware rewrites (`beforeCompile`) are not applied, because they belong to running a query. A plan with `prepare` bind sites throws `RUNTIME.PREPARE_BIND_ON_ADHOC`, and a plan built for another contract throws `PLAN.HASH_MISMATCH`, as running it would. `sqliteStatic()` has `toSql` too.
 
@@ -122,6 +130,10 @@ await db.execute(db.raw.sql`UPDATE posts SET views = 0`.affectedCount().build())
 `mode` is `'strict'` by default, and every `budgets()` violation throws. Pass `mode: 'permissive'` and a violation whose severity is `'warn'` goes to `log.warn` instead, and the query runs; a violation whose severity is `'error'` still throws. `budgets()` gives latency `'warn'` and the row count `'error'` by default, so a row-count limit warns only with `severities: { rowCount: 'warn' }`.
 
 ### Transactions
+
+Import `{ IsolationLevel }` from `@prisma/orm-sqlite/runtime`. `SqliteTransactionOptions` accepts only `isolationLevel: IsolationLevel.Serializable` (or the literal `'Serializable'`), through factory `transactionOptions` or `transaction(fn, options?)`. The driver keeps plain BEGIN and does not alter PRAGMAs. See [transaction isolation](../../../../docs/reference/transaction-options.md) for null rejection, undefined inheritance and explicit-only defaults.
+
+Callback options also accept `timeout` defaults and overrides independently of isolation. Local `undefined` inherits; `null` disables an inherited deadline. Synchronous SQLite calls can delay deadline observation. See [callback timeouts](../../../../docs/reference/transaction-options.md#timeout).
 
 `db.transaction(async (tx) => ...)` commits when the callback returns and rolls back when it throws. `tx` offers the client's query members, with the same types: `sql`, `orm` (with the client's custom collection classes and `fragment`), `raw`, `prepare`, `query`, `execute`, `toSql` and `enums`. Every statement they send runs inside the transaction. `tx` has no `close`, `[Symbol.asyncDispose]`, `transaction` or `runtime()`. The type is `SqliteTransactionContext<Contract>`.
 

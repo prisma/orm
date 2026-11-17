@@ -34,7 +34,7 @@ describe('a column with type parameters', () => {
         .flatMap((model) => model.fields)
         .filter((field) => field.name === 'price')
         .map(fieldText),
-    }).toEqual({ types: undefined, price: ['price Numeric(10, 2)'] });
+    }).toEqual({ types: undefined, price: ['price Decimal(precision: 10, scale: 2)'] });
   });
 });
 

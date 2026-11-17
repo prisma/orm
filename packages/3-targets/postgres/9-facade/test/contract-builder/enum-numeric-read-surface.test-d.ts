@@ -9,11 +9,11 @@ const pgInt = { codecId: 'pg/int4@1' } as const;
 const Ratio = enumType('Ratio', pgNumeric, member('Half', '0.5'), member('Whole', '1.50'));
 const Level = enumType('Level', pgInt, member('Low', 1), member('High', 10));
 
-const contract = defineContract({ enums: { Ratio, Level } }, ({ field, model }) => ({
+const contract = defineContract({ enums: { Ratio, Level } }, ({ field, model, gen, type }) => ({
   models: {
     Reading: model('Reading', {
       fields: {
-        id: field.id.uuidv4String(),
+        id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
         ratio: field.namedType(Ratio),
         level: field.namedType(Level),
       },

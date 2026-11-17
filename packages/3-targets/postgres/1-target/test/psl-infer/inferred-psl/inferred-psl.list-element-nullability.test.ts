@@ -17,8 +17,9 @@ import { printPslFromFlat } from '../fixtures';
 const elementCandidate = postgresRenderCheckExpressions({
   tableName: 'users',
   columnName: 'tags',
-  many: true,
+  many: { elementNullable: false },
   memberValues: undefined,
+  valueObject: undefined,
 })[0];
 
 const derivedPrefix = composeCheckWirePrefix('users', 'tags', 'elementNotNull');

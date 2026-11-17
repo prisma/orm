@@ -28,6 +28,7 @@ export const MASKED_CONNECTION = 'postgres://****:****@localhost:5432/appdb';
 export const EMITTED_CONTRACT_DTS = 'export type Contract = unknown;\n';
 /** What the fake client renders for any contract: the snapshot must carry this, not the file on disk. */
 export const RENDERED_CONTRACT_DTS = '// rendered\nexport type Contract = { rendered: true };\n';
+export const SNAPSHOT_CONTRACT_DTS = '/* rendered */ export type Contract = { rendered: true };\n';
 
 export const mocks: Record<'connect' | 'close' | 'dbSign' | 'renderContractDts', Mock> = {
   connect: vi.fn(),

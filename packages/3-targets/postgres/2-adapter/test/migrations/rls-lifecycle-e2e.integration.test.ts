@@ -1,7 +1,5 @@
 import type { Contract } from '@internal/contract/types';
 import { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
-import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
-import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
 import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import {
   APP_SPACE_ID,
@@ -20,7 +18,6 @@ import {
 import { sqlContextInput } from '@internal/sql-contract-psl/test';
 import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
-import { postgresScalarAuthoringTypes } from '@internal/target-postgres/control';
 import { isPostgresSchema, postgresCreateNamespace } from '@internal/target-postgres/types';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { postgresDataTypeSupport } from '../helpers/postgres-data-type-support';
@@ -140,21 +137,8 @@ namespace public {
 // PSL → contract helpers
 // ============================================================================
 
-function buildScalarTypeDescriptors(): ReadonlyMap<string, { codecId: string }> {
-  return collectScalarTypeConstructors(postgresScalarAuthoringTypes);
-}
-
 function buildContractFromPsl(psl: string): Contract<SqlStorage> {
   const assembled = assembleAuthoringContributions([postgresTargetDescriptor]);
-  const scalarColumnDescriptors = buildScalarTypeDescriptors();
-  const scalarTypeConstructors: Record<string, AuthoringTypeConstructorDescriptor> =
-    Object.fromEntries(
-      [...scalarColumnDescriptors].map(([name, output]) => [
-        name,
-        { kind: 'typeConstructor' as const, output },
-      ]),
-    );
-
   const bound = bindPslSchema(psl, {
     sourceId: 'rls-lifecycle-e2e.integration.test.psl',
     context: {
@@ -163,7 +147,6 @@ function buildContractFromPsl(psl: string): Contract<SqlStorage> {
       composedExtensionContracts: new Map(),
       authoringContributions: {
         ...assembled,
-        type: { ...scalarTypeConstructors, ...assembled.type },
         attributeSpecs: sqlAttributeSpecs,
       },
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },

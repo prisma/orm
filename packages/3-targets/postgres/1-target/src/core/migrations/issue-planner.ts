@@ -45,6 +45,7 @@ import {
   type SqlUniqueIR,
   sqlColumnTypesEqual,
 } from '@internal/sql-schema-ir/types';
+import { invariant } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import type { Result } from '@internal/utils/result';
@@ -56,6 +57,11 @@ import {
 } from '../default-constraint-names';
 import { DEFAULT_NAMESPACE_ID } from '../namespace-ids';
 import type { PostgresDatabaseSchemaNode } from '../schema-ir/postgres-database-schema-node';
+import {
+  offSearchPathText,
+  PostgresExtensionSchemaNode,
+  searchPathFix,
+} from '../schema-ir/postgres-extension-schema-node';
 import type { PostgresNamespaceSchemaNode } from '../schema-ir/postgres-namespace-schema-node';
 import type { PostgresNativeEnumSchemaNode } from '../schema-ir/postgres-native-enum-schema-node';
 import type { PostgresTableSchemaNode } from '../schema-ir/postgres-table-schema-node';
@@ -75,6 +81,7 @@ import {
   AddPrimaryKeyCall,
   AddUniqueCall,
   AlterColumnTypeCall,
+  CreateExtensionCall,
   CreateIndexCall,
   CreateNativeEnumTypeCall,
   CreateSchemaCall,
@@ -85,6 +92,7 @@ import {
   DropColumnCall,
   DropConstraintCall,
   DropDefaultCall,
+  DropExtensionCall,
   DropIndexCall,
   DropNativeEnumTypeCall,
   DropNotNullCall,
@@ -92,6 +100,7 @@ import {
   EnableRowLevelSecurityCall,
   type PostgresOpFactoryCall,
   SetDefaultCall,
+  SetExtensionSchemaCall,
   SetNotNullCall,
 } from './op-factory-call';
 import type { ForeignKeySpec } from './operations/shared';
@@ -160,11 +169,13 @@ type CallCategory =
 function classifyCall(call: PostgresOpFactoryCall): CallCategory {
   switch (call.factoryName) {
     case 'createExtension':
+    case 'setExtensionSchema':
     case 'createSchema':
     case 'createNativeEnumType':
     case 'addNativeEnumValue':
       return 'dep';
     case 'dropNativeEnumType':
+    case 'dropExtension':
       return 'dropType';
     case 'dropTable':
     case 'dropColumn':
@@ -195,6 +206,10 @@ function classifyCall(call: PostgresOpFactoryCall): CallCategory {
       return 'column';
     case 'replaceStoredValue':
     case 'removeStoredValue':
+    case 'renameStoredKey':
+    case 'removeStoredKey':
+    case 'fillStoredKey':
+    case 'deleteRows':
     case 'alterColumnType':
     case 'setNotNull':
     case 'dropNotNull':
@@ -246,6 +261,21 @@ function emptySchemaIR(): SqlSchemaIR {
 function dropRank(call: PostgresOpFactoryCall): number {
   if (call.factoryName !== 'dropConstraint') return 2;
   return call.kind === 'foreignKey' ? 0 : 1;
+}
+
+/**
+ * Schemas come first, then extensions, then the other dependencies such as enum types: an extension may be installed into a schema the same plan creates.
+ */
+function depRank(call: PostgresOpFactoryCall): number {
+  switch (call.factoryName) {
+    case 'createSchema':
+      return 0;
+    case 'createExtension':
+    case 'setExtensionSchema':
+      return 1;
+    default:
+      return 2;
+  }
 }
 
 function conflictKindForCall(call: PostgresOpFactoryCall): SqlPlannerConflict['kind'] {
@@ -591,6 +621,51 @@ function nativeEnumMemberChangeRefusal(options: {
  * refused with a NAMED diagnostic, never a silent no-op and never a
  * drop-and-recreate.
  */
+function mapExtensionNodeIssue(
+  issue: SchemaDiffIssue,
+): Result<readonly PostgresOpFactoryCall[], SqlPlannerConflict> {
+  const asNode = (node: DiffableNode | undefined) =>
+    node === undefined
+      ? undefined
+      : blindCast<SqlSchemaIRNode, 'every Postgres diff-tree node is a SqlSchemaIRNode'>(node);
+  const expected = asNode(issue.expected);
+  const actual = asNode(issue.actual);
+  if (expected !== undefined) {
+    PostgresExtensionSchemaNode.assert(expected);
+    const expectedLocation = expected.location;
+    if (actual === undefined) {
+      return ok([
+        new CreateExtensionCall(
+          expectedLocation.kind === 'searchPath' ? undefined : expectedLocation.schemaName,
+          expected.name,
+        ),
+      ]);
+    }
+    PostgresExtensionSchemaNode.assert(actual);
+    const actualLocation = actual.location;
+    if (expectedLocation.kind === 'searchPath') {
+      invariant(
+        actualLocation.kind === 'installed',
+        'an extension left to the search path differs only from an installed extension',
+      );
+      return notOk({
+        kind: 'unsupportedOperation',
+        summary: `Extension "${actual.name}" ${offSearchPathText(actualLocation)}. The contract declares it in the unbound namespace, so the planner does not move it.`,
+        why: searchPathFix(actualLocation),
+      });
+    }
+    return ok([new SetExtensionSchemaCall(expected.name, expectedLocation.schemaName)]);
+  }
+  invariant(actual !== undefined, 'an extension issue carries a node on one side');
+  PostgresExtensionSchemaNode.assert(actual);
+  return ok([
+    new DropExtensionCall(
+      actual.location.kind === 'searchPath' ? undefined : actual.location.schemaName,
+      actual.name,
+    ),
+  ]);
+}
+
 function mapNativeEnumNodeIssue(
   issue: SchemaDiffIssue,
   ctx: StrategyContext,
@@ -985,6 +1060,10 @@ export function mapNodeIssueToCall(
     return mapNativeEnumNodeIssue(issue, ctx);
   }
 
+  if (node.nodeKind === PostgresSchemaNodeKind.extension) {
+    return mapExtensionNodeIssue(issue);
+  }
+
   const ddlSchemaName = issueSchemaName(issue);
   const tableName = issueTableName(issue);
   if (ddlSchemaName === undefined || tableName === undefined) {
@@ -1169,7 +1248,7 @@ export function planIssues(
     combinedBucketable.filter((c) => classifyCall(c) === cat);
 
   const calls: PostgresOpFactoryCall[] = [
-    ...byCategory('dep'),
+    ...byCategory('dep').sort((a, b) => depRank(a) - depRank(b)),
     ...byCategory('drop').sort((a, b) => dropRank(a) - dropRank(b)),
     // DROP TYPE after every table drop — a managed enum type can only go once
     // no live column still uses it.

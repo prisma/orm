@@ -52,7 +52,7 @@ const fieldContext = {
   ...modelContext,
   field,
   typeResolution: undefined,
-  typeConstructor: undefined,
+  contributedType: undefined,
 };
 const blockContext = blockSpecContext({ symbols: symbolTable, dataTypes: postgresDataTypeSupport });
 

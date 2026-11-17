@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm';
 import {
   AggregateExpr,
   AndExpr,
@@ -38,6 +39,7 @@ import { litParams } from '@repo/test-utils/lowered-params';
 import { describe, expect, it } from 'vitest';
 import { TestSqlContractSerializer as SqlContractSerializer } from '../../../../2-sql-family/9-family/test/test-sql-contract-serializer';
 import { createSqliteAdapter } from '../src/core/adapter';
+import { sqliteAdapterDescriptorMeta } from '../src/core/descriptor-meta';
 import type { SqliteContract } from '../src/core/types';
 
 const contract = new SqlContractSerializer().deserializeContract({
@@ -92,6 +94,16 @@ describe('SQLite adapter', () => {
 
   it('SQLite adapter does not report sql.scalarList capability', () => {
     expect(adapter.profile.capabilities['sql']).not.toMatchObject({ scalarList: true });
+  });
+
+  it('reports that an insert conflict clause applies only to the columns it names', () => {
+    expect({
+      profile: adapter.profile.capabilities['sql'],
+      contract: sqliteAdapterDescriptorMeta.capabilities.sql,
+    }).toMatchObject({
+      profile: { insertOnConflictTarget: true },
+      contract: { insertOnConflictTarget: true },
+    });
   });
 
   it.each([
@@ -600,6 +612,60 @@ describe('SQLite adapter', () => {
       expect(sql).toContain('json_object(\'email\', "user"."email", \'count\', COUNT(*))');
     });
 
+    describe('an object wider than one json_object call takes', () => {
+      function lowerObjectOf(keys: readonly string[]): string {
+        const entries = keys.map((key, index) =>
+          JsonObjectExpr.entry(
+            key,
+            new NativeJsonValueProjection(ColumnRef.of('user', `c${index}`)),
+          ),
+        );
+        const ast = SelectAst.from(TableSource.named('user')).withProjection([
+          ProjectionItem.of('object', JsonObjectExpr.fromEntries(entries)),
+        ]);
+        return adapter.lower(ast, { contract }).sql;
+      }
+
+      const keysOf = (width: number) => Array.from({ length: width }, (_, index) => `k${index}`);
+
+      function pairs(from: number, to: number): string {
+        return Array.from({ length: to - from }, (_, offset) => {
+          const index = from + offset;
+          return `'k${index}', "user"."c${index}"`;
+        }).join(', ');
+      }
+
+      function paths(from: number, to: number): string {
+        return Array.from({ length: to - from }, (_, offset) => {
+          const index = from + offset;
+          return `'$."k${index}"', "user"."c${index}"`;
+        }).join(', ');
+      }
+
+      it('renders 63 entries as one json_object call', () => {
+        expect(lowerObjectOf(keysOf(63))).toBe(
+          `SELECT json_object(${pairs(0, 63)}) AS "object" FROM "user"`,
+        );
+      });
+
+      it('appends the entries past 63 with json_set, which keeps them in order', () => {
+        expect(lowerObjectOf(keysOf(64))).toBe(
+          `SELECT json_set(json_object(${pairs(0, 63)}), ${paths(63, 64)}) AS "object" FROM "user"`,
+        );
+      });
+
+      it('appends each further 63 entries with another json_set', () => {
+        expect(lowerObjectOf(keysOf(130))).toBe(
+          `SELECT json_set(json_set(json_object(${pairs(0, 63)}), ${paths(63, 126)}), ${paths(126, 130)}) AS "object" FROM "user"`,
+        );
+      });
+
+      it('quotes an appended key in its JSON path', () => {
+        const sql = lowerObjectOf([...keysOf(63), `it's "a\\b"`]);
+        expect(sql).toContain(`), '$."it''s \\"a\\\\b\\""', "user"."c63") AS "object"`);
+      });
+    });
+
     function selectProjecting(projection: AnyJsonValueProjection): SelectAst {
       return SelectAst.from(TableSource.named('user')).withProjection([
         ProjectionItem.of(
@@ -751,6 +817,19 @@ describe('SQLite adapter', () => {
         `SELECT 12 AS "bigintValue", '2024-01-01T00:00:00.000Z' AS "dateValue", '{"ok":true}' AS "jsonValue", NULL AS "missingValue" FROM "user"`,
       );
     });
+
+    it('renders a Date literal created in another realm as its ISO text', () => {
+      const ast = SelectAst.from(TableSource.named('user')).withProjection([
+        ProjectionItem.of(
+          'at',
+          LiteralExpr.of(runInNewContext('new Date("2024-01-01T00:00:00.000Z")')),
+        ),
+      ]);
+
+      expect(adapter.lower(ast, { contract }).sql).toBe(
+        `SELECT '2024-01-01T00:00:00.000Z' AS "at" FROM "user"`,
+      );
+    });
   });
 
   describe('negative cases', () => {
@@ -817,5 +896,51 @@ describe('SQLite adapter', () => {
       const { sql } = adapter.lower(ast, { contract });
       expect(sql).toContain('LEFT JOIN "post" ON');
     });
+  });
+});
+
+describe('SQLite adapter of a row value IN a subquery', () => {
+  const rowValueInSubquery = SelectAst.from(TableSource.named('tag'))
+    .withProjection([ProjectionItem.of('id', ColumnRef.of('tag', 'id'))])
+    .withWhere(
+      BinaryExpr.in(
+        ListExpression.of([ColumnRef.of('tag', 'tenant_id'), ColumnRef.of('tag', 'id')]),
+        SubqueryExpr.of(
+          SelectAst.from(TableSource.named('user_tags', 'ut'))
+            .withProjection([
+              ProjectionItem.of('tenant_id', ColumnRef.of('ut', 'tenant_id')),
+              ProjectionItem.of('tag_id', ColumnRef.of('ut', 'tag_id')),
+            ])
+            .withWhere(BinaryExpr.eq(ColumnRef.of('ut', 'user_id'), LiteralExpr.of(1))),
+        ),
+      ),
+    );
+
+  it('renders the row value and the subquery', () => {
+    expect(createSqliteAdapter().lower(rowValueInSubquery, { contract }).sql).toBe(
+      'SELECT "tag"."id" AS "id" FROM "tag" WHERE ("tag"."tenant_id", "tag"."id") IN (SELECT "ut"."tenant_id" AS "tenant_id", "ut"."tag_id" AS "tag_id" FROM "user_tags" AS "ut" WHERE "ut"."user_id" = 1)',
+    );
+  });
+
+  it('refuses a subquery whose columns do not match the row value', () => {
+    const ast = SelectAst.from(TableSource.named('tag'))
+      .withProjection([ProjectionItem.of('id', ColumnRef.of('tag', 'id'))])
+      .withWhere(
+        BinaryExpr.in(
+          ListExpression.of([ColumnRef.of('tag', 'tenant_id'), ColumnRef.of('tag', 'id')]),
+          SubqueryExpr.of(
+            SelectAst.from(TableSource.named('user_tags')).withProjection([
+              ProjectionItem.of('tag_id', ColumnRef.of('user_tags', 'tag_id')),
+            ]),
+          ),
+        ),
+      );
+
+    expect(() => createSqliteAdapter().lower(ast, { contract })).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.AST_INVALID',
+        message: 'A subquery compared with a row value of 2 columns must project 2 columns',
+      }),
+    );
   });
 });

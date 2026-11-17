@@ -5,7 +5,7 @@
  *
  * What the database computes and what the application reads are two questions, and the defaults policy answers the second: `count`, `sum`, and `avg` over integers answer as a JS `number` — throwing through the codec's safe-range guard where the value cannot be one — while `countBigInt`, `sumBigInt`, and `avgDecimal` answer losslessly. Bare `sum` and `avg` over a float, `numeric`, or unbounded-integer column stay in that column's own family, whose representation its author chose.
  *
- * The pairs PostgreSQL does not aggregate at all — `sum`/`avg` over anything non-numeric and non-temporal, and `min`/`max` over `bool`, `uuid`, `bytea`, `bit`, `bit varying`, `json`, and `jsonb` — carry no descriptor, so resolution reports them as unavailable rather than typing a result for an expression the database refuses to run.
+ * The pairs PostgreSQL does not aggregate at all — `sum`/`avg` over anything non-numeric and non-temporal, `avg` over `money`, `sum` and `avg` over `oid`, and `min`/`max` over `bool`, `uuid`, `bytea`, `bit`, `bit varying`, `json`, and `jsonb` — carry no descriptor, so resolution reports them as unavailable rather than typing a result for an expression the database refuses to run.
  *
  * A lowering hook builds the expression wherever the operation's name is not the database's: the lossless variants compute with the SQL aggregate their bare namesakes use, and `avg` over an integer casts its result. Result identity stays declared either way — a hook returns an expression and nothing else.
  */
@@ -29,7 +29,9 @@ import {
   PG_INT8_NUMBER_CODEC_ID,
   PG_INTERVAL_CODEC_ID,
   PG_INTERVAL_STRING_CODEC_ID,
+  PG_MONEY_CODEC_ID,
   PG_NUMERIC_CODEC_ID,
+  PG_OID_CODEC_ID,
   PG_TEXT_ARRAY_CODEC_ID,
   PG_TEXT_CODEC_ID,
   PG_TIME_STRING_CODEC_ID,
@@ -134,7 +136,7 @@ const DOUBLE_PRECISION_CODECS = [
 ] as const;
 
 /**
- * Codecs whose `min`/`max` returns the input type and whose traits do not already say so: the temporal types, `inet`, `text[]`, and native enums advertise `order` or `equality`, which `uuid`, `bit`, `bit varying`, `bool`, `bytea`, `json`, and `jsonb` also advertise while having no `min`/`max` at all. An exact overload per supported codec is therefore the only honest shape — a trait fallback over `order` would claim the unsupported ones too.
+ * Codecs whose `min`/`max` returns the input type and whose traits do not already say so: the temporal types, `inet`, `oid`, `money`, `text[]`, and native enums advertise `order` or `equality`, which `uuid`, `bit`, `bit varying`, `bool`, `bytea`, `json`, and `jsonb` also advertise while having no `min`/`max` at all. An exact overload per supported codec is therefore the only honest shape — a trait fallback over `order` would claim the unsupported ones too.
  */
 const MIN_MAX_PRESERVING_CODECS = [
   PG_ENUM_CODEC_ID,
@@ -142,6 +144,8 @@ const MIN_MAX_PRESERVING_CODECS = [
   PG_INTERVAL_CODEC_ID,
   PG_INTERVAL_STRING_CODEC_ID,
   PG_INET_CODEC_ID,
+  PG_OID_CODEC_ID,
+  PG_MONEY_CODEC_ID,
   PG_TEXT_ARRAY_CODEC_ID,
   PG_DATE_STRING_CODEC_ID,
   PG_TIMESTAMP_STRING_CODEC_ID,
@@ -224,6 +228,7 @@ export const postgresAggregateDescriptors = [
   produces('sum', { kind: 'codec', codecId: PG_NUMERIC_CODEC_ID }, PG_NUMERIC_CODEC_ID),
   // `sum` over the unbounded integer keeps its codec: the expression's SQL type is `numeric`, and a sum of integral values is integral, so the codec's integrality-checked `bigint` decode is the right reader for the total.
   produces('sum', { kind: 'codec', codecId: PG_UNBOUNDED_INT_CODEC_ID }, PG_UNBOUNDED_INT_CODEC_ID),
+  produces('sum', { kind: 'codec', codecId: PG_MONEY_CODEC_ID }, PG_MONEY_CODEC_ID),
   produces('sum', { kind: 'codec', codecId: PG_INTERVAL_CODEC_ID }, PG_INTERVAL_CODEC_ID),
   produces(
     'sum',

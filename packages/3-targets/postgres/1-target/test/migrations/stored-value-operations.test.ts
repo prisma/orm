@@ -129,7 +129,13 @@ describe('removeStoredValue', () => {
     expect({ description: check?.description, meta: check?.meta }).toEqual({
       description: 'ensure column "state" of "task" takes NULL, or no row holds "ARCHIVED" in it',
       meta: {
-        rowsHoldingValue: { enumValue: { enum: 'Status', member: 'ARCHIVED' }, value: 'ARCHIVED' },
+        rowsHoldingValue: {
+          enumValue: { enum: 'Status', member: 'ARCHIVED' },
+          value: 'ARCHIVED',
+          table: 'task',
+          column: 'state',
+          storedValue: 'ARCHIVED',
+        },
       },
     });
   });
@@ -193,6 +199,9 @@ describe('stored value calls', () => {
         enumValue: { namespaceId: 'app', enum: 'Status', member: 'ARCHIVED' },
         value: 'archived',
         codecRef: { codecId: 'pg/text@1' },
+        table: 'task',
+        column: 'state',
+        storedValue: 'archived',
       },
     });
   });

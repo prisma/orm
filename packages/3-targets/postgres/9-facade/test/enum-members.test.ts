@@ -70,11 +70,11 @@ const contract = defineContract(
       Float8Level,
     },
   },
-  ({ field, model }) => ({
+  ({ field, model, gen, type }) => ({
     models: {
       Reading: model('Reading', {
         fields: {
-          id: field.id.uuidv4String(),
+          id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
           text: field.namedType(TextLevel),
           int4: field.namedType(Int4Level),
           int8: field.namedType(Int8Level),

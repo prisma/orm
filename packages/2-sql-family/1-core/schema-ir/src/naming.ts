@@ -158,12 +158,13 @@ export function computeCheckContentHash(expression: string): string {
  * The canonical spelling of this union — every layer that can depend on this
  * module imports it rather than re-spelling the literals.
  */
-export type CheckKind = 'membership' | 'elementNotNull';
+export type CheckKind = 'membership' | 'elementNotNull' | 'shape';
 
 /** The trailing segment a check's wire-name prefix carries, per kind. */
 const CHECK_KIND_SUFFIX = {
   membership: 'check',
   elementNotNull: 'elem_not_null',
+  shape: 'shape',
 } as const;
 
 /**
@@ -185,7 +186,7 @@ export function composeCheckWirePrefix(
  * Every {@link CheckKind} value, read off {@link CHECK_KIND_SUFFIX}'s own keys
  * so the enumeration can never drift out of step with it.
  */
-const CHECK_KINDS: readonly CheckKind[] = Object.keys(CHECK_KIND_SUFFIX).filter(
+export const CHECK_KINDS: readonly CheckKind[] = Object.keys(CHECK_KIND_SUFFIX).filter(
   (kind): kind is CheckKind => kind in CHECK_KIND_SUFFIX,
 );
 

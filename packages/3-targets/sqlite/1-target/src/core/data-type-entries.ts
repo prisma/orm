@@ -3,8 +3,9 @@
  *
  * SQLite stores every whole number of up to 64 bits as an `integer` and has no type at all for a
  * wider one or for a non-finite number, so its classifier returns nothing for those and the value is
- * refused. The `json` tag yields `sqlite/json` and the `datetime` tag `sqlite/datetime`, each
- * stored as text. ADR 254.
+ * refused. The `json` tag yields `sqlite/json`, and the `datetime`, `date`, `time` and `duration`
+ * tags yield `sqlite/datetime`, `sqlite/date`, `sqlite/time` and `sqlite/duration`, each stored as
+ * text. ADR 254.
  */
 
 import type { JsonValue } from '@internal/contract/types';
@@ -19,12 +20,18 @@ import { canonicalizeJson } from '@internal/framework-components/utils';
 import {
   sqliteBlob,
   sqliteBlobFromHexText,
+  sqliteDate,
+  sqliteDateText,
   sqliteDatetime,
   sqliteDatetimeText,
+  sqliteDuration,
+  sqliteDurationText,
   sqliteInteger,
   sqliteJson,
   sqliteReal,
   sqliteText,
+  sqliteTime,
+  sqliteTimeText,
 } from './data-types';
 
 const classifySqliteNumber = createNumberClassifier({
@@ -75,6 +82,24 @@ export function sqliteDataTypeEntries(): Readonly<Record<string, DataTypeAuthori
       print: (value) => String(value),
       documentation:
         'An instant, as in datetime`2024-01-01T00:00:00Z`. Reads ISO 8601 with a UTC offset and stores the instant in UTC with three fraction digits, the text every row holds.',
+    },
+    [sqliteDate.id]: {
+      written: { kind: 'tag', tag: 'date', parse: sqliteDateText },
+      print: (value) => String(value),
+      documentation:
+        'A calendar date, as in date`2024-02-29`, in the years 0000 to 9999, stored as the text every row holds.',
+    },
+    [sqliteTime.id]: {
+      written: { kind: 'tag', tag: 'time', parse: sqliteTimeText },
+      print: (value) => String(value),
+      documentation:
+        'A time of day without a UTC offset, as in time`09:30:00`. Stores it with three fraction digits, as in 09:30:00.000, the text every row holds.',
+    },
+    [sqliteDuration.id]: {
+      written: { kind: 'tag', tag: 'duration', parse: sqliteDurationText },
+      print: (value) => String(value),
+      documentation:
+        'A length of time, as in duration`PT1H30M`. Reads an ISO 8601 duration and stores it as written.',
     },
   };
 }

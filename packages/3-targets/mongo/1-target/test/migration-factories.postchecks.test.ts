@@ -1,3 +1,4 @@
+import { MONGO_INDEX_OPTION_KEYS } from '@internal/mongo-contract';
 import type { MongoFilterExpr } from '@internal/mongo-query-ast/control';
 import {
   keysToKeySpec,
@@ -6,7 +7,6 @@ import {
   MongoFieldFilter,
   MongoNotExpr,
 } from '@internal/mongo-query-ast/control';
-import { MONGO_INDEX_OPTION_KEYS } from '@internal/mongo-schema-ir';
 import { describe, expect, it } from 'vitest';
 import { collMod, createIndex } from '../src/core/migrations/migration-factories';
 
@@ -22,14 +22,17 @@ describe('createIndex postcheck', () => {
 
     expect(op.postcheck[0]!.filter).toEqual(
       MongoAndExpr.of([
-        MongoFieldFilter.eq('key', keysToKeySpec(keys)),
-        MongoFieldFilter.eq('unique', true),
-        new MongoNotExpr(MongoFieldFilter.eq('sparse', true)),
-        MongoExistsExpr.notExists('expireAfterSeconds'),
-        MongoFieldFilter.eq('partialFilterExpression', { email: { $exists: true } }),
-        MongoExistsExpr.notExists('wildcardProjection'),
-        MongoFieldFilter.eq('collation.locale', 'en'),
-        MongoFieldFilter.eq('collation.strength', 2),
+        MongoFieldFilter.eq('name', 'email_1'),
+        MongoAndExpr.of([
+          MongoFieldFilter.eq('key', keysToKeySpec(keys)),
+          MongoFieldFilter.eq('unique', true),
+          new MongoNotExpr(MongoFieldFilter.eq('sparse', true)),
+          MongoExistsExpr.notExists('expireAfterSeconds'),
+          MongoFieldFilter.eq('partialFilterExpression', { email: { $exists: true } }),
+          MongoExistsExpr.notExists('wildcardProjection'),
+          MongoFieldFilter.eq('collation.locale', 'en'),
+          MongoFieldFilter.eq('collation.strength', 2),
+        ]),
       ]),
     );
   });
@@ -47,16 +50,19 @@ describe('createIndex postcheck', () => {
 
     expect(op.postcheck[0]!.filter).toEqual(
       MongoAndExpr.of([
-        MongoFieldFilter.eq('key', { category: 1, _fts: 'text', _ftsx: 1 }),
-        new MongoNotExpr(MongoFieldFilter.eq('unique', true)),
-        new MongoNotExpr(MongoFieldFilter.eq('sparse', true)),
-        MongoExistsExpr.notExists('expireAfterSeconds'),
-        MongoExistsExpr.notExists('partialFilterExpression'),
-        MongoExistsExpr.notExists('wildcardProjection'),
-        MongoExistsExpr.notExists('collation'),
-        MongoFieldFilter.eq('weights', { body: 1, title: 10 }),
-        MongoFieldFilter.eq('default_language', 'english'),
-        MongoFieldFilter.eq('language_override', 'language'),
+        MongoFieldFilter.eq('name', 'category_1_title_text_body_text'),
+        MongoAndExpr.of([
+          MongoFieldFilter.eq('key', { category: 1, _fts: 'text', _ftsx: 1 }),
+          new MongoNotExpr(MongoFieldFilter.eq('unique', true)),
+          new MongoNotExpr(MongoFieldFilter.eq('sparse', true)),
+          MongoExistsExpr.notExists('expireAfterSeconds'),
+          MongoExistsExpr.notExists('partialFilterExpression'),
+          MongoExistsExpr.notExists('wildcardProjection'),
+          MongoExistsExpr.notExists('collation'),
+          MongoFieldFilter.eq('weights', { body: 1, title: 10 }),
+          MongoFieldFilter.eq('default_language', 'english'),
+          MongoFieldFilter.eq('language_override', 'language'),
+        ]),
       ]),
     );
   });

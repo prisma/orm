@@ -1,8 +1,5 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
-import type {
-  AuthoringFieldPresetDescriptor,
-  EnumBlockSite,
-} from '@internal/framework-components/authoring';
+import type { EnumBlockSite } from '@internal/framework-components/authoring';
 import {
   describeDiscriminatorRefusal,
   enumMemberProblemDiagnostic,
@@ -10,7 +7,6 @@ import {
 import type { MongoContractRefusal } from '@internal/mongo-contract';
 import type {
   BuildRefusal,
-  BuildWarning,
   FieldKey,
   IndexNode,
   RestatedFieldDifference,
@@ -29,10 +25,6 @@ export interface Site {
 export interface FieldSite {
   readonly symbol: FieldSymbol;
   readonly source: DiagnosticSource;
-  readonly preset?: {
-    readonly helperPath: string;
-    readonly descriptor: AuthoringFieldPresetDescriptor;
-  };
   readonly typeAlias?: ResolvedTypeAlias;
   readonly generatorAttributes: Partial<
     Record<'onCreate' | 'onUpdate', { readonly span: PslSpan; readonly argument: string }>
@@ -42,10 +34,16 @@ export interface FieldSite {
   readonly storedName: string;
 }
 
+/** Where an index is written, and the index as the schema writes it, such as `@@index([email]) on model "User"`. */
+export interface IndexSite extends Site {
+  readonly index: IndexNode;
+  readonly label: string;
+}
+
 /** Where a model's polymorphism and indexes are written. */
 export interface ModelSites {
   /** Each of the model's indexes, in the order the definition lists them. */
-  readonly indexes: readonly (Site & { readonly index: IndexNode })[];
+  readonly indexes: readonly IndexSite[];
   readonly discriminator?: Site & { readonly fieldName: string };
   readonly base?: Site & { readonly valueSpan: PslSpan };
 }
@@ -60,8 +58,6 @@ export interface SchemaSites {
   readonly models: ReadonlyMap<string, ModelSites>;
   readonly fields: ReadonlyMap<string, FieldSite>;
   readonly enums: ReadonlyMap<string, EnumSite>;
-  /** Each scalar type name with the codec it stands for, to name the type a preset with no effect matches. */
-  readonly scalarTypeOfCodec: (codecId: string) => string | undefined;
 }
 
 export function fieldSiteKey(owner: string, fieldName: string): string {
@@ -80,6 +76,12 @@ function modelSitesOf(sites: SchemaSites, model: string): ModelSites {
   const modelSites = sites.models.get(model);
   if (modelSites === undefined) throw new InternalError(`A refused model "${model}" has sites.`);
   return modelSites;
+}
+
+function indexSiteOf(sites: SchemaSites, model: string, position: number): IndexSite {
+  const site = modelSitesOf(sites, model).indexes[position];
+  if (site === undefined) throw new InternalError(`Index ${position} of "${model}" has a site.`);
+  return site;
 }
 
 function at(site: Site, code: string, message: string): PslDiagnostic {
@@ -118,22 +120,11 @@ function generatedListDiagnostic(field: FieldSite, label: string): PslDiagnostic
 
 function generatedOnValueObjectDiagnostic(field: FieldSite, owner: string): PslDiagnostic {
   const fieldName = field.symbol.name;
-  if (field.preset !== undefined) {
-    return atField(
-      field,
-      'PSL_UNSUPPORTED_FIELD_TYPE',
-      `Field "${owner}.${fieldName}" uses field preset "${field.preset.helperPath}", which generates a value; a member of a composite type has no generated values.`,
-    );
-  }
   return atField(
     field,
     'PSL_UNSUPPORTED_FIELD_TYPE',
     `Member "${fieldName}" of composite type "${owner}" is typed by the type alias "${field.typeAlias?.name}", which generates a value; a composite type member has no generated values.`,
   );
-}
-
-function generatedValueSource(field: FieldSite): string {
-  return field.preset !== undefined ? `Preset "${field.preset.helperPath}"` : 'Generated value';
 }
 
 function relationNullabilityDiagnostic(
@@ -327,29 +318,31 @@ export function refusalDiagnostic(
           return at(
             site,
             'PSL_INVALID_INDEX',
-            refusal.firstModel === model
-              ? `Model "${model}" declares this index twice. Remove one of them.`
-              : `Collection "${refusal.collection}" already has this index, declared on model "${refusal.firstModel}". Remove one of them from model "${model}" or "${refusal.firstModel}".`,
+            `${site.label} has the same keys and options as ${indexSiteOf(sites, refusal.firstModel, refusal.firstPosition).label}, in collection "${refusal.collection}", but another name. MongoDB cannot hold both. Remove one of them, or give them the same \`map\`.`,
           );
       }
       break;
+    }
+    case 'indexNameDuplicate': {
+      const { model, position } = refusal.key;
+      const site = modelSitesOf(sites, model).indexes[position];
+      if (site === undefined)
+        throw new InternalError(`Index ${position} of "${model}" has a site.`);
+      return at(
+        site,
+        'PSL_INVALID_INDEX',
+        `${site.label} is named "${refusal.name}", as is ${indexSiteOf(sites, refusal.firstModel, refusal.firstPosition).label}, in collection "${refusal.collection}". An index without \`map\` is named after its keys and directions. Give one of them another name with \`map\`.`,
+      );
     }
     case 'generatedOnValueObject':
       return generatedOnValueObjectDiagnostic(
         fieldSiteOf(sites, refusal.key),
         refusal.key.owner.name,
       );
-    case 'generatorPhaseSetTwice': {
-      const field = fieldSiteOf(sites, refusal.key);
-      const { phase } = refusal;
-      const attribute = field.generatorAttributes[phase];
-      const phaseText = phase === 'onCreate' ? 'on create' : 'on update';
-      return {
-        code: 'PSL_PRESET_AND_DEFAULT_CONFLICT',
-        message: `Field "${refusal.key.owner.name}.${refusal.key.field}" uses a field-preset call that already generates a value ${phaseText}, so @${phase}(...) cannot set one too. Remove @${phase}(...) or use a preset without an ${phase} generator.`,
-        ...field.source.at(attribute?.span ?? field.symbol.span),
-      };
-    }
+    case 'generatorPhaseSetTwice':
+      throw new InternalError(
+        `Field "${refusal.key.owner.name}.${refusal.key.field}" sets a phase twice, which PSL refuses as a repeated type alias attribute before building.`,
+      );
     case 'generatedList':
       return generatedListDiagnostic(
         fieldSiteOf(sites, refusal.key),
@@ -357,18 +350,18 @@ export function refusalDiagnostic(
       );
     case 'generatedOnVariant': {
       const field = fieldSiteOf(sites, refusal.key);
-      return atFieldCall(
+      return atField(
         field,
-        'PSL_PRESET_ON_VARIANT_FIELD',
-        `${generatedValueSource(field)} on variant "${refusal.key.owner.name}" field "${refusal.key.field}": execution defaults apply to every document in collection "${refusal.collection}", so declare them on the base model.`,
+        'PSL_GENERATOR_ON_VARIANT_FIELD',
+        `Generated value on variant "${refusal.key.owner.name}" field "${refusal.key.field}": execution defaults apply to every document in collection "${refusal.collection}", so declare them on the base model.`,
       );
     }
     case 'generatedConflict': {
       const field = fieldSiteOf(sites, refusal.key);
-      return atFieldCall(
+      return atField(
         field,
-        'PSL_PRESET_CONFLICT',
-        `${generatedValueSource(field)} on "${refusal.key.owner.name}.${refusal.key.field}" sets different execution defaults than "${refusal.otherModel}.${refusal.otherField}" for field "${field.storedName}" of collection "${refusal.collection}". Generate the same values on both models.`,
+        'PSL_GENERATOR_CONFLICT',
+        `Generated value on "${refusal.key.owner.name}.${refusal.key.field}" sets different execution defaults than "${refusal.otherModel}.${refusal.otherField}" for field "${field.storedName}" of collection "${refusal.collection}". Generate the same values on both models.`,
       );
     }
     case 'typeParamsInvalid': {
@@ -377,9 +370,7 @@ export function refusalDiagnostic(
       return atFieldCall(
         field,
         'PSL_INVALID_ATTRIBUTE_ARGUMENT',
-        field.preset !== undefined
-          ? `${label} uses field preset "${field.preset.helperPath}", whose type parameters are refused: ${refusal.problem.message}`
-          : `${label} has type parameters its type refuses: ${refusal.problem.message}`,
+        `${label} has type parameters its type refuses: ${refusal.problem.message}`,
       );
     }
     case 'enumMemberProblem': {
@@ -501,34 +492,6 @@ function wildcardTypeOf(index: IndexNode): string {
 
 function discriminatorTypeName(sites: SchemaSites, model: string, fieldName: string): string {
   return sites.fields.get(fieldSiteKey(model, fieldName))?.symbol.typeName ?? fieldName;
-}
-
-/** A builder warning as a PSL warning at the field it is about, or undefined when PSL has no wording for it. */
-export function warningDiagnostic(
-  warning: BuildWarning,
-  sites: SchemaSites,
-): PslDiagnostic | undefined {
-  if (warning.kind === 'source') return undefined;
-  const field = fieldSiteOf(sites, warning.key);
-  const preset = field.preset;
-  const typeName = sites.scalarTypeOfCodec(warning.codecId);
-  if (preset === undefined || typeName === undefined) return undefined;
-  const phases = (preset.descriptor.args ?? []).flatMap((arg) =>
-    arg.kind === 'option' && arg.name !== undefined
-      ? [{ name: arg.name, value: arg.values[0] }]
-      : [],
-  );
-  const without =
-    phases.length === 0 ? '' : ` without ${phases.map(({ name }) => name).join(' or ')}`;
-  const pass =
-    phases.length === 0
-      ? ''
-      : `, or pass ${phases.map(({ name, value }) => `${name}: ${value}`).join(' or ')}`;
-  return atFieldCall(
-    field,
-    'PSL_PRESET_WITHOUT_EFFECT',
-    `Field "${warning.key.owner.name}.${warning.key.field}" uses ${preset.helperPath}()${without}, so nothing fills it and it is stored exactly like ${typeName}. Write ${typeName}${pass}.`,
-  );
 }
 
 function differenceWording(difference: RestatedFieldDifference): string {

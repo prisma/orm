@@ -168,8 +168,8 @@ const POSTGRES_BEFORE = `
 model Box {
   id       Int            @id
   tags     String[]       @default(["x"])
-  at       DateTime       @default(timestamptz\`2020-01-01T00:00:00Z\`)
-  hundreds Numeric(5, -2) @default(100)
+  at       TimestamptzTemporal       @default(timestamptz\`2020-01-01T00:00:00Z\`)
+  hundreds NumericString(5, -2) @default(100)
   code     Char(5)        @default("z")
   token    Uuid           @default("11111111-1111-1111-1111-111111111111")
 }
@@ -179,14 +179,14 @@ const POSTGRES_AFTER = `
 model Box {
   id          Int            @id
   tags        String[]       @default(["a", "b"])
-  at          DateTime       @default(timestamptz\`2024-01-01T01:00:00+01:00\`)
-  hundreds    Numeric(5, -2) @default(12300)
+  at          TimestamptzTemporal       @default(timestamptz\`2024-01-01T01:00:00+01:00\`)
+  hundreds    NumericString(5, -2) @default(12300)
   code        Char(5)        @default("ab")
   token       Uuid           @default("A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11")
   addedTags   String[]       @default(["a", "b"])
   addedEmpty  String[]       @default([])
   addedAt     TimestampTemporal      @default(timestamp\`0044-03-15 12:00:00 BC\`)
-  addedNumber Numeric(5, -2) @default(-9999900)
+  addedNumber NumericString(5, -2) @default(-9999900)
   addedCode   Char(5)        @default("ab")
   addedToken  Uuid           @default("{a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11}")
 }

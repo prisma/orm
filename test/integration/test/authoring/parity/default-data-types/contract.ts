@@ -4,7 +4,7 @@ import {
   int2Column,
   int4Column,
   jsonbColumn,
-  numericColumn,
+  numericStringColumn,
   textColumn,
 } from '@internal/adapter-postgres/column-types';
 import { autoincrement, defineContract, field, model } from '@internal/postgres/contract-builder';
@@ -17,7 +17,7 @@ export const contract = defineContract({
         name: field.column(textColumn).default('anonymous'),
         small: field.column(int2Column).default(100),
         count: field.column(int4Column).default(100000),
-        price: field.column(numericColumn(10, 2)).default('1.50'),
+        price: field.column(numericStringColumn(10, 2)).default('1.50'),
         ratio: field.column(float8Column).default(1.5),
         active: field.column(boolColumn).default(true),
         meta: field.column(jsonbColumn).default({ plan: 'free', seats: 1 }),

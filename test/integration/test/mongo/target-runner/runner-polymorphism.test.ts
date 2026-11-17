@@ -152,7 +152,6 @@ function makeContractFromPsl(): MongoContract {
       defaultNamespaceId: '__unbound__',
       composedExtensionContracts: new Map(),
       authoringContributions: {
-        field: {},
         type: scalarTypeConstructors,
         entityTypes: {},
         pslBlockDescriptors: {},
@@ -194,7 +193,7 @@ function makeContractFromPsl(): MongoContract {
 
 function planForContract(
   contract: MongoContract,
-  origin: MongoSchemaIR = new MongoSchemaIR([]),
+  origin: MongoSchemaIR = new MongoSchemaIR([], { fromDatabase: false }),
 ): MigrationPlan {
   const planner = new MongoMigrationPlanner();
   const result = planner.plan({

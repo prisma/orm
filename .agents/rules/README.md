@@ -36,6 +36,7 @@ Rules below are listed by bare filename; the canonical file is `.agents/rules/<n
 **Always-apply rules must be short, globally relevant, and stable.** If a rule only applies to a specific area (SQL, CLI, tests, package layout), scope it with `globs` and set `alwaysApply: false`. These are the rules currently carrying `alwaysApply: true`:
 
 - `read-agents-md.mdc` — Read AGENTS.md (onboarding deep dive is optional)
+- `never-change-the-framework-domain.mdc` — Never add to or reshape the framework domain; a design that needs to is wrong — stop and tell the operator
 - `schema-driven-architecture.mdc` — Read the architecture overview before writing code
 - `doc-maintenance.mdc` — Keep docs/READMEs/rules up‑to‑date
 - `no-direct-lockfile-edits.mdc` — Never edit `pnpm-lock.yaml` manually; use `pnpm install`

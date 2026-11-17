@@ -2,14 +2,14 @@ import { test } from 'vitest';
 import { defineContract } from '../../src/exports/contract-builder';
 
 test('.default() takes the input type of the field codec', () => {
-  defineContract({}, ({ field, model }) => ({
+  defineContract({}, ({ field, model, gen, type }) => ({
     models: {
       Event: model('Event', {
         fields: {
-          id: field.id.uuidv4String(),
-          at: field.temporal.datetime().default(new Date()),
+          id: field.column(type.sql.Char(36)).id().onCreate(gen.uuid()),
+          at: field.column(type.DateTime()).default(new Date()),
           // @ts-expect-error sqlite/datetime@1 takes a Date, not a string
-          refused: field.temporal.datetime().default('2024-01-01T00:00:00Z'),
+          refused: field.column(type.DateTime()).default('2024-01-01T00:00:00Z'),
         },
       }),
     },

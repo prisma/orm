@@ -19,11 +19,11 @@ import type {
   NamespaceId,
   ProfileHashBase,
   StorageHashBase,
-  ValueObjectTypesFromDomain,
+  ValueObjectTypesFromStorage,
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'e6b8f0ca84154e70d8240cabf47951883d699f4a84e45131c60f899dd900deb4'>;
+  StorageHashBase<'587167f68245c71b02d0b16add544f6309946b099c767c78cfa60e0d3c68b8ce'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3'>;
@@ -31,15 +31,15 @@ export type ProfileHash =
 export type CodecTypes = MongoCodecTypes;
 
 type ParameterizedOutputTypeFunctions = MongoParameterizedOutputTypes;
-type ValueObjectOutputTypes = ValueObjectTypesFromDomain<
-  ContractBase['domain']['namespaces'],
+type ValueObjectOutputTypes = ValueObjectTypesFromStorage<
+  ContractBase['storage']['namespaces'],
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
   'output'
 >;
-type ValueObjectInputTypes = ValueObjectTypesFromDomain<
-  ContractBase['domain']['namespaces'],
+type ValueObjectInputTypes = ValueObjectTypesFromStorage<
+  ContractBase['storage']['namespaces'],
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
@@ -65,14 +65,16 @@ export type FieldOutputTypes = FieldTypesFromDomain<
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
-  'output'
+  'output',
+  ContractBase['storage']['namespaces']
 >;
 export type FieldInputTypes = FieldTypesFromDomain<
   ContractBase['domain']['namespaces'],
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
-  'input'
+  'input',
+  ContractBase['storage']['namespaces']
 >;
 
 export namespace Models {
@@ -136,6 +138,13 @@ export namespace Models {
     words: FieldOutputTypes['__unbound__']['Series']['words'];
     readonly [RelationKeys]?: never;
   };
+  export type unbound_Tally = {
+    hits: FieldOutputTypes['__unbound__']['Tally']['hits'];
+    id: FieldOutputTypes['__unbound__']['Tally']['id'];
+    ratio: FieldOutputTypes['__unbound__']['Tally']['ratio'];
+    total: FieldOutputTypes['__unbound__']['Tally']['total'];
+    readonly [RelationKeys]?: never;
+  };
   export type unbound_AnyAsset = unbound_Photo;
 }
 
@@ -148,6 +157,7 @@ export declare const models: {
     Post: Models.unbound_Post;
     Reading: Models.unbound_Reading;
     Series: Models.unbound_Series;
+    Tally: Models.unbound_Tally;
     AnyAsset: Models.unbound_AnyAsset;
   };
 };
@@ -419,6 +429,60 @@ type ContractBase = Omit<
                 readonly validationLevel: 'strict';
               };
             };
+            readonly tallies: {
+              readonly kind: 'mongo-collection';
+              readonly validator: {
+                readonly jsonSchema: {
+                  readonly additionalProperties: false;
+                  readonly bsonType: 'object';
+                  readonly properties: {
+                    readonly _id: { readonly bsonType: 'objectId' };
+                    readonly hits: { readonly bsonType: readonly ['null', 'int'] };
+                    readonly ratio: { readonly bsonType: readonly ['null', 'double'] };
+                    readonly total: { readonly bsonType: readonly ['null', 'long'] };
+                  };
+                  readonly required: readonly ['_id'];
+                };
+                readonly kind: 'mongo-validator';
+                readonly validationAction: 'error';
+                readonly validationLevel: 'strict';
+              };
+            };
+          };
+          readonly valueObject: {
+            readonly Address: {
+              readonly fields: {
+                readonly city: {
+                  readonly nullable: true;
+                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+                };
+                readonly zip: {
+                  readonly nullable: false;
+                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int64@1' };
+                };
+              };
+            };
+            readonly Point: {
+              readonly fields: {
+                readonly tags: {
+                  readonly nullable: false;
+                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int64@1' };
+                  readonly many: { readonly elementNullable: false };
+                };
+                readonly x: {
+                  readonly nullable: false;
+                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int32@1' };
+                };
+              };
+            };
+            readonly Stamp: {
+              readonly fields: {
+                readonly note: {
+                  readonly nullable: false;
+                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/json@1' };
+                };
+              };
+            };
           };
         };
       };
@@ -439,6 +503,7 @@ type ContractBase = Omit<
       readonly model: 'Reading';
     };
     readonly series: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Series' };
+    readonly tallies: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Tally' };
   };
   readonly domain: {
     readonly namespaces: {
@@ -475,7 +540,13 @@ type ContractBase = Omit<
             readonly fields: {
               readonly address: {
                 readonly nullable: true;
-                readonly type: { readonly kind: 'valueObject'; readonly name: 'Address' };
+                readonly type: {
+                  readonly kind: 'valueObject';
+                  readonly plane: 'storage';
+                  readonly namespaceId: '__unbound__';
+                  readonly entityKind: 'valueObject';
+                  readonly entityName: 'Address';
+                };
               };
               readonly avatar: {
                 readonly nullable: true;
@@ -573,7 +644,13 @@ type ContractBase = Omit<
               };
               readonly stamps: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'valueObject'; readonly name: 'Stamp' };
+                readonly type: {
+                  readonly kind: 'valueObject';
+                  readonly plane: 'storage';
+                  readonly namespaceId: '__unbound__';
+                  readonly entityKind: 'valueObject';
+                  readonly entityName: 'Stamp';
+                };
                 readonly many: { readonly elementNullable: false };
               };
             };
@@ -709,7 +786,13 @@ type ContractBase = Omit<
               };
               readonly points: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'valueObject'; readonly name: 'Point' };
+                readonly type: {
+                  readonly kind: 'valueObject';
+                  readonly plane: 'storage';
+                  readonly namespaceId: '__unbound__';
+                  readonly entityKind: 'valueObject';
+                  readonly entityName: 'Point';
+                };
                 readonly many: { readonly elementNullable: false };
               };
               readonly words: {
@@ -736,38 +819,33 @@ type ContractBase = Omit<
               };
             };
           };
-        };
-        readonly valueObjects: {
-          readonly Address: {
+          readonly Tally: {
             readonly fields: {
-              readonly city: {
+              readonly hits: {
                 readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-              };
-              readonly zip: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int64@1' };
-              };
-            };
-          };
-          readonly Point: {
-            readonly fields: {
-              readonly tags: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int64@1' };
-                readonly many: { readonly elementNullable: false };
-              };
-              readonly x: {
-                readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int32@1' };
               };
-            };
-          };
-          readonly Stamp: {
-            readonly fields: {
-              readonly note: {
+              readonly id: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/json@1' };
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
+              };
+              readonly ratio: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/double@1' };
+              };
+              readonly total: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int64@1' };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly collection: 'tallies';
+              readonly fields: {
+                readonly hits: { readonly field: 'hits' };
+                readonly id: { readonly field: '_id' };
+                readonly ratio: { readonly field: 'ratio' };
+                readonly total: { readonly field: 'total' };
               };
             };
           };
@@ -793,41 +871,6 @@ type ContractBase = Omit<
   readonly capabilities: {};
   readonly extensions: {};
   readonly meta: {};
-  readonly valueObjects: {
-    readonly Address: {
-      readonly fields: {
-        readonly city: {
-          readonly nullable: true;
-          readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-        };
-        readonly zip: {
-          readonly nullable: false;
-          readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int64@1' };
-        };
-      };
-    };
-    readonly Point: {
-      readonly fields: {
-        readonly tags: {
-          readonly nullable: false;
-          readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int64@1' };
-          readonly many: { readonly elementNullable: false };
-        };
-        readonly x: {
-          readonly nullable: false;
-          readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int32@1' };
-        };
-      };
-    };
-    readonly Stamp: {
-      readonly fields: {
-        readonly note: {
-          readonly nullable: false;
-          readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/json@1' };
-        };
-      };
-    };
-  };
   readonly profileHash: ProfileHash;
 };
 

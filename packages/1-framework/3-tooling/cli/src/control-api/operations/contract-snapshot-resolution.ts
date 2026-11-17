@@ -3,7 +3,7 @@
  */
 
 import { readFile } from 'node:fs/promises';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import {
   contractSnapshotDir,
   readContractSnapshotJson,
@@ -37,7 +37,7 @@ function isEnoent(error: unknown): boolean {
 }
 
 interface ResolveContractRefToSnapshotBaseOptions {
-  readonly config: PrismaNextConfig;
+  readonly config: PrismaConfig;
   readonly migrationsDir: string;
   /** User-supplied contract reference (hash, prefix, ref name, migration dir name, or <dir>^). */
   readonly refInput: string;

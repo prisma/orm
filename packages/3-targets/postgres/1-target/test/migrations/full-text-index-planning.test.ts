@@ -138,6 +138,7 @@ function authoredContract(schema: string): Contract<SqlStorage> {
 /** The table exists with no indexes, so only the index is left to plan. */
 function liveSchemaWithoutTheIndex(): PostgresDatabaseSchemaNode {
   return new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces: {
       public: new PostgresNamespaceSchemaNode({
         schemaName: 'public',

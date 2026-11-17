@@ -4,6 +4,8 @@ import { canonicalizeContractToObject } from '@internal/contract/hashing';
 import type { Contract } from '@internal/contract/types';
 import arktypeJsonControl from '@internal/extension-arktype-json/control';
 import arktypeJsonPack from '@internal/extension-arktype-json/pack';
+import citextControl from '@internal/extension-citext/control';
+import citextPack from '@internal/extension-citext/pack';
 import paradedbControl from '@internal/extension-paradedb/control';
 import paradedbPack from '@internal/extension-paradedb/pack';
 import pgvectorControl from '@internal/extension-pgvector/control';
@@ -38,6 +40,7 @@ const [slugidDefaultsPack] = slugidExtensions;
 
 const extensionPacks: ReadonlyMap<string, ExtensionPack> = new Map<string, ExtensionPack>([
   ['arktype-json', { control: arktypeJsonControl, packRef: arktypeJsonPack }],
+  ['citext', { control: citextControl, packRef: citextPack }],
   ['paradedb', { control: paradedbControl, packRef: paradedbPack }],
   ['pgvector', { control: pgvectorControl, packRef: pgvectorPack }],
   ['postgis', { control: postgisControl, packRef: postgisPack }],
@@ -86,15 +89,19 @@ interface Composition {
 
 /**
  * The stack a contract needs: every pack it names, and the pack whose own
- * contract space it is, which names no pack.
+ * contract space it is, which names no pack. That pack is composed for its
+ * authoring contributions only: a contract space is never composed beside
+ * itself, so its own contract is not one the PSL source compares against.
  */
 function compositionFor(contract: Contract<SqlStorage>): Composition {
   const ids = new Set(Object.keys(contract.extensions));
+  const ownSpaceIds = new Set<string>();
   for (const [id, pack] of extensionPacks) {
     if (
       pack.control.contractSpace?.contractJson.storage.storageHash === contract.storage.storageHash
     ) {
       ids.add(id);
+      ownSpaceIds.add(id);
     }
   }
   const packs = [...ids].flatMap((id) => {
@@ -103,8 +110,14 @@ function compositionFor(contract: Contract<SqlStorage>): Composition {
     if (packsOutsideThisPackage.has(id)) return [];
     throw new Error(`the contract names pack "${id}", which this test does not compose; add it`);
   });
+  const stack = composePostgresStack(packs.map((pack) => pack.control));
   return {
-    stack: composePostgresStack(packs.map((pack) => pack.control)),
+    stack: {
+      ...stack,
+      extensionContracts: new Map(
+        [...stack.extensionContracts].filter(([id]) => !ownSpaceIds.has(id)),
+      ),
+    },
     packRefs: packs.flatMap((pack) => (pack.packRef === undefined ? [] : [pack.packRef])),
   };
 }
@@ -217,6 +230,13 @@ const expectedRefusals: ReadonlyMap<string, ExpectedRefusal> = new Map<string, E
     {
       reason: 'that no relation of model "Post" travels',
       meta: { namespaceId: 'public', table: 'Post', columns: ['legacyOwnerId'] },
+    },
+  ],
+  [
+    'test/integration/test/fixtures/prisma7-source/citext/expected-contract.json',
+    {
+      reason: 'that no relation of model "Review" travels',
+      meta: { namespaceId: 'public', table: 'Review', columns: ['authorEmail'] },
     },
   ],
   [
@@ -387,8 +407,9 @@ describe('every Postgres contract in the repo prints as PSL that reads back as t
     expect(contracts.length).toBeGreaterThan(200);
   });
 
-  it('skips only the contract spaces of pgvector and PostGIS, which register database types', () => {
+  it('skips only the contract spaces of citext, pgvector and PostGIS, which register database types', () => {
     expect(registeringDatabaseTypes).toEqual([
+      'packages/3-extensions/citext/src/contract.json',
       'packages/3-extensions/pgvector/src/contract.json',
       'packages/3-extensions/postgis/src/contract.json',
     ]);

@@ -10,12 +10,14 @@ import {
   dataType,
   dataTypeId,
 } from '@internal/framework-components/codec';
+import type { JsonType } from '@internal/sql-contract/codec-json-type';
 import { FunctionCallExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { expectTypeOf, test } from 'vitest';
 import {
   definePostgresCodecs,
   PostgresCodecDescriptor,
+  type PostgresCodecDescriptorRegistry,
   postgresCodec,
 } from '../src/exports/codec-descriptor';
 
@@ -65,6 +67,7 @@ class VectorCodec<N extends number> extends CodecImpl<
 }
 
 class GenericVectorDescriptor extends CodecDescriptorImpl<VectorParams> {
+  readonly jsonType = 'array' as const;
   override readonly dataType = dataTypeId('demo/fixture');
   override readonly codecId = 'demo/vector@1' as const;
   override readonly traits = ['equality'] as const;
@@ -83,6 +86,7 @@ class GenericVectorDescriptor extends CodecDescriptorImpl<VectorParams> {
 }
 
 class DirectVectorDescriptor extends PostgresCodecDescriptor<VectorParams> {
+  override readonly jsonType = 'any' as const;
   override readonly dataType = dataTypeId('demo/fixture');
   override readonly codecId = 'demo/direct-vector@1' as const;
   override readonly traits = ['equality'] as const;
@@ -188,6 +192,7 @@ test('a factory option builds a codec of the family codec it adapts', () => {
 
 // @ts-expect-error -- direct descriptors must implement scalar JSON projection
 class MissingJsonProjection extends PostgresCodecDescriptor<VectorParams> {
+  override readonly jsonType = 'any' as const;
   override readonly dataType = dataTypeId('demo/fixture');
   override readonly codecId = 'demo/missing-json@1' as const;
   override readonly traits: readonly CodecTrait[] = [];
@@ -198,3 +203,8 @@ class MissingJsonProjection extends PostgresCodecDescriptor<VectorParams> {
 }
 
 void MissingJsonProjection;
+
+test('a registered descriptor may lack the JSON type, which only an author must declare', () => {
+  type Registered = NonNullable<ReturnType<PostgresCodecDescriptorRegistry['descriptorFor']>>;
+  expectTypeOf<Registered['jsonType']>().toEqualTypeOf<JsonType | undefined>();
+});

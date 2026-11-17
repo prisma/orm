@@ -25,7 +25,7 @@ const codecLookup: CodecLookupWithDescriptors = {
 
 function interpret(schema: string) {
   return interpretMongoContract(schema, {
-    scalarTypeCodecIds: new Map([
+    scalarTypes: new Map([
       ['String', 'mongo/string@1'],
       ['ObjectId', 'mongo/objectId@1'],
       ['Point', 'geo/point@1'],

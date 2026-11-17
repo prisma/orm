@@ -1,9 +1,6 @@
 import type { SqlPslBuildContext } from '@internal/family-sql/control';
 import sqlFamilyPack from '@internal/family-sql/pack';
-import type {
-  AuthoringFieldNamespace,
-  AuthoringTypeNamespace,
-} from '@internal/framework-components/authoring';
+import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
 import {
   type CodecDescriptorTemplate,
   createDataTypeLookup,
@@ -13,15 +10,16 @@ import {
   assembleGeneratorFunctions,
   type GeneratorFunctionContribution,
 } from '@internal/framework-components/components';
-import { postgresAuthoringFieldPresets, postgresAuthoringTypes } from '../../src/core/authoring';
+import { postgresAuthoringTypes } from '../../src/core/authoring';
 import { type AnyPostgresCodecDescriptor, postgresCodec } from '../../src/core/codec-descriptor';
 import { postgresDataTypeEntries } from '../../src/core/data-type-entries';
 import { pgText, postgresDataTypes } from '../../src/core/data-types';
 import { postgresTargetDescriptorMeta } from '../../src/core/descriptor-meta';
 import { postgresCodecDescriptorRegistry } from '../../src/core/registry';
-import { postgresScalarAndNativeTypeConstructors } from '../../src/core/type-constructors';
+import { postgresScalarTypes } from '../../src/core/type-constructors';
 
-const citextTemplate: CodecDescriptorTemplate = {
+const citextTemplate: CodecDescriptorTemplate & { readonly jsonType: 'string' } = {
+  jsonType: 'string',
   codecId: 'ext/citext@1',
   traits: [],
   paramsSchema: undefined,
@@ -41,15 +39,11 @@ export const extensionCodec: AnyPostgresCodecDescriptor = postgresCodec(citextTe
 });
 
 /**
- * A stand-in for the stack the SQL family hands the printer: the family's and the target's own type constructors and data types,
- * field presets, codecs, data types and generator functions, the family's generator functions, and what `extra` adds. `extra.temporalPresets` joins the target's `temporal.*`
- * presets; `extra.fieldPresets` adds top-level field namespaces.
+ * A stand-in for the stack the SQL family hands the printer: the family's and the target's own type constructors, codecs, data types and generator functions, the family's generator functions, and what `extra` adds.
  */
 export function testBuildContext(
   extra: {
     readonly types?: AuthoringTypeNamespace;
-    readonly temporalPresets?: AuthoringFieldNamespace;
-    readonly fieldPresets?: AuthoringFieldNamespace;
     readonly generatorFunctions?: readonly GeneratorFunctionContribution[];
     readonly componentIdsByGenerator?: ReadonlyMap<string, string | undefined>;
     readonly codecs?: readonly AnyPostgresCodecDescriptor[];
@@ -59,20 +53,14 @@ export function testBuildContext(
   const extraCodecs = new Map((extra.codecs ?? []).map((codec) => [codec.codecId, codec]));
   const descriptorFor = (codecId: string) =>
     extraCodecs.get(codecId) ?? postgresCodecDescriptorRegistry.descriptorFor(codecId);
-  const field: AuthoringFieldNamespace = {
-    ...postgresAuthoringFieldPresets,
-    temporal: { ...postgresAuthoringFieldPresets.temporal, ...extra.temporalPresets },
-    ...extra.fieldPresets,
-  };
   return {
     authoringContributions: {
       type: {
         ...sqlFamilyPack.authoring.type,
         ...postgresAuthoringTypes,
-        ...postgresScalarAndNativeTypeConstructors,
+        ...postgresScalarTypes,
         ...extra.types,
       },
-      field,
     },
     generatorFunctions: assembleGeneratorFunctions([
       sqlFamilyPack,

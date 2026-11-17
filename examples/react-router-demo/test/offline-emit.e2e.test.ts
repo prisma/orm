@@ -11,7 +11,7 @@ const execFileAsync = promisify(execFile);
 const exampleDir = dirname(dirname(fileURLToPath(import.meta.url)));
 // The workspace root links the local prisma bin; the example itself
 // names no @internal/* package (lint:consumer-internal-imports).
-const prismaBin = join(exampleDir, '..', '..', 'node_modules', '.bin', 'prisma');
+const prismaBin = join(exampleDir, 'node_modules', '.bin', 'prisma');
 const contractJsonPath = join(exampleDir, 'src', 'prisma', 'contract.json');
 const contractDtsPath = join(exampleDir, 'src', 'prisma', 'contract.d.ts');
 

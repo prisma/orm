@@ -47,6 +47,7 @@ describe('a planning refusal that can be written by hand', () => {
     }).toEqual({
       code: 'MIGRATION.PLANNING_FAILED',
       actions: [
+        conflict.why,
         'To write the rewrites by hand, plan the change without --rename Status.ACTIVE:Status.X and --rename Status.OLD:Status.Y with `{bin} migration plan --from sha256:0123 --rename Status.DONE:Status.FINISHED --delete Legacy`, add the rewrites the message describes to the migration.ts it writes, run `node <migration directory>/migration.ts` for the directory it writes, and apply it with `{bin} db migrate`',
       ],
     });
@@ -62,6 +63,7 @@ describe('a planning refusal that can be written by hand', () => {
     });
 
     expect((error.nextActions ?? []).map(({ label }) => label)).toEqual([
+      conflict.why,
       'To write the rewrites by hand, plan the change without --rename Status.ACTIVE:Status.X with `{bin} migration plan --from sha256:0123 --to staging`, add the rewrites the message describes to the migration.ts it writes, run `node <migration directory>/migration.ts` for the directory it writes, and apply it with `{bin} db migrate`',
     ]);
   });

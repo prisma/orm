@@ -5,7 +5,12 @@ import { mongoDataType } from '@internal/mongo-contract/data-type';
 import { describe, expect, it } from 'vitest';
 import { defineContract, field, model, rel, valueObject } from '../src/contract-builder';
 import { enumType, member } from '../src/enum-type';
-import { identityCodecDescriptor, mongoFamilyPack, mongoTargetPack } from './mongo-test-packs';
+import {
+  identityCodecDescriptor,
+  mongoFamilyPack,
+  mongoTargetPack,
+  type,
+} from './mongo-test-packs';
 
 const geoPoint = mongoDataType('geo/point', { read: (json) => json, bsonTypes: ['object'] });
 
@@ -29,20 +34,20 @@ function collectionsOf(contract: { readonly storage: { readonly namespaces: obje
 describe('mongo defineContract collection validators', () => {
   it('derives each collection validator from its root model', () => {
     const Address = valueObject('Address', {
-      fields: { street: field.string(), zip: field.string().optional() },
+      fields: { street: field.scalar(type.String()), zip: field.scalar(type.String()).optional() },
     });
     const Role = enumType('Role', { codecId: 'mongo/string@1' }, member('User', 'user'));
     const User = model('User', {
       collection: 'users',
       fields: {
-        _id: field.objectId(),
-        email: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        email: field.scalar(type.String()),
         role: field.namedType(Role),
         address: field.valueObject(Address).optional(),
       },
       relations: { notes: rel.hasMany('Note') },
     });
-    const Note = model('Note', { owner: User, fields: { text: field.string() } });
+    const Note = model('Note', { owner: User, fields: { text: field.scalar(type.String()) } });
 
     const contract = defineContract({
       family: mongoFamilyPack,
@@ -100,13 +105,13 @@ describe('mongo defineContract collection validators', () => {
   it('describes each variant of a root model in one validator', () => {
     const Task = model('Task', {
       collection: 'tasks',
-      fields: { _id: field.objectId(), type: field.string() },
+      fields: { _id: field.scalar(type.ObjectId()), type: field.scalar(type.String()) },
       discriminator: { field: 'type', variants: { Bug: { value: 'bug' } } },
     });
     const Bug = model('Bug', {
       collection: 'tasks',
       base: Task,
-      fields: { severity: field.int32() },
+      fields: { severity: field.scalar(type.Int32()) },
     });
 
     const contract = defineContract({
@@ -136,11 +141,11 @@ describe('mongo defineContract collection validators', () => {
   it('accepts a document of any model stored in a collection', () => {
     const User = model('User', {
       collection: 'users',
-      fields: { _id: field.objectId(), email: field.string() },
+      fields: { _id: field.scalar(type.ObjectId()), email: field.scalar(type.String()) },
     });
     const Admin = model('Admin', {
       collection: 'users',
-      fields: { _id: field.objectId(), level: field.int32() },
+      fields: { _id: field.scalar(type.ObjectId()), level: field.scalar(type.Int32()) },
     });
 
     const contract = defineContract({
@@ -171,7 +176,10 @@ describe('mongo defineContract collection validators', () => {
   it('reads the BSON type of a codec from the extension packs the contract lists', () => {
     const Place = model('Place', {
       collection: 'places',
-      fields: { _id: field.objectId(), location: field.scalar('geo/point@1') },
+      fields: {
+        _id: field.scalar(type.ObjectId()),
+        location: field.scalar({ kind: 'scalar', codecId: 'geo/point@1' }),
+      },
     });
 
     const contract = defineContract({
@@ -190,7 +198,7 @@ describe('mongo defineContract collection validators', () => {
   it('hashes storage as every Mongo contract source does', () => {
     const User = model('User', {
       collection: 'users',
-      fields: { _id: field.objectId(), email: field.string() },
+      fields: { _id: field.scalar(type.ObjectId()), email: field.scalar(type.String()) },
     });
 
     const contract = defineContract({

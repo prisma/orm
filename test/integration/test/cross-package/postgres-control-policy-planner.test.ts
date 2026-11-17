@@ -70,6 +70,7 @@ const testAdapter = createTestPostgresControlAdapter(
 const planner = createPostgresMigrationPlanner(testAdapter);
 
 const emptySchema = new PostgresDatabaseSchemaNode({
+  extensions: undefined,
   namespaces: {
     public: new PostgresNamespaceSchemaNode({
       schemaName: 'public',
@@ -85,6 +86,7 @@ function liveSchemaWithUsers(
   columns: Record<string, { name: string; typeText: string; nullable: boolean }>,
 ): PostgresDatabaseSchemaNode {
   return new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces: {
       public: new PostgresNamespaceSchemaNode({
         schemaName: 'public',

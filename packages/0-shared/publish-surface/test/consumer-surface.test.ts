@@ -35,6 +35,7 @@ const facades: ShellName[] = [
   '@prisma/orm-postgres',
   '@prisma/orm-sqlite',
   '@prisma/orm-mysql',
+  '@prisma/orm-mariadb',
   '@prisma/orm-mongo',
 ];
 
@@ -115,9 +116,11 @@ describe('the published surface against the applications that will consume it', 
       '@internal/target-postgres/codec-types',
       '@internal/target-postgres/operation-types',
       '@internal/adapter-mysql/codec-types',
+      '@internal/adapter-mariadb/codec-types',
       '@internal/postgres/migration',
       '@internal/sqlite/migration',
       '@internal/mysql/migration',
+      '@internal/mariadb/migration',
       '@internal/target-mongo/migration',
     ];
 

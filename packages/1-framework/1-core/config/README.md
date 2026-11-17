@@ -8,7 +8,7 @@ Config authoring types and validation for `prisma.config.ts`.
 
 This package owns the shared config contract used by tooling and authoring packages:
 
-- `PrismaNextConfig` and `ContractConfig` types
+- `PrismaConfig` and `ContractConfig` types
 - contract source provider + diagnostics protocol
 - provider-declared input metadata for tooling integrations
 - `defineConfig()` normalization/defaulting

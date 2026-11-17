@@ -68,7 +68,16 @@ describe('templates', () => {
 
       expect(schema).toContain('defineContract');
       expect(schema).toContain("from '@internal/postgres/contract-builder'");
-      expect(schema).toContain('username: field.text().optional()');
+      expect(schema).toContain('username: field.column(type.String()).optional()');
+      expect(schema).toContain('id: field.column(type.Uuid()).id().onCreate(gen.uuid(7))');
+      expect(schema).toContain('authorId: field.column(type.Uuid())');
+      expect(schema).not.toContain('type.Char(');
+      expect(schema).toContain('updatedAt: field.column(type.temporal.UpdatedAt())');
+      expect(schema).not.toMatch(/field\.(id|temporal)\.|field\.(text|uuidString)\(/);
+    });
+
+    it('writes no field preset into the postgres PSL starter schema', () => {
+      expect(starterSchema('postgres', 'psl')).toContain('updatedAt temporal.UpdatedAt\n');
     });
 
     it('uses defineContract for mongo TypeScript imported from facade', () => {
@@ -76,7 +85,7 @@ describe('templates', () => {
 
       expect(schema).toContain('defineContract');
       expect(schema).toContain("from '@internal/mongo/contract-builder'");
-      expect(schema).toContain('username: field.string().optional()');
+      expect(schema).toContain('username: field.scalar(type.String()).optional()');
     });
 
     it('only imports from the facade package for postgres TypeScript', () => {
@@ -114,7 +123,7 @@ describe('templates', () => {
         // body. The shared signature is the callback destructure itself.
         for (const schema of [pg, mongo]) {
           expect(schema).toMatch(
-            /defineContract\(\s*\{\s*\},\s*\(\{ field, model, rel \}\) => [({]/,
+            /defineContract\(\s*\{\s*\},\s*\(\{ field, model, rel(, gen)?, type \}\) => [({]/,
           );
           expect(schema).not.toMatch(/\{ family:/);
           expect(schema).toContain('models: {');
@@ -184,8 +193,8 @@ describe('templates', () => {
       expect(db).toContain('postgres({\n  contract,\n');
       expect(db).toContain("url: process.env['DATABASE_URL']!,");
       expect(db).not.toContain('await db.connect');
-      const prismaNextImports = db.split('\n').filter((l) => l.includes("from '@internal/"));
-      expect(prismaNextImports).toHaveLength(2);
+      const internalImports = db.split('\n').filter((l) => l.includes("from '@internal/"));
+      expect(internalImports).toHaveLength(2);
     });
 
     it('generates mongo db.ts with lazy facade and DATABASE_URL binding', () => {
@@ -197,8 +206,8 @@ describe('templates', () => {
       expect(db).toContain('mongo({\n  contract,\n');
       expect(db).toContain("url: process.env['DATABASE_URL']!,");
       expect(db).not.toContain('await db.connect');
-      const prismaNextImports = db.split('\n').filter((l) => l.includes("from '@internal/"));
-      expect(prismaNextImports).toHaveLength(2);
+      const internalImports = db.split('\n').filter((l) => l.includes("from '@internal/"));
+      expect(internalImports).toHaveLength(2);
     });
   });
 
@@ -373,7 +382,7 @@ describe('templates', () => {
           null,
           2,
         );
-        const merged = JSON.parse(mergeTsConfig(existing)) as Record<string, unknown>;
+        const merged = JSON.parse(mergeTsConfig(existing, 'module')) as Record<string, unknown>;
         const opts = merged['compilerOptions'] as Record<string, unknown>;
 
         expect(opts['outDir']).toBe('./dist');
@@ -393,7 +402,7 @@ describe('templates', () => {
           null,
           2,
         );
-        const merged = JSON.parse(mergeTsConfig(existing)) as Record<string, unknown>;
+        const merged = JSON.parse(mergeTsConfig(existing, 'module')) as Record<string, unknown>;
         const opts = merged['compilerOptions'] as Record<string, unknown>;
 
         expect(opts['module']).toBe('preserve');
@@ -411,7 +420,7 @@ describe('templates', () => {
           null,
           2,
         );
-        const merged = JSON.parse(mergeTsConfig(existing)) as Record<string, unknown>;
+        const merged = JSON.parse(mergeTsConfig(existing, 'module')) as Record<string, unknown>;
 
         expect(merged['include']).toEqual(['src/**/*.ts']);
         expect(merged['exclude']).toEqual(['node_modules']);
@@ -419,7 +428,7 @@ describe('templates', () => {
 
       it('creates compilerOptions if missing', () => {
         const existing = JSON.stringify({ include: ['src'] }, null, 2);
-        const merged = JSON.parse(mergeTsConfig(existing)) as Record<string, unknown>;
+        const merged = JSON.parse(mergeTsConfig(existing, 'module')) as Record<string, unknown>;
         const opts = merged['compilerOptions'] as Record<string, unknown>;
 
         for (const [key, value] of Object.entries(REQUIRED_COMPILER_OPTIONS)) {

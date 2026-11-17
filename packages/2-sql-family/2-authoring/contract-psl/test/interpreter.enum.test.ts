@@ -89,7 +89,6 @@ const testCodecLookup: CodecLookupWithDescriptors = testSqlTypeLookups(
 
 const authoringContributions = {
   entityTypes: testEnumEntityContributions,
-  field: {},
   type: {},
   pslBlockDescriptors: { enum: testEnumPslBlockDescriptor },
 };
@@ -196,7 +195,7 @@ model Post {
       targetId: 'postgres' as const,
       version: '0.0.1',
       defaultNamespaceId: 'public',
-      authoring: { field: {}, renderCheckExpressions: testRenderCheckExpressions },
+      authoring: { type: {}, renderCheckExpressions: testRenderCheckExpressions },
     };
 
     const tsContract = defineContract({
@@ -285,7 +284,7 @@ model Post {
       targetId: 'postgres' as const,
       version: '0.0.1',
       defaultNamespaceId: 'public',
-      authoring: { field: {}, renderCheckExpressions: testRenderCheckExpressions },
+      authoring: { type: {}, renderCheckExpressions: testRenderCheckExpressions },
     };
 
     const tsContract = defineContract({
@@ -579,7 +578,6 @@ model Post {
       {
         authoringContributions: {
           entityTypes: entityTypesWithoutEnum,
-          field: {},
           type: {},
           pslBlockDescriptors: { enum: testEnumPslBlockDescriptor },
         },
@@ -606,7 +604,6 @@ model Post {
       {
         authoringContributions: {
           entityTypes: testEnumEntityContributions,
-          field: {},
           type: {},
         },
       },

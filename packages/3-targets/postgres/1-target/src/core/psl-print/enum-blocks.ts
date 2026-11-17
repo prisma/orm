@@ -1,6 +1,6 @@
 import type { ContractEnum } from '@internal/contract/types';
 import type { SqlPslBuildContext } from '@internal/family-sql/control';
-import { writeDefaultLiteral } from '@internal/family-sql/psl-build';
+import { writeTypedLiteral } from '@internal/framework-components/authoring';
 import type {
   PslExtensionBlock,
   PslExtensionBlockPrintEntry,
@@ -31,9 +31,9 @@ export function buildDomainEnumBlocks(
     const parameters = Object.fromEntries(
       domainEnum.members.map((member): [string, PslExtensionBlockPrintEntry] => {
         refuseUnwritableName('enum member', member.name);
-        const written = writeDefaultLiteral(member.value, {
+        const written = writeTypedLiteral(member.value, {
           dataTypes: context.dataTypes,
-          columnCodec: context.codecLookup.descriptorFor(domainEnum.codecId),
+          dataType: context.codecLookup.descriptorFor(domainEnum.codecId)?.dataType,
         });
         if (written === undefined) {
           refuseUnwritableEnumMember({ enumName: name, member: member.name, value: member.value });

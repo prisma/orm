@@ -58,6 +58,7 @@ async function infer(input: {
   readonly policies?: readonly PostgresPolicySchemaNode[];
 }): Promise<string> {
   const tree = new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces: {
       public: new PostgresNamespaceSchemaNode({
         schemaName: 'public',

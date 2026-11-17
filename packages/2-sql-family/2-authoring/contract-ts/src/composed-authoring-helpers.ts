@@ -1,9 +1,9 @@
 import {
+  type ArgTypeFromDescriptor,
   type CanonicalArguments,
   type CodecTypeMap,
   composePackAuthoringNamespace,
   createEntityHelpersFromNamespace,
-  createFieldHelpersFromNamespace,
   type DataTypeArgumentTypes,
   type EntityHelpersFromNamespace,
   type ExtractAuthoringNamespaceFromPack,
@@ -16,8 +16,10 @@ import {
 import type {
   AuthoringArgumentDescriptor,
   AuthoringEntityTypeNamespace,
-  AuthoringFieldNamespace,
   AuthoringTypeAliasDescriptor,
+  AuthoringTypeChoiceArgument,
+  AuthoringTypeChoiceDescriptor,
+  AuthoringTypeChoiceRow,
   AuthoringTypeConstructorDescriptor,
   AuthoringTypeNamespace,
   DataTypeComponent,
@@ -25,6 +27,7 @@ import type {
 import {
   assembleDataTypeSupport,
   assertNoCrossRegistryCollisions,
+  assertTypeChoicesValid,
 } from '@internal/framework-components/authoring';
 import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import {
@@ -39,10 +42,8 @@ import {
 import { blindCast } from '@internal/utils/casts';
 import {
   type AuthoringHelperLookups,
-  createFieldPresetHelper,
   createTypeHelpersFromNamespace,
 } from './authoring-helper-runtime';
-import type { FieldHelpersFromNamespace } from './authoring-type-utils';
 import type {
   AnyRelationBuilder,
   ColumnFieldHelper,
@@ -51,22 +52,18 @@ import type {
   NamedTypeFieldHelper,
   ScalarFieldBuilder,
 } from './contract-dsl';
-import { buildFieldPreset, field, model, rel } from './contract-dsl';
+import { field, model, rel } from './contract-dsl';
 import { contractError } from './contract-errors';
 import type {
   ExtractCodecTypesFromPack,
   MergeExtensionCodecTypesSafe,
   MergeExtensionIndexTypes,
 } from './contract-types';
+import { refusingRemovedFieldPresets } from './removed-field-presets';
 
 type ExtractTypeNamespaceFromPack<Pack> = ExtractAuthoringNamespaceFromPack<
   Pack,
   'type',
-  Record<never, never>
->;
-type ExtractFieldNamespaceFromPack<Pack> = ExtractAuthoringNamespaceFromPack<
-  Pack,
-  'field',
   Record<never, never>
 >;
 type ExtractEntitiesNamespaceFromPack<Pack> = ExtractAuthoringNamespaceFromPack<
@@ -78,10 +75,6 @@ type ExtractEntitiesNamespaceFromPack<Pack> = ExtractAuthoringNamespaceFromPack<
 type MergeExtensionTypeNamespaces<Extensions> = MergeExtensionAuthoringNamespaces<
   Extensions,
   'type'
->;
-type MergeExtensionFieldNamespaces<Extensions> = MergeExtensionAuthoringNamespaces<
-  Extensions,
-  'field'
 >;
 type MergeExtensionEntityNamespaces<Extensions> = MergeExtensionAuthoringNamespaces<
   Extensions,
@@ -113,6 +106,161 @@ type TypeHelperFunction<
     ) => StorageTypeFromDescriptor<Descriptor, CanonicalArguments<Args, Params, ValueTypes>>
   : () => StorageTypeFromDescriptor<Descriptor, readonly []>;
 
+type RowDefault<Row extends AuthoringTypeChoiceRow, Name extends string> = Row extends {
+  readonly defaults: infer Defaults;
+}
+  ? Name extends keyof Defaults
+    ? Defaults[Name]
+    : undefined
+  : undefined;
+
+/** The arguments a type choice passes on to the constructor its row chooses, by that constructor's argument positions: the written value, or the row's default. */
+type PassedOnArguments<
+  Parameters extends readonly AuthoringArgumentDescriptor[],
+  Written extends object,
+  Row extends AuthoringTypeChoiceRow,
+> = {
+  readonly [Index in keyof Parameters]: Parameters[Index] extends {
+    readonly name: infer Name extends string;
+  }
+    ? Name extends keyof Written
+      ? Written[Name] extends undefined
+        ? RowDefault<Row, Name>
+        : Written[Name]
+      : RowDefault<Row, Name>
+    : undefined;
+};
+
+type ChosenStorageType<
+  Chosen,
+  Written extends object,
+  Row extends AuthoringTypeChoiceRow,
+  ValueTypes extends DataTypeArgumentTypes,
+> = Chosen extends AuthoringTypeConstructorDescriptor
+  ? Chosen extends {
+      readonly args: infer Parameters extends readonly AuthoringArgumentDescriptor[];
+    }
+    ? StorageTypeFromDescriptor<
+        Chosen,
+        CanonicalArguments<Parameters, PassedOnArguments<Parameters, Written, Row>, ValueTypes>
+      >
+    : StorageTypeFromDescriptor<Chosen, readonly []>
+  : never;
+
+type ParameterNames<Chosen> = Chosen extends {
+  readonly args: readonly (infer Parameter)[];
+}
+  ? Parameter extends { readonly name: infer Name extends string }
+    ? Name
+    : never
+  : never;
+
+type RowValue<
+  Row extends AuthoringTypeChoiceRow,
+  Name extends string,
+> = Name extends keyof Row['when'] ? Row['when'][Name] : never;
+
+/** Whether `Row` gives the option `Argument` its default, so a call choosing the row may leave it out. */
+type RowTakesDefault<
+  Argument extends AuthoringTypeChoiceArgument,
+  Row extends AuthoringTypeChoiceRow,
+> = Argument extends { readonly default: infer Default }
+  ? RowValue<Row, Argument['name']> extends Default
+    ? true
+    : false
+  : true;
+
+/** The options a call choosing `Row` must write: those whose value in the row is not their default. */
+type RequiredRowOptions<
+  Args extends readonly AuthoringTypeChoiceArgument[],
+  Row extends AuthoringTypeChoiceRow,
+> = {
+  readonly [Argument in Args[number] as Argument extends { readonly kind: 'option' }
+    ? RowTakesDefault<Argument, Row> extends true
+      ? never
+      : Argument['name']
+    : never]: RowValue<Row, Argument['name']>;
+};
+
+/** What else a call choosing `Row` may write: an option the row gives its default, and an argument the chosen constructor takes. */
+type OptionalRowArguments<
+  Args extends readonly AuthoringTypeChoiceArgument[],
+  Row extends AuthoringTypeChoiceRow,
+  Chosen,
+  ValueTypes extends DataTypeArgumentTypes,
+> = {
+  readonly [Argument in Args[number] as Argument extends { readonly kind: 'option' }
+    ? RowTakesDefault<Argument, Row> extends true
+      ? Argument['name']
+      : never
+    : Argument['name'] extends ParameterNames<Chosen>
+      ? Argument['name']
+      : never]?:
+    | (Argument extends { readonly kind: 'option' }
+        ? RowValue<Row, Argument['name']>
+        : Argument extends AuthoringArgumentDescriptor
+          ? ArgTypeFromDescriptor<Argument, ValueTypes>
+          : never)
+    | undefined;
+};
+
+/** `Params`, with every key `Allowed` does not name typed `never`, so a call writing such a key does not compile. */
+type OnlyKeys<Params, Allowed extends PropertyKey> = Params & {
+  readonly [Key in Exclude<keyof Params, Allowed>]: never;
+};
+
+type RowArguments<
+  Args extends readonly AuthoringTypeChoiceArgument[],
+  Row extends AuthoringTypeChoiceRow,
+  Chosen,
+  ValueTypes extends DataTypeArgumentTypes,
+> = RequiredRowOptions<Args, Row> & OptionalRowArguments<Args, Row, Chosen, ValueTypes>;
+
+type RowObjectHelperFunction<
+  Args extends readonly AuthoringTypeChoiceArgument[],
+  Row extends AuthoringTypeChoiceRow,
+  Chosen,
+  ValueTypes extends DataTypeArgumentTypes,
+> = <const Params extends RowArguments<Args, Row, Chosen, ValueTypes>>(
+  args: OnlyKeys<Params, keyof RowArguments<Args, Row, Chosen, ValueTypes>>,
+) => ChosenStorageType<Chosen, Params, Row, ValueTypes>;
+
+/** A call choosing `Row`: with no arguments too when the row gives every option its default. */
+type RowHelperFunction<
+  Args extends readonly AuthoringTypeChoiceArgument[],
+  Row extends AuthoringTypeChoiceRow,
+  Chosen,
+  ValueTypes extends DataTypeArgumentTypes,
+> = keyof RequiredRowOptions<Args, Row> extends never
+  ? (() => ChosenStorageType<Chosen, Record<never, never>, Row, ValueTypes>) &
+      RowObjectHelperFunction<Args, Row, Chosen, ValueTypes>
+  : RowObjectHelperFunction<Args, Row, Chosen, ValueTypes>;
+
+type RowOverloads<
+  Args extends readonly AuthoringTypeChoiceArgument[],
+  Rows extends readonly AuthoringTypeChoiceRow[],
+  Namespace,
+  ValueTypes extends DataTypeArgumentTypes,
+> = Rows extends readonly [
+  infer Row extends AuthoringTypeChoiceRow,
+  ...infer Rest extends readonly AuthoringTypeChoiceRow[],
+]
+  ? RowHelperFunction<
+      Args,
+      Row,
+      Row['type'] extends keyof Namespace ? Namespace[Row['type']] : never,
+      ValueTypes
+    > &
+      RowOverloads<Args, Rest, Namespace, ValueTypes>
+  : unknown;
+
+/** A type choice's helper, which takes its arguments as one object keyed by name: one overload per row, so a call is typed by the row its option values choose, and a combination with no row, an unknown key, or an argument the chosen type does not take does not compile. */
+type TypeChoiceHelperFunction<
+  Descriptor extends AuthoringTypeChoiceDescriptor,
+  Namespace,
+  ValueTypes extends DataTypeArgumentTypes,
+> = RowOverloads<Descriptor['args'], Descriptor['choices'], Namespace, ValueTypes>;
+
 type AliasGeneratorCalls<Output> = (Output extends { readonly onCreate: GeneratorFunctionCall }
   ? { readonly onCreate: GeneratorFunctionCall }
   : unknown) &
@@ -139,9 +287,11 @@ type TypeHelpersFromNamespace<Namespace, ValueTypes extends DataTypeArgumentType
     ? TypeHelperFunction<Namespace[K], ValueTypes>
     : Namespace[K] extends AuthoringTypeAliasDescriptor
       ? TypeAliasHelperFunction<Namespace[K]>
-      : Namespace[K] extends Record<string, unknown>
-        ? TypeHelpersFromNamespace<Namespace[K], ValueTypes>
-        : never;
+      : Namespace[K] extends AuthoringTypeChoiceDescriptor
+        ? TypeChoiceHelperFunction<Namespace[K], Namespace, ValueTypes>
+        : Namespace[K] extends Record<string, unknown>
+          ? TypeHelpersFromNamespace<Namespace[K], ValueTypes>
+          : never;
 };
 
 type MergeExtensionDataTypeArgumentTypes<Extensions> =
@@ -160,9 +310,7 @@ type DataTypeArgumentTypesOfPacks<Family, Target, Extensions> =
     ExtractDataTypeArgumentTypesFromPack<Target> &
     MergeExtensionDataTypeArgumentTypes<Extensions>;
 
-type CoreFieldHelpers = Pick<typeof field, 'column' | 'generated' | 'namedType'>;
-
-type FieldHelpersForCodecs<CodecTypes extends CodecTypeMap> = Pick<typeof field, 'generated'> & {
+type FieldHelpersForCodecs<CodecTypes extends CodecTypeMap> = {
   readonly column: ColumnFieldHelper<CodecTypes>;
   readonly namedType: NamedTypeFieldHelper;
 };
@@ -232,14 +380,7 @@ export type ComposedAuthoringHelpers<
     ExtractEntitiesNamespaceFromPack<Target> &
     MergeExtensionEntityNamespaces<Extensions>
 > & {
-  readonly field: FieldHelpersForCodecs<CodecTypesOfPacks<Family, Target, Extensions>> &
-    FieldHelpersFromNamespace<
-      ExtractFieldNamespaceFromPack<Family> &
-        ExtractFieldNamespaceFromPack<Target> &
-        MergeExtensionFieldNamespaces<Extensions>,
-      CodecTypesOfPacks<Family, Target, Extensions>,
-      DataTypeArgumentTypesOfPacks<Family, Target, Extensions>
-    >;
+  readonly field: FieldHelpersForCodecs<CodecTypesOfPacks<Family, Target, Extensions>>;
   readonly model: PackAwareModel<MergeAllPackIndexTypes<Family, Target, Extensions>>;
   readonly rel: typeof rel;
   readonly type: TypeHelpersFromNamespace<
@@ -257,10 +398,6 @@ type AuthoringComponent = DataTypeComponent & {
 
 function composeTypeNamespace(components: readonly AuthoringComponent[]): AuthoringTypeNamespace {
   return composePackAuthoringNamespace(components, 'type');
-}
-
-function composeFieldNamespace(components: readonly AuthoringComponent[]): AuthoringFieldNamespace {
-  return composePackAuthoringNamespace(components, 'field');
 }
 
 function composeEntityNamespace(
@@ -291,45 +428,6 @@ function assertNoBuiltInEntityCollisions(namespace: AuthoringEntityTypeNamespace
   }
 }
 
-function createComposedFieldHelpers(
-  fieldNamespace: AuthoringFieldNamespace,
-  lookups: AuthoringHelperLookups,
-): CoreFieldHelpers & Record<string, unknown> {
-  const helperNamespace = createFieldHelpersFromNamespace(
-    fieldNamespace,
-    ({ helperPath, descriptor }) =>
-      createFieldPresetHelper({
-        helperPath,
-        descriptor,
-        codecLookup: lookups.codecLookup,
-        dataTypes: lookups.dataTypes,
-        build: ({ args, namedConstraintOptions }) =>
-          buildFieldPreset(descriptor, args, namedConstraintOptions),
-      }),
-  );
-  const coreFieldHelpers = {
-    column: field.column,
-    generated: field.generated,
-    namedType: field.namedType,
-  } satisfies CoreFieldHelpers;
-
-  const coreHelperNames = new Set(Object.keys(coreFieldHelpers));
-  for (const helperName of Object.keys(helperNamespace)) {
-    if (coreHelperNames.has(helperName)) {
-      throw contractError(
-        'CONTRACT.PACK_CONTRIBUTION_INVALID',
-        `Duplicate authoring field helper "${helperName}". Core field helpers reserve that name.`,
-        { meta: { helperName } },
-      );
-    }
-  }
-
-  return {
-    ...coreFieldHelpers,
-    ...helperNamespace,
-  };
-}
-
 export function createComposedAuthoringHelpers<
   Family extends FamilyPackRef<string>,
   Target extends TargetPackRef<'sql', string>,
@@ -350,12 +448,14 @@ export function createComposedAuthoringHelpers<
   ];
 
   const typeNamespace = composeTypeNamespace(components);
-  const fieldNamespace = composeFieldNamespace(components);
   const entityNamespace = composeEntityNamespace(components);
   // Mirrors the call in `assembleAuthoringContributions`: PSL composes via
   // `createControlStack`, the TS DSL composes here. Both seams need the guard.
-  assertNoCrossRegistryCollisions(typeNamespace, fieldNamespace, entityNamespace);
+  assertNoCrossRegistryCollisions(typeNamespace, entityNamespace);
   assertNoBuiltInEntityCollisions(entityNamespace);
+  for (const component of components) {
+    assertTypeChoicesValid(component.authoring?.type ?? {}, component.id ?? '<unknown>');
+  }
   const { support } = assembleDataTypeSupport(
     components,
     (codecId) => options.codecLookup.descriptorFor(codecId)?.dataType,
@@ -377,7 +477,7 @@ export function createComposedAuthoringHelpers<
         dataTypes: support,
       },
     }),
-    field: createComposedFieldHelpers(fieldNamespace, helperLookups),
+    field: refusingRemovedFieldPresets(field, typeNamespace),
     model,
     rel,
     type: createTypeHelpersFromNamespace(typeNamespace, helperLookups),

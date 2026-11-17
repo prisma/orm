@@ -62,8 +62,8 @@ withTempDir(({ createTempDir }) => {
           .map((line) => line.trim().replace(/\s+/g, ' '))
           .filter((line) => /^(?:hundreds|tiny) /.test(line));
         expect(fields).toEqual([
-          'hundreds Numeric(5, -2)? @default(12300)',
-          'tiny Numeric(2, 5)? @default(0.00012)',
+          'hundreds Decimal(precision: 5, scale: -2)? @default(12300)',
+          'tiny Decimal(precision: 2, scale: 5)? @default(0.00012)',
         ]);
 
         const emit = await runContractEmit(ctx);

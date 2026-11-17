@@ -27,6 +27,7 @@ export const PostgresSchemaNodeKind = {
   policy: 'postgres-policy',
   role: 'postgres-role',
   nativeEnum: 'postgres-native-enum',
+  extension: 'postgres-extension',
 } as const;
 
 export type PostgresSchemaNodeKind =
@@ -53,6 +54,7 @@ const POSTGRES_NODE_GRANULARITY: Readonly<Record<PostgresSchemaNodeKind, DiffSub
     [PostgresSchemaNodeKind.policy]: 'structural',
     [PostgresSchemaNodeKind.role]: 'structural',
     [PostgresSchemaNodeKind.nativeEnum]: 'entity',
+    [PostgresSchemaNodeKind.extension]: 'entity',
   };
 
 function isPostgresSchemaNodeKind(nodeKind: string): nodeKind is PostgresSchemaNodeKind {
@@ -97,6 +99,7 @@ export function postgresDiffSubjectGranularity(nodeKind: string): DiffSubjectGra
 const POSTGRES_NODE_ENTITY_KIND: Partial<Readonly<Record<PostgresSchemaNodeKind, string>>> = {
   [PostgresSchemaNodeKind.table]: 'table',
   [PostgresSchemaNodeKind.nativeEnum]: 'native_enum',
+  [PostgresSchemaNodeKind.extension]: 'extension',
 };
 
 /** Looks up the storage entityKind for a Postgres-specific `nodeKind`. */

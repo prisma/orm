@@ -1,0 +1,14 @@
+datasource db {
+  provider   = "postgresql"
+  extensions = [vector, postgis, pg_search]
+}
+
+generator client {
+  provider        = "prisma-client"
+  output          = "../generated/prisma"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+model User {
+  id Int @id
+}

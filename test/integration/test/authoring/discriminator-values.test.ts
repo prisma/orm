@@ -8,8 +8,9 @@ import { prismaContract } from '@internal/sql-contract-psl/provider';
 import postgres from '@internal/target-postgres/control';
 import postgresPackRef from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
-import sqlite, { sqliteCreateNamespace } from '@internal/target-sqlite/control';
+import sqlite from '@internal/target-sqlite/control';
 import sqlitePackRef from '@internal/target-sqlite/pack';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { join } from 'pathe';
 import { afterAll, describe, expect, it } from 'vitest';
 
@@ -19,7 +20,7 @@ describe.each([
     stack: createControlStack({ family: sql, target: postgres, adapter: postgresAdapter }),
     pack: postgresPackRef,
     createNamespace: postgresCreateNamespace,
-    lengthLimited: 'VarChar(5)',
+    lengthLimited: 'Varchar(5)',
     notText: [
       ['Uuid', '"a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"'],
       ['Inet', '"10.0.0.1"'],

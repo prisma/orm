@@ -1,4 +1,4 @@
-import type { ContractModel, PlanMeta } from '@internal/contract/types';
+import type { ContractModel, PlanMeta, StorageBase } from '@internal/contract/types';
 import type { MongoModelStorage } from '@internal/mongo-contract';
 import type {
   MongoFieldShape,
@@ -16,10 +16,7 @@ import {
   MongoSortStage,
   MongoUnwindStage,
 } from '@internal/mongo-query-ast/execution';
-import {
-  contractModelToMongoResultShape,
-  type MongoValueObjects,
-} from '@internal/mongo-query-builder';
+import { contractModelToMongoResultShape } from '@internal/mongo-query-builder';
 import { ifDefined } from '@internal/utils/defined';
 import type { MongoCollectionState, MongoIncludeExpr } from './collection-state';
 
@@ -30,8 +27,11 @@ function isToOne(include: MongoIncludeExpr): boolean {
 /**
  * An included document is decoded through the related model's codecs, like the root document. A to-one include with no related document reads as `null`.
  */
-function includeShape(include: MongoIncludeExpr, valueObjects: MongoValueObjects): MongoFieldShape {
-  const target = contractModelToMongoResultShape(include.targetModel, { valueObjects });
+function includeShape(
+  include: MongoIncludeExpr,
+  storage: Pick<StorageBase, 'namespaces'>,
+): MongoFieldShape {
+  const target = contractModelToMongoResultShape(include.targetModel, { storage });
   const fields = target.kind === 'document' ? target.fields : {};
   return isToOne(include)
     ? { kind: 'document', nullable: true, fields }
@@ -59,13 +59,13 @@ function compileIncludes(includes: readonly MongoIncludeExpr[]): MongoPipelineSt
   return stages;
 }
 
-export function compileMongoQuery<Row = unknown>(
+export function compileMongoQuery(
   collection: string,
   state: MongoCollectionState,
   storageHash: string,
   model: ContractModel<MongoModelStorage>,
-  valueObjects: MongoValueObjects,
-): MongoQueryPlan<Row> {
+  storage: Pick<StorageBase, 'namespaces'>,
+): MongoQueryPlan<Record<string, unknown>> {
   const stages: MongoPipelineStage[] = [];
 
   const singleFilter = state.filters.length === 1 ? state.filters[0] : undefined;
@@ -119,9 +119,9 @@ export function compileMongoQuery<Row = unknown>(
   const resultShape = contractModelToMongoResultShape(model, {
     ...ifDefined('selection', selection),
     includes: Object.fromEntries(
-      state.includes.map((inc) => [inc.relationName, includeShape(inc, valueObjects)]),
+      state.includes.map((inc) => [inc.relationName, includeShape(inc, storage)]),
     ),
-    valueObjects,
+    storage,
   });
 
   return { collection, command, meta, resultShape };

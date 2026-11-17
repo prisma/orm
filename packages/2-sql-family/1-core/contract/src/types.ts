@@ -48,6 +48,7 @@ export {
   type StorageTypeInstanceInput,
   toStorageTypeInstance,
 } from './ir/storage-type-instance';
+export { StorageValueObject, type StorageValueObjectInput } from './ir/storage-value-object';
 export {
   isStorageValueSet,
   StorageValueSet,

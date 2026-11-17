@@ -16,3 +16,15 @@ test('type.temporal.UpdatedAt is a DateTime column generated on create and updat
     return { models: {} };
   });
 });
+
+test('type.sql.Ulid is a fixed-length text column of 26 characters with no generator', () => {
+  defineContract({}, ({ type }) => {
+    expectTypeOf(type.sql.Ulid()).toEqualTypeOf<{
+      readonly kind: 'codec-instance';
+      readonly codecId: 'sql/char@1';
+      readonly typeParams: { readonly length: 26 };
+    }>();
+    expectTypeOf(type).not.toHaveProperty('Ulid');
+    return { models: {} };
+  });
+});

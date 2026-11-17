@@ -82,17 +82,17 @@ const mongoCodecLookup: CodecLookupWithDescriptors = {
 };
 
 function pslToContract(schema: string): MongoContract {
-  const scalarTypeCodecIds = new Map([
+  const scalarCodecIds = new Map([
     ['String', 'mongo/string@1'],
     ['Int32', 'mongo/int32@1'],
     ['Bool', 'mongo/bool@1'],
-    ['Date', 'mongo/date@1'],
+    ['DateTime', 'mongo/date@1'],
     ['ObjectId', 'mongo/objectId@1'],
     ['Double', 'mongo/double@1'],
   ]);
   const scalarTypeConstructors: Record<string, AuthoringTypeConstructorDescriptor> =
     Object.fromEntries(
-      [...scalarTypeCodecIds].map(([name, codecId]) => [
+      [...scalarCodecIds].map(([name, codecId]) => [
         name,
         { kind: 'typeConstructor' as const, output: { codecId } },
       ]),
@@ -104,7 +104,6 @@ function pslToContract(schema: string): MongoContract {
       defaultNamespaceId: '__unbound__',
       composedExtensionContracts: new Map(),
       authoringContributions: {
-        field: {},
         type: scalarTypeConstructors,
         entityTypes: {},
         pslBlockDescriptors: {},
@@ -258,6 +257,24 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
     expect(emailIdx!['unique']).toBe(true);
   });
 
+  it('PSL with @unique and @@index on one field creates one unique index', async () => {
+    const contract = pslToContract(`
+      model User {
+        id    ObjectId @id @map("_id")
+        email String   @unique
+        @@index([email])
+      }
+    `);
+
+    await planAndApply(replSetUri, null, contract);
+
+    const indexes = await db.collection('User').listIndexes().toArray();
+    expect(indexes.map(({ key, unique }) => ({ key, unique }))).toEqual([
+      { key: { _id: 1 }, unique: undefined },
+      { key: { email: 1 }, unique: true },
+    ]);
+  });
+
   it('PSL with model fields produces $jsonSchema validator on MongoDB', async () => {
     const contract = pslToContract(`
       model User {
@@ -291,7 +308,7 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
       model Post {
         id        ObjectId @id @map("_id")
         title     String
-        createdAt Date
+        createdAt DateTime
         @@index([createdAt])
       }
     `);
@@ -376,7 +393,7 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
       model Events {
         id        ObjectId @id @map("_id")
         status    String
-        createdAt Date
+        createdAt DateTime
         @@index([status, sort(createdAt, Desc)])
       }
     `);

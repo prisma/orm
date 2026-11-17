@@ -24,12 +24,15 @@ const uncoveredElsewhere = [
   '@prisma/orm-sqlite',
   '@prisma/orm-target-mysql',
   '@prisma/orm-mysql',
+  '@prisma/orm-target-mariadb',
+  '@prisma/orm-mariadb',
   '@prisma/orm-mongo',
   '@prisma/orm-extension-postgis',
   '@prisma/orm-extension-paradedb',
   '@prisma/orm-extension-supabase',
   '@prisma/orm-extension-arktype-json',
   '@prisma/orm-extension-middleware-cache',
+  '@prisma/orm-postgres-contrib',
 ];
 const adrExampleNames = [
   '@prisma/orm-framework/contract',

@@ -1,5 +1,6 @@
 import type { ContractSourceContext } from '@internal/config/config-types';
 import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
+import { ifDefined } from '@internal/utils/defined';
 import type { InterpretPslDocumentToSqlContractInput } from './interpreter';
 
 export type SqlContextInput = Pick<
@@ -13,6 +14,7 @@ export type SqlContextInput = Pick<
   | 'capabilities'
   | 'codecLookup'
   | 'dataTypes'
+  | 'reportWarning'
 >;
 
 export function sqlContextInput(context: ContractSourceContext): SqlContextInput {
@@ -28,5 +30,6 @@ export function sqlContextInput(context: ContractSourceContext): SqlContextInput
     capabilities: context.capabilities,
     codecLookup: context.codecLookup,
     dataTypes: context.dataTypes,
+    ...ifDefined('reportWarning', context.reportWarning),
   };
 }

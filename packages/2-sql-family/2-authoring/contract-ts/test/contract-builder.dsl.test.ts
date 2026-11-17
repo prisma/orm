@@ -68,7 +68,10 @@ function buildOwnershipRelationContract(ownershipCase: OwnershipRelationCase) {
   const Target = model(ownershipCase.targetModelName, {
     fields: {
       id: field.column(textColumn).id(),
-      userId: field.column(textColumn).column('user_id'),
+      userId:
+        ownershipCase.label === 'hasOne'
+          ? field.column(textColumn).column('user_id').unique()
+          : field.column(textColumn).column('user_id'),
       ...(ownershipCase.label === 'hasMany' ? { title: field.column(textColumn) } : {}),
     },
   });
@@ -105,12 +108,7 @@ describe('contract DSL authoring surface', () => {
 
     const UserBase = model('User', {
       fields: {
-        id: field
-          .generated({
-            type: textColumn,
-            generated: { kind: 'generator', id: 'uuidv4' },
-          })
-          .id({ name: 'app_user_pkey' }),
+        id: field.column(textColumn).id({ name: 'app_user_pkey' }),
         email: field.column(textColumn).unique({ name: 'app_user_email_key' }),
         role: field.column(types.Role),
         createdAt: field.column(timestamptzTemporalColumn).column('created_at').default(now()),
@@ -195,12 +193,6 @@ describe('contract DSL authoring surface', () => {
         target: { namespaceId: 'public', tableName: 'app_user', columns: ['id'] },
         name: 'blog_post_user_id_fkey',
         onDelete: 'cascade',
-      },
-    ]);
-    expect(contract.execution?.mutations.defaults).toEqual([
-      {
-        ref: { namespace: 'public', entry: 'app_user', field: 'id' },
-        onCreate: { kind: 'generator', id: 'uuidv4' },
       },
     ]);
     const modelsByName = modelsOf(contract) as Record<

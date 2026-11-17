@@ -422,6 +422,26 @@ export function extensionExistsAst(extensionName: string): ExtensionExistsCheckB
   };
 }
 
+/**
+ * Typed check that an extension is installed in one schema: `pg_extension` joined to `pg_namespace`, with both names bound as text parameters.
+ */
+export function extensionInSchemaAst(extensionName: string, schema: string): SelectAst {
+  const inner = exprSelect()
+    .from(cfTable('pg_extension', 'e'))
+    .join(
+      cfTable('pg_namespace', 'n'),
+      cfExpr.columnRef('n', 'oid').eqExpr(cfExpr.columnRef('e', 'extnamespace')),
+    )
+    .project('one', cfExpr.lit(1))
+    .where(
+      cfExpr.allOf([
+        cfExpr.columnRef('e', 'extname').eqParam(extensionName, PG_TEXT_CODEC_ID),
+        cfExpr.columnRef('n', 'nspname').eqParam(schema, PG_TEXT_CODEC_ID),
+      ]),
+    );
+  return exprSelect().project('result', cfExpr.exists(inner)).build();
+}
+
 export interface RlsPolicyExistsCheckBuilder {
   policyPresent(): SelectAst;
   policyAbsent(): SelectAst;

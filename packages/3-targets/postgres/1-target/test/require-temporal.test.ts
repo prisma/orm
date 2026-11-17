@@ -4,11 +4,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const hostTemporal = Temporal;
 
-type RequireTemporalModule = typeof import('../src/core/require-temporal');
+type RequireTemporalModule = typeof import('@internal/type-implementations/temporal') &
+  typeof import('../src/core/require-temporal');
 
 async function freshModule(): Promise<RequireTemporalModule> {
   vi.resetModules();
-  return import('../src/core/require-temporal');
+  return {
+    ...(await import('@internal/type-implementations/temporal')),
+    ...(await import('../src/core/require-temporal')),
+  };
 }
 
 const DECODE_A_DATE = { codecId: 'pg/date-temporal@1', operation: 'decode' } as const;
@@ -64,6 +68,7 @@ describe('requireTemporal', () => {
         code: 'RUNTIME.TEMPORAL_UNAVAILABLE',
         message:
           "Mutation default generator 'instantNow' cannot produce a value because this runtime has no global Temporal implementation.",
+        fix: 'Run on a runtime with Temporal available, install a Temporal polyfill before creating the client, or write the column as a convenience type at its default, which needs no Temporal: `DateTime` reads a JavaScript `Date`, and `Date`, `Time` and `Duration` read ISO 8601 strings.',
         meta: { generatorId: 'instantNow' },
       }),
     );

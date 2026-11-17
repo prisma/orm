@@ -34,7 +34,6 @@ function createBinderFor(symbolTable: SymbolTable, sources: PslSources) {
     composedExtensionContracts: new Map(),
     authoringContributions: {
       type: {},
-      field: {},
       entityTypes: {},
       pslBlockDescriptors: {},
       modelAttributes: {},
@@ -116,7 +115,7 @@ function contexts(): { model: AttributeSpecContext; field: FieldAttributeSpecCon
   };
   return {
     model: modelContext,
-    field: { ...modelContext, field, typeResolution: undefined, typeConstructor: undefined },
+    field: { ...modelContext, field, typeResolution: undefined, contributedType: undefined },
   };
 }
 

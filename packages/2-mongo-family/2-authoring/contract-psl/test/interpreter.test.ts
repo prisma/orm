@@ -92,7 +92,8 @@ function modelsOf(ir: Contract): Record<string, unknown> {
 }
 
 function valueObjectsOf(ir: Contract): Record<string, unknown> | undefined {
-  return ir.domain.namespaces[UNBOUND_NAMESPACE_ID]!.valueObjects;
+  const slot = ir.storage.namespaces[UNBOUND_NAMESPACE_ID]?.entries['valueObject'];
+  return slot === undefined ? undefined : JSON.parse(JSON.stringify(slot));
 }
 
 function model(ir: Contract, name: string): MongoModel {
@@ -106,12 +107,15 @@ function interpret(
       InterpretPslDocumentToMongoContractInput,
       'documents' | 'symbolTable' | 'sources' | 'codecLookup'
     >
-  > & { readonly codecLookup?: CodecLookupWithDescriptors },
+  > & {
+    readonly codecLookup?: CodecLookupWithDescriptors;
+    readonly scalarTypes?: ReadonlyMap<string, string>;
+  },
 ) {
   return interpretMongoContract(
     schema,
     {
-      scalarTypeCodecIds: mongoScalarTypeDescriptors,
+      scalarTypes: mongoScalarTypeDescriptors,
       defaultFunctionRegistry: new Map(),
       codecLookup: mongoCodecLookup,
       dataTypes: mongoDataTypeSupport,
@@ -128,7 +132,10 @@ function interpretOk(
       InterpretPslDocumentToMongoContractInput,
       'documents' | 'symbolTable' | 'sources' | 'codecLookup'
     >
-  > & { readonly codecLookup?: CodecLookupWithDescriptors },
+  > & {
+    readonly codecLookup?: CodecLookupWithDescriptors;
+    readonly scalarTypes?: ReadonlyMap<string, string>;
+  },
 ) {
   const result = interpret(schema, overrides);
   expect(result.ok).toBe(true);
@@ -235,7 +242,6 @@ model Item {
       composedExtensionContracts: new Map(),
       authoringContributions: {
         type: {},
-        field: {},
         entityTypes: {},
         pslBlockDescriptors: authoringContributions.pslBlockDescriptors,
         modelAttributes: {},
@@ -267,7 +273,6 @@ model Item {
         symbolTable,
         binder,
         ...mongoTestStack,
-        scalarTypeCodecIds: new Map(),
         defaultFunctionRegistry: context.controlMutationDefaults.defaultFunctionRegistry,
         dataTypes: context.dataTypes,
         codecLookup: context.codecLookup,
@@ -364,7 +369,7 @@ model Item {
         }
       `,
         {
-          scalarTypeCodecIds: new Map([
+          scalarTypes: new Map([
             ['ObjectId', 'custom/oid@2'],
             ['String', 'custom/text@2'],
           ]),
@@ -794,10 +799,14 @@ model Item {
         fields: { id: { field: '_id' }, code: { field: 'code_value' } },
       });
       expect(getIndexes(ir, 'Child')).toEqual([
-        new MongoIndex({ keys: [{ field: 'parent_id', direction: 1 }] }),
+        new MongoIndex({ name: 'parent_id_1', keys: [{ field: 'parent_id', direction: 1 }] }),
       ]);
       expect(getIndexes(ir, 'parents')).toEqual([
-        new MongoIndex({ keys: [{ field: 'code_value', direction: 1 }], unique: true }),
+        new MongoIndex({
+          name: 'code_value_1',
+          keys: [{ field: 'code_value', direction: 1 }],
+          unique: true,
+        }),
       ]);
     });
 
@@ -1113,7 +1122,7 @@ model Item {
         }
       `,
           {
-            scalarTypeCodecIds: new Map([
+            scalarTypes: new Map([
               ...mongoScalarTypeDescriptors,
               ['Json', 'mongo/json@1'],
               ['Vector', 'mongo/vector@1'],
@@ -1332,7 +1341,13 @@ model Item {
       expect(modelsOf(ir)['User']).toMatchObject({
         fields: {
           homeAddress: {
-            type: { kind: 'valueObject', name: 'Address' },
+            type: {
+              kind: 'valueObject',
+              plane: 'storage',
+              namespaceId: '__unbound__',
+              entityKind: 'valueObject',
+              entityName: 'Address',
+            },
             nullable: true,
             many: false,
           },
@@ -1356,7 +1371,13 @@ model Item {
       expect(modelsOf(ir)['User']).toMatchObject({
         fields: {
           addresses: {
-            type: { kind: 'valueObject', name: 'Address' },
+            type: {
+              kind: 'valueObject',
+              plane: 'storage',
+              namespaceId: '__unbound__',
+              entityKind: 'valueObject',
+              entityName: 'Address',
+            },
             nullable: false,
             many: { elementNullable: false },
           },
@@ -1384,7 +1405,7 @@ model Item {
         }
       `,
         {
-          scalarTypeCodecIds: mongoScalarTypeDescriptors,
+          scalarTypes: mongoScalarTypeDescriptors,
         },
       );
 
@@ -1416,7 +1437,13 @@ model Item {
               many: false,
             },
             location: {
-              type: { kind: 'valueObject', name: 'GeoPoint' },
+              type: {
+                kind: 'valueObject',
+                plane: 'storage',
+                namespaceId: '__unbound__',
+                entityKind: 'valueObject',
+                entityName: 'GeoPoint',
+              },
               nullable: false,
               many: false,
             },
@@ -2535,7 +2562,6 @@ model Item {
         `,
         {
           authoringContributions: {
-            field: {},
             type: {},
             entityTypes: {
               enum: {
@@ -2626,12 +2652,24 @@ model Item {
       `);
       expect(model(ir, 'User').fields).toMatchObject({
         nullableElements: {
-          type: { kind: 'valueObject', name: 'Address' },
+          type: {
+            kind: 'valueObject',
+            plane: 'storage',
+            namespaceId: '__unbound__',
+            entityKind: 'valueObject',
+            entityName: 'Address',
+          },
           nullable: false,
           many: { elementNullable: true },
         },
         fullyNullable: {
-          type: { kind: 'valueObject', name: 'Address' },
+          type: {
+            kind: 'valueObject',
+            plane: 'storage',
+            namespaceId: '__unbound__',
+            entityKind: 'valueObject',
+            entityName: 'Address',
+          },
           nullable: true,
           many: { elementNullable: true },
         },
@@ -2822,7 +2860,7 @@ model Post {
 }
 `,
         {
-          scalarTypeCodecIds: mongoScalarTypeDescriptors,
+          scalarTypes: mongoScalarTypeDescriptors,
           defaultFunctionRegistry: new Map(),
         },
       );

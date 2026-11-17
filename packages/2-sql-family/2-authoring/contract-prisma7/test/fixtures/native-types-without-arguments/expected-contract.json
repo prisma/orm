@@ -75,7 +75,7 @@
               "timestamp": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamp-string@1"
+                  "codecId": "pg/timestamp-date@1"
                 },
                 "nullable": false,
                 "many": false
@@ -83,7 +83,7 @@
               "timestamptz": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamptz-string@1"
+                  "codecId": "pg/timestamptz-date@1"
                 },
                 "nullable": false,
                 "many": false
@@ -122,7 +122,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "f28e64193b60a26ff5ceaa3bb9339d2b5a10ff67030771a3a52ab7334105a5a1",
+    "storageHash": "eae4cf8beefa2f644b3e2d462b69e8447946c347f1aa21fda6587cd3b829dbba",
     "namespaces": {
       "public": {
         "id": "public",
@@ -160,13 +160,13 @@
                 },
                 "timestamp": {
                   "dataType": "pg/timestamp",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "nullable": false,
                   "many": false
                 },
                 "timestamptz": {
                   "dataType": "pg/timestamptz",
-                  "codecId": "pg/timestamptz-string@1",
+                  "codecId": "pg/timestamptz-date@1",
                   "nullable": false,
                   "many": false
                 },

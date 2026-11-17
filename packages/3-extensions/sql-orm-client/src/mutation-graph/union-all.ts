@@ -5,6 +5,8 @@ import { rowsResult } from './run-statement';
 type Inputs = { rows: Rows[] };
 
 export class UnionAll extends Node<Inputs> {
+  readonly slots = { rows: 'list' } as const;
+
   constructor() {
     super();
     Object.freeze(this);

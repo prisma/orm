@@ -51,6 +51,7 @@ describe('a role-bound activity handle', () => {
         'SELECT set_config($1, $2, false)',
         'select 1',
         'RESET ALL',
+        'RESET ROLE',
       ],
       released: 1,
     });
@@ -77,6 +78,7 @@ describe('a role-bound activity handle', () => {
         'SELECT set_config($1, $2, false)',
         'SELECT set_config($1, $2, false)',
         'RESET ALL',
+        'RESET ROLE',
       ],
       transactionSql: ['select 1'],
       commits: 1,

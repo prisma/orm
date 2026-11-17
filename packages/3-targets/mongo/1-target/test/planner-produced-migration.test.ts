@@ -31,8 +31,11 @@ describe('PlannerProducedMongoMigration', () => {
 
   it('renders the supplied OpFactoryCall list to runnable mongo operations via the operations getter', () => {
     const calls = [
-      new CreateIndexCall('users', [{ field: 'email', direction: 1 }], { unique: true }),
-      new DropIndexCall('users', [{ field: 'legacy', direction: 1 }]),
+      new CreateIndexCall('users', [{ field: 'email', direction: 1 }], {
+        name: 'email_1',
+        unique: true,
+      }),
+      new DropIndexCall('users', [{ field: 'legacy', direction: 1 }], { name: 'legacy_1' }),
     ];
     const migration = new PlannerProducedMongoMigration(calls, META, SNAPSHOTS_IMPORT_PATH);
 
@@ -50,7 +53,9 @@ describe('PlannerProducedMongoMigration', () => {
   });
 
   it('renders authoring TypeScript that wires up MigrationCLI.run and derives describe() from contract JSON', () => {
-    const calls = [new CreateIndexCall('users', [{ field: 'email', direction: 1 }])];
+    const calls = [
+      new CreateIndexCall('users', [{ field: 'email', direction: 1 }], { name: 'email_1' }),
+    ];
     const migration = new PlannerProducedMongoMigration(calls, META, SNAPSHOTS_IMPORT_PATH);
 
     const source = migration.renderTypeScript(keepInternalSpecifiers);
@@ -84,7 +89,9 @@ describe('PlannerProducedMongoMigration', () => {
   });
 
   it('renderTypeScript emits no describe() block (so no labels leak through it)', () => {
-    const calls = [new CreateIndexCall('users', [{ field: 'email', direction: 1 }])];
+    const calls = [
+      new CreateIndexCall('users', [{ field: 'email', direction: 1 }], { name: 'email_1' }),
+    ];
     const migration = new PlannerProducedMongoMigration(calls, META, SNAPSHOTS_IMPORT_PATH);
 
     const source = migration.renderTypeScript(keepInternalSpecifiers);

@@ -11,8 +11,9 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import postgres from '@internal/target-postgres/control';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
-import sqlite, { sqliteCreateNamespace } from '@internal/target-sqlite/control';
+import sqlite from '@internal/target-sqlite/control';
 import sqlitePackRef from '@internal/target-sqlite/pack';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { timeouts, withDevDatabase } from '@repo/test-utils';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
@@ -24,8 +25,8 @@ import {
 } from '../scalar-lists/psl-list-authoring';
 
 const schema = `types {
-  Money = Numeric(65, 30)
-  Price = Numeric(10, 2)
+  Money = NumericString(65, 30)
+  Price = NumericString(10, 2)
 }
 
 model NumberDefault {

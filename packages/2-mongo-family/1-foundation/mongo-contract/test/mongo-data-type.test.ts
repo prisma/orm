@@ -24,6 +24,18 @@ describe('mongoDataType', () => {
     });
   });
 
+  it('keeps the temporary value a migration writes for a new required field', () => {
+    const declared = mongoDataType('demo/long', {
+      read: (json) => json,
+      bsonTypes: ['long'],
+      temporaryValue: { expression: { $toLong: 0 }, text: '0' },
+    });
+    expect(declared.mongo).toEqual({
+      bsonTypes: ['long'],
+      temporaryValue: { expression: { $toLong: 0 }, text: '0' },
+    });
+  });
+
   it('allows a type stored as no one BSON type', () => {
     expect(
       mongoDataType('demo/any', { read: (json) => json, bsonTypes: [] }).mongo.bsonTypes,

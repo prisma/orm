@@ -14,13 +14,15 @@ import {
   type MongoValidator,
   type MongoValidatorInput,
 } from '@internal/mongo-contract';
-import type {
-  CollModCommand,
-  CreateCollectionCommand,
-  CreateIndexCommand,
-  DropCollectionCommand,
-  DropIndexCommand,
-  MongoMigrationPlanOperation,
+import {
+  type CollModCommand,
+  type CreateCollectionCommand,
+  type CreateIndexCommand,
+  type DropCollectionCommand,
+  type DropIndexCommand,
+  ListCollectionsCommand,
+  ListIndexesCommand,
+  type MongoMigrationPlanOperation,
 } from '@internal/mongo-query-ast/control';
 import {
   MongoSchemaCollection,
@@ -33,6 +35,7 @@ import { describe, expect, it } from 'vitest';
 import { MongoMigrationPlanner } from '../src/core/migrations/mongo-planner';
 import { CollModCall, CreateIndexCall } from '../src/core/migrations/op-factory-call';
 import type { PlannerProducedMongoMigration } from '../src/exports/control';
+import { settledOperations } from './mongo-statement-fixtures';
 
 const ALL_CLASSES_POLICY: MigrationOperationPolicy = {
   allowedOperationClasses: ['additive', 'widening', 'destructive'],
@@ -83,11 +86,11 @@ function makeContract(
 }
 
 function emptyIR(): MongoSchemaIR {
-  return new MongoSchemaIR([]);
+  return new MongoSchemaIR([], { fromDatabase: false });
 }
 
 function irWithCollection(name: string, indexes: MongoSchemaIndex[]): MongoSchemaIR {
-  return new MongoSchemaIR([new MongoSchemaCollection({ name, indexes })]);
+  return new MongoSchemaIR([new MongoSchemaCollection({ name, indexes })], { fromDatabase: false });
 }
 
 function ascIndex(
@@ -95,6 +98,7 @@ function ascIndex(
   options?: { unique?: boolean; sparse?: boolean },
 ): MongoSchemaIndex {
   return new MongoSchemaIndex({
+    name: `${field}_1`,
     keys: [{ field, direction: 1 }],
     unique: options?.unique,
     sparse: options?.sparse,
@@ -106,7 +110,7 @@ function planSuccess(
   contract: MongoContract,
   schema: MongoSchemaIR,
   policy = ALL_CLASSES_POLICY,
-): PlannerProducedMongoMigration {
+) {
   const result = planner.plan({
     contract,
     schema,
@@ -119,7 +123,26 @@ function planSuccess(
   });
   expect(result.kind).toBe('success');
   if (result.kind !== 'success') throw new Error('Expected success');
-  return result.plan as PlannerProducedMongoMigration;
+  const migration = result.plan as PlannerProducedMongoMigration;
+  return { operations: settledOperations(migration), destination: migration.destination };
+}
+
+function planCallsSuccess(
+  p: MongoMigrationPlanner,
+  contract: MongoContract,
+  schema: MongoSchemaIR,
+  policy = ALL_CLASSES_POLICY,
+) {
+  const result = p.planCalls({
+    contract,
+    schema,
+    policy,
+    fromContract: null,
+    frameworkComponents: [],
+  });
+  expect(result.kind).toBe('success');
+  if (result.kind !== 'success') throw new Error('Expected success');
+  return result.calls;
 }
 
 describe('MongoMigrationPlanner', () => {
@@ -128,7 +151,7 @@ describe('MongoMigrationPlanner', () => {
   describe('index diffing', () => {
     it('emits createIndex when destination has an index origin lacks', () => {
       const contract = makeContract({
-        users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },
+        users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] },
       });
       const plan = planSuccess(planner, contract, emptyIR());
 
@@ -158,7 +181,7 @@ describe('MongoMigrationPlanner', () => {
 
     it('emits no operations when indexes are identical', () => {
       const contract = makeContract({
-        users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },
+        users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] },
       });
       const origin = irWithCollection('users', [ascIndex('email')]);
       const plan = planSuccess(planner, contract, origin);
@@ -167,7 +190,7 @@ describe('MongoMigrationPlanner', () => {
 
     it('treats indexes with same keys but different name as equivalent (no-op)', () => {
       const contract = makeContract({
-        users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },
+        users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] },
       });
       const origin = irWithCollection('users', [ascIndex('email')]);
       const plan = planSuccess(planner, contract, origin);
@@ -176,7 +199,9 @@ describe('MongoMigrationPlanner', () => {
 
     it('includes sparse flag in index lookup key', () => {
       const contract = makeContract({
-        users: { indexes: [{ keys: [{ field: 'email', direction: 1 }], sparse: true }] },
+        users: {
+          indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }], sparse: true }],
+        },
       });
       const origin = irWithCollection('users', [ascIndex('email', { sparse: true })]);
       const plan = planSuccess(planner, contract, origin);
@@ -185,7 +210,9 @@ describe('MongoMigrationPlanner', () => {
 
     it('treats indexes with same keys but different options as different', () => {
       const contract = makeContract({
-        users: { indexes: [{ keys: [{ field: 'email', direction: 1 }], unique: true }] },
+        users: {
+          indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }], unique: true }],
+        },
       });
       const origin = irWithCollection('users', [ascIndex('email')]);
       const plan = planSuccess(planner, contract, origin);
@@ -200,11 +227,18 @@ describe('MongoMigrationPlanner', () => {
     it('treats indexes with same keys but different TTL as different', () => {
       const contract = makeContract({
         sessions: {
-          indexes: [{ keys: [{ field: 'createdAt', direction: 1 }], expireAfterSeconds: 3600 }],
+          indexes: [
+            {
+              name: 'createdAt_1',
+              keys: [{ field: 'createdAt', direction: 1 }],
+              expireAfterSeconds: 3600,
+            },
+          ],
         },
       });
       const origin = irWithCollection('sessions', [
         new MongoSchemaIndex({
+          name: 'createdAt_1',
           keys: [{ field: 'createdAt', direction: 1 }],
           expireAfterSeconds: 7200,
         }),
@@ -218,6 +252,7 @@ describe('MongoMigrationPlanner', () => {
         items: {
           indexes: [
             {
+              name: 'status_1',
               keys: [{ field: 'status', direction: 1 }],
               partialFilterExpression: { active: true },
             },
@@ -226,6 +261,7 @@ describe('MongoMigrationPlanner', () => {
       });
       const origin = irWithCollection('items', [
         new MongoSchemaIndex({
+          name: 'status_1',
           keys: [{ field: 'status', direction: 1 }],
           partialFilterExpression: { active: false },
         }),
@@ -238,8 +274,8 @@ describe('MongoMigrationPlanner', () => {
       const contract = makeContract({
         users: {
           indexes: [
-            { keys: [{ field: 'email', direction: 1 }] },
-            { keys: [{ field: 'name', direction: 1 }] },
+            { name: 'email_1', keys: [{ field: 'email', direction: 1 }] },
+            { name: 'name_1', keys: [{ field: 'name', direction: 1 }] },
           ],
         },
       });
@@ -250,8 +286,8 @@ describe('MongoMigrationPlanner', () => {
 
     it('handles multiple collections', () => {
       const contract = makeContract({
-        users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },
-        posts: { indexes: [{ keys: [{ field: 'title', direction: 1 }] }] },
+        users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] },
+        posts: { indexes: [{ name: 'title_1', keys: [{ field: 'title', direction: 1 }] }] },
       });
       const plan = planSuccess(planner, contract, emptyIR());
       expect(plan.operations).toHaveLength(2);
@@ -259,12 +295,15 @@ describe('MongoMigrationPlanner', () => {
 
     it('drops all indexes and the collection when collection removed from destination', () => {
       const contract = makeContract({});
-      const origin = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'users',
-          indexes: [ascIndex('email'), ascIndex('name')],
-        }),
-      ]);
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'users',
+            indexes: [ascIndex('email'), ascIndex('name')],
+          }),
+        ],
+        { fromDatabase: false },
+      );
       const plan = planSuccess(planner, contract, origin);
       expect(plan.operations).toHaveLength(3);
       expect(plan.operations.map((op) => op.operationClass)).toEqual([
@@ -279,8 +318,8 @@ describe('MongoMigrationPlanner', () => {
       const contract = makeContract({
         users: {
           indexes: [
-            { keys: [{ field: 'email', direction: 1 }], unique: true },
-            { keys: [{ field: 'name', direction: 1 }] },
+            { name: 'email_1', keys: [{ field: 'email', direction: 1 }], unique: true },
+            { name: 'name_1', keys: [{ field: 'name', direction: 1 }] },
           ],
         },
       });
@@ -293,7 +332,7 @@ describe('MongoMigrationPlanner', () => {
   describe('ordering', () => {
     it('orders drops before creates', () => {
       const contract = makeContract({
-        users: { indexes: [{ keys: [{ field: 'name', direction: 1 }] }] },
+        users: { indexes: [{ name: 'name_1', keys: [{ field: 'name', direction: 1 }] }] },
       });
       const origin = irWithCollection('users', [ascIndex('email')]);
       const plan = planSuccess(planner, contract, origin);
@@ -305,8 +344,8 @@ describe('MongoMigrationPlanner', () => {
 
     it('orders operations deterministically by collection then keys', () => {
       const contract = makeContract({
-        beta: { indexes: [{ keys: [{ field: 'x', direction: 1 }] }] },
-        alpha: { indexes: [{ keys: [{ field: 'y', direction: 1 }] }] },
+        beta: { indexes: [{ name: 'x_1', keys: [{ field: 'x', direction: 1 }] }] },
+        alpha: { indexes: [{ name: 'y_1', keys: [{ field: 'y', direction: 1 }] }] },
       });
       const plan = planSuccess(planner, contract, emptyIR());
 
@@ -339,7 +378,7 @@ describe('MongoMigrationPlanner', () => {
 
     it('allows additive operations with additive-only policy', () => {
       const contract = makeContract({
-        users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },
+        users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] },
       });
       const plan = planSuccess(planner, contract, emptyIR(), ADDITIVE_ONLY_POLICY);
       expect(plan.operations).toHaveLength(1);
@@ -347,12 +386,15 @@ describe('MongoMigrationPlanner', () => {
 
     it('returns all disallowed operations as separate conflicts', () => {
       const contract = makeContract({});
-      const origin = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'users',
-          indexes: [ascIndex('email'), ascIndex('name')],
-        }),
-      ]);
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'users',
+            indexes: [ascIndex('email'), ascIndex('name')],
+          }),
+        ],
+        { fromDatabase: false },
+      );
       const result = planner.plan({
         contract,
         schema: origin,
@@ -400,39 +442,227 @@ describe('MongoMigrationPlanner', () => {
         allowedOperationClasses: ['additive', 'widening'],
       };
       const contract = makeContract({ users: {} });
-      const origin = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'users',
-          validator: new MongoSchemaValidator({
-            jsonSchema: { bsonType: 'object' },
-            validationLevel: 'strict',
-            validationAction: 'error',
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'users',
+            validator: new MongoSchemaValidator({
+              jsonSchema: { bsonType: 'object' },
+              validationLevel: 'strict',
+              validationAction: 'error',
+            }),
           }),
-        }),
-      ]);
+        ],
+        { fromDatabase: false },
+      );
       const plan = planSuccess(planner, contract, origin, wideningPolicy);
       expect(plan.operations).toHaveLength(1);
       expect(plan.operations[0]!.operationClass).toBe('widening');
     });
   });
 
+  describe('index names', () => {
+    const email = [{ field: 'email', direction: 1 as const }];
+    const planIds = (contract: MongoContract, origin: MongoSchemaIR) =>
+      planSuccess(planner, contract, origin).operations.map((op) => op.id);
+
+    it('drops and creates an index whose content stays and whose name changes', () => {
+      const contract = makeContract({
+        users: { indexes: [{ name: 'User_email_key', keys: email, unique: true }] },
+      });
+      const origin = irWithCollection('users', [
+        new MongoSchemaIndex({ name: 'email_1', keys: email, unique: true }),
+      ]);
+
+      expect(planIds(contract, origin)).toEqual([
+        'index.users.drop(email_1)',
+        'index.users.create(User_email_key)',
+      ]);
+    });
+
+    it('plans nothing for indexes whose names and content match', () => {
+      const contract = makeContract({
+        users: {
+          indexes: [
+            { name: 'User_email_key', keys: email, unique: true },
+            { name: 'User_email_idx', keys: email },
+          ],
+        },
+      });
+      const origin = irWithCollection('users', [
+        new MongoSchemaIndex({ name: 'User_email_idx', keys: email }),
+        new MongoSchemaIndex({ name: 'User_email_key', keys: email, unique: true }),
+      ]);
+
+      expect(planIds(contract, origin)).toEqual([]);
+    });
+
+    it('drops and creates an index whose name stays and whose content changes', () => {
+      const contract = makeContract({
+        users: { indexes: [{ name: 'email_1', keys: email, unique: true }] },
+      });
+      const origin = irWithCollection('users', [
+        new MongoSchemaIndex({ name: 'email_1', keys: email }),
+      ]);
+
+      expect(planIds(contract, origin)).toEqual([
+        'index.users.drop(email_1)',
+        'index.users.create(email_1)',
+      ]);
+    });
+
+    it('creates each of two indexes on the same keys with different options under its own name', () => {
+      const contract = makeContract({
+        users: {
+          indexes: [
+            { name: 'User_email_key', keys: email, unique: true },
+            { name: 'User_email_idx', keys: email },
+            { name: 'User_email_sparse', keys: email, sparse: true },
+          ],
+        },
+      });
+      const plan = planSuccess(planner, contract, emptyIR());
+
+      expect(
+        plan.operations.map((op) => [
+          op.id,
+          (op as MongoMigrationPlanOperation).execute[0]?.command,
+        ]),
+      ).toEqual([
+        [
+          'index.users.create(User_email_key)',
+          expect.objectContaining({ name: 'User_email_key', unique: true }),
+        ],
+        ['index.users.create(User_email_idx)', expect.objectContaining({ name: 'User_email_idx' })],
+        [
+          'index.users.create(User_email_sparse)',
+          expect.objectContaining({ name: 'User_email_sparse', sparse: true }),
+        ],
+      ]);
+    });
+
+    it('drops an index by the name the origin holds it under, checking its options', () => {
+      const contract = makeContract({ users: {} });
+      const origin = irWithCollection('users', [
+        new MongoSchemaIndex({ name: 'User_email_key', keys: email, unique: true }),
+      ]);
+      const plan = planSuccess(planner, contract, origin);
+
+      const op = plan.operations[0] as MongoMigrationPlanOperation;
+      expect({ command: op.execute[0]?.command, precheck: op.precheck[0]?.filter }).toEqual({
+        command: expect.objectContaining({ kind: 'dropIndex', name: 'User_email_key' }),
+        precheck: expect.objectContaining({
+          exprs: [
+            expect.objectContaining({ field: 'name', value: 'User_email_key' }),
+            expect.objectContaining({
+              exprs: expect.arrayContaining([
+                expect.objectContaining({ field: 'unique', value: true }),
+              ]),
+            }),
+          ],
+        }),
+      });
+    });
+  });
+
+  describe('an origin read from a database', () => {
+    const slug = [{ field: 'slug', direction: 1 as const }];
+    const text = [
+      { field: 'title', direction: 'text' as const },
+      { field: 'body', direction: 'text' as const },
+    ];
+    const contract = makeContract({
+      posts: {
+        indexes: [
+          { name: 'title_text_body_text', keys: text, weights: { title: 10 } },
+          { name: 'slug_1', keys: slug, collation: { locale: 'en', strength: 2 } },
+        ],
+      },
+    });
+    const live = (fromDatabase: boolean) =>
+      new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'posts',
+            indexes: [
+              new MongoSchemaIndex({
+                name: 'title_text_body_text',
+                keys: [
+                  { field: '_fts', direction: 'text' },
+                  { field: '_ftsx', direction: 1 },
+                ],
+                weights: { body: 1, title: 10 },
+                default_language: 'english',
+                language_override: 'language',
+              }),
+              new MongoSchemaIndex({
+                name: 'slug_1',
+                keys: slug,
+                collation: { locale: 'en', strength: 2, caseLevel: false, numericOrdering: false },
+              }),
+            ],
+          }),
+        ],
+        { fromDatabase },
+      );
+
+    it('pairs indexes as the verifier does, so server defaults plan nothing', () => {
+      expect(planSuccess(planner, contract, live(true)).operations).toEqual([]);
+    });
+
+    it('creates each index as the contract writes it, not in the form it compares', () => {
+      const empty = new MongoSchemaIR([], { fromDatabase: true });
+      const created = planSuccess(planner, contract, empty).operations.flatMap((op) =>
+        (op as MongoMigrationPlanOperation).execute.map((step) => step.command),
+      );
+
+      expect(created).toEqual([
+        expect.objectContaining({
+          kind: 'createIndex',
+          name: 'title_text_body_text',
+          keys: text,
+          weights: { title: 10 },
+        }),
+        expect.objectContaining({
+          kind: 'createIndex',
+          name: 'slug_1',
+          keys: slug,
+          collation: { locale: 'en', strength: 2 },
+        }),
+      ]);
+    });
+
+    it('compares a contract origin exactly', () => {
+      expect(planSuccess(planner, contract, live(false)).operations.map((op) => op.id)).toEqual([
+        'index.posts.drop(title_text_body_text)',
+        'index.posts.drop(slug_1)',
+        'index.posts.create(title_text_body_text)',
+        'index.posts.create(slug_1)',
+      ]);
+    });
+  });
+
   describe('operation structure', () => {
     it('createIndex has correct precheck/execute/postcheck', () => {
       const contract = makeContract({
-        users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },
+        users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] },
       });
       const plan = planSuccess(planner, contract, emptyIR());
       const op = plan.operations[0] as MongoMigrationPlanOperation;
 
-      expect(op.precheck).toHaveLength(1);
-      expect(op.precheck[0]!.source.kind).toBe('listIndexes');
-      expect(op.precheck[0]!.expect).toBe('notExists');
+      expect(op.precheck).toHaveLength(2);
+      expect(
+        op.precheck.map((check) => [check.source instanceof ListIndexesCommand, check.expect]),
+      ).toEqual([
+        [true, 'notExists'],
+        [true, 'notExists'],
+      ]);
 
       expect(op.execute).toHaveLength(1);
       expect(op.execute[0]!.command.kind).toBe('createIndex');
 
       expect(op.postcheck).toHaveLength(1);
-      expect(op.postcheck[0]!.source.kind).toBe('listIndexes');
+      expect(op.postcheck[0]!.source).toBeInstanceOf(ListIndexesCommand);
       expect(op.postcheck[0]!.expect).toBe('exists');
     });
 
@@ -443,20 +673,22 @@ describe('MongoMigrationPlanner', () => {
       const op = plan.operations[0] as MongoMigrationPlanOperation;
 
       expect(op.precheck).toHaveLength(1);
-      expect(op.precheck[0]!.source.kind).toBe('listIndexes');
+      expect(op.precheck[0]!.source).toBeInstanceOf(ListIndexesCommand);
       expect(op.precheck[0]!.expect).toBe('exists');
 
       expect(op.execute).toHaveLength(1);
       expect(op.execute[0]!.command.kind).toBe('dropIndex');
 
       expect(op.postcheck).toHaveLength(1);
-      expect(op.postcheck[0]!.source.kind).toBe('listIndexes');
+      expect(op.postcheck[0]!.source).toBeInstanceOf(ListIndexesCommand);
       expect(op.postcheck[0]!.expect).toBe('notExists');
     });
 
     it('unique index postcheck includes unique filter', () => {
       const contract = makeContract({
-        users: { indexes: [{ keys: [{ field: 'email', direction: 1 }], unique: true }] },
+        users: {
+          indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }], unique: true }],
+        },
       });
       const plan = planSuccess(planner, contract, emptyIR());
       const op = plan.operations[0] as MongoMigrationPlanOperation;
@@ -466,7 +698,7 @@ describe('MongoMigrationPlanner', () => {
 
     it('non-unique index postcheck requires the index not to be unique', () => {
       const contract = makeContract({
-        users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },
+        users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] },
       });
       const plan = planSuccess(planner, contract, emptyIR());
       const op = plan.operations[0] as MongoMigrationPlanOperation;
@@ -474,24 +706,29 @@ describe('MongoMigrationPlanner', () => {
       expect(op.postcheck[0]!.filter).toMatchObject({
         kind: 'and',
         exprs: expect.arrayContaining([
-          { kind: 'not', expr: expect.objectContaining({ field: 'unique', value: true }) },
+          expect.objectContaining({
+            kind: 'and',
+            exprs: expect.arrayContaining([
+              { kind: 'not', expr: expect.objectContaining({ field: 'unique', value: true }) },
+            ]),
+          }),
         ]),
       });
     });
 
     it('createIndex sets a deterministic operation id', () => {
       const contract = makeContract({
-        users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },
+        users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] },
       });
       const plan = planSuccess(planner, contract, emptyIR());
-      expect(plan.operations[0]!.id).toBe('index.users.create(email:1)');
+      expect(plan.operations[0]!.id).toBe('index.users.create(email_1)');
     });
 
     it('dropIndex sets a deterministic operation id', () => {
       const contract = makeContract({ users: {} });
       const origin = irWithCollection('users', [ascIndex('email')]);
       const plan = planSuccess(planner, contract, origin);
-      expect(plan.operations[0]!.id).toBe('index.users.drop(email:1)');
+      expect(plan.operations[0]!.id).toBe('index.users.drop(email_1)');
     });
   });
 
@@ -501,6 +738,7 @@ describe('MongoMigrationPlanner', () => {
         users: {
           indexes: [
             {
+              name: '$**_1',
               keys: [{ field: '$**', direction: 1 }],
               wildcardProjection: { name: 1, email: 1 },
             },
@@ -509,6 +747,7 @@ describe('MongoMigrationPlanner', () => {
       });
       const origin = irWithCollection('users', [
         new MongoSchemaIndex({
+          name: '$**_1',
           keys: [{ field: '$**', direction: 1 }],
           wildcardProjection: { name: 1 },
         }),
@@ -522,6 +761,7 @@ describe('MongoMigrationPlanner', () => {
         users: {
           indexes: [
             {
+              name: 'name_1',
               keys: [{ field: 'name', direction: 1 }],
               collation: { locale: 'en', strength: 2 },
             },
@@ -530,6 +770,7 @@ describe('MongoMigrationPlanner', () => {
       });
       const origin = irWithCollection('users', [
         new MongoSchemaIndex({
+          name: 'name_1',
           keys: [{ field: 'name', direction: 1 }],
           collation: { locale: 'fr', strength: 2 },
         }),
@@ -543,6 +784,7 @@ describe('MongoMigrationPlanner', () => {
         users: {
           indexes: [
             {
+              name: 'name_1',
               keys: [{ field: 'name', direction: 1 }],
               collation: { strength: 2, locale: 'en' },
             },
@@ -551,6 +793,7 @@ describe('MongoMigrationPlanner', () => {
       });
       const origin = irWithCollection('users', [
         new MongoSchemaIndex({
+          name: 'name_1',
           keys: [{ field: 'name', direction: 1 }],
           collation: { locale: 'en', strength: 2 },
         }),
@@ -564,6 +807,7 @@ describe('MongoMigrationPlanner', () => {
         users: {
           indexes: [
             {
+              name: 'bio_text',
               keys: [{ field: 'bio', direction: 'text' }],
               weights: { bio: 10 },
             },
@@ -572,6 +816,7 @@ describe('MongoMigrationPlanner', () => {
       });
       const origin = irWithCollection('users', [
         new MongoSchemaIndex({
+          name: 'bio_text',
           keys: [{ field: 'bio', direction: 'text' }],
           weights: { bio: 5 },
         }),
@@ -585,6 +830,7 @@ describe('MongoMigrationPlanner', () => {
         users: {
           indexes: [
             {
+              name: 'bio_text',
               keys: [{ field: 'bio', direction: 'text' }],
               weights: { bio: 10 },
               default_language: 'english',
@@ -630,6 +876,92 @@ describe('MongoMigrationPlanner', () => {
       expect(collModOps[0]!.operationClass).toBe('widening');
     });
 
+    describe('the document check', () => {
+      const validator = {
+        jsonSchema: { bsonType: 'object', required: ['email'] },
+        validationLevel: 'strict' as const,
+        validationAction: 'error' as const,
+      };
+
+      function plannedValidatorMeta(
+        origin: MongoSchemaIR,
+        contract = makeContract({ users: { validator } }),
+      ) {
+        return planCallsSuccess(planner, contract, origin)
+          .filter((call): call is CollModCall => call instanceof CollModCall)
+          .map((call) => call.meta);
+      }
+
+      it('is asked for when a validator is added', () => {
+        expect(plannedValidatorMeta(irWithCollection('users', []))).toEqual([
+          {
+            id: 'validator.users.add',
+            label: 'Add validator on users',
+            operationClass: 'widening',
+            checkDocuments: true,
+          },
+        ]);
+      });
+
+      it('is asked for when a validator is updated', () => {
+        const origin = new MongoSchemaIR(
+          [
+            new MongoSchemaCollection({
+              name: 'users',
+              validator: new MongoSchemaValidator({
+                ...validator,
+                jsonSchema: { bsonType: 'object' },
+              }),
+            }),
+          ],
+          { fromDatabase: false },
+        );
+
+        expect(plannedValidatorMeta(origin)).toEqual([
+          expect.objectContaining({ id: 'validator.users.update', checkDocuments: true }),
+        ]);
+      });
+
+      it('is not asked for when a validator is removed', () => {
+        const origin = new MongoSchemaIR(
+          [
+            new MongoSchemaCollection({
+              name: 'users',
+              validator: new MongoSchemaValidator(validator),
+            }),
+          ],
+          { fromDatabase: false },
+        );
+
+        expect(plannedValidatorMeta(origin, makeContract({ users: {} }))).toEqual([
+          {
+            id: 'validator.users.remove',
+            label: 'Remove validator on users',
+            operationClass: 'widening',
+          },
+        ]);
+      });
+
+      it('is not asked for on a collection the plan creates', () => {
+        const ops = planSuccess(planner, makeContract({ users: { validator } }), emptyIR())
+          .operations as MongoMigrationPlanOperation[];
+
+        expect(
+          ops.flatMap((op) => op.precheck.map(({ description }) => description)),
+        ).not.toContain('every document in users fits the new validator');
+      });
+
+      it('is written into migration.ts', () => {
+        const [call] = planCallsSuccess(
+          planner,
+          makeContract({ users: { validator } }),
+          irWithCollection('users', []),
+        );
+
+        expect(call?.renderTypeScript()).toContain('checkDocuments: true');
+      });
+    });
+
     it('validator add has precheck (collection exists) and postcheck (validator applied)', () => {
       const contract = makeContract({
         users: {
@@ -646,34 +978,38 @@ describe('MongoMigrationPlanner', () => {
         (o) => o.execute[0]?.command.kind === 'collMod',
       )!;
 
-      expect(op.precheck).toHaveLength(1);
-      expect(op.precheck[0]!.source.kind).toBe('listCollections');
+      expect(op.precheck).toHaveLength(2);
+      expect(op.precheck[0]!.source).toBeInstanceOf(ListCollectionsCommand);
       expect(op.precheck[0]!.expect).toBe('exists');
+      expect(op.precheck[1]!.description).toBe('every document in users fits the new validator');
 
       expect(op.postcheck).toHaveLength(1);
-      expect(op.postcheck[0]!.source.kind).toBe('listCollections');
+      expect(op.postcheck[0]!.source).toBeInstanceOf(ListCollectionsCommand);
       expect(op.postcheck[0]!.expect).toBe('exists');
     });
 
     it('validator remove has precheck and empty postcheck', () => {
       const contract = makeContract({ users: {} });
-      const origin = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'users',
-          validator: new MongoSchemaValidator({
-            jsonSchema: { bsonType: 'object' },
-            validationLevel: 'strict',
-            validationAction: 'error',
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'users',
+            validator: new MongoSchemaValidator({
+              jsonSchema: { bsonType: 'object' },
+              validationLevel: 'strict',
+              validationAction: 'error',
+            }),
           }),
-        }),
-      ]);
+        ],
+        { fromDatabase: false },
+      );
       const plan = planSuccess(planner, contract, origin);
       const op = (plan.operations as MongoMigrationPlanOperation[]).find(
         (o) => o.execute[0]?.command.kind === 'collMod',
       )!;
 
       expect(op.precheck).toHaveLength(1);
-      expect(op.precheck[0]!.source.kind).toBe('listCollections');
+      expect(op.precheck[0]!.source).toBeInstanceOf(ListCollectionsCommand);
       expect(op.precheck[0]!.expect).toBe('exists');
 
       expect(op.postcheck).toHaveLength(0);
@@ -681,16 +1017,19 @@ describe('MongoMigrationPlanner', () => {
 
     it('classifies validator removal as widening', () => {
       const contract = makeContract({ users: {} });
-      const origin = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'users',
-          validator: new MongoSchemaValidator({
-            jsonSchema: { bsonType: 'object' },
-            validationLevel: 'strict',
-            validationAction: 'error',
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'users',
+            validator: new MongoSchemaValidator({
+              jsonSchema: { bsonType: 'object' },
+              validationLevel: 'strict',
+              validationAction: 'error',
+            }),
           }),
-        }),
-      ]);
+        ],
+        { fromDatabase: false },
+      );
       const plan = planSuccess(planner, contract, origin);
       const collModOps = (plan.operations as MongoMigrationPlanOperation[]).filter(
         (op) => op.execute[0]?.command.kind === 'collMod',
@@ -718,18 +1057,21 @@ describe('MongoMigrationPlanner', () => {
             },
           },
         });
-        const origin = new MongoSchemaIR([
-          new MongoSchemaCollection({
-            name: 'items',
-            validator: new MongoSchemaValidator({
-              jsonSchema: jsonSchema(originMeta),
-              validationLevel: 'strict',
-              validationAction: 'error',
+        const origin = new MongoSchemaIR(
+          [
+            new MongoSchemaCollection({
+              name: 'items',
+              validator: new MongoSchemaValidator({
+                jsonSchema: jsonSchema(originMeta),
+                validationLevel: 'strict',
+                validationAction: 'error',
+              }),
             }),
-          }),
-        ]);
-        const [operation] = planSuccess(planner, contract, origin).operations;
-        return operation;
+          ],
+          { fromDatabase: false },
+        );
+        const [call] = planCallsSuccess(planner, contract, origin);
+        return call?.toOp();
       }
 
       it('is widening when the schema becomes {}, as changing Json to Bson does', () => {
@@ -774,27 +1116,71 @@ describe('MongoMigrationPlanner', () => {
             },
           },
         });
-        const origin = new MongoSchemaIR([
-          new MongoSchemaCollection({
-            name: 'items',
-            validator: new MongoSchemaValidator({
-              jsonSchema: {
-                bsonType: 'object',
-                properties: { name: { bsonType: 'int' }, legacy: { bsonType: 'string' } },
-              },
-              validationLevel: 'strict',
-              validationAction: 'error',
+        const origin = new MongoSchemaIR(
+          [
+            new MongoSchemaCollection({
+              name: 'items',
+              validator: new MongoSchemaValidator({
+                jsonSchema: {
+                  bsonType: 'object',
+                  properties: { name: { bsonType: 'int' }, legacy: { bsonType: 'string' } },
+                },
+                validationLevel: 'strict',
+                validationAction: 'error',
+              }),
             }),
-          }),
-        ]);
+          ],
+          { fromDatabase: false },
+        );
         const labels = planSuccess(planner, contract, origin).operations.map(
           (operation) => operation.label,
         );
         expect(labels).toEqual([
+          'Cast field name in collection items from int to string',
           'Remove field legacy from collection items',
           'Update validator on items (changed: name; added: note; removed: legacy)',
         ]);
       });
+    });
+
+    it('names the variant fields a validator update changes when the fields of the whole collection stay the same', () => {
+      const tasks = (bug: string, epic: string) => ({
+        bsonType: 'object',
+        required: ['_id', 'type'],
+        properties: { _id: { bsonType: 'objectId' }, type: { bsonType: 'string' } },
+        oneOf: [
+          {
+            required: ['type'],
+            properties: { type: { enum: ['bug'] }, [bug]: { bsonType: 'string' } },
+            additionalProperties: false,
+          },
+          {
+            required: ['type'],
+            properties: { type: { enum: ['epic'] }, [epic]: { bsonType: 'string' } },
+            additionalProperties: false,
+          },
+        ],
+      });
+      const validator = (jsonSchema: Record<string, unknown>) => ({
+        jsonSchema,
+        validationLevel: 'strict' as const,
+        validationAction: 'error' as const,
+      });
+      const contract = makeContract({ tasks: { validator: validator(tasks('y', 'x')) } });
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'tasks',
+            validator: new MongoSchemaValidator(validator(tasks('x', 'y'))),
+          }),
+        ],
+        { fromDatabase: false },
+      );
+      expect(
+        planSuccess(planner, contract, origin).operations.map((operation) => operation.label),
+      ).toEqual([
+        'Update validator on tasks (added: y in documents whose type is "bug", x in documents whose type is "epic"; removed: x in documents whose type is "bug", y in documents whose type is "epic")',
+      ]);
     });
 
     it('classifies adding a non-required property as widening', () => {
@@ -814,20 +1200,23 @@ describe('MongoMigrationPlanner', () => {
           },
         },
       });
-      const origin = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'users',
-          validator: new MongoSchemaValidator({
-            jsonSchema: {
-              bsonType: 'object',
-              required: ['email'],
-              properties: { email: { bsonType: 'string' } },
-            },
-            validationLevel: 'strict',
-            validationAction: 'error',
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'users',
+            validator: new MongoSchemaValidator({
+              jsonSchema: {
+                bsonType: 'object',
+                required: ['email'],
+                properties: { email: { bsonType: 'string' } },
+              },
+              validationLevel: 'strict',
+              validationAction: 'error',
+            }),
           }),
-        }),
-      ]);
+        ],
+        { fromDatabase: false },
+      );
       const plan = planSuccess(planner, contract, origin);
       const collModOps = (plan.operations as MongoMigrationPlanOperation[]).filter(
         (op) => op.execute[0]?.command.kind === 'collMod',
@@ -851,20 +1240,23 @@ describe('MongoMigrationPlanner', () => {
           },
         },
       });
-      const origin = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'users',
-          validator: new MongoSchemaValidator({
-            jsonSchema: {
-              bsonType: 'object',
-              required: ['email'],
-              properties: { email: { bsonType: 'string' } },
-            },
-            validationLevel: 'strict',
-            validationAction: 'error',
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'users',
+            validator: new MongoSchemaValidator({
+              jsonSchema: {
+                bsonType: 'object',
+                required: ['email'],
+                properties: { email: { bsonType: 'string' } },
+              },
+              validationLevel: 'strict',
+              validationAction: 'error',
+            }),
           }),
-        }),
-      ]);
+        ],
+        { fromDatabase: false },
+      );
       const plan = planSuccess(planner, contract, origin);
       const collModOps = (plan.operations as MongoMigrationPlanOperation[]).filter(
         (op) => op.execute[0]?.command.kind === 'collMod',
@@ -891,21 +1283,24 @@ describe('MongoMigrationPlanner', () => {
           },
         },
       });
-      const origin = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'users',
-          validator: new MongoSchemaValidator({
-            jsonSchema: {
-              bsonType: 'object',
-              required: ['email'],
-              properties: { email: { bsonType: 'string' } },
-              additionalProperties: false,
-            },
-            validationLevel: 'strict',
-            validationAction: 'error',
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'users',
+            validator: new MongoSchemaValidator({
+              jsonSchema: {
+                bsonType: 'object',
+                required: ['email'],
+                properties: { email: { bsonType: 'string' } },
+                additionalProperties: false,
+              },
+              validationLevel: 'strict',
+              validationAction: 'error',
+            }),
           }),
-        }),
-      ]);
+        ],
+        { fromDatabase: false },
+      );
       const plan = planSuccess(planner, contract, origin);
       const collModOps = (plan.operations as MongoMigrationPlanOperation[]).filter(
         (op) => op.execute[0]?.command.kind === 'collMod',
@@ -927,19 +1322,22 @@ describe('MongoMigrationPlanner', () => {
           },
         },
       });
-      const origin = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'users',
-          validator: new MongoSchemaValidator({
-            jsonSchema: {
-              bsonType: 'object',
-              properties: { age: { bsonType: ['null', 'int'] } },
-            },
-            validationLevel: 'strict',
-            validationAction: 'error',
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'users',
+            validator: new MongoSchemaValidator({
+              jsonSchema: {
+                bsonType: 'object',
+                properties: { age: { bsonType: ['null', 'int'] } },
+              },
+              validationLevel: 'strict',
+              validationAction: 'error',
+            }),
           }),
-        }),
-      ]);
+        ],
+        { fromDatabase: false },
+      );
       const plan = planSuccess(planner, contract, origin);
       const collModOps = (plan.operations as MongoMigrationPlanOperation[]).filter(
         (op) => op.execute[0]?.command.kind === 'collMod',
@@ -965,23 +1363,26 @@ describe('MongoMigrationPlanner', () => {
           },
         },
       });
-      const origin = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'users',
-          validator: new MongoSchemaValidator({
-            jsonSchema: {
-              bsonType: 'object',
-              required: ['email'],
-              properties: {
-                email: { bsonType: 'string' },
-                name: { bsonType: 'string' },
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'users',
+            validator: new MongoSchemaValidator({
+              jsonSchema: {
+                bsonType: 'object',
+                required: ['email'],
+                properties: {
+                  email: { bsonType: 'string' },
+                  name: { bsonType: 'string' },
+                },
               },
-            },
-            validationLevel: 'strict',
-            validationAction: 'error',
+              validationLevel: 'strict',
+              validationAction: 'error',
+            }),
           }),
-        }),
-      ]);
+        ],
+        { fromDatabase: false },
+      );
       const plan = planSuccess(planner, contract, origin);
       const collModOps = (plan.operations as MongoMigrationPlanOperation[]).filter(
         (op) => op.execute[0]?.command.kind === 'collMod',
@@ -1000,16 +1401,19 @@ describe('MongoMigrationPlanner', () => {
           },
         },
       });
-      const origin = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'users',
-          validator: new MongoSchemaValidator({
-            jsonSchema: { bsonType: 'object', properties: { name: { bsonType: 'string' } } },
-            validationLevel: 'strict',
-            validationAction: 'error',
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'users',
+            validator: new MongoSchemaValidator({
+              jsonSchema: { bsonType: 'object', properties: { name: { bsonType: 'string' } } },
+              validationLevel: 'strict',
+              validationAction: 'error',
+            }),
           }),
-        }),
-      ]);
+        ],
+        { fromDatabase: false },
+      );
       const plan = planSuccess(planner, contract, origin);
       const collModOps = (plan.operations as MongoMigrationPlanOperation[]).filter(
         (op) => op.execute[0]?.command.kind === 'collMod',
@@ -1027,16 +1431,19 @@ describe('MongoMigrationPlanner', () => {
           },
         },
       });
-      const origin = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'users',
-          validator: new MongoSchemaValidator({
-            jsonSchema: { bsonType: 'object' },
-            validationLevel: 'strict',
-            validationAction: 'error',
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'users',
+            validator: new MongoSchemaValidator({
+              jsonSchema: { bsonType: 'object' },
+              validationLevel: 'strict',
+              validationAction: 'error',
+            }),
           }),
-        }),
-      ]);
+        ],
+        { fromDatabase: false },
+      );
       const plan = planSuccess(planner, contract, origin);
       const collModOps = (plan.operations as MongoMigrationPlanOperation[]).filter(
         (op) => op.execute[0]?.command.kind === 'collMod',
@@ -1055,16 +1462,19 @@ describe('MongoMigrationPlanner', () => {
           },
         },
       });
-      const origin = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'users',
-          validator: new MongoSchemaValidator({
-            jsonSchema: { bsonType: 'object' },
-            validationLevel: 'strict',
-            validationAction: 'warn',
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'users',
+            validator: new MongoSchemaValidator({
+              jsonSchema: { bsonType: 'object' },
+              validationLevel: 'strict',
+              validationAction: 'warn',
+            }),
           }),
-        }),
-      ]);
+        ],
+        { fromDatabase: false },
+      );
       const plan = planSuccess(planner, contract, origin);
       const collModOps = (plan.operations as MongoMigrationPlanOperation[]).filter(
         (op) => op.execute[0]?.command.kind === 'collMod',
@@ -1083,16 +1493,19 @@ describe('MongoMigrationPlanner', () => {
           },
         },
       });
-      const origin = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'users',
-          validator: new MongoSchemaValidator({
-            jsonSchema: { bsonType: 'object' },
-            validationLevel: 'strict',
-            validationAction: 'error',
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'users',
+            validator: new MongoSchemaValidator({
+              jsonSchema: { bsonType: 'object' },
+              validationLevel: 'strict',
+              validationAction: 'error',
+            }),
           }),
-        }),
-      ]);
+        ],
+        { fromDatabase: false },
+      );
       const plan = planSuccess(planner, contract, origin);
       const collModOps = (plan.operations as MongoMigrationPlanOperation[]).filter(
         (op) => op.execute[0]?.command.kind === 'collMod',
@@ -1111,16 +1524,19 @@ describe('MongoMigrationPlanner', () => {
           },
         },
       });
-      const origin = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'users',
-          validator: new MongoSchemaValidator({
-            jsonSchema: { bsonType: 'object' },
-            validationLevel: 'moderate',
-            validationAction: 'error',
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'users',
+            validator: new MongoSchemaValidator({
+              jsonSchema: { bsonType: 'object' },
+              validationLevel: 'moderate',
+              validationAction: 'error',
+            }),
           }),
-        }),
-      ]);
+        ],
+        { fromDatabase: false },
+      );
       const plan = planSuccess(planner, contract, origin);
       const collModOps = (plan.operations as MongoMigrationPlanOperation[]).filter(
         (op) => op.execute[0]?.command.kind === 'collMod',
@@ -1139,16 +1555,19 @@ describe('MongoMigrationPlanner', () => {
           },
         },
       });
-      const origin = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'users',
-          validator: new MongoSchemaValidator({
-            jsonSchema: { bsonType: 'object' },
-            validationLevel: 'strict',
-            validationAction: 'warn',
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'users',
+            validator: new MongoSchemaValidator({
+              jsonSchema: { bsonType: 'object' },
+              validationLevel: 'strict',
+              validationAction: 'warn',
+            }),
           }),
-        }),
-      ]);
+        ],
+        { fromDatabase: false },
+      );
       const plan = planSuccess(planner, contract, origin);
       const collModOps = (plan.operations as MongoMigrationPlanOperation[]).filter(
         (op) => op.execute[0]?.command.kind === 'collMod',
@@ -1167,16 +1586,19 @@ describe('MongoMigrationPlanner', () => {
           },
         },
       });
-      const origin = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'users',
-          validator: new MongoSchemaValidator({
-            jsonSchema: { bsonType: 'object' },
-            validationLevel: 'strict',
-            validationAction: 'error',
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'users',
+            validator: new MongoSchemaValidator({
+              jsonSchema: { bsonType: 'object' },
+              validationLevel: 'strict',
+              validationAction: 'error',
+            }),
           }),
-        }),
-      ]);
+        ],
+        { fromDatabase: false },
+      );
       const plan = planSuccess(planner, contract, origin);
       expect(plan.operations).toHaveLength(0);
     });
@@ -1230,14 +1652,17 @@ describe('MongoMigrationPlanner', () => {
 
     it('emits dropCollection for removed collections', () => {
       const contract = makeContract({});
-      const origin = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'events',
-          options: new MongoSchemaCollectionOptions({
-            capped: { size: 1048576 },
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'events',
+            options: new MongoSchemaCollectionOptions({
+              capped: { size: 1048576 },
+            }),
           }),
-        }),
-      ]);
+        ],
+        { fromDatabase: false },
+      );
       const plan = planSuccess(planner, contract, origin);
       const dropOps = (plan.operations as MongoMigrationPlanOperation[]).filter(
         (op) => op.execute[0]?.command.kind === 'dropCollection',
@@ -1253,14 +1678,17 @@ describe('MongoMigrationPlanner', () => {
           options: { capped: { size: 2097152 } },
         },
       });
-      const origin = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'events',
-          options: new MongoSchemaCollectionOptions({
-            capped: { size: 1048576 },
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'events',
+            options: new MongoSchemaCollectionOptions({
+              capped: { size: 1048576 },
+            }),
           }),
-        }),
-      ]);
+        ],
+        { fromDatabase: false },
+      );
       const result = planner.plan({
         contract,
         schema: origin,
@@ -1282,7 +1710,9 @@ describe('MongoMigrationPlanner', () => {
           options: { collation: { locale: 'en', strength: 2 } },
         },
       });
-      const origin = new MongoSchemaIR([new MongoSchemaCollection({ name: 'users' })]);
+      const origin = new MongoSchemaIR([new MongoSchemaCollection({ name: 'users' })], {
+        fromDatabase: false,
+      });
       const result = planner.plan({
         contract,
         schema: origin,
@@ -1300,14 +1730,17 @@ describe('MongoMigrationPlanner', () => {
 
     it('reports conflict when removing capped from existing collection', () => {
       const contract = makeContract({ events: {} });
-      const origin = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'events',
-          options: new MongoSchemaCollectionOptions({
-            capped: { size: 1048576 },
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'events',
+            options: new MongoSchemaCollectionOptions({
+              capped: { size: 1048576 },
+            }),
           }),
-        }),
-      ]);
+        ],
+        { fromDatabase: false },
+      );
       const result = planner.plan({
         contract,
         schema: origin,
@@ -1329,14 +1762,17 @@ describe('MongoMigrationPlanner', () => {
           options: { clusteredIndex: { name: 'newName' } },
         },
       });
-      const origin = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'events',
-          options: new MongoSchemaCollectionOptions({
-            clusteredIndex: {},
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'events',
+            options: new MongoSchemaCollectionOptions({
+              clusteredIndex: {},
+            }),
           }),
-        }),
-      ]);
+        ],
+        { fromDatabase: false },
+      );
       const result = planner.plan({
         contract,
         schema: origin,
@@ -1359,14 +1795,17 @@ describe('MongoMigrationPlanner', () => {
 
     it('plans nothing for the clustered index fields the server fills in', () => {
       const contract = makeContract({ events: { options: { clusteredIndex: {} } } });
-      const origin = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'events',
-          options: new MongoSchemaCollectionOptions({
-            clusteredIndex: liveClusteredIndex('_id_'),
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'events',
+            options: new MongoSchemaCollectionOptions({
+              clusteredIndex: liveClusteredIndex('_id_'),
+            }),
           }),
-        }),
-      ]);
+        ],
+        { fromDatabase: false },
+      );
       const result = planner.plan({
         contract,
         schema: origin,
@@ -1382,14 +1821,17 @@ describe('MongoMigrationPlanner', () => {
 
     it('reports conflict when the contract removes a declared clustered index name', () => {
       const contract = makeContract({ events: { options: { clusteredIndex: {} } } });
-      const origin = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'events',
-          options: new MongoSchemaCollectionOptions({
-            clusteredIndex: liveClusteredIndex('byId'),
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'events',
+            options: new MongoSchemaCollectionOptions({
+              clusteredIndex: liveClusteredIndex('byId'),
+            }),
           }),
-        }),
-      ]);
+        ],
+        { fromDatabase: false },
+      );
       const result = planner.plan({
         contract,
         schema: origin,
@@ -1413,14 +1855,17 @@ describe('MongoMigrationPlanner', () => {
           },
         },
       });
-      const origin = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'events',
-          options: new MongoSchemaCollectionOptions({
-            timeseries: { timeField: 'ts', metaField: 'meta', granularity: 'seconds' },
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'events',
+            options: new MongoSchemaCollectionOptions({
+              timeseries: { timeField: 'ts', metaField: 'meta', granularity: 'seconds' },
+            }),
           }),
-        }),
-      ]);
+        ],
+        { fromDatabase: false },
+      );
       const result = planner.plan({
         contract,
         schema: origin,
@@ -1440,7 +1885,7 @@ describe('MongoMigrationPlanner', () => {
       const contract = makeContract({
         newColl: {
           options: { capped: { size: 1024 } },
-          indexes: [{ keys: [{ field: 'ts', direction: 1 }] }],
+          indexes: [{ name: 'ts_1', keys: [{ field: 'ts', direction: 1 }] }],
         },
       });
       const result = planner.plan({
@@ -1458,7 +1903,7 @@ describe('MongoMigrationPlanner', () => {
       expect(result.conflicts.some((c) => c.summary.includes('Create collection newColl'))).toBe(
         true,
       );
-      expect(result.conflicts.some((c) => c.summary.includes('Create index on newColl'))).toBe(
+      expect(result.conflicts.some((c) => c.summary.includes('Create index ts_1 on newColl'))).toBe(
         true,
       );
     });
@@ -1469,14 +1914,17 @@ describe('MongoMigrationPlanner', () => {
           options: { collation: { strength: 2, locale: 'en' } },
         },
       });
-      const origin = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'users',
-          options: new MongoSchemaCollectionOptions({
-            collation: { locale: 'en', strength: 2 },
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'users',
+            options: new MongoSchemaCollectionOptions({
+              collation: { locale: 'en', strength: 2 },
+            }),
           }),
-        }),
-      ]);
+        ],
+        { fromDatabase: false },
+      );
       const plan = planSuccess(planner, contract, origin);
       expect(plan.operations).toHaveLength(0);
     });
@@ -1487,14 +1935,17 @@ describe('MongoMigrationPlanner', () => {
           options: { changeStreamPreAndPostImages: { enabled: true } },
         },
       });
-      const origin = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'events',
-          options: new MongoSchemaCollectionOptions({
-            changeStreamPreAndPostImages: { enabled: false },
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'events',
+            options: new MongoSchemaCollectionOptions({
+              changeStreamPreAndPostImages: { enabled: false },
+            }),
           }),
-        }),
-      ]);
+        ],
+        { fromDatabase: false },
+      );
       const plan = planSuccess(planner, contract, origin);
       const collModOps = (plan.operations as MongoMigrationPlanOperation[]).filter(
         (op) => op.execute[0]?.command.kind === 'collMod',
@@ -1509,14 +1960,17 @@ describe('MongoMigrationPlanner', () => {
           options: { changeStreamPreAndPostImages: { enabled: false } },
         },
       });
-      const origin = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'events',
-          options: new MongoSchemaCollectionOptions({
-            changeStreamPreAndPostImages: { enabled: true },
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'events',
+            options: new MongoSchemaCollectionOptions({
+              changeStreamPreAndPostImages: { enabled: true },
+            }),
           }),
-        }),
-      ]);
+        ],
+        { fromDatabase: false },
+      );
       const plan = planSuccess(planner, contract, origin);
       const collModOps = (plan.operations as MongoMigrationPlanOperation[]).filter(
         (op) => op.execute[0]?.command.kind === 'collMod',
@@ -1527,14 +1981,17 @@ describe('MongoMigrationPlanner', () => {
 
     it('emits { enabled: false } when destination removes changeStreamPreAndPostImages', () => {
       const contract = makeContract({ events: {} });
-      const origin = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'events',
-          options: new MongoSchemaCollectionOptions({
-            changeStreamPreAndPostImages: { enabled: true },
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'events',
+            options: new MongoSchemaCollectionOptions({
+              changeStreamPreAndPostImages: { enabled: true },
+            }),
           }),
-        }),
-      ]);
+        ],
+        { fromDatabase: false },
+      );
       const plan = planSuccess(planner, contract, origin);
       const collModOps = (plan.operations as MongoMigrationPlanOperation[]).filter(
         (op) => op.execute[0]?.command.kind === 'collMod',
@@ -1548,7 +2005,7 @@ describe('MongoMigrationPlanner', () => {
     it('orders creates before indexes, drops after', () => {
       const contract = makeContract({
         events: {
-          indexes: [{ keys: [{ field: 'ts', direction: 1 as const }] }],
+          indexes: [{ name: 'ts_1', keys: [{ field: 'ts', direction: 1 as const }] }],
           options: { capped: { size: 1048576 } },
         },
       });
@@ -1577,27 +2034,9 @@ describe('MongoMigrationPlanner', () => {
   });
 
   describe('planCalls', () => {
-    function planCallsSuccess(
-      p: MongoMigrationPlanner,
-      contract: MongoContract,
-      schema: MongoSchemaIR,
-      policy = ALL_CLASSES_POLICY,
-    ) {
-      const result = p.planCalls({
-        contract,
-        schema,
-        policy,
-        fromContract: null,
-        frameworkComponents: [],
-      });
-      expect(result.kind).toBe('success');
-      if (result.kind !== 'success') throw new Error('Expected success');
-      return result.calls;
-    }
-
     it('returns OpFactoryCall[] for index creation', () => {
       const contract = makeContract({
-        users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },
+        users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] },
       });
       const calls = planCallsSuccess(planner, contract, emptyIR());
 
@@ -1622,13 +2061,16 @@ describe('MongoMigrationPlanner', () => {
       const contract = makeContract({
         users: { options: { capped: { size: 2048 } } },
       });
-      const origin = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'users',
-          indexes: [],
-          options: new MongoSchemaCollectionOptions({ capped: { size: 1024 } }),
-        }),
-      ]);
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'users',
+            indexes: [],
+            options: new MongoSchemaCollectionOptions({ capped: { size: 1024 } }),
+          }),
+        ],
+        { fromDatabase: false },
+      );
 
       const result = planner.planCalls({
         fromContract: null,
@@ -1645,7 +2087,7 @@ describe('MongoMigrationPlanner', () => {
 
     it('returns failure when policy rejects operation class', () => {
       const contract = makeContract({
-        users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },
+        users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] },
       });
 
       const result = planner.planCalls({
@@ -1671,17 +2113,20 @@ describe('MongoMigrationPlanner', () => {
           },
         },
       });
-      const origin = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'users',
-          indexes: [],
-          validator: new MongoSchemaValidator({
-            jsonSchema: { required: ['email'] },
-            validationLevel: 'moderate',
-            validationAction: 'warn',
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'users',
+            indexes: [],
+            validator: new MongoSchemaValidator({
+              jsonSchema: { required: ['email'] },
+              validationLevel: 'moderate',
+              validationAction: 'warn',
+            }),
           }),
-        }),
-      ]);
+        ],
+        { fromDatabase: false },
+      );
 
       const calls = planCallsSuccess(planner, contract, origin);
 
@@ -1704,17 +2149,20 @@ describe('MongoMigrationPlanner', () => {
           },
         },
       });
-      const origin = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'users',
-          indexes: [],
-          validator: new MongoSchemaValidator({
-            jsonSchema: { required: ['email'] },
-            validationLevel: 'strict',
-            validationAction: 'error',
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'users',
+            indexes: [],
+            validator: new MongoSchemaValidator({
+              jsonSchema: { required: ['email'] },
+              validationLevel: 'strict',
+              validationAction: 'error',
+            }),
           }),
-        }),
-      ]);
+        ],
+        { fromDatabase: false },
+      );
 
       const calls = planCallsSuccess(planner, contract, origin);
 
@@ -1729,9 +2177,10 @@ describe('MongoMigrationPlanner', () => {
           options: { changeStreamPreAndPostImages: { enabled: true } },
         },
       });
-      const origin = new MongoSchemaIR([
-        new MongoSchemaCollection({ name: 'events', indexes: [] }),
-      ]);
+      const origin = new MongoSchemaIR(
+        [new MongoSchemaCollection({ name: 'events', indexes: [] })],
+        { fromDatabase: false },
+      );
 
       const calls = planCallsSuccess(planner, contract, origin);
 
@@ -1742,7 +2191,7 @@ describe('MongoMigrationPlanner', () => {
 
     it('returns empty calls when schemas are identical', () => {
       const contract = makeContract({
-        users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] },
+        users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] },
       });
       const origin = irWithCollection('users', [ascIndex('email')]);
       const calls = planCallsSuccess(planner, contract, origin);
@@ -1755,7 +2204,7 @@ describe('MongoMigrationPlanner', () => {
     it('does not createCollection for variant names when contract has only the base collection', () => {
       const contract = makeContract({
         tasks: {
-          indexes: [{ keys: [{ field: 'title', direction: 1 }] }],
+          indexes: [{ name: 'title_1', keys: [{ field: 'title', direction: 1 }] }],
           validator: {
             jsonSchema: {
               bsonType: 'object',
@@ -1933,7 +2382,7 @@ describe('MongoMigrationPlanner', () => {
       // set. The planner reads only entries.collection, so the value set produces
       // no op — the validator (physical artifact) is unchanged.
       const contract = makeContractWithValueSet(
-        { users: { indexes: [{ keys: [{ field: 'email', direction: 1 }] }] } },
+        { users: { indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }] } },
         { Role: { kind: 'valueSet', values: ['admin', 'author', 'reader'] } },
       );
       const origin = irWithCollection('users', [ascIndex('email')]);

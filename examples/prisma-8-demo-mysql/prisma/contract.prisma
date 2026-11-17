@@ -14,6 +14,15 @@ model Post {
   authorId Int
 }
 
+model Event {
+  id        Int      @id @default(autoincrement())
+  title     String
+  startsAt  DateTime
+  day       Date
+  opensAt   Time
+  createdAt DateTime @default(now())
+}
+
 enum Role {
   USER
   ADMIN

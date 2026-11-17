@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { detectionPatterns } from '../guide-detections';
 
+const APP_GUIDE =
+  'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.20-to-8.0.0-rc.21/instructions.md';
+
+const EXTENSION_GUIDE =
+  'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.20-to-8.0.0-rc.21/instructions.md';
+
 function patternsOf(audience: string, id: string): readonly RegExp[] {
-  return detectionPatterns(
-    `upgrade-instructions/pending/mongo-contract-target/${audience}/instructions.md`,
-    id,
-  );
+  return detectionPatterns(audience === 'app' ? APP_GUIDE : EXTENSION_GUIDE, id);
 }
 
 describe.each(['app', 'extension'])('the %s mongo-contract-target detection', (audience) => {
@@ -25,7 +28,9 @@ describe.each(['app', 'extension'])('the %s mongo-contract-target detection', (a
       matches(
         "mongoContract(schemaPath, {\n  output: 'out/contract.json',\n  target: mongoTargetPack,\n})",
       ),
-    ]).toEqual([true, true, true, true, true, true, false, false, false]);
+      matches('mongoContract(schemaPath, options)'),
+      matches("mongoContract(join(dir, 'schema.prisma'), config.contract)"),
+    ]).toEqual([true, true, true, true, true, true, false, false, false, true, true]);
   });
 
   it('does not match a call of another function that ends in mongoContract', () => {

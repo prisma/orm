@@ -1,8 +1,6 @@
-import { temporalCodecPresetWithPrecision } from '@internal/family-sql/pack';
-import { temporalAuthoringPresets } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
 import { postgresAggregateDescriptors } from '../src/core/aggregates';
-import { postgresAuthoringFieldPresets } from '../src/core/authoring';
+import { postgresAuthoringTypes } from '../src/core/authoring';
 import { codecDescriptorMap } from '../src/core/codec-type-map';
 import { codecDescriptors } from '../src/core/codecs';
 import * as codecIds from '../src/exports/codec-ids';
@@ -37,21 +35,11 @@ describe('Postgres Date codec wiring', () => {
     );
   });
 
-  it('provides opt-in Date field presets with the Date-valued clock', () => {
-    expect(postgresAuthoringFieldPresets).not.toHaveProperty('dateTimeDate');
-    for (const name of ['timestamptzDate', 'createdAtDate', 'updatedAtDate']) {
-      expect(postgresAuthoringFieldPresets.temporal).not.toHaveProperty(name);
-    }
-    const input = { codecId };
-    const convenience = temporalAuthoringPresets(input);
-    expect(postgresAuthoringFieldPresets.temporal).toMatchObject({
-      timestamptzJsDate: temporalCodecPresetWithPrecision({ ...input, sizeType: 'pg/int4' }),
-      createdAtJsDate: convenience.createdAt,
-      updatedAtJsDate: convenience.updatedAt,
-    });
-    expect(postgresAuthoringFieldPresets.dateTime.output.codecId).toBe('pg/timestamptz-temporal@1');
-    expect(postgresAuthoringFieldPresets.temporal.timestamptz.output.codecId).toBe(
-      'pg/timestamptz-temporal@1',
-    );
+  it('builds the created-at and updated-at aliases on the Date codec at millisecond precision', () => {
+    const { CreatedAt, UpdatedAt } = postgresAuthoringTypes.temporal;
+    expect([CreatedAt.output.type, UpdatedAt.output.type]).toEqual([
+      { codecId, typeParams: { precision: 3 } },
+      { codecId, typeParams: { precision: 3 } },
+    ]);
   });
 });

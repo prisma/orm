@@ -1,0 +1,80 @@
+// use prisma-8
+
+// Real emitted fixture for the ORM's writes without RETURNING. It is emitted against a SQLite
+// adapter that reports neither `returning` nor `insertOnConflictTarget` (see prisma.config.ts),
+// as the MySQL adapter does, so every write reads its rows back by key.
+
+model User {
+  id    Int    @id @default(autoincrement())
+  email String @unique
+  name  String
+
+  posts  Post[]
+  badges Badge[]
+
+  @@map("users")
+}
+
+model Post {
+  id       Int    @id @default(autoincrement())
+  title    String
+  authorId Int    @map("author_id")
+
+  author User @relation(fields: [authorId], references: [id])
+
+  @@map("posts")
+}
+
+model Account {
+  id     Int    @id @default(autoincrement())
+  email  String @unique
+  handle String @unique
+
+  @@map("accounts")
+}
+
+model Tag {
+  code  String @id
+  label String
+
+  @@map("tags")
+}
+
+model Token {
+  id    String @id @default(sql`(lower(hex(randomblob(16))))`)
+  label String
+
+  @@map("tokens")
+}
+
+model Badge {
+  id     String @id @default(sql`(lower(hex(randomblob(16))))`)
+  label  String
+  userId Int    @map("user_id")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("badges")
+}
+
+model Task {
+  id    Int    @id @default(autoincrement())
+  title String
+  type  String
+
+  @@discriminator(type)
+  @@map("tasks")
+}
+
+model Bug {
+  severity String
+
+  @@base(Task, "bug")
+}
+
+model Feature {
+  priority Int
+
+  @@base(Task, "feature")
+  @@map("features")
+}

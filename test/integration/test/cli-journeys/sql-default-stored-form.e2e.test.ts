@@ -71,7 +71,7 @@ function writeContract(ctx: JourneyContext, text: string): void {
 const cases = [
   {
     name: 'an interval',
-    type: 'DateTime',
+    type: 'TimestamptzTemporal',
     written: "sql`now() - interval '1 day'`",
     stored: "(now() - '1 day'::interval)",
     literal: "sql`(now() - '1 day'::interval)`",
@@ -158,7 +158,7 @@ withTempDir(({ createTempDir }) => {
 
   describe('two pending migrations, the first of which writes the default', () => {
     const db = useDevDatabase();
-    const withTag = (literal: string) => `${schema('DateTime', literal)}
+    const withTag = (literal: string) => `${schema('TimestamptzTemporal', literal)}
 model Tag {
   id Int @id
 }
@@ -172,7 +172,7 @@ model Tag {
           createTempDir,
           contractMode: 'psl',
         });
-        writeContract(ctx, schema('DateTime', "sql`now() - interval '1 day'`"));
+        writeContract(ctx, schema('TimestamptzTemporal', "sql`now() - interval '1 day'`"));
         expect((await runContractEmit(ctx)).exitCode).toBe(0);
         expect((await planMigrationAndSelfEmit(ctx, ['--name', 'first'])).exitCode).toBe(0);
         const firstHash = storageHash(ctx);
@@ -230,7 +230,7 @@ model Tag {
           createTempDir,
           contractMode: 'psl',
         });
-        writeContract(ctx, schema('DateTime', "sql`now() - interval '1 day'`"));
+        writeContract(ctx, schema('TimestamptzTemporal', "sql`now() - interval '1 day'`"));
         expect((await runContractEmit(ctx)).exitCode).toBe(0);
         const failed = await runDbInit(ctx);
         const shown = shownOutput(failed);
@@ -254,7 +254,7 @@ model Tag {
           createTempDir,
           contractMode: 'psl',
         });
-        writeContract(ctx, schema('DateTime', "sql`now() - interval '1 day'`"));
+        writeContract(ctx, schema('TimestamptzTemporal', "sql`now() - interval '1 day'`"));
         expect((await runContractEmit(ctx)).exitCode).toBe(0);
         const failed = await runDbUpdate(ctx);
         const shown = shownOutput(failed);
@@ -279,7 +279,7 @@ model Tag {
           createTempDir,
           contractMode: 'psl',
         });
-        writeContract(ctx, schema('DateTime', "sql`(now() + '1 day'::interval)`"));
+        writeContract(ctx, schema('TimestamptzTemporal', "sql`(now() + '1 day'::interval)`"));
         expect((await runContractEmit(ctx)).exitCode).toBe(0);
         expect((await planMigrationAndSelfEmit(ctx, ['--name', 'initial'])).exitCode).toBe(0);
         expect((await runMigrate(ctx)).exitCode).toBe(0);

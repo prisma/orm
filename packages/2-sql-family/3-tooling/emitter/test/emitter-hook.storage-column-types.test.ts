@@ -816,7 +816,7 @@ describe('StorageColumnTypes', () => {
     const dts = generateContractDts(contract, sqlEmission, [], testHashes);
 
     expect(dts).toContain(
-      "export type FieldOutputTypes = FieldTypesFromDomain<ContractBase['domain']['namespaces'], CodecTypes, ParameterizedOutputTypeFunctions, FieldTypeOverrides, \"output\">;",
+      "export type FieldOutputTypes = FieldTypesFromDomain<ContractBase['domain']['namespaces'], CodecTypes, ParameterizedOutputTypeFunctions, FieldTypeOverrides, \"output\", ContractBase['storage']['namespaces']>;",
     );
     expect(dts).toContain(
       'readonly tags: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "pg/text@1" }; readonly many: { readonly elementNullable: false } }',

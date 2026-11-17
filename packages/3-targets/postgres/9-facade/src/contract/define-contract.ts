@@ -22,6 +22,7 @@ import { buildBoundContract } from '@internal/sql-contract-ts/contract-builder';
 import { assemblePostgresCodecRegistryWithBuiltins } from '@internal/target-postgres/codecs';
 import postgresPack from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
+import type { ExtensionHandle } from './extension';
 import type { RlsEntityHandle } from './rls';
 
 type SqlFamily = typeof sqlFamilyPack;
@@ -91,13 +92,13 @@ type PostgresBaseScaffold<
    */
   readonly dataTypeLookup?: DataTypeLookup;
   /**
-   * RLS handles (`policy*`, `rlsEnabled`, `role`), lowered by the generic
+   * RLS handles (`policy*`, `rlsEnabled`, `role`) and `extension` handles, lowered by the generic
    * contract build through the postgres pack's entity-handle hook —
    * mirroring the PSL `policy_*` / `@@rls` lowering key-for-key and
    * wire-name-for-wire-name. This wrapper only narrows the element type;
    * it contains no entity-kind logic.
    */
-  readonly entities?: readonly RlsEntityHandle[];
+  readonly entities?: readonly (RlsEntityHandle | ExtensionHandle)[];
 };
 
 type PostgresDefinition<

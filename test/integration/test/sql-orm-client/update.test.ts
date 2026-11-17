@@ -9,7 +9,6 @@ import { getTestContext } from './helpers';
 import {
   createReturningUsersCollection,
   createUsersCollection,
-  createUsersCollectionWithoutReturning,
   timeouts,
   withCollectionRuntime,
 } from './integration-helpers';
@@ -230,24 +229,6 @@ describe('integration/update', () => {
   );
 
   it(
-    'update() and updateAll() reject when returning capability is disabled',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollectionWithoutReturning(runtime);
-        const filtered = users.where({ id: 1 });
-
-        await expect(filtered.update({ name: 'Blocked' })).rejects.toThrow(
-          /requires contract capability "returning"/,
-        );
-        expect(() => filtered.updateAll({ name: 'Blocked' })).toThrow(
-          /requires contract capability "returning"/,
-        );
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-
-  it(
     'update() finalizes its UPDATE committed once, after its transaction commits',
     async () => {
       const events: Array<{ readonly hook: string; readonly sql: string; readonly scope: string }> =
@@ -278,7 +259,7 @@ describe('integration/update', () => {
           await seedUsers(runtime, [{ id: 1, name: 'Stale', email: 'a@example.com' }]);
           events.length = 0;
 
-          await users.where({ id: 1 }).update({ name: 'Updated' });
+          await users.where({ name: 'Stale' }).update({ name: 'Updated' });
 
           const updateEvents = events.filter((event) =>
             event.sql.toLowerCase().startsWith('update'),

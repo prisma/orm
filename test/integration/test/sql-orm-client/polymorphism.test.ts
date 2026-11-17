@@ -36,6 +36,7 @@ async function setupPolySchema(runtime: PgIntegrationRuntime): Promise<void> {
       severity text,
       project_id integer,
       reporter_id integer,
+      pinned_by_id integer unique,
       bug_assignee_person_id integer
     )
   `);
@@ -97,6 +98,7 @@ describe('integration/polymorphism', () => {
             type: 'bug',
             projectId: null,
             reporterId: null,
+            pinnedById: null,
             severity: 'critical',
             assigneeId: null,
           },
@@ -106,6 +108,7 @@ describe('integration/polymorphism', () => {
             type: 'bug',
             projectId: null,
             reporterId: null,
+            pinnedById: null,
             severity: 'low',
             assigneeId: null,
           },
@@ -115,6 +118,7 @@ describe('integration/polymorphism', () => {
             type: 'feature',
             projectId: null,
             reporterId: null,
+            pinnedById: null,
             priority: 1,
             assigneeId: null,
           },
@@ -124,10 +128,55 @@ describe('integration/polymorphism', () => {
             type: 'feature',
             projectId: null,
             reporterId: null,
+            pinnedById: null,
             priority: 3,
             assigneeId: null,
           },
         ]);
+      }, polyContext.contract);
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'writes through the base model return the full row of each variant',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        await setupPolySchema(runtime);
+        await seedPolyData(runtime);
+
+        const tasks = createTaskCollection(runtime);
+        const updated = await tasks.where({ id: 3 }).updateAll({ title: 'Dark mode v2' });
+        const created = await tasks.create({
+          id: 10,
+          title: 'Crash on save',
+          type: 'bug',
+        } as never);
+
+        expect({ updated, created }).toEqual({
+          updated: [
+            {
+              id: 3,
+              title: 'Dark mode v2',
+              type: 'feature',
+              projectId: null,
+              reporterId: null,
+              pinnedById: null,
+              priority: 1,
+              assigneeId: null,
+            },
+          ],
+          created: {
+            id: 10,
+            title: 'Crash on save',
+            type: 'bug',
+            projectId: null,
+            reporterId: null,
+            pinnedById: null,
+            severity: null,
+            assigneeId: null,
+          },
+        });
       }, polyContext.contract);
     },
     timeouts.spinUpPpgDev,
@@ -157,6 +206,7 @@ describe('integration/polymorphism', () => {
             type: 'bug',
             projectId: null,
             reporterId: null,
+            pinnedById: null,
             severity: 'critical',
             assigneeId: null,
           },
@@ -166,6 +216,7 @@ describe('integration/polymorphism', () => {
             type: 'bug',
             projectId: null,
             reporterId: null,
+            pinnedById: null,
             severity: 'low',
             assigneeId: null,
           },
@@ -200,6 +251,7 @@ describe('integration/polymorphism', () => {
             type: 'feature',
             projectId: null,
             reporterId: null,
+            pinnedById: null,
             priority: 1,
             assigneeId: null,
           },
@@ -209,6 +261,7 @@ describe('integration/polymorphism', () => {
             type: 'feature',
             projectId: null,
             reporterId: null,
+            pinnedById: null,
             priority: 3,
             assigneeId: null,
           },
@@ -235,6 +288,7 @@ describe('integration/polymorphism', () => {
           type: 'bug',
           projectId: null,
           reporterId: null,
+          pinnedById: null,
           severity: 'high',
           assigneeId: 17,
         });
@@ -254,6 +308,7 @@ describe('integration/polymorphism', () => {
             type: 'bug',
             projectId: null,
             reporterId: null,
+            pinnedById: null,
             severity: 'high',
             assigneeId: 17,
           },
@@ -283,6 +338,7 @@ describe('integration/polymorphism', () => {
           type: 'feature',
           projectId: null,
           reporterId: null,
+          pinnedById: null,
           priority: 5,
           assigneeId: null,
         });

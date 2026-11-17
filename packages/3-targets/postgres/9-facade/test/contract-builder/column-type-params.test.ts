@@ -1,13 +1,16 @@
-import { numericColumn, varcharColumn } from '@internal/adapter-postgres/column-types';
+import { numericStringColumn, varcharColumn } from '@internal/adapter-postgres/column-types';
 import type { ColumnTypeDescriptor } from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
 import { defineContract } from '../../src/exports/contract-builder';
 
 function buildWithColumn(descriptor: ColumnTypeDescriptor) {
-  return defineContract({}, ({ field, model }) => ({
+  return defineContract({}, ({ field, model, gen, type }) => ({
     models: {
       Item: model('Item', {
-        fields: { id: field.id.uuidv4String(), value: field.column(descriptor) },
+        fields: {
+          id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+          value: field.column(descriptor),
+        },
       }),
     },
   }));
@@ -16,7 +19,7 @@ function buildWithColumn(descriptor: ColumnTypeDescriptor) {
 describe('column type parameters', () => {
   it.each([
     ['varcharColumn(0)', varcharColumn(0), 'pg/varchar', 'length'],
-    ['numericColumn(2000)', numericColumn(2000), 'pg/numeric', 'precision'],
+    ['numericStringColumn(2000)', numericStringColumn(2000), 'pg/numeric', 'precision'],
   ])('%s fails when the contract is built', (_, descriptor, dataType, parameter) => {
     expect(() => buildWithColumn(descriptor)).toThrow(
       expect.objectContaining({

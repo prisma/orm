@@ -18,10 +18,10 @@ const literal = (value: unknown) => ({ kind: 'literal', value });
 
 /** The tag that writes a value of each Postgres column type these tests use. */
 const TAG_OF: Readonly<Record<string, string>> = {
-  DateTime: 'timestamptz',
+  TimestamptzTemporal: 'timestamptz',
   TimestampTemporal: 'timestamp',
-  Date: 'date',
-  Time: 'time',
+  DateTemporal: 'date',
+  TimeTemporal: 'time',
   Timetz: 'timetz',
 };
 
@@ -31,9 +31,9 @@ describe('a PSL date or time default is stored in its data type canonical form',
       await postgresDefaults(
         `model Event {
   id Int      @id
-  a  DateTime @default(timestamptz\`2024-01-01T00:00:00Z\`)
-  b  DateTime @default(timestamptz\`2024-01-01T00:00:00.000Z\`)
-  c  DateTime @default(timestamptz\`2024-01-01T01:00:00+01:00\`)
+  a  TimestamptzTemporal @default(timestamptz\`2024-01-01T00:00:00Z\`)
+  b  TimestamptzTemporal @default(timestamptz\`2024-01-01T00:00:00.000Z\`)
+  c  TimestamptzTemporal @default(timestamptz\`2024-01-01T01:00:00+01:00\`)
 }`,
         ['a', 'b', 'c'],
       ),
@@ -53,9 +53,9 @@ describe('a PSL date or time default is stored in its data type canonical form',
   jsDate    TimestamptzJsDate  @default(timestamptz\`2024-01-01 00:00:00.500+00\`)
   local     TimestampTemporal          @default(timestamp\`2024-01-01 12:34:56.500\`)
   localText TimestampString    @default(timestamp\`2024-01-01 12:34:56\`)
-  day       Date               @default(date\`0044-03-15 BC\`)
+  day       DateTemporal               @default(date\`0044-03-15 BC\`)
   dayText   DateString         @default(date\`12026-01-02\`)
-  clock     Time               @default(time\`12:34\`)
+  clock     TimeTemporal               @default(time\`12:34\`)
   zoned     Timetz             @default(timetz\`12:34:56+02\`)
   history   TimestampTemporal(3)[]     @default([timestamp\`2024-01-01 00:00:00\`, timestamp\`2024-06-30 12:34:56.789000\`])
 }`,
@@ -92,17 +92,17 @@ describe('a PSL date or time default is stored in its data type canonical form',
       'pg/timestamp holds no UTC offset, but "2024-01-01T00:00:00Z" has one. Leave it out, as in "2024-01-01T12:34:56".',
     ],
     [
-      'DateTime',
+      'TimestamptzTemporal',
       '2024-01-01 00:00:00',
       'pg/timestamptz needs a UTC offset, but "2024-01-01 00:00:00" has none. Add Z for UTC or an offset such as +02:00, as in "2024-01-01T12:34:56Z".',
     ],
     [
-      'Date',
+      'DateTemporal',
       '2024-02-30',
       '"2024-02-30" is not a date that exists. Write a real date, as in "2024-01-01".',
     ],
     [
-      'Time',
+      'TimeTemporal',
       '25:00:00',
       '"25:00:00" is not a time of day that exists: hours run from 00 to 23, and minutes and seconds from 00 to 59. Write one, as in "12:34:56".',
     ],
@@ -112,7 +112,7 @@ describe('a PSL date or time default is stored in its data type canonical form',
       'pg/timetz needs a UTC offset, but "12:34:56" has none. Add Z for UTC or an offset such as +02:00, as in "12:34:56+02:00".',
     ],
     [
-      'DateTime',
+      'TimestamptzTemporal',
       '2024-01-01T00:00:00.1234567Z',
       '"2024-01-01T00:00:00.1234567Z" has 7 digits after the decimal point, but pg/timestamptz holds microseconds, so at most 6. Round it, as in "2024-01-01T12:34:56.123456Z".',
     ],
@@ -157,10 +157,10 @@ describe('a PSL date or time default is stored in its data type canonical form',
 
 describe('a quoted string on a Postgres date, time, interval or bytes column', () => {
   it.each([
-    ['DateTime', '2024-01-01T00:00:00Z', 'timestamptz'],
+    ['TimestamptzTemporal', '2024-01-01T00:00:00Z', 'timestamptz'],
     ['TimestampTemporal', '2024-01-01 12:34:56', 'timestamp'],
-    ['Date', '2024-01-01', 'date'],
-    ['Time', '12:34:56', 'time'],
+    ['DateTemporal', '2024-01-01', 'date'],
+    ['TimeTemporal', '12:34:56', 'time'],
     ['Timetz', '12:34:56+02:00', 'timetz'],
     ['IntervalParts', 'P1D', 'interval'],
     ['Bytes', '\\x68656c6c6f', 'bytea'],
@@ -192,9 +192,9 @@ describe('a quoted string on a Postgres date, time, interval or bytes column', (
 
 describe('infinity on a column whose codec holds a Temporal value or a Date', () => {
   it.each([
-    ['DateTime', 'timestamptz', 'pg/timestamptz-temporal@1', 'pg/timestamptz-string@1'],
+    ['TimestamptzTemporal', 'timestamptz', 'pg/timestamptz-temporal@1', 'pg/timestamptz-string@1'],
     ['TimestamptzJsDate', 'timestamptz', 'pg/timestamptz-date@1', 'pg/timestamptz-string@1'],
-    ['Date', 'date', 'pg/date-temporal@1', 'pg/date-string@1'],
+    ['DateTemporal', 'date', 'pg/date-temporal@1', 'pg/date-string@1'],
   ])(
     'is refused on a %s column, naming the text codec that holds it',
     async (type, tag, codecId, textCodecId) => {

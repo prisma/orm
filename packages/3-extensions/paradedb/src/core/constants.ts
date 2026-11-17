@@ -23,6 +23,16 @@ export const PARADEDB_SPACE_ID = 'paradedb' as const;
 export const PARADEDB_BASELINE_MIGRATION_NAME =
   '20260601T0000_install_pg_search_extension' as const;
 
+export const PARADEDB_UPGRADE_MIGRATION_NAME = '20261029T1342_declare_pg_search_extension' as const;
+
+export const PARADEDB_INSTALL_MIGRATION_NAME = '20261029T1342_create_pg_search_extension' as const;
+
+export const PARADEDB_SEARCH_PATH_MIGRATION_NAME =
+  '20261106T1036_find_pg_search_on_search_path' as const;
+
+export const PARADEDB_SEARCH_PATH_INSTALL_MIGRATION_NAME =
+  '20261106T1401_install_pg_search_on_search_path' as const;
+
 /**
  * `paradedb:*` invariantIds emitted by the baseline migration. Each id,
  * once published, is immutable: downstream consumers reference them by

@@ -7,6 +7,7 @@ import {
   MongoIndex,
   MongoStorage,
   MongoValidator,
+  MongoValueObject,
   MongoValueSet,
 } from '@internal/mongo-contract';
 import { applicationDomainOf } from '@repo/test-utils';
@@ -151,6 +152,7 @@ describe('MongoTargetContractSerializer', () => {
                   items: {
                     indexes: [
                       {
+                        name: 'email_1',
                         keys: [{ field: 'email', direction: 1 as const }],
                         unique: true,
                         collation: { locale: 'en', strength: 2 },
@@ -338,6 +340,36 @@ describe('MongoTargetContractSerializer', () => {
       const roleVs = ns!.entries.valueSet?.['Role'];
       expect(roleVs).toBeInstanceOf(MongoValueSet);
       expect(roleVs?.values).toEqual(['admin', 'author', 'reader']);
+    });
+  });
+
+  describe('entries.valueObject round-trip', () => {
+    const address = {
+      fields: {
+        city: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false, many: false },
+      },
+    };
+
+    function makeValueObjectContractJson() {
+      const base = makeValidContractJson();
+      const ns = base.storage.namespaces[UNBOUND_NAMESPACE_ID] as {
+        entries: Record<string, unknown>;
+      };
+      ns.entries['valueObject'] = { Address: address };
+      return base;
+    }
+
+    it('hydrates entries.valueObject and serializes it back unchanged', () => {
+      const serializer = new MongoTargetContractSerializer();
+      const contract = serializer.deserializeContract(makeValueObjectContractJson());
+      const out = JSON.parse(JSON.stringify(serializer.serializeContract(contract)));
+      expect({
+        hydrated:
+          contract.storage.namespaces[UNBOUND_NAMESPACE_ID]?.entries.valueObject?.[
+            'Address'
+          ] instanceof MongoValueObject,
+        serialized: out.storage.namespaces[UNBOUND_NAMESPACE_ID].entries.valueObject,
+      }).toEqual({ hydrated: true, serialized: { Address: address } });
     });
   });
 });

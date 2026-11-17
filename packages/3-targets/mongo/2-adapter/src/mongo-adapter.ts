@@ -1,5 +1,5 @@
 import type { CodecCallContext } from '@internal/framework-components/codec';
-import type { MongoCodecRegistry } from '@internal/mongo-codec';
+import { assembleMongoCodecRegistry, type MongoCodecRegistry } from '@internal/mongo-codec';
 import type { MongoAdapter, MongoDdlPlan, MongoLoweredDraft } from '@internal/mongo-lowering';
 import type { AnyMongoDdlCommand } from '@internal/mongo-query-ast/control';
 import { keysToKeySpec } from '@internal/mongo-query-ast/control';
@@ -30,7 +30,7 @@ import {
   UpdateManyWireCommand,
   UpdateOneWireCommand,
 } from '@internal/mongo-wire';
-import { buildStandardCodecRegistry } from '@internal/target-mongo/codecs';
+import mongoRuntimeTarget from '@internal/target-mongo/runtime';
 import { blindCast } from '@internal/utils/casts';
 import { assertNever } from '@internal/utils/internal-error';
 import { structuralLowerFilter, structuralLowerPipeline } from './lowering';
@@ -339,25 +339,12 @@ class MongoAdapterImpl implements MongoAdapter {
 }
 
 /**
- * Construct a Mongo adapter with the standard wire-type codecs registered
- * for encode-side dispatch (`MongoParamRef.codecId` lookups).
+ * Construct a Mongo adapter that encodes `MongoParamRef` leaves with `codecs`, the MongoDB target's codecs when omitted.
  *
- * The runtime-side codec registry the runtime decodes against is composed
- * separately by `createMongoExecutionContext`. This factory exists for
- * direct adapter use (the runtime descriptor's `create(stack)` calls
- * through it). User code should compose a stack/context instead.
+ * The runtime descriptor's `create(stack)` passes the codecs of every component in the stack, so extension codecs encode as well as decode. User code should compose a stack/context instead.
  */
-export function createMongoAdapter(): MongoAdapter {
-  return new MongoAdapterImpl(buildStandardCodecRegistry());
-}
-
-/**
- * Internal escape hatch — direct adapter construction with a caller-supplied
- * codec registry, used only by adapter unit tests that exercise the
- * encode-side codec-dispatch path with synthetic codecs. Not re-exported
- * from the package's public surface and not for production use; production
- * callers compose a `MongoExecutionStack` and `MongoExecutionContext`.
- */
-export function _unstable_createMongoAdapterWithCodecs(codecs: MongoCodecRegistry): MongoAdapter {
+export function createMongoAdapter(
+  codecs: MongoCodecRegistry = assembleMongoCodecRegistry([mongoRuntimeTarget]),
+): MongoAdapter {
   return new MongoAdapterImpl(codecs);
 }

@@ -54,6 +54,7 @@ function expectedColumn(dataType: string, codecId: string, expression: string): 
   const { expected } = buildPostgresPlanDiff({
     contract,
     actualSchema: new PostgresDatabaseSchemaNode({
+      extensions: undefined,
       namespaces: {},
       roles: [],
       existingSchemas: ['public'],
@@ -112,7 +113,7 @@ describe("a literal-shaped sql`'{}'::jsonb` default on Postgres", () => {
     expect(
       postgresResolveDefault(
         { kind: 'function', expression: "'{}'::jsonb" },
-        { typeText: 'jsonb', many: false },
+        { typeText: 'jsonb', dataTypeId: 'pg/jsonb', many: false },
       ),
     ).toEqual({ kind: 'function', expression: "'{}'::jsonb" });
   });

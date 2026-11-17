@@ -4,9 +4,9 @@ import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
+  fixturePostgresTypeNamespace,
   interpretSqlContract,
   postgresNativeScalarTypeDescriptors,
-  postgresScalarAuthoringTypes,
   postgresTarget,
 } from './fixtures';
 
@@ -15,7 +15,7 @@ function interpret(schema: string) {
     target: postgresTarget,
     scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
     authoringContributions: {
-      type: postgresScalarAuthoringTypes,
+      type: fixturePostgresTypeNamespace,
       dataTypes: fixtureDataTypeSupport.entries,
     },
     ...fixtureInterpreterTypes,
@@ -37,17 +37,15 @@ describe('interpretPslDocumentToSqlContract given a view block', () => {
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      expect(result.failure.diagnostics).toEqual([
-        {
-          code: 'PSL_UNSUPPORTED_TOP_LEVEL_BLOCK',
-          message: 'Unsupported top-level block "view"',
-          sourceId: 'schema.prisma',
-          span: {
-            start: { offset: 0, line: 1, column: 1 },
-            end: { offset: 4, line: 1, column: 5 },
-          },
+      expect(result.failure.diagnostics).toContainEqual({
+        code: 'PSL_UNSUPPORTED_TOP_LEVEL_BLOCK',
+        message: 'Unsupported top-level block "view"',
+        sourceId: 'schema.prisma',
+        span: {
+          start: { offset: 0, line: 1, column: 1 },
+          end: { offset: 4, line: 1, column: 5 },
         },
-      ]);
+      });
     },
   );
 });

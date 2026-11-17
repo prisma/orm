@@ -5,9 +5,9 @@ import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
   documentScopedTypes,
+  fixturePostgresTypeNamespace,
   interpretSqlContract,
   postgresNativeScalarTypeDescriptors,
-  postgresScalarAuthoringTypes,
   postgresTarget,
   testEnumEntityContributions,
 } from './fixtures';
@@ -18,8 +18,7 @@ const baseInput = {
   scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
   authoringContributions: {
     entityTypes: testEnumEntityContributions,
-    type: postgresScalarAuthoringTypes,
-    field: {},
+    type: fixturePostgresTypeNamespace,
   },
   composedExtensionContracts: new Map(),
   createNamespace: createTestSqlNamespace,

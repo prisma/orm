@@ -1,5 +1,6 @@
-import { MongoDriverImpl } from '@internal/driver-mongo';
-import { AsyncIterableResult } from '@internal/framework-components/runtime';
+import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
+import mongoRuntimeDriver, { type MongoBinding } from '@internal/driver-mongo/runtime';
+import { AsyncIterableResult, type RuntimeMode } from '@internal/framework-components/runtime';
 import type {
   AnyMongoTypeMaps,
   MongoContract,
@@ -8,26 +9,35 @@ import type {
 import type { MongoOrmClient, MongoQueryPlan, MongoRawClient } from '@internal/mongo-orm';
 import { mongoOrm } from '@internal/mongo-orm';
 import type { MongoMiddleware, MongoRuntime } from '@internal/mongo-runtime';
-import { createMongoRuntime, type MongoExecutionContext } from '@internal/mongo-runtime';
+import {
+  createMongoExecutionStack,
+  createMongoRuntime,
+  type MongoExecutionContext,
+  type MongoRuntimeDriverInstance,
+  type MongoRuntimeExtensionDescriptor,
+} from '@internal/mongo-runtime';
+import mongoRuntimeTarget from '@internal/target-mongo/runtime';
 import { ifDefined } from '@internal/utils/defined';
 import { validateMongoContract } from '../static/contract-from-json';
 import { buildMongoStaticContext, type MongoStaticContext } from '../static/mongo-static';
 import {
-  type MongoBinding,
   type MongoBindingInput,
   resolveMongoBinding,
   resolveOptionalMongoBinding,
 } from './binding';
 import { mongoError } from './mongo-errors';
-
-export type MongoTargetId = 'mongo';
+import type { MongoTargetId } from './mongo-target-id';
+import { type MongoPrepareMember, prepareMongoQuery } from './prepared-row-query';
 
 type UnboundEnums<TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>> =
   MongoStaticContext<TContract>['enums'];
 
+/**
+ * A MongoDB client. `prepare` opens no connection, so a client with no binding can prepare; run the handle against `await db.runtime()`. Declarations are checked against the contract's codec types.
+ */
 export interface MongoClient<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
-> {
+> extends MongoPrepareMember<TContract> {
   readonly orm: MongoOrmClient<TContract>;
   readonly query: MongoStaticContext<TContract>['query'];
   readonly raw: MongoRawClient<TContract>;
@@ -41,7 +51,8 @@ export interface MongoClient<
 }
 
 export interface MongoOptionsBase {
-  readonly mode?: 'strict' | 'permissive';
+  readonly extensions?: readonly MongoRuntimeExtensionDescriptor<MongoTargetId>[];
+  readonly mode?: RuntimeMode;
   /**
    * Optional middleware chain applied to every Mongo execution.
    */
@@ -86,35 +97,49 @@ export default function mongo<
   const contract = validateMongoContract(options.contract);
   let binding = resolveOptionalMongoBinding(options);
 
-  const { context, query, enums, enumsByNamespace, raw } =
-    buildMongoStaticContext<TContract>(contract);
+  const stack = createMongoExecutionStack({
+    target: mongoRuntimeTarget,
+    adapter: mongoRuntimeAdapter,
+    driver: mongoRuntimeDriver,
+    extensions: options.extensions ?? [],
+  });
+  const { context, query, enums, raw } = buildMongoStaticContext<TContract>(contract, stack);
 
   // Single source of truth for the lifecycle. `runtimePromise` is the in-flight
   // or settled build; `closed` is the terminal state set by `close()`. A failed
   // build resets `runtimePromise` so a retry is possible (see test).
   let runtimePromise: Promise<MongoRuntime> | undefined;
   let closed = false;
-  let ownedDispose: (() => Promise<void>) | undefined;
+  let runtimeInstance:
+    | { readonly runtime: MongoRuntime; readonly driver: MongoRuntimeDriverInstance }
+    | undefined;
 
-  const buildRuntime = async (resolvedBinding: MongoBinding): Promise<MongoRuntime> => {
-    const driver =
-      resolvedBinding.kind === 'url'
-        ? await MongoDriverImpl.fromConnection(resolvedBinding.url, resolvedBinding.dbName)
-        : MongoDriverImpl.fromDb(resolvedBinding.client.db(resolvedBinding.dbName));
-    if (resolvedBinding.kind === 'url') {
-      ownedDispose = () => driver.close();
-    }
-    return createMongoRuntime({
+  const closedError = () => mongoError('DRIVER.NOT_CONNECTED', 'Mongo client is closed');
+
+  // The runtime is created before the driver connects, as in postgres(), so a runtime that cannot be built opens no connection. The runtime owns the driver and closes it.
+  const createRuntime = () => {
+    if (runtimeInstance !== undefined) return runtimeInstance;
+    const driver = stack.driver.create();
+    const runtime = createMongoRuntime({
       context,
+      adapter: stack.adapter.create(stack),
       driver,
       ...ifDefined('mode', options.mode),
       ...ifDefined('middleware', options.middleware),
     });
+    runtimeInstance = { runtime, driver };
+    return runtimeInstance;
+  };
+
+  const buildRuntime = async (resolvedBinding: MongoBinding): Promise<MongoRuntime> => {
+    const { runtime, driver } = createRuntime();
+    await driver.connect(resolvedBinding);
+    return runtime;
   };
 
   const getRuntime = (): Promise<MongoRuntime> => {
     if (closed) {
-      return Promise.reject(mongoError('DRIVER.NOT_CONNECTED', 'Mongo client is closed'));
+      return Promise.reject(closedError());
     }
     if (runtimePromise !== undefined) {
       return runtimePromise;
@@ -150,10 +175,8 @@ export default function mongo<
   }
 
   const orm = mongoOrm<TContract>({
-    contract,
-    executor: { query: queryRows, execute: executeStats },
-    mutationDefaults: context,
-    enums: enumsByNamespace,
+    context,
+    runtime: { query: queryRows, execute: executeStats },
   });
 
   return {
@@ -166,10 +189,18 @@ export default function mongo<
 
     async connect(bindingInput?: MongoBindingInput): Promise<MongoRuntime> {
       if (closed) {
-        throw mongoError('DRIVER.NOT_CONNECTED', 'Mongo client is closed');
+        throw closedError();
       }
       if (runtimePromise !== undefined) {
-        throw mongoError('DRIVER.ALREADY_CONNECTED', 'Mongo client already connected');
+        if (bindingInput !== undefined) {
+          throw mongoError('DRIVER.ALREADY_CONNECTED', 'Mongo client is already bound', {
+            why: 'connect() was given options after the client was bound to a database.',
+            fix: 'Call connect() without options, or create a new client for another database.',
+          });
+        }
+        const runtime = await runtimePromise;
+        if (closed) throw closedError();
+        return runtime;
       }
       if (bindingInput !== undefined) {
         binding = resolveMongoBinding(bindingInput);
@@ -180,28 +211,28 @@ export default function mongo<
           'Mongo binding not configured. Pass url/uri+dbName/mongoClient+dbName/binding to mongo(...) or call db.connect({ ... }).',
         );
       }
-      return getRuntime();
+      const runtime = await getRuntime();
+      if (closed) throw closedError();
+      return runtime;
     },
 
     runtime(): Promise<MongoRuntime> {
       return getRuntime();
     },
 
+    async prepare(declaration, callback) {
+      if (closed) {
+        throw closedError();
+      }
+      return prepareMongoQuery(createRuntime().runtime, declaration, callback);
+    },
+
     async close(): Promise<void> {
       if (closed) return;
       closed = true;
-      if (runtimePromise === undefined) return;
-      // Await whatever the build resolved to. Swallow build failures because
-      // the user's intent is "release any resources we acquired" — there is
-      // nothing to close if the build never produced a runtime.
-      try {
-        await runtimePromise;
-      } catch {
-        // build failed; still attempt disposing any already-acquired owned driver.
-      }
-      const dispose = ownedDispose;
-      ownedDispose = undefined;
-      await dispose?.();
+      await runtimePromise?.catch(() => undefined);
+      // The runtime closes its driver, which closes a client it created from a URL and leaves a caller's mongoClient open.
+      await runtimeInstance?.runtime.close();
     },
 
     [Symbol.asyncDispose](): Promise<void> {

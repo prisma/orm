@@ -68,6 +68,7 @@ describe('PostgresMigrationPlanner - unique constraints vs indexes (structural n
     }[];
   }): PostgresDatabaseSchemaNode {
     return new PostgresDatabaseSchemaNode({
+      extensions: undefined,
       namespaces: {
         public: new PostgresNamespaceSchemaNode({
           schemaName: 'public',

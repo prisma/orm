@@ -1,5 +1,8 @@
 import type { ContractModel } from '@internal/contract/types';
-import { validateContractDomain } from '@internal/contract/validate-domain';
+import {
+  removedDomainKeyProblems,
+  validateContractDomain,
+} from '@internal/contract/validate-domain';
 import { withDerivedToOneRelationNullability } from '@internal/contract-authoring';
 import type { ContractSerializer } from '@internal/framework-components/control';
 import {
@@ -107,6 +110,9 @@ export abstract class MongoContractSerializerBase<TContract>
   // `{ id, entries: { collection } }` shape, so the published hash cannot be
   // recomputed from a snapshot's content. Mongo snapshots therefore read
   // without content verification until the hash covers the persisted shape.
+  // Snapshots written before ADR 317 were rewritten in place with index names
+  // and keep their old hash, which markers, the ledger and migration from/to
+  // name, so a future content check must accept them.
 
   /**
    * Family-shared structural validation: parse against the Mongo
@@ -120,11 +126,18 @@ export abstract class MongoContractSerializerBase<TContract>
    * `storage.namespaces[namespaceId].entries.collection[collectionName]` (each value is a
    * `MongoCollection`, with nested `MongoIndex` / `MongoValidator` /
    * `MongoCollectionOptions` constructed by the `MongoCollection` constructor).
-   * The rest of the contract envelope (models, valueObjects, capabilities, …)
+   * The rest of the contract envelope (models, capabilities, …)
    * remains in plain-JSON form; those IR layers are handled by sibling
    * subsystems and don't sit behind this SPI.
    */
   protected parseMongoContractStructure(json: unknown): MongoContract {
+    const removedKeys = removedDomainKeyProblems(json);
+    if (removedKeys.length > 0) {
+      throw structuredError(
+        'CONTRACT.VALIDATION_FAILED',
+        `Contract structural validation failed: ${removedKeys.join('; ')}`,
+      );
+    }
     const schema = this.contractSchema ?? MongoContractSchema;
     const parsed = schema(json);
     if (parsed instanceof arktypeType.errors) {

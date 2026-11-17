@@ -4,15 +4,20 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createBoundDriverFromBinding } from '../src/postgres-driver';
 import { queryRows } from './sql-queryable-test-utils';
 
-const SESSION_SETTINGS = { DateStyle: 'ISO' } as const;
-const GERMAN = "SET DateStyle TO 'German, DMY'";
+const SESSION_SETTINGS = { DateStyle: 'ISO', lc_monetary: 'C' } as const;
+const OTHER_SETTINGS = ["SET DateStyle TO 'German, DMY'", "SET lc_monetary TO 'POSIX'"];
 
-async function dateStyleOf(
-  queryable: Parameters<typeof queryRows>[0],
-): Promise<string | undefined> {
-  const rows = await queryRows<{ DateStyle: string }>(queryable, 'SHOW DateStyle');
-  return rows[0]?.DateStyle;
+type Queryable = Parameters<typeof queryRows>[0];
+
+async function settingsOf(
+  queryable: Queryable,
+): Promise<{ DateStyle: string; lc_monetary: string }> {
+  const [dateStyle] = await queryRows<{ DateStyle: string }>(queryable, 'SHOW DateStyle');
+  const [lcMonetary] = await queryRows<{ lc_monetary: string }>(queryable, 'SHOW lc_monetary');
+  return { DateStyle: dateStyle?.DateStyle ?? '', lc_monetary: lcMonetary?.lc_monetary ?? '' };
 }
+
+const APPLIED = { DateStyle: expect.stringMatching(/^ISO/), lc_monetary: 'C' };
 
 describe('the session settings on a connection the application supplies', () => {
   const cleanups: (() => Promise<void>)[] = [];
@@ -31,7 +36,7 @@ describe('the session settings on a connection the application supplies', () => 
     'are applied to a pooled connection whose session holds another value, before the driver uses it',
     async () => {
       const pool = new pg.Pool({ connectionString: await devDatabaseUrl(), max: 1 });
-      await pool.query(GERMAN);
+      for (const statement of OTHER_SETTINGS) await pool.query(statement);
       const driver = createBoundDriverFromBinding(
         { kind: 'pgPool', pool, ownedByDriver: false },
         undefined,
@@ -41,7 +46,7 @@ describe('the session settings on a connection the application supplies', () => 
       );
       cleanups.push(() => driver.close());
 
-      expect(await dateStyleOf(driver)).toMatch(/^ISO/);
+      expect(await settingsOf(driver)).toEqual(APPLIED);
     },
     timeouts.spinUpPpgDev,
   );
@@ -60,10 +65,10 @@ describe('the session settings on a connection the application supplies', () => 
       cleanups.push(() => driver.close());
 
       const connection = await driver.acquireConnection();
-      await connection.execute({ sql: GERMAN });
+      for (const sql of OTHER_SETTINGS) await connection.execute({ sql });
       await connection.release();
 
-      expect(await dateStyleOf(driver)).toMatch(/^ISO/);
+      expect(await settingsOf(driver)).toEqual(APPLIED);
     },
     timeouts.spinUpPpgDev,
   );
@@ -73,7 +78,7 @@ describe('the session settings on a connection the application supplies', () => 
     async () => {
       const client = new pg.Client({ connectionString: await devDatabaseUrl() });
       await client.connect();
-      await client.query(GERMAN);
+      for (const statement of OTHER_SETTINGS) await client.query(statement);
       const driver = createBoundDriverFromBinding(
         { kind: 'pgClient', client, ownedByDriver: false },
         undefined,
@@ -83,14 +88,14 @@ describe('the session settings on a connection the application supplies', () => 
       );
       cleanups.push(() => driver.close());
 
-      const first = await dateStyleOf(driver);
+      const first = await settingsOf(driver);
       const connection = await driver.acquireConnection();
-      await connection.execute({ sql: GERMAN });
+      for (const sql of OTHER_SETTINGS) await connection.execute({ sql });
       await connection.release();
 
-      expect({ first, afterRelease: await dateStyleOf(driver) }).toEqual({
-        first: expect.stringMatching(/^ISO/),
-        afterRelease: expect.stringMatching(/^ISO/),
+      expect({ first, afterRelease: await settingsOf(driver) }).toEqual({
+        first: APPLIED,
+        afterRelease: APPLIED,
       });
     },
     timeouts.spinUpPpgDev,

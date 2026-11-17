@@ -15,7 +15,7 @@
  * digits under a different declared codec — a decimal string beside a bigint.
  */
 
-import { int4Column, int8Column } from '@internal/adapter-postgres/column-types';
+import { int4Column, int8BigIntColumn } from '@internal/adapter-postgres/column-types';
 import postgresAdapter from '@internal/adapter-postgres/runtime';
 import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
 import { type AggregateSpec, Collection } from '@internal/sql-orm-client';
@@ -77,7 +77,7 @@ const contributedAggregates: SqlRuntimeExtensionDescriptor<'postgres'> = {
 const Reading = model('Reading', {
   fields: {
     id: field.column(int4Column).id(),
-    weight: field.column(int8Column).optional(),
+    weight: field.column(int8BigIntColumn).optional(),
   },
 }).sql({ table: 'contributed_readings' });
 
@@ -85,7 +85,7 @@ const Sample = model('Sample', {
   fields: {
     id: field.column(int4Column).id(),
     readingId: field.column(int4Column).column('reading_id'),
-    weight: field.column(int8Column).optional(),
+    weight: field.column(int8BigIntColumn).optional(),
   },
   relations: {
     reading: rel.belongsTo(Reading, { from: 'readingId', to: 'id' }),

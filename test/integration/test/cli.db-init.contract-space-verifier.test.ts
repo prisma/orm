@@ -1,4 +1,6 @@
+import { rmSync } from 'node:fs';
 import { timeouts, withClient, withDevDatabase } from '@repo/test-utils';
+import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { runOnEngine, setupTestDirectoryFromFixtures, withTempDir } from './utils/cli-test-helpers';
 import { runDbInit, setupDbInitFixture } from './utils/db-init-test-helpers';
@@ -85,11 +87,11 @@ withTempDir(({ createTempDir }) => {
           );
           const { configPath } = testSetup;
 
-          // Emit contract — needed because the runner reads contract.json.
-          // No `migrations/<space-id>/` dir is written, so the verifier
-          // surfaces `declaredButUnmigrated` for the test extension.
           const emit = await runOnEngine(testSetup, ['contract', 'emit']);
           expect(emit.exitCode).toBe(0);
+          rmSync(join(testSetup.testDir, 'migrations', 'test-contract-space'), {
+            recursive: true,
+          });
 
           const run = await runDbInit(testSetup, ['--config', configPath, '--json', '--no-color']);
           expect(run.exitCode).toBe(2);
