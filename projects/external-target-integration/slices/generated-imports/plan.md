@@ -29,6 +29,8 @@ Known failure modes to check in every dispatch: destructive git operations are f
 
 ## 4. Migration files are rendered from `migrations.module`; the old mechanism is removed
 
+- **Split 2026-11-17.** The operator approved replacing the translation function with the module name from the config. How a component's type declaration loses its package is still being decided, and that blocks dispatch 3. So this dispatch runs in two parts. **4a, now:** every target's migration renderer writes its imports from `migrations.module`, and a command that renders a migration with no module named stops with a structured error. The translation function stays alive for contract types only. **4b, after dispatch 3:** the function, the import-root modes and `project-import-root.ts` are deleted.
+
 - **Outcome:** every target's migration renderer writes its imports from the config's module; `project-import-root.ts`, the import-root modes and the threaded resolver are gone; `init` still scaffolds Postgres and MongoDB as before.
 - **Builds on:** dispatch 3.
 - **Hands on:** no code path chooses an import name from the manifest; the shell table is read only by the build and the publish lint.
