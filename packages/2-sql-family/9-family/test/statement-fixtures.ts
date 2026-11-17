@@ -243,6 +243,7 @@ export function fakeTarget(
   });
   return {
     tables: () => schemaTables,
+    sameName,
     namespaces: {
       createNamespaceCalls: (namespaceId: string) =>
         existingNamespaces === undefined || existingNamespaces.has(namespaceId)

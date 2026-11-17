@@ -94,25 +94,11 @@ describe('planStatements refuses a table rename no statement asks for', () => {
         { User: table('accounts') },
         fakeTarget(['app.users', 'app.Accounts'], {}, ['widening'], ignoringCase),
       ),
-    ).toMatchObject({
-      kind: 'unsupportedOperation',
-      summary:
-        'Cannot rename table "users" to "accounts": the schema being planned from already has a table "accounts", as "Accounts"',
-    });
-  });
-
-  it('when two tables move to one name', () => {
-    expect(
-      refusal(
-        { User: table('users'), Member: table('members') },
-        { User: table('people'), Member: table('people') },
-        fakeTarget(['app.users', 'app.members']),
-      ),
     ).toEqual({
       kind: 'unsupportedOperation',
       summary:
-        'Cannot rename table "users" to "people": the table of model "app.Member" changes from "members" to "people"',
-      why: 'The table of model "app.User" changes from "users" to "people", and the table of model "app.Member" changes from "members" to "people". Moving the rows of two tables into one is a data migration, which a plan does not write: write it by hand in the migration.ts of a migration plan.',
+        'Cannot rename table "users" to "accounts": the schema being planned from already has a table "accounts", as "Accounts"',
+      why: 'The table of model "app.User" changes from "users" to "accounts", and the schema being planned from already has table "Accounts", the table of model "app.Account". Without the rename the plan would read the rows of table "Accounts" as rows of model "app.User". Make the change in two plans: first remove table "Accounts" or give it a name nothing uses, and plan and apply that; then make this change and plan again.',
       location: usersLocation,
     });
   });
@@ -211,31 +197,11 @@ describe('planStatements refuses a column rename no statement asks for', () => {
         { User: columns({ a: 'y' }) },
         usersWith(['x', 'Y'], ignoringCase),
       ),
-    ).toMatchObject({
-      kind: 'unsupportedOperation',
-      summary:
-        'Cannot rename column "users"."x" to "y": the schema being planned from already has a column "y" on table "users", as "Y"',
-    });
-  });
-
-  it('when two columns move to one name', () => {
-    expect(
-      refusal(
-        {
-          Task: { table: 'users', fields: { id: 'id', a: 'x' } },
-          Bug: { table: 'users', base: 'Task', fields: { b: 'y' } },
-        },
-        {
-          Task: { table: 'users', fields: { id: 'id', a: 'z' } },
-          Bug: { table: 'users', base: 'Task', fields: { b: 'z' } },
-        },
-        usersWith(['id', 'x', 'y']),
-      ),
     ).toEqual({
       kind: 'unsupportedOperation',
       summary:
-        'Cannot rename column "users"."x" to "z": the column of field "app.Bug.b" changes from "y" to "z"',
-      why: 'The column of field "app.Task.a" changes from "x" to "z", and the column of field "app.Bug.b" changes from "y" to "z". Moving the values of two columns into one is a data migration, which a plan does not write: write it by hand in the migration.ts of a migration plan.',
+        'Cannot rename column "users"."x" to "y": the schema being planned from already has a column "y" on table "users", as "Y"',
+      why: 'The column of field "app.User.a" changes from "x" to "y", and the schema being planned from already has column "Y" on table "users", the column of field "app.User.old". Without the rename the plan would read the values of column "Y" as values of field "app.User.a". Make the change in two plans: first remove column "Y" or give it a name nothing uses, and plan and apply that; then make this change and plan again.',
       location: columnLocation('x'),
     });
   });

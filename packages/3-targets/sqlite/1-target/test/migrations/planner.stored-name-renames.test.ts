@@ -228,6 +228,41 @@ describe('SQLite planner, a table or column whose model or field keeps its name'
     ]);
   });
 
+  it('renames no table when two tables move to names that differ only in case', async () => {
+    expect(
+      await labelsOf(
+        plan(
+          contractOf('from', { User: { table: 'users' }, Member: { table: 'members' } }),
+          contractOf('to', { User: { table: 'people' }, Member: { table: 'People' } }),
+        ),
+      ),
+    ).toEqual([
+      'Create table People',
+      'Create table people',
+      'Drop table "members"',
+      'Drop table "users"',
+    ]);
+  });
+
+  it('renames no column when two columns move to names that differ only in case', async () => {
+    expect(
+      await labelsOf(
+        plan(
+          contractOf('from', {
+            User: { table: 'users', fields: { a: { column: 'x' }, b: { column: 'y' } } },
+          }),
+          contractOf('to', {
+            User: { table: 'users', fields: { a: { column: 'z' }, b: { column: 'Z' } } },
+          }),
+        ),
+      ),
+    ).toEqual([
+      'Recreate table users',
+      'Drop column "x" from "users"',
+      'Drop column "y" from "users"',
+    ]);
+  });
+
   it('emits the same operations as the facade calls it renders, run against the same contracts', async () => {
     const from = contractOf('a'.repeat(64), { User: { table: 'users', fields: { email } } });
     const to = contractOf('b'.repeat(64), {

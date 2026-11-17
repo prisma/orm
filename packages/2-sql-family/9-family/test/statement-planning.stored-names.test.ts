@@ -132,8 +132,13 @@ describe('planStatements, a model whose table changes and whose name both contra
           tasks('work_items'),
           fakeTarget(['app.tasks'], { 'app.tasks': ['id', 'type', 'severity'] }),
         ),
-      ).calls,
-    ).toEqual(['table app.tasks -> work_items']);
+      ),
+    ).toEqual({
+      calls: ['table app.tasks -> work_items'],
+      tableRenames: [{ namespaceId: 'app', from: 'tasks', to: 'work_items' }],
+      columnRenames: [],
+      plannedStatements: [],
+    });
   });
 
   it('plans a new model in the table a rename frees', () => {
@@ -147,8 +152,13 @@ describe('planStatements, a model whose table changes and whose name both contra
           }),
           fakeTarget(['app.users'], { 'app.users': ['id', 'email'] }),
         ),
-      ).calls,
-    ).toEqual(['table app.users -> app_users']);
+      ),
+    ).toEqual({
+      calls: ['table app.users -> app_users'],
+      tableRenames: [{ namespaceId: 'app', from: 'users', to: 'app_users' }],
+      columnRenames: [],
+      plannedStatements: [],
+    });
   });
 
   it('plans a new field in the column a rename frees', () => {
@@ -161,8 +171,13 @@ describe('planStatements, a model whose table changes and whose name both contra
           }),
           fakeTarget(['app.users'], { 'app.users': ['id', 'email'] }),
         ),
-      ).calls,
-    ).toEqual(['column app.users.email -> email_address']);
+      ),
+    ).toEqual({
+      calls: ['column app.users.email -> email_address'],
+      tableRenames: [],
+      columnRenames: [{ namespaceId: 'app', table: 'users', from: 'email', to: 'email_address' }],
+      plannedStatements: [],
+    });
   });
 
   it('renames a table and a column whose names change only in case where the target ignores case', () => {
@@ -173,8 +188,13 @@ describe('planStatements, a model whose table changes and whose name both contra
           contractOf({ User: { table: 'User', fields: { email: 'Email' } } }),
           fakeTarget(['app.user'], { 'app.user': ['email'] }, ['widening'], ignoringCase),
         ),
-      ).calls,
-    ).toEqual(['table app.user -> User', 'column app.User.email -> Email']);
+      ),
+    ).toEqual({
+      calls: ['table app.user -> User', 'column app.User.email -> Email'],
+      tableRenames: [{ namespaceId: 'app', from: 'user', to: 'User' }],
+      columnRenames: [{ namespaceId: 'app', table: 'User', from: 'email', to: 'Email' }],
+      plannedStatements: [],
+    });
   });
 });
 
@@ -240,7 +260,11 @@ describe('planStatements, storage that does not move whole', () => {
 
   it.each([
     ['origin', 'external'],
+    ['origin', 'observed'],
+    ['origin', 'tolerated'],
+    ['destination', 'external'],
     ['destination', 'observed'],
+    ['destination', 'tolerated'],
   ] as const)(
     'renames nothing when the table is not managed in the %s contract',
     (side, control) => {
@@ -332,7 +356,7 @@ describe('planStatements, statements on storage that does not move whole', () =>
       kind: 'statementRefused',
       summary:
         'Cannot rename table "tasks" to "defects": table "tasks" also stores model "app.Task"',
-      why: 'A table rename moves every row of the table, and the rows of model "app.Task" do not move to table "defects". Moving the rows of one model out of a table it shares with others is a data migration, which a plan does not write: write it by hand in the migration.ts of a migration plan, and leave out this statement.',
+      why: 'A table rename moves every row of the table, and the rows of model "app.Task" do not move to table "defects". Moving the rows of one model out of a table it shares with others is a data migration, which a plan does not write. Write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the rows of model "app.Bug" into table "defects" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
       refusedStatement: statement,
       location: { namespaceId: 'app', entityKind: 'table', entityName: 'tasks' },
     });
@@ -358,7 +382,7 @@ describe('planStatements, statements on storage that does not move whole', () =>
       kind: 'statementRefused',
       summary:
         'Cannot rename column "tasks"."title" to "heading": column "title" also stores field "app.Task.title"',
-      why: 'A column rename moves the values of every row, and the values of field "app.Task.title" do not move to column "heading". Moving the values of one field out of a column it shares with others is a data migration, which a plan does not write: write it by hand in the migration.ts of a migration plan, and leave out this statement.',
+      why: 'A column rename moves the values of every row, and the values of field "app.Task.title" do not move to column "heading". Moving the values of one field out of a column it shares with others is a data migration, which a plan does not write. Write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the values of field "app.Bug.title" into column "heading" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
       refusedStatement: statement,
       location: { namespaceId: 'app', entityKind: 'table', entityName: 'tasks', column: 'title' },
     });

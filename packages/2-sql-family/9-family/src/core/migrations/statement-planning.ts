@@ -18,6 +18,7 @@ import {
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { notOk, ok, type Result } from '@internal/utils/result';
+import { handWrittenMigrationAdvice } from './hand-written-migration';
 import {
   fieldColumn,
   type ModelTable,
@@ -181,6 +182,8 @@ export interface NamespaceStatementTarget<TCall extends CallWithCompanions> {
 export interface StatementPlanningTarget<TCall extends CallWithCompanions> {
   /** The tables of the working schema as earlier statements have left it. */
   tables(): SchemaTables;
+  /** Whether the database takes two table or column names for one. */
+  sameName(left: string, right: string): boolean;
   /** The call that renames a table, with its companions, computed against the working schema. */
   renameTableCall(rename: TableRename): TCall;
   /** Namespace renames and model moves; a target that keeps every table in one namespace has none. */
@@ -656,15 +659,19 @@ class StatementPlanner<TCall extends CallWithCompanions> {
     const change = rename === undefined ? undefined : this.#renames.tableChangeOf(rename);
     const shared = change === undefined ? undefined : this.#renames.sharedTable(change);
     if (change === undefined || shared === undefined) return undefined;
-    const label = `Cannot rename table "${change.origin.table}" to "${change.destination.table}"`;
+    const from = change.origin.table;
+    const to = change.destination.table;
+    const label = `Cannot rename table "${from}" to "${to}"`;
+    const moving = change.renames.map((renamed) => renamed.from);
+    const others = modelsText(shared.objects);
     return renameRefused(
       statement,
       shared.kind === 'left'
-        ? `${label}: table "${change.origin.table}" also stores ${modelsText(shared.objects)}`
-        : `${label}: table "${change.destination.table}" stores ${modelsText(shared.objects)}, which ${shared.objects.length === 1 ? 'stays' : 'stay'} in it`,
+        ? `${label}: table "${from}" also stores ${others}`
+        : `${label}: table "${to}" also stores ${others}, whose rows are not in table "${from}"`,
       shared.kind === 'left'
-        ? `A table rename moves every row of the table, and the rows of ${modelsText(shared.objects)} do not move to table "${change.destination.table}". Moving the rows of one model out of a table it shares with others is a data migration, which a plan does not write: write it by hand in the migration.ts of a migration plan, and leave out this statement.`
-        : `Table "${change.destination.table}" keeps the rows of ${modelsText(shared.objects)}. Moving the rows of one model into a table another model keeps is a data migration, which a plan does not write: write it by hand in the migration.ts of a migration plan, and leave out this statement.`,
+        ? `A table rename moves every row of the table, and the rows of ${others} do not move to table "${to}". Moving the rows of one model out of a table it shares with others is a data migration, which a plan does not write. ${handWrittenMigrationAdvice(`the rows of ${modelsText(moving)} into table "${to}"`)}`
+        : `A table rename moves the rows of one table, and table "${to}" would also store the rows of ${others}. Moving the rows of two tables into one is a data migration, which a plan does not write. ${handWrittenMigrationAdvice(`the rows of ${others} and ${modelsText(moving)} into table "${to}"`)}`,
       change.origin,
     );
   }
@@ -674,16 +681,19 @@ class StatementPlanner<TCall extends CallWithCompanions> {
     const change = rename === undefined ? undefined : this.#renames.columnChangeOf(rename);
     const shared = change === undefined ? undefined : this.#renames.sharedColumn(change);
     if (change === undefined || shared === undefined) return undefined;
-    const label = `Cannot rename column "${change.origin.table}"."${change.from}" to "${change.to}"`;
+    const { from, to } = change;
+    const label = `Cannot rename column "${change.origin.table}"."${from}" to "${to}"`;
+    const moving = change.renames.map((renamed) => renamed.from);
+    const others = fieldsText(shared.objects);
     return renameRefused(
       statement,
       shared.kind === 'left'
-        ? `${label}: column "${change.from}" also stores ${fieldsText(shared.objects)}`
-        : `${label}: column "${change.to}" stores ${fieldsText(shared.objects)}, which ${shared.objects.length === 1 ? 'stays' : 'stay'} in it`,
+        ? `${label}: column "${from}" also stores ${others}`
+        : `${label}: column "${to}" also stores ${others}, whose values are not in column "${from}"`,
       shared.kind === 'left'
-        ? `A column rename moves the values of every row, and the values of ${fieldsText(shared.objects)} do not move to column "${change.to}". Moving the values of one field out of a column it shares with others is a data migration, which a plan does not write: write it by hand in the migration.ts of a migration plan, and leave out this statement.`
-        : `Column "${change.to}" keeps the values of ${fieldsText(shared.objects)}. Moving the values of one field into a column another field keeps is a data migration, which a plan does not write: write it by hand in the migration.ts of a migration plan, and leave out this statement.`,
-      { ...change.origin, column: change.from },
+        ? `A column rename moves the values of every row, and the values of ${others} do not move to column "${to}". Moving the values of one field out of a column it shares with others is a data migration, which a plan does not write. ${handWrittenMigrationAdvice(`the values of ${fieldsText(moving)} into column "${to}"`)}`
+        : `A column rename moves the values of one column, and column "${to}" would also store the values of ${others}. Moving the values of two columns into one is a data migration, which a plan does not write. ${handWrittenMigrationAdvice(`the values of ${others} and ${fieldsText(moving)} into column "${to}"`)}`,
+      { ...change.origin, column: from },
     );
   }
 
@@ -805,8 +815,6 @@ class StatementPlanner<TCall extends CallWithCompanions> {
         ),
       );
     }
-    const shared = this.#sharedColumnRefusal(statement);
-    if (shared !== undefined) return notOk(shared);
     const rename: ColumnRename = {
       namespaceId: current.namespaceId,
       table,
@@ -821,6 +829,8 @@ class StatementPlanner<TCall extends CallWithCompanions> {
     if (!checked.ok) {
       return notOk(columnRenameRefused(statement, label, rename, checked.failure));
     }
+    const shared = this.#sharedColumnRefusal(statement);
+    if (shared !== undefined) return notOk(shared);
     return this.#renameColumn({ statement }, label, effect.table, rename);
   }
 
@@ -904,7 +914,12 @@ export function planStatements<TCall extends CallWithCompanions>(input: {
       ),
     );
   }
-  const renames = new StorageRenames(input.statements, fromContract, input.contract);
+  const renames = new StorageRenames(
+    input.statements,
+    fromContract,
+    input.contract,
+    input.target.sameName,
+  );
   const storageRenames = plannedStorageRenames(renames, input.target.tables());
   const conflict = storageRenameConflict(storageRenames, input.target.tables(), renames);
   if (conflict !== undefined) return notOk(conflict);

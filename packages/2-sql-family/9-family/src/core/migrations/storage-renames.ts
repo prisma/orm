@@ -16,6 +16,7 @@ import {
   type ModelTable,
   modelsStoring,
   modelTable,
+  type SameName,
   sameTable,
   sqlModelStorage,
   tableControlPolicy,
@@ -61,11 +62,11 @@ export interface ColumnChange {
 }
 
 /**
- * Why a table or column cannot be renamed whole: the objects stored in it that do not move with
- * it, or the objects that keep the name it would move to.
+ * Why a table or column cannot be renamed whole: the objects stored in it that move elsewhere, or
+ * the objects stored in the name it would move to that come from elsewhere.
  */
 export interface SharedStorage<TObject> {
-  readonly kind: 'left' | 'kept';
+  readonly kind: 'left' | 'joined';
   readonly objects: readonly TObject[];
 }
 
@@ -95,8 +96,20 @@ export function fieldsText(fields: readonly FieldCoordinate[]): string {
   return listed('field', fields.map(fieldDisplayName));
 }
 
+/** The name each namespace has after the namespace rename statements, keyed by its origin name. */
+function namespaceRenamesOf(
+  statements: readonly ResolvedRenameStatement[],
+): ReadonlyMap<string, string> {
+  return new Map(
+    statements.flatMap((statement) =>
+      statement.entity === 'namespace' ? [[statement.from, statement.to] as const] : [],
+    ),
+  );
+}
+
 function modelRenamesOf(
   statements: readonly ResolvedRenameStatement[],
+  namespaceRenames: ReadonlyMap<string, string>,
   fromContract: Contract<SqlStorage>,
   contract: Contract<SqlStorage>,
 ): readonly ModelRename[] {
@@ -106,13 +119,17 @@ function modelRenamesOf(
   const named = new Set(stated.flatMap((rename) => [rename.from, rename.to]).map(coordinateKey));
   const kept = Object.entries(fromContract.domain.namespaces).flatMap(([namespaceId, namespace]) =>
     Object.keys(namespace.models).flatMap((model) => {
-      const coordinate = { namespaceId: asNamespaceId(namespaceId), model };
+      const from = { namespaceId: asNamespaceId(namespaceId), model };
+      const to = {
+        namespaceId: asNamespaceId(namespaceRenames.get(namespaceId) ?? namespaceId),
+        model,
+      };
       const inDestination = Object.hasOwn(
-        contract.domain.namespaces[namespaceId]?.models ?? {},
+        contract.domain.namespaces[to.namespaceId]?.models ?? {},
         model,
       );
-      return inDestination && !named.has(coordinateKey(coordinate))
-        ? [{ from: coordinate, to: coordinate, statement: undefined }]
+      return inDestination && !named.has(coordinateKey(from)) && !named.has(coordinateKey(to))
+        ? [{ from, to, statement: undefined }]
         : [];
     }),
   );
@@ -184,15 +201,21 @@ export class StorageRenames {
   readonly columnChanges: readonly ColumnChange[];
   readonly #fromContract: Contract<SqlStorage>;
   readonly #contract: Contract<SqlStorage>;
+  readonly #namespaceRenames: ReadonlyMap<string, string>;
+  /** Whether the target takes two table or column names for one. */
+  readonly sameName: SameName;
 
   constructor(
     statements: readonly ResolvedRenameStatement[],
     fromContract: Contract<SqlStorage>,
     contract: Contract<SqlStorage>,
+    sameName: SameName,
   ) {
     this.#fromContract = fromContract;
     this.#contract = contract;
-    this.models = modelRenamesOf(statements, fromContract, contract);
+    this.sameName = sameName;
+    this.#namespaceRenames = namespaceRenamesOf(statements);
+    this.models = modelRenamesOf(statements, this.#namespaceRenames, fromContract, contract);
     this.fields = fieldRenamesOf(statements, this.models, fromContract, contract);
     this.tableChanges = grouped(
       this.models,
@@ -200,7 +223,7 @@ export class StorageRenames {
       (left, right) =>
         sameTable(left.origin, right.origin) && sameTable(left.destination, right.destination),
     ).flatMap(({ key, items }) =>
-      sameTable(key.origin, key.destination) ? [] : [{ ...key, renames: items }],
+      this.inPlace(key.origin, key.destination) ? [] : [{ ...key, renames: items }],
     );
     this.columnChanges = grouped(
       this.fields,
@@ -224,6 +247,19 @@ export class StorageRenames {
       : { ...tables, from, to };
   }
 
+  /** The namespace an origin namespace has after the namespace rename statements. */
+  namespaceAfterRenames(namespaceId: string): string {
+    return this.#namespaceRenames.get(namespaceId) ?? namespaceId;
+  }
+
+  /** Whether the origin table is the destination table once the namespace renames are made. */
+  inPlace(origin: ModelTable, destination: ModelTable): boolean {
+    return sameTable(
+      { namespaceId: this.namespaceAfterRenames(origin.namespaceId), table: origin.table },
+      destination,
+    );
+  }
+
   /** The table change that moves the table of `rename`'s origin model, if its table changes. */
   tableChangeOf(rename: ModelRename): TableChange | undefined {
     return this.tableChanges.find((change) => change.renames.includes(rename));
@@ -242,68 +278,101 @@ export class StorageRenames {
     );
   }
 
-  #destinationOfModel(origin: ModelCoordinate): ModelTable | undefined {
-    const rename = this.models.find((model) => coordinateKey(model.from) === coordinateKey(origin));
-    return rename === undefined ? undefined : modelTable(this.#contract, rename.to);
+  #renameFrom(origin: ModelCoordinate | FieldCoordinate) {
+    const key = coordinateKey(origin);
+    return [...this.models, ...this.fields].find((rename) => coordinateKey(rename.from) === key);
   }
 
-  #destinationOfField(origin: FieldCoordinate) {
-    const rename = this.fields.find((field) => coordinateKey(field.from) === coordinateKey(origin));
-    return rename === undefined ? undefined : this.#columnsOf(rename);
+  #renameTo(destination: ModelCoordinate | FieldCoordinate) {
+    const key = coordinateKey(destination);
+    return [...this.models, ...this.fields].find((rename) => coordinateKey(rename.to) === key);
+  }
+
+  #storedIn(contract: Contract<SqlStorage>, coordinate: ModelCoordinate | FieldCoordinate) {
+    const table = modelTable(contract, coordinate);
+    if (table === undefined) return undefined;
+    return 'field' in coordinate
+      ? { table, column: fieldColumn(contract, coordinate) }
+      : { table, column: undefined };
   }
 
   /**
-   * Why the change cannot rename its table: an origin model stored in it that does not move to
-   * the destination table, or an origin model that stays in the destination table. `undefined`
-   * when the whole table moves.
+   * Why the change cannot rename its table: an origin model stored in it that the destination
+   * keeps in another table, or a destination model stored in the new table, as the target compares
+   * names, whose origin model is stored elsewhere. `undefined` when the whole table moves, and
+   * nothing else moves there. A model the destination removes, or a new model, blocks nothing.
    */
   sharedTable(change: TableChange): SharedStorage<ModelCoordinate> | undefined {
-    const left = modelsStoring(this.#fromContract, change.origin).filter((model) => {
-      const destination = this.#destinationOfModel(model);
-      return destination === undefined || !sameTable(destination, change.destination);
-    });
+    const left = modelsStoring(this.#fromContract, change.origin)
+      .map(({ coordinate }) => coordinate)
+      .filter((model) => {
+        const rename = this.#renameFrom(model);
+        const destination =
+          rename === undefined ? undefined : this.#storedIn(this.#contract, rename.to);
+        return destination !== undefined && !sameTable(destination.table, change.destination);
+      });
     if (left.length > 0) return { kind: 'left', objects: left };
-    const kept = modelsStoring(this.#fromContract, change.destination).filter((model) => {
-      const destination = this.#destinationOfModel(model);
-      return destination !== undefined && sameTable(destination, change.destination);
-    });
-    return kept.length > 0 ? { kind: 'kept', objects: kept } : undefined;
+    const joined = modelsStoring(this.#contract, change.destination, this.sameName).flatMap(
+      ({ coordinate }) => {
+        const rename = this.#renameTo(coordinate);
+        const origin =
+          rename === undefined ? undefined : this.#storedIn(this.#fromContract, rename.from);
+        return origin !== undefined &&
+          rename !== undefined &&
+          !sameTable(origin.table, change.origin)
+          ? [rename.from]
+          : [];
+      },
+    );
+    return joined.length > 0 ? { kind: 'joined', objects: joined } : undefined;
   }
 
   /**
-   * Why the change cannot rename its column: an origin field stored in it that does not move to
-   * the destination column, or an origin field that stays in the destination column. `undefined`
-   * when the whole column moves.
+   * Why the change cannot rename its column: an origin field stored in it that the destination
+   * keeps in another column, or a destination field stored in the new column, as the target
+   * compares names, whose origin field is stored elsewhere. `undefined` when the whole column
+   * moves, and nothing else moves there.
    */
   sharedColumn(change: ColumnChange): SharedStorage<FieldCoordinate> | undefined {
     const left = fieldsStoring(this.#fromContract, change.origin, change.from).filter((field) => {
-      const destination = this.#destinationOfField(field);
+      const rename = this.#renameFrom(field);
+      const destination =
+        rename === undefined ? undefined : this.#storedIn(this.#contract, rename.to);
       return (
-        destination === undefined ||
-        !sameTable(destination.destination, change.destination) ||
-        destination.to !== change.to
+        destination?.column !== undefined &&
+        (!sameTable(destination.table, change.destination) || destination.column !== change.to)
       );
     });
     if (left.length > 0) return { kind: 'left', objects: left };
-    const kept = fieldsStoring(this.#fromContract, change.origin, change.to).filter((field) => {
-      const destination = this.#destinationOfField(field);
-      return (
-        destination !== undefined &&
-        sameTable(destination.destination, change.destination) &&
-        destination.to === change.to
-      );
+    const joined = fieldsStoring(
+      this.#contract,
+      change.destination,
+      change.to,
+      this.sameName,
+    ).flatMap((field) => {
+      const rename = this.#renameTo(field);
+      const origin =
+        rename === undefined ? undefined : this.#storedIn(this.#fromContract, rename.from);
+      return rename !== undefined &&
+        'field' in rename.from &&
+        origin?.column !== undefined &&
+        (!sameTable(origin.table, change.origin) || origin.column !== change.from)
+        ? [rename.from]
+        : [];
     });
-    return kept.length > 0 ? { kind: 'kept', objects: kept } : undefined;
+    return joined.length > 0 ? { kind: 'joined', objects: joined } : undefined;
   }
 
-  /** The models of the origin contract stored in `table`. */
+  /** The models of the origin contract stored in `table`, as the target compares names. */
   originModelsIn(table: ModelTable): readonly ModelCoordinate[] {
-    return modelsStoring(this.#fromContract, table);
+    return modelsStoring(this.#fromContract, table, this.sameName).map(
+      ({ coordinate }) => coordinate,
+    );
   }
 
-  /** The fields of the origin contract stored in `column` of `table`. */
+  /** The fields of the origin contract stored in `column` of `table`, as the target compares names. */
   originFieldsIn(table: ModelTable, column: string): readonly FieldCoordinate[] {
-    return fieldsStoring(this.#fromContract, table, column);
+    return fieldsStoring(this.#fromContract, table, column, this.sameName);
   }
 }
 
@@ -402,18 +471,13 @@ function tableRenameConflict(
   const misread = (table: string) =>
     `rows of table "${table}" as rows of ${modelsText(change.renames.map((rename) => rename.from))}`;
   const others = changes.filter((other) => other !== change);
-  const merged = others.find((other) => sameTable(other.destination, change.destination));
-  if (merged !== undefined) {
-    return contractChangeRefused(
-      `${label}: ${tableChangeText(merged)}`,
-      `${changeText}, and ${tableChangeText(merged)}. Moving the rows of two tables into one is a data migration, which a plan does not write: write it by hand in the migration.ts of a migration plan.`,
-      location,
-    );
-  }
+  const { sameName } = renames;
   const [held] = tables.tablesNamed(namespaceId, to).filter((table) => table !== from);
   if (held !== undefined) {
     const heldTable = { namespaceId, table: held };
-    const moved = others.find((other) => sameTable(other.origin, heldTable));
+    const moved = others.find(
+      (other) => other.origin.namespaceId === namespaceId && sameName(other.origin.table, held),
+    );
     if (moved !== undefined) {
       return contractChangeRefused(
         `${label}: table "${held}" is renamed in the same plan`,
@@ -431,8 +495,8 @@ function tableRenameConflict(
   const takes = others.find(
     (other) =>
       hasStatement(other) &&
-      other.destination.namespaceId === namespaceId &&
-      tables.tablesNamed(namespaceId, other.destination.table).includes(from),
+      other.destination.namespaceId === change.destination.namespaceId &&
+      sameName(other.destination.table, from),
   );
   if (takes !== undefined) {
     return contractChangeRefused(
@@ -459,19 +523,12 @@ function columnRenameConflict(
   const others = changes.filter(
     (other) => other !== change && sameTable(other.origin, change.origin),
   );
-  const merged = others.find((other) => other.to === change.to);
-  if (merged !== undefined) {
-    return contractChangeRefused(
-      `${label}: ${columnChangeText(merged)}`,
-      `${changeText}, and ${columnChangeText(merged)}. Moving the values of two columns into one is a data migration, which a plan does not write: write it by hand in the migration.ts of a migration plan.`,
-      location,
-    );
-  }
+  const { sameName } = renames;
   const [held] = tables
     .columnsNamed(namespaceId, table, change.to)
     .filter((column) => column !== change.from);
   if (held !== undefined) {
-    const moved = others.find((other) => other.from === held);
+    const moved = others.find((other) => sameName(other.from, held));
     if (moved !== undefined) {
       return contractChangeRefused(
         `${label}: column "${held}" is renamed in the same plan`,
@@ -486,11 +543,7 @@ function columnRenameConflict(
       location,
     );
   }
-  const takes = others.find(
-    (other) =>
-      hasStatement(other) &&
-      tables.columnsNamed(namespaceId, table, other.to).includes(change.from),
-  );
+  const takes = others.find((other) => hasStatement(other) && sameName(other.to, change.from));
   if (takes !== undefined) {
     return contractChangeRefused(
       `${label}: another rename in the same plan takes column name "${takes.to}"`,
@@ -542,13 +595,14 @@ export function plannedStorageRenames(
   const plannedTables = renames.tableChanges.filter(
     (change) =>
       hasStatement(change) ||
-      (change.origin.namespaceId === change.destination.namespaceId &&
+      (renames.namespaceAfterRenames(change.origin.namespaceId) ===
+        change.destination.namespaceId &&
         renames.managedOnBothSides(change) &&
         tables.hasTable(change.origin.namespaceId, change.origin.table) &&
         renames.sharedTable(change) === undefined),
   );
   const tableMoves = (change: ColumnChange) =>
-    sameTable(change.origin, change.destination) ||
+    renames.inPlace(change.origin, change.destination) ||
     plannedTables.some(
       (table) =>
         sameTable(table.origin, change.origin) && sameTable(table.destination, change.destination),

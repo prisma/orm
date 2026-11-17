@@ -204,9 +204,10 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     readonly policy: MigrationOperationPolicy;
     /**
      * The "from" contract (state the planner assumes the database starts
-     * at), or `null` for reconciliation flows. Only `migration plan` ever
-     * supplies a non-null value; `db update` / `db init` reconcile against
-     * the live schema and pass `null`. When present alongside the
+     * at), or `null` when there is none. `migration plan` passes the
+     * contract of the migration it plans from; `db update` passes the
+     * contract the database's marker names when its snapshot can be read,
+     * and `null` otherwise; `db init` passes `null`. When present alongside the
      * `'data'` operation class, strategies that need from/to column-shape
      * comparisons (unsafe type change, nullability tightening) activate.
      *
@@ -443,10 +444,10 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     const result = planIssues({
       issues: issuePartition.plannable,
       toContract: options.contract,
-      // `fromContract` is only supplied by `migration plan`. It is `null` for
-      // `db update` / `db init`, which means data-safety strategies needing
-      // from/to comparisons (unsafe type change, nullable tightening) are
-      // inapplicable there — reconciliation falls through to
+      // `fromContract` is `null` for `db init`, and for `db update` when the
+      // database's marker names no readable contract. Then data-safety
+      // strategies needing from/to comparisons (unsafe type change, nullable
+      // tightening) are inapplicable, and reconciliation falls through to
       // `mapNodeIssueToCall`'s direct destructive handlers.
       fromContract: options.fromContract,
       schemaName,
@@ -865,6 +866,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       ownership: { oracle: options.ownership, spaceId: options.spaceId },
       target: {
         tables: () => postgresSchemaTables(working.current, options.contract),
+        sameName: (left, right) => left === right,
         namespaces: {
           createNamespaceCalls: (namespaceId) => {
             const schemaName = ddlSchemaOf(namespaceId);

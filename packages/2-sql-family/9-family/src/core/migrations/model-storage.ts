@@ -58,34 +58,59 @@ export function sameTable(left: ModelTable, right: ModelTable): boolean {
   return left.namespaceId === right.namespaceId && left.table === right.table;
 }
 
-/** The models of `contract` stored in `table`: a model and its single-table variants share one. */
+/** Whether a database takes two table or column names for one. */
+export type SameName = (left: string, right: string) => boolean;
+
+export const exactName: SameName = (left, right) => left === right;
+
+/** A model of a contract stored in a table. */
+export interface StoredModel {
+  readonly coordinate: ModelCoordinate;
+  readonly isRoot: boolean;
+  readonly fields: SqlModelStorage['fields'];
+}
+
+/**
+ * The models of `contract` stored in `table`, or in a table of its namespace that `sameName` takes
+ * for it: a model and its single-table variants share one.
+ */
 export function modelsStoring(
   contract: ContractWithDomain,
   table: ModelTable,
-): readonly ModelCoordinate[] {
+  sameName: SameName = exactName,
+): readonly StoredModel[] {
   return Object.entries(contract.domain.namespaces).flatMap(([namespaceId, namespace]) =>
-    Object.entries(namespace.models).flatMap(([model, definition]) =>
-      isSqlModelStorage(definition.storage) &&
-      sameTable(
-        { namespaceId: definition.storage.namespaceId, table: definition.storage.table },
-        table,
-      )
-        ? [{ namespaceId: asNamespaceId(namespaceId), model }]
-        : [],
-    ),
+    Object.entries(namespace.models).flatMap(([model, definition]) => {
+      const { storage } = definition;
+      return isSqlModelStorage(storage) &&
+        storage.namespaceId === table.namespaceId &&
+        sameName(storage.table, table.table)
+        ? [
+            {
+              coordinate: { namespaceId: asNamespaceId(namespaceId), model },
+              isRoot: definition.base === undefined,
+              fields: storage.fields,
+            },
+          ]
+        : [];
+    }),
   );
 }
 
-/** The fields of `contract` stored in `column` of `table`: variant fields may share one. */
+/**
+ * The fields of `contract` stored in `column` of `table`, or in a column `sameName` takes for it:
+ * variant fields may share one.
+ */
 export function fieldsStoring(
   contract: ContractWithDomain,
   table: ModelTable,
   column: string,
+  sameName: SameName = exactName,
 ): readonly FieldCoordinate[] {
-  return modelsStoring(contract, table).flatMap((model) =>
-    Object.entries(sqlModelStorage(contract, model)?.fields ?? {})
-      .filter(([, stored]) => stored.column === column)
-      .map(([field]) => ({ ...model, field })),
+  return modelsStoring(contract, table, sameName).flatMap(({ coordinate, fields }) =>
+    Object.entries(fields)
+      .filter(([, stored]) => sameName(stored.column, column))
+      .map(([field]) => ({ ...coordinate, field })),
   );
 }
 

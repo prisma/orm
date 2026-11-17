@@ -575,7 +575,7 @@ describe('subjectsOfCalls for a table whose model keeps its name', () => {
         loss: 'drop',
         label: 'Drop',
         keepDataAdvice:
-          'To keep its rows, rename table "profiles" to "people" instead; a statement cannot rename the table of a model that keeps its name. With db update, rename the table in the database yourself with ALTER TABLE "profiles" RENAME TO "people", then run prisma db update. With migration plan, write the rename as a migration of its own instead: run prisma migration new --name <name> --from <hash of the migration the database is at>, add this.renameTable("profiles", "people") to the operations of its migration.ts, run node on that migration.ts so it writes ops.json, then run prisma db migrate.',
+          'To keep its rows, rename table "profiles" to "people" instead. The plan does not rename it: a plan renames the table of a model that keeps its name only on a target that plans table renames, when the control policy of the table is "managed" in both contracts, every model stored in it moves to the new table, and no model moves there from another table. With db update, rename the table in the database yourself with ALTER TABLE "profiles" RENAME TO "people", then run prisma db update. With migration plan, write the rename as a migration of its own instead: run prisma migration new --name <name> --from <hash of the migration the database is at>, add this.renameTable("profiles", "people") to the operations of its migration.ts, run node on that migration.ts so it writes ops.json, then run prisma db migrate.',
       },
     ]);
   });
