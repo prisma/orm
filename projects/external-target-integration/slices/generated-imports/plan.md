@@ -19,6 +19,7 @@ Known failure modes to check in every dispatch: destructive git operations are f
 - **Outcome:** MongoDB, SQLite, MySQL and MariaDB target packages each have a `generated-types` entrypoint and name both modules; every extension states the module for its types through the same constant.
 - **Builds on:** dispatch 1's mechanism, unchanged.
 - **Hands on:** every config built by a target package names both modules.
+- **Amended 2026-11-17, during the dispatch:** the brief said nothing emitted would change. That is false for an application that loads an extension from its published package: the extension now states its published module, so the `package` string recorded beside its codec metadata in the emitted contract changes from `@internal/extension-<x>/...` to the published name. That is the design record's rule arriving here (a module name recorded in an emitted contract is the name the matching import line uses), so the regeneration is accepted in this dispatch, in its own commit. Import lines and hashes do not change. Dispatch 5 still decides whether the string is read at all and should be removed.
 
 ## 3. Contract types are emitted from `contract.typesModule`
 
