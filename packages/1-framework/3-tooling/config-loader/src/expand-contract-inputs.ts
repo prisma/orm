@@ -19,8 +19,21 @@ function resolveLiteral(entry: string): string {
  * wildcard. Convert native separators back to `/` on Windows only, so glob
  * escapes keep working on POSIX.
  */
-function toGlobPattern(pattern: string): string {
+function withForwardSlashSeparators(pattern: string): string {
   return process.platform === 'win32' ? pattern.replaceAll('\\', '/') : pattern;
+}
+
+/**
+ * The form of `entry` the glob libraries understand, or nothing when `entry`
+ * is a literal. A UNC entry on Windows stays a literal: tinyglobby would
+ * crawl the share's path on the working directory's drive.
+ */
+function globPatternOf(entry: string): string | undefined {
+  if (process.platform === 'win32' && isUncLike(entry)) {
+    return undefined;
+  }
+  const candidate = withForwardSlashSeparators(entry);
+  return isDynamicPattern(candidate) ? candidate : undefined;
 }
 
 /** pathe's `matchesGlob` uppercases the drive letter of the path it tests, so the pattern's must match. */
@@ -52,11 +65,11 @@ export async function expandContractInputs(
   const literals: string[] = [];
   const globPatterns: string[] = [];
   for (const pattern of patterns) {
-    const globPattern = toGlobPattern(pattern);
-    if (isDynamicPattern(globPattern)) {
-      globPatterns.push(globPattern);
-    } else {
+    const globPattern = globPatternOf(pattern);
+    if (globPattern === undefined) {
       literals.push(pattern);
+    } else {
+      globPatterns.push(globPattern);
     }
   }
   const globMatches =
@@ -76,7 +89,7 @@ export function globContractInputMatching(
   path: string,
 ): string | undefined {
   return patterns.find((pattern) => {
-    const globPattern = toGlobPattern(pattern);
-    return isDynamicPattern(globPattern) && matchesGlob(path, withUppercaseDrive(globPattern));
+    const globPattern = globPatternOf(pattern);
+    return globPattern !== undefined && matchesGlob(path, withUppercaseDrive(globPattern));
   });
 }

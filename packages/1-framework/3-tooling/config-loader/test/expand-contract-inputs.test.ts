@@ -159,6 +159,18 @@ describe('expandContractInputs', () => {
         file,
       ]);
     });
+
+    it('passes a UNC literal through unchanged', async () => {
+      const uncPath = '\\\\server\\share\\schema.prisma';
+
+      expect(await expandContractInputs([uncPath])).toEqual([uncPath]);
+    });
+
+    it('passes a UNC entry with a wildcard through unchanged, without globbing it', async () => {
+      const uncPattern = '\\\\server\\share\\schema\\*.prisma';
+
+      expect(await expandContractInputs([uncPattern])).toEqual([uncPattern]);
+    });
   });
 });
 
