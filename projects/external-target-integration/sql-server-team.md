@@ -2,7 +2,7 @@
 
 For the team building a SQL Server target for Prisma 8 in their own repository. This replaces the mechanism proposed in [prisma/orm#31008](https://github.com/prisma/orm/pull/31008).
 
-**Status:** the design below is proposed in [prisma/orm#31057](https://github.com/prisma/orm/pull/31057) and under maintainer review. The shape is settled; the exact member names can still change before release. We will post in the Discord thread when each part is released, with the version to pin.
+**Status:** the design is approved. The first half, generated files importing from your package, is implemented and in review, and section 1 below describes it as built. The second half, `prisma orm init`, is designed and not yet built, so the names in section 2 can still change. We will post in the Discord thread when each part is released, with the version to pin.
 
 ## The outcome
 
@@ -89,11 +89,50 @@ export type * from './codec-types';
 export type * from './operation-types';
 ```
 
+**Your target's and adapter's type declarations state your types module.** Each descriptor declares the types it contributes to `contract.d.ts` as a module, a name and an alias:
+
+```ts
+{ package: '@microsoft/prisma-orm-mssql/generated-types', named: 'CodecTypes', alias: 'MssqlTypes' }
+```
+
+Prisma writes each declaration from the module it states, so that module must be one an application on your package can import. An application can import only from packages it depends on directly, which is your package and not the ones it is built from.
+
+- If your target and adapter live in the package the application installs, write your types module in the declarations, as above.
+- If they live in a separate package of yours, hand the config copies that state the installable package's types module:
+
+  ```ts
+  import { restateTypeDeclarations } from '@prisma/orm-framework/target-package-config/type-declarations';
+
+  export const target = restateTypeDeclarations(mssqlTarget, '@microsoft/prisma-orm-mssql/generated-types');
+  export const adapter = restateTypeDeclarations(mssqlAdapter, '@microsoft/prisma-orm-mssql/generated-types');
+  ```
+
+**Assemble your components in one file.** Put the family, target, adapter and driver in one module, and build both `defineConfig` and any control client you export from it. A command run through the CLI and a script that uses your control client are then given the same components.
+
+**Your migration renderer is handed the module.** A migration plan's `renderTypeScript(migrationModule)` receives the config's `migrations.module`. Write every import of the migration base class, the command-line entry and your operation helpers from it, and name no module in the renderer itself.
+
 Rules:
 
-- If a config names no module, the command that needs it stops with an error naming the missing member. Prisma does not guess a module.
+- If a config names no module, the command that needs it stops with an error naming the missing member: `CONFIG.CONTRACT_TYPES_MODULE_MISSING` or `CONFIG.MIGRATION_MODULE_MISSING`. Prisma does not guess a module.
+- A module is named the way a package is imported. A path or a URL is refused when the config is loaded, because generated files are written into more than one folder.
 - Prisma does not read the application's `package.json` to choose import names, and consults no list of package names.
 - An extension, such as a vector type package, is a separate package the application installs. Its types are imported from its own package, not from yours.
+
+**Check your package from outside.** This is how we test the mechanism ourselves, with a package that appears in no list in our repository:
+
+1. Pack your package and install it from the tarball into a scratch application that depends on nothing else from Prisma except the CLI.
+2. Run `prisma contract emit` and `prisma migration plan`.
+3. Typecheck the application with `skipLibCheck` off, so an import that does not resolve cannot hide as `any`.
+4. Check that every import in the generated files names your package, an extension's own package, or a relative path.
+
+**What our test does not prove for you.** Our test package borrows the Postgres target, adapter and driver behind its own name. A target written from scratch also has to:
+
+- write its own target, adapter and driver descriptors;
+- declare its own codec and operation types, under its own module names;
+- build its own migration planner and renderer;
+- provide its own contract serialiser and runtime client.
+
+**One known gap.** `prisma migration plan` can write a migration with a `placeholder(...)` call for you to fill in by hand. Before `prisma db migrate` applies anything, it checks for a migration that is still unfilled. That check recognises only Prisma's own migration modules today, so it will not catch an unfilled migration that imports from yours. We are fixing it separately. Until then, do not rely on that check: run `node migration.ts` yourself, which fails on an unfilled placeholder.
 
 **Requirements from your proposal this satisfies**
 
@@ -225,7 +264,7 @@ We have not run this arrangement outside our repository. Please try it in a clea
 
 | Release | What you do | What your users do |
 | --- | --- | --- |
-| Generated imports | Add the generated-types module and name both modules in `defineConfig`. **This is required in the same version:** that release removes the `package.json` lookup, so a config that names no module stops emitting | Upgrade your package, remove the two framework packages from their own dependencies, run `prisma contract emit` |
+| Generated imports | Add the generated-types module, name both modules in `defineConfig`, and state your types module in your target's and adapter's type declarations. **This is required in the same version:** that release removes the `package.json` lookup, so a config that names no module stops emitting | Upgrade your package, remove the two framework packages from their own dependencies, run `prisma contract emit` |
 | `init` | Add the `/init` entrypoint | New projects run `prisma orm init --target <your package>`. Existing projects change nothing |
 
 ## Alternatives considered
