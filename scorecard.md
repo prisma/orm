@@ -50,12 +50,12 @@ Group structure (30 groups): Targets & connection; Types & values; PSL schema la
 
 Verdicts are computed per feature row across the three DB columns; the tallies below count individual non-`—` cells.
 
-Across 593 atomic feature rows (one capability each), spanning 1,779 per-database cells (593 rows × 3 databases): `✅` 416, `🟡` 488, `🧪` 12, `❌` 244 (and 619 `—` n/a cells).
+Across 593 atomic feature rows (one capability each), spanning 1,779 per-database cells (593 rows × 3 databases): `✅` 417, `🟡` 489, `🧪` 12, `❌` 242 (and 619 `—` n/a cells).
 
 Per-database tallies:
 
 | Database | ✅ | 🟡 | 🧪 | ❌ | — |
 | --- | --- | --- | --- | --- | --- |
-| Postgres | 222 | 136 | 4 | 111 | 120 |
-| SQLite | 85 | 235 | 4 | 98 | 171 |
+| Postgres | 223 | 136 | 4 | 110 | 120 |
+| SQLite | 85 | 236 | 4 | 97 | 171 |
 | MongoDB | 109 | 117 | 4 | 35 | 328 |

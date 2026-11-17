@@ -43,7 +43,19 @@
             },
             "owner": "User",
             "relations": {},
-            "storage": {}
+            "storage": {
+              "fields": {
+                "city": {
+                  "field": "city"
+                },
+                "street": {
+                  "field": "street"
+                },
+                "zip": {
+                  "field": "zip"
+                }
+              }
+            }
           },
           "Bug": {
             "base": {
@@ -61,7 +73,12 @@
             },
             "relations": {},
             "storage": {
-              "collection": "tasks"
+              "collection": "tasks",
+              "fields": {
+                "severity": {
+                  "field": "severity"
+                }
+              }
             }
           },
           "Comment": {
@@ -90,7 +107,19 @@
             },
             "owner": "Task",
             "relations": {},
-            "storage": {}
+            "storage": {
+              "fields": {
+                "_id": {
+                  "field": "_id"
+                },
+                "createdAt": {
+                  "field": "createdAt"
+                },
+                "text": {
+                  "field": "text"
+                }
+              }
+            }
           },
           "Feature": {
             "base": {
@@ -115,7 +144,15 @@
             },
             "relations": {},
             "storage": {
-              "collection": "tasks"
+              "collection": "tasks",
+              "fields": {
+                "priority": {
+                  "field": "priority"
+                },
+                "targetRelease": {
+                  "field": "targetRelease"
+                }
+              }
             }
           },
           "Task": {
@@ -179,6 +216,20 @@
             },
             "storage": {
               "collection": "tasks",
+              "fields": {
+                "_id": {
+                  "field": "_id"
+                },
+                "assigneeId": {
+                  "field": "assigneeId"
+                },
+                "title": {
+                  "field": "title"
+                },
+                "type": {
+                  "field": "type"
+                }
+              },
               "relations": {
                 "comments": {
                   "field": "comments"
@@ -186,11 +237,13 @@
               }
             },
             "variants": {
-              "Bug": {
-                "value": "bug"
+              "bug": {
+                "model": "Bug",
+                "namespace": "__unbound__"
               },
-              "Feature": {
-                "value": "feature"
+              "feature": {
+                "model": "Feature",
+                "namespace": "__unbound__"
               }
             }
           },
@@ -229,6 +282,17 @@
             },
             "storage": {
               "collection": "users",
+              "fields": {
+                "_id": {
+                  "field": "_id"
+                },
+                "email": {
+                  "field": "email"
+                },
+                "name": {
+                  "field": "name"
+                }
+              },
               "relations": {
                 "addresses": {
                   "field": "addresses"
@@ -246,7 +310,162 @@
         "entries": {
           "collection": {
             "tasks": {
-              "kind": "mongo-collection"
+              "kind": "mongo-collection",
+              "validator": {
+                "jsonSchema": {
+                  "bsonType": "object",
+                  "oneOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "_id": {
+                          "bsonType": "objectId"
+                        },
+                        "assigneeId": {
+                          "bsonType": "objectId"
+                        },
+                        "comments": {
+                          "bsonType": "array",
+                          "items": {
+                            "additionalProperties": false,
+                            "bsonType": "object",
+                            "properties": {
+                              "_id": {
+                                "bsonType": "objectId"
+                              },
+                              "createdAt": {
+                                "bsonType": "date"
+                              },
+                              "text": {
+                                "bsonType": "string"
+                              }
+                            },
+                            "required": [
+                              "_id",
+                              "createdAt",
+                              "text"
+                            ]
+                          }
+                        },
+                        "severity": {
+                          "bsonType": "string"
+                        },
+                        "title": {
+                          "bsonType": "string"
+                        },
+                        "type": {
+                          "enum": [
+                            "bug"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "severity",
+                        "type"
+                      ]
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "_id": {
+                          "bsonType": "objectId"
+                        },
+                        "assigneeId": {
+                          "bsonType": "objectId"
+                        },
+                        "comments": {
+                          "bsonType": "array",
+                          "items": {
+                            "additionalProperties": false,
+                            "bsonType": "object",
+                            "properties": {
+                              "_id": {
+                                "bsonType": "objectId"
+                              },
+                              "createdAt": {
+                                "bsonType": "date"
+                              },
+                              "text": {
+                                "bsonType": "string"
+                              }
+                            },
+                            "required": [
+                              "_id",
+                              "createdAt",
+                              "text"
+                            ]
+                          }
+                        },
+                        "priority": {
+                          "bsonType": "string"
+                        },
+                        "targetRelease": {
+                          "bsonType": "string"
+                        },
+                        "title": {
+                          "bsonType": "string"
+                        },
+                        "type": {
+                          "enum": [
+                            "feature"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "priority",
+                        "targetRelease",
+                        "type"
+                      ]
+                    }
+                  ],
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "assigneeId": {
+                      "bsonType": "objectId"
+                    },
+                    "comments": {
+                      "bsonType": "array",
+                      "items": {
+                        "additionalProperties": false,
+                        "bsonType": "object",
+                        "properties": {
+                          "_id": {
+                            "bsonType": "objectId"
+                          },
+                          "createdAt": {
+                            "bsonType": "date"
+                          },
+                          "text": {
+                            "bsonType": "string"
+                          }
+                        },
+                        "required": [
+                          "_id",
+                          "createdAt",
+                          "text"
+                        ]
+                      }
+                    },
+                    "title": {
+                      "bsonType": "string"
+                    },
+                    "type": {
+                      "bsonType": "string"
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "assigneeId",
+                    "title",
+                    "type"
+                  ]
+                },
+                "kind": "mongo-validator",
+                "validationAction": "error",
+                "validationLevel": "strict"
+              }
             },
             "users": {
               "indexes": [
@@ -258,6 +477,7 @@
                     }
                   ],
                   "kind": "mongo-index",
+                  "name": "email_1",
                   "unique": true
                 }
               ],
@@ -269,6 +489,54 @@
                   "strength": 2
                 },
                 "kind": "mongo-collection-options"
+              },
+              "validator": {
+                "jsonSchema": {
+                  "additionalProperties": false,
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "addresses": {
+                      "bsonType": "array",
+                      "items": {
+                        "additionalProperties": false,
+                        "bsonType": "object",
+                        "properties": {
+                          "city": {
+                            "bsonType": "string"
+                          },
+                          "street": {
+                            "bsonType": "string"
+                          },
+                          "zip": {
+                            "bsonType": "string"
+                          }
+                        },
+                        "required": [
+                          "city",
+                          "street",
+                          "zip"
+                        ]
+                      }
+                    },
+                    "email": {
+                      "bsonType": "string"
+                    },
+                    "name": {
+                      "bsonType": "string"
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "email",
+                    "name"
+                  ]
+                },
+                "kind": "mongo-validator",
+                "validationAction": "error",
+                "validationLevel": "strict"
               }
             }
           }
@@ -277,7 +545,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "570ba689a61d07585f3e31609fe8eda758d82b4df90937daff6c946276a5b9ac"
+    "storageHash": "72e8c7b1e3787e3bf0b97f8563ec668d91dcf3d1594cd8a1597fdb95a1e3392f"
   },
   "capabilities": {},
   "extensions": {},

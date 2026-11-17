@@ -51,7 +51,7 @@ function getPackageRoots(files) {
     // Walk up from the file's directory to find the nearest package.json.
     // This supports nested monorepo layouts like:
     // - packages/1-framework/0-foundation/contract/...
-    // - packages/2-sql/4-lanes/sql-lane/...
+    // - packages/2-sql-family/4-lanes/sql-lane/...
     let currentDir = join(repoRoot, dirname(file));
     const packagesRoot = join(repoRoot, 'packages');
 
@@ -104,7 +104,7 @@ function escapeRegex(value) {
 // Build include-only pattern from package roots.
 // Example roots:
 // - packages/1-framework/0-foundation/contract
-// - packages/2-sql/4-lanes/sql-lane
+// - packages/2-sql-family/4-lanes/sql-lane
 const includePattern = `^(${packageRoots.map(escapeRegex).join('|')})(/|$)`;
 
 const packageNames = packageRoots

@@ -60,7 +60,7 @@ The cache key is `${codecId}:${canonicalizeJson(typeParams)}`, where `canonicali
 
 ### `forColumn` survives as a build-time helper
 
-`descriptors.codecRefForColumn(table, column)` derives the canonical `CodecRef` from contract storage (resolving `typeRef` entries to their `storage.types` `typeParams`). The existing `forColumn(table, column): Codec` wrapper is retained as a convenience API; internally it calls `forCodecRef(codecRefForColumn(table, column))`. The runtime encode/decode hot path reads `node.codec` directly and never calls `forColumn`.
+`descriptors.codecRefForColumn(table, column)` derives the canonical `CodecRef` from contract storage (resolving `typeRef` entries to their `storage.types` `typeParams`; amended by [ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md) on 2026-10-21: contracts store no `typeRef`, so it reads the column's own `codecId`, `typeParams` and list-ness). The existing `forColumn(table, column): Codec` wrapper is retained as a convenience API; internally it calls `forCodecRef(codecRefForColumn(table, column))`. The runtime encode/decode hot path reads `node.codec` directly and never calls `forColumn`.
 
 ### `CodecRef` is a build-time concept; never appears in `ops.json`
 

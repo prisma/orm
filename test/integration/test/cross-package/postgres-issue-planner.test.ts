@@ -1,15 +1,21 @@
-import {
+import postgresAdapterControl, {
   createPostgresBuiltinCodecLookup,
-  PostgresControlAdapter,
 } from '@internal/adapter-postgres/control';
-
-import { type Contract, coreHash, profileHash } from '@internal/contract/types';
+import { asNamespaceId, type Contract, coreHash, profileHash } from '@internal/contract/types';
+import { type FieldStatementColumns, sqlTypeLookupsOf } from '@internal/family-sql/control';
+import type { DataType } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
   SqlStorage,
   type SqlStorageInput,
   type StorageTableInput,
 } from '@internal/sql-contract/types';
+import type { SqlColumnIRInput } from '@internal/sql-schema-ir/types';
+import postgresTargetControl from '@internal/target-postgres/control';
+import {
+  createPostgresBuiltinDataTypeLookup,
+  postgresDataTypes,
+} from '@internal/target-postgres/data-types';
 import { buildPostgresPlanDiff } from '@internal/target-postgres/diff-database-schema';
 import { coalesceSubtreeIssues, planIssues } from '@internal/target-postgres/issue-planner';
 import type { CreateTableCall } from '@internal/target-postgres/op-factory-call';
@@ -25,8 +31,19 @@ import {
 } from '@internal/target-postgres/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
+import { introspectedColumn as introspectedColumnOver } from '../../../../packages/2-sql-family/1-core/contract/test/introspected-column';
+import { createTestPostgresControlAdapter } from '../../../../packages/3-targets/postgres/2-adapter/test/helpers/test-control-adapter';
 
-const testAdapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+const introspectedColumn = (
+  column: SqlColumnIRInput,
+  dataTypes: readonly DataType[] = postgresDataTypes,
+) => introspectedColumnOver(column, dataTypes);
+
+const testAdapter = createTestPostgresControlAdapter(
+  createPostgresBuiltinCodecLookup(),
+  createPostgresBuiltinDataTypeLookup(),
+);
+const frameworkComponents = [postgresTargetControl, postgresAdapterControl];
 
 function makeContract(
   overrides: {
@@ -58,6 +75,7 @@ function makeContract(
 
 /** An empty introspected tree — every table in `contract` surfaces as `not-found`. */
 const emptyRoot = new PostgresDatabaseSchemaNode({
+  extensions: undefined,
   namespaces: {},
   roles: [],
   existingSchemas: ['public'],
@@ -76,23 +94,46 @@ function planAgainst(
   options: {
     readonly fromContract?: Contract<SqlStorage> | null;
     readonly strategies?: readonly [];
+    readonly statementColumns?: FieldStatementColumns;
   } = {},
 ) {
-  const { issues } = buildPostgresPlanDiff({
+  const { issues, expected } = buildPostgresPlanDiff({
     contract,
     actualSchema: actual,
-    frameworkComponents: [],
+    frameworkComponents,
   });
   const coalesced = coalesceSubtreeIssues(issues);
   return planIssues({
     issues: coalesced,
+    startTree: actual,
+    endTree: expected,
+    foreignKeyDropAuthority: () => 'allowed' as const,
     toContract: contract,
     fromContract: options.fromContract ?? null,
     schemaName: 'public',
     codecHooks: new Map(),
-    storageTypes: contract.storage.types ?? {},
+    types: sqlTypeLookupsOf(frameworkComponents),
+    frameworkComponents,
     ...(options.strategies !== undefined ? { strategies: options.strategies } : {}),
+    ...(options.statementColumns !== undefined
+      ? { statementColumns: options.statementColumns }
+      : {}),
   });
+}
+
+function backfillOf(column: string): FieldStatementColumns {
+  return {
+    convert: [],
+    backfill: [
+      {
+        namespaceId: UNBOUND_NAMESPACE_ID,
+        table: 'user',
+        column,
+        field: { namespaceId: asNamespaceId(UNBOUND_NAMESPACE_ID), model: 'User', field: column },
+        text: `User.${column}`,
+      },
+    ],
+  };
 }
 
 describe('planIssues', () => {
@@ -103,8 +144,8 @@ describe('planIssues', () => {
           table: {
             user: {
               columns: {
-                id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -135,8 +176,8 @@ describe('planIssues', () => {
           table: {
             user: {
               columns: {
-                id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                status: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                status: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -150,6 +191,7 @@ describe('planIssues', () => {
 
     function actualWithoutStatus(): PostgresDatabaseSchemaNode {
       return new PostgresDatabaseSchemaNode({
+        extensions: undefined,
         namespaces: {
           public: new PostgresNamespaceSchemaNode({
             schemaName: 'public',
@@ -157,12 +199,11 @@ describe('planIssues', () => {
               user: new PostgresTableSchemaNode({
                 name: 'user',
                 columns: {
-                  id: {
+                  id: introspectedColumn({
                     name: 'id',
-                    nativeType: 'uuid',
+                    typeText: 'uuid',
                     nullable: false,
-                    resolvedNativeType: 'uuid',
-                  },
+                  }),
                 },
                 primaryKey: { columns: ['id'] },
                 foreignKeys: [],
@@ -180,8 +221,10 @@ describe('planIssues', () => {
       });
     }
 
-    it('emits AddColumnCall(nullable) + DataTransformCall + SetNotNullCall', () => {
-      const result = planAgainst(contractWithStatus(), actualWithoutStatus());
+    it('emits AddColumnCall(nullable) + DataTransformCall + SetNotNullCall for --backfill', () => {
+      const result = planAgainst(contractWithStatus(), actualWithoutStatus(), {
+        statementColumns: backfillOf('status'),
+      });
 
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error('expected ok');
@@ -189,31 +232,31 @@ describe('planIssues', () => {
       expect(calls).toHaveLength(3);
       expect(calls[0]).toMatchObject({ factoryName: 'addColumn' });
       expect(calls[1]).toMatchObject({ factoryName: 'dataTransform' });
-      expect(calls[2]).toMatchObject({ factoryName: 'setNotNull' });
+      expect(calls[2]).toMatchObject({ factoryName: 'setNotNull', operationClass: 'widening' });
     });
 
-    it('DataTransformCall.toOp() throws MIGRATION.UNFILLED_PLACEHOLDER', () => {
-      const result = planAgainst(contractWithStatus(), actualWithoutStatus());
+    it('DataTransformCall.toOp() rejects with MIGRATION.UNFILLED_PLACEHOLDER', async () => {
+      const result = planAgainst(contractWithStatus(), actualWithoutStatus(), {
+        statementColumns: backfillOf('status'),
+      });
 
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error('expected ok');
       const dtCall = result.value.calls[1]!;
       expect(dtCall.factoryName).toBe('dataTransform');
-      expect(() => dtCall.toOp()).toThrow(
-        expect.objectContaining({ code: 'MIGRATION.UNFILLED_PLACEHOLDER' }),
-      );
+      await expect(dtCall.toOp()).rejects.toMatchObject({ code: 'MIGRATION.UNFILLED_PLACEHOLDER' });
     });
   });
 
   describe('nullableTightening call strategy', () => {
-    it('emits DataTransformCall + SetNotNullCall', () => {
+    it('emits DataTransformCall + SetNotNullCall for --backfill, and a direct SetNotNullCall without it', () => {
       const toContract = makeContract({
         entries: {
           table: {
             user: {
               columns: {
-                id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -224,6 +267,7 @@ describe('planIssues', () => {
         },
       });
       const actual = new PostgresDatabaseSchemaNode({
+        extensions: undefined,
         namespaces: {
           public: new PostgresNamespaceSchemaNode({
             schemaName: 'public',
@@ -231,18 +275,16 @@ describe('planIssues', () => {
               user: new PostgresTableSchemaNode({
                 name: 'user',
                 columns: {
-                  id: {
+                  id: introspectedColumn({
                     name: 'id',
-                    nativeType: 'uuid',
+                    typeText: 'uuid',
                     nullable: false,
-                    resolvedNativeType: 'uuid',
-                  },
-                  email: {
+                  }),
+                  email: introspectedColumn({
                     name: 'email',
-                    nativeType: 'text',
+                    typeText: 'text',
                     nullable: true,
-                    resolvedNativeType: 'text',
-                  },
+                  }),
                 },
                 primaryKey: { columns: ['id'] },
                 foreignKeys: [],
@@ -259,20 +301,25 @@ describe('planIssues', () => {
         pgVersion: 'unknown',
       });
 
-      const result = planAgainst(toContract, actual);
+      const result = planAgainst(toContract, actual, { statementColumns: backfillOf('email') });
+      const direct = planAgainst(toContract, actual);
 
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error('expected ok');
       const calls = result.value.calls;
       expect(calls).toHaveLength(2);
       expect(calls[0]).toMatchObject({ factoryName: 'dataTransform' });
-      expect(calls[1]).toMatchObject({ factoryName: 'setNotNull' });
+      expect(calls[1]).toMatchObject({ factoryName: 'setNotNull', operationClass: 'widening' });
+      expect(direct.ok && direct.value.calls).toEqual([
+        expect.objectContaining({ factoryName: 'setNotNull', operationClass: 'widening' }),
+      ]);
     });
   });
 
   describe('typeChange call strategy', () => {
-    function actualWithAge(nativeType: string): PostgresDatabaseSchemaNode {
+    function actualWithAge(typeText: string, codecId: string): PostgresDatabaseSchemaNode {
       return new PostgresDatabaseSchemaNode({
+        extensions: undefined,
         namespaces: {
           public: new PostgresNamespaceSchemaNode({
             schemaName: 'public',
@@ -280,13 +327,17 @@ describe('planIssues', () => {
               user: new PostgresTableSchemaNode({
                 name: 'user',
                 columns: {
-                  id: {
+                  id: introspectedColumn({
                     name: 'id',
-                    nativeType: 'uuid',
+                    typeText: 'uuid',
                     nullable: false,
-                    resolvedNativeType: 'uuid',
-                  },
-                  age: { name: 'age', nativeType, nullable: false, resolvedNativeType: nativeType },
+                  }),
+                  age: introspectedColumn({
+                    name: 'age',
+                    typeText,
+                    nullable: false,
+                    codecRef: { codecId },
+                  }),
                 },
                 primaryKey: { columns: ['id'] },
                 foreignKeys: [],
@@ -310,8 +361,8 @@ describe('planIssues', () => {
           table: {
             user: {
               columns: {
-                id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                age: { nativeType: 'int8', codecId: 'pg/int8@1', nullable: false },
+                id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                age: { dataType: 'pg/int8', codecId: 'pg/int8@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -325,23 +376,28 @@ describe('planIssues', () => {
       // `typeChangeCallStrategy` only fires when the planner has a prior
       // contract (`migration plan`); any non-null contract satisfies the
       // gate, it is never otherwise read by this strategy.
-      const result = planAgainst(toContract, actualWithAge('int4'), { fromContract: toContract });
+      const result = planAgainst(toContract, actualWithAge('int4', 'pg/int4@1'), {
+        fromContract: toContract,
+      });
 
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error('expected ok');
       const calls = result.value.calls;
       expect(calls).toHaveLength(1);
-      expect(calls[0]).toMatchObject({ factoryName: 'alterColumnType' });
+      expect(calls[0]).toMatchObject({
+        factoryName: 'alterColumnType',
+        operationClass: 'widening',
+      });
     });
 
-    it('emits DataTransformCall + AlterColumnTypeCall for unsafe change', () => {
+    it('emits one destructive AlterColumnTypeCall for an unsafe change no statement names, and a data one with a USING slot for a converted one', () => {
       const toContract = makeContract({
         entries: {
           table: {
             user: {
               columns: {
-                id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                age: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                age: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -352,20 +408,48 @@ describe('planIssues', () => {
         },
       });
 
-      const result = planAgainst(toContract, actualWithAge('int4'), { fromContract: toContract });
+      const plain = planAgainst(toContract, actualWithAge('text', 'pg/text@1'), {
+        fromContract: toContract,
+      });
+      const converted = planAgainst(toContract, actualWithAge('text', 'pg/text@1'), {
+        fromContract: toContract,
+        statementColumns: {
+          convert: [
+            {
+              namespaceId: UNBOUND_NAMESPACE_ID,
+              table: 'user',
+              column: 'age',
+              field: {
+                namespaceId: asNamespaceId(UNBOUND_NAMESPACE_ID),
+                model: 'User',
+                field: 'age',
+              },
+              text: 'User.age',
+            },
+          ],
+          backfill: [],
+        },
+      });
 
-      expect(result.ok).toBe(true);
-      if (!result.ok) throw new Error('expected ok');
-      const calls = result.value.calls;
-      expect(calls).toHaveLength(2);
-      expect(calls[0]).toMatchObject({ factoryName: 'dataTransform' });
-      expect(calls[1]).toMatchObject({ factoryName: 'alterColumnType' });
+      expect([plain.ok, converted.ok]).toEqual([true, true]);
+      if (!plain.ok || !converted.ok) throw new Error('expected ok');
+      expect(plain.value.calls).toEqual([
+        expect.objectContaining({ factoryName: 'alterColumnType', operationClass: 'destructive' }),
+      ]);
+      expect(converted.value.calls).toEqual([
+        expect.objectContaining({
+          factoryName: 'alterColumnType',
+          operationClass: 'data',
+          using: { kind: 'placeholder', slot: 'User.age:convert' },
+        }),
+      ]);
     });
   });
 
   describe('index missing on an existing table', () => {
     function actualDocWithoutIndex(): PostgresDatabaseSchemaNode {
       return new PostgresDatabaseSchemaNode({
+        extensions: undefined,
         namespaces: {
           public: new PostgresNamespaceSchemaNode({
             schemaName: 'public',
@@ -373,18 +457,16 @@ describe('planIssues', () => {
               doc: new PostgresTableSchemaNode({
                 name: 'doc',
                 columns: {
-                  id: {
+                  id: introspectedColumn({
                     name: 'id',
-                    nativeType: 'uuid',
+                    typeText: 'uuid',
                     nullable: false,
-                    resolvedNativeType: 'uuid',
-                  },
-                  body: {
+                  }),
+                  body: introspectedColumn({
                     name: 'body',
-                    nativeType: 'text',
+                    typeText: 'text',
                     nullable: false,
-                    resolvedNativeType: 'text',
-                  },
+                  }),
                 },
                 primaryKey: { columns: ['id'] },
                 foreignKeys: [],
@@ -408,8 +490,8 @@ describe('planIssues', () => {
           table: {
             doc: {
               columns: {
-                id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                body: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                body: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -447,8 +529,8 @@ describe('planIssues', () => {
           table: {
             doc: {
               columns: {
-                id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                body: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                body: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -486,8 +568,8 @@ describe('planIssues', () => {
           table: {
             doc: {
               columns: {
-                id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                body: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                body: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -519,8 +601,8 @@ describe('planIssues', () => {
           table: {
             user: {
               columns: {
-                id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                status: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                status: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -531,6 +613,7 @@ describe('planIssues', () => {
         },
       });
       const actual = new PostgresDatabaseSchemaNode({
+        extensions: undefined,
         namespaces: {
           public: new PostgresNamespaceSchemaNode({
             schemaName: 'public',
@@ -538,12 +621,11 @@ describe('planIssues', () => {
               user: new PostgresTableSchemaNode({
                 name: 'user',
                 columns: {
-                  id: {
+                  id: introspectedColumn({
                     name: 'id',
-                    nativeType: 'uuid',
+                    typeText: 'uuid',
                     nullable: false,
-                    resolvedNativeType: 'uuid',
-                  },
+                  }),
                 },
                 primaryKey: { columns: ['id'] },
                 foreignKeys: [],
@@ -579,8 +661,8 @@ describe('planIssues', () => {
           table: {
             user: {
               columns: {
-                id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-                status: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+                status: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -591,6 +673,7 @@ describe('planIssues', () => {
         },
       });
       const actual = new PostgresDatabaseSchemaNode({
+        extensions: undefined,
         namespaces: {
           public: new PostgresNamespaceSchemaNode({
             schemaName: 'public',
@@ -598,12 +681,11 @@ describe('planIssues', () => {
               user: new PostgresTableSchemaNode({
                 name: 'user',
                 columns: {
-                  id: {
+                  id: introspectedColumn({
                     name: 'id',
-                    nativeType: 'uuid',
+                    typeText: 'uuid',
                     nullable: false,
-                    resolvedNativeType: 'uuid',
-                  },
+                  }),
                 },
                 primaryKey: { columns: ['id'] },
                 foreignKeys: [],
@@ -620,7 +702,7 @@ describe('planIssues', () => {
         pgVersion: 'unknown',
       });
 
-      const result = planAgainst(toContract, actual);
+      const result = planAgainst(toContract, actual, { statementColumns: backfillOf('status') });
       if (!result.ok) throw new Error('expected ok');
 
       const ts = renderCallsToTypeScript(result.value.calls, {
@@ -683,7 +765,9 @@ describe('planIssues', () => {
         schema: actual,
         policy: { allowedOperationClasses: ['additive', 'widening', 'destructive', 'data'] },
         fromContract: null,
-        frameworkComponents: [],
+        origin: null,
+        statements: [],
+        frameworkComponents,
         spaceId: 'app',
         snapshotsImportPath: '../../snapshots',
       });
@@ -694,8 +778,8 @@ describe('planIssues', () => {
     it('translates a missing schema into a CREATE SCHEMA op ordered before the table', async () => {
       const userTable: StorageTableInput = {
         columns: {
-          id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+          id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
         },
         primaryKey: { columns: ['id'] },
         uniques: [],
@@ -706,6 +790,7 @@ describe('planIssues', () => {
         auth: { entries: { table: { user: userTable } } },
       });
       const actual = new PostgresDatabaseSchemaNode({
+        extensions: undefined,
         namespaces: {},
         roles: [],
         existingSchemas: ['public'],
@@ -726,6 +811,7 @@ describe('planIssues', () => {
     it('emits a CREATE SCHEMA IF NOT EXISTS DDL statement', async () => {
       const toContract = makeNamespacedContract({ auth: { entries: { table: {} } } });
       const actual = new PostgresDatabaseSchemaNode({
+        extensions: undefined,
         namespaces: {},
         roles: [],
         existingSchemas: ['public'],
@@ -743,8 +829,8 @@ describe('planIssues', () => {
     it('emits correctly-qualified DDL for each same-named table under its own namespace', () => {
       const userTable: StorageTableInput = {
         columns: {
-          id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+          id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
         },
         primaryKey: { columns: ['id'] },
         uniques: [],
@@ -776,6 +862,7 @@ describe('planIssues', () => {
         meta: {},
       };
       const actual = new PostgresDatabaseSchemaNode({
+        extensions: undefined,
         namespaces: {},
         roles: [],
         existingSchemas: ['public', 'tenant_a', 'tenant_b'],

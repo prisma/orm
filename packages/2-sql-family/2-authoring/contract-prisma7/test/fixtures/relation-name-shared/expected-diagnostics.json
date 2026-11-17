@@ -1,0 +1,14 @@
+[
+  {
+    "code": "PSL.PRISMA7_RELATION_NAME_SHARED",
+    "file": "schema.prisma",
+    "line": 7,
+    "message": "Relation field \"A.bs\" is an implicit many-to-many relation named \"X\", and so is relation field \"C.ds\"; Prisma 7 creates one table \"_X\" for them, wired to only one of the relations (its foreign keys show which). Give each relation its own name with @relation(\"<name>\") on both fields: renaming a relation that \"_X\" does not reference makes Prisma 7's next migration create its own table, while renaming the one it references moves \"_X\"'s foreign keys to another relation, which fails on rows whose ids that relation's models lack and attaches the rest to the wrong records."
+  },
+  {
+    "code": "PSL.PRISMA7_RELATION_NAME_SHARED",
+    "file": "schema.prisma",
+    "line": 17,
+    "message": "Relation field \"C.ds\" is an implicit many-to-many relation named \"X\", and so is relation field \"A.bs\"; Prisma 7 creates one table \"_X\" for them, wired to only one of the relations (its foreign keys show which). Give each relation its own name with @relation(\"<name>\") on both fields: renaming a relation that \"_X\" does not reference makes Prisma 7's next migration create its own table, while renaming the one it references moves \"_X\"'s foreign keys to another relation, which fails on rows whose ids that relation's models lack and attaches the rest to the wrong records."
+  }
+]

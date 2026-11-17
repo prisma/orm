@@ -1,0 +1,245 @@
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
+import {
+  assembleAuthoringContributions,
+  assembleControlMutationDefaults,
+} from '@internal/framework-components/control';
+import {
+  buildSymbolTable,
+  type FuncCallSig,
+  fieldAttribute,
+  fieldRef,
+  funcCall,
+  list,
+  modelAttribute,
+  referencedFieldRef,
+} from '@internal/psl-parser';
+import { parse } from '@internal/psl-parser/syntax';
+import { describe, expect, it } from 'vitest';
+import { classifyPslCompletionContext } from '../src/completion-context';
+import { providePslCompletionItems } from '../src/completion-provider';
+import { testBinder } from './helpers/binder';
+
+const completionOnlyNestedSignature = {
+  documentation: 'Selects fields from the declaring and referenced models.',
+  named: {
+    local: { type: list(fieldRef()), documentation: 'Fields on the declaring model.' },
+    remote: { type: list(referencedFieldRef()), documentation: 'Fields on the referenced model.' },
+  },
+} as unknown as FuncCallSig;
+const fieldSpec = fieldAttribute('probe', {
+  documentation: 'Selects local and referenced fields, directly or through a nested call.',
+  named: {
+    local: { type: list(fieldRef()), documentation: 'Fields on the declaring model.' },
+    remote: { type: list(referencedFieldRef()), documentation: 'Fields on the referenced model.' },
+    nested: {
+      type: funcCall('fields', completionOnlyNestedSignature),
+      documentation: 'A nested field selection.',
+    },
+  },
+});
+const modelSpec = modelAttribute('probe', {
+  documentation: 'Selects fields from this model.',
+  named: { local: { type: list(fieldRef()), documentation: 'Fields on the declaring model.' } },
+});
+const authoringContributions = assembleAuthoringContributions([
+  {
+    id: 'scoped-completion-fixture',
+    authoring: {
+      attributeSpecs: { field: { probe: () => fieldSpec }, model: { probe: () => modelSpec } },
+    },
+  },
+]);
+
+function complete(markedSource: string, siblings: readonly string[] = []) {
+  const offset = markedSource.indexOf('|');
+  const source = markedSource.slice(0, offset) + markedSource.slice(offset + 1);
+  const parsed = parse(source, 'language-server-test.psl');
+  const { document } = parsed;
+  const others = siblings.map((text, index) => parse(text, `sibling-${index}.psl`));
+  const sources = parsed.sources.merge(...others.map((other) => other.sources));
+  const sourceFile = sources.sourceFileFor(document.syntax);
+  const { symbolTable } = buildSymbolTable({
+    documents: [...others.map((other) => other.document), document],
+    sources,
+    defaultNamespaceId: 'public',
+  });
+  const items = providePslCompletionItems({
+    context: classifyPslCompletionContext({
+      document,
+      sourceFile,
+      position: sourceFile.positionAt(offset),
+    }),
+    sourceFile,
+    candidates: {
+      binder: testBinder({ sources, symbolTable, scalarTypes: ['String'], authoringContributions }),
+      scalarTypes: ['String'],
+      symbolTable,
+      pslBlockDescriptors: {},
+      authoringContributions,
+      controlMutationDefaults: assembleControlMutationDefaults([]),
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
+    },
+    clientSupportsSnippets: false,
+  });
+  return { labels: items.map((item) => item.label), items, sourceFile };
+}
+
+it('selects the actual owner when another document has identical declaration spans', () => {
+  expect(
+    complete('model Bravo { other String\n @@probe(local: [|]) }', [
+      'model Alpha { first String\n @@probe(local: []) }',
+    ]).labels,
+  ).toEqual(['other']);
+});
+
+function schema(type: string, args: string) {
+  return `model Target { topOnly String }
+namespace local {
+  model Target { localOnly String }
+  model Owner {
+    ownOnly String
+    relation ${type} @probe(${args})
+  }
+}
+namespace remote { model Target { remoteOnly String } }
+namespace unrelated { model Missing { unrelatedOnly String } }`;
+}
+
+describe('scoped field-reference completion', () => {
+  it('uses declaring-model fields for local references', () => {
+    expect(complete(schema('remote.Target', 'local: [|]')).labels).toEqual(['ownOnly']);
+  });
+
+  it('uses explicitly referenced fields rather than declaring-model fields', () => {
+    expect(complete(schema('remote.Target', 'remote: [|]')).labels).toEqual(['remoteOnly']);
+  });
+
+  it('prefers the declaring namespace for unqualified targets', () => {
+    expect(complete(schema('Target', 'remote: [|]')).labels).toEqual(['localOnly']);
+  });
+
+  it('falls back to top-level models only for an unqualified target', () => {
+    const source = `model Target { topOnly String }
+namespace local { model Owner { relation Target @probe(remote: [|]) } }
+namespace unrelated { model Target { unrelatedOnly String } }`;
+    expect(complete(source).labels).toEqual(['topOnly']);
+  });
+
+  it('resolves an unqualified top-level relation without searching namespaces', () => {
+    expect(
+      complete(
+        'model Target { topOnly String }\nmodel Owner { relation Target @probe(remote: [|]) }\nnamespace remote { model Target { remoteOnly String } }',
+      ).labels,
+    ).toEqual(['topOnly']);
+  });
+
+  it.each([
+    'missing.Target',
+    'remote.Missing',
+    'Missing',
+    'foreign:remote.Target',
+    'foreign:Target',
+    'remote.extra.Target',
+  ])('offers no referenced fields for unresolved or unavailable target %s', (type) => {
+    expect(complete(schema(type, 'remote: [|]')).items).toEqual([]);
+  });
+
+  it.each(['remote.Target?', 'remote.Target[]'])(
+    'uses type coordinates independently of cardinality: %s',
+    (type) => {
+      expect(complete(schema(type, 'remote: [|]')).labels).toEqual(['remoteOnly']);
+    },
+  );
+
+  it('retains the declaring model inside a function and list', () => {
+    expect(complete(schema('remote.Target', 'nested: fields(local: [|])')).labels).toEqual([
+      'ownOnly',
+    ]);
+  });
+
+  it('retains the referenced model inside a function and list', () => {
+    expect(complete(schema('remote.Target', 'nested: fields(remote: [|])')).labels).toEqual([
+      'remoteOnly',
+    ]);
+  });
+
+  it('preserves namespace ownership in a model attribute', () => {
+    expect(
+      complete(
+        'model Owner { topOnly String }\nnamespace local { model Owner { ownOnly String\n @@probe(local: [|]) } }',
+      ).labels,
+    ).toEqual(['ownOnly']);
+  });
+
+  it('retains referenced fields in a recovered missing-element gap', () => {
+    expect(complete(schema('remote.Target', 'remote: [, |]')).labels).toEqual(['remoteOnly']);
+  });
+
+  it('does not append a reference in trivia after a completed field name', () => {
+    expect(complete(schema('remote.Target', 'remote: [remoteOnly |]')).items).toEqual([]);
+  });
+
+  it('replaces the complete partial field token', () => {
+    const result = complete(schema('remote.Target', 'remote: [rem|oteOnly]'));
+    expect(result.labels).toEqual(['remoteOnly']);
+    const edit = result.items[0]?.textEdit;
+    expect(edit).toBeDefined();
+    if (edit === undefined || !('range' in edit)) throw new Error('missing edit');
+    expect(
+      result.sourceFile.text.slice(
+        result.sourceFile.offsetAt(edit.range.start),
+        result.sourceFile.offsetAt(edit.range.end),
+      ),
+    ).toBe('remoteOnly');
+    expect(edit.newText).toBe('remoteOnly');
+  });
+});
+
+describe('field names offered inside a mixin body', () => {
+  const body = ['  first String', '  second String', '  other Target'];
+
+  it.each([
+    ['a block attribute', '  @@probe(local: [|])'],
+    ['a field attribute', '  third String @probe(local: [|])'],
+    ['a nested call of a field attribute', '  third String @probe(nested: fields(local: [|]))'],
+  ])(
+    'are the fields of the mixin, as a model with the same fields offers its own, in %s',
+    (_position, line) => {
+      const inMixin = complete(
+        ['model Target { remote String }', 'model mixin Probe {', ...body, line, '}'].join('\n'),
+      ).labels;
+      const inModel = complete(
+        ['model Target { remote String }', 'model Probe {', ...body, line, '}'].join('\n'),
+      ).labels;
+
+      expect(inMixin).toEqual(inModel);
+      expect(inMixin).toEqual(expect.arrayContaining(['first', 'second']));
+    },
+  );
+
+  it('are the fields of the referenced model for a referenced-field position', () => {
+    const line = '  link Target @probe(remote: [|])';
+    const inMixin = complete(
+      ['model Target { remote String }', 'model mixin Probe {', line, '}'].join('\n'),
+    ).labels;
+
+    expect(inMixin).toEqual(['remote']);
+  });
+
+  it('do not include the fields of a model that includes the mixin', () => {
+    const labels = complete(
+      [
+        'model mixin Probe {',
+        '  first String',
+        '  @@probe(local: [|])',
+        '}',
+        'model User {',
+        '  own String',
+        '  +Probe',
+        '}',
+      ].join('\n'),
+    ).labels;
+
+    expect(labels).toEqual(['first']);
+  });
+});

@@ -7,9 +7,12 @@ import { orm } from '../src/orm';
 import { buildTestContextFromContract, createMockRuntime, type MockRuntime } from './helpers';
 
 function storageTable(columns: string[]) {
-  const cols: Record<string, { codecId: string; nativeType: string; nullable: boolean }> = {};
+  const cols: Record<
+    string,
+    { codecId: string; dataType: string; nullable: boolean; many: false }
+  > = {};
   for (const column of columns) {
-    cols[column] = { codecId: 'pg/text@1', nativeType: 'text', nullable: false };
+    cols[column] = { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false, many: false };
   }
   return {
     columns: cols,
@@ -64,7 +67,13 @@ const twoNamespaceContract = blindCast<Contract<SqlStorage>, 'hand-built multi-n
   targetFamily: 'sql',
   capabilities: {
     returning: { enabled: true },
-    sql: { jsonAgg: true, returning: true, lateral: true },
+    sql: {
+      jsonAgg: true,
+      outerReferencesInDerivedTables: true,
+      jsonAggWithoutTruncation: true,
+      returning: true,
+      lateral: true,
+    },
     postgres: { jsonAgg: true, returning: true, lateral: true },
   },
   domain: {
@@ -134,14 +143,14 @@ describe('namespaced orm cross-namespace relation', () => {
     const { db, runtime } = setup();
 
     runtime.setNextResults([
-      [{ id: 1, bio_col: 'hi', user_id: 9, user: '[{"id":9,"token_col":"tok"}]' }],
+      [{ id: 1, bio_col: 'hi', user_id: 9, user: '[{"id":"9","token_col":"tok"}]' }],
     ]);
     const profile = await db.public.Profile.include('user').first();
     expect(profile).toEqual({
       id: 1,
       bio: 'hi',
       userId: 9,
-      user: { id: 9, token: 'tok' },
+      user: { id: '9', token: 'tok' },
     });
   });
 });

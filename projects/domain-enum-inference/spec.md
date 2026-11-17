@@ -1,5 +1,8 @@
 # Domain-enum inference — Spec
 
+> **Note (2026-10-15).** `@noCheck` was removed (TML-3595). Path B below emits `@noCheck(membership)`, so it no longer works as written and must be redesigned before this project starts. Today a column with a hand-written membership check pulls as `String` plus `@@check(map:)`. Typing it by an enum would derive a second membership check beside the live one.
+
+
 **Related:** [sql-check-constraint-unification](../sql-check-constraint-unification/spec.md) (this closes the gap that project's § Non-goals left open) · [ADR 244](../../docs/architecture%20docs/adrs/ADR%20244%20-%20Check%20constraints%20are%20opaque%20wire-named%20expressions.md)
 
 ## Purpose

@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url';
 import type { Contract } from '@internal/contract/types';
 import { CliStructuredError } from '@internal/errors/control';
 import { InternalError } from '@internal/utils/internal-error';
-import type { Plugin } from 'esbuild';
+import type { OnResolveArgs, OnResolveResult, Plugin, PluginBuild } from 'esbuild';
 import { build } from 'esbuild';
 import { join, resolve as resolvePath } from 'pathe';
 
@@ -82,7 +82,7 @@ function validatePurity(value: unknown, entryPath: string): void {
     path.add(value);
 
     try {
-      for (const key in value) {
+      for (const key of Object.keys(value)) {
         const descriptor = Object.getOwnPropertyDescriptor(value, key);
         if (descriptor && (descriptor.get || descriptor.set)) {
           throw contractSourceError(
@@ -105,14 +105,11 @@ function validatePurity(value: unknown, entryPath: string): void {
     }
   }
 
+  check(value);
   try {
-    check(value);
     JSON.stringify(value);
   } catch (error) {
     if (error instanceof Error) {
-      if (error.message.includes('getter') || error.message.includes('circular')) {
-        throw error;
-      }
       throw contractSourceError(
         'CONTRACT.EXPORT_INVALID',
         `Contract export is not JSON-serializable: ${error.message}`,
@@ -125,6 +122,29 @@ function validatePurity(value: unknown, entryPath: string): void {
       { meta: { path: entryPath, reason: 'not-json-serializable' } },
     );
   }
+}
+
+// The framework and the packages built on it. The bundle imports them from where they are
+// installed instead of carrying its own copy, so the contract's values are the ones the
+// process's framework recognises.
+const FRAMEWORK_PACKAGES = ['@internal/*', '@prisma/orm-*'];
+
+const SKIP_IN_PLACE = Symbol('resolving in place');
+
+/** Leaves `args.path` external, imported by the file URL it resolves to from the importer. */
+async function importedInPlace(
+  build: PluginBuild,
+  args: OnResolveArgs,
+): Promise<OnResolveResult | undefined> {
+  const resolved = await build.resolve(args.path, {
+    kind: args.kind,
+    resolveDir: args.resolveDir,
+    pluginData: SKIP_IN_PLACE,
+  });
+  if (resolved.errors.length > 0 || resolved.path === '') {
+    return undefined;
+  }
+  return { path: pathToFileURL(resolved.path).href, external: true };
 }
 
 function createImportAllowlistPlugin(
@@ -145,8 +165,8 @@ function createImportAllowlistPlugin(
   return {
     name: 'import-allowlist',
     setup(build) {
-      build.onResolve({ filter: /.*/ }, (args) => {
-        if (args.kind === 'entry-point') {
+      build.onResolve({ filter: /.*/ }, async (args) => {
+        if (args.kind === 'entry-point' || args.pluginData === SKIP_IN_PLACE) {
           return undefined;
         }
         if (args.path.startsWith('.') || args.path.startsWith('/')) {
@@ -158,6 +178,9 @@ function createImportAllowlistPlugin(
             path: args.path,
             external: true,
           };
+        }
+        if (isAllowedImport(args.path, FRAMEWORK_PACKAGES)) {
+          return await importedInPlace(build, args);
         }
         return undefined;
       });

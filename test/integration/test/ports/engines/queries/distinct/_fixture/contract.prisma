@@ -1,10 +1,13 @@
+// use prisma-8
+
 model User {
   id         Int      @id
   first_name String
   last_name  String
   email      String   @unique
-  birthday   DateTime?
+  birthday   TimestamptzTemporal?
   posts      Post[]
+  @@map("user")
 }
 
 model Post {
@@ -13,4 +16,5 @@ model Post {
   content   String @default("Wip")
   author_id Int
   author    User   @relation(fields: [author_id], references: [id])
+  @@map("post")
 }

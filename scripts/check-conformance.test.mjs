@@ -208,6 +208,27 @@ describe('findValidatorViolations', () => {
     assert.match(violations[0].message, /boom/);
   });
 
+  it('passes the provenance the engine would supply', () => {
+    const calls = [];
+    const section = {
+      name: 'orm',
+      validate: (value, provenance) => {
+        calls.push({ value, provenance });
+        return { ok: false, diagnostics: [] };
+      },
+    };
+    assert.deepEqual(findValidatorViolations(section), []);
+    const provenanceOf = (label) =>
+      calls[HOSTILE_INPUTS.findIndex((hostile) => hostile.label === label)].provenance;
+    assert.deepEqual(provenanceOf('null'), { files: [], keys: {} });
+    assert.deepEqual(provenanceOf('a populated array'), { files: [], keys: {} });
+    assert.deepEqual(provenanceOf('a proxy whose ownKeys trap throws'), { files: [], keys: {} });
+    assert.deepEqual(provenanceOf('a frozen object'), {
+      files: ['/conformance-hostile/prisma.config.ts'],
+      keys: { contract: '/conformance-hostile/prisma.config.ts' },
+    });
+  });
+
   it('reports a malformed return as a violation', () => {
     const section = { name: 'orm', validate: () => 'not a SectionValidation' };
     const violations = findValidatorViolations(section);

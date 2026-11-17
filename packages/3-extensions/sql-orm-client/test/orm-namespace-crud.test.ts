@@ -18,9 +18,9 @@ function model(table: string, fieldColumns: Record<string, string>) {
 }
 
 function storageTable(columns: string[]) {
-  const cols: Record<string, { codecId: string; nativeType: string; nullable: boolean }> = {};
+  const cols: Record<string, { codecId: string; dataType: string; nullable: boolean }> = {};
   for (const column of columns) {
-    cols[column] = { codecId: 'pg/text@1', nativeType: 'text', nullable: false };
+    cols[column] = { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false };
   }
   return {
     columns: cols,
@@ -116,6 +116,7 @@ describe('namespaced orm CRUD execution', () => {
 
   it('inserts within the namespace target table', async () => {
     const { db, runtime } = setup();
+    runtime.setNextStats([{ affectedRows: 1 }, { affectedRows: 1 }]);
     expect(await db.public.User.createAndCount([{ email: 'a@example.com' }])).toBe(1);
     expect(lastPlanTable(runtime).namespaceId).toBe('public');
     expect(lastPlanTable(runtime).name).toBe('users');

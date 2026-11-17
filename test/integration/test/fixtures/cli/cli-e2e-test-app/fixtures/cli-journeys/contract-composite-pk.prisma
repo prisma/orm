@@ -4,6 +4,7 @@ model Org {
   id          Int @id
   name        String
   memberships Membership[]
+  @@map("org")
 }
 
 model User {

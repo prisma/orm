@@ -1,4 +1,5 @@
 import { CliStructuredError } from './control';
+import { UPGRADE_GUIDES_URL } from './upgrade-guides';
 
 // ============================================================================
 // Migration Errors (MIGRATION.*)
@@ -24,6 +25,18 @@ export function errorUnfilledPlaceholder(slot: string): CliStructuredError {
       meta: { slot },
     },
   );
+}
+
+/**
+ * The operation of a planner-stubbed data transform: a promise that rejects with
+ * `MIGRATION.UNFILLED_PLACEHOLDER`. A plan's other operations stay readable beside it. The
+ * rejection is marked handled, and so is any promise a target wraps it in, so reading a plan's
+ * operations without awaiting each one does not raise an unhandled rejection.
+ */
+export function unfilledPlaceholderOperation(slot: string): Promise<never> {
+  const operation = Promise.reject(errorUnfilledPlaceholder(slot));
+  operation.catch(() => undefined);
+  return operation;
 }
 
 /**
@@ -169,6 +182,28 @@ export function errorMigrationPlanNotArray(
         dir,
         ...(actualValueDescription !== undefined ? { actualValue: actualValueDescription } : {}),
       },
+    },
+  );
+}
+
+/**
+ * A `migration.ts` passes an operation an option in the form an earlier version wrote, which this version no longer reads. `node migration.ts` strips types without checking them, so such a file runs; the operation refuses the option rather than leave out what it carries. `subject` names what the option was for, `rewrite` says how to write it now, and `upgradeEntry` is the id of the upgrade entry that shows the new form.
+ */
+export function errorMigrationOperationOptionRemoved(options: {
+  readonly operation: string;
+  readonly option: string;
+  readonly subject: string;
+  readonly rewrite: string;
+  readonly upgradeEntry: string;
+}): CliStructuredError {
+  const { operation, option, upgradeEntry } = options;
+  return new CliStructuredError(
+    'MIGRATION.OPERATION_OPTION_REMOVED',
+    `\`${operation}\` in migration.ts passes \`${option}\`, which this version no longer reads, for ${options.subject}`,
+    {
+      why: 'An earlier version wrote this migration.ts. `node migration.ts` does not check its types, so the file runs, and this version would leave out what the option carries.',
+      fix: `${options.rewrite} Or, if the migration is not applied, delete its package and run \`migration plan\` again. The upgrade entry \`${upgradeEntry}\` shows the new shape: ${UPGRADE_GUIDES_URL}`,
+      meta: { operation, option, upgradeEntry },
     },
   );
 }

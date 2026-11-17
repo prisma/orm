@@ -2,16 +2,13 @@ import type { PlanMeta } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
 import type { ExecutionPlan, QueryPlan } from '../src/execution/query-plan';
 import { RuntimeCore } from '../src/execution/runtime-core';
-import type {
-  RuntimeMiddleware,
-  RuntimeMiddlewareContext,
-} from '../src/execution/runtime-middleware';
+import type { ActivityContextFields, RuntimeMiddleware } from '../src/execution/runtime-middleware';
 
 /**
  * Cross-family demonstration: a fictional "mock" family extends the
  * canonical `RuntimeCore` base and inherits the middleware lifecycle
- * (`runBeforeCompile → lower → beforeQuery → runDriver → onRow →
- * afterQuery`) from `runQueryWithMiddleware`. Confirms that the abstract
+ * (`activityStarted → runBeforeCompile → lower → beforeEncode → runDriver →
+ * onRow → activityEnded → activityFinalized`). Confirms that the abstract
  * base is family-agnostic — i.e. SQL and Mongo are not the only families
  * that can plug in.
  *
@@ -35,11 +32,10 @@ interface MockExec extends ExecutionPlan {
 
 class MockRuntime extends RuntimeCore<MockPlan, MockExec, RuntimeMiddleware<MockExec>> {
   readonly events: string[] = [];
-  closeCalls = 0;
 
   constructor(
     middleware: ReadonlyArray<RuntimeMiddleware<MockExec>>,
-    ctx: RuntimeMiddlewareContext,
+    ctx: ActivityContextFields,
     private readonly contract: MockContract,
     private readonly rows: ReadonlyArray<Record<string, unknown>>,
   ) {
@@ -75,19 +71,16 @@ class MockRuntime extends RuntimeCore<MockPlan, MockExec, RuntimeMiddleware<Mock
     return Promise.resolve({ affectedRows: 0 });
   }
 
-  async close(): Promise<void> {
-    this.closeCalls++;
-  }
+  async close(): Promise<void> {}
 }
 
-const ctx: RuntimeMiddlewareContext = {
+const ctx: ActivityContextFields = {
   contract: {},
   mode: 'strict',
   now: () => Date.now(),
   log: { info: () => {}, warn: () => {}, error: () => {} },
   contentHash: async () => 'mock-hash',
   scope: 'runtime',
-  planExecutionId: 'test-fixture-plan-execution-id',
 };
 
 const meta: PlanMeta = {
@@ -128,20 +121,24 @@ describe('RuntimeCore with mock family', () => {
   });
 
   it('drives middleware hooks for any family', async () => {
-    let beforeQueryCalled = false;
-    let onRowCalled = false;
-    let afterQueryCalled = false;
+    const hooks: string[] = [];
 
     const middleware: RuntimeMiddleware<MockExec> = {
       name: 'test-middleware',
-      async beforeQuery() {
-        beforeQueryCalled = true;
+      async activityStarted() {
+        hooks.push('activityStarted');
+      },
+      async beforeEncode() {
+        hooks.push('beforeEncode');
       },
       async onRow() {
-        onRowCalled = true;
+        hooks.push('onRow');
       },
-      async afterQuery() {
-        afterQueryCalled = true;
+      async activityEnded() {
+        hooks.push('activityEnded');
+      },
+      async activityFinalized() {
+        hooks.push('activityFinalized');
       },
     };
 
@@ -150,16 +147,12 @@ describe('RuntimeCore with mock family', () => {
 
     await runtime.query({ draftId: 'd-3', meta }).toArray();
 
-    expect(beforeQueryCalled).toBe(true);
-    expect(onRowCalled).toBe(true);
-    expect(afterQueryCalled).toBe(true);
-  });
-
-  it('exposes `close()` for resource teardown', async () => {
-    const contract: MockContract = { target: 'mock', storageHash: 'test-core' };
-    const runtime = new MockRuntime([], ctx, contract, []);
-
-    await expect(runtime.close()).resolves.toBeUndefined();
-    expect(runtime.closeCalls).toBe(1);
+    expect(hooks).toEqual([
+      'activityStarted',
+      'beforeEncode',
+      'onRow',
+      'activityEnded',
+      'activityFinalized',
+    ]);
   });
 });

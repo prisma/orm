@@ -36,7 +36,7 @@ Cross-runtime automation against a moving model surface is its own research proj
 |---|---|---|
 | [`01-onboarding-first-query.md`](01-onboarding-first-query.md) | quickstart, contract, migrations, queries | AC4 |
 | [`02a-add-relation.md`](02a-add-relation.md) | contract, migrations, queries | AC5a |
-| [`02b-rename-with-hint.md`](02b-rename-with-hint.md) | contract, migrations | AC5b |
+| [`02b-rename-with-statement.md`](02b-rename-with-statement.md) | contract, migrations | AC5b |
 | [`02c-data-transform-placeholder.md`](02c-data-transform-placeholder.md) | migrations | AC5c |
 | [`02d-capability-gate.md`](02d-capability-gate.md) | queries, contract | AC5d |
 | [`02e-hash-mismatch.md`](02e-hash-mismatch.md) | debug, migrations | AC5e |

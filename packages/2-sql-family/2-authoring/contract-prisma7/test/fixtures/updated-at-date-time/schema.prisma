@@ -1,0 +1,13 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Clock {
+  id                Int       @id
+  day               DateTime  @updatedAt @db.Date
+  time              DateTime  @updatedAt @db.Time(6)
+  zoned             DateTime  @updatedAt @db.Timetz(6)
+  optional          DateTime? @updatedAt @db.Date
+  defaulted         DateTime  @default(now()) @updatedAt @db.Date
+  optionalDefaulted DateTime? @default(now()) @updatedAt @db.Time(6)
+}

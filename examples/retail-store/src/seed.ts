@@ -262,7 +262,7 @@ export async function seed(db: Db) {
 
   function lineItemFrom(product: (typeof products)[number]) {
     return {
-      productId: product._id,
+      productId: product.id,
       name: product.name,
       brand: product.brand,
       image: { url: `/images/products/${product.code.toLowerCase()}.jpg` },
@@ -292,7 +292,7 @@ export async function seed(db: Db) {
   if (!alice || !bob) throw new Error('Failed to seed users');
 
   await db.orm.carts.create({
-    userId: alice._id,
+    userId: alice.id,
     items: [
       {
         ...lineItemFrom(p0),
@@ -308,7 +308,7 @@ export async function seed(db: Db) {
   });
 
   const order = await db.orm.orders.create({
-    userId: bob._id,
+    userId: bob.id,
     items: [
       {
         ...lineItemFrom(p2),
@@ -353,7 +353,7 @@ export async function seed(db: Db) {
   ]);
 
   await db.orm.invoices.create({
-    orderId: order._id,
+    orderId: order.id,
     items: [{ name: 'Leather Crossbody Bag', amount: 1, unitPrice: 149.99, lineTotal: 149.99 }],
     subtotal: 149.99,
     tax: 12.75,
@@ -365,7 +365,7 @@ export async function seed(db: Db) {
     userId: 'alice-session-1',
     sessionId: 'sess-001',
     timestamp: new Date('2026-03-01T09:00:00Z'),
-    productId: p0._id,
+    productId: p0.id,
     subCategory: 'Topwear',
     brand: 'Heritage',
     exitMethod: null,
@@ -375,7 +375,7 @@ export async function seed(db: Db) {
     userId: 'alice-session-1',
     sessionId: 'sess-001',
     timestamp: new Date('2026-03-01T09:05:00Z'),
-    productId: p0._id,
+    productId: p0.id,
     brand: 'Heritage',
   });
 

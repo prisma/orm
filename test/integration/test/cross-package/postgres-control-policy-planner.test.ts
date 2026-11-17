@@ -1,12 +1,17 @@
-import {
+import postgresAdapterControl, {
   createPostgresBuiltinCodecLookup,
-  PostgresControlAdapter,
 } from '@internal/adapter-postgres/control';
-
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';
+import type { DataType } from '@internal/framework-components/codec';
 import type { MigrationOperationPolicy } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, type StorageTableInput } from '@internal/sql-contract/types';
+import type { SqlColumnIRInput } from '@internal/sql-schema-ir/types';
+import postgresTargetControl from '@internal/target-postgres/control';
+import {
+  createPostgresBuiltinDataTypeLookup,
+  postgresDataTypes,
+} from '@internal/target-postgres/data-types';
 import { createPostgresMigrationPlanner } from '@internal/target-postgres/planner';
 import {
   PostgresDatabaseSchemaNode,
@@ -16,6 +21,15 @@ import {
 } from '@internal/target-postgres/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
+import { introspectedColumn as introspectedColumnOver } from '../../../../packages/2-sql-family/1-core/contract/test/introspected-column';
+import { createTestPostgresControlAdapter } from '../../../../packages/3-targets/postgres/2-adapter/test/helpers/test-control-adapter';
+
+const introspectedColumn = (
+  column: SqlColumnIRInput,
+  dataTypes: readonly DataType[] = postgresDataTypes,
+) => introspectedColumnOver(column, dataTypes);
+
+const frameworkComponents = [postgresTargetControl, postgresAdapterControl];
 
 function makeContract(
   tables: Record<string, StorageTableInput>,
@@ -42,17 +56,21 @@ function makeContract(
   };
 }
 
-const baseColumn = { nativeType: 'text', codecId: 'pg/text@1', nullable: false };
-const nullableColumn = { nativeType: 'text', codecId: 'pg/text@1', nullable: true };
+const baseColumn = { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false };
+const nullableColumn = { dataType: 'pg/text', codecId: 'pg/text@1', nullable: true };
 
 const RECONCILIATION_POLICY: MigrationOperationPolicy = {
   allowedOperationClasses: ['additive', 'widening', 'destructive'],
 };
 
-const testAdapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+const testAdapter = createTestPostgresControlAdapter(
+  createPostgresBuiltinCodecLookup(),
+  createPostgresBuiltinDataTypeLookup(),
+);
 const planner = createPostgresMigrationPlanner(testAdapter);
 
 const emptySchema = new PostgresDatabaseSchemaNode({
+  extensions: undefined,
   namespaces: {
     public: new PostgresNamespaceSchemaNode({
       schemaName: 'public',
@@ -65,16 +83,19 @@ const emptySchema = new PostgresDatabaseSchemaNode({
 });
 
 function liveSchemaWithUsers(
-  columns: Record<string, { name: string; nativeType: string; nullable: boolean }>,
+  columns: Record<string, { name: string; typeText: string; nullable: boolean }>,
 ): PostgresDatabaseSchemaNode {
   return new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces: {
       public: new PostgresNamespaceSchemaNode({
         schemaName: 'public',
         tables: {
           users: new PostgresTableSchemaNode({
             name: 'users',
-            columns,
+            columns: Object.fromEntries(
+              Object.entries(columns).map(([key, column]) => [key, introspectedColumn(column)]),
+            ),
             primaryKey: { columns: ['id'] },
             uniques: [],
             foreignKeys: [],
@@ -96,7 +117,9 @@ async function planAgainst(contract: Contract<SqlStorage>, schema: PostgresDatab
     schema,
     policy: RECONCILIATION_POLICY,
     fromContract: null,
-    frameworkComponents: [],
+    origin: null,
+    statements: [],
+    frameworkComponents,
     spaceId: 'app',
     snapshotsImportPath: '../../snapshots',
   });
@@ -154,7 +177,7 @@ describe('PostgresMigrationPlanner.plan control-policy partitioning', async () =
       // tolerated semantics, the missing-column issue is suppressed at the
       // input partition.
       const contract = toleratedContract({ email: nullableColumn });
-      const live = liveSchemaWithUsers({ id: { name: 'id', nativeType: 'text', nullable: false } });
+      const live = liveSchemaWithUsers({ id: { name: 'id', typeText: 'text', nullable: false } });
       const result = await planAgainst(contract, live);
       expect(result.operations).toHaveLength(0);
       expect(result.warnings ?? []).toEqual(
@@ -269,7 +292,7 @@ describe('PostgresMigrationPlanner.plan control-policy partitioning', async () =
 // add-column.
 describe('PostgresMigrationPlanner.plan tolerated vs managed add-column', async () => {
   const liveSchemaWithUsersIdOnly: PostgresDatabaseSchemaNode = liveSchemaWithUsers({
-    id: { name: 'id', nativeType: 'text', nullable: false },
+    id: { name: 'id', typeText: 'text', nullable: false },
   });
 
   async function planAddColumn(control: 'managed' | 'tolerated') {
@@ -288,7 +311,9 @@ describe('PostgresMigrationPlanner.plan tolerated vs managed add-column', async 
       schema: liveSchemaWithUsersIdOnly,
       policy: RECONCILIATION_POLICY,
       fromContract: null,
-      frameworkComponents: [],
+      origin: null,
+      statements: [],
+      frameworkComponents,
       spaceId: 'app',
       snapshotsImportPath: '../../snapshots',
     });

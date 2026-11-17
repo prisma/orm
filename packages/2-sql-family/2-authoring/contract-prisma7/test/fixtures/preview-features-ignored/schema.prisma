@@ -1,0 +1,13 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider        = "prisma-client"
+  output          = "../generated/prisma"
+  previewFeatures = ["fullTextSearchPostgres", "relationJoins", "multiSchema"]
+}
+
+model User {
+  id Int @id
+}

@@ -74,8 +74,8 @@ For SQL targets, plan mode also prints a DDL preview derived from planned operat
 
 The planner supports three operation classes:
 - **Additive**: Create tables, add columns, add indexes/constraints
-- **Widening**: Relax nullability (NOT NULL → nullable)
-- **Destructive**: Drop tables, drop columns, alter column types, tighten nullability
+- **Widening**: Change existing structure without losing data: relax or tighten nullability, widen a column type, rename, drop an index or a constraint
+- **Destructive**: Lose rows or values: drop tables, drop columns, change a column type in a way that can change values
 
 ### Scenario 3: Local contract divergent from remote database (conflicts)
 
@@ -93,12 +93,12 @@ This happens when:
 
 **Recovery**: Inspect the conflict, reconcile the schema drift manually or update the contract to match reality, then re-run `db update`.
 
-If the runner detects that the resulting schema does not match the contract, it fails with `RUNNER_FAILED`:
+If the runner detects that the resulting schema does not match the contract, it fails with `MIGRATION.SCHEMA_VERIFY_FAILED` and lists the issues:
 
 ```
-✖ Schema verify failed (RUNNER_FAILED)
-  Why: The resulting database schema does not satisfy the destination contract.
-  Fix: Inspect the reported conflict, reconcile schema drift if needed, then re-run `prisma db update`
+✘ [MIGRATION.SCHEMA_VERIFY_FAILED] Database schema does not satisfy contract (1 failure)
+  why: The schema check after apply found: missing: database/user/column:email.
+→ Change the contract source to resolve the issues listed, re-run `prisma contract emit`, then re-run `prisma db update`.
 ```
 
 ## Key differences between `db init` and `db update`
@@ -121,12 +121,13 @@ Both commands share the same flag surface:
 | `--db <url>` | Database connection string |
 | `--config <path>` | Path to `prisma.config.ts` |
 | `--dry-run` | Preview planned operations without applying |
-| `-y, --yes` | Accept the declared default of every prompt. It cannot grant consent, so it never authorises `db update`'s destructive operations |
-| `--confirm <database>` | Grant `db update`'s destructive consent without being asked. Read only when the run is non-interactive, so a script running from a terminal needs `--no-interactive --confirm <database>` |
+| `-y, --yes` | Accept the declared default of every prompt. It answers none of `db update`'s questions |
 | `--json [format]` | Output as JSON (`object` format only) |
 | `-q, --quiet` | Quiet mode: errors only |
 | `-v, --verbose` | Verbose output: debug info, timings |
 | `--no-color` | Disable color output |
+
+`db update` also takes statements, each repeatable, which answer the questions it asks before an apply: `--rename <old>:<new>` keeps a model's or field's data under a new name, `--delete <subject>` lets the update lose a model's, field's or storage name's data, and `--allow <subject>` lets it change who can read or write a model's data, one operation per flag. Without them, an apply that would lose data or change access asks in a terminal, and fails with `CLI.CONSENT_REQUIRED` elsewhere. `--confirm` answers none of them. See the CLI README's `db update` section.
 
 ## Programmatic API
 
@@ -144,16 +145,22 @@ const client = createControlClient({
 
 // db init
 const initResult = await client.dbInit({
-  contractIR: contractJson,
+  contract: contractJson,
   mode: 'apply',
+  migrationsDir: 'migrations',
   connection: databaseUrl,
 });
 
 // db update
 const updateResult = await client.dbUpdate({
-  contractIR: contractJson,
-  mode: 'plan', // or 'apply'
+  contract: contractJson,
+  mode: 'apply', // or 'plan'
+  migrationsDir: 'migrations',
   connection: databaseUrl,
+  answerQuestions: async (questions) => {
+    if (questions.length > 0) throw new Error('db update would lose data or change access');
+    return [];
+  },
 });
 
 await client.close();

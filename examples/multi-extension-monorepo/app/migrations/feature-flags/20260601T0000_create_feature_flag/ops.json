@@ -1,0 +1,24 @@
+[
+  {
+    "id": "feature-flags.create-feature_flag",
+    "label": "Create table \"feature_flag\"",
+    "operationClass": "additive",
+    "invariantId": "feature-flags:create-feature_flag-v1",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "feature_flag"
+      }
+    },
+    "precheck": [],
+    "execute": [
+      {
+        "description": "Create table \"feature_flag\"",
+        "sql": "CREATE TABLE IF NOT EXISTS public.\"feature_flag\" (\n        \"key\" text NOT NULL PRIMARY KEY,\n        \"enabled\" boolean NOT NULL\n      )"
+      }
+    ],
+    "postcheck": []
+  }
+]

@@ -1,0 +1,229 @@
+import { type ColumnDefault, type Contract, coreHash, profileHash } from '@internal/contract/types';
+import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { SqlStorage, type StorageTable } from '@internal/sql-contract/types';
+import { FunctionColumnDefault, opaqueSql } from '@internal/sql-relational-core/ast';
+import { SqlSchemaIR, SqlTableIR } from '@internal/sql-schema-ir/types';
+import { ifDefined } from '@internal/utils/defined';
+import { applicationDomainOf } from '@repo/test-utils';
+import { describe, expect, it } from 'vitest';
+import { readSqliteDefault } from '../src/core/default-normalizer';
+import { columnSpecFromNode, ddlColumnFromNode } from '../src/core/migrations/column-ddl-rendering';
+import { buildSqlitePlanDiff, diffSqliteSchema } from '../src/core/migrations/diff-database-schema';
+import { sqliteCreateNamespace } from '../src/core/sqlite-unbound-database';
+import { introspectedColumn, sqliteTestComponents } from './sqlite-test-types';
+
+function liveSchema(rawDefault: string): SqlSchemaIR {
+  return new SqlSchemaIR({
+    tables: {
+      event: new SqlTableIR({
+        name: 'event',
+        columns: {
+          at: introspectedColumn({
+            name: 'at',
+            typeText: 'text',
+            nullable: false,
+            default: rawDefault,
+            ...ifDefined('resolvedDefault', functionDefaultOf(rawDefault)),
+          }),
+        },
+        foreignKeys: [],
+        uniques: [],
+        indexes: [],
+      }),
+    },
+  });
+}
+
+function contractWithDefault(
+  columnDefault: ColumnDefault,
+  column: { readonly codecId: string; readonly dataType: string } = {
+    codecId: 'sqlite/text@1',
+    dataType: 'sqlite/text',
+  },
+): Contract<SqlStorage> {
+  const event: StorageTable = {
+    columns: {
+      at: {
+        many: false,
+        dataType: column.dataType,
+        nullable: false,
+        codecId: column.codecId,
+        default: columnDefault,
+      },
+    },
+    foreignKeys: [],
+    uniques: [],
+    indexes: [],
+  };
+  return {
+    target: 'sqlite',
+    targetFamily: 'sql',
+    profileHash: profileHash('test'),
+    storage: new SqlStorage({
+      storageHash: coreHash('c'.repeat(64)),
+      namespaces: {
+        [UNBOUND_NAMESPACE_ID]: sqliteCreateNamespace({
+          id: UNBOUND_NAMESPACE_ID,
+          entries: { table: { event } },
+        }),
+      },
+    }),
+    roots: {},
+    domain: applicationDomainOf({ models: {} }),
+    capabilities: {},
+    extensions: {},
+    meta: {},
+  };
+}
+
+describe('buildSqlitePlanDiff derives the expected default like verify does', () => {
+  it('sees no change for sql`CURRENT_TIMESTAMP` against a live column that stores CURRENT_TIMESTAMP', () => {
+    const diff = buildSqlitePlanDiff({
+      contract: contractWithDefault({ kind: 'function', expression: 'CURRENT_TIMESTAMP' }),
+      actualSchema: liveSchema('CURRENT_TIMESTAMP'),
+      frameworkComponents: sqliteTestComponents,
+    });
+    expect(diff.issues).toEqual([]);
+  });
+
+  it.each([["strftime('%Y-%m-%dT%H:%M:%fZ','now')"], ["datetime('now')"], ['CURRENT_TIMESTAMP']])(
+    'sees no change for now() against a live column that stores %s',
+    (stored) => {
+      const diff = buildSqlitePlanDiff({
+        contract: contractWithDefault({ kind: 'function', expression: 'now()' }),
+        actualSchema: liveSchema(stored),
+        frameworkComponents: sqliteTestComponents,
+      });
+      expect(diff.issues).toEqual([]);
+    },
+  );
+
+  const dateTimeColumns = {
+    DateTime: { codecId: 'sqlite/datetime@1', dataType: 'sqlite/datetime' },
+    Date: { codecId: 'sqlite/date-string@1', dataType: 'sqlite/date' },
+    Time: { codecId: 'sqlite/time-string@1', dataType: 'sqlite/time' },
+  } as const;
+  const nowStoredBy = {
+    DateTime: "strftime('%Y-%m-%dT%H:%M:%fZ','now')",
+    Date: "date('now')",
+    Time: "strftime('%H:%M:%f','now')",
+  } as const;
+  const fieldTypes = ['DateTime', 'Date', 'Time'] as const;
+
+  it.each(
+    fieldTypes.flatMap((contractType) =>
+      fieldTypes.map((liveType) => [contractType, liveType] as const),
+    ),
+  )(
+    'sees a now() default on a %s field against a live column whose default is the now() of a %s field as a change only when the two differ',
+    (contractType, liveType) => {
+      const diff = buildSqlitePlanDiff({
+        contract: contractWithDefault(
+          { kind: 'function', expression: 'now()' },
+          dateTimeColumns[contractType],
+        ),
+        actualSchema: liveSchema(`(${nowStoredBy[liveType]})`),
+        frameworkComponents: sqliteTestComponents,
+      });
+      expect(diff.issues.length > 0).toBe(contractType !== liveType);
+    },
+  );
+
+  it.each(['Date', 'Time'] as const)(
+    'sees a now() default on a %s field against a live column whose default is CURRENT_TIMESTAMP as a change',
+    (contractType) => {
+      const diff = buildSqlitePlanDiff({
+        contract: contractWithDefault(
+          { kind: 'function', expression: 'now()' },
+          dateTimeColumns[contractType],
+        ),
+        actualSchema: liveSchema('CURRENT_TIMESTAMP'),
+        frameworkComponents: sqliteTestComponents,
+      });
+      expect(diff.issues).not.toEqual([]);
+    },
+  );
+
+  it('sees no change for a now() default on a Date field against a live column whose default is CURRENT_DATE, which writes the same text', () => {
+    const diff = buildSqlitePlanDiff({
+      contract: contractWithDefault(
+        { kind: 'function', expression: 'now()' },
+        dateTimeColumns.Date,
+      ),
+      actualSchema: liveSchema('CURRENT_DATE'),
+      frameworkComponents: sqliteTestComponents,
+    });
+    expect(diff.issues).toEqual([]);
+  });
+
+  it('sees a now() default on a Time field against a live column whose default is CURRENT_TIME, which writes no fraction of a second, as a change', () => {
+    const diff = buildSqlitePlanDiff({
+      contract: contractWithDefault(
+        { kind: 'function', expression: 'now()' },
+        dateTimeColumns.Time,
+      ),
+      actualSchema: liveSchema('CURRENT_TIME'),
+      frameworkComponents: sqliteTestComponents,
+    });
+    expect(diff.issues).not.toEqual([]);
+  });
+
+  it('has db verify report a now() default on a Date field against a live column that writes the current instant', () => {
+    const verdict = diffSqliteSchema({
+      contract: contractWithDefault(
+        { kind: 'function', expression: 'now()' },
+        dateTimeColumns.Date,
+      ),
+      schema: liveSchema(`(${nowStoredBy.DateTime})`),
+      frameworkComponents: sqliteTestComponents,
+    });
+    expect(verdict.issues).not.toEqual([]);
+  });
+
+  it('names a now() default as introspection names it', () => {
+    const diff = buildSqlitePlanDiff({
+      contract: contractWithDefault({ kind: 'function', expression: 'now()' }),
+      actualSchema: new SqlSchemaIR({ tables: {} }),
+      frameworkComponents: sqliteTestComponents,
+    });
+    expect(diff.expected.tables['event']?.columns['at']?.resolvedDefault).toEqual({
+      kind: 'function',
+      expression: 'now()',
+    });
+  });
+
+  it("sees no change for a literal-shaped body sql`'x'` against the literal the database stores", () => {
+    const diff = buildSqlitePlanDiff({
+      contract: contractWithDefault({ kind: 'function', expression: "'x'" }),
+      actualSchema: liveSchema("'x'"),
+      frameworkComponents: sqliteTestComponents,
+    });
+    expect(diff.issues).toEqual([]);
+  });
+
+  it.each(['CURRENT_TIMESTAMP', "'x'", 'now()'])(
+    'hands DDL the authored expression %s, never the resolved default',
+    (expression) => {
+      const diff = buildSqlitePlanDiff({
+        contract: contractWithDefault({ kind: 'function', expression }),
+        actualSchema: new SqlSchemaIR({ tables: {} }),
+        frameworkComponents: sqliteTestComponents,
+      });
+      const column = diff.expected.tables['event']?.columns['at'];
+      if (column === undefined) throw new Error('expected column derived');
+      expect({
+        spec: columnSpecFromNode(column, false).default,
+        ddl: ddlColumnFromNode(column, false).default,
+      }).toEqual({
+        spec: { kind: 'function', expression },
+        ddl: new FunctionColumnDefault(opaqueSql(expression)),
+      });
+    },
+  );
+});
+
+/** The function default introspection reads from `rawDefault`; a literal needs the column codec, which these schemas have none of. */
+function functionDefaultOf(rawDefault: string) {
+  const read = readSqliteDefault(rawDefault, 'text');
+  return read.kind === 'function' ? read : undefined;
+}

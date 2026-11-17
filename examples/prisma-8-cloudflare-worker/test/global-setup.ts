@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { Client } from 'pg';
 import type { ProvidedContext } from 'vitest';
 import { EXAMPLE_ROOT, HYPERDRIVE_VAR, loadLocalEnv } from '../scripts/env';
+import { GENERATED_POST_COUNT, insertGeneratedPosts } from '../scripts/seed-posts';
 
 interface GlobalSetupContext {
   provide<K extends keyof ProvidedContext & string>(key: K, value: ProvidedContext[K]): void;
@@ -73,11 +74,6 @@ async function applySchema(databaseUrl: string): Promise<void> {
 const ALICE_ID = '00000000-0000-4000-8000-000000000001';
 const BOB_ID = '00000000-0000-4000-8000-000000000002';
 
-// Sized to the budgets cap in `src/prisma/db.ts` (`tableRows.post: 10_000`)
-// — large enough that the cursor early-break test (`/cursor/large`) is
-// observably fast under cursor=on and observably slow under cursor=off.
-const POST_SEED_COUNT = 10_000;
-
 async function ensurePgStatStatements(databaseUrl: string): Promise<void> {
   const client = new Client({ connectionString: databaseUrl });
   await client.connect();
@@ -106,18 +102,7 @@ async function resetAndSeed(databaseUrl: string): Promise<void> {
       [ALICE_ID, BOB_ID],
     );
 
-    // Single set-based INSERT via generate_series — bulk-loads 10k rows in
-    // one round trip (much faster than batched multi-row VALUES).
-    await client.query(
-      `INSERT INTO "post" (id, title, "userId", "createdAt")
-       SELECT
-         '10000000-0000-4000-8000-' || lpad(g::text, 12, '0'),
-         'Post ' || g,
-         CASE WHEN g % 2 = 0 THEN $1 ELSE $2 END,
-         TIMESTAMPTZ '2026-04-01 00:00:00+00' + ((g % 365) * INTERVAL '1 hour')
-       FROM generate_series(1, $3::int) AS g`,
-      [ALICE_ID, BOB_ID, POST_SEED_COUNT],
-    );
+    await insertGeneratedPosts(client, [ALICE_ID, BOB_ID], GENERATED_POST_COUNT);
   } finally {
     await client.end();
   }

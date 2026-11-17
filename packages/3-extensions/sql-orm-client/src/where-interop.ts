@@ -1,13 +1,17 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
-import type { AnyExpression, ToWhereExpr, WhereArg } from '@internal/sql-relational-core/ast';
-import { isWhereExpr } from '@internal/sql-relational-core/ast';
+import {
+  type AnyExpression,
+  isWhereExpr,
+  type ToWhereExpr,
+  type WhereArg,
+} from '@internal/sql-relational-core/ast';
 import { ormError } from './orm-errors';
-import { bindWhereExpr } from './where-binding';
+import { bindWhereExpr, type TableAliases } from './where-binding';
 
 interface NormalizeWhereArgOptions {
-  readonly contract?: Contract<SqlStorage>;
-  readonly namespaceId?: string | undefined;
+  readonly contract: Contract<SqlStorage>;
+  readonly tables: TableAliases;
 }
 
 export function normalizeWhereArg(arg: undefined): undefined;
@@ -32,14 +36,11 @@ export function normalizeWhereArg(
     );
   }
 
-  if (isToWhereExpr(arg)) {
-    return arg.toWhereExpr();
+  const expr = isToWhereExpr(arg) ? arg.toWhereExpr() : arg;
+  if (!options) {
+    return expr;
   }
-
-  if (options?.contract) {
-    return bindWhereExpr(options.contract, arg, options.namespaceId);
-  }
-  return arg;
+  return bindWhereExpr(options.contract, expr, options.tables);
 }
 
 function isToWhereExpr(arg: WhereArg): arg is ToWhereExpr {

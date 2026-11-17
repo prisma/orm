@@ -75,6 +75,11 @@ export function formatRunScriptCommand(pm: PackageManager, scriptName: string): 
   }
 }
 
+export function formatRemoveCommand(pm: PackageManager, packages: readonly string[]): string {
+  const verb = pm === 'npm' ? 'uninstall' : 'remove';
+  return [pm, verb, ...packages].join(' ');
+}
+
 export function formatAddArgs(pm: PackageManager, packages: string[]): string[] {
   if (pm === 'deno') {
     return ['add', ...packages.map((p) => `npm:${p}`)];

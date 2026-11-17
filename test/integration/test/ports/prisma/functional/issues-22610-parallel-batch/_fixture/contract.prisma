@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma@a6d0155
 // packages/client/tests/functional/issues/22610-parallel-batch (postgres matrix entry;
 // allProviders — this is the postgres port).
@@ -22,17 +24,19 @@
 //
 // Subject: a large parallel batch of queries (Promise.all) completes without timing out.
 model User {
-  id    String  @id @default(cuid(2))
+  id    String  @id @onCreate(cuid(2))
   email String  @unique
   name  String?
   posts Post[]
+  @@map("user")
 }
 
 model Post {
-  id        String  @id @default(cuid(2))
+  id        String  @id @onCreate(cuid(2))
   title     String
   content   String?
   published Boolean @default(false)
   author    User    @relation(fields: [authorId], references: [id])
   authorId  String
+  @@map("post")
 }

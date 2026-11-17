@@ -1,0 +1,17 @@
+// use prisma-8
+model Post {
+  id        String   @id @onCreate(uuid())
+  v7        String   @onCreate(uuid(7))
+  v4        String   @onCreate(uuid(4))
+  cuid      String   @onCreate(cuid(2))
+  ulid      String   @onCreate(ulid())
+  nanoid    String   @onCreate(nanoid())
+  short     String   @onCreate(nanoid(16))
+  spaced    String   @onCreate( uuid( 7 ) )
+  createdAt DateTime @default(now())
+  count     Int      @default(autoincrement())
+  label     String   @default("uuid()")
+  quoted    String   @default("x @default(uuid()) y")
+  // legacy String @default(uuid())
+  trailing  String   @onCreate(ulid()) // was @default(ulid())
+}

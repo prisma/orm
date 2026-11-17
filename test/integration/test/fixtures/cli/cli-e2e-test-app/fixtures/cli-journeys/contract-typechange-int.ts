@@ -4,10 +4,10 @@ import { defineContract, field, model } from '@internal/postgres/contract-builde
 /**
  * Type-change *to*-state: the `score` column, previously `text`
  * (`contract-typechange-text.ts`), is retyped as `int4`. The
- * `text → int4` transition is unsafe (not in `SAFE_WIDENINGS`), so the
- * Postgres `typeChangeCallStrategy` emits
- * `dataTransform(placeholder slots) → alterColumnType` and the user must
- * fill in the placeholders with a normalising query.
+ * `text → int4` transition is unsafe (not in `SAFE_WIDENINGS`): without a
+ * statement `migration plan` asks about it, and with `--convert User.score`
+ * the Postgres `typeChangeCallStrategy` emits one `alterColumnType` whose
+ * `using` is a placeholder the user fills with the conversion.
  */
 export const contract = defineContract({
   models: {

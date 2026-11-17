@@ -45,7 +45,8 @@ export function rewriteWorkspaceDeps(packageJson: MutablePackageJson, version: s
     if (!deps) continue;
     for (const [name, spec] of Object.entries(deps)) {
       if (typeof spec !== 'string' || !spec.startsWith('workspace:')) continue;
-      deps[name] = `workspace:${version}`;
+      const alias = /^workspace:((?:@[^/@]+\/)?[^@]+)@/.exec(spec)?.[1];
+      deps[name] = alias ? `workspace:${alias}@${version}` : `workspace:${version}`;
     }
   }
 }
@@ -106,4 +107,23 @@ export function stampSkillMetadata(skillMd: string, key: string, value: string):
     return skillMd.replace(frontmatter, lines.join('\n'));
   }
   throw new Error(`SKILL.md metadata has no ${key} key to stamp`);
+}
+
+/**
+ * Move an extension's version stamp in an emitted contract artefact from
+ * `from` to `to`. Extension packs record their own package version in every
+ * `contract.json` / `contract.d.ts` they contribute to, so the tracked
+ * artefacts go stale on each bump and `fixtures:check` diffs them. Only the
+ * `version` that directly follows an extension entry's `targetId` is touched;
+ * every other `version` field in the artefact is left alone. Idempotent, and
+ * a no-op when the stamp is not `from`.
+ */
+export function restampExtensionVersion(artefact: string, from: string, to: string): string {
+  const escaped = from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const json = new RegExp(`("targetId":\\s*"[^"]*",\\s*"version":\\s*")${escaped}(")`, 'g');
+  const dts = new RegExp(
+    `(readonly targetId:\\s*'[^']*';\\s*readonly version:\\s*')${escaped}(')`,
+    'g',
+  );
+  return artefact.replace(json, `$1${to}$2`).replace(dts, `$1${to}$2`);
 }

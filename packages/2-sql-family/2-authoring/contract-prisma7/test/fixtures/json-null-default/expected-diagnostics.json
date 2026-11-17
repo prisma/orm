@@ -1,0 +1,20 @@
+[
+  {
+    "code": "PSL.PRISMA7_JSON_NULL_DEFAULT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 7,
+    "message": "Field \"T.required\": @default(\"null\") is the JSON value null, which the contract cannot tell apart from SQL NULL. Remove the @default or give it another JSON value; either changes the column default on Prisma 7's next migration."
+  },
+  {
+    "code": "PSL.PRISMA7_JSON_NULL_DEFAULT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 8,
+    "message": "Field \"T.optional\": @default(\"null\") is the JSON value null, which the contract cannot tell apart from SQL NULL. Remove the @default or give it another JSON value; either changes the column default on Prisma 7's next migration."
+  },
+  {
+    "code": "PSL.PRISMA7_JSON_NULL_DEFAULT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 9,
+    "message": "Field \"T.list\": @default([\"null\"]) holds the JSON value null, which the contract cannot tell apart from SQL NULL. Remove the @default or give it another JSON value; either changes the column default on Prisma 7's next migration."
+  }
+]

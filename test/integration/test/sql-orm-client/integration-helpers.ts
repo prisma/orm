@@ -6,13 +6,18 @@ import { APP_SPACE_ID, createControlStack } from '@internal/framework-components
 import { buildFabricatedMigrationEdge } from '@internal/migration-tools/aggregate';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { Collection } from '@internal/sql-orm-client';
-import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import type { SqlMiddleware, SqlRuntimeExtensionDescriptor } from '@internal/sql-runtime';
 import postgresTargetControl from '@internal/target-postgres/control';
 import { createDevDatabase, type DevDatabase, timeouts, withDevDatabase } from '@repo/test-utils';
-import { afterAll } from 'vitest';
+import { afterAll, expect } from 'vitest';
 import { withReturningCapability } from './collection-fixtures';
-import { getTestContext, getTestContract, type TestContract } from './helpers';
+import {
+  contextFor,
+  getTestContext,
+  getTestContract,
+  type IncludeStrategy,
+  type TestContract,
+} from './helpers';
 import {
   createPgIntegrationRuntime,
   type PgIntegrationRuntime,
@@ -49,43 +54,82 @@ async function getCollectionDatabase(): Promise<DevDatabase> {
   return collectionDatabase;
 }
 
-export function createUsersCollection(runtime: PgIntegrationRuntime) {
-  return new Collection({ runtime, context: getTestContext() }, 'User', { namespaceId: 'public' });
+export function createUsersCollection(
+  runtime: PgIntegrationRuntime,
+  strategy: IncludeStrategy = 'join',
+) {
+  return new Collection({ runtime, context: getTestContext(strategy) }, 'User', {
+    namespaceId: 'public',
+  });
 }
 
-export function createUsersCollectionWithoutReturning(runtime: PgIntegrationRuntime) {
-  const contract = { ...getTestContract(), capabilities: {} } as TestContract;
-  const context = { ...getTestContext(), contract } as ExecutionContext<TestContract>;
+/** Under `'query'`, a read with includes sends the parent statement and one statement per include and level with parent rows: `statements` in all. */
+export function expectPerRelationStatements(
+  runtime: PgIntegrationRuntime,
+  strategy: IncludeStrategy,
+  statements: number,
+): void {
+  if (strategy === 'query') {
+    expect(runtime.executions).toHaveLength(statements);
+  }
+}
+
+export function createReturningUsersCollectionWithout(
+  runtime: PgIntegrationRuntime,
+  capabilityKeys: readonly string[],
+  strategy: IncludeStrategy = 'join',
+) {
+  const base = withReturningCapability(getTestContract());
+  const capabilities: Record<string, Record<string, unknown>> = {};
+  for (const [group, entries] of Object.entries(base.capabilities)) {
+    capabilities[group] = Object.fromEntries(
+      Object.entries(entries as Record<string, unknown>).filter(
+        ([key]) => !capabilityKeys.includes(key),
+      ),
+    );
+  }
+  const context = contextFor({ ...base, capabilities } as TestContract, strategy);
   return new Collection({ runtime, context }, 'User', { namespaceId: 'public' });
 }
 
-export function createPostsCollection(runtime: PgIntegrationRuntime) {
-  return new Collection({ runtime, context: getTestContext() }, 'Post', { namespaceId: 'public' });
+export function createPostsCollection(
+  runtime: PgIntegrationRuntime,
+  strategy: IncludeStrategy = 'join',
+) {
+  return new Collection({ runtime, context: getTestContext(strategy) }, 'Post', {
+    namespaceId: 'public',
+  });
 }
 
 // Shallow spread is intentional — withReturningCapability only adds capabilities
 // without changing codec structure, so codecs/operations registries remain valid.
-export function createReturningUsersCollection(runtime: PgIntegrationRuntime) {
-  const contract = withReturningCapability(getTestContract());
-  const context = { ...getTestContext(), contract } as ExecutionContext<TestContract>;
+export function createReturningUsersCollection(
+  runtime: PgIntegrationRuntime,
+  strategy: IncludeStrategy = 'join',
+) {
+  const context = contextFor(withReturningCapability(getTestContract()), strategy);
   return new Collection({ runtime, context }, 'User', { namespaceId: 'public' });
 }
 
-export function createReturningPostsCollection(runtime: PgIntegrationRuntime) {
-  const contract = withReturningCapability(getTestContract());
-  const context = { ...getTestContext(), contract } as ExecutionContext<TestContract>;
+export function createReturningPostsCollection(
+  runtime: PgIntegrationRuntime,
+  strategy: IncludeStrategy = 'join',
+) {
+  const context = contextFor(withReturningCapability(getTestContract()), strategy);
   return new Collection({ runtime, context }, 'Post', { namespaceId: 'public' });
 }
 
-export function createReturningTagsCollection(runtime: PgIntegrationRuntime) {
-  const contract = withReturningCapability(getTestContract());
-  const context = { ...getTestContext(), contract } as ExecutionContext<TestContract>;
+export function createReturningTagsCollection(
+  runtime: PgIntegrationRuntime,
+  strategy: IncludeStrategy = 'join',
+) {
+  const context = contextFor(withReturningCapability(getTestContract()), strategy);
   return new Collection({ runtime, context }, 'Tag', { namespaceId: 'public' });
 }
 
 export async function withPushedContractRuntime(
   contract: Contract<SqlStorage>,
-  fn: (runtime: PgIntegrationRuntime) => Promise<void>,
+  fn: (runtime: PgIntegrationRuntime, connectionString: string) => Promise<void>,
 ): Promise<void> {
   await withDevDatabase(async ({ connectionString }) => {
     const driver = await postgresDriverControl.create(connectionString);
@@ -97,6 +141,8 @@ export async function withPushedContractRuntime(
         schema,
         policy: INIT_ADDITIVE_POLICY,
         fromContract: null,
+        origin: null,
+        statements: [],
         frameworkComponents,
         spaceId: APP_SPACE_ID,
         snapshotsImportPath: '../../snapshots',
@@ -136,7 +182,7 @@ export async function withPushedContractRuntime(
 
     const runtime = await createPgIntegrationRuntime(connectionString, contract);
     try {
-      await fn(runtime);
+      await fn(runtime, connectionString);
     } finally {
       await runtime.close();
     }

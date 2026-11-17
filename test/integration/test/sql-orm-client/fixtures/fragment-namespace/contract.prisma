@@ -1,0 +1,22 @@
+// use prisma-8
+
+// Emitted fixture for the sql-orm-client fragment tests: a contract with a
+// namespace named `fragment`, which takes the name of the client's `fragment` method.
+
+namespace public {
+  model Post {
+    id    Int    @id @default(autoincrement())
+    title String
+
+    @@map("posts")
+  }
+}
+
+namespace fragment {
+  model Audit {
+    id      Int    @id @default(autoincrement())
+    message String
+
+    @@map("audits")
+  }
+}

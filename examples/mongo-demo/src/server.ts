@@ -28,11 +28,11 @@ export async function getPosts(orm: Db['orm']) {
 }
 
 export async function getArticles(orm: Db['orm']) {
-  return orm.posts.variant('Article').all();
+  return orm.posts.variant('article').all();
 }
 
 export async function getTutorials(orm: Db['orm']) {
-  return orm.posts.variant('Tutorial').all();
+  return orm.posts.variant('tutorial').all();
 }
 
 export async function getUsers(orm: Db['orm']) {

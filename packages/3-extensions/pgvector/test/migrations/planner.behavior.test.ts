@@ -1,6 +1,5 @@
-import {
+import postgresAdapterDescriptor, {
   createPostgresBuiltinCodecLookup,
-  PostgresControlAdapter,
 } from '@internal/adapter-postgres/control';
 import {
   asNamespaceId,
@@ -11,10 +10,18 @@ import {
 } from '@internal/contract/types';
 import type { SqlMigrationPlanOperation } from '@internal/family-sql/control';
 import { type CodecControlHooks, INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
+import type { AnyCodecDescriptor, DataType } from '@internal/framework-components/codec';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import { APP_SPACE_ID } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { sqlDataType } from '@internal/sql-contract/data-type';
 import { SqlStorage, type SqlStorageInput, type StorageTable } from '@internal/sql-contract/types';
+import type { SqlColumnIRInput } from '@internal/sql-schema-ir/types';
+import postgresTargetDescriptor from '@internal/target-postgres/control';
+import {
+  createPostgresBuiltinDataTypeLookup,
+  postgresDataTypes,
+} from '@internal/target-postgres/data-types';
 import { createPostgresMigrationPlanner } from '@internal/target-postgres/planner';
 import { buildBuiltinIdentityValue } from '@internal/target-postgres/planner-identity-values';
 import type { PostgresPlanTargetDetails } from '@internal/target-postgres/planner-target-details';
@@ -26,9 +33,52 @@ import {
 } from '@internal/target-postgres/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
+import { introspectedColumn as introspectedColumnOver } from '../../../../2-sql-family/1-core/contract/test/introspected-column';
+import { createTestPostgresControlAdapter } from '../../../../3-targets/postgres/2-adapter/test/helpers/test-control-adapter';
 import pgvectorDescriptor from '../../src/exports/control';
 
-const testAdapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+const introspectedColumn = (
+  column: SqlColumnIRInput,
+  dataTypes: readonly DataType[] = postgresDataTypes,
+) => introspectedColumnOver(column, dataTypes);
+
+const testAdapter = createTestPostgresControlAdapter(
+  createPostgresBuiltinCodecLookup(),
+  createPostgresBuiltinDataTypeLookup(),
+);
+
+const postgresComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', 'postgres'>> = [
+  postgresTargetDescriptor,
+  postgresAdapterDescriptor,
+];
+
+const testTsvectorComponent = {
+  kind: 'extension',
+  id: 'test-tsvector',
+  familyId: 'sql',
+  targetId: 'postgres',
+  version: '0.0.0-test',
+  create: () => ({ familyId: 'sql', targetId: 'postgres' }) as never,
+  dataTypes: [
+    sqlDataType('test/tsvector', {
+      read: (json) => json,
+      texts: [{ text: 'tsvector', written: true, catalog: true }],
+    }),
+  ],
+  types: {
+    codecTypes: {
+      codecDescriptors: [
+        {
+          codecId: 'pg/tsvector@1',
+          dataType: 'test/tsvector',
+          traits: [],
+          isParameterized: false,
+          factory: () => () => ({ id: 'pg/tsvector@1' }),
+        } as unknown as AnyCodecDescriptor,
+      ],
+    },
+  },
+} as TargetBoundComponentDescriptor<'sql', 'postgres'>;
 
 describe('PostgresMigrationPlanner - subset/superset/conflict handling', () => {
   const planner = createPostgresMigrationPlanner(testAdapter);
@@ -36,6 +86,7 @@ describe('PostgresMigrationPlanner - subset/superset/conflict handling', () => {
 
   it('returns empty plan when schema already satisfies contract (superset)', () => {
     const schema = new PostgresDatabaseSchemaNode({
+      extensions: undefined,
       namespaces: {
         public: new PostgresNamespaceSchemaNode({
           schemaName: 'public',
@@ -45,7 +96,7 @@ describe('PostgresMigrationPlanner - subset/superset/conflict handling', () => {
             extra: new PostgresTableSchemaNode({
               name: 'extra',
               columns: {
-                id: { name: 'id', nativeType: 'uuid', nullable: false },
+                id: introspectedColumn({ name: 'id', typeText: 'uuid', nullable: false }),
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -66,7 +117,9 @@ describe('PostgresMigrationPlanner - subset/superset/conflict handling', () => {
       schema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
-      frameworkComponents: [],
+      origin: null,
+      statements: [],
+      frameworkComponents: postgresComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });
@@ -79,6 +132,7 @@ describe('PostgresMigrationPlanner - subset/superset/conflict handling', () => {
 
   it('plans additive operations for subset schema (missing column/index/fk)', async () => {
     const schema = new PostgresDatabaseSchemaNode({
+      extensions: undefined,
       namespaces: {
         public: new PostgresNamespaceSchemaNode({
           schemaName: 'public',
@@ -86,7 +140,7 @@ describe('PostgresMigrationPlanner - subset/superset/conflict handling', () => {
             user: new PostgresTableSchemaNode({
               name: 'user',
               columns: {
-                id: { name: 'id', nativeType: 'uuid', nullable: false },
+                id: introspectedColumn({ name: 'id', typeText: 'uuid', nullable: false }),
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -107,7 +161,9 @@ describe('PostgresMigrationPlanner - subset/superset/conflict handling', () => {
       schema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
-      frameworkComponents: [],
+      origin: null,
+      statements: [],
+      frameworkComponents: postgresComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });
@@ -129,6 +185,7 @@ describe('PostgresMigrationPlanner - subset/superset/conflict handling', () => {
 
   it('fails with conflicts when schema has incompatible column types', () => {
     const schema = new PostgresDatabaseSchemaNode({
+      extensions: undefined,
       namespaces: {
         public: new PostgresNamespaceSchemaNode({
           schemaName: 'public',
@@ -136,8 +193,8 @@ describe('PostgresMigrationPlanner - subset/superset/conflict handling', () => {
             user: new PostgresTableSchemaNode({
               name: 'user',
               columns: {
-                id: { name: 'id', nativeType: 'uuid', nullable: false },
-                email: { name: 'email', nativeType: 'uuid', nullable: false },
+                id: introspectedColumn({ name: 'id', typeText: 'uuid', nullable: false }),
+                email: introspectedColumn({ name: 'email', typeText: 'uuid', nullable: false }),
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -158,7 +215,9 @@ describe('PostgresMigrationPlanner - subset/superset/conflict handling', () => {
       schema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
-      frameworkComponents: [],
+      origin: null,
+      statements: [],
+      frameworkComponents: postgresComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
     });
@@ -184,7 +243,8 @@ describe('NOT NULL column without default uses temporary default', () => {
 
   it('emits 2-step execute (add with temp default, drop default) for NOT NULL text column', async () => {
     const addCol = await planAddColumn('name', {
-      nativeType: 'text',
+      many: false,
+      dataType: 'pg/text',
       codecId: 'pg/text@1',
       nullable: false,
     });
@@ -207,7 +267,8 @@ describe('NOT NULL column without default uses temporary default', () => {
 
   it('emits 2-step execute for NOT NULL int4 column', async () => {
     const addCol = await planAddColumn('age', {
-      nativeType: 'int4',
+      many: false,
+      dataType: 'pg/int4',
       codecId: 'pg/int4@1',
       nullable: false,
     });
@@ -219,23 +280,13 @@ describe('NOT NULL column without default uses temporary default', () => {
   });
 
   it('uses length-aware temporary defaults for fixed-length bit columns', async () => {
-    const addCol = await planAddColumn(
-      'flags',
-      {
-        nativeType: 'bit',
-        codecId: 'pg/bit@1',
-        nullable: false,
-        typeParams: { length: 4 },
-      },
-      {
-        frameworkComponents: [
-          createPlannerControlHookComponent('pg/bit@1', {
-            expandNativeType: ({ nativeType, typeParams }) =>
-              `${nativeType}(${String(typeParams?.['length'])})`,
-          }),
-        ],
-      },
-    );
+    const addCol = await planAddColumn('flags', {
+      many: false,
+      dataType: 'pg/bit',
+      codecId: 'pg/bit@1',
+      nullable: false,
+      typeParams: { length: 4 },
+    });
 
     expect(addCol.execute.map((step) => step.sql)).toEqual([
       `ALTER TABLE ${qualifiedUserTable} ADD COLUMN "flags" bit(4) DEFAULT (B'0000') NOT NULL`,
@@ -245,8 +296,9 @@ describe('NOT NULL column without default uses temporary default', () => {
 
   it('uses empty-array temporary defaults for NOT NULL array columns', async () => {
     const addCol = await planAddColumn('tags', {
-      nativeType: 'text[]',
-      codecId: 'pg/text-array@1',
+      dataType: 'pg/text',
+      codecId: 'pg/text@1',
+      many: { elementNullable: false },
       nullable: false,
     });
 
@@ -256,22 +308,30 @@ describe('NOT NULL column without default uses temporary default', () => {
     ]);
   });
 
-  it('uses built-in temporary defaults for NOT NULL tsvector columns', async () => {
-    const addCol = await planAddColumn('searchDocument', {
-      nativeType: 'tsvector',
-      codecId: 'pg/tsvector@1',
-      nullable: false,
-    });
+  it('uses the empty-table fallback for NOT NULL columns of a data type with no built-in identity value', async () => {
+    const addCol = await planAddColumn(
+      'searchDocument',
+      {
+        many: false,
+        dataType: 'test/tsvector',
+        codecId: 'pg/tsvector@1',
+        nullable: false,
+      },
+      { frameworkComponents: [testTsvectorComponent] },
+    );
 
+    expect(addCol.precheck.map((p) => p.sql)).toContain(
+      `SELECT NOT EXISTS (SELECT 1 AS "one" FROM ${qualifiedUserTable} LIMIT 1) AS "result"`,
+    );
     expect(addCol.execute.map((step) => step.sql)).toEqual([
-      `ALTER TABLE ${qualifiedUserTable} ADD COLUMN "searchDocument" tsvector DEFAULT (''::tsvector) NOT NULL`,
-      `ALTER TABLE ${qualifiedUserTable} ALTER COLUMN "searchDocument" DROP DEFAULT`,
+      `ALTER TABLE ${qualifiedUserTable} ADD COLUMN "searchDocument" tsvector NOT NULL`,
     ]);
   });
 
   it('uses a json-typed identity literal for NOT NULL json columns', async () => {
     const addCol = await planAddColumn('metadata', {
-      nativeType: 'json',
+      many: false,
+      dataType: 'pg/json',
       codecId: 'pg/json@1',
       nullable: false,
     });
@@ -284,7 +344,8 @@ describe('NOT NULL column without default uses temporary default', () => {
 
   it('uses explicit UTC-offset temporary defaults for NOT NULL timetz columns', async () => {
     const addCol = await planAddColumn('opensAt', {
-      nativeType: 'timetz',
+      many: false,
+      dataType: 'pg/timetz',
       codecId: 'pg/timetz@1',
       nullable: false,
     });
@@ -299,7 +360,8 @@ describe('NOT NULL column without default uses temporary default', () => {
     const addCol = await planAddColumn(
       'embedding',
       {
-        nativeType: 'vector',
+        many: false,
+        dataType: 'pgvector/vector',
         codecId: 'pg/vector@1',
         nullable: false,
         typeParams: { length: 3 },
@@ -316,45 +378,10 @@ describe('NOT NULL column without default uses temporary default', () => {
     ]);
   });
 
-  it('uses codec hook temporary defaults for parameterized pgvector storage type refs', async () => {
-    const addCol = await planAddColumn(
-      'embedding',
-      {
-        nativeType: 'vector',
-        codecId: 'pg/vector@1',
-        nullable: false,
-        typeRef: 'Embedding3',
-      },
-      {
-        frameworkComponents: [pgvectorDescriptor],
-        extraStorageTypes: {
-          Embedding3: {
-            kind: 'codec-instance',
-            codecId: 'pg/vector@1',
-            nativeType: 'vector',
-            typeParams: { length: 3 },
-          },
-        },
-      },
-    );
-
-    expect(addCol.precheck.map((p) => p.sql)).not.toContain(
-      `SELECT NOT EXISTS (SELECT 1 AS "one" FROM ${qualifiedUserTable} LIMIT 1) AS "result"`,
-    );
-    expect(addCol.execute.map((step) => step.sql)).toEqual([
-      `ALTER TABLE ${qualifiedUserTable} ADD COLUMN "embedding" vector(3) DEFAULT ('[0,0,0]'::vector) NOT NULL`,
-      `ALTER TABLE ${qualifiedUserTable} ALTER COLUMN "embedding" DROP DEFAULT`,
-    ]);
-  });
-
   it('uses the empty-table fallback when a codec hook declines a temporary default', async () => {
     const addCol = await planAddColumn(
       'name',
-      {
-        nativeType: 'text',
-        codecId: 'pg/text@1',
-        nullable: false,
-      },
+      { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
       {
         frameworkComponents: [
           createPlannerControlHookComponent('pg/text@1', {
@@ -376,8 +403,8 @@ describe('NOT NULL column without default uses temporary default', () => {
     const operationsPromise = planUserTableOperations(
       {
         columns: {
-          id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          slug: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          slug: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
         },
         primaryKey: { columns: ['slug'] },
         uniques: [],
@@ -386,7 +413,7 @@ describe('NOT NULL column without default uses temporary default', () => {
       },
       new PostgresTableSchemaNode({
         name: 'user',
-        columns: { id: { name: 'id', nativeType: 'uuid', nullable: false } },
+        columns: { id: introspectedColumn({ name: 'id', typeText: 'uuid', nullable: false }) },
         uniques: [],
         foreignKeys: [],
         indexes: [],
@@ -409,8 +436,8 @@ describe('NOT NULL column without default uses temporary default', () => {
     const operationsPromise = planUserTableOperations(
       {
         columns: {
-          id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          slug: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          slug: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
         },
         primaryKey: { columns: ['id'] },
         uniques: [{ columns: ['slug'] }],
@@ -435,8 +462,8 @@ describe('NOT NULL column without default uses temporary default', () => {
     const operationsPromise = planUserTableOperations(
       {
         columns: {
-          id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          orgId: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+          id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          orgId: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
         },
         primaryKey: { columns: ['id'] },
         uniques: [],
@@ -461,7 +488,7 @@ describe('NOT NULL column without default uses temporary default', () => {
         extraContractTables: {
           org: {
             columns: {
-              id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+              id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],
@@ -473,7 +500,7 @@ describe('NOT NULL column without default uses temporary default', () => {
           org: new PostgresTableSchemaNode({
             name: 'org',
             columns: {
-              id: { name: 'id', nativeType: 'uuid', nullable: false },
+              id: introspectedColumn({ name: 'id', typeText: 'uuid', nullable: false }),
             },
             primaryKey: { columns: ['id'] },
             uniques: [],
@@ -498,7 +525,8 @@ describe('NOT NULL column without default uses temporary default', () => {
 
   it('skips temporary default for nullable columns', async () => {
     const addCol = await planAddColumn('bio', {
-      nativeType: 'text',
+      many: false,
+      dataType: 'pg/text',
       codecId: 'pg/text@1',
       nullable: true,
     });
@@ -510,7 +538,8 @@ describe('NOT NULL column without default uses temporary default', () => {
 
   it('skips temporary default for NOT NULL columns with explicit default', async () => {
     const addCol = await planAddColumn('active', {
-      nativeType: 'bool',
+      many: false,
+      dataType: 'pg/bool',
       codecId: 'pg/bool@1',
       nullable: false,
       default: { kind: 'literal', value: true },
@@ -524,53 +553,39 @@ describe('NOT NULL column without default uses temporary default', () => {
 
 describe('buildBuiltinIdentityValue (built-in fallback)', () => {
   it.each([
-    ['text', undefined, "''"],
-    ['character', undefined, "''"],
-    ['bpchar', undefined, "''"],
-    ['character varying', undefined, "''"],
-    ['varchar', undefined, "''"],
-    ['int2', undefined, '0'],
-    ['int4', undefined, '0'],
-    ['int8', undefined, '0'],
-    ['integer', undefined, '0'],
-    ['bigint', undefined, '0'],
-    ['smallint', undefined, '0'],
-    ['float4', undefined, '0'],
-    ['float8', undefined, '0'],
-    ['real', undefined, '0'],
-    ['double precision', undefined, '0'],
-    ['numeric', undefined, '0'],
-    ['decimal', undefined, '0'],
-    ['bool', undefined, 'false'],
-    ['boolean', undefined, 'false'],
-    ['uuid', undefined, "'00000000-0000-0000-0000-000000000000'"],
-    ['json', undefined, "'{}'::json"],
-    ['jsonb', undefined, "'{}'::jsonb"],
-    ['date', undefined, "'epoch'"],
-    ['timestamp', undefined, "'epoch'"],
-    ['timestamptz', undefined, "'epoch'"],
-    ['time', undefined, "'00:00:00'"],
-    ['time without time zone', undefined, "'00:00:00'"],
-    ['timetz', undefined, "'00:00:00+00'"],
-    ['time with time zone', undefined, "'00:00:00+00'"],
-    ['interval', undefined, "'0'"],
-    ['bytea', undefined, "''::bytea"],
-    ['tsvector', undefined, "''::tsvector"],
-    ['bit', undefined, "B'0'"],
-    ['bit', { length: 4 }, "B'0000'"],
-    ['bit varying', undefined, "B''"],
-    ['varbit', undefined, "B''"],
-    ['int4[]', undefined, "'{}'"],
-    ['text[]', undefined, "'{}'"],
-  ] as const)('returns %s with %j → %s', (nativeType, typeParams, expected) => {
-    expect(buildBuiltinIdentityValue(nativeType, typeParams)).toBe(expected);
+    ['pg/text', undefined, "''"],
+    ['pg/char', undefined, "''"],
+    ['pg/varchar', undefined, "''"],
+    ['pg/int2', undefined, '0'],
+    ['pg/int4', undefined, '0'],
+    ['pg/int8', undefined, '0'],
+    ['pg/float4', undefined, '0'],
+    ['pg/float8', undefined, '0'],
+    ['pg/numeric', undefined, '0'],
+    ['pg/bool', undefined, 'false'],
+    ['pg/uuid', undefined, "'00000000-0000-0000-0000-000000000000'"],
+    ['pg/json', undefined, "'{}'::json"],
+    ['pg/jsonb', undefined, "'{}'::jsonb"],
+    ['pg/date', undefined, "'epoch'"],
+    ['pg/timestamp', undefined, "'epoch'"],
+    ['pg/timestamptz', undefined, "'epoch'"],
+    ['pg/time', undefined, "'00:00:00'"],
+    ['pg/timetz', undefined, "'00:00:00+00'"],
+    ['pg/interval', undefined, "'0'"],
+    ['pg/bytea', undefined, "''::bytea"],
+    ['pg/bit', undefined, "B'0'"],
+    ['pg/bit', { length: 4 }, "B'0000'"],
+    ['pg/varbit', undefined, "B''"],
+    ['pg/text-array', undefined, "'{}'"],
+  ] as const)('returns %s with %j → %s', (dataType, typeParams, expected) => {
+    expect(buildBuiltinIdentityValue(dataType, typeParams)).toBe(expected);
   });
 
   it('returns null for unknown types (enum, array, extension)', () => {
-    expect(buildBuiltinIdentityValue('my_enum')).toBeNull();
-    expect(buildBuiltinIdentityValue('tsquery')).toBeNull();
-    expect(buildBuiltinIdentityValue('vector')).toBeNull();
-    expect(buildBuiltinIdentityValue('bit', { length: 0 })).toBeNull();
+    expect(buildBuiltinIdentityValue('pg/enum')).toBeNull();
+    expect(buildBuiltinIdentityValue('pg/tsquery')).toBeNull();
+    expect(buildBuiltinIdentityValue('pgvector/vector')).toBeNull();
+    expect(buildBuiltinIdentityValue('pg/bit', { length: 0 })).toBeNull();
   });
 });
 
@@ -583,8 +598,8 @@ function createTestContract(
   const defaultTables = {
     user: {
       columns: {
-        id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-        email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+        id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+        email: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
       },
       primaryKey: { columns: ['id'] },
       uniques: [{ columns: ['email'] }],
@@ -593,9 +608,9 @@ function createTestContract(
     },
     post: {
       columns: {
-        id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-        userId: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-        title: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+        id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+        userId: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+        title: { many: false, dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
       },
       primaryKey: { columns: ['id'] },
       uniques: [],
@@ -652,8 +667,8 @@ function buildUserTableSchema(): PostgresTableSchemaNode {
   return new PostgresTableSchemaNode({
     name: 'user',
     columns: {
-      id: { name: 'id', nativeType: 'uuid', nullable: false },
-      email: { name: 'email', nativeType: 'text', nullable: false },
+      id: introspectedColumn({ name: 'id', typeText: 'uuid', nullable: false }),
+      email: introspectedColumn({ name: 'email', typeText: 'text', nullable: false }),
     },
     primaryKey: { columns: ['id'] },
     uniques: [{ columns: ['email'], name: 'user_email_key' }],
@@ -682,22 +697,21 @@ function buildUserTableSchema(): PostgresTableSchemaNode {
 function planAddColumn(
   columnName: string,
   columnDef: {
-    nativeType: string;
+    readonly many: false | { readonly elementNullable: boolean };
+    dataType: string;
     codecId: string;
     nullable: boolean;
     typeParams?: Record<string, unknown>;
-    typeRef?: string;
     default?: { kind: 'literal'; value: ColumnDefaultLiteralInputValue };
   },
   options?: {
     frameworkComponents?: ReadonlyArray<TargetBoundComponentDescriptor<'sql', 'postgres'>>;
-    extraStorageTypes?: Contract<SqlStorage>['storage']['types'];
   },
 ) {
   const operationsPromise = planUserTableOperations(
     {
       columns: {
-        id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+        id: { many: false, dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
         [columnName]: columnDef,
       },
       primaryKey: { columns: ['id'] },
@@ -742,7 +756,6 @@ async function planUserTableOperations(
   schemaUserTable: PostgresTableSchemaNode,
   options?: {
     frameworkComponents?: ReadonlyArray<TargetBoundComponentDescriptor<'sql', 'postgres'>>;
-    extraStorageTypes?: Contract<SqlStorage>['storage']['types'];
     extraContractTables?: Record<string, StorageTable>;
     extraSchemaTables?: Record<string, PostgresTableSchemaNode>;
   },
@@ -761,10 +774,10 @@ async function planUserTableOperations(
           },
         }),
       },
-      ...(options?.extraStorageTypes ? { types: options.extraStorageTypes } : {}),
     },
   });
   const schema = new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces: {
       public: new PostgresNamespaceSchemaNode({
         schemaName: 'public',
@@ -783,7 +796,9 @@ async function planUserTableOperations(
     schema,
     policy: INIT_ADDITIVE_POLICY,
     fromContract: null,
-    frameworkComponents: options?.frameworkComponents ?? [],
+    origin: null,
+    statements: [],
+    frameworkComponents: [...postgresComponents, ...(options?.frameworkComponents ?? [])],
     spaceId: APP_SPACE_ID,
     snapshotsImportPath: '../../snapshots',
   });
@@ -808,7 +823,7 @@ async function getRequiredOperation(
 function buildUserTableSchemaWithoutEmail(): PostgresTableSchemaNode {
   return new PostgresTableSchemaNode({
     name: 'user',
-    columns: { id: { name: 'id', nativeType: 'uuid', nullable: false } },
+    columns: { id: introspectedColumn({ name: 'id', typeText: 'uuid', nullable: false }) },
     primaryKey: { columns: ['id'] },
     uniques: [],
     foreignKeys: [],
@@ -821,9 +836,9 @@ function buildPostTableSchema(): PostgresTableSchemaNode {
   return new PostgresTableSchemaNode({
     name: 'post',
     columns: {
-      id: { name: 'id', nativeType: 'uuid', nullable: false },
-      userId: { name: 'userId', nativeType: 'uuid', nullable: false },
-      title: { name: 'title', nativeType: 'text', nullable: false },
+      id: introspectedColumn({ name: 'id', typeText: 'uuid', nullable: false }),
+      userId: introspectedColumn({ name: 'userId', typeText: 'uuid', nullable: false }),
+      title: introspectedColumn({ name: 'title', typeText: 'text', nullable: false }),
     },
     primaryKey: { columns: ['id'] },
     uniques: [],

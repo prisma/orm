@@ -1,0 +1,315 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "Post": {
+            "storage": {
+              "table": "Post",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "title": {
+                  "column": "title"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "title": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {}
+          },
+          "Host": {
+            "storage": {
+              "table": "Host",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {}
+          },
+          "Network": {
+            "storage": {
+              "table": "Network",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "Post": {
+      "namespace": "public",
+      "model": "Post"
+    },
+    "Host": {
+      "namespace": "public",
+      "model": "Host"
+    },
+    "Network": {
+      "namespace": "public",
+      "model": "Network"
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "f55c44e8854bc7fd6ea5134bc62b4d086a217d942a79f283ae7754caf6daf69a",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "Post": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "title": {
+                  "dataType": "pg/text",
+                  "codecId": "pg/text@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "search": {
+                  "dataType": "sql/raw",
+                  "codecId": "sql/raw@1",
+                  "nullable": true,
+                  "many": false,
+                  "typeParams": {
+                    "sql": "tsvector"
+                  }
+                },
+                "area": {
+                  "dataType": "sql/raw",
+                  "codecId": "sql/raw@1",
+                  "nullable": false,
+                  "many": false,
+                  "typeParams": {
+                    "sql": "circle"
+                  },
+                  "default": {
+                    "kind": "function",
+                    "expression": "'<(0,0),1>'::circle"
+                  }
+                },
+                "net": {
+                  "dataType": "sql/raw",
+                  "codecId": "sql/raw@1",
+                  "nullable": false,
+                  "many": false,
+                  "typeParams": {
+                    "sql": "cidr"
+                  }
+                },
+                "tags": {
+                  "dataType": "sql/raw",
+                  "codecId": "sql/raw@1",
+                  "nullable": true,
+                  "many": {
+                    "elementNullable": true
+                  },
+                  "typeParams": {
+                    "sql": "text"
+                  }
+                },
+                "labels": {
+                  "dataType": "sql/raw",
+                  "codecId": "sql/raw@1",
+                  "nullable": true,
+                  "many": false,
+                  "typeParams": {
+                    "sql": "text[]"
+                  }
+                },
+                "loc": {
+                  "dataType": "sql/raw",
+                  "codecId": "sql/raw@1",
+                  "nullable": false,
+                  "many": false,
+                  "typeParams": {
+                    "sql": "point"
+                  }
+                }
+              },
+              "uniques": [],
+              "indexes": [
+                {
+                  "name": "Post_net_key",
+                  "unique": true,
+                  "columns": ["net"]
+                },
+                {
+                  "name": "Post_search_idx",
+                  "unique": false,
+                  "columns": ["search"],
+                  "type": "gin",
+                  "options": {}
+                }
+              ],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "Host": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "address": {
+                  "dataType": "sql/raw",
+                  "codecId": "sql/raw@1",
+                  "nullable": false,
+                  "many": false,
+                  "typeParams": {
+                    "sql": "inet"
+                  }
+                },
+                "gateway": {
+                  "dataType": "sql/raw",
+                  "codecId": "sql/raw@1",
+                  "nullable": true,
+                  "many": false,
+                  "typeParams": {
+                    "sql": "inet"
+                  }
+                },
+                "net": {
+                  "dataType": "sql/raw",
+                  "codecId": "sql/raw@1",
+                  "nullable": false,
+                  "many": false,
+                  "typeParams": {
+                    "sql": "cidr"
+                  }
+                }
+              },
+              "uniques": [],
+              "indexes": [
+                {
+                  "name": "Host_address_gateway_key",
+                  "unique": true,
+                  "columns": ["address", "gateway"]
+                },
+                {
+                  "name": "Host_gateway_idx",
+                  "unique": false,
+                  "columns": ["gateway"]
+                }
+              ],
+              "foreignKeys": [
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "Host",
+                    "columns": ["net"]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "Network",
+                    "columns": ["prefix"]
+                  },
+                  "onDelete": "restrict",
+                  "onUpdate": "cascade"
+                }
+              ],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "Network": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "prefix": {
+                  "dataType": "sql/raw",
+                  "codecId": "sql/raw@1",
+                  "nullable": false,
+                  "many": false,
+                  "typeParams": {
+                    "sql": "cidr"
+                  }
+                }
+              },
+              "uniques": [],
+              "indexes": [
+                {
+                  "name": "Network_prefix_key",
+                  "unique": true,
+                  "columns": ["prefix"]
+                }
+              ],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

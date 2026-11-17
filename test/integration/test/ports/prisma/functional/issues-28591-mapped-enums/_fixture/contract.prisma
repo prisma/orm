@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma@a6d0155
 // packages/client/tests/functional/issues/28591-mapped-enums (postgres only).
 //
@@ -38,7 +40,7 @@ native_enum SuggestionStatus {
 model SuggestionModel {
   id               Int              @id @default(autoincrement())
   suggestedContent String           @map("suggested_content")
-  status           pg.enum(SuggestionStatus) @default(dbgenerated("'pending'::\"SuggestionStatus\""))
+  status           pg.enum(SuggestionStatus) @default("pending")
 
   @@index([status])
   @@map("snippet_suggestions")

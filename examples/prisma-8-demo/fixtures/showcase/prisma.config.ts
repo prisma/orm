@@ -1,4 +1,4 @@
-import { defineConfig } from '@prisma/cli-engine';
+import { definePrismaConfig } from '@prisma/cli-engine';
 import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
 
 // Showcase fixture config — a deliberately comprehensive migration graph that
@@ -11,7 +11,7 @@ import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
 //
 // Explore it from the CLI:
 //   pnpm exec prisma migration graph --config ./fixtures/showcase/prisma.config.ts
-export default defineConfig({
+export default definePrismaConfig({
   orm: ormConfig({
     contract: './contract.prisma',
     db: {

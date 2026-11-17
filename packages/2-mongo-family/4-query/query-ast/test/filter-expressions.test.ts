@@ -304,14 +304,14 @@ describe('isMongoFilterExpr', () => {
 
   it('brand property is non-enumerable', () => {
     const field = MongoFieldFilter.eq('x', 1);
-    const brandKey = '__prismaNextMongoFilter__';
+    const brandKey = '__prismaMongoFilter__';
     expect(Object.keys(field)).not.toContain(brandKey);
     expect(JSON.parse(JSON.stringify(field))).not.toHaveProperty(brandKey);
   });
 
   it('survives dual-package scenario (string-based lookup)', () => {
     const field = MongoFieldFilter.eq('x', 1);
-    const brandKey = '__prismaNextMongoFilter__';
+    const brandKey = '__prismaMongoFilter__';
     expect(brandKey in field).toBe(true);
   });
 });

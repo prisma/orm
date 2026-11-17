@@ -1,0 +1,4 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["test/no-temporal-global/**/*.ts"]
+}

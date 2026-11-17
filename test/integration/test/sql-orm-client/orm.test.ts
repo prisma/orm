@@ -1,6 +1,6 @@
 import { Collection, orm } from '@internal/sql-orm-client';
 import { describe, expect, it } from 'vitest';
-import { getTestContext, type TestContract } from './helpers';
+import { getTestContext, includeStrategies, type TestContract } from './helpers';
 import { timeouts, withCollectionRuntime } from './integration-helpers';
 import { seedComments, seedPosts, seedUsers } from './runtime-helpers';
 
@@ -24,14 +24,14 @@ function expectCommentCollection(value: unknown): asserts value is CommentCollec
   expect(value).toBeInstanceOf(CommentCollection);
 }
 
-describe('integration/orm', () => {
+describe.each(includeStrategies)('integration/orm (%s)', (strategy) => {
   it(
     'uses registered collection methods inside include() refinements',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         const db = orm({
           runtime,
-          context: getTestContext(),
+          context: getTestContext(strategy),
           collections: { Post: PostCollection },
         });
 
@@ -81,7 +81,7 @@ describe('integration/orm', () => {
       await withCollectionRuntime(async (runtime) => {
         const db = orm({
           runtime,
-          context: getTestContext(),
+          context: getTestContext(strategy),
           collections: { Post: PostCollection, Comment: CommentCollection },
         });
 

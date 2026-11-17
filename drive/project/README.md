@@ -18,7 +18,7 @@ Project-scope calibration lives in [`drive/calibration/`](../calibration/):
 - **Working-branch naming.** Project working branch is named with the Linear Project ID: `<tml-id>-<descriptive-slug>` (lowercased; hyphens). Example: `tml-2549-agile-agent-orchestration`.
 - **Initial status update.** Links the project's spec.
 - **State conventions.** Don't manually transition issues to a completed state; the GitHub integration handles it on PR merge (auto-transitions to the team's terminal state). Manual transitions before merge are fine (e.g. moving to `In review` when the PR opens).
-- **Single-issue multi-slice auto-close.** When a whole project is tracked as one Linear issue, the GitHub integration auto-closes it on **every** slice-PR merge (each PR's title prefix matches the issue). The orchestrator must reopen after each merge — or prefer per-slice sub-issues under a parent issue, so auto-close fires per-slice. (Learned on lsp-interpreter-diagnostics: one issue, five reopens.)
+- **Single-issue multi-slice auto-close.** When a whole project is tracked as one Linear issue, the GitHub integration auto-closes it on **every** slice-PR merge (each PR's title prefix matches the issue). The orchestrator must reopen after each merge — or prefer per-slice sub-issues under a parent issue, so auto-close fires per-slice. (Learned on lsp-interpreter-diagnostics: one issue, five reopens.) Per-slice tickets are not enough on their own: Linear also links a PR by the ticket id in its branch name, and closes that ticket when the PR merges. Name each slice branch after the slice's own ticket (`tml-3787-mysql`), not the parent's (`tml-3714-mysql`). (Learned on convenience types on other targets, 2026-11: every slice had its own ticket, but every branch started `tml-3714-`, so the parent closed when the first slice merged.)
 - **Promotion / demotion.** Handled by `drive-triage-work`; see [`drive/triage/README.md`](../triage/README.md) for the ceremony.
 
 ## PR boundaries under mid-flight scope shifts
@@ -30,10 +30,15 @@ A stacked PR is justified only when its base PR is independently valuable to mer
 - Linear Project status: update at slice-merge (`drive-deliver-workflow` does this implicitly via `drive-check-health`).
 - Wider-team comms: optional, operator-set. Use `drive-post-update` for the cadence the project needs.
 - Cross-team dependencies: surface in the project plan's `Dependencies` section; ping owners explicitly when a dependency is blocking.
+- Release dependencies: when users get a feature only through a package release, the plan's `Dependencies` section names that release (package, version, and whether it is published yet), so the plan says when users can use the feature, not only when it merges. (Added 2026-09-24, orm-init-prisma7-detection final retro: the Prisma 7 path of `orm init` merged while the published `@prisma/orm-postgres` still predated the Prisma 7 contract source it needs.)
 
 ## ADR cadence
 
 Projects that introduce durable architectural decisions (subsystems, patterns, conventions) write ADRs as part of close-out — `drive-close-project` migrates them into `docs/architecture docs/adrs/`. The mandatory-final retro is a natural surface for "did this project produce an ADR-worthy decision?"
+
+## Close-out runs the close-out procedure
+
+A project's `plan.md` close-out checklist is a reminder, not the procedure. Close-out runs the close-out procedure of the `drive-process` skill (`references/close-project.md`, installed from [prisma/ignite](https://github.com/prisma/ignite/tree/main/skills/.pilot)) step by step: the final retro first, then the project DoD criterion by criterion with evidence, confirmation that every review thread on every slice PR is resolved by a fix or by a reply that says why not, the reference scan, file classification and prose audit, migration, and a close-out PR whose description carries the DoD block, the classification and the reference-strip summary. (Added 2026-10-27, mongo-authoring-structure: the first close-out PR filed tickets, linked them from an ADR and deleted the folder, and skipped the retro, the DoD block, the classification and two references; the operator sent it back.)
 
 ## Close-out destinations
 
@@ -51,5 +56,7 @@ Projects that introduce durable architectural decisions (subsystems, patterns, c
 Index doc: `docs/<project>/README.md` (created at migration time).
 
 Transient artefacts (deleted at close, never migrated): `spec.md`, `plan.md`, `problem-statement.md`, `*-restructure.md`, `migration-plan.md`, `design-decisions.md` (decisions that needed preservation should already be ADRs by close-out), `retros.md`, `trial.md`, project-level `README.md`, `specs/`, `plans/`, `assets/` (unless explicitly tagged "keep").
+
+A project `spec.md` that carries a decisions section or a decision log is treated like `design-decisions.md`, not as a plain transient file. Before deleting it, map every decision to its durable home (an ADR, a reference doc, a package README, a Linear issue, or code that enforces it) and put the mapping in the close-out PR. A decision that is architecturally durable (cross-cutting, hard to reverse, or shaping future work) needs an ADR, exactly as the ADR audit in [`dod.md`](../calibration/dod.md#adr-audit-final-retro-item) requires for `design-decisions.md`; a README, reference doc, Linear issue or enforcing code is enough only for decisions that are not. A decision with no home is written into the matching ADR or README in the same PR. (Learned on remove-dbgenerated, 2026-09-24: the spec was deleted first, and two decisions, list-column defaults and what `contract infer` prints, existed nowhere else until the close-out PR added them to ADR 129.)
 
 Ambiguous-by-default: anything not matching the rules above. `drive-close-project` surfaces these to the operator at classification time — never silently classified.

@@ -19,7 +19,7 @@ The migration file imports the contract *locally*, not from the project root:
 import type { Contract } from './contract'
 import contractJson from './contract.json' with { type: 'json' }
 
-const raw = mongoRaw({ contract: contractJson as Contract })
+const { raw } = mongoStatic({ contract: contractJson as Contract })
 ```
 
 `contract.json` and `contract.d.ts` are copies — snapshots of the project's emitted contract when the migration was scaffolded. The migration never reaches outside its own directory for type information.
@@ -88,8 +88,8 @@ import type { Contract as Intermediate } from './intermediate'
 import contractJson from './contract.json' with { type: 'json' }
 import intermediateJson from './intermediate.json' with { type: 'json' }
 
-const dest = mongoRaw({ contract: contractJson as Contract })
-const mid = mongoRaw({ contract: intermediateJson as Intermediate })
+const dest = mongoStatic({ contract: contractJson as Contract }).raw
+const mid = mongoStatic({ contract: intermediateJson as Intermediate }).raw
 ```
 
 Multiple intermediate contracts are supported — the user names them and emits them independently. Each is a self-contained contract snapshot that lives in the migration directory.

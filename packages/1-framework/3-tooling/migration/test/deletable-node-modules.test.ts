@@ -118,6 +118,7 @@ describe('per-space verifier + runner against a project with deleted node_module
 
     const dirs = await listContractSpaceDirectories(fixture.projectMigrationsDir);
     const result = verifyContractSpaces({
+      markerLocation: 'prisma_contract.marker',
       loadedSpaces: new Set(['app', TEST_SPACE_ID]),
       spaceDirsOnDisk: dirs,
       headRefsBySpace: new Map([[TEST_SPACE_ID, headJson]]),
@@ -138,6 +139,7 @@ describe('per-space verifier + runner against a project with deleted node_module
     };
 
     const result = verifyContractSpaces({
+      markerLocation: 'prisma_contract.marker',
       loadedSpaces: new Set(['app', TEST_SPACE_ID]),
       spaceDirsOnDisk: dirs,
       headRefsBySpace: new Map([

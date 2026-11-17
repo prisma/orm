@@ -5,9 +5,10 @@ import {
   type Expression,
   toExpr,
 } from '@internal/sql-relational-core/expression';
-import type { CodecTypes } from '../types/codec-types';
-import type { QueryOperationTypes } from '../types/operation-types';
+import type { CodecTypes, ParameterizedOutputTypesForTypeParams } from '../types/codec-types';
+import type { QueryOperationTypes, QueryOperationTypesForCodecs } from '../types/operation-types';
 import { pgvectorAuthoringTypes } from './authoring';
+import { pgvectorDataTypes } from './data-types';
 import { pgvectorCodecRegistry } from './registry';
 
 const pgvectorTypeId = 'pg/vector@1' as const;
@@ -29,7 +30,6 @@ export function pgvectorQueryOperations<CT extends CodecTypesBase>(): QueryOpera
           returns: { codecId: 'pg/float8@1', nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: '{{self}} <=> {{arg0}}',
           },
         });
@@ -48,7 +48,6 @@ export function pgvectorQueryOperations<CT extends CodecTypesBase>(): QueryOpera
           returns: { codecId: 'pg/float8@1', nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: '1 - ({{self}} <=> {{arg0}})',
           },
         });
@@ -71,6 +70,7 @@ const pgvectorPackMetaBase = {
   authoring: {
     type: pgvectorAuthoringTypes,
   },
+  dataTypes: pgvectorDataTypes,
   types: {
     codecTypes: {
       codecDescriptors: Array.from(pgvectorCodecRegistry.values()),
@@ -79,13 +79,11 @@ const pgvectorPackMetaBase = {
         named: 'CodecTypes',
         alias: 'PgVectorTypes',
       },
-      typeImports: [
-        {
-          package: '@internal/extension-pgvector/codec-types',
-          named: 'Vector',
-          alias: 'Vector',
-        },
-      ],
+      parameterizedOutputTypes: {
+        package: '@internal/extension-pgvector/codec-types',
+        named: 'ParameterizedOutputTypesForTypeParams',
+        alias: 'PgVectorParameterizedOutputTypes',
+      },
     },
     operationTypes: {
       import: {
@@ -101,12 +99,11 @@ const pgvectorPackMetaBase = {
         alias: 'PgVectorQueryOperationTypes',
       },
     },
-    storage: [
-      { typeId: pgvectorTypeId, familyId: 'sql', targetId: 'postgres', nativeType: 'vector' },
-    ],
   },
 } as const;
 
 export const pgvectorPackMeta: typeof pgvectorPackMetaBase & {
   readonly __codecTypes?: CodecTypes;
+  readonly __queryOperationTypes?: QueryOperationTypesForCodecs;
+  readonly __parameterizedOutputTypes?: ParameterizedOutputTypesForTypeParams;
 } = pgvectorPackMetaBase;
