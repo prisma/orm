@@ -110,6 +110,8 @@ A config built through a target package always names them. A config assembled di
 
 If a command needs a module the config does not name, it stops with an error that names the missing member. The emitter never falls back to a default or works a name out.
 
+A module is named the way a package is imported, such as `@prisma/orm-postgres/generated-types`, or by a name private to the package that holds the generated files, such as `#generated-types`. It is never a relative path. Generated files are written into more than one folder, a contract's types beside the contract and a copy beside each migration, and a relative path is right for at most one of them. A relative path is refused with an error.
+
 Any module name recorded inside an emitted contract is the name the matching import line uses. An emitted artifact never holds a name the application cannot resolve.
 
 ## Why
@@ -137,7 +139,7 @@ The table that maps workspace packages to published packages is configuration fo
 - A target package has two obligations: a module that re-exports the contract types, and a module for migration files.
 - A generated file can be checked mechanically: every import is one of the config's two modules, an extension's module, or a relative path.
 - A published package can be checked mechanically: every module one of its components declares, and every module its config names, is one of that package's own exports, and no declaration holds a private workspace name.
-- An application that assembles its own stack from the framework, family and target packages writes a small module that re-exports their types and names it in its config.
+- An application that assembles its own stack from the framework, family and target packages writes a small module that re-exports their types, gives it a name private to its own package, and names that in its config.
 
 ## Alternatives considered
 
