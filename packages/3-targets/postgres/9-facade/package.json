@@ -36,10 +36,8 @@
     "@internal/target-postgres": "workspace:8.0.0-rc.24",
     "@internal/utils": "workspace:8.0.0-rc.24",
     "@types/node": "catalog:",
-    "@types/pg": "catalog:",
     "arktype": "catalog:",
     "pathe": "^2.0.3",
-    "pg": "catalog:",
     "temporal-spec": "1.0.1",
     "tinyglobby": "catalog:"
   },
@@ -58,6 +56,8 @@
     "vitest": "catalog:"
   },
   "peerDependencies": {
+    "@types/pg": "^8.20.0",
+    "pg": "^8.20.0",
     "temporal-polyfill": "^1.0.4",
     "typescript": ">=5.9"
   },

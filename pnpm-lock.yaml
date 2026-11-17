@@ -4797,13 +4797,13 @@ importers:
         specifier: 'catalog:'
         version: 26.1.2
       '@types/pg':
-        specifier: 'catalog:'
+        specifier: ^8.20.0
         version: 8.20.4
       arktype:
         specifier: ^2.2.2
         version: 2.2.7
       pg:
-        specifier: 'catalog:'
+        specifier: ^8.20.0
         version: 8.22.0
       pg-connection-string:
         specifier: ^2.14.0
@@ -4955,7 +4955,7 @@ importers:
         specifier: 'catalog:'
         version: 26.1.2
       '@types/pg':
-        specifier: 'catalog:'
+        specifier: ^8.20.0
         version: 8.20.4
       arktype:
         specifier: 'catalog:'
@@ -4964,7 +4964,7 @@ importers:
         specifier: ^2.0.3
         version: 2.0.3
       pg:
-        specifier: 'catalog:'
+        specifier: ^8.20.0
         version: 8.22.0
       temporal-spec:
         specifier: 1.0.1
@@ -5960,7 +5960,7 @@ importers:
         specifier: 'catalog:'
         version: 26.1.2
       '@types/pg':
-        specifier: 'catalog:'
+        specifier: ^8.20.0
         version: 8.20.4
       arktype:
         specifier: 'catalog:'
@@ -5969,7 +5969,7 @@ importers:
         specifier: ^2.0.3
         version: 2.0.3
       pg:
-        specifier: 'catalog:'
+        specifier: ^8.20.0
         version: 8.22.0
       temporal-polyfill:
         specifier: ^1.0.4
@@ -6239,7 +6239,7 @@ importers:
         specifier: 'catalog:'
         version: 26.1.2
       '@types/pg':
-        specifier: 'catalog:'
+        specifier: ^8.20.0
         version: 8.20.4
       arktype:
         specifier: ^2.2.2
@@ -6248,7 +6248,7 @@ importers:
         specifier: ^2.0.3
         version: 2.0.3
       pg:
-        specifier: 'catalog:'
+        specifier: ^8.20.0
         version: 8.22.0
       pg-connection-string:
         specifier: ^2.14.0

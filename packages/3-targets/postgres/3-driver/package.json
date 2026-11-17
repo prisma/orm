@@ -25,9 +25,7 @@
     "@internal/target-postgres": "workspace:8.0.0-rc.24",
     "@internal/utils": "workspace:8.0.0-rc.24",
     "@types/node": "catalog:",
-    "@types/pg": "catalog:",
     "arktype": "^2.2.2",
-    "pg": "catalog:",
     "pg-connection-string": "^2.14.0",
     "pg-cursor": "^2.21.0"
   },
@@ -45,6 +43,8 @@
     "vitest": "catalog:"
   },
   "peerDependencies": {
+    "@types/pg": "^8.20.0",
+    "pg": "^8.20.0",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {
