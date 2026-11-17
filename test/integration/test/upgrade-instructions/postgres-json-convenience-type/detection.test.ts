@@ -69,3 +69,36 @@ describe('the PostgreSQL json type lookup detection in the extension guide', () 
     }).toEqual({ explicit: true, scalar: true, jsonb: false, plainJson: false, sqlite: false });
   });
 });
+
+describe.each(GUIDES)('the renamed sql.String detections in %s', (guidePath) => {
+  const matches = (id: string, content: string) =>
+    detectionPatterns(guidePath, id).some((pattern) => pattern.test(content));
+  const psl = (content: string) => matches('psl-renamed-sql-string', content);
+  const ts = (content: string) => matches('ts-renamed-sql-string', content);
+
+  it('matches sql.String calls in a schema only', () => {
+    expect({
+      field: psl('model A {\n  name sql.String(50)\n}'),
+      alias: psl('types {\n  Name = sql.String(10)\n}'),
+      varchar: psl('model A {\n  name sql.Varchar(50)\n}'),
+      convenience: psl('model A {\n  name String\n}'),
+      char: psl('model A {\n  code sql.Char(3)\n}'),
+    }).toEqual({ field: true, alias: true, varchar: false, convenience: false, char: false });
+  });
+
+  it('matches sql.String calls in TypeScript only', () => {
+    expect({
+      builder: ts('field.column(type.sql.String(64))'),
+      destructured: ts('const { sql } = type;\nfield.column(sql.String(64));'),
+      varchar: ts('field.column(type.sql.Varchar(64))'),
+      convenience: ts('field.column(type.String())'),
+      mysql: ts('mysql.String(64)'),
+    }).toEqual({
+      builder: true,
+      destructured: true,
+      varchar: false,
+      convenience: false,
+      mysql: false,
+    });
+  });
+});

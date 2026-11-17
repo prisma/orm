@@ -124,12 +124,12 @@ Positional arguments fill the arguments in the order the table shows, options fi
 
 The arguments are written as bare names, by name or in this order: `DateTime(as: string, precision: 6)`, `DateTime(temporal, timestamp)`. A combination the table does not list, such as `Time(as: temporal, storage: timetz)` or `Date(as: jsDate)`, is refused at the argument that makes it invalid, naming the values it accepts; so is a `precision` the chosen type does not take. No default needs a global `Temporal`. In a TypeScript contract the helpers take the same arguments as one object, `type.DateTime({ as: 'string', precision: 6 })`, and are typed as the explicit type they choose; a combination the table does not list, or an argument the chosen type does not take, does not compile. An options object kept in a variable needs `as const`, so each option keeps its literal value: `const options = { as: 'string' } as const; type.DateTime(options)`.
 
-The names `SmallInt`, `BigIntNumber`, `Numeric`, `UnboundedInt`, `Real`, `VarChar` and `VarBit` are deprecated aliases of `Int2`, `Int8Number`, `NumericString`, `NumericBigInt`, `Float4`, `Varchar` and `Varbit`; they give the same codec, report `PSL_DEPRECATED_SCALAR_NAME` as a warning, and will be removed. The date and time types' old names `Timestamptz`, `Timestamp` and `Interval` were removed with no deprecated alias.
+The names `SmallInt`, `BigIntNumber`, `Numeric`, `UnboundedInt`, `Real`, `VarChar` and `VarBit` are deprecated aliases of `Int2`, `Int8Number`, `NumericString`, `NumericBigInt`, `Float4`, `Varchar` and `Varbit`; they give the same codec, report `PSL_DEPRECATED_SCALAR_NAME` as a warning, and will be removed. The date and time types' old names `Timestamptz`, `Timestamp` and `Interval` were removed with no deprecated alias. `sql.String(n)` is a deprecated alias of `sql.Varchar(n)`; it reports `PSL_DEPRECATED_SCALAR_NAME` as a warning and will be removed.
 
 | PSL name | TS helper | Codec id | Storage type | Application type |
 | --- | --- | --- | --- | --- |
 | `Text` | `field.column(type.Text())` | `pg/text@1` | `text` | `string` |
-| `Varchar(n?)`, `sql.String(n)` | `field.column(type.Varchar(n))` | `sql/varchar@1` | `character varying` | `string` |
+| `Varchar(n?)`, `sql.Varchar(n)` | `field.column(type.Varchar(n))` | `sql/varchar@1` | `character varying` | `string` |
 | `Char(n?)`, `sql.Char(n)` | `field.column(type.Char(n))` | `sql/char@1` | `character` | `string` |
 | `Bool` | `field.column(type.Bool())` | `pg/bool@1` | `bool` | `boolean` |
 | `Int2` | `field.column(type.Int2())` | `pg/int2@1` | `int2` | `number` |
@@ -191,7 +191,7 @@ PostgreSQL prints a `money` value in the connection's `lc_monetary` locale, with
 
 ## SQLite
 
-These are the current names; SQLite gets convenience types over its own explicit types later, and this table will change then. Write a TypeScript field as `field.column(type.X())` with the type of the PSL name, such as `field.column(type.DateTime())`, or `field.column(...)` with a column type from `adapter/column-types`. `sql.String(n)` and `sql.Char(n)` exist on every SQL target; SQLite accepts their length and does not enforce it.
+These are the current names; SQLite gets convenience types over its own explicit types later, and this table will change then. Write a TypeScript field as `field.column(type.X())` with the type of the PSL name, such as `field.column(type.DateTime())`, or `field.column(...)` with a column type from `adapter/column-types`. `sql.Varchar(n)` and `sql.Char(n)` exist on every SQL target; SQLite accepts their length and does not enforce it. `sql.String(n)` is a deprecated alias of `sql.Varchar(n)`; it reports `PSL_DEPRECATED_SCALAR_NAME` as a warning and will be removed.
 
 SQLite has the convenience date and time types too ([ADR 315](../architecture%20docs/adrs/ADR%20315%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md)). SQLite has no date or time column types, so every one is stored as `text`, `storage` takes only `text`, and none takes a precision. The defaults need no `Temporal`. A bare `DateTime` is `DatetimeJsDate`, the type `DateTime` named before, so its contract is unchanged.
 
@@ -226,14 +226,14 @@ A write stores the stored text: a value in another ISO 8601 form is converted, a
 | `DurationString` | — | `sqlite/duration-string@1` | `text` | `string`, an ISO 8601 duration |
 | `Json` | — | `sqlite/json@1` | `text` | `JsonValue` |
 | `Bytes` | — | `sqlite/blob@1` | `blob` | `Uint8Array` |
-| `sql.String(n)` | `field.column(type.sql.String(n))` | `sql/varchar@1` | `character varying` | `string` |
+| `sql.Varchar(n)` | `field.column(type.sql.Varchar(n))` | `sql/varchar@1` | `character varying` | `string` |
 | `sql.Char(n)` | `field.column(type.sql.Char(n))` | `sql/char@1` | `character` | `string` |
 
 A `DateTime` default is written with the `datetime` tag, as in ``@default(datetime`2024-01-01T00:00:00Z`)``, a `Date`, `Time` or `Duration` default with the `date`, `time` or `duration` tag, and a `Json` default with the `json` tag. A `DateTime` column has the data type `sqlite/datetime`, a `Date` column `sqlite/date`, a `Time` column `sqlite/time`, a `Duration` column `sqlite/duration` and a `Json` column `sqlite/json`, all stored as `text`. A `DateTime` default is stored as the instant in UTC with three fraction digits, the text every row holds, however it was written; [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md#date-and-time-types) states the form and the text it takes.
 
 ## MySQL
 
-Write a TypeScript field as `field.column(type.X())` with the type of the PSL name, such as `field.column(type.DateTime())`. `sql.String(n)` and `sql.Char(n)` exist on every SQL target.
+Write a TypeScript field as `field.column(type.X())` with the type of the PSL name, such as `field.column(type.DateTime())`. `sql.Varchar(n)` and `sql.Char(n)` exist on every SQL target. `sql.String(n)` is a deprecated alias of `sql.Varchar(n)`; it reports `PSL_DEPRECATED_SCALAR_NAME` as a warning and will be removed.
 
 MySQL has the convenience date and time types ([ADR 315](../architecture%20docs/adrs/ADR%20315%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md)). The defaults need no `Temporal`. A bare `DateTime` is `DatetimeJsDate(3)`, a `datetime(3)` column, the type `DateTime` named before, so its contract is unchanged.
 
@@ -262,7 +262,7 @@ The precision in brackets is the default when none is written. Every instant is 
 | `TimeString(p?)` | — | `mysql/time-string@1` | `time(p)` | `string` (ISO 8601) |
 | `TimeTemporal(p?)` | — | `mysql/time-temporal@1` | `time(p)` | `Temporal.PlainTime` |
 | `DurationString` | — | `mysql/duration-string@1` | `varchar(191)` | `string`, an ISO 8601 duration |
-| `sql.String(n)` | `field.column(type.sql.String(n))` | `sql/varchar@1` | `varchar(n)` | `string` |
+| `sql.Varchar(n)` | `field.column(type.sql.Varchar(n))` | `sql/varchar@1` | `varchar(n)` | `string` |
 | `sql.Char(n)` | `field.column(type.sql.Char(n))` | `sql/char@1` | `char(n)` | `string` |
 
 A default is written with the tag of its column type: `datetime`, `timestamp`, `date`, `time` or `duration`, as in ``@default(datetime`2024-01-01T00:00:00`)``. [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md#date-and-time-types) states the stored form of each.

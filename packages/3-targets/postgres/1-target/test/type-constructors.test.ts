@@ -51,8 +51,8 @@ describe('the type constructors the target contributes', () => {
     ]);
   });
 
-  it('contributes the family’s sql.String, whose length is a value of pg/int4', () => {
-    expect(postgresAuthoringTypes.sql.String.args).toEqual([
+  it('contributes the family’s sql.Varchar, whose length is a value of pg/int4', () => {
+    expect(postgresAuthoringTypes.sql.Varchar.args).toEqual([
       { kind: 'value', dataType: 'pg/int4', name: 'length' },
     ]);
   });

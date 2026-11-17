@@ -1,6 +1,6 @@
 # ADR 316 — PostgreSQL scalars get convenience types
 
-**Status:** Accepted, amended 2026-11-17: `Json` is a convenience type too
+**Status:** Accepted, amended 2026-11-17: `Json` is a convenience type too, and `sql.String(n)` is renamed `sql.Varchar(n)`
 **Amends:** [ADR 257 — Scalar types are named after the target on every surface](ADR%20257%20-%20Scalar%20types%20are%20named%20after%20the%20target%20on%20every%20surface.md), [ADR 279 — Convenience types choose an explicit type from their arguments](ADR%20279%20-%20Convenience%20types%20choose%20an%20explicit%20type%20from%20their%20arguments.md)
 
 ## At a glance
@@ -80,7 +80,7 @@ The explicit names that disappear, `SmallInt`, `BigIntNumber`, `Numeric`, `Unbou
 
 A TypeScript column helper is named after the explicit type it gives: `int8Column` becomes `int8BigIntColumn`, `numericColumn` becomes `numericStringColumn` and `jsonColumn` becomes `plainJsonColumn`, with no alias. The other helpers, such as `int2Column`, `textColumn` and `varcharColumn`, already match.
 
-The family's `sql.String(n)` and `sql.Char(n)` stay as they are: they are family-wide explicit types for `varchar` and `char` with a required length, shared with SQLite and MySQL. `sql.String(12)` is `Varchar(12)`, not the `String` convenience type. They are reconsidered with the other targets in TML-3790.
+The family's `sql.String(n)` is renamed `sql.Varchar(n)`. It is a family-wide explicit type for a `varchar` column with a required length, shared with SQLite and MySQL, and it shared a name with the `String` convenience type while meaning something else: `sql.String(12)` was `Varchar(12)`, not the `String` convenience type. `sql.String` stays for one release line as a deprecated alias of `sql.Varchar`, which warns in PSL and compiles in TypeScript as the other aliases do. `sql.Char(n)` keeps its name, so the namespace ends as `sql.Varchar(n)` and `sql.Char(n)`.
 
 `Json` means a `json` column, as it did before it was a convenience type, and `Jsonb` keeps its name as the explicit type of a `jsonb` column. Types that already name one concept keep a single explicit name and get no convenience type: `Uuid`, `Inet`, `Bit`, `Varbit`, `Xml`, `Oid`, `Money`, `citext.Citext` and `pg.enum(...)`.
 
@@ -134,7 +134,7 @@ The warning names the explicit replacement, such as `use "Int2"` for `SmallInt`,
 
 ### Deprecated names in TypeScript
 
-The aliases are in the same `type` namespace, so `type.SmallInt()`, `type.VarChar(64)`, `type.VarBit(16)` and the others still compile in a TypeScript contract and give the same type. Nothing warns where they are called. They are removed in the same release as the PSL aliases.
+The aliases are in the same `type` namespace, so `type.SmallInt()`, `type.VarChar(64)`, `type.VarBit(16)` and the others still compile in a TypeScript contract and give the same type. So does `type.sql.String(64)`, which gives the type of `type.sql.Varchar(64)` on every SQL target. Nothing warns where they are called. They are removed in the same release as the PSL aliases.
 
 ### The tools
 

@@ -21,7 +21,7 @@ const stack = createControlStack({
 
 function emit(schema: string) {
   const bound = bindPslSchema(schema, {
-    sourceId: 'sql-string-length.psl',
+    sourceId: 'sql-varchar-length.psl',
     context: contractSourceContextFromControlStack(stack),
   });
   return withSeedDiagnostics(
@@ -38,9 +38,9 @@ function emit(schema: string) {
   );
 }
 
-describe('sql.String on SQLite, whose length is a value of sqlite/real', () => {
+describe('sql.Varchar on SQLite, whose length is a value of sqlite/real', () => {
   it('gives a whole-number length as a number, in PSL', () => {
-    const result = emit('model Label {\n  id   Int @id\n  name sql.String(50)\n}\n');
+    const result = emit('model Label {\n  id   Int @id\n  name sql.Varchar(50)\n}\n');
     if (!result.ok) throw new Error(JSON.stringify(result.failure.diagnostics));
     const { storage } = JSON.parse(JSON.stringify(result.value));
     const [namespace] = Object.values<{ entries: { table: Record<string, { columns: object }> } }>(
@@ -56,7 +56,7 @@ describe('sql.String on SQLite, whose length is a value of sqlite/real', () => {
 
   it('gives the same parameters from the TypeScript builder', () => {
     const contract = defineContract({}, ({ field, model, type, gen }) => {
-      const name = type.sql.String(50);
+      const name = type.sql.Varchar(50);
       expectTypeOf(name.typeParams).toEqualTypeOf<{ readonly length: 50 }>();
       return {
         models: {
@@ -77,7 +77,7 @@ describe('sql.String on SQLite, whose length is a value of sqlite/real', () => {
   });
 
   it('refuses a length with a fraction through the length’s schema, at the argument', () => {
-    const schema = 'model Label {\n  id   Int @id\n  name sql.String(2.5)\n}\n';
+    const schema = 'model Label {\n  id   Int @id\n  name sql.Varchar(2.5)\n}\n';
     const result = emit(schema);
     expect(result.ok ? [] : result.failure.diagnostics).toEqual([
       expect.objectContaining({
@@ -91,7 +91,7 @@ describe('sql.String on SQLite, whose length is a value of sqlite/real', () => {
   });
 
   it('accepts the largest length SQLite allows, which a double holds exactly', () => {
-    const result = emit('model Label {\n  id   Int @id\n  name sql.String(2147483647)\n}\n');
+    const result = emit('model Label {\n  id   Int @id\n  name sql.Varchar(2147483647)\n}\n');
     if (!result.ok) throw new Error(JSON.stringify(result.failure.diagnostics));
     const { storage } = JSON.parse(JSON.stringify(result.value));
     const [namespace] = Object.values<{ entries: { table: Record<string, { columns: object }> } }>(
@@ -103,7 +103,7 @@ describe('sql.String on SQLite, whose length is a value of sqlite/real', () => {
   });
 
   it('refuses a length above SQLite’s maximum through the length’s schema, at the argument', () => {
-    const schema = 'model Label {\n  id   Int @id\n  name sql.String(2147483648)\n}\n';
+    const schema = 'model Label {\n  id   Int @id\n  name sql.Varchar(2147483648)\n}\n';
     const result = emit(schema);
     expect(result.ok ? [] : result.failure.diagnostics).toEqual([
       expect.objectContaining({
@@ -117,7 +117,7 @@ describe('sql.String on SQLite, whose length is a value of sqlite/real', () => {
   });
 
   it('accepts a whole number written with a zero fraction, which reads as sqlite/real', () => {
-    const result = emit('model Label {\n  id   Int @id\n  name sql.String(2.0)\n}\n');
+    const result = emit('model Label {\n  id   Int @id\n  name sql.Varchar(2.0)\n}\n');
     if (!result.ok) throw new Error(JSON.stringify(result.failure.diagnostics));
     const { storage } = JSON.parse(JSON.stringify(result.value));
     const [namespace] = Object.values<{ entries: { table: Record<string, { columns: object }> } }>(

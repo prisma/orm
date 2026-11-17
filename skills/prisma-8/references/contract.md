@@ -171,7 +171,7 @@ Note: scalar lists (e.g. `String[]`) are gated on the target's `sql.scalarList` 
 
 ## Workflow — Edit a model / field / relation (TS builder)
 
-The concept: same model, different authoring surface. The façade re-exports `defineContract`, `field`, `model`, `rel`, plus the `family`/`target` packs as default exports of `@internal/postgres/family` and `@internal/postgres/target`. Use the callback overload (`defineContract({...}, ({ field, model, rel, type, gen }) => ({...}))`) to get the type constructors, type aliases and generator calls (`field.column(type.String())`, `field.column(type.Uuid()).id().onCreate(gen.uuid(7))`, `field.column(type.temporal.CreatedAt())`, `type.sql.String(35)`).
+The concept: same model, different authoring surface. The façade re-exports `defineContract`, `field`, `model`, `rel`, plus the `family`/`target` packs as default exports of `@internal/postgres/family` and `@internal/postgres/target`. Use the callback overload (`defineContract({...}, ({ field, model, rel, type, gen }) => ({...}))`) to get the type constructors, type aliases and generator calls (`field.column(type.String())`, `field.column(type.Uuid()).id().onCreate(gen.uuid(7))`, `field.column(type.temporal.CreatedAt())`, `type.sql.Varchar(35)`).
 
 ```typescript
 import sqlFamily from '@internal/postgres/family';
