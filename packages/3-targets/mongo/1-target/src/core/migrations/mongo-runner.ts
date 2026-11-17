@@ -654,6 +654,8 @@ interface TouchedFields {
    * its discriminator value, so no `--backfill` of the field has documents to fill yet.
    */
   readonly ofNewVariants: ReadonlyMap<string, ValidatorDiscriminator>;
+  /** The fields whose list elements the new validator accepts only as objects. */
+  readonly objectLists: ReadonlySet<string>;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -738,6 +740,7 @@ function fieldsTouched(before: unknown, after: unknown): TouchedFields {
   const keys = new Map<string, RequiredKey>();
   const ofOldKinds = new Set<string>();
   const ofNewVariants = new Map<string, ValidatorDiscriminator>();
+  const objectLists = new Set<string>();
   const rootsAfter = validatorRootShapesOf(after);
   for (const shape of validatorDocumentShapesOf(after)) {
     const same = shapesBefore.length === 0 ? undefined : sameKindOfDocumentIn(shapesBefore, shape);
@@ -764,6 +767,8 @@ function fieldsTouched(before: unknown, after: unknown): TouchedFields {
       }
     }
     for (const [field, schema] of Object.entries(shape.properties)) {
+      const items = itemsOf(schema);
+      if (isRecord(items) && isRecord(items['properties'])) objectLists.add(field);
       if (!Object.hasOwn(previous.properties, field)) continue;
       const schemaBefore = previous.properties[field];
       const canonical = canonicalize(schema);
@@ -781,6 +786,7 @@ function fieldsTouched(before: unknown, after: unknown): TouchedFields {
     retypes: [...retypes].filter((field) => !requires.has(field)).sort(),
     keys,
     ofNewVariants: new Map([...ofNewVariants].filter(([field]) => !ofOldKinds.has(field))),
+    objectLists,
   };
 }
 
@@ -815,7 +821,8 @@ function keyFindingsOf(
 
 /**
  * Of the nested keys a validator change makes required, those the document shown lacks, and the
- * fields whose list elements the keys are required in hold an element that is not an object.
+ * fields whose list elements must be objects, or hold keys the change requires, that hold an
+ * element that is not an object.
  */
 function nestedFindings(
   touched: TouchedFields,
@@ -827,6 +834,10 @@ function nestedFindings(
     const findings = keyFindingsOf(shown.get(key.field)?.value, key.steps);
     if (findings.has('lacks')) lacking.push(dotted);
     if (findings.has('notObject')) notObjects.add(key.field);
+  }
+  for (const field of touched.objectLists) {
+    const value = shown.get(field)?.value;
+    if (Array.isArray(value) && value.some((element) => !isRecord(element))) notObjects.add(field);
   }
   return { lacking, notObjects: [...notObjects].sort() };
 }

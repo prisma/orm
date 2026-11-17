@@ -167,3 +167,55 @@ describe('MongoMigrationRunner, a renamed key that a document never held', () =>
     timeouts.spinUpMongoMemoryServer,
   );
 });
+
+describe('MongoMigrationRunner, a list element that is not an object', () => {
+  it(
+    'says the document holds it when it is the only reason the document does not fit',
+    async () => {
+      const users = (address: Record<string, unknown>) => ({
+        bsonType: 'object',
+        required: ['_id', 'addresses'],
+        properties: {
+          _id: { bsonType: 'objectId' },
+          addresses: { bsonType: 'array', items: address },
+        },
+        additionalProperties: false,
+      });
+      const lineOptional = {
+        bsonType: 'object',
+        properties: { line1: { bsonType: 'string' } },
+        additionalProperties: false,
+      };
+      await live
+        .db()
+        .createCollection('users', { validator: { $jsonSchema: users(addressSchema([])) } });
+      await live
+        .db()
+        .collection('users')
+        .insertOne({ addresses: [null] }, { bypassDocumentValidation: true });
+
+      const result = await live.run(
+        [
+          renameStoredKey({
+            collection: 'users',
+            field: 'addresses',
+            path: '$[*].street',
+            to: 'line1',
+          }),
+          collMod(
+            'users',
+            { validator: { $jsonSchema: users(lineOptional) } },
+            { id: 'validator.users.update', checkDocuments: true },
+          ),
+        ],
+        destination('line1'),
+      );
+
+      if (result.ok) throw new Error('Expected the validator change to stop at its document check');
+      expect(result.failure.why).toContain(
+        'That document holds an element in "addresses" that is not an object.',
+      );
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+});
