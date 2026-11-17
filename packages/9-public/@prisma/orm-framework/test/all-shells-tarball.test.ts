@@ -38,7 +38,24 @@ const targetPackages = [...publicShells]
   .filter(([, shell]) => shell.kind === 'facade')
   .map(([name]) => name);
 /** Target packages whose `defineConfig` names `contract.typesModule` and `migrations.module`. */
-const namingGeneratedModules: readonly string[] = ['@prisma/orm-postgres'];
+const namingGeneratedModules: readonly string[] = [
+  '@prisma/orm-postgres',
+  '@prisma/orm-sqlite',
+  '@prisma/orm-mysql',
+  '@prisma/orm-mariadb',
+  '@prisma/orm-mongo',
+];
+const extensionPackages = [...publicShells]
+  .filter(([, shell]) => shell.kind === 'extension')
+  .map(([name]) => name);
+/** Extension packages whose control descriptors state the modules their types come from. */
+const statingTypeModules: readonly string[] = [
+  '@prisma/orm-extension-postgis',
+  '@prisma/orm-extension-pgvector',
+  '@prisma/orm-extension-paradedb',
+  '@prisma/orm-postgres-contrib',
+  '@prisma/orm-extension-arktype-json',
+];
 const adrExampleNames = [
   '@prisma/orm-framework/contract',
   '@prisma/orm-framework/components',
@@ -190,6 +207,56 @@ describe('all publish shells packed and installed together', () => {
           problems.push(`${name} names ${module}, which is not a subpath of ${name}`);
         } else if (!Object.hasOwn(exports, `.${module.slice(name.length)}`)) {
           problems.push(`${name} names ${module}, which ${name} does not export`);
+        }
+      }
+    }
+    expect(problems).toEqual([]);
+  });
+
+  it('states only its own published exports as the modules extension types come from', () => {
+    expect(extensionPackages).toEqual(expect.arrayContaining(statingTypeModules));
+    const controlEntrypoints = extensionPackages.flatMap((name) =>
+      Object.keys(installedExports(name))
+        .filter((subpath) => subpath === './control' || subpath.endsWith('/control'))
+        .map((subpath) => [name, `${name}${subpath.slice(1)}`]),
+    );
+    const script = [
+      `const entrypoints = ${JSON.stringify(controlEntrypoints)};`,
+      'const stated = {};',
+      'const collect = (value, into, seen) => {',
+      "  if (value === null || typeof value !== 'object' || seen.has(value)) return;",
+      '  seen.add(value);',
+      "  if (typeof value.package === 'string' && typeof value.named === 'string') into.push(value.package);",
+      '  for (const child of Object.values(value)) collect(child, into, seen);',
+      '};',
+      'for (const [name, specifier] of entrypoints) {',
+      '  const descriptor = (await import(specifier)).default;',
+      '  collect(descriptor?.types, (stated[name] ??= []), new Set());',
+      '}',
+      'console.log(JSON.stringify(stated));',
+    ].join('\n');
+    const stated: Record<string, string[]> = JSON.parse(runInScratch(scratch, script));
+
+    const problems: string[] = [];
+    for (const name of extensionPackages) {
+      const modules = stated[name] ?? [];
+      if (!statingTypeModules.includes(name)) {
+        if (modules.length > 0) {
+          problems.push(
+            `${name} states ${modules.join(', ')} but is not listed as stating modules`,
+          );
+        }
+        continue;
+      }
+      if (modules.length === 0) problems.push(`${name} states no module for its types`);
+      const exports = installedExports(name);
+      for (const module of modules) {
+        if (module.startsWith('@internal/')) {
+          problems.push(`${name} states the private module ${module}`);
+        } else if (!module.startsWith(`${name}/`)) {
+          problems.push(`${name} states ${module}, which is not a subpath of ${name}`);
+        } else if (!Object.hasOwn(exports, `.${module.slice(name.length)}`)) {
+          problems.push(`${name} states ${module}, which ${name} does not export`);
         }
       }
     }
