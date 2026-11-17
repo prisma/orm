@@ -2,8 +2,8 @@
 
 // Real emitted fixture for the SQLite integer-representation type round-trip.
 //
-// `Meter.peak` and `Sample.reading` use bare `BigIntNumber` —
-// `sqlite/bigintnumber@1`: INTEGER storage decoded as a JS number, throwing
+// `Meter.peak` and `Sample.reading` use `BigInt(as: number)` —
+// `sqlite/integer@1`: INTEGER storage decoded as a JS number, throwing
 // outside ±(2^53 − 1). `Sample.reading` sits on the child side of a relation so
 // an include read traverses the codec's JSON-number projection through the
 // nested-document path. SQLite declares no `UnboundedInt` type because it has
@@ -12,7 +12,7 @@
 
 model Meter {
   id   Int @id
-  peak BigIntNumber
+  peak BigInt(as: number)
 
   samples Sample[]
 
@@ -22,7 +22,7 @@ model Meter {
 model Sample {
   id      Int @id
   meterId Int @map("meter_id")
-  reading BigIntNumber
+  reading BigInt(as: number)
 
   meter Meter @relation(fields: [meterId], references: [id])
 

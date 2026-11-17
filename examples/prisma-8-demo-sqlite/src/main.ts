@@ -22,7 +22,7 @@
  *                                          on success; prints the rollback reason and the unchanged
  *                                          count on quota violation.
  * - integer-representations [limit]        The two Post engagement counters side by side:
- *                                          `BigIntNumber` reads as a JS number, `BigInt` as a
+ *                                          `BigInt(as: number)` reads as a JS number, `BigInt` as a
  *                                          bigint. SQLite offers no `UnboundedInt`.
  * - aggregate-precision                    count/sum/avg beside countBigInt/sumBigInt, including a
  *                                          bare sum() whose total passes 2^53 and raises rather
@@ -241,8 +241,8 @@ async function main() {
       const posts = await ormClientGetPostEngagement(limit);
 
       console.log('Post engagement counters, one column per integer representation:\n');
-      console.log('  viewCount        BigIntNumber   sqlite/bigintnumber@1   read as a number');
-      console.log('  impressionCount  BigInt         sqlite/bigint@1         read as a bigint\n');
+      console.log('  viewCount        BigInt(as: number)   sqlite/integer@1   read as a number');
+      console.log('  impressionCount  BigInt               sqlite/bigint@1    read as a bigint\n');
       for (const post of posts) {
         console.log(post.title);
         console.log(`  viewCount        ${describe(post.viewCount)}`);
@@ -259,7 +259,7 @@ async function main() {
       console.log(`  count()                       ${describe(report.posts.count)}`);
       console.log(`  countBigInt()                 ${describe(report.posts.countBigInt)}\n`);
 
-      console.log('viewCount — BigIntNumber, and the total stays inside the safe range:');
+      console.log('viewCount — BigInt(as: number), and the total stays inside the safe range:');
       console.log(`  sum('viewCount')              ${describe(report.views.sum)}`);
       console.log(`  sumBigInt('viewCount')        ${describe(report.views.sumBigInt)}`);
       console.log(`  avg('viewCount')              ${describe(report.views.avg)}\n`);

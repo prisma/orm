@@ -19,7 +19,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'db3851857a0390f7a57b9f608a73ffd0e7ebb2fdbc00c3bedb7fbb4e77f25122'>;
+  StorageHashBase<'bdd26e20eb9f795c685a8b627c76a12f16b1d00aa36c7ffa7a70f773f46c9412'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53'>;
@@ -264,20 +264,20 @@ type ContractBase = Omit<
                   readonly many: false;
                 };
                 readonly rebate: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
+                  readonly dataType: 'sqlite/decimal';
+                  readonly codecId: 'sqlite/decimal@1';
                   readonly nullable: true;
                   readonly many: false;
                 };
                 readonly total: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
+                  readonly dataType: 'sqlite/decimal';
+                  readonly codecId: 'sqlite/decimal@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
                 readonly visits: {
                   readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/bigintnumber@1';
+                  readonly codecId: 'sqlite/integer@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
@@ -290,8 +290,8 @@ type ContractBase = Omit<
             readonly invoice_line: {
               columns: {
                 readonly amount: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
+                  readonly dataType: 'sqlite/decimal';
+                  readonly codecId: 'sqlite/decimal@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
@@ -365,18 +365,15 @@ type ContractBase = Omit<
               };
               readonly rebate: {
                 readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/decimal@1' };
               };
               readonly total: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/decimal@1' };
               };
               readonly visits: {
                 readonly nullable: false;
-                readonly type: {
-                  readonly kind: 'scalar';
-                  readonly codecId: 'sqlite/bigintnumber@1';
-                };
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
               };
             };
             readonly relations: {
@@ -407,7 +404,7 @@ type ContractBase = Omit<
             readonly fields: {
               readonly amount: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/decimal@1' };
               };
               readonly id: {
                 readonly nullable: false;

@@ -29,7 +29,7 @@
               "peak": {
                 "nullable": false,
                 "type": {
-                  "codecId": "sqlite/bigintnumber@1",
+                  "codecId": "sqlite/integer@1",
                   "kind": "scalar"
                 }
               }
@@ -83,7 +83,7 @@
               "reading": {
                 "nullable": false,
                 "type": {
-                  "codecId": "sqlite/bigintnumber@1",
+                  "codecId": "sqlite/integer@1",
                   "kind": "scalar"
                 }
               }
@@ -139,7 +139,7 @@
                   "nullable": false
                 },
                 "peak": {
-                  "codecId": "sqlite/bigintnumber@1",
+                  "codecId": "sqlite/integer@1",
                   "dataType": "sqlite/integer",
                   "nullable": false
                 }
@@ -166,7 +166,7 @@
                   "nullable": false
                 },
                 "reading": {
-                  "codecId": "sqlite/bigintnumber@1",
+                  "codecId": "sqlite/integer@1",
                   "dataType": "sqlite/integer",
                   "nullable": false
                 }
@@ -214,7 +214,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "a26473e09e8572c35fc4fe554bc5a25dca7841d21700b511026286c5fd53334b"
+    "storageHash": "27a6c4b04f098e2aabf355368d163edb74666747336b66917d227a2fc5c050bb"
   },
   "capabilities": {
     "sql": {

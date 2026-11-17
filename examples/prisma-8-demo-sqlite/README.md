@@ -65,7 +65,7 @@ SQLITE_PATH=./demo.db pnpm start -- aggregate-precision
 | `disconnect-post-tags` | ORM | `db.Post.update({ tags: (t) => t.disconnect([…]) })` — junction DELETE |
 | `create-post-with-tags` | ORM | `db.Post.create({ …, tags: (t) => t.create([…]) })` — insert targets + links |
 | `create-post-connect-tags` | ORM | `db.Post.create({ …, tags: (t) => t.connect([…]) })` — connect in the create flow |
-| `integer-representations` | ORM | `db.Post.select('viewCount', 'impressionCount')` — `BigIntNumber` beside `BigInt` |
+| `integer-representations` | ORM | `db.Post.select('viewCount', 'impressionCount')` — `BigInt(as: number)` beside `BigInt` |
 | `aggregate-precision` | ORM | `count`/`sum`/`avg` beside `countBigInt`/`sumBigInt`, including the `sum` that raises |
 
 The `add-posts` command demonstrates why an interactive transaction is necessary: the count (SQL
@@ -82,7 +82,7 @@ representation.
 
 | Column | Type | Codec | Reads as |
 | --- | --- | --- | --- |
-| `viewCount` | `BigIntNumber` | `sqlite/bigintnumber@1` | `number`, throwing outside ±(2^53 − 1) |
+| `viewCount` | `BigInt(as: number)` | `sqlite/integer@1` | `number`, throwing outside ±(2^53 − 1) |
 | `impressionCount` | `BigInt` | `sqlite/bigint@1` | `bigint` |
 
 SQLite declares no `UnboundedInt`: that type needs lossless unbounded integer

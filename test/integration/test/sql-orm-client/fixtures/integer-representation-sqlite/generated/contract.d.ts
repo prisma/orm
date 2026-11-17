@@ -19,7 +19,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'a26473e09e8572c35fc4fe554bc5a25dca7841d21700b511026286c5fd53334b'>;
+  StorageHashBase<'27a6c4b04f098e2aabf355368d163edb74666747336b66917d227a2fc5c050bb'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53'>;
@@ -263,7 +263,7 @@ type ContractBase = Omit<
                 };
                 readonly peak: {
                   readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/bigintnumber@1';
+                  readonly codecId: 'sqlite/integer@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
@@ -289,7 +289,7 @@ type ContractBase = Omit<
                 };
                 readonly reading: {
                   readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/bigintnumber@1';
+                  readonly codecId: 'sqlite/integer@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
@@ -351,10 +351,7 @@ type ContractBase = Omit<
               };
               readonly peak: {
                 readonly nullable: false;
-                readonly type: {
-                  readonly kind: 'scalar';
-                  readonly codecId: 'sqlite/bigintnumber@1';
-                };
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
               };
             };
             readonly relations: {
@@ -391,10 +388,7 @@ type ContractBase = Omit<
               };
               readonly reading: {
                 readonly nullable: false;
-                readonly type: {
-                  readonly kind: 'scalar';
-                  readonly codecId: 'sqlite/bigintnumber@1';
-                };
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
               };
             };
             readonly relations: {

@@ -16,9 +16,9 @@ import contractJson from './fixtures/integer-representation-sqlite/generated/con
 };
 
 /**
- * End-to-end proof of the `BigIntNumber` type on SQLite, driven through the
+ * End-to-end proof of the `BigInt(as: number)` type on SQLite, driven through the
  * real emitted fixture (`fixtures/integer-representation-sqlite/generated/`):
- * `Meter.peak` and `Sample.reading` are `sqlite/bigintnumber@1` — INTEGER
+ * `Meter.peak` and `Sample.reading` are `sqlite/integer@1` — INTEGER
  * storage read as a JS number. Boundary values only — a value inside the safe
  * range proves nothing about the guard.
  *
@@ -84,7 +84,7 @@ describe('integration/integer representation type on sqlite', () => {
     if (directory !== undefined) rmSync(directory, { recursive: true, force: true });
   });
 
-  it('writes and reads BigIntNumber at both safe-range boundaries', async () => {
+  it('writes and reads BigInt(as: number) at both safe-range boundaries', async () => {
     const meters = db![UNBOUND_NAMESPACE_ID].Meter;
     await meters.create({ id: 1, peak: MAX_SAFE });
     await meters.create({ id: 2, peak: -MAX_SAFE });
@@ -103,7 +103,7 @@ describe('integration/integer representation type on sqlite', () => {
     expectTypeOf<Row['peak']>().toEqualTypeOf<number>();
   });
 
-  it('carries a BigIntNumber column through an include at the safe-range boundary', async () => {
+  it('carries a BigInt(as: number) column through an include at the safe-range boundary', async () => {
     const samples = db![UNBOUND_NAMESPACE_ID].Sample;
     await samples.create({ id: 1, meterId: 1, reading: MAX_SAFE });
     await samples.create({ id: 2, meterId: 1, reading: -MAX_SAFE });
@@ -142,48 +142,47 @@ describe('integration/integer representation type on sqlite', () => {
     // runtime's column-context envelope, with the codec error on `cause`.
     expect(shape).toEqual({
       name: 'RuntimeError',
-      message: `Failed to decode column int_repr_samples.reading with codec 'sqlite/bigintnumber@1': sqlite/bigintnumber@1 value must be an integer within the safe integer range, got ${FIRST_UNSAFE}`,
+      message: `Failed to decode column int_repr_samples.reading with codec 'sqlite/integer@1': sqlite/integer@1 value must be an integer within the safe integer range, got ${FIRST_UNSAFE}`,
       code: 'RUNTIME.DECODE_FAILED',
       category: 'RUNTIME',
       severity: 'error',
       details: {
         table: 'int_repr_samples',
         column: 'reading',
-        codec: 'sqlite/bigintnumber@1',
+        codec: 'sqlite/integer@1',
       },
       cause: {
         name: 'StructuredError',
-        message: `sqlite/bigintnumber@1 value must be an integer within the safe integer range, got ${FIRST_UNSAFE}`,
+        message: `sqlite/integer@1 value must be an integer within the safe integer range, got ${FIRST_UNSAFE}`,
         code: 'RUNTIME.DECODE_FAILED',
-        meta: { codecId: 'sqlite/bigintnumber@1', received: String(FIRST_UNSAFE) },
+        meta: { codecId: 'sqlite/integer@1', received: String(FIRST_UNSAFE) },
       },
     });
 
     database!.exec('delete from int_repr_samples where id = 10');
   });
 
-  it('writing past the safe range through BigIntNumber raises RUNTIME.ENCODE_FAILED', async () => {
+  it('writing past the safe range through BigInt(as: number) raises RUNTIME.ENCODE_FAILED', async () => {
     const shape = await rejectionShape(
       db![UNBOUND_NAMESPACE_ID].Meter.create({ id: 20, peak: FIRST_UNSAFE }),
     );
     expect(shape).toEqual({
       name: 'StructuredError',
-      message: `sqlite/bigintnumber@1 value must be an integer within the safe integer range, got ${FIRST_UNSAFE}`,
+      message: `sqlite/integer@1 value must be an integer within the safe integer range, got ${FIRST_UNSAFE}`,
       code: 'RUNTIME.ENCODE_FAILED',
-      meta: { codecId: 'sqlite/bigintnumber@1', received: String(FIRST_UNSAFE) },
+      meta: { codecId: 'sqlite/integer@1', received: String(FIRST_UNSAFE) },
     });
   });
 
-  it('writing a non-integral number through BigIntNumber raises RUNTIME.ENCODE_FAILED', async () => {
+  it('writing a non-integral number through BigInt(as: number) raises RUNTIME.ENCODE_FAILED', async () => {
     const shape = await rejectionShape(
       db![UNBOUND_NAMESPACE_ID].Meter.create({ id: 21, peak: 1.5 }),
     );
     expect(shape).toEqual({
       name: 'StructuredError',
-      message:
-        'sqlite/bigintnumber@1 value must be an integer within the safe integer range, got 1.5',
+      message: 'sqlite/integer@1 value must be an integer within the safe integer range, got 1.5',
       code: 'RUNTIME.ENCODE_FAILED',
-      meta: { codecId: 'sqlite/bigintnumber@1', received: '1.5' },
+      meta: { codecId: 'sqlite/integer@1', received: '1.5' },
     });
   });
 });

@@ -19,7 +19,7 @@ import type {
 } from '@prisma/orm-sqlite/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'38ba9948da5dd02051336dcd63474c601a073c1e63741d1fcca0e8692e978708'>;
+  StorageHashBase<'58f983997d83814809882ae60784356aa5db298701ad75502b09f01bafe83971'>;
 export type ExecutionHash =
   ExecutionHashBase<'711ee7a9f9952ece816afa0be8a7beb696460439dd0added45acb86d7072b8fe'>;
 export type ProfileHash =
@@ -366,7 +366,7 @@ type ContractBase = Omit<
                 };
                 readonly viewCount: {
                   readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/bigintnumber@1';
+                  readonly codecId: 'sqlite/integer@1';
                   readonly nullable: true;
                   readonly many: false;
                 };
@@ -627,10 +627,7 @@ type ContractBase = Omit<
               };
               readonly viewCount: {
                 readonly nullable: true;
-                readonly type: {
-                  readonly kind: 'scalar';
-                  readonly codecId: 'sqlite/bigintnumber@1';
-                };
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
               };
             };
             readonly relations: {
