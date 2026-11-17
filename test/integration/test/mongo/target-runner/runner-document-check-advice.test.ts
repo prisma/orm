@@ -60,9 +60,22 @@ describe('MongoMigrationRunner, --backfill advice in a collection several root m
       );
 
       if (result.ok) throw new Error('Expected the validator change to stop at its document check');
-      expect(result.failure.why).toContain(
-        'To give "severity" values you choose, plan the change with migration plan --backfill Bug.severity.',
-      );
+      expect({
+        advice: result.failure.why?.includes(
+          'To give "severity" values you choose, plan the change with --backfill Bug.severity, as the steps to take describe.',
+        ),
+        rowsWithoutValue: result.failure.meta.rowsWithoutValue,
+      }).toEqual({
+        advice: true,
+        rowsWithoutValue: [
+          {
+            field: { kind: 'field', namespaceId: '__unbound__', model: 'Bug', field: 'severity' },
+            reason: 'newField',
+            rows: 1,
+            operationIndex: 0,
+          },
+        ],
+      });
     },
     timeouts.spinUpMongoMemoryServer,
   );
@@ -117,7 +130,7 @@ describe('MongoMigrationRunner, --backfill advice for a new discriminator beside
       expect({
         required: result.failure.why?.includes('This validator change makes "kind" required'),
         advice: result.failure.why?.includes(
-          'To give "kind" values you choose, plan the change with migration plan --backfill Task.kind.',
+          'To give "kind" values you choose, plan the change with --backfill Task.kind, as the steps to take describe.',
         ),
       }).toEqual({ required: true, advice: true });
     },

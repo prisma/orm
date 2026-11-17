@@ -125,7 +125,7 @@ describe('MongoMigrationRunner, a required field new inside a value object', () 
         'This validator change makes "addresses.seen" and "home.seen" required and changes what "addresses" and "home" accept.',
       );
       expect(result.failure.why).toContain(
-        'To give "addresses.seen" and "home.seen" values you choose, plan the change with migration plan --backfill Address.seen.',
+        'To give "addresses.seen" and "home.seen" values you choose, plan the change with --backfill Address.seen, as the steps to take describe.',
       );
     },
     timeouts.spinUpMongoMemoryServer,

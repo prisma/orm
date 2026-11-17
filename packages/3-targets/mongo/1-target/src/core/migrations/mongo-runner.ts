@@ -26,7 +26,9 @@ import {
   type MigrationRunnerPerSpaceSuccessValue,
   type MigrationSubject,
   migrationRunnerFailure,
+  migrationSubjectKey,
   type OperationContext,
+  type RowsWithoutValue,
   schemaCheckWhy,
   type VerifyDatabaseSchemaResult,
   withDatabaseUnchanged,
@@ -399,31 +401,55 @@ function joinedList(items: readonly string[]): string {
 
 /**
  * The `--backfill` statements that let the user choose values for the fields a change makes
- * required: one for each field the planner would accept the statement for, as its rewrite refusals
- * and stored name rules say.
+ * required, one for each field the planner would accept the statement for, as its rewrite refusals
+ * and stored name rules say; and each such field as `rowsWithoutValue`, from which the caller gives
+ * the steps that plan the change with them.
  */
 function backfillAdvice(
   contract: MongoContract,
-  collection: string,
-  requires: readonly string[],
+  lacking: { readonly collection: string; readonly documents: ReadonlyMap<string, number> },
   keys: ReadonlyMap<string, RequiredKey>,
   rewriteCollection: RewriteCollection,
-): readonly string[] {
-  const accepted = backfillStatements(contract, collection, requires, keys, rewriteCollection);
-  if (accepted.length === 0) return [];
+  operationIndex: number,
+): {
+  readonly sentences: readonly string[];
+  readonly rowsWithoutValue: readonly RowsWithoutValue[];
+} {
+  const accepted = backfillStatements(
+    contract,
+    lacking.collection,
+    [...lacking.documents.keys()],
+    keys,
+    rewriteCollection,
+  );
+  if (accepted.length === 0) return { sentences: [], rowsWithoutValue: [] };
   const statements = [...new Set(accepted.map(({ statement }) => `--backfill ${statement}`))];
-  return [
-    `To give ${quotedList(accepted.map(({ stored }) => stored))} values you choose, plan the change with migration plan ${statements.join(' ')}.`,
-  ];
+  const subjects = new Map(
+    accepted.map(({ stored, subject }) => [
+      migrationSubjectKey(subject),
+      { subject, documents: lacking.documents.get(stored) ?? 0 },
+    ]),
+  );
+  return {
+    sentences: [
+      `To give ${quotedList(accepted.map(({ stored }) => stored))} values you choose, plan the change with ${statements.join(' ')}, as the steps to take describe.`,
+    ],
+    rowsWithoutValue: [...subjects.values()].map(({ subject, documents }) => ({
+      field: subject,
+      reason: 'newField',
+      rows: documents,
+      operationIndex,
+    })),
+  };
 }
 
-/** The `--backfill` statement of a nested key, by the field of a value object or an embedded model stored there, when the planner would accept it. */
+/** The `--backfill` statement of a nested key, by the field of a value object or an embedded model stored there, and that field, when the planner would accept it. */
 function nestedBackfillStatement(
   contract: MongoContract,
   collection: string,
   key: RequiredKey,
   rewriteCollection: RewriteCollection,
-): string | undefined {
+): { readonly statement: string; readonly subject: MigrationSubject } | undefined {
   const parsed = storedKeyPath(key.field, key.path);
   if (!parsed.ok) return undefined;
   const names = [
@@ -445,7 +471,7 @@ function nestedBackfillStatement(
     contract,
     rewriteCollection,
   );
-  return refusals.length === 0 ? found.text : undefined;
+  return refusals.length === 0 ? { statement: found.text, subject: found.subject } : undefined;
 }
 
 /** The `--backfill` statement of each of `fields` the planner would accept it for, with the field's stored name. */
@@ -455,12 +481,16 @@ function backfillStatements(
   fields: readonly string[],
   keys: ReadonlyMap<string, RequiredKey>,
   rewriteCollection: RewriteCollection,
-): readonly { readonly stored: string; readonly statement: string }[] {
+): readonly {
+  readonly stored: string;
+  readonly statement: string;
+  readonly subject: MigrationSubject;
+}[] {
   return fields.flatMap((stored) => {
     const key = keys.get(stored);
     if (key !== undefined) {
-      const statement = nestedBackfillStatement(contract, collection, key, rewriteCollection);
-      return statement === undefined ? [] : [{ stored, statement }];
+      const found = nestedBackfillStatement(contract, collection, key, rewriteCollection);
+      return found === undefined ? [] : [{ stored, ...found }];
     }
     if (unrewritableFieldNameReason(stored) !== undefined) return [];
     const field = fieldStoredAt(contract, collection, stored);
@@ -479,7 +509,7 @@ function backfillStatements(
       rewriteCollection,
     );
     return refusals.length === 0
-      ? [{ stored, statement: fieldStatementText(contract, field) }]
+      ? [{ stored, statement: fieldStatementText(contract, field), subject: field }]
       : [];
   });
 }
@@ -1028,6 +1058,7 @@ export class MongoMigrationRunner {
                 operation,
                 failing,
                 options.destinationContract,
+                operationIndex,
               )) ??
               runnerFailure(
                 'MIGRATION.PRECHECK_FAILED',
@@ -1373,6 +1404,7 @@ export class MongoMigrationRunner {
     op: MongoMigrationPlanOperation,
     failed: MongoMigrationCheck,
     contract: MongoContract,
+    operationIndex: number,
   ): Promise<MongoMigrationRunnerResult | undefined> {
     if (isInspectionCheckSource(failed.source)) return undefined;
     const collMod = validatorSetBy(op);
@@ -1438,21 +1470,25 @@ export class MongoMigrationRunner {
       `Find them all with ${query} in mongosh.`,
     ];
     const uncheckable = problems.length > 0 && problems.every((problem) => problem.uncheckable);
+    const backfills =
+      uncheckable || !hadValidator
+        ? { sentences: [], rowsWithoutValue: [] }
+        : backfillAdvice(
+            contract,
+            {
+              collection,
+              documents: await this.documentsLacking(failed.source, collection, failing, touched),
+            },
+            touched.keys,
+            inPlace.rewrite,
+            operationIndex,
+          );
     const advice = uncheckable
       ? [
           'A document that holds such a field can never fit the validator, so changing the documents does not help: store the field under a name without "." that does not start with "$".',
         ]
       : hadValidator
-        ? [
-            ...backfillAdvice(
-              contract,
-              collection,
-              await this.fieldsSomeDocumentLacks(failed.source, collection, failing, touched),
-              touched.keys,
-              inPlace.rewrite,
-            ),
-            byHandAdvice(collection),
-          ]
+        ? [...backfills.sentences, byHandAdvice(collection)]
         : ['Change them with a dataTransform in migration.ts, or with an update in mongosh.'];
     const why = [
       ...found,
@@ -1476,6 +1512,9 @@ export class MongoMigrationRunner {
             requires: touched.requires,
             retypes: touched.retypes,
           },
+          ...(backfills.rowsWithoutValue.length === 0
+            ? {}
+            : { rowsWithoutValue: backfills.rowsWithoutValue }),
         },
       },
     );
@@ -1579,13 +1618,13 @@ export class MongoMigrationRunner {
     };
   }
 
-  /** Each field or nested key the change makes required that a document matching `failing` lacks or holds as `null`; a nested key counts only in an object that the document holds. */
-  private async fieldsSomeDocumentLacks(
+  /** Each field or nested key the change makes required that documents matching `failing` lack or hold as `null`, with how many do; a nested key counts only in an object that the document holds. */
+  private async documentsLacking(
     source: MongoQueryPlan,
     collection: string,
     failing: Readonly<Record<string, unknown>>,
     touched: TouchedFields,
-  ): Promise<readonly string[]> {
+  ): Promise<ReadonlyMap<string, number>> {
     const lackingFilter = (field: string): Record<string, unknown> | undefined => {
       const key = touched.keys.get(field);
       if (key === undefined) {
@@ -1597,21 +1636,21 @@ export class MongoMigrationRunner {
         : undefined;
     };
     const lacking = await Promise.all(
-      touched.requires.map(async (field) => {
+      touched.requires.map(async (field): Promise<readonly (readonly [string, number])[]> => {
         const filter = lackingFilter(field);
-        return filter !== undefined &&
-          (await this.firstRow({
-            ...source,
-            command: new RawAggregateCommand(collection, [
-              { $match: { $and: [failing, filter] } },
-              { $limit: 1 },
-            ]),
-          })) !== undefined
-          ? [field]
-          : [];
+        if (filter === undefined) return [];
+        const counted = await this.firstRow({
+          ...source,
+          command: new RawAggregateCommand(collection, [
+            { $match: { $and: [failing, filter] } },
+            { $count: 'documents' },
+          ]),
+        });
+        const documents = Number(counted?.['documents'] ?? 0);
+        return documents === 0 ? [] : [[field, documents]];
       }),
     );
-    return lacking.flat();
+    return new Map(lacking.flat());
   }
 
   /**

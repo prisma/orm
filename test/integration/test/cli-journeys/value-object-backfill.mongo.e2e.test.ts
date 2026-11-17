@@ -353,7 +353,7 @@ describe('Journeys (MongoDB): required fields new inside value objects and embed
     ).toEqual({
       code: 'MIGRATION.PRECHECK_FAILED',
       why: expect.stringContaining(
-        'To give "addresses.seen" and "home.seen" values you choose, plan the change with migration plan --backfill Address.seen.',
+        'To give "addresses.seen" and "home.seen" values you choose, plan the change with --backfill Address.seen, as the steps to take describe.',
       ),
     });
   });

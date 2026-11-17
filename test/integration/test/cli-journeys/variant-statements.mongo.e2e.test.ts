@@ -3,7 +3,7 @@
  *
  * `Task` is stored in collection `tasks` and discriminated by `type`. `Bug` (`bug`, with `severity`) and `Epic` (`epic`, with `scope`) are its variants.
  *
- * V1: the value of `Bug` becomes `defect`. Without a statement both commands ask, offering `--convert Bug` first and `--delete Bug` second; `--convert Bug` rewrites the documents. V2: `Bug` is renamed to `Defect`, whose value is `defect`: `--rename Bug:Defect` rewrites the documents. V3: `Bug` is removed: it is asked about as the model, and `--delete Bug` deletes its documents and keeps the others. V4: `Bug` is removed and `Epic` takes `bug`: the plan is refused with advice to use two migrations, and two migrations then delete the documents of `Bug` and move `Epic` to `bug`. V5: without a snapshot of the origin contract `db update` rewrites nothing, and the validator's document check stops it while documents hold `bug`. V6: the discriminator is renamed to `kind` and the value of `Bug` becomes `defect`: planned without statements, with `--convert Bug --delete Task.type`, or with `--delete Task.type --delete Bug`, and through `db update`, the plan is refused because a temporary value would name no variant, offering `--rename Task.type:Task.kind`, and nothing is applied; the plan with that rename and `--convert Bug` keeps every document's variant. V7: the discriminator is renamed and `Bug` is renamed to `Defect`: the refusal offers the discriminator rename, the question that follows offers `--rename Bug:Defect` before `--delete Bug`, and following both keeps every document. V8: `Task` has no discriminator and gains `type` with its variants: `db update` applies it on an empty collection, and on a collection with a document the validator's document check stops it before anything changes. V9: `kind` becomes the discriminator and `type` stays as a field: `db update` is stopped by the document check, which names `kind` as required and `--backfill Task.kind`.
+ * V1: the value of `Bug` becomes `defect`. Without a statement both commands ask, offering `--convert Bug` first and `--delete Bug` second; `--convert Bug` rewrites the documents. V2: `Bug` is renamed to `Defect`, whose value is `defect`: `--rename Bug:Defect` rewrites the documents. V3: `Bug` is removed: it is asked about as the model, and `--delete Bug` deletes its documents and keeps the others. V4: `Bug` is removed and `Epic` takes `bug`: the plan is refused with advice to use two migrations, and two migrations then delete the documents of `Bug` and move `Epic` to `bug`. V5: without a snapshot of the origin contract `db update` rewrites nothing, and the validator's document check stops it while documents hold `bug`. V6: the discriminator is renamed to `kind` and the value of `Bug` becomes `defect`: planned without statements, with `--convert Bug --delete Task.type`, or with `--delete Task.type --delete Bug`, and through `db update`, the plan is refused because a temporary value would name no variant, offering `--rename Task.type:Task.kind`, and nothing is applied; the plan with that rename and `--convert Bug` keeps every document's variant. V7: the discriminator is renamed and `Bug` is renamed to `Defect`: the refusal offers the discriminator rename, the question that follows offers `--rename Bug:Defect` before `--delete Bug`, and following both keeps every document. V8: `Task` has no discriminator and gains `type` with its variants: `db update` applies it on an empty collection, and on a collection with a document the validator's document check stops it before anything changes. V10: the same change through `migration plan` and `db migrate` stops at the document check, whose steps say to delete the migration that stopped and give the `migration plan` command, with `--from` and `--backfill Task.type`, that plans it again. V9: `kind` becomes the discriminator and `type` stays as a field: `db update` is stopped by the document check, which names `kind` as required and `--backfill Task.kind`.
  *
  * Every journey that applies ends with an empty further plan, a clean `db verify --schema-only`, and every document accepting an update; each `migration.ts` written is run again and reproduces its `ops.json`.
  */
@@ -517,14 +517,55 @@ describe('Journeys (MongoDB): variant statements', {
       code: failure?.code,
       summary: failure?.summary,
       text: JSON.stringify(failure ?? {}),
+      advice: failure?.nextActions?.map(({ label }) => label),
       documents: await documents('mongo_v8_held'),
     }).toEqual({
       exitCode: 'failed',
       code: 'MIGRATION.PRECHECK_FAILED',
       summary: expect.stringContaining('not fit the new validator'),
       text: expect.stringContaining('--backfill Task.type'),
+      advice: [
+        expect.stringMatching(/^Plan it with `[^`]*migration plan --backfill Task\.type`/),
+        'Make the field optional in the contract source',
+      ],
       documents: [{ title: 'a' }],
     });
+  });
+
+  it('V10: under db migrate, the stop for a first discriminator says to delete the migration that stopped and plan it again from its origin with --backfill Task.type, and that command plans', async () => {
+    const dbName = 'mongo_v10_migrate';
+    const ctx = setup(dbName);
+    await emit(ctx, PLAIN, 'V10.01');
+    const initial = await runMigrationPlan(ctx, ['--name', 'initial']);
+    expect(initial.exitCode, `V10.02: ${initial.stdout}\n${initial.stderr}`).toBe(0);
+    expect((await runMigrate(ctx)).exitCode, 'V10.03').toBe(0);
+    const origin = latestMigrationDirName(ctx);
+    await client.db(dbName).collection('tasks').insertOne({ title: 'a' });
+    await emit(ctx, BEFORE, 'V10.04');
+    const planned = await runMigrationPlan(ctx, ['--name', 'disc', '--from', origin]);
+    expect(planned.exitCode, `V10.05: ${planned.stdout}\n${planned.stderr}`).toBe(0);
+    const stoppedDir = latestMigrationDirName(ctx);
+
+    const failure = engineError(await runMigrate(ctx, ['--json']));
+    const advice = failure?.nextActions?.map(({ label }) => label).join('\n') ?? '';
+    const command = /`[^`]*migration plan (--from \S+ --name disc --backfill Task\.type)`/.exec(
+      advice,
+    )?.[1];
+    expect({
+      code: failure?.code,
+      deletesStopped: new RegExp(`delete \`[^\`]*${stoppedDir}\``).test(advice),
+      command,
+      documents: await documents(dbName),
+    }).toEqual({
+      code: 'MIGRATION.PRECHECK_FAILED',
+      deletesStopped: true,
+      command: expect.stringContaining('--backfill Task.type'),
+      documents: [{ title: 'a' }],
+    });
+
+    rmSync(join(ctx.testDir, 'migrations/app', stoppedDir), { recursive: true, force: true });
+    const replanned = await runMigrationPlan(ctx, (command ?? '').split(' '));
+    expect(replanned.exitCode, `V10.07: ${replanned.stdout}\n${replanned.stderr}`).toBe(0);
   });
 
   it('V9: a new discriminator beside the old one kept as a field is stopped by the document check, which names --backfill for the new one', async () => {
