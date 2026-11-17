@@ -266,7 +266,6 @@ Postgres prints a `timestamptz` value in the session's time zone, and dates, int
 - `./runtime`: Runtime entry point for target-specific runtime code
 - `./pack`: Pure pack ref for `defineContract({ family, target: postgresPack, ... })`
 - `./operation-types`: `QueryOperationTypes` for the built-in Postgres query operations, and the types their signatures name (`TsqueryArgument`, the `FullText*Options` types, `FullTextSearchLanguage`)
-- `./module-base`: `moduleBase`, this package's published module base, which the Postgres adapter, bundled into the same published package, uses to name this package's `codec-types` in its type declarations
 - `./full-text`: what an application calls to build a full-text query: the four parsers, the `tsquery` tag, and their types
 - `./prisma7-binding`: `prisma7PostgresBinding`, this target's view for the Prisma 7 contract source (see above)
 

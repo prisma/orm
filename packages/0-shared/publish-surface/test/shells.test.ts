@@ -143,7 +143,7 @@ describe('publicShells', () => {
   });
 
   it('forwards every Mongo target export from the Mongo facade except the ones no application imports', () => {
-    const notForwardedByFacade = ['module-base', 'prisma6-binding'];
+    const notForwardedByFacade = ['prisma6-binding'];
     const manifest: unknown = JSON.parse(
       readFileSync(join(repoRoot, 'packages/3-targets/mongo/1-target/package.json'), 'utf8'),
     );
@@ -162,7 +162,7 @@ describe('publicShells', () => {
   });
 
   it('forwards every Postgres target export from the Postgres facade except the ones no application imports', () => {
-    const notForwardedByFacade = ['module-base', 'prisma7-binding'];
+    const notForwardedByFacade = ['prisma7-binding'];
     const manifest: unknown = JSON.parse(
       readFileSync(join(repoRoot, 'packages/3-targets/postgres/1-target/package.json'), 'utf8'),
     );

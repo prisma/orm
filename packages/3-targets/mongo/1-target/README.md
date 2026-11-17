@@ -17,7 +17,6 @@ MongoDB target pack for Prisma 8.
 - `./codec-ids`: codec id constants (`MONGO_STRING_CODEC_ID`, …)
 - `./data-types`: the data types the codecs represent
 - `./codec-types`: the `CodecTypes` map, the `Vector<N>` brand, and `ParameterizedOutputTypesForTypeParams`, the type function that gives a vector field with a `length` type parameter the type `Vector<N>`; both `defineContract` and the emitted `contract.d.ts` apply it
-- `./module-base`: `moduleBase`, this package's published module base, which the MongoDB adapter, bundled into the same published package, uses to name this package's `codec-types` in its type declarations
 - `./migration`: factory functions (the `Migration` base class is in `@internal/family-mongo/migration`)
 - `./runtime`: the runtime target descriptor, and `mongoNowGenerators`, the `now()` generators of the date and time codecs, which the adapter registers
 - `./control`: sets the fallback `Temporal` when it is loaded; `mongoTargetDescriptor` and `MongoMigrationRunner` for migration execution; the runner gets its database dependencies from the family instance (`MongoControlFamilyInstance.createRunnerDependencies`), which delegates to the control adapter on the stack

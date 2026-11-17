@@ -1,6 +1,6 @@
 import { postgresCodecRegistry } from '@internal/target-postgres/codecs';
-import { moduleBase as targetModuleBase } from '@internal/target-postgres/module-base';
 import { postgresAdapterContractContributions } from './contract-contributions';
+import { targetModuleBase } from './target-module-base';
 
 // ============================================================================ Descriptor metadata ============================================================================
 

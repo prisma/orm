@@ -123,7 +123,7 @@ export const moduleBase =
     : '@internal/target-postgres';
 ```
 
-Write this check in each package's own source. The shell build defines a package's constant only in the shell that bundles that package. A package may read another package's base, exported for that purpose, only when the shells table maps both into the same published package: the Postgres adapter names the Postgres target's codec types with `moduleBase` from `@internal/target-postgres/module-base`, and both are bundled into `@prisma/orm-target-postgres`. Never read a base through a helper that another published package bundles: that helper is built into the other package and returns its value there.
+Write this check in each package's own source. The shell build defines a package's constant only in the shell that bundles that package. A package may read another package's constant, declared and checked the same way in its own source, only when the shells table maps both into the same published package: the Postgres adapter names the Postgres target's codec types from `__PRISMA_PUBLISHED_MODULE_BASE__TARGET_POSTGRES`, and both are bundled into `@prisma/orm-target-postgres`. Never import a base from another package: the imported code may be built into another published package, and it returns its value there.
 
 The workspace build must not define it. The shell build bundles the workspace build's `dist`, so a value substituted there could not be replaced with the published one. See `packages/3-targets/postgres/1-target/src/core/module-base.ts`.
 

@@ -9,8 +9,8 @@ export { extractDb, isMongoControlDriver } from '../core/migrations/mongo-contro
 export { createMongoAdapter } from '../mongo-adapter';
 export type { MongoControlDriverInstance };
 
-import { moduleBase as targetModuleBase } from '@internal/target-mongo/module-base';
 import { MongoControlAdapterImpl } from '../core/migrations/mongo-control-adapter';
+import { targetModuleBase } from '../core/target-module-base';
 
 export const mongoAdapterDescriptor: MongoControlAdapterDescriptor<'mongo'> = {
   kind: 'adapter',
