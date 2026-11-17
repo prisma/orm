@@ -326,6 +326,19 @@ describe('the orm section', () => {
       );
     });
 
+    it('refuses an empty name for both modules', () => {
+      const raw = withModules('');
+      const result = validateOrmSection(raw, provenanceFor(raw));
+
+      expect(result.ok ? [] : result.diagnostics.map((d) => d.meta?.['field'])).toEqual([
+        'contract.typesModule',
+        'migrations.module',
+      ]);
+      expect(result.ok ? '' : (result.diagnostics[0]?.summary ?? '')).toMatch(
+        /Config\.contract\.typesModule is empty.*`#`/,
+      );
+    });
+
     it.each(['#generated-types', '@acme/orm-db/generated-types', 'orm-db/migration', 'orm-db'])(
       'accepts %s',
       (module) => {

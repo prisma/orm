@@ -155,23 +155,26 @@ export function descriptorRelationshipProblems(
   return problems;
 }
 
-/**
- * Whether a module specifier names a file rather than a package or an import
- * private to one: it begins `.`, `/` or a backslash, holds a backslash, or begins with a
- * URL scheme such as `file:` or a Windows drive such as `C:`. A package name
- * (`pkg`, `pkg/sub`, `@scope/pkg/sub`) and a `#` import are not paths.
- */
-function isPathOrUrl(specifier: string): boolean {
-  return (
-    /^[./\\]/.test(specifier) || specifier.includes('\\') || /^[A-Za-z][\w+.-]*:/.test(specifier)
-  );
+const NAMING_ADVICE =
+  'Name the module the way a package is imported, or by a `#` import declared in the `imports` of the package that holds the generated files';
+
+function namesPathOrUrl(specifier: string): boolean {
+  const startsLikePath = /^[./\\]/.test(specifier) || specifier.includes('\\');
+  const startsWithSchemeOrDrive = /^[A-Za-z][\w+.-]*:/.test(specifier);
+  return startsLikePath || startsWithSchemeOrDrive;
 }
 
-/**
- * The generated-file modules the config names by a path. Generated files are
- * written into more than one folder, so a path resolves from at most one.
- */
-function modulePathProblems(config: {
+function moduleNameProblem(member: string, module: string): string | undefined {
+  if (module === '') {
+    return `Config.${member} is empty. ${NAMING_ADVICE}`;
+  }
+  if (namesPathOrUrl(module)) {
+    return `Config.${member} names the path or URL '${module}': generated files are written into more than one folder, beside the contract and beside each migration, so a path resolves from at most one of them. ${NAMING_ADVICE}`;
+  }
+  return undefined;
+}
+
+function generatedFileModuleProblems(config: {
   readonly contract?: { readonly typesModule?: string | undefined } | undefined;
   readonly migrations?: { readonly module?: string | undefined } | undefined;
 }): { readonly path: readonly string[]; readonly message: string }[] {
@@ -179,16 +182,10 @@ function modulePathProblems(config: {
     [['contract', 'typesModule'], config.contract?.typesModule],
     [['migrations', 'module'], config.migrations?.module],
   ];
-  return named.flatMap(([path, module]) =>
-    module !== undefined && isPathOrUrl(module)
-      ? [
-          {
-            path,
-            message: `Config.${path.join('.')} names the path or URL '${module}': generated files are written into more than one folder, beside the contract and beside each migration, so a path resolves from at most one of them. Name the module the way a package is imported, or by a \`#\` import declared in the \`imports\` of the package that holds the generated files`,
-          },
-        ]
-      : [],
-  );
+  return named.flatMap(([path, module]) => {
+    const message = module === undefined ? undefined : moduleNameProblem(path.join('.'), module);
+    return message === undefined ? [] : [{ path, message }];
+  });
 }
 
 /**
@@ -209,7 +206,7 @@ export const ormConfigSchema = ormSubsectionsSchema.narrow((config, ctx) => {
   for (const problem of problems) {
     ctx.error({ path: [...problem.path], expected: problem.expected, actual: problem.actual });
   }
-  const modulePaths = modulePathProblems(config);
+  const modulePaths = generatedFileModuleProblems(config);
   for (const problem of modulePaths) {
     ctx.reject(problem);
   }
