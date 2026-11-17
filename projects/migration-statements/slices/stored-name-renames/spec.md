@@ -52,7 +52,7 @@ Pairing order, per kind:
 
 | Object | Paired by, in this order | Compared | SQL family | MongoDB |
 | --- | --- | --- | --- | --- |
-| Model | a model rename statement; else the same coordinate; else, MongoDB variants only, the same storage (the rule of prisma/orm#31061, unchanged) | table, collection | rename table | rename collection |
+| Model | a model rename statement; else a namespace rename statement and the same name; else the same coordinate; else, MongoDB variants only, the same storage (the rule of prisma/orm#31061, unchanged) | table, collection | rename table | rename collection |
 | Field of a paired model | a field rename statement; else the same field name | column, document key | rename column | rename field (`$rename`) |
 | Field of an embedded model (MongoDB) | the same field name in the same embedded model | key inside the subdocument | not applicable | rename stored key, in every place the type is stored |
 | Enum member | an enum value rename statement; else the same member name | stored value | replace stored value | replace stored value |
@@ -66,9 +66,14 @@ Pairing order, per kind:
 
 A table, collection or column can be shared: SQL single-table variants share the base's table and may share a column, MongoDB variants share the base's collection, and MongoDB root models may share one collection. A rename moves everything stored there. So:
 
-**A table, collection or column is renamed only when every origin object stored in the old name is paired with a destination object stored in the new name, and no destination object still uses the old name.** One rename is planned for the storage, not one per model or field.
+**A table, collection or column is renamed only when both of these hold. One rename is planned for the storage, not one per model or field.**
 
-When only some of the objects move, the storage is splitting or merging, not being renamed. That is a change of storage mode (a variant moving between its base's table and its own, a model leaving a shared collection), which the design notes already list as a data migration that statements do not offer. No rename is planned for it, and the plan is what it is today: the storage diff, with its questions.
+1. Every origin object stored in the old name that the destination keeps is paired with a destination object stored in the new name. An object the destination removes does not block the rename: its rows move with the storage and are asked about by `--delete` as usual.
+2. Every destination object stored in the new name is new or is paired with an origin object stored in the old name.
+
+A name freed by the rename may be taken by a new object, so the old name may still be used in the destination by something new.
+
+When only some of the objects move, or objects from elsewhere join, the storage is splitting or merging, not being renamed. That is a change of storage mode (a variant moving between its base's table and its own, a model leaving a shared collection), which the design notes already list as a data migration that statements do not offer. No rename is planned for it, and the plan is what it is today: the storage diff, with its questions.
 
 This also fixes a defect in statement renames today. `--rename Bug:Defect`, where `Bug` is a single-table variant and `Defect` gets its own table, renames the base's table and takes every variant's rows with it (shown by the probe in `wip/stored-name-renames/pe-probes/`). The same condition now applies to statement pairs. A statement that fails it is refused, with a message that says the model's storage is shared and the change is a data migration.
 
@@ -105,7 +110,7 @@ One check runs over all renames of a plan together, those from statements and th
 A rename from a pair with the same coordinate is refused when:
 
 1. **Its new name is held in the origin** by anything other than its own source. This is a swap, a chain or a takeover.
-2. **Its new name is the new name of another rename.** This is a merge.
+2. **Its new name is the new name of a statement rename.** Two statements, or a statement and a contract change, would merge two objects' storage. (Two contract changes that move into one new name fail the shared-storage condition above, so no rename is planned and the plan is today's, with its questions.)
 3. **Its old name is the new name of a statement rename**, or the reverse. This is a chain between a statement and the contract change, in either direction.
 4. **On `db update`, its new name exists in the live database** and its old name does too (see the `db update` table).
 
@@ -116,7 +121,7 @@ Statement renames among themselves behave as today: the user orders them.
 | Swap | `User` moves to `accounts`, `Account` moves to `users` | No drop and no create. Each table is altered in place and silently holds the other model's rows. | Refused |
 | Chain | `User` moves to `accounts`, `Account` moves to `members` | Same silent reinterpretation | Refused |
 | Taking the storage of a removed model | `Account` removed, `User` moves to `accounts` | `users` is dropped and asked about. `Account`'s rows silently become `User`'s. | Refused |
-| Merge | `User` and `Member` both move to `people` | Both tables dropped and asked about | Refused |
+| Merge | `User` and `Member` both move to `people` | Both tables dropped and asked about | As today when no statement is involved; refused when a statement is |
 | Two fields of one model swap or chain `@map` | `a @map("x")`, `b @map("y")` become `a @map("y")`, `b @map("x")` | Nothing planned. The data is silently swapped. | Refused |
 | A field takes the column of a removed field | | The column is kept and silently read as the other field | Refused |
 | Chain with a statement | `a` moves from column `x` to `y`, and `--rename User.b:User.c` gives `c` the column `x` | Refused or planned depending on direction | Refused, both directions, for tables and columns |
