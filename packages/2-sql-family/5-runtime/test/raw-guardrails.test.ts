@@ -50,7 +50,7 @@ describe('evaluateRawGuardrails — read-only mutation lint', () => {
   });
 
   it('does not flag a mutation statement when intent is undefined', () => {
-    const result = evaluateRawGuardrails(makePlan('DELETE FROM users WHERE id = 1'));
+    const result = evaluateRawGuardrails(makePlan('DELETE FROM users WHERE id = 1', {}));
     expect(result.lints).not.toContainEqual(
       expect.objectContaining({ code: 'LINT.READ_ONLY_MUTATION' }),
     );
