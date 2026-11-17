@@ -129,7 +129,7 @@ gh issue view <n> --repo prisma/orm --json title,state,author,createdAt,body
 2. **The bug is in the current source.** Find the line that ignores the input or the `TODO` that parks it, and cite `file:line`.
 3. **The fix reaches the layer that has the bug.** Plumbing an option through one layer only counts if the layer beneath already honours it — verify that, do not assume it.
 4. **A test fails without the change.** See the constraint below before running anything.
-5. **The fix covers every place the bug occurs.** Search the PR's base branch (`baseRefName` from step 4), not `main` by default, for the same mistake in the other database targets, in the other family (SQL and MongoDB), and along the other code paths the same value passes through. Cite `file:line` for each occurrence the PR leaves unfixed, or say what you searched for and that you found none.
+5. **The fix covers every place the bug occurs.** Search the PR's base branch (`baseRefName` from step 4), not `main` by default, and the code the PR adds, for the same mistake in the other database targets, in the other family (SQL and MongoDB), and along the other code paths the same value passes through. Cite `file:line` for each occurrence the PR leaves unfixed, or say what you searched for and that you found none.
 
 Checks 1 to 3 and 5 are reading. Check 4 is execution, and that is a different risk.
 
