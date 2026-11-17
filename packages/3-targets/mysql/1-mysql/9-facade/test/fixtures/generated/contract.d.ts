@@ -31,11 +31,6 @@ export type AggregateTypes = {
   readonly avg: {
     readonly byCodec: {
       readonly 'mysql/bigint@1': { readonly output: 'mysql/double@1'; readonly nullable: true };
-      readonly 'mysql/bigintnumber@1': {
-        readonly output: 'mysql/double@1';
-        readonly nullable: true;
-      };
-      readonly 'mysql/double@1': { readonly output: 'mysql/double@1'; readonly nullable: true };
       readonly 'mysql/int@1': { readonly output: 'mysql/double@1'; readonly nullable: true };
     };
   };
@@ -159,21 +154,12 @@ export type AggregateTypes = {
         readonly output: 'mysql/bigintnumber@1';
         readonly nullable: true;
       };
-      readonly 'mysql/bigintnumber@1': {
-        readonly output: 'mysql/bigintnumber@1';
-        readonly nullable: true;
-      };
-      readonly 'mysql/double@1': { readonly output: 'mysql/double@1'; readonly nullable: true };
       readonly 'mysql/int@1': { readonly output: 'mysql/bigintnumber@1'; readonly nullable: true };
     };
   };
   readonly sumBigInt: {
     readonly byCodec: {
       readonly 'mysql/bigint@1': { readonly output: 'mysql/bigint@1'; readonly nullable: true };
-      readonly 'mysql/bigintnumber@1': {
-        readonly output: 'mysql/bigint@1';
-        readonly nullable: true;
-      };
       readonly 'mysql/int@1': { readonly output: 'mysql/bigint@1'; readonly nullable: true };
     };
   };
