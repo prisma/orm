@@ -1,5 +1,6 @@
-import type { ContractToOneRelation } from '@internal/contract/types';
+import { type ContractToOneRelation, coreHash, crossRef } from '@internal/contract/types';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { createContract } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { col, fk, table } from '../src/factories';
 import { SqlStorage } from '../src/ir/sql-storage';
@@ -11,7 +12,7 @@ function makeRelation(overrides: {
   localFields: readonly string[];
 }): ContractToOneRelation {
   return {
-    to: {} as never,
+    to: crossRef('User'),
     cardinality: overrides.cardinality,
     nullable: false,
     on: { localFields: overrides.localFields, targetFields: ['id'] },
@@ -21,11 +22,11 @@ function makeRelation(overrides: {
 describe('resolveSqlToOneRelationStorage', () => {
   it('resolves a mapped, non-nullable column for an existing field', () => {
     const usersTable = table({
-      id: col('int4', 'pg/int4@1'),
-      author_id: col('int4', 'pg/int4@1'),
+      id: col('pg/int4', 'pg/int4@1'),
+      author_id: col('pg/int4', 'pg/int4@1'),
     });
     const storage = new SqlStorage({
-      storageHash: 'test' as never,
+      storageHash: coreHash('test'),
       namespaces: {
         [UNBOUND_NAMESPACE_ID]: createTestSqlNamespace({
           id: UNBOUND_NAMESPACE_ID,
@@ -40,16 +41,22 @@ describe('resolveSqlToOneRelationStorage', () => {
     };
     const relation = makeRelation({ cardinality: 'N:1', localFields: ['authorId'] });
 
-    const result = resolveSqlToOneRelationStorage({ storage } as never, modelStorage, relation);
+    const result = resolveSqlToOneRelationStorage(
+      createContract<SqlStorage>({ storage }),
+      modelStorage,
+      relation,
+    );
 
-    expect(result.columns).toEqual([{ name: 'author_id', nullable: false }]);
-    expect(result.ownsForeignKey).toBe(true);
+    expect(result).toEqual({
+      ownsForeignKey: true,
+      columns: [{ name: 'author_id', nullable: false }],
+    });
   });
 
   it('falls back to the field name and treats the column as nullable when the field has no column mapping', () => {
-    const usersTable = table({ id: col('int4', 'pg/int4@1') });
+    const usersTable = table({ id: col('pg/int4', 'pg/int4@1') });
     const storage = new SqlStorage({
-      storageHash: 'test' as never,
+      storageHash: coreHash('test'),
       namespaces: {
         [UNBOUND_NAMESPACE_ID]: createTestSqlNamespace({
           id: UNBOUND_NAMESPACE_ID,
@@ -64,15 +71,19 @@ describe('resolveSqlToOneRelationStorage', () => {
     };
     const relation = makeRelation({ cardinality: 'N:1', localFields: ['missingField'] });
 
-    const result = resolveSqlToOneRelationStorage({ storage } as never, modelStorage, relation);
+    const result = resolveSqlToOneRelationStorage(
+      createContract<SqlStorage>({ storage }),
+      modelStorage,
+      relation,
+    );
 
     expect(result.columns).toEqual([{ name: 'missingField', nullable: true }]);
   });
 
   it('falls back to the field name and treats the column as nullable when the field maps to a missing table column', () => {
-    const usersTable = table({ id: col('int4', 'pg/int4@1') });
+    const usersTable = table({ id: col('pg/int4', 'pg/int4@1') });
     const storage = new SqlStorage({
-      storageHash: 'test' as never,
+      storageHash: coreHash('test'),
       namespaces: {
         [UNBOUND_NAMESPACE_ID]: createTestSqlNamespace({
           id: UNBOUND_NAMESPACE_ID,
@@ -87,15 +98,19 @@ describe('resolveSqlToOneRelationStorage', () => {
     };
     const relation = makeRelation({ cardinality: 'N:1', localFields: ['authorId'] });
 
-    const result = resolveSqlToOneRelationStorage({ storage } as never, modelStorage, relation);
+    const result = resolveSqlToOneRelationStorage(
+      createContract<SqlStorage>({ storage }),
+      modelStorage,
+      relation,
+    );
 
     expect(result.columns).toEqual([{ name: 'author_id', nullable: true }]);
   });
 
   it('does not own the foreign key for a 1:1 relation whose table declares no matching foreign key', () => {
-    const usersTable = table({ id: col('int4', 'pg/int4@1') });
+    const usersTable = table({ id: col('pg/int4', 'pg/int4@1') });
     const storage = new SqlStorage({
-      storageHash: 'test' as never,
+      storageHash: coreHash('test'),
       namespaces: {
         [UNBOUND_NAMESPACE_ID]: createTestSqlNamespace({
           id: UNBOUND_NAMESPACE_ID,
@@ -110,7 +125,11 @@ describe('resolveSqlToOneRelationStorage', () => {
     };
     const relation = makeRelation({ cardinality: '1:1', localFields: ['id'] });
 
-    const result = resolveSqlToOneRelationStorage({ storage } as never, modelStorage, relation);
+    const result = resolveSqlToOneRelationStorage(
+      createContract<SqlStorage>({ storage }),
+      modelStorage,
+      relation,
+    );
 
     expect(result.ownsForeignKey).toBe(false);
   });
@@ -118,11 +137,11 @@ describe('resolveSqlToOneRelationStorage', () => {
   it('owns the foreign key for a 1:1 relation whose table declares a matching foreign key', () => {
     const foreignKey = fk('profiles', ['user_id'], 'users', ['id']);
     const profilesTable = table(
-      { id: col('int4', 'pg/int4@1'), user_id: col('int4', 'pg/int4@1') },
+      { id: col('pg/int4', 'pg/int4@1'), user_id: col('pg/int4', 'pg/int4@1') },
       { fks: [foreignKey] },
     );
     const storage = new SqlStorage({
-      storageHash: 'test' as never,
+      storageHash: coreHash('test'),
       namespaces: {
         [UNBOUND_NAMESPACE_ID]: createTestSqlNamespace({
           id: UNBOUND_NAMESPACE_ID,
@@ -137,14 +156,18 @@ describe('resolveSqlToOneRelationStorage', () => {
     };
     const relation = makeRelation({ cardinality: '1:1', localFields: ['userId'] });
 
-    const result = resolveSqlToOneRelationStorage({ storage } as never, modelStorage, relation);
+    const result = resolveSqlToOneRelationStorage(
+      createContract<SqlStorage>({ storage }),
+      modelStorage,
+      relation,
+    );
 
     expect(result.ownsForeignKey).toBe(true);
   });
 
   it('does not own the foreign key when the referenced table is entirely missing', () => {
     const storage = new SqlStorage({
-      storageHash: 'test' as never,
+      storageHash: coreHash('test'),
       namespaces: {
         [UNBOUND_NAMESPACE_ID]: createTestSqlNamespace({
           id: UNBOUND_NAMESPACE_ID,
@@ -159,7 +182,11 @@ describe('resolveSqlToOneRelationStorage', () => {
     };
     const relation = makeRelation({ cardinality: '1:1', localFields: ['x'] });
 
-    const result = resolveSqlToOneRelationStorage({ storage } as never, modelStorage, relation);
+    const result = resolveSqlToOneRelationStorage(
+      createContract<SqlStorage>({ storage }),
+      modelStorage,
+      relation,
+    );
 
     expect(result.ownsForeignKey).toBe(false);
   });
