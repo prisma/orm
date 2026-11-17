@@ -588,8 +588,8 @@ model Job {
         const actions = nextActionLabels(refused);
         expect(
           actions.filter((label) => label.startsWith('To keep')).length,
-          'S9.04: one way per value, and no two-run way',
-        ).toBe(2);
+          'S9.04: one way, the same for both values, with no two-run way',
+        ).toBe(1);
         expect(actions.join('\n')).not.toContain('To keep it with db update');
         const printed = /`prisma-test migration plan (.+?)`/.exec(actions[0] ?? '')?.[1] ?? '';
         expect(printed, 'S9.04: the printed plan deletes both values').toMatch(
