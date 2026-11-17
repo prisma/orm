@@ -106,8 +106,8 @@ export interface PlannedQuestions {
   readonly accessChanges: readonly PlannedAccessChange[];
   /** The namespaces the planner removes and adds; absent when it reports none. */
   readonly namespaces?: MigrationPlanNamespaces;
-  /** The fields the plan gives a temporary value, as a statement names each in the destination contract. */
-  readonly temporaryValues: readonly { readonly field: string }[];
+  /** The fields the plan gives a temporary value, in the destination contract. */
+  readonly temporaryValues: readonly { readonly subject: MigrationSubject }[];
 }
 
 /** The contracts a statement names things in, and the statements the plan carries out so far. */
@@ -577,8 +577,8 @@ type DataLossContracts = StatementContracts & {
   readonly keepDataEditAdvice?: KeepDataEditAdvice;
   /** The subjects of the round's questions that carry edits that keep their data. */
   readonly keptSubjects?: readonly string[];
-  /** The fields the plan gives a temporary value, as a statement names each in the destination contract. */
-  readonly temporaryValues: readonly { readonly field: string }[];
+  /** The fields the plan gives a temporary value, in the destination contract. */
+  readonly temporaryValues: readonly { readonly subject: MigrationSubject }[];
 };
 
 /** What a command says of keeping a subject's data: why its answer loses it, if anything, and each way to keep it. */
@@ -650,13 +650,13 @@ function changedVariant(
 
 /**
  * The new required fields beside a removed field of a value object or of a model another model
- * embeds, as statements name them, without those the run backfills: the fields of its value object
+ * embeds, in the destination contract, without those the run backfills: the fields of its value object
  * or model that the origin does not have and no rename of the plan names.
  */
 function newRequiredFieldsBeside(
   subject: MigrationSubject,
   contracts: DataLossContracts,
-): readonly string[] {
+): readonly MigrationSubject[] {
   if (inDestination(subject, contracts)) return [];
   const backfills = contracts.canConvert ? resolvedBackfills(contracts) : [];
   if (subject.kind === 'valueObjectField') {
@@ -680,9 +680,7 @@ function newRequiredFieldsBeside(
               backfill.field.field === name,
           ),
       )
-      .map((name) =>
-        valueObjectFieldStatementText(contracts.destination, { ...field, field: name }),
-      );
+      .map((name): MigrationSubject => ({ ...field, kind: 'valueObjectField', field: name }));
   }
   if (subject.kind !== 'field') return [];
   const origin = contracts.origin.domain.namespaces[subject.namespaceId]?.models[subject.model];
@@ -702,7 +700,20 @@ function newRequiredFieldsBeside(
             backfill.field.field === name,
         ),
     )
-    .map((name) => `${modelStatementText(contracts.destination, model)}.${name}`);
+    .map((name): MigrationSubject => ({ ...model, kind: 'field', field: name }));
+}
+
+function newFieldText(field: MigrationSubject, destination: ContractWithDomain): string {
+  switch (field.kind) {
+    case 'field':
+      return fieldStatementText(destination, field);
+    case 'valueObjectField':
+      return valueObjectFieldStatementText(destination, field);
+    default:
+      throw new InternalError(
+        `A new required field is a field or a value object field, not a ${field.kind}`,
+      );
+  }
 }
 
 /**
@@ -715,9 +726,14 @@ function newRequiredFieldNote(
 ): readonly string[] {
   const added = newRequiredFieldsBeside(subject, contracts);
   if (added.length === 0) return [];
-  const filled = (each: string) => contracts.temporaryValues.some((value) => value.field === each);
-  const temporary = added.filter(filled);
-  const needed = added.filter((each) => !filled(each));
+  const filledKeys = new Set(
+    contracts.temporaryValues.map((value) => migrationSubjectKey(value.subject)),
+  );
+  const filled = (each: MigrationSubject) => filledKeys.has(migrationSubjectKey(each));
+  const temporary = added.filter(filled).map((each) => newFieldText(each, contracts.destination));
+  const needed = added
+    .filter((each) => !filled(each))
+    .map((each) => newFieldText(each, contracts.destination));
   const named = (fields: readonly string[]) =>
     `${fields.length === 1 ? 'field' : 'fields'} ${quotedList(fields)}`;
   const backfills = needed.map((each) => statementFlag({ verb: 'backfill', text: each })).join(' ');

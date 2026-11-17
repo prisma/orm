@@ -12,6 +12,14 @@ import { contractOf } from './statement-fixtures';
 
 const app = asNamespaceId('app');
 
+function geoPointField(field: string): MigrationSubject {
+  return { kind: 'valueObjectField', namespaceId: app, valueObject: 'GeoPoint', field };
+}
+
+function lineField(field: string): MigrationSubject {
+  return { kind: 'field', namespaceId: app, model: 'Line', field };
+}
+
 async function questionsOf(input: {
   readonly origin: ContractWithDomain;
   readonly destination: ContractWithDomain;
@@ -22,7 +30,7 @@ async function questionsOf(input: {
   readonly statements?: readonly { readonly verb: 'backfill'; readonly text: string }[];
   readonly preAnswers?: readonly { readonly verb: 'delete'; readonly text: string }[];
   /** The fields the plan gives a temporary value; none when left out. */
-  readonly temporaryValues?: readonly string[];
+  readonly temporaryValues?: readonly MigrationSubject[];
 }) {
   const asked: PlanQuestion[] = [];
   const result = await askPlanQuestions<PlannedQuestions, never>({
@@ -35,7 +43,11 @@ async function questionsOf(input: {
         ...(input.keepDataAdvice === undefined ? {} : { keepDataAdvice: input.keepDataAdvice }),
       })),
       accessChanges: [],
-      temporaryValues: (input.temporaryValues ?? []).map((field) => ({ field, value: '""' })),
+      temporaryValues: (input.temporaryValues ?? []).map((subject, operationIndex) => ({
+        operationIndex,
+        subject,
+        value: '""',
+      })),
     },
     askAccess: false,
     canConvert: input.canConvert ?? false,
@@ -82,7 +94,7 @@ describe('a question about a value object field', () => {
           destination,
           subject: lat,
           canConvert,
-          temporaryValues: canConvert ? [] : ['GeoPoint.latitude'],
+          temporaryValues: canConvert ? [] : [geoPointField('latitude')],
         });
         return question?.question;
       }),
@@ -97,7 +109,7 @@ describe('a question about a value object field', () => {
   it('says what --delete leaves in the new required field as the plan fills it, whatever the command', async () => {
     const asked = await Promise.all(
       [
-        { canConvert: true, temporaryValues: ['GeoPoint.latitude'] },
+        { canConvert: true, temporaryValues: [geoPointField('latitude')] },
         { canConvert: false, temporaryValues: [] },
       ].map(async ({ canConvert, temporaryValues }) => {
         const {
@@ -125,7 +137,7 @@ describe('a question about a value object field', () => {
       destination: twoNamespaces,
       subject: lat,
       canConvert: true,
-      temporaryValues: ['app.GeoPoint.latitude'],
+      temporaryValues: [geoPointField('latitude')],
     });
 
     expect(question?.question).toBe(
@@ -169,7 +181,7 @@ describe('a question about a value object field', () => {
         subject: lat,
         canConvert,
         statements,
-        temporaryValues: canConvert ? [] : ['GeoPoint.latitude', 'GeoPoint.longitude'],
+        temporaryValues: canConvert ? [] : [geoPointField('latitude'), geoPointField('longitude')],
       });
       return question?.question;
     }
@@ -196,7 +208,7 @@ describe('a question about a value object field', () => {
       destination,
       subject: lat,
       labels: ['Remove key "lat" from "place"."location"', 'Remove key "lat" from "trip"."stops"'],
-      temporaryValues: ['GeoPoint.latitude'],
+      temporaryValues: [geoPointField('latitude')],
     });
 
     expect(question).toMatchObject({
@@ -419,7 +431,7 @@ describe('a question about a field of an embedded model', () => {
     const asked = await Promise.all(
       [
         { canConvert: true, temporaryValues: [] },
-        { canConvert: false, temporaryValues: ['Line.code'] },
+        { canConvert: false, temporaryValues: [lineField('code')] },
       ].map(async ({ canConvert, temporaryValues }) => {
         const {
           asked: [question],
@@ -450,7 +462,7 @@ describe('a question about a field of an embedded model', () => {
       origin: roots(['sku', 'qty']),
       destination: roots(['code', 'qty']),
       subject: sku,
-      temporaryValues: ['Line.code'],
+      temporaryValues: [lineField('code')],
     });
 
     expect(question?.question).toBe('Remove key would lose the values of field "Line.sku".');
