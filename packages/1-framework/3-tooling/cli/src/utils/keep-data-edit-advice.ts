@@ -45,10 +45,7 @@ function listed(words: readonly string[]): string {
 }
 
 /**
- * Two runs of `db update` that end at the contract with every member under its own name: the first
- * renames the members to temporary members with stored values the enum does not use, and the second
- * renames them back with their new stored values. Each run changes stored values, so the database
- * records the names of both.
+ * Two runs of `db update` that keep the data when members keep their names and only their stored values change, which no rename statement can name. The first run renames each member to a temporary member with a stored value the enum does not use, so its rename rewrites the stored values, and the second renames it back with its new stored value the same way. Passing through unused values means no rewrite writes a value another rewrite replaces, so members that swap values are kept too.
  */
 function twoRuns(invocation: CliInvocation, subject: string, others: readonly string[]): string {
   const { enumName } = enumAndMember(subject);
