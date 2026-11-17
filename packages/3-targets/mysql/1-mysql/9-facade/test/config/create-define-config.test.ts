@@ -8,7 +8,6 @@ import sql, { type SqlControlAdapterDescriptor } from '@internal/family-sql/cont
 import type { TargetPackRef } from '@internal/framework-components/components';
 import { createMysqlControlTargetDescriptor } from '@internal/target-mysql/control';
 import mysqlPackRef from '@internal/target-mysql/pack';
-import { restateTypeDeclarations } from '@internal/target-package-config/type-declarations';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { createMysqlDefineConfig } from '../../src/config/define-config';
 
@@ -48,10 +47,7 @@ describe('createMysqlDefineConfig', () => {
     }).toEqual({
       family: sql,
       target: mariadbComponents.target,
-      adapter: restateTypeDeclarations(
-        mariadbComponents.adapter,
-        '@internal/mariadb/generated-types',
-      ),
+      adapter: mariadbComponents.adapter,
       driver: mariadbComponents.driver,
       output: './prisma/contract.json',
       inputs: ['./prisma/contract.prisma'],

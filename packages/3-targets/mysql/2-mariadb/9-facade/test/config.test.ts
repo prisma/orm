@@ -66,13 +66,13 @@ describe('defineConfig for MariaDB', () => {
     );
   });
 
-  it("emits a PSL contract for target mariadb, with no returning capability and typed by MariaDB's codec types module", async () => {
+  it('emits a PSL contract for target mariadb, with no returning capability and typed by its generated-types module', async () => {
     const { contract, contractDts } = await emitFixture('example');
     expect({
       target: contract.target,
       capabilities: contract.capabilities,
       codecTypes: contractDts.includes(
-        "import type { CodecTypes as MariadbTypes } from '@internal/adapter-mariadb/codec-types';",
+        "import type { CodecTypes as MariadbTypes } from '@internal/mariadb/generated-types';",
       ),
     }).toEqual({
       target: 'mariadb',

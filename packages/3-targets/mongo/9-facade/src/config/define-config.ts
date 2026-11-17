@@ -1,4 +1,3 @@
-import mongoAdapter from '@internal/adapter-mongo/control';
 import type {
   ContractConfig,
   FormatterConfig,
@@ -14,11 +13,10 @@ import type { ControlExtensionDescriptor } from '@internal/framework-components/
 import { mongoContract } from '@internal/mongo-contract-psl/provider';
 import { typescriptContractFromPath } from '@internal/mongo-contract-ts/config-types';
 import { MONGO_INT32_CODEC_ID, MONGO_STRING_CODEC_ID } from '@internal/target-mongo/codec-ids';
-import { mongoTargetDescriptor } from '@internal/target-mongo/control';
 import mongoTargetPack from '@internal/target-mongo/pack';
-import { restateTypeDeclarations } from '@internal/target-package-config/type-declarations';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
+import { generatedTypesModule, mongoControlAdapter, mongoTarget } from './components';
 import { moduleBase } from './module-base';
 
 export interface MongoConfigOptions {
@@ -79,11 +77,11 @@ export function defineConfig(options: MongoConfigOptions): PrismaNextConfig<'mon
 
   return coreDefineConfig({
     family: mongoFamilyDescriptor,
-    target: restateTypeDeclarations(mongoTargetDescriptor, `${moduleBase}/generated-types`),
-    adapter: restateTypeDeclarations(mongoAdapter, `${moduleBase}/generated-types`),
+    target: mongoTarget,
+    adapter: mongoControlAdapter,
     driver: mongoDriver,
     extensions,
-    contract: { ...contractConfig, typesModule: `${moduleBase}/generated-types` },
+    contract: { ...contractConfig, typesModule: generatedTypesModule },
     migrations: { ...options.migrations, module: `${moduleBase}/migration` },
     ...ifDefined('db', options.db),
     ...ifDefined('formatter', options.formatter),

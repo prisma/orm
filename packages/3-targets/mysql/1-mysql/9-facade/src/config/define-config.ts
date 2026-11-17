@@ -1,4 +1,3 @@
-import mysqlAdapter from '@internal/adapter-mysql/control';
 import type {
   ContractConfig,
   FormatterConfig,
@@ -15,13 +14,12 @@ import type { ControlExtensionDescriptor } from '@internal/framework-components/
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import { typescriptContractFromPath } from '@internal/sql-contract-ts/config-types';
 import { MYSQL_ENUM_CODEC_ID, MYSQL_INT_CODEC_ID } from '@internal/target-mysql/codec-ids';
-import mysql from '@internal/target-mysql/control';
 import mysqlPackRef from '@internal/target-mysql/pack';
 import { mysqlCreateNamespace } from '@internal/target-mysql/types';
-import { restateTypeDeclarations } from '@internal/target-package-config/type-declarations';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
 import { typescriptContractUnsupported } from '../errors';
+import { mysqlControlAdapter, mysqlTarget } from './components';
 import { moduleBase } from './module-base';
 
 export interface MysqlConfigOptions<TargetId extends string = 'mysql'> {
@@ -37,7 +35,7 @@ export interface MysqlConfigOptions<TargetId extends string = 'mysql'> {
   readonly formatter?: FormatterConfig;
 }
 
-/** The components of MySQL, or of a target that extends it, that its `prisma.config.ts` wires together. The control target carries the facade module its `migration.ts` files import from. */
+/** The components of MySQL, or of a target that extends it, that its `prisma.config.ts` wires together. The target and adapter are the ones the target package hands on, with their type declarations restated. */
 export interface MysqlConfigComponents<TargetId extends string> {
   readonly pack: TargetPackRef<'sql', TargetId>;
   readonly target: PrismaNextConfig<'sql', TargetId>['target'];
@@ -62,11 +60,8 @@ function buildConfig<TargetId extends string>(
 ): PrismaNextConfig<'sql', TargetId> {
   return coreDefineConfig({
     family: sql,
-    target: restateTypeDeclarations(components.target, `${components.moduleBase}/generated-types`),
-    adapter: restateTypeDeclarations(
-      components.adapter,
-      `${components.moduleBase}/generated-types`,
-    ),
+    target: components.target,
+    adapter: components.adapter,
     driver: components.driver,
     extensions: options.extensions ?? [],
     contract: { ...contract, typesModule: `${components.moduleBase}/generated-types` },
@@ -101,8 +96,8 @@ export function createMysqlDefineConfig<TargetId extends string>(
 
 const mysqlComponents: MysqlConfigComponents<'mysql'> = {
   pack: mysqlPackRef,
-  target: mysql,
-  adapter: mysqlAdapter,
+  target: mysqlTarget,
+  adapter: mysqlControlAdapter,
   driver: mysqlDriver,
   moduleBase,
 };

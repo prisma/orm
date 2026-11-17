@@ -284,6 +284,58 @@ describe('all publish shells packed and installed together', () => {
     expect(problems).toEqual([]);
   });
 
+  it('imports its target and adapter types only from its own exports when its control client emits', () => {
+    const controlPackages = namingGeneratedModules.filter((name) =>
+      Object.hasOwn(installedExports(name), './control'),
+    );
+    expect(controlPackages.length).toBeGreaterThan(0);
+    const script = [
+      "import { mkdirSync, writeFileSync } from 'node:fs';",
+      "import { join } from 'node:path';",
+      COLLECT_DECLARED_MODULES,
+      `const names = ${JSON.stringify(controlPackages)};`,
+      "const model = { '@prisma/orm-mongo': 'model User {\\n  id ObjectId @id @map(\"_id\")\\n}\\n' };",
+      'const imported = {};',
+      'for (const name of names) {',
+      "  const dir = join(process.cwd(), 'emit-' + name.replace(/[@/]/g, '-'));",
+      '  mkdirSync(dir, { recursive: true });',
+      "  const contract = join(dir, 'contract.prisma');",
+      "  writeFileSync(contract, '// use prisma-8\\n\\n' + (model[name] ?? 'model User {\\n  id Int @id\\n}\\n'));",
+      "  const { defineConfig } = await import(name + '/config');",
+      '  const config = defineConfig({ contract });',
+      '  const aliases = new Set();',
+      '  const walk = (value) => {',
+      "    if (value === null || typeof value !== 'object') return;",
+      "    if (typeof value.package === 'string' && typeof value.alias === 'string') aliases.add(value.alias);",
+      '    for (const child of Object.values(value)) walk(child);',
+      '  };',
+      '  walk([config.target.types, config.adapter.types]);',
+      "  const { createControlClient } = await import(name + '/control').then((control) => ({",
+      "    createControlClient: Object.values(control).find((value) => typeof value === 'function'),",
+      '  }));',
+      '  const emitted = await createControlClient().emit({ contractConfig: config.contract });',
+      '  if (!emitted.ok) throw new Error(JSON.stringify(emitted.failure));',
+      "  imported[name] = [...emitted.value.contractDts.matchAll(/import type \\{([^}]*)\\} from '([^']+)';/g)]",
+      "    .filter(([, names]) => names.split(',').some((each) => aliases.has(each.trim().split(/\\s+as\\s+/).at(-1))))",
+      '    .map(([, , module]) => module);',
+      '}',
+      'console.log(JSON.stringify(imported));',
+    ].join('\n');
+    const imported: Record<string, string[]> = JSON.parse(runInScratch(scratch, script));
+
+    const problems: string[] = [];
+    for (const name of controlPackages) {
+      const modules = imported[name] ?? [];
+      if (modules.length === 0)
+        problems.push(`${name} emitted no import of its target and adapter types`);
+      for (const module of modules) {
+        if (module !== `${name}/generated-types`)
+          problems.push(`${name} emitted an import from ${module}`);
+      }
+    }
+    expect(problems).toEqual([]);
+  });
+
   it('ships no type declaration naming an @internal module in any built or declaration file', () => {
     const offenders: string[] = [];
     for (const name of allShells) {

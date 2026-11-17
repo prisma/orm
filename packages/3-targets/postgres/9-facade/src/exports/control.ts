@@ -7,7 +7,6 @@
  * `@internal/postgres/runtime` did for the query side.
  */
 
-import postgresAdapter from '@internal/adapter-postgres/control';
 import {
   type ControlClient,
   type ControlClientOptions,
@@ -15,8 +14,8 @@ import {
 } from '@internal/cli/control-api';
 import postgresDriver from '@internal/driver-postgres/control';
 import sql from '@internal/family-sql/control';
-import postgres from '@internal/target-postgres/control';
 import { ifDefined } from '@internal/utils/defined';
+import { postgresControlAdapter, postgresTarget } from '../config/components';
 
 export interface PostgresControlClientOptions {
   /**
@@ -37,8 +36,8 @@ export function createPostgresControlClient(
 ): ControlClient {
   const clientOptions: ControlClientOptions = {
     family: sql,
-    target: postgres,
-    adapter: postgresAdapter,
+    target: postgresTarget,
+    adapter: postgresControlAdapter,
     driver: postgresDriver,
     ...ifDefined('connection', options.connection),
     ...ifDefined('extensions', options.extensions),

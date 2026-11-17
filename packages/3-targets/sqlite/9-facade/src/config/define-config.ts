@@ -1,4 +1,3 @@
-import sqliteAdapter from '@internal/adapter-sqlite/control';
 import type { FormatterConfig, PrismaNextConfig } from '@internal/config/config-types';
 import {
   defineConfig as coreDefineConfig,
@@ -9,13 +8,12 @@ import sql from '@internal/family-sql/control';
 import type { ControlExtensionDescriptor } from '@internal/framework-components/control';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import { typescriptContractFromPath } from '@internal/sql-contract-ts/config-types';
-import { restateTypeDeclarations } from '@internal/target-package-config/type-declarations';
 import { SQLITE_INTEGER_CODEC_ID, SQLITE_TEXT_CODEC_ID } from '@internal/target-sqlite/codec-ids';
-import sqlite from '@internal/target-sqlite/control';
 import sqlitePackRef from '@internal/target-sqlite/pack';
 import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
+import { generatedTypesModule, sqliteControlAdapter, sqliteTarget } from './components';
 import { moduleBase } from './module-base';
 
 export interface SqliteConfigOptions {
@@ -51,11 +49,11 @@ export function defineConfig(options: SqliteConfigOptions): PrismaNextConfig<'sq
 
   return coreDefineConfig({
     family: sql,
-    target: restateTypeDeclarations(sqlite, `${moduleBase}/generated-types`),
-    adapter: restateTypeDeclarations(sqliteAdapter, `${moduleBase}/generated-types`),
+    target: sqliteTarget,
+    adapter: sqliteControlAdapter,
     driver: sqliteDriver,
     extensions,
-    contract: { ...contractConfig, typesModule: `${moduleBase}/generated-types` },
+    contract: { ...contractConfig, typesModule: generatedTypesModule },
     migrations: { ...options.migrations, module: `${moduleBase}/migration` },
     ...ifDefined('db', options.db),
     ...ifDefined('formatter', options.formatter),

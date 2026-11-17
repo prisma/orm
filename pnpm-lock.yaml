@@ -4563,6 +4563,9 @@ importers:
       '@internal/target-mysql':
         specifier: workspace:8.0.0-rc.24
         version: link:../../1-mysql/1-target
+      '@internal/target-package-config':
+        specifier: workspace:8.0.0-rc.24
+        version: link:../../../0-shared/target-package-config
       '@internal/utils':
         specifier: workspace:8.0.0-rc.24
         version: link:../../../../1-framework/0-foundation/utils
@@ -4582,9 +4585,6 @@ importers:
       '@internal/sql-schema-ir':
         specifier: workspace:8.0.0-rc.24
         version: link:../../../../2-sql-family/1-core/schema-ir
-      '@internal/target-package-config':
-        specifier: workspace:8.0.0-rc.24
-        version: link:../../../0-shared/target-package-config
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.24
         version: link:../../../../../test/utils

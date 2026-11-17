@@ -1,4 +1,3 @@
-import sqliteAdapter from '@internal/adapter-sqlite/control';
 import {
   type ControlClient,
   type ControlClientOptions,
@@ -6,8 +5,8 @@ import {
 } from '@internal/cli/control-api';
 import sqliteDriver from '@internal/driver-sqlite/control';
 import sql from '@internal/family-sql/control';
-import sqlite from '@internal/target-sqlite/control';
 import { ifDefined } from '@internal/utils/defined';
+import { sqliteControlAdapter, sqliteTarget } from '../config/components';
 
 export interface SqliteControlClientOptions {
   readonly connection?: string;
@@ -17,8 +16,8 @@ export interface SqliteControlClientOptions {
 export function createSqliteControlClient(options: SqliteControlClientOptions = {}): ControlClient {
   const clientOptions: ControlClientOptions = {
     family: sql,
-    target: sqlite,
-    adapter: sqliteAdapter,
+    target: sqliteTarget,
+    adapter: sqliteControlAdapter,
     driver: sqliteDriver,
     ...ifDefined('connection', options.connection),
     ...ifDefined('extensions', options.extensions),

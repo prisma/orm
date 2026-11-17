@@ -1,4 +1,3 @@
-import mongoAdapter from '@internal/adapter-mongo/control';
 import {
   type ControlClient,
   type ControlClientOptions,
@@ -6,8 +5,8 @@ import {
 } from '@internal/cli/control-api';
 import mongoDriver from '@internal/driver-mongo/control';
 import { mongoFamilyDescriptor } from '@internal/family-mongo/control';
-import { mongoTargetDescriptor } from '@internal/target-mongo/control';
 import { ifDefined } from '@internal/utils/defined';
+import { mongoControlAdapter, mongoTarget } from '../config/components';
 
 export interface MongoControlClientOptions {
   readonly connection?: string;
@@ -17,8 +16,8 @@ export interface MongoControlClientOptions {
 export function createMongoControlClient(options: MongoControlClientOptions = {}): ControlClient {
   const clientOptions: ControlClientOptions = {
     family: mongoFamilyDescriptor,
-    target: mongoTargetDescriptor,
-    adapter: mongoAdapter,
+    target: mongoTarget,
+    adapter: mongoControlAdapter,
     driver: mongoDriver,
     ...ifDefined('connection', options.connection),
     ...ifDefined('extensions', options.extensions),

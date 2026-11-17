@@ -1,4 +1,3 @@
-import mysqlAdapter from '@internal/adapter-mysql/control';
 import {
   type ControlClient,
   type ControlClientOptions,
@@ -6,8 +5,8 @@ import {
 } from '@internal/cli/control-api';
 import mysqlDriver from '@internal/driver-mysql/control';
 import sql from '@internal/family-sql/control';
-import mysql from '@internal/target-mysql/control';
 import { ifDefined } from '@internal/utils/defined';
+import { mysqlControlAdapter, mysqlTarget } from '../config/components';
 
 export interface MysqlControlClientOptions {
   readonly connection?: string;
@@ -18,8 +17,8 @@ export interface MysqlControlClientOptions {
 export function createMysqlControlClient(options: MysqlControlClientOptions = {}): ControlClient {
   return createControlClient({
     family: sql,
-    target: mysql,
-    adapter: mysqlAdapter,
+    target: mysqlTarget,
+    adapter: mysqlControlAdapter,
     driver: mysqlDriver,
     ...ifDefined('connection', options.connection),
     ...ifDefined('extensions', options.extensions),

@@ -1,9 +1,8 @@
-import mariadbAdapter from '@internal/adapter-mariadb/control';
 import type { PrismaNextConfig } from '@internal/config/config-types';
 import mariadbDriver from '@internal/driver-mariadb/control';
 import { createMysqlDefineConfig, type MysqlConfigOptions } from '@internal/mysql/config';
-import mariadb from '@internal/target-mariadb/control';
 import mariadbPackRef from '@internal/target-mariadb/pack';
+import { mariadbControlAdapter, mariadbTarget } from './components';
 import { moduleBase } from './module-base';
 
 export type MariadbConfigOptions = MysqlConfigOptions<'mariadb'>;
@@ -12,8 +11,8 @@ export type MariadbConfigOptions = MysqlConfigOptions<'mariadb'>;
 export const defineConfig: (options: MariadbConfigOptions) => PrismaNextConfig<'sql', 'mariadb'> =
   createMysqlDefineConfig({
     pack: mariadbPackRef,
-    target: mariadb,
-    adapter: mariadbAdapter,
+    target: mariadbTarget,
+    adapter: mariadbControlAdapter,
     driver: mariadbDriver,
     moduleBase,
   });

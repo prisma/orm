@@ -1,4 +1,3 @@
-import mariadbAdapter from '@internal/adapter-mariadb/control';
 import {
   type ControlClient,
   type ControlClientOptions,
@@ -6,8 +5,8 @@ import {
 } from '@internal/cli/control-api';
 import mariadbDriver from '@internal/driver-mariadb/control';
 import sql from '@internal/family-sql/control';
-import mariadb from '@internal/target-mariadb/control';
 import { ifDefined } from '@internal/utils/defined';
+import { mariadbControlAdapter, mariadbTarget } from '../config/components';
 
 export interface MariadbControlClientOptions {
   readonly connection?: string;
@@ -20,8 +19,8 @@ export function createMariadbControlClient(
 ): ControlClient {
   return createControlClient({
     family: sql,
-    target: mariadb,
-    adapter: mariadbAdapter,
+    target: mariadbTarget,
+    adapter: mariadbControlAdapter,
     driver: mariadbDriver,
     ...ifDefined('connection', options.connection),
     ...ifDefined('extensions', options.extensions),
