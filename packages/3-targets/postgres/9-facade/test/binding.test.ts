@@ -90,6 +90,29 @@ describe('resolvePostgresBinding', () => {
       'Unable to determine pg binding type from pg input',
     );
   });
+
+  it('accepts a URL that leaves the host blank', () => {
+    expect(resolvePostgresBinding({ url: 'postgres://u:p@/db' })).toEqual({
+      kind: 'url',
+      url: 'postgres://u:p@/db',
+    });
+  });
+
+  it('accepts a URL that leaves the user blank', () => {
+    expect(resolvePostgresBinding({ url: 'postgres://:p@localhost/db' })).toEqual({
+      kind: 'url',
+      url: 'postgres://:p@localhost/db',
+    });
+  });
+
+  it('still refuses a URL whose host is malformed rather than blank', () => {
+    expect(() => resolvePostgresBinding({ url: 'postgres://u:p@[/db' })).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.BINDING_INVALID',
+        message: 'Postgres URL must be a valid URL',
+      }),
+    );
+  });
 });
 
 describe('resolveOptionalPostgresBinding with a narrowed list of kinds', () => {
