@@ -483,6 +483,35 @@ describe('MongoMigrationPlanner, a field whose type changes', () => {
       ]);
     });
 
+    it('finds no type change when a new root model of a shared collection sorts before the others', () => {
+      const note = closedSchema({ age: { bsonType: 'string' }, title: { bsonType: 'string' } });
+      const task = closedSchema({ age: { bsonType: 'string' }, done: { bsonType: 'bool' } });
+      const article = closedSchema({ age: { bsonType: 'int' } });
+      const destination = contract(
+        'to',
+        {
+          Article: { collection: 'items', fields: ['_id', 'age'], types: { _id: OBJECT_ID } },
+          Note: { collection: 'items', fields: ['_id', 'age', 'title'], types: { _id: OBJECT_ID } },
+          Task: { collection: 'items', fields: ['_id', 'age', 'done'], types: { _id: OBJECT_ID } },
+        },
+        { items: { jsonSchema: { bsonType: 'object', anyOf: [article, note, task] } } },
+      );
+
+      expect(
+        planned(
+          plan({
+            from: null,
+            to: destination,
+            schema: [
+              schemaCollection('items', {
+                jsonSchema: { bsonType: 'object', anyOf: [note, task] },
+              }),
+            ],
+          }),
+        ).dataLoss,
+      ).toEqual([]);
+    });
+
     it("casts a variant's field in that variant's documents only, read from the validator's variants", () => {
       const tasks = (severity: string) => ({
         bsonType: 'object',

@@ -66,13 +66,19 @@ export interface ValidatorDiscriminator {
 /**
  * One kind of document a collection validator describes: a root model with no variants, or a
  * variant with its root's required fields and properties. `key` names the same kind of document in
- * another validator of the collection: the root's position in `anyOf`, and the variant's
- * discriminator value, or its position when it has none. Roots are matched by position because
- * `deriveCollectionValidators` writes them in the same order every time. `sameKindOfDocumentIn`
- * also matches a variant with a shape whose key differs; see there.
+ * another validator of the collection: its `root`, and the variant's discriminator value, or its
+ * position when it has none. `sameKindOfDocumentIn` also matches a variant with a shape whose key
+ * differs; see there.
  */
 export interface ValidatorDocumentShape {
   readonly key: string;
+  /**
+   * The root's position in `anyOf` and the number of roots. A validator names no root model, so
+   * position is the root's only identity. `deriveCollectionValidators` writes roots in name order, and
+   * a root model added or removed moves the others, so roots of validators with different numbers of
+   * roots never match.
+   */
+  readonly root: string;
   readonly rootIndex: number;
   readonly discriminator: ValidatorDiscriminator | undefined;
   readonly required: readonly string[];
@@ -92,17 +98,16 @@ function discriminatorOf(
   return others.length === 0 ? only : undefined;
 }
 
-function rootKey(rootIndex: number): string {
-  return `${rootIndex}`;
-}
-
 /** Each kind of document a collection validator's `$jsonSchema` describes. */
 export function validatorDocumentShapesOf(jsonSchema: unknown): readonly ValidatorDocumentShape[] {
-  return validatorRootShapesOf(jsonSchema).flatMap((root, rootIndex): ValidatorDocumentShape[] => {
+  const roots = validatorRootShapesOf(jsonSchema);
+  return roots.flatMap((root, rootIndex): ValidatorDocumentShape[] => {
+    const rootKey = `${rootIndex}/${roots.length}`;
     if (root.variants.length === 0) {
       return [
         {
-          key: rootKey(rootIndex),
+          key: rootKey,
+          root: rootKey,
           rootIndex,
           discriminator: undefined,
           required: root.required,
@@ -114,7 +119,8 @@ export function validatorDocumentShapesOf(jsonSchema: unknown): readonly Validat
     return root.variants.map((variant, variantIndex) => {
       const discriminator = discriminatorOf(variant.properties);
       return {
-        key: `${rootIndex}:${discriminator === undefined ? variantIndex : JSON.stringify([discriminator.field, discriminator.value])}`,
+        key: `${rootKey}:${discriminator === undefined ? variantIndex : JSON.stringify([discriminator.field, discriminator.value])}`,
+        root: rootKey,
         rootIndex,
         discriminator,
         required: [...new Set([...root.required, ...variant.required])],
@@ -153,13 +159,13 @@ export function sameKindOfDocumentIn(
   const value = JSON.stringify(shape.discriminator.value);
   return (
     matched(
-      shapes.find(({ key }) => key === rootKey(shape.rootIndex)),
+      shapes.find(({ key }) => key === shape.root),
       'root',
     ) ??
     matched(
       shapes.find(
-        ({ rootIndex, discriminator }) =>
-          rootIndex === shape.rootIndex &&
+        ({ root, discriminator }) =>
+          root === shape.root &&
           discriminator !== undefined &&
           JSON.stringify(discriminator.value) === value,
       ),

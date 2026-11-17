@@ -71,7 +71,8 @@ describe('validatorDocumentShapesOf', () => {
   it('reads each root model, or each of its variants with the root fields, keyed by root and discriminator value', () => {
     expect(validatorDocumentShapesOf({ bsonType: 'object', anyOf: [user, task] })).toEqual([
       {
-        key: '0',
+        key: '0/2',
+        root: '0/2',
         rootIndex: 0,
         discriminator: undefined,
         required: ['_id', 'email'],
@@ -79,7 +80,8 @@ describe('validatorDocumentShapesOf', () => {
         closed: true,
       },
       {
-        key: '1:["type","bug"]',
+        key: '1/2:["type","bug"]',
+        root: '1/2',
         rootIndex: 1,
         discriminator: { field: 'type', value: 'bug' },
         required: ['_id', 'type', 'severity'],
@@ -95,7 +97,7 @@ describe('validatorDocumentShapesOf', () => {
 
   it('keys a variant with no single-valued field by its position', () => {
     const unnamed = { ...task, oneOf: [{ required: [], properties: {} }] };
-    expect(validatorDocumentShapesOf(unnamed).map(({ key }) => key)).toEqual(['0:0']);
+    expect(validatorDocumentShapesOf(unnamed).map(({ key }) => key)).toEqual(['0/1:0']);
   });
 });
 
@@ -119,8 +121,8 @@ describe('validatorDocumentShapesOf, a base field with a one-value enum', () => 
         discriminator,
       })),
     ).toEqual([
-      { key: '0:["type","bug"]', discriminator: { field: 'type', value: 'bug' } },
-      { key: '0:["type","feature"]', discriminator: { field: 'type', value: 'feature' } },
+      { key: '0/1:["type","bug"]', discriminator: { field: 'type', value: 'bug' } },
+      { key: '0/1:["type","feature"]', discriminator: { field: 'type', value: 'feature' } },
     ]);
   });
 });
@@ -155,8 +157,8 @@ describe('sameKindOfDocumentIn', () => {
         return [found?.shape.key, found?.matchedBy];
       }),
     ).toEqual([
-      ['0', 'key'],
-      ['1:["type","bug"]', 'key'],
+      ['0/2', 'key'],
+      ['1/2:["type","bug"]', 'key'],
     ]);
   });
 
@@ -165,15 +167,26 @@ describe('sameKindOfDocumentIn', () => {
 
     const found = sameKindOfDocumentIn(validatorDocumentShapesOf(plainTask), bug!);
 
-    expect([found?.shape.key, found?.matchedBy]).toEqual(['0', 'root']);
+    expect([found?.shape.key, found?.matchedBy]).toEqual(['0/1', 'root']);
   });
 
   it('finds the variant of the same root with the same discriminator value when the discriminator field changes', () => {
     const found = sameKindOfDocumentIn(validatorDocumentShapesOf(task), bugByKind!);
 
     expect([found?.shape.key, found?.matchedBy]).toEqual([
-      '0:["type","bug"]',
+      '0/1:["type","bug"]',
       'discriminatorValue',
+    ]);
+  });
+
+  it('matches no root of a validator with another number of roots, since a root added or removed moves the others', () => {
+    const before = validatorDocumentShapesOf({ bsonType: 'object', anyOf: [user, plainTask] });
+    const after = validatorDocumentShapesOf({ bsonType: 'object', anyOf: [plainTask, user, task] });
+
+    expect(after.map((shape) => sameKindOfDocumentIn(before, shape))).toEqual([
+      undefined,
+      undefined,
+      undefined,
     ]);
   });
 
