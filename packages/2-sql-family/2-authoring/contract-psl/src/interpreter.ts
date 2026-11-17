@@ -52,6 +52,7 @@ import { elementCoordinates, UNBOUND_NAMESPACE_ID } from '@internal/framework-co
 import { UNBOUND_PSL_NAMESPACE_NAME } from '@internal/framework-components/psl-ast';
 import type { Binder, ParsedWrittenScalar } from '@internal/psl-parser';
 import {
+  type AttributeSpec,
   type AttributeSpecContext,
   type BlockSymbol,
   type CompositeTypeSymbol,
@@ -61,6 +62,7 @@ import {
   type FieldSymbol,
   findBlockDescriptor,
   interpretExtensionBlocks,
+  type ModelAttributeCtx,
   type ModelAttributeSpecFactory,
   type ModelSymbol,
   type NamespaceSymbol,
@@ -165,6 +167,7 @@ import {
   modelAttributeSpecsFrom,
   modelSpecContext,
   PSL_CHECK_ON_STI_VARIANT,
+  type SqlRelationOutput,
   sqlAttributeSpecs,
 } from './sql-attribute-specs';
 import type { ValueObjectTypes } from './value-object-default';
@@ -612,6 +615,54 @@ function relationNullabilityMismatchDiagnostic(
   };
 }
 
+interface ModelLoweringContext {
+  readonly input: BuildModelNodeInput;
+  readonly model: ModelSymbol;
+  readonly diagnostics: PslDiagnosticCollector;
+  readonly source: DiagnosticSource;
+  readonly tableName: string;
+  readonly specContext: AttributeSpecContext;
+  readonly resolvedFields: readonly ResolvedField[];
+}
+
+type ModelAttribute = ModelSymbol['attributes'][number];
+
+interface RelationAttributeEntry {
+  readonly field: FieldSymbol;
+  readonly relation: ResolvedAttribute<FieldAttributeAst>;
+}
+
+interface ModelAttributeLowering {
+  readonly hasInlinePrimaryKey: boolean;
+  primaryKey: PrimaryKeyNode | undefined;
+  blockPrimaryKeyDeclared: boolean;
+  controlPolicyDeclared: boolean;
+  controlPolicy: ControlPolicy | undefined;
+  readonly declaredContributedModelAttributes: Set<string>;
+  readonly uniqueConstraints: UniqueConstraintNode[];
+  readonly indexNodes: IndexNode[];
+  readonly checkNodes: CheckNode[];
+  readonly modelAttributeEntities: Record<string, Record<string, unknown>>;
+}
+
+interface RelationLowering {
+  readonly foreignKeyNodes: ForeignKeyNode[];
+  readonly fkRelationMetadata: FkRelationMetadata<ModelSymbol>[];
+  readonly relationIndexLocations: RelationIndexLocation[];
+  readonly invalidFkPairings: InvalidModelFkPairing<ModelSymbol>[];
+  readonly crossSpaceRelations: RelationNode[];
+}
+
+type OwningRelationParse =
+  | { readonly kind: 'invalid' }
+  | { readonly kind: 'nullability-mismatch'; readonly parsed: SqlRelationOutput }
+  | {
+      readonly kind: 'valid';
+      readonly parsed: SqlRelationOutput;
+      readonly references: readonly string[];
+      readonly localColumns: readonly string[];
+    };
+
 function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult {
   const { model, diagnostics } = input;
   const source = diagnosticSource(input.sources, model.node.syntax);
@@ -623,7 +674,6 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     generatorFunctions: input.generatorFunctions,
     dataTypes: input.dataTypes,
   });
-  const modelNamespaceId = input.namespaceId;
 
   const resolvedFields = collectResolvedFields({
     model,
@@ -644,804 +694,861 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     scalarColumnDescriptors: input.scalarColumnDescriptors,
     enumHandles: input.enumHandles,
     capabilities: input.capabilities,
-    namespaceId: modelNamespaceId,
+    namespaceId: input.namespaceId,
     ...ifDefined('namespaceExtensionEntities', input.namespaceExtensionEntities),
     codecLookup: input.codecLookup,
     warnDeprecated: input.warnDeprecated,
   });
 
-  const inlineIdFields = resolvedFields.filter((field) => field.isId);
-  if (inlineIdFields.length > 1) {
-    diagnostics.push({
-      code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
-      message: `Model "${model.name}" cannot declare inline @id on multiple fields; use model-level @@id([...]) for composite identity`,
-      ...source.at(model.span),
-    });
-  }
-  const singleInlineIdField = inlineIdFields.length === 1 ? inlineIdFields[0] : undefined;
-  let primaryKey: PrimaryKeyNode | undefined = singleInlineIdField
-    ? {
-        columns: [singleInlineIdField.columnName],
-        ...ifDefined('name', singleInlineIdField.idName),
-      }
-    : undefined;
-  const hasInlinePrimaryKey = primaryKey !== undefined;
-  let blockPrimaryKeyDeclared = false;
-  let controlPolicyDeclared = false;
-  let controlPolicy: ControlPolicy | undefined;
-  const declaredContributedModelAttributes = new Set<string>();
-  const modelAttributeEntities: Record<string, Record<string, unknown>> = {};
+  const ctx: ModelLoweringContext = {
+    input,
+    model,
+    diagnostics,
+    source,
+    tableName,
+    specContext,
+    resolvedFields,
+  };
 
-  const resultBackrelationCandidates: ModelBackrelationCandidate<ModelSymbol>[] = [];
-  for (const field of Object.values(model.fields)) {
-    const backrelationTarget = backrelationTargetSymbol(field, input.binder);
-    if (backrelationTarget === undefined) {
-      continue;
-    }
-    const relationAttribute = getAttribute(field.attributes, 'relation');
-    if (
-      !field.list &&
-      relationAttribute &&
-      relationAttributeDeclaresOwningSide(relationAttribute)
-    ) {
-      // The owning side of the relation: it declares fields/references and is
-      // lowered separately below, by the `relationAttributes` FK-building loop.
-      continue;
-    }
-    const attributesValid = validateBackrelationFieldAttributes({
-      modelName: model.name,
-      field,
-      sources: input.sources,
-      binder: input.binder,
-      diagnostics,
-    });
-    let relationName: string | undefined;
-    if (relationAttribute) {
-      const parsedRelation = interpretRelationAttribute({
-        selfModel: model,
-        field,
-        specContext: fieldSpecContext({ ...specContext, field, binder: input.binder }),
-        symbols: input.symbolTable,
-        sources: input.sources,
-        binder: input.binder,
-        diagnostics,
-      });
-      if (!parsedRelation) {
-        continue;
-      }
-      if (parsedRelation.fields || parsedRelation.references) {
-        diagnostics.push({
-          code: 'PSL_INVALID_RELATION_ATTRIBUTE',
-          message: `Backrelation list field "${model.name}.${field.name}" cannot declare fields/references; define them on the FK-side relation field`,
-          ...source.at(relationAttribute.span),
-        });
-        continue;
-      }
-      if (
-        parsedRelation.onDelete ||
-        parsedRelation.onUpdate ||
-        parsedRelation.index !== undefined
-      ) {
-        diagnostics.push({
-          code: 'PSL_INVALID_RELATION_ATTRIBUTE',
-          message: `Backrelation list field "${model.name}.${field.name}" cannot declare onDelete/onUpdate/index; define them on the FK-side relation field`,
-          ...source.at(relationAttribute.span),
-        });
-        continue;
-      }
-      relationName = parsedRelation.name;
-    }
-    if (!attributesValid) {
-      continue;
-    }
-
-    resultBackrelationCandidates.push({
-      modelName: model,
-      tableName,
-      field,
-      targetModelName: backrelationTarget,
-      isList: field.list,
-      ...ifDefined('relationName', relationName),
-    });
-  }
-
-  const relationAttributes = Object.values(model.fields)
-    .map((field) => ({
-      field,
-      relation: getAttribute(field.attributes, 'relation'),
-    }))
-    .filter(
-      (entry): entry is { field: FieldSymbol; relation: ResolvedAttribute<FieldAttributeAst> } =>
-        Boolean(entry.relation),
-    );
-  const uniqueConstraints: UniqueConstraintNode[] = resolvedFields
-    .filter((field) => field.isUnique)
-    .map((field) => ({
-      columns: [field.columnName],
-      ...ifDefined('name', field.uniqueName),
-    }));
-  const indexNodes: IndexNode[] = [];
-  const checkNodes: CheckNode[] = [];
-  const foreignKeyNodes: ForeignKeyNode[] = [];
-
-  for (const modelAttribute of model.attributes) {
-    if (
-      !Object.hasOwn(sqlAttributeSpecs.model, modelAttribute.name) &&
-      !input.modelAttributesByName.has(modelAttribute.name)
-    ) {
-      continue;
-    }
-    if (modelAttribute.name === 'map') {
-      continue;
-    }
-    if (modelAttribute.name === 'discriminator' || modelAttribute.name === 'base') {
-      continue;
-    }
-    if (modelAttribute.name === 'control') {
-      if (controlPolicyDeclared) {
-        diagnostics.push(
-          duplicateModelAttributeDiagnostic({
-            name: 'control',
-            modelName: model.name,
-            source,
-            span: modelAttribute.span,
-          }),
-        );
-        continue;
-      }
-      controlPolicyDeclared = true;
-      const node = modelAttribute.node;
-      const parsed = interpretModelAttribute({
-        node,
-        spec: sqlAttributeSpecs.model.control(specContext),
-        model,
-        symbols: input.symbolTable,
-        sources: input.sources,
-        binder: input.binder,
-        diagnostics,
-      });
-      if (parsed !== undefined) {
-        controlPolicy = parsed.policy;
-      }
-      continue;
-    }
-    const attributeLabel = `Model "${model.name}" @@${modelAttribute.name}`;
-    if (modelAttribute.name === 'id') {
-      if (blockPrimaryKeyDeclared) {
-        diagnostics.push({
-          code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
-          message: `Model "${model.name}" declares @@id more than once`,
-          ...source.at(modelAttribute.span),
-        });
-        continue;
-      }
-      if (hasInlinePrimaryKey) {
-        diagnostics.push({
-          code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
-          message: `Model "${model.name}" cannot declare both field-level @id and model-level @@id`,
-          ...source.at(modelAttribute.span),
-        });
-        blockPrimaryKeyDeclared = true;
-        continue;
-      }
-      const node = modelAttribute.node;
-      const parsed = interpretModelAttribute({
-        node,
-        spec: sqlAttributeSpecs.model.id(specContext),
-        model,
-        symbols: input.symbolTable,
-        sources: input.sources,
-        binder: input.binder,
-        diagnostics,
-      });
-      if (parsed === undefined) {
-        continue;
-      }
-      const fieldNames = parsed.fields;
-      const nullableFieldName = fieldNames.find((name) => model.fields[name]?.optional === true);
-      if (nullableFieldName !== undefined) {
-        diagnostics.push({
-          code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
-          message: `${attributeLabel} cannot include optional field "${nullableFieldName}"; primary key columns must be NOT NULL`,
-          ...source.at(modelAttribute.span),
-        });
-        continue;
-      }
-      const columnNames = mapFieldNamesToColumns({
-        model,
-        physicalNames: input.physicalNames,
-        fieldNames,
-        source,
-        diagnostics,
-        span: modelAttribute.span,
-        entityLabel: attributeLabel,
-      });
-      if (!columnNames) {
-        continue;
-      }
-      primaryKey = {
-        columns: columnNames,
-        ...ifDefined('name', parsed.map),
-      };
-      blockPrimaryKeyDeclared = true;
-      continue;
-    }
-    if (modelAttribute.name === 'unique') {
-      const node = modelAttribute.node;
-      const parsed = interpretModelAttribute({
-        node,
-        spec: sqlAttributeSpecs.model.unique(specContext),
-        model,
-        symbols: input.symbolTable,
-        sources: input.sources,
-        binder: input.binder,
-        diagnostics,
-      });
-      if (parsed === undefined) {
-        continue;
-      }
-      const columnNames = mapFieldNamesToColumns({
-        model,
-        physicalNames: input.physicalNames,
-        fieldNames: parsed.fields,
-        source,
-        diagnostics,
-        span: modelAttribute.span,
-        entityLabel: attributeLabel,
-      });
-      if (!columnNames) {
-        continue;
-      }
-      uniqueConstraints.push({
-        columns: columnNames,
-        ...ifDefined('name', parsed.map),
-      });
-      continue;
-    }
-    if (modelAttribute.name === 'index') {
-      const node = modelAttribute.node;
-      const parsed = interpretModelAttribute({
-        node,
-        spec: sqlAttributeSpecs.model.index(specContext),
-        model,
-        symbols: input.symbolTable,
-        sources: input.sources,
-        binder: input.binder,
-        diagnostics,
-      });
-      if (parsed === undefined) {
-        continue;
-      }
-      let columnNames: readonly string[] | undefined;
-      if (parsed.fields !== undefined) {
-        const mapped = mapFieldNamesToColumns({
-          model,
-          physicalNames: input.physicalNames,
-          fieldNames: parsed.fields,
-          source,
-          diagnostics,
-          span: modelAttribute.span,
-          entityLabel: attributeLabel,
-        });
-        if (!mapped) {
-          continue;
-        }
-        columnNames = mapped;
-      }
-      indexNodes.push(
-        // PSL attribute arguments are assembled one at a time, so the
-        // compiler cannot see either union arm; the interpreter's own
-        // span-anchored diagnostics reject both invalid shapes first.
-        blindCast<
-          IndexNode,
-          'dynamically assembled from PSL arguments; the interpreter diagnoses both invalid shapes and lowerAuthoredIndex re-checks'
-        >({
-          ...ifDefined('columns', columnNames),
-          ...ifDefined(
-            'expression',
-            parsed.expression === undefined
-              ? undefined
-              : sqlTextFromStored(parsed.expression.value.value),
-          ),
-          where:
-            parsed.where === undefined ? undefined : sqlTextFromStored(parsed.where.value.value),
-          unique: parsed.unique,
-          name: parsed.name,
-          map: parsed.map,
-          type: parsed.type,
-          options: parsed.options,
-        }),
-      );
-      continue;
-    }
-    if (modelAttribute.name === 'check') {
-      const node = modelAttribute.node;
-      if (input.capabilities['sql']?.['checkConstraint'] !== true) {
-        diagnostics.push({
-          code: 'PSL_CHECK_UNSUPPORTED_TARGET',
-          message: `Model "${model.name}" declares "@@check", but target "${input.targetId}" does not support check constraints (the adapter does not report the "checkConstraint" capability). Remove the check or author it against a target that supports check constraints.`,
-          ...source.at(modelAttribute.span),
-        });
-        continue;
-      }
-      const parsed = interpretModelAttribute({
-        node,
-        spec: sqlAttributeSpecs.model.check(specContext),
-        model,
-        symbols: input.symbolTable,
-        sources: input.sources,
-        binder: input.binder,
-        diagnostics,
-      });
-      if (parsed === undefined) {
-        continue;
-      }
-      checkNodes.push({
-        expression: sqlTextFromStored(parsed.expression.value.value),
-        name: parsed.name,
-        map: parsed.map,
-      });
-      continue;
-    }
-    const contributedModelAttribute = input.modelAttributesByName.get(modelAttribute.name);
-    if (contributedModelAttribute !== undefined) {
-      if (
-        contributedModelAttribute.repeatable !== true &&
-        declaredContributedModelAttributes.has(modelAttribute.name)
-      ) {
-        diagnostics.push(
-          duplicateModelAttributeDiagnostic({
-            name: modelAttribute.name,
-            modelName: model.name,
-            source,
-            span: modelAttribute.span,
-          }),
-        );
-        continue;
-      }
-      declaredContributedModelAttributes.add(modelAttribute.name);
-      const node = modelAttribute.node;
-      const specFactory = input.contributedModelAttributeSpecs[contributedModelAttribute.attribute];
-      if (specFactory === undefined) {
-        continue;
-      }
-      const parsed = interpretModelAttribute({
-        node,
-        spec: specFactory(specContext),
-        model,
-        symbols: input.symbolTable,
-        sources: input.sources,
-        binder: input.binder,
-        diagnostics,
-      });
-      if (parsed === undefined) {
-        continue;
-      }
-      const lower = blindCast<
-        (
-          parsed: unknown,
-          ctx: AuthoringModelAttributeContext,
-        ) => AuthoringModelAttributeLoweringOutput | undefined,
-        "lowering is called with the exact value interpretModelAttribute parsed against this descriptor's own spec"
-      >(contributedModelAttribute.lower);
-      const lowered = lower(parsed, {
-        family: input.familyId,
-        target: input.targetId,
-        codecLookup: input.codecLookup,
-        dataTypes: input.dataTypes,
-        modelName: model.name,
-        storageName: tableName,
-        fieldStorageName: (fieldName) => {
-          const field = model.fields[fieldName];
-          return field === undefined ? undefined : storageName(field, input.physicalNames);
-        },
-        fieldCodecId: (fieldName) =>
-          resolvedFields.find((resolved) => resolved.field.name === fieldName)?.descriptor.codecId,
-        namespaceId: modelNamespaceId,
-        sourceId: source.sources.sourceFileFor(source.node).filename,
-        diagnostics: {
-          push: (d) => {
-            diagnostics.pushExternal(
-              blindCast<ContractSourceDiagnostic, 'sink diagnostics are span-compatible'>(d),
-            );
-          },
-        },
-      });
-      if (lowered === undefined) {
-        continue;
-      }
-      if ('index' in lowered) {
-        if (!isAuthoredIndexInput(lowered.index)) {
-          throw contractError(
-            'CONTRACT.PACK_CONTRIBUTION_INVALID',
-            `model attribute "@@${modelAttribute.name}" on model "${model.name}" lowered to a malformed index. A contributed attribute that returns { index } must return an authored-index input: exactly one of a columns list or an expression, plus explicit where/unique/name/map and a type-with-options pair.`,
-            { meta: { attribute: modelAttribute.name, modelName: model.name } },
-          );
-        }
-        indexNodes.push(lowered.index);
-        continue;
-      }
-      const slot = modelAttributeEntities[contributedModelAttribute.attribute] ?? {};
-      modelAttributeEntities[contributedModelAttribute.attribute] = slot;
-      slot[lowered.key] = lowered.entity;
-      continue;
-    }
-    throw new InternalError(
-      `Model attribute "@@${modelAttribute.name}" is registered but has no interpreter branch`,
-    );
-  }
-
-  const resultFkRelationMetadata: FkRelationMetadata<ModelSymbol>[] = [];
-  const relationIndexLocations: RelationIndexLocation[] = [];
-  const resultInvalidFkPairings: InvalidModelFkPairing<ModelSymbol>[] = [];
-  const resultCrossSpaceRelations: RelationNode[] = [];
-  for (const relationAttribute of relationAttributes) {
-    const {
-      typeName: fieldTypeName,
-      typeNamespaceId: fieldTypeNamespaceId,
-      typeContractSpaceId: fieldTypeContractSpaceId,
-    } = relationAttribute.field;
-
-    if (relationAttribute.field.list) {
-      // F-list: cross-space list relations are explicitly unsupported (Option B does not
-      // navigate, so a list target makes no sense to carry). Emit a diagnostic instead of
-      // silently dropping the field — the author needs to know the field was ignored.
-      if (fieldTypeContractSpaceId !== undefined) {
-        diagnostics.push({
-          code: 'PSL_UNSUPPORTED_CROSS_SPACE_LIST',
-          message: `Relation field "${model.name}.${relationAttribute.field.name}" is a cross-space list relation (type "${fieldTypeContractSpaceId}:${fieldTypeNamespaceId !== undefined ? `${fieldTypeNamespaceId}.` : ''}${fieldTypeName}[]"). Cross-space relations must be singular in v0.1 — list cross-space relations are not supported.`,
-          ...source.at(relationAttribute.field.span),
-        });
-      }
-      continue;
-    }
-
-    if (!relationAttributeDeclaresOwningSide(relationAttribute.relation)) {
-      // A singular model-typed field whose `@relation` carries only a name (or nothing) is the
-      // back side of a 1:1 relation, already lowered above via backrelationCandidates. It is
-      // not the owning side, so it has no fields/references to validate here.
-      continue;
-    }
-
-    // Cross-contract-space relation: the target model lives in a different contract space
-    // identified by `typeContractSpaceId` (e.g. `supabase:auth.User`).
-    if (fieldTypeContractSpaceId !== undefined) {
-      // Fail fast if the space has no entry in composedExtensionContracts (AC5 PSL half).
-      const extContractForSpace = input.composedExtensionContracts.get(fieldTypeContractSpaceId);
-      if (extContractForSpace === undefined) {
-        diagnostics.push({
-          code: 'PSL_UNKNOWN_CONTRACT_SPACE',
-          message: `Relation field "${model.name}.${relationAttribute.field.name}" references contract space "${fieldTypeContractSpaceId}" which is not declared in extensions. Add "${fieldTypeContractSpaceId}" to extensions in prisma.config.ts.`,
-          ...source.at(relationAttribute.field.span),
-          data: { space: fieldTypeContractSpaceId, suggestedPack: fieldTypeContractSpaceId },
-        });
-        continue;
-      }
-
-      const parsedRelation = interpretRelationAttribute({
-        selfModel: model,
-        field: relationAttribute.field,
-        specContext: fieldSpecContext({
-          ...specContext,
-          field: relationAttribute.field,
-          binder: input.binder,
-        }),
-        symbols: input.symbolTable,
-        sources: input.sources,
-        binder: input.binder,
-        diagnostics,
-      });
-      if (!parsedRelation) {
-        continue;
-      }
-      if (!parsedRelation.fields || !parsedRelation.references) {
-        diagnostics.push({
-          code: 'PSL_INVALID_RELATION_ATTRIBUTE',
-          message: `Relation field "${model.name}.${relationAttribute.field.name}" requires fields and references arguments`,
-          ...source.at(relationAttribute.relation.span),
-        });
-        continue;
-      }
-
-      const localColumns = mapFieldNamesToColumns({
-        model,
-        physicalNames: input.physicalNames,
-        fieldNames: parsedRelation.fields,
-        source,
-        diagnostics,
-        span: relationAttribute.relation.span,
-        entityLabel: `Relation field "${model.name}.${relationAttribute.field.name}"`,
-      });
-      if (!localColumns) {
-        continue;
-      }
-
-      if (relationNullabilityMismatch(relationAttribute.field, localColumns, resolvedFields)) {
-        diagnostics.push(
-          relationNullabilityMismatchDiagnostic(model.name, relationAttribute, source),
-        );
-        continue;
-      }
-
-      // For cross-space references the `references` list provides field names from the remote
-      // model. Since the interpreter has no access to the extension contract, these field names
-      // are treated as column names directly (matching the TS builder's cross-space path).
-      const referencedColumns = parsedRelation.references;
-
-      if (localColumns.length !== referencedColumns.length) {
-        diagnostics.push({
-          code: 'PSL_INVALID_RELATION_ATTRIBUTE',
-          message: `Relation field "${model.name}.${relationAttribute.field.name}" must provide the same number of fields and references`,
-          ...source.at(relationAttribute.relation.span),
-        });
-        continue;
-      }
-
-      const onDelete = parsedRelation.onDelete
-        ? normalizeReferentialAction(parsedRelation.onDelete)
-        : undefined;
-      const onUpdate = parsedRelation.onUpdate
-        ? normalizeReferentialAction(parsedRelation.onUpdate)
-        : undefined;
-
-      // Target namespace: use the colon-prefix namespace qualifier, or `__unbound__` when the
-      // no-namespace form is used (e.g. `supabase:User` → AC3).
-      const crossTargetNamespaceId = fieldTypeNamespaceId ?? UNBOUND_NAMESPACE_ID;
-
-      // Target table name: resolved from the extension contract. The get() check above
-      // guarantees extContractForSpace is defined here; if the model or namespace is not
-      // found in it, emit PSL_UNKNOWN_CROSS_SPACE_TARGET (user typo).
-      const extContract = extContractForSpace;
-      const resolvedTable =
-        extContract.domain.namespaces[crossTargetNamespaceId]?.models[fieldTypeName]?.storage[
-          'table'
-        ];
-      if (typeof resolvedTable !== 'string') {
-        const availableModels =
-          Object.keys(extContract.domain.namespaces[crossTargetNamespaceId]?.models ?? {}).join(
-            ', ',
-          ) || '(none)';
-        diagnostics.push({
-          code: 'PSL_UNKNOWN_CROSS_SPACE_TARGET',
-          message: `Relation field "${model.name}.${relationAttribute.field.name}" references model "${fieldTypeName}" in namespace "${crossTargetNamespaceId}" of space "${fieldTypeContractSpaceId}", but that model was not found in the extension contract. Available models: ${availableModels}`,
-          ...source.at(relationAttribute.field.span),
-          data: {
-            space: fieldTypeContractSpaceId,
-            namespace: crossTargetNamespaceId,
-            model: fieldTypeName,
-          },
-        });
-        continue;
-      }
-      const crossTargetTableName = resolvedTable;
-
-      foreignKeyNodes.push({
-        columns: localColumns,
-        references: {
-          model: fieldTypeName,
-          table: crossTargetTableName,
-          columns: referencedColumns,
-          namespaceId: crossTargetNamespaceId,
-          spaceId: fieldTypeContractSpaceId,
-        },
-        ...ifDefined('name', parsedRelation.map),
-        ...ifDefined('onDelete', onDelete),
-        ...ifDefined('onUpdate', onUpdate),
-        ...ifDefined('index', parsedRelation.index),
-      });
-      if (typeof parsedRelation.index === 'string') {
-        relationIndexLocations.push({
-          namespaceId: modelNamespaceId,
-          tableName,
-          columns: localColumns,
-          index: parsedRelation.index,
-          location: source.at(relationAttribute.relation.span),
-        });
-      }
-
-      // Build the cross-space RelationNode directly (no local back-relation candidate).
-      // `buildSqlContractFromDefinition` recognises `spaceId` on a RelationNode and routes it
-      // through the cross-space domain-relation path (produces a non-navigable CrossReference).
-      resultCrossSpaceRelations.push({
-        fieldName: relationAttribute.field.name,
-        toModel: fieldTypeName,
-        toTable: crossTargetTableName,
-        cardinality: 'N:1',
-        nullable: relationAttribute.field.optional,
-        spaceId: fieldTypeContractSpaceId,
-        namespaceId: crossTargetNamespaceId,
-        on: {
-          parentTable: tableName,
-          parentColumns: localColumns,
-          childTable: crossTargetTableName,
-          childColumns: referencedColumns,
-        },
-      });
-
-      continue;
-    }
-
-    const qualifiedTypeName = fieldTypeNamespaceId
-      ? `${fieldTypeNamespaceId}.${fieldTypeName}`
-      : fieldTypeName;
-
-    const typeReference = typeReferenceNode(relationAttribute.field);
-    const targetResolution =
-      typeReference === undefined ? undefined : input.binder.symbolForNode(typeReference);
-    if (targetResolution?.kind === 'unresolved') {
-      continue;
-    }
-    if (targetResolution?.kind !== 'model') {
-      const foundKind =
-        targetResolution === undefined ? undefined : relationTargetKindLabel(targetResolution);
-      diagnostics.push({
-        code: 'PSL_INVALID_RELATION_TARGET',
-        message:
-          foundKind === undefined
-            ? `Relation field "${model.name}.${relationAttribute.field.name}" references unknown model "${qualifiedTypeName}"`
-            : `Relation field "${model.name}.${relationAttribute.field.name}" references ${foundKind} "${qualifiedTypeName}"; a relation target must be a model`,
-        ...source.at(relationAttribute.field.span),
-      });
-      continue;
-    }
-    const targetModel = targetResolution.symbol;
-    const targetNamespaceId = targetResolution.namespace.id;
-
-    const parsedRelation = interpretRelationAttribute({
-      selfModel: model,
-      field: relationAttribute.field,
-      specContext: fieldSpecContext({
-        ...specContext,
-        field: relationAttribute.field,
-        binder: input.binder,
-      }),
-      symbols: input.symbolTable,
-      sources: input.sources,
-      binder: input.binder,
-      diagnostics,
-    });
-    if (!parsedRelation) {
-      continue;
-    }
-    if (!parsedRelation.fields || !parsedRelation.references) {
-      diagnostics.push({
-        code: 'PSL_INVALID_RELATION_ATTRIBUTE',
-        message: `Relation field "${model.name}.${relationAttribute.field.name}" requires fields and references arguments`,
-        ...source.at(relationAttribute.relation.span),
-      });
-      continue;
-    }
-
-    const localColumns = mapFieldNamesToColumns({
-      model,
-      physicalNames: input.physicalNames,
-      fieldNames: parsedRelation.fields,
-      source,
-      diagnostics,
-      span: relationAttribute.relation.span,
-      entityLabel: `Relation field "${model.name}.${relationAttribute.field.name}"`,
-    });
-    if (!localColumns) {
-      continue;
-    }
-    if (relationNullabilityMismatch(relationAttribute.field, localColumns, resolvedFields)) {
-      diagnostics.push(
-        relationNullabilityMismatchDiagnostic(model.name, relationAttribute, source),
-      );
-      resultInvalidFkPairings.push({
-        declaringModel: model,
-        targetModel,
-        ...ifDefined('relationName', parsedRelation.name),
-      });
-      continue;
-    }
-    const referencedColumns = mapFieldNamesToColumns({
-      model: targetModel,
-      physicalNames: input.physicalNames,
-      fieldNames: parsedRelation.references,
-      source,
-      diagnostics,
-      span: relationAttribute.relation.span,
-      entityLabel: `Relation field "${model.name}.${relationAttribute.field.name}"`,
-    });
-    if (!referencedColumns) {
-      continue;
-    }
-    if (localColumns.length !== referencedColumns.length) {
-      diagnostics.push({
-        code: 'PSL_INVALID_RELATION_ATTRIBUTE',
-        message: `Relation field "${model.name}.${relationAttribute.field.name}" must provide the same number of fields and references`,
-        ...source.at(relationAttribute.relation.span),
-      });
-      continue;
-    }
-
-    const onDelete = parsedRelation.onDelete
-      ? normalizeReferentialAction(parsedRelation.onDelete)
-      : undefined;
-    const onUpdate = parsedRelation.onUpdate
-      ? normalizeReferentialAction(parsedRelation.onUpdate)
-      : undefined;
-
-    const targetTableName = storageName(targetModel, input.physicalNames);
-    foreignKeyNodes.push({
-      columns: localColumns,
-      references: {
-        model: targetModel.name,
-        table: targetTableName,
-        columns: referencedColumns,
-        namespaceId: targetNamespaceId,
-      },
-      ...ifDefined('name', parsedRelation.map),
-      ...ifDefined('onDelete', onDelete),
-      ...ifDefined('onUpdate', onUpdate),
-      ...ifDefined('index', parsedRelation.index),
-    });
-    if (typeof parsedRelation.index === 'string') {
-      relationIndexLocations.push({
-        namespaceId: modelNamespaceId,
-        tableName,
-        columns: localColumns,
-        index: parsedRelation.index,
-        location: source.at(relationAttribute.relation.span),
-      });
-    }
-
-    resultFkRelationMetadata.push({
-      declaringModelName: model,
-      declaringFieldName: relationAttribute.field.name,
-      declaringTableName: tableName,
-      ...ifDefined('declaringNamespaceId', modelNamespaceId),
-      targetModelName: targetModel,
-      targetTableName,
-      ...ifDefined('targetNamespaceId', targetNamespaceId),
-      ...ifDefined('relationName', parsedRelation.name),
-      nullable: relationAttribute.field.optional,
-      localColumns,
-      referencedColumns,
-    });
-  }
+  const inlineKey = inlinePrimaryKey(ctx);
+  const backrelationCandidates = collectBackrelationCandidates(ctx);
+  const attributes = lowerModelAttributes(ctx, inlineKey);
+  const relations = lowerRelationAttributes(ctx);
 
   return {
     modelNode: {
       modelName: model.name,
       tableName,
-      fields: resolvedFields.map((resolvedField): FieldNode | ValueObjectFieldNode => {
-        const common = {
-          fieldName: resolvedField.field.name,
-          columnName: resolvedField.columnName,
-          descriptor: resolvedField.descriptor,
-          nullable: resolvedField.nullable,
-          ...ifDefined('many', resolvedField.many),
-          ...ifDefined(
-            'elementNullable',
-            resolvedField.many ? resolvedField.elementNullable === true : undefined,
-          ),
-          ...ifDefined('default', resolvedField.defaultValue),
-          ...ifDefined('executionDefaults', resolvedField.executionDefaults),
-        };
-        if (resolvedField.valueObjectTypeName !== undefined) {
-          return { ...common, valueObjectName: resolvedField.valueObjectTypeName };
-        }
-        return {
-          ...common,
-          ...ifDefined('enumTypeHandle', resolvedField.enumTypeHandle),
-        };
-      }),
-      ...ifDefined('id', primaryKey),
-      ...(uniqueConstraints.length > 0 ? { uniques: uniqueConstraints } : {}),
-      ...(indexNodes.length > 0 ? { indexes: indexNodes } : {}),
-      ...(checkNodes.length > 0 ? { checks: checkNodes } : {}),
-      ...(foreignKeyNodes.length > 0 ? { foreignKeys: foreignKeyNodes } : {}),
-      ...ifDefined('control', controlPolicy),
+      fields: resolvedFields.map(toModelFieldNode),
+      ...ifDefined('id', attributes.primaryKey),
+      ...(attributes.uniqueConstraints.length > 0 ? { uniques: attributes.uniqueConstraints } : {}),
+      ...(attributes.indexNodes.length > 0 ? { indexes: attributes.indexNodes } : {}),
+      ...(attributes.checkNodes.length > 0 ? { checks: attributes.checkNodes } : {}),
+      ...(relations.foreignKeyNodes.length > 0 ? { foreignKeys: relations.foreignKeyNodes } : {}),
+      ...ifDefined('control', attributes.controlPolicy),
     },
-    fkRelationMetadata: resultFkRelationMetadata,
-    relationIndexLocations,
-    invalidFkPairings: resultInvalidFkPairings,
-    crossSpaceRelations: resultCrossSpaceRelations,
-    backrelationCandidates: resultBackrelationCandidates,
-    modelAttributeEntities,
+    fkRelationMetadata: relations.fkRelationMetadata,
+    relationIndexLocations: relations.relationIndexLocations,
+    invalidFkPairings: relations.invalidFkPairings,
+    crossSpaceRelations: relations.crossSpaceRelations,
+    backrelationCandidates,
+    modelAttributeEntities: attributes.modelAttributeEntities,
   };
+}
+
+function inlinePrimaryKey(ctx: ModelLoweringContext): PrimaryKeyNode | undefined {
+  const inlineIdFields = ctx.resolvedFields.filter((field) => field.isId);
+  if (inlineIdFields.length > 1) {
+    ctx.diagnostics.push({
+      code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
+      message: `Model "${ctx.model.name}" cannot declare inline @id on multiple fields; use model-level @@id([...]) for composite identity`,
+      ...ctx.source.at(ctx.model.span),
+    });
+  }
+  const singleInlineIdField = inlineIdFields.length === 1 ? inlineIdFields[0] : undefined;
+  return singleInlineIdField
+    ? {
+        columns: [singleInlineIdField.columnName],
+        ...ifDefined('name', singleInlineIdField.idName),
+      }
+    : undefined;
+}
+
+function toModelFieldNode(resolvedField: ResolvedField): FieldNode | ValueObjectFieldNode {
+  const common = {
+    fieldName: resolvedField.field.name,
+    columnName: resolvedField.columnName,
+    descriptor: resolvedField.descriptor,
+    nullable: resolvedField.nullable,
+    ...ifDefined('many', resolvedField.many),
+    ...ifDefined(
+      'elementNullable',
+      resolvedField.many ? resolvedField.elementNullable === true : undefined,
+    ),
+    ...ifDefined('default', resolvedField.defaultValue),
+    ...ifDefined('executionDefaults', resolvedField.executionDefaults),
+  };
+  if (resolvedField.valueObjectTypeName !== undefined) {
+    return { ...common, valueObjectName: resolvedField.valueObjectTypeName };
+  }
+  return {
+    ...common,
+    ...ifDefined('enumTypeHandle', resolvedField.enumTypeHandle),
+  };
+}
+
+function parseRelationAttribute(
+  ctx: ModelLoweringContext,
+  field: FieldSymbol,
+): SqlRelationOutput | undefined {
+  return interpretRelationAttribute({
+    selfModel: ctx.model,
+    field,
+    specContext: fieldSpecContext({ ...ctx.specContext, field, binder: ctx.input.binder }),
+    symbols: ctx.input.symbolTable,
+    sources: ctx.input.sources,
+    binder: ctx.input.binder,
+    diagnostics: ctx.diagnostics,
+  });
+}
+
+function parseModelAttribute<Out>(
+  ctx: ModelLoweringContext,
+  modelAttribute: ModelAttribute,
+  spec: AttributeSpec<Out, ModelAttributeCtx>,
+): Out | undefined {
+  return interpretModelAttribute({
+    node: modelAttribute.node,
+    spec,
+    model: ctx.model,
+    symbols: ctx.input.symbolTable,
+    sources: ctx.input.sources,
+    binder: ctx.input.binder,
+    diagnostics: ctx.diagnostics,
+  });
+}
+
+function mapModelAttributeColumns(
+  ctx: ModelLoweringContext,
+  modelAttribute: ModelAttribute,
+  fieldNames: readonly string[],
+): readonly string[] | undefined {
+  return mapFieldNamesToColumns({
+    model: ctx.model,
+    physicalNames: ctx.input.physicalNames,
+    fieldNames,
+    source: ctx.source,
+    diagnostics: ctx.diagnostics,
+    span: modelAttribute.span,
+    entityLabel: `Model "${ctx.model.name}" @@${modelAttribute.name}`,
+  });
+}
+
+function collectBackrelationCandidates(
+  ctx: ModelLoweringContext,
+): ModelBackrelationCandidate<ModelSymbol>[] {
+  const candidates: ModelBackrelationCandidate<ModelSymbol>[] = [];
+  for (const field of Object.values(ctx.model.fields)) {
+    const candidate = backrelationCandidate(ctx, field);
+    if (candidate !== undefined) {
+      candidates.push(candidate);
+    }
+  }
+  return candidates;
+}
+
+function backrelationCandidate(
+  ctx: ModelLoweringContext,
+  field: FieldSymbol,
+): ModelBackrelationCandidate<ModelSymbol> | undefined {
+  const backrelationTarget = backrelationTargetSymbol(field, ctx.input.binder);
+  if (backrelationTarget === undefined) {
+    return undefined;
+  }
+  const relationAttribute = getAttribute(field.attributes, 'relation');
+  if (!field.list && relationAttribute && relationAttributeDeclaresOwningSide(relationAttribute)) {
+    // The owning side of the relation: it declares fields/references and is
+    // lowered separately below, by the `relationAttributes` FK-building loop.
+    return undefined;
+  }
+  const attributesValid = validateBackrelationFieldAttributes({
+    modelName: ctx.model.name,
+    field,
+    sources: ctx.input.sources,
+    binder: ctx.input.binder,
+    diagnostics: ctx.diagnostics,
+  });
+  const relation = relationAttribute
+    ? backrelationRelation(ctx, field, relationAttribute)
+    : { name: undefined };
+  if (relation === undefined || !attributesValid) {
+    return undefined;
+  }
+  return {
+    modelName: ctx.model,
+    tableName: ctx.tableName,
+    field,
+    targetModelName: backrelationTarget,
+    isList: field.list,
+    ...ifDefined('relationName', relation.name),
+  };
+}
+
+function backrelationRelation(
+  ctx: ModelLoweringContext,
+  field: FieldSymbol,
+  relationAttribute: ResolvedAttribute<FieldAttributeAst>,
+): { readonly name: string | undefined } | undefined {
+  const parsedRelation = parseRelationAttribute(ctx, field);
+  if (!parsedRelation) {
+    return undefined;
+  }
+  if (parsedRelation.fields || parsedRelation.references) {
+    ctx.diagnostics.push({
+      code: 'PSL_INVALID_RELATION_ATTRIBUTE',
+      message: `Backrelation list field "${ctx.model.name}.${field.name}" cannot declare fields/references; define them on the FK-side relation field`,
+      ...ctx.source.at(relationAttribute.span),
+    });
+    return undefined;
+  }
+  if (parsedRelation.onDelete || parsedRelation.onUpdate || parsedRelation.index !== undefined) {
+    ctx.diagnostics.push({
+      code: 'PSL_INVALID_RELATION_ATTRIBUTE',
+      message: `Backrelation list field "${ctx.model.name}.${field.name}" cannot declare onDelete/onUpdate/index; define them on the FK-side relation field`,
+      ...ctx.source.at(relationAttribute.span),
+    });
+    return undefined;
+  }
+  return { name: parsedRelation.name };
+}
+
+function lowerModelAttributes(
+  ctx: ModelLoweringContext,
+  inlineKey: PrimaryKeyNode | undefined,
+): ModelAttributeLowering {
+  const lowering: ModelAttributeLowering = {
+    hasInlinePrimaryKey: inlineKey !== undefined,
+    primaryKey: inlineKey,
+    blockPrimaryKeyDeclared: false,
+    controlPolicyDeclared: false,
+    controlPolicy: undefined,
+    declaredContributedModelAttributes: new Set<string>(),
+    uniqueConstraints: ctx.resolvedFields
+      .filter((field) => field.isUnique)
+      .map((field) => ({
+        columns: [field.columnName],
+        ...ifDefined('name', field.uniqueName),
+      })),
+    indexNodes: [],
+    checkNodes: [],
+    modelAttributeEntities: {},
+  };
+  for (const modelAttribute of ctx.model.attributes) {
+    lowerModelAttribute(ctx, lowering, modelAttribute);
+  }
+  return lowering;
+}
+
+function lowerModelAttribute(
+  ctx: ModelLoweringContext,
+  lowering: ModelAttributeLowering,
+  modelAttribute: ModelAttribute,
+): void {
+  if (
+    !Object.hasOwn(sqlAttributeSpecs.model, modelAttribute.name) &&
+    !ctx.input.modelAttributesByName.has(modelAttribute.name)
+  ) {
+    return;
+  }
+  switch (modelAttribute.name) {
+    case 'map':
+    case 'discriminator':
+    case 'base':
+      return;
+    case 'control':
+      lowerControlAttribute(ctx, lowering, modelAttribute);
+      return;
+    case 'id':
+      lowerPrimaryKeyAttribute(ctx, lowering, modelAttribute);
+      return;
+    case 'unique':
+      lowerUniqueAttribute(ctx, lowering, modelAttribute);
+      return;
+    case 'index':
+      lowerIndexAttribute(ctx, lowering, modelAttribute);
+      return;
+    case 'check':
+      lowerCheckAttribute(ctx, lowering, modelAttribute);
+      return;
+    default:
+      lowerContributedModelAttribute(ctx, lowering, modelAttribute);
+  }
+}
+
+function lowerControlAttribute(
+  ctx: ModelLoweringContext,
+  lowering: ModelAttributeLowering,
+  modelAttribute: ModelAttribute,
+): void {
+  if (lowering.controlPolicyDeclared) {
+    ctx.diagnostics.push(
+      duplicateModelAttributeDiagnostic({
+        name: 'control',
+        modelName: ctx.model.name,
+        source: ctx.source,
+        span: modelAttribute.span,
+      }),
+    );
+    return;
+  }
+  lowering.controlPolicyDeclared = true;
+  const parsed = parseModelAttribute(
+    ctx,
+    modelAttribute,
+    sqlAttributeSpecs.model.control(ctx.specContext),
+  );
+  if (parsed !== undefined) {
+    lowering.controlPolicy = parsed.policy;
+  }
+}
+
+function lowerPrimaryKeyAttribute(
+  ctx: ModelLoweringContext,
+  lowering: ModelAttributeLowering,
+  modelAttribute: ModelAttribute,
+): void {
+  const { model, diagnostics, source } = ctx;
+  if (lowering.blockPrimaryKeyDeclared) {
+    diagnostics.push({
+      code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
+      message: `Model "${model.name}" declares @@id more than once`,
+      ...source.at(modelAttribute.span),
+    });
+    return;
+  }
+  if (lowering.hasInlinePrimaryKey) {
+    diagnostics.push({
+      code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
+      message: `Model "${model.name}" cannot declare both field-level @id and model-level @@id`,
+      ...source.at(modelAttribute.span),
+    });
+    lowering.blockPrimaryKeyDeclared = true;
+    return;
+  }
+  const parsed = parseModelAttribute(
+    ctx,
+    modelAttribute,
+    sqlAttributeSpecs.model.id(ctx.specContext),
+  );
+  if (parsed === undefined) {
+    return;
+  }
+  const fieldNames = parsed.fields;
+  const nullableFieldName = fieldNames.find((name) => model.fields[name]?.optional === true);
+  if (nullableFieldName !== undefined) {
+    diagnostics.push({
+      code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
+      message: `Model "${model.name}" @@${modelAttribute.name} cannot include optional field "${nullableFieldName}"; primary key columns must be NOT NULL`,
+      ...source.at(modelAttribute.span),
+    });
+    return;
+  }
+  const columnNames = mapModelAttributeColumns(ctx, modelAttribute, fieldNames);
+  if (!columnNames) {
+    return;
+  }
+  lowering.primaryKey = {
+    columns: columnNames,
+    ...ifDefined('name', parsed.map),
+  };
+  lowering.blockPrimaryKeyDeclared = true;
+}
+
+function lowerUniqueAttribute(
+  ctx: ModelLoweringContext,
+  lowering: ModelAttributeLowering,
+  modelAttribute: ModelAttribute,
+): void {
+  const parsed = parseModelAttribute(
+    ctx,
+    modelAttribute,
+    sqlAttributeSpecs.model.unique(ctx.specContext),
+  );
+  if (parsed === undefined) {
+    return;
+  }
+  const columnNames = mapModelAttributeColumns(ctx, modelAttribute, parsed.fields);
+  if (!columnNames) {
+    return;
+  }
+  lowering.uniqueConstraints.push({
+    columns: columnNames,
+    ...ifDefined('name', parsed.map),
+  });
+}
+
+function lowerIndexAttribute(
+  ctx: ModelLoweringContext,
+  lowering: ModelAttributeLowering,
+  modelAttribute: ModelAttribute,
+): void {
+  const parsed = parseModelAttribute(
+    ctx,
+    modelAttribute,
+    sqlAttributeSpecs.model.index(ctx.specContext),
+  );
+  if (parsed === undefined) {
+    return;
+  }
+  let columnNames: readonly string[] | undefined;
+  if (parsed.fields !== undefined) {
+    const mapped = mapModelAttributeColumns(ctx, modelAttribute, parsed.fields);
+    if (!mapped) {
+      return;
+    }
+    columnNames = mapped;
+  }
+  lowering.indexNodes.push(
+    // PSL attribute arguments are assembled one at a time, so the
+    // compiler cannot see either union arm; the interpreter's own
+    // span-anchored diagnostics reject both invalid shapes first.
+    blindCast<
+      IndexNode,
+      'dynamically assembled from PSL arguments; the interpreter diagnoses both invalid shapes and lowerAuthoredIndex re-checks'
+    >({
+      ...ifDefined('columns', columnNames),
+      ...ifDefined(
+        'expression',
+        parsed.expression === undefined
+          ? undefined
+          : sqlTextFromStored(parsed.expression.value.value),
+      ),
+      where: parsed.where === undefined ? undefined : sqlTextFromStored(parsed.where.value.value),
+      unique: parsed.unique,
+      name: parsed.name,
+      map: parsed.map,
+      type: parsed.type,
+      options: parsed.options,
+    }),
+  );
+}
+
+function lowerCheckAttribute(
+  ctx: ModelLoweringContext,
+  lowering: ModelAttributeLowering,
+  modelAttribute: ModelAttribute,
+): void {
+  if (ctx.input.capabilities['sql']?.['checkConstraint'] !== true) {
+    ctx.diagnostics.push({
+      code: 'PSL_CHECK_UNSUPPORTED_TARGET',
+      message: `Model "${ctx.model.name}" declares "@@check", but target "${ctx.input.targetId}" does not support check constraints (the adapter does not report the "checkConstraint" capability). Remove the check or author it against a target that supports check constraints.`,
+      ...ctx.source.at(modelAttribute.span),
+    });
+    return;
+  }
+  const parsed = parseModelAttribute(
+    ctx,
+    modelAttribute,
+    sqlAttributeSpecs.model.check(ctx.specContext),
+  );
+  if (parsed === undefined) {
+    return;
+  }
+  lowering.checkNodes.push({
+    expression: sqlTextFromStored(parsed.expression.value.value),
+    name: parsed.name,
+    map: parsed.map,
+  });
+}
+
+function lowerContributedModelAttribute(
+  ctx: ModelLoweringContext,
+  lowering: ModelAttributeLowering,
+  modelAttribute: ModelAttribute,
+): void {
+  const { input, model } = ctx;
+  const contributedModelAttribute = input.modelAttributesByName.get(modelAttribute.name);
+  if (contributedModelAttribute === undefined) {
+    throw new InternalError(
+      `Model attribute "@@${modelAttribute.name}" is registered but has no interpreter branch`,
+    );
+  }
+  if (
+    contributedModelAttribute.repeatable !== true &&
+    lowering.declaredContributedModelAttributes.has(modelAttribute.name)
+  ) {
+    ctx.diagnostics.push(
+      duplicateModelAttributeDiagnostic({
+        name: modelAttribute.name,
+        modelName: model.name,
+        source: ctx.source,
+        span: modelAttribute.span,
+      }),
+    );
+    return;
+  }
+  lowering.declaredContributedModelAttributes.add(modelAttribute.name);
+  const specFactory = input.contributedModelAttributeSpecs[contributedModelAttribute.attribute];
+  if (specFactory === undefined) {
+    return;
+  }
+  const parsed = parseModelAttribute(ctx, modelAttribute, specFactory(ctx.specContext));
+  if (parsed === undefined) {
+    return;
+  }
+  const lower = blindCast<
+    (
+      parsed: unknown,
+      ctx: AuthoringModelAttributeContext,
+    ) => AuthoringModelAttributeLoweringOutput | undefined,
+    "lowering is called with the exact value interpretModelAttribute parsed against this descriptor's own spec"
+  >(contributedModelAttribute.lower);
+  const lowered = lower(parsed, contributedModelAttributeContext(ctx));
+  if (lowered === undefined) {
+    return;
+  }
+  if ('index' in lowered) {
+    if (!isAuthoredIndexInput(lowered.index)) {
+      throw contractError(
+        'CONTRACT.PACK_CONTRIBUTION_INVALID',
+        `model attribute "@@${modelAttribute.name}" on model "${model.name}" lowered to a malformed index. A contributed attribute that returns { index } must return an authored-index input: exactly one of a columns list or an expression, plus explicit where/unique/name/map and a type-with-options pair.`,
+        { meta: { attribute: modelAttribute.name, modelName: model.name } },
+      );
+    }
+    lowering.indexNodes.push(lowered.index);
+    return;
+  }
+  const slot = lowering.modelAttributeEntities[contributedModelAttribute.attribute] ?? {};
+  lowering.modelAttributeEntities[contributedModelAttribute.attribute] = slot;
+  slot[lowered.key] = lowered.entity;
+}
+
+function contributedModelAttributeContext(
+  ctx: ModelLoweringContext,
+): AuthoringModelAttributeContext {
+  const { input, model, diagnostics, source } = ctx;
+  return {
+    family: input.familyId,
+    target: input.targetId,
+    codecLookup: input.codecLookup,
+    dataTypes: input.dataTypes,
+    modelName: model.name,
+    storageName: ctx.tableName,
+    fieldStorageName: (fieldName) => {
+      const field = model.fields[fieldName];
+      return field === undefined ? undefined : storageName(field, input.physicalNames);
+    },
+    fieldCodecId: (fieldName) =>
+      ctx.resolvedFields.find((resolved) => resolved.field.name === fieldName)?.descriptor.codecId,
+    namespaceId: input.namespaceId,
+    sourceId: source.sources.sourceFileFor(source.node).filename,
+    diagnostics: {
+      push: (d) => {
+        diagnostics.pushExternal(
+          blindCast<ContractSourceDiagnostic, 'sink diagnostics are span-compatible'>(d),
+        );
+      },
+    },
+  };
+}
+
+function lowerRelationAttributes(ctx: ModelLoweringContext): RelationLowering {
+  const lowering: RelationLowering = {
+    foreignKeyNodes: [],
+    fkRelationMetadata: [],
+    relationIndexLocations: [],
+    invalidFkPairings: [],
+    crossSpaceRelations: [],
+  };
+  for (const field of Object.values(ctx.model.fields)) {
+    const relation = getAttribute(field.attributes, 'relation');
+    if (relation) {
+      lowerRelationAttribute(ctx, lowering, { field, relation });
+    }
+  }
+  return lowering;
+}
+
+function lowerRelationAttribute(
+  ctx: ModelLoweringContext,
+  lowering: RelationLowering,
+  relationAttribute: RelationAttributeEntry,
+): void {
+  const { field } = relationAttribute;
+  if (field.list) {
+    // F-list: cross-space list relations are explicitly unsupported (Option B does not
+    // navigate, so a list target makes no sense to carry). Emit a diagnostic instead of
+    // silently dropping the field — the author needs to know the field was ignored.
+    if (field.typeContractSpaceId !== undefined) {
+      ctx.diagnostics.push({
+        code: 'PSL_UNSUPPORTED_CROSS_SPACE_LIST',
+        message: `Relation field "${ctx.model.name}.${field.name}" is a cross-space list relation (type "${field.typeContractSpaceId}:${field.typeNamespaceId !== undefined ? `${field.typeNamespaceId}.` : ''}${field.typeName}[]"). Cross-space relations must be singular in v0.1 — list cross-space relations are not supported.`,
+        ...ctx.source.at(field.span),
+      });
+    }
+    return;
+  }
+
+  if (!relationAttributeDeclaresOwningSide(relationAttribute.relation)) {
+    // A singular model-typed field whose `@relation` carries only a name (or nothing) is the
+    // back side of a 1:1 relation, already lowered above via backrelationCandidates. It is
+    // not the owning side, so it has no fields/references to validate here.
+    return;
+  }
+
+  // Cross-contract-space relation: the target model lives in a different contract space
+  // identified by `typeContractSpaceId` (e.g. `supabase:auth.User`).
+  if (field.typeContractSpaceId !== undefined) {
+    lowerCrossSpaceRelation(ctx, lowering, relationAttribute, field.typeContractSpaceId);
+    return;
+  }
+
+  lowerLocalRelation(ctx, lowering, relationAttribute);
+}
+
+function parseOwningRelation(
+  ctx: ModelLoweringContext,
+  relationAttribute: RelationAttributeEntry,
+): OwningRelationParse {
+  const { model, diagnostics, source } = ctx;
+  const { field, relation } = relationAttribute;
+  const parsed = parseRelationAttribute(ctx, field);
+  if (!parsed) {
+    return { kind: 'invalid' };
+  }
+  if (!parsed.fields || !parsed.references) {
+    diagnostics.push({
+      code: 'PSL_INVALID_RELATION_ATTRIBUTE',
+      message: `Relation field "${model.name}.${field.name}" requires fields and references arguments`,
+      ...source.at(relation.span),
+    });
+    return { kind: 'invalid' };
+  }
+  const localColumns = mapFieldNamesToColumns({
+    model,
+    physicalNames: ctx.input.physicalNames,
+    fieldNames: parsed.fields,
+    source,
+    diagnostics,
+    span: relation.span,
+    entityLabel: `Relation field "${model.name}.${field.name}"`,
+  });
+  if (!localColumns) {
+    return { kind: 'invalid' };
+  }
+  if (relationNullabilityMismatch(field, localColumns, ctx.resolvedFields)) {
+    diagnostics.push(relationNullabilityMismatchDiagnostic(model.name, relationAttribute, source));
+    return { kind: 'nullability-mismatch', parsed };
+  }
+  return { kind: 'valid', parsed, references: parsed.references, localColumns };
+}
+
+function relationArityMismatchDiagnostic(
+  ctx: ModelLoweringContext,
+  relationAttribute: RelationAttributeEntry,
+): PslDiagnostic {
+  return {
+    code: 'PSL_INVALID_RELATION_ATTRIBUTE',
+    message: `Relation field "${ctx.model.name}.${relationAttribute.field.name}" must provide the same number of fields and references`,
+    ...ctx.source.at(relationAttribute.relation.span),
+  };
+}
+
+function pushRelationForeignKey(
+  ctx: ModelLoweringContext,
+  lowering: RelationLowering,
+  relationAttribute: RelationAttributeEntry,
+  parsedRelation: SqlRelationOutput,
+  localColumns: readonly string[],
+  references: ForeignKeyNode['references'],
+): void {
+  const onDelete = parsedRelation.onDelete
+    ? normalizeReferentialAction(parsedRelation.onDelete)
+    : undefined;
+  const onUpdate = parsedRelation.onUpdate
+    ? normalizeReferentialAction(parsedRelation.onUpdate)
+    : undefined;
+  lowering.foreignKeyNodes.push({
+    columns: localColumns,
+    references,
+    ...ifDefined('name', parsedRelation.map),
+    ...ifDefined('onDelete', onDelete),
+    ...ifDefined('onUpdate', onUpdate),
+    ...ifDefined('index', parsedRelation.index),
+  });
+  if (typeof parsedRelation.index === 'string') {
+    lowering.relationIndexLocations.push({
+      namespaceId: ctx.input.namespaceId,
+      tableName: ctx.tableName,
+      columns: localColumns,
+      index: parsedRelation.index,
+      location: ctx.source.at(relationAttribute.relation.span),
+    });
+  }
+}
+
+function lowerCrossSpaceRelation(
+  ctx: ModelLoweringContext,
+  lowering: RelationLowering,
+  relationAttribute: RelationAttributeEntry,
+  spaceId: string,
+): void {
+  const { model, diagnostics, source } = ctx;
+  const { field } = relationAttribute;
+
+  // Fail fast if the space has no entry in composedExtensionContracts (AC5 PSL half).
+  const extContract = ctx.input.composedExtensionContracts.get(spaceId);
+  if (extContract === undefined) {
+    diagnostics.push({
+      code: 'PSL_UNKNOWN_CONTRACT_SPACE',
+      message: `Relation field "${model.name}.${field.name}" references contract space "${spaceId}" which is not declared in extensions. Add "${spaceId}" to extensions in prisma.config.ts.`,
+      ...source.at(field.span),
+      data: { space: spaceId, suggestedPack: spaceId },
+    });
+    return;
+  }
+
+  const owning = parseOwningRelation(ctx, relationAttribute);
+  if (owning.kind !== 'valid') {
+    return;
+  }
+  const { parsed: parsedRelation, localColumns } = owning;
+
+  // For cross-space references the `references` list provides field names from the remote
+  // model. Since the interpreter has no access to the extension contract, these field names
+  // are treated as column names directly (matching the TS builder's cross-space path).
+  const referencedColumns = owning.references;
+
+  if (localColumns.length !== referencedColumns.length) {
+    diagnostics.push(relationArityMismatchDiagnostic(ctx, relationAttribute));
+    return;
+  }
+
+  // Target namespace: use the colon-prefix namespace qualifier, or `__unbound__` when the
+  // no-namespace form is used (e.g. `supabase:User` → AC3).
+  const crossTargetNamespaceId = field.typeNamespaceId ?? UNBOUND_NAMESPACE_ID;
+
+  // Target table name: resolved from the extension contract. If the model or namespace is not
+  // found in it, emit PSL_UNKNOWN_CROSS_SPACE_TARGET (user typo).
+  const targetNamespace = extContract.domain.namespaces[crossTargetNamespaceId];
+  const resolvedTable = targetNamespace?.models[field.typeName]?.storage['table'];
+  if (typeof resolvedTable !== 'string') {
+    const availableModels = Object.keys(targetNamespace?.models ?? {}).join(', ') || '(none)';
+    diagnostics.push({
+      code: 'PSL_UNKNOWN_CROSS_SPACE_TARGET',
+      message: `Relation field "${model.name}.${field.name}" references model "${field.typeName}" in namespace "${crossTargetNamespaceId}" of space "${spaceId}", but that model was not found in the extension contract. Available models: ${availableModels}`,
+      ...source.at(field.span),
+      data: {
+        space: spaceId,
+        namespace: crossTargetNamespaceId,
+        model: field.typeName,
+      },
+    });
+    return;
+  }
+
+  pushRelationForeignKey(ctx, lowering, relationAttribute, parsedRelation, localColumns, {
+    model: field.typeName,
+    table: resolvedTable,
+    columns: referencedColumns,
+    namespaceId: crossTargetNamespaceId,
+    spaceId,
+  });
+
+  // Build the cross-space RelationNode directly (no local back-relation candidate).
+  // `buildSqlContractFromDefinition` recognises `spaceId` on a RelationNode and routes it
+  // through the cross-space domain-relation path (produces a non-navigable CrossReference).
+  lowering.crossSpaceRelations.push({
+    fieldName: field.name,
+    toModel: field.typeName,
+    toTable: resolvedTable,
+    cardinality: 'N:1',
+    nullable: field.optional,
+    spaceId,
+    namespaceId: crossTargetNamespaceId,
+    on: {
+      parentTable: ctx.tableName,
+      parentColumns: localColumns,
+      childTable: resolvedTable,
+      childColumns: referencedColumns,
+    },
+  });
+}
+
+function resolveRelationTarget(
+  ctx: ModelLoweringContext,
+  field: FieldSymbol,
+): { readonly model: ModelSymbol; readonly namespaceId: string } | undefined {
+  const typeReference = typeReferenceNode(field);
+  const targetResolution =
+    typeReference === undefined ? undefined : ctx.input.binder.symbolForNode(typeReference);
+  if (targetResolution?.kind === 'unresolved') {
+    return undefined;
+  }
+  if (targetResolution?.kind !== 'model') {
+    const qualifiedTypeName = field.typeNamespaceId
+      ? `${field.typeNamespaceId}.${field.typeName}`
+      : field.typeName;
+    const foundKind =
+      targetResolution === undefined ? undefined : relationTargetKindLabel(targetResolution);
+    ctx.diagnostics.push({
+      code: 'PSL_INVALID_RELATION_TARGET',
+      message:
+        foundKind === undefined
+          ? `Relation field "${ctx.model.name}.${field.name}" references unknown model "${qualifiedTypeName}"`
+          : `Relation field "${ctx.model.name}.${field.name}" references ${foundKind} "${qualifiedTypeName}"; a relation target must be a model`,
+      ...ctx.source.at(field.span),
+    });
+    return undefined;
+  }
+  return { model: targetResolution.symbol, namespaceId: targetResolution.namespace.id };
+}
+
+function lowerLocalRelation(
+  ctx: ModelLoweringContext,
+  lowering: RelationLowering,
+  relationAttribute: RelationAttributeEntry,
+): void {
+  const { model, diagnostics } = ctx;
+  const { field } = relationAttribute;
+
+  const target = resolveRelationTarget(ctx, field);
+  if (target === undefined) {
+    return;
+  }
+
+  const owning = parseOwningRelation(ctx, relationAttribute);
+  if (owning.kind === 'invalid') {
+    return;
+  }
+  if (owning.kind === 'nullability-mismatch') {
+    lowering.invalidFkPairings.push({
+      declaringModel: model,
+      targetModel: target.model,
+      ...ifDefined('relationName', owning.parsed.name),
+    });
+    return;
+  }
+  const { parsed: parsedRelation, localColumns } = owning;
+
+  const referencedColumns = mapFieldNamesToColumns({
+    model: target.model,
+    physicalNames: ctx.input.physicalNames,
+    fieldNames: owning.references,
+    source: ctx.source,
+    diagnostics,
+    span: relationAttribute.relation.span,
+    entityLabel: `Relation field "${model.name}.${field.name}"`,
+  });
+  if (!referencedColumns) {
+    return;
+  }
+  if (localColumns.length !== referencedColumns.length) {
+    diagnostics.push(relationArityMismatchDiagnostic(ctx, relationAttribute));
+    return;
+  }
+
+  const targetTableName = storageName(target.model, ctx.input.physicalNames);
+  pushRelationForeignKey(ctx, lowering, relationAttribute, parsedRelation, localColumns, {
+    model: target.model.name,
+    table: targetTableName,
+    columns: referencedColumns,
+    namespaceId: target.namespaceId,
+  });
+
+  lowering.fkRelationMetadata.push({
+    declaringModelName: model,
+    declaringFieldName: field.name,
+    declaringTableName: ctx.tableName,
+    ...ifDefined('declaringNamespaceId', ctx.input.namespaceId),
+    targetModelName: target.model,
+    targetTableName,
+    ...ifDefined('targetNamespaceId', target.namespaceId),
+    ...ifDefined('relationName', parsedRelation.name),
+    nullable: field.optional,
+    localColumns,
+    referencedColumns,
+  });
 }
 
 interface BuildValueObjectNodesInput {
