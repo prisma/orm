@@ -3,10 +3,7 @@ import { tmpdir } from 'node:os';
 import { CliStructuredError } from '@internal/errors/control';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import {
-  createProjectSpecifierResolver,
-  projectImportRoot,
-} from '../../src/utils/project-import-root';
+import { projectImportRoot } from '../../src/utils/project-import-root';
 
 let project: string;
 
@@ -157,24 +154,5 @@ describe('projectImportRoot', () => {
       why: expect.stringContaining('could not be read'),
       meta: { path: join(project, 'package.json') },
     });
-  });
-});
-
-describe('createProjectSpecifierResolver', () => {
-  it('rewrites emitted specifiers to the facade the project installed', () => {
-    const configPath = writeManifest({ '@prisma/orm-postgres': '0.16.0' });
-    const resolve = createProjectSpecifierResolver(configPath);
-
-    expect(resolve('@internal/contract/types')).toBe('@prisma/orm-postgres/contract/types');
-    expect(resolve('@internal/sql-contract/types')).toBe(
-      '@prisma/orm-postgres/family-contract/types',
-    );
-  });
-
-  it('leaves specifiers alone for a project on the internal root', () => {
-    const configPath = writeManifest({ '@internal/postgres': 'workspace:0.16.0' });
-    const resolve = createProjectSpecifierResolver(configPath);
-
-    expect(resolve('@internal/contract/types')).toBe('@internal/contract/types');
   });
 });

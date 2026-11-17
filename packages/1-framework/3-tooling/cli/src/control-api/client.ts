@@ -24,10 +24,6 @@ import {
   hasPslContractInfer,
   hasSchemaView,
 } from '@internal/framework-components/control';
-import {
-  type ImportSpecifierResolver,
-  keepInternalSpecifiers,
-} from '@internal/framework-components/emission';
 import type { PslDocumentAst } from '@internal/framework-components/psl-ast';
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
 import { blindCast } from '@internal/utils/casts';
@@ -694,7 +690,7 @@ class ControlClientImpl implements ControlClient {
         });
       }
 
-      const result = await this.emitArtifacts(deserializedContract, keepInternalSpecifiers);
+      const result = await this.emitArtifacts(deserializedContract, contractConfig.typesModule);
 
       onProgress?.({
         action: 'emit',
@@ -748,10 +744,7 @@ class ControlClientImpl implements ControlClient {
     }
 
     try {
-      const { contractDts } = await this.emitArtifacts(
-        contract,
-        options.resolveImportSpecifier ?? keepInternalSpecifiers,
-      );
+      const { contractDts } = await this.emitArtifacts(contract, options.typesModule);
       return ok({ contractDts });
     } catch (error) {
       return notOk({
@@ -765,7 +758,7 @@ class ControlClientImpl implements ControlClient {
 
   private emitArtifacts(
     contract: Contract,
-    resolveImportSpecifier: ImportSpecifierResolver,
+    typesModule: string,
   ): ReturnType<typeof emitContractArtifacts> {
     const familyInstance = this.familyInstance;
     if (!familyInstance) {
@@ -775,7 +768,7 @@ class ControlClientImpl implements ControlClient {
     return emitContractArtifacts(contract, this.stack!, this.options.family.emission, {
       serializeContract: (c) => contractSerializer.serializeContract(c),
       deserializeContract: (json) => familyInstance.deserializeContract(json),
-      resolveImportSpecifier,
+      typesModule,
       ...ifDefined('shouldPreserveEmpty', contractSerializer.shouldPreserveEmpty),
       ...ifDefined('sortStorage', contractSerializer.sortStorage),
       ...ifDefined('supportsNamespaces', this.options.target.supportsNamespaces),

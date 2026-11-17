@@ -404,6 +404,23 @@ export function errorSpaceNotFound(
 }
 
 /**
+ * A command that writes a `contract.d.ts` was run with a config that names no module for its contract types.
+ */
+export function errorContractTypesModuleMissing(): ActionableCliError {
+  const fix =
+    "Build the config with your target package's `defineConfig`, which sets `contract.typesModule`; a config assembled by hand sets `contract.typesModule` itself, to a module that exports the framework's and family's contract types.";
+  return new ActionableCliError(
+    'CONFIG.CONTRACT_TYPES_MODULE_MISSING',
+    'Config names no contract types module',
+    {
+      why: 'Config.contract.typesModule is not set, so a generated contract.d.ts has no module to import the framework and family contract types from.',
+      fix,
+      nextActions: [editFileAction(fix)],
+    },
+  );
+}
+
+/**
  * A command that renders a `migration.ts` was run with a config that names no module for it to import from.
  */
 export function errorMigrationModuleMissing(): ActionableCliError {

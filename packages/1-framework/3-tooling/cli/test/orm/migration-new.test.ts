@@ -8,6 +8,7 @@ import { BIN_GROUPS } from '../../src/orm/cli';
 import { createOrmTestCli } from '../helpers/orm-test-cli';
 import {
   contractJson,
+  contractWithoutTypesModule,
   createOfflineProject,
   OFFLINE_COMMANDS,
   OFFLINE_MIGRATION_MODULE,
@@ -454,6 +455,7 @@ describe('migration new', () => {
       contract: {
         source: { format: 'typescript', inputs: [], load: async () => ({}) },
         output: join(project.dir, 'output', 'missing.json'),
+        typesModule: '@acme/orm-db/generated-types',
       },
     }).run(['migration', 'new', '--json'], { cwd: project.dir });
 
@@ -511,7 +513,7 @@ describe('migration new destination snapshot', () => {
     expect(run.exitCode).toBe(0);
     expect(renderContractDtsMock).toHaveBeenCalledWith({
       contract: contractJson(HASH_TO),
-      resolveImportSpecifier: expect.any(Function),
+      typesModule: '@acme/orm-db/generated-types',
     });
     const storeDir = contractSnapshotDir(project.migrationsDir, HASH_TO);
     expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(SNAPSHOT_CONTRACT_DTS);
@@ -554,6 +556,31 @@ describe('migration new without a migration module', () => {
     expect(run.json.at(-1)).toMatchObject({
       kind: 'result',
       envelope: { ok: false, error: { code: 'CONFIG.MIGRATION_MODULE_MISSING' } },
+    });
+    expect(existsSync(project.appMigrationsDir)).toBe(false);
+    expect(existsSync(contractSnapshotDir(project.migrationsDir, HASH_TO))).toBe(false);
+  });
+});
+
+describe('migration new without a contract types module', () => {
+  it('refuses before writing anything, naming the missing member', async () => {
+    const project = await createOfflineProject({ storageHash: HASH_TO });
+
+    const run = await harness(project, { contract: contractWithoutTypesModule(project) }).run(
+      ['migration', 'new', '--name', 'refused', '--json'],
+      { cwd: project.dir },
+    );
+
+    expect(run.exitCode).toBe(2);
+    expect(run.json.at(-1)).toMatchObject({
+      kind: 'result',
+      envelope: {
+        ok: false,
+        error: {
+          code: 'CONFIG.CONTRACT_TYPES_MODULE_MISSING',
+          why: expect.stringContaining('contract.typesModule'),
+        },
+      },
     });
     expect(existsSync(project.appMigrationsDir)).toBe(false);
     expect(existsSync(contractSnapshotDir(project.migrationsDir, HASH_TO))).toBe(false);

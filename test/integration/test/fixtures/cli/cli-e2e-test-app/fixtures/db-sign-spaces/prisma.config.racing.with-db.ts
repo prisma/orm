@@ -24,6 +24,7 @@ export default definePrismaConfig({
       },
       output: 'output/contract.json',
       types: 'output/contract.d.ts',
+      typesModule: '@internal/postgres/generated-types',
     },
     db: {
       connection: '{{DB_URL}}',

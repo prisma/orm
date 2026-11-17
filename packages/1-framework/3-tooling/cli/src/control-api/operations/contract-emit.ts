@@ -8,10 +8,12 @@ import { ifDefined } from '@internal/utils/defined';
 import type { JsonObject } from '@internal/utils/json';
 import { dirname, join } from 'pathe';
 import { migrationsDirFor } from '../../orm/migration/paths';
-import { errorContractConfigMissing } from '../../utils/cli-errors';
+import {
+  errorContractConfigMissing,
+  errorContractTypesModuleMissing,
+} from '../../utils/cli-errors';
 import { queueEmitByOutput } from '../../utils/emit-queue';
 import { toExtensionInputs } from '../../utils/extension-pack-inputs';
-import { createProjectSpecifierResolver } from '../../utils/project-import-root';
 import { publishContractArtifactPair } from '../../utils/publish-contract-artifact-pair';
 import { validateContractDeps } from '../../utils/validate-contract-deps';
 import type {
@@ -79,14 +81,7 @@ export async function executeContractEmit(
   options: ContractEmitOptions,
   dependencies: ContractEmitDependencies = defaultContractEmitDependencies,
 ): Promise<ContractEmitResult> {
-  const {
-    config,
-    cwd,
-    projectDir,
-    outputPath,
-    signal = new AbortController().signal,
-    onProgress,
-  } = options;
+  const { config, cwd, outputPath, signal = new AbortController().signal, onProgress } = options;
   const unlessAborted = abortable(signal);
   const contractConfig = requireContractConfig(config);
 
@@ -100,6 +95,10 @@ export async function executeContractEmit(
   }
 
   requireSourceProvider(contractConfig);
+  const { typesModule } = contractConfig;
+  if (typesModule === undefined) {
+    throw errorContractTypesModuleMissing();
+  }
 
   let outputPaths: ReturnType<typeof getEmittedArtifactPaths>;
   try {
@@ -155,14 +154,7 @@ export async function executeContractEmit(
           outputJsonPath,
           serializeContract,
           deserializeContract: (json) => familyInstance.deserializeContract(json),
-          // Which package names the generated files may import is decided by
-          // the nearest manifest above the file being written — the package
-          // that will import it, and the same directory `validateContractDeps`
-          // resolves against below. A caller that knows the project directory
-          // names it instead.
-          resolveImportSpecifier: createProjectSpecifierResolver(
-            projectDir ?? dirname(outputJsonPath),
-          ),
+          typesModule,
           ...ifDefined('shouldPreserveEmpty', contractSerializer.shouldPreserveEmpty),
           ...ifDefined('sortStorage', contractSerializer.sortStorage),
           ...ifDefined('supportsNamespaces', config.target.supportsNamespaces),

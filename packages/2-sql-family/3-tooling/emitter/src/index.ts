@@ -17,10 +17,8 @@ import {
 import type { CodecLookup } from '@internal/framework-components/codec';
 import type { AggregateDescriptor } from '@internal/framework-components/components';
 import { settleAggregateOverloads } from '@internal/framework-components/components';
-import type {
-  GenerateContractTypesOptions,
-  ImportSpecifierResolver,
-} from '@internal/framework-components/emission';
+import type { ImportRequirement } from '@internal/framework-components/control';
+import type { GenerateContractTypesOptions } from '@internal/framework-components/emission';
 import { entityAt, type Namespace, UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
   nonEmptyTypeParams,
@@ -222,15 +220,13 @@ export const sqlEmission = {
     ].join('\n');
   },
 
-  getFamilyImports(resolveImportSpecifier: ImportSpecifierResolver): string[] {
+  getFamilyImports(typesModule: string): ReadonlyArray<ImportRequirement> {
     return [
-      'import type {',
-      '  ColumnTypesFromStorage,',
-      '  ContractWithTypeMaps,',
-      '  RelationKeys,',
-      '  TypeMaps as TypeMapsType,',
-      `} from '${resolveImportSpecifier('@internal/sql-contract/types')}';`,
-    ];
+      { symbol: 'ColumnTypesFromStorage' },
+      { symbol: 'ContractWithTypeMaps' },
+      { symbol: 'RelationKeys' },
+      { symbol: 'TypeMaps', alias: 'TypeMapsType' },
+    ].map((name) => ({ ...name, moduleSpecifier: typesModule, typeOnly: true }));
   },
 
   getFamilyTypeAliases(options?: GenerateContractTypesOptions): string {

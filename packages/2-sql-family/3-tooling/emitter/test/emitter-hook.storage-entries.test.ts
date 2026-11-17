@@ -5,6 +5,8 @@ import { sqlEmission } from '../src/index';
 import { createEmitterTestContract as createContract } from './create-emitter-test-contract';
 import { identityCodecLookup } from './value-set-codec-lookups';
 
+const TYPES_MODULE = '@acme/orm-db/generated-types';
+
 const testHashes = { storageHash: 'test-core-hash', profileHash: 'test-profile-hash' };
 
 function contractWithEntries() {
@@ -60,6 +62,7 @@ describe('storage namespace entries type emission', () => {
       sqlEmission,
       [],
       testHashes,
+      TYPES_MODULE,
       undefined,
       identityCodecLookup,
     );
@@ -75,6 +78,7 @@ describe('storage namespace entries type emission', () => {
       sqlEmission,
       [],
       testHashes,
+      TYPES_MODULE,
       undefined,
       identityCodecLookup,
     );
@@ -105,6 +109,7 @@ describe('storage namespace entries type emission', () => {
       sqlEmission,
       [],
       testHashes,
+      TYPES_MODULE,
       undefined,
       identityCodecLookup,
     );

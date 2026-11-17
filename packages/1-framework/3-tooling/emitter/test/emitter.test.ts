@@ -7,7 +7,7 @@ import type { EmitStackInput } from '../src/exports';
 import { getEmittedArtifactPaths } from '../src/exports';
 import { generateContractDts } from '../src/generate-contract-dts';
 import { createMockSpi } from './mock-spi';
-import { createTestContract, emit } from './utils';
+import { createTestContract, emit, TEST_TYPES_MODULE } from './utils';
 
 const mockSqlHook = createMockSpi();
 
@@ -336,10 +336,16 @@ describe('emitter', () => {
         },
       },
     };
-    const dts = generateContractDts(contract, mockSqlHook, [], {
-      storageHash: '0000000000000000000000000000000000000000000000000000000000000001',
-      profileHash: '0000000000000000000000000000000000000000000000000000000000000002',
-    });
+    const dts = generateContractDts(
+      contract,
+      mockSqlHook,
+      [],
+      {
+        storageHash: '0000000000000000000000000000000000000000000000000000000000000001',
+        profileHash: '0000000000000000000000000000000000000000000000000000000000000002',
+      },
+      TEST_TYPES_MODULE,
+    );
     expect(dts).toContain('readonly auth:');
     expect(dts).toContain('readonly public:');
   });
@@ -347,10 +353,16 @@ describe('emitter', () => {
   it('throws when the sole namespace id has no namespace payload on the contract', () => {
     const contract = createTestContract({ namespaces: { public: undefined } });
     expect(() =>
-      generateContractDts(contract, mockSqlHook, [], {
-        storageHash: '0000000000000000000000000000000000000000000000000000000000000001',
-        profileHash: '0000000000000000000000000000000000000000000000000000000000000002',
-      }),
+      generateContractDts(
+        contract,
+        mockSqlHook,
+        [],
+        {
+          storageHash: '0000000000000000000000000000000000000000000000000000000000000001',
+          profileHash: '0000000000000000000000000000000000000000000000000000000000000002',
+        },
+        TEST_TYPES_MODULE,
+      ),
     ).toThrow('domain namespace "public" is not present on the contract');
   });
 

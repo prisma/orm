@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type * as configLoader from '@internal/config-loader';
@@ -20,6 +20,8 @@ function executeContractEmitWithMock(options: ContractEmitOptions) {
   return executeContractEmit(options, emitDependencies);
 }
 
+const TYPES_MODULE = '@acme/orm-db/generated-types';
+
 const stubDescriptor = (kind: string, id: string) => ({
   kind,
   id,
@@ -30,7 +32,7 @@ function mockConfigWithContract(contractOverrides: Record<string, unknown>) {
   return {
     family: stubDescriptor('family', 'test'),
     target: stubDescriptor('target', 'test'),
-    contract: contractOverrides,
+    contract: { typesModule: TYPES_MODULE, ...contractOverrides },
   } as unknown as configLoader.PrismaNextConfig;
 }
 
@@ -96,6 +98,7 @@ function createSuccessfulConfig(output: string) {
         value: createMockContract(),
       })),
       output,
+      typesModule: TYPES_MODULE,
     },
   } as unknown as configLoader.PrismaNextConfig;
 }
@@ -626,43 +629,31 @@ describe('executeContractEmit', () => {
     expect(result.pinnedFiles).toEqual([]);
   });
 
-  describe('the import root the emitted files are written against', () => {
-    async function emitInto(project: string, options: { readonly namesConfig: boolean }) {
-      const outputJsonPath = join(tmpDir, project, 'generated/contract.json');
-      await mkdir(join(tmpDir, project), { recursive: true });
-      await writeFile(
-        join(tmpDir, project, 'package.json'),
-        JSON.stringify({
-          name: project,
-          dependencies: { '@prisma/orm-postgres': '8.0.0-rc.1' },
-        }),
-        'utf-8',
-      );
-      mockedEmit.mockResolvedValueOnce(createEmitResult('specifiers'));
+  describe('the module the emitted contract types import from', () => {
+    it("is the config's contract.typesModule", async () => {
+      const outputJsonPath = join(tmpDir, 'generated/contract.json');
+      mockedEmit.mockResolvedValueOnce(createEmitResult('types-module'));
 
-      await executeContractEmitWithMock(
-        options.namesConfig
-          ? emitOptions(
-              createSuccessfulConfig(outputJsonPath),
-              join(tmpDir, project, 'prisma.config.ts'),
-            )
-          : { config: createSuccessfulConfig(outputJsonPath), cwd: tmpDir },
-      );
+      await executeContractEmitWithMock(emitOptions(createSuccessfulConfig(outputJsonPath)));
 
-      const resolveSpecifier = mockedEmit.mock.calls.at(-1)?.[3]?.resolveImportSpecifier;
-      return resolveSpecifier?.('@internal/contract/types');
-    }
-
-    it('is the project the artifacts are written into, not the working directory', async () => {
-      expect(await emitInto('app-a', { namesConfig: false })).toBe(
-        '@prisma/orm-postgres/contract/types',
-      );
+      expect(mockedEmit.mock.calls.at(-1)?.[3]?.typesModule).toBe(TYPES_MODULE);
     });
 
-    it('is the project holding the config file when the caller names one', async () => {
-      expect(await emitInto('app-b', { namesConfig: true })).toBe(
-        '@prisma/orm-postgres/contract/types',
-      );
+    it('refuses a config that names none, before anything is written', async () => {
+      const outputJsonPath = join(tmpDir, 'generated/contract.json');
+      const config = createSuccessfulConfig(outputJsonPath);
+      const { typesModule: _omitted, ...contract } = config.contract ?? {};
+
+      await expect(
+        executeContractEmitWithMock(
+          emitOptions({ ...config, contract } as unknown as configLoader.PrismaNextConfig),
+        ),
+      ).rejects.toMatchObject({
+        code: 'CONFIG.CONTRACT_TYPES_MODULE_MISSING',
+        why: expect.stringContaining('Config.contract.typesModule is not set'),
+      });
+      expect(mockedEmit).not.toHaveBeenCalled();
+      expect(existsSync(join(tmpDir, 'generated'))).toBe(false);
     });
   });
 

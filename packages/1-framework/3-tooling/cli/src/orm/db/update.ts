@@ -54,7 +54,7 @@ import type {
 import { type CliInvocation, cliCommand, cliInvocation } from '../../utils/printed-command';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
-import { baseDirFor, migrationsDirFor } from '../migration/paths';
+import { migrationsDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 import { promptPlanQuestions } from '../plan-question-prompt';
 import { controlProgressReporter } from '../progress';
@@ -378,7 +378,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           name: refName,
           contractJson,
           contractJsonPath: snapshotContractPath,
-          projectDir: baseDirFor(ctx.config),
+          config: ctx.config,
           client,
         });
         if (!preflight.ok) {

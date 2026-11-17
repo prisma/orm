@@ -15,11 +15,14 @@ export default definePrismaConfig({
     adapter: postgresAdapter,
     driver: postgresDriver,
     extensions: [pgvector],
-    contract: prismaContract('./contract.prisma', {
-      output: 'contract.json',
-      target: postgres,
-      createNamespace: postgresCreateNamespace,
-    }),
+    contract: {
+      ...prismaContract('./contract.prisma', {
+        output: 'contract.json',
+        target: postgres,
+        createNamespace: postgresCreateNamespace,
+      }),
+      typesModule: '@internal/postgres/generated-types',
+    },
     db: {
       connection: '{{DB_URL}}',
     },

@@ -71,9 +71,10 @@ describe('defineConfig for MariaDB', () => {
     expect({
       target: contract.target,
       capabilities: contract.capabilities,
-      codecTypes: contractDts.includes(
-        "import type { CodecTypes as MariadbTypes } from '@internal/mariadb/generated-types';",
-      ),
+      codecTypes:
+        /^import type \{[^}]*\bCodecTypes as MariadbTypes\b[^}]*\} from '@internal\/mariadb\/generated-types';$/m.test(
+          contractDts,
+        ),
     }).toEqual({
       target: 'mariadb',
       capabilities: {

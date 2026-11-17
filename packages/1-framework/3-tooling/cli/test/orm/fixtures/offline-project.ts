@@ -375,6 +375,9 @@ function deserializeIntoStorageInstance(json: unknown): unknown {
 /** The module the offline config names for rendered migration files: not one of Prisma's, so a test that finds it proves the name came from the config. */
 export const OFFLINE_MIGRATION_MODULE = '@acme/orm-db/migration';
 
+/** The module the offline config names for generated contract types, for the same reason. */
+export const OFFLINE_TYPES_MODULE = '@acme/orm-db/generated-types';
+
 export function offlineConfig(options: {
   readonly project: OfflineProject;
   readonly script?: FakePlannerScript;
@@ -409,9 +412,19 @@ export function offlineConfig(options: {
     contract: {
       source: { format: 'typescript', inputs: [], load: async () => contractJson('unused') },
       output: options.project.contractPath,
+      typesModule: OFFLINE_TYPES_MODULE,
     },
     migrations: { module: OFFLINE_MIGRATION_MODULE },
   };
+}
+
+/** The offline config's contract section without `typesModule`, as a config assembled by hand might leave it. */
+export function contractWithoutTypesModule(project: OfflineProject): Record<string, unknown> {
+  const { typesModule: _omitted, ...contract } = blindCast<
+    { readonly typesModule?: string },
+    'offlineConfig always returns a contract section'
+  >(offlineConfig({ project })['contract']);
+  return contract;
 }
 
 export const RENDERED_CONTRACT_DTS = '// rendered\nexport type Contract = { rendered: true };\n';

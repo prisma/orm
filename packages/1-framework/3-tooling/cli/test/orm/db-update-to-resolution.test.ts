@@ -130,6 +130,7 @@ function ormConfig(cwd: string): Record<string, unknown> {
     contract: {
       source: { format: 'typescript', inputs: [], load: async () => ({}) },
       output: join(cwd, 'contract.json'),
+      typesModule: '@acme/orm-db/generated-types',
     },
   };
 }

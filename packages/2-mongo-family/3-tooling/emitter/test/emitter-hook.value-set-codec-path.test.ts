@@ -6,6 +6,8 @@ import { describe, expect, it } from 'vitest';
 import { mongoEmission } from '../src/index';
 import { createMongoContract } from './fixtures/create-mongo-contract';
 
+const TYPES_MODULE = '@acme/orm-db/generated-types';
+
 const NON_IDENTITY_CODEC_ID = 'test/level@1';
 const LEVEL_BY_INDEX = ['low', 'high', 'urgent'] as const;
 
@@ -89,6 +91,7 @@ describe('mongo emit typing routes through the codec seam (not a raw value print
       mongoEmission,
       [],
       testHashes,
+      TYPES_MODULE,
       undefined,
       nonIdentityCodecLookup,
     );
@@ -110,6 +113,7 @@ describe('mongo emit typing routes through the codec seam (not a raw value print
       mongoEmission,
       [],
       testHashes,
+      TYPES_MODULE,
       undefined,
       noLiteralLookup,
     );

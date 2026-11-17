@@ -4,6 +4,7 @@ import sql from '@internal/family-sql/control';
 import postgres from '@internal/target-postgres/control';
 import { ok } from '@internal/utils/result';
 import { definePrismaConfig } from '@prisma/cli-engine';
+import { workspaceTypesModule } from '@repo/test-utils';
 import { contract } from './contract-no-pgvector';
 
 export default definePrismaConfig({
@@ -17,6 +18,7 @@ export default definePrismaConfig({
         load: async () => ok(contract),
       },
       output: 'generated-no-pgvector/contract.json',
+      typesModule: workspaceTypesModule.postgres,
     },
   }),
 });

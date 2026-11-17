@@ -5,6 +5,8 @@ import { sqlEmission } from '@internal/sql-contract-emitter';
 import { describe, expect, it } from 'vitest';
 import { defineContract, field, model } from '../../src/exports/contract-builder';
 
+const TYPES_MODULE = '@internal/postgres/generated-types';
+
 const textColumn = {
   codecId: 'sql/char@1' as const,
   typeParams: {},
@@ -90,6 +92,7 @@ describe('postgres defineContract wrap', () => {
       sqlEmission,
       [{ package: '@internal/target-postgres/codec-types', named: 'CodecTypes', alias: 'PgTypes' }],
       { storageHash: 'test-storage-hash', profileHash: 'test-profile-hash' },
+      TYPES_MODULE,
       undefined,
       createPostgresBuiltinCodecLookup(),
     );

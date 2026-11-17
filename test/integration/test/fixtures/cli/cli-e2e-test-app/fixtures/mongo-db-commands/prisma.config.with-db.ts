@@ -18,6 +18,7 @@ export default definePrismaConfig({
         load: async () => ({ ok: true, value: {} }),
       },
       output: 'output/contract.json',
+      typesModule: '@internal/mongo/generated-types',
     },
     db: {
       connection: '{{MONGO_URI}}',

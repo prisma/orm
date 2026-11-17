@@ -1921,6 +1921,12 @@
       "plane": "shared"
     },
     {
+      "glob": "packages/3-extensions/paradedb/src/generated-types.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-extensions/pgvector/src/core/**",
       "domain": "extensions",
       "layer": "adapters",
@@ -1958,6 +1964,12 @@
     },
     {
       "glob": "packages/3-extensions/pgvector/src/contract.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-extensions/pgvector/src/generated-types.ts",
       "domain": "extensions",
       "layer": "adapters",
       "plane": "shared"
@@ -2011,6 +2023,12 @@
       "plane": "shared"
     },
     {
+      "glob": "packages/3-extensions/citext/src/generated-types.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-extensions/citext/src/exports/column-types.ts",
       "domain": "extensions",
       "layer": "adapters",
@@ -2036,6 +2054,12 @@
     },
     {
       "glob": "packages/3-extensions/postgis/src/contract.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-extensions/postgis/src/generated-types.ts",
       "domain": "extensions",
       "layer": "adapters",
       "plane": "shared"

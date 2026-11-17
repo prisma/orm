@@ -105,6 +105,7 @@ function ormConfig(overrides: Record<string, unknown> = {}): Record<string, unkn
     contract: {
       source: { format: 'typescript', inputs: [], load: async () => ({}) },
       output: join(projectDir, 'contract.json'),
+      typesModule: '@acme/orm-db/generated-types',
     },
     ...overrides,
   };
@@ -401,6 +402,7 @@ describe('db init', () => {
         contract: {
           source: { format: 'typescript', inputs: [], load: async () => ({}) },
           output: join(projectDir, 'absent.json'),
+          typesModule: '@acme/orm-db/generated-types',
         },
       }),
     ).run(['db', 'init', '--json'], { cwd: projectDir });
@@ -714,7 +716,7 @@ describe('db init', () => {
       expect(run.exitCode).toBe(0);
       expect(mocks.renderContractDts).toHaveBeenCalledWith({
         contract: { storage: { storageHash: MARKER_HASH } },
-        resolveImportSpecifier: expect.any(Function),
+        typesModule: '@acme/orm-db/generated-types',
       });
       expect(mocks.renderContractDts.mock.invocationCallOrder[0]).toBeLessThan(
         mocks.connect.mock.invocationCallOrder[0]!,

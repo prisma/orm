@@ -37,6 +37,10 @@ Namespaces:
 
 The `contract` section is missing (or incomplete) in `prisma.config.ts` when a command needs it, raised by `prisma contract emit` when the config has no contract configuration, no schema path, or the referenced authoring entrypoint cannot be resolved. Payload: none.
 
+### CONFIG.CONTRACT_TYPES_MODULE_MISSING
+
+`contract emit`, the Vite plugin, or a command that writes a contract snapshot (`db init`, `db update`, `db sign`, `migrate`, `migration new`, `migration plan`) was run with a config that has no `contract.typesModule`, the module a generated `contract.d.ts` imports the framework and family contract types from. Raised before anything is written. A target package's `defineConfig` sets it; a config assembled by hand sets `contract.typesModule` itself. Payload: none.
+
 ### CONFIG.DB_CONNECTION_REQUIRED
 
 A DB-connected command (`db migrate`, `db init`, `db sign`, `db verify`, `db update`, `db schema`, and the migration scaffold commands) was run with no database connection available: no `--db <url>` flag and no `db.connection` in `prisma.config.ts`. The fix text names the exact retry command when known. Payload: `missingFlags` (optional).

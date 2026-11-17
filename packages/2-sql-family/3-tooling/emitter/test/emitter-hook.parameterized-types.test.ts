@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { sqlEmission } from '../src/index';
 import { createEmitterTestContract as createContract } from './create-emitter-test-contract';
 
+const TYPES_MODULE = '@acme/orm-db/generated-types';
+
 const testHashes = { storageHash: 'test-core-hash', profileHash: 'test-profile-hash' };
 
 describe('sql-target-family-hook parameterized type emission', () => {
@@ -36,7 +38,7 @@ describe('sql-target-family-hook parameterized type emission', () => {
         },
       });
 
-      const types = generateContractDts(ir, sqlEmission, [], testHashes);
+      const types = generateContractDts(ir, sqlEmission, [], testHashes, TYPES_MODULE);
 
       expect(types).toContain('readonly types:');
       expect(types).toContain(
@@ -65,7 +67,7 @@ describe('sql-target-family-hook parameterized type emission', () => {
         },
       });
 
-      const types = generateContractDts(ir, sqlEmission, [], testHashes);
+      const types = generateContractDts(ir, sqlEmission, [], testHashes, TYPES_MODULE);
 
       expect(types).toContain('readonly namespaces:');
       expect(types).not.toContain('readonly types:');
@@ -88,7 +90,7 @@ describe('sql-target-family-hook parameterized type emission', () => {
         },
       });
 
-      const types = generateContractDts(ir, sqlEmission, [], testHashes);
+      const types = generateContractDts(ir, sqlEmission, [], testHashes, TYPES_MODULE);
 
       expect(types).toContain('readonly namespaces:');
       expect(types).not.toContain('readonly Vector1536');
@@ -118,7 +120,7 @@ describe('sql-target-family-hook parameterized type emission', () => {
         },
       });
 
-      const types = generateContractDts(ir, sqlEmission, [], testHashes);
+      const types = generateContractDts(ir, sqlEmission, [], testHashes, TYPES_MODULE);
 
       expect(types).toContain('readonly ComplexType:');
       expect(types).toContain(
@@ -150,7 +152,7 @@ describe('sql-target-family-hook parameterized type emission', () => {
         },
       });
 
-      const types = generateContractDts(ir, sqlEmission, [], testHashes);
+      const types = generateContractDts(ir, sqlEmission, [], testHashes, TYPES_MODULE);
 
       expect(types).toContain('readonly ArrayType:');
       expect(types).toContain('readonly typeParams: { readonly items: readonly [1, 2, 3] }');
@@ -180,7 +182,7 @@ describe('sql-target-family-hook parameterized type emission', () => {
         },
       });
 
-      const types = generateContractDts(ir, sqlEmission, [], testHashes);
+      const types = generateContractDts(ir, sqlEmission, [], testHashes, TYPES_MODULE);
 
       expect(types).toContain('readonly NestedType:');
       expect(types).toContain(
@@ -212,7 +214,7 @@ describe('sql-target-family-hook parameterized type emission', () => {
         },
       });
 
-      const types = generateContractDts(ir, sqlEmission, [], testHashes);
+      const types = generateContractDts(ir, sqlEmission, [], testHashes, TYPES_MODULE);
 
       expect(types).toContain('readonly NullableType:');
       expect(types).toContain('readonly typeParams: { readonly value: null }');
@@ -242,7 +244,7 @@ describe('sql-target-family-hook parameterized type emission', () => {
         },
       });
 
-      const types = generateContractDts(ir, sqlEmission, [], testHashes);
+      const types = generateContractDts(ir, sqlEmission, [], testHashes, TYPES_MODULE);
 
       expect(types).toContain('readonly UndefinedType:');
       expect(types).toContain('readonly typeParams: { readonly value: undefined }');

@@ -25,6 +25,7 @@ import {
   errorTargetMigrationNotSupported,
 } from '../../utils/cli-errors';
 import {
+  contractTypesModuleOf,
   getTargetMigrations,
   migrationModuleOf,
   resolveContractPath,
@@ -32,7 +33,6 @@ import {
 } from '../../utils/command-helpers';
 import { contractValidationMeta } from '../../utils/contract-validation-meta';
 import { assertFrameworkComponentsCompatible } from '../../utils/framework-components';
-import { createProjectSpecifierResolver } from '../../utils/project-import-root';
 import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
 import type { ControlClient } from '../types';
 import { errorFromCaught } from './caught-errors';
@@ -44,8 +44,6 @@ export interface MigrationNewOptions {
   readonly config: PrismaNextConfig;
   /** Directory the command was invoked from. */
   readonly cwd: string;
-  /** The project's directory, normally the validated config's `baseDir`; locates the project manifest. */
-  readonly projectDir?: string;
   readonly name?: string;
   readonly from?: string;
   /** Renders the declarations of the destination snapshot from its `contract.json`. */
@@ -68,6 +66,10 @@ export async function executeMigrationNewCommand(
   const migrationModule = migrationModuleOf(config);
   if (!migrationModule.ok) {
     return migrationModule;
+  }
+  const typesModule = contractTypesModuleOf(config);
+  if (!typesModule.ok) {
+    return typesModule;
   }
   const { migrationsDir, appMigrationsDir, appMigrationsRelative } = resolveMigrationPaths(
     config,
@@ -236,15 +238,11 @@ export async function executeMigrationNewCommand(
       ...(config.extensions ?? []),
     ]);
 
-    // Before any write: an unreadable or contradictory project manifest fails
-    // the command outright rather than after a half-scaffolded migration
-    // directory is already on disk.
-    const resolveSpecifier = createProjectSpecifierResolver(options.projectDir);
     const declarations = await renderSnapshotDeclarations({
       client: options.client,
       contractJson: parsedContract,
       contractJsonPath: contractPathAbsolute,
-      resolveImportSpecifier: resolveSpecifier,
+      typesModule: typesModule.value,
     });
     if (!declarations.ok) {
       return notOk(declarations.failure);

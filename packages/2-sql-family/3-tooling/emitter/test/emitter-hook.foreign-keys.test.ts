@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { sqlEmission } from '../src/index';
 import { createEmitterTestContract as createContract } from './create-emitter-test-contract';
 
+const TYPES_MODULE = '@acme/orm-db/generated-types';
+
 const testHashes = { storageHash: 'test-core-hash', profileHash: 'test-profile-hash' };
 
 /**
@@ -43,7 +45,7 @@ describe('generateContractDts — FK literal (FK1)', () => {
       },
     });
 
-    const types = generateContractDts(ir, sqlEmission, [], testHashes);
+    const types = generateContractDts(ir, sqlEmission, [], testHashes, TYPES_MODULE);
 
     expect(types).toContain('readonly tableName: "post"; readonly columns: readonly ["userId"]');
     expect(types).toContain('readonly tableName: "user"; readonly columns: readonly ["id"]');
@@ -92,7 +94,7 @@ describe('generateContractDts — FK literal (FK1)', () => {
       },
     });
 
-    const types = generateContractDts(ir, sqlEmission, [], testHashes);
+    const types = generateContractDts(ir, sqlEmission, [], testHashes, TYPES_MODULE);
 
     expect(types).toContain('readonly name: "post_userId_fkey"');
     const fkLiteralStart = types.indexOf('readonly foreignKeys:');

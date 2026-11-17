@@ -89,6 +89,7 @@ describe('createFixtureControlClient', () => {
           load: async () => notOk({ summary: '', diagnostics: [] }),
         },
         output: 'contract.json',
+        typesModule: '@acme/orm-db/generated-types',
       },
     });
     expect(emit.assertOk().storageHash).toBe(FIXTURE_STORAGE_HASH);
@@ -261,6 +262,7 @@ describe('createFixtureControlClient', () => {
           load: async () => notOk({ summary: '', diagnostics: [] }),
         },
         output: 'contract.json',
+        typesModule: '@acme/orm-db/generated-types',
       },
     });
 

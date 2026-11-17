@@ -18,6 +18,7 @@ import { createOrmTestCli } from '../helpers/orm-test-cli';
 import {
   ADDITIVE_OP,
   contractJson,
+  contractWithoutTypesModule,
   createOfflineProject,
   DESTRUCTIVE_OP,
   type FakePlannerScript,
@@ -113,6 +114,7 @@ describe('migration plan --config naming a file in a subdirectory', () => {
                     load: async () => contractJson('unused'),
                   },
                   output: './output/contract.json',
+                  typesModule: '@acme/orm-db/generated-types',
                 },
                 migrations: { dir: './migrations', module: OFFLINE_MIGRATION_MODULE },
               },
@@ -549,7 +551,6 @@ describe('migration plan', () => {
             baseDir: project.dir,
           } as unknown as PrismaNextConfig,
           cwd: project.dir,
-          projectDir: project.dir,
           statements,
           answerQuestions,
           client: { renderContractDts: renderContractDtsMock },
@@ -620,7 +621,6 @@ describe('migration plan', () => {
             baseDir: project.dir,
           } as unknown as PrismaNextConfig,
           cwd: project.dir,
-          projectDir: project.dir,
           statements: [{ verb: 'delete', text: 'audit_log' }],
           answerQuestions: async (questions) =>
             questions.map(() => ({ verb: 'rename', text: 'Legacy:Archive' })),
@@ -1216,6 +1216,7 @@ describe('migration plan', () => {
         contract: {
           source: { format: 'typescript', inputs: [], load: async () => ({}) },
           output: join(project.dir, 'output', 'missing.json'),
+          typesModule: '@acme/orm-db/generated-types',
         },
       },
     }).run(['migration', 'plan', '--json'], { cwd: project.dir });
@@ -1391,7 +1392,7 @@ describe('migration plan destination snapshot', () => {
     expect(run.exitCode).toBe(0);
     expect(renderContractDtsMock).toHaveBeenCalledWith({
       contract: contractJson(HASH_TO),
-      resolveImportSpecifier: expect.any(Function),
+      typesModule: '@acme/orm-db/generated-types',
     });
     const storeDir = contractSnapshotDir(project.migrationsDir, HASH_TO);
     expect(JSON.parse(await readFile(join(storeDir, 'contract.json'), 'utf-8'))).toEqual(
@@ -1435,6 +1436,29 @@ describe('migration plan and the module migration files import from', () => {
     expect(await readFile(join(dir, 'migration.ts'), 'utf-8')).toBe(
       `// planned migration importing ${OFFLINE_MIGRATION_MODULE}\n`,
     );
+  });
+
+  it('refuses before writing anything when the config names no contract types module', async () => {
+    const project = await plannableProject();
+    const before = await plannedDirs(project);
+
+    const run = await harness(project, {
+      overrides: { contract: contractWithoutTypesModule(project) },
+    }).run(['migration', 'plan', '--name', 'add-users', '--json'], { cwd: project.dir });
+
+    expect(run.exitCode).toBe(2);
+    expect(run.json.at(-1)).toMatchObject({
+      kind: 'result',
+      envelope: {
+        ok: false,
+        error: {
+          code: 'CONFIG.CONTRACT_TYPES_MODULE_MISSING',
+          why: expect.stringContaining('contract.typesModule'),
+        },
+      },
+    });
+    expect(await plannedDirs(project)).toEqual(before);
+    expect(existsSync(contractSnapshotDir(project.migrationsDir, HASH_TO))).toBe(false);
   });
 
   it('refuses before writing anything when the config names no migration module', async () => {

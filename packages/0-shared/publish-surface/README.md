@@ -17,11 +17,11 @@ The canonical map from internal workspace packages to the published `@prisma/orm
 
   Resolution refuses to produce a name the application does not depend on **directly**. A package manager puts a package's own dependencies in that package's `node_modules`, so a generated file importing a transitively installed package fails to resolve at run time even though the files are on disk. `resolveImportSpecifier` throws rather than emit one.
 
-  `importRootForDependencies` picks the root from a project's own dependency names, which is how the CLI decides what to emit for a project (`@internal/cli`'s `projectImportRoot` reads the manifest next to the config file). Nothing configures the root separately: the manifest already states which packages are installed, and a second setting could only disagree with it.
+  `importRootForDependencies` picks the root from a project's own dependency names.
 
-Two consumers read this table and nothing copies it: the shell build (`@repo/tsdown/shell-build`), which turns each mapping into a generated entrypoint, and the CLI, which turns a project's manifest into a resolver.
+Two consumers read this table and nothing copies it: the shell build (`@repo/tsdown/shell-build`), which turns each mapping into a generated entrypoint, and `prisma orm init`, which names the facade a scaffolded project imports from.
 
-Emission itself does **not** read it. The contract emitters, the targets' migration renderers, and `prisma orm init` each receive an opaque `ImportSpecifierResolver` — a `(specifier) => string` declared in `@internal/framework-components/emission` — and never learn what the published names are. That keeps `packages/1-framework` free of family and target vocabulary, and keeps this package out of every published bundle. Whoever chooses the root builds the resolver here and passes it in.
+Emission does **not** read it. A generated `contract.d.ts` imports from the module the config names in `contract.typesModule`, and a written `migration.ts` from `migrations.module`; a target package's `defineConfig` sets both. `prisma orm init` receives an opaque `ImportSpecifierResolver` — a `(specifier) => string` declared in `@internal/framework-components/emission` — and never learns what the published names are. That keeps `packages/1-framework` free of family and target vocabulary, and keeps this package out of every published bundle.
 
 ## Why the name is declared, not read from disk
 

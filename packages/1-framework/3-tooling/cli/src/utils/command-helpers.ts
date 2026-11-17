@@ -10,7 +10,12 @@ import type { NextAction } from '@internal/utils/structured-error';
 import { relative, resolve } from 'pathe';
 import type { ControlClient } from '../control-api/types';
 import { migrationsDirFor } from '../orm/migration/paths';
-import { CliStructuredError, errorMigrationModuleMissing, errorRuntime } from './cli-errors';
+import {
+  CliStructuredError,
+  errorContractTypesModuleMissing,
+  errorMigrationModuleMissing,
+  errorRuntime,
+} from './cli-errors';
 import {
   hasUrlScheme,
   passwordQueryValues,
@@ -19,6 +24,14 @@ import {
 } from './url-credentials';
 
 const PASSWORD_QUERY_KEY = /password/i;
+
+/** The module a generated `contract.d.ts` imports the framework and family types from: the config's `contract.typesModule`. */
+export function contractTypesModuleOf(config: {
+  readonly contract?: { readonly typesModule?: string };
+}): Result<string, CliStructuredError> {
+  const module = config.contract?.typesModule;
+  return module === undefined ? notOk(errorContractTypesModuleMissing()) : ok(module);
+}
 
 /** The module a rendered `migration.ts` imports from: the config's `migrations.module`. */
 export function migrationModuleOf(config: {

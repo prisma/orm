@@ -13,5 +13,5 @@ export default {
   adapter: postgresAdapter,
   driver: postgresDriver,
   extensions: [],
-  contract: typescriptContract(contract),
+  contract: { ...typescriptContract(contract), typesModule: '@internal/postgres/generated-types' },
 };

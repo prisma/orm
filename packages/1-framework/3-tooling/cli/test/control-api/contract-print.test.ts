@@ -46,6 +46,7 @@ function configWithMalformedContract(output: string) {
         load: async () => ok({ domain: { namespaces: {} }, capabilities: {}, extensions: {} }),
       },
       output,
+      typesModule: '@acme/orm-db/generated-types',
     },
   } as unknown as PrismaNextConfig;
   return { config, familyInstance };

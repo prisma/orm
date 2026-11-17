@@ -8,6 +8,8 @@ import storedNamesContractJson from '../../../5-query-builders/orm/test/fixtures
 import migrationContractJson from '../../../9-family/test/fixtures/migration-contract.json';
 import { mongoEmission } from '../src/index';
 
+const TYPES_MODULE = '@acme/orm-db/generated-types';
+
 const targetCodecTypes = resolve(
   import.meta.dirname,
   '../../../../3-targets/mongo/1-target/src/exports/codec-types',
@@ -88,6 +90,7 @@ for (const { json, hash, targets } of fixtures) {
         mongoEmission,
         codecImportsFrom(dir, viaPackage),
         { storageHash: `${hash}-storage`, profileHash: `${hash}-profile` },
+        TYPES_MODULE,
       ),
     );
     console.log(`Generated ${target}`);

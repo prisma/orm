@@ -9,6 +9,8 @@ import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 
+const TYPES_MODULE = '@internal/postgres/generated-types';
+
 describe('emitter + postgres target descriptor', () => {
   it('surfaces target-declared queryOperationTypes.import in generated contract.d.ts', () => {
     const ir: Contract<SqlStorage> = {
@@ -37,6 +39,7 @@ describe('emitter + postgres target descriptor', () => {
       sqlEmission,
       [],
       { storageHash: 'h', profileHash: 'p' },
+      TYPES_MODULE,
       { queryOperationTypeImports },
     );
 

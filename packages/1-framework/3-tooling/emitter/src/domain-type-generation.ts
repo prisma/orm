@@ -13,13 +13,9 @@ import type {
 } from '@internal/contract/types';
 import { valueObjectsWithCoordinates } from '@internal/contract/types';
 import type { CodecLookup } from '@internal/framework-components/codec';
-import {
-  type ImportSpecifierResolver,
-  keepInternalSpecifiers,
-  type TypesImportSpec,
-} from '@internal/framework-components/emission';
+import type { TypesImportSpec } from '@internal/framework-components/emission';
 import { entityAt } from '@internal/framework-components/ir';
-import { type ImportRequirement, renderImports, tsStringLiteral } from '@internal/ts-render';
+import { type ImportRequirement, tsStringLiteral } from '@internal/ts-render';
 import { blindCast } from '@internal/utils/casts';
 import { emitterError } from './emitter-errors';
 import { isSafeTypeExpression } from './type-expression-safety';
@@ -269,18 +265,16 @@ export function deduplicateImports(imports: TypesImportSpec[]): TypesImportSpec[
   return result;
 }
 
-export function generateImportLines(
-  imports: TypesImportSpec[],
-  resolveImportSpecifier: ImportSpecifierResolver = keepInternalSpecifiers,
-): string[] {
-  const requirements: ImportRequirement[] = imports.map((imp) => ({
-    moduleSpecifier: resolveImportSpecifier(imp.package),
+/** The import requirements of type declarations, each from the module it states. */
+export function typesImportRequirements(
+  imports: ReadonlyArray<TypesImportSpec>,
+): ImportRequirement[] {
+  return imports.map((imp) => ({
+    moduleSpecifier: imp.package,
     symbol: imp.named,
     alias: imp.alias,
     typeOnly: true,
   }));
-  const rendered = renderImports(requirements);
-  return rendered === '' ? [] : rendered.split('\n');
 }
 
 export function generateCodecTypeIntersection(

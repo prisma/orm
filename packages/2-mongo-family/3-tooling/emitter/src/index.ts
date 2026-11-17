@@ -4,7 +4,7 @@ import {
   serializeObjectKey,
   serializeValue,
 } from '@internal/emitter/domain-type-generation';
-import type { ImportSpecifierResolver } from '@internal/framework-components/emission';
+import type { ImportRequirement } from '@internal/framework-components/control';
 import type { Namespace } from '@internal/framework-components/ir';
 import type { MongoCollection, MongoModelStorage, MongoStorage } from '@internal/mongo-contract';
 import { blindCast } from '@internal/utils/casts';
@@ -131,15 +131,10 @@ export const mongoEmission = {
     };
   },
 
-  getFamilyImports(resolveImportSpecifier: ImportSpecifierResolver): string[] {
-    return [
-      'import type {',
-      '  MongoCollection,',
-      '  MongoContractWithTypeMaps,',
-      '  MongoTypeMaps,',
-      '  RelationKeys,',
-      `} from '${resolveImportSpecifier('@internal/mongo-contract')}';`,
-    ];
+  getFamilyImports(typesModule: string): ReadonlyArray<ImportRequirement> {
+    return ['MongoCollection', 'MongoContractWithTypeMaps', 'MongoTypeMaps', 'RelationKeys'].map(
+      (symbol) => ({ moduleSpecifier: typesModule, symbol, typeOnly: true }),
+    );
   },
 
   getFamilyTypeAliases(): string {

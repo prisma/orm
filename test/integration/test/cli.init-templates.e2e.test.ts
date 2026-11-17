@@ -77,7 +77,6 @@ async function emitContract(testDir: string, configPath: string): Promise<void> 
     await executeContractEmit({
       config: loaded.value,
       cwd: testDir,
-      projectDir: dirname(configPath),
     });
   } finally {
     process.chdir(originalCwd);

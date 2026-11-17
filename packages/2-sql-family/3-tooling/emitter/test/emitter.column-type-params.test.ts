@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { sqlEmission } from '../src/index';
 import { createEmitterTestContract as createContract } from './create-emitter-test-contract';
 
+const TYPES_MODULE = '@acme/orm-db/generated-types';
+
 const testHashes = { storageHash: 'test', profileHash: 'test' };
 
 function typeOverrides(dts: string, name: 'ColumnTypeOverrides' | 'FieldTypeOverrides'): string {
@@ -76,6 +78,7 @@ describe('contract.d.ts types of a column with type parameters', () => {
       sqlEmission,
       [],
       testHashes,
+      TYPES_MODULE,
       undefined,
       vectorCodecLookup(),
     );
@@ -135,6 +138,7 @@ describe('contract.d.ts types of a column with type parameters', () => {
       sqlEmission,
       [],
       testHashes,
+      TYPES_MODULE,
       undefined,
       vectorCodecLookup(),
     );
@@ -174,6 +178,7 @@ describe('contract.d.ts types of a column with type parameters', () => {
       sqlEmission,
       [],
       testHashes,
+      TYPES_MODULE,
       undefined,
       vectorCodecLookup(),
     );
