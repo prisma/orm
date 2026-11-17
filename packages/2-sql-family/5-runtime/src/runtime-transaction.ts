@@ -203,7 +203,6 @@ export class OuterTransaction extends TransactionBase implements SettledTransact
   private closed = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private commitAttempted = false;
-  private readonly self: OuterTransaction = this;
 
   constructor(
     runtime: TransactionRuntime,
@@ -242,7 +241,7 @@ export class OuterTransaction extends TransactionBase implements SettledTransact
   }
 
   protected get rootTransaction(): OuterTransaction {
-    return this.self;
+    return this;
   }
 
   assertOpen(): void {
@@ -289,7 +288,7 @@ export class OuterTransaction extends TransactionBase implements SettledTransact
     this.stopAcceptingChildren();
     if (this.entry.commitEnding !== undefined) {
       await this.entry.commitEnding.catch(() => undefined);
-      return;
+      throw transactionClosedError();
     }
     if (this.entry.state === 'rolled-back') return;
     try {
@@ -431,7 +430,7 @@ class Savepoint extends TransactionBase {
   async rollback(): Promise<void> {
     if (this.entry.commitEnding !== undefined) {
       await this.entry.commitEnding.catch(() => undefined);
-      return;
+      throw transactionClosedError();
     }
     const commitAttempted = this.entry.state === 'commit-failed';
     if (this.isClosed) {

@@ -1,5 +1,4 @@
 import type { Contract } from '@internal/contract/types';
-import type { ActivityParent } from '@internal/framework-components/runtime';
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
 import { type PostgresRuntime, PostgresRuntimeImpl } from '@internal/postgres/runtime';
 import type { SqlStorage } from '@internal/sql-contract/types';
@@ -100,6 +99,7 @@ export class SupabaseRuntimeImpl<
     readonly conn: SqlConnection;
     readonly session: BoundSession & TransactionStartTarget;
   }> {
+    const parent = options?.activityParent;
     const conn = await this.acquireRawConnection(options);
 
     try {
@@ -156,7 +156,7 @@ export class SupabaseRuntimeImpl<
       },
 
       async transaction(options?: RuntimeTransactionOptions): Promise<RuntimeTransaction> {
-        return self.beginTransactionOn(conn, session, undefined, options);
+        return self.beginTransactionOn(conn, session, parent, options);
       },
 
       /**
@@ -235,21 +235,13 @@ export class SupabaseRuntimeImpl<
           scope[preparedStatementQuery](statement, params, options),
         preparedExecute: (statement, params, options) =>
           scope[preparedStatementExecute](statement, params, options),
-        transaction: (parent, options) => runtime().beginRoleTransaction(binding, parent, options),
+        transaction: (parent) => ({
+          connection: async () =>
+            (await runtime().openRoleConnection(binding, { activityParent: parent })).session,
+        }),
       };
       return scope;
     };
-  }
-
-  private async beginRoleTransaction(
-    binding: SupabaseRoleBinding,
-    parent: ActivityParent,
-    options?: RuntimeTransactionOptions,
-  ): Promise<RuntimeTransaction> {
-    const { conn, session } = await this.openRoleConnection(binding, { activityParent: parent });
-    return this.ownTransaction(session, () =>
-      this.beginTransactionOn(conn, session, parent, options),
-    );
   }
 
   private runPreparedExecuteAgainstRoleQueryable<Params>(

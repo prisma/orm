@@ -347,11 +347,10 @@ describe('isolation across Supabase roots and user roles', () => {
           kind: 'test-call',
           contentHash: async () => 'test',
         });
-        const tx = await activity.transaction?.(undefined);
-        if (!tx) throw new Error('Expected transaction');
-        await vi.advanceTimersByTimeAsync(10);
-        expect(vi.getTimerCount()).toBe(0);
-        await tx.commit();
+        await activity.transaction?.(async () => {
+          await vi.advanceTimersByTimeAsync(10);
+          expect(vi.getTimerCount()).toBe(0);
+        });
         await activity.end({ outcome: 'succeeded' });
         expect(recorded.statements).toEqual(underRole('service_role', [['BEGIN'], ['COMMIT']]));
       }

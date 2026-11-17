@@ -166,7 +166,9 @@ import {
   type AggregateIncludeReducers,
   type AggregateResult,
   type AggregateSpec,
+  type CallContext,
   type CollectionContext,
+  type CollectionQueryable,
   type CollectionState,
   type CollectionTypeState,
   type DefaultCollectionTypeState,
@@ -190,7 +192,6 @@ import {
   type RelationTargetNamespace,
   type ResolvedCreateInput,
   type ResolvedScalarCreateInput,
-  type RuntimeQueryable,
   type ScalarUpdateInput,
   type ShorthandWhereFilter,
   type UniqueConstraintCriterion,
@@ -1698,7 +1699,7 @@ export class CollectionBase<
     };
   }
 
-  #on(queryable: RuntimeQueryable): CollectionContext<TContract> {
+  #on(queryable: CollectionQueryable): CallContext<TContract> {
     return { ...this.ctx, runtime: queryable };
   }
 
@@ -1959,7 +1960,7 @@ export class CollectionBase<
   }
 
   async #create(
-    queryable: RuntimeQueryable,
+    queryable: CollectionQueryable,
     data:
       | ResolvedCreateInput<TContract, ModelName, State['variantValue'], State['nsId']>
       | MutationCreateInputWithRelations<TContract, ModelName, State['nsId']>,
@@ -2098,7 +2099,7 @@ export class CollectionBase<
     >[],
     method: 'create()' | 'createAll()',
     conflictSkip?: InsertConflictSkip,
-  ): (queryable: RuntimeQueryable) => AsyncIterableResult<Row> {
+  ): (queryable: CollectionQueryable) => AsyncIterableResult<Row> {
     if (data.length === 0) {
       const generator = async function* (): AsyncGenerator<Row, void, unknown> {};
       return () => new AsyncIterableResult(generator());
@@ -2422,7 +2423,7 @@ export class CollectionBase<
   }
 
   async #update(
-    queryable: RuntimeQueryable,
+    queryable: CollectionQueryable,
     data: MutationUpdateInput<TContract, ModelName, State['nsId']>,
   ): Promise<Row | null> {
     const input = blindCast<

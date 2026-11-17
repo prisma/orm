@@ -20,6 +20,7 @@ import {
   findActivitySource,
   type PreparedStatement,
   type RuntimeConnection,
+  type RuntimeTransactionOptions,
   type SqlMiddleware,
   type SqlRuntimeExtensionDescriptor,
   type RuntimeQueryable as SqlRuntimeQueryable,
@@ -318,8 +319,15 @@ export function withPlanRecording<T extends SqlRuntimeQueryable>(
     },
     ...(typeof transaction === 'function'
       ? {
-          transaction: async () =>
-            withPlanRecording((await transaction.call(target)) as SqlRuntimeQueryable, record),
+          transaction: (
+            fn: (tx: SqlRuntimeQueryable) => PromiseLike<unknown>,
+            options?: RuntimeTransactionOptions,
+          ) =>
+            transaction.call(
+              target,
+              (tx: SqlRuntimeQueryable) => fn(withPlanRecording(tx, record)),
+              options,
+            ),
         }
       : {}),
     ...(typeof preparedQuery === 'function'

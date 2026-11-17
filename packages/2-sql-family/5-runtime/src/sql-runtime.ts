@@ -78,7 +78,6 @@ import { InFlightOperations } from './in-flight-operations';
 import { lowerSqlPlan } from './lower-sql-plan';
 import { runBeforeCompileChain } from './middleware/before-compile-chain';
 import type { SqlMiddleware, SqlMiddlewareContext } from './middleware/sql-middleware';
-import { beginOwnedTransaction } from './owned-transaction';
 import { buildBindSiteParams } from './prepared/bind-site-params';
 import { encodePreparedParams, resolvePreparedSlotValues } from './prepared/encode-prepared';
 import {
@@ -248,10 +247,8 @@ export interface ActivityRoute {
     params: Params,
     options: ActivityExecuteOptions,
   ): Promise<SqlStatementStats>;
-  /** Begins a transaction beneath `parent`; absent where the route is a transaction. */
-  readonly transaction:
-    | ((parent: ActivityParent, options?: RuntimeTransactionOptions) => Promise<RuntimeTransaction>)
-    | undefined;
+  /** The connections `withTransaction` runs a transaction beneath `parent` on; absent where the route is a transaction. */
+  readonly transaction: ((parent: ActivityParent) => ConnectionProvider) | undefined;
   /** Whether an open activity on the route is runtime work that `close()` waits for. */
   readonly runtimeWork: boolean;
 }
@@ -543,7 +540,9 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       activity: StartActivity<K>,
     ): Promise<ActivityHandle<K>> => {
       this.#runtimeRoute ??= this.queryableRoute(this.driver, 'runtime', () => undefined, {
-        transaction: (parent, options) => this.beginOwnedTransactionBeneath(parent, options),
+        transaction: (parent) => ({
+          connection: () => this.openConnection({ activityParent: parent }),
+        }),
         runtimeWork: true,
       });
       return this.startActivityOnRoute(this.#runtimeRoute, activity, undefined);
@@ -660,24 +659,32 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     return this.queryableRoute(connection, 'connection', () => openTransaction, {
       transaction:
         openTransaction === undefined
-          ? (parent, options) => this.beginTransactionBeneathOn(connection, owner, parent, options)
+          ? (parent) => this.heldConnectionProvider(connection, owner, parent)
           : undefined,
       runtimeWork: false,
     });
   }
 
   // A connection runs one transaction at a time; a second one would send BEGIN inside the first.
-  private beginTransactionBeneathOn(
+  private heldConnectionProvider(
     connection: SqlConnection,
     owner: TransactionStartTarget,
     parent: ActivityParent,
-    options?: RuntimeTransactionOptions,
-  ): Promise<RuntimeTransaction> {
-    const openTransaction = this.#transactions.get(connection)?.activity;
-    if (openTransaction !== undefined) {
-      return Promise.reject(transactionAlreadyOpenError(parent, openTransaction));
-    }
-    return this.beginTransactionOn(connection, owner, parent, options);
+  ): ConnectionProvider {
+    const held: HeldConnection = {
+      [transactionStart]: owner[transactionStart],
+      transaction: (options) => {
+        const openTransaction = this.#transactions.get(connection)?.activity;
+        if (openTransaction !== undefined) {
+          owner[transactionStart].refusedBeforeBegin = true;
+          return Promise.reject(transactionAlreadyOpenError(parent, openTransaction));
+        }
+        return this.beginTransactionOn(connection, owner, parent, options);
+      },
+      release: async () => {},
+      destroy: (reason) => connection.destroy(reason),
+    };
+    return { connection: async () => held };
   }
 
   /** The `activitySource` member of a held connection that `owner()` wraps. */
@@ -787,35 +794,17 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
         });
       },
     };
-    const beginTransaction = route.transaction;
-    if (beginTransaction === undefined) return handle;
+    const connections = route.transaction;
+    if (connections === undefined) return handle;
     return Object.assign(handle, {
-      transaction: async (options?: RuntimeTransactionOptions): Promise<RuntimeTransaction> => {
+      transaction: async <R>(
+        fn: (tx: TransactionContext) => PromiseLike<R>,
+        options?: RuntimeTransactionOptions,
+      ): Promise<R> => {
         run.assertAcceptsChildren();
-        validateTransactionTimeout(options?.timeout);
-        return beginTransaction(run, options);
+        return withTransaction(connections(run), fn, options);
       },
     });
-  }
-
-  // A transaction beneath an activity on the runtime takes a connection of its own and gives it back when it settles.
-  private async beginOwnedTransactionBeneath(
-    parent: ActivityParent,
-    options?: RuntimeTransactionOptions,
-  ): Promise<RuntimeTransaction> {
-    validateTransactionTimeout(options?.timeout);
-    const { driverConnection, connection } = await this.openConnection({ activityParent: parent });
-    return this.ownTransaction(connection, () =>
-      this.beginTransactionOn(driverConnection, connection, parent, options),
-    );
-  }
-
-  /** Begins a transaction with `begin` on a connection the transaction owns; see `beginOwnedTransaction`. */
-  protected ownTransaction(
-    connection: Pick<RuntimeConnection, 'release' | 'destroy'>,
-    begin: () => Promise<RuntimeTransaction>,
-  ): Promise<RuntimeTransaction> {
-    return beginOwnedTransaction(connection, begin, this.sqlCtx.log);
   }
 
   /**
@@ -1415,13 +1404,13 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   }
 
   async connection(): Promise<RuntimeConnection> {
-    return (await this.openConnection()).connection;
+    return this.openConnection();
   }
 
-  private async openConnection(options?: Pick<ActivityExecuteOptions, 'activityParent'>): Promise<{
-    readonly driverConnection: SqlConnection;
-    readonly connection: RuntimeConnection & TransactionStartTarget;
-  }> {
+  private async openConnection(
+    options?: Pick<ActivityExecuteOptions, 'activityParent'>,
+  ): Promise<RuntimeConnection & TransactionStartTarget> {
+    const parent = options?.activityParent;
     const driverConn = await this.acquireRawConnection(options);
     this.#heldQueryables.add(driverConn);
     const self = this;
@@ -1433,7 +1422,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       PreparedStatementExecuteTarget = {
       [transactionStart]: createTransactionStart(),
       transaction(options?: RuntimeTransactionOptions): Promise<RuntimeTransaction> {
-        return self.beginTransactionOn(driverConn, wrappedConnection, undefined, options);
+        return self.beginTransactionOn(driverConn, wrappedConnection, parent, options);
       },
       [activitySource]: self.connectionActivitySource(driverConn, () => wrappedConnection),
       release: () => driverConn.release(),
@@ -1488,7 +1477,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       },
     };
 
-    return { driverConnection: driverConn, connection: wrappedConnection };
+    return wrappedConnection;
   }
 
   /**
@@ -1749,8 +1738,13 @@ class RowsBeneath<Row> implements AsyncGenerator<Row, void, unknown> {
  * Minimal structural type `withTransaction` depends on — anything that can open a connection. A connection the runtime made also carries its last transaction start, and its transactions carry their settlement; `withTransaction` reads both to decide whether a failure left the connection clean and which error to report.
  */
 export interface ConnectionProvider {
-  connection(): Promise<RuntimeConnection & Partial<TransactionStartTarget>>;
+  connection(): Promise<
+    Pick<RuntimeConnection, 'transaction' | 'release' | 'destroy'> & Partial<TransactionStartTarget>
+  >;
 }
+
+type HeldConnection = Pick<RuntimeConnection, 'transaction' | 'release' | 'destroy'> &
+  TransactionStartTarget;
 
 /**
  * Adds a client's members to the context `withTransaction` passes. The context is the prototype, not spread, so live accessors such as `invalidated` keep reading the transaction's state; spreading would copy their value once.
