@@ -1,15 +1,16 @@
 /**
- * A target package this repository has never heard of gets correct generated
- * files.
+ * A target package under a name the CLI has never heard of gets correct
+ * generated files.
  *
- * `@acme/orm-standin` (`./fixtures/standin`) plays a target package
- * written outside Prisma: it is in no list here, it is compiled with `tsc`
- * against the packed published packages only, and it is installed from its
- * own tarball into a scratch application outside the workspace. The
+ * `prisma-orm-standin` (`./fixtures/standin`) plays a target package written
+ * outside Prisma: it is in no list here, it is compiled with `tsc` against the
+ * packed published packages only, and it is installed from its own tarball
+ * into a scratch application outside the workspace. It reuses the Postgres
+ * target, so what this proves is the package name, not a new target. The
  * application emits its contract and plans a migration with the published
- * CLI, and every generated file must import only the modules its config
- * names, an extension's own package, or a relative path, and typecheck with
- * declaration files checked.
+ * CLI; every generated file must import only the modules its config names,
+ * an extension's own package, or a relative path, typecheck with declaration
+ * files checked, and the planned `migration.ts` must run under Node.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -43,7 +44,7 @@ const cliEngineVersion = (
   ) as { peerDependencies: Record<string, string> }
 ).peerDependencies['@prisma/cli-engine'];
 
-const STANDIN = '@acme/orm-standin';
+const STANDIN = 'prisma-orm-standin';
 const TYPES_MODULE = `${STANDIN}/generated-types`;
 const MIGRATION_MODULE = `${STANDIN}/migration`;
 const EXTENSION = '@prisma/orm-extension-pgvector';
@@ -126,7 +127,7 @@ function buildStandin(scratch: string, packed: readonly PackedShell[]): PackedSh
   mkdirSync(packageDir, { recursive: true });
   cpSync(join(buildDir, 'dist'), join(packageDir, 'dist'), { recursive: true });
   writeFileSync(join(packageDir, 'package.json'), standinManifest());
-  const tarball = join(scratch, 'acme-orm-standin-1.0.0.tgz');
+  const tarball = join(scratch, 'prisma-orm-standin-1.0.0.tgz');
   execFileSync('pnpm', ['pack', '--out', tarball], { cwd: packageDir, stdio: 'pipe' });
   return { name: STANDIN, tarball, override: false };
 }
@@ -136,6 +137,7 @@ interface Application {
   readonly directDependencies: readonly string[];
   readonly extensionPackages: readonly string[];
   run(...args: string[]): void;
+  runNode(file: string): void;
   read(path: string): string;
   /** Every generated contract type and migration file, relative to the application. */
   generatedFiles(): string[];
@@ -190,19 +192,10 @@ export default definePrismaConfig({
     directDependencies,
     extensionPackages: options.withExtension ? [EXTENSION] : [],
     run(...args) {
-      try {
-        execFileSync(process.execPath, ['prisma-cli.mjs', ...args], {
-          cwd: dir,
-          stdio: 'pipe',
-          env: { ...process.env, NO_COLOR: '1', CI: 'true' },
-        });
-      } catch (error) {
-        const output =
-          error instanceof Error && 'stdout' in error && 'stderr' in error
-            ? `${String(error.stdout)}\n${String(error.stderr)}`
-            : String(error);
-        throw new Error(`prisma ${args.join(' ')} failed in ${dir}:\n${output}`);
-      }
+      runNodeIn(dir, ['prisma-cli.mjs', ...args]);
+    },
+    runNode(file) {
+      runNodeIn(dir, [file]);
     },
     read(path) {
       return readFileSync(join(dir, path), 'utf8');
@@ -216,6 +209,22 @@ export default definePrismaConfig({
         .sort();
     },
   };
+}
+
+function runNodeIn(dir: string, args: readonly string[]): void {
+  try {
+    execFileSync(process.execPath, args, {
+      cwd: dir,
+      stdio: 'pipe',
+      env: { ...process.env, NO_COLOR: '1', CI: 'true' },
+    });
+  } catch (error) {
+    const output =
+      error instanceof Error && 'stdout' in error && 'stderr' in error
+        ? `${String(error.stdout)}\n${String(error.stderr)}`
+        : String(error);
+    throw new Error(`node ${args.join(' ')} failed in ${dir}:\n${output}`);
+  }
 }
 
 /** Diagnostics in the application's own files, with declaration files checked. */
@@ -262,7 +271,7 @@ function importProblems(app: Application): string[] {
   );
 }
 
-describe('a target package from outside this repository', () => {
+describe('a target package under a name the CLI has never heard of', () => {
   let scratch: string;
   let app: Application;
   let appWithExtension: Application;
@@ -315,6 +324,17 @@ describe('a target package from outside this repository', () => {
 
     expect(migrations).toHaveLength(1);
     expect(app.read(migrations[0] ?? '')).toContain(`from '${MIGRATION_MODULE}'`);
+  });
+
+  it('runs the planned migration.ts under Node, which writes the same operations the plan did', () => {
+    const [migration] = app.generatedFiles().filter((file) => file.endsWith('migration.ts'));
+    const opsFile = join(dirname(migration ?? ''), 'ops.json');
+    const planned = app.read(opsFile);
+    rmSync(join(app.dir, opsFile));
+
+    app.runNode(migration ?? '');
+
+    expect(JSON.parse(app.read(opsFile))).toEqual(JSON.parse(planned));
   });
 
   it('writes no generated file importing anything but its config modules, an extension or a relative path', () => {

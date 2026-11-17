@@ -1,6 +1,7 @@
-# `@acme/orm-standin`
+# `prisma-orm-standin`
 
-A target package written the way someone outside Prisma would write one, for
+A target package written the way someone outside Prisma would write one, under
+an unscoped name of the form community packages use, for
 `test/packaging/standin-target.test.ts`. It appears in no list in this
 repository. The test builds it with `tsc` against the packed published
 packages, packs it, and installs it into a scratch application.
