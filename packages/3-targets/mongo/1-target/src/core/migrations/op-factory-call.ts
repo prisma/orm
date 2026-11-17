@@ -45,6 +45,7 @@ import {
   jsonToTsSource,
   TsExpression,
   tsObjectSource,
+  tsStringLiteral,
 } from '@internal/ts-render';
 import { ifDefined } from '@internal/utils/defined';
 import {
@@ -552,12 +553,24 @@ export class ReplaceStoredValueCall extends OpFactoryCallNode {
 }
 
 /** A call as an edit names it inside a sentence: on one line, without trailing commas. */
-export function callInSentence(call: TsExpression): string {
-  return call
-    .renderTypeScript()
-    .replace(/\s*\n\s*/g, ' ')
-    .replace(/,\s*([}\]])/g, ' $1')
-    .replace(/\(\s+/g, '(');
+export function callInSentence(call: RemoveStoredValueCall | ReplaceStoredValueCall): string {
+  return `${call.factoryName}(${sourceOnOneLine(call.options)})`;
+}
+
+function sourceOnOneLine(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(sourceOnOneLine).join(', ')}]`;
+  }
+  if (typeof value === 'object' && value !== null) {
+    const entries = Object.entries(value).filter(([, entry]) => entry !== undefined);
+    if (entries.length === 0) return '{}';
+    return `{ ${entries.map(([key, entry]) => `${propertyName(key)}: ${sourceOnOneLine(entry)}`).join(', ')} }`;
+  }
+  return jsonToTsSource(value);
+}
+
+function propertyName(key: string): string {
+  return /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key) && key !== '__proto__' ? key : tsStringLiteral(key);
 }
 
 /** What `migration.ts` imports for a `removeStoredValue` call beside the call itself. */

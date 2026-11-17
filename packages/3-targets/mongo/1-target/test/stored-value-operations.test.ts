@@ -6,6 +6,7 @@ import {
   serializeMongoOps,
 } from '../src/core/migrations/mongo-ops-serializer';
 import {
+  callInSentence,
   RemoveStoredValueCall,
   ReplaceStoredValueCall,
 } from '../src/core/migrations/op-factory-call';
@@ -242,6 +243,30 @@ describe('stored value calls', () => {
           enumValue: { enum: 'Kind', member: 'A' },
         }),
       },
+    ]);
+  });
+});
+
+describe('callInSentence', () => {
+  it('writes a call on one line and keeps the text of every string as it is', () => {
+    const remove = new RemoveStoredValueCall({
+      collection: 'users',
+      field: 'profile',
+      path: '$.status',
+      value: 'archived,] ( x',
+      required: true,
+      enumValue: { enum: 'Status', member: 'ARCHIVED' },
+    });
+    const replace = new ReplaceStoredValueCall({
+      collection: 'users',
+      field: 'status',
+      from: 'archived,]',
+      to: { $literal: 'a,  }\n(  b' },
+    });
+
+    expect([callInSentence(remove), callInSentence(replace)]).toEqual([
+      'removeStoredValue({ collection: "users", field: "profile", path: "$.status", value: "archived,] ( x", required: true, enumValue: { enum: "Status", member: "ARCHIVED" } })',
+      'replaceStoredValue({ collection: "users", field: "status", from: "archived,]", to: { $literal: "a,  }\\n(  b" } })',
     ]);
   });
 });
