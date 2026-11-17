@@ -580,7 +580,7 @@ describe('MongoMigrationPlanner, a discriminator renamed without its statement',
 });
 
 describe('MongoMigrationPlanner, a plan-wide refusal involving a removed variant', () => {
-  it('offers the rename to the one new variant of its base, as the question does', () => {
+  it('offers the rename to the one new variant of its base, and nothing for the fields of the removed variant, as the question does', () => {
     const why = refusal(
       plan({
         from: BEFORE,
@@ -590,7 +590,7 @@ describe('MongoMigrationPlanner, a plan-wide refusal involving a removed variant
       }),
     ).map(({ why: text }) => text?.slice(0, text.indexOf(ONE_AT_A_TIME)));
     expect(why).toEqual([
-      'The plan holds changes that no --rename or --convert statement carries: field "Bug.severity", which the plan removes; model "Bug", whose documents the plan deletes; new required field "Epic.scope", which the plan fills with a temporary value. To keep their data, plan again with: --rename \'Bug.severity:Bug.<new name>\'; --rename Bug:Defect. ',
+      'The plan holds changes that no --rename or --convert statement carries: model "Bug", whose documents the plan deletes; new required field "Epic.scope", which the plan fills with a temporary value. To keep their data, plan again with: --rename Bug:Defect. ',
     ]);
   });
 });

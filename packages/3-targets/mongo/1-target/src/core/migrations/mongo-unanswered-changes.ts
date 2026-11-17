@@ -260,7 +260,8 @@ const ORDER: Readonly<Record<MigrationSubject['kind'], number>> = {
  * What a plan-wide refusal leads with when the plan holds changes no statement carries: those
  * changes, as their questions name them, and the statements that keep their data, as the questions
  * offer them first. The planner cannot tell an unanswered change from one answered with
- * `--delete`, so it says only that no `--rename` or `--convert` carries them. `undefined` when no
+ * `--delete`, so it says only that no `--rename` or `--convert` carries them. A field of a model the
+ * destination does not have is left out, since no field statement can keep its data. `undefined` when no
  * removal has a field or model in the destination to keep its data in.
  */
 export function unansweredChangesAdvice(
@@ -276,7 +277,11 @@ export function unansweredChangesAdvice(
       ) === index,
   );
   const removed = unique
-    .filter((change) => change.kind === 'removed')
+    .filter(
+      ({ kind, subject }) =>
+        kind === 'removed' &&
+        (subject.kind !== 'field' || destinationModelOf(subject, contracts) !== undefined),
+    )
     .sort((a, b) => ORDER[a.subject.kind] - ORDER[b.subject.kind])
     .map(({ subject }) => {
       const text = subjectText(subject, contracts);
