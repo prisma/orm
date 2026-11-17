@@ -26,7 +26,7 @@ After this project:
 
 ```sh
 $ prisma orm init --target @microsoft/prisma-orm-mssql
-? Install and run @microsoft/prisma-orm-mssql? yes
+? This installs @microsoft/prisma-orm-mssql and runs code from it. Type the package name to continue: @microsoft/prisma-orm-mssql
 ✔ Installed @microsoft/prisma-orm-mssql
 ✔ Wrote prisma.config.ts, prisma/contract.prisma, prisma/db.ts, prisma-8.md, .env.example
 ✔ Emitted contract.json and contract.d.ts
@@ -109,7 +109,7 @@ No new descriptor field, registry or runtime interface.
 
 | Where it stops | State of the project |
 | --- | --- |
-| The package name does not resolve, or the user declines to install it | Unchanged |
+| The package name does not resolve, or consent to install an unlisted package is not given | Unchanged |
 | `--skip-install` and the package is not installed | Unchanged; the error names the install command |
 | The install fails | `package.json` and the lockfile may list the package; no file written |
 | The package has no init contribution, or it fails to load | The package is installed; no file written |

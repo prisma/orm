@@ -73,7 +73,7 @@ The entrypoint imports no framework runtime module. It is loaded from the projec
 ## Order of steps
 
 1. Resolve the package from `--target` or the picker.
-2. For a package not in the list, ask `Install and run <package>?` before installing. `--yes` accepts.
+2. For a package not in the list, ask for consent before installing, through the CLI engine's consent mechanism: `ctx.prompt.consent(question, { token })`, with the package name as the token. The question says that `init` will install the package and run code from it. Interactively the user types the package name; non-interactively `--confirm <package name>` grants it. `--yes` does not.
 3. Install the database package, unless it is already installed.
 4. Load its contribution.
 5. Ask the remaining questions: authoring mode from the contribution's modes, schema path, then consent to replace files on a re-init, then the `.env` question.
