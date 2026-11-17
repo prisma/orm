@@ -21,6 +21,13 @@ describe('platformEntrypointOf', () => {
     });
   });
 
+  it('names the shell itself for a package that occupies it, with no subpath', () => {
+    expect(platformEntrypointOf('@internal/postgres')).toEqual({
+      shell: '@prisma/orm-postgres',
+      id: '@prisma/orm-postgres',
+    });
+  });
+
   it('refuses a specifier no shell maps', () => {
     expect(() => platformEntrypointOf('@internal/not-a-package')).toThrow(ShellMappingError);
     expect(() => platformEntrypointOf('@internal/not-a-package')).toThrow(
