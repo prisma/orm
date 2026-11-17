@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { isRecognisedPnpmResolutionError } from '../../../src/commands/init/pnpm-fallback';
+import {
+  isPnpmIgnoredBuildsError,
+  isRecognisedPnpmResolutionError,
+} from '../../../src/commands/init/pnpm-fallback';
 
 describe('isRecognisedPnpmResolutionError', () => {
   it('recognises a leaked workspace specifier', () => {
@@ -52,5 +55,18 @@ describe('isRecognisedPnpmResolutionError', () => {
 
   it('ignores empty output', () => {
     expect(isRecognisedPnpmResolutionError('')).toBe(false);
+  });
+});
+
+describe('isPnpmIgnoredBuildsError', () => {
+  it.each([
+    ['the pnpm 12 report', 'Error: ERR_PNPM_IGNORED_BUILDS\n\n  × adding a new package', true],
+    ['the pnpm 11 report', '[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: esbuild@0.28.2', true],
+    ['another pnpm code', ' ERR_PNPM_FETCH_404  GET https://registry/x: Not Found', false],
+    ['a code that only starts with it', 'ERR_PNPM_IGNORED_BUILDS_ELSEWHERE', false],
+    ['an English description without the code', 'Ignored build scripts: esbuild@0.28.2', false],
+    ['empty output', '', false],
+  ])('answers %s', (_case, output, expected) => {
+    expect(isPnpmIgnoredBuildsError(output)).toBe(expected);
   });
 });

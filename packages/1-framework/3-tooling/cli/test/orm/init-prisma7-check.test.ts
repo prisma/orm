@@ -29,6 +29,15 @@ const VIEW_DIAGNOSTIC = {
 const PNPM_WORKSPACE_LEAK =
   'ERR_PNPM_WORKSPACE_PKG_NOT_FOUND  In : "@prisma/orm-postgres@workspace:*" is in the dependencies but no package named "@prisma/orm-postgres" is present in the workspace';
 
+const PNPM_12_IGNORED_BUILDS = [
+  'Error: ERR_PNPM_IGNORED_BUILDS',
+  '',
+  '  × adding a new package',
+  '  ╰─▶ Ignored build scripts: esbuild@0.28.2',
+  '  help: Run "pnpm approve-builds" to pick which dependencies should be allowed',
+  '        to run scripts.',
+].join('\n');
+
 let projectDir: string;
 let installs: (readonly string[])[];
 let script: { readonly exitCode: number; readonly stderr: string }[];
@@ -361,6 +370,61 @@ describe('the Prisma 7 check before init changes the project', () => {
           expect.stringContaining('ERR_PNPM_WORKSPACE_PKG_NOT_FOUND'),
         ]),
       });
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'proceeds with one warning when pnpm fails the install before the check only over ignored build scripts',
+    async () => {
+      copyFixture();
+      script = [
+        { exitCode: 1, stderr: PNPM_12_IGNORED_BUILDS },
+        { exitCode: 1, stderr: PNPM_12_IGNORED_BUILDS },
+      ];
+
+      const run = await harness('pnpm').run(prisma7Argv(), { cwd: projectDir });
+
+      const data = Object(run.presented?.data);
+      expect({
+        exitCode: run.exitCode,
+        installs,
+        packagesInstalled: Reflect.get(data, 'packagesInstalled'),
+        ignoredBuildsWarnings: Reflect.get(data, 'warnings').filter((text: string) =>
+          text.includes('ERR_PNPM_IGNORED_BUILDS'),
+        ),
+      }).toEqual({
+        exitCode: 0,
+        installs: [
+          ['add', '@prisma/orm-postgres', 'dotenv'],
+          [
+            'add',
+            '-D',
+            'prisma@latest',
+            '@types/node',
+            '@prisma/prisma7@7',
+            '@prisma/cli-engine@latest',
+          ],
+        ],
+        packagesInstalled: {
+          status: 'installed',
+          deps: ['@prisma/orm-postgres', 'dotenv'],
+          devDeps: [
+            'prisma@latest',
+            '@types/node',
+            '@prisma/prisma7@7',
+            '@prisma/cli-engine@latest',
+          ],
+        },
+        ignoredBuildsWarnings: [
+          [
+            'pnpm did not run the build scripts of some dependencies, because they are not approved (ERR_PNPM_IGNORED_BUILDS).',
+            'pnpm reports that as a failure, but it had already installed the packages, so init continued.',
+            'Run `pnpm approve-builds` to choose which dependencies may run their build scripts.',
+          ].join('\n'),
+        ],
+      });
+      expect(existsSync(join(projectDir, 'prisma7.config.ts'))).toBe(true);
     },
     timeouts.coldTransformImport,
   );
