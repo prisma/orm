@@ -358,22 +358,6 @@
       "id": "postgis",
       "kind": "extension",
       "targetId": "postgres",
-      "types": {
-        "codecTypes": {
-          "import": {
-            "alias": "PostgisTypes",
-            "named": "CodecTypes",
-            "package": "@prisma/orm-extension-postgis/codec-types"
-          }
-        },
-        "queryOperationTypes": {
-          "import": {
-            "alias": "PostgisQueryOperationTypes",
-            "named": "QueryOperationTypes",
-            "package": "@prisma/orm-extension-postgis/operation-types"
-          }
-        }
-      },
       "version": "0.0.1"
     }
   },

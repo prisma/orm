@@ -876,15 +876,6 @@ type ContractBase = Omit<
       readonly id: 'citext';
       readonly kind: 'extension';
       readonly targetId: 'postgres';
-      readonly types: {
-        readonly codecTypes: {
-          readonly import: {
-            readonly alias: 'CitextTypes';
-            readonly named: 'CodecTypes';
-            readonly package: '@prisma/orm-postgres-contrib/citext/codec-types';
-          };
-        };
-      };
       readonly version: '0.0.1';
     };
   };

@@ -732,15 +732,6 @@
       "id": "citext",
       "kind": "extension",
       "targetId": "postgres",
-      "types": {
-        "codecTypes": {
-          "import": {
-            "alias": "CitextTypes",
-            "named": "CodecTypes",
-            "package": "@prisma/orm-postgres-contrib/citext/codec-types"
-          }
-        }
-      },
       "version": "0.0.1"
     }
   },

@@ -973,34 +973,6 @@ type ContractBase = Omit<
       readonly id: 'pgvector';
       readonly kind: 'extension';
       readonly targetId: 'postgres';
-      readonly types: {
-        readonly codecTypes: {
-          readonly import: {
-            readonly alias: 'PgVectorTypes';
-            readonly named: 'CodecTypes';
-            readonly package: '@internal/extension-pgvector/codec-types';
-          };
-          readonly parameterizedOutputTypes: {
-            readonly alias: 'PgVectorParameterizedOutputTypes';
-            readonly named: 'ParameterizedOutputTypesForTypeParams';
-            readonly package: '@internal/extension-pgvector/codec-types';
-          };
-        };
-        readonly operationTypes: {
-          readonly import: {
-            readonly alias: 'PgVectorOperationTypes';
-            readonly named: 'OperationTypes';
-            readonly package: '@internal/extension-pgvector/operation-types';
-          };
-        };
-        readonly queryOperationTypes: {
-          readonly import: {
-            readonly alias: 'PgVectorQueryOperationTypes';
-            readonly named: 'QueryOperationTypes';
-            readonly package: '@internal/extension-pgvector/operation-types';
-          };
-        };
-      };
       readonly version: '0.0.1';
     };
   };

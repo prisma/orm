@@ -2070,15 +2070,6 @@ type ContractBase = Omit<
       readonly id: 'arktype-json';
       readonly kind: 'extension';
       readonly targetId: 'postgres';
-      readonly types: {
-        readonly codecTypes: {
-          readonly import: {
-            readonly alias: 'ArktypeJsonTypes';
-            readonly named: 'CodecTypes';
-            readonly package: '@internal/extension-arktype-json/codec-types';
-          };
-        };
-      };
       readonly version: '0.0.1';
     };
   };

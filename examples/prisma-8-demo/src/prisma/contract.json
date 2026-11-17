@@ -1367,34 +1367,6 @@
       "id": "pgvector",
       "kind": "extension",
       "targetId": "postgres",
-      "types": {
-        "codecTypes": {
-          "import": {
-            "alias": "PgVectorTypes",
-            "named": "CodecTypes",
-            "package": "@prisma/orm-extension-pgvector/codec-types"
-          },
-          "parameterizedOutputTypes": {
-            "alias": "PgVectorParameterizedOutputTypes",
-            "named": "ParameterizedOutputTypesForTypeParams",
-            "package": "@prisma/orm-extension-pgvector/codec-types"
-          }
-        },
-        "operationTypes": {
-          "import": {
-            "alias": "PgVectorOperationTypes",
-            "named": "OperationTypes",
-            "package": "@prisma/orm-extension-pgvector/operation-types"
-          }
-        },
-        "queryOperationTypes": {
-          "import": {
-            "alias": "PgVectorQueryOperationTypes",
-            "named": "QueryOperationTypes",
-            "package": "@prisma/orm-extension-pgvector/operation-types"
-          }
-        }
-      },
       "version": "0.0.1"
     }
   },
