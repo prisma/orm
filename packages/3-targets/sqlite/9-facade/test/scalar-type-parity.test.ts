@@ -59,6 +59,12 @@ describe('sqlite scalar types derived from the unified namespace', () => {
     const derived = collectScalarTypeConstructors(stack.authoringContributions.type);
 
     expect(Object.fromEntries(derived)).toEqual({
+      IntegerNumber: { codecId: 'sqlite/integer@1' },
+      IntegerBigInt: { codecId: 'sqlite/bigint@1' },
+      Real: { codecId: 'sqlite/real@1' },
+      Text: { codecId: 'sqlite/text@1' },
+      Blob: { codecId: 'sqlite/blob@1' },
+      PlainJson: { codecId: 'sqlite/json@1' },
       String: { codecId: 'sqlite/text@1' },
       Int: { codecId: 'sqlite/integer@1' },
       BigInt: { codecId: 'sqlite/bigint@1' },
@@ -86,6 +92,7 @@ describe('sqlite scalar types derived from the unified namespace', () => {
     expect([...stack.scalarTypes].sort()).toEqual([
       'BigInt',
       'BigIntNumber',
+      'Blob',
       'Bytes',
       'Date',
       'DateString',
@@ -99,8 +106,13 @@ describe('sqlite scalar types derived from the unified namespace', () => {
       'DurationString',
       'Float',
       'Int',
+      'IntegerBigInt',
+      'IntegerNumber',
       'Json',
+      'PlainJson',
+      'Real',
       'String',
+      'Text',
       'Time',
       'TimeString',
       'TimeTemporal',

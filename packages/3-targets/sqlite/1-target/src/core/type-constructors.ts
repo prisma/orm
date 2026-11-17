@@ -17,49 +17,118 @@ import {
 } from './codec-ids';
 
 /**
- * The base PSL scalars as zero-arg type constructors in the unified authoring
- * channel. Each names a codec; the column's database type is its data type's.
- *
- * The type position is the only storage decider: a mutation-default generator
- * (`@onCreate(uuid())`) never re-picks a column's storage.
- *
- * The target contributes them, so PSL and the TypeScript builder's `type.*` see the same names.
+ * The explicit SQLite scalar types, each named after the SQLite column type that stores it, plus the value it reads where that column type has more than one codec. PSL writes them as field types and the TypeScript builder calls them as `type.X()`. ADR 315, ADR 322.
  */
-export const sqliteScalarAuthoringTypes = {
-  String: {
+export const sqliteExplicitScalarTypes = {
+  IntegerNumber: {
     kind: 'typeConstructor',
-    documentation: 'Variable-length text stored as SQLite text.',
-    output: { codecId: SQLITE_TEXT_CODEC_ID },
-  },
-  Int: {
-    kind: 'typeConstructor',
-    documentation: 'An integer stored as SQLite integer and represented as a JavaScript number.',
+    documentation:
+      'An integer read as a JavaScript number within its safe integer range, stored as SQLite integer.',
     output: { codecId: SQLITE_INTEGER_CODEC_ID },
   },
-  BigInt: {
+  IntegerBigInt: {
     kind: 'typeConstructor',
-    documentation: 'An integer stored as SQLite integer and represented as a JavaScript bigint.',
+    documentation: 'An integer read as a JavaScript bigint, stored as SQLite integer.',
     output: { codecId: SQLITE_BIGINT_CODEC_ID },
   },
-  Float: {
+  Real: {
     kind: 'typeConstructor',
-    documentation: 'A floating-point number stored as SQLite real.',
+    documentation: 'A floating-point number, stored as SQLite real.',
     output: { codecId: SQLITE_REAL_CODEC_ID },
   },
+  Text: {
+    kind: 'typeConstructor',
+    documentation: 'Text, stored as SQLite text.',
+    output: { codecId: SQLITE_TEXT_CODEC_ID },
+  },
+  Blob: {
+    kind: 'typeConstructor',
+    documentation: 'Binary data read as a Uint8Array, stored as SQLite blob.',
+    output: { codecId: SQLITE_BLOB_CODEC_ID },
+  },
+  PlainJson: {
+    kind: 'typeConstructor',
+    documentation: 'A JSON value, serialized and stored as SQLite text.',
+    output: { codecId: SQLITE_JSON_CODEC_ID },
+  },
+} as const satisfies AuthoringTypeNamespace;
+
+function storageOption<const Storage extends string>(storage: Storage) {
+  return {
+    kind: 'option',
+    name: 'storage',
+    values: [storage],
+    default: storage,
+    optional: true,
+  } as const;
+}
+
+/**
+ * The convenience types of SQLite's scalars. Each is a type choice: `storage` names the SQLite column type that stores the value and, for `BigInt`, `as` chooses the application value. `Int` comes before `BigInt`, so `IntegerNumber`, which both can choose, is written `Int`. ADR 279, ADR 322.
+ */
+export const sqliteConvenienceScalarTypes = {
+  Int: {
+    kind: 'typeChoice',
+    documentation:
+      'An integer read as a JavaScript number within its safe integer range, stored as SQLite integer.',
+    args: [storageOption('integer')],
+    choices: [{ when: { storage: 'integer' }, type: 'IntegerNumber' }],
+  },
+  BigInt: {
+    kind: 'typeChoice',
+    documentation:
+      'An integer that may exceed the safe integer range, stored as SQLite integer. `as` is what the application reads: bigint, or number within the safe integer range.',
+    args: [
+      {
+        kind: 'option',
+        name: 'as',
+        values: ['bigint', 'number'],
+        default: 'bigint',
+        optional: true,
+      },
+      storageOption('integer'),
+    ],
+    choices: [
+      { when: { as: 'bigint', storage: 'integer' }, type: 'IntegerBigInt' },
+      { when: { as: 'number', storage: 'integer' }, type: 'IntegerNumber' },
+    ],
+  },
+  Float: {
+    kind: 'typeChoice',
+    documentation: 'A floating-point number, stored as SQLite real.',
+    args: [storageOption('real')],
+    choices: [{ when: { storage: 'real' }, type: 'Real' }],
+  },
+  String: {
+    kind: 'typeChoice',
+    documentation: 'Text, stored as SQLite text.',
+    args: [storageOption('text')],
+    choices: [{ when: { storage: 'text' }, type: 'Text' }],
+  },
+  Bytes: {
+    kind: 'typeChoice',
+    documentation: 'Binary data read as a Uint8Array, stored as SQLite blob.',
+    args: [storageOption('blob')],
+    choices: [{ when: { storage: 'blob' }, type: 'Blob' }],
+  },
+  Json: {
+    kind: 'typeChoice',
+    documentation: 'A JSON value, serialized and stored as SQLite text.',
+    args: [storageOption('text')],
+    choices: [{ when: { storage: 'text' }, type: 'PlainJson' }],
+  },
+} as const satisfies AuthoringTypeNamespace;
+
+/**
+ * SQLite's scalar types other than the date and time types: the explicit types, the convenience types, and `Decimal`, which is still a type constructor on text. `sqliteScalarTypeConstructors` adds the date and time types.
+ */
+export const sqliteScalarAuthoringTypes = {
+  ...sqliteExplicitScalarTypes,
+  ...sqliteConvenienceScalarTypes,
   Decimal: {
     kind: 'typeConstructor',
     documentation: 'A decimal value stored and represented as text to preserve precision.',
     output: { codecId: SQLITE_TEXT_CODEC_ID },
-  },
-  Json: {
-    kind: 'typeConstructor',
-    documentation: 'A JSON value serialized to SQLite text.',
-    output: { codecId: SQLITE_JSON_CODEC_ID },
-  },
-  Bytes: {
-    kind: 'typeConstructor',
-    documentation: 'Binary data stored as a SQLite blob.',
-    output: { codecId: SQLITE_BLOB_CODEC_ID },
   },
 } as const satisfies AuthoringTypeNamespace;
 
@@ -117,13 +186,7 @@ export const sqliteDateTimeTypeConstructors = {
   },
 } as const satisfies AuthoringTypeNamespace;
 
-const textStorage = {
-  kind: 'option',
-  name: 'storage',
-  values: ['text'],
-  default: 'text',
-  optional: true,
-} as const;
+const textStorage = storageOption('text');
 
 /**
  * The convenience date and time types. Each is a type choice: its `as` argument chooses the explicit type it becomes. Every SQLite date and time type is stored as text, so `storage` is text only. ADR 279, ADR 315.
@@ -200,7 +263,7 @@ export const sqliteConvenienceDateTimeTypes = {
 } as const satisfies AuthoringTypeNamespace;
 
 /**
- * The base scalars, the explicit date and time types and the convenience date and time types as type constructors. The target contributes them, so PSL and the TypeScript builder's `type.*` see the same names.
+ * The scalar types, the explicit date and time types and the convenience date and time types. The target contributes them, so PSL and the TypeScript builder's `type.*` see the same names.
  */
 export const sqliteScalarTypeConstructors = {
   ...sqliteScalarAuthoringTypes,
