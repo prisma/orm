@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { readdir, readFile, rm } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 import type { PrismaConfig } from '@internal/config/config-types';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { computeMigrationHash } from '@internal/migration-tools/hash';
@@ -14,11 +14,17 @@ import type { AnswerPlanQuestions } from '../../src/control-api/statements/plan-
 import type { StatementText } from '../../src/control-api/statements/statement-text';
 import { BIN_GROUPS } from '../../src/orm/cli';
 import { errorUnfilledPlaceholder } from '../../src/utils/cli-errors';
-import { createOrmTestCli } from '../helpers/orm-test-cli';
+import {
+  HASH_FROM,
+  HASH_TO,
+  harness,
+  plannableProject,
+  plannedDirs,
+  upToDateProject,
+} from './fixtures/migration-plan-project';
 import {
   ADDITIVE_OP,
   contractJson,
-  contractWithoutTypesModule,
   createOfflineProject,
   DESTRUCTIVE_OP,
   type FakePlannerScript,
@@ -35,60 +41,8 @@ import {
   seedMigrationPackage,
 } from './fixtures/offline-project';
 
-const HASH_TO = `c0ffee${'0'.repeat(58)}`;
-const HASH_FROM = `beef${'1'.repeat(60)}`;
-
 beforeEach(resetRenderContractDtsMock);
 afterEach(removeOfflineProjects);
-
-function harness(
-  project: OfflineProject,
-  options: {
-    readonly script?: FakePlannerScript;
-    readonly overrides?: Record<string, unknown>;
-  } = {},
-) {
-  return createOrmTestCli({
-    commands: OFFLINE_COMMANDS,
-    groups: BIN_GROUPS,
-    orm: {
-      ...offlineConfig({ project, ...(options.script ? { script: options.script } : {}) }),
-      ...options.overrides,
-    },
-  });
-}
-
-async function plannedDirs(project: OfflineProject): Promise<readonly string[]> {
-  return (await readdir(project.appMigrationsDir)).filter((entry) => entry !== 'refs').sort();
-}
-
-/** A project whose database sits at HASH_FROM and whose contract is HASH_TO. */
-async function plannableProject(): Promise<OfflineProject> {
-  const project = await createOfflineProject({ storageHash: HASH_TO });
-  await seedMigrationPackage({
-    appMigrationsDir: project.appMigrationsDir,
-    dirName: '20260101T0000_initial',
-    from: null,
-    to: HASH_FROM,
-  });
-  await seedContractSnapshot({ migrationsDir: project.migrationsDir, storageHash: HASH_FROM });
-  await seedDbRef({ appMigrationsDir: project.appMigrationsDir, storageHash: HASH_FROM });
-  return project;
-}
-
-/** A project whose database already sits at the emitted contract. */
-async function upToDateProject(): Promise<OfflineProject> {
-  const project = await createOfflineProject({ storageHash: HASH_TO });
-  await seedMigrationPackage({
-    appMigrationsDir: project.appMigrationsDir,
-    dirName: '20260101T0000_initial',
-    from: null,
-    to: HASH_TO,
-  });
-  await seedContractSnapshot({ migrationsDir: project.migrationsDir, storageHash: HASH_TO });
-  await seedDbRef({ appMigrationsDir: project.appMigrationsDir, storageHash: HASH_TO });
-  return project;
-}
 
 describe('migration plan --config naming a file in a subdirectory', () => {
   it('reads the contract from and plans into the config file directory', async () => {
@@ -1419,69 +1373,6 @@ describe('migration plan destination snapshot', () => {
       envelope: { ok: false, error: { code: 'CONTRACT.TYPES_RENDER_FAILED' } },
     });
     expect(await plannedDirs(project)).toEqual(['20260101T0000_initial']);
-    expect(existsSync(contractSnapshotDir(project.migrationsDir, HASH_TO))).toBe(false);
-  });
-});
-
-describe('migration plan and the module migration files import from', () => {
-  it('writes a migration file that imports from the module the config names', async () => {
-    const project = await plannableProject();
-
-    const run = await harness(project).run(['migration', 'plan', '--name', 'add-users'], {
-      cwd: project.dir,
-    });
-    const dir = join(project.appMigrationsDir, (await plannedDirs(project)).at(-1) ?? '');
-
-    expect(run.exitCode).toBe(0);
-    expect(await readFile(join(dir, 'migration.ts'), 'utf-8')).toBe(
-      `// planned migration importing ${OFFLINE_MIGRATION_MODULE}\n`,
-    );
-  });
-
-  it('refuses before writing anything when the config names no contract types module', async () => {
-    const project = await plannableProject();
-    const before = await plannedDirs(project);
-
-    const run = await harness(project, {
-      overrides: { contract: contractWithoutTypesModule(project) },
-    }).run(['migration', 'plan', '--name', 'add-users', '--json'], { cwd: project.dir });
-
-    expect(run.exitCode).toBe(2);
-    expect(run.json.at(-1)).toMatchObject({
-      kind: 'result',
-      envelope: {
-        ok: false,
-        error: {
-          code: 'CONFIG.CONTRACT_TYPES_MODULE_MISSING',
-          why: expect.stringContaining('contract.typesModule'),
-        },
-      },
-    });
-    expect(await plannedDirs(project)).toEqual(before);
-    expect(existsSync(contractSnapshotDir(project.migrationsDir, HASH_TO))).toBe(false);
-  });
-
-  it('refuses before writing anything when the config names no migration module', async () => {
-    const project = await plannableProject();
-    const before = await plannedDirs(project);
-
-    const run = await harness(project, { overrides: { migrations: {} } }).run(
-      ['migration', 'plan', '--name', 'add-users', '--json'],
-      { cwd: project.dir },
-    );
-
-    expect(run.exitCode).toBe(2);
-    expect(run.json.at(-1)).toMatchObject({
-      kind: 'result',
-      envelope: {
-        ok: false,
-        error: {
-          code: 'CONFIG.MIGRATION_MODULE_MISSING',
-          why: expect.stringContaining('migrations.module'),
-        },
-      },
-    });
-    expect(await plannedDirs(project)).toEqual(before);
     expect(existsSync(contractSnapshotDir(project.migrationsDir, HASH_TO))).toBe(false);
   });
 });
