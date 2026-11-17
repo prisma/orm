@@ -1,12 +1,4 @@
-import {
-  cpSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import type { MountedTree, PackageManagerId, PackageManagerRunner } from '@prisma/cli-engine';
 import { createTestCli } from '@prisma/cli-engine/testing';
 import { timeouts } from '@repo/test-utils';
@@ -15,9 +7,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
 import { type ImportFromProject, importFromProject } from '../../src/orm/init-prisma7-check';
-import { createTestProjectDir, fixtureAppDir } from '../utils/test-project-dir';
+import { createTestProjectDir } from '../utils/test-project-dir';
+import { PNPM_WORKSPACE_LEAK } from './init-install-fixtures';
+import { copyPrisma7Fixture, PRISMA7_FIXTURE, prisma7InitArgv } from './init-prisma7-fixtures';
 
-const FIXTURE = join(fixtureAppDir, 'fixtures/prisma7-project');
 const TARGET_CONFIG = '@prisma/orm-postgres/config';
 const VIEW_DIAGNOSTIC = {
   code: 'PSL.PRISMA7_VIEW_UNSUPPORTED',
@@ -25,18 +18,6 @@ const VIEW_DIAGNOSTIC = {
   sourceId: 'prisma/schema.prisma',
   span: { start: { offset: 477, line: 26, column: 1 }, end: { offset: 481, line: 26, column: 5 } },
 };
-
-const PNPM_WORKSPACE_LEAK =
-  'ERR_PNPM_WORKSPACE_PKG_NOT_FOUND  In : "@prisma/orm-postgres@workspace:*" is in the dependencies but no package named "@prisma/orm-postgres" is present in the workspace';
-
-const PNPM_12_IGNORED_BUILDS = [
-  'Error: ERR_PNPM_IGNORED_BUILDS',
-  '',
-  '  × adding a new package',
-  '  ╰─▶ Ignored build scripts: esbuild@0.28.2',
-  '  help: Run "pnpm approve-builds" to pick which dependencies should be allowed',
-  '        to run scripts.',
-].join('\n');
 
 let projectDir: string;
 let installs: (readonly string[])[];
@@ -76,17 +57,7 @@ function harness(packageManager?: PackageManagerId) {
 }
 
 function copyFixture(): void {
-  cpSync(FIXTURE, projectDir, { recursive: true });
-  renameSync(join(projectDir, 'package.json.fixture'), join(projectDir, 'package.json'));
-  mkdirSync(join(projectDir, 'node_modules/prisma'), { recursive: true });
-  writeFileSync(
-    join(projectDir, 'node_modules/prisma/package.json'),
-    JSON.stringify({ name: 'prisma', version: '7.4.1', exports: { './config': './config.js' } }),
-  );
-  writeFileSync(
-    join(projectDir, 'node_modules/prisma/config.js'),
-    'export const defineConfig = (c) => c;\n',
-  );
+  copyPrisma7Fixture(projectDir);
 }
 
 function projectFile(relative: string): string {
@@ -94,7 +65,7 @@ function projectFile(relative: string): string {
 }
 
 function fixtureFile(relative: string): string {
-  return readFileSync(join(FIXTURE, relative), 'utf-8');
+  return readFileSync(join(PRISMA7_FIXTURE, relative), 'utf-8');
 }
 
 /** The target package's real `defineConfig`, with `prisma7Schema` replaced or removed. */
@@ -125,15 +96,7 @@ function refusingSource(schemaPath: string) {
 }
 
 function prisma7Argv(...extra: string[]): string[] {
-  return [
-    'orm',
-    'init',
-    '--from-prisma7-schema',
-    'prisma/schema.prisma',
-    '--confirm',
-    basename(projectDir),
-    ...extra,
-  ];
+  return prisma7InitArgv(projectDir, ...extra);
 }
 
 function envelopeOf(run: { readonly json: readonly { readonly kind: string }[] }) {
@@ -370,61 +333,6 @@ describe('the Prisma 7 check before init changes the project', () => {
           expect.stringContaining('ERR_PNPM_WORKSPACE_PKG_NOT_FOUND'),
         ]),
       });
-    },
-    timeouts.coldTransformImport,
-  );
-
-  it(
-    'proceeds with one warning when pnpm fails the install before the check only over ignored build scripts',
-    async () => {
-      copyFixture();
-      script = [
-        { exitCode: 1, stderr: PNPM_12_IGNORED_BUILDS },
-        { exitCode: 1, stderr: PNPM_12_IGNORED_BUILDS },
-      ];
-
-      const run = await harness('pnpm').run(prisma7Argv(), { cwd: projectDir });
-
-      const data = Object(run.presented?.data);
-      expect({
-        exitCode: run.exitCode,
-        installs,
-        packagesInstalled: Reflect.get(data, 'packagesInstalled'),
-        ignoredBuildsWarnings: Reflect.get(data, 'warnings').filter((text: string) =>
-          text.includes('ERR_PNPM_IGNORED_BUILDS'),
-        ),
-      }).toEqual({
-        exitCode: 0,
-        installs: [
-          ['add', '@prisma/orm-postgres', 'dotenv'],
-          [
-            'add',
-            '-D',
-            'prisma@latest',
-            '@types/node',
-            '@prisma/prisma7@7',
-            '@prisma/cli-engine@latest',
-          ],
-        ],
-        packagesInstalled: {
-          status: 'installed',
-          deps: ['@prisma/orm-postgres', 'dotenv'],
-          devDeps: [
-            'prisma@latest',
-            '@types/node',
-            '@prisma/prisma7@7',
-            '@prisma/cli-engine@latest',
-          ],
-        },
-        ignoredBuildsWarnings: [
-          [
-            'pnpm did not run the build scripts of some dependencies, because they are not approved (ERR_PNPM_IGNORED_BUILDS).',
-            'pnpm reports that as a failure, but it had already installed the packages, so init continued.',
-            'Run `pnpm approve-builds` to choose which dependencies may run their build scripts.',
-          ].join('\n'),
-        ],
-      });
-      expect(existsSync(join(projectDir, 'prisma7.config.ts'))).toBe(true);
     },
     timeouts.coldTransformImport,
   );

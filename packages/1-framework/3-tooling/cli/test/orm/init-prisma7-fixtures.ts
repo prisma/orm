@@ -1,8 +1,39 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import type { PromptSurface } from '@prisma/cli-engine';
-import { dirname, join } from 'pathe';
+import { basename, dirname, join } from 'pathe';
 import { type InitFlagValues, resolveInitInputs } from '../../src/orm/init-inputs';
 import type { CheckPrisma7Source, Prisma7SourceCheck } from '../../src/orm/init-prisma7-check';
+import { fixtureAppDir } from '../utils/test-project-dir';
+
+export const PRISMA7_FIXTURE = join(fixtureAppDir, 'fixtures/prisma7-project');
+
+/** Copies the Prisma 7 fixture project into `projectDir`, with a Prisma 7 CLI installed. */
+export function copyPrisma7Fixture(projectDir: string): void {
+  cpSync(PRISMA7_FIXTURE, projectDir, { recursive: true });
+  renameSync(join(projectDir, 'package.json.fixture'), join(projectDir, 'package.json'));
+  mkdirSync(join(projectDir, 'node_modules/prisma'), { recursive: true });
+  writeFileSync(
+    join(projectDir, 'node_modules/prisma/package.json'),
+    JSON.stringify({ name: 'prisma', version: '7.4.1', exports: { './config': './config.js' } }),
+  );
+  writeFileSync(
+    join(projectDir, 'node_modules/prisma/config.js'),
+    'export const defineConfig = (c) => c;\n',
+  );
+}
+
+/** `orm init` reading the fixture's Prisma 7 schema, confirmed by the project's folder name. */
+export function prisma7InitArgv(projectDir: string, ...extra: string[]): string[] {
+  return [
+    'orm',
+    'init',
+    '--from-prisma7-schema',
+    'prisma/schema.prisma',
+    '--confirm',
+    basename(projectDir),
+    ...extra,
+  ];
+}
 
 export function flags(overrides: Partial<InitFlagValues> = {}): InitFlagValues {
   return {
