@@ -42,7 +42,7 @@ Layout after 6a: MySQL in `packages/3-targets/mysql/1-mysql/{1-target,2-adapter,
 
 ## Merged: slice 6b-1, loading includes with one query per relation. Next: slice 6b-2
 
-**State on 2026-11-18 (`aida-20`):** 6b-1 merged as prisma/orm#31058 on 2026-11-17. Slice 6b-2 is being built on branch `tml-3697-mariadb-runtime` (the `bot` remote), cut from `main`. Its dispatches are in `slices/mariadb-runtime/plan.md`. It starts with MySQL's ORM aggregates (`deferred.md`).
+**State on 2026-11-18 (`aida-20`):** 6b-1 merged as prisma/orm#31058 on 2026-11-17. Slice 6b-2 is built on branch `aida-20/tml-3697-mariadb-runtime` (the `bot` remote), cut from `main`: all four dispatches in `slices/mariadb-runtime/plan.md` are done, and the findings of its first code review (`slices/mariadb-runtime/reviews/6b-2/`) are fixed. Next: a second review of the fixes, manual QA on both servers, the PR.
 
 **Why.** The ORM loads includes in one query: a correlated subquery aggregating child rows into JSON, reading from a derived table that refers to the outer row. MariaDB 10.11 cannot resolve that outer reference ("Unknown column"), so every row include fails on MariaDB. MariaDB also silently truncates `JSON_ARRAYAGG` (a cut on an element boundary is valid JSON with fewer rows), so no single-query rewrite is safe.
 
@@ -100,4 +100,4 @@ Then `/drive-code-review`, fixes, a second review if fixes are substantial, manu
 ## Open items outside 6b
 
 - **Before the release that ships `@prisma/orm-mariadb` and `@prisma/orm-target-mariadb`:** someone must hand-publish a placeholder version of each (as `@prisma/orm-mysql` got `0.0.0-stage`) so npm trusted publishing accepts them.
-- `deferred.md` lists follow-ups: splitting `returning` by statement kind, MariaDB JSON/boolean types, `tx_isolation` deprecation on MariaDB 11.1+, `target: 'mysql'` in shared error metadata (6b-2 decides), MySQL's cut-include failure surfacing as a JSON decoding error rather than a size message, TML-3777 (startup check of the database environment).
+- `deferred.md` lists follow-ups: splitting `returning` by statement kind, MariaDB JSON/boolean types, the aggregate descriptor helpers copied into three targets (`coupling.md` row 31), `mysql/bigintnumber@1` and `mysql/double` waiting for authoring names (ADR 322), MySQL's cut-include failure surfacing as a JSON decoding error rather than a size message, TML-3777 (startup check of the database environment).

@@ -28,7 +28,8 @@ Declares what MySQL is to the SQL family: its data types, codecs and PSL scalars
 ## Exports
 
 - `./pack`: the pack ref for `defineContract` and the PSL interpreter
-- `./runtime`: the runtime target descriptor, `createMysqlRuntimeTargetDescriptor`, which builds it for a database that extends MySQL from its runtime metadata (`mysqlTargetDescriptorMetaRuntime` under its own target id and `displayName`), `MysqlContractSerializer` and the `now()` generators
+- `./runtime`: the runtime target descriptor, `createMysqlRuntimeTargetDescriptor({ descriptorMeta })`, which builds it for a database that extends MySQL from that database's runtime metadata, `MysqlContractSerializer` and the `now()` generators
+- `./descriptor-meta-runtime`: `mysqlTargetDescriptorMetaRuntime`, MySQL's runtime metadata, the one place its target id and display name are written. The adapter, driver and facade read both from it
 - `./control`: the control target descriptor, which sets the fallback `Temporal` when it is loaded, and `createMysqlControlTargetDescriptor`
 - `./types`: the storage namespace class `MysqlDatabase` and `mysqlCreateNamespace`, for contract authoring without the control plane
 - `./migration`: `MysqlMigration` as `Migration`, `MysqlMigrationBase` for a target that extends MySQL, the migration calls, the planner and the runner

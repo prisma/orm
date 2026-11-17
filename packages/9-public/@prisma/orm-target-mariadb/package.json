@@ -4,7 +4,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "Prisma 8 MariaDB target: target descriptor, control adapter, driver",
+  "description": "Prisma 8 MariaDB target: target descriptor, control and runtime adapters, driver",
   "files": [
     "dist"
   ],

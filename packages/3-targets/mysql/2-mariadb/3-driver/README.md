@@ -14,7 +14,7 @@ MySQL's drivers ([`@internal/driver-mysql`](../../1-mysql/3-driver/README.md)) b
 
 ## Responsibilities
 
-- `src/core/runtime/runtime-driver.ts` and `src/core/migrations/control-driver.ts` apply `createMysqlRuntimeDriverDescriptor` and `createMysqlControlDriverDescriptor` to `'mariadb'` and `'MariaDB'`.
+- `src/core/runtime/runtime-driver.ts` and `src/core/migrations/control-driver.ts` apply `createMysqlRuntimeDriverDescriptor` and `createMysqlControlDriverDescriptor` to MariaDB's runtime metadata (`mariadbTargetDescriptorMetaRuntime` from `@internal/target-mariadb`), the source of its target id and display name.
 
 ## Exports
 

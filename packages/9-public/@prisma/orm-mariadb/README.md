@@ -30,6 +30,15 @@ The URL may use `mariadb://` or `mysql://`. MariaDB loads each include with a qu
 
 `temporal-polyfill` is a required peer dependency. The control plane, such as the `prisma` commands, loads it as a fallback `Temporal` when the runtime has none. npm, pnpm and bun install it automatically; with Yarn, add `temporal-polyfill` to your dependencies.
 
+## Requirements
+
+These hold on MariaDB 10.11 as on MySQL 8.4; each was checked on a live MariaDB 10.11 server.
+
+- **Transactions the ORM owns run at READ COMMITTED.** The driver starts each with `SET TRANSACTION ISOLATION LEVEL READ COMMITTED`. A `db.transaction()` without an isolation level, and a statement outside a transaction, run at the server's default, REPEATABLE READ on MariaDB 10.11. Prisma sets no session isolation level.
+- **Binary logging, when it is on, must be row-based or mixed (`binlog_format = ROW` or `MIXED`, MariaDB 10.11's default being `MIXED`).** With `binlog_format = STATEMENT`, InnoDB refuses a write at READ COMMITTED with error 1665, "Cannot execute statement: impossible to write to binary log", so every ORM write fails.
+- **`session_track_system_variables` must keep `character_set_client`,** as MariaDB 10.11's default does. The driver confirms from it that the connection reads statements as utf8mb4 before it sends values, and refuses them otherwise (`RUNTIME.CHARACTER_SET_UNSUPPORTED`).
+- **The session's `sql_mode` must not contain `NO_BACKSLASH_ESCAPES` or `ANSI_QUOTES`.** The driver removes both on every connection; raw SQL, stored procedures and triggers must not set them again. The MySQL driver's [environment requirements](https://github.com/prisma/orm/blob/main/packages/3-targets/mysql/1-mysql/3-driver/README.md#environment-requirements) give the detail, and hold on MariaDB too.
+
 ## Entrypoints
 
 | Namespace | Surface |
