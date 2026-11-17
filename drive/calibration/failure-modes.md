@@ -968,3 +968,15 @@ Per-repo stop conditions beyond the canonical ones:
 **Mitigation.** A test that reads every entry of a shared or generated file filters to the entries it is about, by the property it needs, instead of assuming every entry has it. When writing an entry of a new kind into such a file, grep the tests that read the whole file.
 
 **Reference incident.** Convenience types on other targets, 2026-11-06: the 8.0.0-rc.23 release compiled the guides, and `mongo-checks-required-extensions/detection.test.ts` failed on `main` for four days until prisma/orm#30959 filtered to changes with `matches`.
+
+### F56. A review finding removes a public type that the sibling family keeps, and the two families' interfaces drift apart
+
+**Symptom.** A system-design review calls a type an unneeded name and asks for its removal. The fix deletes it. Later someone asks whether the family's interface matches its sibling's, and it does not: the sibling's clients extend a type of the same role.
+
+**Root cause.** The reviewer judged the type inside one family. The repo copies the Postgres facade pattern on every family, so a public type that looks redundant in one family can be the counterpart of a type the other family's clients extend. Neither the review brief nor the fix compared the two.
+
+**Detection signal.** A finding or a fix deletes, renames or changes the meaning of an exported type in one family. `grep -rn "<TypeNameWithoutFamilyPrefix>" packages/2-sql-family packages/3-targets/postgres --include='*.ts'` finds a type of the same role in the sibling.
+
+**Mitigation.** Before accepting such a finding, find the sibling family's counterpart and what uses it. If the sibling's clients or runtime use the counterpart, keep the type and give it the sibling's role. Put the comparison in the review brief when the slice adds or changes a facade interface.
+
+**Reference incident.** MongoDB `prepare()`, 2026-11: the system-design review of prisma/orm#31054 asked to delete `MongoPrepareMember`, and the fix did. SQL clients extend `PrepareMember<TContract>`. The operator's question "is our API consistent with the SQL runtime's?" found the gap, and the type was restored in the client package before merge.
