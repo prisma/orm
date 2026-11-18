@@ -17,8 +17,9 @@ export default definePrismaConfig({
       source: { format: 'typescript', load: async () => ({ ok: true as const, value: contract }) },
       output: 'contract.json',
       types: 'contract.d.ts',
+      typesModule: '@internal/sqlite/contract-types',
     },
     db: { connection: '{{DB_PATH}}' },
-    migrations: { dir: 'migrations' },
+    migrations: { dir: 'migrations', module: '@internal/sqlite/migration' },
   }),
 });
