@@ -1,10 +1,7 @@
 import type { InitProbeResult } from '@internal/cli/init-contribution';
 import type * as MongoDriver from 'mongodb';
 
-/** The server answered, but not with a version this probe can read; init reports it as a failed probe. */
-class ServerVersionUnreadable extends Error {
-  override readonly name = 'ServerVersionUnreadable';
-}
+type LoadDriver = () => Promise<Pick<typeof MongoDriver, 'MongoClient'>>;
 
 function isModuleNotFound(error: unknown): boolean {
   return error instanceof Error && Reflect.get(error, 'code') === 'ERR_MODULE_NOT_FOUND';
@@ -14,10 +11,13 @@ function causeMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export async function probeMongo(databaseUrl: string): Promise<InitProbeResult> {
-  let mongodb: typeof MongoDriver;
+export async function probeMongo(
+  databaseUrl: string,
+  loadDriver: LoadDriver = () => import('mongodb'),
+): Promise<InitProbeResult> {
+  let mongodb: Pick<typeof MongoDriver, 'MongoClient'>;
   try {
-    mongodb = await import('mongodb');
+    mongodb = await loadDriver();
   } catch (error) {
     if (isModuleNotFound(error)) {
       return { kind: 'driver-missing', driver: 'mongodb', cause: causeMessage(error) };
@@ -29,10 +29,9 @@ export async function probeMongo(databaseUrl: string): Promise<InitProbeResult> 
   try {
     const buildInfo = await client.db().admin().command({ buildInfo: 1 });
     const versionString = String(buildInfo['version'] ?? '');
-    if (versionString.length === 0) {
-      throw new ServerVersionUnreadable('buildInfo did not include a `version` field');
-    }
-    return { kind: 'server-version', serverVersion: versionString };
+    return versionString.length === 0
+      ? { kind: 'version-unreadable', detail: 'buildInfo did not include a `version` field' }
+      : { kind: 'server-version', serverVersion: versionString };
   } finally {
     await client.close().catch(() => undefined);
   }

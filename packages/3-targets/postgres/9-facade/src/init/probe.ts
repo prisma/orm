@@ -1,10 +1,5 @@
 import type { InitProbeResult } from '@internal/cli/init-contribution';
 
-/** The server answered, but not with a version this probe can read; init reports it as a failed probe. */
-class ServerVersionUnreadable extends Error {
-  override readonly name = 'ServerVersionUnreadable';
-}
-
 /**
  * Extracts the numeric prefix from a Postgres `version()` row, e.g.
  *
@@ -13,15 +8,11 @@ class ServerVersionUnreadable extends Error {
  *      conservatively drop the suffix; minimum-version comparisons
  *      treat 16beta1 as 16, which is what every reasonable user
  *      expects).
+ *
+ * `undefined` when the row holds no PostgreSQL version.
  */
-export function parsePostgresVersion(versionString: string): string {
-  const match = versionString.match(/PostgreSQL\s+(\d+(?:\.\d+)?)/i);
-  if (match === null || match[1] === undefined) {
-    throw new ServerVersionUnreadable(
-      `Could not parse PostgreSQL version from \`${versionString}\``,
-    );
-  }
-  return match[1];
+export function parsePostgresVersion(versionString: string): string | undefined {
+  return versionString.match(/PostgreSQL\s+(\d+(?:\.\d+)?)/i)?.[1];
 }
 
 export async function probePostgres(databaseUrl: string): Promise<InitProbeResult> {
@@ -32,7 +23,13 @@ export async function probePostgres(databaseUrl: string): Promise<InitProbeResul
     await client.connect();
     const result = await client.query<{ version: string }>('SELECT version() as version');
     const versionString = String(result.rows[0]?.version ?? '');
-    return { kind: 'server-version', serverVersion: parsePostgresVersion(versionString) };
+    const serverVersion = parsePostgresVersion(versionString);
+    return serverVersion === undefined
+      ? {
+          kind: 'version-unreadable',
+          detail: `could not parse PostgreSQL version from \`${versionString}\``,
+        }
+      : { kind: 'server-version', serverVersion };
   } finally {
     await client.end().catch(() => undefined);
   }

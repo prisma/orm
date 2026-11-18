@@ -1,8 +1,7 @@
-/** How the starter contract is written: Prisma Schema Language or TypeScript. */
-export type AuthoringMode = 'psl' | 'typescript';
+import type { ContractSourceFormat } from '@internal/config/config-types';
 
 export interface QuickReferenceInput {
-  readonly mode: AuthoringMode;
+  readonly mode: ContractSourceFormat;
   readonly schemaPath: string;
   /** The command that runs the project's Prisma CLI, such as `pnpm prisma`. */
   readonly cliCommand: string;
@@ -17,14 +16,9 @@ export interface ReadmeInput {
   readonly runScript: (script: string) => string;
 }
 
-export interface Prisma7ConfigFileInput {
-  readonly schemaPath: string;
-  /** The directory the contract is emitted into, which also holds `db.ts`. */
-  readonly outputDir: string;
-}
-
 export interface Prisma7QuickReferenceInput {
   readonly schemaPath: string;
+  /** The directory the contract is emitted into, which also holds `db.ts`. */
   readonly outputDir: string;
   readonly cliCommand: string;
   readonly requirements: string;
@@ -40,11 +34,16 @@ export interface ServerRequirement {
 
 export type InitProbeResult =
   | { readonly kind: 'server-version'; readonly serverVersion: string }
+  /** It connected, but the server's answer held no version the probe can read. */
+  | { readonly kind: 'version-unreadable'; readonly detail: string }
   | { readonly kind: 'driver-missing'; readonly driver: string; readonly cause: string };
 
 /**
  * What a target package tells `prisma orm init`, as the default export of its `init` entrypoint.
  * The entrypoint may import types from the framework but no framework code that runs.
+ *
+ * A package takes a Prisma 7 schema as its contract source when its `configModule` exports
+ * `prisma7Schema`; `init` then writes the config itself and needs `prisma7QuickReference`.
  */
 export interface InitContribution {
   readonly label: string;
@@ -52,21 +51,26 @@ export interface InitContribution {
   readonly configModule: string;
   /** Packages installed into the application with the target package. */
   readonly peerPackages: readonly string[];
-  readonly authoringModes: readonly AuthoringMode[];
-  readonly starterContract: (mode: AuthoringMode) => string;
+  readonly authoringModes: readonly ContractSourceFormat[];
+  readonly starterContract: (mode: ContractSourceFormat) => string;
   /** A short contract sample for the quick reference, as a fenced code block. */
-  readonly contractSample: (mode: AuthoringMode) => string;
-  /** `db.ts`, which sits beside the emitted `contract.json` and `contract.d.ts`. */
+  readonly contractSample: (mode: ContractSourceFormat) => string;
+  /**
+   * `db.ts`, which sits beside the emitted `contract.json` and `contract.d.ts`. The connection
+   * string is in `DATABASE_URL`, and `dotenv` is installed, so it may import `dotenv/config`.
+   */
   readonly databaseFile: () => string;
-  /** The body of `.env.example`, and of `.env` when the user asks for one. */
+  /**
+   * The body of `.env.example`, and of `.env` when the user asks for one. It sets `DATABASE_URL`,
+   * the variable `prisma.config.ts`, `db.ts` and `--probe-db` read; `dotenv` loads it.
+   */
   readonly envExample: () => string;
   readonly quickReference: (input: QuickReferenceInput) => string;
-  readonly readme: (input: ReadmeInput) => string;
+  /** The README for a project that already has `src/index.ts`; no README is written without it. */
+  readonly readme?: (input: ReadmeInput) => string;
   readonly serverRequirement?: ServerRequirement;
   /** Connects and reads the server's version; rejects when it cannot connect. */
   readonly probe?: (databaseUrl: string) => Promise<InitProbeResult>;
-  /** The config for a project that keeps its Prisma 7 schema as the contract source. */
-  readonly prisma7ConfigFile?: (input: Prisma7ConfigFileInput) => string;
-  /** The quick reference for that project. Given exactly when `prisma7ConfigFile` is. */
+  /** The quick reference for a project that keeps its Prisma 7 schema as the contract source. */
   readonly prisma7QuickReference?: (input: Prisma7QuickReferenceInput) => string;
 }

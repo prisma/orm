@@ -1,8 +1,6 @@
 export type {
-  AuthoringMode,
   InitContribution,
   InitProbeResult,
-  Prisma7ConfigFileInput,
   Prisma7QuickReferenceInput,
   QuickReferenceInput,
   ReadmeInput,

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const clients: FakeClient[] = [];
 let connectError: Error | undefined;
+let versionRow = 'PostgreSQL 16.1 on x86_64-pc-linux-gnu';
 const endSpy = vi.fn(async () => {});
 
 class FakeClient {
@@ -17,7 +18,7 @@ class FakeClient {
     if (connectError !== undefined) throw connectError;
   }
   async query(): Promise<{ rows: Array<{ version: string }> }> {
-    return { rows: [{ version: 'PostgreSQL 16.1 on x86_64-pc-linux-gnu' }] };
+    return { rows: [{ version: versionRow }] };
   }
   end = endSpy;
 }
@@ -29,6 +30,7 @@ const { parsePostgresVersion, probePostgres } = await import('../../src/init/pro
 beforeEach(() => {
   clients.length = 0;
   connectError = undefined;
+  versionRow = 'PostgreSQL 16.1 on x86_64-pc-linux-gnu';
   endSpy.mockClear();
 });
 
@@ -43,8 +45,8 @@ describe('parsePostgresVersion (FR8.3)', () => {
     expect(parsePostgresVersion('PostgreSQL 16 on aarch64-apple-darwin')).toBe('16');
   });
 
-  it('throws on a row that does not start with PostgreSQL', () => {
-    expect(() => parsePostgresVersion('NotPostgres 1.0')).toThrow(/Could not parse/);
+  it('reads nothing from a row that does not start with PostgreSQL', () => {
+    expect(parsePostgresVersion('NotPostgres 1.0')).toBeUndefined();
   });
 });
 
@@ -53,6 +55,15 @@ describe('probePostgres', () => {
     await expect(probePostgres('postgres://localhost:5432/db')).resolves.toEqual({
       kind: 'server-version',
       serverVersion: '16.1',
+    });
+  });
+
+  it('says the version could not be read when the row holds none', async () => {
+    versionRow = 'CockroachDB CCL v23.1';
+
+    await expect(probePostgres('postgres://localhost:5432/db')).resolves.toEqual({
+      kind: 'version-unreadable',
+      detail: 'could not parse PostgreSQL version from `CockroachDB CCL v23.1`',
     });
   });
 

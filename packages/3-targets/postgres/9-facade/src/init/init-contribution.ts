@@ -14,7 +14,6 @@ import {
   contractSample,
   databaseFile,
   envExample,
-  prisma7ConfigFile,
   starterContract,
 } from './templates';
 
@@ -80,7 +79,6 @@ const contribution: InitContribution = {
   readme,
   serverRequirement: { minVersion: POSTGRES_MIN_SERVER_VERSION, checkCommand: 'SELECT version()' },
   probe: probePostgres,
-  prisma7ConfigFile,
   prisma7QuickReference,
 };
 

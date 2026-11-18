@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
-import type { AuthoringMode } from '@internal/cli/init-contribution';
+import type { ReadmeInput } from '@internal/cli/init-contribution';
+import type { ContractSourceFormat } from '@internal/config/config-types';
 import { MONGO_MIN_SERVER_VERSION } from '@internal/target-mongo/server-version';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
@@ -19,13 +20,20 @@ const REQUIREMENTS = [
   '- The CLI never connects to your database without explicit consent. Pass `--probe-db` to `pnpm prisma orm init` if you want `init` to verify the server version itself.',
 ].join('\n');
 
-function quickReferenceFor(mode: AuthoringMode, schemaPath: string): string {
+function quickReferenceFor(mode: ContractSourceFormat, schemaPath: string): string {
   return contribution.quickReference({
     mode,
     schemaPath,
     cliCommand: 'pnpm prisma',
     requirements: REQUIREMENTS,
   });
+}
+
+function readme(input: ReadmeInput): string {
+  if (contribution.readme === undefined) {
+    throw new Error('the contribution writes no README');
+  }
+  return contribution.readme(input);
 }
 
 describe('templates', () => {
@@ -41,7 +49,6 @@ describe('templates', () => {
   });
 
   it('cannot take a Prisma 7 schema', () => {
-    expect(contribution.prisma7ConfigFile).toBeUndefined();
     expect(contribution.prisma7QuickReference).toBeUndefined();
   });
 
@@ -258,7 +265,7 @@ describe('templates', () => {
 
   describe('minimalProjectReadmeMd', () => {
     it('leads with db:up before dev', () => {
-      const md = contribution.readme({
+      const md = readme({
         projectName: 'my-app',
         contractPath: 'prisma/contract.prisma',
         runScript: (script) => `npm run ${script}`,
@@ -274,7 +281,7 @@ describe('templates', () => {
     describe('per-target snapshots', () => {
       it('mongo readme is stable', () => {
         expect(
-          contribution.readme({
+          readme({
             projectName: 'my-app',
             contractPath: 'prisma/contract.ts',
             runScript: (script) => `pnpm run ${script}`,

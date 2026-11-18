@@ -1,15 +1,15 @@
-import type { AuthoringMode } from '@internal/cli/init-contribution';
+import type { ContractSourceFormat } from '@internal/config/config-types';
 import { POSTGRES_MIN_SERVER_VERSION } from '@internal/target-postgres/server-version';
 import { moduleBase } from '../config/module-base';
 
 export const configModule = `${moduleBase}/config`;
 const builder = `${moduleBase}/contract-builder`;
 
-export function starterContract(mode: AuthoringMode): string {
+export function starterContract(mode: ContractSourceFormat): string {
   return mode === 'typescript' ? starterContractTs() : starterContractPsl();
 }
 
-export function contractSample(mode: AuthoringMode): string {
+export function contractSample(mode: ContractSourceFormat): string {
   return mode === 'typescript' ? contractSampleTs() : contractSamplePsl();
 }
 
@@ -107,32 +107,6 @@ export const contract = defineContract({}, ({ field, model, rel, gen, type }) =>
       }),
     },
   };
-});
-`;
-}
-
-/**
- * The config for a project whose contract source is its Prisma 7 schema:
- * `prisma7Schema` beside `defineConfig`, from the same entrypoint, with the
- * schema path as the user gave it and the emitted artifacts under Prisma 8's
- * own directory (`output` is the directory; the facade names `contract.json`).
- */
-export function prisma7ConfigFile(input: {
-  readonly schemaPath: string;
-  readonly outputDir: string;
-}): string {
-  return `import 'dotenv/config';
-import { definePrismaConfig } from '@prisma/cli-engine';
-import { defineConfig as ormConfig, prisma7Schema } from '${configModule}';
-
-export default definePrismaConfig({
-  orm: ormConfig({
-    contract: prisma7Schema(${JSON.stringify(input.schemaPath)}),
-    output: ${JSON.stringify(input.outputDir)},
-    db: {
-      connection: process.env['DATABASE_URL']!,
-    },
-  }),
 });
 `;
 }
