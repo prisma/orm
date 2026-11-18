@@ -10,11 +10,6 @@
     "**/types.ts",
     "src/index.ts",
     "src/pack-types.ts",
-    "src/ir/sql-storage.ts",
-    "src/ir/storage-column.ts",
-    "src/ir/storage-table.ts",
-    "src/ir/storage-type-instance.ts",
-    "src/ir/unique-constraint.ts",
     "src/index-type-validation.ts"
   ],
   "thresholds": {
