@@ -14,7 +14,7 @@ describe('subjectsOfCalls for a table whose model keeps its name', () => {
       subjectsOfCalls([losing(table('profiles'))], {
         fromContract: from,
         contract: to,
-        renames: renamesBetween(from, to),
+        storageRenames: renamesBetween(from, to),
         origins: NO_RENAMED_ORIGINS,
         byHand,
         removedVariants: [],
@@ -38,7 +38,7 @@ describe('subjectsOfCalls for a table whose model keeps its name', () => {
       subjectsOfCalls([losing(table('profiles'))], {
         fromContract: from,
         contract: to,
-        renames: renamesBetween(from, to),
+        storageRenames: renamesBetween(from, to),
         origins: NO_RENAMED_ORIGINS,
         byHand,
         removedVariants: [],
@@ -64,7 +64,7 @@ describe('subjectsOfCalls for a table whose model keeps its name', () => {
       subjectsOfCalls([losing(table('profiles'))], {
         fromContract: withPeople,
         contract: to,
-        renames: renamesBetween(withPeople, to),
+        storageRenames: renamesBetween(withPeople, to),
         origins: NO_RENAMED_ORIGINS,
         byHand,
         removedVariants: [],
@@ -85,7 +85,7 @@ describe('subjectsOfCalls for a table whose model keeps its name', () => {
       subjectsOfCalls([losing(table('users')), losing(table('members'))], {
         fromContract: two,
         contract: merged,
-        renames: renamesBetween(two, merged),
+        storageRenames: renamesBetween(two, merged),
         origins: NO_RENAMED_ORIGINS,
         byHand,
         removedVariants: [],
@@ -119,7 +119,7 @@ describe('subjectsOfCalls for a table whose model keeps its name', () => {
       subjectsOfCalls([losing(table('tasks'))], {
         fromContract: shared,
         contract: split,
-        renames: renamesBetween(shared, split),
+        storageRenames: renamesBetween(shared, split),
         origins: NO_RENAMED_ORIGINS,
         byHand,
         removedVariants: [],

@@ -14,12 +14,12 @@ const two = contractOf({
 
 function adviceOnDroppingUsers(
   contract: ReturnType<typeof contractOf>,
-  renames: StorageRenames | undefined,
+  storageRenames: StorageRenames | undefined,
 ) {
   return subjectsOfCalls([losing(table('users'))], {
     fromContract: two,
     contract,
-    renames,
+    storageRenames,
     origins: NO_RENAMED_ORIGINS,
     byHand,
     removedVariants: [],
@@ -61,7 +61,7 @@ describe('the advice for a dropped table and the planner agree whether its stora
     if (!result.ok) throw new Error(result.failure.summary);
 
     expect(result.value.tableRenames).toEqual([]);
-    expect(adviceOnDroppingUsers(merged, result.value.renames)).toEqual([
+    expect(adviceOnDroppingUsers(merged, result.value.storageRenames)).toEqual([
       'The destination stores models "app.Member" and "app.User" in table "people", and the origin stores them in different tables, so their storage is being merged. Keeping their rows is a data migration, which a plan does not write. With migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the rows of models "app.Member" and "app.User" into table "people" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
     ]);
   });

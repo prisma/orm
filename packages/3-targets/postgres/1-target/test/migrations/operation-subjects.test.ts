@@ -90,7 +90,7 @@ function subjectsOf(calls: readonly OpFactoryCall[], fieldEvents: readonly Field
     {
       fromContract: contract,
       contract,
-      renames: new StorageRenames([], contract, contract, exactName),
+      storageRenames: new StorageRenames([], contract, contract, exactName),
       byHand: postgresTableRenameByHand(contract),
       removedVariants: [],
       origins: NO_RENAMED_ORIGINS,

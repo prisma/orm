@@ -108,7 +108,7 @@ interface SubjectContext {
   /** Where the plan's statements put the origin's tables and columns. */
   readonly origins: WorkingSchemaOrigins;
   /** The renames of the plan, `undefined` with no origin contract. */
-  readonly renames: StorageRenames | undefined;
+  readonly storageRenames: StorageRenames | undefined;
   readonly byHand: TableRenameByHand;
   /** The variants of the origin the destination no longer has and no rename names: their columns are asked about as the variant. */
   readonly removedVariants: readonly ModelCoordinate[];
@@ -159,8 +159,8 @@ function keepTableAdvice(
   subject: MigrationSubject,
   context: SubjectContext,
 ): string | undefined {
-  const { renames } = context;
-  if (subject.kind !== 'model' || target.table === undefined || renames === undefined) {
+  const { storageRenames } = context;
+  if (subject.kind !== 'model' || target.table === undefined || storageRenames === undefined) {
     return undefined;
   }
   const storage =
@@ -168,8 +168,9 @@ function keepTableAdvice(
   if (storage === undefined || !isSqlModelStorage(storage)) return undefined;
   const { namespaceId, table: from } = target.table;
   if (storage.namespaceId !== namespaceId || storage.table === from) return undefined;
-  if (renames.originModelsIn({ namespaceId, table: storage.table }).length > 0) return undefined;
-  const sharing = sharedStorageAdvice(renames, {
+  if (storageRenames.originModelsIn({ namespaceId, table: storage.table }).length > 0)
+    return undefined;
+  const sharing = sharedStorageAdvice(storageRenames, {
     origin: { namespaceId, table: from },
     destination: { namespaceId, table: storage.table },
   });
@@ -187,20 +188,20 @@ function byName(left: ModelCoordinate, right: ModelCoordinate): number {
  * decides it: their storage is being split or merged. Keeping their rows is then a data migration.
  */
 function sharedStorageAdvice(
-  renames: StorageRenames,
+  storageRenames: StorageRenames,
   tables: { readonly origin: ModelTable; readonly destination: ModelTable },
 ): string | undefined {
-  const shared = renames.sharedTable(tables);
+  const shared = storageRenames.sharedTable(tables);
   if (shared === undefined) return undefined;
   const split = shared.kind === 'split';
   const models = [
     ...(split
-      ? renames.originModelsIn(tables.origin)
-      : renames.destinationModelsIn(tables.destination)),
+      ? storageRenames.originModelsIn(tables.origin)
+      : storageRenames.destinationModelsIn(tables.destination)),
   ].sort(byName);
   const into = new Map<string, ModelCoordinate[]>();
   for (const model of models) {
-    const moved = split ? renames.destinationTableOf(model) : tables.destination;
+    const moved = split ? storageRenames.destinationTableOf(model) : tables.destination;
     if (moved !== undefined) into.set(moved.table, [...(into.get(moved.table) ?? []), model]);
   }
   const moves = [...into]

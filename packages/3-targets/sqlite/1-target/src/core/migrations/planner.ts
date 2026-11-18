@@ -340,7 +340,7 @@ export class SqliteMigrationPlanner
           fromContract: options.fromContract,
           contract: options.contract,
           origins: statements.value.origins,
-          renames: statements.value.renames,
+          storageRenames: statements.value.storageRenames,
           byHand: sqliteTableRenameByHand,
           removedVariants: storedRewrites.value.removedVariants,
         },

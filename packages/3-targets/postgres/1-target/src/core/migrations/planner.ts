@@ -614,7 +614,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
           fromContract: options.fromContract,
           contract: options.contract,
           origins: statements.value.origins,
-          renames: statements.value.renames,
+          storageRenames: statements.value.storageRenames,
           byHand: postgresTableRenameByHand(options.contract),
           removedVariants: storedRewrites.value.removedVariants,
         },

@@ -96,7 +96,7 @@ function subjectsOf(
     {
       fromContract: contract,
       contract,
-      renames: new StorageRenames([], contract, contract, sqliteIdentifiersCollide),
+      storageRenames: new StorageRenames([], contract, contract, sqliteIdentifiersCollide),
       byHand: sqliteTableRenameByHand,
       removedVariants: [],
       origins: NO_RENAMED_ORIGINS,

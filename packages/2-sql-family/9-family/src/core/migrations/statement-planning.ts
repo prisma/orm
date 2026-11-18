@@ -249,7 +249,7 @@ export interface PlannedStatements<TCall extends CallWithCompanions> {
   readonly plannedStatements: readonly PlannedStatement[];
   readonly origins: WorkingSchemaOrigins;
   /** The renames of the plan, which the questions read too; `undefined` with no origin contract. */
-  readonly renames: StorageRenames | undefined;
+  readonly storageRenames: StorageRenames | undefined;
 }
 
 const DRIFTED =
@@ -409,7 +409,7 @@ class StatementPlanner<TCall extends CallWithCompanions> {
   /** The name each namespace renamed so far has in the working schema, keyed by its origin name. */
   readonly #renamedNamespaces = new Map<string, string>();
   readonly #ownership: StatementOwnership | undefined;
-  readonly #renames: StorageRenames;
+  readonly #storageRenames: StorageRenames;
   readonly calls: TCall[] = [];
   /** How many operations the calls planned so far lower to. */
   #operationCount = 0;
@@ -422,14 +422,14 @@ class StatementPlanner<TCall extends CallWithCompanions> {
     readonly policy: MigrationOperationPolicy;
     readonly target: StatementPlanningTarget<TCall>;
     readonly ownership: StatementOwnership | undefined;
-    readonly renames: StorageRenames;
+    readonly storageRenames: StorageRenames;
   }) {
     this.#fromContract = input.fromContract;
     this.#contract = input.contract;
     this.#policy = input.policy;
     this.#target = input.target;
     this.#ownership = input.ownership;
-    this.#renames = input.renames;
+    this.#storageRenames = input.storageRenames;
   }
 
   /** Renames a table no statement asks for, where it is in the working schema now. */
@@ -694,9 +694,9 @@ class StatementPlanner<TCall extends CallWithCompanions> {
   }
 
   #sharedTableRefusal(statement: ResolvedModelRenameStatement): SqlPlannerConflict | undefined {
-    const rename = this.#renames.models.find((model) => model.statement === statement);
-    const change = rename === undefined ? undefined : this.#renames.tableChangeOf(rename);
-    const shared = change === undefined ? undefined : this.#renames.sharedTable(change);
+    const rename = this.#storageRenames.models.find((model) => model.statement === statement);
+    const change = rename === undefined ? undefined : this.#storageRenames.tableChangeOf(rename);
+    const shared = change === undefined ? undefined : this.#storageRenames.sharedTable(change);
     if (change === undefined || shared === undefined) return undefined;
     const from = change.origin.table;
     const to = change.destination.table;
@@ -716,9 +716,9 @@ class StatementPlanner<TCall extends CallWithCompanions> {
   }
 
   #sharedColumnRefusal(statement: ResolvedFieldRenameStatement): SqlPlannerConflict | undefined {
-    const rename = this.#renames.fields.find((field) => field.statement === statement);
-    const change = rename === undefined ? undefined : this.#renames.columnChangeOf(rename);
-    const shared = change === undefined ? undefined : this.#renames.sharedColumn(change);
+    const rename = this.#storageRenames.fields.find((field) => field.statement === statement);
+    const change = rename === undefined ? undefined : this.#storageRenames.columnChangeOf(rename);
+    const shared = change === undefined ? undefined : this.#storageRenames.sharedColumn(change);
     if (change === undefined || shared === undefined) return undefined;
     const { from, to } = change;
     const label = `Cannot rename column "${change.origin.table}"."${from}" to "${to}"`;
@@ -939,7 +939,7 @@ export function planStatements<TCall extends CallWithCompanions>(input: {
         alreadyRenamedTables: [],
         plannedStatements: [],
         origins: NO_RENAMED_ORIGINS,
-        renames: undefined,
+        storageRenames: undefined,
       });
     }
     return notOk(
@@ -952,20 +952,20 @@ export function planStatements<TCall extends CallWithCompanions>(input: {
     );
   }
   const tables = input.target.tables();
-  const renames = new StorageRenames(
+  const storageRenames = new StorageRenames(
     input.statements,
     fromContract,
     input.contract,
     tables.sameName,
   );
-  const storageRenames = plannedStorageRenames(renames, tables);
-  const conflict = storageRenameConflict(storageRenames, tables, renames);
+  const planned = plannedStorageRenames(storageRenames, tables);
+  const conflict = storageRenameConflict(planned, tables, storageRenames);
   if (conflict !== undefined) return notOk(conflict);
   const planner = new StatementPlanner<TCall>({
     ...input,
     fromContract,
     ownership: input.ownership,
-    renames,
+    storageRenames,
   });
   const unstated = (change: TableChange | ColumnChange) =>
     change.renames.every((rename) => rename.statement === undefined);
@@ -979,25 +979,21 @@ export function planStatements<TCall extends CallWithCompanions>(input: {
     ...input.statements
       .filter((statement) => statement.entity === 'namespace')
       .map((statement) => () => planStatement(statement)),
-    ...storageRenames.foundTables.map(
+    ...planned.foundTables.map(
       ({ change, name }) =>
         () =>
           planner.recordTableFound(change, name),
     ),
-    ...storageRenames.tables
-      .filter(unstated)
-      .map((change) => () => planner.planTableChange(change)),
+    ...planned.tables.filter(unstated).map((change) => () => planner.planTableChange(change)),
     ...input.statements
       .filter((statement) => statement.entity !== 'namespace')
       .map((statement) => () => planStatement(statement)),
-    ...storageRenames.foundColumns.map(
+    ...planned.foundColumns.map(
       ({ change, name }) =>
         () =>
           planner.recordColumnFound(change, name),
     ),
-    ...storageRenames.columns
-      .filter(unstated)
-      .map((change) => () => planner.planColumnChange(change)),
+    ...planned.columns.filter(unstated).map((change) => () => planner.planColumnChange(change)),
   ];
   for (const step of steps) {
     const result = step();
@@ -1007,12 +1003,12 @@ export function planStatements<TCall extends CallWithCompanions>(input: {
     calls: planner.calls,
     tableRenames: planner.tableRenames,
     columnRenames: planner.columnRenames,
-    alreadyRenamedTables: storageRenames.foundTables
-      .filter(({ change }) => !storageRenames.tables.includes(change))
+    alreadyRenamedTables: planned.foundTables
+      .filter(({ change }) => !planned.tables.includes(change))
       .map(({ change, name }) => ({ namespaceId: change.destination.namespaceId, table: name })),
     plannedStatements,
     origins: planner.origins(),
-    renames,
+    storageRenames,
   });
 }
 

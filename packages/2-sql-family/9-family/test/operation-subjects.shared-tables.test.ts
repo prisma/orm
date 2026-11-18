@@ -34,7 +34,7 @@ describe('subjectsOfCalls for models that share a table', () => {
           {
             fromContract: tasks,
             contract: tasks,
-            renames: renamesBetween(tasks, tasks),
+            storageRenames: renamesBetween(tasks, tasks),
             byHand,
             removedVariants: [bug],
             origins: NO_RENAMED_ORIGINS,
@@ -66,7 +66,7 @@ describe('subjectsOfCalls for models that share a table', () => {
           {
             fromContract: tasks,
             contract: tasks,
-            renames: renamesBetween(tasks, tasks),
+            storageRenames: renamesBetween(tasks, tasks),
             byHand,
             removedVariants: [],
             origins: NO_RENAMED_ORIGINS,
@@ -88,7 +88,7 @@ describe('subjectsOfCalls for models that share a table', () => {
         subjectsOfCalls([losing(column('tasks', 'severity'))], {
           fromContract: tasks,
           contract: tasks,
-          renames: renamesBetween(tasks, tasks),
+          storageRenames: renamesBetween(tasks, tasks),
           byHand,
           removedVariants: [],
           origins: NO_RENAMED_ORIGINS,
@@ -109,7 +109,7 @@ describe('subjectsOfCalls for models that share a table', () => {
         subjectsOfCalls([losing(table('users')), losing(column('users', 'email'))], {
           fromContract: sharing,
           contract: sharing,
-          renames: renamesBetween(sharing, sharing),
+          storageRenames: renamesBetween(sharing, sharing),
           byHand,
           removedVariants: [],
           origins: NO_RENAMED_ORIGINS,
@@ -125,7 +125,7 @@ describe('subjectsOfCalls for models that share a table', () => {
         subjectsOfCalls([losing(column('users', 'level'))], {
           fromContract: sharing,
           contract: sharing,
-          renames: renamesBetween(sharing, sharing),
+          storageRenames: renamesBetween(sharing, sharing),
           byHand,
           removedVariants: [],
           origins: NO_RENAMED_ORIGINS,

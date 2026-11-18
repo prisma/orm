@@ -1,3 +1,4 @@
+import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { planStatements } from '../src/core/migrations/statement-planning';
 import {
@@ -458,7 +459,9 @@ describe('planStatements, a large contract whose names both contracts keep', () 
       ),
     );
 
-  it('plans only the column whose name changes, without grouping the fields that keep theirs', () => {
+  it('plans an unchanged 1000-model contract with one changed column within the time limit', {
+    timeout: timeouts.largeContractPlanning,
+  }, () => {
     const result = plan(
       modelsOf((_model, field) => field),
       modelsOf((model, field) => (model === 'M7' && field === 'f3' ? 'renamed' : field)),

@@ -210,7 +210,7 @@ export class MysqlMigrationPlanner<TargetId extends string = 'mysql'>
         fromContract: options.fromContract,
         contract: options.contract,
         origins: NO_RENAMED_ORIGINS,
-        renames:
+        storageRenames:
           options.fromContract === null
             ? undefined
             : new StorageRenames([], options.fromContract, options.contract, exactName),

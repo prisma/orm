@@ -7,6 +7,7 @@ const BASE_TIMEOUTS = {
   databaseOperation: 5000,
   pslRoundTrip: 5000,
   repeatedScriptRuns: 60000,
+  largeContractPlanning: 2000,
   default: 100,
   /**
    * Vitest `testTimeout` / `hookTimeout` when a package uses mostly local I/O
@@ -126,6 +127,14 @@ export const timeouts = {
    */
   get repeatedScriptRuns(): number {
     return Math.round(BASE_TIMEOUTS.repeatedScriptRuns * getMultiplier());
+  },
+
+  /**
+   * Timeout for a test that plans a contract of about a thousand models, so that planning time
+   * that grows faster than the contract fails it.
+   */
+  get largeContractPlanning(): number {
+    return Math.round(BASE_TIMEOUTS.largeContractPlanning * getMultiplier());
   },
 
   /**
