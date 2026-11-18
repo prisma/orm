@@ -143,10 +143,19 @@ describe.each(GUIDES)(
         columnHelper: matches(
           "import { integerNumberColumn } from '@prisma/orm-sqlite/adapter/column-types';",
         ),
+        oldColumnHelper: matches(
+          "import { integerColumn } from '@prisma/orm-sqlite/adapter/column-types';",
+        ),
+        oldColumnHelperNamespace: matches(
+          "import * as columns from '@internal/adapter-sqlite/column-types';\n\nfield.column(columns.integerColumn);",
+        ),
         bigInt: matches('model Post {\n  views BigInt\n}'),
         longerName: matches('model Post {\n  views Integer\n}'),
         postgresTypescript: matches(
-          "import { defineContract } from '@prisma/orm-postgres/contract-builder';\nfield.column(type.Text());",
+          "import { defineContract } from '@prisma/orm-postgres/contract-builder';\nfield.column(type.Int());\nfield.column(type.BigInt({ as: 'number' }));",
+        ),
+        postgresColumnHelper: matches(
+          "import { integerColumn } from '@prisma/orm-postgres/adapter/column-types';\n\nfield.column(integerColumn);",
         ),
       }).toEqual({
         field: true,
@@ -158,9 +167,12 @@ describe.each(GUIDES)(
         typescript: true,
         typescriptAsNumber: true,
         columnHelper: true,
+        oldColumnHelper: true,
+        oldColumnHelperNamespace: true,
         bigInt: false,
         longerName: false,
         postgresTypescript: false,
+        postgresColumnHelper: false,
       });
     });
   },
