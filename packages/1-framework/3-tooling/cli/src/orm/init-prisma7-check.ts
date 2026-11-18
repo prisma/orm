@@ -68,7 +68,6 @@ export class Prisma7CheckInstallFailed extends Error {
     readonly failure: CliStructuredError,
     readonly target: TargetId,
     readonly schemaPath: string,
-    readonly warnings: readonly string[],
   ) {
     super(failure.message);
     this.name = 'Prisma7CheckInstallFailed';
@@ -118,17 +117,18 @@ export function createPrisma7SourceCheck(ctx: {
     if (ctx.install) {
       const deps = [packageName, 'dotenv'];
       const declaredBefore = declaredPackages(ctx.cwd);
-      const outcome = await installProjectDependencies({
+      const installFailure = await installProjectDependencies({
         packages: ctx.packages,
         cwd: ctx.cwd,
         deps,
         devDeps: [],
-        catalogWarnings: ctx.packageManager === 'pnpm' ? buildCatalogWarnings(ctx.cwd, deps) : [],
       });
-      if (outcome.failure !== undefined) {
-        throw new Prisma7CheckInstallFailed(outcome.failure, target, schemaPath, outcome.warnings);
+      if (installFailure !== undefined) {
+        throw new Prisma7CheckInstallFailed(installFailure, target, schemaPath);
       }
-      warnings.push(...outcome.warnings);
+      if (ctx.packageManager === 'pnpm') {
+        warnings.push(...buildCatalogWarnings(ctx.cwd, deps));
+      }
       installed = deps;
       const newlyDeclared = deps.filter((dep) => !declaredBefore.has(dep));
       added =
@@ -136,10 +136,7 @@ export function createPrisma7SourceCheck(ctx: {
           ? undefined
           : {
               packages: newlyDeclared,
-              removeCommand: formatRemoveCommand(
-                outcome.manager ?? ctx.packageManager,
-                newlyDeclared,
-              ),
+              removeCommand: formatRemoveCommand(ctx.packageManager, newlyDeclared),
             };
     }
 
