@@ -38,6 +38,18 @@ function linkedParentsOf(db: ToManyDb) {
     .all();
 }
 
+function oneToOneChildren(db: OneToOneDb) {
+  return db.public.Child.select('c')
+    .orderBy((child) => child.c.asc())
+    .all();
+}
+
+function toManyChildren(db: ToManyDb) {
+  return db.public.Child.select('c')
+    .orderBy((child) => child.c.asc())
+    .all();
+}
+
 async function seedOneToOne(db: OneToOneDb, nonUnique: string | null) {
   await db.public.Parent.create({
     p: 'p1',
@@ -117,6 +129,7 @@ describe('ports/engines/writes/nested_mutations/already_converted/nested_delete_
           { p: 'p1', childOpt: { c: 'existingChild' } },
           { p: 'p2', childOpt: null },
         ]);
+        expect(await oneToOneChildren(db)).toEqual([{ c: 'existingChild' }]);
       }),
     timeouts.spinUpPpgDev,
   );
@@ -135,6 +148,7 @@ describe('ports/engines/writes/nested_mutations/already_converted/nested_delete_
           { p: 'p1', childOpt: { c: 'existingChild' } },
           { p: 'p2', childOpt: null },
         ]);
+        expect(await oneToOneChildren(db)).toEqual([{ c: 'existingChild' }]);
       }),
     timeouts.spinUpPpgDev,
   );
@@ -186,6 +200,7 @@ describe('ports/engines/writes/nested_mutations/already_converted/nested_delete_
         });
 
         expect(await childrenOf(db)).toEqual([{ p: 'p1', childrenOpt: [{ c: 'c2' }] }]);
+        expect(await toManyChildren(db)).toEqual([{ c: 'c2' }]);
       }),
     timeouts.spinUpPpgDev,
   );
@@ -204,6 +219,7 @@ describe('ports/engines/writes/nested_mutations/already_converted/nested_delete_
         });
 
         expect(await childrenOf(db)).toEqual([{ p: 'p1', childrenOpt: [{ c: 'c2' }] }]);
+        expect(await toManyChildren(db)).toEqual([{ c: 'c2' }]);
       }),
     timeouts.spinUpPpgDev,
   );
@@ -218,7 +234,7 @@ describe('ports/engines/writes/nested_mutations/already_converted/nested_delete_
         await seedTwoChildren(db);
 
         await db.public.Parent.where({ p: 'p1' }).update({
-          childrenOpt: (children) => children.where({ c: 'c1', non_unique: '2' }).delete(),
+          childrenOpt: (children) => children.where({ c: 'c1', non_unique: '1' }).delete(),
         });
 
         expect(await childrenOf(db)).toEqual([
@@ -366,6 +382,7 @@ describe('ports/engines/writes/nested_mutations/already_converted/nested_delete_
 
         expect(afterDelete).toEqual(manyToManyAfterDeletingC2);
         expect(await childrenOf(db)).toEqual(manyToManyAfterDeletingC2);
+        expect(await toManyChildren(db)).toEqual([{ c: 'c3' }, { c: 'c4' }, { c: 'otherChild' }]);
       }),
     timeouts.spinUpPpgDev,
   );
@@ -387,6 +404,7 @@ describe('ports/engines/writes/nested_mutations/already_converted/nested_delete_
         });
 
         expect(await childrenOf(db)).toEqual(manyToManyAfterDeletingC2);
+        expect(await toManyChildren(db)).toEqual([{ c: 'c3' }, { c: 'c4' }, { c: 'otherChild' }]);
       }),
     timeouts.spinUpPpgDev,
   );
@@ -408,6 +426,7 @@ describe('ports/engines/writes/nested_mutations/already_converted/nested_delete_
           { p: 'otherParent', childrenOpt: [{ c: 'otherChild' }] },
           { p: 'p2', childrenOpt: [{ c: 'c4' }] },
         ]);
+        expect(await toManyChildren(db)).toEqual([{ c: 'c4' }, { c: 'otherChild' }]);
       }),
     timeouts.spinUpPpgDev,
   );
