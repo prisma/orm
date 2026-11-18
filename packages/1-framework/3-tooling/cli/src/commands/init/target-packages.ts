@@ -1,7 +1,8 @@
 /**
- * A target package Prisma vouches for. Names only: listing a package gives it a short name for
- * `--target`, a line in the picker, and the mapping from an earlier Prisma's `datasource`
- * provider. Everything else `init` writes comes from the package's own init contribution.
+ * A target package Prisma vouches for: its names, and the facts `init` needs before the package is
+ * installed. Listing a package gives it a short name for `--target`, a line in the picker, the
+ * mapping from an earlier Prisma's `datasource` provider, and the drivers installed with it.
+ * Everything else `init` writes comes from the package's own init contribution.
  */
 export interface KnownTargetPackage {
   readonly shortName: string;
@@ -19,7 +20,8 @@ export interface KnownTargetPackage {
   /**
    * The driver packages installed with the target package, which it declares as required peers.
    * A package manager with strict peer checks refuses the package without them, and the printed
-   * Prisma 6 setup installs them before `init` has installed anything.
+   * Prisma 6 setup installs them before `init` has installed anything. The package's other
+   * required peers, such as the driver's type package, are not installed yet.
    */
   readonly peerPackages: readonly string[];
 }
