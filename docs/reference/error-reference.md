@@ -113,7 +113,7 @@ Writing a file failed: currently raised when `contract format` cannot write the 
 
 ### CLI.INIT_AUTHORING_UNSUPPORTED
 
-`prisma orm init --authoring <mode>` names a way to write the contract that the target package's init contribution does not offer. Raised after the target package is installed and before any file is written. Maps to init exit code 2 (PRECONDITION). Payload: `packageName`, `authoring`, `offered` (the modes the package lists).
+`prisma orm init --authoring <mode>` names a way to write the contract that the target package's init contribution does not offer. Raised after the target package is installed and before any file is written; the next actions name the packages init added and the command that removes them. Maps to init exit code 2 (PRECONDITION). Payload: `packageName`, `authoring`, `offered` (the modes the package lists), `packagesAdded`.
 
 ### CLI.INIT_AUTHORING_SCHEMA_PATH_MISMATCH
 
@@ -121,7 +121,7 @@ During `prisma orm init`, `--authoring` and `--schema-path` disagree on file ext
 
 ### CLI.INIT_CONTRIBUTION_UNAVAILABLE
 
-`prisma orm init` installed the target package, but the package has no `init` entrypoint (`reason: no-entrypoint`), or the default export of `<package>/init` is not an init contribution (`reason: invalid-shape`, with what is wrong in `why`). The package stays installed and no file is written. The fix is to write `prisma.config.ts` by hand, importing `defineConfig` from the package. Maps to init exit code 2 (PRECONDITION). Payload: `packageName`, `reason`.
+`prisma orm init` installed the target package, but the package does not export `./init` (`reason: no-entrypoint`), its init module cannot be loaded because the file its export names is missing or the module throws while loading (`reason: unloadable`, with the cause in `why`), or the default export of `<package>/init` is not an init contribution (`reason: invalid-shape`, with what is wrong in `why`). `invalid-shape` also covers a package whose config module exports `prisma7Schema` while its contribution has no `prisma7QuickReference`. Init resolves `./init` with the `import` condition. The package stays installed and no file is written; when init added packages to `package.json`, the next actions name them and the command that removes them. The fix is to write `prisma.config.ts` by hand, importing `defineConfig` from the package, or, for `unloadable`, to reinstall it. Maps to init exit code 2 (PRECONDITION). Payload: `packageName`, `module`, `reason`, and `packagesAdded` when init added any.
 
 ### CLI.INIT_EMIT_FAILED
 
@@ -181,7 +181,7 @@ On the Prisma 7 path of `prisma orm init`, the target package's Prisma 7 contrac
 
 ### CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE
 
-On the Prisma 7 path of `prisma orm init`, the target package cannot read the Prisma 7 schema. Either it has no `prisma7Schema` export, or its init contribution has no `prisma7ConfigFile`, while `--from-prisma7-schema` asked for one (`reason: no-prisma7-source`), or the config module its contribution names could not be loaded from the project (`reason: not-resolvable`). When the user entered the Prisma 7 path by answering yes to init's question instead of passing the flag, a package without a Prisma 7 source is not an error: init warns and runs as a fresh init. Nothing is written apart from the target package and `dotenv` the check installed, and the next actions give the command that removes them. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `packageName`, `reason`, `packagesAdded` (the packages the project did not declare before the check).
+On the Prisma 7 path of `prisma orm init`, the target package cannot read the Prisma 7 schema. Either it has no `prisma7Schema` export while `--from-prisma7-schema` asked for one (`reason: no-prisma7-source`), or the config module its contribution names could not be loaded from the project (`reason: not-resolvable`). When the user entered the Prisma 7 path by answering yes to init's question instead of passing the flag, a package without a Prisma 7 source is not an error: init warns and runs as a fresh init. Nothing is written apart from the target package and `dotenv` the check installed, and the next actions give the command that removes them. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `packageName`, `reason`, `packagesAdded` (the packages the project did not declare before the check).
 
 ### CLI.INIT_PRISMA7_TARGET_MISMATCH
 
