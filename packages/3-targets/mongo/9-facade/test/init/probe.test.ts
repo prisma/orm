@@ -94,6 +94,48 @@ describe('probeMongo', () => {
     expect(close).toHaveBeenCalled();
   });
 
+  it('settles at the abort when timeoutMS=0 in the URL turns the driver timeout off for a stalled buildInfo', async () => {
+    let rejectStalled: ((error: Error) => void) | undefined;
+    const close = vi.fn(async () => {
+      rejectStalled?.(new Error('client closed'));
+    });
+    const constructed: unknown[][] = [];
+    class StalledBuildInfoClient {
+      constructor(...args: unknown[]) {
+        constructed.push(args);
+      }
+      async connect(): Promise<void> {}
+      db() {
+        return {
+          admin: () => ({
+            command: () =>
+              new Promise((_resolve, reject) => {
+                rejectStalled = reject;
+              }),
+          }),
+        };
+      }
+      close = close;
+    }
+    const driver = { MongoClient: StalledBuildInfoClient } as unknown as Pick<
+      typeof MongoDriver,
+      'MongoClient'
+    >;
+    const controller = new AbortController();
+    const url = 'mongodb://localhost:27017/db?timeoutMS=0';
+
+    const pending = probeMongo(url, controller.signal, async () => driver);
+    await vi.waitFor(() => expect(rejectStalled).toBeDefined());
+    controller.abort();
+
+    await expect(pending).resolves.toEqual({
+      kind: 'version-unreadable',
+      detail: 'buildInfo failed: client closed',
+    });
+    expect(constructed[0]?.[0]).toBe(url);
+    expect(close).toHaveBeenCalled();
+  });
+
   it('says the version could not be read when buildInfo has none', async () => {
     const { load } = driverAnswering({});
 
