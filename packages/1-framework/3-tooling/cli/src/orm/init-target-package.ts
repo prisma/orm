@@ -22,7 +22,7 @@ import type { InitContribution } from '../commands/init/init-contribution';
 import { chooseAction } from '../utils/next-actions';
 import { installProjectDependencies } from './init-packages';
 import { normalizeError } from './normalize-error';
-import type { ImportFromProject } from './project-modules';
+import { type ImportFromProject, isInstalledInProject } from './project-modules';
 
 const InitContributionSchema = type({
   label: 'string',
@@ -149,9 +149,11 @@ export function createTargetPackagePreparation(ctx: {
       const declaredBefore = declaredPackages(ctx.cwd);
       // Asking again for a package the project declares rewrites its declared range, which a
       // refusal later would leave behind; the later install puts those in place instead. The
-      // target package stays, since init must load its contribution now.
+      // target package is left out only when it is also on disk, since init loads it now.
+      const targetInPlace =
+        declaredBefore.has(packageName) && isInstalledInProject(ctx.cwd, packageName);
       const deps = [
-        packageName,
+        ...(targetInPlace ? [] : [packageName]),
         ...['dotenv', ...peerPackages].filter((dep) => !declaredBefore.has(dep)),
       ];
       const installFailure = await installProjectDependencies({
@@ -167,7 +169,7 @@ export function createTargetPackagePreparation(ctx: {
         warnings.push(...buildCatalogWarnings(ctx.cwd, deps));
       }
       installed = deps;
-      ranCommand = installCommand(ctx.packageManager, deps);
+      ranCommand = deps.length === 0 ? undefined : installCommand(ctx.packageManager, deps);
       const newlyDeclared = deps.filter((dep) => !declaredBefore.has(dep));
       added =
         newlyDeclared.length === 0

@@ -204,6 +204,55 @@ describe('init takes the project from the target package', () => {
   );
 
   it(
+    'leaves a declared, installed target package out of the install before the questions',
+    async () => {
+      const manifest = {
+        name: 'app',
+        dependencies: { '@prisma/orm-postgres': '~8.0.0-rc.1' },
+      };
+      writeProjectFile('package.json', `${JSON.stringify(manifest)}\n`);
+
+      const run = await harness(await postgresWith({ authoringModes: ['typescript'] })).run(
+        STARTER,
+        { cwd: projectDir },
+      );
+
+      expect(envelopeOf(run)).toMatchObject({
+        ok: false,
+        error: {
+          code: 'CLI.INIT_AUTHORING_UNSUPPORTED',
+          meta: { packagesAdded: ['dotenv', 'pg'] },
+        },
+      });
+      expect(installs).toEqual([['add', 'dotenv', 'pg']]);
+      expect(JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf-8'))).toEqual(manifest);
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'installs nothing before the questions when the project declares and has everything',
+    async () => {
+      writeProjectFile(
+        'package.json',
+        `${JSON.stringify({
+          name: 'app',
+          dependencies: { '@prisma/orm-postgres': '~8.0.0-rc.1', dotenv: '^17.0.0', pg: '^8.20.0' },
+        })}\n`,
+      );
+
+      const run = await harness(await postgresWith({ authoringModes: ['typescript'] })).run(
+        STARTER,
+        { cwd: projectDir },
+      );
+
+      expect(envelopeOf(run)).toMatchObject({ error: { code: 'CLI.INIT_AUTHORING_UNSUPPORTED' } });
+      expect(installs).toEqual([]);
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
     'reports a package without an init entrypoint through the real resolver',
     async () => {
       writeProjectFile(

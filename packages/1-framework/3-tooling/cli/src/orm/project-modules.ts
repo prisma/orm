@@ -82,6 +82,18 @@ function resolveFromProject(cwd: string, specifier: string): Resolution {
     : { kind: 'resolved', path: join(dirname(manifestPath), target) };
 }
 
+/** Whether the project at `cwd` has the package `name` where Node would find it. */
+export function isInstalledInProject(cwd: string, name: string): boolean {
+  try {
+    return findPackageJSON(name, pathToFileURL(join(cwd, 'package.json'))) !== undefined;
+  } catch (error) {
+    if (errorCode(error) === 'ERR_MODULE_NOT_FOUND') {
+      return false;
+    }
+    throw error;
+  }
+}
+
 /**
  * Resolves with the import conditions, so a package that exports a module only under `import`
  * loads. A package the project does not have is `not-installed`; one that does not export the
