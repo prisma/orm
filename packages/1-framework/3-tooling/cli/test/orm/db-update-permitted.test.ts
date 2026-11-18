@@ -65,6 +65,7 @@ function harness() {
       contract: {
         source: { format: 'typescript', inputs: [], load: async () => ({}) },
         output: join(projectDir, 'contract.json'),
+        typesModule: '@acme/orm-db/contract-types',
       },
     },
   });
