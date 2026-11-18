@@ -1,3 +1,4 @@
+import type { ForeignKeyAuthoringInput } from '@internal/sql-contract/foreign-key-materialization';
 import type { TableProperties } from './contract-definition';
 import { contractError } from './contract-errors';
 import type { ColumnSite } from './declaration-sites';
@@ -9,6 +10,12 @@ import {
 } from './storage-description';
 
 type VariantStorage = Extract<ModelStorage, { kind: 'baseTable' }>;
+
+/** A foreign key of a shared table, with the model that declares it. */
+interface OwnedForeignKey {
+  readonly owner: string;
+  readonly foreignKey: ForeignKeyAuthoringInput;
+}
 
 /** How a refusal names each table-level property. Typed by every key of {@link TableProperties}, so a new property cannot be left out of the check. */
 const tablePropertyLabels: Readonly<Record<keyof TableProperties, string>> = {
@@ -27,9 +34,9 @@ function isTableProperty(key: string): key is keyof TableProperties {
 /**
  * Collects the tables the models and table nodes describe, one per namespace and table name: the models' tables in model order, then the tables only table nodes declare.
  *
- * A table node for a table a model maps adds its columns to that table and nothing else, because the model owns the table's table-level properties. A table node for any other table is the whole table. A single-table variant adds its unique constraints, indexes and foreign keys to its base's table; each of its columns must already be on that table, which the base owns, and no table node may declare a column a variant's field maps. Each of the variant's uniques must cover a nullable column no other variant maps, so that it cannot reject the rows of the base or another variant. A variant whose table no model owns is not checked.
+ * A table node for a table a model maps adds its columns to that table and nothing else, because the model owns the table's table-level properties. A table node for any other table is the whole table. A single-table variant adds its indexes and foreign keys to its base's table; each of its columns must already be on that table, which the base owns, and no table node may declare a column a variant's field maps. A variant may declare only indexes with a `where` condition, since anything else would also cover the rows of other variants. A foreign key two declarations share is kept once. A variant whose table no model owns is not checked.
  *
- * Every table comes out with its foreign keys from exactly one declaration, a model or a table node, in the order that declaration lists them, followed by those of its single-table variants.
+ * Every table comes out with its foreign keys from exactly one declaration, a model or a table node, in the order that declaration lists them, followed by those its single-table variants add.
  */
 export function mergeTables(
   storages: readonly ModelStorage[],
@@ -82,17 +89,26 @@ export function mergeTables(
     });
   }
 
+  const ownedForeignKeys = new Map<string, readonly OwnedForeignKey[]>();
   for (const variant of variants) {
     const key = tableKey(variant.namespaceId, variant.tableName);
     const table = tables.get(key);
     if (table === undefined) continue;
     assertVariantColumnsOnBaseTable(variant, table);
-    assertVariantUniquesOwnAColumn(variant, table, variants);
+    assertVariantIndexesScoped(variant);
+    const foreignKeys = withVariantForeignKeys(
+      ownedForeignKeys.get(key) ??
+        table.foreignKeys.map((foreignKey) => ({
+          owner: modelOfTable.get(key) ?? table.tableName,
+          foreignKey,
+        })),
+      variant,
+    );
+    ownedForeignKeys.set(key, foreignKeys);
     tables.set(key, {
       ...table,
-      uniques: [...table.uniques, ...variant.uniques],
       indexes: [...table.indexes, ...variant.indexes],
-      foreignKeys: [...table.foreignKeys, ...variant.foreignKeys],
+      foreignKeys: foreignKeys.map(({ foreignKey }) => foreignKey),
     });
   }
 
@@ -190,51 +206,63 @@ function assertVariantColumnsOnBaseTable(variant: VariantStorage, table: TableDe
   );
 }
 
-/** The other rows of a shared table hold NULL in a nullable column only this variant maps, so a unique covering such a column constrains only this variant's rows. A partial unique index is scoped by its own predicate. */
-function assertVariantUniquesOwnAColumn(
-  variant: VariantStorage,
-  table: TableDescription,
-  variants: readonly VariantStorage[],
-): void {
-  const nullable = new Set(
-    table.columns
-      .filter((column) => column.nullable && column.default === undefined)
-      .map((column) => column.columnName),
-  );
-  const siblingColumns = new Set(
-    variants
-      .filter(
-        (other) =>
-          other !== variant &&
-          other.namespaceId === variant.namespaceId &&
-          other.tableName === variant.tableName,
-      )
-      .flatMap((other) => other.columns.map((column) => column.columnName)),
-  );
-  const owned = new Set(
-    variant.columns
-      .map((column) => column.columnName)
-      .filter((name) => nullable.has(name) && !siblingColumns.has(name)),
-  );
-  const uniques = [
+/** A variant shares its base's table, so a unique constraint or an index without a `where` condition would also cover the rows of the base and the other variants. Only an index the author scoped with a condition is accepted. */
+function assertVariantIndexesScoped(variant: VariantStorage): void {
+  const unscoped = [
     ...variant.uniques,
-    ...variant.indexes.filter((index) => index.unique === true && index.where === undefined),
-  ];
-  const unscoped = uniques.find(
-    (unique) => !(unique.columns ?? []).some((name) => owned.has(name)),
-  );
-  if (unscoped === undefined) return;
-  const columns = unscoped.columns?.join(', ') ?? 'an expression';
+    ...variant.indexes.filter((index) => index.where === undefined),
+  ].map((constraint) => constraint.columns ?? []);
+  if (unscoped.length === 0) return;
+  const listed = unscoped.map((columns) => `(${columns.join(', ')})`).join(', ');
   throw contractError(
-    'CONTRACT.VARIANT_UNIQUE_NOT_SCOPED',
-    `Model "${variant.modelName}" shares table "${variant.tableName}" with its base model (single-table inheritance), and its unique on (${columns}) would also constrain the rows of the base model and its other variants. Include a nullable column only "${variant.modelName}" maps, or declare a partial unique index on the base model.`,
+    'CONTRACT.UNSCOPED_INDEX_ON_STI_VARIANT',
+    `Model "${variant.modelName}" shares table "${variant.tableName}" with its base model (single-table inheritance), so its unique constraints and indexes on ${listed} would also cover the rows of other variants. Declare each as an index with a \`where\` condition that selects this variant's discriminator value.`,
     {
       meta: {
         modelName: variant.modelName,
         namespaceId: variant.namespaceId,
         tableName: variant.tableName,
-        columns: unscoped.columns ?? [],
+        unscoped,
       },
     },
   );
+}
+
+/**
+ * The table's foreign keys with the variant's added. A foreign key the table already has is kept once. A different foreign key on the same columns is refused: every row would have to satisfy both.
+ */
+function withVariantForeignKeys(
+  foreignKeys: readonly OwnedForeignKey[],
+  variant: VariantStorage,
+): readonly OwnedForeignKey[] {
+  const merged = [...foreignKeys];
+  for (const foreignKey of variant.foreignKeys) {
+    const sameColumns = merged.find((existing) =>
+      sameColumnList(existing.foreignKey.source.columns, foreignKey.source.columns),
+    );
+    if (sameColumns === undefined) {
+      merged.push({ owner: variant.modelName, foreignKey });
+      continue;
+    }
+    if (JSON.stringify(sameColumns.foreignKey) === JSON.stringify(foreignKey)) continue;
+    const { columns } = foreignKey.source;
+    throw contractError(
+      'CONTRACT.FOREIGN_KEY_CONFLICT_ON_STI_VARIANT',
+      `Models "${variant.modelName}" and "${sameColumns.owner}" share table "${variant.tableName}" (single-table inheritance) and declare different foreign keys on (${columns.join(', ')}). Every row would have to satisfy both; give each variant its own column.`,
+      {
+        meta: {
+          modelName: variant.modelName,
+          otherModelName: sameColumns.owner,
+          namespaceId: variant.namespaceId,
+          tableName: variant.tableName,
+          columns,
+        },
+      },
+    );
+  }
+  return merged;
+}
+
+function sameColumnList(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((column, index) => column === right[index]);
 }

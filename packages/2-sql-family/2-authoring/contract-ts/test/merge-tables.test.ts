@@ -1,3 +1,5 @@
+import { asNamespaceId } from '@internal/contract/types';
+import type { ForeignKeyAuthoringInput } from '@internal/sql-contract/foreign-key-materialization';
 import { describe, expect, it } from 'vitest';
 import { mergeTables } from '../src/merge-tables';
 import type { ColumnDescription, ModelStorage, TableDescription } from '../src/storage-description';
@@ -57,6 +59,15 @@ function baseTable(
   };
 }
 
+function foreignKey(columnName: string, targetTable: string): ForeignKeyAuthoringInput {
+  return {
+    source: { namespaceId: asNamespaceId('public'), tableName: 'task', columns: [columnName] },
+    target: { namespaceId: asNamespaceId('public'), tableName: targetTable, columns: ['id'] },
+    constraint: true,
+    index: true,
+  };
+}
+
 describe('mergeTables', () => {
   it('keeps one table per namespace and table name, in model order', () => {
     const task = table('task', [column('Task', 'id')]);
@@ -98,19 +109,14 @@ describe('mergeTables', () => {
     ).toEqual([task]);
   });
 
-  it("adds a variant's uniques, indexes and foreign keys to the base table", () => {
+  it("adds a variant's partial indexes and foreign keys to the base table", () => {
     const task = table('task', [column('Task', 'id'), column('Task', 'ownerId')]);
     const constraints = {
-      uniques: [{ columns: ['ownerId'] }],
-      indexes: [columnIndex(['ownerId'])],
-      foreignKeys: [
-        {
-          source: { namespaceId: 'public', tableName: 'task', columns: ['ownerId'] },
-          target: { namespaceId: 'public', tableName: 'user', columns: ['id'] },
-          constraint: true,
-          index: true,
-        },
+      indexes: [
+        { ...columnIndex(['ownerId']), where: "kind = 'bug'" },
+        { ...columnIndex(['ownerId']), where: "kind = 'bug'", unique: true },
       ],
+      foreignKeys: [foreignKey('ownerId', 'user')],
     } satisfies Partial<TableDescription>;
 
     expect(
@@ -121,28 +127,105 @@ describe('mergeTables', () => {
     ).toEqual([{ ...task, ...constraints }]);
   });
 
-  it('refuses a variant unique that would constrain the rows of other variants', () => {
+  it('merges the same foreign key declared by two variants', () => {
+    const task = table('task', [column('Task', 'id'), column('Task', 'ownerId')]);
+    const constraints = { foreignKeys: [foreignKey('ownerId', 'user')] };
+
+    expect(
+      mergeTables(
+        [
+          ownTable(task),
+          baseTable('Bug', 'task', [column('Bug', 'ownerId')], constraints),
+          baseTable('Feature', 'task', [column('Feature', 'ownerId')], constraints),
+        ],
+        [],
+      ),
+    ).toEqual([{ ...task, ...constraints }]);
+  });
+
+  it.each([
+    {
+      case: 'two variants',
+      task: table('task', [column('Task', 'id'), column('Task', 'ownerId')]),
+      other: 'Bug',
+    },
+    {
+      case: 'the base model and a variant',
+      task: {
+        ...table('task', [column('Task', 'id'), column('Task', 'ownerId')]),
+        foreignKeys: [foreignKey('ownerId', 'team')],
+      },
+      other: 'Model',
+    },
+  ])('refuses foreign keys on one column to different targets from $case', ({ task, other }) => {
+    const variants =
+      other === 'Bug'
+        ? [
+            baseTable('Bug', 'task', [column('Bug', 'ownerId')], {
+              foreignKeys: [foreignKey('ownerId', 'team')],
+            }),
+          ]
+        : [];
+
+    expect(() =>
+      mergeTables(
+        [
+          ownTable(task),
+          ...variants,
+          baseTable('Feature', 'task', [column('Feature', 'ownerId')], {
+            foreignKeys: [foreignKey('ownerId', 'user')],
+          }),
+        ],
+        [],
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.FOREIGN_KEY_CONFLICT_ON_STI_VARIANT',
+        message: expect.stringContaining(`"Feature" and "${other}"`),
+        meta: {
+          modelName: 'Feature',
+          otherModelName: other,
+          namespaceId: 'public',
+          tableName: 'task',
+          columns: ['ownerId'],
+        },
+      }),
+    );
+  });
+
+  it('refuses every unique and every index without a condition on a variant', () => {
     const task = table('task', [
-      column('Task', 'id', false),
+      column('Task', 'id'),
       column('Task', 'email'),
-      { ...column('Task', 'code'), default: { kind: 'literal', value: 'none' } },
+      column('Task', 'code'),
     ]);
 
-    for (const storages of [
-      [baseTable('Bug', 'task', [column('Bug', 'id')], { uniques: [{ columns: ['id'] }] })],
-      [
-        baseTable('Bug', 'task', [column('Bug', 'email')], { uniques: [{ columns: ['email'] }] }),
-        baseTable('Feature', 'task', [column('Feature', 'email')]),
-      ],
-      [baseTable('Bug', 'task', [column('Bug', 'code')], { uniques: [{ columns: ['code'] }] })],
-    ]) {
-      expect(() => mergeTables([ownTable(task), ...storages], [])).toThrow(
-        expect.objectContaining({
-          code: 'CONTRACT.VARIANT_UNIQUE_NOT_SCOPED',
-          meta: expect.objectContaining({ modelName: 'Bug', tableName: 'task' }),
-        }),
-      );
-    }
+    expect(() =>
+      mergeTables(
+        [
+          ownTable(task),
+          baseTable('Bug', 'task', [column('Bug', 'email'), column('Bug', 'code')], {
+            uniques: [{ columns: ['email'] }],
+            indexes: [
+              columnIndex(['code']),
+              { ...columnIndex(['code']), unique: true },
+              { ...columnIndex(['email']), where: "kind = 'bug'" },
+            ],
+          }),
+        ],
+        [],
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.UNSCOPED_INDEX_ON_STI_VARIANT',
+        meta: {
+          modelName: 'Bug',
+          namespaceId: 'public',
+          tableName: 'task',
+          unscoped: [['email'], ['code'], ['code']],
+        },
+      }),
+    );
   });
 
   it('adds nothing for a variant whose base table no model owns', () => {

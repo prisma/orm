@@ -69,6 +69,7 @@ import {
   type PslDiagnosticCollector,
   type Resolution,
   type ResolvedAttribute,
+  type ResolvedAttributeArg,
   type ResolvedEntityReference,
   type SymbolTable,
   typeAliasAttributeNames,
@@ -82,6 +83,7 @@ import {
 import type {
   DocumentAst,
   FieldAttributeAst,
+  ModelAttributeAst,
   PslSources,
   SyntaxNode,
 } from '@internal/psl-parser/syntax';
@@ -165,6 +167,8 @@ import {
   modelAttributeSpecsFrom,
   modelSpecContext,
   PSL_CHECK_ON_STI_VARIANT,
+  PSL_FOREIGN_KEY_CONFLICT_ON_STI_VARIANT,
+  PSL_UNSCOPED_INDEX_ON_STI_VARIANT,
   sqlAttributeSpecs,
 } from './sql-attribute-specs';
 import type { ValueObjectTypes } from './value-object-default';
@@ -2042,14 +2046,10 @@ function materializeStiVariantStorageColumns(
 ): {
   modelNodes: ModelNode[];
   stiBaseFieldsByBase: Map<string, readonly string[]>;
-  unscopedUniquesByVariant: Map<string, readonly string[]>;
+  foreignKeyConflicts: readonly StiForeignKeyConflict[];
 } {
   if (stiVariantKeys.size === 0) {
-    return {
-      modelNodes: [...modelNodes],
-      stiBaseFieldsByBase: new Map(),
-      unscopedUniquesByVariant: new Map(),
-    };
+    return { modelNodes: [...modelNodes], stiBaseFieldsByBase: new Map(), foreignKeyConflicts: [] };
   }
 
   const keyOf = (node: ModelNode) =>
@@ -2057,20 +2057,9 @@ function materializeStiVariantStorageColumns(
   const nodeByModel = new Map(modelNodes.map((node) => [keyOf(node), node]));
   type StiColumn = ModelNode['fields'][number];
   const stiColumnsByBase = new Map<string, StiColumn[]>();
-  const stiConstraintsByBase = new Map<
-    string,
-    Required<Pick<ModelNode, 'uniques' | 'indexes' | 'foreignKeys'>>
-  >();
-  const unscopedUniquesByVariant = new Map<string, readonly string[]>();
-  const variantCountByBaseColumn = new Map<string, number>();
-  for (const variantKey of stiVariantKeys) {
-    const baseKey = baseDeclarations.get(variantKey)?.base.key;
-    const columns = new Set(nodeByModel.get(variantKey)?.fields.map((field) => field.columnName));
-    for (const columnName of columns) {
-      const key = `${baseKey}\0${columnName}`;
-      variantCountByBaseColumn.set(key, (variantCountByBaseColumn.get(key) ?? 0) + 1);
-    }
-  }
+  const stiIndexesByBase = new Map<string, readonly IndexNode[]>();
+  const foreignKeysByBase = new Map<string, readonly OwnedForeignKeyNode[]>();
+  const foreignKeyConflicts: StiForeignKeyConflict[] = [];
 
   for (const variantKey of stiVariantKeys) {
     const variantNode = nodeByModel.get(variantKey);
@@ -2092,35 +2081,14 @@ function materializeStiVariantStorageColumns(
     }
     stiColumnsByBase.set(baseDecl.base.key, claimed);
 
-    // Its unique is added to the base table unscoped, so it must cover a column the base's other rows leave NULL.
-    const ownColumns = new Set(
-      variantNode.fields
-        .filter((field) => field.default === undefined)
-        .map((field) => field.columnName)
-        .filter(
-          (columnName) =>
-            !baseColumns.has(columnName) &&
-            variantCountByBaseColumn.get(`${baseDecl.base.key}\0${columnName}`) === 1,
-        ),
-    );
-    const unscoped = [
-      ...(variantNode.uniques ?? []),
-      ...(variantNode.indexes ?? []).filter(
-        (index) => index.unique === true && index.where === undefined,
-      ),
-    ].find((unique) => !(unique.columns ?? []).some((columnName) => ownColumns.has(columnName)));
-    if (unscoped !== undefined) unscopedUniquesByVariant.set(variantKey, unscoped.columns ?? []);
-
-    const constraints = stiConstraintsByBase.get(baseDecl.base.key) ?? {
-      uniques: [],
-      indexes: [],
-      foreignKeys: [],
-    };
-    stiConstraintsByBase.set(baseDecl.base.key, {
-      uniques: [...constraints.uniques, ...(variantNode.uniques ?? [])],
-      indexes: [...constraints.indexes, ...(variantNode.indexes ?? [])],
-      foreignKeys: [...constraints.foreignKeys, ...(variantNode.foreignKeys ?? [])],
-    });
+    stiIndexesByBase.set(baseDecl.base.key, [
+      ...(stiIndexesByBase.get(baseDecl.base.key) ?? []),
+      ...(variantNode.indexes ?? []),
+    ]);
+    const owned = foreignKeysByBase.get(baseDecl.base.key) ?? ownedBy(baseNode);
+    const merged = withVariantForeignKeys(owned, variantNode);
+    foreignKeysByBase.set(baseDecl.base.key, merged.foreignKeys);
+    foreignKeyConflicts.push(...merged.conflicts.map((conflict) => ({ ...conflict, variantKey })));
   }
 
   // The materialised columns exist on the base STORAGE table so the variants'
@@ -2143,22 +2111,66 @@ function materializeStiVariantStorageColumns(
       return { ...variant, sharesBaseTable: true };
     }
     const stiColumns = stiColumnsByBase.get(keyOf(node)) ?? [];
-    const constraints = stiConstraintsByBase.get(keyOf(node));
-    if (stiColumns.length === 0 && constraints === undefined) return node;
+    const stiIndexes = stiIndexesByBase.get(keyOf(node)) ?? [];
+    const foreignKeys = foreignKeysByBase.get(keyOf(node));
+    if (stiColumns.length === 0 && stiIndexes.length === 0 && foreignKeys === undefined) {
+      return node;
+    }
+    const allIndexes = [...(node.indexes ?? []), ...stiIndexes];
+    const allForeignKeys = (foreignKeys ?? []).map(({ foreignKey }) => foreignKey);
     return {
       ...node,
       fields: [...node.fields, ...stiColumns],
-      ...(constraints === undefined
-        ? {}
-        : {
-            uniques: [...(node.uniques ?? []), ...constraints.uniques],
-            indexes: [...(node.indexes ?? []), ...constraints.indexes],
-            foreignKeys: [...(node.foreignKeys ?? []), ...constraints.foreignKeys],
-          }),
+      ...(allIndexes.length > 0 ? { indexes: allIndexes } : {}),
+      ...(allForeignKeys.length > 0 ? { foreignKeys: allForeignKeys } : {}),
     };
   });
 
-  return { modelNodes: enriched, stiBaseFieldsByBase, unscopedUniquesByVariant };
+  return { modelNodes: enriched, stiBaseFieldsByBase, foreignKeyConflicts };
+}
+
+/** A foreign key of a base table, with the name of the model that declares it. */
+interface OwnedForeignKeyNode {
+  readonly owner: string;
+  readonly foreignKey: ForeignKeyNode;
+}
+
+/** Two declarations sharing a base table that declare different foreign keys on the same columns. */
+interface StiForeignKeyConflict {
+  readonly variantKey: string;
+  readonly otherModelName: string;
+  readonly columns: readonly string[];
+}
+
+function ownedBy(node: ModelNode): readonly OwnedForeignKeyNode[] {
+  return (node.foreignKeys ?? []).map((foreignKey) => ({ owner: node.modelName, foreignKey }));
+}
+
+/** The base table's foreign keys with the variant's added. A foreign key already there is kept once; a different one on the same columns is a conflict, since every row would have to satisfy both. */
+function withVariantForeignKeys(
+  owned: readonly OwnedForeignKeyNode[],
+  variant: ModelNode,
+): {
+  readonly foreignKeys: readonly OwnedForeignKeyNode[];
+  readonly conflicts: readonly Omit<StiForeignKeyConflict, 'variantKey'>[];
+} {
+  const foreignKeys = [...owned];
+  const conflicts: Omit<StiForeignKeyConflict, 'variantKey'>[] = [];
+  for (const foreignKey of variant.foreignKeys ?? []) {
+    const sameColumns = foreignKeys.find((existing) =>
+      sameColumnList(existing.foreignKey.columns, foreignKey.columns),
+    );
+    if (sameColumns === undefined) {
+      foreignKeys.push({ owner: variant.modelName, foreignKey });
+    } else if (JSON.stringify(sameColumns.foreignKey) !== JSON.stringify(foreignKey)) {
+      conflicts.push({ otherModelName: sameColumns.owner, columns: foreignKey.columns });
+    }
+  }
+  return { foreignKeys, conflicts };
+}
+
+function sameColumnList(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((column, index) => column === right[index]);
 }
 
 /**
@@ -2229,6 +2241,100 @@ function relationIndexRefusal(
   );
   if (at === undefined) return undefined;
   return { at, message: error.fix === undefined ? error.message : `${error.message} ${error.fix}` };
+}
+
+/** The discriminator column of a variant's base, as a `where` condition names it. */
+function discriminatorColumnOf(
+  baseDecl: BaseDeclaration,
+  discriminatorDeclarations: ReadonlyMap<string, DiscriminatorDeclaration>,
+  physicalNames: ReadonlyMap<ModelSymbol | FieldSymbol, string>,
+): string | undefined {
+  const fieldName = discriminatorDeclarations.get(baseDecl.base.key)?.fieldName;
+  const field = fieldName === undefined ? undefined : baseDecl.base.model.fields[fieldName];
+  return field === undefined ? undefined : physicalNames.get(field);
+}
+
+/**
+ * An STI variant shares its base's table, so a unique constraint or an index without a `where` condition on it would also cover the rows of the base and the other variants. Each such attribute is refused where it is written, with the partial index scoped to the variant that the author can write instead.
+ */
+function unscopedIndexDiagnostics(
+  baseDecl: BaseDeclaration,
+  discriminatorColumn: string | undefined,
+  sources: PslSources,
+): PslDiagnostic[] {
+  const condition = `where: sql\`${discriminatorColumn ?? '<discriminator>'} = '${(baseDecl.value ?? '<value>').replaceAll("'", "''")}'\``;
+  const refusal = (
+    label: string,
+    node: FieldAttributeAst | ModelAttributeAst,
+    indexArguments: readonly string[],
+  ): PslDiagnostic => ({
+    code: PSL_UNSCOPED_INDEX_ON_STI_VARIANT,
+    message: `Model "${baseDecl.model.name}" shares the table of its base model "${baseDecl.base.model.name}" (single-table inheritance), so "${label}" would also cover the rows of other variants. Scope it to this variant instead: @@index(${[...indexArguments, condition].join(', ')})`,
+    ...diagnosticSource(sources, node.syntax).at(nodePslSpan(node.syntax, sources)),
+  });
+  const writtenArguments = (args: readonly ResolvedAttributeArg[]) =>
+    args.map((arg) => (arg.kind === 'named' ? `${arg.name}: ${arg.value}` : arg.value));
+
+  const refusals: PslDiagnostic[] = [];
+  for (const field of Object.values(baseDecl.model.fields)) {
+    for (const attribute of field.attributes) {
+      if (attribute.name !== 'unique') continue;
+      refusals.push(
+        refusal('@unique', attribute.node, [
+          `[${field.name}]`,
+          'unique: true',
+          ...writtenArguments(attribute.args),
+        ]),
+      );
+    }
+  }
+  for (const attribute of baseDecl.model.attributes) {
+    if (attribute.name === 'unique') {
+      const [fields, ...rest] = writtenArguments(attribute.args);
+      refusals.push(
+        refusal('@@unique', attribute.node, [
+          ...(fields === undefined ? [] : [fields]),
+          'unique: true',
+          ...rest,
+        ]),
+      );
+    }
+    const scoped = attribute.args.some((arg) => arg.kind === 'named' && arg.name === 'where');
+    if (attribute.name === 'index' && !scoped) {
+      refusals.push(refusal('@@index', attribute.node, writtenArguments(attribute.args)));
+    }
+  }
+  return refusals;
+}
+
+/** Reported at the variant's relation that declares the conflicting foreign key, or at its `@@base` when no relation does. */
+function foreignKeyConflictDiagnostic(
+  baseDecl: BaseDeclaration,
+  conflict: StiForeignKeyConflict,
+  fkRelationMetadata: readonly FkRelationMetadata<ModelSymbol>[],
+  sources: PslSources,
+): PslDiagnostic {
+  const relation = fkRelationMetadata.find(
+    (metadata) =>
+      metadata.declaringModelName === baseDecl.model &&
+      sameColumnList(metadata.localColumns, conflict.columns),
+  );
+  const relationAttribute =
+    relation === undefined
+      ? undefined
+      : getAttribute(
+          baseDecl.model.fields[relation.declaringFieldName]?.attributes ?? [],
+          'relation',
+        );
+  return {
+    code: PSL_FOREIGN_KEY_CONFLICT_ON_STI_VARIANT,
+    message: `Models "${baseDecl.model.name}" and "${conflict.otherModelName}" share the table of their base model "${baseDecl.base.model.name}" (single-table inheritance) and declare different foreign keys on (${conflict.columns.join(', ')}). Every row would have to satisfy both; give each variant its own column.`,
+    ...(relationAttribute === undefined
+      ? baseDecl.source.at(baseDecl.span)
+      : diagnosticSource(sources, relationAttribute.node.syntax).at(
+          nodePslSpan(relationAttribute.node.syntax, sources),
+        )),
+  };
 }
 
 export function interpretPslDocumentToSqlContract(
@@ -2826,6 +2932,13 @@ export function interpretPslDocumentToSqlContract(
         ...baseDecl.source.at(baseDecl.span),
       });
     }
+    diagnostics.push(
+      ...unscopedIndexDiagnostics(
+        baseDecl,
+        discriminatorColumnOf(baseDecl, discriminatorDeclarations, physicalNames),
+        input.sources,
+      ),
+    );
     for (const attribute of baseDecl.model.attributes) {
       if (attribute.node.name()?.isSimpleName('check') !== true) continue;
       diagnostics.push({
@@ -2857,23 +2970,19 @@ export function interpretPslDocumentToSqlContract(
   const {
     modelNodes: stiColumnModelNodes,
     stiBaseFieldsByBase,
-    unscopedUniquesByVariant,
+    foreignKeyConflicts,
   } = materializeStiVariantStorageColumns(
     mtiLinkedModelNodes,
     baseDeclarations,
     stiVariantKeys,
     defaultNamespaceId,
   );
-  for (const [variantKey, columns] of unscopedUniquesByVariant) {
-    const baseDecl = baseDeclarations.get(variantKey);
-    if (baseDecl === undefined) continue;
-    const variantName = baseDecl.model.name;
-    const baseName = baseDecl.base.model.name;
-    diagnostics.push({
-      code: 'PSL_STI_VARIANT_UNIQUE_NOT_SCOPED',
-      message: `Model "${variantName}" shares its base model "${baseName}"'s storage table (single-table inheritance via @@base), and its unique on (${columns.join(', ')}) would also constrain the rows of "${baseName}" and its other variants. Include a column only "${variantName}" declares, or declare a partial unique index on "${baseName}".`,
-      ...baseDecl.source.at(baseDecl.span),
-    });
+  for (const conflict of foreignKeyConflicts) {
+    const baseDecl = baseDeclarations.get(conflict.variantKey);
+    invariant(baseDecl !== undefined, 'a foreign key conflict is found only on an STI variant');
+    diagnostics.push(
+      foreignKeyConflictDiagnostic(baseDecl, conflict, fkRelationMetadata, input.sources),
+    );
   }
 
   if (
