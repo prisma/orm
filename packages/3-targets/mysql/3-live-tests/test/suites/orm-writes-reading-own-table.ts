@@ -285,7 +285,10 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
               .where((task) => task.subtasks.some((subtask) => subtask.type.eq('feature')))
               .updateAndCount({ title: 'Has features' }),
           ),
-          first: await db.orm.Task.variant('feature').where({ id: 2 }).update({ title: 'Second' }),
+          first: await outcome(
+            sent,
+            db.orm.Task.variant('feature').where({ id: 2 }).update({ title: 'Second' }),
+          ),
           stored: await db.orm.Task.orderBy((task) => task.id.asc()).all(),
         }).toEqual(
           runs
@@ -295,7 +298,13 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
                   { id: 5, title: 'Later', type: 'feature', parentId: null, priority: 50 },
                 ]),
                 counted: written(1),
-                first: { id: 2, title: 'Second', type: 'feature', parentId: 1, priority: 20 },
+                first: written({
+                  id: 2,
+                  title: 'Second',
+                  type: 'feature',
+                  parentId: 1,
+                  priority: 20,
+                }),
                 stored: [
                   { id: 1, title: 'Has features', type: 'feature', parentId: null, priority: 10 },
                   { id: 2, title: 'Second', type: 'feature', parentId: 1, priority: 20 },
@@ -307,7 +316,13 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
             : {
                 updated: refused,
                 counted: refused,
-                first: { id: 2, title: 'Second', type: 'feature', parentId: 1, priority: 20 },
+                first: written({
+                  id: 2,
+                  title: 'Second',
+                  type: 'feature',
+                  parentId: 1,
+                  priority: 20,
+                }),
                 stored: seededTasks.map((task) =>
                   task.id === 2 ? { ...task, title: 'Second' } : task,
                 ),
@@ -333,9 +348,12 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
               .where((task) => task.id.gte(2))
               .deleteAndCount(),
           ),
-          first: await db.orm.Task.variant('feature')
-            .orderBy((task) => task.id.asc())
-            .delete(),
+          first: await outcome(
+            sent,
+            db.orm.Task.variant('feature')
+              .orderBy((task) => task.id.asc())
+              .delete(),
+          ),
           second: await db.orm.Task.variant('feature')
             .orderBy((task) => task.id.asc())
             .delete(),
@@ -347,7 +365,13 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
                   { id: 5, title: 'Backlog', type: 'feature', parentId: null, priority: 50 },
                 ]),
                 counted: written(1),
-                first: { id: 1, title: 'Launch', type: 'feature', parentId: null, priority: 10 },
+                first: written({
+                  id: 1,
+                  title: 'Launch',
+                  type: 'feature',
+                  parentId: null,
+                  priority: 10,
+                }),
                 second: null,
                 remaining: [
                   { id: 3, title: 'Crash', type: 'bug', parentId: 1, severity: 'critical' },
@@ -357,7 +381,13 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
             : {
                 deleted: refused,
                 counted: refused,
-                first: { id: 1, title: 'Launch', type: 'feature', parentId: null, priority: 10 },
+                first: written({
+                  id: 1,
+                  title: 'Launch',
+                  type: 'feature',
+                  parentId: null,
+                  priority: 10,
+                }),
                 second: { id: 2, title: 'Checkout', type: 'feature', parentId: 1, priority: 20 },
                 remaining: seededTasks.slice(2),
               },
