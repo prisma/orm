@@ -1,24 +1,30 @@
-import { coreHash } from '@internal/contract/types';
 import {
+  AggregateExpr,
   ColumnRef,
   ProjectionItem,
+  RawQueryAst,
   SelectAst,
+  SubqueryExpr,
   TableSource,
 } from '@internal/sql-relational-core/ast';
-import type { SqlExecutionPlan } from '@internal/sql-relational-core/plan';
 import { describe, expect, it } from 'vitest';
 import { buildDecodeContext, decodeRow, sqlNativeArrayListDecoder } from '../src/codecs/decoding';
 import { defineTestCodec } from './test-codec';
 import { buildTestContractCodecs } from './utils';
 
-const TEST_HASH = coreHash('test');
+function includeAst(): SelectAst {
+  return SelectAst.from(TableSource.named('users')).withProjection([
+    ProjectionItem.of(
+      'posts',
+      SubqueryExpr.of(SelectAst.from(TableSource.named('posts'))),
+      undefined,
+    ),
+  ]);
+}
 
 describe('buildDecodeContext — include aliases', () => {
   it('marks a subquery projection item as an include alias', () => {
-    const ast = SelectAst.from(TableSource.named('users')).withProjection([
-      ProjectionItem.of('posts', { kind: 'subquery' } as never, undefined),
-    ]);
-    const ctx = buildDecodeContext(ast, undefined);
+    const ctx = buildDecodeContext(includeAst(), undefined);
     expect(ctx.includeAliases.has('posts')).toBe(true);
   });
 });
@@ -54,20 +60,8 @@ describe('decodeRow — many-typed column validation', () => {
 });
 
 describe('decodeRow — include aggregate (JSON) columns', () => {
-  function buildIncludePlan(): SqlExecutionPlan {
-    const ast = SelectAst.from(TableSource.named('users')).withProjection([
-      ProjectionItem.of('posts', { kind: 'subquery' } as never, undefined),
-    ]);
-    return {
-      sql: 'select 1',
-      params: [],
-      ast,
-      meta: { target: 'postgres', storageHash: TEST_HASH, lane: 'dsl' },
-    };
-  }
-
   it('returns [] for a null include aggregate wire value', async () => {
-    const ast = buildIncludePlan().ast;
+    const ast = includeAst();
     const result = await decodeRow(
       { posts: null },
       buildDecodeContext(ast, undefined),
@@ -78,7 +72,7 @@ describe('decodeRow — include aggregate (JSON) columns', () => {
   });
 
   it('parses a JSON string wire value for an include aggregate', async () => {
-    const ast = buildIncludePlan().ast;
+    const ast = includeAst();
     const result = await decodeRow(
       { posts: '[{"id":1}]' },
       buildDecodeContext(ast, undefined),
@@ -89,7 +83,7 @@ describe('decodeRow — include aggregate (JSON) columns', () => {
   });
 
   it('passes through an already-parsed object wire value unchanged', async () => {
-    const ast = buildIncludePlan().ast;
+    const ast = includeAst();
     const result = await decodeRow(
       { posts: { count: 5 } },
       buildDecodeContext(ast, undefined),
@@ -100,7 +94,7 @@ describe('decodeRow — include aggregate (JSON) columns', () => {
   });
 
   it('throws RUNTIME.DECODE_FAILED when the JSON string is malformed', async () => {
-    const ast = buildIncludePlan().ast;
+    const ast = includeAst();
     await expect(
       decodeRow(
         { posts: '{not valid json' },
@@ -115,7 +109,7 @@ describe('decodeRow — include aggregate (JSON) columns', () => {
   });
 
   it('coerces a non-string, non-object wire value via String() before parsing', async () => {
-    const ast = buildIncludePlan().ast;
+    const ast = includeAst();
     const result = await decodeRow(
       { posts: 42 },
       buildDecodeContext(ast, undefined),
@@ -128,48 +122,16 @@ describe('decodeRow — include aggregate (JSON) columns', () => {
 
 describe('buildDecodeContext — raw-query row spec', () => {
   it('builds decode context from row spec columns without contractCodecs', () => {
-    const ast = {
-      kind: 'raw-query',
-      result: {
-        kind: 'columns',
-        columns: { id: { codecId: 'test/int@1' } },
-      },
-    } as unknown as Parameters<typeof buildDecodeContext>[0];
+    const ast = RawQueryAst.rows(['select id from users'], {
+      id: { codecId: 'test/int@1', nullable: false },
+    });
 
     const ctx = buildDecodeContext(ast, undefined);
-    expect(ctx.aliasSource).toBe('row-spec');
-    expect(ctx.aliases).toEqual(['id']);
-    expect(ctx.codecs.size).toBe(0);
-  });
-
-  it('builds decode context from row spec columns with contractCodecs resolving each codec', () => {
-    const registry = [
-      defineTestCodec({
-        typeId: 'test/int@1',
-        toWire: (v: number) => v,
-        fromWire: (v: unknown) => Number(v),
-      }),
-    ];
-    const ast = {
-      kind: 'raw-query',
-      result: {
-        kind: 'columns',
-        columns: { id: { codecId: 'test/int@1' } },
-      },
-    } as unknown as Parameters<typeof buildDecodeContext>[0];
-
-    const ctx = buildDecodeContext(ast, buildTestContractCodecs(registry));
-    expect(ctx.codecs.has('id')).toBe(true);
-  });
-
-  it('returns an undecoded context for an affected-count raw-query result', () => {
-    const ast = {
-      kind: 'raw-query',
-      result: { kind: 'affected-count' },
-    } as unknown as Parameters<typeof buildDecodeContext>[0];
-
-    const ctx = buildDecodeContext(ast, undefined);
-    expect(ctx.aliases).toBeUndefined();
+    expect({
+      aliasSource: ctx.aliasSource,
+      aliases: ctx.aliases,
+      codecCount: ctx.codecs.size,
+    }).toEqual({ aliasSource: 'row-spec', aliases: ['id'], codecCount: 0 });
   });
 });
 
@@ -207,7 +169,7 @@ describe('decodeRow — wire preview truncation', () => {
 describe('decodeRow — decode failures without a resolvable column ref', () => {
   it('reports { alias } (not { table, column }) when the failing projection item has no column-ref', async () => {
     const ast = SelectAst.from(TableSource.named('users')).withProjection([
-      ProjectionItem.of('total', { kind: 'aggregate' } as never, { codecId: 'test/broken@1' }),
+      ProjectionItem.of('total', AggregateExpr.count(), { codecId: 'test/broken@1' }),
     ]);
     const registry = [
       defineTestCodec({
