@@ -377,6 +377,22 @@ describe('onConflict on a create through variant()', () => {
     return printGraph(updateFirstGraph(target, {}, relationMutations));
   }
 
+  it('accepts onConflict skip on a variant stored in the base table', () => {
+    expect(
+      updateProject((tasks) =>
+        tasks
+          .variant('bug')
+          .create([{ id: 5, title: 'Crash', severity: 'high' }], { onConflict: 'skip' }),
+      ),
+    ).toBe(
+      [
+        'n1 Find projects_tbl where id = 1',
+        'n2 Insert tasks on conflict do nothing <- PayloadData n1 (id->project_id)',
+        'result: n1',
+      ].join('\n'),
+    );
+  });
+
   it('rejects onConflict on a variant stored in its own table', () => {
     expect(() =>
       updateProject((tasks) =>
