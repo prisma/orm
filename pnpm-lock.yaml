@@ -6122,6 +6122,9 @@ importers:
       pg:
         specifier: ^8.22.0
         version: 8.22.0
+      pg-connection-string:
+        specifier: ^2.14.0
+        version: 2.14.0
       temporal-polyfill:
         specifier: ^1.0.4
         version: 1.0.4
