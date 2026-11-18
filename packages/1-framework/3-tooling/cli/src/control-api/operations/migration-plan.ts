@@ -91,7 +91,7 @@ import {
   type ContractSpaceSeedPhaseRecord,
   runContractSpaceSeedPhase,
 } from './contract-space-seed-phase';
-import { forbiddenDataProtectionOfRef, refuseForbiddenChanges } from './database-policies';
+import { forbiddingSettingsOfRef, refuseForbiddenChanges } from './database-policies';
 import { resolveFromForPlan, resolveToForPlan } from './plan-resolution';
 import { renderSnapshotDeclarations } from './snapshot-declarations';
 
@@ -864,7 +864,7 @@ async function executeMigrationPlanCommandInner(
             appSpaceId: aggregate.app.spaceId,
             command: 'migration plan',
             invocation: invocationOf(options),
-            forbidden: forbiddenDataProtectionOfRef(toRef),
+            forbidden: forbiddingSettingsOfRef(toRef),
             dataLoss: legs.flatMap((leg) => plannedOperations(leg, leg.dataLoss, planned)),
             accessChanges: legs.flatMap((leg) =>
               plannedOperations(leg, leg.accessChanges, planned),

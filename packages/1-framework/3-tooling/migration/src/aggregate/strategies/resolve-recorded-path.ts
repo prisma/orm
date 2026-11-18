@@ -39,7 +39,7 @@ export interface ResolveRecordedPathInputs {
   readonly refName?: string;
   /** The name the database knows the object an operation acts on by; names what a drop loses. */
   readonly storageNameOf: (operation: MigrationPlanOperation) => string;
-  /** The operations of one migration that change who can read or write rows, by position in that migration. */
+  /** The operations of one migration that change who can read or write data, by position in that migration. */
   readonly accessChangesOf: (
     operations: readonly MigrationPlanOperation[],
   ) => readonly MigrationAccessChange[];

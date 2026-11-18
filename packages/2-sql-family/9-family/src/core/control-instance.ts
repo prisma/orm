@@ -616,9 +616,13 @@ export function createSqlFamilyInstance<TTargetId extends string>(
     { readonly classifyEntityKind?: (nodeKind: string) => string | undefined },
     'reading the target-descriptor classifyEntityKind hook'
   >(target).classifyEntityKind;
+  // Read lazily, like `diffSchema`: construction-only stub descriptors omit it, and the throw
+  // happens at call time.
   const targetAccessChangesOf = blindCast<
-    Partial<Pick<SqlControlTargetDescriptor<TTargetId, unknown>, 'accessChangesOf'>>,
-    'reading the target-descriptor accessChangesOf hook'
+    {
+      readonly accessChangesOf?: SqlControlTargetDescriptor<TTargetId, unknown>['accessChangesOf'];
+    },
+    'the stack target is this SQL target descriptor, whose accessChangesOf a construction-only stub may omit'
   >(target).accessChangesOf;
   // `contract infer` needs each extension pack's already-assembled contract,
   // carried as-is (no merging — that is the contract-spaces machinery's

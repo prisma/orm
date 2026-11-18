@@ -98,7 +98,7 @@ export interface PlannerInput<TFamilyId extends string, TTargetId extends string
   readonly appSpace: AppSpacePlanningInputs;
   /** The name the database knows the object an operation acts on by; names what a recorded drop loses. */
   readonly storageNameOf: (operation: MigrationPlanOperation) => string;
-  /** The operations of one recorded migration that change who can read or write rows. */
+  /** The operations of one recorded migration that change who can read or write data. */
   readonly accessChangesOf: (
     operations: readonly MigrationPlanOperation[],
   ) => readonly MigrationAccessChange[];
@@ -160,8 +160,9 @@ export interface AggregateMigrationEdgeRef {
  *   operation by its storage name, since no planner mapped it to a model,
  *   and does not say whether it drops or changes a type, since a recorded
  *   operation does not say. Its access changes are those the family
- *   recognises from each migration's operations; raw SQL and data
- *   transforms are not read.
+ *   recognises from each migration's operations; an operation whose effect
+ *   the family cannot read, such as one its author wrote by hand, is not
+ *   listed.
  * - `temporaryValues`: the new required fields whose existing rows the plan
  *   gives a temporary value. A recorded path lists none.
  */

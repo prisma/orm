@@ -111,7 +111,7 @@ import {
   checkRunPolicies,
   databasePoliciesInForce,
   dataProtectionOfRun,
-  forbiddenDataProtectionOfRun,
+  forbiddingSettingsOfRun,
   refuseForbiddenChanges,
 } from './database-policies';
 import { stripOperations } from './migration-helpers';
@@ -445,7 +445,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
       appSpaceId: aggregate.app.spaceId,
       command: 'db update',
       invocation: options.invocation,
-      forbidden: forbiddenDataProtectionOfRun(checkedPolicies, options.ref),
+      forbidden: forbiddingSettingsOfRun(checkedPolicies, options.ref),
       dataLoss: operations(planned.subjects.dataLoss),
       accessChanges: operations(planned.subjects.accessChanges),
     });

@@ -33,7 +33,7 @@ export interface ControlFamilyInstance<TFamilyId extends string, TSchemaIR>
   storageNameOf(operation: MigrationPlanOperation): string;
 
   /**
-   * The operations of one recorded migration that change who can read or write rows, each by its position in `operations`. Recognised from each operation's structure, never its label. An operation whose effect the family cannot read, such as raw SQL, is not listed.
+   * The operations of one recorded migration that change who can read or write data, each by its position in `operations`. Pass one migration's operations at a time: whether an operation changes access can depend on the rest of its migration. Recognised from each operation's structure, never its label. An operation whose effect the family cannot read, such as one its author wrote by hand, is not listed.
    */
   accessChangesOf(operations: readonly MigrationPlanOperation[]): readonly MigrationAccessChange[];
 

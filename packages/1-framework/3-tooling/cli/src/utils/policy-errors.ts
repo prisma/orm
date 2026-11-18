@@ -48,7 +48,7 @@ export function errorPolicyMismatch(args: {
 export type PolicyCheckedCommand = 'db update' | 'db sign' | 'db migrate';
 
 /** Where a refused policy comes from: the database's marker, or the ref a run consents to record or a plan is made for. */
-export type ChangePolicySource =
+export type PolicySource =
   | { readonly kind: 'marker' }
   | { readonly kind: 'ref'; readonly refName: string };
 
@@ -57,7 +57,7 @@ export function errorChangePolicyForbids(args: {
   readonly spaceId: string;
   readonly command: PolicyCheckedCommand;
   readonly change: readonly ChangeStrategy[];
-  readonly source: ChangePolicySource;
+  readonly source: PolicySource;
   /** The contract the refused command was moving the database to. */
   readonly targetHash: string;
   /** The ref the user named, and whether they gave `--permit-policy-change`, which the advised command repeats. */
@@ -127,14 +127,17 @@ export interface DataProtectionRefusedOperation {
 /** A data protection setting at its `forbidden` level, where it is recorded, and the operations it refuses. */
 export interface DataProtectionRefusal {
   readonly setting: DataProtectionSetting;
-  readonly source: ChangePolicySource;
+  readonly source: PolicySource;
   readonly operations: readonly DataProtectionRefusedOperation[];
 }
 
-const FORBIDDEN_LEVEL = {
+/** Each data protection setting's `forbidden` level. */
+export const FORBIDDEN_LEVEL = {
   dataLoss: 'data-loss-forbidden',
   accessWidening: 'access-widening-forbidden',
-} as const satisfies { readonly [S in DataProtectionSetting]: string };
+} as const satisfies {
+  readonly [S in DataProtectionSetting]: DatabasePolicies['dataProtection'][S];
+};
 
 const FORBIDDEN_CHANGE = {
   dataLoss: 'data loss',

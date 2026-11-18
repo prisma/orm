@@ -67,7 +67,7 @@ import {
   checkRunPolicies,
   type DatabasePoliciesToWrite,
   databasePoliciesInForce,
-  forbiddenDataProtectionOfRun,
+  forbiddingSettingsOfRun,
   refuseForbiddenChanges,
 } from './database-policies';
 import { noInvariantPathError } from './no-invariant-path';
@@ -480,7 +480,7 @@ export function refuseForbiddenMigrations(args: {
     appSpaceId: args.appSpaceId,
     command: 'db migrate',
     invocation: args.invocation,
-    forbidden: forbiddenDataProtectionOfRun(args.checked, args.ref),
+    forbidden: forbiddingSettingsOfRun(args.checked, args.ref),
     dataLoss: pending.flatMap(({ spaceId, entry }) =>
       recordedOperations(spaceId, entry, entry.dataLoss),
     ),
