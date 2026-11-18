@@ -25,7 +25,7 @@ changes:
         - '\.\s*BigIntNumber\s*\('
   - id: sqlite-integer-safe-range
     summary: |
-      On SQLite, an `Int` field, and every field whose codec is `sqlite/integer@1` (`IntegerNumber`, `BigInt(as: number)`, the deprecated `BigIntNumber`), now refuses to write a number that is not an integer within ±(2^53 − 1), such as `1.5`, with `RUNTIME.ENCODE_FAILED`, and reading a stored value that is not such an integer raises `RUNTIME.DECODE_FAILED`. Before, the codec wrote any number as it was and read a stored number without checking it. Find rows that hold such values and fix them.
+      On SQLite, an `Int` field, and every field whose codec is `sqlite/integer@1` (`IntegerNumber`, `BigInt(as: number)`, the deprecated `BigIntNumber`), now refuses to write a number that is not an integer within ±(2^53 − 1), such as `1.5`, with `RUNTIME.ENCODE_FAILED`, and reading a stored number that is not an integer, such as a `real`, raises `RUNTIME.DECODE_FAILED` naming the table and column. Before, the codec wrote any number as it was and read such a number as it was. A stored integer outside the range already failed to read before. Find rows that hold such values and fix them.
     detection:
       glob: "**/*.{prisma,ts,mts,cts,tsx}"
       matches:
@@ -125,7 +125,10 @@ This applies to a SQLite schema or TypeScript contract. On PostgreSQL and MongoD
 Nothing in the schema or the contract changes. The codec `sqlite/integer@1`, which `Int`, `IntegerNumber`, `BigInt(as: number)` and the deprecated `BigIntNumber` give, now checks every value in both directions:
 
 - A write of a number that is not an integer, such as `1.5`, or of an integer outside ±(2^53 − 1), the range a JavaScript `number` holds exactly, fails with `RUNTIME.ENCODE_FAILED` before any SQL runs, as in `sqlite/integer@1 value must be an integer within the safe integer range, got 1.5`. Before, the number was written as it was: SQLite stored `1.5` as a `real` in the `integer` column, and an integer past the range had already lost digits in the JavaScript `number` before it was written. Round the value in the application, or give the field `BigInt` if it needs the full 64-bit range.
-- A read of a stored value that is not such an integer, such as a `real` an earlier write stored, fails with `RUNTIME.DECODE_FAILED`. Before, the number was read as it was. Find such rows with this query, putting in each `Int` column and its table:
+- A read of a stored number that is not an integer, such as the `real` `1.5` an earlier write stored, fails with `RUNTIME.DECODE_FAILED` and names the table and column, as in `Column "line_item"."quantity" holds 1.5, which is not an integer within the safe integer range.` Before, a read of the row gave the number as it was, and a read through an `include()` already failed.
+- A stored integer outside the range failed to read before this change, and still does. A read of the row fails in `node:sqlite` before any codec runs, with a `RangeError` whose code is `ERR_OUT_OF_RANGE` and which names no column, as in `Value is too large to be represented as a JavaScript number: 9007199254740993`. A read through an `include()` fails with `RUNTIME.DECODE_FAILED` and names the table and column.
+
+Find such rows with this query, putting in each `Int` column and its table:
 
 ```sql
 SELECT rowid, "quantity"
