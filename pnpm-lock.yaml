@@ -4972,6 +4972,9 @@ importers:
       pg:
         specifier: 'catalog:'
         version: 8.22.0
+      pg-connection-string:
+        specifier: ^2.14.0
+        version: 2.14.0
       temporal-spec:
         specifier: 1.0.1
         version: 1.0.1

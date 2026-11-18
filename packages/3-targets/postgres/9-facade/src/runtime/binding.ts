@@ -8,6 +8,7 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import type { Client, Pool } from 'pg';
+import { parse } from 'pg-connection-string';
 import { postgresError } from '../errors';
 import { DEFAULT_CONNECT_TIMEOUT_MILLIS, type PostgresPoolOptions } from './postgres-options';
 
@@ -80,6 +81,14 @@ export function validatePostgresUrl(url: string, extension = 'postgres'): string
         },
       },
     );
+  }
+
+  try {
+    parse(trimmed);
+  } catch {
+    throw postgresError('RUNTIME.BINDING_INVALID', 'Postgres URL must be a valid URL', {
+      meta: { extension, reason: 'unparseable url' },
+    });
   }
 
   return trimmed;

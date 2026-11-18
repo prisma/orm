@@ -113,6 +113,24 @@ describe('resolvePostgresBinding', () => {
       }),
     );
   });
+
+  it('refuses a URL with a user but no host and no path, as pg does', () => {
+    expect(() => resolvePostgresBinding({ url: 'postgres://u@' })).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.BINDING_INVALID',
+        message: 'Postgres URL must be a valid URL',
+      }),
+    );
+  });
+
+  it('refuses a URL with a user but no host that only names one in a query, as pg does', () => {
+    expect(() => resolvePostgresBinding({ url: 'postgres://u@?host=/tmp' })).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.BINDING_INVALID',
+        message: 'Postgres URL must be a valid URL',
+      }),
+    );
+  });
 });
 
 describe('resolveOptionalPostgresBinding with a narrowed list of kinds', () => {
