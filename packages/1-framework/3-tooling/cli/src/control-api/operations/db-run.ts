@@ -57,7 +57,10 @@ import {
 } from '../../utils/extension-path-failure';
 import { dbUpdateKeepDataEditAdvice } from '../../utils/keep-data-edit-advice';
 import { planningRefusedError } from '../../utils/planning-refused-error';
-import { declaredSettingsText } from '../../utils/policy-errors';
+import {
+  type DataProtectionRefusedOperation,
+  declaredSettingsText,
+} from '../../utils/policy-errors';
 import type { CliInvocation } from '../../utils/printed-command';
 import {
   type AnswerPlanQuestions,
@@ -67,6 +70,7 @@ import {
   type PlannedQuestions,
   refuseUnusedConsents,
   removedNamespaceOf,
+  type StatementContracts,
   subjectText,
 } from '../statements/plan-questions';
 import {
@@ -105,6 +109,9 @@ import {
   type CheckedDatabasePolicies,
   checkRunPolicies,
   databasePoliciesInForce,
+  dataProtectionOfRun,
+  forbiddenDataProtectionOfRun,
+  refuseForbiddenChanges,
 } from './database-policies';
 import { stripOperations } from './migration-helpers';
 import { structuralPathOf } from './no-invariant-path';
@@ -415,6 +422,37 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
   let run = first.value;
   let plannedTexts: readonly StatementText[] = statementTexts.filter(isPlannedStatement);
   let consented: readonly ConsentedSubject[] = [];
+  // A `forbidden` data protection setting refuses what the plan still loses or changes after the
+  // given renames, before anyone is asked; a `permitted` one answers every question it covers.
+  const protection =
+    checkedPolicies === undefined ? undefined : dataProtectionOfRun(checkedPolicies);
+  if (options.action === 'dbUpdate' && checkedPolicies !== undefined) {
+    const planned = (entries: readonly MigrationOperationSubject[]) =>
+      plannedOperations(run.orderedResolutions, entries, {
+        origin: fromContract ?? EMPTY_ORIGIN,
+        destination: contract,
+        statements: plannedTexts,
+      });
+    const forbidden = refuseForbiddenChanges({
+      appSpaceId: aggregate.app.spaceId,
+      command: 'db update',
+      forbidden: forbiddenDataProtectionOfRun(checkedPolicies, options.ref),
+      dataLoss: planned(run.subjects.dataLoss),
+      accessChanges: planned(run.subjects.accessChanges),
+    });
+    if (forbidden !== undefined) {
+      return notOk(forbidden);
+    }
+  }
+  const consentAll =
+    options.action === 'dbUpdate'
+      ? {
+          delete: options.acceptDataLoss || protection?.dataLoss === 'data-loss-permitted',
+          allow:
+            options.acceptAccessChanges ||
+            protection?.accessWidening === 'access-widening-permitted',
+        }
+      : { delete: false, allow: false };
   // 3a. Questions: an apply of `db update` asks what each operation that would lose data means,
   // and whether each that would change access may run, before it applies anything. A dry run asks
   // nothing and lists them.
@@ -425,7 +463,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
       canConvert: false,
       statements: plannedTexts,
       preAnswers: consentTexts,
-      consentAll: { delete: options.acceptDataLoss, allow: options.acceptAccessChanges },
+      consentAll,
       origin: fromContract ?? EMPTY_ORIGIN,
       originKnown: fromContract !== null,
       destination: contract,
@@ -462,7 +500,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
     consented = givenConsents({
       plan: run,
       statements: statementTexts,
-      consentAll: { delete: options.acceptDataLoss, allow: options.acceptAccessChanges },
+      consentAll,
       contracts: {
         origin: fromContract ?? EMPTY_ORIGIN,
         destination: contract,
@@ -683,6 +721,34 @@ async function readAppOrigin(input: {
     const unreadable = error instanceof Error ? error.message : String(error);
     return { origin: { kind: 'missing', hash, snapshotDirectory, unreadable }, contract: null };
   }
+}
+
+/**
+ * The operations of a plan that `entries` name, each with its space and its subject as the user
+ * names it. `entries` index the operations of every space, in apply order.
+ */
+function plannedOperations(
+  orderedResolutions: readonly OrderedResolution[],
+  entries: readonly MigrationOperationSubject[],
+  contracts: StatementContracts,
+): readonly DataProtectionRefusedOperation[] {
+  const placed = orderedResolutions.flatMap((resolution) =>
+    resolution.entry.displayOps.map((operation) => ({ spaceId: resolution.spaceId, operation })),
+  );
+  return entries.map(({ operationIndex, subject }) => {
+    const at = placed[operationIndex];
+    if (at === undefined) {
+      throw new InternalError(
+        `Unreachable: the plan names operation ${operationIndex}, which it does not hold`,
+      );
+    }
+    return {
+      spaceId: at.spaceId,
+      operationId: at.operation.id,
+      subject: subjectText(subject, contracts),
+      label: at.operation.label,
+    };
+  });
 }
 
 /** How many operations the spaces applied before `spaceId` list ahead of it in `operations`. */
