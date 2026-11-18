@@ -127,10 +127,16 @@ import { type CreateIndexExtras, createIndex, dropIndex, renameIndex } from './o
 import { createNativeEnumType, dropNativeEnumType } from './operations/native-enum-types';
 import {
   createRlsPolicy,
+  createRlsPolicyIdentity,
   disableRowLevelSecurity,
+  disableRowLevelSecurityIdentity,
   dropRlsPolicy,
+  dropRlsPolicyIdentity,
   enableRowLevelSecurity,
+  enableRowLevelSecurityIdentity,
+  type RlsOperationIdentity,
   renameRlsPolicy,
+  renameRlsPolicyIdentity,
 } from './operations/rls';
 import { dropSchema, renameSchema, setTableSchema } from './operations/schemas';
 import type { ForeignKeySpec } from './operations/shared';
@@ -190,6 +196,11 @@ abstract class PostgresOpFactoryCallNode extends TsExpression implements Framewo
 
   importRequirements(): readonly ImportRequirement[] {
     return [{ moduleSpecifier: POSTGRES_MIGRATION_FACADE, symbol: this.factoryName }];
+  }
+
+  /** The id and target of a row-level-security operation this call lowers to; `undefined` for any other call. */
+  rlsIdentity(): RlsOperationIdentity | undefined {
+    return undefined;
   }
 
   protected freeze(): void {
@@ -2987,6 +2998,10 @@ export class CreatePostgresRlsPolicyCall extends PostgresOpFactoryCallNode {
     return createRlsPolicy(this.schemaName, this.tableName, this.policy, lowerer);
   }
 
+  override rlsIdentity(): RlsOperationIdentity {
+    return createRlsPolicyIdentity(this.schemaName, this.tableName, this.policy.name);
+  }
+
   renderTypeScript(): string {
     return this.#written().source;
   }
@@ -3060,6 +3075,10 @@ export class DropPostgresRlsPolicyCall extends PostgresOpFactoryCallNode {
     return dropRlsPolicy(this.schemaName, this.tableName, this.policyName, lowerer);
   }
 
+  override rlsIdentity(): RlsOperationIdentity {
+    return dropRlsPolicyIdentity(this.schemaName, this.tableName, this.policyName);
+  }
+
   renderTypeScript(): string {
     return `this.dropRlsPolicy({ schema: ${jsonToTsSource(this.schemaName)}, table: ${jsonToTsSource(this.tableName)}, policy: ${jsonToTsSource(this.policyName)} })`;
   }
@@ -3095,6 +3114,10 @@ export class EnableRowLevelSecurityCall extends PostgresOpFactoryCallNode {
     return enableRowLevelSecurity(this.schemaName, this.tableName, lowerer);
   }
 
+  override rlsIdentity(): RlsOperationIdentity {
+    return enableRowLevelSecurityIdentity(this.schemaName, this.tableName);
+  }
+
   renderTypeScript(): string {
     return `this.enableRowLevelSecurity({ schema: ${jsonToTsSource(this.schemaName)}, table: ${jsonToTsSource(this.tableName)} })`;
   }
@@ -3128,6 +3151,10 @@ export class DisableRowLevelSecurityCall extends PostgresOpFactoryCallNode {
       );
     }
     return disableRowLevelSecurity(this.schemaName, this.tableName, lowerer);
+  }
+
+  override rlsIdentity(): RlsOperationIdentity {
+    return disableRowLevelSecurityIdentity(this.schemaName, this.tableName);
   }
 
   renderTypeScript(): string {
@@ -3172,6 +3199,15 @@ export class RenamePostgresRlsPolicyCall extends PostgresOpFactoryCallNode {
       this.oldPolicyName,
       this.newPolicyName,
       lowerer,
+    );
+  }
+
+  override rlsIdentity(): RlsOperationIdentity {
+    return renameRlsPolicyIdentity(
+      this.schemaName,
+      this.tableName,
+      this.oldPolicyName,
+      this.newPolicyName,
     );
   }
 

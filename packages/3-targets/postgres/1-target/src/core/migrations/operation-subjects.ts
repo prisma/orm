@@ -17,24 +17,22 @@ import type {
 } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { SqlStorage } from '@internal/sql-contract/types';
-import { parseWireName } from '@internal/sql-schema-ir/naming';
 import { ifDefined } from '@internal/utils/defined';
 import { DEFAULT_NAMESPACE_ID } from '../namespace-ids';
 import { resolveNamespaceIdForDdlSchema } from './control-policy';
 import {
   AddColumnWithTemporaryDefaultCall,
   AlterColumnTypeCall,
-  CreatePostgresRlsPolicyCall,
   DeleteRowsCall,
-  DisableRowLevelSecurityCall,
   DropColumnCall,
-  DropPostgresRlsPolicyCall,
   DropTableCall,
   FillStoredKeyCall,
+  isPostgresOpFactoryCall,
   RawSqlCall,
   RemoveStoredKeyCall,
   RemoveStoredValueCall,
 } from './op-factory-call';
+import { accessChangesOfIdentities } from './recorded-access-changes';
 
 interface Locator {
   /** The contract that names the namespaces: the origin contract when the plan has one. */
@@ -120,50 +118,6 @@ function knownTarget(locator: Locator, call: OpFactoryCall): SubjectStorage | un
   return fieldEvent === undefined ? undefined : fieldEventStorage(fieldEvent);
 }
 
-/**
- * A policy's identity across a replacement: its name, or the prefix of a generated (wire) name,
- * whose hash changes with the policy's body.
- */
-export function policyKey(schemaName: string, tableName: string, policyName: string): string {
-  return JSON.stringify([schemaName, tableName, parseWireName(policyName)?.prefix ?? policyName]);
-}
-
-/**
- * The policies the plan creates. A drop of one of them, by name or by generated-name prefix, is
- * half of a replacement, which leaves a policy in place, so it widens no access.
- */
-function createdPolicies(calls: readonly OpFactoryCall[]): ReadonlySet<string> {
-  return new Set(
-    calls.flatMap((call) =>
-      call instanceof CreatePostgresRlsPolicyCall
-        ? [policyKey(call.schemaName, call.tableName, call.policy.name)]
-        : [],
-    ),
-  );
-}
-
-/**
- * Disabling row-level security widens access: every role with table privileges then reads and
- * writes every row. Dropping a policy changes access either way, since a permissive policy grants
- * access and a restrictive one limits it, unless the plan creates the policy again.
- */
-function accessChangesOf(
-  locator: Locator,
-  call: OpFactoryCall,
-  replaced: ReadonlySet<string>,
-): CallSubjects['accessChanges'] {
-  if (call instanceof DisableRowLevelSecurityCall) {
-    return [{ ...target(locator, call.schemaName, call.tableName, undefined), widens: true }];
-  }
-  if (
-    call instanceof DropPostgresRlsPolicyCall &&
-    !replaced.has(policyKey(call.schemaName, call.tableName, call.policyName))
-  ) {
-    return [{ ...target(locator, call.schemaName, call.tableName, undefined), widens: false }];
-  }
-  return [];
-}
-
 /** The temporary values a call writes: a new required column's, or a planner-written fill's of a value object field. */
 function temporaryValuesOf(locator: Locator, call: OpFactoryCall): CallSubjects['temporaryValues'] {
   if (call instanceof AddColumnWithTemporaryDefaultCall) {
@@ -196,13 +150,18 @@ export function postgresCallSubjects(
   calls: readonly OpFactoryCall[],
   locator: Locator,
 ): readonly CallSubjects[] {
-  const replaced = createdPolicies(calls);
+  const accessChanges = new Map(
+    accessChangesOfIdentities(
+      calls.map((call) => (isPostgresOpFactoryCall(call) ? call.rlsIdentity() : undefined)),
+    ).map((change) => [change.operationIndex, change]),
+  );
   const destructive = calls.filter((call) => call.operationClass === 'destructive');
   const known = new Map(destructive.map((call) => [call, knownTarget(locator, call)]));
   const unknownNames = unknownCallNames(
     destructive.filter((call) => known.get(call) === undefined),
   );
-  return calls.map((call) => {
+  return calls.map((call, callIndex) => {
+    const accessChange = accessChanges.get(callIndex);
     const lossTarget = known.get(call);
     const unknownName = unknownNames.get(call);
     const loss: MigrationDataLossKind = call instanceof AlterColumnTypeCall ? 'typeChange' : 'drop';
@@ -221,7 +180,15 @@ export function postgresCallSubjects(
           : unknownName !== undefined
             ? [{ storageName: unknownName, table: undefined, loss }]
             : [],
-      accessChanges: accessChangesOf(locator, call, replaced),
+      accessChanges:
+        accessChange === undefined
+          ? []
+          : [
+              {
+                ...target(locator, accessChange.schema, accessChange.table, undefined),
+                widens: accessChange.widens,
+              },
+            ],
       temporaryValues: temporaryValuesOf(locator, call),
     };
   });
