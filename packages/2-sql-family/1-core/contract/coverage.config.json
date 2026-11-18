@@ -13,7 +13,7 @@
     "src/index-type-validation.ts"
   ],
   "thresholds": {
-    "lines": 90,
+    "lines": 95,
     "branches": 85,
     "functions": 92,
     "statements": 91
