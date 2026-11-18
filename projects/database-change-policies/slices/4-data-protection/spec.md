@@ -110,4 +110,4 @@ When one run breaks both settings, one error reports both.
 
 ## Failure states
 
-Every refusal happens before the first operation runs and before any file is written. A refused `migration plan` leaves no migration directory. A refused `db migrate` or `db update` leaves the database, the marker and the ref file as they were.
+Every refusal happens before the first operation runs. A refused `migration plan` writes no migration directory; it may already have re-pinned extension artifacts, which it does before planning on every run. A refused `db migrate` or `db update` leaves the database, the marker and the ref file as they were.
