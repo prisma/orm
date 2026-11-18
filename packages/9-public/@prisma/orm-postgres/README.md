@@ -24,11 +24,12 @@ pnpm add @prisma/orm-postgres
 | `/serverless` | the serverless runtime variant |
 | `/static` | statically composed runtime for pre-wired deployments |
 | `/config` | `defineConfig` for `prisma.config.ts` |
+| `/contract-types` | the types a generated `contract.d.ts` imports |
 | `/contract-builder` | `defineContract`, Postgres enums, RLS authoring |
 | `/target`, `/family` | the Postgres target pack and the SQL family pack |
 | `/migration`, `/control` | migration planning and the control client |
 
-Generated contract files import their types from the facade, so an application never has to depend on a package it did not install:
+A generated `contract.d.ts` imports every framework, family and target type it names from `/contract-types`, and a generated `migration.ts` imports from `/migration`: the modules this package's `defineConfig` sets as `contract.typesModule` and `migrations.module`. The facade also forwards the namespaces of the packages it is built from, so an application never has to depend on a package it did not install:
 
 | Namespace | Forwards |
 | --- | --- |

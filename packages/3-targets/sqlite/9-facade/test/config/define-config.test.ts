@@ -3,6 +3,7 @@ import { defineConfig as coreDefineConfig } from '@internal/config/config-types'
 import sqliteDriver from '@internal/driver-sqlite/control';
 import sql from '@internal/family-sql/control';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
+import { restateTypeDeclarations } from '@internal/target-package-config/type-declarations';
 import sqlite from '@internal/target-sqlite/control';
 import sqlitePackRef from '@internal/target-sqlite/pack';
 import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
@@ -32,7 +33,9 @@ describe('defineConfig facade', () => {
 
     expect(facadeConfig.family).toBe(manualConfig.family);
     expect(facadeConfig.target).toBe(manualConfig.target);
-    expect(facadeConfig.adapter).toBe(manualConfig.adapter);
+    expect(facadeConfig.adapter).toEqual(
+      restateTypeDeclarations(sqliteAdapter, '@internal/sqlite/contract-types'),
+    );
     expect(facadeConfig.driver).toBe(manualConfig.driver);
     expect(facadeConfig.extensions).toEqual(manualConfig.extensions);
     expect(facadeConfig.contract?.output).toBe(manualConfig.contract?.output);
@@ -132,13 +135,12 @@ describe('defineConfig facade', () => {
     expect(config.migrations?.dir).toBe('custom-migrations');
   });
 
-  it('omits db and migrations when they are not provided', () => {
+  it('omits db when it is not provided', () => {
     const config = defineConfig({
       contract: './prisma/contract.prisma',
     });
 
     expect(Object.hasOwn(config, 'db')).toBe(false);
-    expect(Object.hasOwn(config, 'migrations')).toBe(false);
   });
 
   it('passes extensions through to config', () => {
@@ -175,5 +177,16 @@ describe('defineConfig facade', () => {
     const config = defineConfig({ contract: './prisma/contract.prisma' });
 
     expect(Object.hasOwn(config, 'formatter')).toBe(false);
+  });
+});
+
+describe('the modules generated files import from', () => {
+  it('names its own contract-types and migration modules', () => {
+    const config = defineConfig({ contract: './prisma/contract.prisma' });
+
+    expect([config.contract?.typesModule, config.migrations]).toEqual([
+      '@internal/sqlite/contract-types',
+      { module: '@internal/sqlite/migration' },
+    ]);
   });
 });

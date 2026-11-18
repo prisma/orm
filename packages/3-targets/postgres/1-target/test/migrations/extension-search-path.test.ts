@@ -7,7 +7,7 @@ import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter
 import { verifySqlSchemaByDiff } from '@internal/family-sql/diff';
 import { APP_SPACE_ID, type SchemaOwnership } from '@internal/framework-components/control';
 import { SqlStorage } from '@internal/sql-contract/types';
-import { applicationDomainOf } from '@repo/test-utils';
+import { applicationDomainOf, workspaceMigrationModule } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { contractToPostgresDatabaseSchemaNode } from '../../src/core/migrations/contract-to-postgres-database-schema-node';
 import { diffPostgresSchema } from '../../src/core/migrations/diff-database-schema';
@@ -136,7 +136,7 @@ async function plannedOperations(input: Parameters<typeof plan>[0]) {
       target: op.target,
       execute: op.execute.map((step) => step.sql),
     })),
-    typeScript: result.plan.renderTypeScript((specifier) => specifier),
+    typeScript: result.plan.renderTypeScript(workspaceMigrationModule.postgres),
   };
 }
 

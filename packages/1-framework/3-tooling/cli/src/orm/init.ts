@@ -14,11 +14,7 @@ import {
 } from '../commands/init/output';
 import { versionMajor } from '../commands/init/prisma7-detect';
 import { type ProbeOutcome, probeServerVersion } from '../commands/init/probe-db';
-import {
-  type TargetId,
-  targetPackageName,
-  targetPeerPackages,
-} from '../commands/init/templates/code-templates';
+import { type TargetId, targetPeerPackages } from '../commands/init/templates/code-templates';
 import { MIN_SERVER_VERSION } from '../commands/init/templates/env';
 import { chooseAction } from '../utils/next-actions';
 import { defineOrmCommand } from './define-command';
@@ -225,7 +221,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
       // workspace or catalog, is left alone: only a declared major below 7 moves.
       const moveClient = movePackages !== null && clientMajor !== undefined && clientMajor < 7;
       const deps = [
-        targetPackageName(inputs.target, scaffold.resolveImportSpecifier),
+        scaffold.targetPackage,
         'dotenv',
         ...targetPeerPackages(inputs.target),
         ...(moveClient ? ['@prisma/client@7'] : []),

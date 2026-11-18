@@ -15,12 +15,15 @@ export default definePrismaConfig({
     adapter: sqliteAdapter,
     driver: sqliteDriver,
     extensions: [],
-    contract: prismaContract('./contract.prisma', {
-      output: 'contract.json',
-      target: sqlitePackRef,
-      createNamespace: sqliteCreateNamespace,
-    }),
+    contract: {
+      ...prismaContract('./contract.prisma', {
+        output: 'contract.json',
+        target: sqlitePackRef,
+        createNamespace: sqliteCreateNamespace,
+      }),
+      typesModule: '@internal/sqlite/contract-types',
+    },
     db: { connection: '{{DB_PATH}}' },
-    migrations: { dir: 'migrations' },
+    migrations: { dir: 'migrations', module: '@internal/sqlite/migration' },
   }),
 });

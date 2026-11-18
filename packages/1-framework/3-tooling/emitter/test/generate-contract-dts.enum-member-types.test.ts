@@ -3,7 +3,7 @@ import type { CodecLookup } from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
 import { generateContractDts } from '../src/generate-contract-dts';
 import { createMockSpi } from './mock-spi';
-import { createTestContract } from './utils';
+import { createTestContract, TEST_TYPES_MODULE } from './utils';
 
 const HASHES = {
   storageHash: '0000000000000000000000000000000000000000000000000000000000000001',
@@ -32,7 +32,15 @@ function emitEnums(enums: Record<string, ContractEnum>, lookup: CodecLookup | un
   const contract = createTestContract({
     namespaces: { public: { models: {}, enum: enums } },
   });
-  return generateContractDts(contract, createMockSpi(), [], HASHES, undefined, lookup);
+  return generateContractDts(
+    contract,
+    createMockSpi(),
+    [],
+    HASHES,
+    TEST_TYPES_MODULE,
+    undefined,
+    lookup,
+  );
 }
 
 function memberTypesOf(dts: string): string {

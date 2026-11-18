@@ -84,6 +84,9 @@
     },
     "./package.json": "./package.json"
   },
+  "imports": {
+    "#contract-types": "./src/contract/contract-types.ts"
+  },
   "engines": {
     "node": ">=24"
   },

@@ -10,6 +10,7 @@ export { createMongoAdapter } from '../mongo-adapter';
 export type { MongoControlDriverInstance };
 
 import { MongoControlAdapterImpl } from '../core/migrations/mongo-control-adapter';
+import { targetModuleBase } from '../core/target-module-base';
 
 export const mongoAdapterDescriptor: MongoControlAdapterDescriptor<'mongo'> = {
   kind: 'adapter',
@@ -20,12 +21,12 @@ export const mongoAdapterDescriptor: MongoControlAdapterDescriptor<'mongo'> = {
   types: {
     codecTypes: {
       import: {
-        package: '@internal/target-mongo/codec-types',
+        package: `${targetModuleBase}/codec-types`,
         named: 'CodecTypes',
         alias: 'MongoCodecTypes',
       },
       parameterizedOutputTypes: {
-        package: '@internal/target-mongo/codec-types',
+        package: `${targetModuleBase}/codec-types`,
         named: 'ParameterizedOutputTypesForTypeParams',
         alias: 'MongoParameterizedOutputTypes',
       },

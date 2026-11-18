@@ -30,6 +30,7 @@
     "@internal/sql-orm-client": "workspace:8.0.0-rc.24",
     "@internal/sql-relational-core": "workspace:8.0.0-rc.24",
     "@internal/sql-runtime": "workspace:8.0.0-rc.24",
+    "@internal/target-package-config": "workspace:8.0.0-rc.24",
     "@internal/target-sqlite": "workspace:8.0.0-rc.24",
     "@internal/utils": "workspace:8.0.0-rc.24",
     "arktype": "catalog:",
@@ -64,6 +65,7 @@
   "exports": {
     "./config": "./dist/config.mjs",
     "./contract-builder": "./dist/contract-builder.mjs",
+    "./contract-types": "./dist/contract-types.mjs",
     "./control": "./dist/control.mjs",
     "./migration": "./dist/migration.mjs",
     "./runtime": "./dist/runtime.mjs",

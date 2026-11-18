@@ -3,6 +3,7 @@ import { defineConfig as ormConfig } from '@internal/cli/config-types';
 import sql from '@internal/family-sql/control';
 import postgres from '@internal/target-postgres/control';
 import { definePrismaConfig } from '@prisma/cli-engine';
+import { workspaceTypesModule } from '@repo/test-utils';
 import { contract } from './contract';
 
 export default definePrismaConfig({
@@ -16,6 +17,7 @@ export default definePrismaConfig({
         load: async () => ({ ok: true, value: contract }),
       },
       output: 'contract.json',
+      typesModule: workspaceTypesModule.postgres,
     },
   }),
 });

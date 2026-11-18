@@ -37,6 +37,10 @@ Namespaces:
 
 The `contract` section is missing (or incomplete) in `prisma.config.ts` when a command needs it, raised by `prisma contract emit` when the config has no contract configuration, no schema path, or the referenced authoring entrypoint cannot be resolved. Payload: none.
 
+### CONFIG.CONTRACT_TYPES_MODULE_MISSING
+
+`contract emit`, the Vite plugin, or a command that writes a contract snapshot (`db init`, `db update`, `db sign`, `migrate`, `migration new`, `migration plan`) was run with a config that has no `contract.typesModule`, the module a generated `contract.d.ts` imports the framework and family contract types from. Raised before anything is written. A target package's `defineConfig` sets it, so a config from one that does not was built against an older release of that package; a config assembled by hand sets `contract.typesModule` itself. Payload: none.
+
 ### CONFIG.DB_CONNECTION_REQUIRED
 
 A DB-connected command (`db migrate`, `db init`, `db sign`, `db verify`, `db update`, `db schema`, and the migration scaffold commands) was run with no database connection available: no `--db <url>` flag and no `db.connection` in `prisma.config.ts`. The fix text names the exact retry command when known. Payload: `missingFlags` (optional).
@@ -57,6 +61,10 @@ Reserved: `db verify` needs the family package to export `verify.readMarker()` a
 
 No `prisma.config.ts` (or the explicitly passed config path) could be found when loading configuration, raised by the config loader for any command that needs config. The fix is to run `prisma orm init` to create one. The path, when known, is carried in `where.path`. Payload: none.
 
+### CONFIG.MIGRATION_MODULE_MISSING
+
+`migration new` or `migration plan` was run with a config that has no `migrations.module`, the module a written `migration.ts` imports `Migration`, `MigrationCLI` and the operation helpers from. Raised before anything is written. A target package's `defineConfig` sets it, so a config from one that does not was built against an older release of that package; a config assembled by hand sets `migrations.module` itself. Payload: none.
+
 ### CONFIG.MISSING_EXTENSION_PACKS
 
 The contract declares extension packs that the CLI config does not provide matching descriptors for; raised when resolving framework components for any command that loads the contract. The fix is to add the missing extension descriptors to `extensions` in `prisma.config.ts`. Payload: `missingExtensionPacks`, `providedComponentIds`.
@@ -67,7 +75,7 @@ Reserved: `db verify` needs `db.queryRunnerFactory` in `prisma.config.ts` and it
 
 ### CONFIG.VALIDATION_FAILED
 
-`prisma.config.ts` loaded but a config section is missing or malformed, as seen by the ORM's own config loader (the language server, the vite plugin, and any tool that calls `loadConfig` outside a command run). The loader validates the `orm` section against its schema and returns one diagnostic per problem, each tagged with the top-level subsection it concerns (`meta.section`: `family`, `target`, `adapter`, `driver`, `extensions`, `db`, `contract`, `migrations`, or `formatter`); a command fails with the diagnostic (exit `2`) only when it reads that section. Under the `prisma` CLI the same problems are reported by the engine instead, as `CLI.CONFIG_FIELD_INVALID` diagnostics (one per field, `meta.section: 'orm'`, `meta.field` the dotted path, `where.path` the config file that declared the field) accompanying `CLI.CONFIG_SECTION_INVALID`. Also raised by framework-component resolution for fields like `frameworkComponents[]`, `frameworkComponents[].kind`/`familyId`/`targetId`, `contract.targetFamily`, and `contract.target`, and by contract-path resolution when `config.contract.output` is absent (those sites carry no `section`). Payload: `field` (loader diagnostics), `section` (loader diagnostics; optional elsewhere).
+`prisma.config.ts` loaded but a config section is missing or malformed, as seen by the ORM's own config loader (the language server, the vite plugin, and any tool that calls `loadConfig` outside a command run). The loader validates the `orm` section against its schema and returns one diagnostic per problem, each tagged with the top-level subsection it concerns (`meta.section`: `family`, `target`, `adapter`, `driver`, `extensions`, `db`, `contract`, `migrations`, or `formatter`); a command fails with the diagnostic (exit `2`) only when it reads that section. Under the `prisma` CLI the same problems are reported by the engine instead, as `CLI.CONFIG_FIELD_INVALID` diagnostics (one per field, `meta.section: 'orm'`, `meta.field` the dotted path, `where.path` the config file that declared the field) accompanying `CLI.CONFIG_SECTION_INVALID`. A `contract.typesModule` or `migrations.module` that is a path or a URL (it begins `.`, `/` or a backslash, holds a backslash, or begins with a URL scheme such as `file:` or a Windows drive such as `C:`) is refused here, before anything is written: generated files are written beside the contract and beside each migration, so a path resolves from at most one of them; name the module the way a package is imported, or by a `#` import declared in the `imports` of the package that holds the generated files. Also raised by framework-component resolution for fields like `frameworkComponents[]`, `frameworkComponents[].kind`/`familyId`/`targetId`, `contract.targetFamily`, and `contract.target`, and by contract-path resolution when `config.contract.output` is absent (those sites carry no `section`). Payload: `field` (loader diagnostics), `section` (loader diagnostics; optional elsewhere).
 
 ### CONFIG.VERSION_MARKER_MISSING
 
@@ -222,14 +230,6 @@ Running a `migration.ts` with node and no `--config` found no config that owns t
 ### CLI.OUTPUT_FORMAT_CONFLICT
 
 The main CLI received mutually exclusive output flags: `--format pretty` together with `--json`. Use `--format json` or `--json` alone for JSON output. Payload: none.
-
-### CLI.PROJECT_MANIFEST_INVALID
-
-A `package.json` found while resolving the project import root is not valid JSON, or parses to something other than a JSON object. Emission reads the nearest manifest to decide which package names generated files should import; fix the manifest's JSON and re-run. The parse failure (when there is one) is attached as `cause`. Payload: `path`.
-
-### CLI.PROJECT_MANIFEST_UNREADABLE
-
-A `package.json` found while resolving the project import root exists but could not be read (e.g. a permissions failure). Absent manifests continue the walk up; a read failure stops it, because silently skipping would emit against the wrong project's dependencies. The read failure is attached as `cause`. Payload: `path`.
 
 ### CLI.PROMPT_REQUIRED
 
@@ -2005,7 +2005,7 @@ A SQLite `recreateTable` call in `migration.ts` has a `temporaryValues` entry th
 
 ### MIGRATION.UNFILLED_PLACEHOLDER
 
-A scaffolded migration still contains a `placeholder(...)` call that the author never replaced with a real query or value; it throws when the migration is emitted or run. The `slot` names the exact location to edit (e.g. `"backfill-product-status:check.source"`). `db migrate` raises it too, before it applies anything, when a migration to apply has no operations and its `migration.ts` still calls the `placeholder` it imports from a Prisma migration module, by any local name or through a namespace import; a `placeholder(` in a comment or a string, or a function of the user's own named `placeholder`, is not such a call. The check reads common forms of code only. It misses a call from another file that `migration.ts` imports, every call after a regular expression literal that holds a quote or a backtick, and a call through a name `placeholder` is destructured or reassigned to, as in `const { placeholder: fill } = m` or `const fill = placeholder`. It counts as a call a class method named `placeholder`, and a call to a parameter that shadows the imported name, as in `(placeholder) => placeholder(1)`. Fill the placeholders, run that `migration.ts` with `node` to write `ops.json`, and run `db migrate` again. Payload: `slot` from `migration.ts`; `directory` from `db migrate`.
+A scaffolded migration still contains a `placeholder(...)` call that the author never replaced with a real query or value; it throws when the migration is emitted or run. The `slot` names the exact location to edit (e.g. `"backfill-product-status:check.source"`). `db migrate` raises it too, before it applies anything, when a migration to apply has no operations and its `migration.ts` still calls a `placeholder` it imports from a package or from a `#` name of the application's own package, whichever it is, by any local name or through a namespace import; a `placeholder(` in a comment or a string, or a function of the user's own named `placeholder`, is not such a call. The check reads common forms of code only. It misses a call from another file that `migration.ts` imports, every call after a regular expression literal that holds a quote or a backtick, and a call through a name `placeholder` is destructured or reassigned to, as in `const { placeholder: fill } = m` or `const fill = placeholder`. It counts as a call a class method named `placeholder`, and a call to a parameter that shadows the imported name, as in `(placeholder) => placeholder(1)`. Fill the placeholders, run that `migration.ts` with `node` to write `ops.json`, and run `db migrate` again. Payload: `slot` from `migration.ts`; `directory` from `db migrate`.
 
 ### MIGRATION.UNKNOWN_INVARIANT
 

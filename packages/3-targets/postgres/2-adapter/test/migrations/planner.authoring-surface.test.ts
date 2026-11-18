@@ -5,7 +5,6 @@ import {
   type MigrationPlannerSuccessResult,
   planOriginOf,
 } from '@internal/framework-components/control';
-import { keepInternalSpecifiers } from '@internal/framework-components/emission';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage } from '@internal/sql-contract/types';
 import postgresTargetDescriptor from '@internal/target-postgres/control';
@@ -14,7 +13,7 @@ import {
   PostgresNamespaceSchemaNode,
   postgresCreateNamespace,
 } from '@internal/target-postgres/types';
-import { applicationDomainOf } from '@repo/test-utils';
+import { applicationDomainOf, workspaceMigrationModule } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 
 const TO_STORAGE_HASH = '2'.repeat(64);
@@ -96,7 +95,7 @@ describe('PostgresMigrationPlanner authoring surface', () => {
       }
       const success = result as MigrationPlannerSuccessResult;
 
-      const source = success.plan.renderTypeScript(keepInternalSpecifiers);
+      const source = success.plan.renderTypeScript(workspaceMigrationModule.postgres);
 
       expect(source).toContain("from '@internal/postgres/migration'");
       expect(source).toMatch(/\bMigration\b/);
@@ -143,7 +142,7 @@ describe('PostgresMigrationPlanner authoring surface', () => {
         APP_SPACE_ID,
       );
 
-      const source = empty.renderTypeScript(keepInternalSpecifiers);
+      const source = empty.renderTypeScript(workspaceMigrationModule.postgres);
 
       expect(source).toContain("from '@internal/postgres/migration'");
       expect(source).toContain('export default class M extends Migration<Start, End>');

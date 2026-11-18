@@ -231,6 +231,7 @@ describe('migration file E2E', () => {
       from: '0'.repeat(64),
       to: '1'.repeat(64),
       snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+      migrationModule: '@internal/target-mongo/migration',
     } as const;
 
     it('produces ops.json identical to direct factory invocation', async () => {
@@ -549,6 +550,7 @@ describe('migration file E2E', () => {
         from: 'a'.repeat(64),
         to: 'b'.repeat(64),
         snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+        migrationModule: '@internal/target-mongo/migration',
       } as const;
       const tsSource = renderCallsToTypeScript(calls, meta);
       const resolvedSource = tsSource.replace(
@@ -735,6 +737,7 @@ describe('migration file E2E', () => {
         from: '0'.repeat(64),
         to: '1'.repeat(64),
         snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+        migrationModule: '@internal/target-mongo/migration',
       } as const;
       const migrationSource = renderCallsToTypeScript(calls, directRunMeta).replace(
         "'@internal/target-mongo/migration'",

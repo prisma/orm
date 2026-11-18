@@ -1,11 +1,10 @@
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import { APP_SPACE_ID, planOriginOf } from '@internal/framework-components/control';
-import { keepInternalSpecifiers } from '@internal/framework-components/emission';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage } from '@internal/sql-contract/types';
 import { SqlSchemaIR } from '@internal/sql-schema-ir/types';
-import { applicationDomainOf } from '@repo/test-utils';
+import { applicationDomainOf, workspaceMigrationModule } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { createSqliteMigrationPlanner } from '../../src/core/migrations/planner';
 import {
@@ -192,7 +191,7 @@ describe('SqliteMigrationPlanner authoring surface', () => {
       });
 
       if (result.kind !== 'success') throw new Error('expected success');
-      const source = result.plan.renderTypeScript(keepInternalSpecifiers);
+      const source = result.plan.renderTypeScript(workspaceMigrationModule.sqlite);
       expect(source).toContain("from '@internal/sqlite/migration'");
       expect(source).toMatch(/\bMigration\b/);
       // New shape: base derives describe() from the imported contract JSON, so
@@ -238,7 +237,7 @@ describe('SqliteMigrationPlanner authoring surface', () => {
         APP_SPACE_ID,
       );
 
-      const source = empty.renderTypeScript(keepInternalSpecifiers);
+      const source = empty.renderTypeScript(workspaceMigrationModule.sqlite);
       expect(source).toContain("from '@internal/sqlite/migration'");
       // New shape: base derives from/to; scaffold imports the contract JSON
       // rather than embedding hash literals or a describe() method.

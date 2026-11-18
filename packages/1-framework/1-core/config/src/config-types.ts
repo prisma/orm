@@ -6,6 +6,7 @@ import type {
   ControlFamilyDescriptor,
   ControlTargetDescriptor,
 } from '@internal/framework-components/control';
+import { ifDefined } from '@internal/utils/defined';
 import type { ContractSourceProvider } from './contract-source-types';
 
 /**
@@ -30,6 +31,8 @@ export interface ContractConfig {
    * always emitted next to the JSON (e.g., `contract.json` → `contract.d.ts`).
    */
   readonly output?: string;
+  /** The module the generated contract types import from. */
+  readonly typesModule?: string;
 }
 
 export interface FormatterConfig {
@@ -54,6 +57,7 @@ export function normalizeContractConfig(
   return {
     source: contract.source,
     output: contract.output ?? inMemoryFallbackOutput,
+    ...ifDefined('typesModule', contract.typesModule),
   };
 }
 
@@ -109,6 +113,8 @@ export interface PrismaConfig<
   readonly migrations?: {
     /** Directory for migration packages, relative to the config file. Defaults to 'migrations'. */
     readonly dir?: string;
+    /** The module rendered migration files import from. */
+    readonly module?: string;
   };
   readonly formatter?: FormatterConfig;
   /**

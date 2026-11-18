@@ -29,6 +29,7 @@
     "@internal/sql-runtime": "workspace:8.0.0-rc.24",
     "@internal/target-mariadb": "workspace:8.0.0-rc.24",
     "@internal/target-mysql": "workspace:8.0.0-rc.24",
+    "@internal/target-package-config": "workspace:8.0.0-rc.24",
     "@internal/utils": "workspace:8.0.0-rc.24",
     "pathe": "^2.0.3"
   },
@@ -61,6 +62,7 @@
   ],
   "exports": {
     "./config": "./dist/config.mjs",
+    "./contract-types": "./dist/contract-types.mjs",
     "./control": "./dist/control.mjs",
     "./migration": "./dist/migration.mjs",
     "./runtime": "./dist/runtime.mjs",

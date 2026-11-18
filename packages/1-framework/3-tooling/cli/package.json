@@ -31,7 +31,6 @@
     "@internal/migration-tools": "workspace:8.0.0-rc.24",
     "@internal/psl-parser": "workspace:8.0.0-rc.24",
     "@internal/psl-printer": "workspace:8.0.0-rc.24",
-    "@internal/publish-surface": "workspace:8.0.0-rc.24",
     "@internal/utils": "workspace:8.0.0-rc.24",
     "arktype": "^2.2.2",
     "ci-info": "^4.3.1",

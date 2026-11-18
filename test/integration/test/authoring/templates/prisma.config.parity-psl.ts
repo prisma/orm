@@ -6,6 +6,7 @@ import { prismaContract } from '@internal/sql-contract-psl/provider';
 import postgres from '@internal/target-postgres/control';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { definePrismaConfig } from '@prisma/cli-engine';
+import { workspaceTypesModule } from '@repo/test-utils';
 import { extensions } from './packs';
 
 export default definePrismaConfig({
@@ -15,10 +16,13 @@ export default definePrismaConfig({
     adapter: postgresAdapter,
     driver: postgresDriver,
     extensions,
-    contract: prismaContract('./schema.prisma', {
-      output: 'output/contract.json',
-      target: postgres,
-      createNamespace: postgresCreateNamespace,
-    }),
+    contract: {
+      ...prismaContract('./schema.prisma', {
+        output: 'output/contract.json',
+        target: postgres,
+        createNamespace: postgresCreateNamespace,
+      }),
+      typesModule: workspaceTypesModule.postgres,
+    },
   }),
 });

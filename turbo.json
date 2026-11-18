@@ -46,7 +46,12 @@
     },
     "record": {
       "dependsOn": ["build"],
-      "inputs": ["scripts/record.ts", "recordings/config.ts", "recordings/fixtures/**"],
+      "inputs": [
+        "scripts/record.ts",
+        "recordings/config.ts",
+        "recordings/fixtures/**",
+        "$TURBO_ROOT$/test/integration/test/fixtures/cli/cli-e2e-test-app/fixtures/recordings/**"
+      ],
       "outputs": ["recordings/svgs/**", "recordings/ascii/**"]
     },
     "clean": {

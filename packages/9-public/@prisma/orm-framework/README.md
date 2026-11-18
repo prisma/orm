@@ -17,6 +17,8 @@ Each subpath namespace consolidates one internal framework module; a bare namesp
 | `/config` | configuration types and validation |
 | `/errors` | control, execution, and migration error types |
 | `/ids`, `/operations`, `/ts-render`, `/utils` | identifiers, operation model, TypeScript rendering, shared utilities |
+| `/type-implementations` | value logic that more than one target's codecs, data types and `now()` generators share |
+| `/target-package-config` | what a target package uses to restate its components' type declarations with its own module |
 
 ## Responsibilities
 

@@ -33,12 +33,12 @@ import {
 import {
   type AuthoringId,
   defaultSchemaPath,
-  scaffoldSpecifierResolverFor,
   type TargetId,
   targetEntrypoint,
   targetLabel,
   targetPackageName,
   targetPeerPackages,
+  workspaceTargetPackageName,
 } from '../commands/init/templates/code-templates';
 import {
   type CheckPrisma7Source,
@@ -197,10 +197,7 @@ function previousFacade(cwd: string, target: TargetId): string | undefined {
     return undefined;
   }
   const otherTarget: TargetId = target === 'postgres' ? 'mongo' : 'postgres';
-  const candidates = [
-    targetPackageName(otherTarget, scaffoldSpecifierResolverFor(otherTarget)),
-    targetPackageName(otherTarget),
-  ];
+  const candidates = [targetPackageName(otherTarget), workspaceTargetPackageName(otherTarget)];
   let parsed: Record<string, unknown>;
   try {
     parsed = JSON.parse(readFileSync(manifestPath, 'utf-8'));
@@ -639,7 +636,6 @@ function prisma6SchemaFound(
   { schema, target }: Prisma6Schema,
   packageManager: PackageManager,
 ) {
-  const resolveImportSpecifier = scaffoldSpecifierResolverFor(target);
   const { config, cli } = detection;
   const ownConfigPath =
     (config.kind === 'prisma7' || config.kind === 'unreadable') &&
@@ -655,9 +651,9 @@ function prisma6SchemaFound(
       packageManager,
       cliVersion: cli.kind === 'earlier' ? cli.version : undefined,
       ownConfigPath,
-      targetPackage: targetPackageName(target, resolveImportSpecifier),
+      targetPackage: targetPackageName(target),
       peerPackages: targetPeerPackages(target),
-      targetConfigEntrypoint: targetEntrypoint(target, 'config', resolveImportSpecifier),
+      targetConfigEntrypoint: targetEntrypoint(targetPackageName(target), 'config'),
     }),
   });
 }
