@@ -32,7 +32,7 @@ import {
   sqlitePslConfigFixture,
 } from './journey-test-helpers';
 
-export type ContractVersion = 'base' | 'next' | 'unique';
+export type ContractVersion = 'base' | 'next' | 'unique' | 'renamed';
 
 export type PolicyTarget = 'postgres' | 'sqlite' | 'mysql' | 'mongo';
 
@@ -73,6 +73,16 @@ model User {
   @@map("user")
 }
 `,
+  renamed: `// use prisma-8
+
+model User {
+  id       Int     @id
+  email    String
+  nickname String?
+
+  @@map("user")
+}
+`,
 };
 
 const MONGO_CONTRACTS = {
@@ -101,6 +111,16 @@ model User {
   id    ObjectId @id @map("_id")
   email String   @unique
   name  String?
+
+  @@map("users")
+}
+`,
+  renamed: `// use prisma-8
+
+model User {
+  id       ObjectId @id @map("_id")
+  email    String
+  nickname String?
 
   @@map("users")
 }
@@ -182,11 +202,12 @@ export function writeContract(project: PolicyProject, version: ContractVersion):
   writeFileSync(join(project.ctx.testDir, 'contract.prisma'), contracts[version], 'utf-8');
 }
 
-/** Emits `version` and plans a migration to it from the latest migration, returning the contract it ends at. */
+/** Emits `version` and plans a migration to it from the latest migration, with `statements`, returning the contract it ends at. */
 export async function planTo(
   project: PolicyProject,
   version: ContractVersion,
   name: string,
+  statements: readonly string[] = [],
 ): Promise<string> {
   const previous = getLatestMigrationDir(project.ctx);
   writeContract(project, version);
@@ -196,6 +217,7 @@ export async function planTo(
     '--name',
     name,
     ...(previous === undefined ? [] : ['--from', previous]),
+    ...statements,
   ]);
   expect(planned.exitCode, `plan ${name}: ${planned.stdout}\n${planned.stderr}`).toBe(0);
   return latestMigrationTo(project);
