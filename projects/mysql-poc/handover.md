@@ -42,7 +42,7 @@ Layout after 6a: MySQL in `packages/3-targets/mysql/1-mysql/{1-target,2-adapter,
 
 ## Merged: slice 6b-1, loading includes with one query per relation. Next: slice 6b-2
 
-**State on 2026-11-18 (`aida-20`):** 6b-1 merged as prisma/orm#31058 on 2026-11-17. Slice 6b-2 is built on branch `aida-20/tml-3697-mariadb-runtime` (the `bot` remote), cut from `main`: all four dispatches in `slices/mariadb-runtime/plan.md` are done, and the findings of its first code review (`slices/mariadb-runtime/reviews/6b-2/`) are fixed. Next: a second review of the fixes, manual QA on both servers, the PR.
+**State on 2026-11-18 (`aida-20`):** 6b-1 merged as prisma/orm#31058 on 2026-11-17. Slice 6b-2, the MariaDB runtime, is built, reviewed three times by an architect and a principal engineer, manually tested on live MySQL 8.4 and MariaDB 10.11, and open as prisma/orm#31082 from branch `tml-3697-mariadb-runtime`. It waits for Will's review. After it merges: project close-out. The `having` rounding difference found in review is TML-3841.
 
 **Why.** The ORM loads includes in one query: a correlated subquery aggregating child rows into JSON, reading from a derived table that refers to the outer row. MariaDB 10.11 cannot resolve that outer reference ("Unknown column"), so every row include fails on MariaDB. MariaDB also silently truncates `JSON_ARRAYAGG` (a cut on an element boundary is valid JSON with fewer rows), so no single-query rewrite is safe.
 
