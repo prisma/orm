@@ -89,7 +89,13 @@ export interface PreparedTargetPackage {
   readonly warnings: readonly string[];
 }
 
-export type PrepareTargetPackage = (packageName: string) => Promise<PreparedTargetPackage>;
+/** Why the target package is being installed, which the undo instruction says. */
+export type PreparationPurpose = 'prisma7-check' | 'init-contribution';
+
+export type PrepareTargetPackage = (
+  packageName: string,
+  purpose: PreparationPurpose,
+) => Promise<PreparedTargetPackage>;
 
 /** The install of the target package failed; nothing else has happened yet. */
 export class TargetPackageInstallFailed extends Error {
@@ -111,7 +117,7 @@ export function createTargetPackagePreparation(ctx: {
   readonly install: boolean;
   readonly importFromProject: ImportFromProject;
 }): PrepareTargetPackage {
-  return async (packageName) => {
+  return async (packageName, purpose) => {
     rejectUnparseableManifest(ctx.cwd);
     const warnings: string[] = [];
     let installed: readonly string[] = [];
@@ -140,6 +146,10 @@ export function createTargetPackagePreparation(ctx: {
           : {
               packages: newlyDeclared,
               removeCommand: formatRemoveCommand(ctx.packageManager, newlyDeclared),
+              reason:
+                purpose === 'prisma7-check'
+                  ? { kind: 'prisma7-check' }
+                  : { kind: 'init-contribution', packageName },
             };
     }
 

@@ -144,7 +144,10 @@ async function prepareTarget(
   report: { readonly authoring: ContractSourceFormat | 'prisma7'; readonly schemaPath: string },
 ): Promise<PreparedTargetPackage> {
   try {
-    return await prepareTargetPackage(target.packageName);
+    return await prepareTargetPackage(
+      target.packageName,
+      report.authoring === 'prisma7' ? 'prisma7-check' : 'init-contribution',
+    );
   } catch (error) {
     if (error instanceof TargetPackageInstallFailed) {
       throw new InitInstallFailedBeforeWriting(

@@ -508,16 +508,26 @@ export function errorInitAuthoringUnsupported(options: {
   );
 }
 
-/** Packages init installed before it found out it could not continue. */
+/**
+ * Packages init installed before it found out it could not continue, and why it installed them:
+ * to check a Prisma 7 schema, or to read the target package's init contribution.
+ */
 export interface PackagesAdded {
   readonly packages: readonly string[];
   readonly removeCommand: string;
+  readonly reason:
+    | { readonly kind: 'prisma7-check' }
+    | { readonly kind: 'init-contribution'; readonly packageName: string };
 }
 
-/** The next action that tells the user how to undo what the Prisma 7 check installed. */
+/** The next action that tells the user how to undo what init installed. */
 export function packagesAddedAction(added: PackagesAdded): string {
   const pronoun = added.packages.length === 1 ? 'it' : 'them';
-  return `init added ${added.packages.join(' and ')} to package.json before checking; remove ${pronoun} with \`${added.removeCommand}\`.`;
+  const packages = added.packages.join(' and ');
+  const remove = `remove ${pronoun} with \`${added.removeCommand}\`.`;
+  return added.reason.kind === 'prisma7-check'
+    ? `init added ${packages} to package.json before checking; ${remove}`
+    : `init installed ${packages} to read the init contribution of ${added.reason.packageName}; ${remove}`;
 }
 
 function packagesAddedNote(added: PackagesAdded | undefined): string {

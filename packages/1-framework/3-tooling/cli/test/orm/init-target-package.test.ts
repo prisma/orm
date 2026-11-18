@@ -88,7 +88,7 @@ function projectEntries(): string[] {
 const STARTER = ['orm', 'init', '--target', 'postgres', '--authoring', 'psl', '--json'];
 
 const REMOVE_ADDED =
-  'init added @prisma/orm-postgres and dotenv to package.json before checking; remove them with `pnpm remove @prisma/orm-postgres dotenv`.';
+  'init installed @prisma/orm-postgres and dotenv to read the init contribution of @prisma/orm-postgres; remove them with `pnpm remove @prisma/orm-postgres dotenv`.';
 
 function writePackage(
   name: string,

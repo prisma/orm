@@ -5,6 +5,7 @@ import type { InitContribution } from '../../src/commands/init/init-contribution
 import { type InitFlagValues, resolveInitInputs } from '../../src/orm/init-inputs';
 import type { CheckPrisma7Source, Prisma7SourceCheck } from '../../src/orm/init-prisma7-check';
 import type {
+  PreparationPurpose,
   PreparedTargetPackage,
   PrepareTargetPackage,
 } from '../../src/orm/init-target-package';
@@ -137,7 +138,7 @@ export function stubPrepare(
   prepared: Partial<PreparedTargetPackage> = {},
 ): PrepareTargetPackage & { readonly requests: string[] } {
   const requests: string[] = [];
-  const prepare = async (packageName: string) => {
+  const prepare = async (packageName: string, _purpose: PreparationPurpose) => {
     requests.push(packageName);
     return preparedTarget(prepared);
   };
