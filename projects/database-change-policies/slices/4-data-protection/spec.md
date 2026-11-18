@@ -41,7 +41,7 @@ No new check runs inside the runner. The runner already fails the run when the p
 
 The framework's `ControlFamilyInstance` already has `storageNameOf(operation)`, which `resolveRecordedPath` uses to name what a recorded operation acts on. It gains a sibling, `accessChangesOf(operations)`, which returns `MigrationAccessChange[]` for a migration's recorded operations. The SQL family delegates to its target, as it does for the operation preview. The name and the return type are the ones the planners already use.
 
-- **Postgres:** `disableRowLevelSecurity` (`widens: true`) and `dropRlsPolicy` (`widens: false`), recognised from `target.details.objectType` (`rowLevelSecurity`, `rlsPolicy`) and the operation's `id`, which the operation factory builds. A dropped policy that the same migration creates again is not an access change, as in the planner. Renaming a policy is not an access change. Nothing reads the label.
+- **Postgres:** `disableRowLevelSecurity` (`widens: true`) and `dropRlsPolicy` (`widens: false`), recognised from `target.details.objectType` (`rowLevelSecurity`, `rlsPolicy`) and the operation's `id`, which the operation factory builds. A dropped policy is not an access change when a policy the same migration creates, under the same name or generated-name prefix, is still there when the migration ends, as in the planner. Renaming a policy is not an access change. Nothing reads the label.
 - **SQLite, MySQL, MongoDB:** no such operations exist; the function returns none.
 
 `access-widening-forbidden` refuses every listed access change, whether `widens` is true or false. That matches `db update`, which asks about both, and the project spec's definition (an operation that changes who can read or write rows).
