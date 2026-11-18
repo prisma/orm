@@ -254,6 +254,12 @@ export interface FakePlannerScript {
   readonly operationsAccessorThrows?: unknown;
   /** The new required fields every `plan` call reports it gives a temporary value. */
   readonly temporaryValues?: readonly unknown[];
+  /** What every `plan` call reports would change who can read or write rows. */
+  readonly accessChanges?: readonly {
+    readonly operationIndex: number;
+    readonly subject: { readonly kind: 'storage'; readonly name: string };
+    readonly widens: boolean;
+  }[];
 }
 
 /**
@@ -316,7 +322,7 @@ function fakePlanner(script: FakePlannerScript): Record<string, unknown> {
               label: (operations ?? [ADDITIVE_OP])[entry.operationIndex]?.label,
               ...entry,
             })),
-            accessChanges: [],
+            accessChanges: script.accessChanges ?? [],
             temporaryValues: script.temporaryValues ?? [],
             ...(script.warnings === undefined ? {} : { warnings: script.warnings }),
             appliedStatements: options.statements.map((statement) => ({
