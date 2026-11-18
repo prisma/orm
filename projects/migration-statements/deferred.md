@@ -395,6 +395,8 @@ On the SQL targets, origin `A = "a"`, `X = "x"` and destination `A = "b"`, `N = 
 
 This is a rename with no statement, paired by storage, which the design note and the spec's rule forbid; the spec already refuses the case where a model that keeps its name takes the storage of a removed one. It needs a decision: ask about `X` (or `Account`) as removed, so the new member or model starts empty unless a `--rename` says otherwise, or refuse it as a takeover. Either changes plans that today succeed with no question, so it needs an upgrade note.
 
+**Decided (Will, 2026-11-19):** ask. The removed model or member is asked about as removed: `--delete` lets its rows go, and `--rename` to the new model or member keeps them. Not built yet; it is its own change with an upgrade note.
+
 ## A rename statement for an enum value is refused where the same change without a statement is planned
 
 `stillStoredRefusal` (`packages/2-sql-family/9-family/src/core/migrations/enum-value-planning.ts`, line 278, called at lines 590–593) refuses `--rename Role.A:Role.V` when the destination enum still stores the old value of `A` under another member. When that member is new, the rows that hold the old value belong to `A`, which the statement renames, so the refusal is not needed: origin `A = "a"`, destination `V = "v"` and a new `N = "a"` is refused, while origin `A = "a"`, destination `A = "v"` and a new `N = "a"` (the member keeps its name, no statement) is planned, with the rows rewritten to `"v"` and `N` starting with no rows. Statements are stricter than the contract change they describe. The check should skip a holder the origin enum does not have, as the freed-and-reused case of the stored-name spec does.
