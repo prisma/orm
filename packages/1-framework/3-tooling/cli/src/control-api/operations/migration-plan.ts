@@ -854,10 +854,7 @@ async function executeMigrationPlanCommandInner(
         label: entry.label,
         ...ifDefined('loss', entry.loss),
       }));
-    const refuseForbidden = (
-      legs: readonly PlannerSuccess[],
-      planned: readonly StatementText[] = statementTexts.filter(isPlannedStatement),
-    ) =>
+    const refuseForbidden = (leg: PlannerSuccess, planned: readonly StatementText[]) =>
       toRef === undefined
         ? undefined
         : refuseForbiddenChanges({
@@ -865,11 +862,18 @@ async function executeMigrationPlanCommandInner(
             command: 'migration plan',
             invocation: invocationOf(options),
             forbidden: forbiddingSettingsOfRef(toRef),
-            dataLoss: legs.flatMap((leg) => plannedOperations(leg, leg.dataLoss, planned)),
-            accessChanges: legs.flatMap((leg) =>
-              plannedOperations(leg, leg.accessChanges, planned),
-            ),
+            dataLoss: plannedOperations(leg, leg.dataLoss, planned),
+            accessChanges: plannedOperations(leg, leg.accessChanges, planned),
           });
+    const planLeg = async (
+      texts: readonly StatementText[],
+      ...args: Parameters<typeof runPlannerLeg>
+    ): Promise<Result<PlannerSuccess, CliStructuredError>> => {
+      const leg = await runPlannerLeg(...args);
+      if (!leg.ok) return leg;
+      const refused = refuseForbidden(leg.value, texts.filter(isPlannedStatement));
+      return refused === undefined ? leg : notOk(refused);
+    };
     const planner = migrations.createPlanner(controlAdapter);
     const planDestination: PlanDestination = {
       hash: toStorageHash,
@@ -900,10 +904,7 @@ async function executeMigrationPlanCommandInner(
             destination: toContract,
           });
           if (!resolved.ok) return resolved;
-          const replanned = await planDelta([...consentTexts, ...planned], resolved.value);
-          if (!replanned.ok) return replanned;
-          const refused = refuseForbidden([replanned.value], planned);
-          return refused === undefined ? replanned : notOk(refused);
+          return planDelta([...consentTexts, ...planned], resolved.value);
         },
       });
 
@@ -915,7 +916,8 @@ async function executeMigrationPlanCommandInner(
       const baselinePackageDir = join(appMigrationsDir, baselineDirName);
       const deltaPackageDir = join(appMigrationsDir, deltaDirName);
 
-      const baselineLeg = await runPlannerLeg(
+      const baselineLeg = await planLeg(
+        [],
         planner,
         migrations,
         frameworkComponents,
@@ -936,7 +938,8 @@ async function executeMigrationPlanCommandInner(
         texts: readonly StatementText[],
         resolved: readonly ResolvedMigrationStatement[],
       ) =>
-        runPlannerLeg(
+        planLeg(
+          texts,
           planner,
           migrations,
           frameworkComponents,
@@ -956,13 +959,6 @@ async function executeMigrationPlanCommandInner(
           : await planBaselineDelta(statementTexts, statements);
       if (plannedDelta !== undefined && !plannedDelta.ok) {
         return plannedDelta;
-      }
-      const forbiddenBaseline = refuseForbidden([
-        baselineLeg.value,
-        ...(plannedDelta === undefined ? [] : [plannedDelta.value]),
-      ]);
-      if (forbiddenBaseline !== undefined) {
-        return notOk(forbiddenBaseline);
       }
 
       const answered = await answerDataLoss(
@@ -1144,7 +1140,8 @@ async function executeMigrationPlanCommandInner(
       texts: readonly StatementText[],
       resolved: readonly ResolvedMigrationStatement[],
     ) =>
-      runPlannerLeg(
+      planLeg(
+        texts,
         planner,
         migrations,
         frameworkComponents,
@@ -1161,10 +1158,6 @@ async function executeMigrationPlanCommandInner(
     const plannedDelta = await planDelta(statementTexts, statements);
     if (!plannedDelta.ok) {
       return plannedDelta;
-    }
-    const forbidden = refuseForbidden([plannedDelta.value]);
-    if (forbidden !== undefined) {
-      return notOk(forbidden);
     }
     const answered = await answerDataLoss(undefined, plannedDelta.value, planDelta);
     if (!answered.ok) {
