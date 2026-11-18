@@ -201,8 +201,13 @@ describe('a transaction activity driven by hand', () => {
     await expect(transaction.rollback()).rejects.toMatchObject({
       code: 'RUNTIME.TRANSACTION_CLOSED',
     });
-    await transaction.commit();
+    await expect(transaction.commit()).rejects.toMatchObject({
+      code: 'RUNTIME.TRANSACTION_CLOSED',
+    });
 
+    expect(names(setup.events).filter((name) => name === 'commit' || name === 'rollback')).toEqual([
+      'commit',
+    ]);
     expect([...stages(setup.events), ...transactionStages(setup.events)]).toEqual([
       'finalized:statement:committed',
       'finalized:transaction:committed',
