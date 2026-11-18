@@ -8,7 +8,7 @@ import type { ChangedStorageEntity } from '../../control-api/operations/changed-
 import type { AppliedStatementReport } from '../../control-api/statements/report-applied-statements';
 import type { TemporaryValueReport } from '../../control-api/statements/temporary-values';
 import type { PerSpaceExecutionEntry } from '../../control-api/types';
-import type { DataProtectionSetting } from '../policy-errors';
+import type { DataProtectionSetting } from '../data-protection-settings';
 
 /**
  * Render a single statement of an `OperationPreview` for the human-readable

@@ -5,6 +5,7 @@ import { labelsText } from '../../control-api/statements/plan-questions';
 import { statementFlag } from '../../control-api/statements/statement-flag';
 import type { PerSpaceExecutionEntry } from '../../control-api/types';
 import { skippedOperationsText } from '../../utils/applied-summary';
+import type { DataProtectionSetting } from '../../utils/data-protection-settings';
 import {
   type MigrationCommandResult,
   previewBlockHeader,
@@ -12,7 +13,7 @@ import {
 } from '../../utils/formatters/migrations';
 import { runCommandAction } from '../../utils/next-actions';
 import { plannerWarningText } from '../../utils/planner-warning-text';
-import { type DataProtectionSetting, declaredSettingsText } from '../../utils/policy-errors';
+import { declaredSettingsText } from '../../utils/policy-errors';
 import { type CliInvocation, cliCommand, printedPlanCommand } from '../../utils/printed-command';
 import { appliedStatementBlocks } from '../statement-blocks';
 

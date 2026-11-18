@@ -49,6 +49,7 @@ import { notOk, ok, type Result } from '@internal/utils/result';
 import { join } from 'pathe';
 import { withEditsAsWritten } from '../../utils/calls-as-written';
 import { CliStructuredError, errorStatementNeedsMigrationFile } from '../../utils/cli-errors';
+import type { DataProtectionSetting } from '../../utils/data-protection-settings';
 import { dbInitPlanningFailedError, dbInitRunnerFailureError } from '../../utils/db-init-failure';
 import { dbUpdateRunnerFailureError } from '../../utils/db-update-failure';
 import {
@@ -60,7 +61,6 @@ import { dbUpdateKeepDataEditAdvice } from '../../utils/keep-data-edit-advice';
 import { planningRefusedError } from '../../utils/planning-refused-error';
 import {
   type DataProtectionRefusedOperation,
-  type DataProtectionSetting,
   declaredSettingsText,
 } from '../../utils/policy-errors';
 import type { CliInvocation } from '../../utils/printed-command';

@@ -14,14 +14,17 @@ import type { NamedRef } from '@internal/migration-tools/refs';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import type { CliStructuredError } from '../../utils/cli-errors';
 import {
+  type DataProtectionSetting,
+  FORBIDDEN_LEVEL,
+  PERMITTED_LEVEL,
+} from '../../utils/data-protection-settings';
+import {
   type ChangePolicyCheckedCommand,
   type DataProtectionCheckedCommand,
   type DataProtectionRefusedOperation,
-  type DataProtectionSetting,
   errorChangePolicyForbids,
   errorDataProtectionForbids,
   errorPolicyMismatch,
-  FORBIDDEN_LEVEL,
   type PolicySource,
 } from '../../utils/policy-errors';
 import type { CliInvocation } from '../../utils/printed-command';
@@ -119,13 +122,6 @@ export function dataProtectionOfRun(
 ): DatabasePolicies['dataProtection'] {
   return checked.toWrite?.policies.dataProtection ?? checked.inForce.dataProtection;
 }
-
-const PERMITTED_LEVEL = {
-  dataLoss: 'data-loss-permitted',
-  accessWidening: 'access-widening-permitted',
-} as const satisfies {
-  readonly [S in DataProtectionSetting]: DatabasePolicies['dataProtection'][S];
-};
 
 /** The data protection settings a checked run obeys at their `permitted` level: nobody is asked about what they cover. */
 export function permittedSettingsOfRun(

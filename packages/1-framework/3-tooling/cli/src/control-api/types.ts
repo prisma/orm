@@ -36,7 +36,7 @@ import type { AggregateMigrationEdgeRef } from '@internal/migration-tools/aggreg
 import type { NamedRef } from '@internal/migration-tools/refs';
 import type { Result } from '@internal/utils/result';
 import type { CliStructuredError } from '../utils/cli-errors';
-import type { DataProtectionSetting } from '../utils/policy-errors';
+import type { DataProtectionSetting } from '../utils/data-protection-settings';
 import type { CliInvocation } from '../utils/printed-command';
 import type { ChangedStorageEntity } from './operations/changed-storage-entities';
 import type { ExecuteDbSignResult } from './operations/db-sign';

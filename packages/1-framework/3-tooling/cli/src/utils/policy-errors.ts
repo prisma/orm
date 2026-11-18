@@ -8,6 +8,7 @@ import {
 } from '@internal/framework-components/control';
 import { shellQuoted } from '../control-api/statements/statement-flag';
 import { ActionableCliError } from './cli-errors';
+import { type DataProtectionSetting, FORBIDDEN_LEVEL } from './data-protection-settings';
 import { chooseAction, runCommandAction } from './next-actions';
 import { type CliInvocation, cliCommand } from './printed-command';
 
@@ -108,9 +109,6 @@ export function errorChangePolicyForbids(args: {
   );
 }
 
-/** A setting of the data protection policy. */
-export type DataProtectionSetting = keyof DatabasePolicies['dataProtection'];
-
 export type DataProtectionCheckedCommand = 'db migrate' | 'db update' | 'migration plan';
 
 /** An operation a data protection setting refuses: its subject as the user names it, and for `db migrate` the migration that holds it. */
@@ -130,14 +128,6 @@ export interface DataProtectionRefusal {
   readonly source: PolicySource;
   readonly operations: readonly DataProtectionRefusedOperation[];
 }
-
-/** Each data protection setting's `forbidden` level. */
-export const FORBIDDEN_LEVEL = {
-  dataLoss: 'data-loss-forbidden',
-  accessWidening: 'access-widening-forbidden',
-} as const satisfies {
-  readonly [S in DataProtectionSetting]: DatabasePolicies['dataProtection'][S];
-};
 
 const FORBIDDEN_CHANGE = {
   dataLoss: 'data loss',
