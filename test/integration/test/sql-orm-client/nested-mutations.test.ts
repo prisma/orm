@@ -909,6 +909,33 @@ describe.each(includeStrategies)('integration/nested-mutations (%s)', (strategy)
   );
 
   it(
+    'update() delete() on a relation the parent holds the key for deletes the row its filter found, even when the filter depends on the link',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime, strategy);
+        await seedUsers(runtime, [
+          { id: 1, name: 'Alice', email: 'alice@example.com' },
+          { id: 2, name: 'Bob', email: 'bob@example.com', invitedById: 1 },
+        ]);
+
+        const updated = await users
+          .where({ id: 2 })
+          .select('id', 'invitedById')
+          .update({
+            invitedBy: (inviter) =>
+              inviter.where((user) => user.invitedUsers.some({ id: 2 })).delete(),
+          });
+
+        expect(updated).toEqual({ id: 2, invitedById: null });
+        expect(await runtime.query('select id, invited_by_id from users order by id')).toEqual([
+          { id: 2, invited_by_id: null },
+        ]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
     'update() refuses delete() on a relation the parent holds a required key for, before any statement runs',
     async () => {
       await withCollectionRuntime(async (runtime) => {

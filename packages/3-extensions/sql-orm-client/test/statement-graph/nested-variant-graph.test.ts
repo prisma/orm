@@ -759,7 +759,7 @@ describe('update and delete on a variant', () => {
         'n1 Find task_comments where id = 1',
         "n2 Find tasks where type = 'feature' limit 1 <- FilterData n1 (task_id->id)",
         'n3 Update task_comments set task_id = null <- FilterData n1 (id->id), FilterData n2 (id->task_id)',
-        `n4 Delete tasks where ${featureExists('')} <- FilterData n2 (id->id), FilterData n1 (task_id->id)`,
+        'n4 Delete tasks <- FilterData n2 (id->id)',
         'n5 Find task_comments <- FilterData n1 (id->id)',
         'result: n5',
       ].join('\n'),

@@ -185,15 +185,22 @@ export function addDeleteFirst(
   b: Builder,
   collection: DescribeCollectionRowsOptions,
   sources: Sources,
-  beforeDelete: (found: NodeId) => void = () => undefined,
+  unlinkFound?: (found: NodeId) => void,
 ): void {
   const find = addFindOfFirstRelated(b, collection, 'delete()', sources);
-  beforeDelete(find);
-  deleteRows(b, collection.state.tables, {
-    where: whereOf(collection),
-    filters: [{ from: find, columns: sameRowColumns(collection) }, ...sources.filters],
-    links: sources.links,
-  });
+  unlinkFound?.(find);
+  const byFoundKey = [{ from: find, columns: sameRowColumns(collection) }];
+  deleteRows(
+    b,
+    collection.state.tables,
+    unlinkFound === undefined
+      ? {
+          where: whereOf(collection),
+          filters: [...byFoundKey, ...sources.filters],
+          links: sources.links,
+        }
+      : { where: undefined, filters: byFoundKey, links: [] },
+  );
 }
 
 function addFindOfFirstRelated(

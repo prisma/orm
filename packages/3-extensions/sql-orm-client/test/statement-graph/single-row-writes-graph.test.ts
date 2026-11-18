@@ -209,7 +209,7 @@ describe('update() and delete() on a relation the parent holds the key for', () 
         'n1 Find users where id = 1',
         "n2 Find users where name = 'Grace' limit 1 <- FilterData n1 (invited_by_id->id)",
         'n3 Update users set invited_by_id = null <- FilterData n1 (id->id), FilterData n2 (id->invited_by_id)',
-        "n4 Delete users where name = 'Grace' <- FilterData n2 (id->id), FilterData n1 (invited_by_id->id)",
+        'n4 Delete users <- FilterData n2 (id->id)',
         'n5 Find users <- FilterData n1 (id->id)',
         'result: n5',
       ].join('\n'),
