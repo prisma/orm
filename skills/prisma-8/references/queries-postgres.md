@@ -630,6 +630,21 @@ await db.transaction(async (tx) => {
 
 The callback's return value passes through `db.transaction(...)`. Capture inserted ids out of the callback and use them downstream after commit.
 
+`tx.transaction(async (inner) => ...)` runs work in a savepoint inside the transaction, to any depth; `inner` has the same members as `tx`. If its callback throws, only its work rolls back, the error is rethrown, and `tx` can go on. Await it before using `tx` again: while it runs, `tx` rejects work with `RUNTIME.TRANSACTION_SUSPENDED`. It takes no options.
+
+```typescript
+await db.transaction(async (tx) => {
+  await tx.orm.public.User.create({ id, email });
+  await tx
+    .transaction(async (inner) => {
+      await inner.orm.public.Post.create({ userId: id, title: 'draft' });
+      throw new Error('discard the post');
+    })
+    .catch(() => {});
+  // The user is committed, the post is not.
+});
+```
+
 To read a row and then write it without another transaction changing it in between, lock it when you read it. The lock lasts until the transaction ends; outside a transaction it is released when the statement ends.
 
 ```typescript
