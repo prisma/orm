@@ -1,4 +1,5 @@
 import type { InitProbeResult } from '@internal/cli/init-contribution';
+import type { QueryConfig } from 'pg';
 
 /**
  * Extracts the numeric prefix from a Postgres `version()` row, e.g.
@@ -28,7 +29,12 @@ export async function probePostgres(databaseUrl: string): Promise<InitProbeResul
   client.on('error', () => {});
   try {
     await client.connect();
-    const result = await client.query<{ version: string }>('SELECT version() as version');
+    // pg reads query_timeout from a query's config as well, where the URL cannot override it.
+    const versionQuery: QueryConfig & { readonly query_timeout: number } = {
+      text: 'SELECT version() as version',
+      query_timeout: PROBE_TIMEOUT_MILLIS,
+    };
+    const result = await client.query<{ version: string }>(versionQuery);
     const versionString = String(result.rows[0]?.version ?? '');
     const serverVersion = parsePostgresVersion(versionString);
     return serverVersion === undefined

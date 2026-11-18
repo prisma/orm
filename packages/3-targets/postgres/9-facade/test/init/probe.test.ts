@@ -17,7 +17,9 @@ class FakeClient {
   async connect(): Promise<void> {
     if (connectError !== undefined) throw connectError;
   }
-  async query(): Promise<{ rows: Array<{ version: string }> }> {
+  readonly queries: unknown[] = [];
+  async query(config: unknown): Promise<{ rows: Array<{ version: string }> }> {
+    this.queries.push(config);
     return { rows: [{ version: versionRow }] };
   }
   end = endSpy;
@@ -75,6 +77,14 @@ describe('probePostgres', () => {
       connectionTimeoutMillis: 20_000,
       query_timeout: 20_000,
     });
+  });
+
+  it('bounds the version query itself, so a query_timeout in the URL cannot lift the limit', async () => {
+    await probePostgres('postgres://localhost:5432/db?query_timeout=0');
+
+    expect(clients[0]?.queries).toEqual([
+      { text: 'SELECT version() as version', query_timeout: 20_000 },
+    ]);
   });
 
   it('attaches an error listener so a dropped connection cannot crash the process', async () => {
