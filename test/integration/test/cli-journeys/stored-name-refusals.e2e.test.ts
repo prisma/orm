@@ -3,7 +3,7 @@
  *
  * The Postgres twin of `stored-name-refusals.sqlite.e2e.test.ts`. A model or field that keeps its name while its table or column changes is planned as a rename, unless the rename's new name is taken: by another model's or field's old name (a swap), by a rename statement (a chain, in either direction), or by a model or field the change removes (a takeover). Each journey runs once through `migration plan` and `db migrate`, and once through `db update`.
  *
- * Each refusal is asserted whole: no statement is named in it. Its advice is then followed as printed, in two plans through names nothing uses, and the rows are read back under the right names.
+ * Each refusal is asserted whole: no statement is named in it. Its advice is then followed as printed, in two plans, and the rows are read back under the right names. A takeover offers two routes, removing the model in the first plan or moving its table to a name nothing uses, and both are followed.
  *
  * The swapped models and fields differ in shape, so that the destination's storage differs from the origin's.
  */
@@ -313,6 +313,38 @@ const SCENARIOS: readonly RefusalScenario[] = [
             operationClass: 'widening',
           },
           { label: 'Drop table "prisma_swap_accounts"', operationClass: 'destructive' },
+        ],
+      },
+    ],
+    tables: { accounts: [USER_ROW] },
+  },
+  {
+    name: 'a changed @@map takes the table of a removed model, and the model is removed first',
+    from: models('users', 'accounts'),
+    seed: MODELS_SEED,
+    to: models('accounts', undefined),
+    args: [],
+    conflict: {
+      summary:
+        'Cannot rename table "users" to "accounts": the schema being planned from already has a table "accounts"',
+      why: 'The table of model "public.User" changes from "users" to "accounts", and the schema being planned from already has table "accounts", the table of model "public.Account". Without the rename the plan would read the rows of table "accounts" as rows of model "public.User". Make the change in two plans: first remove model "public.Account", or keep it and change its table to a name nothing uses, such as "prisma_swap_accounts", and plan and apply that; then make this change and plan again.',
+      location: { namespaceId: 'public', entityKind: 'table', entityName: 'users' },
+    },
+    steps: [
+      {
+        psl: models('users', undefined),
+        args: ['--delete', 'Account'],
+        operations: [{ label: 'Drop table "accounts"', operationClass: 'destructive' }],
+      },
+      {
+        psl: models('accounts', undefined),
+        args: [],
+        operations: [
+          { label: 'Rename table "users" to "accounts"', operationClass: 'widening' },
+          {
+            label: 'Rename primary key "users_pkey" to "accounts_pkey" on "accounts"',
+            operationClass: 'widening',
+          },
         ],
       },
     ],
