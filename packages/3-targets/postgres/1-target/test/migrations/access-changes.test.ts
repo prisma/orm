@@ -95,6 +95,35 @@ describe('recordedAccessChangesOf', () => {
     ]);
   });
 
+  it('lists a dropped policy when the migration renames its replacement and drops that', async () => {
+    const operations = recorded([
+      await dropRlsPolicy('public', 'profiles', 'read_own_ab12cd34', lowerer),
+      await createRlsPolicy('public', 'profiles', policy('read_own', 'ef56ab78'), lowerer),
+      await renameRlsPolicy('public', 'profiles', 'read_own_ef56ab78', 'owner_ef56ab78', lowerer),
+      await dropRlsPolicy('public', 'profiles', 'owner_ef56ab78', lowerer),
+    ]);
+
+    expect(recordedAccessChangesOf(operations)).toEqual([
+      { operationIndex: 0, subject: PROFILES, widens: false },
+    ]);
+  });
+
+  it('does not list a dropped policy whose replacement the migration renames and keeps', async () => {
+    const operations = recorded([
+      await dropRlsPolicy('public', 'profiles', 'read_own_ab12cd34', lowerer),
+      await createRlsPolicy('public', 'profiles', policy('read_own', 'ef56ab78'), lowerer),
+      await renameRlsPolicy(
+        'public',
+        'profiles',
+        'read_own_ef56ab78',
+        'read_own_11223344',
+        lowerer,
+      ),
+    ]);
+
+    expect(recordedAccessChangesOf(operations)).toEqual([]);
+  });
+
   it('does not list a policy the migration both creates and drops', async () => {
     const operations = recorded([
       await createRlsPolicy('public', 'profiles', policy('read_own', 'ef56ab78'), lowerer),

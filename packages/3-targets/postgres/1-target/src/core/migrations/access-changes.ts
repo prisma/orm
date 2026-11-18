@@ -10,6 +10,7 @@ import {
   disableRowLevelSecurityIdentity,
   dropRlsPolicyIdentity,
   type RlsOperationIdentity,
+  renameRlsPolicyIdentity,
 } from './operations/rls';
 
 /** An entry of the given list, by its position, that changes who can read or write the rows of `schema.table`. */
@@ -60,6 +61,22 @@ function policyOf(
   return identity.id === identityOf(schema, table, name).id ? { schema, table, name } : undefined;
 }
 
+/** The policy `identity` renames and what it becomes, when it is the operation `renameRlsPolicy` builds. */
+function renamedPolicy(
+  identity: UncheckedIdentity,
+): { readonly from: Policy; readonly to: Policy } | undefined {
+  const target = RlsPolicyTarget(identity.target);
+  if (target instanceof type.errors) return undefined;
+  const { schema, table, name } = target.details;
+  const prefix = `rlsPolicy.${schema}.${table}.`;
+  const suffix = '.rename';
+  if (!identity.id.startsWith(prefix) || !identity.id.endsWith(suffix)) return undefined;
+  const from = identity.id.slice(prefix.length, -suffix.length);
+  return identity.id === renameRlsPolicyIdentity(schema, table, from, name).id
+    ? { from: { schema, table, name: from }, to: { schema, table, name } }
+    : undefined;
+}
+
 /**
  * A policy's identity across a replacement: its name, or the prefix of a generated (wire) name,
  * whose hash changes with the policy's body.
@@ -95,6 +112,14 @@ export function accessChangesOfIdentities(
     if (created !== undefined) {
       const key = policyKey(created);
       createdAndKept.set(key, (createdAndKept.get(key) ?? new Set()).add(created.name));
+      return;
+    }
+    const renamed = renamedPolicy(identity);
+    if (renamed !== undefined) {
+      if (createdAndKept.get(policyKey(renamed.from))?.delete(renamed.from.name)) {
+        const key = policyKey(renamed.to);
+        createdAndKept.set(key, (createdAndKept.get(key) ?? new Set()).add(renamed.to.name));
+      }
       return;
     }
     const dropped = policyOf(identity, dropRlsPolicyIdentity);
