@@ -194,6 +194,44 @@ describe('db update --dry-run on a database whose data protection policy permits
     });
   });
 
+  it('says on an apply that the policy permitted the access changes it applied', async () => {
+    mocks.dbUpdate.mockResolvedValue(
+      ok({
+        ...permittedPlan(),
+        mode: 'apply',
+        permitted: ['accessWidening'],
+        dataLoss: [],
+        appliedStatements: [
+          {
+            verb: 'allow',
+            statement: { kind: 'allow', subject: user },
+            description: 'allow model "User"',
+            operationIndexes: [1],
+          },
+        ],
+        execution: { operationsPlanned: 1, operationsExecuted: 1 },
+        marker: { storageHash: DEST_HASH },
+      }),
+    );
+
+    const human = await harness().run(['db', 'update'], {
+      cwd: projectDir,
+      isTty: { stdout: true },
+    });
+
+    expect(
+      human.presented?.presentation.human.filter((block) =>
+        JSON.stringify(block).includes('without asking'),
+      ),
+    ).toEqual([
+      {
+        kind: 'summary',
+        status: 'info',
+        text: "This database's data protection policy permits changing who can read or write data, so these access changes were applied without asking.",
+      },
+    ]);
+  });
+
   it('says nothing about the policy on an apply that deleted nothing', async () => {
     mocks.dbUpdate.mockResolvedValue(
       ok({
