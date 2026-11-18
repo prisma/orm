@@ -1,4 +1,9 @@
 import type { LedgerEntryRecord } from '@internal/contract/types';
+import {
+  DATABASE_POLICIES_META_KEY,
+  type MarkerDestination,
+  storedDatabasePolicies,
+} from '@internal/framework-components/control';
 import { ledgerOriginFromStored } from '@internal/migration-tools/ledger-origin';
 import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
 import { decodeMysqlDatetime } from '@internal/target-mysql/codecs';
@@ -54,41 +59,22 @@ export async function readLedgerEntries(
   });
 }
 
-export interface MarkerDestination {
-  readonly storageHash: string;
-  readonly profileHash: string;
-  readonly invariants?: readonly string[];
+const MARKER_INSERT = `INSERT INTO ${quoteIdentifier(MARKER_TABLE_NAME)} (space, core_hash, profile_hash, contract_json, canonical_version, updated_at, app_tag, meta, invariants) VALUES (?, ?, ?, NULL, NULL, CURRENT_TIMESTAMP(3), NULL, ?, ?)`;
+
+function metaOnInsert(destination: MarkerDestination): Record<string, unknown> {
+  return destination.databasePolicies === undefined
+    ? {}
+    : { [DATABASE_POLICIES_META_KEY]: storedDatabasePolicies(destination.databasePolicies) };
 }
 
-/** The SQL a marker column is written with, or the value bound for it from the destination. */
-type MarkerValue = string | ((destination: MarkerDestination) => unknown);
-
-/** Every column of the marker row except its key, `space`, with what both the insert and the upsert's update write to it. */
-const MARKER_COLUMNS: readonly (readonly [column: string, value: MarkerValue])[] = [
-  ['core_hash', (destination) => destination.storageHash],
-  ['profile_hash', (destination) => destination.profileHash],
-  ['contract_json', 'NULL'],
-  ['canonical_version', 'NULL'],
-  ['updated_at', 'CURRENT_TIMESTAMP(3)'],
-  ['app_tag', 'NULL'],
-  ['meta', "'{}'"],
-  ['invariants', (destination) => JSON.stringify(destination.invariants ?? [])],
-];
-
-function markerValueSql(value: MarkerValue): string {
-  return typeof value === 'string' ? value : '?';
-}
-
-const MARKER_INSERT = `INSERT INTO ${quoteIdentifier(MARKER_TABLE_NAME)} (space, ${MARKER_COLUMNS.map(([column]) => column).join(', ')}) VALUES (?, ${MARKER_COLUMNS.map(([, value]) => markerValueSql(value)).join(', ')})`;
-
-const MARKER_UPDATE = MARKER_COLUMNS.map(
-  ([column, value]) => `${column} = ${markerValueSql(value)}`,
-).join(', ');
-
-function markerColumnParams(destination: MarkerDestination): readonly unknown[] {
-  return MARKER_COLUMNS.flatMap(([, value]) =>
-    typeof value === 'string' ? [] : [value(destination)],
-  );
+function markerInsertParams(space: string, destination: MarkerDestination): readonly unknown[] {
+  return [
+    space,
+    destination.storageHash,
+    destination.profileHash,
+    JSON.stringify(metaOnInsert(destination)),
+    JSON.stringify(destination.invariants ?? []),
+  ];
 }
 
 /** Inserts the marker row of `space`; fails when the space already has one. */
@@ -97,21 +83,40 @@ export async function insertMarkerRow(
   space: string,
   destination: MarkerDestination,
 ): Promise<void> {
-  await driver.query(MARKER_INSERT, [space, ...markerColumnParams(destination)]);
+  await driver.query(MARKER_INSERT, markerInsertParams(space, destination));
 }
 
-/** Writes the marker row of `space`, replacing the row the space already has. The update binds the values again instead of naming a row alias, which MariaDB does not accept, or `VALUES()`, which MySQL deprecates. */
+/** Writes the marker row of `space`, replacing the row the space already has. Its `meta` is kept, with `policies` set when the destination records them. The update binds its values again instead of naming a row alias, which MariaDB does not accept, or `VALUES()`, which MySQL deprecates. */
 export async function upsertMarkerRow(
   driver: Driver,
   space: string,
   destination: MarkerDestination,
 ): Promise<void> {
-  const params = markerColumnParams(destination);
-  await driver.query(`${MARKER_INSERT} ON DUPLICATE KEY UPDATE ${MARKER_UPDATE}`, [
-    space,
-    ...params,
-    ...params,
+  const columns =
+    'core_hash = ?, profile_hash = ?, contract_json = NULL, canonical_version = NULL, updated_at = CURRENT_TIMESTAMP(3), app_tag = NULL, invariants = ?';
+  const columnParams = [
+    destination.storageHash,
+    destination.profileHash,
+    JSON.stringify(destination.invariants ?? []),
+  ];
+  const [update, updateParams] =
+    destination.databasePolicies === undefined
+      ? [columns, columnParams]
+      : [
+          `${columns}, meta = JSON_SET(meta, '$.${DATABASE_POLICIES_META_KEY}', JSON_EXTRACT(?, '$'))`,
+          [...columnParams, JSON.stringify(storedDatabasePolicies(destination.databasePolicies))],
+        ];
+  await driver.query(`${MARKER_INSERT} ON DUPLICATE KEY UPDATE ${update}`, [
+    ...markerInsertParams(space, destination),
+    ...updateParams,
   ]);
+}
+
+function metaOf(text: unknown): Record<string, unknown> {
+  const parsed = parseJsonColumn('meta', text);
+  return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+    ? Object.fromEntries(Object.entries(parsed))
+    : {};
 }
 
 function invariantsOf(text: unknown): readonly string[] {
@@ -120,7 +125,7 @@ function invariantsOf(text: unknown): readonly string[] {
 }
 
 /**
- * Advances the marker row of `space` from `expectedFrom` to `destination`, and says whether it did. MySQL has no `RETURNING`, so the row is read and locked with `FOR UPDATE` first, inside the transaction the caller holds, and written only when it still holds `expectedFrom`. Supplied invariants are merged with the stored ones.
+ * Advances the marker row of `space` from `expectedFrom` to `destination`, and says whether it did. MySQL has no `RETURNING`, so the row is read and locked with `FOR UPDATE` first, inside the transaction the caller holds, and written only when it still holds `expectedFrom`. Supplied invariants are merged with the stored ones; supplied policies replace `meta.policies`.
  */
 export async function compareAndSwapMarkerRow(
   driver: Driver,
@@ -129,7 +134,7 @@ export async function compareAndSwapMarkerRow(
   destination: MarkerDestination,
 ): Promise<boolean> {
   const { rows } = await driver.query(
-    `SELECT core_hash, invariants FROM ${quoteIdentifier(MARKER_TABLE_NAME)} WHERE space = ? FOR UPDATE`,
+    `SELECT core_hash, meta, invariants FROM ${quoteIdentifier(MARKER_TABLE_NAME)} WHERE space = ? FOR UPDATE`,
     [space],
   );
   const [row] = rows;
@@ -138,12 +143,20 @@ export async function compareAndSwapMarkerRow(
     destination.invariants === undefined
       ? undefined
       : [...new Set([...invariantsOf(row['invariants']), ...destination.invariants])].sort();
+  const meta =
+    destination.databasePolicies === undefined
+      ? undefined
+      : {
+          ...metaOf(row['meta']),
+          [DATABASE_POLICIES_META_KEY]: storedDatabasePolicies(destination.databasePolicies),
+        };
   await driver.query(
-    `UPDATE ${quoteIdentifier(MARKER_TABLE_NAME)} SET core_hash = ?, profile_hash = ?, updated_at = CURRENT_TIMESTAMP(3)${invariants === undefined ? '' : ', invariants = ?'} WHERE space = ? AND core_hash = ?`,
+    `UPDATE ${quoteIdentifier(MARKER_TABLE_NAME)} SET core_hash = ?, profile_hash = ?, updated_at = CURRENT_TIMESTAMP(3)${invariants === undefined ? '' : ', invariants = ?'}${meta === undefined ? '' : ', meta = ?'} WHERE space = ? AND core_hash = ?`,
     [
       destination.storageHash,
       destination.profileHash,
       ...(invariants === undefined ? [] : [JSON.stringify(invariants)]),
+      ...(meta === undefined ? [] : [JSON.stringify(meta)]),
       space,
       expectedFrom,
     ],

@@ -68,6 +68,7 @@ const ALL_POLICY: MigrationOperationPolicy = {
 };
 
 const NOOP_MARKER_OPS: MarkerOperations = {
+  markerLocation: '_prisma_migrations',
   readMarker: async () => null,
   initMarker: async () => {},
   updateMarker: async () => true,
@@ -519,6 +520,7 @@ describe('MongoMigrationRunner schema verification', () => {
   function makeTrackingMarkerOps(): { ops: MarkerOperations; calls: MarkerCallLog } {
     const calls = { initMarker: 0, updateMarker: 0, writeLedgerEntry: 0 };
     const ops: MarkerOperations = {
+      markerLocation: '_prisma_migrations',
       readMarker: async () => null,
       initMarker: async () => {
         calls.initMarker++;
@@ -675,6 +677,7 @@ function makeLedgerHarness(): {
 } {
   const ledgerEntries: LedgerEntryPayload[] = [];
   const markerOps: MarkerOperations = {
+    markerLocation: '_prisma_migrations',
     readMarker: async () => null,
     initMarker: async () => {},
     updateMarker: async () => true,

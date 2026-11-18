@@ -1,4 +1,12 @@
 import { CliStructuredError } from '@internal/errors/control';
+import {
+  ACCESS_WIDENING_LEVELS,
+  CHANGE_STRATEGIES,
+  DATA_LOSS_LEVELS,
+  DATA_PROTECTION_KEYS,
+  DATABASE_POLICIES_KEYS,
+  type DeclaredDatabasePoliciesIssue,
+} from '@internal/framework-components/control';
 import { ifDefined } from '@internal/utils/defined';
 import type { NextAction } from '@internal/utils/structured-error';
 import { isStructuredError } from '@internal/utils/structured-error';
@@ -240,10 +248,62 @@ export function errorInvalidRefs(refsPath: string, reason: string): MigrationToo
   });
 }
 
-export function errorInvalidRefFile(filePath: string, reason: string): MigrationToolsError {
+function alternatives(values: readonly string[], conjunction: 'or' | 'and' = 'or'): string {
+  const quoted = values.map((value) => JSON.stringify(value));
+  return quoted.length === 1
+    ? (quoted[0] ?? '')
+    : `${quoted.slice(0, -1).join(', ')} ${conjunction} ${quoted.at(-1)}`;
+}
+
+const REF_FILE_SHAPE =
+  'Make the ref file valid JSON of the form { "hash": "<64 hex chars>", "invariants": ["..."] }, with an optional "policies" object.';
+
+type DatabasePoliciesKey = (typeof DATABASE_POLICIES_KEYS)[number];
+type DataProtectionKey = (typeof DATA_PROTECTION_KEYS)[number];
+
+const DATA_PROTECTION_VALUES: Readonly<Record<DataProtectionKey, readonly string[]>> = {
+  dataLoss: DATA_LOSS_LEVELS,
+  accessWidening: ACCESS_WIDENING_LEVELS,
+};
+
+/** How to correct each top-level key of a ref's `policies`, given its key path as printed. */
+const POLICY_KEY_FIXES: Readonly<Record<DatabasePoliciesKey, (key: string) => string>> = {
+  change: (key) =>
+    `Set ${key} to a non-empty list whose items are ${alternatives(CHANGE_STRATEGIES)}.`,
+  dataProtection: (key) =>
+    `Set ${key} to an object with ${alternatives(DATA_PROTECTION_KEYS, 'and')}, each optional.`,
+};
+
+function isOneOf<T extends string>(values: readonly T[], value: string | undefined): value is T {
+  return values.some((candidate) => candidate === value);
+}
+
+/** How to correct one invalid key of a ref's `policies`: its allowed values, or its removal when the key is not one a declaration has. */
+function policyIssueFix({ path }: DeclaredDatabasePoliciesIssue): string {
+  if (path === '') {
+    return `Set policies to an object with ${alternatives(DATABASE_POLICIES_KEYS, 'and')}, each optional.`;
+  }
+  const key = `policies.${path}`;
+  const [first, second, ...rest] = path.split('.');
+  if (/^change\[\d+\]$/.test(path)) return `Set ${key} to ${alternatives(CHANGE_STRATEGIES)}.`;
+  if (second === undefined && isOneOf(DATABASE_POLICIES_KEYS, first)) {
+    return POLICY_KEY_FIXES[first](key);
+  }
+  if (first === 'dataProtection' && rest.length === 0 && isOneOf(DATA_PROTECTION_KEYS, second)) {
+    return `Set ${key} to ${alternatives(DATA_PROTECTION_VALUES[second])}.`;
+  }
+  return `Remove ${key}.`;
+}
+
+/** `MIGRATION.INVALID_REF_FILE`; `policyIssues` are the invalid keys of the ref's `policies`, which the fix names. */
+export function errorInvalidRefFile(
+  filePath: string,
+  reason: string,
+  policyIssues: readonly DeclaredDatabasePoliciesIssue[] = [],
+): MigrationToolsError {
   return new MigrationToolsError('MIGRATION.INVALID_REF_FILE', 'Invalid ref file', {
     why: `Ref file at "${filePath}" is invalid: ${reason}`,
-    fix: 'Ensure the ref file contains valid JSON with { "hash": "<64 hex chars>", "invariants": ["..."] }.',
+    fix: policyIssues.length === 0 ? REF_FILE_SHAPE : policyIssues.map(policyIssueFix).join(' '),
     meta: { path: filePath, reason },
   });
 }

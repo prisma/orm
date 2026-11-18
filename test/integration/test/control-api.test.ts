@@ -401,6 +401,7 @@ describe('control-api', () => {
               const signResult = await client.dbSign({
                 contract: familyInstance.deserializeContract(contractJson),
                 migrationsDir: resolve(testDir, 'migrations'),
+                invocation: { cwd: testDir, configPath: undefined, dbGiven: false },
               });
 
               expect(signResult.assertOk().spaces).toMatchObject([

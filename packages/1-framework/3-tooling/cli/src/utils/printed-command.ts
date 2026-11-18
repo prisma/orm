@@ -9,7 +9,7 @@ export interface CliInvocation {
   readonly cwd: string;
   readonly configPath: string | undefined;
   readonly dbGiven: boolean;
-  /** The arguments a re-run of the same command repeats, such as its statements. */
+  /** The flags other than statements that a re-run of the same command repeats: those the user gave. */
   readonly rerunArgs?: readonly string[];
   /** The run's statements, as flags, which another command that plans the same change repeats. */
   readonly statementArgs?: readonly string[];
@@ -21,6 +21,32 @@ export function cliInvocation(
   db: string | undefined,
 ): CliInvocation {
   return { cwd: ctx.cwd, configPath: ctx.configPath, dbGiven: db !== undefined };
+}
+
+/** The flags of `db migrate` or `db update` that a re-run repeats, as the user gave them. */
+export function rerunFlags(flags: {
+  readonly to: string | undefined;
+  readonly advanceRef: string | undefined;
+  readonly permitPolicyChange: boolean | undefined;
+}): readonly string[] {
+  return [
+    ...(flags.to === undefined ? [] : ['--to', shellQuoted(flags.to)]),
+    ...(flags.advanceRef === undefined ? [] : ['--advance-ref', shellQuoted(flags.advanceRef)]),
+    ...(flags.permitPolicyChange === true ? ['--permit-policy-change'] : []),
+  ];
+}
+
+/** The `db migrate` the user ran, with the flags they gave. */
+export function dbMigrateRerun(invocation: CliInvocation): string {
+  return cliCommand(invocation, 'db migrate', invocation.rerunArgs ?? []);
+}
+
+/** The `db update` the user ran, with the flags they gave and `statements`, by default the run's own. */
+export function dbUpdateRerun(
+  invocation: CliInvocation,
+  statements: readonly string[] = invocation.statementArgs ?? [],
+): string {
+  return cliCommand(invocation, 'db update', [...(invocation.rerunArgs ?? []), ...statements]);
 }
 
 /** The commands that connect to a database: those whose flags include `dbFlag`, which a test checks. */

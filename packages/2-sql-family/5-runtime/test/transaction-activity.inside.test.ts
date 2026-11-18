@@ -207,22 +207,17 @@ describe('a transaction activity driven by hand', () => {
     ]);
   });
 
-  it('finalizes a statement sent after the transaction ended committed right after it ends, with no parent', async () => {
+  it('refuses a statement sent after the transaction ended, running none of its hooks', async () => {
     const setup = createSetup();
     const transaction = await begin(setup);
     await transaction.commit();
     const before = setup.events.length;
 
-    await transaction.execute(rawPlan('update t set x = 2'));
+    await expect(transaction.execute(rawPlan('update t set x = 2'))).rejects.toMatchObject({
+      code: 'RUNTIME.ACTIVITY_NOT_ACCEPTING_CHILDREN',
+    });
 
-    const after = setup.events.slice(before);
-    expect(after.map((event) => [event.name, event.sql])).toEqual([
-      ['started:statement', 'update t set x = 2'],
-      ['beforeEncode', 'update t set x = 2'],
-      ['ended:statement:succeeded', 'update t set x = 2'],
-      ['finalized:statement:committed', 'update t set x = 2'],
-    ]);
-    expect(after[0]?.ctx?.parent).toBeUndefined();
+    expect(setup.events.slice(before)).toEqual([]);
   });
 
   it('finalizes each statement with the activity and context its other hooks saw', async () => {

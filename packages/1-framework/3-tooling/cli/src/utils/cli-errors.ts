@@ -36,6 +36,7 @@ import { chooseAction, editFileAction, runCommandAction } from './next-actions';
 import {
   type CliInvocation,
   cliCommand,
+  dbMigrateRerun,
   printedPath,
   printedPlanCommand,
   selfEmitCommand,
@@ -1004,7 +1005,7 @@ export function errorMigrationHasUnfilledPlaceholders(
   const migrationTs = join(directory, 'migration.ts');
   const edit = `Replace each placeholder(...) call in ${printedPath(invocation, migrationTs)} with the value or query it stands for.`;
   const emit = selfEmitCommand(invocation, migrationTs);
-  const migrate = cliCommand(invocation, 'db migrate');
+  const migrate = dbMigrateRerun(invocation);
   return new ActionableCliError(
     'MIGRATION.UNFILLED_PLACEHOLDER',
     'Migration has unfilled placeholders',

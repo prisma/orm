@@ -78,6 +78,7 @@ Today `r.disconnect(criteria)` on an N:1 relation ignores its criteria: the tran
 - `disconnect(criteria)` on N:1 unlinks only when the linked row matches one of the criteria: a separate `Update` of the parent, `SET fk = NULL WHERE <parent key> AND fk IN (SELECT key FROM target WHERE <criterion>)`, with the parent's `FilterData` edge, after the parent's own update. A composite key uses row-value `IN`, as in `filtered-many-writes`.
 - No match: no change, no error, as for `update` and `delete`.
 - Behaviour change for callers whose criteria did not match the linked row; the upgrade entry says so.
+- `r.variant(v).disconnect()` on N:1, refused by slice `nested-variant-creates` (type error, and `ORM.RELATION_MUTATION_UNSUPPORTED` with `reason: 'variant-parent-owned'`) because the unlink did not read the linked row, becomes available: the same conditional unlink, with the variant's condition (`variantWhere`, as variant `connect` uses) in the subquery, so the parent is unlinked only when the linked row is of that variant. With criteria, both conditions apply.
 
 ## Coherence rationale
 
@@ -94,6 +95,7 @@ Two operations that share one selection of the row per relation layout and the f
   - `packages/client/tests/functional/blog-update` from `prisma/prisma`, whose ledger entry is removed
 - `projects/port-all-tests/checklists/` and the ledgers.
 - `disconnect` criteria applied on N:1, with graph tests and integration tests where the linked row matches and where it does not.
+- N:1 `disconnect` on the variant mutator, replacing `rejectVariantDisconnect` and the `never` parameter, with a graph test and an integration test where the linked row is of the variant and where it is not; the README sentence that says it is not available is removed.
 - The required-relation check for `disconnect`, with type tests and integration tests on a required N:1 and a required 1:N relation; the integration tests that disconnect a required relation, if any, are edited.
 - Package README and error reference.
 - An `upgrade-instructions/pending/` entry: `disconnect` on a required relation is now an ORM error and a type error, and `disconnect(criteria)` on N:1 unlinks only when the linked row matches.
@@ -116,6 +118,7 @@ Two operations that share one selection of the row per relation layout and the f
 ## Slice-specific done conditions
 
 - [ ] Each of the 38 upstream tests listed under Scope has a disposition in the `port-all-tests` checklists, and none is left unported for lack of nested `update` or `delete`.
+- [ ] N:1 `disconnect` on the variant mutator is implemented and tested.
 
 ## Open Questions
 
