@@ -36,18 +36,18 @@ describe('a relation callback that returns an array of operations', () => {
   it('adds the operations in array order', () => {
     expect(
       printUpdate({
-        posts: (posts: Mutator) => [
-          posts.create([{ id: 10, title: 'Hello', views: 0 }]),
-          posts.connect({ id: 11 }),
-          posts.disconnect([{ id: 12 }]),
+        invitedUsers: (invited: Mutator) => [
+          invited.create([{ id: 10, name: 'Grace', email: 'g@h.io' }]),
+          invited.connect({ id: 11 }),
+          invited.disconnect([{ id: 12 }]),
         ],
       }),
     ).toBe(
       [
         'n1 Find users where id = 1',
-        'n2 Insert posts <- PayloadData n1 (id->user_id)',
-        'n3 Update posts set nothing where id = 11 <- PayloadData n1 (id->user_id)',
-        'n4 Update posts set user_id = null where id = 12 <- FilterData n1 (id->user_id)',
+        'n2 Insert users <- PayloadData n1 (id->invited_by_id)',
+        'n3 Update users set nothing where id = 11 <- PayloadData n1 (id->invited_by_id)',
+        'n4 Update users set invited_by_id = null where id = 12 <- FilterData n1 (id->invited_by_id)',
         'result: n1',
       ].join('\n'),
     );

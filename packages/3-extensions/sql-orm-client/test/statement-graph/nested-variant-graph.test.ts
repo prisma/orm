@@ -618,6 +618,53 @@ describe('disconnect on a variant', () => {
       meta: { kind: 'disconnect', relation: 'task', reason: 'variant-parent-owned' },
     });
   });
+
+  it('is refused on a relation the child holds the key for when that key is required', () => {
+    const json = structuredClone(polyContractJson);
+    json.storage.namespaces.public.entries.table.tasks.columns.project_id.nullable = false;
+    json.domain.namespaces.public.models.Task.fields.projectId.nullable = false;
+    json.domain.namespaces.public.models.Task.relations.project.nullable = false;
+    const required = buildTestContextFromContract(
+      serializer.deserializeContract<PolyContract>(json),
+    );
+    const projects = new Collection(
+      { runtime: createMockRuntime(), context: required },
+      'Project',
+      {
+        namespaceId: 'public',
+      },
+    );
+
+    expect(
+      thrownBy(() =>
+        updateFirstGraph(
+          {
+            context: required,
+            state: projects.where({ id: 1 }).state,
+            modelName: 'Project',
+            namespaceId: 'public',
+          },
+          {},
+          parsed(
+            'Project',
+            { tasks: (tasks: VariantMutator) => tasks.variant('bug').disconnect() },
+            required,
+          ).relationMutations,
+        ),
+      ),
+    ).toMatchObject({
+      code: 'ORM.OPERATION_UNSUPPORTED',
+      message:
+        'disconnect() nested mutation for relation "tasks" cannot set "projectId" of model "Task" to null, because the foreign key is required',
+      meta: {
+        kind: 'disconnect',
+        relation: 'tasks',
+        reason: 'required-foreign-key',
+        model: 'Task',
+        fields: ['projectId'],
+      },
+    });
+  });
 });
 
 const featureExists = (condition: string) =>

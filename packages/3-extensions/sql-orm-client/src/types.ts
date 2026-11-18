@@ -2086,6 +2086,35 @@ type RelationParentLinkFields<
         : never
       : never;
 
+type RelationLocalFields<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  RelName extends string,
+  NsId extends string = never,
+> =
+  RelationsOf<TContract, ModelName, NsId> extends infer Rels extends Record<string, unknown>
+    ? RelName extends keyof Rels
+      ? Rels[RelName] extends {
+          readonly on: { readonly localFields: readonly (infer Field extends string)[] };
+        }
+        ? Field
+        : never
+      : never
+    : never;
+
+type AnyFieldRequired<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  Fields extends string,
+  NsId extends string = never,
+> = false extends (
+  Fields extends string
+    ? FieldNullable<TContract, ModelName, Fields, NsId>
+    : never
+)
+  ? true
+  : false;
+
 /**
  * Resolves a storage table name to its owning domain model by scanning the
  * model map for the model whose `storage.table` and `storage.namespaceId`
@@ -2257,11 +2286,6 @@ export interface RelationMutator<
       ? never
       : readonly RelationConnectCriterion<TContract, ModelName, NsId>[],
   ): RelationMutationConnect<TContract, ModelName, NsId>;
-  // `disconnect` is update-only: `createGraph` rejects any nested disconnect
-  // during `create()`, so in the create context the criteria parameter narrows
-  // to `never`, making every call a type error (mirrors the `LinkWritesDisabled`
-  // arms above). `never` is callable, so disabling must live on the parameter,
-  // not the property type.
   readonly disconnect: DisconnectDisabled extends true
     ? (criteria: never) => RelationMutationDisconnect<TContract, ModelName, NsId>
     : DisconnectMutator<TContract, ModelName, BareDisconnectDisabled, NsId>;
@@ -2418,7 +2442,21 @@ type RelationMutationCallback<
     TargetModel,
     HasRequiredJunctionPayload<TContract, ModelName, RelName, NsId>,
     HasJunctionThrough<TContract, ModelName, RelName, NsId>,
-    Context extends 'create' ? true : false,
+    Context extends 'create'
+      ? true
+      : Cardinality extends 'N:1'
+        ? AnyFieldRequired<
+            TContract,
+            ModelName,
+            RelationLocalFields<TContract, ModelName, RelName, NsId>,
+            NsId
+          >
+        : AnyFieldRequired<
+            TContract,
+            TargetModel,
+            RelationParentLinkFields<TContract, ModelName, RelName, NsId>,
+            TargetNs
+          >,
     Context extends 'create' ? true : Cardinality extends '1:1' | 'N:1' ? true : false,
     RelationParentLinkFields<TContract, ModelName, RelName, NsId>,
     TargetNs,
@@ -2429,7 +2467,16 @@ type RelationMutationCallback<
       TargetModel,
       HasRequiredJunctionPayload<TContract, ModelName, RelName, NsId>,
       HasJunctionThrough<TContract, ModelName, RelName, NsId>,
-      Context extends 'create' ? true : Cardinality extends 'N:1' ? true : false,
+      Context extends 'create'
+        ? true
+        : Cardinality extends 'N:1'
+          ? true
+          : AnyFieldRequired<
+              TContract,
+              TargetModel,
+              RelationParentLinkFields<TContract, ModelName, RelName, NsId>,
+              TargetNs
+            >,
       Context extends 'create' ? true : Cardinality extends '1:1' | 'N:1' ? true : false,
       RelationParentLinkFields<TContract, ModelName, RelName, NsId>,
       TargetNs,
