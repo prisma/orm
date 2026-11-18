@@ -585,7 +585,7 @@ function tableRenameConflict(
     if (!renames.originHasTable(heldTable)) {
       return contractChangeRefused(
         `${label}: the database has both tables`,
-        `${changeText}, and the database has both table "${from}" and table "${held}". The rename may have been half done by hand, or something created table "${held}" before db update ran: then move any rows of table "${held}" into table "${from}" and drop table "${held}", and run again. Or table "${from}" was renamed to "${held}" by hand and the name "${from}" used again for another table: then rename or drop table "${from}", and run again.`,
+        `${changeText}, and the database has both table "${from}" and table "${held}". The rename may have been half done by hand, or something created table "${held}" before db update ran: then move into table "${from}" the rows of table "${held}" that it does not already hold, drop table "${held}", and run again. Or table "${from}" was renamed to "${held}" by hand and the name "${from}" used again for another table: then drop table "${from}", and run again. To keep its rows, first move them into a table the contract has: db update drops every table the contract does not have.`,
         location,
       );
     }
@@ -645,7 +645,7 @@ function columnRenameConflict(
     if (!renames.originHasColumn(change.origin, held)) {
       return contractChangeRefused(
         `${label}: the database has both columns`,
-        `${changeText}, and table "${table}" in the database has both column "${change.from}" and column "${held}". The rename may have been half done by hand, or something created column "${held}" before db update ran: then move any values of column "${held}" into column "${change.from}" and drop column "${held}", and run again. Or column "${change.from}" was renamed to "${held}" by hand and the name "${change.from}" used again for another column: then rename or drop column "${change.from}", and run again.`,
+        `${changeText}, and table "${table}" in the database has both column "${change.from}" and column "${held}". The rename may have been half done by hand, or something created column "${held}" before db update ran: then copy into column "${change.from}" the value of column "${held}" in each row where column "${held}" holds one, drop column "${held}", and run again. Or column "${change.from}" was renamed to "${held}" by hand and the name "${change.from}" used again for another column: then drop column "${change.from}", and run again. To keep its values, first move them into a column the contract has: db update drops every column the contract does not have.`,
         location,
       );
     }

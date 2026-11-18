@@ -91,7 +91,7 @@ describe('SQLite db update, a stored name that changes', {
         {
           kind: 'unsupportedOperation',
           summary: 'Cannot rename table "users" to "app_users": the database has both tables',
-          why: 'The table of model "User" changes from "users" to "app_users", and the database has both table "users" and table "app_users". The rename may have been half done by hand, or something created table "app_users" before db update ran: then move any rows of table "app_users" into table "users" and drop table "app_users", and run again. Or table "users" was renamed to "app_users" by hand and the name "users" used again for another table: then rename or drop table "users", and run again.',
+          why: 'The table of model "User" changes from "users" to "app_users", and the database has both table "users" and table "app_users". The rename may have been half done by hand, or something created table "app_users" before db update ran: then move into table "users" the rows of table "app_users" that it does not already hold, drop table "app_users", and run again. Or table "users" was renamed to "app_users" by hand and the name "users" used again for another table: then drop table "users", and run again. To keep its rows, first move them into a table the contract has: db update drops every table the contract does not have.',
           location: { namespaceId: UNBOUND_NAMESPACE_ID, entityKind: 'table', entityName: 'users' },
         },
       ]);
@@ -203,7 +203,7 @@ describe('SQLite db update, a stored name that changes', {
           kind: 'unsupportedOperation',
           summary:
             'Cannot rename column "users"."email" to "email_address": the database has both columns',
-          why: 'The column of field "User.email" changes from "email" to "email_address", and table "users" in the database has both column "email" and column "email_address". The rename may have been half done by hand, or something created column "email_address" before db update ran: then move any values of column "email_address" into column "email" and drop column "email_address", and run again. Or column "email" was renamed to "email_address" by hand and the name "email" used again for another column: then rename or drop column "email", and run again.',
+          why: 'The column of field "User.email" changes from "email" to "email_address", and table "users" in the database has both column "email" and column "email_address". The rename may have been half done by hand, or something created column "email_address" before db update ran: then copy into column "email" the value of column "email_address" in each row where column "email_address" holds one, drop column "email_address", and run again. Or column "email" was renamed to "email_address" by hand and the name "email" used again for another column: then drop column "email", and run again. To keep its values, first move them into a column the contract has: db update drops every column the contract does not have.',
           location: {
             namespaceId: UNBOUND_NAMESPACE_ID,
             entityKind: 'table',
@@ -211,6 +211,24 @@ describe('SQLite db update, a stored name that changes', {
             column: 'email',
           },
         },
+      ]);
+    });
+
+    it('renames it once the values of the new column are copied into the old one and the new column dropped', async () => {
+      await start();
+      await query('alter table "users" add column "email_address" text');
+      await query(`update "users" set "email_address" = 'new@example.com' where id = '2'`);
+      expect((await plan(origin, to)).kind).toBe('failure');
+
+      await query('update "users" set "email" = "email_address" where "email_address" is not null');
+      await query('alter table "users" drop column "email_address"');
+      const result = await plan(origin, to);
+
+      expect(await labelsOf(result)).toEqual(['Rename column email on users to email_address']);
+      await apply(result, to);
+      expect(await rows('select id, email_address, name from "users" order by id')).toEqual([
+        { id: '1', email_address: 'a@example.com', name: 'Ada' },
+        { id: '2', email_address: 'new@example.com', name: 'Bo' },
       ]);
     });
   });

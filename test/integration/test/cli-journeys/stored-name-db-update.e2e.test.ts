@@ -160,7 +160,7 @@ withTempDir(({ createTempDir }) => {
         expect(refused, 'D2.03: both tables').toEqual(
           planningFailure({
             summary: 'Cannot rename table "users" to "people": the database has both tables',
-            why: 'The table of model "public.User" changes from "users" to "people", and the database has both table "users" and table "people". The rename may have been half done by hand, or something created table "people" before db update ran: then move any rows of table "people" into table "users" and drop table "people", and run again. Or table "users" was renamed to "people" by hand and the name "users" used again for another table: then rename or drop table "users", and run again.',
+            why: 'The table of model "public.User" changes from "users" to "people", and the database has both table "users" and table "people". The rename may have been half done by hand, or something created table "people" before db update ran: then move into table "users" the rows of table "people" that it does not already hold, drop table "people", and run again. Or table "users" was renamed to "people" by hand and the name "users" used again for another table: then drop table "users", and run again. To keep its rows, first move them into a table the contract has: db update drops every table the contract does not have.',
             location: {
               namespaceId: 'public',
               entityKind: 'table',
@@ -219,7 +219,7 @@ withTempDir(({ createTempDir }) => {
         expect(refused, 'D3.03: both tables').toEqual(
           planningFailure({
             summary: 'Cannot rename table "users" to "people": the database has both tables',
-            why: 'The table of model "public.User" changes from "users" to "people", and the database has both table "users" and table "people". The rename may have been half done by hand, or something created table "people" before db update ran: then move any rows of table "people" into table "users" and drop table "people", and run again. Or table "users" was renamed to "people" by hand and the name "users" used again for another table: then rename or drop table "users", and run again.',
+            why: 'The table of model "public.User" changes from "users" to "people", and the database has both table "users" and table "people". The rename may have been half done by hand, or something created table "people" before db update ran: then move into table "users" the rows of table "people" that it does not already hold, drop table "people", and run again. Or table "users" was renamed to "people" by hand and the name "users" used again for another table: then drop table "users", and run again. To keep its rows, first move them into a table the contract has: db update drops every table the contract does not have.',
             location: {
               namespaceId: 'public',
               entityKind: 'table',
