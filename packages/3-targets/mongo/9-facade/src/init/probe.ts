@@ -1,6 +1,12 @@
 import type { InitProbeResult } from '@internal/cli/init-contribution';
 import type * as MongoDriver from 'mongodb';
 
+/**
+ * The driver's own deadline for each operation, server selection and connecting included, so an
+ * unreachable server or a stalled `buildInfo` rejects instead of hanging.
+ */
+const PROBE_TIMEOUT_MS = 20_000;
+
 type LoadDriver = () => Promise<Pick<typeof MongoDriver, 'MongoClient'>>;
 
 function isModuleNotFound(error: unknown): boolean {
@@ -24,7 +30,7 @@ export async function probeMongo(
     }
     throw error;
   }
-  const client = new mongodb.MongoClient(databaseUrl);
+  const client = new mongodb.MongoClient(databaseUrl, { timeoutMS: PROBE_TIMEOUT_MS });
   await client.connect();
   try {
     const buildInfo = await client.db().admin().command({ buildInfo: 1 });

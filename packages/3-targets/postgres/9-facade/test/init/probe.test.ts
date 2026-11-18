@@ -7,7 +7,7 @@ const endSpy = vi.fn(async () => {});
 
 class FakeClient {
   readonly listeners = new Map<string, (err: Error) => void>();
-  constructor(_cfg: { connectionString: string }) {
+  constructor(readonly config: Record<string, unknown>) {
     clients.push(this);
   }
   on(event: string, listener: (err: Error) => void): this {
@@ -64,6 +64,16 @@ describe('probePostgres', () => {
     await expect(probePostgres('postgres://localhost:5432/db')).resolves.toEqual({
       kind: 'version-unreadable',
       detail: 'could not parse PostgreSQL version from `CockroachDB CCL v23.1`',
+    });
+  });
+
+  it('bounds the connection and the version query with the driver timeouts', async () => {
+    await probePostgres('postgres://localhost:5432/db');
+
+    expect(clients[0]?.config).toEqual({
+      connectionString: 'postgres://localhost:5432/db',
+      connectionTimeoutMillis: 20_000,
+      query_timeout: 20_000,
     });
   });
 

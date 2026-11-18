@@ -4,8 +4,11 @@ import { probeMongo } from '../../src/init/probe';
 
 function driverAnswering(buildInfo: Record<string, unknown>) {
   const close = vi.fn(async () => {});
+  const constructed: unknown[][] = [];
   class FakeClient {
-    constructor(readonly url: string) {}
+    constructor(...args: unknown[]) {
+      constructed.push(args);
+    }
     async connect(): Promise<void> {}
     db() {
       return { admin: () => ({ command: async () => buildInfo }) };
@@ -13,7 +16,7 @@ function driverAnswering(buildInfo: Record<string, unknown>) {
     close = close;
   }
   const driver = { MongoClient: FakeClient } as unknown as Pick<typeof MongoDriver, 'MongoClient'>;
-  return { load: async () => driver, close };
+  return { load: async () => driver, close, constructed };
 }
 
 describe('probeMongo', () => {
@@ -25,6 +28,14 @@ describe('probeMongo', () => {
       serverVersion: '8.0.4',
     });
     expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('bounds server selection, the connection and buildInfo with the driver timeout', async () => {
+    const { load, constructed } = driverAnswering({ version: '8.0.4' });
+
+    await probeMongo('mongodb://localhost:27017/db', load);
+
+    expect(constructed).toEqual([['mongodb://localhost:27017/db', { timeoutMS: 20_000 }]]);
   });
 
   it('says the version could not be read when buildInfo has none', async () => {

@@ -15,9 +15,16 @@ export function parsePostgresVersion(versionString: string): string | undefined 
   return versionString.match(/PostgreSQL\s+(\d+(?:\.\d+)?)/i)?.[1];
 }
 
+/** How long the probe waits for the server to accept the connection, and then to answer. */
+const PROBE_TIMEOUT_MILLIS = 20_000;
+
 export async function probePostgres(databaseUrl: string): Promise<InitProbeResult> {
   const pg = await import('pg');
-  const client = new pg.default.Client({ connectionString: databaseUrl });
+  const client = new pg.default.Client({
+    connectionString: databaseUrl,
+    connectionTimeoutMillis: PROBE_TIMEOUT_MILLIS,
+    query_timeout: PROBE_TIMEOUT_MILLIS,
+  });
   client.on('error', () => {});
   try {
     await client.connect();
