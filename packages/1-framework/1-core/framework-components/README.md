@@ -12,7 +12,7 @@ Framework component types, authoring logic, control stack assembly, and emission
 - **Control stack** (`./control`): Assembly functions that combine component descriptors into a unified `ControlStack` with derived state (codec imports, renderers, authoring contributions)
 - **Emission SPI** (`./emission`): Types for the emission pipeline — `TargetFamilyHook`, `GenerateContractTypesOptions`, `TypeRenderEntry`, `TypeRenderer`, `ParameterizedCodecDescriptor`, and related types
 - **Execution types** (`./execution`): Execution-plane stack and instance interfaces
-- **Runtime SPI** (`./runtime`): Abstract `RuntimeCore<TPlan, TExec, TMiddleware>` base class, `RuntimeMiddleware` interface, and the canonical `runQueryWithMiddleware` and `runExecuteWithMiddleware` orchestrator helpers. Family runtimes (`@internal/sql-runtime`, `@internal/mongo-runtime`) extend `RuntimeCore` directly per [ADR 204](../../../../../docs/architecture%20docs/adrs/ADR%20204%20-%20Single-tier%20runtime.md).
+- **Runtime SPI** (`./runtime`): Abstract `RuntimeCore<TPlan, TExec, TMiddleware>` base class, `RuntimeMiddleware` interface, and the canonical `runQueryWithMiddleware` and `runExecuteWithMiddleware` orchestrator helpers. Family runtimes (`@internal/sql-runtime`, `@internal/mongo-runtime`) extend `RuntimeCore` directly per [ADR 204](../../../../docs/architecture%20docs/adrs/ADR%20204%20-%20Single-tier%20runtime.md).
 
 ## Subpath exports
 
@@ -29,10 +29,10 @@ import { RuntimeCore, runQueryWithMiddleware, runExecuteWithMiddleware, type Run
 
 The base `Codec` interface lands on the seam between **query-time** methods (per-row, IO-relevant) and **build-time** methods (per-contract-load):
 
-- Query-time: `toWire(value): Promise<TWire>` and `fromWire(wire): Promise<TInput>` are required and **Promise-returning at the public boundary**. Codec authors extend `CodecImpl` (per [ADR 208 — Higher-order codecs for parameterized types](../../../../../docs/architecture%20docs/adrs/ADR%20208%20-%20Higher-order%20codecs%20for%20parameterized%20types.md)); a logically synchronous body still has to return a `Promise`-compatible value (mark the method `async`, or return `Promise.resolve(...)` explicitly). The runtime always awaits the result.
+- Query-time: `toWire(value): Promise<TWire>` and `fromWire(wire): Promise<TInput>` are required and **Promise-returning at the public boundary**. Codec authors extend `CodecImpl` (per [ADR 208 — Higher-order codecs for parameterized types](../../../../docs/architecture%20docs/adrs/ADR%20208%20-%20Higher-order%20codecs%20for%20parameterized%20types.md)); a logically synchronous body still has to return a `Promise`-compatible value (mark the method `async`, or return `Promise.resolve(...)` explicitly). The runtime always awaits the result.
 - Build-time: `toDataTypeValue`, `fromDataTypeValue`, and the optional `renderOutputType` are **synchronous** so `family.deserializeContract` and client construction stay synchronous. `toDataTypeValue` and `fromDataTypeValue` convert between the application value and a `DataTypeValue` of the codec's data type, which reads and constructs every stored value ([ADR 254](../../../../docs/architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md#codecs)).
 
-There is no `runtime` / `kind` / equivalent async marker on the interface and no `TRuntime` generic. The runtime always awaits the query-time methods. See [ADR 204 — Single-Path Async Codec Runtime](../../../../../docs/architecture%20docs/adrs/ADR%20204%20-%20Single-Path%20Async%20Codec%20Runtime.md) for the full design.
+There is no `runtime` / `kind` / equivalent async marker on the interface and no `TRuntime` generic. The runtime always awaits the query-time methods. See [ADR 204 — Single-Path Async Codec Runtime](../../../../docs/architecture%20docs/adrs/ADR%20204%20-%20Single-Path%20Async%20Codec%20Runtime.md) for the full design.
 
 ### Codec call context (`ctx`)
 
@@ -74,13 +74,13 @@ Codec metadata, parameterized-codec registration, and runtime materialization li
 import type { CodecDescriptor, CodecInstanceContext } from '@internal/framework-components/codec';
 ```
 
-- `CodecDescriptor<P = void>` carries `dataType`, `codecId`, `traits`, `meta`, `paramsSchema: StandardSchemaV1<P> | undefined`, `renderOutputType` (only for an output type no type can compute from the params, such as an arktype schema's text), and a curried `factory: (P) => (CodecInstanceContext) => Codec`. `dataType` is the id of the data type the codec represents; assembly refuses a codec whose data type no component registers (see [ADR 254 — Data types and casts](../../../../../docs/architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md)). A codec whose data type depends on the target that adapts it is declared as a `CodecDescriptorTemplate<P>`, the same shape without `dataType`, and the target supplies the id when it adapts the template. Non-parameterized codecs use `P = void`, set `paramsSchema` to `undefined`, and use a constant factory. Such a codec rejects any `typeParams`. Parameterized codecs use a non-empty `P` (e.g. `{ length: number }` for pgvector).
+- `CodecDescriptor<P = void>` carries `dataType`, `codecId`, `traits`, `meta`, `paramsSchema: StandardSchemaV1<P> | undefined`, `renderOutputType` (only for an output type no type can compute from the params, such as an arktype schema's text), and a curried `factory: (P) => (CodecInstanceContext) => Codec`. `dataType` is the id of the data type the codec represents; assembly refuses a codec whose data type no component registers (see [ADR 254 — Data types and casts](../../../../docs/architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md)). A codec whose data type depends on the target that adapts it is declared as a `CodecDescriptorTemplate<P>`, the same shape without `dataType`, and the target supplies the id when it adapts the template. Non-parameterized codecs use `P = void`, set `paramsSchema` to `undefined`, and use a constant factory. Such a codec rejects any `typeParams`. Parameterized codecs use a non-empty `P` (e.g. `{ length: number }` for pgvector).
 - `CodecInstanceContext` (family-agnostic, `{ name }` only) is supplied by the runtime when materializing a per-instance codec. Pack authors close over it inside the factory; they never construct it. This is the **per-materialization** context, sibling to the **per-call** `CodecCallContext` documented above. Family-specific extensions augment it — the SQL family ships `SqlCodecInstanceContext extends CodecInstanceContext` in `@internal/sql-relational-core/ast`, adding `usedAt: ReadonlyArray<{ table; column }>` for SQL-domain codecs that need column-set metadata.
 - Contributors expose their descriptors through `ComponentMetadata.types.codecTypes.codecDescriptors` and the unified `codecs: () => ReadonlyArray<CodecDescriptor>` slot. `extractCodecLookup` reads `meta` / `renderOutputType` directly off the descriptors — there is no parameterized vs. non-parameterized split and no synthesis bridge.
 
 `paramsSchema` is typed as Standard Schema (`StandardSchemaV1<P>`), not arktype-specific. arktype `Type`s satisfy the shape via their `~standard` getter, so existing arktype-typed descriptors satisfy the new shape transparently while `framework-components` itself takes no dependency on arktype.
 
-See [ADR 208 — Higher-order codecs for parameterized types](../../../../../docs/architecture%20docs/adrs/ADR%20208%20-%20Higher-order%20codecs%20for%20parameterized%20types.md) for the full design.
+See [ADR 208 — Higher-order codecs for parameterized types](../../../../docs/architecture%20docs/adrs/ADR%20208%20-%20Higher-order%20codecs%20for%20parameterized%20types.md) for the full design.
 
 ## Why SPI types live here (dependency inversion)
 
@@ -94,7 +94,7 @@ By placing these interfaces in the core layer rather than alongside their implem
 
 This is the [dependency inversion principle](https://en.wikipedia.org/wiki/Dependency_inversion_principle) applied to package layering. The same pattern applies to component descriptors, control-plane types, and execution-plane types in this package.
 
-See [ADR 185 — SPI types live at the lowest consuming layer](../../../../../docs/architecture%20docs/adrs/ADR%20185%20-%20SPI%20types%20live%20at%20the%20lowest%20consuming%20layer.md).
+See [ADR 185 — SPI types live at the lowest consuming layer](../../../../docs/architecture%20docs/adrs/ADR%20185%20-%20SPI%20types%20live%20at%20the%20lowest%20consuming%20layer.md).
 
 ## Relationship to other packages
 
