@@ -294,6 +294,8 @@ model Feature {
 }
 ```
 
+An STI variant's relations put their foreign keys on the base table. Its `@@unique`, `@unique` and `@@index` without `where:` are refused, because on the shared table they would also cover the other variants' rows; scope the index to the variant instead, as in ``@@index([severity], unique: true, where: sql`type = 'bug'`)``. Without `where:`, only a plain `@@index` that backs one of the variant's own relations is accepted: the index its foreign key creates anyway, or the one its `index:` argument names. A unique is always refused, so a one-to-one relation from a single-table variant is not supported yet. A variant `@@index` with `where:` becomes a partial index on the base table; before, it was dropped from the contract. A variant relation is refused when another model of the table maps one of its columns without the same relation, or when its column has a `@default`, which every row of the table gets: give the variant's field its own column with `@map`, or remove the default. `@@check` on an STI variant is refused; declare it on the base.
+
 A variant's base can be in another namespace: write `@@base(ns.Model, "value")`. Such a variant must set `@@map(...)`, because a variant that shares its base's table has to be in the base's namespace.
 
 Verify the polymorphism syntax against the interpreter tests if in doubt: `packages/2-sql-family/2-authoring/contract-psl/test/interpreter.polymorphism.test.ts`.

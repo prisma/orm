@@ -641,6 +641,12 @@ export const PSL_CHECK_EXPRESSION_EMPTY: ContributedPslDiagnosticCode =
  * declaration, which a single attribute's `refine` cannot see.
  */
 export const PSL_CHECK_ON_STI_VARIANT: ContributedPslDiagnosticCode = 'PSL_CHECK_ON_STI_VARIANT';
+/** A unique constraint or an index without a `where` condition on a single-table-inheritance variant, which would also cover the rows of the other variants. */
+export const PSL_UNSCOPED_INDEX_ON_STI_VARIANT: ContributedPslDiagnosticCode =
+  'PSL_UNSCOPED_INDEX_ON_STI_VARIANT';
+/** Two models sharing a single-table-inheritance table that declare different foreign keys on the same columns. */
+export const PSL_FOREIGN_KEY_CONFLICT_ON_STI_VARIANT: ContributedPslDiagnosticCode =
+  'PSL_FOREIGN_KEY_CONFLICT_ON_STI_VARIANT';
 
 function checkModelSpec(ctx: AttributeSpecContext) {
   return modelAttribute('check', {
