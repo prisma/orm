@@ -45,7 +45,7 @@ Built on the first-row builders of the collection's `update` and `delete` (`upda
 | --- | --- | --- | --- |
 | Child holds the key (1:N, 1:1) | `Find … limit 1` on the child with the caller's filter and an edge from the parent's key to the child's foreign key | the first-row update | the first-row delete |
 | Junction (M:N) | the same `Find`, with the junction subquery of `filtered-many-writes` and the edge into it | the first-row update | the first-row delete; junction rows are left to the database's foreign-key action, as in `deleteAll` |
-| Parent holds the key (N:1) | the target row whose key the parent's foreign key holds, through an edge from the parent's row to the target's key, with the caller's filter | the update | the parent's foreign key is set to null in the parent's update, then the target row is deleted, its key read from the parent row before the update |
+| Parent holds the key (N:1) | the target row whose key the parent's foreign key holds, through an edge from the parent's row to the target's key, with the caller's filter | the update | the target row is found as for `update` (through the parent's foreign key read before the parent's update, with the caller's filter); if it is found, the parent's foreign key is set to null in a separate update of the parent, then the target row is deleted by its key. If it is not found, nothing changes |
 
 - On 1:1 with the key on the child, at most one row is related; the slice may write without the `Find` when that keeps the graph smaller, and the graph tests pin whichever it builds.
 - A parent whose foreign key is null has no linked row: nothing changes.
