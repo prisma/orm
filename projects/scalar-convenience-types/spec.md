@@ -32,7 +32,9 @@ The mechanism is the type choice of ADR 279. It lives in the framework domain an
 | --- | --- |
 | PostgreSQL `Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean`, `Bytes` | Merged, prisma/orm#30942. Recorded in ADR 316. |
 | PostgreSQL `Json`, and `sql.Varchar` | Merged, prisma/orm#31065. Recorded in ADR 316. |
-| SQLite, MySQL, MongoDB | To build. This spec. |
+| MongoDB | Merged, prisma/orm#31067. Recorded in ADR 322. |
+| SQLite | Built, not merged. Recorded in ADR 322. |
+| MySQL | To build. This spec. |
 
 ## Rules that hold on every target
 
@@ -91,7 +93,7 @@ SQLite's column types are `text`, `integer`, `real` and `blob`. An explicit type
 - **What `sqlite/decimal@1` does.** It refuses to write text that is not a decimal. Reading text that is not a decimal (such as the `''` an earlier fill wrote) raises a decode error that names the column; the upgrade instruction says how to find such rows. A new required field is filled with `'0'`. It allows equality filters only: text compares by characters, so ordering and aggregates are not offered.
 - **`DecimalString` is named after its data type, not its column.** SQLite has no decimal column type, so the name follows ADR 315's rule for that case, as `DateString` and `DurationString` do. `TextString` would say nothing.
 - **`Boolean` is new on SQLite,** with its own data type `sqlite/boolean`, stored as `integer` 0 or 1, which is what SQLite's own `TRUE` and `FALSE` are. The codec writes 0 or 1, because `node:sqlite` does not bind booleans. It reads 0 as `false` and 1 as `true` from a number, bigint or text, and raises a decode error for any other value. `@default(true)` renders as `1`.
-- **`BigInt(as: number)` and `Int` are the same explicit type.** `sqlite/integer@1` and `sqlite/bigintnumber@1` both store an `integer` and both read a `number` checked against the safe-integer range. `BigIntNumber` becomes a deprecated alias of `IntegerNumber`. This is the second place rule 3 is broken: a field written `BigIntNumber` changes codec id from `sqlite/bigintnumber@1` to `sqlite/integer@1` on the next emit, with no column change. It shares the `Decimal` upgrade instruction and journey test. The codec `sqlite/bigintnumber@1` itself stays, because aggregates return it.
+- **`BigInt(as: number)` and `Int` are the same explicit type.** `sqlite/integer@1` and `sqlite/bigintnumber@1` both store an `integer` and read a `number`. They did not check alike: `sqlite/bigintnumber@1` refused a value outside the safe-integer range or not an integer on write and on read, while `sqlite/integer@1` wrote any number as it was and read a number from a row without checking it. The slice makes `sqlite/integer@1` check as `sqlite/bigintnumber@1` does, so a `BigIntNumber` field keeps its checks; every `Int` field gets them too, with its own upgrade instruction (`sqlite-integer-safe-range`). The one remaining difference is that `sqlite/bigintnumber@1` also reads a `bigint` from the driver, which `node:sqlite` does not return here. `BigIntNumber` becomes a deprecated alias of `IntegerNumber`. This is the second place rule 3 is broken: a field written `BigIntNumber` changes codec id from `sqlite/bigintnumber@1` to `sqlite/integer@1` on the next emit, with no column change. It shares the `Decimal` upgrade instruction and journey test. The codec `sqlite/bigintnumber@1` itself stays, because aggregates return it.
 - **`Int` is declared before `BigInt`,** so the convenience call for `IntegerNumber` is `Int`. A test fixes this. It is an exception to ADR 316's "each explicit type has one convenience call", recorded in the new ADR.
 - **Column helpers are named after the explicit type they give,** as ADR 316 requires: `integerColumn`, `bigintColumn` and `jsonColumn` are renamed to match `IntegerNumber`, `IntegerBigInt` and `PlainJson`, helpers are added for `DecimalString` and `IntegerBoolean`, and each rename gets an upgrade instruction.
 
