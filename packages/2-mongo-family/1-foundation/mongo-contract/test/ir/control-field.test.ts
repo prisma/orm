@@ -5,6 +5,7 @@ import { MongoCollection } from '../../src/ir/mongo-collection';
 
 function minimalContract(opts: { collectionControl?: unknown; defaultControlPolicy?: unknown }) {
   return {
+    target: 'mongo',
     targetFamily: 'mongo',
     roots: {},
     domain: { namespaces: { main: { models: {} } } },

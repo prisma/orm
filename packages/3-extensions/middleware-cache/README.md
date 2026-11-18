@@ -139,12 +139,12 @@ interface CacheEntry<TMeta = unknown, TValue = CachedValue> {
 interface CacheStore<TMeta = unknown, TValue = CachedValue> {
   get(target: {
     readonly key: string;
-    readonly meta: TMeta | undefined;
+    readonly meta?: TMeta | undefined;
   }): Promise<CacheEntry<TMeta, TValue>>;
   set(entry: CacheEntry<TMeta, TValue>, value: TValue): Promise<boolean>;
   unset(target: {
-    readonly keys: readonly string[] | undefined;
-    readonly meta: TMeta | undefined;
+    readonly keys?: readonly string[] | undefined;
+    readonly meta?: TMeta | undefined;
   }): Promise<void>;
 }
 
@@ -166,6 +166,7 @@ The store keeps a **version** per key: an integer it keeps even for a key that h
 - `get({ key, meta })` always returns a `CacheEntry`: the key, the `meta` the read supplied (the read annotation's `meta`, or `undefined`), the key's current version, and `data`. `data.empty` is `true` on a miss; otherwise `data.value` is the stored value. A store that matches `meta` folds the versions of whatever `meta` names into the version it returns, and does the same when `set` compares, so an `invalidate({ meta })` refuses an overlapping read's `set` even for a key the store has never seen.
 - `set(entry, value)` stores `value` under `entry.key` with `entry.meta` if and only if the key's current version still equals `entry.version`, and returns whether it stored. `entry` is the one `get` returned, empty or not; refreshing a value passes the non-empty entry. `set` never changes a version. There is no unconditional write: to prefill the cache, call `get` and then `set`.
 - `unset` removes every value named in `keys` and every value that matches `meta`, in one call so the store can batch them, and increments the version of every key it removes or would remove, including keys that hold no value. `keys` is either `undefined` or non-empty.
+- A field the caller leaves out of `get` or `unset` means the same as `undefined`. A store must not tell the two apart, for example with `'meta' in target`.
 
 The rules a store must follow:
 
@@ -323,7 +324,7 @@ await db.transaction(async (tx) => {
   );
 }); // invalidates here, once the transaction has committed
 
-await db.runtime().execute(
+await db.execute(
   db.sql.public.users
     .update({ name: 'Alicia' })
     .where((f, fns) => fns.eq(f.id, 1))

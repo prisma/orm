@@ -1,22 +1,7 @@
-import type { VerifyDatabaseSchemaResult } from '@internal/framework-components/control';
 import { describe, expect, it } from 'vitest';
 import { errorConfigFileNotFound, errorContractValidationFailed } from '../src/control';
-import {
-  errorMarkerMissing,
-  errorMarkerRequired,
-  errorMarkerRowCorrupt,
-  errorSchemaVerificationFailed,
-} from '../src/execution';
+import { errorMarkerMissing, errorMarkerRequired, errorMarkerRowCorrupt } from '../src/execution';
 import { errorMigrationFileMissing } from '../src/migration';
-
-const driftedSchema: VerifyDatabaseSchemaResult = {
-  ok: false,
-  summary: 'Schema drift detected',
-  contract: { storageHash: 'a'.repeat(64) },
-  target: { expected: 'postgres' },
-  schema: { issues: [] },
-  timings: { total: 0 },
-};
 
 /**
  * Every converted factory in this package, paired with the remediation it used
@@ -99,21 +84,6 @@ describe('converted factories carry typed nextActions', () => {
     const error = errorMarkerRequired({ nextActions });
 
     expect(error.nextActions).toEqual(nextActions);
-  });
-
-  it('errorSchemaVerificationFailed', () => {
-    const error = errorSchemaVerificationFailed({
-      summary: 'Schema drift detected',
-      verificationResult: driftedSchema,
-    });
-
-    expect(error.fix).toBe(
-      'Run `{bin} db update` to reconcile, or adjust your contract to match the database',
-    );
-    expect(error.nextActions).toEqual([
-      { kind: 'run-command', label: 'Reconcile the database', command: '{bin} db update' },
-      { kind: 'edit-file', label: 'Adjust your contract to match the database' },
-    ]);
   });
 
   it('errorMigrationFileMissing', () => {

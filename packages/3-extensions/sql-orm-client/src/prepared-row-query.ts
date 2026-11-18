@@ -41,7 +41,7 @@ export async function prepareQuery<
   Q extends SqlQueryPlan | Preparable<unknown, unknown>,
   CT extends CodecTypesBase,
 >(
-  runtime: Runtime,
+  runtime: Pick<Runtime, 'prepare'>,
   declaration: D,
   callback: (params: BindSiteParams<D>) => Q,
 ): Promise<PreparedFrom<ParamsFromDeclaration<D, CT>, Q>> {

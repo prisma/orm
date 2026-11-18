@@ -5,10 +5,10 @@
  * notOk(CliStructuredError) — never as an unhandled rejection past the Result
  * contract.
  */
-import type { PrismaNextConfig } from '@internal/config-loader';
+import type { PrismaConfig } from '@internal/config-loader';
 import { errorInvalidJson } from '@internal/migration-tools/errors';
 import { ok } from '@internal/utils/result';
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 
 const stubClient = {
   renderContractDts: async () => ok({ contractDts: 'export type Contract = never;\n' }),
@@ -23,9 +23,17 @@ vi.mock('../../src/utils/command-helpers', async (importOriginal) => {
   return { ...actual, resolveMigrationPaths: mocks.resolveMigrationPaths };
 });
 
-const config = { migrations: { dir: 'migrations' } } as unknown as PrismaNextConfig;
+const config = {
+  contract: { typesModule: '@acme/orm-db/contract-types' },
+  migrations: { dir: 'migrations', module: '@acme/orm-db/migration' },
+} as unknown as PrismaConfig;
 
 describe('executeMigrationPlanCommand — mutation-prologue guard', () => {
+  afterAll(() => {
+    vi.doUnmock('../../src/utils/command-helpers');
+    vi.resetModules();
+  });
+
   it('maps a MigrationToolsError thrown in the prologue to a structured failure', async () => {
     const toolsError = errorInvalidJson('/project/prisma.config.ts', 'Unexpected token');
     mocks.resolveMigrationPaths.mockImplementationOnce(() => {
@@ -40,7 +48,6 @@ describe('executeMigrationPlanCommand — mutation-prologue guard', () => {
       {
         config,
         cwd: '/project',
-        projectDir: '/project',
         client: stubClient,
         answerQuestions: async () => [],
       },
@@ -68,7 +75,6 @@ describe('executeMigrationPlanCommand — mutation-prologue guard', () => {
       {
         config,
         cwd: '/project',
-        projectDir: '/project',
         client: stubClient,
         answerQuestions: async () => [],
       },

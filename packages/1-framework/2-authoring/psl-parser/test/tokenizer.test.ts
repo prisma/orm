@@ -246,6 +246,34 @@ describe('Tokenizer', () => {
       `);
     });
 
+    it('scans a block comment as one Comment token, across lines', () => {
+      const source = '/**\n * doc\n */\nenum A /* x */ {}';
+      assertLossless(source);
+      expect(tokenize(source)).toMatchInlineSnapshot(`
+        "Comment        "/**\\n * doc\\n */"
+        Newline        "\\n"
+        Ident          "enum"
+        Whitespace     " "
+        Ident          "A"
+        Whitespace     " "
+        Comment        "/* x */"
+        Whitespace     " "
+        LBrace         "{"
+        RBrace         "}"
+        Eof            """
+      `);
+    });
+
+    it('leaves an unterminated block comment as Invalid tokens', () => {
+      expect(tokenize('/* a')).toMatchInlineSnapshot(`
+        "Invalid        "/"
+        Invalid        "*"
+        Whitespace     " "
+        Ident          "a"
+        Eof            """
+      `);
+    });
+
     it('never throws on pathological input', () => {
       const nasty = '!@#$%^&*(){}[]<>~`|\\;\'"/?.,\x00\x01\x02';
       assertLossless(nasty);

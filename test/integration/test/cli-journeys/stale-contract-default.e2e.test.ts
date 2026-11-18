@@ -71,16 +71,15 @@ const LENGTH_SCHEMA = `// use prisma-8
 
 model Label {
   id   Int         @id
-  name VarChar(10) @default("abc")
+  name Varchar(10) @default("abc")
 }
 `;
 
 async function reportedByDdlCommands(ctx: ReturnType<typeof setupJourney>) {
-  const json = { isTTY: false };
   const runs = {
-    init: await runDbInit(ctx, ['--dry-run'], json),
-    update: await runDbUpdate(ctx, ['--dry-run'], json),
-    plan: await runMigrationPlan(ctx, [], json),
+    init: await runDbInit(ctx, ['--dry-run', '--json']),
+    update: await runDbUpdate(ctx, ['--dry-run', '--json']),
+    plan: await runMigrationPlan(ctx, ['--json']),
   };
   return Object.fromEntries(
     Object.entries(runs).map(([name, run]) => {
@@ -193,7 +192,7 @@ withTempDir(({ createTempDir }) => {
         const emitted = readFileSync(contractJsonPath, 'utf-8');
         writeFileSync(contractJsonPath, emitted.replace(CANONICAL, UPPER_CASE), 'utf-8');
 
-        const check = await runMigrationCheck(ctx, [], { isTTY: false });
+        const check = await runMigrationCheck(ctx, ['--json']);
         const error = engineError(check);
         expect({ exitCode: check.exitCode, code: error?.code, meta: error?.meta }).toEqual({
           exitCode: 2,

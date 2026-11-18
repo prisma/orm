@@ -82,7 +82,7 @@ withTempDir(({ createTempDir }) => {
         expect(error.text).toContain(
           `storage.namespaces.auth.entries.table.audit_log_entries.columns.created_at.nativeType: contracts no longer store a column's database type name; the column names its data type in "dataType"`,
         );
-        expect(error.text).toContain('and 328 more paths (333 in all)');
+        expect(error.text).toContain('and 319 more paths (324 in all)');
         expect(error.text).not.toMatch(/upgrade|script/i);
       },
     );

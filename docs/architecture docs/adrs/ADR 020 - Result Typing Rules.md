@@ -144,7 +144,7 @@ await readings.aggregate((aggregate) => ({ bits: aggregate.bitOr('weight') }));
 // { bits: bigint | null }
 ```
 
-**The operation namespace is open; the SQL alphabet is closed.** `AggregateFn` — `count | sum | avg | min | max`, in `packages/2-sql/4-lanes/relational-core/src/ast/types.ts` — is the set of function names an `AggregateExpr` can carry, and so the set renderers are exhaustive over. It is SQL's alphabet, not the operation namespace.
+**The operation namespace is open; the SQL alphabet is closed.** `AggregateFn` — `count | sum | avg | min | max`, in `packages/2-sql-family/4-lanes/relational-core/src/ast/types.ts` — is the set of function names an `AggregateExpr` can carry, and so the set renderers are exhaustive over. It is SQL's alphabet, not the operation namespace.
 
 **An operation outside the alphabet carries its own lowering.** A name in the alphabet lowers to `AggregateExpr(name, expr)` by default. Any other name must declare a `lower` hook that builds its expression from existing nodes — a function call, a cast, an aggregate call wrapped in either. Registry assembly rejects a descriptor that has neither a name in the alphabet nor a hook, with `RUNTIME.AGGREGATE_LOWERING_MISSING`, so the failure lands at composition rather than mid-query.
 

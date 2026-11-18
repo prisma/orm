@@ -37,7 +37,7 @@ import {
 } from '@internal/target-postgres/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import { createTestPostgresControlAdapter } from '../../../../3-targets/6-adapters/postgres/test/helpers/test-control-adapter';
+import { createTestPostgresControlAdapter } from '../../../../3-targets/postgres/2-adapter/test/helpers/test-control-adapter';
 import pgvectorDescriptor from '../../src/exports/control';
 
 const testAdapter = createTestPostgresControlAdapter(
@@ -173,6 +173,7 @@ function contractToSchemaIR(
     ]),
   );
   return new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces: {
       public: new PostgresNamespaceSchemaNode({
         schemaName: 'public',
@@ -786,7 +787,7 @@ const DEMO_BASE_TABLES = {
       kind: col({
         dataType: 'app/test-type',
         codecId: 'app/test-type@1',
-        typeRef: 'user_type',
+        typeParams: { typeName: 'user_type', values: ['admin', 'user'] },
       }),
     },
     primaryKey: { columns: ['id'] },
@@ -881,6 +882,7 @@ function createDemoContract(
 const ownsUserTypeEnum: SchemaOwnership = {
   declaresEntity: (coordinate) =>
     coordinate.entityKind === 'native_enum' && coordinate.entityName === 'user_type',
+  namespaceDeclaringSpaces: () => [],
 };
 
 describe('incremental migration with full contract surface (enums, FKs)', () => {

@@ -13,7 +13,7 @@ import {
   type MutationDefaultGeneratorDescriptor,
 } from '@internal/framework-components/components';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
-import { buildSymbolTable } from '@internal/psl-parser';
+import { buildSymbolTable, EMPTY_DATA_TYPES } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
@@ -38,7 +38,7 @@ const types: AuthoringTypeNamespace = {
   String: { kind: 'typeConstructor', output: { codecId: 'pg/text@1' } },
   Time: {
     kind: 'typeConstructor',
-    args: [{ kind: 'number', name: 'precision', integer: true, optional: true }],
+    args: [{ kind: 'value', dataType: 'fixture/int', name: 'precision', optional: true }],
     output: { codecId: 'pg/time-temporal@1', typeParams: { precision: { kind: 'arg', index: 0 } } },
   },
 };
@@ -46,20 +46,20 @@ const types: AuthoringTypeNamespace = {
 async function actualPostgresStack(): Promise<Stack> {
   const [attributes, blocks, family, postgres] = await Promise.all([
     importFromPackageRoot<{ sqlAttributeSpecs: AuthoringAttributeSpecContributions }>(
-      '../../../2-sql/2-authoring/contract-psl/src/sql-attribute-specs.ts',
+      '../../../2-sql-family/2-authoring/contract-psl/src/sql-attribute-specs.ts',
     ),
     importFromPackageRoot<{
       sqlFamilyPslBlockDescriptors: AuthoringPslBlockDescriptorNamespace;
       sqlFamilyEntityTypes: AuthoringEntityTypeNamespace;
-    }>('../../../2-sql/9-family/src/core/authoring-entity-types.ts'),
+    }>('../../../2-sql-family/9-family/src/core/authoring-entity-types.ts'),
     importFromPackageRoot<{
       sqlFamilyGeneratorFunctions: readonly GeneratorFunctionContribution[];
       sqlFamilyGeneratorDescriptors: readonly MutationDefaultGeneratorDescriptor[];
-    }>('../../../2-sql/9-family/src/core/generator-functions.ts'),
+    }>('../../../2-sql-family/9-family/src/core/generator-functions.ts'),
     importFromPackageRoot<{
       postgresGeneratorFunctions: readonly GeneratorFunctionContribution[];
       postgresGeneratorDescriptors: readonly MutationDefaultGeneratorDescriptor[];
-    }>('../../../3-targets/3-targets/postgres/src/core/generator-functions.ts'),
+    }>('../../../3-targets/postgres/1-target/src/core/generator-functions.ts'),
   ]);
   return {
     authoringContributions: assembleAuthoringContributions([
@@ -102,7 +102,7 @@ function prepare(markedSource: string, stack: Stack) {
   });
   const controlMutationDefaults = { defaultFunctionRegistry: new Map(), generatorDescriptors: [] };
   const binder = testBinder({ ...stack, controlMutationDefaults, sources, symbolTable });
-  return { document, sourceFile, symbolTable, binder, offset, controlMutationDefaults };
+  return { document, sourceFile, symbolTable, binder, offset, controlMutationDefaults, sources };
 }
 
 function complete(markedSource: string, stack: Stack, clientSupportsSnippets = false) {
@@ -158,7 +158,7 @@ describe('generator attributes in the language server', {
 
   it('show the signature of a generator function on hover', async () => {
     const stack = await actualPostgresStack();
-    const { document, sourceFile, binder, offset } = prepare(
+    const { document, sourceFile, binder, offset, sources } = prepare(
       'model Post {\n  id String @onCreate(uu|id(7))\n}',
       stack,
     );
@@ -169,6 +169,8 @@ describe('generator attributes in the language server', {
         position: sourceFile.positionAt(offset),
         binder,
         pslBlockDescriptors: stack.pslBlockDescriptors,
+        dataTypes: EMPTY_DATA_TYPES,
+        sources,
       })?.contents,
     ).toEqual({
       kind: 'markdown',

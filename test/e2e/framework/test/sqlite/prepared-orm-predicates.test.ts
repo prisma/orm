@@ -113,8 +113,8 @@ it('prepares ORM predicates and pagination through the public SQLite facade with
     ]);
     expect(await query.query(runtime, second)).toEqual([{ id: 2, posts: [] }]);
     expect(executions.map((execution) => execution.params)).toEqual([
-      [5, 9, 1, 999, 2, 1, 'Match'],
-      [7, 9, 2, 999, 3, 2, 'Match'],
+      [5, 9, 1, 999, 2, 'Match'],
+      [7, 9, 2, 999, 3, 'Match'],
     ]);
     expect(executions[0]?.sql).toBe(executions[1]?.sql);
     expect(lower).toHaveBeenCalledOnce();
@@ -308,11 +308,11 @@ it('prepares ORM predicates and pagination through the public SQLite facade with
     const paginationExecutions = executions.slice(paginationStart);
     expect(new Set(paginationExecutions.map((execution) => execution.sql)).size).toBe(1);
     expect(paginationExecutions.map((execution) => execution.params)).toEqual([
-      [2, 0, 0, 2, 0, 2, 0],
-      [1, 0, 0, 1, 0, 1, 0],
-      [1, 1, 1, 1, 1, 1, 1],
-      [0, 0, 0, 0, 0, 0, 0],
-      [2, 9, 9, 2, 9, 2, 9],
+      [2, 0],
+      [1, 0],
+      [1, 1],
+      [0, 0],
+      [2, 9],
     ]);
     expect(paginationCallback).toHaveBeenCalledOnce();
     expect(lower.mock.calls.length).toBe(lowerCount + 1);

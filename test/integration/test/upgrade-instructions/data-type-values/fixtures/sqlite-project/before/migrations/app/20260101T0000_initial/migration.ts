@@ -1,5 +1,5 @@
-import type { Contract as End } from '../../snapshots/e12144f8cb1dd3d315b65f0098cc5ac938bbb6e4f6706a733a1a9f9194ef614b/contract';
-import endContract from '../../snapshots/e12144f8cb1dd3d315b65f0098cc5ac938bbb6e4f6706a733a1a9f9194ef614b/contract.json' with {
+import type { Contract as End } from '../../snapshots/85008a1e38a85164c8ad699585433ec7cd2b599eceffbbf7f753923b114e3219/contract';
+import endContract from '../../snapshots/85008a1e38a85164c8ad699585433ec7cd2b599eceffbbf7f753923b114e3219/contract.json' with {
   type: 'json',
 };
 

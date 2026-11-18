@@ -1,16 +1,16 @@
-import type { ContractSourceDiagnostic, PrismaNextConfig } from '@internal/config/config-types';
+import type { ContractSourceDiagnostic, PrismaConfig } from '@internal/config/config-types';
 import type { PslSourceSettings } from '@internal/framework-components/control';
 import { createControlStack, hasPslContractBuild } from '@internal/framework-components/control';
 import { printPsl } from '@internal/psl-printer';
 import { ifDefined } from '@internal/utils/defined';
 import { errorRuntime } from '../../utils/cli-errors';
-import { loadContractSourceWithStack } from './load-contract-source';
+import { loadContractSourceWithStack, withWarningFindings } from './load-contract-source';
 import { validateLoadedContract } from './validate-loaded-contract';
 
-type ContractConfig = NonNullable<PrismaNextConfig['contract']>;
+type ContractConfig = NonNullable<PrismaConfig['contract']>;
 
 export interface ContractPrintOptions {
-  readonly config: PrismaNextConfig;
+  readonly config: PrismaConfig;
   readonly contractConfig: ContractConfig;
   /** The line under the `// use prisma-8` marker saying where the file came from. */
   readonly description: string;
@@ -49,22 +49,23 @@ export async function executeContractPrint(
 ): Promise<ContractPrintResult> {
   const { config, contractConfig, description, cwd, signal } = options;
   const stack = createControlStack(config);
-  const sourceWarnings: ContractSourceDiagnostic[] = [];
   const loaded = await loadContractSourceWithStack({
     stack,
     source: contractConfig.source,
     cwd,
     ...ifDefined('signal', signal),
-    reportWarning: (diagnostic) => {
-      sourceWarnings.push(diagnostic);
-    },
   });
   if (!loaded.ok) {
-    throw loaded.failure.error;
+    throw withWarningFindings(loaded.failure.error, loaded.failure.warnings, cwd);
   }
+  const { warnings: sourceWarnings } = loaded.value;
 
   const familyInstance = config.family.create(stack);
-  const contract = validateLoadedContract({ config, familyInstance, contract: loaded.value });
+  const contract = validateLoadedContract({
+    config,
+    familyInstance,
+    contract: loaded.value.contract,
+  });
   if (!hasPslContractBuild(familyInstance)) {
     throw errorRuntime(
       'CONTRACT.PRINT_UNSUPPORTED',

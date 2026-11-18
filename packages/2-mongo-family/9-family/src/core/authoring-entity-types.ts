@@ -10,13 +10,14 @@ import {
 import { enumRefusalOf } from '@internal/framework-components/codec';
 import { type EnumTypeHandle, enumType } from '@internal/mongo-contract-ts/contract-builder';
 import type { InferBlock, PslBlockSpecDescriptor } from '@internal/psl-parser';
-import { blockAttribute, jsonValue, mapBlock, str } from '@internal/psl-parser';
+import { blockAttribute, enumMemberValue, mapBlock, str } from '@internal/psl-parser';
 
 export function mongoFamilyEnumSpec() {
   return mapBlock({
     value: {
-      type: jsonValue(),
-      documentation: 'The stored member value; a bare member stores its own name.',
+      type: enumMemberValue(),
+      documentation:
+        "The member's value, written as a value of the enum's data type; a bare member stores its own name.",
     },
     allowBare: true,
   });

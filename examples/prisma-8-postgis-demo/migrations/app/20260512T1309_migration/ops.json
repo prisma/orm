@@ -16,7 +16,11 @@
       {
         "description": "ensure table \"cafe\" does not exist",
         "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
-        "params": ["\"public\".\"cafe\""]
+        "params": ["\"public\".\"cafe\""],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"cafe\""
+        }
       }
     ],
     "execute": [
@@ -30,7 +34,11 @@
       {
         "description": "verify table \"cafe\" exists",
         "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3))) AS \"result\"",
-        "params": ["\"public\".\"cafe\"", "r", "p"]
+        "params": ["\"public\".\"cafe\"", "r", "p"],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"cafe\""
+        }
       }
     ]
   },
@@ -51,7 +59,11 @@
       {
         "description": "ensure table \"neighborhood\" does not exist",
         "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
-        "params": ["\"public\".\"neighborhood\""]
+        "params": ["\"public\".\"neighborhood\""],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"neighborhood\""
+        }
       }
     ],
     "execute": [
@@ -65,7 +77,11 @@
       {
         "description": "verify table \"neighborhood\" exists",
         "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3))) AS \"result\"",
-        "params": ["\"public\".\"neighborhood\"", "r", "p"]
+        "params": ["\"public\".\"neighborhood\"", "r", "p"],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"neighborhood\""
+        }
       }
     ]
   },
@@ -86,7 +102,11 @@
       {
         "description": "ensure table \"route\" does not exist",
         "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
-        "params": ["\"public\".\"route\""]
+        "params": ["\"public\".\"route\""],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"route\""
+        }
       }
     ],
     "execute": [
@@ -100,7 +120,11 @@
       {
         "description": "verify table \"route\" exists",
         "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3))) AS \"result\"",
-        "params": ["\"public\".\"route\"", "r", "p"]
+        "params": ["\"public\".\"route\"", "r", "p"],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"route\""
+        }
       }
     ]
   }

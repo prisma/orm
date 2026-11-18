@@ -1,7 +1,7 @@
-import { domainModelsAtDefaultNamespace } from '@internal/contract/types';
+import { type ContractModel, domainModelsAtDefaultNamespace } from '@internal/contract/types';
 import type {
   MongoContract,
-  MongoModelDefinition,
+  MongoModelStorage,
   MongoModelsMap,
   RootModelName,
 } from '@internal/mongo-contract';
@@ -112,7 +112,7 @@ export interface LookupBuilder<
 /**
  * Type of the `from` callable passed to `PipelineChain.lookup`'s outer
  * callback. The generic argument is inferred from a string-literal
- * argument (the same pattern as `mongoQuery({ contract }).from('orders')`),
+ * argument (the same pattern as `mongoQuery({ context }).from('orders')`),
  * which grounds `RootName` into the returned `LookupBuilder` *before*
  * the inner `on(...)` callback is type-checked. This sequential
  * inference is what makes `foreign` resolve narrowly to the foreign
@@ -153,7 +153,7 @@ export function createLookupFrom<
       );
     }
     const model = domainModelsAtDefaultNamespace(contract.domain)[modelName] as
-      | MongoModelDefinition
+      | ContractModel<MongoModelStorage>
       | undefined;
     const foreignCollection = model?.storage?.collection ?? rootName;
     return createLookupBuilder({
@@ -275,7 +275,7 @@ export function extractLookupResult(
     );
   }
   const model = domainModelsAtDefaultNamespace(contract.domain)[result._model] as
-    | MongoModelDefinition
+    | ContractModel<MongoModelStorage>
     | undefined;
   const foreignCollection = model?.storage?.collection ?? result._root;
   return {

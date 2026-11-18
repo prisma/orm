@@ -1,22 +1,22 @@
 import { int4Column, rawColumn } from '@internal/adapter-postgres/column-types';
-import postgresAdapter from '@internal/adapter-postgres/runtime';
-import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
+import { defineContract, field, model, rel, sql } from '@internal/postgres/contract-builder';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { describe, expect, expectTypeOf, it } from 'vitest';
+import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
 import { timeouts, withPushedContractRuntime } from './integration-helpers';
 
 const ShelfBase = model('Shelf', {
   fields: {
     id: field.column(int4Column).id(),
-    search: field.column(rawColumn('tsvector')),
-    area: field.column(rawColumn('circle')),
-    size: field.column(rawColumn('integer')),
-    open: field.column(rawColumn('boolean')),
-    net: field.column(rawColumn('cidr')).optional(),
-    nets: field.column(rawColumn('cidr')).many(),
-    codes: field.column(rawColumn('character varying(3)')).many(),
+    search: field.column(rawColumn(sql`tsvector`)),
+    area: field.column(rawColumn(sql`circle`)),
+    size: field.column(rawColumn(sql`integer`)),
+    open: field.column(rawColumn(sql`boolean`)),
+    net: field.column(rawColumn(sql`cidr`)).optional(),
+    nets: field.column(rawColumn(sql`cidr`)).many(),
+    codes: field.column(rawColumn(sql`character varying(3)`)).many(),
   },
 }).sql({ table: 'raw_shelves' });
 
@@ -24,7 +24,7 @@ const Book = model('Book', {
   fields: {
     id: field.column(int4Column).id(),
     shelfId: field.column(int4Column).column('shelf_id'),
-    search: field.column(rawColumn('tsvector')),
+    search: field.column(rawColumn(sql`tsvector`)),
   },
   relations: { shelf: rel.belongsTo(ShelfBase, { from: 'shelfId', to: 'id' }) },
 }).sql({ table: 'raw_books' });
@@ -34,10 +34,15 @@ const Shelf = ShelfBase.relations({
 }).sql({ table: 'raw_shelves' });
 
 const contract = defineContract({ models: { Shelf, Book } });
-const context = createExecutionContext({
-  contract,
-  stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),
-});
+function contextOf(strategy: IncludeStrategy) {
+  return createExecutionContext({
+    contract,
+    stack: createSqlExecutionStack({
+      target: postgresTarget,
+      adapter: postgresAdapterFor(strategy),
+    }),
+  });
+}
 const namespace = { namespaceId: 'public' };
 
 const shelfFields = ['id', 'search', 'area', 'size', 'open', 'net', 'nets', 'codes'] as const;
@@ -54,7 +59,8 @@ const shelfAsPrinted = {
   codes: ['abc', 'xy'],
 };
 
-describe('raw fields through the ORM', () => {
+describe.each(includeStrategies)('raw fields through the ORM (%s)', (strategy) => {
+  const context = contextOf(strategy);
   it(
     'read as the text the database prints, flat and through includes, and write back as read',
     async () => {

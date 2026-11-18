@@ -8,13 +8,11 @@
  * `migrations/` directory the script:
  *
  *   1. Reads `src/contract.json` -> `storage.storageHash` (new end-state hash).
- *   2. Locates the HEAD migration - the one whose `migration.json` sets
- *      `"to"` equal to the hash published in `migrations/refs/head.json`.
- *      Because every current extension has exactly one (baseline) migration
- *      with `from: null`, the head migration is always unambiguous; the
- *      script halts with an error if the chain is ambiguous or the head
- *      migration cannot be identified.
- *   3. Rewrites the `to` literal in that migration's `migration.ts` to the
+ *   2. Locates the HEAD migrations - every one whose `migration.json` sets
+ *      `"to"` equal to the hash published in `migrations/refs/head.json`
+ *      (a pack can reach its head both from its previous head and from the
+ *      empty contract). The script halts with an error if none is found.
+ *   3. Rewrites the `to` literal in each such migration's `migration.ts` to the
  *      new storageHash.
  *   4. Re-emits `ops.json` + `migration.json` by running `tsx migration.ts`
  *      from the extension package root (tsx because the migration imports
@@ -97,16 +95,14 @@ function biomeFormatInPlace(filePath) {
 }
 
 /**
- * Find the migration directory whose `migration.json` has a `to` field
- * matching `headHash`. Returns the directory path.
+ * Find the migration directories whose `migration.json` has a `to` field
+ * matching `headHash`. Returns the directory paths.
  *
  * Halts (throws) when:
  *   - No migration directory matches (chain is broken -- head.json is stale
  *     in a way regen cannot fix automatically).
- *   - More than one migration directory matches (ambiguous HEAD -- not expected
- *     in the current single-migration baseline layout; human review required).
  */
-function findHeadMigrationDir(migrationsDir, headHash) {
+function findHeadMigrationDirs(migrationsDir, headHash) {
   let migrationDirs;
   try {
     migrationDirs = readdirSync(migrationsDir, { withFileTypes: true })
@@ -131,13 +127,7 @@ function findHeadMigrationDir(migrationsDir, headHash) {
         'head.json may be stale in an unexpected way; manual review required',
     );
   }
-  if (matching.length > 1) {
-    throw new Error(
-      `regen-extension-migrations: multiple migration directories match "to": "${headHash}" in ${migrationsDir} -- ` +
-        `ambiguous HEAD; manual review required: ${matching.join(', ')}`,
-    );
-  }
-  return matching[0];
+  return matching;
 }
 
 /**
@@ -284,38 +274,39 @@ async function processExtension(extDir) {
     return snapshot.written ? 'refreshed' : 'skipped';
   }
 
-  const headMigrationDir = findHeadMigrationDir(migrationsDir, oldHash);
-  const migrationTsPath = join(headMigrationDir, 'migration.ts');
-  if (!existsSync(migrationTsPath)) {
-    throw new Error(`regen-extension-migrations: no migration.ts in ${headMigrationDir}`);
-  }
+  for (const headMigrationDir of findHeadMigrationDirs(migrationsDir, oldHash)) {
+    const migrationTsPath = join(headMigrationDir, 'migration.ts');
+    if (!existsSync(migrationTsPath)) {
+      throw new Error(`regen-extension-migrations: no migration.ts in ${headMigrationDir}`);
+    }
 
-  const snapshotsImportPath = snapshotsImportPathFrom(headMigrationDir, migrationsDir);
-  const migrationTsSrc = readFileSync(migrationTsPath, 'utf8');
-  const hasSnapshotImports = /import\s+endContract\s+from\s+'/.test(migrationTsSrc);
-  const rewrittenMigrationTs = rewriteContractSnapshotSpecifiers(
-    migrationTsSrc,
-    snapshotsImportPath,
-    newHash,
-  );
-  if (rewrittenMigrationTs !== migrationTsSrc) {
-    writeFileSync(migrationTsPath, rewrittenMigrationTs, 'utf8');
-  }
-  const rewroteToLiteral = rewriteMigrationToHash(migrationTsPath, newHash);
-  if (!rewroteToLiteral && !hasSnapshotImports) {
-    throw new Error(
-      `regen-extension-migrations: ${migrationTsPath} carries neither a 'to: ...' hash literal nor snapshot-store contract imports; cannot re-anchor`,
+    const snapshotsImportPath = snapshotsImportPathFrom(headMigrationDir, migrationsDir);
+    const migrationTsSrc = readFileSync(migrationTsPath, 'utf8');
+    const hasSnapshotImports = /import\s+endContract\s+from\s+'/.test(migrationTsSrc);
+    const rewrittenMigrationTs = rewriteContractSnapshotSpecifiers(
+      migrationTsSrc,
+      snapshotsImportPath,
+      newHash,
     );
+    if (rewrittenMigrationTs !== migrationTsSrc) {
+      writeFileSync(migrationTsPath, rewrittenMigrationTs, 'utf8');
+    }
+    const rewroteToLiteral = rewriteMigrationToHash(migrationTsPath, newHash);
+    if (!rewroteToLiteral && !hasSnapshotImports) {
+      throw new Error(
+        `regen-extension-migrations: ${migrationTsPath} carries neither a 'to: ...' hash literal nor snapshot-store contract imports; cannot re-anchor`,
+      );
+    }
+    reemitMigrationArtifacts(extDir, migrationTsPath);
+    const freshMigrationMeta = readJson(join(headMigrationDir, 'migration.json'));
+    if (freshMigrationMeta.to !== newHash) {
+      throw new Error(
+        `regen-extension-migrations: ${headMigrationDir} re-emitted "to": "${freshMigrationMeta.to}" but expected "${newHash}"`,
+      );
+    }
+    biomeFormatInPlace(join(headMigrationDir, 'migration.json'));
+    biomeFormatInPlace(join(headMigrationDir, 'ops.json'));
   }
-  reemitMigrationArtifacts(extDir, migrationTsPath);
-  const freshMigrationMeta = readJson(join(headMigrationDir, 'migration.json'));
-  if (freshMigrationMeta.to !== newHash) {
-    throw new Error(
-      `regen-extension-migrations: ${headMigrationDir} re-emitted "to": "${freshMigrationMeta.to}" but expected "${newHash}"`,
-    );
-  }
-  biomeFormatInPlace(join(headMigrationDir, 'migration.json'));
-  biomeFormatInPlace(join(headMigrationDir, 'ops.json'));
   repinHeadRef(headRefPath, newHash);
 
   return 'updated';

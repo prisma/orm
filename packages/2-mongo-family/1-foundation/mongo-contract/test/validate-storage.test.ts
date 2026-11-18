@@ -1,5 +1,6 @@
 import {
   asNamespaceId,
+  type ContractModel,
   coreHash,
   profileHash,
   UNBOUND_DOMAIN_NAMESPACE_ID,
@@ -13,7 +14,7 @@ function crossRef(model: string, namespace: string = UNBOUND_DOMAIN_NAMESPACE_ID
   return { namespace: asNamespaceId(namespace), model };
 }
 
-import type { MongoContract, MongoModelDefinition } from '../src/contract-types';
+import type { MongoContract, MongoModelStorage } from '../src/contract-types';
 import { buildMongoNamespace } from '../src/ir/build-mongo-namespace';
 import { MongoCollection } from '../src/ir/mongo-collection';
 import { MongoStorage } from '../src/ir/mongo-storage';
@@ -36,12 +37,12 @@ function storageWithItemsCollections(
 }
 
 type MongoContractTestOverrides = Partial<MongoContract> & {
-  models?: Record<string, MongoModelDefinition>;
+  models?: Record<string, ContractModel<MongoModelStorage>>;
 };
 
 function makeMinimalContract(overrides: MongoContractTestOverrides = {}): MongoContract {
   const { models, domain, ...rest } = overrides;
-  const defaultModels: Record<string, MongoModelDefinition> = {
+  const defaultModels: Record<string, ContractModel<MongoModelStorage>> = {
     Item: {
       fields: {
         _id: {
@@ -270,7 +271,7 @@ describe('validateMongoStorage()', () => {
                 cardinality: 'N:1',
                 on: { localFields: ['authorId'], targetFields: ['_id'] },
                 ...(input.nullable === undefined ? {} : { nullable: input.nullable }),
-              } as MongoModelDefinition['relations'][string],
+              } as ContractModel<MongoModelStorage>['relations'][string],
             },
           },
           User: {

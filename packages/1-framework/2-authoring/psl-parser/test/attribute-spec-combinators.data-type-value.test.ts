@@ -13,7 +13,7 @@ import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
 import type { AttributeCtx } from '../src/attribute-spec/types';
-import { dataTypeValue, funcCall, oneOf, str } from '../src/exports';
+import { dataTypeValue, funcCall, leafDiagnostic, oneOf, refineArg, str } from '../src/exports';
 import { Cursor, parseAttribute } from '../src/parse';
 import { PslSources } from '../src/source-file';
 import { buildSymbolTable } from '../src/symbol-table';
@@ -149,6 +149,14 @@ function colonQualifiedArgOf(source: string): { expr: ExpressionAst; ctx: Attrib
 function parse(type: DataTypeId, source: string, over: DataTypeSupport = support) {
   const { expr, ctx } = argOf(source);
   return dataTypeValue(type, over).parse(expr, ctx);
+}
+
+function parseWith(
+  type: { readonly parse: (expr: ExpressionAst, ctx: AttributeCtx) => unknown },
+  source: string,
+) {
+  const { expr, ctx } = argOf(source);
+  return type.parse(expr, ctx);
 }
 
 /** The diagnostic for the argument `source`, which starts after `@x(` on the first line. */
@@ -436,6 +444,60 @@ describe('dataTypeValue', () => {
     expect(rewrite).toBeDefined();
     expect(parse(sqlExpression.id, rewrite ?? '')).toMatchObject(
       ok({ value: sqlExpression.fromContract(text, {}) }),
+    );
+  });
+
+  it('takes the label it is given in place of the forms it admits', () => {
+    expect({
+      given: dataTypeValue(pgInt4.id, support, { label: '4 | 7' }).label,
+      none: dataTypeValue(pgInt4.id, support).label,
+    }).toEqual({ given: '4 | 7', none: 'a number' });
+  });
+
+  it('offers the suggestions it is given, and none by default', () => {
+    expect({
+      given: dataTypeValue(pgInt4.id, support, { suggestions: ['4', '7'] }).suggestions,
+      none: dataTypeValue(pgInt4.id, support).suggestions,
+    }).toEqual({ given: ['4', '7'], none: [] });
+  });
+
+  describe('refined by a check on its value', () => {
+    const version = refineArg(dataTypeValue(pgInt4.id, support), (parsed, arg, ctx) =>
+      Number(parsed.value.value) === 7
+        ? ok(7)
+        : notOk([leafDiagnostic(ctx, arg, 'version must be 7', 'PSL_FIXTURE_CHECK')]),
+    );
+
+    it('keeps the metadata of the value it refines', () => {
+      expect({ kind: version.kind, label: version.label }).toEqual({
+        kind: 'dataTypeValue',
+        label: 'a number',
+      });
+    });
+
+    it('returns what the check returns', () => {
+      const { expr, ctx } = argOf('7');
+      expect(version.parse(expr, ctx)).toEqual(ok(7));
+    });
+
+    it('refuses at the argument with the diagnostic of the check', () => {
+      expect(parseWith(version, '5')).toEqual(
+        refusal('5', 'PSL_FIXTURE_CHECK', 'version must be 7'),
+      );
+    });
+
+    it('passes a refusal of the value through without running the check', () => {
+      expect(parseWith(version, '"7"')).toEqual(
+        refusal('"7"', 'PSL_VALUE_TYPE_INCOMPATIBLE', 'Expected a number; write 7'),
+      );
+    });
+  });
+
+  it('is refused as an arm of oneOf when the oneOf is built', () => {
+    expect(() => oneOf(str(), dataTypeValue(pgInt4.id, support))).toThrow(
+      new InternalError(
+        'oneOf was given an arm typed by data type "pg/int4" (a number). A value of a data type is a parameter of an attribute, a block or a function call, never an arm of oneOf.',
+      ),
     );
   });
 

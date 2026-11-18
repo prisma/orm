@@ -2,12 +2,13 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { isPrismaNextSchema } from '@internal/psl-parser';
 import { dirname, join } from 'pathe';
 import { afterAll, describe, expect, it } from 'vitest';
 
 const SCRIPT_PATHS = {
-  app: 'upgrade-instructions/pending/default-generators-to-on-create/app/scripts/rewrite-default-generators.mjs',
+  app: 'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.18-to-8.0.0-rc.19/scripts/default-generators-to-on-create/rewrite-default-generators.mjs',
+  extension:
+    'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.18-to-8.0.0-rc.19/scripts/default-generators-to-on-create/rewrite-default-generators.mjs',
 } as const;
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -91,19 +92,14 @@ describe('rewrite-default-generators', () => {
     });
   });
 
-  it('treats a file as Prisma 8 exactly when contract emit does', () => {
+  it('skips exactly the files without the Prisma 8 directive', () => {
     const dir = copyBefore();
     const files = Object.keys(filesOf(dir)).sort();
-    const before = filesOf(dir);
-    const skipped = new Set(
-      run(dir, files)
-        .stdout.split('\n')
-        .filter((line) => line.includes('is not a Prisma 8 schema'))
-        .map((line) => line.slice(0, line.indexOf(':'))),
-    );
-    expect(files.map((name) => ({ name, skipped: skipped.has(name) }))).toEqual(
-      files.map((name) => ({ name, skipped: !isPrismaNextSchema(before[name] ?? '') })),
-    );
+    const skipped = run(dir, files)
+      .stdout.split('\n')
+      .filter((line) => line.includes('is not a Prisma 8 schema'))
+      .map((line) => line.slice(0, line.indexOf(':')));
+    expect(skipped).toEqual(['prisma7-models.prisma', 'prisma7.prisma']);
   });
 
   it('is idempotent', () => {
@@ -126,5 +122,11 @@ describe('rewrite-default-generators', () => {
         stderr: 'missing.prisma: cannot be read; no file was changed.\n',
       },
     });
+  });
+
+  it('ships the same script for extensions', () => {
+    expect(readFileSync(join(repoRoot, SCRIPT_PATHS.extension), 'utf8')).toBe(
+      readFileSync(script, 'utf8'),
+    );
   });
 });

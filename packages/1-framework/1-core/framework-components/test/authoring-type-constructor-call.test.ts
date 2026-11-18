@@ -14,8 +14,8 @@ const namespace = {
   Decimal: {
     kind: 'typeConstructor',
     args: [
-      { kind: 'number', name: 'precision', integer: true, optional: true },
-      { kind: 'number', name: 'scale', integer: true, optional: true },
+      { kind: 'value', dataType: 'test/int', name: 'precision', optional: true },
+      { kind: 'value', dataType: 'test/int', name: 'scale', optional: true },
     ],
     output: {
       codecId: 'test/numeric@1',
@@ -28,7 +28,7 @@ const namespace = {
   vector: {
     Vector: {
       kind: 'typeConstructor',
-      args: [{ kind: 'number', name: 'length', integer: true }],
+      args: [{ kind: 'value', dataType: 'test/int', name: 'length' }],
       output: {
         codecId: 'test/vector@1',
         typeParams: { length: { kind: 'arg', index: 0 } },

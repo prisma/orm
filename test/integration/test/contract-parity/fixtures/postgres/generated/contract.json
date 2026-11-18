@@ -1749,7 +1749,9 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "name": "profiles_userId_idx_a489d58a"
+                    "unique": [
+                      "userId"
+                    ]
                   },
                   "onDelete": "cascade",
                   "source": {
@@ -1768,22 +1770,19 @@
                   }
                 }
               ],
-              "indexes": [
-                {
-                  "columns": [
-                    "userId"
-                  ],
-                  "name": "profiles_userId_idx_a489d58a",
-                  "prefix": "profiles_userId_idx",
-                  "unique": false
-                }
-              ],
+              "indexes": [],
               "primaryKey": {
                 "columns": [
                   "id"
                 ]
               },
-              "uniques": []
+              "uniques": [
+                {
+                  "columns": [
+                    "userId"
+                  ]
+                }
+              ]
             },
             "tags": {
               "columns": {
@@ -2005,7 +2004,9 @@
                   "codecId": "pg/timestamp-string@1",
                   "dataType": "pg/timestamp",
                   "nullable": false,
-                  "typeRef": "TimestampString3"
+                  "typeParams": {
+                    "precision": 3
+                  }
                 },
                 "timestamptz": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -2027,7 +2028,9 @@
                   "codecId": "pg/timestamptz-string@1",
                   "dataType": "pg/timestamptz",
                   "nullable": true,
-                  "typeRef": "TimestamptzString3"
+                  "typeParams": {
+                    "precision": 3
+                  }
                 },
                 "ulid": {
                   "codecId": "sql/char@1",
@@ -2120,28 +2123,10 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "67dcecb0dbd20137538fa4534d1016b3107d87bba11434f79aed258feea22cd5",
-    "types": {
-      "TimestampString3": {
-        "codecId": "pg/timestamp-string@1",
-        "dataType": "pg/timestamp",
-        "kind": "codec-instance",
-        "typeParams": {
-          "precision": 3
-        }
-      },
-      "TimestamptzString3": {
-        "codecId": "pg/timestamptz-string@1",
-        "dataType": "pg/timestamptz",
-        "kind": "codec-instance",
-        "typeParams": {
-          "precision": 3
-        }
-      }
-    }
+    "storageHash": "3617e76539b0a1fbc3c24d944dca4ca185ff8417945261f87a04a99949fb3ddc"
   },
   "execution": {
-    "executionHash": "4c8b52aa880ed951466684d8a101a1fc3992151da635fe969fe2926dbd8964eb",
+    "executionHash": "4a96a7146e13898bf97aa37dba3cc7c9cae8e2599993a25be7fe3bdb78b45b9e",
     "mutations": {
       "defaults": [
         {
@@ -2359,7 +2344,10 @@
         {
           "onCreate": {
             "id": "instantNow",
-            "kind": "generator"
+            "kind": "generator",
+            "params": {
+              "precision": 6
+            }
           },
           "ref": {
             "entry": "users",
@@ -2370,11 +2358,17 @@
         {
           "onCreate": {
             "id": "timestamptzStringNow",
-            "kind": "generator"
+            "kind": "generator",
+            "params": {
+              "precision": 3
+            }
           },
           "onUpdate": {
             "id": "timestamptzStringNow",
-            "kind": "generator"
+            "kind": "generator",
+            "params": {
+              "precision": 3
+            }
           },
           "ref": {
             "entry": "users",
@@ -2418,11 +2412,15 @@
       "forShare": true,
       "forUpdate": true,
       "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
       "insertOnConflictWithoutTarget": true,
+      "jsonAgg": true,
+      "jsonAggWithoutTruncation": true,
       "lateral": true,
       "lockNowait": true,
       "lockOf": true,
       "lockSkipLocked": true,
+      "outerReferencesInDerivedTables": true,
       "returning": true,
       "scalarList": true
     }
@@ -2433,15 +2431,6 @@
       "id": "arktype-json",
       "kind": "extension",
       "targetId": "postgres",
-      "types": {
-        "codecTypes": {
-          "import": {
-            "alias": "ArktypeJsonTypes",
-            "named": "CodecTypes",
-            "package": "@internal/extension-arktype-json/codec-types"
-          }
-        }
-      },
       "version": "0.0.1"
     }
   },

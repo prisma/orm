@@ -131,6 +131,47 @@ describe('deriveCollectionValidators', () => {
     });
   });
 
+  it('reads each value object from the storage namespace its field names', () => {
+    const closedObject = (field: string) => ({
+      bsonType: 'object',
+      required: [field],
+      properties: { [field]: { bsonType: 'string' } },
+      additionalProperties: false,
+    });
+    const validators = derive({
+      roots: { users: crossRef('User') },
+      models: {
+        User: model({
+          _id: objectId(),
+          home: voField('Address', false, 'home'),
+          work: voField('Address', false, 'work'),
+        }),
+      },
+      storage: {
+        namespaces: {
+          home: {
+            id: 'home',
+            entries: {
+              valueObject: { Address: { fields: { city: scalarField('mongo/string@1') } } },
+            },
+          },
+          work: {
+            id: 'work',
+            entries: {
+              valueObject: { Address: { fields: { desk: scalarField('mongo/string@1') } } },
+            },
+          },
+        },
+      },
+    });
+
+    expect(jsonSchemas(validators)['users']?.['properties']).toEqual({
+      _id: { bsonType: 'objectId' },
+      home: closedObject('city'),
+      work: closedObject('desk'),
+    });
+  });
+
   describe('embedded models', () => {
     const Address = model({ city: scalarField('mongo/string@1') });
 

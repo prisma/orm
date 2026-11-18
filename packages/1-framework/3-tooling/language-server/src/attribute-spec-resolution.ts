@@ -193,9 +193,13 @@ export function attributeSpecResolver(
       };
       const node = typeReferenceNode(field);
       const typeResolution = node === undefined ? undefined : source.binder.symbolForNode(node);
-      const typeConstructor = contributedTypeOf(typeResolution, source.binder);
+      const contributedType = contributedTypeOf(
+        typeResolution,
+        source.binder,
+        field.typeConstructor,
+      );
       return (name) =>
-        specs.field[name]?.({ ...specContext, field, typeResolution, typeConstructor });
+        specs.field[name]?.({ ...specContext, field, typeResolution, contributedType });
     }
   }
 }

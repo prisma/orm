@@ -6,6 +6,7 @@ export type {
 } from '@internal/framework-components/runtime';
 export { RelationKeys } from '@internal/framework-components/runtime';
 export { buildMongoStorage } from '../build-mongo-storage';
+export { canonicalize } from '../canonicalize';
 export type { CollectionControlPolicies } from '../collection-control-policies';
 export {
   collectionControlPoliciesOf,
@@ -31,6 +32,8 @@ export type {
   ExtractMongoFieldOutputTypes,
   ExtractMongoTypeMaps,
   InferModelRow,
+  MongoCodecInput,
+  MongoCodecTypesBase,
   MongoContract,
   MongoContractWithTypeMaps,
   MongoIndexAuthoringInput,
@@ -41,7 +44,6 @@ export type {
   MongoJsonObject,
   MongoJsonPrimitive,
   MongoJsonValue,
-  MongoModelDefinition,
   MongoModelFieldStorage,
   MongoModelStorage,
   MongoModelsMap,
@@ -57,6 +59,7 @@ export type {
 } from '../contract-types';
 export type { MongoContractAccessors, MongoContractView } from '../contract-view';
 export { buildMongoContractView } from '../contract-view';
+export { defaultMongoIndexName } from '../default-index-name';
 export {
   defaultMongoDomainNamespaceId,
   defaultMongoStorageNamespaceId,
@@ -67,6 +70,8 @@ export type { FieldValueSets } from '../derive-json-schema';
 export { documentIdRefusalReason } from '../document-id-refusal';
 export type { FieldBsonTypeRefusal } from '../field-bson-type-refusal';
 export { fieldBsonTypeRefusalOf } from '../field-bson-type-refusal';
+export type { MongoIndexLookupInput, MongoIndexOptionKey } from '../index-lookup-key';
+export { indexLookupKey, MONGO_INDEX_OPTION_KEYS } from '../index-lookup-key';
 export { buildMongoNamespace } from '../ir/build-mongo-namespace';
 export type { MongoChangeStreamPreAndPostImagesOptionsInput } from '../ir/mongo-change-stream-pre-and-post-images-options';
 export { MongoChangeStreamPreAndPostImagesOptions } from '../ir/mongo-change-stream-pre-and-post-images-options';
@@ -112,8 +117,18 @@ export type {
   MongoValidatorValidationLevel,
 } from '../ir/mongo-validator';
 export { MongoValidator } from '../ir/mongo-validator';
+export type { MongoValueObjectInput } from '../ir/mongo-value-object';
+export { MongoValueObject } from '../ir/mongo-value-object';
 export type { MongoValueSetInput } from '../ir/mongo-value-set';
 export { MongoValueSet } from '../ir/mongo-value-set';
+export type { MongoModelReference } from '../model-collections';
+export { collectionOfModel, embeddingModelOf, modelFieldStoredAs } from '../model-collections';
+export type { SelectedVariant } from '../model-documents';
+export {
+  otherModelsReached,
+  selectedVariantOf,
+  variantFilter,
+} from '../model-documents';
 export { mongoValueSetsOf } from '../mongo-enum';
 export { modelAndBasesOf, mongoModelsOf } from '../mongo-models';
 export type {
@@ -121,6 +136,7 @@ export type {
   PolymorphicIndexScope,
 } from '../polymorphic-index-scope';
 export { applyPolymorphicScopeToMongoIndex } from '../polymorphic-index-scope';
+export { modelKey, recursiveGroupsOf, valueObjectKey } from '../recursive-groups';
 export type { MongoToOneRelationFields } from '../relation-fields';
 export { isEmbedRelation, resolveMongoToOneRelationFields } from '../relation-fields';
 export {
@@ -140,5 +156,17 @@ export {
   validatorEnumMemberRefusalOf,
   validatorEnumRefusalOf,
 } from '../validator-enum-refusal';
-export type { ValidatorRootShape, ValidatorShape } from '../validator-shapes';
-export { validatorFieldNamesOf, validatorRootShapesOf } from '../validator-shapes';
+export type {
+  SameKindOfDocument,
+  ValidatorDiscriminator,
+  ValidatorDocumentShape,
+  ValidatorRootShape,
+  ValidatorShape,
+} from '../validator-shapes';
+export {
+  propertyBsonTypesOf,
+  sameKindOfDocumentIn,
+  validatorDocumentShapesOf,
+  validatorFieldNamesOf,
+  validatorRootShapesOf,
+} from '../validator-shapes';

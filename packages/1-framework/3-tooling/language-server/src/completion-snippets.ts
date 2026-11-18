@@ -1,3 +1,5 @@
+import { admittedTags, type DataTypeSupport } from '@internal/framework-components/authoring';
+import { dataTypeId } from '@internal/framework-components/codec';
 import type {
   ArgType,
   ContributedTypeDescriptor,
@@ -23,8 +25,9 @@ export function requiredArgumentsSnippet(signature: ArgumentSignature): string {
 export function typeConstructorSnippet(
   name: string,
   descriptor: ContributedTypeDescriptor,
+  dataTypes: DataTypeSupport,
 ): string {
-  const args = descriptor.args ?? [];
+  const args = descriptor.kind === 'typeAlias' ? [] : (descriptor.args ?? []);
   const reference = descriptor.kind === 'typeConstructor' ? descriptor.entityRefArg : undefined;
   const count = Math.max(args.length, (reference?.index ?? -1) + 1);
   const values: string[] = [];
@@ -34,14 +37,13 @@ export function typeConstructorSnippet(
       values.push(argSnippetPlaceholder('identifier', values.length + 1, reference.entityKind));
     } else if (arg !== undefined && arg.optional !== true) {
       const key = arg.name ?? `arg${index + 1}`;
-      const kind =
-        arg.kind === 'string' || arg.kind === 'stringArray'
-          ? 'str'
-          : arg.kind === 'object'
-            ? 'record'
-            : 'identifier';
-      const placeholder = argSnippetPlaceholder(kind, values.length + 1, key);
-      values.push(arg.kind === 'stringArray' ? `[${placeholder}]` : placeholder);
+      const tabStop = values.length + 1;
+      const [tag] = admittedTags(dataTypes, dataTypeId(arg.dataType));
+      values.push(
+        tag !== undefined
+          ? taggedPlaceholder(tag, tabStop, key)
+          : argSnippetPlaceholder('identifier', tabStop, key),
+      );
     }
   }
   const content = values.join(', ') || (count > 0 ? '$' + '{1:}' : '');
@@ -74,8 +76,12 @@ function requiredArgumentSnippet(argument: RequiredArgument, tabStop: number): s
 
 function argumentPlaceholder(type: ArgType<unknown, never>, tabStop: number, key: string): string {
   const tag = type.kind === 'dataTypeValue' ? type.tags[0] : undefined;
-  if (tag !== undefined) return `${tag}\`\${${tabStop.toString()}:${key}}\``;
+  if (tag !== undefined) return taggedPlaceholder(tag, tabStop, key);
   return argSnippetPlaceholder(type.kind, tabStop, key);
+}
+
+function taggedPlaceholder(tag: string, tabStop: number, key: string): string {
+  return `${tag}\`\${${tabStop.toString()}:${key}}\``;
 }
 
 function argSnippetPlaceholder(

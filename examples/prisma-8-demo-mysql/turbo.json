@@ -1,0 +1,19 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "test": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "migrations/**",
+        "prisma/**",
+        "src/**",
+        "test/**",
+        "prisma.config.ts",
+        "vitest.config.ts",
+        "tsconfig.json"
+      ],
+      "env": ["TEST_TIMEOUT_MULTIPLIER", "MYSQL_URL"]
+    }
+  }
+}

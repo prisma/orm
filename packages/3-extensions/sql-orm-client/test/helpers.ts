@@ -1,3 +1,4 @@
+import { postgresAdapterCapabilities } from '@internal/adapter-postgres/adapter';
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
 import postgresAdapter from '@internal/adapter-postgres/runtime';
 import {
@@ -11,6 +12,10 @@ import type {
   ColumnTypeDescriptor,
 } from '@internal/framework-components/codec';
 import { dataTypeId } from '@internal/framework-components/codec';
+import {
+  type ExtensionPackRef,
+  singleGeneratorBinding,
+} from '@internal/framework-components/components';
 import type { RuntimeMutationDefaultGenerator } from '@internal/framework-components/runtime';
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
 import type { SqlStorage } from '@internal/sql-contract/types';
@@ -270,6 +275,7 @@ export function buildTestContextFromContract<TContract extends FrameworkContract
   options?: {
     readonly mutationDefaultGenerators?: ReadonlyArray<RuntimeMutationDefaultGenerator>;
     readonly extensions?: ReadonlyArray<SqlRuntimeExtensionDescriptor<'postgres'>>;
+    readonly adapter?: typeof postgresAdapter;
   },
 ): ExecutionContext<TContract> {
   const generators = options?.mutationDefaultGenerators ?? [];
@@ -296,11 +302,24 @@ export function buildTestContextFromContract<TContract extends FrameworkContract
     contract,
     stack: createSqlExecutionStack({
       target: postgresTarget,
-      adapter: postgresAdapter,
+      adapter: options?.adapter ?? postgresAdapter,
       extensions,
     }),
   });
 }
+
+/** The Postgres adapter, reporting that the database cannot run the one-query include, so includes load with one query per relation. */
+export const perRelationPostgresAdapter: typeof postgresAdapter = {
+  ...postgresAdapter,
+  capabilities: {
+    ...postgresAdapterCapabilities,
+    sql: {
+      ...postgresAdapterCapabilities.sql,
+      outerReferencesInDerivedTables: false,
+      jsonAggWithoutTruncation: false,
+    },
+  },
+};
 
 const testContext: ExecutionContext<TestContract> = buildTestContextFromContract(baseTestContract);
 
@@ -795,53 +814,72 @@ export function buildManyToManyContractWithTargetRelation() {
  * Builds a User <-> Role M:N contract whose `user_roles` junction carries a
  * NOT NULL `level` payload column whose only default is an execution-time
  * onCreate generator (`test-level`) — no storage default. Authored through the
- * DSL: `field.generated` stamps the execution onCreate default and leaves the
- * column NOT NULL with no storage default, so the connect/create gate stays
- * open and `insertJunctionLink` must populate `level` before the INSERT.
+ * DSL: `.onCreate(gen.testLevel())` stamps the execution onCreate default and
+ * leaves the column NOT NULL with no storage default, so the connect/create gate
+ * stays open and `insertJunctionLink` must populate `level` before the INSERT.
  */
 export function buildExecutionDefaultJunctionContract() {
-  const User = model('User', {
-    fields: {
-      id: field.column(int4Column).id(),
-      name: field.column(textColumn),
-      email: field.column(textColumn).unique(),
+  return defineContract(
+    { extensions: { 'test-mutation-default-generators': testLevelGeneratorPack } },
+    ({ gen }) => {
+      const User = model('User', {
+        fields: {
+          id: field.column(int4Column).id(),
+          name: field.column(textColumn),
+          email: field.column(textColumn).unique(),
+        },
+      });
+
+      const Role = model('Role', {
+        fields: {
+          id: field.column(textColumn).id(),
+          name: field.column(textColumn).unique(),
+        },
+      }).sql({ table: 'roles' });
+
+      const UserRole = model('UserRole', {
+        fields: {
+          userId: field.column(int4Column).column('user_id'),
+          roleId: field.column(textColumn).column('role_id'),
+          level: field.column(int4Column).onCreate(gen.testLevel()),
+        },
+      })
+        .attributes(({ fields, constraints }) => ({
+          id: constraints.id([fields.userId, fields.roleId]),
+        }))
+        .sql({ table: 'user_roles' });
+
+      const UserWithRelation = User.relations({
+        roles: rel.manyToMany(() => Role, {
+          through: () => UserRole,
+          from: 'userId',
+          to: 'roleId',
+        }),
+      }).sql({ table: 'users' });
+
+      return { models: { User: UserWithRelation, Role, UserRole } };
     },
-  });
-
-  const Role = model('Role', {
-    fields: {
-      id: field.column(textColumn).id(),
-      name: field.column(textColumn).unique(),
-    },
-  }).sql({ table: 'roles' });
-
-  const UserRole = model('UserRole', {
-    fields: {
-      userId: field.column(int4Column).column('user_id'),
-      roleId: field.column(textColumn).column('role_id'),
-      level: field.generated({
-        type: int4Column,
-        generated: { kind: 'generator', id: 'test-level' },
-      }),
-    },
-  })
-    .attributes(({ fields, constraints }) => ({
-      id: constraints.id([fields.userId, fields.roleId]),
-    }))
-    .sql({ table: 'user_roles' });
-
-  const UserWithRelation = User.relations({
-    roles: rel.manyToMany(() => Role, {
-      through: () => UserRole,
-      from: 'userId',
-      to: 'roleId',
-    }),
-  }).sql({ table: 'users' });
-
-  return defineContract({
-    models: { User: UserWithRelation, Role, UserRole },
-  });
+  );
 }
+
+const testLevelGeneratorPack = {
+  kind: 'extension',
+  id: 'test-mutation-default-generators',
+  familyId: 'sql',
+  targetId: 'postgres',
+  version: '0.0.1',
+  controlMutationDefaults: {
+    defaultFunctionRegistry: new Map(),
+    generatorDescriptors: [{ id: 'test-level' }],
+  },
+  generatorFunctions: [
+    {
+      name: 'testLevel',
+      signature: { documentation: 'Generates the junction row level.' },
+      bindings: [singleGeneratorBinding({ codecIds: ['pg/int4@1'], generatorId: 'test-level' })],
+    },
+  ],
+} as const satisfies ExtensionPackRef<'sql', 'postgres'>;
 
 /**
  * Builds a contract whose `User` model (table `users`) keys on a custom

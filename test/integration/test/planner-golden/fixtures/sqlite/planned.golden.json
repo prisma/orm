@@ -21,11 +21,15 @@
         "precheck": [
           {
             "description": "ensure table \"scalar\" does not exist",
-            "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ? AND \"name\" = ?)",
+            "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
             "params": [
               "table",
               "scalar"
-            ]
+            ],
+            "expectation": {
+              "expects": "absent",
+              "object": "table \"scalar\""
+            }
           }
         ],
         "execute": [
@@ -38,11 +42,15 @@
         "postcheck": [
           {
             "description": "verify table \"scalar\" exists",
-            "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ? AND \"name\" = ?)",
+            "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
             "params": [
               "table",
               "scalar"
-            ]
+            ],
+            "expectation": {
+              "expects": "present",
+              "object": "table \"scalar\""
+            }
           },
           {
             "description": "verify table \"scalar\" has exactly its columns",

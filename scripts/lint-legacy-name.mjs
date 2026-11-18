@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * The old `prisma-next` name does not come back.
+ * The old `prisma-next` name does not come back, in any spelling: `Prisma Next`,
+ * `PrismaNext`, `prismaNext`, `PRISMA_NEXT` and the rest.
  *
  * Prisma 8 publishes 17 packages under `@prisma/*`, its repository is
  * `prisma/orm`, and its examples read `prisma-8-*`. The working name survives
@@ -25,6 +26,20 @@ const GIT_ROOT = process.cwd();
 
 const LEGACY = 'prisma-next';
 
+/**
+ * Any case, joined by nothing, a hyphen or an underscore. Joined by a space,
+ * not after a dot, so `contract.prisma next to` is a file name followed by a
+ * word, and not before `js`, so `Prisma Next.js` is the framework.
+ */
+const LEGACY_PATTERN = /prisma[_-]?next|(?<!\.)prisma next(?!\.?js\b)/gi;
+
+function occurrences(line) {
+  return [...line.matchAll(LEGACY_PATTERN)].map((match) => ({
+    at: match.index,
+    length: match[0].length,
+  }));
+}
+
 /** Files that carry the retired name only to prove it stays gone, this check included. */
 const RETIREMENT_PROOFS = new Set([
   'scripts/lint-legacy-name.mjs',
@@ -46,10 +61,9 @@ const COMPATIBILITY_SITES = new Set([
   'packages/1-framework/3-tooling/cli-telemetry/src/gating.ts',
   'packages/1-framework/3-tooling/cli-telemetry/test/gating.test.ts',
   'docs/Telemetry.md',
-  'upgrade-instructions/pending/default-generators-to-on-create/app/instructions.md',
-  'upgrade-instructions/pending/default-generators-to-on-create/app/scripts/rewrite-default-generators.mjs',
   'test/integration/test/upgrade-instructions/default-generators-to-on-create/fixtures/before/older-header.prisma',
   'test/integration/test/upgrade-instructions/default-generators-to-on-create/fixtures/after/older-header.prisma',
+  'test/integration/test/upgrade-instructions/default-generators-to-on-create/detection.test.ts',
 ]);
 
 /**
@@ -66,9 +80,9 @@ const COMPATIBILITY_SITES = new Set([
  */
 const ALLOWED = [
   {
-    why: 'a dated record of past work — the changelog, the release notes, the ADRs, the shipped upgrade instructions and their archived sources, the gotcha logs, the framework-gaps review, the `projects/` and `drive/` write-ups, and committed migration steps and their content-addressed contract snapshots. Each says what was true, decided, or observed at a time when the old name was the name; rewriting one would misreport it (or break its hash)',
+    why: 'a dated record of past work — the changelog, the release notes, the ADRs, the upgrade instructions, pending or shipped, and their archived sources (each names what it renames from), the gotcha logs, the framework-gaps review, the `projects/` and `drive/` write-ups, and committed migration steps and their content-addressed contract snapshots. Each says what was true, decided, or observed at a time when the old name was the name; rewriting one would misreport it (or break its hash)',
     matches: (relPath) =>
-      /^(CHANGELOG\.md|docs\/releases\/v[^/]*\.md|docs\/architecture docs\/adrs\/|docs\/reference\/framework-gaps\.md|skills\/prisma-8\/upgrading\/|upgrade-instructions\/releases\/|projects\/|drive\/)/.test(
+      /^(CHANGELOG\.md|docs\/releases\/v[^/]*\.md|docs\/architecture docs\/adrs\/|docs\/reference\/framework-gaps\.md|skills\/prisma-8\/upgrading\/|upgrade-instructions\/(?:releases|pending)\/|projects\/|drive\/)/.test(
         relPath,
       ) ||
       /(^|\/)gotchas\.md$/.test(relPath) ||
@@ -81,6 +95,13 @@ const ALLOWED = [
         /^\/(?:pull|issues|commit|compare|releases|blob\/v[\d.]|tree\/v[\d.])\b/.test(after)) ||
       /linear\.app\/[^\s)]*$/.test(before) ||
       /adrs\/ADR(?:%20| )\d+(?:%20| )-(?:%20| )$/.test(before),
+  },
+  {
+    why: 'the Prisma 8 skill’s description naming its former name once, so an agent matches a user who still says it',
+    matches: (relPath, line, before, after) =>
+      relPath === 'skills/prisma-8/SKILL.md' &&
+      /\(Prisma 8, formerly $/.test(before) &&
+      after.startsWith(')'),
   },
   {
     why: 'a third party’s package name — `@cipherstash/prisma-next` is published under that name and only that name',
@@ -117,9 +138,10 @@ export function trackedFiles(scanDir) {
  * `at` is the index of the occurrence within `line`; it defaults to the first,
  * which is what a caller checking a single-occurrence string wants.
  */
-export function allowanceFor(relPath, line, at = line.indexOf(LEGACY)) {
+export function allowanceFor(relPath, line, at = occurrences(line)[0]?.at ?? -1) {
+  const length = occurrences(line).find((occurrence) => occurrence.at === at)?.length ?? 0;
   const before = line.slice(0, at);
-  const after = line.slice(at + LEGACY.length);
+  const after = line.slice(at + length);
   return ALLOWED.find((allowance) => allowance.matches(relPath, line, before, after));
 }
 
@@ -133,9 +155,10 @@ export function findViolations(scanDir, files = trackedFiles(scanDir)) {
     } catch {
       continue;
     }
-    if (!content.includes(LEGACY)) continue;
+    if (!LEGACY_PATTERN.test(content)) continue;
+    LEGACY_PATTERN.lastIndex = 0;
     content.split('\n').forEach((line, index) => {
-      for (let at = line.indexOf(LEGACY); at !== -1; at = line.indexOf(LEGACY, at + 1)) {
+      for (const { at } of occurrences(line)) {
         if (allowanceFor(relPath, line, at) !== undefined) continue;
         violations.push({ file: relPath, line: index + 1, column: at + 1, text: line.trim() });
         return;
@@ -148,11 +171,11 @@ export function findViolations(scanDir, files = trackedFiles(scanDir)) {
 export function main(scanDir = GIT_ROOT) {
   const violations = findViolations(scanDir);
   if (violations.length === 0) {
-    console.log(`No disallowed \`${LEGACY}\` occurrence.`);
+    console.log(`No disallowed \`${LEGACY}\` occurrence, in any spelling.`);
     return 0;
   }
 
-  console.error(`${violations.length} disallowed \`${LEGACY}\` occurrence(s):\n`);
+  console.error(`${violations.length} disallowed \`${LEGACY}\` occurrence(s), in any spelling:\n`);
   for (const violation of violations.slice(0, 40)) {
     console.error(`  ${violation.file}:${violation.line}: ${violation.text.slice(0, 140)}`);
   }

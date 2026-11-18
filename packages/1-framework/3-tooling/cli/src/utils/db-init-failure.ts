@@ -9,10 +9,10 @@ import { DB_UPDATE_POLICY } from '../control-api/operations/db-update-policy';
 import type { RunnerFailureFacts } from '../control-api/types';
 import type { CliStructuredError } from './cli-errors';
 import { ActionableCliError, errorMigrationPlanningFailed } from './cli-errors';
-import { dbInitFailedPrecheckFix } from './failed-precheck-advice';
-import { runCommandAction } from './next-actions';
+import { dbInitFailedPrecheckAdvice } from './failed-precheck-advice';
+import { chooseAction, editFileAction, runCommandAction } from './next-actions';
 import { type CliInvocation, cliCommand } from './printed-command';
-import { dbInitRowsWithoutValueFix } from './runner-failure-advice';
+import { dbInitRowsWithoutValueAdvice } from './runner-failure-advice';
 import { runnerFailureError } from './runner-failure-error';
 import { schemaCheckIssues } from './schema-check-issues';
 
@@ -84,13 +84,22 @@ export function dbInitRunnerFailureError(
   facts: RunnerFailureFacts,
   invocation: CliInvocation,
 ): CliStructuredError {
-  const fix =
+  const init = cliCommand(invocation, 'db init');
+  const advice =
     facts.rowsWithoutValue !== undefined
-      ? dbInitRowsWithoutValueFix(facts.rowsWithoutValue, invocation)
+      ? dbInitRowsWithoutValueAdvice(facts.rowsWithoutValue, invocation)
       : schemaCheckIssues(failure) !== undefined
-        ? `Change the contract source to resolve the issues listed, re-run \`${cliCommand(invocation, 'contract emit')}\`, then re-run \`${cliCommand(invocation, 'db init')}\`.`
+        ? [
+            editFileAction(
+              `Change the contract source to resolve the issues listed, re-run \`${cliCommand(invocation, 'contract emit')}\`, then re-run \`${init}\``,
+            ),
+          ]
         : facts.failedPrecheck !== undefined
-          ? dbInitFailedPrecheckFix(invocation)
-          : `Fix the schema mismatch (db init is additive-only), or drop/reset the database and re-run \`${cliCommand(invocation, 'db init')}\``;
-  return runnerFailureError(failure, { fix });
+          ? dbInitFailedPrecheckAdvice(invocation)
+          : [
+              chooseAction(
+                `Fix the schema mismatch (db init is additive-only), or bring the database to the contract with \`${cliCommand(invocation, 'db update')}\`, which moves the database without a reset and asks before losing data`,
+              ),
+            ];
+  return runnerFailureError(failure, advice);
 }

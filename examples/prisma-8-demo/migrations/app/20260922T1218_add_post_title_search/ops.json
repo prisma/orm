@@ -16,7 +16,11 @@
       {
         "description": "ensure index \"post_title_search_e0dd1131\" does not exist",
         "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
-        "params": ["\"public\".\"post_title_search_e0dd1131\""]
+        "params": ["\"public\".\"post_title_search_e0dd1131\""],
+        "expectation": {
+          "expects": "absent",
+          "object": "index \"post_title_search_e0dd1131\""
+        }
       }
     ],
     "execute": [

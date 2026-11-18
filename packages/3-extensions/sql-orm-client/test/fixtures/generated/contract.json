@@ -505,8 +505,8 @@
               "address": {
                 "nullable": true,
                 "type": {
-                  "kind": "valueObject",
-                  "name": "Address"
+                  "codecId": "pg/jsonb@1",
+                  "kind": "scalar"
                 }
               },
               "email": {
@@ -776,33 +776,6 @@
               },
               "namespaceId": "public",
               "table": "user_tags"
-            }
-          }
-        },
-        "valueObjects": {
-          "Address": {
-            "fields": {
-              "city": {
-                "nullable": false,
-                "type": {
-                  "codecId": "pg/text@1",
-                  "kind": "scalar"
-                }
-              },
-              "street": {
-                "nullable": false,
-                "type": {
-                  "codecId": "pg/text@1",
-                  "kind": "scalar"
-                }
-              },
-              "zip": {
-                "nullable": true,
-                "type": {
-                  "codecId": "pg/text@1",
-                  "kind": "scalar"
-                }
-              }
             }
           }
         }
@@ -1375,11 +1348,15 @@
       "forShare": true,
       "forUpdate": true,
       "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
       "insertOnConflictWithoutTarget": true,
+      "jsonAgg": true,
+      "jsonAggWithoutTruncation": true,
       "lateral": true,
       "lockNowait": true,
       "lockOf": true,
       "lockSkipLocked": true,
+      "outerReferencesInDerivedTables": true,
       "returning": true,
       "scalarList": true
     }
@@ -1395,34 +1372,6 @@
       "id": "pgvector",
       "kind": "extension",
       "targetId": "postgres",
-      "types": {
-        "codecTypes": {
-          "import": {
-            "alias": "PgVectorTypes",
-            "named": "CodecTypes",
-            "package": "@internal/extension-pgvector/codec-types"
-          },
-          "parameterizedOutputTypes": {
-            "alias": "PgVectorParameterizedOutputTypes",
-            "named": "ParameterizedOutputTypesForTypeParams",
-            "package": "@internal/extension-pgvector/codec-types"
-          }
-        },
-        "operationTypes": {
-          "import": {
-            "alias": "PgVectorOperationTypes",
-            "named": "OperationTypes",
-            "package": "@internal/extension-pgvector/operation-types"
-          }
-        },
-        "queryOperationTypes": {
-          "import": {
-            "alias": "PgVectorQueryOperationTypes",
-            "named": "QueryOperationTypes",
-            "package": "@internal/extension-pgvector/operation-types"
-          }
-        }
-      },
       "version": "0.0.1"
     }
   },

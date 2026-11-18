@@ -1,8 +1,9 @@
-import type { ContractRelation } from '@internal/contract/types';
+import type { ContractModel, ContractRelation } from '@internal/contract/types';
+import { validateStorageValueObjects } from '@internal/contract/validate-storage';
 import { structuredError } from '@internal/utils/structured-error';
 import { collectionRootModelsOf } from './collection-root-models';
 import { lookupFreeRefusalsOf } from './contract-refusals';
-import type { MongoContract, MongoModelDefinition } from './contract-types';
+import type { MongoContract, MongoModelStorage } from './contract-types';
 import { documentIdRefusalOf } from './document-id-refusal';
 import { modelAndBasesOf, mongoModelsOf } from './mongo-models';
 import { resolveMongoToOneRelationFields } from './relation-fields';
@@ -30,7 +31,7 @@ function idSchemaOf(shape: ValidatorShape): object | undefined {
  * What a collection validator gets wrong about `_id`: a root model's branch that does not require it, or an `_id` that can hold a BSON type an `_id` cannot have, refused with the reason the build gives.
  */
 function documentIdErrors(contract: MongoContract): string[] {
-  const models: Record<string, MongoModelDefinition> = Object.assign(
+  const models: Record<string, ContractModel<MongoModelStorage>> = Object.assign(
     {},
     ...Object.keys(contract.domain.namespaces).map((namespaceId) =>
       mongoModelsOf(contract.domain, namespaceId),
@@ -85,8 +86,8 @@ function storageDeclaresCollection(
 function fieldStorageErrors(
   qualifiedName: string,
   modelName: string,
-  model: MongoModelDefinition,
-  models: Record<string, MongoModelDefinition>,
+  model: ContractModel<MongoModelStorage>,
+  models: Record<string, ContractModel<MongoModelStorage>>,
 ): string[] {
   const errors: string[] = [];
   const storageFields = model.storage.fields;
@@ -125,7 +126,10 @@ function fieldStorageErrors(
   return errors;
 }
 
-function unsupportedStoredNameErrors(qualifiedName: string, model: MongoModelDefinition): string[] {
+function unsupportedStoredNameErrors(
+  qualifiedName: string,
+  model: ContractModel<MongoModelStorage>,
+): string[] {
   const members = [
     ...Object.entries(model.storage.fields).map(
       ([name, { field }]) => [`field "${name}"`, field] as const,
@@ -140,7 +144,7 @@ function unsupportedStoredNameErrors(qualifiedName: string, model: MongoModelDef
   });
 }
 
-function hasCompleteFieldStorage(model: MongoModelDefinition): boolean {
+function hasCompleteFieldStorage(model: ContractModel<MongoModelStorage>): boolean {
   return Object.keys(model.fields).every((name) => Object.hasOwn(model.storage.fields, name));
 }
 
@@ -159,6 +163,7 @@ function bothStoredAs(
 }
 
 export function validateMongoStorage(contract: MongoContract): void {
+  validateStorageValueObjects(contract.storage);
   const errors: string[] = [];
   let fieldStorageComplete = true;
 
@@ -261,7 +266,7 @@ function toOneRelationNullabilityError(
   qualifiedName: string,
   relationName: string,
   relation: ContractRelation,
-  model: MongoModelDefinition,
+  model: ContractModel<MongoModelStorage>,
 ): string | undefined {
   const isSameSpaceToOne =
     'on' in relation &&

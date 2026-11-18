@@ -1,26 +1,14 @@
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
+import { detectionPatterns } from '../guide-detections';
 
-const here = dirname(fileURLToPath(import.meta.url));
-const repoRoot = join(here, '../../../../..');
+const GUIDE_PATHS = {
+  app: 'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.18-to-8.0.0-rc.19/instructions.md',
+  extension:
+    'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.18-to-8.0.0-rc.19/instructions.md',
+} as const;
 
 function detectionOf(audience: 'app' | 'extension', id: string): readonly RegExp[] {
-  const guide = readFileSync(
-    join(
-      repoRoot,
-      'upgrade-instructions/pending/column-types-through-data-types',
-      audience,
-      'instructions.md',
-    ),
-    'utf-8',
-  );
-  const entry = guide.split(/\n {2}- id: /).find((block) => block.startsWith(`${id}\n`));
-  if (entry === undefined) throw new Error(`The ${audience} fragment has no change ${id}`);
-  return [...entry.matchAll(/^ {8}- '(.*)'$/gm)].map(
-    ([, pattern]) => new RegExp((pattern ?? '').replaceAll("''", "'")),
-  );
+  return detectionPatterns(GUIDE_PATHS[audience], id);
 }
 
 function detects(audience: 'app' | 'extension', id: string, content: string): boolean {
@@ -70,14 +58,29 @@ describe('extension detection', () => {
       'column.typeText === other.typeText',
     ],
     [
+      'schema-ir-column-type-text',
+      "import type { SqlTableIR } from '@prisma/orm-family-sql/schema-ir/types';\nconst types = Object.values(table.columns).map((column) => column.nativeType);",
+      "import type { SqlTableIR } from '@prisma/orm-family-sql/schema-ir/types';\nconst types = Object.values(table.columns).map((column) => column.typeText);",
+    ],
+    [
       'default-resolver-takes-the-column',
-      'readPostgresDefault(raw, "text[]")',
-      'readSqliteDefault(raw, "text")',
+      'parsePostgresDefault(raw, "text[]")',
+      'readPostgresDefault(raw, true)',
+    ],
+    [
+      'default-resolver-takes-the-column',
+      "import { parseSqliteDefault } from '@prisma/orm-sqlite/adapter/control';",
+      'readSqliteDefault(raw, column.typeText)',
+    ],
+    [
+      'default-resolver-takes-the-column',
+      'class MyAdapter implements SqlControlAdapter {\n  readonly normalizeDefault = parseMyDefault;\n}',
+      'class MyAdapter implements SqlControlAdapter {\n  readonly normalizeDefaults = true;\n}',
     ],
     [
       'default-resolver-takes-the-column',
       'const resolve: DefaultResolver = (def, nativeType) => def;',
-      'const resolve: DefaultReader = (def) => def;',
+      'const resolve: DefaultResolver = (def, column) => read(def, column.many);',
     ],
     [
       'alter-type-postcheck-by-data-type',

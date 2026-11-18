@@ -1,6 +1,6 @@
 {
   "name": "@prisma/orm-sqlite",
-  "version": "8.0.0-rc.18",
+  "version": "8.0.0-rc.24",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -16,21 +16,24 @@
     "clean": "rm -rf dist src-gen skills"
   },
   "dependencies": {
-    "@prisma/orm-family-sql": "workspace:8.0.0-rc.18",
-    "@prisma/orm-framework": "workspace:8.0.0-rc.18",
-    "@prisma/orm-target-sqlite": "workspace:8.0.0-rc.18",
-    "@prisma/orm-toolchain": "workspace:8.0.0-rc.18",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.24",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.24",
+    "@prisma/orm-target-sqlite": "workspace:8.0.0-rc.24",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.24",
+    "arktype": "catalog:",
     "pathe": "^2.0.3",
-    "tinyglobby": "catalog:"
+    "tinyglobby": "catalog:",
+    "temporal-spec": "1.0.1"
   },
   "devDependencies": {
-    "@internal/sqlite": "workspace:8.0.0-rc.18",
-    "@repo/tsconfig": "workspace:8.0.0-rc.18",
-    "@repo/tsdown": "workspace:8.0.0-rc.18",
+    "@internal/sqlite": "workspace:8.0.0-rc.24",
+    "@repo/tsconfig": "workspace:8.0.0-rc.24",
+    "@repo/tsdown": "workspace:8.0.0-rc.24",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },
   "peerDependencies": {
+    "temporal-polyfill": "^1.0.4",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {
@@ -74,7 +77,9 @@
     "./contract/types": "./dist/contract__types.mjs",
     "./contract/validate-domain": "./dist/contract__validate-domain.mjs",
     "./contract/validate-once": "./dist/contract__validate-once.mjs",
+    "./contract/validate-storage": "./dist/contract__validate-storage.mjs",
     "./contract-builder": "./dist/contract-builder.mjs",
+    "./contract-types": "./dist/contract-types.mjs",
     "./control": "./dist/control.mjs",
     "./driver": "./dist/driver.mjs",
     "./driver/control": "./dist/driver__control.mjs",
@@ -92,6 +97,8 @@
     "./family-contract": "./dist/family-contract.mjs",
     "./family-contract/authored-check-naming": "./dist/family-contract__authored-check-naming.mjs",
     "./family-contract/canonicalization-hooks": "./dist/family-contract__canonicalization-hooks.mjs",
+    "./family-contract/check-expressions": "./dist/family-contract__check-expressions.mjs",
+    "./family-contract/codec-json-type": "./dist/family-contract__codec-json-type.mjs",
     "./family-contract/contract-view": "./dist/family-contract__contract-view.mjs",
     "./family-contract/data-type": "./dist/family-contract__data-type.mjs",
     "./family-contract/data-type-support": "./dist/family-contract__data-type-support.mjs",
@@ -99,6 +106,7 @@
     "./family-contract/entity-kinds": "./dist/family-contract__entity-kinds.mjs",
     "./family-contract/factories": "./dist/family-contract__factories.mjs",
     "./family-contract/foreign-key-materialization": "./dist/family-contract__foreign-key-materialization.mjs",
+    "./family-contract/generated-id-column-aliases": "./dist/family-contract__generated-id-column-aliases.mjs",
     "./family-contract/index-naming": "./dist/family-contract__index-naming.mjs",
     "./family-contract/index-type-validation": "./dist/family-contract__index-type-validation.mjs",
     "./family-contract/index-types": "./dist/family-contract__index-types.mjs",
@@ -153,6 +161,7 @@
     "./target/render-ops": "./dist/target__render-ops.mjs",
     "./target/runtime": "./dist/target__runtime.mjs",
     "./target/sql-utils": "./dist/target__sql-utils.mjs",
+    "./target/types": "./dist/target__types.mjs",
     "./utils": "./dist/utils.mjs",
     "./utils/abortable": "./dist/utils__abortable.mjs",
     "./utils/array-equal": "./dist/utils__array-equal.mjs",

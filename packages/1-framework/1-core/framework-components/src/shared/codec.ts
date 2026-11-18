@@ -77,7 +77,7 @@ function namedDataType(descriptor: object): unknown {
 /**
  * Abstract base class for concrete codec implementations.
  *
- * A codec is built with its descriptor, the data type it converts values of and the column's parameters of that type. The constructor makes `fromDataTypeValue` refuse a value of another data type before the subclass's conversion runs. `fromDataTypeValue` and `toDataTypeValue` convert between a value of the type and the application value, and `toDataTypeValue` finishes with {@link CodecImpl.dataTypeValueOf}, which constructs the value through the type. `fromWire` and `toWire` read and write what the driver exchanges, asynchronously.
+ * A codec is built with its descriptor, the data type it converts values of and the column's parameters of that type. The constructor makes `fromDataTypeValue` refuse a value of another data type before the subclass's conversion runs. `fromDataTypeValue` and `toDataTypeValue` convert between a value of the type and the application value, and `toDataTypeValue` finishes with {@link CodecImpl.dataTypeValueOf}, which constructs the value through the type and writes any spelling the type reads in its stored spelling, or, for a codec whose application value is the stored form itself, with {@link CodecImpl.storedDataTypeValueOf}, which takes only the stored spelling. `fromWire` and `toWire` read and write what the driver exchanges, asynchronously.
  */
 export abstract class CodecImpl<
   Id extends string = string,
@@ -117,6 +117,11 @@ export abstract class CodecImpl<
   /** The value of the codec's data type that `json` stores, under the codec's parameters. */
   protected dataTypeValueOf<J extends JsonValue>(json: J): DataTypeValue<J> {
     return this.dataType.valueFrom(json, this.dataTypeParams);
+  }
+
+  /** The value of the codec's data type that `json` stores, refusing JSON in any spelling but the stored one: for a codec whose application value is the stored form, so a value it is given reads back as given. */
+  protected storedDataTypeValueOf(json: JsonValue): DataTypeValue {
+    return this.dataType.fromContract(json, this.dataTypeParams);
   }
 
   abstract fromDataTypeValue(value: DataTypeValue): TInput;

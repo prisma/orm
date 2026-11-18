@@ -17,9 +17,9 @@ import {
  * `TMeta` is the shape of `meta`; pass the store's `TMeta` so the two agree.
  */
 export interface CacheAnnotationOptions<TMeta = unknown> {
-  readonly key?: string;
-  readonly meta?: TMeta;
-  readonly bypass?: boolean;
+  readonly key?: string | undefined;
+  readonly meta?: TMeta | undefined;
+  readonly bypass?: boolean | undefined;
 }
 
 /**
@@ -87,8 +87,8 @@ function withTypedMeta(
  * `TMeta` is the shape of `meta`; pass the store's `TMeta` so the two agree.
  */
 export interface InvalidationTarget<TMeta = unknown> {
-  readonly keys?: readonly string[];
-  readonly meta?: TMeta;
+  readonly keys?: readonly string[] | undefined;
+  readonly meta?: TMeta | undefined;
 }
 
 /**

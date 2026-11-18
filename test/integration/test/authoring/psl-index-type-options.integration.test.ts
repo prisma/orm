@@ -41,7 +41,6 @@ function interpret(schema: string) {
       defaultNamespaceId: 'public',
       composedExtensionContracts: new Map(),
       authoringContributions: {
-        field: {},
         type: scalarTypeConstructors,
         entityTypes: {},
         pslBlockDescriptors: {},

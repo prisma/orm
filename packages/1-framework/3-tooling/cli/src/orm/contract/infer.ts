@@ -16,6 +16,7 @@ import {
 } from '../../utils/cli-errors';
 import { closeQuietly, maskConnectionUrl } from '../../utils/command-helpers';
 import { publishTextArtifact } from '../../utils/publish-text-artifact';
+import { valueLines } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
 import { normalizeError } from '../normalize-error';
@@ -37,7 +38,7 @@ function inferPresentations(inputs: {
 }): Presentations {
   const { document, database } = inputs;
   return {
-    stdout: () => [],
+    stdout: () => valueLines([document.psl.path]),
     next: () => [],
     human: (): readonly Block[] => [
       ...(database === undefined

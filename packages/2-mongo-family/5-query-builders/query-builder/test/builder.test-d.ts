@@ -1,12 +1,18 @@
-import type { MongoFilterExpr, MongoQueryPlan } from '@internal/mongo-query-ast/execution';
+import type {
+  MongoExecutionContext,
+  MongoFilterExpr,
+  MongoQueryPlan,
+} from '@internal/mongo-query-ast/execution';
 import { MongoAggFieldRef, MongoLimitStage } from '@internal/mongo-query-ast/execution';
 import { expectTypeOf } from 'vitest';
 import { acc } from '../src/accumulator-helpers';
 import { fn } from '../src/expression-helpers';
 import { mongoQuery } from '../src/query';
+import { contextOf } from './fixtures/test-context';
 import type { TContract } from './fixtures/test-contract';
 
 declare const contract: TContract;
+declare const context: MongoExecutionContext<TContract>;
 
 type PlanRow<P extends MongoQueryPlan> = P extends MongoQueryPlan<infer R> ? R : never;
 
@@ -19,9 +25,19 @@ type OrderRow = {
   readonly tags: string[];
 };
 
+describe('mongoQuery', () => {
+  it('takes an execution context, not a contract', () => {
+    expectTypeOf(mongoQuery({ context }).from('orders')).not.toBeNever();
+    // @ts-expect-error -- a contract alone is not accepted; build the context with mongoStatic() or mongo()
+    mongoQuery({ contract });
+    // @ts-expect-error -- an object holding only a contract is not an execution context
+    mongoQuery({ context: { contract } });
+  });
+});
+
 describe('builder shape tests', () => {
   it('sort() only accepts keys from current shape', () => {
-    const p = mongoQuery({ contract });
+    const p = mongoQuery({ context: contextOf(contract) });
     const builder = p.from('orders');
     builder.sort({ amount: -1 });
     builder.sort({ status: 1 });
@@ -30,7 +46,7 @@ describe('builder shape tests', () => {
   });
 
   it('group() replaces shape — previous fields inaccessible', () => {
-    const p = mongoQuery({ contract });
+    const p = mongoQuery({ context: contextOf(contract) });
     const grouped = p.from('orders').group((f) => ({
       _id: f.customerId,
       total: acc.sum(f.amount),
@@ -47,7 +63,7 @@ describe('builder shape tests', () => {
   });
 
   it('addFields() extends shape', () => {
-    const p = mongoQuery({ contract });
+    const p = mongoQuery({ context: contextOf(contract) });
     const extended = p.from('orders').addFields((f) => ({
       fullName: fn.concat(f.status, fn.literal(' ')),
     }));
@@ -57,7 +73,7 @@ describe('builder shape tests', () => {
   });
 
   it('project() inclusion narrows shape', () => {
-    const p = mongoQuery({ contract });
+    const p = mongoQuery({ context: contextOf(contract) });
     const projected = p.from('orders').project('status', 'amount');
 
     projected.sort({ status: 1 });
@@ -68,7 +84,7 @@ describe('builder shape tests', () => {
   });
 
   it('count() replaces shape with single field', () => {
-    const p = mongoQuery({ contract });
+    const p = mongoQuery({ context: contextOf(contract) });
     const counted = p.from('orders').count('total');
 
     counted.sort({ total: 1 });
@@ -77,7 +93,7 @@ describe('builder shape tests', () => {
   });
 
   it('lookup() adds array field and preserves existing fields', () => {
-    const p = mongoQuery({ contract });
+    const p = mongoQuery({ context: contextOf(contract) });
     const withLookup = p.from('orders').lookup((from) =>
       from('users')
         .on((local, foreign) => ({
@@ -96,7 +112,7 @@ describe('builder shape tests', () => {
   });
 
   it('lookup() rejects bad local field at type level (AC-1 TC-1)', () => {
-    const p = mongoQuery({ contract });
+    const p = mongoQuery({ context: contextOf(contract) });
     p.from('orders').lookup((from) =>
       from('users')
         .on((local, foreign) => ({
@@ -109,7 +125,7 @@ describe('builder shape tests', () => {
   });
 
   it('lookup() rejects bad foreign field at type level (AC-1 TC-2)', () => {
-    const p = mongoQuery({ contract });
+    const p = mongoQuery({ context: contextOf(contract) });
     p.from('orders').lookup((from) =>
       from('users')
         .on((local, foreign) => ({
@@ -122,7 +138,7 @@ describe('builder shape tests', () => {
   });
 
   it('lookup() rejects non-leaf returns from on() (AC-2 TC-3)', () => {
-    const p = mongoQuery({ contract });
+    const p = mongoQuery({ context: contextOf(contract) });
     p.from('orders').lookup((from) =>
       from('users')
         .on((local, foreign) => ({
@@ -140,7 +156,7 @@ describe('builder shape tests', () => {
   // behaviour). See spec § Open Questions / Resolved decisions.
 
   it('replaceRoot() replaces entire shape', () => {
-    const p = mongoQuery({ contract });
+    const p = mongoQuery({ context: contextOf(contract) });
     type NewShape = {
       readonly x: { readonly codecId: 'mongo/string@1'; readonly nullable: false };
     };
@@ -155,12 +171,14 @@ describe('builder shape tests', () => {
 
 describe('resolved row types', () => {
   it('from() → build() resolves to concrete field types', () => {
-    const plan = mongoQuery({ contract }).from('orders').build();
+    const plan = mongoQuery({ context: contextOf(contract) })
+      .from('orders')
+      .build();
     expectTypeOf<PlanRow<typeof plan>>().toEqualTypeOf<OrderRow>();
   });
 
   it('match() preserves row type', () => {
-    const plan = mongoQuery({ contract })
+    const plan = mongoQuery({ context: contextOf(contract) })
       .from('orders')
       .match((f) => f.status.eq('active') as MongoFilterExpr)
       .build();
@@ -168,17 +186,25 @@ describe('resolved row types', () => {
   });
 
   it('sort() preserves row type', () => {
-    const plan = mongoQuery({ contract }).from('orders').sort({ amount: -1 }).build();
+    const plan = mongoQuery({ context: contextOf(contract) })
+      .from('orders')
+      .sort({ amount: -1 })
+      .build();
     expectTypeOf<PlanRow<typeof plan>>().toEqualTypeOf<OrderRow>();
   });
 
   it('limit() / skip() / sample() preserve row type', () => {
-    const plan = mongoQuery({ contract }).from('orders').limit(10).skip(5).sample(3).build();
+    const plan = mongoQuery({ context: contextOf(contract) })
+      .from('orders')
+      .limit(10)
+      .skip(5)
+      .sample(3)
+      .build();
     expectTypeOf<PlanRow<typeof plan>>().toEqualTypeOf<OrderRow>();
   });
 
   it('addFields() extends row with new fields at correct types', () => {
-    const plan = mongoQuery({ contract })
+    const plan = mongoQuery({ context: contextOf(contract) })
       .from('orders')
       .addFields((f) => ({
         fullName: fn.concat(f.status, fn.literal(' ')),
@@ -198,7 +224,10 @@ describe('resolved row types', () => {
   });
 
   it('project() inclusion narrows to selected fields at correct types', () => {
-    const plan = mongoQuery({ contract }).from('orders').project('status', 'amount').build();
+    const plan = mongoQuery({ context: contextOf(contract) })
+      .from('orders')
+      .project('status', 'amount')
+      .build();
     expectTypeOf<PlanRow<typeof plan>>().toEqualTypeOf<{
       _id: string;
       status: string;
@@ -207,7 +236,7 @@ describe('resolved row types', () => {
   });
 
   it('project() computed includes expression fields at correct types', () => {
-    const plan = mongoQuery({ contract })
+    const plan = mongoQuery({ context: contextOf(contract) })
       .from('orders')
       .project((f) => ({
         status: 1 as const,
@@ -224,7 +253,7 @@ describe('resolved row types', () => {
   });
 
   it('group() resolves _id at grouped-by field type, accumulators at correct types', () => {
-    const plan = mongoQuery({ contract })
+    const plan = mongoQuery({ context: contextOf(contract) })
       .from('orders')
       .group((f) => ({
         _id: f.customerId,
@@ -242,17 +271,23 @@ describe('resolved row types', () => {
   });
 
   it('unwind() preserves row type', () => {
-    const plan = mongoQuery({ contract }).from('orders').unwind('tags').build();
+    const plan = mongoQuery({ context: contextOf(contract) })
+      .from('orders')
+      .unwind('tags')
+      .build();
     expectTypeOf<PlanRow<typeof plan>>().toEqualTypeOf<OrderRow>();
   });
 
   it('count() row type is { [field]: number }', () => {
-    const plan = mongoQuery({ contract }).from('orders').count('total').build();
+    const plan = mongoQuery({ context: contextOf(contract) })
+      .from('orders')
+      .count('total')
+      .build();
     expectTypeOf<PlanRow<typeof plan>>().toEqualTypeOf<{ total: number }>();
   });
 
   it('sortByCount() row type is { _id: <field type>; count: number }', () => {
-    const plan = mongoQuery({ contract })
+    const plan = mongoQuery({ context: contextOf(contract) })
       .from('orders')
       .sortByCount((f) => f.status)
       .build();
@@ -263,7 +298,7 @@ describe('resolved row types', () => {
   });
 
   it('lookup() resolves the as-named field to Array<ForeignRow> with concrete leaf types (AC-3 TC-4)', () => {
-    const plan = mongoQuery({ contract })
+    const plan = mongoQuery({ context: contextOf(contract) })
       .from('orders')
       .lookup((from) =>
         from('users')
@@ -291,7 +326,7 @@ describe('resolved row types', () => {
   });
 
   it('lookup() resolves nested value-object fields on the foreign model recursively', () => {
-    const plan = mongoQuery({ contract })
+    const plan = mongoQuery({ context: contextOf(contract) })
       .from('orders')
       .lookup((from) =>
         from('customers')
@@ -330,7 +365,9 @@ describe('resolved row types', () => {
   });
 
   it('entry-point query resolves value-object fields recursively (model-origin brand)', () => {
-    const plan = mongoQuery({ contract }).from('customers').build();
+    const plan = mongoQuery({ context: contextOf(contract) })
+      .from('customers')
+      .build();
     expectTypeOf<PlanRow<typeof plan>>().toEqualTypeOf<{
       readonly _id: string;
       readonly name: string;
@@ -351,7 +388,7 @@ describe('resolved row types', () => {
   });
 
   it('addFields() preserves model-origin resolution and adds the new fields on top', () => {
-    const plan = mongoQuery({ contract })
+    const plan = mongoQuery({ context: contextOf(contract) })
       .from('customers')
       .addFields((f) => ({
         upperName: fn.concat(f.name, fn.literal('!')),
@@ -378,7 +415,7 @@ describe('resolved row types', () => {
   });
 
   it('group() drops model-origin resolution (legitimate shape replacement)', () => {
-    const plan = mongoQuery({ contract })
+    const plan = mongoQuery({ context: contextOf(contract) })
       .from('customers')
       .group((f) => ({
         _id: f.name,
@@ -398,7 +435,7 @@ describe('resolved row types', () => {
       readonly x: { readonly codecId: 'mongo/string@1'; readonly nullable: false };
       readonly y: { readonly codecId: 'mongo/double@1'; readonly nullable: true };
     };
-    const plan = mongoQuery({ contract })
+    const plan = mongoQuery({ context: contextOf(contract) })
       .from('orders')
       .replaceRoot<NewShape>((f) => f.status)
       .build();
@@ -409,7 +446,10 @@ describe('resolved row types', () => {
   });
 
   it('pipe() preserves row type by default', () => {
-    const plan = mongoQuery({ contract }).from('orders').pipe(new MongoLimitStage(5)).build();
+    const plan = mongoQuery({ context: contextOf(contract) })
+      .from('orders')
+      .pipe(new MongoLimitStage(5))
+      .build();
     expectTypeOf<PlanRow<typeof plan>>().toEqualTypeOf<OrderRow>();
   });
 
@@ -417,7 +457,7 @@ describe('resolved row types', () => {
     type NewShape = {
       readonly a: { readonly codecId: 'mongo/string@1'; readonly nullable: false };
     };
-    const plan = mongoQuery({ contract })
+    const plan = mongoQuery({ context: contextOf(contract) })
       .from('orders')
       .pipe<NewShape>(new MongoLimitStage(5))
       .build();
@@ -425,14 +465,16 @@ describe('resolved row types', () => {
   });
 
   it('nullable fields resolve to T | null', () => {
-    const plan = mongoQuery({ contract }).from('orders').build();
+    const plan = mongoQuery({ context: contextOf(contract) })
+      .from('orders')
+      .build();
     type Row = PlanRow<typeof plan>;
     expectTypeOf<Row['notes']>().toEqualTypeOf<string | null>();
     expectTypeOf<Row['status']>().toEqualTypeOf<string>();
   });
 
   it('chained pipeline produces correct cumulative row types', () => {
-    const plan = mongoQuery({ contract })
+    const plan = mongoQuery({ context: contextOf(contract) })
       .from('orders')
       .match((f) => f.status.eq('active') as MongoFilterExpr)
       .group((f) => ({
@@ -451,7 +493,9 @@ describe('resolved row types', () => {
   });
 
   it('execute() infers Row from build() plan type', () => {
-    const plan = mongoQuery({ contract }).from('orders').build();
+    const plan = mongoQuery({ context: contextOf(contract) })
+      .from('orders')
+      .build();
     const execute = {} as <Row>(p: MongoQueryPlan<Row>) => Promise<Row[]>;
     const result = execute(plan);
     expectTypeOf<Awaited<typeof result>[0]>().toEqualTypeOf<OrderRow>();
@@ -460,7 +504,7 @@ describe('resolved row types', () => {
 
 describe('resolved row types — new stages', () => {
   it('redact() preserves row type', () => {
-    const plan = mongoQuery({ contract })
+    const plan = mongoQuery({ context: contextOf(contract) })
       .from('orders')
       .redact((f) => f.status)
       .build();
@@ -468,22 +512,29 @@ describe('resolved row types — new stages', () => {
   });
 
   it('out() returns a write-terminal plan with an unknown row type', () => {
-    const plan = mongoQuery({ contract }).from('orders').out('archive');
+    const plan = mongoQuery({ context: contextOf(contract) })
+      .from('orders')
+      .out('archive');
     expectTypeOf<PlanRow<typeof plan>>().toEqualTypeOf<unknown>();
   });
 
   it('merge() returns a write-terminal plan with an unknown row type', () => {
-    const plan = mongoQuery({ contract }).from('orders').merge({ into: 'summary' });
+    const plan = mongoQuery({ context: contextOf(contract) })
+      .from('orders')
+      .merge({ into: 'summary' });
     expectTypeOf<PlanRow<typeof plan>>().toEqualTypeOf<unknown>();
   });
 
   it('unionWith() preserves row type', () => {
-    const plan = mongoQuery({ contract }).from('orders').unionWith('archived_orders').build();
+    const plan = mongoQuery({ context: contextOf(contract) })
+      .from('orders')
+      .unionWith('archived_orders')
+      .build();
     expectTypeOf<PlanRow<typeof plan>>().toEqualTypeOf<OrderRow>();
   });
 
   it('densify() preserves row type', () => {
-    const plan = mongoQuery({ contract })
+    const plan = mongoQuery({ context: contextOf(contract) })
       .from('orders')
       .densify({ field: 'amount', range: { step: 10, bounds: 'full' } })
       .build();
@@ -491,7 +542,7 @@ describe('resolved row types — new stages', () => {
   });
 
   it('fill() preserves row type', () => {
-    const plan = mongoQuery({ contract })
+    const plan = mongoQuery({ context: contextOf(contract) })
       .from('orders')
       .fill({ sortBy: { amount: 1 }, output: { notes: { method: 'linear' } } })
       .build();
@@ -499,7 +550,7 @@ describe('resolved row types — new stages', () => {
   });
 
   it('search() preserves row type', () => {
-    const plan = mongoQuery({ contract })
+    const plan = mongoQuery({ context: contextOf(contract) })
       .from('orders')
       .search({ text: { query: 'test', path: 'status' } })
       .build();
@@ -507,7 +558,7 @@ describe('resolved row types — new stages', () => {
   });
 
   it('vectorSearch() preserves row type', () => {
-    const plan = mongoQuery({ contract })
+    const plan = mongoQuery({ context: contextOf(contract) })
       .from('orders')
       .vectorSearch({
         index: 'idx',
@@ -521,7 +572,7 @@ describe('resolved row types — new stages', () => {
   });
 
   it('bucket() resets to untyped row', () => {
-    const plan = mongoQuery({ contract })
+    const plan = mongoQuery({ context: contextOf(contract) })
       .from('orders')
       .bucket({ groupBy: MongoAggFieldRef.of('amount'), boundaries: [0, 100, 500] })
       .build();
@@ -529,7 +580,7 @@ describe('resolved row types — new stages', () => {
   });
 
   it('bucketAuto() resets to untyped row', () => {
-    const plan = mongoQuery({ contract })
+    const plan = mongoQuery({ context: contextOf(contract) })
       .from('orders')
       .bucketAuto({ groupBy: MongoAggFieldRef.of('amount'), buckets: 5 })
       .build();
@@ -537,12 +588,15 @@ describe('resolved row types — new stages', () => {
   });
 
   it('facet() resets to untyped row', () => {
-    const plan = mongoQuery({ contract }).from('orders').facet({ counts: [], top: [] }).build();
+    const plan = mongoQuery({ context: contextOf(contract) })
+      .from('orders')
+      .facet({ counts: [], top: [] })
+      .build();
     expectTypeOf<PlanRow<typeof plan>>().toEqualTypeOf<Record<string, unknown>>();
   });
 
   it('geoNear() resets to untyped row', () => {
-    const plan = mongoQuery({ contract })
+    const plan = mongoQuery({ context: contextOf(contract) })
       .from('orders')
       .geoNear({ near: [0, 0], distanceField: 'dist' })
       .build();
@@ -550,7 +604,7 @@ describe('resolved row types — new stages', () => {
   });
 
   it('graphLookup() resets to untyped row', () => {
-    const plan = mongoQuery({ contract })
+    const plan = mongoQuery({ context: contextOf(contract) })
       .from('orders')
       .graphLookup({
         from: 'categories',
@@ -564,7 +618,7 @@ describe('resolved row types — new stages', () => {
   });
 
   it('setWindowFields() resets to untyped row', () => {
-    const plan = mongoQuery({ contract })
+    const plan = mongoQuery({ context: contextOf(contract) })
       .from('orders')
       .setWindowFields({ sortBy: { amount: 1 }, output: {} })
       .build();
@@ -572,7 +626,7 @@ describe('resolved row types — new stages', () => {
   });
 
   it('searchMeta() resets to untyped row', () => {
-    const plan = mongoQuery({ contract })
+    const plan = mongoQuery({ context: contextOf(contract) })
       .from('orders')
       .searchMeta({ facet: { operator: {} } })
       .build();

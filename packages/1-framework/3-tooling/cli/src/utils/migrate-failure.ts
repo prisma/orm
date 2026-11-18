@@ -2,7 +2,7 @@ import type { MigrationRunnerFailure } from '@internal/framework-components/cont
 import type { RunnerFailureFacts } from '../control-api/types';
 import type { CliStructuredError } from './cli-errors';
 import type { CliInvocation } from './printed-command';
-import { type FailedMigrationOnDisk, migrateFix } from './runner-failure-advice';
+import { type FailedMigrationOnDisk, migrateAdvice } from './runner-failure-advice';
 import { runnerFailureError } from './runner-failure-error';
 
 /**
@@ -15,7 +15,5 @@ export function migrateRunnerFailureError(
   failedMigration: FailedMigrationOnDisk | undefined,
   invocation: CliInvocation,
 ): CliStructuredError {
-  return runnerFailureError(failure, {
-    fix: migrateFix(failure, facts, failedMigration, invocation),
-  });
+  return runnerFailureError(failure, migrateAdvice(failure, facts, failedMigration, invocation));
 }

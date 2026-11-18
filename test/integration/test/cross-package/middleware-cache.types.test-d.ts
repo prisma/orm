@@ -29,8 +29,10 @@ test('a read accepts cacheAnnotation', () => {
 });
 
 test('a write refuses cacheAnnotation', () => {
-  // @ts-expect-error - cacheAnnotation declares applicableTo: ['read'], not 'write'
-  db.public.users.insert([{ name: 'Alice' }]).annotate(cacheAnnotation({}));
+  db.public.users
+    .insert([{ id: 1, name: 'Alice', email: 'a@b.com' }])
+    // @ts-expect-error - cacheAnnotation declares applicableTo: ['read'], not 'write'
+    .annotate(cacheAnnotation({}));
 
   // @ts-expect-error - cacheAnnotation declares applicableTo: ['read'], not 'write'
   db.public.users.update({ name: 'Alicia' }).annotate(cacheAnnotation({}));
@@ -78,7 +80,7 @@ test('ORM read terminals refuse invalidateAnnotation', () => {
 });
 
 test('SQL builder writes accept invalidateAnnotation and reads refuse it', () => {
-  db.public.users.insert([{ name: 'Alice' }]).annotate(invalidate);
+  db.public.users.insert([{ id: 1, name: 'Alice', email: 'a@b.com' }]).annotate(invalidate);
   db.public.users
     .update({ name: 'Alicia' })
     .where((f, fns) => fns.eq(f.id, 1))

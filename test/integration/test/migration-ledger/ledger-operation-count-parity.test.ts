@@ -23,7 +23,7 @@ import {
   ledgerOperationCounts,
   MULTI_EDGE_OPERATION_COUNTS,
 } from '../../../../packages/1-framework/3-tooling/migration/test/fixtures/ledger-operation-count-parity';
-import { createTestPostgresControlAdapter } from '../../../../packages/3-targets/6-adapters/postgres/test/helpers/test-control-adapter';
+import { createTestPostgresControlAdapter } from '../../../../packages/3-targets/postgres/2-adapter/test/helpers/test-control-adapter';
 import {
   createDriver,
   createLedgerTestPlan,
@@ -35,8 +35,8 @@ import {
   frameworkComponents as pgFrameworkComponents,
   postgresTargetDescriptor,
   resetDatabase,
-} from '../../../../packages/3-targets/6-adapters/postgres/test/migrations/fixtures/runner-fixtures';
-import { createTestSqliteControlAdapter } from '../../../../packages/3-targets/6-adapters/sqlite/test/helpers/test-control-adapter';
+} from '../../../../packages/3-targets/postgres/2-adapter/test/migrations/fixtures/runner-fixtures';
+import { createTestSqliteControlAdapter } from '../../../../packages/3-targets/sqlite/2-adapter/test/helpers/test-control-adapter';
 import {
   createLedgerTestPlan as createSqliteLedgerPlan,
   createTestDatabase as createSqliteTestDatabase,
@@ -44,7 +44,7 @@ import {
   familyInstance as sqliteFamily,
   frameworkComponents as sqliteFrameworkComponents,
   sqliteTargetDescriptor,
-} from '../../../../packages/3-targets/6-adapters/sqlite/test/migrations/fixtures/runner-fixtures';
+} from '../../../../packages/3-targets/sqlite/2-adapter/test/migrations/fixtures/runner-fixtures';
 
 const controlAdapter = new MongoControlAdapterImpl();
 
@@ -106,7 +106,7 @@ function multiEdgePlanSqlite() {
         id: 'edge.a',
         label: 'a',
         operationClass: 'additive',
-        target: { id: 'sqlite', details: { schema: 'main', objectType: 'table', name: 'a' } },
+        target: { id: 'sqlite', details: { objectType: 'table', name: 'a' } },
         precheck: [],
         execute: [],
         postcheck: [{ description: 'ok', sql: 'SELECT 1' }],
@@ -115,7 +115,7 @@ function multiEdgePlanSqlite() {
         id: 'edge.b1',
         label: 'b1',
         operationClass: 'additive',
-        target: { id: 'sqlite', details: { schema: 'main', objectType: 'table', name: 'b1' } },
+        target: { id: 'sqlite', details: { objectType: 'table', name: 'b1' } },
         precheck: [],
         execute: [],
         postcheck: [{ description: 'ok', sql: 'SELECT 1' }],
@@ -124,7 +124,7 @@ function multiEdgePlanSqlite() {
         id: 'edge.b2',
         label: 'b2',
         operationClass: 'additive',
-        target: { id: 'sqlite', details: { schema: 'main', objectType: 'table', name: 'b2' } },
+        target: { id: 'sqlite', details: { objectType: 'table', name: 'b2' } },
         precheck: [],
         execute: [],
         postcheck: [{ description: 'ok', sql: 'SELECT 1' }],
@@ -133,7 +133,7 @@ function multiEdgePlanSqlite() {
         id: 'edge.c',
         label: 'c',
         operationClass: 'additive',
-        target: { id: 'sqlite', details: { schema: 'main', objectType: 'table', name: 'c' } },
+        target: { id: 'sqlite', details: { objectType: 'table', name: 'c' } },
         precheck: [],
         execute: [],
         postcheck: [{ description: 'ok', sql: 'SELECT 1' }],
@@ -381,7 +381,7 @@ describe('LedgerEntryRecord.operationCount parity across targets', {
           id: 'table.user',
           label: 'Create user table',
           operationClass: 'additive',
-          target: { id: 'sqlite', details: { schema: 'main', objectType: 'table', name: 'user' } },
+          target: { id: 'sqlite', details: { objectType: 'table', name: 'user' } },
           precheck: [{ description: 'would fail', sql: 'SELECT 0' }],
           execute: [{ description: 'would fail', sql: 'SELECT 1/0' }],
           postcheck: [
@@ -531,7 +531,7 @@ describe('LedgerEntryRecord.operationCount parity across targets', {
           operationClass: 'additive',
           target: {
             id: 'sqlite',
-            details: { schema: 'main', objectType: 'table', name: 'parity_synth' },
+            details: { objectType: 'table', name: 'parity_synth' },
           },
           precheck: [],
           execute: [],

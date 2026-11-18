@@ -3,6 +3,7 @@ import stripAnsi from 'strip-ansi';
 import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
 import {
+  expectStrictVerifyIssues,
   type JourneyContext,
   runContractEmit,
   runContractInfer,
@@ -12,11 +13,7 @@ import {
   timeouts,
   useDevDatabase,
 } from '../utils/journey-test-helpers';
-import {
-  expectVerifiesCleanAfterPull,
-  readContractPsl,
-  writeContractPsl,
-} from './infer-roundtrip-fidelity/harness';
+import { readContractPsl, writeContractPsl } from './infer-roundtrip-fidelity/harness';
 
 withTempDir(({ createTempDir }) => {
   describe('Journey: infer preserves an enforced element check', () => {
@@ -79,7 +76,7 @@ withTempDir(({ createTempDir }) => {
         const emitRepull = await runContractEmit(ctx);
         expect(emitRepull.exitCode, `contract emit\n${stripAnsi(emitRepull.stderr)}`).toBe(0);
 
-        await expectVerifiesCleanAfterPull(ctx, 'enforced element check');
+        await expectStrictVerifyIssues(ctx, 'enforced element check');
       },
       timeouts.spinUpPpgDev,
     );

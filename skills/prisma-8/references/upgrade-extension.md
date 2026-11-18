@@ -63,12 +63,12 @@ For each `(from, to)` step in the chain:
 
 4. **Read the upgrade instructions.** Re-sync the skills (`prisma skills sync`) so the tree matches the version just installed, then load `../upgrading/extension/upgrades/<from>-to-<to>/instructions.md`. Parse the YAML frontmatter and pay particular attention to its `changes[]` array.
 
-5. **Apply each change.** For each entry in `changes[]`:
+5. **Apply each change.** When the guide's body has a section that orders the steps, such as `Order of the steps`, apply the changes in that order: it says which script runs before which, and when to sign the databases and when to plan and apply a migration. Where an entry's prose says to sign or migrate, do it at the step that section names. Otherwise take the entries in the order of `changes[]`. For each entry in `changes[]`:
    - If the entry has a `detection` block (a glob + content predicate), run it. If no files match, skip this change. Run the glob over the project's own files: skip `node_modules`, and build output such as `dist`, `build`, `.next` or `out` (whatever directories the project's build writes). A match there is generated code, which the next build rewrites; editing it changes nothing. Migration snapshots under `migrations/snapshots/` are committed files, not build output, so keep them.
    - How a `detection` block runs: `glob` selects files relative to the project root. Each `matches` entry, once read from the YAML, is a JavaScript regular expression, built as `new RegExp(pattern)` with no flags and tested against the whole content of one file at a time; each `contains` entry is a plain substring. A file is a hit when any entry matches it. Patterns may span lines, and some look at the whole file (for example, to skip a file that declares something elsewhere in it), so a line-by-line search such as `grep` or `rg` without `-U` is not the same test and can report files the pattern excludes. From a shell, `rg -U --pcre2 -l -e '<pattern>' <files>` tests whole files and gives the same hits.
    - If the entry has no `detection`, apply unconditionally.
    - If the entry names a `script:` (a relative path next to `instructions.md`), invoke it from the project root:
-     - `*.ts` → `pnpm exec tsx <skill>/upgrading/extension/upgrades/<from>-to-<to>/<script>`
+     - `*.ts` → the command the guide's prose gives, such as `node <script>` (Node 24 or later runs TypeScript directly); with no command in the prose, `pnpm exec tsx <skill>/upgrading/extension/upgrades/<from>-to-<to>/<script>`
      - `*.sh` → `bash <skill>/upgrading/extension/upgrades/<from>-to-<to>/<script>`
      - codemods → invoke per the script's own `instructions.md` prose.
    - If the entry has no `script`, follow the prose body in `instructions.md` directly.
@@ -90,6 +90,8 @@ Move on to the next step. Repeat.
 ## Exact-pin rule
 
 Prisma 8 extensions pin every `@prisma/orm-*` SPI dependency (everything except `@prisma/orm-extension-*`) to a single **exact** version (no `^`, no `~`, no range, no wildcard, no `workspace:` specifier in the published `package.json`). All of those entries share the same version. The pin advances after each successful upgrade step, release-candidate steps included.
+
+The version is the one the application's database package (`@prisma/orm-postgres`, `@prisma/orm-mongo`, …) uses. Values and registries made by one copy of Prisma ORM are not recognised by another, so they must never cross between copies. A host may load two copies on purpose, as Prisma Composer's boot wrapper does beside the application bundle, but the application, its extensions and the `prisma` CLI must share one. When an extension pins a different version, the package manager installs a second copy beside the application's, and the extension's values then cross between copies. The target package (such as `@prisma/orm-target-postgres`) is therefore a **peer dependency**, so npm refuses a mismatched install instead of adding a copy. The framework and family packages are ordinary dependencies at the same version. pnpm and bun only warn about a mismatched peer, so a second copy can still be installed. `npm ls @prisma/orm-framework`, `pnpm why @prisma/orm-framework` or `bun why @prisma/orm-framework` lists every copy and the package that brought it.
 
 The one-line check in step 3 of the per-step flow enforces the rule; the `prisma-8-check-pins` guard the monorepo uses for its own extensions is not published. Wire the check into the extension's CI alongside the build/test step so an accidental range pin fails the PR before it lands.
 

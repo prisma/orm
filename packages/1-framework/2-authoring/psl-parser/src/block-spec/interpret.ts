@@ -2,7 +2,7 @@ import type {
   AuthoringPslBlockDescriptor,
   AuthoringPslBlockDescriptorNamespace,
   DataTypeSupport,
-  WrittenScalar,
+  WrittenValue,
 } from '@internal/framework-components/authoring';
 import type {
   ParsedPslExtensionBlock,
@@ -20,7 +20,7 @@ import { findBlockDescriptor } from '../extension-block';
 import { nodePslSpan } from '../resolve';
 import type { PslSources } from '../source-file';
 import type { BlockSymbol, SymbolTable } from '../symbol-table';
-import type { ExpressionAst } from '../syntax/ast/expressions';
+import { ArrayLiteralAst, type ExpressionAst } from '../syntax/ast/expressions';
 import type { AstNode } from '../syntax/ast-helpers';
 import { readWrittenScalar } from '../written-scalar';
 import { blockSpecFactoryOf } from './descriptor';
@@ -79,7 +79,7 @@ export function interpretExtensionBlock<S extends BlockSpec<unknown>>(
 interface InterpretedBlockEntries {
   readonly values: Record<string, unknown>;
   readonly parameterSpans: Record<string, PslSpan>;
-  readonly writtenValues: Record<string, WrittenScalar>;
+  readonly writtenValues: Record<string, WrittenValue>;
   readonly diagnostics: readonly PslDiagnostic[];
   readonly failed: boolean;
 }
@@ -93,7 +93,7 @@ function interpretStructBlock(
   let failed = false;
   const values: Record<string, unknown> = Object.create(null);
   const parameterSpans: Record<string, PslSpan> = Object.create(null);
-  const writtenValues: Record<string, WrittenScalar> = Object.create(null);
+  const writtenValues: Record<string, WrittenValue> = Object.create(null);
   const seen = new Set<string>();
 
   for (const entry of block.entries) {
@@ -165,7 +165,7 @@ function interpretMapBlock(
   let failed = false;
   const values: Record<string, unknown> = Object.create(null);
   const parameterSpans: Record<string, PslSpan> = Object.create(null);
-  const writtenValues: Record<string, WrittenScalar> = Object.create(null);
+  const writtenValues: Record<string, WrittenValue> = Object.create(null);
   const seen = new Set<string>();
 
   for (const entry of block.entries) {
@@ -202,12 +202,28 @@ function interpretMapBlock(
 }
 
 function recordWrittenValue(
-  writtenValues: Record<string, WrittenScalar>,
+  writtenValues: Record<string, WrittenValue>,
   key: string,
   value: ExpressionAst,
 ): void {
-  const literal = readWrittenScalar(value);
-  if (literal.ok) writtenValues[key] = literal.written;
+  const written = writtenValueOf(value);
+  if (written !== undefined) writtenValues[key] = written;
+}
+
+/** A literal as it is written, or a list of literals; `undefined` for anything else. */
+function writtenValueOf(value: ExpressionAst): WrittenValue | undefined {
+  const array = ArrayLiteralAst.cast(value.syntax);
+  if (array === undefined) {
+    const literal = readWrittenScalar(value);
+    return literal.ok ? literal.written : undefined;
+  }
+  const elements: WrittenValue[] = [];
+  for (const element of array.elements()) {
+    const literal = readWrittenScalar(element);
+    if (!literal.ok) return undefined;
+    elements.push(literal.written);
+  }
+  return { kind: 'list', elements };
 }
 
 function duplicateParameterDiagnostic(

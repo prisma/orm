@@ -24,10 +24,6 @@ import {
   hasPslContractInfer,
   hasSchemaView,
 } from '@internal/framework-components/control';
-import {
-  type ImportSpecifierResolver,
-  keepInternalSpecifiers,
-} from '@internal/framework-components/emission';
 import type { PslDocumentAst } from '@internal/framework-components/psl-ast';
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
 import { blindCast } from '@internal/utils/casts';
@@ -35,6 +31,7 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok } from '@internal/utils/result';
 import { structuredError } from '@internal/utils/structured-error';
+import { errorContractTypesModuleMissing } from '../utils/cli-errors';
 import { contractValidationMeta } from '../utils/contract-validation-meta';
 import { assertFrameworkComponentsCompatible } from '../utils/framework-components';
 import { snapshotVerifierFor } from '../utils/snapshot-content-verification';
@@ -76,6 +73,12 @@ import type {
  * @see {@link ControlClient} for the client interface
  * @see README.md "Programmatic Control API" section for usage examples
  */
+function sourceWarningsOf(warnings: readonly ContractSourceDiagnostic[]): {
+  readonly sourceWarnings?: readonly ContractSourceDiagnostic[];
+} {
+  return ifDefined('sourceWarnings', warnings.length > 0 ? warnings : undefined);
+}
+
 export function createControlClient(options: ControlClientOptions): ControlClient {
   return new ControlClientImpl(options);
 }
@@ -437,7 +440,9 @@ class ControlClientImpl implements ControlClient {
       targetId: this.options.target.targetId,
       extensions: this.options.extensions ?? [],
       ...ifDefined('acceptDataLoss', options.acceptDataLoss),
-      ...ifDefined('acceptAccessWidening', options.acceptAccessWidening),
+      ...ifDefined('acceptAccessChanges', options.acceptAccessChanges),
+      ...ifDefined('ref', options.ref),
+      ...ifDefined('permitPolicyChange', options.permitPolicyChange),
       ...ifDefined('statements', options.statements),
       answerQuestions: options.answerQuestions,
       ...ifDefined('verifySnapshotContent', this.snapshotVerifier),
@@ -479,6 +484,7 @@ class ControlClientImpl implements ControlClient {
       targetId: this.options.target.targetId,
       extensions: this.options.extensions ?? [],
       frameworkComponents,
+      invocation: options.invocation,
       ...ifDefined('verifySnapshotContent', this.snapshotVerifier),
       ...ifDefined('onProgress', onProgress),
     });
@@ -537,9 +543,8 @@ class ControlClientImpl implements ControlClient {
       migrationsDir: options.migrationsDir,
       extensions: this.options.extensions ?? [],
       targetId: this.options.target.targetId,
-      ...ifDefined('refHash', options.refHash),
-      ...ifDefined('refInvariants', options.refInvariants),
-      ...ifDefined('refName', options.refName),
+      ...ifDefined('target', options.target),
+      ...ifDefined('permitPolicyChange', options.permitPolicyChange),
       ...ifDefined('verifySnapshotContent', this.snapshotVerifier),
       ...ifDefined('onProgress', onProgress),
     });
@@ -615,6 +620,9 @@ class ControlClientImpl implements ControlClient {
 
   async emit(options: EmitOptions): Promise<EmitResult> {
     const { onProgress, contractConfig } = options;
+    if (!contractConfig.typesModule) {
+      throw errorContractTypesModuleMissing();
+    }
 
     // Ensure initialized (creates stack and family instance)
     // emit() does NOT require a database connection
@@ -624,7 +632,6 @@ class ControlClientImpl implements ControlClient {
       throw new InternalError('Family instance was not initialized. This is a bug.');
     }
 
-    const sourceWarnings: ContractSourceDiagnostic[] = [];
     onProgress?.({
       action: 'emit',
       kind: 'spanStart',
@@ -636,9 +643,6 @@ class ControlClientImpl implements ControlClient {
       stack: this.stack!,
       source: contractConfig.source,
       cwd: undefined,
-      reportWarning: (diagnostic) => {
-        sourceWarnings.push(diagnostic);
-      },
     });
     onProgress?.({
       action: 'emit',
@@ -647,7 +651,7 @@ class ControlClientImpl implements ControlClient {
       outcome: loaded.ok ? 'ok' : 'error',
     });
     if (!loaded.ok) {
-      const { error, sourceDiagnostics } = loaded.failure;
+      const { error, sourceDiagnostics, warnings } = loaded.failure;
       const thrownBySource = error.code !== 'CONTRACT.SOURCE_LOAD_FAILED';
       return notOk({
         code: 'CONTRACT_SOURCE_INVALID',
@@ -655,8 +659,10 @@ class ControlClientImpl implements ControlClient {
         why: error.why,
         meta: thrownBySource ? { code: error.code, ...error.meta } : sourceDiagnostics?.meta,
         ...ifDefined('diagnostics', sourceDiagnostics),
+        ...sourceWarningsOf(warnings),
       });
     }
+    const { contract, warnings } = loaded.value;
 
     // Emit contract
     onProgress?.({
@@ -667,7 +673,7 @@ class ControlClientImpl implements ControlClient {
     });
 
     try {
-      const enrichedIR = enrichContract(loaded.value, this.frameworkComponents ?? []);
+      const enrichedIR = enrichContract(contract, this.frameworkComponents ?? []);
       const rawContractJson = this.options.target.contractSerializer.serializeContract(enrichedIR);
 
       let deserializedContract: Contract;
@@ -686,10 +692,11 @@ class ControlClientImpl implements ControlClient {
           summary: 'Contract validation failed',
           why: message,
           meta: undefined,
+          ...sourceWarningsOf(warnings),
         });
       }
 
-      const result = await this.emitArtifacts(deserializedContract, keepInternalSpecifiers);
+      const result = await this.emitArtifacts(deserializedContract, contractConfig.typesModule);
 
       onProgress?.({
         action: 'emit',
@@ -704,7 +711,7 @@ class ControlClientImpl implements ControlClient {
         profileHash: result.profileHash,
         contractJson: result.contractJson,
         contractDts: result.contractDts,
-        ...ifDefined('sourceWarnings', sourceWarnings.length > 0 ? sourceWarnings : undefined),
+        ...sourceWarningsOf(warnings),
       });
     } catch (error) {
       onProgress?.({
@@ -719,11 +726,15 @@ class ControlClientImpl implements ControlClient {
         summary: 'Failed to emit contract',
         why: error instanceof Error ? error.message : String(error),
         meta: undefined,
+        ...sourceWarningsOf(warnings),
       });
     }
   }
 
   async renderContractDts(options: RenderContractDtsOptions): Promise<RenderContractDtsResult> {
+    if (!options.typesModule) {
+      throw errorContractTypesModuleMissing();
+    }
     this.init();
     if (!this.familyInstance) {
       throw new InternalError('Family instance was not initialized. This is a bug.');
@@ -742,10 +753,7 @@ class ControlClientImpl implements ControlClient {
     }
 
     try {
-      const { contractDts } = await this.emitArtifacts(
-        contract,
-        options.resolveImportSpecifier ?? keepInternalSpecifiers,
-      );
+      const { contractDts } = await this.emitArtifacts(contract, options.typesModule);
       return ok({ contractDts });
     } catch (error) {
       return notOk({
@@ -759,7 +767,7 @@ class ControlClientImpl implements ControlClient {
 
   private emitArtifacts(
     contract: Contract,
-    resolveImportSpecifier: ImportSpecifierResolver,
+    typesModule: string,
   ): ReturnType<typeof emitContractArtifacts> {
     const familyInstance = this.familyInstance;
     if (!familyInstance) {
@@ -769,7 +777,7 @@ class ControlClientImpl implements ControlClient {
     return emitContractArtifacts(contract, this.stack!, this.options.family.emission, {
       serializeContract: (c) => contractSerializer.serializeContract(c),
       deserializeContract: (json) => familyInstance.deserializeContract(json),
-      resolveImportSpecifier,
+      typesModule,
       ...ifDefined('shouldPreserveEmpty', contractSerializer.shouldPreserveEmpty),
       ...ifDefined('sortStorage', contractSerializer.sortStorage),
       ...ifDefined('supportsNamespaces', this.options.target.supportsNamespaces),

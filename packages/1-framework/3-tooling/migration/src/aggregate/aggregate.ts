@@ -258,7 +258,9 @@ export function createAggregateContractSpace(args: {
 
 /**
  * Collect the union of every namespace declared across all contract spaces of an
- * aggregate (app + extensions) and return a minimal object with the shape
+ * aggregate (app + extensions), and of the application space's origin contract when given, so a
+ * namespace the origin declares and the destination removed is read too, and return a minimal
+ * object with the shape
  * `{ storage: { namespaces }, contracts }` suitable for passing to
  * `familyInstance.introspect`. `contracts` holds each space's contract, app first, so
  * introspection reads a table with the contract of the space that declares it.
@@ -267,21 +269,25 @@ export function createAggregateContractSpace(args: {
  * with `checkContracts: true`), so every `space.contract()` call is safe —
  * no try/catch is needed here.
  */
-export function collectAggregateNamespaces(aggregate: ContractSpaceAggregate): {
+export function collectAggregateNamespaces(
+  aggregate: ContractSpaceAggregate,
+  originContract: Contract | null = null,
+): {
   readonly storage: { readonly namespaces: Readonly<Record<string, StorageNamespace>> };
   readonly contracts: readonly Contract[];
 } {
+  const contracts = [
+    ...aggregate.spaces().map((space) => space.contract()),
+    ...(originContract === null ? [] : [originContract]),
+  ];
   const merged: Record<string, StorageNamespace> = {};
-  for (const space of aggregate.spaces()) {
-    for (const [key, ns] of Object.entries(space.contract().storage.namespaces)) {
+  for (const contract of contracts) {
+    for (const [key, ns] of Object.entries(contract.storage.namespaces)) {
       const existing = merged[key];
       merged[key] = existing === undefined ? ns : mergeNamespaceEntries(existing, ns);
     }
   }
-  return {
-    storage: { namespaces: merged },
-    contracts: aggregate.spaces().map((space) => space.contract()),
-  };
+  return { storage: { namespaces: merged }, contracts };
 }
 
 /**
@@ -346,6 +352,10 @@ export function createContractSpaceAggregate(args: {
     declaresEntity: (coordinate) => ordered.some((space) => spaceDeclares(space, coordinate)),
     declaringSpaces: (coordinate) =>
       ordered.filter((space) => spaceDeclares(space, coordinate)).map((s) => s.spaceId),
+    namespaceDeclaringSpaces: (namespaceId) =>
+      ordered
+        .filter((space) => Object.hasOwn(space.contract().storage.namespaces, namespaceId))
+        .map((space) => space.spaceId),
     checkIntegrity,
   };
 }

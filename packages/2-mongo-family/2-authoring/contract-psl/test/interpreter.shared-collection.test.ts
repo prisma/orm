@@ -1,6 +1,7 @@
-import { mongoCodecLookup, mongoDataTypeLookup } from '@internal/mongo-contract/test';
+import { mongoCodecLookup } from '@internal/mongo-contract/test';
 import { describe, expect, it } from 'vitest';
 import { interpretMongoContract } from './interpreter-test-helpers';
+import { mongoDataTypeSupport } from './mongo-type-lookups';
 
 const schema = `
 model User {
@@ -19,14 +20,14 @@ model Admin {
 describe('a PSL MongoDB collection that stores two models', () => {
   it('gets a validator that accepts a document of either model', () => {
     const result = interpretMongoContract(schema, {
-      scalarTypeCodecIds: new Map([
+      scalarTypes: new Map([
         ['String', 'mongo/string@1'],
         ['Int', 'mongo/int32@1'],
         ['ObjectId', 'mongo/objectId@1'],
       ]),
       defaultFunctionRegistry: new Map(),
       codecLookup: mongoCodecLookup,
-      dataTypes: { entries: {}, lookup: mongoDataTypeLookup, dataTypeOfCodec: () => undefined },
+      dataTypes: mongoDataTypeSupport,
     });
     if (!result.ok) throw new Error(result.failure.summary);
 

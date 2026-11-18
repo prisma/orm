@@ -1,4 +1,4 @@
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import { defineConfig } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
 import { ok } from '@internal/utils/result';
@@ -15,14 +15,14 @@ describe('defineConfig', () => {
     id: 'sql',
     generateStorageType: () => '{}',
     generateModelStorageType: () => '{}',
-    getFamilyImports: () => [] as string[],
+    getFamilyImports: () => [],
     getFamilyTypeAliases: () => '',
     getTypeMapsExpression: () => 'never',
     getContractWrapper: (base: string, tm: string) =>
       `export type Contract = ${base} & { typeMaps: ${tm} };`,
   };
 
-  const baseConfig: PrismaNextConfig = {
+  const baseConfig: PrismaConfig = {
     family: {
       kind: 'family',
       id: 'sql',
@@ -31,6 +31,7 @@ describe('defineConfig', () => {
       emission: mockHook,
       create: () => ({
         familyId: 'sql',
+        markerLocation: 'prisma_contract.marker',
         deserializeContract: (contract: unknown) => contract as Contract,
         storageNameOf: (operation) => operation.id,
         verify: async () => ({
@@ -95,7 +96,7 @@ describe('defineConfig', () => {
   };
 
   it('preserves omitted contract inputs', () => {
-    const config: PrismaNextConfig = {
+    const config: PrismaConfig = {
       ...baseConfig,
       contract: {
         source: createSourceProvider(),
@@ -108,7 +109,7 @@ describe('defineConfig', () => {
 
   it('validates contract source accepts provider objects', () => {
     const sourceProvider = createSourceProvider();
-    const config: PrismaNextConfig = {
+    const config: PrismaConfig = {
       ...baseConfig,
       contract: {
         source: sourceProvider,

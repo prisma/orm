@@ -1,12 +1,14 @@
 import { textColumn } from '@prisma/orm-postgres/adapter/column-types';
 import { defineContract, fullTextIndex } from '@prisma/orm-postgres/contract-builder';
 
-export const indexed = defineContract({}, ({ field, model }) => {
-  const Author = model('Author', { fields: { id: field.id.uuidv4String() } });
+export const indexed = defineContract({}, ({ field, model, gen, type }) => {
+  const Author = model('Author', {
+    fields: { id: field.column(type.Char(36)).id().onCreate(gen.uuid()) },
+  });
   const Note = model('Note', {
     fields: {
-      id: field.id.uuidv4String(),
-      authorId: field.uuidString(),
+      id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+      authorId: field.column(type.Char(36)),
       title: field.column(textColumn),
       body: field.column(textColumn),
     },

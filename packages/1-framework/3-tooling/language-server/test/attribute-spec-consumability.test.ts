@@ -1,4 +1,4 @@
-import type { PrismaNextConfig } from '@internal/config-loader';
+import type { PrismaConfig } from '@internal/config-loader';
 import * as configLoader from '@internal/config-loader';
 import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import {
@@ -70,7 +70,7 @@ const targetPack = {
   },
 };
 
-function pslProjectConfig(): PrismaNextConfig {
+function pslProjectConfig(): PrismaConfig {
   return {
     family: familyPack,
     target: targetPack,
@@ -83,7 +83,7 @@ function pslProjectConfig(): PrismaNextConfig {
         interpret: () => ({}) as never,
       },
     },
-  } as unknown as PrismaNextConfig;
+  } as unknown as PrismaConfig;
 }
 
 describe('assembled attribute specs are consumable from a resolved project', () => {
@@ -149,7 +149,7 @@ describe('assembled attribute specs are consumable from a resolved project', () 
   it('provides signature help from the SQL @@base spec factory', async () => {
     expectBaseSpecSignatureHelp(
       await importAttributeSpecs(
-        '../../../../2-sql/2-authoring/contract-psl/src/sql-attribute-specs.ts',
+        '../../../../2-sql-family/2-authoring/contract-psl/src/sql-attribute-specs.ts',
         'sqlAttributeSpecs',
       ),
     );
@@ -191,7 +191,7 @@ describe('assembled attribute specs are consumable from a resolved project', () 
       model,
       field,
       typeResolution: undefined,
-      typeConstructor: undefined,
+      contributedType: undefined,
       defaultFunctionRegistry:
         interpretation.context.controlMutationDefaults.defaultFunctionRegistry,
       generatorFunctions: interpretation.context.generatorFunctions,

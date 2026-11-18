@@ -17,6 +17,7 @@ import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonic
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import { type MongoTargetContract, mongoTargetDescriptor } from '@internal/target-mongo/control';
+import mongoTargetPack from '@internal/target-mongo/pack';
 import postgres from '@internal/target-postgres/control';
 import postgresPackRef from '@internal/target-postgres/pack';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
@@ -254,7 +255,9 @@ describe('side-by-side contract examples', () => {
       }
 
       const fixture = await loadFixture(fixtureCase);
-      const provider = mongoContract(fixtureCase.contractPslPath);
+      const provider = mongoContract(fixtureCase.contractPslPath, {
+        target: mongoTargetPack,
+      });
       const providerResult = await provider.source.load({
         ...mongoSourceContext,
         resolvedInputs: [fixtureCase.contractPslPath],

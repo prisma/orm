@@ -38,14 +38,12 @@ export default {
 
     if (url.pathname === '/sql/users') {
       const limit = parseLimit(url.searchParams.get('limit'), 10);
-      const rows = await db
-        .runtime()
-        .query(
-          db.sql.public.user
-            .select('id', 'email', 'displayName', 'kind', 'createdAt')
-            .limit(limit)
-            .build(),
-        );
+      const rows = await db.query(
+        db.sql.public.user
+          .select('id', 'email', 'displayName', 'kind', 'createdAt')
+          .limit(limit)
+          .build(),
+      );
       return Response.json({ ok: true, route: 'sql/users', count: rows.length, rows });
     }
 
@@ -138,7 +136,7 @@ export default {
         // server-side cursor and streams in ~100-row batches; an early
         // `break` only fetches one batch and closes. Without the cursor option
         // the driver buffers all 10_000 rows before the first yield.
-        const iter = db.runtime().query(
+        const iter = db.query(
           db.sql.public.post
             .select('id', 'title')
             .orderBy((f) => f.createdAt, { direction: 'asc' })

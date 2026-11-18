@@ -3,6 +3,7 @@ import stripAnsi from 'strip-ansi';
 import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
 import {
+  expectStrictVerifyIssues,
   type JourneyContext,
   parseJsonOutput,
   runContractEmit,
@@ -13,7 +14,7 @@ import {
   timeouts,
   useDevDatabase,
 } from '../utils/journey-test-helpers';
-import { expectVerifiesCleanAfterPull, readContractPsl } from './infer-roundtrip-fidelity/harness';
+import { readContractPsl } from './infer-roundtrip-fidelity/harness';
 
 withTempDir(({ createTempDir }) => {
   describe('Journey: a hand-written check is declared by infer and survives a destructive plan', () => {
@@ -62,7 +63,7 @@ withTempDir(({ createTempDir }) => {
         const emit = await runContractEmit(ctx);
         expect(emit.exitCode, `contract emit\n${stripAnsi(emit.stderr)}`).toBe(0);
 
-        await expectVerifiesCleanAfterPull(ctx, 'hand-written check');
+        await expectStrictVerifyIssues(ctx, 'hand-written check');
 
         // The constraint is now declared, so it is no longer a strict-only extra.
         const strict = await runDbVerify(ctx, ['--schema-only', '--strict']);

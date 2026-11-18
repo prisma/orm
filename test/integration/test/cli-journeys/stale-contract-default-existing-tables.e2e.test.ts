@@ -116,8 +116,6 @@ const SCENARIOS: readonly Scenario[] = [
   },
 ];
 
-const json = { isTTY: false };
-
 function writeSchema(ctx: JourneyContext, schema: string): void {
   writeFileSync(join(ctx.testDir, 'contract.prisma'), `// use prisma-8\n\n${schema}`, 'utf-8');
 }
@@ -216,8 +214,8 @@ withTempDir(({ createTempDir }) => {
             },
           };
           expect({
-            update: reported(await runDbUpdate(ctx, ['--dry-run'], json)),
-            plan: reported(await runMigrationPlan(ctx, [], json)),
+            update: reported(await runDbUpdate(ctx, ['--dry-run', '--json'])),
+            plan: reported(await runMigrationPlan(ctx, ['--json'])),
           }).toEqual({ update: expected, plan: expected });
         },
         timeouts.spinUpPpgDev,

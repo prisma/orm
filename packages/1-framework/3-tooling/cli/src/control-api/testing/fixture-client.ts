@@ -126,7 +126,7 @@ export function defaultControlClientFixtures(): ControlClientFixtures {
     mode: 'apply' as const,
     appliedStatements: [],
     dataLoss: [],
-    accessWidening: [],
+    accessChanges: [],
     temporaryValues: [],
     plan: { operations: [fixtureOperation] },
     destination: contract,

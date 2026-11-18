@@ -18,6 +18,7 @@ import {
 import { errorMigrationPackageNotFound } from '../../utils/cli-errors';
 import { integrityViolationToCheckFailure } from '../../utils/integrity-violation-to-check-failure';
 import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
+import { dataLine } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
 import { appMigrationsDirFor, displayPath, migrationsDirFor } from './paths';
@@ -71,7 +72,10 @@ function checkPresentations(inputs: {
       ? inputs.document.summary
       : `${inputs.document.summary}  (space: ${inputs.resolvedSpaceId})`;
   return {
-    stdout: () => [],
+    stdout: () =>
+      inputs.document.failures.map((failure) =>
+        dataLine([failure.space, failure.code, failure.where]),
+      ),
     next: () => [],
     human: (): readonly Block[] => [
       {

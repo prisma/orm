@@ -4,6 +4,8 @@ import { canonicalizeContractToObject } from '@internal/contract/hashing';
 import type { Contract } from '@internal/contract/types';
 import arktypeJsonControl from '@internal/extension-arktype-json/control';
 import arktypeJsonPack from '@internal/extension-arktype-json/pack';
+import citextControl from '@internal/extension-citext/control';
+import citextPack from '@internal/extension-citext/pack';
 import paradedbControl from '@internal/extension-paradedb/control';
 import paradedbPack from '@internal/extension-paradedb/pack';
 import pgvectorControl from '@internal/extension-pgvector/control';
@@ -38,6 +40,7 @@ const [slugidDefaultsPack] = slugidExtensions;
 
 const extensionPacks: ReadonlyMap<string, ExtensionPack> = new Map<string, ExtensionPack>([
   ['arktype-json', { control: arktypeJsonControl, packRef: arktypeJsonPack }],
+  ['citext', { control: citextControl, packRef: citextPack }],
   ['paradedb', { control: paradedbControl, packRef: paradedbPack }],
   ['pgvector', { control: pgvectorControl, packRef: pgvectorPack }],
   ['postgis', { control: postgisControl, packRef: postgisPack }],
@@ -86,15 +89,19 @@ interface Composition {
 
 /**
  * The stack a contract needs: every pack it names, and the pack whose own
- * contract space it is, which names no pack.
+ * contract space it is, which names no pack. That pack is composed for its
+ * authoring contributions only: a contract space is never composed beside
+ * itself, so its own contract is not one the PSL source compares against.
  */
 function compositionFor(contract: Contract<SqlStorage>): Composition {
   const ids = new Set(Object.keys(contract.extensions));
+  const ownSpaceIds = new Set<string>();
   for (const [id, pack] of extensionPacks) {
     if (
       pack.control.contractSpace?.contractJson.storage.storageHash === contract.storage.storageHash
     ) {
       ids.add(id);
+      ownSpaceIds.add(id);
     }
   }
   const packs = [...ids].flatMap((id) => {
@@ -103,8 +110,14 @@ function compositionFor(contract: Contract<SqlStorage>): Composition {
     if (packsOutsideThisPackage.has(id)) return [];
     throw new Error(`the contract names pack "${id}", which this test does not compose; add it`);
   });
+  const stack = composePostgresStack(packs.map((pack) => pack.control));
   return {
-    stack: composePostgresStack(packs.map((pack) => pack.control)),
+    stack: {
+      ...stack,
+      extensionContracts: new Map(
+        [...stack.extensionContracts].filter(([id]) => !ownSpaceIds.has(id)),
+      ),
+    },
     packRefs: packs.flatMap((pack) => (pack.packRef === undefined ? [] : [pack.packRef])),
   };
 }
@@ -153,103 +166,103 @@ const expectedRefusals: ReadonlyMap<string, ExpectedRefusal> = new Map<string, E
   ],
   // Prisma 7 `@ignore`, `@@ignore` and `Unsupported(...)` keep storage that no field or model maps, which Prisma 8 PSL cannot write until TML-3469.
   [
-    'packages/2-sql/2-authoring/contract-prisma7/test/fixtures/ignore/expected-contract.json',
+    'packages/2-sql-family/2-authoring/contract-prisma7/test/fixtures/ignore/expected-contract.json',
     {
       reason: 'is not stored by any field',
       meta: { namespaceId: 'public', table: 'User', column: 'legacy' },
     },
   ],
   [
-    'packages/2-sql/2-authoring/contract-prisma7/test/fixtures/ignored-field-defaults/expected-contract.json',
+    'packages/2-sql-family/2-authoring/contract-prisma7/test/fixtures/ignored-field-defaults/expected-contract.json',
     {
       reason: 'is not stored by any field',
       meta: { namespaceId: 'public', table: 'Account', column: 'status' },
     },
   ],
   [
-    'packages/2-sql/2-authoring/contract-prisma7/test/fixtures/ignored-field-in-index/expected-contract.json',
+    'packages/2-sql-family/2-authoring/contract-prisma7/test/fixtures/ignored-field-in-index/expected-contract.json',
     {
       reason: 'is not stored by any field',
       meta: { namespaceId: 'public', table: 'Indexed', column: 'b' },
     },
   ],
   [
-    'packages/2-sql/2-authoring/contract-prisma7/test/fixtures/ignored-model-many-to-many/expected-contract.json',
+    'packages/2-sql-family/2-authoring/contract-prisma7/test/fixtures/ignored-model-many-to-many/expected-contract.json',
     { reason: 'has no model stored in it', meta: { namespaceId: 'public', table: 'tags' } },
   ],
   [
-    'packages/2-sql/2-authoring/contract-prisma7/test/fixtures/ignored-models/expected-contract.json',
+    'packages/2-sql-family/2-authoring/contract-prisma7/test/fixtures/ignored-models/expected-contract.json',
     {
       reason: 'that no relation of model "User" travels',
       meta: { namespaceId: 'public', table: 'User', columns: ['archiveId'] },
     },
   ],
   [
-    'packages/2-sql/2-authoring/contract-prisma7/test/fixtures/ignored-relation-back-relations/expected-contract.json',
+    'packages/2-sql-family/2-authoring/contract-prisma7/test/fixtures/ignored-relation-back-relations/expected-contract.json',
     {
       reason: 'that no relation of model "User" travels',
       meta: { namespaceId: 'public', table: 'User', columns: ['managerId'] },
     },
   ],
   [
-    'packages/2-sql/2-authoring/contract-prisma7/test/fixtures/ignored-relation-field/expected-contract.json',
+    'packages/2-sql-family/2-authoring/contract-prisma7/test/fixtures/ignored-relation-field/expected-contract.json',
     {
       reason: 'that no relation of model "Post" travels',
       meta: { namespaceId: 'public', table: 'Post', columns: ['authorId'] },
     },
   ],
   [
-    'packages/2-sql/2-authoring/contract-prisma7/test/fixtures/junction-name-in-other-schema/expected-contract.json',
+    'packages/2-sql-family/2-authoring/contract-prisma7/test/fixtures/junction-name-in-other-schema/expected-contract.json',
     {
       reason: 'is declared in more than one namespace',
       meta: { modelName: 'PostToTag', namespaces: ['one', 'two'] },
     },
   ],
   [
-    'packages/2-sql/2-authoring/contract-prisma7/test/fixtures/relation-name-in-two-schemas/expected-contract.json',
+    'packages/2-sql-family/2-authoring/contract-prisma7/test/fixtures/relation-name-in-two-schemas/expected-contract.json',
     {
       reason: 'is declared in more than one namespace',
       meta: { modelName: 'X', namespaces: ['one', 'two'] },
     },
   ],
   [
-    'packages/2-sql/2-authoring/contract-prisma7/test/fixtures/relations-ignored/expected-contract.json',
+    'packages/2-sql-family/2-authoring/contract-prisma7/test/fixtures/relations-ignored/expected-contract.json',
     {
       reason: 'that no relation of model "Post" travels',
       meta: { namespaceId: 'public', table: 'Post', columns: ['legacyOwnerId'] },
     },
   ],
   [
-    'packages/2-sql/2-authoring/contract-prisma7/test/fixtures/unsupported-type/expected-contract.json',
+    'test/integration/test/fixtures/prisma7-source/citext/expected-contract.json',
+    {
+      reason: 'that no relation of model "Review" travels',
+      meta: { namespaceId: 'public', table: 'Review', columns: ['authorEmail'] },
+    },
+  ],
+  [
+    'packages/2-sql-family/2-authoring/contract-prisma7/test/fixtures/unsupported-type/expected-contract.json',
     {
       reason: 'that no relation of model "Host" travels',
       meta: { namespaceId: 'public', table: 'Host', columns: ['net'] },
     },
   ],
   [
-    'packages/2-sql/2-authoring/contract-prisma7/test/fixtures/unsupported-type-ignored/expected-contract.json',
+    'packages/2-sql-family/2-authoring/contract-prisma7/test/fixtures/unsupported-type-ignored/expected-contract.json',
     {
       reason: 'is not stored by any field',
       meta: { namespaceId: 'public', table: 'Post', column: 'search' },
     },
   ],
   [
-    'packages/2-sql/2-authoring/contract-prisma7/test/fixtures/unsupported-type-model-ignored/expected-contract.json',
+    'packages/2-sql-family/2-authoring/contract-prisma7/test/fixtures/unsupported-type-model-ignored/expected-contract.json',
     { reason: 'has no model stored in it', meta: { namespaceId: 'public', table: 'Post' } },
   ],
   [
-    'packages/2-sql/4-lanes/sql-builder/test/fixtures/generated/contract.json',
+    'packages/2-sql-family/4-lanes/sql-builder/test/fixtures/generated/contract.json',
     { reason: 'has no foreign key in storage', meta: { model: 'Post', field: 'author' } },
   ],
   [
-    'packages/3-extensions/pgvector/src/contract.json',
-    {
-      reason: 'no PSL type in the configured stack',
-      meta: { coordinate: 'types.vector', dataType: 'pgvector/vector', codecId: 'pg/vector@1' },
-    },
-  ],
-  [
-    'packages/3-extensions/postgres/test/fixtures/generated/contract.json',
+    'packages/3-targets/postgres/9-facade/test/fixtures/generated/contract.json',
     { reason: 'has no foreign key in storage', meta: { model: 'Post', field: 'author' } },
   ],
   [
@@ -282,14 +295,14 @@ const expectedRefusals: ReadonlyMap<string, ExpectedRefusal> = new Map<string, E
     },
   ],
   [
-    'packages/3-targets/3-targets/postgres/test/fixtures/namespaced-contract.json',
+    'packages/3-targets/postgres/1-target/test/fixtures/namespaced-contract.json',
     {
       reason: 'is declared in more than one namespace',
       meta: { modelName: 'User', namespaces: ['auth', 'public'] },
     },
   ],
   [
-    'packages/3-targets/3-targets/postgres/test/fixtures/snapshot-read-shapes/codec-instance.json',
+    'packages/3-targets/postgres/1-target/test/fixtures/snapshot-read-shapes/codec-instance.json',
     {
       reason: 'has no model stored in it',
       meta: { namespaceId: '__unbound__', table: 'embeddings' },
@@ -378,9 +391,28 @@ const refusedAtLoad: ReadonlyMap<string, readonly string[]> = new Map([
 
 const contracts = trackedPostgresContracts();
 
+function registeredDatabaseTypes(file: string): readonly string[] {
+  const json: unknown = JSON.parse(readFileSync(join(repoRoot, file), 'utf-8'));
+  const types: unknown = Reflect.get(Reflect.get(json as object, 'storage') ?? {}, 'types');
+  return typeof types === 'object' && types !== null ? Object.keys(types).sort() : [];
+}
+
+/** The contracts print refuses only because they register database types in `storage.types`: an extension's contract space, written in TypeScript. */
+const registeringDatabaseTypes = contracts.filter(
+  (file) => !expectedRefusals.has(file) && registeredDatabaseTypes(file).length > 0,
+);
+
 describe('every Postgres contract in the repo prints as PSL that reads back as the same contract', () => {
   it('finds the contracts', () => {
     expect(contracts.length).toBeGreaterThan(200);
+  });
+
+  it('skips only the contract spaces of citext, pgvector and PostGIS, which register database types', () => {
+    expect(registeringDatabaseTypes).toEqual([
+      'packages/3-extensions/citext/src/contract.json',
+      'packages/3-extensions/pgvector/src/contract.json',
+      'packages/3-extensions/postgis/src/contract.json',
+    ]);
   });
 
   it.each(contracts)('%s', async (file) => {
@@ -403,7 +435,9 @@ describe('every Postgres contract in the repo prints as PSL that reads back as t
       );
       return;
     }
-    const refusal = expectedRefusals.get(file);
+    const refusal = registeringDatabaseTypes.includes(file)
+      ? { reason: 'registers the database types', meta: { types: registeredDatabaseTypes(file) } }
+      : expectedRefusals.get(file);
     if (refusal !== undefined) {
       expect(() => printContract(contract, composition.stack)).toThrow(
         expect.objectContaining({

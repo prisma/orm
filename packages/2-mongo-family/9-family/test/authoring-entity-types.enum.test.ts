@@ -140,7 +140,12 @@ describe('mongoFamilyEnumEntityDescriptor: explicit @@type bypasses inference, n
       makeContext(diagnostics),
     );
 
-    expect(diagnostics).toEqual([expect.objectContaining({ code: 'PSL_EXTENSION_INVALID_VALUE' })]);
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
+        message: 'enum "Priority" member "low": Expected a quoted string',
+      }),
+    ]);
     expect(handle).toBeUndefined();
   });
 
@@ -173,7 +178,7 @@ describe('mongoFamilyEnumEntityDescriptor: explicit @@type bypasses inference, n
     });
   });
 
-  it('an explicit null member reaches the codec and its rejection is reported', () => {
+  it('a json`null` member reaches the codec and its refusal is reported', () => {
     const diagnostics: unknown[] = [];
     const handle = factory(
       enumBlock({ name: 'Odd', values: { none: null }, typeCodecId: JSON_CODEC_ID }),
@@ -183,8 +188,8 @@ describe('mongoFamilyEnumEntityDescriptor: explicit @@type bypasses inference, n
     expect(handle).toBeUndefined();
     expect(diagnostics).toEqual([
       expect.objectContaining({
-        code: 'PSL_EXTENSION_INVALID_VALUE',
-        message: expect.stringContaining('rejected by codec'),
+        code: 'PSL_VALUE_REFUSED',
+        message: 'enum "Odd" member "none": expected a non-null JSON value',
       }),
     ]);
   });

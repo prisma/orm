@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 import { disposeEmitQueue, executeContractEmit } from '@internal/cli/control-api';
-import type { PrismaNextConfig } from '@internal/config-loader';
+import type { PrismaConfig } from '@internal/config-loader';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { prismaVitePlugin } from '../src/plugin';
 
@@ -50,9 +50,10 @@ const successfulEmitResult = {
   storageHash: 'abc123',
   profileHash: 'def456',
   files: { json: '/out/contract.json', dts: '/out/contract.d.ts' },
+  pinnedFiles: [],
 } satisfies Awaited<ReturnType<typeof executeContractEmit>>;
 
-type LoadedConfig = PrismaNextConfig;
+type LoadedConfig = PrismaConfig;
 type SourceInputs = NonNullable<LoadedConfig['contract']>['source']['inputs'];
 
 interface MockModuleNode {
@@ -222,11 +223,7 @@ describe('prismaVitePlugin', () => {
       ) => Promise<void>;
       await configureServer(mockServer);
 
-      expect(mockedExecuteContractEmit).toHaveBeenCalledWith(
-        expect.objectContaining({
-          projectDir: '/project',
-        }),
-      );
+      expect(mockedLoadConfig).toHaveBeenCalledWith('/project/prisma.config.ts', expect.anything());
     });
 
     it('preserves absolute config path', async () => {
@@ -241,10 +238,9 @@ describe('prismaVitePlugin', () => {
       ) => Promise<void>;
       await configureServer(mockServer);
 
-      expect(mockedExecuteContractEmit).toHaveBeenCalledWith(
-        expect.objectContaining({
-          projectDir: '/absolute',
-        }),
+      expect(mockedLoadConfig).toHaveBeenCalledWith(
+        '/absolute/prisma.config.ts',
+        expect.anything(),
       );
     });
   });
@@ -392,11 +388,7 @@ describe('prismaVitePlugin', () => {
       ) => Promise<void>;
       await configureServer(mockServer);
 
-      expect(mockedExecuteContractEmit).toHaveBeenCalledWith(
-        expect.objectContaining({
-          projectDir: expect.any(String),
-        }),
-      );
+      expect(mockedExecuteContractEmit).toHaveBeenCalledTimes(1);
     });
 
     it('invalidates emitted artifacts after successful emit', async () => {
@@ -413,6 +405,28 @@ describe('prismaVitePlugin', () => {
 
       expect(mockServer.moduleGraph.onFileChange).toHaveBeenCalledWith('/out/contract.json');
       expect(mockServer.moduleGraph.onFileChange).toHaveBeenCalledWith('/out/contract.d.ts');
+    });
+
+    it('logs each file the emit wrote under migrations/', async () => {
+      mockedExecuteContractEmit.mockResolvedValue({
+        ...successfulEmitResult,
+        pinnedFiles: [{ spaceId: 'pgvector', path: '/project/migrations/pgvector/refs/head.json' }],
+      });
+      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const plugin = prismaVitePlugin('prisma.config.ts', { logLevel: 'info' });
+      const mockServer = createMockServer();
+
+      const configResolved = plugin.configResolved as unknown as (config: { root: string }) => void;
+      configResolved({ root: '/project' });
+      const configureServer = plugin.configureServer as unknown as (
+        server: ReturnType<typeof createMockServer>,
+      ) => Promise<void>;
+      await configureServer(mockServer);
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        '[prisma-vite-plugin-contract-emit] Wrote /project/migrations/pgvector/refs/head.json for extension pack space pgvector',
+      );
+      consoleLogSpy.mockRestore();
     });
 
     it('loads config for watch resolution and for the initial emit', async () => {
@@ -513,11 +527,7 @@ describe('prismaVitePlugin', () => {
       expect(consoleWarnSpy).toHaveBeenCalledWith(
         expect.stringContaining('Contract watch coverage is partial'),
       );
-      expect(mockedExecuteContractEmit).toHaveBeenCalledWith(
-        expect.objectContaining({
-          projectDir: '/project',
-        }),
-      );
+      expect(mockedExecuteContractEmit).toHaveBeenCalledTimes(1);
       expect(consoleErrorSpy).not.toHaveBeenCalledWith(
         expect.stringContaining('Contract emit failed'),
       );

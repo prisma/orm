@@ -10,7 +10,6 @@ import type {
   DotPath,
   FieldAccessor,
   FieldExpression,
-  FieldOperation,
   ResolveDotPathType,
 } from '../src/field-accessor';
 import type { MongoOrmClient } from '../src/mongo-orm';
@@ -289,7 +288,6 @@ type ContractWithAssignee<Nullable extends boolean> = Omit<Contract, 'domain'> &
             'relations'
           > & { readonly relations: { readonly assignee: AssigneeRelation<Nullable> } };
         };
-        readonly valueObjects: Contract['domain']['namespaces']['__unbound__']['valueObjects'];
       };
     };
   };
@@ -508,10 +506,7 @@ test('include() on 1:N reference relation all() returns array type', () => {
 test('FieldAccessor has FieldExpression for scalar fields', () => {
   type Accessor = FieldAccessor<Contract, 'User', CodecTypes>;
   expectTypeOf<Accessor['name']>().toExtend<FieldExpression<string>>();
-  expectTypeOf<Accessor['loginCount']>().toMatchTypeOf<{
-    set: (v: unknown) => FieldOperation;
-    unset: () => FieldOperation;
-  }>();
+  expectTypeOf<Accessor['loginCount']>().toExtend<FieldExpression<number>>();
 });
 
 test('FieldAccessor has FieldExpression for array fields', () => {
@@ -555,6 +550,19 @@ test('FieldExpression inc/mul restricted to numeric types', () => {
 
   void ({} as NumberExpr).inc(1);
   void ({} as NumberExpr).mul(2);
+});
+
+test('FieldExpression inc/mul available on nullable numeric types', () => {
+  type NullableNumberExpr = FieldExpression<number | null>;
+  type NullableBigintExpr = FieldExpression<bigint | null>;
+  type NullableStringExpr = FieldExpression<string | null>;
+
+  expectTypeOf<Parameters<NullableNumberExpr['inc']>>().toEqualTypeOf<[value: number]>();
+  expectTypeOf<Parameters<NullableNumberExpr['mul']>>().toEqualTypeOf<[value: number]>();
+  expectTypeOf<Parameters<NullableBigintExpr['inc']>>().toEqualTypeOf<[value: bigint]>();
+  expectTypeOf<NullableStringExpr>().not.toHaveProperty('inc');
+  expectTypeOf<FieldExpression<null>>().not.toHaveProperty('inc');
+  expectTypeOf<FieldExpression<never>>().not.toHaveProperty('inc');
 });
 
 test('FieldExpression inc/mul on a bigint take a bigint', () => {

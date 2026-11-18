@@ -5,8 +5,11 @@ import { Client } from 'pg';
 export * from '../application-domain-of';
 export * from '../column-descriptors';
 export * from '../contract-factories';
+export * from '../contract-types-modules';
 export * from '../lowered-params';
+export * from '../migration-modules';
 export * from '../operation-descriptors';
+export * from '../startup-parameters';
 export * from '../timeouts';
 
 function normalizeConnectionString(raw: string): string {

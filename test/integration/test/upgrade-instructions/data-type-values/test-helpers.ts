@@ -5,13 +5,16 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, relative } from 'pathe';
 
 const SCRIPT_PATHS = {
-  app: 'upgrade-instructions/pending/data-type-values/app/scripts/data-type-values.ts',
+  app: 'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.18-to-8.0.0-rc.19/scripts/data-type-values/data-type-values.ts',
+  extension:
+    'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.18-to-8.0.0-rc.19/scripts/data-type-values/data-type-values.ts',
 } as const;
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, '../../../../..');
 export const fixtures = join(here, 'fixtures');
 export const appScript = join(repoRoot, SCRIPT_PATHS.app);
+export const extensionScript = join(repoRoot, SCRIPT_PATHS.extension);
 const workDirs: string[] = [];
 
 export function removeWorkDirs(): void {
@@ -56,6 +59,6 @@ export function expectedTree(name: string, side: 'before' | 'after'): Record<str
   return readTree(join(fixtures, name, side));
 }
 
-export const OLD_HASH = 'e12144f8cb1dd3d315b65f0098cc5ac938bbb6e4f6706a733a1a9f9194ef614b';
-export const NEW_HASH = 'be4174af061494b515cb3031f75051235fd9307ab05a00c78b5b017c1578b32a';
+export const OLD_HASH = '85008a1e38a85164c8ad699585433ec7cd2b599eceffbbf7f753923b114e3219';
+export const NEW_HASH = '87f816322dd1925839d0a5ac49589f22d308c3d3db34a1585a4b25f699735684';
 export const ALREADY_IN_NEW_FORM = 'The project is already in the new form; nothing changed.\n';

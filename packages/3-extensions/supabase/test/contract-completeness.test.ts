@@ -7,6 +7,7 @@
  * captured 2026-07-12 — see `test/fixtures/supabase-reference/schema.sql`)
  * and catches accidental omissions in `contract:generate`'s output.
  */
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import contractJson from '../src/contract/contract.json' with { type: 'json' };
 import { SupabaseRole } from '../src/contract/roles';
@@ -196,8 +197,20 @@ describe('contract completeness — auth/storage table, native enum, and role se
     );
   });
 
-  it('declares the nine curated named types', () => {
-    expect(Object.keys(storage.types ?? {}).sort()).toEqual([...NAMED_TYPES].sort());
+  it('declares the nine curated type aliases in its source and stores none of them', () => {
+    const source = readFileSync(
+      new URL('../src/contract/contract.prisma', import.meta.url),
+      'utf8',
+    );
+    const aliases = [
+      ...(/^types \{\n([\s\S]*?)^\}/m.exec(source)?.[1] ?? '').matchAll(/^\s+(\w+) =/gm),
+    ]
+      .map((match) => match[1])
+      .sort();
+    expect({ aliases, stored: storage.types }).toEqual({
+      aliases: [...NAMED_TYPES].sort(),
+      stored: undefined,
+    });
   });
 
   const declaredColumns = (['auth', 'storage'] as const).flatMap((namespaceId) =>

@@ -139,7 +139,7 @@ Plan-building failures are represented as a `RuntimeErrorEnvelope` with a dotted
 Migration runner failures are structured errors with stable `MIGRATION.*` codes (e.g., `MIGRATION.EXECUTION_FAILED`, `MIGRATION.SCHEMA_VERIFY_FAILED`, `MIGRATION.PRECHECK_FAILED`, `MIGRATION.POSTCHECK_FAILED`), returned as the failure of the runner's `Result`. `MigrationRunnerFailure` declares the typed facts in their `meta`. `db init`, `db update` and `db migrate` report a runner failure with its own code and `meta`, adding only their advice.
 
 See:
-- `packages/2-sql/9-family/src/core/migrations/types.ts` (`SqlMigrationRunnerErrorCode`, `SqlMigrationRunnerFailure`)
+- `packages/2-sql-family/9-family/src/core/migrations/types.ts` (`SqlMigrationRunnerErrorCode`, `SqlMigrationRunnerFailure`)
 - SQL lane helpers that throw these for invalid builder usage/capability gating.
 
 ### Runtime execution: streaming API throws on failure
@@ -150,8 +150,8 @@ Guardrails (budgets/lints) may block execution by throwing a structured runtime 
 
 See:
 - `packages/1-framework/1-core/framework-components/src/runtime-core.ts`
-- `packages/2-sql/5-runtime/src/middleware/budgets.ts`
-- `packages/2-sql/5-runtime/src/middleware/lints.ts`
+- `packages/2-sql-family/5-runtime/src/middleware/budgets.ts`
+- `packages/2-sql-family/5-runtime/src/middleware/lints.ts`
 
 ## Guidelines
 

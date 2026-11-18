@@ -1,6 +1,11 @@
+import { compareCodeUnits } from '@internal/contract/hashing-utils';
 import type { Contract, ContractModelBase, JsonValue } from '@internal/contract/types';
-import { serializeObjectKey, serializeValue } from '@internal/emitter/domain-type-generation';
-import type { ImportSpecifierResolver } from '@internal/framework-components/emission';
+import {
+  generateValueObjectsDescriptorType,
+  serializeObjectKey,
+  serializeValue,
+} from '@internal/emitter/domain-type-generation';
+import type { ImportRequirement } from '@internal/framework-components/control';
 import type { Namespace } from '@internal/framework-components/ir';
 import type { MongoCollection, MongoModelStorage, MongoStorage } from '@internal/mongo-contract';
 import { blindCast } from '@internal/utils/casts';
@@ -28,7 +33,7 @@ function generateMongoNamespaceCollectionsType(
 ): string {
   const entries: string[] = [];
   for (const [collName, coll] of Object.entries(collections).sort(([a], [b]) =>
-    a.localeCompare(b),
+    compareCodeUnits(a, b),
   )) {
     entries.push(
       `readonly ${serializeObjectKey(collName)}: ${generateMongoCollectionEntryType(coll)}`,
@@ -41,15 +46,23 @@ function generateMongoNamespaceCollectionsType(
 }
 
 function generateMongoNamespacesType(namespaces: MongoStorage['namespaces']): string {
-  const sorted = Object.entries(namespaces ?? {}).sort(([a], [b]) => a.localeCompare(b));
+  const sorted = Object.entries(namespaces ?? {}).sort(([a], [b]) => compareCodeUnits(a, b));
   if (sorted.length === 0) {
     return 'Record<string, never>';
   }
   const parts: string[] = [];
   for (const [name, ns] of sorted) {
-    const collectionsType = generateMongoNamespaceCollectionsType(ns.entries.collection ?? {});
+    const entriesParts = [
+      `readonly collection: ${generateMongoNamespaceCollectionsType(ns.entries.collection ?? {})}`,
+    ];
+    const valueObjects = ns.entries.valueObject;
+    if (valueObjects !== undefined && Object.keys(valueObjects).length > 0) {
+      entriesParts.push(
+        `readonly valueObject: ${generateValueObjectsDescriptorType(valueObjects)}`,
+      );
+    }
     parts.push(
-      `readonly ${serializeObjectKey(name)}: { readonly id: ${serializeValue(ns.id)}; ${mongoNamespaceSerializedKind(ns)}; readonly entries: { readonly collection: ${collectionsType} } }`,
+      `readonly ${serializeObjectKey(name)}: { readonly id: ${serializeValue(ns.id)}; ${mongoNamespaceSerializedKind(ns)}; readonly entries: { ${entriesParts.join('; ')} } }`,
     );
   }
   return `{ ${parts.join('; ')} }`;
@@ -119,15 +132,10 @@ export const mongoEmission = {
     };
   },
 
-  getFamilyImports(resolveImportSpecifier: ImportSpecifierResolver): string[] {
-    return [
-      'import type {',
-      '  MongoCollection,',
-      '  MongoContractWithTypeMaps,',
-      '  MongoTypeMaps,',
-      '  RelationKeys,',
-      `} from '${resolveImportSpecifier('@internal/mongo-contract')}';`,
-    ];
+  getFamilyImports(typesModule: string): ReadonlyArray<ImportRequirement> {
+    return ['MongoCollection', 'MongoContractWithTypeMaps', 'MongoTypeMaps', 'RelationKeys'].map(
+      (symbol) => ({ moduleSpecifier: typesModule, symbol, typeOnly: true }),
+    );
   },
 
   getFamilyTypeAliases(): string {

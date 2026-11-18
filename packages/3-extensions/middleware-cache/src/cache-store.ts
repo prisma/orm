@@ -49,7 +49,8 @@ export interface CacheEntry<TMeta = unknown, TValue = CachedValue> {
  *   synchronous step in memory or one script on a server.
  * - `unset` removes every value named in `keys` and every value that matches `meta`, and
  *   increments the version of every key it removes or would remove, including keys that hold no
- *   value. `keys` is `undefined` or non-empty. A store that cannot act on a `meta` it is given
+ *   value. `keys` is `undefined` or non-empty. A field the caller leaves out of `get` or `unset`
+ *   means the same as `undefined`, and a store must not tell the two apart. A store that cannot act on a `meta` it is given
  *   must throw rather than ignore it. An `unset` by key must also drop that key from any `meta`
  *   index the store keeps.
  *
@@ -63,12 +64,12 @@ export interface CacheEntry<TMeta = unknown, TValue = CachedValue> {
 export interface CacheStore<TMeta = unknown, TValue = CachedValue> {
   get(target: {
     readonly key: string;
-    readonly meta: TMeta | undefined;
+    readonly meta?: TMeta | undefined;
   }): Promise<CacheEntry<TMeta, TValue>>;
   set(entry: CacheEntry<TMeta, TValue>, value: TValue): Promise<boolean>;
   unset(target: {
-    readonly keys: readonly string[] | undefined;
-    readonly meta: TMeta | undefined;
+    readonly keys?: readonly string[] | undefined;
+    readonly meta?: TMeta | undefined;
   }): Promise<void>;
 }
 
@@ -250,7 +251,7 @@ export function createInMemoryCacheStore<TMeta = unknown>(
 
   async function get(target: {
     readonly key: string;
-    readonly meta: TMeta | undefined;
+    readonly meta?: TMeta | undefined;
   }): Promise<CacheEntry<TMeta, CachedValue>> {
     const record = liveRecord(target.key);
     return {
@@ -278,8 +279,8 @@ export function createInMemoryCacheStore<TMeta = unknown>(
   }
 
   async function unset(target: {
-    readonly keys: readonly string[] | undefined;
-    readonly meta: TMeta | undefined;
+    readonly keys?: readonly string[] | undefined;
+    readonly meta?: TMeta | undefined;
   }): Promise<void> {
     if (target.meta !== undefined) {
       throw metaUnsupported();

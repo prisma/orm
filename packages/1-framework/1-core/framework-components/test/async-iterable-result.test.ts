@@ -230,3 +230,12 @@ describe('AsyncIterableResult', () => {
     await expect(result).rejects.toThrow('AsyncIterableResult iterator has already been consumed');
   });
 });
+
+describe('AsyncIterableResult.rejected', () => {
+  it('rejects the first read with the error, not the call', async () => {
+    const failure = new Error('client is closed');
+    const result = AsyncIterableResult.rejected<number>(failure);
+
+    await expect(result.toArray()).rejects.toBe(failure);
+  });
+});

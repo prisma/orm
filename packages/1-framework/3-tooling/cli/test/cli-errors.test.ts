@@ -8,8 +8,8 @@ import {
 import {
   errorDriverRequired,
   errorFamilyReadMarkerSqlRequired,
-  errorMarkerMismatch,
   errorPathUnreachable,
+  errorPlanOriginUnknown,
   errorRefSetEmptySentinel,
   errorRefSetHashNotInGraph,
   errorSpaceNotFound,
@@ -157,6 +157,14 @@ describe('errorRefSetHashNotInGraph', () => {
   });
 });
 
+describe('errorPlanOriginUnknown', () => {
+  it('offers db update only for a database whose migration history does not need to be kept', () => {
+    expect(errorPlanOriginUnknown([]).fix?.split('\n')[0]).toBe(
+      'Set the `db` ref to the contract your database is at (`{bin} migration ref set db <contract>`), or, on a database whose migration history does not need to be kept, advance it via `{bin} db update`.',
+    );
+  });
+});
+
 describe('errorRefSetEmptySentinel', () => {
   it('emits MIGRATION.REF_SET_EMPTY_SENTINEL', () => {
     const envelope = errorRefSetEmptySentinel('empty').toEnvelope();
@@ -190,42 +198,6 @@ describe('typed next actions on the CLI factories', () => {
         command: '{bin} migration list',
       },
     ]);
-  });
-
-  it('turns each marker-mismatch remedy into its own action', () => {
-    const markerHash = 'c'.repeat(64);
-
-    const error = errorMarkerMismatch(markerHash, ['d'.repeat(64)]);
-
-    expect(error.nextActions).toEqual([
-      {
-        kind: 'run-command',
-        label: 'Overwrite the marker if the database already matches the contract',
-        command: '{bin} db sign',
-      },
-      {
-        kind: 'run-command',
-        label: 'Catch the on-disk graph up to the live marker',
-        command: '{bin} migration plan --from <contract>',
-      },
-      {
-        kind: 'run-command',
-        label: 'Point the local db ref at the live marker',
-        command: `{bin} migration ref set db ${markerHash}`,
-      },
-      {
-        kind: 'user-choice',
-        label: 'Investigate whether the database was migrated by an out-of-band process',
-      },
-    ]);
-  });
-
-  it('names db sign as the first fix of a marker mismatch', () => {
-    const error = errorMarkerMismatch('c'.repeat(64), []);
-
-    expect(error.toEnvelope().fix?.split('\n')[0]).toBe(
-      'Run `{bin} db sign` to overwrite the marker if the database already matches the contract.',
-    );
   });
 
   it('keeps the plan-then-apply sequence in order as two run-command actions', () => {

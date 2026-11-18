@@ -10,6 +10,8 @@ export type GeneratorPhase = 'onCreate' | 'onUpdate';
 export interface GeneratorFunctionField {
   readonly codecId: string;
   readonly typeParams: Readonly<Record<string, unknown>> | undefined;
+  /** The column's length, in its data type's normal form, so a bare `Char` holds 1. `undefined` for a column with no length, or one whose database does not limit it; a binding then checks no length. */
+  readonly length: number | undefined;
 }
 
 /** A call of a generator function: what `@onCreate(fn(...))` and `gen.fn(...)` write, and what `contract print` writes back. */

@@ -52,3 +52,55 @@ describe('a codec converts only values of its own data type', () => {
     );
   });
 });
+
+const upperText = dataType('demo/upper', {
+  read: (json) => json,
+  spell: (json) => (typeof json === 'string' ? json.toUpperCase() : json),
+});
+
+class SpellingCodec extends CodecImpl<'demo/upper@1', readonly [], string, string> {
+  constructor(
+    descriptor: CodecDescriptorImpl<void>,
+    private readonly storedOnly: boolean,
+  ) {
+    super(descriptor, upperText);
+  }
+  fromDataTypeValue(value: DataTypeValue<string>): string {
+    return value.value;
+  }
+  toDataTypeValue(input: string): DataTypeValue {
+    return this.storedOnly ? this.storedDataTypeValueOf(input) : this.dataTypeValueOf(input);
+  }
+  async fromWire(wire: string): Promise<string> {
+    return wire;
+  }
+  async toWire(input: string): Promise<string> {
+    return input;
+  }
+}
+
+class SpellingDescriptor extends CodecDescriptorImpl<void> {
+  override readonly dataType = upperText.id;
+  override readonly codecId = 'demo/upper@1';
+  override readonly traits = [] as const;
+  override readonly paramsSchema = undefined;
+  override factory(): (ctx: CodecInstanceContext) => SpellingCodec {
+    return () => new SpellingCodec(this, false);
+  }
+}
+
+describe('the two ways a codec builds a value of its data type', () => {
+  const descriptor = new SpellingDescriptor();
+
+  it('writes any spelling the type reads in its stored spelling, through dataTypeValueOf', () => {
+    expect(new SpellingCodec(descriptor, false).toDataTypeValue('low').value).toBe('LOW');
+  });
+
+  it('takes only the stored spelling, through storedDataTypeValueOf, for a codec whose application value is the stored form', () => {
+    const codec = new SpellingCodec(descriptor, true);
+    expect(codec.toDataTypeValue('LOW').value).toBe('LOW');
+    expect(() => codec.toDataTypeValue('low')).toThrow(
+      expect.objectContaining({ code: 'RUNTIME.DECODE_FAILED' }),
+    );
+  });
+});

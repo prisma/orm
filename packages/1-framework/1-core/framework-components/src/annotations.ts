@@ -229,7 +229,9 @@ export function defineAnnotation<Payload>(): <const Kinds extends OperationKind>
  * db.users.select('id').annotate(cacheAnnotation({ ttl: 60 }));
  * // ✓ cacheAnnotation declares 'read'; SelectQuery.annotate requires 'read'.
  *
- * db.users.insert([{ name: 'Alice' }]).annotate(cacheAnnotation({ ttl: 60 }));
+ * db.users
+ *   .insert([{ id: 1, name: 'Alice', email: 'alice@example.com' }])
+ *   .annotate(cacheAnnotation({ ttl: 60 }));
  * // ✗ cacheAnnotation declares 'read'; InsertQuery.annotate requires 'write'.
  * //   Element resolves to `never` → tuple unassignable → type error.
  * ```

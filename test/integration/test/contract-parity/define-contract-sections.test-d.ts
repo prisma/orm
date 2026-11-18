@@ -247,7 +247,6 @@ type ComparedColumn<Column> = {
   readonly codecId: Column extends { readonly codecId: infer CodecId } ? CodecId : never;
   readonly nullable: Column extends { readonly nullable: infer Nullable } ? Nullable : never;
   readonly many: Column extends { readonly many: infer Many } ? Many : never;
-  readonly typeRef: Column extends { readonly typeRef: infer TypeRef } ? TypeRef : undefined;
   readonly typeParams: Column extends { readonly codecId: TypeParamsResolvedAtRunTime }
     ? 'resolved at run time'
     : Column extends { readonly typeParams: infer TypeParams }
@@ -275,7 +274,7 @@ describe('storage', () => {
         'namespaces',
         {
           readonly storageHash: 'A hash the build computes at run time; the emitter writes it as a literal.';
-          readonly types: 'The named storage types, which the build reads at run time to resolve a column type reference. No type reads them; a column with a type reference is compared through its typeRef and its field types.';
+          readonly types: 'The database types a contract space registers. No type reads them.';
         }
       >
     >().toBeNever();
@@ -309,7 +308,7 @@ describe('storage', () => {
     expectTypeOf<
       UnclassifiedPerFixture<
         'column keys',
-        'codecId' | 'nullable' | 'many' | 'typeRef' | 'typeParams' | 'default',
+        'codecId' | 'nullable' | 'many' | 'typeParams' | 'default',
         {
           readonly dataType: 'The built type gives string; the ORM and the SQL builder read codecId.';
         }

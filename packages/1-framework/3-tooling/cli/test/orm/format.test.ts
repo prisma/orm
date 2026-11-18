@@ -137,16 +137,14 @@ describe('format', () => {
     ]);
   });
 
-  it('leaves stdout empty in human mode, having no machine-consumable lines', async () => {
+  it('prints the path of each file it formatted, relative to the working directory', async () => {
     const dir = await projectWithMessySource();
 
     const run = await harness(pslConfig(join(dir, 'contract.prisma'))).run(['contract', 'format'], {
       cwd: dir,
-      isTty: { stdout: true },
     });
 
-    expect(run.presented?.presentation.stdout).toEqual([]);
-    expect(run.stdout).toBe('');
+    expect(run.stdout).toBe('contract.prisma\n');
   });
 
   it('renders the success line even under --quiet', async () => {

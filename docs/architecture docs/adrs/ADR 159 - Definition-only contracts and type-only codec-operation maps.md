@@ -63,7 +63,7 @@ Some “maps” are runtime-real:
 
 Other “maps” are **compile-time-only typing channels**:
 
-- codecId → TypeScript output type (including parameterized codecs where output depends on per-column `typeParams` / `typeRef`)
+- codecId → TypeScript output type (including parameterized codecs where output depends on per-column `typeParams`)
 - operation method → argument/return TypeScript types
 
 These typing channels are essential for lane inference, but they are not derivable from JSON at runtime and cannot be inferred from runtime registries without losing precision (especially for parameterized codecs).
@@ -150,7 +150,7 @@ Lanes already operate with an `ExecutionContext`:
 - Runtime behavior reads:
   - `context.codecs` (codec implementations)
   - `context.operations` (operation signatures + lowering, assembled from descriptors)
-  - `context.types` (parameterized type helpers)
+  - `context.types` (parameterized type helpers; amended by [ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md) on 2026-10-21: removed, because contracts no longer store the type aliases it was keyed by and only tests read it)
 
 But compile-time inference for columns and operation expressions continues to flow from **TypeMaps** (from `contract.d.ts` or TS authoring inference), because:
 

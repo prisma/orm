@@ -157,7 +157,7 @@ export async function createPgIntegrationRuntime(
       if (!driver) {
         throw new Error('Driver descriptor missing from execution stack');
       }
-      await driver.connect({ kind: 'pgClient', client });
+      await driver.connect({ kind: 'pgClient', client, ownedByDriver: false });
 
       const realRuntime = new PostgresRuntimeImpl({
         closeRefusal: undefined,
@@ -246,7 +246,11 @@ export async function createPgIntegrationRuntime(
       executions.length = 0;
     },
     async close() {
-      await realRuntime.close();
+      try {
+        await realRuntime.close();
+      } finally {
+        await client.end();
+      }
     },
     async execute(
       plan: SqlExecutionPlan | SqlQueryPlan,
@@ -297,8 +301,7 @@ export function withPlanRecording<T extends SqlRuntimeQueryable>(
   const transaction: unknown = Reflect.get(target, 'transaction');
   const preparedQuery: unknown = Reflect.get(target, preparedStatementQuery);
   const preparedExecute: unknown = Reflect.get(target, preparedStatementExecute);
-  return {
-    ...target,
+  const recording = {
     query<Row>(
       plan: (SqlExecutionPlan | SqlQueryPlan) & { readonly _row?: Row },
       options?: RuntimeExecuteOptions,
@@ -345,6 +348,32 @@ export function withPlanRecording<T extends SqlRuntimeQueryable>(
       : {}),
     ...(source === undefined ? {} : { [activitySource]: recordingActivitySource(source, record) }),
   };
+  return blindCast<T, 'the copy forwards every member of target and overrides the recorded ones'>(
+    Object.assign(forwardingCopy(target, recording), recording),
+  );
+}
+
+function forwardingCopy(target: object, overrides: object): object {
+  const copy = {};
+  for (
+    let source: object | null = target;
+    source !== null && source !== Object.prototype;
+    source = Reflect.getPrototypeOf(source)
+  ) {
+    for (const key of Reflect.ownKeys(source)) {
+      if (key === 'constructor' || Object.hasOwn(overrides, key) || Object.hasOwn(copy, key)) {
+        continue;
+      }
+      Object.defineProperty(copy, key, {
+        enumerable: true,
+        get() {
+          const value: unknown = Reflect.get(target, key);
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      });
+    }
+  }
+  return copy;
 }
 
 function preparedExecution(

@@ -12,7 +12,7 @@
  * `migration.ts` the journey filled reproduces its `ops.json`.
  */
 
-import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
@@ -153,7 +153,10 @@ withTempDir(({ createTempDir }) => {
         expect(emitted.exitCode, `self-emit: ${emitted.stderr}`).toBe(0);
         const wrong = await runMigrate(ctx, ['--json']);
         expect(wrong.exitCode, 'the conversion fails on a value').not.toBe(0);
-        const wrongAdvice = JSON.stringify(engineError(wrong)?.nextActions);
+        const wrongAdvice = JSON.stringify([
+          engineError(wrong)?.why,
+          engineError(wrong)?.nextActions,
+        ]);
         expect(wrongAdvice).toContain(
           'The conversion of field \\"User.age\\" failed on a value its new type cannot hold.',
         );
@@ -219,7 +222,7 @@ withTempDir(({ createTempDir }) => {
         ]);
         expect(temporary.exitCode, `plan name: ${temporary.stderr}`).toBe(0);
         expect(`${temporary.stdout}${temporary.stderr}`).toContain(
-          `Existing rows get '' in field "User.name". To choose the value, plan again with --backfill User.name.`,
+          `Field "User.name" gets the temporary value '' where existing data has none. To choose the value, plan again with --backfill User.name.`,
         );
         expect(readFileSync(join(latestDir(ctx), 'migration.ts'), 'utf-8')).toContain(
           'temporaryDefault',
@@ -322,7 +325,7 @@ withTempDir(({ createTempDir }) => {
           '1 row of "user" holds NULL in "nick", so it cannot become required.',
         );
         expect(JSON.stringify(engineError(failed)?.nextActions)).toContain(
-          'Set a value in those rows and re-run',
+          'Set a value in that row and re-run',
         );
 
         await sql(db.connectionString, `UPDATE "user" SET nick = 'anon' WHERE nick IS NULL`);
@@ -365,7 +368,7 @@ withTempDir(({ createTempDir }) => {
           .map((action) => action.label)
           .join('\n');
         const followed =
-          /keep the field optional: .*?delete `([^`]+)`.*?plan it again with `\S+ migration plan ([^`]+)`/.exec(
+          /keep the field optional: .*?delete `([^`]+)`.*?plan it again with `\S+ migration plan ([^`]+)`/i.exec(
             advice,
           );
         expect(followed, advice).not.toBeNull();
@@ -421,6 +424,36 @@ withTempDir(({ createTempDir }) => {
     );
   });
 
+  describe('Postgres: db update --convert with no snapshot of the database contract', () => {
+    const db = useDevDatabase();
+
+    it(
+      'is refused as needing a migration file, not for want of the origin contract',
+      async () => {
+        const ctx = setupJourney({
+          connectionString: db.connectionString,
+          createTempDir,
+          contractMode: 'psl',
+        });
+        await emit(ctx, contractWith('  age   String\n'));
+        const created = await runDbUpdate(ctx, ['--db', db.connectionString, '--json']);
+        expect(created.exitCode, `db update --db: ${created.stderr}`).toBe(0);
+        expect(existsSync(join(ctx.testDir, 'migrations', 'snapshots'))).toBe(false);
+
+        await emit(ctx, contractWith('  age   Int\n'));
+        const refused = await runDbUpdate(ctx, [
+          '--db',
+          db.connectionString,
+          '--convert',
+          'User.age',
+          '--json',
+        ]);
+        expect(engineError(refused)?.code).toBe('MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE');
+      },
+      timeouts.spinUpPpgDev,
+    );
+  });
+
   describe('Postgres: db update on a table with rows', () => {
     const db = useDevDatabase();
 
@@ -463,7 +496,7 @@ withTempDir(({ createTempDir }) => {
         const added = await runDbUpdate(ctx);
         expect(added.exitCode, `db update name: ${added.stderr}`).toBe(0);
         expect(`${added.stdout}${added.stderr}`).toContain(
-          `Existing rows got '' in field "User.name". To choose the value, plan a migration with prisma-test migration plan --backfill User.name instead.`,
+          `Field "User.name" got the temporary value '' where existing data has none. To choose the value, plan a migration with prisma-test migration plan --backfill User.name instead.`,
         );
         expect(
           (await sql(db.connectionString, `SELECT id, name FROM "user" ORDER BY id`)).rows,

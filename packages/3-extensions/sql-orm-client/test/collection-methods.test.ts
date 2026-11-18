@@ -11,7 +11,7 @@ import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import { websearchToTsquery } from '@internal/target-postgres/full-text';
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
-import type { PostgresContract } from '../../../3-targets/6-adapters/postgres/src/core/types';
+import type { PostgresContract } from '../../../3-targets/postgres/2-adapter/src/core/types';
 import { collectionMethodTable } from '../src/collection-methods';
 import { orm } from '../src/orm';
 import { compileSelect, compileSelectWithIncludes } from '../src/query-plan-select';

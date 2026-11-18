@@ -194,6 +194,40 @@ model Host {
   );
 });
 
+describe('Xml, Oid and Money defaults', () => {
+  it(
+    'apply, then verify strictly against the database with no issue and plan no change',
+    async () => {
+      expect(
+        await applyAndVerify(
+          `
+model Ledger {
+  id       Int   @id
+  document Xml   @default("<a>b &amp; c</a>")
+  owner    Oid   @default(4294967295)
+  balance  Money @default(-1234.5)
+  large    Money @default(92233720368547758.07)
+}
+`,
+          ['document', 'owner', 'balance', 'large'],
+          { strict: true },
+        ),
+      ).toEqual({
+        defaults: [
+          { kind: 'literal', value: '<a>b &amp; c</a>' },
+          { kind: 'literal', value: 4294967295 },
+          { kind: 'literal', value: '-1234.50' },
+          { kind: 'literal', value: '92233720368547758.07' },
+        ],
+        applied: true,
+        issues: [],
+        replannedOperations: [],
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+});
+
 describe('a TypeScript numeric or inet default in a spelling Postgres prints differently', () => {
   it(
     'applies, then verifies strictly against the database with no issue and plans no change',
@@ -260,7 +294,7 @@ model Tag {
   );
 });
 
-describe('a Numeric default with a negative scale', () => {
+describe('a NumericString default with a negative scale', () => {
   it(
     'applies on a single and a list column, then verifies strictly with no issue and plans no change',
     async () => {
@@ -269,8 +303,8 @@ describe('a Numeric default with a negative scale', () => {
           `
 model Amount {
   id            Int              @id
-  hundreds      Numeric(5, -2)   @default(12300)
-  hundredsList  Numeric(5, -2)[] @default([100, -9999900]) @map("hundreds_list")
+  hundreds      NumericString(5, -2)   @default(12300)
+  hundredsList  NumericString(5, -2)[] @default([100, -9999900]) @map("hundreds_list")
 }
 `,
           ['hundreds', 'hundreds_list'],
@@ -435,8 +469,8 @@ describe('a numeric column written with a precision and no scale', () => {
           `
 model Amount {
   id     Int            @id
-  whole  Numeric(10)
-  scaled Numeric(10, 2)
+  whole  NumericString(10)
+  scaled NumericString(10, 2)
 }
 `,
           ['whole', 'scaled'],

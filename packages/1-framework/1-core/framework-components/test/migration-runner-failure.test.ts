@@ -1,6 +1,10 @@
 import { isStructuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
-import { migrationRunnerFailure, withFailingSpace } from '../src/control/control-migration-types';
+import {
+  migrationRunnerFailure,
+  withDatabaseUnchanged,
+  withFailingSpace,
+} from '../src/control/control-migration-types';
 
 describe('migrationRunnerFailure', () => {
   it('builds a structured error with the summary as its message', () => {
@@ -66,5 +70,52 @@ describe('withFailingSpace', () => {
     withFailingSpace(original, 'ext');
 
     expect(original.meta).toEqual({});
+  });
+});
+
+describe('withDatabaseUnchanged', () => {
+  it('keeps the failure, says in meta whether the database is unchanged, and ends the why with it', () => {
+    const original = migrationRunnerFailure('MIGRATION.SCHEMA_VERIFY_FAILED', 'Schema differs', {
+      why: 'The schema check after apply found: extra: rogue.',
+      meta: { schemaIssues: [], failingSpace: 'app' },
+    });
+    const bare = migrationRunnerFailure('MIGRATION.POLICY_VIOLATION', 'Not allowed');
+    const driverMessage = migrationRunnerFailure('MIGRATION.EXECUTION_FAILED', 'Copy failed', {
+      why: 'UNIQUE constraint failed: _prisma_new_user.nickname',
+    });
+
+    expect(
+      [
+        withDatabaseUnchanged(original, true),
+        withDatabaseUnchanged(original, false),
+        withDatabaseUnchanged(bare, true),
+        withDatabaseUnchanged(driverMessage, true),
+      ].map(({ code, message, why, meta }) => ({ code, message, why, meta })),
+    ).toEqual([
+      {
+        code: 'MIGRATION.SCHEMA_VERIFY_FAILED',
+        message: 'Schema differs',
+        why: 'The schema check after apply found: extra: rogue. The failed apply changed nothing.',
+        meta: { schemaIssues: [], failingSpace: 'app', databaseUnchanged: true },
+      },
+      {
+        code: 'MIGRATION.SCHEMA_VERIFY_FAILED',
+        message: 'Schema differs',
+        why: 'The schema check after apply found: extra: rogue. The operations that ran before the failure stay applied.',
+        meta: { schemaIssues: [], failingSpace: 'app', databaseUnchanged: false },
+      },
+      {
+        code: 'MIGRATION.POLICY_VIOLATION',
+        message: 'Not allowed',
+        why: 'The failed apply changed nothing.',
+        meta: { databaseUnchanged: true },
+      },
+      {
+        code: 'MIGRATION.EXECUTION_FAILED',
+        message: 'Copy failed',
+        why: 'UNIQUE constraint failed: _prisma_new_user.nickname. The failed apply changed nothing.',
+        meta: { databaseUnchanged: true },
+      },
+    ]);
   });
 });

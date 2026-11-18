@@ -2,7 +2,7 @@ import { createPostgresAdapter } from '@internal/adapter-postgres/adapter';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import { websearchToTsquery } from '@internal/target-postgres/full-text';
 import { describe, expect, it } from 'vitest';
-import type { PostgresContract } from '../../../3-targets/6-adapters/postgres/src/core/types';
+import type { PostgresContract } from '../../../3-targets/postgres/2-adapter/src/core/types';
 import { Collection } from '../src/collection';
 import { and, not } from '../src/filters';
 import { orm } from '../src/orm';

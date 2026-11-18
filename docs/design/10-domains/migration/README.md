@@ -77,7 +77,7 @@ We explicitly **reject the dev/deploy verb split** that other systems (notably P
 
 ### Off-graph reconciliation is not migration
 
-`db update` reconciles a live database to a target contract **without walking the migration graph**. It does not produce a migration and does not consult the marker's prior contract. On the project's default dev URL it implicitly advances the `db` ref — recording the contract hash the dev database has been brought to, which offline `migration plan` uses as its default origin (`--advance-ref <name>` overrides; `--db <non-default-url>` opts out; see [ADR 218](../../../architecture%20docs/adrs/ADR%20218%20-%20Refs%20with%20paired%20contract%20snapshots%20and%20universal%20graph-node%20invariant.md)). It is dev-only.
+`db update` reconciles a live database to a target contract **without walking the migration graph**. It does not produce a migration and does not consult the marker's prior contract. On the project's default dev URL it implicitly advances the `db` ref — recording the contract hash the dev database has been brought to, which offline `migration plan` uses as its default origin (`--advance-ref <name>` overrides; `--db <non-default-url>` opts out; see [ADR 218](../../../architecture%20docs/adrs/ADR%20218%20-%20Refs%20with%20paired%20contract%20snapshots%20and%20universal%20graph-node%20invariant.md)). It is for databases whose migration history does not need to be kept: local, development, staging and preview databases, shared or not. A database that changes only through migrations, such as production, is moved with `migrate`. Neither kind is ever reset to fix a migration problem.
 
 - `db update` → reconcile to current contract (the 90% case).
 - `db update --to <contract>` → reconcile to any contract we can name (see *Contract references* below).
@@ -254,7 +254,7 @@ Grouped by sub-area so the relationships are visible. Some terms appear in more 
 - **Introspection** — read-only schema discovery of a live database.
 - **Initialization** — `db init`. Bootstraps an empty database (greenfield) or applies initial migrations to an existing one. Lays down structure.
 - **Signing** — `db sign`. Verifies a live DB satisfies a contract, then writes the contract hash into the marker and advances the `db` ref to it (`--advance-ref <name>` overrides; `--db` does not suppress it; `--no-advance-ref` skips it). The adoption path for an already-matching database. No structural changes.
-- **Reconciliation** — `db update`. Live-introspect, diff against a target contract, execute the difference. Off-graph; dev-only first-class workflow.
+- **Reconciliation** — `db update`. Live-introspect, diff against a target contract, execute the difference. Off-graph; for databases whose migration history does not need to be kept.
 - **Squash** — collapsing a range of migrations into a single equivalent migration.
 - **Promotion** — moving a ref forward (typically: advancing `production` to match a freshly-merged change).
 
@@ -277,7 +277,7 @@ Grouped by intent.
 
 - **`migrate --to <contract>`** — *the* migration verb. Walks the graph from the marker's current contract to the target. Forward-only. Same verb everywhere (dev, staging, production); only the DB URL changes.
 - **`db init`** — bootstrap an empty database, or adopt an existing one by executing initial migrations from `∅`. Lays down structure. Live, may mutate.
-- **`db update`** — off-graph reconciliation. `db update` reconciles to the current contract; `db update --to <hash>` reconciles to any contract we can name on disk. **Dev-only.** Does not produce a migration and does not consult the graph; on the default dev URL it implicitly advances the `db` ref (`--advance-ref <name>` overrides, `--db <non-default-url>` opts out — see [ADR 218](../../../architecture%20docs/adrs/ADR%20218%20-%20Refs%20with%20paired%20contract%20snapshots%20and%20universal%20graph-node%20invariant.md)).
+- **`db update`** — off-graph reconciliation. `db update` reconciles to the current contract; `db update --to <hash>` reconciles to any contract we can name on disk. For databases whose migration history does not need to be kept. Does not produce a migration and does not consult the graph; on the default dev URL it implicitly advances the `db` ref (`--advance-ref <name>` overrides, `--db <non-default-url>` opts out — see [ADR 218](../../../architecture%20docs/adrs/ADR%20218%20-%20Refs%20with%20paired%20contract%20snapshots%20and%20universal%20graph-node%20invariant.md)).
 - **`db sign [<contract>]`** *(explicit form: `db sign --contract <contract>`)* — verify the live DB satisfies a contract, then write the contract hash into the marker and advance the `db` ref to the signed hash (`--advance-ref <name>` overrides; unlike `db init` / `db update`, `--db` does not suppress it; `--no-advance-ref` skips it). **Refuses if it doesn't satisfy.** No structural mutation. The adoption path for an already-matching DB. Without an argument, defaults to the current `contract.json`. The argument names *the thing being signed* — distinct from `--to` (movement) used by `migrate` and `db update`.
 
 ### Verification

@@ -43,9 +43,9 @@ export interface CollectionMethodRegistry {
 
 | Implementation | Path | Demonstrates |
 |---|---|---|
-| `CollectionMethodRegistry` | [`packages/2-sql/4-lanes/relational-core/src/collection-methods.ts`](../../../packages/2-sql/4-lanes/relational-core/src/collection-methods.ts) | The registry with its marker member, the id type, the type half with its `model` slot, and the run-time half. |
+| `CollectionMethodRegistry` | [`packages/2-sql-family/4-lanes/relational-core/src/collection-methods.ts`](../../../packages/2-sql-family/4-lanes/relational-core/src/collection-methods.ts) | The registry with its marker member, the id type, the type half with its `model` slot, and the run-time half. |
 | Reading the registry | [`packages/3-extensions/sql-orm-client/src/collection-methods.ts`](../../../packages/3-extensions/sql-orm-client/src/collection-methods.ts) | Filling each entry's `model` slot, reading `methods` back by indexed access, and typing a name two entries give as a clash. |
-| Postgres full-text methods | [`packages/3-targets/3-targets/postgres/src/core/full-text-collection-method.ts`](../../../packages/3-targets/3-targets/postgres/src/core/full-text-collection-method.ts) | A contributor that holds both halves in one module, loaded through the Postgres client's entry points. |
+| Postgres full-text methods | [`packages/3-targets/postgres/1-target/src/core/full-text-collection-method.ts`](../../../packages/3-targets/postgres/1-target/src/core/full-text-collection-method.ts) | A contributor that holds both halves in one module, loaded through the Postgres client's entry points. |
 | pgvector nearest-neighbour methods | [`packages/3-extensions/pgvector/src/core/nearest-collection-method.ts`](../../../packages/3-extensions/pgvector/src/core/nearest-collection-method.ts) | A contributor that computes method names and parameter types from a model's fields. |
 | Shell rewrite | [`packages/0-config/tsdown/shell-build.ts`](../../../packages/0-config/tsdown/shell-build.ts) | `rewriteInternalModuleNames`, which rewrites augmentations to published module names. |
 

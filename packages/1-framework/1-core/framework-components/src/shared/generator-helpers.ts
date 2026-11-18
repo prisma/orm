@@ -1,5 +1,7 @@
 import { blindCast } from '@internal/utils/casts';
+import { createDataTypeLookup } from './data-type';
 import type { GeneratorFunctionCall, GeneratorFunctionComponent } from './generator-functions';
+import type { DataTypeSupport } from './written-value';
 
 /** The value type an argument type of a signature parses to. psl-parser's `ArgTypeOutput` extends it, so `gen` reads the argument types of a `FuncCallSig` through this one definition. */
 export interface SignatureArgumentOutput<T> {
@@ -22,9 +24,14 @@ type PositionalArguments<Params> = Params extends readonly [infer Head, ...infer
     : []
   : [];
 
+/** A signature, or what a signature written as a function of the stack's data types returns. */
+type SignatureObject<Signature> = Signature extends (...args: never) => infer Built
+  ? Built
+  : Signature;
+
 /** The `gen` helper of one generator function, typed by the positional arguments of its signature. */
 export type GeneratorHelper<Signature> = (
-  ...args: Signature extends { readonly positional: infer Params }
+  ...args: SignatureObject<Signature> extends { readonly positional: infer Params }
     ? PositionalArguments<Params>
     : []
 ) => GeneratorFunctionCall;
@@ -55,7 +62,15 @@ export type GeneratorHelpersOf<Component> = {
   > as Contribution['name']]: GeneratorHelper<Contribution['signature']>;
 };
 
-function positionalKeys(signature: unknown): readonly string[] {
+/** The data types of a stack that registers none, which a signature written as a function of them is built against to read its parameter keys. */
+const NO_DATA_TYPES: DataTypeSupport = {
+  entries: {},
+  lookup: createDataTypeLookup([]),
+  dataTypeOfCodec: () => undefined,
+};
+
+function positionalKeys(declared: unknown): readonly string[] {
+  const signature: unknown = typeof declared === 'function' ? declared(NO_DATA_TYPES) : declared;
   if (typeof signature !== 'object' || signature === null || !('positional' in signature)) {
     return [];
   }

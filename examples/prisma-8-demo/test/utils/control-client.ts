@@ -23,7 +23,7 @@ export interface TestControlClientOptions {
  * The client auto-connects when operations are called because we provide
  * a default connection in options.
  */
-export function createPrismaNextControlClient(options: TestControlClientOptions): ControlClient {
+export function createTestControlClient(options: TestControlClientOptions): ControlClient {
   return createPostgresControlClient({
     extensions: [pgvector],
     connection: options.connection,
@@ -47,24 +47,22 @@ export function createPrismaNextControlClient(options: TestControlClientOptions)
 /**
  * Materialise pgvector's pinned contract-space artifacts under
  * `<migrationsDir>/pgvector/...`. The demo's contract uses pgvector,
- * so the per-space `db init` flow requires its head ref + baseline
- * migration to be present on disk.
+ * so the per-space `db init` flow requires its head ref and
+ * migrations to be present on disk.
  */
 async function materialisePgvectorPinnedArtifacts(migrationsDir: string): Promise<void> {
   const space = pgvector.contractSpace;
   if (!space) {
     throw new Error('pgvector descriptor must declare a contractSpace');
   }
-  const baseline = space.migrations[0];
-  if (!baseline) {
-    throw new Error('pgvector contract-space must ship at least one baseline migration');
-  }
   await emitContractSpaceArtifacts(migrationsDir, 'pgvector', {
     contract: space.contractJson,
     contractDts: '// rendered .d.ts for pgvector contract space\nexport interface Contract {}\n',
     headRef: { hash: space.headRef.hash, invariants: [...space.headRef.invariants] },
   });
-  await materialiseMigrationPackage(join(migrationsDir, 'pgvector'), baseline);
+  for (const migration of space.migrations) {
+    await materialiseMigrationPackage(join(migrationsDir, 'pgvector'), migration);
+  }
 }
 
 export async function initTestDatabase(options: {
@@ -77,7 +75,7 @@ export async function initTestDatabase(options: {
    */
   readonly migrationsDir?: string;
 }): Promise<void> {
-  const client = createPrismaNextControlClient({ connection: options.connection });
+  const client = createTestControlClient({ connection: options.connection });
 
   const ownsMigrationsDir = options.migrationsDir === undefined;
   const migrationsDir =

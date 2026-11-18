@@ -1,4 +1,4 @@
-import type { Contract, ContractModel, StorageBase } from '@internal/contract/types';
+import type { Contract, StorageBase } from '@internal/contract/types';
 import type { Namespace, UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { MongoIndexOptionsInput } from './ir/mongo-index-options';
 
@@ -41,8 +41,6 @@ export type MongoModelStorage = {
   readonly fields: Readonly<Record<string, MongoModelFieldStorage>>;
   readonly relations?: Record<string, { readonly field: string }>;
 };
-
-export type MongoModelDefinition = ContractModel<MongoModelStorage>;
 
 /**
  * Data-shape constraint for the Mongo family's storage block. The
@@ -119,6 +117,14 @@ export type ExtractMongoCodecTypes<T> =
       ? C
       : Record<string, never>
     : Record<string, never>;
+
+/** The shape every contract's codec types have: each codec id maps to at least its `output` type. */
+export type MongoCodecTypesBase = Record<string, { readonly output: unknown }>;
+
+/** The type a codec accepts as a value: its `input` type, or `unknown` when the codec types do not declare one. */
+export type MongoCodecInput<CT, Id extends keyof CT> = CT[Id] extends { readonly input: infer I }
+  ? I
+  : unknown;
 
 export type ExtractMongoFieldOutputTypes<T> =
   ExtractMongoTypeMaps<T> extends { fieldOutputTypes: infer F }

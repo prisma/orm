@@ -36,7 +36,10 @@ export type { AssembledAttributeSpecs } from '../attribute-spec/assemble';
 export { assembleAttributeSpecs } from '../attribute-spec/assemble';
 export { blockAttribute } from '../attribute-spec/block-attribute';
 export { bool } from '../attribute-spec/combinators/bool';
-export { dataTypeValue } from '../attribute-spec/combinators/data-type-value';
+export {
+  type DataTypeValueOptions,
+  dataTypeValue,
+} from '../attribute-spec/combinators/data-type-value';
 export { leafDiagnostic } from '../attribute-spec/combinators/diagnostic';
 export { entityRef } from '../attribute-spec/combinators/entity-ref';
 export { enumMemberValue } from '../attribute-spec/combinators/enum-member-value';
@@ -48,7 +51,7 @@ export { json } from '../attribute-spec/combinators/json';
 export { jsonValue } from '../attribute-spec/combinators/json-value';
 export type { ListOptions } from '../attribute-spec/combinators/list';
 export { list } from '../attribute-spec/combinators/list';
-export { mapArg } from '../attribute-spec/combinators/map-arg';
+export { mapArg, refineArg } from '../attribute-spec/combinators/map-arg';
 export { num } from '../attribute-spec/combinators/num';
 export { numLiteral } from '../attribute-spec/combinators/num-literal';
 export { oneOf } from '../attribute-spec/combinators/one-of';
@@ -60,8 +63,13 @@ export type {
   ParsedWrittenScalar,
 } from '../attribute-spec/combinators/written-scalar';
 export { writtenList, writtenScalar } from '../attribute-spec/combinators/written-scalar';
-export { fieldAttribute } from '../attribute-spec/field-attribute';
-export { generatorAttributeSpec, nodeSourceText } from '../attribute-spec/generator-attribute';
+export { fieldAttribute, typeAttribute } from '../attribute-spec/field-attribute';
+export {
+  generatorAttributeSpec,
+  generatorFunctionCall,
+  nodeSourceText,
+  typeGeneratorAttributeSpec,
+} from '../attribute-spec/generator-attribute';
 export type { ArgBindingSpec } from '../attribute-spec/interpret';
 export { interpretArgs, interpretAttribute } from '../attribute-spec/interpret';
 export { modelAttribute } from '../attribute-spec/model-attribute';
@@ -73,8 +81,15 @@ export type {
   FieldAttributeSpecContext,
   FieldAttributeSpecFactory,
   ModelAttributeSpecFactory,
+  TypeAttributeSpecContext,
+  TypeAttributeSubject,
 } from '../attribute-spec/spec-context';
-export { EMPTY_DATA_TYPES } from '../attribute-spec/spec-context';
+export {
+  EMPTY_DATA_TYPES,
+  typeAttributeSpecContextOfField,
+  typeAttributeSubjectLabel,
+} from '../attribute-spec/spec-context';
+export { groupedTypeLabel } from '../attribute-spec/type-label';
 export type {
   ArgType,
   ArgTypeKind,
@@ -158,13 +173,22 @@ export type {
   MapBlockSpec,
   StructBlockSpec,
 } from '../block-spec/types';
+export { printTypeConstructorCall } from '../call-arguments';
 export type {
   ContributedMember,
   ContributedNamespaceSymbol,
+  ContributedTypeChoiceSymbol,
   ContributedTypeDescriptor,
   ContributedTypeNamespace,
   ContributedTypeScope,
   ContributedTypeSymbol,
+  ContributedTypeUse,
+} from '../contributed-type-scope';
+export {
+  chosenTypeConstructor,
+  contributedTypeAt,
+  contributedTypeCodecId,
+  isContributedTypeChoice,
 } from '../contributed-type-scope';
 export type { DiagnosticSource, PslDiagnostic, PslDiagnosticCollector } from '../diagnostic';
 export {
@@ -182,6 +206,8 @@ export type {
 export { entityReference, matchesSelector } from '../entity-reference';
 export { findBlockDescriptor } from '../extension-block';
 export { NAME_THE_PSL_SOURCE_LOSES } from '../name-the-psl-source-loses';
+export type { DataTypeValueRefusal } from '../read-expression-as';
+export { readExpressionAs } from '../read-expression-as';
 export {
   keywordPslSpan,
   nodePslSpan,
@@ -189,7 +215,7 @@ export {
   readResolvedAttributes,
   readResolvedConstructorCall,
 } from '../resolve';
-export { isPrismaNextSchema, renameLegacyDirective } from '../schema-directive';
+export { isPrisma8Schema, renameLegacyDirective } from '../schema-directive';
 export type { Scope, ScopeResolution } from '../scope';
 export { isNamespaceLike, memberEntries } from '../scope';
 export type {
@@ -210,5 +236,15 @@ export type {
 } from '../symbol-table';
 export { buildSymbolTable } from '../symbol-table';
 export { isPslIdentifier } from '../tokenizer';
+export type { ContributedTypeAlias, TypeAlias, TypeAliasBase } from '../type-aliases';
+export {
+  contributedTypeAliasOf,
+  refuseRepeatedTypeAliasAttributes,
+  resolveTypeAliases,
+  TYPE_ALIAS_ATTRIBUTE_NAMES,
+  typeAliasAttributeNames,
+  typeAliasOfField,
+  typeAliasSpecContext,
+} from '../type-aliases';
 export type { WrittenScalarResult } from '../written-scalar';
 export { readWrittenScalar } from '../written-scalar';

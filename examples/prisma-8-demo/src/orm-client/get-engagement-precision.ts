@@ -91,7 +91,7 @@ export async function ormClientGetEngagementPrecision(
     total: aggregate.sumBigInt('impressionCount'),
   }));
 
-  // `reachScore` is `UnboundedInt`, so even the bare `sum` is a `bigint`: a
+  // `reachScore` is `BigInt(storage: numeric)`, so even the bare `sum` is a `bigint`: a
   // column whose author already chose an exact representation keeps it, and a
   // sum of integers is an integer.
   const reach = await orm.Post.aggregate((aggregate) => ({

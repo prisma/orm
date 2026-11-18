@@ -236,7 +236,7 @@ describe('contract infer', () => {
         ],
       },
     ]);
-    expect(run.presented?.presentation.stdout).toEqual([]);
+    expect(run.presented?.presentation.stdout).toEqual(['generated/contract.prisma']);
     expect(stripAnsi(run.stderr)).toContain('Contract written to generated/contract.prisma');
     expect(run.stdout).toBe('');
   });

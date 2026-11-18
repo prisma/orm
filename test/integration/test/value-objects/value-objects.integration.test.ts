@@ -3,8 +3,8 @@ import {
   type ContractField,
   type ContractValueObject,
   domainModelsAtDefaultNamespace,
-  domainValueObjectsAtDefaultNamespace,
   UNBOUND_DOMAIN_NAMESPACE_ID,
+  valueObjectsWithCoordinates,
 } from '@internal/contract/types';
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
 import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
@@ -17,7 +17,6 @@ import {
 } from '@internal/mongo-contract-psl';
 import { mongoContextInput } from '@internal/mongo-contract-psl/test';
 import { mongoOrm } from '@internal/mongo-orm';
-import { buildMongoEnums } from '@internal/mongo-runtime';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema } from '@internal/psl-parser/test';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
@@ -32,7 +31,7 @@ import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/code
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { describe, expect, it } from 'vitest';
-import { describeWithMongoDB } from '../mongo/setup';
+import { describeWithMongoDB, executionContextFor } from '../mongo/setup';
 
 const mongoPsl = `
 model User {
@@ -106,7 +105,6 @@ function interpretMongoPsl(schema: string) {
       defaultNamespaceId: '__unbound__',
       composedExtensionContracts: new Map(),
       authoringContributions: {
-        field: {},
         type: scalarTypeConstructors,
         entityTypes: {},
         pslBlockDescriptors: {},
@@ -139,7 +137,7 @@ function interpretMongoPsl(schema: string) {
   );
 }
 
-const postgresScalarAuthoringTypes = Object.fromEntries(
+const scalarTypeNamespace = Object.fromEntries(
   [...postgresScalarTypeDescriptors].map(([name, { codecId }]) => [
     name,
     {
@@ -159,8 +157,7 @@ function interpretSqlPsl(schema: string) {
       composedExtensionContracts: new Map(),
       // Mirrors the real postgres adapter declaration.
       authoringContributions: {
-        field: {},
-        type: postgresScalarAuthoringTypes,
+        type: scalarTypeNamespace,
         entityTypes: {},
         pslBlockDescriptors: {},
         modelAttributes: {},
@@ -196,7 +193,22 @@ function modelsAtDefaultNamespace(contract: Contract) {
 }
 
 function valueObjectsAtDefaultNamespace(contract: Contract) {
-  return domainValueObjectsAtDefaultNamespace(contract.domain);
+  return Object.fromEntries(
+    valueObjectsWithCoordinates(contract.storage).map(({ coordinate, valueObject }) => [
+      coordinate.entityName,
+      valueObject,
+    ]),
+  );
+}
+
+function valueObjectRef(namespaceId: string, entityName: string) {
+  return {
+    kind: 'valueObject',
+    plane: 'storage',
+    namespaceId,
+    entityKind: 'valueObject',
+    entityName,
+  };
 }
 
 describeWithMongoDB('value objects: end-to-end Mongo', (ctx) => {
@@ -207,19 +219,17 @@ describeWithMongoDB('value objects: end-to-end Mongo', (ctx) => {
 
     const contract = result.value;
     const unboundDomain = contract.domain.namespaces[UNBOUND_DOMAIN_NAMESPACE_ID]!;
-    expect(unboundDomain.valueObjects).toBeDefined();
-    expect(unboundDomain.valueObjects!['Address']).toBeDefined();
+    expect(valueObjectsAtDefaultNamespace(contract)['Address']).toBeDefined();
 
     const userFields = unboundDomain.models['User']!.fields as Record<string, ContractField>;
     expect(userFields['homeAddress']!.type.kind).toBe('valueObject');
 
-    const validated = { contract: new MongoContractSerializer().deserializeContract(contract) };
+    const validated = {
+      contract: new MongoContractSerializer().deserializeContract(contract),
+    };
 
-    const orm = mongoOrm({
-      contract: validated.contract,
-      executor: ctx.runtime,
-      enums: buildMongoEnums(validated.contract, ctx.codecs),
-    });
+    const context = executionContextFor(validated.contract);
+    const orm = mongoOrm({ context, runtime: ctx.runtime });
     const userCollection = orm['User']!;
 
     type CreateUser = Parameters<typeof userCollection.create>[0];
@@ -250,11 +260,8 @@ describeWithMongoDB('value objects: end-to-end Mongo', (ctx) => {
     if (!result.ok) throw new Error(`Interpretation failed: ${result.failure.summary}`);
 
     const validated = { contract: new MongoContractSerializer().deserializeContract(result.value) };
-    const orm = mongoOrm({
-      contract: validated.contract,
-      executor: ctx.runtime,
-      enums: buildMongoEnums(validated.contract, ctx.codecs),
-    });
+    const context = executionContextFor(validated.contract);
+    const orm = mongoOrm({ context, runtime: ctx.runtime });
     const userCollection = orm['User']!;
 
     type CreateUser = Parameters<typeof userCollection.create>[0];
@@ -293,11 +300,8 @@ type Address {
     if (!result.ok) throw new Error(`Interpretation failed: ${result.failure.summary}`);
 
     const validated = { contract: new MongoContractSerializer().deserializeContract(result.value) };
-    const orm = mongoOrm({
-      contract: validated.contract,
-      executor: ctx.runtime,
-      enums: buildMongoEnums(validated.contract, ctx.codecs),
-    });
+    const context = executionContextFor(validated.contract);
+    const orm = mongoOrm({ context, runtime: ctx.runtime });
     const userCollection = orm['User']!;
 
     await userCollection.create({ name: 'NoAddr', address: null } as unknown as Parameters<
@@ -317,10 +321,8 @@ describe('value objects: end-to-end SQL pipeline', () => {
 
     const contract = result.value;
     const publicDomain = contract.domain.namespaces['public']!;
-    expect(publicDomain.valueObjects).toBeDefined();
-    expect(publicDomain.valueObjects!['Address']).toBeDefined();
-
-    const addressVo = publicDomain.valueObjects!['Address'] as ContractValueObject;
+    const addressVo = valueObjectsAtDefaultNamespace(contract)['Address'] as ContractValueObject;
+    expect(addressVo).toBeDefined();
     const voFields = addressVo.fields;
     expect(voFields['street']).toBeDefined();
     expect(voFields['city']).toBeDefined();
@@ -328,7 +330,7 @@ describe('value objects: end-to-end SQL pipeline', () => {
 
     const userFields = publicDomain.models['User']!.fields as Record<string, ContractField>;
     const homeAddressField = userFields['homeAddress']!;
-    expect(homeAddressField.type).toEqual({ kind: 'valueObject', name: 'Address' });
+    expect(homeAddressField.type).toEqual(valueObjectRef('public', 'Address'));
     expect(homeAddressField.nullable).toBe(false);
 
     const storage = contract.storage as unknown as {
@@ -398,8 +400,8 @@ type Metadata {
       ContractField
     >;
 
-    expect(mongoItemFields['meta']!.type).toEqual({ kind: 'valueObject', name: 'Metadata' });
-    expect(sqlItemFields['meta']!.type).toEqual({ kind: 'valueObject', name: 'Metadata' });
+    expect(mongoItemFields['meta']!.type).toEqual(valueObjectRef('__unbound__', 'Metadata'));
+    expect(sqlItemFields['meta']!.type).toEqual(valueObjectRef('public', 'Metadata'));
   });
 
   it('nested value objects produce consistent definitions across families', () => {
@@ -449,7 +451,7 @@ type Address {
     const sqlShipping = valueObjectsAtDefaultNamespace(sqlResult.value)!['ShippingInfo']!
       .fields as Record<string, ContractField>;
 
-    expect(mongoShipping['address']!.type).toEqual({ kind: 'valueObject', name: 'Address' });
-    expect(sqlShipping['address']!.type).toEqual({ kind: 'valueObject', name: 'Address' });
+    expect(mongoShipping['address']!.type).toEqual(valueObjectRef('__unbound__', 'Address'));
+    expect(sqlShipping['address']!.type).toEqual(valueObjectRef('public', 'Address'));
   });
 });

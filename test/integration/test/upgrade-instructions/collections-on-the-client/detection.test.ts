@@ -1,22 +1,14 @@
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
+import { detectionPatterns } from '../guide-detections';
 
 const GUIDE_PATHS = {
-  app: 'upgrade-instructions/pending/collections-on-the-client/app/instructions.md',
-  extension: 'upgrade-instructions/pending/collections-on-the-client/extension/instructions.md',
+  app: 'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.18-to-8.0.0-rc.19/instructions.md',
+  extension:
+    'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.18-to-8.0.0-rc.19/instructions.md',
 } as const;
 
-const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../../..');
-
 function detection(audience: keyof typeof GUIDE_PATHS): readonly RegExp[] {
-  const guide = readFileSync(join(repoRoot, GUIDE_PATHS[audience]), 'utf8');
-  const patterns = [...guide.matchAll(/^ {8}- '(.*)'$/gm)].map(
-    ([, pattern]) => new RegExp((pattern ?? '').replaceAll("''", "'")),
-  );
-  if (patterns.length === 0) throw new Error(`${GUIDE_PATHS[audience]} has no detection pattern`);
-  return patterns;
+  return detectionPatterns(GUIDE_PATHS[audience], 'collections-on-the-client');
 }
 
 describe.each(['app', 'extension'] as const)('the %s detection', (audience) => {
@@ -36,6 +28,10 @@ describe.each(['app', 'extension'] as const)('the %s detection', (audience) => {
     [
       'an aliased import',
       "import { orm as createOrm } from './orm-client';\n\nexport const db = createOrm({ runtime, context, collections: { Post: PostCollection } });",
+    ],
+    [
+      'an aliased import after other imports, with a nested type argument',
+      "import { a } from './a';\nimport { orm as createOrm } from './orm-client';\n\nexport const db = createOrm<Classes<Contract>>({ runtime, context, collections });",
     ],
   ])('finds %s', (_name, content) => {
     expect(detects(content)).toBe(true);
@@ -65,5 +61,16 @@ describe.each(['app', 'extension'] as const)('the %s detection', (audience) => {
     ],
   ])('skips %s', (_name, content) => {
     expect(detects(content)).toBe(false);
+  });
+
+  it.each([
+    ['renamed imports', "import { orm as o } from './orm';\n"],
+    ['unclosed import lists', "import { orm as o from './orm';\n"],
+    ['type arguments that never close', 'orm<<<<<<<<<<<<<<<<>'],
+  ])('reads 400 KB of repeated %s in linear time', (_name, line) => {
+    const content = line.repeat(Math.ceil(400_000 / line.length));
+    const start = performance.now();
+    const found = detects(content);
+    expect({ found, fast: performance.now() - start < 1000 }).toEqual({ found: false, fast: true });
   });
 });

@@ -14,7 +14,7 @@ interface Env {
 export default {
   async fetch(_request: Request, env: Env): Promise<Response> {
     await using db = await postgres.connect({ url: env.DATABASE_URL });
-    const notes = await db.runtime().query(db.sql.public.Note.select('id').limit(10).build());
+    const notes = await db.query(db.sql.public.Note.select('id').limit(10).build());
     return Response.json({ notes });
   },
 };

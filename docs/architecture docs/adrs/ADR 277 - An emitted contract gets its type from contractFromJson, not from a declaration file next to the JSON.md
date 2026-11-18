@@ -1,6 +1,6 @@
 # ADR 277 — An emitted contract gets its type from `contractFromJson`, not from a declaration file next to the JSON
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-19
 **Domain:** Contract emission, Adapters / Targets
 **Builds on:** [ADR 274 — A client takes a typed contract value, so every other option is inferred](ADR%20274%20-%20A%20client%20takes%20a%20typed%20contract%20value%2C%20so%20every%20other%20option%20is%20inferred.md), [ADR 159 — Definition-only contracts and type-only codec-operation maps](ADR%20159%20-%20Definition-only%20contracts%20and%20type-only%20codec-operation%20maps.md)

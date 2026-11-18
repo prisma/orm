@@ -21,7 +21,7 @@ import {
 } from '@internal/target-postgres/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import { introspectedColumn as introspectedColumnOver } from '../../../../2-sql/1-core/contract/test/introspected-column';
+import { introspectedColumn as introspectedColumnOver } from '../../../../2-sql-family/1-core/contract/test/introspected-column';
 import { pgvectorDataTypes } from '../../src/core/data-types';
 import pgvectorDescriptor from '../../src/exports/control';
 import { createComposedPostgresControlAdapter } from '../helpers/composed-adapter';
@@ -75,6 +75,7 @@ function contractWithEmbeddingDefault(value: number[]): Contract<SqlStorage> {
 }
 
 const liveSchema = new PostgresDatabaseSchemaNode({
+  extensions: undefined,
   namespaces: {
     public: new PostgresNamespaceSchemaNode({
       schemaName: 'public',

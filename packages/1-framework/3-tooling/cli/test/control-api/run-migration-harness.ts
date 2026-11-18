@@ -1,8 +1,10 @@
 import type {
   ControlDriverInstance,
   ControlFamilyInstance,
+  DatabasePolicies,
   MigrationPlan,
   MigrationRunnerFailure,
+  MigrationRunnerPerSpaceOptions,
   MigrationRunnerResult,
   TargetMigrationsCapability,
 } from '@internal/framework-components/control';
@@ -15,7 +17,8 @@ import {
   buildFabricatedMigrationEdge,
   createContractSpaceAggregate,
 } from '@internal/migration-tools/aggregate';
-import { notOk } from '@internal/utils/result';
+import { ifDefined } from '@internal/utils/defined';
+import { notOk, ok } from '@internal/utils/result';
 import { vi } from 'vitest';
 import {
   collectOrdered,
@@ -79,10 +82,10 @@ function makePerSpacePlan(): PerSpacePlan {
   } as unknown as PerSpacePlan;
 }
 
-/** The facts the advice names when the runner of the one space, `app`, fails with `runnerFailure`. */
-export async function failureOf(
+/** The failure `runMigration` returns when the runner of the one space, `app`, fails with `runnerFailure`. */
+export async function runFailure(
   runnerFailure: MigrationRunnerFailure,
-  origin: MigrationPlan['origin'],
+  origin: MigrationPlan['origin'] = null,
 ) {
   const failingResult: MigrationRunnerResult = notOk(runnerFailure);
   const migrations = {
@@ -92,13 +95,9 @@ export async function failureOf(
     'postgres',
     ControlFamilyInstance<'sql', unknown>
   >;
-  const perSpacePlan = makePerSpacePlan();
-  const perSpacePlans = new Map([
-    ['app', { ...perSpacePlan, plan: { ...perSpacePlan.plan, origin } } as unknown as PerSpacePlan],
-  ]);
   const result = await runMigration<'sql', 'postgres'>({
     aggregate: makeAggregate(),
-    perSpacePlans,
+    perSpacePlans: perSpacePlansFrom(origin),
     applyOrder: ['app'],
     driver: {} as ControlDriverInstance<'sql', 'postgres'>,
     familyInstance: { familyId: 'sql' } as unknown as ControlFamilyInstance<'sql', unknown>,
@@ -107,7 +106,57 @@ export async function failureOf(
     policy: { allowedOperationClasses: ['additive', 'widening', 'destructive', 'data'] },
     action: 'migrate',
   });
-  return result.ok
+  return result.ok ? undefined : result.failure;
+}
+
+function perSpacePlansFrom(origin: MigrationPlan['origin']): ReadonlyMap<string, PerSpacePlan> {
+  const perSpacePlan = makePerSpacePlan();
+  return new Map([
+    ['app', { ...perSpacePlan, plan: { ...perSpacePlan.plan, origin } } as unknown as PerSpacePlan],
+  ]);
+}
+
+/** The facts the advice names when the runner of the one space, `app`, fails with `runnerFailure`. */
+export async function failureOf(
+  runnerFailure: MigrationRunnerFailure,
+  origin: MigrationPlan['origin'],
+) {
+  const failure = await runFailure(runnerFailure, origin);
+  return failure === undefined
     ? undefined
-    : runnerFailureFacts(result.failure, collectOrdered(['app'], perSpacePlans));
+    : runnerFailureFacts(failure, collectOrdered(['app'], perSpacePlansFrom(origin)));
+}
+
+/** The per-space options `runMigration` hands the runner for the one space, `app`. */
+export async function runnerOptionsFor(
+  databasePolicies: DatabasePolicies | undefined,
+): Promise<readonly MigrationRunnerPerSpaceOptions[]> {
+  let captured: readonly MigrationRunnerPerSpaceOptions[] = [];
+  const migrations = {
+    createRunner: () => ({
+      execute: async (options: {
+        readonly perSpaceOptions: readonly MigrationRunnerPerSpaceOptions[];
+      }) => {
+        captured = options.perSpaceOptions;
+        return ok({ perSpaceResults: [] });
+      },
+    }),
+  } as unknown as TargetMigrationsCapability<
+    'sql',
+    'postgres',
+    ControlFamilyInstance<'sql', unknown>
+  >;
+  await runMigration<'sql', 'postgres'>({
+    aggregate: makeAggregate(),
+    perSpacePlans: perSpacePlansFrom(null),
+    applyOrder: ['app'],
+    driver: {} as ControlDriverInstance<'sql', 'postgres'>,
+    familyInstance: { familyId: 'sql' } as unknown as ControlFamilyInstance<'sql', unknown>,
+    migrations,
+    frameworkComponents: [],
+    policy: { allowedOperationClasses: ['additive'] },
+    action: 'migrate',
+    ...ifDefined('databasePolicies', databasePolicies),
+  });
+  return captured;
 }

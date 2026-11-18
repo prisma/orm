@@ -2,10 +2,15 @@ import type { WrittenScalar } from '@internal/framework-components/authoring';
 import { describeTaggedLiteralFailure } from '@internal/framework-components/control';
 import { blindCast } from '@internal/utils/casts';
 import { notOk, ok } from '@internal/utils/result';
-import { type ExpressionAst, TaggedLiteralExprAst } from '../../syntax/ast/expressions';
+import {
+  ArrayLiteralAst,
+  type ExpressionAst,
+  TaggedLiteralExprAst,
+} from '../../syntax/ast/expressions';
 import type { ArgType, AttributeCtx } from '../types';
 import { bool } from './bool';
 import { leafDiagnostic } from './diagnostic';
+import { list } from './list';
 import { num } from './num';
 import { oneOf } from './one-of';
 import { str } from './str';
@@ -44,9 +49,16 @@ function writtenTaggedLiteral(): ArgType<WrittenScalar, AttributeCtx> {
   });
 }
 
+function scalarMemberValue() {
+  return oneOf(str(), num(), bool(), writtenTaggedLiteral());
+}
+
 /**
- * An enum member's written value: a string, a number, a boolean, or a tagged literal, which it yields as the written value, its tag and canonical text. A tagged literal whose text cannot be canonicalized is refused. The block also records each member as written in `writtenValues`, from which the member reader takes it by the cast rule. ADR 254.
+ * An enum member's written value: a string, a number, a boolean, a tagged literal, which it yields as the written value, its tag and canonical text, or a list of those. A tagged literal whose text cannot be canonicalized is refused. The block also records each member as written in `writtenValues`, from which the member reader takes it by the cast rule. ADR 254.
  */
 export function enumMemberValue() {
-  return oneOf(str(), num(), bool(), writtenTaggedLiteral());
+  return oneOf(str(), num(), bool(), writtenTaggedLiteral(), {
+    ...list(scalarMemberValue(), { label: '[...]' }),
+    claims: (arg: ExpressionAst) => ArrayLiteralAst.cast(arg.syntax) !== undefined,
+  });
 }

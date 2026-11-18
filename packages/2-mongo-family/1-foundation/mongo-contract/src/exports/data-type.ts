@@ -2,11 +2,12 @@ export type {
   MongoDataType,
   MongoDataTypeFacts,
   MongoDataTypeSpec,
+  MongoTemporaryValue,
 } from '../mongo-data-type';
 export {
-  assertMongoFieldTypeParams,
   bsonTypesOfCodec,
   codecTypeParamsProblem,
   isMongoDataType,
   mongoDataType,
+  temporaryValueOfCodec,
 } from '../mongo-data-type';

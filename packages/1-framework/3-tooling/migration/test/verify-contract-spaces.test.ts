@@ -124,6 +124,7 @@ describe('verifyContractSpaces', () => {
 
   it("returns ok for today's single-app project (no extensions, no extra dirs, no extra markers)", () => {
     const result = verifyContractSpaces({
+      markerLocation: 'prisma_contract.marker',
       loadedSpaces: new Set(['app']),
       spaceDirsOnDisk: [],
       headRefsBySpace: new Map(),
@@ -134,6 +135,7 @@ describe('verifyContractSpaces', () => {
 
   it('returns ok when loadedSpaces match contract-space dirs and marker rows exactly', () => {
     const result = verifyContractSpaces({
+      markerLocation: 'prisma_contract.marker',
       loadedSpaces: new Set(['app', 'cipherstash']),
       spaceDirsOnDisk: ['cipherstash'],
       headRefsBySpace: new Map([['cipherstash', cipherstashHead]]),
@@ -144,6 +146,7 @@ describe('verifyContractSpaces', () => {
 
   it('rejects when extensions declares a space without a contract-space dir on disk (declaredButUnmigrated)', () => {
     const result = verifyContractSpaces({
+      markerLocation: 'prisma_contract.marker',
       loadedSpaces: new Set(['app', 'cipherstash']),
       spaceDirsOnDisk: [],
       headRefsBySpace: new Map(),
@@ -160,6 +163,7 @@ describe('verifyContractSpaces', () => {
 
   it('rejects when a contract-space dir on disk is not in extensions (orphanSpaceDir)', () => {
     const result = verifyContractSpaces({
+      markerLocation: 'prisma_contract.marker',
       loadedSpaces: new Set(['app']),
       spaceDirsOnDisk: ['cipherstash'],
       headRefsBySpace: new Map([['cipherstash', cipherstashHead]]),
@@ -176,6 +180,7 @@ describe('verifyContractSpaces', () => {
 
   it('rejects when a marker row exists for a space not in extensions (orphanMarker)', () => {
     const result = verifyContractSpaces({
+      markerLocation: 'prisma_contract.marker',
       loadedSpaces: new Set(['app']),
       spaceDirsOnDisk: [],
       headRefsBySpace: new Map(),
@@ -190,12 +195,34 @@ describe('verifyContractSpaces', () => {
     });
   });
 
+  it('names the marker location the target gives in the orphan marker remediation', () => {
+    const result = verifyContractSpaces({
+      markerLocation: '_prisma_marker',
+      loadedSpaces: new Set(['app']),
+      spaceDirsOnDisk: [],
+      headRefsBySpace: new Map(),
+      markerRowsBySpace: new Map([['cipherstash', markerOf(cipherstashHead)]]),
+    });
+    expect(result).toEqual({
+      ok: false,
+      violations: [
+        {
+          kind: 'orphanMarker',
+          spaceId: 'cipherstash',
+          remediation:
+            "Orphan marker row for space 'cipherstash' (no longer in extensions); remediation: manually delete the row from `_prisma_marker`.",
+        },
+      ],
+    });
+  });
+
   it('rejects when marker hash does not match on-disk head hash for a loaded space (hashMismatch)', () => {
     const driftedMarker: SpaceMarkerRecord = {
       hash: '00000000000000000000000000000000000000000000000000000000000000ff',
       invariants: cipherstashHead.invariants,
     };
     const result = verifyContractSpaces({
+      markerLocation: 'prisma_contract.marker',
       loadedSpaces: new Set(['app', 'cipherstash']),
       spaceDirsOnDisk: ['cipherstash'],
       headRefsBySpace: new Map([['cipherstash', cipherstashHead]]),
@@ -219,6 +246,7 @@ describe('verifyContractSpaces', () => {
       invariants: [],
     };
     const result = verifyContractSpaces({
+      markerLocation: 'prisma_contract.marker',
       loadedSpaces: new Set(['app', 'cipherstash']),
       spaceDirsOnDisk: ['cipherstash'],
       headRefsBySpace: new Map([['cipherstash', cipherstashHead]]),
@@ -236,6 +264,7 @@ describe('verifyContractSpaces', () => {
 
   it('aggregates multiple violations across spaces deterministically (alphabetical by spaceId)', () => {
     const result = verifyContractSpaces({
+      markerLocation: 'prisma_contract.marker',
       loadedSpaces: new Set(['app', 'cipherstash']),
       spaceDirsOnDisk: ['orphan-z', 'orphan-a'],
       headRefsBySpace: new Map([
@@ -266,6 +295,7 @@ describe('verifyContractSpaces', () => {
       invariants: [],
     };
     const result = verifyContractSpaces({
+      markerLocation: 'prisma_contract.marker',
       loadedSpaces: new Set(['app', 'pgvector']),
       spaceDirsOnDisk: ['orphan'],
       headRefsBySpace: new Map([['orphan', cipherstashHead]]),
@@ -289,6 +319,7 @@ describe('verifyContractSpaces', () => {
       invariants: [],
     };
     const result = verifyContractSpaces({
+      markerLocation: 'prisma_contract.marker',
       loadedSpaces: new Set(['app']),
       spaceDirsOnDisk: [],
       headRefsBySpace: new Map(),

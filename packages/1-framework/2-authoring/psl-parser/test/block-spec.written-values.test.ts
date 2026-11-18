@@ -95,6 +95,36 @@ describe('interpretExtensionBlock records each literal entry as it is written', 
     });
   });
 
+  it('keeps a list of literals as a written list, and leaves out a list holding anything else', () => {
+    const parsed = interpretOnlyBlock(
+      [
+        'enum Vectors {',
+        '  Unit  = [1, 2.5, -0, "x", true]',
+        '  Empty = []',
+        '  Mixed = [1, {}]',
+        '}',
+      ].join('\n'),
+      ENUM_DESCRIPTOR,
+      enumSpec(),
+    );
+
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect({ ...parsed.value.writtenValues }).toEqual({
+      Unit: {
+        kind: 'list',
+        elements: [
+          { kind: 'number', text: '1' },
+          { kind: 'number', text: '2.5' },
+          { kind: 'number', text: '-0' },
+          { kind: 'string', text: 'x' },
+          { kind: 'boolean', value: true },
+        ],
+      },
+      Empty: { kind: 'list', elements: [] },
+    });
+  });
+
   it('keeps each literal struct entry as it is written, by key', () => {
     const parsed = interpretOnlyBlock(
       ['settings Main {', '  limit = 9223372036854775807', '  label = "x"', '}'].join('\n'),

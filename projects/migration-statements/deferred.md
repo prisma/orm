@@ -124,14 +124,265 @@ A SQLite table rebuild renders as a 40-line `recreateTable` call full of interna
 
 `db migrate`, `db update` and `migration plan` print every command through `cliCommand` in `packages/1-framework/3-tooling/cli/src/utils/printed-command.ts`. About 100 other `{bin} …` literals do not: `migration status`, `db init` failures (`db-init-failure.ts`), `db sign` beyond its re-run command, `contract emit`, `prepare.ts`, `cli-errors.ts` (for example `MIGRATION.PLAN_ORIGIN_UNKNOWN`), and `reemitHint` in the migration package. Followed from another directory, they load a different config or none.
 
-## The shared-collection reach check reads the discriminator value back out of a filter
-
-**Found:** slice 4p review, PR 2 rounds 4 and 5 (2026-10-19).
-
-`otherModelsReached` in `packages/3-mongo-target/1-mongo-target/src/core/migrations/mongo-statement-planning.ts` learns which variant a field removal selects by reading the discriminator value back out of the removal call's MongoDB filter (`discriminatorValueOf`). It is safe today, because a filter it cannot read is treated as reaching every model. Carry the selection as a typed value, the discriminator field and value, on `FieldRemoval` and on the statement outcome, and write the filter from it at the end. Do it with the next PR, which changes the discriminator to a stored key, so the filter changes shape anyway.
+The re-run advice has a second gap of the same kind, found in the slice 3b PR 1 second system-design review (2026-10-22), S05. `CliInvocation.rerunArgs` holds one command's arguments (`db update`'s `--to`, `--advance-ref` and statements, and `db migrate`'s `--to` and `--advance-ref`) on the invocation that every printed command uses, and only the advice after a blocked drop reads it (`blockingObjectsFix` through `db-update-failure.ts` and `migrateFix`). The other re-run advice of the same failures still prints the command without them. Name it as the command that ran, for example `CliInvocation.command: { name, args }`, with a `rerunCommand(invocation)` helper that every "re-run the same command" advice uses.
 
 ## The enum refusal walks the models a second time
 
 **Found:** slice 4p review, PR 2 round 5 (2026-10-19).
 
 `validatedEnumNames` in `packages/2-mongo-family/1-foundation/mongo-contract/src/contract-refusals.ts` works out which enums a managed collection's validator lists by walking root models, variants, embedded models and value objects. `deriveCollectionValidators` already walks the same types, and is the authority on what a validator lists, for example below the entry point of a recursive group. Have the derivation report the enums it listed, for example by returning `{ validators, listedEnums }` from one internal walk, and refuse from that, so the two walks cannot drift apart.
+
+## A planner-written row rewrite holds its locks for its whole run
+
+**Found:** slice 3b spec discussion with Will (2026-10-21).
+
+Slice 3b plans each row rewrite as one plain operation: an `UPDATE` for an enum value rename, a discriminator conversion or a value object key rename, and a `DELETE` for a removed variant's rows. A migration runs in one transaction, so on a large production table the rewrite blocks writes to every row it touches until it commits, and next to DDL such as a check rebuild it blocks the whole table. Nothing batches it or runs it in the background. 3a's `--backfill` and type conversions have the same cost. Will ruled that 3b's goal is that the planner sees these changes; making the rewrites cheap is a later optimization.
+
+## Derived checks are added with a full table read under lock
+
+**Found:** whole-branch review of the value object storage PR (2026-10-23).
+
+The planner adds each derived check, value object shape checks included, with a plain `ALTER TABLE … ADD CONSTRAINT … CHECK (…)`. Postgres holds a lock on the table while it reads every row. The check's name holds a hash of its expression, so any change to a value object drops the check and adds it again, and the rows are read again. Adding the check `NOT VALID` and then running `VALIDATE CONSTRAINT` takes a weaker lock while the rows are read. It changes how every derived check is planned, enum checks included, so it belongs with the row rewrite cost above.
+
+## `--delete billing` is not offered as a next action, and the CLI copies the engine's unused-flag error
+
+**Found:** slice 3b PR 1 system-design review (2026-10-21), S04.
+
+When a removed namespace has questions, the `CLI.CONSENT_REQUIRED` refusal's `nextActions` list one `--delete` per model; `--delete billing` appears only in the question text. And because the CLI engine answers a question only with a flag equal to its subject, `db update` and `migration plan` take the `--delete` values from the engine themselves and raise `CLI.CONSENT_UNUSED` through their own `errorConsentUnused` in `packages/1-framework/3-tooling/cli/src/utils/cli-errors.ts`, a copy of the engine's error. Resolve it in the CLI engine (prisma/prisma-cli): let a question name extra flag values that answer it, such as its namespace, so the engine matches `--delete billing`, lists it in `nextActions`, and raises its own error for an unused flag. Then delete the copy and the command-side matching.
+
+Everything the prompt adapter (`packages/1-framework/3-tooling/cli/src/orm/plan-question-prompt.ts`) does to work around the engine goes with it (slice 3b PR 1 second system-design review, 2026-10-22, S06):
+
+- `namespaceDeletes`, which takes the `--delete` values from the engine when one names a removed namespace and matches them itself through `matchConsents`, raising `errorConsentUnused`.
+- The one-question-at-a-time mode (`askOneAtATime`), used when a question is about a removed namespace, so a typed `delete billing` answers the rest of the namespace and a typed `rename billing:finance` leaves them open for the next round.
+- `isConsentRequired`, which catches the engine's `CLI.CONSENT_REQUIRED` for one question and asks the engine again with every open question, so its refusal names them all.
+- The `undefined` answer that `AnswerPlanQuestions` may return beside a `rename` or `convert` answer, and the `InternalError` in `checkAnswers` that guards it.
+
+## `SchemaTables` is asked about namespace ids of the origin contract
+
+**Found:** slice 3b PR 1 system-design review (2026-10-21), S07.
+
+`SchemaTables` in `packages/2-sql/9-family/src/core/migrations/schema-tables.ts` says it is addressed by the contract's namespace ids, meaning the destination's. A namespace rename asks `hasNamespace(rename.from)` and a move asks `hasTable` of its source, both origin ids. Postgres's `postgresSchemaTables` resolves them through the destination contract's storage and falls back to the id, which works only because a named Postgres schema's name is its id. Either document that ids of either contract are accepted, or have the family pass a name resolved through the right contract.
+
+## A model move of a table that another contract space's table references by foreign key
+
+**Found:** slice 3b PR 1 code review (2026-10-21).
+
+`--rename billing.Invoice:finance.Invoice` moves the table with `ALTER TABLE … SET SCHEMA`. Postgres keeps a foreign key from another contract space's table pointing at it, and the app's plan is right, but the other space's contract still names the old schema, so that space's next plan sees drift. A table rename has the same gap on main. It needs a cross-space design: either refuse a move or rename of a table another space references, or tell the other space's plan about it.
+
+## One model with two access questions needs `--allow` twice
+
+**Found:** slice 3b PR 1 manual QA (2026-10-21), F5. Older than this PR: on main an `--allow` answers one operation.
+
+Reproduction: remove `@@rls` and the policy from a model `Invoice`, then run `db update --no-interactive`. It refuses with two questions about `"Invoice"`, one for dropping the policy and one for disabling row-level security, each answered by `--allow Invoice`. `db update --allow Invoice` still refuses, with "Run the command again with --allow Invoice"; only `--allow Invoice --allow Invoice` applies. To resolve it, either let one `--allow <model>` answer every access question about the model (the control API's `givenFor` and the dry run's `answeredByFlags` match all of them, and the CLI engine needs to accept one flag for several questions with the same subject, as `--delete <namespace>` works around today), or give each access question its own subject, such as the policy name.
+
+## A planner warning about the unbound namespace on every multi-namespace run
+
+**Found:** slice 3b PR 1 manual QA (2026-10-21), F9; referred by the system-design review. Older than this PR: main prints it too.
+
+Reproduction: emit a PSL contract with a `namespace public` block and a `namespace billing` block (for example `test/integration/test/fixtures/cli/cli-e2e-test-app/fixtures/cli-journeys/contract-namespace-statements-from.prisma`) and run `db update --json`, then `db update --dry-run --json`. Both carry the warning `control policy suppressed: namespace "__unbound__" — namespace '__unbound__' has effective control 'external' but declared 'external'`, checked on origin/main at `1e98c69e1b` and on this branch. Something plans a namespace-level call or issue for the unbound namespace, whose control policy is `external`, and `partitionCallsByControlPolicy` or `partitionIssuesByControlPolicy` in `packages/2-sql/9-family/src/core/migrations/control-policy.ts` records it as a suppression. Find what plans it and stop planning it, or record no suppression for the unbound namespace, which has no fixed place in the database.
+
+## A dry run with unanswered questions suggests an apply command that is refused
+
+**Found:** slice 3b PR 1 manual QA (2026-10-21), F12. Older than this PR.
+
+`db update --dry-run` ends with `→ Apply the planned operations: prisma db update`, repeating the statements it was given. When the plan has questions that no given statement answers, running that command non-interactively fails with `CLI.CONSENT_REQUIRED`. The next action in `migrationResultNextActions` (`packages/1-framework/3-tooling/cli/src/orm/db/migration-blocks.ts`) could say to answer the questions listed above, or point at them, when any is unanswered.
+
+## `--delete <namespace>` with no snapshot says only that it answers no question
+
+**Found:** second whole-PR review of the namespace statements, fix round (2026-10-22).
+
+`db update --delete billing` against a database whose marker hash has no local snapshot fails with `CLI.CONSENT_UNUSED`: the planner has no origin contract, so it reports no removed namespace, and the namespace's tables stay. Nothing is lost, which is the right outcome, but the message does not say why. `--rename` in the same situation fails with `MIGRATION.STATEMENT_ORIGIN_UNKNOWN`, which names the hash and the snapshot directory. A namespace `--delete` that matches no question should say the same when the origin contract is unknown.
+
+## `StoredValueRewrite.namespaceId` reads as the enum's namespace
+
+**Found:** slice 3b PR 2 system-design review (2026-10-22), S07.
+
+In `enum-value-planning.ts`, `namespaceId` is the table's namespace while `enumValue.namespaceId` is the enum's. Rename it, for example to `tableNamespaceId`. The other field the review named, `keptName`, became `keepData` in the manual QA fixes.
+
+## Older debt the enum value work follows
+
+**Found:** slice 3b PR 2 system-design review (2026-10-22), S08.
+
+- `keepTableAdvice` (`packages/2-sql-family/9-family/src/core/migrations/operation-subjects.ts`) builds a `keepDataAdvice` string with `prisma migration plan` and `prisma db migrate` written in, so it ignores how the CLI was invoked. Enum values now pass a typed `keepDataEdit` that the CLI words; the table advice could move to the same shape.
+- `RowsWithoutValue` and `RowsHoldingValue` are framework types named after rows, with a `rows` count, and the older `rowsWithoutValue` advice in `packages/1-framework/3-tooling/cli/src/utils/runner-failure-advice.ts` says "rows". Rename both to family-neutral names in one pass, for example `MissingValues` and `HeldValues` with `count`.
+- `ENTITY_WORDS` (`packages/1-framework/3-tooling/cli/src/control-api/statements/statement-text.ts`) is keyed by a hand-written union; key it by `MigrationSubject['kind']` so a new subject kind must add its word. Its doc says it covers what a statement can name, but it has no `namespace`.
+
+## Members that trade stored values while the list of stored values stays the same are not asked about
+
+**Found:** fixing PR 2's manual QA (enum values), 2026-10-23; corrected after the verification review the same day.
+
+An enum `A = "a", B = "b"` becomes `B = "a", A = "b"`: each member keeps its name and takes the other's stored value, and the list of stored values in storage is still `a, b`. The storage hash does not change, so `migration plan` prints "No changes detected" and `db update` plans nothing, on Postgres and SQLite. The rows still hold `a`, which now reads as member `B`. This is a change to the domain part only (which member names which stored value), so it is the same class as TML-3720 (the snapshot and the planner see nothing when only the domain changes). When the same plan also changes something else, the planner does ask, and on Postgres the printed edit, which swaps through a temporary value, can fail against the kept check without changing anything. A single `UPDATE … SET c = CASE c WHEN 'a' THEN 'b' WHEN 'b' THEN 'a' END` would need no temporary value. Resolve together with TML-3720, and consider it in PR 3, which makes more domain facts part of storage.
+
+## Column value-set references are not checked against storage
+
+A column's `valueSet: { plane: 'storage', entityKind: 'valueSet', entityName }` is not checked to name an existing `storage.namespaces.<ns>.entries.valueSet` entry, in either family. A hand-edited or corrupt `contract.json` with a dangling reference passes validation and fails later. PR 3 of the remaining-nouns slice adds the check for value object members only, in `validateStorageValueObjects` (`@internal/contract/validate-storage`), where the column check belongs too. Found in the review of that PR, 2026-10-23.
+
+## Composite types are not namespaced in SQL PSL
+
+SQL PSL resolves a composite type by its bare name across all namespaces and writes every value object to the default storage namespace. Two composite types with the same name in different PSL namespaces are refused with `PSL_DUPLICATE_DECLARATION` (before PR 3 of the remaining-nouns slice they silently overwrote each other). Letting each namespace declare its own needs namespace-qualified type references in PSL and writing each value object to its namespace's storage. When that changes, `generate-contract-dts.ts` must also emit one `<Name>Output` alias per storage namespace; today it emits one per name, from the first namespace. Found in the review of that PR, 2026-10-23.
+
+## The SQL ORM cannot write some value object members
+
+Found in the review of the value object storage PR, 2026-10-23. Both limits are older than that PR.
+
+- A `BigInt` member of a value object cannot be written: the `pg/jsonb@1` codec throws "Do not know how to serialize a BigInt". The same holds for a `pg/interval@1` member, whose value holds a `bigint`. Their codecs declare the JSON type their value would have: `pg/int8@1` and `pg/unboundedint@1` declare `number`, and `pg/interval@1` declares `object`.
+- A `Bytes` member is written as an object of byte indexes, such as `{"0":1,"1":2}`, not as bytes. Its codec declares `object`, the type it is written as today.
+
+## The SQL TypeScript builder has no value objects
+
+`defineContract` in `@internal/postgres/contract-builder` cannot declare a value object, so a SQL contract written in TypeScript cannot have one. The main SQL ORM test contract (`test/integration/test/sql-orm-client/fixtures/contract.ts`) used to patch a value object into its built contract; it now stores `User.address` as a plain `jsonb` column, and the value object type tests read a PSL fixture (`fixtures/value-objects`). That contract cannot move to PSL, because PSL cannot write its to-one relation without a foreign key (`Article.reviewer`).
+
+## A value object rename (`--rename Address:Location`) stays refused
+
+**Found:** slice 3b PR 4, dispatch 24 (2026-10-30).
+
+The resolver refuses a statement that names a value object as a whole. The planner compares a value object of the origin only with the value object of the same name in the destination, so a value object renamed in the contract source is a value object removed and one added: no key is rewritten, and on Postgres the new shape check of each column that holds it is added over the old data. The JSON of a column does not name its value object, so a rename that keeps the fields changes no data; one that also renames fields would need the field comparison to follow the rename. The project design table lists a value object rename as reported as applied; the 3b spec does not list it.
+
+## A type change of a value object field is not a statement
+
+**Found:** slice 3b PR 4, dispatch 24 (2026-10-30).
+
+A field of a value object that changes type, such as `String` to `Int`, plans no rewrite. On Postgres the new shape check rejects every row whose JSON still holds the old type, so the apply fails at the check; on SQLite the rows keep the old type silently. A `--convert GeoPoint.lat` would need a placeholder for the conversion at every path, as `--convert Model.field` writes one for a column.
+
+## Question for Will: the variant lookup stays in each family
+
+**Found:** slice 3b PR 4, dispatch 28 (2026-10-30).
+
+The 3b spec's implementation notes ask to move MongoDB's variant lookup into the framework, so SQL and MongoDB share it. MongoDB's lookup is `selectedVariantOf` and `variantFilter` in `packages/2-mongo-family/1-foundation/mongo-contract/src/model-documents.ts`, and `destinationOf` and `destinationDiscriminator` in `packages/3-targets/mongo/1-target/src/core/migrations/mongo-variant-planning.ts`, which find where each variant went and its discriminator as the destination stores it. PR 4 does not do this, because the repo rule `.agents/rules/never-change-the-framework-domain.mdc` forbids adding to the framework domain. SQL has its own lookup in `packages/2-sql-family/9-family/src/core/migrations/variant-planning.ts`: `originVariants`, `variantValue`, `baseOf`, `discriminatorColumn` and `destinationOf` find each variant, its discriminator value and where it went, and `planVariantRowRewrites` turns them into rewrites and deletions. The two read the same domain types twice. Will to decide whether the lookup should stay in each family, move to a shared package outside the framework domain, or justify an exception to the rule.
+
+## A value object field has no default, so `--backfill` has none to respect
+
+**Found:** slice 3b PR 4, dispatch 28 (2026-10-30).
+
+A field of a value object cannot declare a default in this release. So when a value object field becomes required, the planner has no default to fill existing objects with: `migration plan` needs `--backfill`, and `db update` uses a temporary value. A column field with a default is filled from its default instead. When value object fields can carry defaults, the fill should take the default first, as a column does, and `--backfill` should then be refused for a defaulted field, as it is for a column (`backfillOfDefaultedField`).
+
+## Question for Will: both families keep a model's empty `fields` in their own canonicalization hook
+
+**Found:** slice 3b PR 4 review, dispatch 29 (2026-10-30).
+
+A variant with no fields of its own has an empty `fields` object, which canonicalization would drop. So both `packages/2-sql-family/1-core/contract/src/canonicalization-hooks.ts` and `packages/2-mongo-family/1-foundation/mongo-contract/src/canonicalization-hooks.ts` keep the pattern `domain.namespaces.*.models.*.fields`. That path is in a framework type, `ContractModelBase.fields`, and the framework canonicalizer already keeps its siblings `relations` and `storage` itself (`DOMAIN_MODEL_RELATIONS_PATTERN` and `DOMAIN_MODEL_STORAGE_PATTERN` in `packages/1-framework/0-foundation/contract/src/canonicalization.ts`). Moving the pattern beside them would keep it once, but it changes the framework, which `.agents/rules/never-change-the-framework-domain.mdc` forbids without Will's approval. The second pattern, `models.*.storage.fields`, is family storage and stays in each family. Will to decide whether to move the first pattern into the framework canonicalizer.
+
+## On SQLite, a foreign key that cascades to a deleted row from a table other than the variant's own still fails the apply
+
+**Found:** slice 3b PR 4 review round 2, dispatch 30 (2026-10-30).
+
+The SQLite runner turns foreign keys off, so no declared cascade runs. The plan deletes the rows of a variant's own table before the base rows, as that table's cascade would. A table whose foreign key to the variant's table cascades (for example `bug_attachment` to `bug`), or another table whose foreign key to the base table cascades, is not handled: the apply fails at `PRAGMA foreign_key_check` with `MIGRATION.FOREIGN_KEY_VIOLATION`, naming the referencing tables, and the database is left as it was. A general fix belongs to the SQLite runner's foreign key handling, not to the statements.
+
+## The dictionary refusal could plan `.*` paths now
+
+**Found:** slice 3b PR 4 review round 2, dispatch 30 (2026-10-30).
+
+The refusals for a column that holds a value object through a dictionary say the planner cannot list the paths in such a column. Since the wildcard selects the member values of an object, a path such as `$.byCountry.*.lat` reaches every object in a dictionary on both targets. No SQL authoring surface writes a dictionary of value objects today, so the refusal stays. When one does, plan the dictionary with `.*` instead of copying the refusal and its reason forward.
+
+## A hand-written migration with only data rewrites is refused as a no-op self-edge
+
+**Found:** slice 3b PR 4 manual QA (F19), dispatch 30 (2026-10-30).
+
+`prisma migration new` from the current contract, with only a `renameStoredKey` in its `migration.ts`, is refused by `db migrate` with `MIGRATION.CONTRACT_SPACE_VIOLATION` (source equal to target with no data invariant). Every operation of the statements can be called by hand, but for a `Json` column there is no contract change to attach a data rewrite to. The user has to make an unrelated contract change to carry it.
+
+## `db update` gives no query for a removed enum value inside a list when it does not know the database's contract
+
+**Found:** slice 3b PR 4 manual QA (F9), dispatch 30 (2026-10-30).
+
+When rows hold an enum value `db update` removes from a member that takes no null, and no migration on disk ends at the database's contract, the advice says to change the stored value in the database by hand, with no query. Inside a list this needs `jsonb_agg` over `jsonb_array_elements` on Postgres, or `json_group_array` over `json_each` on SQLite. The by-hand route through `migration plan --from <hash>`, which writes `replaceStoredValue` with a path, needs that contract. The advice to add a new member and `--rename` to it works inside lists too.
+
+## Question for Will: a migration package does not record unfilled placeholders
+
+**Found:** slice 3b PR 4 review round 3, dispatch 31 (2026-10-30).
+
+`migration plan` knows when a migration it writes has unfilled placeholders, but it writes `ops.json` as `[]`, the same as a migration with no operations. So `db migrate` must read the code of `migration.ts` to find a call of `placeholder`, and it cannot find one made from a helper file that `migration.ts` imports. Recording the unfilled state in the package needs a new field on `MigrationMetadata` (`packages/1-framework/3-tooling/migration`), which changes the on-disk format and the migration hash, so this PR does not do it. `migration new` has the same gap: its `ops.json` is `[]` until the user runs `node migration.ts`, so a migration the user forgot to emit is applied as zero operations. Recommendation: add the field in its own change, so both commands write it and `db migrate` refuses on it instead of reading `migration.ts`.
+
+## The MongoDB JSONPath parser is a copy of SQL's
+
+**Found:** slice 4b PR 2 review of dispatch 1 (2026-11-11).
+
+`packages/3-targets/mongo/1-target/src/core/migrations/stored-key-path.ts` copies the JSONPath parser in `packages/2-sql-family/9-family/src/core/migrations/json-path.ts` (`parseJsonPath`, `writtenPrefix`, `jsonPathText`). What is missing is one shared parser. It was copied because the layering rules stop the MongoDB target from importing the SQL family, and the framework domain may not take it. Two copies of one grammar can drift apart. Move the parser to a shared package outside the framework domain that both families may import, once such a package is agreed. One difference is intended: the MongoDB walk reads a wildcard as the elements of a list only, never as an object's member values.
+
+## The question about a removed field of an embedded model says nothing of the model's new required fields
+
+**Found:** slice 4b PR 2 review of dispatch 3 (2026-11-14).
+
+When a value object loses a field and gains a required one, the question about the removal says whether the new field gets a temporary value or still needs `--backfill` (`newRequiredFieldNote` in `packages/1-framework/3-tooling/cli/src/control-api/statements/plan-questions.ts`). A MongoDB embedded model that loses `Line.sku` and gains a required `Line.code` gets no such note, because its fields are `field` subjects, and the note reads only `valueObjectField` subjects. Giving `field` subjects the note would also give it to every root model's removed field beside a new required one, on SQL too, whose plans word that case through their own refusals. Telling an embedded model apart in the CLI needs the domain's owner relation, which no other part of the question reads. What is missing is only that note. The plan itself is right: `--delete Line.sku` plans the removal, and the new field is filled with a temporary value or left to the document check, whose advice names `--backfill Line.code`.
+
+## A boolean enum value held by a required MongoDB field gets no rename advice when its removal stops
+
+**Found:** slice 4b PR 2 review of dispatch 4 (2026-11-17).
+
+When `removeStoredValue` stops because a required field holds the value, the MongoDB runner writes the framework's `rowsHoldingValue` fact, and the CLI then advises renaming the enum value. The fact's `value` is typed `string | number` (`RowsHoldingValue` in `packages/1-framework/1-core/framework-components/src/control/control-migration-types.ts`), so for an enum whose stored values are booleans the runner leaves the fact out. What is missing is the CLI's `--rename` advice for that case. The failure's own text still counts the documents, names one `_id` and says to rename the value or change the documents. Widening the fact's type to `boolean` is a framework change, so it waits for a ruling.
+
+## Ask before refusing
+
+**Found:** slice 4b PR 2, manual QA round 3, new problem 1 (2026-11-17). Updated after the round 5 reviews and QA round 4 (2026-11-18).
+
+The MongoDB planner cannot know which removals the user answered with `--delete`, because `MigrationPlanner.plan()` receives only resolved statements and the CLI keeps delete answers. So a plan-wide refusal that involves unanswered changes names them and the statements that keep their data, instead of asking. Passing delete answers to `plan()` (a framework interface change) would let the planner ask first and judge the plan the answers produce. That change should delete `packages/3-targets/mongo/1-target/src/core/migrations/mongo-unanswered-changes.ts`, not leave it next to a working question.
+
+What the two plan-wide refusals print, when a removal in the plan could keep its data (a field the destination model gains, a variant it keeps, or the one new variant of its base):
+
+- The overlap refusal (an operation writes what another empties): "The plan holds changes that no --rename or --convert statement carries: field "User.a", which the plan removes. To keep their data, run the command again with: --rename User.a:User.c." Then its reason (MongoDB applies operations one at a time, without a transaction). Then "If every answer is --delete, the plan stays as it is: make the change as two changes to the contract, and apply the first, by a migration or by db update, before you make the second: …", with the route for that overlap.
+- The filter-order refusal (an operation's filter reads what another changes): the same lead, then "One of these operations finds its documents by what another changes, and the order the plan needs runs it on the wrong side of that change." Then "If every answer is --delete, the plan stays as it is: make the change as two changes to the contract, and apply the first, by a migration or by db update, before you make the second: first make only the part of the change that "<operation>" carries out; then the rest."
+
+A refusal whose removals can only be deleted prints only its reason and its two-migration route. A user who answers `--delete` gets the same refusal again, because the planner cannot see the answer; the last sentence of each refusal is the route for that user.
+
+A discriminator renamed without its statement no longer reaches these refusals. A new required discriminator is never filled with a temporary value, since a temporary value names no variant: the plan is refused with "Cannot plan the migration: new discriminator field "Task.kind" has no value in the documents of collection tasks", and the reason offers "add --rename Task.type:Task.kind to keep it, and run the command again". That refusal is only for documents that hold their variants in an old discriminator the destination no longer has. A model's first discriminator, or a new one beside an old discriminator kept as a field, is left to the validator change's document check, as on `main`: it applies on an empty collection, and a document without the field stops it with `--backfill Task.type` named for `migration plan`. The refusal holds whatever the other answers are, including `--delete Task.type --convert Bug` and `--delete Task.type --delete Bug`, under `migration plan` and `db update`. A variant `--convert` whose discriminator field the plan does not rename (for example one the plan backfills) is refused with the same rename; a variant delete no statement asked for is refused the same way, as "Cannot plan the migration: the documents of variant "Bug" hold their discriminator value in field "type", which the plan does not rename to "kind"", so a user who said nothing about `Bug` is not told that its documents cannot be deleted.
+
+What `mongo-unanswered-changes.ts` copies from the CLI, because the target cannot import it:
+
+- `newModelFields` and `onlyNewModelField` from `packages/1-framework/3-tooling/cli/src/control-api/statements/plan-questions.ts`, as `newModelFields`: the fields of the destination model that the origin model does not have and no rename names.
+- `onlyNewMember` from the same file, as `newMembers`: the members of the destination enum that the origin enum does not have and no rename names.
+- `newValueObjectFields` and `onlyNewValueObjectField` from the same file, as `newValueObjectFields`.
+- `newVariantsOfBase` from `packages/1-framework/3-tooling/cli/src/control-api/statements/variants.ts`, as `newVariants`, and the model case of `renameForm` from `plan-questions.ts`: a removed variant is offered `--rename Bug:Defect` when its base has exactly one new variant.
+- `renameForm` from `plan-questions.ts`, as `answerOf`: the single candidate, else `<new name>`.
+- The field case of `subjectText` from `plan-questions.ts`, as `subjectText`: a field of a model a rename statement renames is named through the model's new name (`Job.type`, not `Task.type`), because the statement resolver reads the old side of a field rename through the destination model. `discriminatorRenameOf` in `mongo-discriminator-renames.ts` names both sides of the discriminator rename statement the same way; where its refusal says which field the documents hold their variant in, it names the origin field (`Task.type`). A field of a model the destination does not have is left out of the list, since no field statement can keep its data and no question offers one.
+- `shellQuoted` from `packages/1-framework/3-tooling/cli/src/control-api/statements/statement-flag.ts`, as `statementFlag` in `packages/3-targets/mongo/1-target/src/core/migrations/mongo-statement-flags.ts`, which `takenValueAdvice` in `mongo-enum-value-planning.ts` and the discriminator refusals also use.
+
+The copies leave out namespace renames, which MongoDB contracts do not have.
+
+In the other direction, the CLI's `sharesValueWithKeptMember` in `plan-questions.ts` decides that a MongoDB enum question's `keepDataAdvice` is the two-migration route by repeating the planner's overlap rule (`overlappingChanges` in `mongo-enum-value-planning.ts`): a member that takes the stored value of a member the destination still has, or gives its own to one. Under `db update` it then leaves that advice out, since the command gives its own two-run route. A structured reason on `MigrationDataLoss` saying which route the advice is would replace this inference; that is a framework interface change.
+
+Where it lives: the refusal is built by `overlapRefusal` in `packages/3-targets/mongo/1-target/src/core/migrations/mongo-rewrite-overlaps.ts`, which takes its lead from `unansweredChangesAdvice` in `mongo-unanswered-changes.ts`. `packages/3-targets/mongo/1-target/src/core/migrations/mongo-planner.ts` marks which operations no statement carries. The discriminator refusals are in `mongo-field-fills.ts` and `mongo-variant-planning.ts`, with the rename from `mongo-discriminator-renames.ts`. The interface is `MigrationPlanner.plan()` in `packages/1-framework/1-core/framework-components/src/control/control-migration-types.ts`; the delete answers stay in `packages/1-framework/3-tooling/cli/src/control-api/statements/plan-questions.ts`.
+
+## `--delete` of a variant still asks about the variant's own fields
+
+When a MongoDB contract removes a variant (`Bug`) and its fields, the CLI asks about `Bug`'s removed fields as well as about `Bug`. Answering `--delete Bug` deletes the variant's documents, so the plan's removal of those fields then has nothing to do. No data is lost, but the user answers questions that do not matter.
+
+What is missing: `--delete Bug` should also answer the questions about the fields of `Bug`, as `--delete` of a namespace answers the questions about what it holds. That needs matching, unused-flag and next-action handling in the CLI's statement resolution and questions (`packages/1-framework/3-tooling/cli/src/control-api/statements/`), like the namespace delete has. It is family-blind CLI work, not small enough to ride along in the MongoDB nested-statements PR.
+
+## A base that loses its discriminator and variants stops at the document check
+
+When a MongoDB contract removes a base's discriminator and all its variants (`Task` loses `type`, `Bug` and `Epic`), the plan keeps every document and asks no question; `--delete Bug` is "given but nothing asked". The apply then stops at the validator change's document check, because documents still hold fields only the removed variants had (`severity`), which the new validator does not name. Nothing is lost: the stop changes nothing and gives the by-hand routes (an update in `mongosh`, or `checkDocuments: false` under `db migrate`).
+
+What is missing: a question about the fields only the removed variants had, so `--delete` can remove them in the plan. That needs a decision on how a question names a field of a model the destination no longer has. Files: the variant planning in `packages/3-targets/mongo/1-target/src/core/migrations/mongo-variant-planning.ts`, the field removals in `mongo-planner.ts`, the document check in `mongo-runner.ts` (`documentsFailingValidatorRefusal`), and the CLI questions in `packages/1-framework/3-tooling/cli/src/control-api/statements/plan-questions.ts`.
+
+## Statement errors say "rows" on MongoDB
+
+The CLI's statement errors say "rows" on every database: "A new model has no existing rows to backfill" and "the field ... is optional in the destination contract, so no existing row needs a value" and "... is already required in the origin contract, so every existing row has a value", in `packages/1-framework/3-tooling/cli/src/control-api/statements/resolve-statements.ts`. On MongoDB these are documents. The advice in `packages/1-framework/3-tooling/cli/src/utils/runner-failure-advice.ts` ("Set a value in those 3 rows", "the existing rows have no value") says "rows" too, as does the framework fact `RowsWithoutValue`. Changing only the statement errors would leave the CLI using two words; the CLI needs one family-blind word for them, chosen for all its texts at once.
+
+## A plain field that becomes the discriminator, with a new variant's required field, has only by-hand routes
+
+When a MongoDB contract makes an existing plain field the discriminator (`Task.type`) and adds a variant with a required field (`Bug.severity`), the documents that already hold `type: "bug"` become `Bug` documents with no `severity`. The apply stops at the validator change's document check. The stop gives only by-hand routes: an update in `mongosh`, or `checkDocuments: false` under `db migrate`. Nothing is lost.
+
+What is missing: a statement route. `--backfill Bug.severity` is the natural one, but the CLI refuses it, because `Bug` has no counterpart in the origin contract and a new model is taken to have no existing rows. That holds for a new model, not for a new variant whose documents already exist under a field that becomes its discriminator. The CLI would need to accept `--backfill` for such a variant's field, and the MongoDB planner and runner would need to plan and advise it. Files: the refusal in `packages/1-framework/3-tooling/cli/src/control-api/statements/resolve-statements.ts` ("A new model has no existing rows to backfill"), the variant planning in `packages/3-targets/mongo/1-target/src/core/migrations/mongo-variant-planning.ts`, and the stop in `packages/3-targets/mongo/1-target/src/core/migrations/mongo-runner.ts` (`newVariantFieldsAdvice`, `fieldsTouched`).
+
+## A discriminator backfill that set only the discriminator cannot be planned again to set the variant's field
+
+On MongoDB, when a model gets its first discriminator (`Task.type`) and a new variant has a required field (`Bug.severity`), the stop says the update written for `--backfill Task.type` can also set `severity`. If the user's update sets only `type`, the backfill fills `type`, and the document check then stops on `severity`. Planning the migration again with an update that sets both fields does not help: the backfill's check and run select only the documents that lack `type`, so it finds none and is skipped. The stop's `mongosh` fix works, so nothing is lost.
+
+What is missing: a way to fill the variant's field after the discriminator is filled, without going by hand. That is the statement route of the entry above (`--backfill Bug.severity` for a variant whose documents exist), or a backfill whose selection the user can widen. Files: `backfillTransform` in `packages/3-targets/mongo/1-target/src/core/migrations/mongo-data-transforms.ts`, which builds the check and run of a backfill, and `newVariantFieldsAdvice` in `packages/3-targets/mongo/1-target/src/core/migrations/mongo-runner.ts`.
+
+## After a stored name is renamed by hand, db update on MongoDB still says the delete would lose values
+
+The advice for a stored-name-only rename (`--rename User.fullName:User.fullName`) says: with `db update`, rename it in the database yourself first, then run `db update`. On MongoDB, after the user renames the key in `mongosh`, `db update` still asks for `--delete User.fullName` and says it "would lose the values of field "User.fullName"". The old key is empty by then, so answering keeps the data, but the question does not say so. On Postgres the same advice leads to no question, because `db update` reads the live schema there.
+
+What is missing: `db update` on MongoDB plans from the origin contract, not from the documents, so it cannot know the old key is empty. Either the question would need to know that no document holds the field, or the advice would need to say that the question follows and that answering it keeps the data. Files: the delete questions in `packages/1-framework/3-tooling/cli/src/control-api/statements/resolve-statements.ts`, with the loss text in `lossText` in `packages/1-framework/3-tooling/cli/src/control-api/statements/plan-questions.ts`.
+
+## A MongoDB validator names no root model, so roots are matched by position
+
+A collection that stores several root models gets a validator with one `anyOf` branch per root model, in name order, and no branch names its model. Code that compares two validators of the collection without the contracts matches roots by position: planning without an origin contract (type changes, the validator update's label) and the runner's advice after a failed document check (`fieldsTouched`). Roots of validators with different numbers of roots are no longer matched, so adding or removing a root model no longer compares one model's fields with another's. A change that keeps the number of roots can still pair the wrong roots: a root model renamed so that the name order changes (`Zebra` to `Aardvark` in a collection that also stores `Mole`), with or without `--rename`, or one root model removed and another added in the same plan. The rename is the more likely case, and with an origin contract it reaches the runner's advice. Nothing is lost: the validator change's document check runs before the validator is replaced.
+
+What is missing: an identity for each root in the validator, such as a `title` naming the model on each `anyOf` branch. That changes the validator, and so the storage hash, of every contract with such a collection, which needs a migration and upgrade instructions. Files: `deriveCollectionValidators` in `packages/2-mongo-family/1-foundation/mongo-contract/src/derive-collection-validators.ts` and `validatorDocumentShapesOf` in `packages/2-mongo-family/1-foundation/mongo-contract/src/validator-shapes.ts`.
+
+## The refusal that lists unanswered MongoDB changes pairs models by a narrower rule
+
+`mongo-unanswered-changes.ts` has its own private `destinationModelOf`: a rename statement, else the same name. The planner's shared `destinationModelOf` in `mongo-statement-planning.ts` also pairs a model renamed without a statement with the only new model stored the same way. The private rule only chooses which renames a refusal offers, so the effect is small: a field removed from a model paired by storage gets no rename offer. Nothing is lost.
+
+What is missing: the private function should call the shared one, or take another name. File: `packages/3-targets/mongo/1-target/src/core/migrations/mongo-unanswered-changes.ts`.

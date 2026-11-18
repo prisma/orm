@@ -10,7 +10,7 @@
  * `for await` / `.toArray()` consumer below therefore sees plain `T` values, not
  * `Promise<T>`.
  *
- * See `packages/2-sql/5-runtime/src/codecs/decoding.ts` for the decode-once-
+ * See `packages/2-sql-family/5-runtime/src/codecs/decoding.ts` for the decode-once-
  * per-row contract; this file is the consumer side of that contract. See also
  * ADR 030 (codecs registry & decode boundary) and `test/codec-async.types.test-d.ts`.
  */
@@ -23,7 +23,7 @@ import {
 } from '@internal/framework-components/runtime';
 import type { SqlStorage, StorageColumn } from '@internal/sql-contract/types';
 import type { Codec, SqlCodecCallContext } from '@internal/sql-relational-core/ast';
-import type { Preparable, SqlQueryPlan } from '@internal/sql-relational-core/plan';
+import type { Preparable } from '@internal/sql-relational-core/plan';
 import type { RuntimeScope } from '@internal/sql-relational-core/types';
 import { blindCast } from '@internal/utils/casts';
 import { InternalError, isInternalError } from '@internal/utils/internal-error';
@@ -44,6 +44,7 @@ import {
   mapResultRows,
   mapStorageRowToModelFields,
   type RowEnvelope,
+  stripHiddenMappedFields,
 } from './collection-runtime';
 import {
   requireVariantTable,
@@ -51,8 +52,10 @@ import {
   variantColumnLabelPrefix,
 } from './collection-tables';
 import { resolveColumn } from './column-codec';
+import { type CallHashInput, planHashInput } from './orm-call';
 import { compileSelect, compileSelectWithIncludes } from './query-plan';
 import { queryPlanRows } from './query-plan-rows';
+import { RELATED_AGGREGATE_ALIAS } from './query-plan-select';
 import type {
   CollectionContext,
   CollectionState,
@@ -121,6 +124,151 @@ export function consumeCollectionRows<Row>(
           'collection row generic is supplied by the caller and matched to the selected model shape'
         >(mapStorageRowToModelFields(contract, namespaceId, modelName, rawRow));
   return mapResultRows(rows, mapper);
+}
+
+/** The columns of each level of an include tree that other statements read and the caller did not select, and those of the levels below, by the key their rows are attached under. */
+export interface HiddenColumns {
+  readonly columns: readonly string[];
+  readonly nested: ReadonlyMap<string, HiddenColumns>;
+}
+
+const noHiddenColumns: HiddenColumns = { columns: [], nested: new Map() };
+
+/** One statement's worth of an include, read with one query per relation: the include itself, or one branch of a `combine()` as an include of its own. Its rows are attached to the parent row under `key`. */
+export interface RelatedRead {
+  readonly name: string;
+  readonly include: IncludeExpr;
+}
+
+export function relatedReadsOf(include: IncludeExpr): readonly RelatedRead[] {
+  if (include.combine === undefined) {
+    return [{ name: include.relationName, include }];
+  }
+  return Object.entries(include.combine).map(([branchName, branch]) => ({
+    name: `__prisma_combine__${JSON.stringify([include.relationName, branchName])}`,
+    include: {
+      ...include,
+      nested: branch.kind === 'rows' ? branch.state : branch.selector.state,
+      scalar: branch.kind === 'rows' ? undefined : branch.selector,
+      combine: undefined,
+    },
+  }));
+}
+
+export function readsNoRows(read: RelatedRead): boolean {
+  return read.include.nested.limit === 0;
+}
+
+export function consumeRowsWithAttachedIncludes<Row>(
+  options: DescribeCollectionRowsOptions,
+  rows: AsyncIterableResult<Record<string, unknown>>,
+  hidden: HiddenColumns,
+): AsyncIterableResult<Row> {
+  const { context, state, modelName, namespaceId } = options;
+  const generator = async function* (): AsyncGenerator<Row, void, unknown> {
+    const shape = await attachedIncludeRowShaper(context, namespaceId, modelName, state, hidden);
+    for await (const row of rows) {
+      yield blindCast<Row, 'collection row generic matches the selected model shape'>(shape(row));
+    }
+  };
+  return new AsyncIterableResult(generator());
+}
+
+type RowShaper = (row: Record<string, unknown>) => Record<string, unknown>;
+type ReadShaper = (row: Record<string, unknown>) => unknown;
+
+async function attachedIncludeRowShaper(
+  context: CodecExecutionContext,
+  namespaceId: string,
+  modelName: string,
+  state: CollectionState,
+  hidden: HiddenColumns,
+): Promise<RowShaper> {
+  const { contract } = context;
+  const mapRow = createPreparedMapper(contract, namespaceId, modelName, state);
+  const includes: { readonly name: string; readonly shape: ReadShaper }[] = [];
+  for (const include of state.includes) {
+    includes.push({
+      name: include.relationName,
+      shape: await relatedIncludeShaper(context, include, hidden),
+    });
+  }
+  return (row) => {
+    const mapped = mapRow(row);
+    stripHiddenMappedFields(contract, namespaceId, modelName, mapped, hidden.columns);
+    for (const { name, shape } of includes) {
+      mapped[name] = shape(row);
+    }
+    return mapped;
+  };
+}
+
+async function relatedIncludeShaper(
+  context: CodecExecutionContext,
+  include: IncludeExpr,
+  hidden: HiddenColumns,
+): Promise<ReadShaper> {
+  const reads = relatedReadsOf(include);
+  const shapers: ReadShaper[] = [];
+  for (const read of reads) {
+    shapers.push(await relatedReadShaper(context, read, hidden));
+  }
+  const [only] = shapers;
+  if (include.combine === undefined && only !== undefined) {
+    return only;
+  }
+  const branchNames = Object.keys(include.combine ?? {});
+  return (row) =>
+    Object.fromEntries(branchNames.map((name, index) => [name, shapers[index]?.(row)]));
+}
+
+async function relatedReadShaper(
+  context: CodecExecutionContext,
+  read: RelatedRead,
+  hidden: HiddenColumns,
+): Promise<ReadShaper> {
+  const { include } = read;
+  if (include.scalar !== undefined) {
+    const { resolved, codec } = resolveScalarIncludeMetadata(
+      context.contract,
+      context,
+      include,
+      include.scalar,
+    );
+    const empty = await emptyAggregateResult(resolved, codec);
+    return (row) => {
+      const value = attachedRowsOf(row, read)[0]?.[RELATED_AGGREGATE_ALIAS];
+      return value === null || value === undefined ? empty : value;
+    };
+  }
+  const shapeChild = await attachedIncludeRowShaper(
+    context,
+    include.relatedNamespaceId,
+    include.relatedModelName,
+    include.nested,
+    hidden.nested.get(read.name) ?? noHiddenColumns,
+  );
+  const toOne = isToOneCardinality(include.cardinality);
+  return (row) => {
+    const children = attachedRowsOf(row, read).map(shapeChild);
+    return toOne ? (children[0] ?? null) : children;
+  };
+}
+
+function attachedRowsOf(
+  row: Record<string, unknown>,
+  read: RelatedRead,
+): readonly Record<string, unknown>[] {
+  const related = row[read.name];
+  if (Array.isArray(related)) {
+    return related;
+  }
+  if (related === undefined && readsNoRows(read)) {
+    return [];
+  }
+  throw new InternalError(
+    `The rows of include "${read.include.relationName}" were not attached to their parent row`,
+  );
 }
 
 function deferResolution<T>(resolve: () => T): () => T {
@@ -373,9 +521,10 @@ export function describeCollectionFirstOrThrow<Row>(
   };
 }
 
-/** The query a collection read sends. Without includes it is compiled now; with includes, on first use. */
+/** The statements a collection read sends. Without includes they are compiled now; with includes, on first use. */
 export interface CollectionQuery<Row> {
-  plan(): SqlQueryPlan<Record<string, unknown>>;
+  /** What the read's cache key digests. */
+  readonly hashInput: CallHashInput;
   rows(scope: RuntimeScope): AsyncIterableResult<Row>;
 }
 
@@ -385,7 +534,7 @@ export function describeCollectionQuery<Row>(
   const { context, state, modelName, namespaceId } = options;
   if (state.includes.length === 0) {
     const query = describeExecutionRows<Row>(options);
-    return { plan: () => query.plan, rows: (scope) => runQuery(scope, query) };
+    return { hashInput: planHashInput(() => query.plan), rows: (scope) => runQuery(scope, query) };
   }
   resolvePolymorphismInfo(context.contract, namespaceId, modelName);
   let compiled: Preparable<Record<string, unknown>, AsyncIterableResult<Row>> | undefined;
@@ -394,7 +543,7 @@ export function describeCollectionQuery<Row>(
     return compiled;
   };
   return {
-    plan: () => query().plan,
+    hashInput: planHashInput(() => query().plan),
     rows: (scope) => {
       const generator = async function* (): AsyncGenerator<Row, void, unknown> {
         yield* runQuery(scope, query());

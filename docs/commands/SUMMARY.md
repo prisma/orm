@@ -127,7 +127,7 @@ Both commands share the same flag surface:
 | `-v, --verbose` | Verbose output: debug info, timings |
 | `--no-color` | Disable color output |
 
-`db update` also takes statements, each repeatable, which answer the questions it asks before an apply: `--rename <old>:<new>` keeps a model's or field's data under a new name, `--delete <subject>` lets the update lose a model's, field's or storage name's data, and `--allow <subject>` lets it change who can read or write a model's rows, one operation per flag. Without them, an apply that would lose data or change access asks in a terminal, and fails with `CLI.CONSENT_REQUIRED` elsewhere. `--confirm` answers none of them. See the CLI README's `db update` section.
+`db update` also takes statements, each repeatable, which answer the questions it asks before an apply: `--rename <old>:<new>` keeps a model's or field's data under a new name, `--delete <subject>` lets the update lose a model's, field's or storage name's data, and `--allow <subject>` lets it change who can read or write a model's data, one operation per flag. Without them, an apply that would lose data or change access asks in a terminal, and fails with `CLI.CONSENT_REQUIRED` elsewhere. `--confirm` answers none of them. See the CLI README's `db update` section.
 
 ## Programmatic API
 
@@ -158,7 +158,7 @@ const updateResult = await client.dbUpdate({
   migrationsDir: 'migrations',
   connection: databaseUrl,
   answerQuestions: async (questions) => {
-    if (questions.length > 0) throw new Error('db update would lose data or widen access');
+    if (questions.length > 0) throw new Error('db update would lose data or change access');
     return [];
   },
 });

@@ -76,7 +76,7 @@ const authoringTypes = {
     Thing: {
       kind: 'typeConstructor',
       inferred: true,
-      args: [{ kind: 'number', name: 'size', integer: true }],
+      args: [{ kind: 'value', name: 'size', dataType: 'pg/int4' }],
       output: { codecId: THING_CODEC_ID, typeParams: { size: { kind: 'arg', index: 0 } } },
     },
   },

@@ -1,0 +1,7 @@
+// use prisma-8
+
+model Booking {
+  id     ObjectId @id @map("_id")
+  dateId ObjectId
+  date   Date     @relation(fields: [dateId], references: [id])
+}

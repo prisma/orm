@@ -43,6 +43,8 @@ export interface CliErrorConflict {
   readonly why?: string;
   /** The statement the conflict refuses, in domain coordinates. */
   readonly refusedStatement?: ResolvedMigrationStatement;
+  /** The statements to leave out of a plan whose `migration.ts` the user finishes by hand. */
+  readonly leaveOut?: readonly ResolvedMigrationStatement[];
   /** Where the conflict is; `namespaceId` is left out of JSON output for the unbound namespace. */
   readonly location?: Readonly<Record<string, unknown>> & { readonly namespaceId?: string };
 }
@@ -410,6 +412,9 @@ function conflictJson(conflict: CliErrorConflict): Record<string, unknown> {
     ...(conflict.refusedStatement === undefined
       ? {}
       : { refusedStatement: migrationStatementJson(conflict.refusedStatement) }),
+    ...(conflict.leaveOut === undefined
+      ? {}
+      : { leaveOut: conflict.leaveOut.map(migrationStatementJson) }),
   };
 }
 

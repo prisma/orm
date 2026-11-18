@@ -2,6 +2,7 @@ import type { ContractField, ContractModel, ContractValueObject } from '@interna
 import { crossRef } from '@internal/contract/types';
 import type { CodecLookup } from '@internal/framework-components/codec';
 import type { TypesImportSpec } from '@internal/framework-components/emission';
+import { renderImports } from '@internal/ts-render';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -9,7 +10,6 @@ import {
   generateCodecTypeIntersection,
   generateContractFieldDescriptor,
   generateHashTypeAliases,
-  generateImportLines,
   generateModelFieldsType,
   generateModelRelationsType,
   generateModelsType,
@@ -21,6 +21,7 @@ import {
   serializeExecutionType,
   serializeObjectKey,
   serializeValue,
+  typesImportRequirements,
 } from '../src/domain-type-generation';
 
 /**
@@ -194,6 +195,11 @@ describe('generateModelsType', () => {
 
   it('returns Record<string, never> for empty models', () => {
     expect(generateModelsType({}, noopStorage)).toBe('Record<string, never>');
+  });
+
+  it('orders models by code unit, whatever the locale', () => {
+    const result = generateModelsType({ alpha: makeModel(), Beta: makeModel() }, noopStorage);
+    expect(result.indexOf('readonly Beta:')).toBeLessThan(result.indexOf('readonly alpha:'));
   });
 
   it('generates model with fields, relations, and storage', () => {
@@ -517,12 +523,17 @@ describe('deduplicateImports', () => {
   });
 });
 
-describe('generateImportLines', () => {
+function renderedImportLines(imports: TypesImportSpec[]): string[] {
+  const rendered = renderImports(typesImportRequirements(imports));
+  return rendered === '' ? [] : rendered.split('\n');
+}
+
+describe('typesImportRequirements', () => {
   it('generates import with alias', () => {
     const imports: TypesImportSpec[] = [
       { package: '@internal/adapter', named: 'CodecTypes', alias: 'PgCodecTypes' },
     ];
-    const lines = generateImportLines(imports);
+    const lines = renderedImportLines(imports);
     expect(lines).toEqual(["import type { CodecTypes as PgCodecTypes } from '@internal/adapter';"]);
   });
 
@@ -530,7 +541,7 @@ describe('generateImportLines', () => {
     const imports: TypesImportSpec[] = [
       { package: '@internal/adapter', named: 'Vector', alias: 'Vector' },
     ];
-    const lines = generateImportLines(imports);
+    const lines = renderedImportLines(imports);
     expect(lines).toEqual(["import type { Vector } from '@internal/adapter';"]);
   });
 
@@ -543,7 +554,7 @@ describe('generateImportLines', () => {
       },
       { package: '@test/mongo/codec-types', named: 'Vector', alias: 'Vector' },
     ];
-    const lines = generateImportLines(imports);
+    const lines = renderedImportLines(imports);
     expect(lines).toEqual([
       "import type { CodecTypes as MongoCodecTypes, Vector } from '@test/mongo/codec-types';",
     ]);
@@ -555,7 +566,7 @@ describe('generateImportLines', () => {
       { package: '@scope/zeta/codec-types', named: 'CodecTypes', alias: 'ZetaTypes' },
       { package: '@scope/alpha/operation-types', named: 'QueryOperationTypes', alias: 'AlphaOps' },
     ];
-    const lines = generateImportLines(imports);
+    const lines = renderedImportLines(imports);
     expect(lines).toEqual([
       "import type { QueryOperationTypes as AlphaOps } from '@scope/alpha/operation-types';",
       "import type { CodecTypes as ZetaTypes, Numeric } from '@scope/zeta/codec-types';",
@@ -653,22 +664,34 @@ describe('generateContractFieldDescriptor', () => {
     );
   });
 
-  it('generates value object field descriptor', () => {
+  it('renders a value object field type as the coordinate of its storage value object', () => {
     const field: ContractField = {
       nullable: true,
-      type: { kind: 'valueObject', name: 'Address' },
+      type: {
+        kind: 'valueObject',
+        plane: 'storage',
+        namespaceId: 'public',
+        entityKind: 'valueObject',
+        entityName: 'Address',
+      },
       many: false,
     };
     const result = generateContractFieldDescriptor('homeAddress', field);
     expect(result).toBe(
-      'readonly homeAddress: { readonly nullable: true; readonly type: { readonly kind: "valueObject"; readonly name: "Address" } }',
+      'readonly homeAddress: { readonly nullable: true; readonly type: { readonly kind: "valueObject"; readonly plane: "storage"; readonly namespaceId: "public"; readonly entityKind: "valueObject"; readonly entityName: "Address" } }',
     );
   });
 
   it('includes the non-nullable list descriptor', () => {
     const field: ContractField = {
       nullable: false,
-      type: { kind: 'valueObject', name: 'Address' },
+      type: {
+        kind: 'valueObject',
+        plane: 'storage',
+        namespaceId: 'public',
+        entityKind: 'valueObject',
+        entityName: 'Address',
+      },
       many: { elementNullable: false },
     };
     const result = generateContractFieldDescriptor('addresses', field);
@@ -678,11 +701,17 @@ describe('generateContractFieldDescriptor', () => {
   it('includes element nullability inside the list descriptor', () => {
     const field: ContractField = {
       nullable: false,
-      type: { kind: 'valueObject', name: 'Address' },
+      type: {
+        kind: 'valueObject',
+        plane: 'storage',
+        namespaceId: 'public',
+        entityKind: 'valueObject',
+        entityName: 'Address',
+      },
       many: { elementNullable: true },
     };
     expect(generateContractFieldDescriptor('addresses', field)).toBe(
-      'readonly addresses: { readonly nullable: false; readonly type: { readonly kind: "valueObject"; readonly name: "Address" }; readonly many: { readonly elementNullable: true } }',
+      'readonly addresses: { readonly nullable: false; readonly type: { readonly kind: "valueObject"; readonly plane: "storage"; readonly namespaceId: "public"; readonly entityKind: "valueObject"; readonly entityName: "Address" }; readonly many: { readonly elementNullable: true } }',
     );
   });
 
@@ -741,15 +770,15 @@ describe('generateValueObjectTypeAliases', () => {
     expect(generateValueObjectTypeAliases([])).toBe('');
   });
 
-  it('reads each value object from the shared generic at the namespace that declares it', () => {
+  it('reads each value object from the shared generic at the storage namespace that holds it', () => {
     expect(
       generateValueObjectTypeAliases([
         ['Address', 'public'],
         ['Point', '__unbound__'],
       ]).split('\n'),
     ).toEqual([
-      "type ValueObjectOutputTypes = ValueObjectTypesFromDomain<ContractBase['domain']['namespaces'], CodecTypes, ParameterizedOutputTypeFunctions, FieldTypeOverrides, \"output\">;",
-      "type ValueObjectInputTypes = ValueObjectTypesFromDomain<ContractBase['domain']['namespaces'], CodecTypes, ParameterizedOutputTypeFunctions, FieldTypeOverrides, \"input\">;",
+      "type ValueObjectOutputTypes = ValueObjectTypesFromStorage<ContractBase['storage']['namespaces'], CodecTypes, ParameterizedOutputTypeFunctions, FieldTypeOverrides, \"output\">;",
+      "type ValueObjectInputTypes = ValueObjectTypesFromStorage<ContractBase['storage']['namespaces'], CodecTypes, ParameterizedOutputTypeFunctions, FieldTypeOverrides, \"input\">;",
       'export type AddressOutput = ValueObjectOutputTypes["public"]["Address"];',
       'export type AddressInput = ValueObjectInputTypes["public"]["Address"];',
       'export type PointOutput = ValueObjectOutputTypes["__unbound__"]["Point"];',

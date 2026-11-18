@@ -2,6 +2,6 @@
 
 model Event {
   id     Int     @id
-  seenAt Time(3) @onUpdate(now())
+  seenAt TimeTemporal(3) @onUpdate(now())
   @@map("event")
 }

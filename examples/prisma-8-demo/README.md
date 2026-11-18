@@ -120,7 +120,7 @@ The demo includes ORM client examples under `src/orm-client/`. `src/prisma/db.ts
 - `ormClientGetLatestUserPerKind(orm)` — `distinctOn()` with deterministic ordering
 - `ormClientGetUserInsights(limit, orm)` — `include().combine()` metrics and latest related row
 - `ormClientGetUserKindBreakdown(minUsers, orm)` — `groupBy().having().aggregate()` breakdown
-- `ormClientGetPostEngagement(limit, orm)` — the three engagement counters side by side, one per integer representation (`BigIntNumber`, `BigInt`, `UnboundedInt`)
+- `ormClientGetPostEngagement(limit, orm)` — the three engagement counters side by side, one per integer representation (`BigInt(as: number)`, `BigInt`, `BigInt(storage: numeric)`)
 - `ormClientGetEngagementPrecision(orm)` — `count`/`sum`/`avg` beside `countBigInt`/`sumBigInt`/`avgDecimal`, including the bare `sum` that raises rather than rounding
 - `ormClientGetEngagementSpread(orm)` — an extension-contributed `stddev` aggregate, called like a built-in
 - `ormClientUpsertUser(data, orm)` — `upsert()` for create-or-update by primary key
@@ -270,9 +270,9 @@ in application code as a different JavaScript value.
 
 | Column | Type | Codec | Storage | Reads as |
 | --- | --- | --- | --- | --- |
-| `viewCount` | `BigIntNumber` | `pg/int8number@1` | `int8` | `number`, throwing outside ±(2^53 − 1) |
+| `viewCount` | `BigInt(as: number)` | `pg/int8number@1` | `int8` | `number`, throwing outside ±(2^53 − 1) |
 | `impressionCount` | `BigInt` | `pg/int8@1` | `int8` | `bigint` |
-| `reachScore` | `UnboundedInt` | `pg/unboundedint@1` | unconstrained `numeric` | `bigint`, exact at any magnitude |
+| `reachScore` | `BigInt(storage: numeric)` | `pg/unboundedint@1` | unconstrained `numeric` | `bigint`, exact at any magnitude |
 
 ```bash
 pnpm start -- integer-representations
@@ -309,7 +309,7 @@ impressionCount — BigInt, and the total is 2^53 + 1000:
     than rounding. Reach for the lossless variant instead:
   sumBigInt('impressionCount')  9007199254741992n (bigint)
 
-reachScore — UnboundedInt, so even the bare sum is exact:
+reachScore — BigInt(storage: numeric), so even the bare sum is exact:
   sum('reachScore')             27670116110564327467n (bigint)
   sumBigInt('reachScore')       27670116110564327467n (bigint)
 ```
@@ -387,7 +387,7 @@ Relevant points:
 - On a cache hit for an ORM call no statement runs, so `lints`, `budgets` and the slow-query warning do not run for it.
 - The default cache key of an ORM call is the call's content hash, a digest of the terminal method and the statement it sends first. The default key of a SQL builder query is `ActivityContext.contentHash(exec)`, a SHA-512 digest of the post-lowering SQL plus parameters. Different parameters land in different cache slots; identical executions hit. Schema migrations rotate `meta.storageHash`, which feeds into `contentHash`, so cached entries do not leak across migrations.
 - An explicit `key`, such as the `user:<id>` key of `ormClientFindUserByIdCached`, does not change with `meta.storageHash`, so after a migration it can serve an entry cached under the old schema until it expires. With a store shared across deploys, prefix the key with something tied to the schema, such as the storage hash.
-- Errors from the store during a write's invalidation reach only the client's `log` option, which `src/prisma/db.ts` does not pass. To see them, pass one: `postgres<Contract>({ contractJson, url, middleware: [...], log: console })`.
+- Errors from the store during a write's invalidation reach only the client's `log` option, which `src/prisma/db.ts` does not pass. To see them, pass one: `postgres({ contract, url, middleware: [...], log: console })`.
 - The default in-memory store is per-process. For shared caching across replicas, supply a custom `CacheStore` (for example a Redis-backed implementation) via `createCacheMiddleware({ store })`.
 - Connection-scoped (`runtime.connection().execute(...)`) and transaction-scoped (`runtime.transaction(...)`) executions bypass the cache regardless of annotation, so transactional read-after-write coherence is preserved.
 

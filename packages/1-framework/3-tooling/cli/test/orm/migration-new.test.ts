@@ -1,20 +1,14 @@
 import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
-import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
-import { notOk } from '@internal/utils/result';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { BIN_GROUPS } from '../../src/orm/cli';
-import { createOrmTestCli } from '../helpers/orm-test-cli';
+import { harness } from './fixtures/migration-plan-project';
 import {
-  contractJson,
   createOfflineProject,
-  OFFLINE_COMMANDS,
+  OFFLINE_MIGRATION_MODULE,
   type OfflineProject,
   offlineConfig,
-  RENDERED_CONTRACT_DTS,
   removeOfflineProjects,
-  renderContractDtsMock,
   resetRenderContractDtsMock,
   seedDbRef,
   seedMigrationPackage,
@@ -44,14 +38,6 @@ async function forkedProject(): Promise<OfflineProject> {
 
 beforeEach(resetRenderContractDtsMock);
 afterEach(removeOfflineProjects);
-
-function harness(project: OfflineProject, overrides: Record<string, unknown> = {}) {
-  return createOrmTestCli({
-    commands: OFFLINE_COMMANDS,
-    groups: BIN_GROUPS,
-    orm: { ...offlineConfig({ project }), ...overrides },
-  });
-}
 
 async function scaffoldedDirs(project: OfflineProject): Promise<readonly string[]> {
   return (await readdir(project.appMigrationsDir)).filter((entry) => entry !== 'refs').sort();
@@ -85,7 +71,9 @@ describe('migration new', () => {
     const packageDir = join(project.appMigrationsDir, dirName ?? '');
 
     expect(dirName).toMatch(/_migration$/);
-    expect(await readFile(join(packageDir, 'migration.ts'), 'utf-8')).toBe('// empty migration\n');
+    expect(await readFile(join(packageDir, 'migration.ts'), 'utf-8')).toBe(
+      `// empty migration importing ${OFFLINE_MIGRATION_MODULE}\n`,
+    );
     expect(JSON.parse(await readFile(join(packageDir, 'ops.json'), 'utf-8'))).toEqual([]);
     expect(
       await readFile(join(project.migrationsDir, 'snapshots', HASH_TO, 'contract.json'), 'utf-8'),
@@ -159,16 +147,13 @@ describe('migration new', () => {
     });
   });
 
-  it('writes nothing to stdout in human mode', async () => {
+  it('prints the directory it scaffolded', async () => {
     const project = await createOfflineProject({ storageHash: HASH_TO });
 
-    const run = await harness(project).run(['migration', 'new'], {
-      cwd: project.dir,
-      isTty: { stdout: true, stderr: true },
-    });
+    const run = await harness(project).run(['migration', 'new'], { cwd: project.dir });
+    const [dirName] = await scaffoldedDirs(project);
 
-    expect(run.stdout).toBe('');
-    expect(run.presented?.presentation.stdout).toEqual([]);
+    expect(run.stdout).toBe(`${join('migrations', 'app', dirName ?? '')}\n`);
   });
 
   it('takes the db ref as the origin when --from is absent', async () => {
@@ -451,9 +436,12 @@ describe('migration new', () => {
     const project = await createOfflineProject({ storageHash: HASH_TO });
 
     const run = await harness(project, {
-      contract: {
-        source: { format: 'typescript', inputs: [], load: async () => ({}) },
-        output: join(project.dir, 'output', 'missing.json'),
+      overrides: {
+        contract: {
+          source: { format: 'typescript', inputs: [], load: async () => ({}) },
+          output: join(project.dir, 'output', 'missing.json'),
+          typesModule: '@acme/orm-db/contract-types',
+        },
       },
     }).run(['migration', 'new', '--json'], { cwd: project.dir });
 
@@ -468,7 +456,9 @@ describe('migration new', () => {
     const project = await createOfflineProject({ storageHash: HASH_TO });
 
     const run = await harness(project, {
-      ...offlineConfig({ project, targetSupportsMigrations: false }),
+      overrides: {
+        ...offlineConfig({ project, targetSupportsMigrations: false }),
+      },
     }).run(['migration', 'new', '--json'], { cwd: project.dir });
 
     expect(run.exitCode).toBe(2);
@@ -497,46 +487,5 @@ describe('migration new', () => {
     expect(envelope?.nextActions.length).toBeGreaterThan(0);
     expect(envelope?.ok).toBe(false);
     expect(envelope).not.toHaveProperty('error.fix');
-  });
-});
-
-describe('migration new destination snapshot', () => {
-  it('writes the destination snapshot with declarations rendered from the emitted contract', async () => {
-    const project = await createOfflineProject({ storageHash: HASH_TO });
-
-    const run = await harness(project).run(['migration', 'new', '--name', 'rendered', '--json'], {
-      cwd: project.dir,
-    });
-
-    expect(run.exitCode).toBe(0);
-    expect(renderContractDtsMock).toHaveBeenCalledWith({
-      contract: contractJson(HASH_TO),
-      resolveImportSpecifier: expect.any(Function),
-    });
-    const storeDir = contractSnapshotDir(project.migrationsDir, HASH_TO);
-    expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(RENDERED_CONTRACT_DTS);
-  });
-
-  it('refuses before writing anything when the declarations cannot be rendered', async () => {
-    const project = await createOfflineProject({ storageHash: HASH_TO });
-    renderContractDtsMock.mockResolvedValue(
-      notOk({
-        code: 'RENDER_FAILED',
-        summary: 'Failed to render contract types',
-        why: 'relation author must declare nullability',
-      }),
-    );
-
-    const run = await harness(project).run(['migration', 'new', '--name', 'refused', '--json'], {
-      cwd: project.dir,
-    });
-
-    expect(run.exitCode).toBe(2);
-    expect(run.json.at(-1)).toMatchObject({
-      kind: 'result',
-      envelope: { ok: false, error: { code: 'CONTRACT.TYPES_RENDER_FAILED' } },
-    });
-    expect(existsSync(project.appMigrationsDir)).toBe(false);
-    expect(existsSync(contractSnapshotDir(project.migrationsDir, HASH_TO))).toBe(false);
   });
 });

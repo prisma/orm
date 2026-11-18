@@ -1,12 +1,12 @@
-import type { ContractField, ContractValueObject } from '@internal/contract/types';
+import type { ContractField, ContractModel, ContractValueObject } from '@internal/contract/types';
 import { InternalError } from '@internal/utils/internal-error';
-import type { MongoModelDefinition } from './contract-types';
+import type { MongoModelStorage } from './contract-types';
 import { modelAndBasesOf } from './mongo-models';
 
 /** The name MongoDB stores a document's id under. */
 export const DOCUMENT_ID = '_id';
 
-type StoredNamesModel = Pick<MongoModelDefinition, 'fields' | 'storage'>;
+type StoredNamesModel = Pick<ContractModel<MongoModelStorage>, 'fields' | 'storage'>;
 
 /** Why a field or embed relation cannot be stored as `storedName`, if it cannot; the subject is the field or relation. */
 export function unsupportedStoredNameReason(storedName: string): string | undefined {
@@ -69,7 +69,7 @@ export function ownDocumentIdFieldOf(
  * The stored name of each of `model`'s own embed relations, keyed by relation name: its `storage.relations` entry, or the relation's own name when it has none.
  */
 export function ownEmbedStoredNamesOf(
-  model: Pick<MongoModelDefinition, 'relations' | 'storage'>,
+  model: Pick<ContractModel<MongoModelStorage>, 'relations' | 'storage'>,
 ): Readonly<Record<string, string>> {
   return Object.fromEntries(
     Object.entries(model.relations)
@@ -80,7 +80,9 @@ export function ownEmbedStoredNamesOf(
 
 /** The stored name of each field of model `modelName`, its own and those it inherits from its base models, keyed by field name. */
 export function storedNamesOf(
-  models: Readonly<Record<string, StoredNamesModel & Pick<MongoModelDefinition, 'base'>>>,
+  models: Readonly<
+    Record<string, StoredNamesModel & Pick<ContractModel<MongoModelStorage>, 'base'>>
+  >,
   modelName: string,
 ): Readonly<Record<string, string>> {
   const chain = [...modelAndBasesOf(models, modelName)].reverse();

@@ -1,12 +1,9 @@
-import type {
-  SchemaDiffIssue,
-  VerifyDatabaseSchemaResult,
-} from '@internal/framework-components/control';
 import { ifDefined } from '@internal/utils/defined';
 import {
   type Diagnostic,
   isStructuredError,
   type NextAction,
+  type StructuredError,
 } from '@internal/utils/structured-error';
 import { CliStructuredError } from './control';
 
@@ -98,6 +95,29 @@ export function errorMarkerRowCorrupt(options: {
 }
 
 /**
+ * The application space's marker records policies that cannot be read. Deleting the marker would
+ * drop the policies and the invariants it records, so the advice keeps it.
+ */
+export function errorMarkerPoliciesCorrupt(options: {
+  readonly why: string;
+  readonly space: string;
+  readonly markerLocation: string;
+}): CliStructuredError {
+  const advice =
+    'Ask whoever owns this database to correct meta.policies in the marker; do not delete the marker.';
+  return new CliStructuredError(
+    'CONTRACT.MARKER_ROW_CORRUPT',
+    "The marker's policies cannot be read",
+    {
+      why: options.why,
+      fix: `${advice} The marker for space "${options.space}" in ${options.markerLocation} also records the database's contract and invariants.`,
+      nextActions: [{ kind: 'user-choice', label: advice }],
+      meta: { space: options.space },
+    },
+  );
+}
+
+/**
  * Driver-level failure while reading the contract marker table.
  */
 export function errorMarkerReadFailed(options: {
@@ -122,12 +142,8 @@ function isDriverError(err: unknown): boolean {
   return isStructuredError(err) && err.code.startsWith('DRIVER.');
 }
 
-function isMarkerRowParseError(err: unknown): err is Error {
-  return (
-    err instanceof Error &&
-    (err.message.startsWith('Invalid contract marker row:') ||
-      err.message.startsWith('Invalid marker doc on'))
-  );
+function isMarkerRowCorruptError(err: unknown): err is StructuredError {
+  return isStructuredError(err) && err.code === 'CONTRACT.MARKER_ROW_CORRUPT';
 }
 
 export function rethrowMarkerReadError(
@@ -137,7 +153,7 @@ export function rethrowMarkerReadError(
   if (CliStructuredError.is(err) || isDriverError(err)) {
     throw err;
   }
-  if (isMarkerRowParseError(err)) {
+  if (isMarkerRowCorruptError(err)) {
     throw errorMarkerRowCorrupt({
       why: err.message,
       space: context.space,
@@ -192,29 +208,6 @@ export function errorMarkerRequired(options?: {
     nextActions: options?.nextActions ?? [
       { kind: 'run-command', label: 'Sign the database', command: '{bin} db init' },
     ],
-  });
-}
-
-/**
- * Schema verification found mismatches between the database and the contract.
- * The full verification result is preserved in `meta.verificationResult`.
- */
-export function errorSchemaVerificationFailed(options: {
-  readonly summary: string;
-  readonly verificationResult: VerifyDatabaseSchemaResult;
-  readonly issues?: readonly SchemaDiffIssue[];
-}): CliStructuredError {
-  return new CliStructuredError('CONTRACT.SCHEMA_VERIFICATION_FAILED', options.summary, {
-    why: 'Database schema does not satisfy the contract',
-    fix: 'Run `{bin} db update` to reconcile, or adjust your contract to match the database',
-    nextActions: [
-      { kind: 'run-command', label: 'Reconcile the database', command: '{bin} db update' },
-      { kind: 'edit-file', label: 'Adjust your contract to match the database' },
-    ],
-    meta: {
-      verificationResult: options.verificationResult,
-      ...ifDefined('issues', options.issues),
-    },
   });
 }
 

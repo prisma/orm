@@ -1,10 +1,12 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'pathe';
 import { afterAll, describe, expect, it } from 'vitest';
 import {
   ALREADY_IN_NEW_FORM,
+  appScript,
   copyFixture,
   expectedTree,
+  extensionScript,
   makeWorkDir,
   NEW_HASH,
   OLD_HASH,
@@ -53,6 +55,28 @@ describe('a SQLite project emitted by the previous release', () => {
     expect({ status: run.status, tree: readTree(run.root) }).toEqual({
       status: 0,
       tree: expectedTree('sqlite-project', 'after'),
+    });
+  });
+});
+
+describe('a project with a copy of itself in a hidden directory', () => {
+  it('rewrites the project and leaves every directory whose name starts with a dot alone', () => {
+    const root = copyFixture('sqlite-project', 'before');
+    for (const hidden of ['.claude/worktrees/feature', '.agents/skills/example'])
+      cpSync(join(root, 'src'), join(root, hidden, 'src'), { recursive: true });
+    const hiddenOf = (tree: Record<string, string>) =>
+      Object.fromEntries(Object.entries(tree).filter(([path]) => path.startsWith('.')));
+    const hiddenBefore = hiddenOf(readTree(root));
+    const run = runScript(root);
+    const tree = readTree(run.root);
+    expect({
+      status: run.status,
+      hidden: hiddenOf(tree),
+      rest: Object.fromEntries(Object.entries(tree).filter(([path]) => !path.startsWith('.'))),
+    }).toEqual({
+      status: 0,
+      hidden: hiddenBefore,
+      rest: expectedTree('sqlite-project', 'after'),
     });
   });
 });
@@ -141,7 +165,16 @@ describe('a project the script cannot finish', () => {
     const run = runScript(makeWorkDir('data-type-values-options-'), ['--data-type']);
     expect({ status: run.status, stderr: run.stderr }).toEqual({
       status: 1,
-      stderr: '--data-type: unknown option\n',
+      stderr: '--data-type: unknown option\nUsage: node data-type-values.ts [project-root]\n',
+    });
+  });
+
+  it('refuses a project root that is not a directory', () => {
+    const missing = join(makeWorkDir('data-type-values-missing-'), 'missing');
+    const run = runScript(missing);
+    expect({ status: run.status, stderr: run.stderr }).toEqual({
+      status: 1,
+      stderr: `${missing}: not a directory\nUsage: node data-type-values.ts [project-root]\n`,
     });
   });
 });
@@ -157,5 +190,11 @@ describe('the fixture', () => {
     expect(
       contract.storage.namespaces.__unbound__.entries.table.events.columns.note.default,
     ).toEqual({ kind: 'literal', value: '2024-01-01T00:00:00Z' });
+  });
+});
+
+describe('the extension guide', () => {
+  it('ships the same script for extensions', () => {
+    expect(readFileSync(extensionScript, 'utf8')).toBe(readFileSync(appScript, 'utf8'));
   });
 });

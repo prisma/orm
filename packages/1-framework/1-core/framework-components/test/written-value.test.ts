@@ -18,6 +18,7 @@ import {
   exactRewrite,
   knownTags,
   readWrittenValue,
+  readWrittenValueAs,
   tagForm,
   type WrittenForm,
 } from '../src/shared/written-value';
@@ -239,6 +240,45 @@ describe('readWrittenValue', () => {
   it('refuses text the entry cannot parse, with the parse error message', () => {
     expect(readWrittenValue(support, { kind: 'tag', tag: 'json', text: '{' })).toEqual(
       notOk({ kind: 'unreadable', message: expect.stringContaining('JSON') }),
+    );
+  });
+});
+
+describe('readWrittenValueAs', () => {
+  it('reads a written value and takes it into the receiving type through its cast', () => {
+    expect(readWrittenValueAs(support, big.id, { kind: 'number', text: '7' })).toEqual(
+      ok(big.fromContract('7n', {})),
+    );
+  });
+
+  it('refuses a value of a type the receiving type does not take, naming both when its form is admitted', () => {
+    expect(readWrittenValueAs(support, small.id, { kind: 'number', text: '700' })).toEqual(
+      notOk({
+        code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
+        message: 'Expected a number that t/small can hold; got t/big',
+      }),
+    );
+  });
+
+  it('refuses a quoted string where a tag goes, with the literal to write', () => {
+    expect(
+      readWrittenValueAs(support, sqlExpression.id, { kind: 'string', text: 'now()' }),
+    ).toEqual(
+      notOk({
+        code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
+        message: 'Expected sql`...`; write sql`now()`',
+      }),
+    );
+  });
+
+  it('refuses a tag no entry names', () => {
+    expect(
+      readWrittenValueAs(support, sqlExpression.id, { kind: 'tag', tag: 'pg.sql', text: 'x' }),
+    ).toEqual(
+      notOk({
+        code: 'PSL_UNKNOWN_LITERAL_TAG',
+        message: 'Unknown literal tag "pg.sql". Known tags: sql, json, letters.',
+      }),
     );
   });
 });
@@ -471,7 +511,11 @@ describe('exactRewrite', () => {
   });
 
   it('offers the text unquoted for a receiving type that takes it as a number', () => {
-    expect(exactRewrite(support, at(big), { kind: 'string', text: '8' })).toBe('8');
+    expect(exactRewrite(support, at(small), { kind: 'string', text: '8' })).toBe('8');
+  });
+
+  it('offers nothing when the number the text writes would be stored as another value', () => {
+    expect(exactRewrite(support, at(big), { kind: 'string', text: '8' })).toBeUndefined();
   });
 
   it('offers nothing for quoted text that is not a number the receiving type takes', () => {

@@ -19,7 +19,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'be4174af061494b515cb3031f75051235fd9307ab05a00c78b5b017c1578b32a'>;
+  StorageHashBase<'87f816322dd1925839d0a5ac49589f22d308c3d3db34a1585a4b25f699735684'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53'>;
@@ -285,7 +285,6 @@ type ContractBase = Omit<
                       '2024-06-30T12:34:56.789Z'
                     >;
                   };
-                  readonly typeRef: 'Stamp';
                   readonly many: false;
                 };
               };
@@ -302,14 +301,6 @@ type ContractBase = Omit<
             };
           };
         };
-      };
-    };
-    readonly types: {
-      readonly Stamp: {
-        readonly kind: 'codec-instance';
-        readonly codecId: 'sqlite/datetime@1';
-        readonly dataType: 'sqlite/datetime';
-        readonly typeParams: Record<string, never>;
       };
     };
     readonly storageHash: StorageHash;

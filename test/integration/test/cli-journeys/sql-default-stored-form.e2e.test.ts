@@ -71,7 +71,7 @@ function writeContract(ctx: JourneyContext, text: string): void {
 const cases = [
   {
     name: 'an interval',
-    type: 'DateTime',
+    type: 'TimestamptzTemporal',
     written: "sql`now() - interval '1 day'`",
     stored: "(now() - '1 day'::interval)",
     literal: "sql`(now() - '1 day'::interval)`",
@@ -122,9 +122,12 @@ withTempDir(({ createTempDir }) => {
           `why: The schema check after apply found: mismatch: database/public/Event/column:at/default. The database reads this default back as ${literal}; the contract declares ${written}. ${HEDGE} If they do, write the default as ${literal}.`,
         );
 
-        const advised = /write the default as ([\s\S]+?)\.\n→/.exec(shown)?.[1];
+        const advised =
+          /write the default as ([\s\S]+?)\. The failed apply changed nothing\.\n→/.exec(
+            shown,
+          )?.[1];
         const fix =
-          /delete `([^`]+)` \(copy any code you wrote in its migration\.ts first\), plan it again with `\S+ migration plan ([^`]+)`, put any code you copied into the migration\.ts it writes, run that migration\.ts with the `node` command `migration plan` prints, and run `\S+ db migrate`\./.exec(
+          /delete `([^`]+)` \(copy any code you wrote in its migration\.ts first\), plan it again with `\S+ migration plan ([^`]+)`, put any code you copied into the migration\.ts it writes, run that migration\.ts with the `node` command `migration plan` prints, and run `\S+ db migrate`/.exec(
             shown,
           );
         expect({
@@ -155,7 +158,7 @@ withTempDir(({ createTempDir }) => {
 
   describe('two pending migrations, the first of which writes the default', () => {
     const db = useDevDatabase();
-    const withTag = (literal: string) => `${schema('DateTime', literal)}
+    const withTag = (literal: string) => `${schema('TimestamptzTemporal', literal)}
 model Tag {
   id Int @id
 }
@@ -169,7 +172,7 @@ model Tag {
           createTempDir,
           contractMode: 'psl',
         });
-        writeContract(ctx, schema('DateTime', "sql`now() - interval '1 day'`"));
+        writeContract(ctx, schema('TimestamptzTemporal', "sql`now() - interval '1 day'`"));
         expect((await runContractEmit(ctx)).exitCode).toBe(0);
         expect((await planMigrationAndSelfEmit(ctx, ['--name', 'first'])).exitCode).toBe(0);
         const firstHash = storageHash(ctx);
@@ -186,9 +189,12 @@ model Tag {
         const failed = await runMigrate(ctx);
         const shown = shownOutput(failed);
         expect(failed.exitCode, shown).not.toBe(0);
-        const advised = /write the default as ([\s\S]+?)\.\n→/.exec(shown)?.[1];
+        const advised =
+          /write the default as ([\s\S]+?)\. The failed apply changed nothing\.\n→/.exec(
+            shown,
+          )?.[1];
         const fix =
-          /delete `([^`]+)` \(copy any code you wrote in its migration\.ts first\), plan it again with `\S+ migration plan ([^`]+)`, put any code you copied into the migration\.ts it writes, run that migration\.ts with the `node` command `migration plan` prints, and run `\S+ db migrate`\./.exec(
+          /delete `([^`]+)` \(copy any code you wrote in its migration\.ts first\), plan it again with `\S+ migration plan ([^`]+)`, put any code you copied into the migration\.ts it writes, run that migration\.ts with the `node` command `migration plan` prints, and run `\S+ db migrate`/.exec(
             shown,
           );
         expect({ advised, folder: fix?.[1], planArgs: fix?.[2] }).toEqual({
@@ -224,7 +230,7 @@ model Tag {
           createTempDir,
           contractMode: 'psl',
         });
-        writeContract(ctx, schema('DateTime', "sql`now() - interval '1 day'`"));
+        writeContract(ctx, schema('TimestamptzTemporal', "sql`now() - interval '1 day'`"));
         expect((await runContractEmit(ctx)).exitCode).toBe(0);
         const failed = await runDbInit(ctx);
         const shown = shownOutput(failed);
@@ -248,7 +254,7 @@ model Tag {
           createTempDir,
           contractMode: 'psl',
         });
-        writeContract(ctx, schema('DateTime', "sql`now() - interval '1 day'`"));
+        writeContract(ctx, schema('TimestamptzTemporal', "sql`now() - interval '1 day'`"));
         expect((await runContractEmit(ctx)).exitCode).toBe(0);
         const failed = await runDbUpdate(ctx);
         const shown = shownOutput(failed);
@@ -273,7 +279,7 @@ model Tag {
           createTempDir,
           contractMode: 'psl',
         });
-        writeContract(ctx, schema('DateTime', "sql`(now() + '1 day'::interval)`"));
+        writeContract(ctx, schema('TimestamptzTemporal', "sql`(now() + '1 day'::interval)`"));
         expect((await runContractEmit(ctx)).exitCode).toBe(0);
         expect((await planMigrationAndSelfEmit(ctx, ['--name', 'initial'])).exitCode).toBe(0);
         expect((await runMigrate(ctx)).exitCode).toBe(0);
