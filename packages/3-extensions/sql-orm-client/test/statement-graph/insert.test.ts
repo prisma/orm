@@ -72,7 +72,7 @@ describe('Insert', () => {
       insert.execute({ payload: [[userIdOf7], [userIdOf8]], state: null, requires: null }, run),
     ).toThrow(
       expect.objectContaining({
-        code: 'ORM.RELATION_MUTATION_INVALID',
+        code: 'ORM.ARGUMENT_INVALID',
         message:
           'Cannot write junction "post_tags": conflicting values for junction column "user_id"',
         meta: { relation: 'tags', junction: 'post_tags', column: 'user_id' },

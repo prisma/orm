@@ -79,7 +79,16 @@ describe('MySQL codecs project a column into JSON as the row form reads it', () 
         codecId: 'sql/raw@1',
         typeParams: { sql: 'point' },
       }),
-    ).toThrow(expect.objectContaining({ code: 'RUNTIME.AST_UNSUPPORTED' }));
+    ).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.AST_UNSUPPORTED',
+        message:
+          'Reading a raw column inside an include is not yet supported on MySQL and MariaDB.',
+        why: "An include reads its rows as JSON, and Prisma cannot yet write a raw column's value into that JSON on MySQL and MariaDB.",
+        fix: "Leave the raw column out of the include's select, and read it with its own query.",
+        meta: { feature: 'Reading a raw column inside an include' },
+      }),
+    );
   });
 
   it('refuses a stored array, which MySQL has no codec for', () => {

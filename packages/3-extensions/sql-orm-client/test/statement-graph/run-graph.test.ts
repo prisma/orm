@@ -1,4 +1,6 @@
 import type { ProjectionItem } from '@internal/sql-relational-core/ast';
+import type { RuntimeScope } from '@internal/sql-relational-core/types';
+import { withTransaction as runTransaction } from '@internal/sql-runtime';
 import { describe, expect, it, vi } from 'vitest';
 import type { NodeId } from '../../src/statement-graph/edge';
 import { FilterData } from '../../src/statement-graph/filter-data';
@@ -78,16 +80,25 @@ function returnedColumns(execution: MockExecution): string[] {
   throw new Error('the executed statement returns no columns');
 }
 
-function withTransaction(runtime: MockRuntime) {
-  const commit = vi.fn(async () => undefined);
+function withTransaction(runtime: MockRuntime, commitFailure?: Error) {
+  const commit = vi.fn(async () => {
+    if (commitFailure) throw commitFailure;
+  });
   const rollback = vi.fn(async () => undefined);
   const open = vi.fn(async () => ({
     query: runtime.query.bind(runtime),
     execute: runtime.execute.bind(runtime),
+    signal: new AbortController().signal,
     commit,
     rollback,
+    transaction: async (): Promise<never> => {
+      throw new Error('transaction is not stubbed');
+    },
   }));
-  return { runtime: Object.assign(runtime, { transaction: open }), open, commit, rollback };
+  const connection = { transaction: open, release: async () => {}, destroy: async () => {} };
+  const transaction = <R>(fn: (tx: RuntimeScope) => PromiseLike<R>, options?: object) =>
+    runTransaction({ connection: async () => connection }, fn, options);
+  return { runtime: Object.assign(runtime, { transaction }), open, commit, rollback };
 }
 
 const allUserColumns = ['address', 'email', 'id', 'invited_by_id', 'name'];
@@ -330,6 +341,20 @@ describe('running a graph', () => {
       ).rejects.toThrow('delete failed');
       expect(transactional.rollback).toHaveBeenCalledTimes(1);
       expect(transactional.commit).not.toHaveBeenCalled();
+    });
+
+    it('rejects RUNTIME.TRANSACTION_COMMIT_FAILED with the driver error as cause when COMMIT fails', async () => {
+      const commitFailure = new Error('commit failed');
+      const transactional = withTransaction(createMockRuntime(), commitFailure);
+
+      await expect(
+        queryGraph(
+          findThenDeleteUsers(),
+          contextOf(transactional.runtime),
+          rowsOfUsers({ selectedFields: ['id', 'name'] }),
+        ).toArray(),
+      ).rejects.toMatchObject({ code: 'RUNTIME.TRANSACTION_COMMIT_FAILED', cause: commitFailure });
+      expect(transactional.rollback).toHaveBeenCalledTimes(1);
     });
   });
 

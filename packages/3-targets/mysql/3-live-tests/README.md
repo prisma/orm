@@ -12,7 +12,7 @@ MariaDB runs MySQL's runtime under its own target id, so every ORM read and writ
 
 ## Responsibilities
 
-- **Suites** (`test/suites/`): reads, includes, writes, raw SQL and transaction ownership. Each suite takes a `LiveServer` (`test/live-server.ts`) and names no database: where the servers differ, the suite reads the expectation from `server.expected`, which the server's definition states.
+- **Suites** (`test/suites/`): reads, includes, writes, writes whose filter reads the written table (which MySQL refuses and MariaDB runs), raw SQL and transaction ownership. Each suite takes a `LiveServer` (`test/live-server.ts`) and names no database: where the servers differ, the suite reads the expectation from `server.expected`, which the server's definition states.
 - **Servers** (`test/mysql/server.ts`, `test/mariadb/server.ts`): a client of each, its control components, and what differs on it. Each folder runs every suite against its server.
 - **One schema for both** (`test/fixtures/contract.prisma`): emitted for each target by `pnpm emit` into `test/fixtures/<target>/generated/`. The suites are typechecked twice, once against each target's emitted types (`tsconfig.json` for MySQL, `tsconfig.mariadb.json` for MariaDB, which map `#live-types` to `test/types/<target>.ts`), so no MariaDB contract is typed as MySQL's. `test/contracts-agree.test.ts` checks that the two contracts have the same models and tables, and type their fields, columns and aggregates alike.
 - **Rendered SQL** (`test/rendered-statements.test.ts`): the SQL MySQL is sent for the suites' queries as they stood when the renderer became a class, replayed against a driver that answers without a database. It is a copy kept by hand.

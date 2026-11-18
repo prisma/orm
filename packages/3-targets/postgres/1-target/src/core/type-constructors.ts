@@ -82,7 +82,7 @@ const varbit = {
 } as const;
 
 /**
- * PostgreSQL's explicit types: each names one codec, and is what the contract stores. Each is named after the database type, plus the application value where the database type has more than one codec (ADR 257, ADR 316). The `json` type is `PlainJson`, because `Json` is its convenience type.
+ * PostgreSQL's explicit types: each names one codec, and is what the contract stores. Each is named after the database type, plus the application value where the database type is read by more than one codec of its data type (ADR 322, rule 4). The `json` type is `PlainJson`, because `Json` is its convenience type.
  */
 export const postgresExplicitTypes = {
   Int2: { ...int2, inferred: true },

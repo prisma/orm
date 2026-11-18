@@ -418,7 +418,7 @@ describe('Collection', () => {
       ]);
 
       await collection
-        .createAll([{ id: 1, name: 'Alice', email: 'alice@example.com' }], {
+        .createAll([{ id: 1, name: 'Alice', email: 'alice@example.com', invitedById: 2 }], {
           onConflict: 'skip',
           conflictOn: ['invitedById'],
         })

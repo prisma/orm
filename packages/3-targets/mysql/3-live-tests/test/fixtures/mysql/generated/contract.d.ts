@@ -16,7 +16,7 @@ import type {
 } from '@internal/mysql/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'1e1ebc7eebdf3efc3d5715efd315cedcd26dfdd19babd568cff0f30997129077'>;
+  StorageHashBase<'37bd4703f9af6fe818996a37f5ee71268b4e4c2b655c7c4410b066cf3e741639'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'5212eb1a1220f2d24de13f4efadd4c703f3a1098a5f57e09da0dc26ebb7201d0'>;
@@ -171,6 +171,9 @@ type ParameterizedOutputTypeFunctions = never;
 type FieldTypeOverrides = {
   readonly __unbound__: {
     readonly models: {
+      readonly Task: {
+        readonly type: { readonly output: 'bug' | 'feature'; readonly input: 'bug' | 'feature' };
+      };
       readonly User: {
         readonly role: { readonly output: 'USER' | 'ADMIN'; readonly input: 'USER' | 'ADMIN' };
       };
@@ -195,6 +198,9 @@ export type FieldInputTypes = FieldTypesFromDomain<
 >;
 type ColumnTypeOverrides = {
   readonly __unbound__: {
+    readonly Task: {
+      readonly type: { readonly output: 'bug' | 'feature'; readonly input: 'bug' | 'feature' };
+    };
     readonly User: {
       readonly role: { readonly output: 'USER' | 'ADMIN'; readonly input: 'USER' | 'ADMIN' };
     };
@@ -227,6 +233,16 @@ export namespace Models {
     notes: Note[];
     readonly [RelationKeys]?: 'notes';
   };
+  export type Bug = {
+    id: FieldOutputTypes['__unbound__']['Task']['id'];
+    parentId: FieldOutputTypes['__unbound__']['Task']['parentId'];
+    title: FieldOutputTypes['__unbound__']['Task']['title'];
+    type: 'bug';
+    severity: FieldOutputTypes['__unbound__']['Bug']['severity'];
+    parent: AnyTask | null;
+    subtasks: AnyTask[];
+    readonly [RelationKeys]?: 'parent' | 'subtasks';
+  };
   export type Counter = {
     big: FieldOutputTypes['__unbound__']['Counter']['big'];
     id: FieldOutputTypes['__unbound__']['Counter']['id'];
@@ -238,6 +254,16 @@ export namespace Models {
     id: FieldOutputTypes['__unbound__']['Event']['id'];
     account: Account;
     readonly [RelationKeys]?: 'account';
+  };
+  export type Feature = {
+    id: FieldOutputTypes['__unbound__']['Task']['id'];
+    parentId: FieldOutputTypes['__unbound__']['Task']['parentId'];
+    title: FieldOutputTypes['__unbound__']['Task']['title'];
+    type: 'feature';
+    priority: FieldOutputTypes['__unbound__']['Feature']['priority'];
+    parent: AnyTask | null;
+    subtasks: AnyTask[];
+    readonly [RelationKeys]?: 'parent' | 'subtasks';
   };
   export type Note = {
     authorId: FieldOutputTypes['__unbound__']['Note']['authorId'];
@@ -254,6 +280,15 @@ export namespace Models {
     author: User;
     readonly [RelationKeys]?: 'author';
   };
+  export type Task = {
+    id: FieldOutputTypes['__unbound__']['Task']['id'];
+    parentId: FieldOutputTypes['__unbound__']['Task']['parentId'];
+    title: FieldOutputTypes['__unbound__']['Task']['title'];
+    type: 'bug' | 'feature';
+    parent: AnyTask | null;
+    subtasks: AnyTask[];
+    readonly [RelationKeys]?: 'parent' | 'subtasks';
+  };
   export type Tick = {
     at: FieldOutputTypes['__unbound__']['Tick']['at'];
     label: FieldOutputTypes['__unbound__']['Tick']['label'];
@@ -266,17 +301,22 @@ export namespace Models {
     posts: Post[];
     readonly [RelationKeys]?: 'posts';
   };
+  export type AnyTask = Bug | Feature;
 }
 
 export declare const models: {
   Account: Models.Account;
   Author: Models.Author;
+  Bug: Models.Bug;
   Counter: Models.Counter;
   Event: Models.Event;
+  Feature: Models.Feature;
   Note: Models.Note;
   Post: Models.Post;
+  Task: Models.Task;
   Tick: Models.Tick;
   User: Models.User;
+  AnyTask: Models.AnyTask;
 };
 
 export type TypeMaps = TypeMapsType<
@@ -399,6 +439,39 @@ type ContractBase = Omit<
                 },
               ];
             };
+            readonly Feature: {
+              columns: {
+                readonly id: {
+                  readonly dataType: 'mysql/int';
+                  readonly codecId: 'mysql/int@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly priority: {
+                  readonly dataType: 'mysql/int';
+                  readonly codecId: 'mysql/int@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'Feature';
+                    readonly columns: readonly ['id'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'Task';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+              ];
+            };
             readonly Note: {
               columns: {
                 readonly authorId: {
@@ -504,6 +577,67 @@ type ContractBase = Omit<
                 },
               ];
             };
+            readonly Task: {
+              columns: {
+                readonly id: {
+                  readonly dataType: 'mysql/int';
+                  readonly codecId: 'mysql/int@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly parentId: {
+                  readonly dataType: 'mysql/int';
+                  readonly codecId: 'mysql/int@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly severity: {
+                  readonly dataType: 'mysql/varchar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: true;
+                  readonly typeParams: { readonly length: 191 };
+                  readonly many: false;
+                };
+                readonly title: {
+                  readonly dataType: 'mysql/varchar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly length: 191 };
+                  readonly many: false;
+                };
+                readonly type: {
+                  readonly dataType: 'mysql/varchar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly length: 191 };
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [
+                {
+                  readonly name: 'Task_parentId_idx_6a68f597';
+                  readonly prefix: 'Task_parentId_idx';
+                  readonly columns: readonly ['parentId'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'Task';
+                    readonly columns: readonly ['parentId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'Task';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+              ];
+            };
             readonly Tick: {
               columns: {
                 readonly at: {
@@ -564,6 +698,10 @@ type ContractBase = Omit<
               readonly kind: 'valueSet';
               readonly values: readonly ['USER', 'ADMIN'];
             };
+            readonly 'Task.type': {
+              readonly kind: 'valueSet';
+              readonly values: readonly ['bug', 'feature'];
+            };
           };
         };
       };
@@ -587,6 +725,7 @@ type ContractBase = Omit<
     readonly Event: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Event' };
     readonly Note: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Note' };
     readonly Post: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Post' };
+    readonly Task: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Task' };
     readonly Tick: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Tick' };
     readonly User: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'User' };
   };
@@ -657,6 +796,28 @@ type ContractBase = Omit<
               readonly fields: { readonly id: { readonly column: 'id' } };
             };
           };
+          readonly Bug: {
+            readonly fields: {
+              readonly severity: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 191 };
+                };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly table: 'Task';
+              readonly namespaceId: '__unbound__';
+              readonly fields: { readonly severity: { readonly column: 'severity' } };
+            };
+            readonly base: {
+              readonly namespace: '__unbound__' & NamespaceId;
+              readonly model: 'Task';
+            };
+          };
           readonly Counter: {
             readonly fields: {
               readonly big: {
@@ -719,6 +880,24 @@ type ContractBase = Omit<
                 readonly at: { readonly column: 'at' };
                 readonly id: { readonly column: 'id' };
               };
+            };
+          };
+          readonly Feature: {
+            readonly fields: {
+              readonly priority: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mysql/int@1' };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly table: 'Feature';
+              readonly namespaceId: '__unbound__';
+              readonly fields: { readonly priority: { readonly column: 'priority' } };
+            };
+            readonly base: {
+              readonly namespace: '__unbound__' & NamespaceId;
+              readonly model: 'Task';
             };
           };
           readonly Note: {
@@ -813,6 +992,80 @@ type ContractBase = Omit<
                 readonly authorId: { readonly column: 'authorId' };
                 readonly id: { readonly column: 'id' };
                 readonly title: { readonly column: 'title' };
+              };
+            };
+          };
+          readonly Task: {
+            readonly fields: {
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mysql/int@1' };
+              };
+              readonly parentId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mysql/int@1' };
+              };
+              readonly title: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 191 };
+                };
+              };
+              readonly type: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 191 };
+                };
+              };
+            };
+            readonly relations: {
+              readonly parent: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'Task';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: true;
+                readonly on: {
+                  readonly localFields: readonly ['parentId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+              readonly subtasks: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'Task';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['parentId'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'Task';
+              readonly namespaceId: '__unbound__';
+              readonly fields: {
+                readonly id: { readonly column: 'id' };
+                readonly parentId: { readonly column: 'parentId' };
+                readonly title: { readonly column: 'title' };
+                readonly type: { readonly column: 'type' };
+              };
+            };
+            readonly discriminator: { readonly field: 'type' };
+            readonly variants: {
+              readonly bug: {
+                readonly namespace: '__unbound__' & NamespaceId;
+                readonly model: 'Bug';
+              };
+              readonly feature: {
+                readonly namespace: '__unbound__' & NamespaceId;
+                readonly model: 'Feature';
               };
             };
           };

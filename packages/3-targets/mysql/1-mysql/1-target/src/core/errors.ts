@@ -28,7 +28,7 @@ export function mysqlError(
   return structuredError(code, message, options);
 }
 
-/** The refusal of a query the MySQL target's codecs cannot render yet: `what` names the feature, as in `Reading a raw column inside an include`. */
+/** The refusal of a query the MySQL target cannot run yet: `what` names the feature. */
 export function mysqlQueryNotYetSupported(what: string): StructuredError {
   return mysqlError(
     'RUNTIME.AST_UNSUPPORTED',

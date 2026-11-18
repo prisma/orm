@@ -449,7 +449,7 @@ describe('the Prisma 7 check before init changes the project', () => {
       expect(run.presented?.data).toMatchObject({
         packagesInstalled: {
           status: 'installed',
-          deps: ['@prisma/orm-postgres', 'dotenv'],
+          deps: ['@prisma/orm-postgres', 'dotenv', 'pg'],
         },
       });
       expect(installs[0]).toEqual(['add', '@prisma/orm-postgres', 'dotenv']);

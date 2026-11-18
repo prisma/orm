@@ -1,19 +1,17 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import type { ContractSourceContext } from '@internal/config/config-types';
 import {
   type Contract,
   type ControlPolicy,
   domainModelsAtDefaultNamespace,
 } from '@internal/contract/types';
-import { createDataTypeLookup } from '@internal/framework-components/codec';
 import type { TargetPackRef } from '@internal/framework-components/components';
-import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import { timeouts } from '@repo/test-utils';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { emptyContract, typescriptContract, typescriptContractFromPath } from '../src/config-types';
+import { stubContext } from './contract-source-context';
 
 const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
   kind: 'target',
@@ -24,31 +22,9 @@ const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
   defaultNamespaceId: 'public',
 };
 
-const stubContext: ContractSourceContext = {
-  composedExtensions: [],
-  defaultNamespaceId: 'public',
-  composedExtensionContracts: new Map(),
-  authoringContributions: {
-    dataTypes: {},
-    type: {},
-    entityTypes: {},
-    pslBlockDescriptors: {},
-    modelAttributes: {},
-    attributeSpecs: { model: {}, field: {} },
-  },
-  dataTypes: { entries: {}, lookup: createDataTypeLookup([]), dataTypeOfCodec: () => undefined },
-  codecLookup: {
-    get: () => undefined,
-    renderOutputTypeFor: () => undefined,
-    descriptorFor: () => undefined,
-  },
-  controlMutationDefaults: {
-    defaultFunctionRegistry: new Map(),
-    generatorDescriptors: [],
-  },
-  generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
-  resolvedInputs: [],
-  capabilities: {},
+const forPostgres = {
+  target: postgresTargetPack,
+  contractBuilderModule: '@prisma/orm-postgres/contract-builder',
 };
 
 describe('source format discriminator', () => {
@@ -58,7 +34,7 @@ describe('source format discriminator', () => {
   });
 
   it('typescriptContractFromPath tags the source as TypeScript', () => {
-    const config = typescriptContractFromPath('./contract.ts');
+    const config = typescriptContractFromPath('./contract.ts', undefined, forPostgres);
     expect(config.source.format).toBe('typescript');
   });
 
@@ -94,17 +70,21 @@ describe('typescriptContract', () => {
   });
 
   it('derives output colocated with input path when output is not provided (TML-2461)', () => {
-    const config = typescriptContractFromPath('./prisma/contract.ts');
+    const config = typescriptContractFromPath('./prisma/contract.ts', undefined, forPostgres);
     expect(config.output).toBe('./prisma/contract.json');
   });
 
   it('honours an explicit output over the derived default', () => {
-    const config = typescriptContractFromPath('./prisma/contract.ts', 'custom/out.json');
+    const config = typescriptContractFromPath(
+      './prisma/contract.ts',
+      'custom/out.json',
+      forPostgres,
+    );
     expect(config.output).toBe('custom/out.json');
   });
 
   it('derives output for an extensionless input path', () => {
-    const config = typescriptContractFromPath('./prisma/contract');
+    const config = typescriptContractFromPath('./prisma/contract', undefined, forPostgres);
     expect(config.output).toBe('./prisma/contract.json');
   });
 
@@ -117,11 +97,11 @@ describe('typescriptContract', () => {
       try {
         await writeFile(
           contractPath,
-          `export default { targetFamily: 'sql', target: 'postgres' };\n`,
+          `export default { targetFamily: 'sql', target: 'postgres', storage: { namespaces: {} } };\n`,
           'utf-8',
         );
 
-        const config = typescriptContractFromPath('./contract.ts');
+        const config = typescriptContractFromPath('./contract.ts', undefined, forPostgres);
         const result = await config.source.load({
           ...stubContext,
           resolvedInputs: [contractPath],
@@ -150,14 +130,20 @@ describe('typescriptContract', () => {
       try {
         await writeFile(contractPath, 'export const notContract = {};\n', 'utf-8');
 
-        const config = typescriptContractFromPath('./contract.ts');
+        const config = typescriptContractFromPath('./contract.ts', undefined, forPostgres);
 
         await expect(
           config.source.load({
             ...stubContext,
             resolvedInputs: [contractPath],
           }),
-        ).rejects.toThrow(/has no "default" or "contract" export/);
+        ).rejects.toThrow(
+          expect.objectContaining({
+            message:
+              'The contract file "./contract.ts" has no default export or named export `contract`.',
+            fix: 'Export the contract that defineContract returns as the default export or as `export const contract`.',
+          }),
+        );
 
         await expect(
           config.source.load({
@@ -229,11 +215,12 @@ describe('defaultControlPolicy specifier precedence', () => {
       try {
         await writeFile(
           contractPath,
-          `export default { targetFamily: 'sql', target: 'postgres', defaultControlPolicy: 'managed' };\n`,
+          `export default { targetFamily: 'sql', target: 'postgres', storage: { namespaces: {} }, defaultControlPolicy: 'managed' };\n`,
           'utf-8',
         );
 
         const config = typescriptContractFromPath('./contract.ts', undefined, {
+          ...forPostgres,
           defaultControlPolicy: 'external',
           createNamespace: createTestSqlNamespace,
         });
@@ -261,11 +248,12 @@ describe('defaultControlPolicy specifier precedence', () => {
       try {
         await writeFile(
           contractPath,
-          `export default { targetFamily: 'sql', target: 'postgres' };\n`,
+          `export default { targetFamily: 'sql', target: 'postgres', storage: { namespaces: {} } };\n`,
           'utf-8',
         );
 
         const config = typescriptContractFromPath('./contract.ts', undefined, {
+          ...forPostgres,
           defaultControlPolicy: 'tolerated',
           createNamespace: createTestSqlNamespace,
         });
@@ -293,11 +281,11 @@ describe('defaultControlPolicy specifier precedence', () => {
       try {
         await writeFile(
           contractPath,
-          `export default { targetFamily: 'sql', target: 'postgres' };\n`,
+          `export default { targetFamily: 'sql', target: 'postgres', storage: { namespaces: {} } };\n`,
           'utf-8',
         );
 
-        const config = typescriptContractFromPath('./contract.ts');
+        const config = typescriptContractFromPath('./contract.ts', undefined, forPostgres);
         const result = await config.source.load({
           ...stubContext,
           resolvedInputs: [contractPath],

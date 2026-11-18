@@ -54,3 +54,27 @@ model Tick {
   at    DateTime @id
   label String
 }
+
+model Task {
+  id       Int     @id
+  title    String
+  type     String
+  parentId Int?
+  parent   Task?   @relation("Subtasks", fields: [parentId], references: [id])
+  subtasks Task[]  @relation("Subtasks")
+
+  @@discriminator(type)
+}
+
+model Bug {
+  severity String
+
+  @@base(Task, "bug")
+}
+
+model Feature {
+  priority Int
+
+  @@base(Task, "feature")
+  @@map("Feature")
+}

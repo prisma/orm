@@ -15,14 +15,14 @@ export function mysqlClientError(
   return structuredError(code, message, options);
 }
 
-/** A TypeScript contract path given to `createMysqlDefineConfig`'s `defineConfig`. */
-export function typescriptContractUnsupported(targetId: string, contract: string): StructuredError {
+/** A TypeScript contract the config names in a file other than `.ts`, such as `.mts`. */
+export function typescriptContractNotTs(targetId: string, contract: string): StructuredError {
   return structuredError(
     'CONFIG.VALIDATION_FAILED',
-    `defineConfig for target "${targetId}" cannot build a contract from "${contract}", which is a TypeScript contract.`,
+    `The config for target "${targetId}" cannot read the contract "${contract}".`,
     {
-      why: `Target "${targetId}" builds contracts from Prisma schemas and does not support TypeScript contracts.`,
-      fix: 'Point `contract` at a Prisma schema: a .prisma file, a folder of them, or a glob.',
+      why: 'A TypeScript contract must be a .ts file.',
+      fix: 'Rename the contract to a .ts file, or point `contract` at a Prisma schema: a .prisma file, a folder of them, or a glob.',
       meta: { contract },
     },
   );

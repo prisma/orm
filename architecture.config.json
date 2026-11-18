@@ -1135,6 +1135,12 @@
       "plane": "shared"
     },
     {
+      "glob": "packages/3-targets/sqlite/3-driver/src/exact-integers.ts",
+      "domain": "targets",
+      "layer": "drivers",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-targets/sqlite/3-driver/src/normalize-error.ts",
       "domain": "targets",
       "layer": "drivers",
@@ -1471,6 +1477,12 @@
       "plane": "shared"
     },
     {
+      "glob": "packages/3-targets/mysql/1-mysql/9-facade/src/exports/define-contract.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-targets/mysql/1-mysql/9-facade/src/exports/control.ts",
       "domain": "extensions",
       "layer": "adapters",
@@ -1585,6 +1597,12 @@
       "plane": "migration"
     },
     {
+      "glob": "packages/3-targets/mysql/2-mariadb/2-adapter/src/exports/adapter.ts",
+      "domain": "targets",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-targets/mysql/2-mariadb/2-adapter/src/exports/codec-types.ts",
       "domain": "targets",
       "layer": "adapters",
@@ -1667,6 +1685,18 @@
       "domain": "extensions",
       "layer": "adapters",
       "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/9-facade/src/exports/contract-builder.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/9-facade/src/contract/**",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
     },
     {
       "glob": "packages/3-targets/mysql/2-mariadb/9-facade/src/config/**",

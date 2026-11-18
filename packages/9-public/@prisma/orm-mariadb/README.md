@@ -16,13 +16,17 @@ pnpm add @prisma/orm-mariadb
 └── @prisma/orm-toolchain       ORM command family for the `prisma` CLI, emitter, config loader
 ```
 
-MariaDB support is early. The package covers contracts, migrations and queries on MariaDB 10.11 and later: `prisma contract emit`, `prisma migration plan`, `prisma db migrate`, `prisma db verify`, `prisma db sign`, and `mariadb({ contract, url })`, the query client, which reads and writes through the ORM, the SQL builder and raw SQL as `mysql()` does on MySQL. The contract must be a `.prisma` schema.
+MariaDB support is early. The package covers contracts, migrations and queries on MariaDB 10.11 and later: `prisma contract emit`, `prisma migration plan`, `prisma db migrate`, `prisma db verify`, `prisma db sign`, and `mariadb({ contract, url })`, the query client, which reads and writes through the ORM, the SQL builder and raw SQL as `mysql()` does on MySQL. The contract is a `.prisma` schema or a TypeScript contract written with `defineContract` from `@prisma/orm-mariadb/contract-builder`.
 
 ```ts
 import mariadb from '@prisma/orm-mariadb/runtime';
 import { contractFromJson } from '@prisma/orm-mariadb/static';
+import type { Contract } from './prisma/contract.d';
+import contractJson from './prisma/contract.json' with { type: 'json' };
 
-const db = mariadb({ contract: contractFromJson<Contract>(contractJson), url: process.env.MARIADB_URL });
+const url = process.env['MARIADB_URL'];
+if (url === undefined) throw new Error('Set MARIADB_URL');
+const db = mariadb({ contract: contractFromJson<Contract>(contractJson), url });
 const users = await db.orm.User.include('posts', (posts) => posts.orderBy((p) => p.id.desc()).limit(3)).all();
 ```
 
@@ -44,6 +48,7 @@ These hold on MariaDB 10.11 as on MySQL 8.4; each was checked on a live MariaDB 
 | Namespace | Surface |
 | --- | --- |
 | `/config` | `defineConfig` for `prisma.config.ts` |
+| `/contract-builder` | `defineContract` and its helpers, for a contract written in TypeScript |
 | `/contract-types` | the types a generated `contract.d.ts` imports |
 | `/migration`, `/control` | migration classes and the control client |
 | `/runtime` | `mariadb({ contract, url })`, the query client |

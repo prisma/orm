@@ -55,6 +55,9 @@ export type ModelStorage =
       readonly namespaceId: string;
       readonly tableName: string;
       readonly columns: readonly ColumnDescription[];
+      readonly uniques: readonly UniqueConstraintNode[];
+      readonly indexes: readonly IndexNode[];
+      readonly foreignKeys: readonly ForeignKeyAuthoringInput[];
     };
 
 /** The key of a table among all tables of a contract: its namespace and its name. */

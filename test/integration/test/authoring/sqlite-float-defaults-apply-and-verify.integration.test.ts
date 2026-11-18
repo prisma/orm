@@ -1,6 +1,6 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { integerColumn } from '@internal/adapter-sqlite/column-types';
+import { integerNumberColumn } from '@internal/adapter-sqlite/column-types';
 import sqliteAdapter from '@internal/adapter-sqlite/control';
 import type { Contract } from '@internal/contract/types';
 import sqliteDriver from '@internal/driver-sqlite/control';
@@ -35,7 +35,7 @@ const contract = defineContract({
   models: {
     Reading: model('Reading', {
       fields: {
-        id: field.column(integerColumn).id(),
+        id: field.column(integerNumberColumn).id(),
         floatUp: field.column(sqlFloat).column('float_up').default(Number.POSITIVE_INFINITY),
         floatDown: field.column(sqlFloat).column('float_down').default(Number.NEGATIVE_INFINITY),
         realUp: field.column(sqliteReal).column('real_up').default(Number.POSITIVE_INFINITY),

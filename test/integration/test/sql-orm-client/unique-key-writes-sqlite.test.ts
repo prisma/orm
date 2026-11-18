@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
-import { integerColumn, textColumn } from '@internal/adapter-sqlite/column-types';
+import { integerNumberColumn, textColumn } from '@internal/adapter-sqlite/column-types';
 import sqliteAdapter from '@internal/adapter-sqlite/runtime';
 import { soleDomainNamespaceId } from '@internal/contract/types';
 import sqliteDriver from '@internal/driver-sqlite/runtime';
@@ -22,7 +22,7 @@ import { describe, expect, it } from 'vitest';
 
 const User = model('User', {
   fields: {
-    id: field.column(integerColumn).id(),
+    id: field.column(integerNumberColumn).id(),
     name: field.column(textColumn),
     email: field.column(textColumn).unique(),
   },

@@ -37,7 +37,7 @@ describe('a MySQL client with no database', () => {
       driverCreated: driverCreate.mock.calls.length,
     }).toEqual({
       builder: {
-        sql: 'SELECT `id` AS `id`, `email` AS `email` FROM `User` WHERE `role` = ?1 LIMIT 10',
+        sql: 'SELECT `id` AS `id`, `email` AS `email` FROM `User` WHERE `User`.`role` = ?1 LIMIT 10',
         params: ['ADMIN'],
       },
       orm: {

@@ -11,9 +11,9 @@
     "src/middleware/sql-middleware.ts"
   ],
   "thresholds": {
-    "lines": 90,
-    "branches": 80,
+    "lines": 95,
+    "branches": 92,
     "functions": 92,
-    "statements": 90
+    "statements": 95
   }
 }

@@ -57,11 +57,11 @@ describe.each(['session', 'activity', 'held-activity'] as const)(
                 kind: 'test-call',
                 contentHash: async () => 'test',
               });
-        const tx = activity
-          ? await activity.transaction?.(start)
-          : await session?.transaction(start);
-        if (!tx) throw new Error('Expected a transaction');
-        await tx.commit();
+        if (activity) {
+          await activity.transaction?.(async () => undefined, start);
+        } else {
+          await (await session?.transaction(start))?.commit();
+        }
         await activity?.end({ outcome: 'succeeded' });
         await session?.release();
         expect(driver.connection.beginTransactionSpy).toHaveBeenCalledExactlyOnceWith(start);

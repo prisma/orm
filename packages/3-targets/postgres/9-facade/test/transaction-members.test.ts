@@ -74,7 +74,7 @@ function deferred() {
 
 const selectIds = 'SELECT "id" AS "id" FROM "public"."posts"';
 const resetViews = 'UPDATE posts SET views = 0';
-const selectById = 'SELECT "id" AS "id" FROM "public"."posts" WHERE "id" = $1';
+const selectById = 'SELECT "id" AS "id" FROM "public"."posts" WHERE "posts"."id" = $1';
 const selectTitled =
   'SELECT "posts"."id" AS "id", "posts"."title" AS "title", "posts"."user_id" AS "user_id", "posts"."views" AS "views" FROM "public"."posts" WHERE "posts"."title" = $1';
 

@@ -11,6 +11,7 @@ import {
   ColumnRef,
   FunctionCallExpr,
   LiteralExpr,
+  type ProjectionExpr,
   sqlCharDescriptor,
   sqlFloatDescriptor,
   sqlIntDescriptor,
@@ -18,6 +19,7 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { ifDefined } from '@internal/utils/defined';
 import { describe, expect, it } from 'vitest';
+import { sqliteBooleanDescriptor } from '../src/core/boolean-codec';
 import type { AnySqliteCodecDescriptor } from '../src/core/codec-descriptor';
 import {
   codecDescriptors,
@@ -40,6 +42,7 @@ import {
   sqliteInteger,
   sqliteReal,
 } from '../src/core/data-types';
+import { sqliteDecimalDescriptor } from '../src/core/decimal-codec';
 import { sqliteCodecDescriptorRegistry, sqliteCodecRegistry } from '../src/core/registry';
 import { fromContractJson, toContractJson } from './contract-json';
 
@@ -64,6 +67,8 @@ const EXPECTED_CODEC_IDS = [
   'sqlite/json@1',
   'sqlite/bigint@1',
   'sqlite/bigintnumber@1',
+  'sqlite/decimal@1',
+  'sqlite/boolean@1',
 ] as const;
 
 const refFor = (
@@ -144,7 +149,7 @@ describe('SQLite built-in codec descriptors', () => {
 
   it("projects identity where SQLite's own JSON conversion is already canonical", () => {
     const expression = ColumnRef.of('records', 'value');
-    const descriptors = [sqliteTextDescriptor, sqliteDatetimeDescriptor, sqliteJsonDescriptor];
+    const descriptors = [sqliteTextDescriptor, sqliteDatetimeDescriptor];
 
     for (const descriptor of descriptors) {
       expect(descriptor.projectJson(expression, refFor(descriptor))).toBe(expression);
@@ -156,8 +161,8 @@ describe('SQLite built-in codec descriptors', () => {
 
     // SQLite's JSON functions reject a BLOB argument outright. A blob is carried as its hex text inside a
     // one-element array, which no row holds, so text in a BLOB column stays text. NULL and any other
-    // value pass through as themselves.
-    expect(sqliteBlobDescriptor.projectJson(expression, refFor(sqliteBlobDescriptor))).toEqual(
+    // value pass through as the codec projects them.
+    const blobAsHexOr = (otherwise: ProjectionExpr) =>
       CaseExpr.of(
         [
           {
@@ -168,9 +173,19 @@ describe('SQLite built-in codec descriptors', () => {
             value: FunctionCallExpr.of('json_array', [FunctionCallExpr.of('hex', [expression])]),
           },
         ],
-        expression,
-      ),
-    );
+        otherwise,
+      );
+    expect({
+      blob: sqliteBlobDescriptor.projectJson(expression, refFor(sqliteBlobDescriptor)),
+      decimal: sqliteDecimalDescriptor.projectJson(expression, refFor(sqliteDecimalDescriptor)),
+      boolean: sqliteBooleanDescriptor.projectJson(expression, refFor(sqliteBooleanDescriptor)),
+      json: sqliteJsonDescriptor.projectJson(expression, refFor(sqliteJsonDescriptor)),
+    }).toEqual({
+      blob: blobAsHexOr(expression),
+      decimal: blobAsHexOr(expression),
+      boolean: blobAsHexOr(expression),
+      json: blobAsHexOr(expression),
+    });
     // SQLite writes an infinity in JSON as 9.0e+999; both float codecs write the text their toDataTypeValue writes.
     const infinityAsText = CaseExpr.of(
       [
@@ -188,26 +203,42 @@ describe('SQLite built-in codec descriptors', () => {
     expect({
       real: sqliteRealDescriptor.projectJson(expression, refFor(sqliteRealDescriptor)),
       sqlFloat: sqliteSqlFloatDescriptor.projectJson(expression, refFor(sqliteSqlFloatDescriptor)),
-    }).toEqual({ real: infinityAsText, sqlFloat: infinityAsText });
+    }).toEqual({ real: blobAsHexOr(infinityAsText), sqlFloat: blobAsHexOr(infinityAsText) });
     expect({
       dataType: sqliteSqlFloatDescriptor.dataType,
       paramsSchema: sqliteSqlFloatDescriptor.paramsSchema,
     }).toEqual({ dataType: sqliteReal.id, paramsSchema: sqliteReal.params });
-    // An INTEGER reaching JSON as a number does not survive the int64 range.
-    expect(sqliteBigintDescriptor.projectJson(expression, refFor(sqliteBigintDescriptor))).toEqual(
-      CastExpr.as(expression, 'TEXT'),
-    );
-    // The canonical JSON is the decimal text every codec of sqlite/integer
-    // carries, whichever storage class the projected expression holds.
-    for (const descriptor of [
-      sqliteIntegerDescriptor,
-      sqliteSqlIntDescriptor,
-      sqliteBigintNumberDescriptor,
-    ]) {
-      expect(descriptor.projectJson(expression, refFor(descriptor))).toEqual(
-        CastExpr.as(expression, 'TEXT'),
+    // An INTEGER reaching JSON as a number does not survive the int64 range, so every codec of
+    // sqlite/integer carries it as decimal text. Any other value passes as a row carries it, so a codec
+    // refuses a REAL or text through an include as it does in a row, and a blob is carried as its hex text,
+    // where the cast would spell its bytes as digits.
+    const integerAsTextOr = (otherwise: ProjectionExpr) =>
+      CaseExpr.of(
+        [
+          {
+            condition: BinaryExpr.eq(
+              FunctionCallExpr.of('typeof', [expression]),
+              LiteralExpr.of('integer'),
+            ),
+            value: CastExpr.as(expression, 'TEXT'),
+          },
+        ],
+        otherwise,
       );
-    }
+    expect({
+      bigint: sqliteBigintDescriptor.projectJson(expression, refFor(sqliteBigintDescriptor)),
+      integer: sqliteIntegerDescriptor.projectJson(expression, refFor(sqliteIntegerDescriptor)),
+      sqlInt: sqliteSqlIntDescriptor.projectJson(expression, refFor(sqliteSqlIntDescriptor)),
+      bigintNumber: sqliteBigintNumberDescriptor.projectJson(
+        expression,
+        refFor(sqliteBigintNumberDescriptor),
+      ),
+    }).toEqual({
+      integer: integerAsTextOr(blobAsHexOr(expression)),
+      sqlInt: integerAsTextOr(blobAsHexOr(expression)),
+      bigint: integerAsTextOr(blobAsHexOr(expression)),
+      bigintNumber: integerAsTextOr(blobAsHexOr(expression)),
+    });
   });
 
   it('keeps authored registries complete, with no codec rendering a named TypeScript type', () => {
