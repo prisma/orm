@@ -151,6 +151,8 @@ export async function run(
 ): Promise<EngineCommandResult> {
   if (journey.command === 'migration plan') {
     return runMigrationPlan(journey, [
+      '--name',
+      `step-${getMigrationDirs(journey).length}`,
       '--from',
       latestMigrationDirName(journey),
       ...args,
@@ -242,4 +244,24 @@ export function dump(label: string, value: unknown): void {
     join(dir, `${label.replace(/[^\w.-]+/g, '_')}.json`),
     JSON.stringify(value, null, 2),
   );
+}
+
+export interface ExpectedConflict {
+  readonly summary: string;
+  readonly why: string;
+  readonly location: Readonly<Record<string, string>>;
+}
+
+/** The whole error of a plan refused for a conflict of kind `unsupportedOperation`, which carries no statement. */
+export function planningFailure(conflict: ExpectedConflict): Diagnostic {
+  return {
+    code: 'MIGRATION.PLANNING_FAILED',
+    severity: 'error',
+    summary: 'Migration planning failed',
+    why: conflict.summary,
+    nextActions: [{ kind: 'user-choice', label: conflict.why }],
+    meta: { conflicts: [{ kind: 'unsupportedOperation', ...conflict }] },
+    docsUrl:
+      'https://docs.prisma.io/docs/orm/v8/reference/error-reference#MIGRATION.PLANNING_FAILED',
+  };
 }
