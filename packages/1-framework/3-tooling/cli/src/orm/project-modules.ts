@@ -1,8 +1,8 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire, findPackageJSON } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { join } from 'pathe';
-import { exports as resolveExportsField } from 'resolve.exports';
 
 /** What the project resolves a module specifier to, and what importing it gave. */
 export type ProjectImport =
@@ -15,38 +15,41 @@ export type ProjectImport =
 export type ImportFromProject = (cwd: string, specifier: string) => Promise<ProjectImport>;
 
 /**
- * The conditions Node's ESM loader applies by default beyond those `resolve.exports` adds for
- * `import` (`import`, `node` and `default`).
+ * Asks a child Node, started in the project folder, to resolve the specifier with
+ * `import.meta.resolve`, so the project's own resolution, conditions and all, decides.
  */
-const IMPORT_CONDITIONS = ['module-sync', 'node-addons'];
+const RESOLVE_IN_PROJECT = `
+try {
+  process.stdout.write(JSON.stringify({ url: import.meta.resolve(process.argv[1]) }));
+} catch (error) {
+  process.stdout.write(JSON.stringify({ code: error?.code, message: String(error?.message ?? error) }));
+}`;
+
+type NodeResolution =
+  | { readonly url: string }
+  | { readonly code: string | undefined; readonly message: string };
+
+function resolveWithNode(cwd: string, specifier: string): NodeResolution {
+  const output = execFileSync(
+    process.execPath,
+    ['--input-type=module', '-e', RESOLVE_IN_PROJECT, specifier],
+    { cwd, encoding: 'utf-8' },
+  );
+  return JSON.parse(output);
+}
 
 function errorCode(error: unknown): unknown {
   return error instanceof Error ? Reflect.get(error, 'code') : undefined;
 }
 
-function splitSpecifier(specifier: string): { readonly name: string; readonly subpath: string } {
+/** The package a bare specifier names: `@scope/name` or `name`. */
+function packageOf(specifier: string): string {
   const parts = specifier.split('/');
-  const nameLength = specifier.startsWith('@') ? 2 : 1;
-  const rest = parts.slice(nameLength);
-  return {
-    name: parts.slice(0, nameLength).join('/'),
-    subpath: rest.length === 0 ? '.' : `./${rest.join('/')}`,
-  };
+  return parts.slice(0, specifier.startsWith('@') ? 2 : 1).join('/');
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-/** The file a package's `exports` field maps `subpath` to under the import conditions. */
-function resolveExports(manifest: Record<string, unknown>, subpath: string): string | undefined {
-  try {
-    const [target] =
-      resolveExportsField(manifest, subpath, { conditions: IMPORT_CONDITIONS }) ?? [];
-    return target;
-  } catch {
-    return undefined;
-  }
 }
 
 type Resolution =
@@ -56,7 +59,7 @@ type Resolution =
   | { readonly kind: 'unreadable'; readonly cause: unknown };
 
 function resolveFromProject(cwd: string, specifier: string): Resolution {
-  const { name, subpath } = splitSpecifier(specifier);
+  const name = packageOf(specifier);
   let manifestPath: string | undefined;
   try {
     manifestPath = findPackageJSON(name, pathToFileURL(join(cwd, 'package.json')));
@@ -88,10 +91,17 @@ function resolveFromProject(cwd: string, specifier: string): Resolution {
       throw error;
     }
   }
-  const target = resolveExports(manifest, subpath);
-  return target === undefined
-    ? { kind: 'not-exported' }
-    : { kind: 'resolved', path: fileURLToPath(new URL(target, pathToFileURL(manifestPath))) };
+  const resolved = resolveWithNode(cwd, specifier);
+  if ('url' in resolved) {
+    return { kind: 'resolved', path: fileURLToPath(resolved.url) };
+  }
+  if (resolved.code === 'ERR_PACKAGE_PATH_NOT_EXPORTED') {
+    return { kind: 'not-exported' };
+  }
+  return {
+    kind: 'unreadable',
+    cause: Object.assign(new Error(resolved.message), { code: resolved.code }),
+  };
 }
 
 /** Whether the project at `cwd` has the package `name` where Node would find it. */

@@ -53,6 +53,10 @@ describe('importFromProject', () => {
       'the node-addons condition Node turns on by default',
       { './init': { 'node-addons': './init.mjs' } },
     ],
+    [
+      'a matched condition with nothing inside, falling back to default',
+      { './init': { node: { types: './init.d.ts' }, default: './init.mjs' } },
+    ],
   ])('loads an export given as %s', async (_case, exports) => {
     writePackage({ type: 'module', exports }, { 'init.mjs': 'export default 42;\n' });
 
