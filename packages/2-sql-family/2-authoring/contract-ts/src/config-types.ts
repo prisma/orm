@@ -117,16 +117,23 @@ function isRecord(value: unknown): value is object {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function isOtherFamilyContract(value: unknown): value is object {
+const isNonEmptyString = (value: unknown): value is string =>
+  typeof value === 'string' && value.length > 0;
+
+/** Has the fields every family's contract has: a target family, a target, and storage namespaces. */
+function isContractOfAnyFamily(value: unknown): value is object {
   if (!isRecord(value)) return false;
-  const { targetFamily, target } = Object(value);
-  return typeof targetFamily === 'string' && targetFamily !== 'sql' && typeof target === 'string';
+  const { targetFamily, target, storage } = Object(value);
+  return (
+    isNonEmptyString(targetFamily) &&
+    isNonEmptyString(target) &&
+    isRecord(storage) &&
+    isRecord(Object(storage).namespaces)
+  );
 }
 
 function isSqlContract(value: unknown): value is Contract {
-  if (!isRecord(value)) return false;
-  const { targetFamily, storage } = Object(value);
-  return targetFamily === 'sql' && isRecord(storage) && isRecord(Object(storage).namespaces);
+  return isContractOfAnyFamily(value) && Object(value).targetFamily === 'sql';
 }
 
 export function emptyContract(options: {
@@ -215,20 +222,19 @@ export function typescriptContractFromPath(
         }
         const exported: unknown = mod.default ?? mod.contract;
         const origin = { format: 'typescript', inputs: [contractPath] } as const;
-        if (isOtherFamilyContract(exported)) refuseOtherTarget(origin, exported, options);
+        if (isContractOfAnyFamily(exported)) refuseOtherTarget(origin, exported, options);
         if (!isSqlContract(exported)) {
           throw contractError(
             'CONTRACT.EXPORT_INVALID',
             `The TypeScript contract "${contractPath}" exports a value that is not a SQL contract.`,
             {
-              why: 'The value has no SQL target family or no storage namespaces, so it was not built with defineContract.',
+              why: 'The value has no SQL target family, no target, or no storage namespaces, so it was not built with defineContract.',
               fix: "Export the result of the target package's defineContract as the module's default or contract export.",
               meta: { path: absolutePath, reason: 'not-a-contract' },
             },
           );
         }
         const contract = exported;
-        refuseOtherTarget(origin, contract, options);
         return ok(
           policy === undefined
             ? contract

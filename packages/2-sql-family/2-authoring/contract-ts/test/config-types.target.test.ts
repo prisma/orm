@@ -92,7 +92,7 @@ describe('typescriptContractFromPath with the target the config is for', () => {
   );
 
   it(
-    'refuses as not a SQL contract an export with a target but no SQL contract shape, null or list namespaces, or a null default export',
+    'refuses as not a contract an export without the storage namespaces every contract has, a SQL export without a target, or a null default export',
     async () => {
       const notContract = { refused: { code: 'CONTRACT.EXPORT_INVALID' } };
       expect({
@@ -104,11 +104,23 @@ describe('typescriptContractFromPath with the target the config is for', () => {
           `export default { targetFamily: 'sql', target: 'postgres', storage: { namespaces: [] } };\n`,
         ),
         nullDefault: await loadModule('export default null;\n'),
+        familyTagOnly: await loadModule(
+          `export default { targetFamily: 'mongo', target: 'mongo' };\n`,
+        ),
+        sqlWithoutTarget: await loadModule(
+          `export default { targetFamily: 'sql', storage: { namespaces: {} } };\n`,
+        ),
+        sqlWithEmptyTarget: await loadModule(
+          `export default { targetFamily: 'sql', target: '', storage: { namespaces: {} } };\n`,
+        ),
       }).toMatchObject({
         targetOnly: notContract,
         nullNamespaces: notContract,
         listNamespaces: notContract,
         nullDefault: notContract,
+        familyTagOnly: notContract,
+        sqlWithoutTarget: notContract,
+        sqlWithEmptyTarget: notContract,
       });
     },
     timeouts.typeScriptCompilation,
@@ -133,7 +145,7 @@ describe('typescriptContractFromPath with the target the config is for', () => {
     async () => {
       expect(
         await loadModule(
-          `export default { targetFamily: 'mongo', target: 'mongo', storage: { collections: {} } };\n`,
+          `export default { targetFamily: 'mongo', target: 'mongo', storage: { namespaces: {} } };\n`,
         ),
       ).toEqual({
         refused: {
