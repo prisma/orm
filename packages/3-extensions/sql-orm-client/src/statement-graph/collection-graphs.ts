@@ -30,6 +30,7 @@ import type { ParsedMutationInput, ParsedRelationMutation } from '../relation-mu
 import type { AliasedTable } from '../table-scope';
 import type { CollectionState } from '../types';
 import { rowIdentity } from '../written-keys';
+import { requireRowsThatCanConflict } from './conflict-keys';
 import { CrossJoin } from './cross-join';
 import type { ColumnMapping, NodeId } from './edge';
 import { Graph } from './graph';
@@ -242,6 +243,18 @@ export function createAllGraph(
     return b.graph;
   }
   const rows = createRowsOf(collection, data);
+  if (conflict !== undefined) {
+    const method = returns === 'rows' ? 'createAll()' : 'createAndCount()';
+    const { modelName, state } = collection;
+    requireRowsThatCanConflict(
+      collection.context.contract,
+      { action: method, modelName, meta: { method, model: modelName } },
+      state.tables.root.storage,
+      { columns: conflict.columns },
+      rows,
+      () => [],
+    );
+  }
   if (returns === 'rows') {
     requireIdentityColumnsForIncludes(collection);
   }

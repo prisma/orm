@@ -164,7 +164,7 @@ describe('updateFirstGraph with relation operations', () => {
     it('rejects a disconnect without criteria while the graph is built', () => {
       expect(() => printUpdate({ tags: (tags: Mutator) => tags.disconnect() })).toThrow(
         expect.objectContaining({
-          code: 'ORM.RELATION_MUTATION_INVALID',
+          code: 'ORM.ARGUMENT_INVALID',
           message: 'disconnect() nested mutation for relation "tags" requires criterion',
           meta: { kind: 'disconnect', relation: 'tags', problem: 'missing-criterion' },
         }),
@@ -189,7 +189,7 @@ describe('updateFirstGraph with relation operations', () => {
   it('rejects an empty disconnect criterion on a relation the child holds the key for', () => {
     expect(() => printUpdate({ posts: (posts: Mutator) => posts.disconnect([{}]) })).toThrow(
       expect.objectContaining({
-        code: 'ORM.RELATION_MUTATION_INVALID',
+        code: 'ORM.ARGUMENT_INVALID',
         message: 'disconnect() nested mutation for relation "posts" requires non-empty criterion',
         meta: { kind: 'disconnect', relation: 'posts', problem: 'empty-criterion' },
       }),
@@ -199,7 +199,7 @@ describe('updateFirstGraph with relation operations', () => {
   it('rejects an empty disconnect criterion on a many-to-many relation', () => {
     expect(() => printUpdate({ tags: (tags: Mutator) => tags.disconnect([{}]) })).toThrow(
       expect.objectContaining({
-        code: 'ORM.RELATION_MUTATION_INVALID',
+        code: 'ORM.ARGUMENT_INVALID',
         message: 'disconnect() nested mutation for relation "tags" requires non-empty criterion',
         meta: { kind: 'disconnect', relation: 'tags', problem: 'empty-criterion' },
       }),

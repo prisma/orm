@@ -264,7 +264,7 @@ describe.each(includeStrategies)('integration/nested-mutations (%s)', (strategy)
           }),
         ).rejects.toThrow(
           expect.objectContaining({
-            code: 'ORM.RELATION_MUTATION_INVALID',
+            code: 'ORM.ARGUMENT_INVALID',
             meta: { relation: 'posts', model: 'User', problem: 'missing-callback' },
           }),
         );
@@ -349,7 +349,7 @@ describe.each(includeStrategies)('integration/nested-mutations (%s)', (strategy)
           users.where({ id: 99 }).update({ posts: (posts) => posts.connect({} as never) }),
         ).rejects.toThrow(
           expect.objectContaining({
-            code: 'ORM.RELATION_MUTATION_INVALID',
+            code: 'ORM.ARGUMENT_INVALID',
             meta: { kind: 'connect', relation: 'posts', problem: 'empty-criterion' },
           }),
         );
@@ -369,7 +369,7 @@ describe.each(includeStrategies)('integration/nested-mutations (%s)', (strategy)
           users.where({ id: 1 }).update({ name: 'Grace', posts: [] as never }),
         ).rejects.toThrow(
           expect.objectContaining({
-            code: 'ORM.RELATION_MUTATION_INVALID',
+            code: 'ORM.ARGUMENT_INVALID',
             meta: { relation: 'posts', model: 'User', problem: 'missing-callback' },
           }),
         );
@@ -606,7 +606,7 @@ describe.each(includeStrategies)('integration/nested-mutations (%s)', (strategy)
             posts: (posts) => posts.where({ title: 'Draft' }).updateAll({ views: 1 }),
           }),
         ).rejects.toMatchObject({
-          code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+          code: 'ORM.OPERATION_UNSUPPORTED',
           meta: { kind: 'updateAll', relation: 'posts' },
         });
 
@@ -619,7 +619,7 @@ describe.each(includeStrategies)('integration/nested-mutations (%s)', (strategy)
             posts: (posts) => posts.deleteAll(),
           }),
         ).rejects.toMatchObject({
-          code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+          code: 'ORM.OPERATION_UNSUPPORTED',
           meta: { kind: 'deleteAll', relation: 'posts' },
         });
 

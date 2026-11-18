@@ -41,7 +41,6 @@ import {
 import {
   addressedModel,
   assertDistinctOnCapability,
-  assertInsertConflictSkipCapability,
   assertLockCapability,
   assertReturningCapability,
   columnOfCallerField,
@@ -50,7 +49,6 @@ import {
   isToOneCardinality,
   type ResolvedRelation,
   resolveIncludeRelation,
-  resolveInsertConflictColumns,
   resolveModelTableName,
   resolvePolymorphismInfo,
   resolveUpsertConflictColumns,
@@ -157,6 +155,7 @@ import {
   updateFirstGraph,
   upsertGraph,
 } from './statement-graph/collection-graphs';
+import { resolveConflict, variantInOwnTableOf } from './statement-graph/conflict-keys';
 import { Graph } from './statement-graph/graph';
 import { describeCollectionRead } from './statement-graph/read-graph';
 import { executeGraph, queryGraph } from './statement-graph/run-graph';
@@ -2131,45 +2130,31 @@ export class CollectionBase<
     method: string,
   ): InsertConflictSkip | undefined {
     if (options === undefined) return undefined;
-
-    if (options.onConflict !== 'skip') {
-      throw ormError(
-        'ORM.ARGUMENT_INVALID',
-        `${method} onConflict must be "skip"; received ${JSON.stringify(options.onConflict)}`,
-        { meta: { method, model: this.modelName } },
-      );
-    }
-
-    if (method === 'createAll()') {
-      this.#assertConflictSkipNotOnMtiVariant(method);
-    } else {
+    const createAll = method === 'createAll()';
+    if (!createAll) {
       this.#assertNotMtiVariant(method);
     }
-
-    const conflictOn = options.conflictOn ?? [];
-    assertInsertConflictSkipCapability(this.contract, method, conflictOn.length > 0);
-
-    return {
-      columns: resolveInsertConflictColumns(
-        this.contract,
-        this.namespaceId,
-        this.modelName,
-        conflictOn,
-      ),
-    };
+    const { columns } = resolveConflict(
+      this.contract,
+      { action: method, modelName: this.modelName, meta: { method, model: this.modelName } },
+      this.namespaceId,
+      options,
+      createAll
+        ? variantInOwnTableOf(
+            this.contract,
+            this.namespaceId,
+            this.modelName,
+            this.state.variantValue,
+          )
+        : undefined,
+    );
+    return { columns };
   }
 
   #assertNotMtiVariant(method: string): void {
     this.#refuseOnMtiVariant(
       method,
       `${method} is not supported for MTI variant "${this.#variantModelName()}" on model "${this.modelName}". Use createAll() instead.`,
-    );
-  }
-
-  #assertConflictSkipNotOnMtiVariant(method: string): void {
-    this.#refuseOnMtiVariant(
-      method,
-      `The onConflict option is not supported on variant "${this.#variantModelName()}" of model "${this.modelName}" because the variant is stored in its own table. Call createAll(rows) without the option; a duplicate row then makes the call fail.`,
     );
   }
 
