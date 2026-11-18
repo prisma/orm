@@ -207,8 +207,22 @@ describe('SQLite built-in codec descriptors', () => {
       paramsSchema: sqliteSqlFloatDescriptor.paramsSchema,
     }).toEqual({ dataType: sqliteReal.id, paramsSchema: sqliteReal.params });
     // An INTEGER reaching JSON as a number does not survive the int64 range, so every codec of
-    // sqlite/integer carries it as decimal text. Each refuses a blob in a row, so each carries a blob
-    // as its hex text too, where the cast would spell its bytes as digits.
+    // sqlite/integer carries it as decimal text. Any other value passes as a row carries it, so a codec
+    // refuses a REAL or text through an include as it does in a row, and a blob is carried as its hex text,
+    // where the cast would spell its bytes as digits.
+    const integerAsTextOr = (otherwise: ProjectionExpr) =>
+      CaseExpr.of(
+        [
+          {
+            condition: BinaryExpr.eq(
+              FunctionCallExpr.of('typeof', [expression]),
+              LiteralExpr.of('integer'),
+            ),
+            value: CastExpr.as(expression, 'TEXT'),
+          },
+        ],
+        otherwise,
+      );
     expect({
       bigint: sqliteBigintDescriptor.projectJson(expression, refFor(sqliteBigintDescriptor)),
       integer: sqliteIntegerDescriptor.projectJson(expression, refFor(sqliteIntegerDescriptor)),
@@ -218,10 +232,10 @@ describe('SQLite built-in codec descriptors', () => {
         refFor(sqliteBigintNumberDescriptor),
       ),
     }).toEqual({
-      integer: blobAsHexOr(CastExpr.as(expression, 'TEXT')),
-      sqlInt: blobAsHexOr(CastExpr.as(expression, 'TEXT')),
-      bigint: blobAsHexOr(CastExpr.as(expression, 'TEXT')),
-      bigintNumber: blobAsHexOr(CastExpr.as(expression, 'TEXT')),
+      integer: integerAsTextOr(blobAsHexOr(expression)),
+      sqlInt: integerAsTextOr(blobAsHexOr(expression)),
+      bigint: integerAsTextOr(blobAsHexOr(expression)),
+      bigintNumber: integerAsTextOr(blobAsHexOr(expression)),
     });
   });
 

@@ -133,6 +133,41 @@ describe('a SQLite BigInt column holding integers past the safe range', () => {
     expect(aggregates).toEqual({ total: 2n * WIDE, greatest: WIDE });
   });
 
+  describe.each([
+    ['2^63', 2n ** 63n],
+    ['2^64', 2n ** 64n],
+    ['-(2^63) - 1', -(2n ** 63n) - 1n],
+  ])('a value past the 64-bit range, %s', (_name, value) => {
+    const refusal = {
+      code: 'RUNTIME.ENCODE_FAILED',
+      message: `sqlite/bigint@1 value must be an integer from -9223372036854775808 to 9223372036854775807, which SQLite stores, got ${value}`,
+      meta: { codecId: 'sqlite/bigint@1', received: String(value) },
+    };
+
+    it('is refused by create', async () => {
+      await expect(
+        collections().entries.create({ id: 20, ledgerId: 2, amount: value }),
+      ).rejects.toMatchObject(refusal);
+    });
+
+    it('is refused by update', async () => {
+      const { entries } = collections();
+      await entries.create({ id: 21, ledgerId: 2, amount: 1n });
+      await expect(
+        entries.where((entry) => entry['id']!.eq(21)).update({ amount: value }),
+      ).rejects.toMatchObject(refusal);
+      await entries.where((entry) => entry['id']!.eq(21)).delete();
+    });
+
+    it('is refused by a filter', async () => {
+      await expect(
+        collections()
+          .entries.where((entry) => entry['amount']!.eq(value))
+          .all(),
+      ).rejects.toMatchObject(refusal);
+    });
+  });
+
   it('leaves no lock behind, so another connection can write after the read', async () => {
     await collections().entries.select('id', 'amount').all();
     const other = new DatabaseSync(path!);

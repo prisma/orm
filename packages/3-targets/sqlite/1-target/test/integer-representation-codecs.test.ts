@@ -1,7 +1,14 @@
 import type { CodecInstanceContext } from '@internal/framework-components/codec';
-import { AggregateExpr, CastExpr } from '@internal/sql-relational-core/ast';
+import {
+  AggregateExpr,
+  BinaryExpr,
+  CaseExpr,
+  CastExpr,
+  FunctionCallExpr,
+  LiteralExpr,
+} from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
-import { hexJsonProjectionOr } from '../src/core/blob-json-projection';
+import { hexJsonProjection } from '../src/core/blob-json-projection';
 import { SQLITE_BIGINT_NUMBER_CODEC_ID } from '../src/core/codec-ids';
 import {
   sqliteBigintDescriptor,
@@ -48,7 +55,7 @@ describe('sqlite/bigint@1 number wire values', () => {
     await expect(codec.fromWire(9007199254740992, {})).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
       message:
-        'sqlite/bigint@1 wire number must be an integer within the safe integer range, got 9007199254740992',
+        'A sqlite/bigint@1 value is 9007199254740992, which is not an integer. sqlite/bigint@1 reads integers from -9223372036854775808 to 9223372036854775807.',
       meta: { codecId: 'sqlite/bigint@1', received: '9007199254740992' },
     });
     await expect(codec.fromWire(-9007199254740992, {})).rejects.toMatchObject({
@@ -61,7 +68,7 @@ describe('sqlite/bigint@1 number wire values', () => {
     await expect(codec.fromWire(1.5, {})).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
       message:
-        'sqlite/bigint@1 wire number must be an integer within the safe integer range, got 1.5',
+        'A sqlite/bigint@1 value is 1.5, which is not an integer. sqlite/bigint@1 reads integers from -9223372036854775808 to 9223372036854775807.',
       meta: { codecId: 'sqlite/bigint@1', received: '1.5' },
     });
   });
@@ -75,6 +82,20 @@ describe('sqlite/bigint@1 number wire values', () => {
       message: 'sqlite/bigint@1 value must be a bigint, got number 9',
       meta: { codecId: 'sqlite/bigint@1', received: 'number' },
     });
+  });
+
+  it.each([
+    [2n ** 63n, '9223372036854775808'],
+    [2n ** 64n, '18446744073709551616'],
+    [-(2n ** 63n) - 1n, '-9223372036854775809'],
+  ])('refuses to write %s, which SQLite cannot store', async (value, received) => {
+    const refusal = {
+      code: 'RUNTIME.ENCODE_FAILED',
+      message: `sqlite/bigint@1 value must be an integer from -9223372036854775808 to 9223372036854775807, which SQLite stores, got ${received}`,
+      meta: { codecId: 'sqlite/bigint@1', received },
+    };
+    await expect(codec.toWire(value, {})).rejects.toMatchObject(refusal);
+    expect(() => codec.toDataTypeValue(value)).toThrow(expect.objectContaining(refusal));
   });
 
   // A schema literal (`BigInt @default(0)`) reaches the JSON boundary as a
@@ -106,37 +127,37 @@ describe('sqlite/bigintnumber@1', () => {
 
     it('throws at 2^53 on every wire form', async () => {
       await expect(codec.fromWire(9007199254740992, {})).rejects.toThrow(
-        'sqlite/bigintnumber@1 value must be an integer within the safe integer range',
+        'which is not an integer within the safe integer range. sqlite/bigintnumber@1 reads integers from -9007199254740991 to 9007199254740991.',
       );
       await expect(codec.fromWire('9007199254740992', {})).rejects.toThrow(
-        'sqlite/bigintnumber@1 value must be an integer within the safe integer range',
+        'which is not an integer within the safe integer range. sqlite/bigintnumber@1 reads integers from -9007199254740991 to 9007199254740991.',
       );
       await expect(codec.fromWire(9007199254740992n, {})).rejects.toThrow(
-        'sqlite/bigintnumber@1 value must be an integer within the safe integer range',
+        'which is not an integer within the safe integer range. sqlite/bigintnumber@1 reads integers from -9007199254740991 to 9007199254740991.',
       );
     });
 
     it('throws at -(2^53)', async () => {
       await expect(codec.fromWire(-9007199254740992n, {})).rejects.toThrow(
-        'sqlite/bigintnumber@1 value must be an integer within the safe integer range',
+        'which is not an integer within the safe integer range. sqlite/bigintnumber@1 reads integers from -9007199254740991 to 9007199254740991.',
       );
       await expect(codec.fromWire('-9007199254740992', {})).rejects.toThrow(
-        'sqlite/bigintnumber@1 value must be an integer within the safe integer range',
+        'which is not an integer within the safe integer range. sqlite/bigintnumber@1 reads integers from -9007199254740991 to 9007199254740991.',
       );
     });
 
     it('throws on decimal text a Number() coercion would silently round', async () => {
       await expect(codec.fromWire('9007199254740993', {})).rejects.toThrow(
-        'sqlite/bigintnumber@1 value must be an integer within the safe integer range',
+        'which is not an integer within the safe integer range. sqlite/bigintnumber@1 reads integers from -9007199254740991 to 9007199254740991.',
       );
     });
 
     it('throws on non-integral wire values', async () => {
       await expect(codec.fromWire(1.5, {})).rejects.toThrow(
-        'sqlite/bigintnumber@1 value must be an integer within the safe integer range',
+        'which is not an integer within the safe integer range. sqlite/bigintnumber@1 reads integers from -9007199254740991 to 9007199254740991.',
       );
       await expect(codec.fromWire('1.5', {})).rejects.toThrow(
-        'sqlite/bigintnumber@1 wire value must be a decimal string',
+        'A sqlite/bigintnumber@1 value is "1.5", which is not an integer within the safe integer range.',
       );
     });
 
@@ -211,13 +232,26 @@ describe('sqlite/bigintnumber@1', () => {
     });
   });
 
-  it('projects a text-cast aggregate as text, and a blob as the array of its hex text', () => {
+  it('projects an integer as decimal text, a blob as the array of its hex text, and any other value as it is', () => {
     const lowered = CastExpr.as(new AggregateExpr('count', undefined), 'text');
     expect(
       sqliteBigintNumberDescriptor.projectJson(lowered, {
         codecId: SQLITE_BIGINT_NUMBER_CODEC_ID,
       }),
-    ).toEqual(hexJsonProjectionOr(lowered, CastExpr.as(lowered, 'TEXT')));
+    ).toEqual(
+      CaseExpr.of(
+        [
+          {
+            condition: BinaryExpr.eq(
+              FunctionCallExpr.of('typeof', [lowered]),
+              LiteralExpr.of('integer'),
+            ),
+            value: CastExpr.as(lowered, 'TEXT'),
+          },
+        ],
+        hexJsonProjection(lowered),
+      ),
+    );
   });
 
   it.each([

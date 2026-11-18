@@ -175,7 +175,7 @@ describe('SQLite aggregate defaults', { concurrent: false }, () => {
     await expect(pastRange.codec.fromWire(pastRange.wire, {})).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
       message:
-        'sqlite/bigintnumber@1 value must be an integer within the safe integer range, got 9007199254740992',
+        'A sqlite/bigintnumber@1 value is "9007199254740992", which is not an integer within the safe integer range. sqlite/bigintnumber@1 reads integers from -9007199254740991 to 9007199254740991.',
       meta: { codecId: 'sqlite/bigintnumber@1', received: '9007199254740992' },
     });
   });

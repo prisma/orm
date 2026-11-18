@@ -30,9 +30,17 @@ export function sqliteError(
   return structuredError(code, message, options);
 }
 
-/** The bytes a blob is, from the row's `Uint8Array` or from the array of their hex text an include carries. */
+/** The bytes an error shows, which their hex text cut to 100 characters holds. */
+const SHOWN_BYTES = 50;
+
+/** The hex text of the bytes an error shows, from the row's `Uint8Array` or from the array of their hex text an include carries. */
 function blobHexText(value: unknown): string | undefined {
-  if (value instanceof Uint8Array) return Buffer.from(value).toString('hex').toUpperCase();
+  if (value instanceof Uint8Array) {
+    const shownBytes = value.subarray(0, SHOWN_BYTES);
+    return Buffer.from(shownBytes.buffer, shownBytes.byteOffset, shownBytes.byteLength)
+      .toString('hex')
+      .toUpperCase();
+  }
   if (!Array.isArray(value) || value.length !== 1) return undefined;
   const [hex]: readonly unknown[] = value;
   return typeof hex === 'string' ? hex : undefined;

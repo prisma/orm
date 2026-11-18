@@ -5,6 +5,7 @@ import {
   sqliteBigintDescriptor,
   sqliteBlobDescriptor,
   sqliteIntegerDescriptor,
+  sqliteJsonDescriptor,
   sqliteRealDescriptor,
   sqliteSqlFloatDescriptor,
   sqliteSqlIntDescriptor,
@@ -31,8 +32,9 @@ describe('SQLite codec JSON representations', () => {
   it('rejects a malformed string wire with a structured decode error', async () => {
     await expect(bigintCodec.fromWire('not-a-number', {})).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
-      message: 'sqlite/bigint@1 wire value must be a decimal string',
-      meta: { codecId: 'sqlite/bigint@1' },
+      message:
+        'A sqlite/bigint@1 value is "not-a-number", which is not an integer. sqlite/bigint@1 reads integers from -9223372036854775808 to 9223372036854775807.',
+      meta: { codecId: 'sqlite/bigint@1', received: 'not-a-number' },
     });
   });
 });
@@ -68,7 +70,9 @@ describe('SQLite codecs read the value an include carries', () => {
     expect(await sqlFloat.fromWire('-Infinity', ctx)).toBe(Number.NEGATIVE_INFINITY);
     await expect(real.fromWire('NaN', ctx)).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
-      message: 'sqlite/real@1 wire value must be a number, or the text Infinity or -Infinity',
+      message:
+        'A sqlite/real@1 value is "NaN", which is not a number. sqlite/real@1 reads a number, or the text Infinity or -Infinity.',
+      meta: { codecId: 'sqlite/real@1', received: 'NaN' },
     });
   });
 
@@ -78,14 +82,14 @@ describe('SQLite codecs read the value an include carries', () => {
   });
 
   it.each([
-    ['text, which a BLOB column outside a STRICT table holds as text', 'ABCD'],
-    ['a number', 42],
-    ['lowercase hex', ['0abc']],
-  ])('sqlite/blob@1 refuses %s', async (_name, wire) => {
+    ['text, which a BLOB column outside a STRICT table holds as text', 'ABCD', '"ABCD"', 'ABCD'],
+    ['a number', 42, '42', '42'],
+    ['lowercase hex', ['0abc'], "bytes x'0abc'", "x'0abc'"],
+  ])('sqlite/blob@1 refuses %s', async (_name, wire, shown, received) => {
     await expect(blob.fromWire(wire as never, ctx)).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
-      message:
-        'sqlite/blob@1 wire value must be bytes, or the array of their hex text an include carries',
+      message: `A sqlite/blob@1 value is ${shown}, which is not a blob. sqlite/blob@1 reads a blob's bytes.`,
+      meta: { codecId: 'sqlite/blob@1', received },
     });
   });
 
@@ -117,7 +121,8 @@ describe('SQLite codecs read the value an include carries', () => {
     async (codecId, codec) => {
       await expect(codec.fromWire('abc' as never, ctx)).rejects.toMatchObject({
         code: 'RUNTIME.DECODE_FAILED',
-        message: `${codecId} wire value must be a number, or the text Infinity or -Infinity`,
+        message: `A ${codecId} value is "abc", which is not a number. ${codecId} reads a number, or the text Infinity or -Infinity.`,
+        meta: { codecId, received: 'abc' },
       });
     },
   );
@@ -178,6 +183,26 @@ describe('SQLite codecs read the value an include carries', () => {
     });
     await expect(integer.fromWire(new Uint8Array(80) as never, ctx)).rejects.toMatchObject({
       meta: { received: `x'${'0'.repeat(100)}'` },
+    });
+  });
+});
+
+describe('sqlite/json@1 reading a stored value', () => {
+  const json = sqliteJsonDescriptor.factory()({ name: 'test' });
+  const column = { table: 'documents', name: 'body' };
+
+  it('reads JSON text as the document it holds', async () => {
+    expect(await json.fromWire('{"a":[1,"b"]}', { column })).toEqual({ a: [1, 'b'] });
+  });
+
+  it.each([
+    ['text that is not JSON', 'abc', '"abc"', 'abc'],
+    ['a blob', new Uint8Array([0x7b]), "bytes x'7B'", "x'7B'"],
+  ])('refuses %s, naming its column', async (_name, wire, shown, received) => {
+    await expect(json.fromWire(wire as never, { column })).rejects.toMatchObject({
+      code: 'RUNTIME.DECODE_FAILED',
+      message: `Column "documents"."body" holds ${shown}, which is not JSON text. sqlite/json@1 reads JSON text as the document it holds.`,
+      meta: { codecId: 'sqlite/json@1', table: 'documents', column: 'body', received },
     });
   });
 });
