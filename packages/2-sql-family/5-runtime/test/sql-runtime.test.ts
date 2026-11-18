@@ -22,6 +22,7 @@ import type { SqlExecutionPlan, SqlQueryPlan } from '@internal/sql-relational-co
 import { applicationDomainOf, timeouts } from '@repo/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import { createTestSqlNamespace } from '../../1-core/contract/test/test-support';
+import { computeSqlFingerprint } from '../src/fingerprint';
 import type { SqlMiddleware, SqlMiddlewareContext } from '../src/middleware/sql-middleware';
 import type {
   SqlRuntimeAdapterDescriptor,
@@ -33,6 +34,11 @@ import { type TransactionContext, withTransaction } from '../src/sql-runtime';
 import { createAsyncSecretCodec, decryptSecret } from './seeded-secret-codec';
 import { defineTestCodec } from './test-codec';
 import { createTestRuntime as createRuntime, descriptorsFromCodecs, stubAst } from './utils';
+
+vi.mock('../src/fingerprint', async (importOriginal) => {
+  const original = await importOriginal<{ computeSqlFingerprint: typeof computeSqlFingerprint }>();
+  return { computeSqlFingerprint: vi.fn(original.computeSqlFingerprint) };
+});
 
 const runtimeSecretSeed = 'sql-runtime-secret';
 
@@ -263,7 +269,7 @@ describe('SqlRuntime', () => {
     expect(runtime.telemetry()).toBeNull();
   });
 
-  it('computes telemetry fingerprint lazily on first read and memoises the result (#30932)', async () => {
+  it('computes the telemetry fingerprint on first read, once per statement', async () => {
     const { stackInstance, context, driver } = createTestSetup();
     const runtime = createRuntime({
       stackInstance,
@@ -271,34 +277,28 @@ describe('SqlRuntime', () => {
       driver,
       verifyMarker: false,
     });
+    const fingerprint = vi.mocked(computeSqlFingerprint);
+    fingerprint.mockClear();
 
-    const plan = createRawExecutionPlan({ sql: 'SELECT id FROM users WHERE id = 123' });
-    await runtime.execute(plan);
+    await runtime.execute(createRawExecutionPlan({ sql: 'SELECT id FROM users WHERE id = 123' }));
+    expect(fingerprint).not.toHaveBeenCalled();
 
-    // telemetry() computes the fingerprint lazily on read
-    const event1 = runtime.telemetry();
-    expect(event1).not.toBeNull();
-    expect(event1?.target).toBe('postgres');
-    expect(event1?.lane).toBe('raw');
-    expect(event1?.outcome).toBe('success');
-    expect(typeof event1?.fingerprint).toBe('string');
-    expect(event1?.fingerprint).toHaveLength(64);
+    const first = runtime.telemetry();
+    expect(first).toEqual({
+      lane: 'raw',
+      target: 'postgres',
+      outcome: 'success',
+      fingerprint: expect.stringMatching(/^[0-9a-f]{64}$/),
+      durationMs: expect.any(Number),
+    });
+    expect(runtime.telemetry()).toBe(first);
+    expect(fingerprint).toHaveBeenCalledTimes(1);
 
-    // Second read returns the exact same memoised object
-    const event2 = runtime.telemetry();
-    expect(event2).toBe(event1);
-
-    // A subsequent statement clears and updates the telemetry
-    const plan2 = createRawExecutionPlan({ sql: 'DELETE FROM users WHERE id = 456' });
-    await runtime.execute(plan2);
-
-    const event3 = runtime.telemetry();
-    expect(event3).not.toBeNull();
-    expect(event3).not.toBe(event1);
-    expect(typeof event3?.fingerprint).toBe('string');
-    expect(event3?.fingerprint).toHaveLength(64);
+    await runtime.execute(createRawExecutionPlan({ sql: 'DELETE FROM users WHERE id = 456' }));
+    expect(fingerprint).toHaveBeenCalledTimes(1);
+    expect(runtime.telemetry()?.fingerprint).not.toBe(first?.fingerprint);
+    expect(fingerprint).toHaveBeenCalledTimes(2);
   });
-
 
   it('closes runtime and driver', async () => {
     const { stackInstance, context, driver } = createTestSetup();
