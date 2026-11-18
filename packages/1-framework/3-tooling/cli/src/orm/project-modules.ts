@@ -1,9 +1,10 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
-import { createRequire, findPackageJSON } from 'node:module';
+import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { type } from 'arktype';
-import { join } from 'pathe';
+import { dirname, join } from 'pathe';
+import { resolverChildCommand } from './resolver-child-command';
 
 /** What the project resolves a module specifier to, and what importing it gave. */
 export type ProjectImport =
@@ -26,7 +27,7 @@ const ANSWER_END = '\u0000prisma-resolution-end\u0000';
 const RESOLVE_IN_PROJECT = `
 const answer = (value) => process.stdout.write(${JSON.stringify(ANSWER_START)} + JSON.stringify(value) + ${JSON.stringify(ANSWER_END)});
 try {
-  answer({ url: import.meta.resolve(process.argv[1]) });
+  answer({ url: import.meta.resolve(process.argv.at(-1)) });
 } catch (error) {
   answer({ code: error?.code, message: String(error?.message ?? error) });
 }`;
@@ -45,15 +46,19 @@ function answerIn(stdout: string): string | undefined {
 }
 
 /**
- * The child runs on `process.execPath` with Node's command-line flags, so it works where the CLI
- * runs on Node or Bun; Deno takes different flags and fails here as `unloadable`.
+ * The child runs on the runtime running the CLI. Node, Bun and Deno each load an exported module
+ * and report a missing package the same way, but report a subpath the package does not export
+ * differently: Node sets `ERR_PACKAGE_PATH_NOT_EXPORTED`, Bun sets `ERR_MODULE_NOT_FOUND` and Deno
+ * sets no code. Under Bun and Deno that case is therefore `unloadable`, not `not-exported`.
  */
 function resolveWithNode(cwd: string, specifier: string): NodeResolution {
-  const child = spawnSync(
+  const { command: runtime, args } = resolverChildCommand(
+    process.versions,
     process.execPath,
-    ['--input-type=module', '-e', RESOLVE_IN_PROJECT, specifier],
-    { cwd, encoding: 'utf-8' },
+    RESOLVE_IN_PROJECT,
+    specifier,
   );
+  const child = spawnSync(runtime, args, { cwd, encoding: 'utf-8' });
   const command = `${process.execPath} resolving ${specifier} in ${cwd}`;
   if (child.error !== undefined) {
     return { failed: new Error(`${command} could not start`, { cause: child.error }) };
@@ -91,6 +96,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/**
+ * The `package.json` of `name` in the nearest `node_modules` from `cwd` upwards, where Node looks
+ * for a bare specifier. `module.findPackageJSON` does this too, but Bun and Deno do not have it.
+ */
+function installedManifest(cwd: string, name: string): string | undefined {
+  for (let dir = cwd; ; dir = dirname(dir)) {
+    const candidate = join(dir, 'node_modules', name, 'package.json');
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+    if (dirname(dir) === dir) {
+      return undefined;
+    }
+  }
+}
+
 type Resolution =
   | { readonly kind: 'not-installed' }
   | { readonly kind: 'not-exported' }
@@ -99,15 +120,7 @@ type Resolution =
 
 function resolveFromProject(cwd: string, specifier: string): Resolution {
   const name = packageOf(specifier);
-  let manifestPath: string | undefined;
-  try {
-    manifestPath = findPackageJSON(name, pathToFileURL(join(cwd, 'package.json')));
-  } catch (error) {
-    if (errorCode(error) === 'ERR_MODULE_NOT_FOUND') {
-      return { kind: 'not-installed' };
-    }
-    throw error;
-  }
+  const manifestPath = installedManifest(cwd, name);
   if (manifestPath === undefined) {
     return { kind: 'not-installed' };
   }
@@ -148,14 +161,7 @@ function resolveFromProject(cwd: string, specifier: string): Resolution {
 
 /** Whether the project at `cwd` has the package `name` where Node would find it. */
 export function isInstalledInProject(cwd: string, name: string): boolean {
-  try {
-    return findPackageJSON(name, pathToFileURL(join(cwd, 'package.json'))) !== undefined;
-  } catch (error) {
-    if (errorCode(error) === 'ERR_MODULE_NOT_FOUND') {
-      return false;
-    }
-    throw error;
-  }
+  return installedManifest(cwd, name) !== undefined;
 }
 
 /**

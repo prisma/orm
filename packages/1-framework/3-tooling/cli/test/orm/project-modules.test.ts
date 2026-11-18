@@ -34,6 +34,21 @@ describe('importFromProject', () => {
     });
   });
 
+  it('finds a package installed in a folder above the project, as Node does', async () => {
+    writePackage(
+      { type: 'module', exports: { './init': './init.mjs' } },
+      { 'init.mjs': 'export default 42;\n' },
+    );
+    writeFile('apps/web/package.json', '{"name":"web"}');
+
+    await expect(
+      importFromProject(join(projectDir, 'apps/web'), 'acme-db/init'),
+    ).resolves.toMatchObject({
+      kind: 'loaded',
+      module: { default: 42 },
+    });
+  });
+
   it('says a subpath the package does not export is not exported', async () => {
     writePackage({ exports: { './config': './config.mjs' } });
 
