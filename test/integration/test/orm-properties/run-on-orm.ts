@@ -229,7 +229,16 @@ export class OrmRunner {
   }
 
   async run(orm: LooseOrm, command: Command): Promise<unknown> {
-    return comparable(await this.#run(orm, command));
+    return (await this.runKeepingRows(orm, command)).value;
+  }
+
+  async runKeepingRows(
+    orm: LooseOrm,
+    command: Command,
+  ): Promise<{ readonly value: unknown; readonly rows: unknown }> {
+    const rows = await this.#run(orm, command);
+    const unordered = Array.isArray(rows) && command.kind !== 'read';
+    return { value: unordered ? inAnyOrder(rows) : comparable(rows), rows };
   }
 
   async #run(orm: LooseOrm, command: Command): Promise<unknown> {
@@ -242,7 +251,7 @@ export class OrmRunner {
       case 'createAll':
         return command.counted
           ? collection.createAndCount(command.rows)
-          : inAnyOrder(await shape(collection).createAll(command.rows));
+          : shape(collection).createAll(command.rows);
       case 'update': {
         const keyed = collection.whereUnique(command.key);
         const target =
@@ -266,7 +275,7 @@ export class OrmRunner {
         const target = collection.where(conditionOf(command.filter, model));
         return command.counted
           ? target.updateAndCount(command.changes)
-          : inAnyOrder(await shape(target).updateAll(command.changes));
+          : shape(target).updateAll(command.changes);
       }
       case 'delete': {
         const keyed = collection.whereUnique(command.key);
@@ -276,9 +285,7 @@ export class OrmRunner {
       }
       case 'deleteAll': {
         const target = collection.where(conditionOf(command.filter, model));
-        return command.counted
-          ? target.deleteAndCount()
-          : inAnyOrder(await shape(target).deleteAll());
+        return command.counted ? target.deleteAndCount() : shape(target).deleteAll();
       }
       case 'upsert':
         return shape(collection).upsert({
@@ -319,7 +326,7 @@ export class OrmRunner {
       const found = collectionOf(orm, command.model, command.variant).whereUnique(key);
       read.push(comparable(await this.#shaped(found, model, command.shape).first()));
     }
-    return { returned: removes ? keyed.map(() => null) : keyed, read };
+    return { returned: removes ? keyed.map(() => null) : keyed.map(comparable), read };
   }
 
   async readTables(orm: LooseOrm): Promise<Record<string, unknown[]>> {

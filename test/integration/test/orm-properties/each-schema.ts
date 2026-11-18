@@ -52,7 +52,6 @@ export const exercisedWithManySequences: readonly string[] = [
   'create through 1:n',
   'create through n:1',
   'create through n:m',
-  'create through 1:1 holder',
   'create through 1:1 other',
   'connect through 1:n',
   'connect through n:1',

@@ -267,32 +267,120 @@ const sqliteTypes: readonly fc.Arbitrary<ScalarType>[] = [
   ),
 ];
 
-const postgresKeyTypes: readonly ScalarType[] = [
-  key('Int4', numbered, true),
-  key('Int2', numbered, true),
-  key('Int8BigInt', bigNumbered),
-  key('Int8Number', numbered),
-  key('Oid', numbered),
-  key('Text', named),
-  key('Varchar(8)', named),
-  key('Uuid', uuidNumbered),
-  key('DateString', datedText),
-  key('TimestamptzJsDate', dated),
+const short = (ordinal: number) => `k${ordinal}`;
+const halved = (ordinal: number) => ordinal + 0.5;
+const decimal = (ordinal: number) => `${ordinal}.5`;
+const even = (ordinal: number) => ordinal % 2 === 0;
+const oneByte = (ordinal: number) => Uint8Array.of(ordinal % 256);
+const eightBits = (ordinal: number) => (ordinal % 256).toString(2).padStart(8, '0');
+const someBits = (ordinal: number) => (ordinal % 256).toString(2);
+const address = (ordinal: number) =>
+  even(ordinal) ? `10.0.0.${ordinal % 256}/32` : `10.0.0.${ordinal % 256}`;
+const days = (ordinal: number) => `P${ordinal}D`;
+const dayParts = (ordinal: number) => ({ months: 0, days: ordinal, micros: 0n });
+const keyed = (ordinal: number) => ({ key: ordinal });
+const mixedCaseUuid = (ordinal: number) =>
+  even(ordinal) ? uuidNumbered(ordinal).toUpperCase() : uuidNumbered(ordinal);
+const clock = (ordinal: number) =>
+  `${String(Math.floor(ordinal / 60) % 24).padStart(2, '0')}:${String(ordinal % 60).padStart(2, '0')}:00`;
+const clockWithZone = (ordinal: number) => `${clock(ordinal)}${even(ordinal) ? 'Z' : '+00:00'}`;
+const instantText = (ordinal: number) =>
+  `${datedText(ordinal)}T00:00:00${even(ordinal) ? 'Z' : '+00:00'}`;
+const localText = (ordinal: number) => `${datedText(ordinal)}T00:00:00`;
+const instantOf = (ordinal: number) => Temporal.Instant.from(`${datedText(ordinal)}T00:00:00Z`);
+const localOf = (ordinal: number) => Temporal.PlainDateTime.from(localText(ordinal));
+const dateOf = (ordinal: number) => Temporal.PlainDate.from(datedText(ordinal));
+const timeOf = (ordinal: number) => Temporal.PlainTime.from(clock(ordinal));
+
+function keyWith<P>(
+  parameters: fc.Arbitrary<P>,
+  psl: (parameters: P) => string,
+  distinct: (ordinal: number) => unknown,
+): fc.Arbitrary<ScalarType> {
+  return parameters.map((chosen) => key(psl(chosen), distinct));
+}
+
+const keyLength = fc.integer({ min: 4, max: 9 });
+const keyScale = fc.integer({ min: 1, max: 4 });
+
+const postgresKeyTypes: readonly fc.Arbitrary<ScalarType>[] = [
+  fc.constant(key('Int4', numbered, true)),
+  fc.constant(key('Int2', numbered, true)),
+  fc.constant(key('Int8BigInt', bigNumbered)),
+  fc.constant(key('Int8Number', numbered)),
+  fc.constant(key('NumericBigInt', bigNumbered)),
+  fc.constant(key('Oid', numbered)),
+  fc.constant(key('Float4', halved)),
+  fc.constant(key('Float8', halved)),
+  fc.constant(key('Money', decimal)),
+  keyWith(keyScale, (scale) => written('NumericString', scale + 6, scale), decimal),
+  fc.constant(key('Text', named)),
+  keyWith(keyLength, (length) => written('Varchar', length), short),
+  keyWith(keyLength, (length) => written('Char', length), short),
+  fc.constant(key('Uuid', mixedCaseUuid)),
+  fc.constant(key('Inet', address)),
+  fc.constant(key('Bytea', oneByte)),
+  fc.constant(key('Jsonb', keyed)),
+  fc.constant(key('Bit(8)', eightBits)),
+  fc.constant(key('Varbit(8)', someBits)),
+  fc.constant(key('DateString', datedText)),
+  fc.constant(key('DateTemporal', dateOf)),
+  keyWith(precision, (p) => written('TimeString', p), clock),
+  keyWith(precision, (p) => written('TimeTemporal', p), timeOf),
+  keyWith(precision, (p) => written('Timetz', p), clockWithZone),
+  keyWith(precision, (p) => written('TimestamptzJsDate', p), dated),
+  keyWith(precision, (p) => written('TimestamptzTemporal', p), instantOf),
+  keyWith(precision, (p) => written('TimestamptzString', p), instantText),
+  keyWith(precision, (p) => written('TimestampJsDate', p), dated),
+  keyWith(precision, (p) => written('TimestampInstant', p), instantOf),
+  keyWith(precision, (p) => written('TimestampTemporal', p), localOf),
+  keyWith(precision, (p) => written('TimestampString', p), localText),
+  keyWith(precision, (p) => written('IntervalString', p), days),
+  keyWith(precision, (p) => written('IntervalParts', p), dayParts),
 ];
 
-const sqliteKeyTypes: readonly ScalarType[] = [
-  key('Int', numbered, true),
-  key('BigInt', bigNumbered),
-  key('BigIntNumber', numbered),
-  key('String', named),
-  key('sql.Varchar(8)', named),
-  key('DateString', datedText),
-  key('DatetimeJsDate', dated),
+const sqliteKeyTypes: readonly fc.Arbitrary<ScalarType>[] = [
+  fc.constant(key('Int', numbered, true)),
+  fc.constant(key('BigInt', bigNumbered)),
+  fc.constant(key('BigIntNumber', numbered)),
+  fc.constant(key('Float', halved)),
+  fc.constant(key('Decimal', decimal)),
+  fc.constant(key('String', named)),
+  keyWith(keyLength, (length) => written('sql.Varchar', length), short),
+  keyWith(keyLength, (length) => written('sql.Char', length), short),
+  fc.constant(key('Bytes', oneByte)),
+  fc.constant(key('Json', keyed)),
+  fc.constant(key('DateString', datedText)),
+  fc.constant(key('DateTemporal', dateOf)),
+  fc.constant(key('TimeString', clock)),
+  fc.constant(key('TimeTemporal', timeOf)),
+  fc.constant(key('DatetimeJsDate', dated)),
+  fc.constant(key('DatetimeTemporal', instantOf)),
+  fc.constant(key('DatetimeString', instantText)),
+  fc.constant(key('DurationString', days)),
 ];
+
+const notKeysOfGeneratedModels = [
+  'Bytea',
+  'Jsonb',
+  'Bytes',
+  'Json',
+  'DurationString',
+  'IntervalParts',
+];
+
+function ordered(type: ScalarType): boolean {
+  return !notKeysOfGeneratedModels.includes(type.psl.replace(/\(.*$/, ''));
+}
 
 export const keyTypes = {
-  postgres: fc.constantFrom(...postgresKeyTypes),
-  sqlite: fc.constantFrom(...sqliteKeyTypes),
+  postgres: fc.oneof(...postgresKeyTypes).filter(ordered),
+  sqlite: fc.oneof(...sqliteKeyTypes).filter(ordered),
+} as const;
+
+export const oneOfEachKeyType = {
+  postgres: fc.tuple(...postgresKeyTypes),
+  sqlite: fc.tuple(...sqliteKeyTypes),
 } as const;
 
 export const generatedKeyType = key('Int', numbered, true);

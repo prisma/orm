@@ -7,6 +7,7 @@ These tests generate schemas, rows and ORM calls with [fast-check](https://fast-
 | `capabilities.*.test.ts` | A sequence of calls gives the same results and the same rows on the client's own ORM and on an ORM whose contract lacks some capabilities. After every call that returns rows, each row equals the row read by its key straight after. |
 | `reads.*.test.ts` | A read agrees with the same rows read another way. |
 | `nested.*.test.ts` | A write with relation callbacks stores the same rows as the same writes made one call at a time. |
+| `keys.*.test.ts` | Every scalar type with equality works as a primary key and as a foreign key. |
 | `values.*.test.ts` | A value of every scalar type is returned as stored, is stored again unchanged, reads the same through an include, and is found by an equality filter. |
 
 ## Capabilities
@@ -43,6 +44,17 @@ After a generated sequence of writes, `reads.ts` checks, on the client's own ORM
 
 The generated call has operations on one relation of each record, and links each related row at most once. With operations on two relations of one record, the ORM does not apply them in the order they are written, so an operation that depends on another relation's (a filter across it, or the same row linked twice) ends differently from the separate calls. The README of the ORM client states an order only within one relation.
 
+## Keys
+
+`keys.ts` builds, for every scalar type that has equality, a parent model keyed by it and a child model with a foreign key to it, with generated type parameters. Key values include spellings the database normalizes, such as an uppercase UUID, an address with `/32`, a time with `Z`, and a decimal with fewer digits than its scale. For generated key values it requires:
+
+- the row is found by the key as written and by the key as read back, with `whereUnique`, the object form of `where`, and `in`;
+- including the children of a parent and the parent of a child gives the rows read directly, on the client's own ORM and with one query per included relation;
+- `cursor` on the key skips exactly the rows up to it;
+- `update` of the key and `delete` return the row a read by key gives.
+
+Each test also states which key types the ORM offers no ordering on (bytes, JSON, and SQLite's duration), and which the include with one query per relation refuses because the key decodes to an object (`Json`, `Jsonb`, `IntervalParts`). `Bool` is left out, having two values.
+
 ## Values
 
 `values.ts` puts one nullable field of every scalar type on a model, with generated type parameters, and for each generated value requires:
@@ -58,7 +70,7 @@ A value the codec or the database refuses is skipped; a type none of whose value
 
 - **Schemas** (`schemas.ts`, `scalar-types.ts`):
   - two to four models, plus one junction model per many-to-many relation;
-  - a key per model: one field of a generated type, a database-generated integer, or two fields;
+  - a key per model: one field, a database-generated integer, or two fields, of any scalar type the key tests show to have ordering and to work with both include strategies, with generated type parameters;
   - an optional unique field, and two to four more fields whose types cycle through every scalar type of the target, with generated type parameters and nullability;
   - polymorphic models: about one model in four gets a discriminator and one to three variants, each with fields of its own, stored in the base table or in a table of its own;
   - one to five relations: one-to-many, one-to-one or many-to-many, between two models or from a model to itself, optional or required, with generated referential actions. A relation to a model with a two-field key has a two-field foreign key.

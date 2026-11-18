@@ -201,9 +201,13 @@ export async function sameOnBothPaths(paths: Paths, comparison: Comparison): Pro
   const { tally } = comparison;
   for (const feature of comparison.schema.features) tally.add(`schema with ${feature}`);
 
+  let returnedRows: unknown;
+
   async function attempt(orm: LooseOrm, command: Command): Promise<Outcome> {
     try {
-      return { status: 'returned', value: await runner.run(orm, command) };
+      const { value, rows } = await runner.runKeepingRows(orm, command);
+      returnedRows = rows;
+      return { status: 'returned', value };
     } catch (error) {
       const code = codeOf(error);
       if (code === undefined) {
@@ -230,7 +234,7 @@ export async function sameOnBothPaths(paths: Paths, comparison: Comparison): Pro
         ? { status: 'refused' }
         : await attempt(orm, command);
       if (outcome.status === 'returned') {
-        const { returned, read } = await runner.readBack(orm, command, outcome.value);
+        const { returned, read } = await runner.readBack(orm, command, returnedRows);
         expect(
           { step, command, read },
           'a returned row differs from the row read by its key straight after',
