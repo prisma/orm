@@ -463,7 +463,7 @@ function recordedOperations(
 
 /**
  * Refuses a run whose pending migrations, in any space, lose data or change who can read or write
- * rows where the run's data protection policy forbids it. `db migrate`, `db migrate --show` and the
+ * data where the run's data protection policy forbids it. `db migrate`, `db migrate --show` and the
  * control API's `migrate` all decide it here.
  */
 export function refuseForbiddenMigrations(args: {

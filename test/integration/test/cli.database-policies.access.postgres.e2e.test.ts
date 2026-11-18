@@ -58,7 +58,7 @@ const NO_RLS = contract(USER(false));
 
 const FORBIDDEN = {
   code: 'MIGRATION.DATA_PROTECTION_FORBIDS',
-  summary: "This database's data protection policy forbids changing who can read or write rows",
+  summary: "This database's data protection policy forbids changing who can read or write data",
 };
 
 async function emit(project: PolicyProject, psl: string): Promise<void> {

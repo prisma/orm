@@ -219,13 +219,15 @@ describe('errorDataProtectionForbids', () => {
     subject: 'post',
     label: 'Disable row-level security on "post"',
   };
-  const ownerCloses =
+  const markerCloses =
     'To do it anyway, whoever owns the database must first change its data protection policy.';
+  const refCloses =
+    'To do it anyway, whoever owns that database must first change the data protection policy production declares.';
   const lossForbidden =
-    'The data protection policy forbids losing data, so these operations cannot run on this database.';
-  const keepData = `${lossForbidden} Remove the operation from the migration. ${ownerCloses}`;
-  const keepAccess = `The data protection policy forbids changing who can read or write rows, so these operations cannot run on this database. Keep the contract's access rules as they are. ${ownerCloses}`;
-  const keepDataPlanned = `${lossForbidden} If a model or field was only renamed, state the rename with --rename <old>:<new>. Otherwise keep it in the contract. ${ownerCloses}`;
+    "This database's data protection policy forbids losing data, so these operations cannot run on it.";
+  const keepData = `${lossForbidden} If a model or field was only renamed, or its type changed, plan this migration again with --rename or --convert. Otherwise remove the operation from the migration. ${markerCloses}`;
+  const keepAccess = `production declares a data protection policy that forbids changing who can read or write data, so these operations cannot run on the database it describes. Keep the contract's access rules as they are. ${refCloses}`;
+  const keepDataPlanned = `${lossForbidden} If a model or field was only renamed, state the rename with --rename <old>:<new>. Otherwise keep it in the contract. ${markerCloses}`;
 
   it('refuses a migration that loses data under data-loss-forbidden the marker records', () => {
     expect(
@@ -272,7 +274,7 @@ describe('errorDataProtectionForbids', () => {
       code: 'MIGRATION.DATA_PROTECTION_FORBIDS',
       severity: 'error',
       summary:
-        'production declares a data protection policy that forbids changing who can read or write rows',
+        'production declares a data protection policy that forbids changing who can read or write data',
       why: 'production declares accessWidening: access-widening-forbidden. Disable row-level security on "post" (post), in contract space "app".',
       fix: keepAccess,
       nextActions: [{ kind: 'user-choice', label: keepAccess }],
@@ -305,7 +307,7 @@ describe('errorDataProtectionForbids', () => {
       code: 'MIGRATION.DATA_PROTECTION_FORBIDS',
       severity: 'error',
       summary:
-        "This database's data protection policy forbids data loss and changing who can read or write rows",
+        "This database's data protection policy forbids data loss and changing who can read or write data",
       why: 'The marker records dataLoss: data-loss-forbidden. Drop column "legacy_name" from "user" (user.legacy_name), in migration 20261118T0900_drop_legacy of contract space "app". production declares accessWidening: access-widening-forbidden. Disable row-level security on "post" (post), in migration 20261118T0900_drop_legacy of contract space "app".',
       fix: `${keepDataPlanned} ${keepAccess}`,
       nextActions: [
@@ -355,7 +357,7 @@ describe('errorDataProtectionForbids advice', () => {
       {
         kind: 'user-choice',
         label:
-          'The data protection policy forbids losing data, so these operations cannot run on this database. If a model or field was only renamed, state the rename with --rename <old>:<new>. For a type change, write the conversion with {bin} migration plan --convert <field> --config app.config.ts. Otherwise keep it in the contract. To do it anyway, whoever owns the database must first change its data protection policy.',
+          "This database's data protection policy forbids losing data, so these operations cannot run on it. If a model or field was only renamed, state the rename with --rename <old>:<new>. For a type change, write the conversion with {bin} migration plan --convert <field> --config app.config.ts. Otherwise keep it in the contract. To do it anyway, whoever owns the database must first change its data protection policy.",
       },
     ]);
   });

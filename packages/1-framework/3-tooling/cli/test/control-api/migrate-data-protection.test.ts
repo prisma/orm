@@ -64,7 +64,7 @@ const DROP_AUDIT: MigrationPlanOperation = {
 };
 
 const KEEP_DATA =
-  'The data protection policy forbids losing data, so these operations cannot run on this database. Remove the operation from the migration. To do it anyway, whoever owns the database must first change its data protection policy.';
+  "This database's data protection policy forbids losing data, so these operations cannot run on it. If a model or field was only renamed, or its type changed, plan this migration again with --rename or --convert. Otherwise remove the operation from the migration. To do it anyway, whoever owns the database must first change its data protection policy.";
 
 const projectDirs: string[] = [];
 
@@ -310,7 +310,7 @@ describe('executeMigrate, data protection', () => {
 
     expect(result.ok ? undefined : result.failure.toEnvelope()).toMatchObject({
       code: 'MIGRATION.DATA_PROTECTION_FORBIDS',
-      summary: "This database's data protection policy forbids changing who can read or write rows",
+      summary: "This database's data protection policy forbids changing who can read or write data",
       meta: {
         settings: [{ setting: 'accessWidening', level: 'access-widening-forbidden' }],
         operations: [

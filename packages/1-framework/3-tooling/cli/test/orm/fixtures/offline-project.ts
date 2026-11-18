@@ -254,7 +254,7 @@ export interface FakePlannerScript {
   readonly operationsAccessorThrows?: unknown;
   /** The new required fields every `plan` call reports it gives a temporary value. */
   readonly temporaryValues?: readonly unknown[];
-  /** What every `plan` call reports would change who can read or write rows. */
+  /** What every `plan` call reports would change who can read or write data. */
   readonly accessChanges?: readonly {
     readonly operationIndex: number;
     readonly subject: { readonly kind: 'storage'; readonly name: string };

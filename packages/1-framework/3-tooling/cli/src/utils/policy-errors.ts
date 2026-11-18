@@ -141,11 +141,21 @@ export const FORBIDDEN_LEVEL = {
 
 const FORBIDDEN_CHANGE = {
   dataLoss: 'data loss',
-  accessWidening: 'changing who can read or write rows',
+  accessWidening: 'changing who can read or write data',
 } as const satisfies { readonly [S in DataProtectionSetting]: string };
 
-const DO_IT_ANYWAY =
-  'To do it anyway, whoever owns the database must first change its data protection policy.';
+/** Who refuses the change: the database's own policy, or the one a ref declares for its database. */
+function refusingPolicy(source: PolicySource, forbids: string): string {
+  return source.kind === 'ref'
+    ? `${source.refName} declares a data protection policy that forbids ${forbids}, so these operations cannot run on the database it describes.`
+    : `This database's data protection policy forbids ${forbids}, so these operations cannot run on it.`;
+}
+
+function doItAnyway(source: PolicySource): string {
+  return source.kind === 'ref'
+    ? `To do it anyway, whoever owns that database must first change the data protection policy ${source.refName} declares.`
+    : 'To do it anyway, whoever owns the database must first change its data protection policy.';
+}
 
 /** What a user can do instead of a refused change, for the command that refused it. */
 function keepProtected(
@@ -153,31 +163,38 @@ function keepProtected(
   command: DataProtectionCheckedCommand,
   invocation: CliInvocation | undefined,
 ): string {
+  const migrated = command === 'db migrate';
   if (refusal.setting === 'accessWidening') {
-    const instead =
-      command === 'db migrate'
+    return [
+      refusingPolicy(refusal.source, FORBIDDEN_CHANGE.accessWidening),
+      migrated
         ? 'Remove the operation from the migration.'
-        : "Keep the contract's access rules as they are.";
-    return `The data protection policy forbids changing who can read or write rows, so these operations cannot run on this database. ${instead} ${DO_IT_ANYWAY}`;
+        : "Keep the contract's access rules as they are.",
+      doItAnyway(refusal.source),
+    ].join(' ');
   }
-  const planned = command !== 'db migrate';
   const changesType = refusal.operations.some(({ loss }) => loss === 'typeChange');
   return [
-    'The data protection policy forbids losing data, so these operations cannot run on this database.',
-    ...(planned
-      ? ['If a model or field was only renamed, state the rename with --rename <old>:<new>.']
-      : []),
-    ...(planned && changesType
+    refusingPolicy(refusal.source, 'losing data'),
+    ...(migrated
       ? [
-          `For a type change, write the conversion with ${cliCommand(
-            invocation === undefined ? undefined : { ...invocation, dbGiven: false },
-            'migration plan',
-            ['--convert', '<field>'],
-          )}.`,
+          'If a model or field was only renamed, or its type changed, plan this migration again with --rename or --convert.',
+          'Otherwise remove the operation from the migration.',
         ]
-      : []),
-    planned ? 'Otherwise keep it in the contract.' : 'Remove the operation from the migration.',
-    DO_IT_ANYWAY,
+      : [
+          'If a model or field was only renamed, state the rename with --rename <old>:<new>.',
+          ...(changesType
+            ? [
+                `For a type change, write the conversion with ${cliCommand(
+                  invocation === undefined ? undefined : { ...invocation, dbGiven: false },
+                  'migration plan',
+                  ['--convert', '<field>'],
+                )}.`,
+              ]
+            : []),
+          'Otherwise keep it in the contract.',
+        ]),
+    doItAnyway(refusal.source),
   ].join(' ');
 }
 
@@ -189,7 +206,7 @@ function refusedOperationText(operation: DataProtectionRefusedOperation): string
   return `${operation.label} (${operation.subject}), ${where}.`;
 }
 
-/** `MIGRATION.DATA_PROTECTION_FORBIDS`: a run would lose data, or change who can read or write rows, where a setting forbids it. */
+/** `MIGRATION.DATA_PROTECTION_FORBIDS`: a run would lose data, or change who can read or write data, where a setting forbids it. */
 export function errorDataProtectionForbids(args: {
   readonly spaceId: string;
   readonly command: DataProtectionCheckedCommand;

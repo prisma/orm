@@ -137,7 +137,7 @@ type PlannerSuccess = {
   readonly appliedStatements: readonly AppliedStatementReport[];
   /** The operations that would lose data, positioned in the plan's operations. */
   readonly dataLoss: readonly PlannedDataLoss[];
-  /** The operations that would change who can read or write rows, positioned in the plan's operations. */
+  /** The operations that would change who can read or write data, positioned in the plan's operations. */
   readonly accessChanges: readonly PlannedAccessChange[];
   readonly temporaryValues: readonly TemporaryValueReport[];
   /** The new required fields the plan gives a temporary value, as the planner reports them. */
