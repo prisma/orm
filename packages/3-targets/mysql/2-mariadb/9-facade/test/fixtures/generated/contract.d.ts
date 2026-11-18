@@ -595,6 +595,7 @@ type ContractBase = Omit<
       readonly jsonAgg: true;
       readonly limit: true;
       readonly orderBy: true;
+      readonly subqueryReadsWrittenTable: true;
     };
   };
   readonly extensions: {};

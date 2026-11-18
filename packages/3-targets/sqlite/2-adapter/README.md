@@ -149,6 +149,7 @@ The adapter declares the following SQLite capabilities:
 - **`sql.jsonAgg: true`** -- Supports JSON aggregation via `json_group_array()`
 - **`sql.returning: true`** -- Supports RETURNING clauses for DML operations (SQLite 3.35+)
 - **`sql.enums: false`** -- No native enum support
+- **`sql.subqueryReadsWrittenTable: true`** -- A subquery of an `UPDATE` or `DELETE` may read the table the statement writes
 
 ## JSON Aggregation
 

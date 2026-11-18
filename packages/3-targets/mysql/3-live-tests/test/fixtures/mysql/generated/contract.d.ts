@@ -16,7 +16,7 @@ import type {
 } from '@internal/mysql/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'1e1ebc7eebdf3efc3d5715efd315cedcd26dfdd19babd568cff0f30997129077'>;
+  StorageHashBase<'4d609c3914dddd6b475f23d6cb0fc901b891a1e85d5182fcfe5f9867fa821103'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'5212eb1a1220f2d24de13f4efadd4c703f3a1098a5f57e09da0dc26ebb7201d0'>;
@@ -171,6 +171,7 @@ type ParameterizedOutputTypeFunctions = never;
 type FieldTypeOverrides = {
   readonly __unbound__: {
     readonly models: {
+      readonly Member: { readonly kind: { readonly output: 'admin'; readonly input: 'admin' } };
       readonly User: {
         readonly role: { readonly output: 'USER' | 'ADMIN'; readonly input: 'USER' | 'ADMIN' };
       };
@@ -195,6 +196,7 @@ export type FieldInputTypes = FieldTypesFromDomain<
 >;
 type ColumnTypeOverrides = {
   readonly __unbound__: {
+    readonly Member: { readonly kind: { readonly output: 'admin'; readonly input: 'admin' } };
     readonly User: {
       readonly role: { readonly output: 'USER' | 'ADMIN'; readonly input: 'USER' | 'ADMIN' };
     };
@@ -222,6 +224,16 @@ export namespace Models {
     events: Event[];
     readonly [RelationKeys]?: 'events';
   };
+  export type Admin = {
+    id: FieldOutputTypes['__unbound__']['Member']['id'];
+    invitedById: FieldOutputTypes['__unbound__']['Member']['invitedById'];
+    kind: 'admin';
+    name: FieldOutputTypes['__unbound__']['Member']['name'];
+    level: FieldOutputTypes['__unbound__']['Admin']['level'];
+    invitedBy: AnyMember | null;
+    invitees: AnyMember[];
+    readonly [RelationKeys]?: 'invitedBy' | 'invitees';
+  };
   export type Author = {
     id: FieldOutputTypes['__unbound__']['Author']['id'];
     notes: Note[];
@@ -238,6 +250,15 @@ export namespace Models {
     id: FieldOutputTypes['__unbound__']['Event']['id'];
     account: Account;
     readonly [RelationKeys]?: 'account';
+  };
+  export type Member = {
+    id: FieldOutputTypes['__unbound__']['Member']['id'];
+    invitedById: FieldOutputTypes['__unbound__']['Member']['invitedById'];
+    kind: 'admin';
+    name: FieldOutputTypes['__unbound__']['Member']['name'];
+    invitedBy: AnyMember | null;
+    invitees: AnyMember[];
+    readonly [RelationKeys]?: 'invitedBy' | 'invitees';
   };
   export type Note = {
     authorId: FieldOutputTypes['__unbound__']['Note']['authorId'];
@@ -266,17 +287,21 @@ export namespace Models {
     posts: Post[];
     readonly [RelationKeys]?: 'posts';
   };
+  export type AnyMember = Admin;
 }
 
 export declare const models: {
   Account: Models.Account;
+  Admin: Models.Admin;
   Author: Models.Author;
   Counter: Models.Counter;
   Event: Models.Event;
+  Member: Models.Member;
   Note: Models.Note;
   Post: Models.Post;
   Tick: Models.Tick;
   User: Models.User;
+  AnyMember: Models.AnyMember;
 };
 
 export type TypeMaps = TypeMapsType<
@@ -317,6 +342,39 @@ type ContractBase = Omit<
               uniques: readonly [];
               indexes: readonly [];
               foreignKeys: readonly [];
+            };
+            readonly Admin: {
+              columns: {
+                readonly id: {
+                  readonly dataType: 'mysql/int';
+                  readonly codecId: 'mysql/int@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly level: {
+                  readonly dataType: 'mysql/int';
+                  readonly codecId: 'mysql/int@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'Admin';
+                    readonly columns: readonly ['id'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'Member';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+              ];
             };
             readonly Author: {
               columns: {
@@ -394,6 +452,60 @@ type ContractBase = Omit<
                   readonly target: {
                     readonly namespaceId: '__unbound__' & NamespaceId;
                     readonly tableName: 'Account';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+              ];
+            };
+            readonly Member: {
+              columns: {
+                readonly id: {
+                  readonly dataType: 'mysql/int';
+                  readonly codecId: 'mysql/int@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly invitedById: {
+                  readonly dataType: 'mysql/int';
+                  readonly codecId: 'mysql/int@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly kind: {
+                  readonly dataType: 'mysql/varchar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly length: 191 };
+                  readonly many: false;
+                };
+                readonly name: {
+                  readonly dataType: 'mysql/varchar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly length: 191 };
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [
+                {
+                  readonly name: 'Member_invitedById_idx_61689f37';
+                  readonly prefix: 'Member_invitedById_idx';
+                  readonly columns: readonly ['invitedById'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'Member';
+                    readonly columns: readonly ['invitedById'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'Member';
                     readonly columns: readonly ['id'];
                   };
                 },
@@ -560,6 +672,10 @@ type ContractBase = Omit<
             };
           };
           readonly valueSet: {
+            readonly 'Member.kind': {
+              readonly kind: 'valueSet';
+              readonly values: readonly ['admin'];
+            };
             readonly Role: {
               readonly kind: 'valueSet';
               readonly values: readonly ['USER', 'ADMIN'];
@@ -585,6 +701,7 @@ type ContractBase = Omit<
       readonly model: 'Counter';
     };
     readonly Event: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Event' };
+    readonly Member: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Member' };
     readonly Note: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Note' };
     readonly Post: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Post' };
     readonly Tick: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Tick' };
@@ -629,6 +746,24 @@ type ContractBase = Omit<
                 readonly id: { readonly column: 'id' };
                 readonly name: { readonly column: 'name' };
               };
+            };
+          };
+          readonly Admin: {
+            readonly fields: {
+              readonly level: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mysql/int@1' };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly table: 'Admin';
+              readonly namespaceId: '__unbound__';
+              readonly fields: { readonly level: { readonly column: 'level' } };
+            };
+            readonly base: {
+              readonly namespace: '__unbound__' & NamespaceId;
+              readonly model: 'Member';
             };
           };
           readonly Author: {
@@ -718,6 +853,76 @@ type ContractBase = Omit<
                 readonly accountId: { readonly column: 'accountId' };
                 readonly at: { readonly column: 'at' };
                 readonly id: { readonly column: 'id' };
+              };
+            };
+          };
+          readonly Member: {
+            readonly fields: {
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mysql/int@1' };
+              };
+              readonly invitedById: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mysql/int@1' };
+              };
+              readonly kind: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 191 };
+                };
+              };
+              readonly name: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 191 };
+                };
+              };
+            };
+            readonly relations: {
+              readonly invitedBy: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'Member';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: true;
+                readonly on: {
+                  readonly localFields: readonly ['invitedById'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+              readonly invitees: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'Member';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['invitedById'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'Member';
+              readonly namespaceId: '__unbound__';
+              readonly fields: {
+                readonly id: { readonly column: 'id' };
+                readonly invitedById: { readonly column: 'invitedById' };
+                readonly kind: { readonly column: 'kind' };
+                readonly name: { readonly column: 'name' };
+              };
+            };
+            readonly discriminator: { readonly field: 'kind' };
+            readonly variants: {
+              readonly admin: {
+                readonly namespace: '__unbound__' & NamespaceId;
+                readonly model: 'Admin';
               };
             };
           };

@@ -455,7 +455,8 @@
       "foreignKeys": true,
       "jsonAgg": true,
       "limit": true,
-      "orderBy": true
+      "orderBy": true,
+      "subqueryReadsWrittenTable": true
     }
   },
   "extensions": {},

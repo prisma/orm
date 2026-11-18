@@ -85,6 +85,7 @@ describe('defineConfig for MariaDB', () => {
           jsonAgg: true,
           limit: true,
           orderBy: true,
+          subqueryReadsWrittenTable: true,
         },
       },
       codecTypes: true,

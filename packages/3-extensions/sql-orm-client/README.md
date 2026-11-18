@@ -12,6 +12,7 @@ This package provides a high-level ORM client surface on top of the runtime. Rea
 - Compile collection state into SQL AST query plans (`SqlQueryPlan`) without rendering SQL in ORM
 - Buffer SELECT include results: read embedded include payloads, or attach the rows of one query per relation to their parents
 - Orchestrate multi-statement mutations, such as nested creates
+- Write by a key set where the contract lacks `sql.subqueryReadsWrittenTable` and the filter of an `UPDATE` or `DELETE` reads the written table (see [Writes whose filter reads the written table](#writes-whose-filter-reads-the-written-table))
 - Run each terminal method as one `orm-call` activity that carries the user's annotations
 - Map storage-column rows back to model-field row shapes
 - Expose an `orm()` client with typed collection keys (for example `db.Post`)
@@ -342,6 +343,41 @@ const user = await db.User.create({ email: 'a@example.com', role: 'USER' });
 - **`upsert`:** without `insertOnConflictTarget`, the database's conflict clause fires on any unique key. The ORM then allows `upsert` only when the contract shows the named columns are the only unique key the create values can collide on: every other primary key or unique constraint contains an auto-increment column the create values leave out. Otherwise it refuses with `ORM.CAPABILITY_MISSING`. It sends no conflict columns and reads the row back by the create's values for the conflict columns, so it also refuses an upsert whose update sets a conflict column or whose create leaves one out. This is correct only when the contract lists every unique index of the table. When the insert collides on an index the contract does not list and no row has the conflict values, the read-back finds no row, the call fails with `ORM.MUTATION_ROW_MISSING` and the transaction rolls back. When a row with the conflict values also exists, the database can update the row the unlisted index matched, and the call returns the conflict values' row unchanged, with no error. `db verify --strict` reports unique indexes the contract does not list.
 
 The count variants (`createAndCount`, `updateAndCount`, `deleteAndCount`) send one statement either way. MTI variant collections still need `returning` to create rows.
+
+## Writes whose filter reads the written table
+
+Two kinds of filter put a subquery that reads the written table into the `WHERE` of an `UPDATE` or a `DELETE`: a relation filter over a self-relation, and the condition that selects the rows of a variant stored in its own table. They reach `updateAll`, `deleteAll`, their count variants, a filtered `update` or `delete`, nested `updateAll` and `deleteAll`, and `connect` and `disconnect` on a variant.
+
+```ts
+await db.Member.where((member) => member.invitedBy.some((inviter) => inviter.name.eq('a')))
+  .updateAndCount({ name: 'z' });
+```
+
+Where the contract's `sql` capability group reports `subqueryReadsWrittenTable`, as on Postgres, SQLite and MariaDB, the statement carries the filter as written:
+
+```sql
+UPDATE "members" SET "name" = $1
+WHERE EXISTS (SELECT … FROM "members" AS "members_2" WHERE "members_2"."id" = "members"."invited_by_id" AND "members_2"."name" = $2)
+```
+
+Where it does not, as on MySQL, which refuses that statement with error 1093, the ORM selects the keys of the matching rows in a derived table and writes the rows that have those keys:
+
+```sql
+UPDATE `Member` SET `name` = ?
+WHERE `Member`.`id` IN (
+  SELECT `matching_keys`.`id` FROM (
+    SELECT `Member`.`id` AS `id` FROM `Member`
+    WHERE EXISTS (SELECT … FROM `Member` AS `Member_2` WHERE `Member_2`.`id` = `Member`.`invitedById` AND `Member_2`.`name` = ?)
+  ) AS `matching_keys`
+)
+```
+
+- **The whole `WHERE` is inside the derived table**, so the database computes the keys once, before it writes any row, and the filter reads the rows as they were before the statement. The whole `WHERE` is the caller's filter and every condition the ORM adds when the statement runs: the keys of the rows it read first, the key of the parent row of a nested write, and the junction condition of a many-to-many relation. A nested write under one parent therefore selects only keys of that parent's rows.
+- **Each `AND` condition that has no subquery reading the written table is repeated after the key set**, so it is also checked on the row as the statement finds it. Conditions are taken from the top-level `AND` and from `AND`s directly inside it. A parameter that appears in both places is bound once.
+- **The key is the table's row identity**: its primary key, otherwise a unique constraint whose columns are all `NOT NULL`. A key of several columns is compared as a row: `(a, b) IN (SELECT matching_keys.a, matching_keys.b FROM …)`.
+- **A table with no row identity** cannot be written this way: the call is refused with `ORM.CAPABILITY_MISSING`, naming `sql.subqueryReadsWrittenTable`. When the caller's filter already reads the written table, it is refused before any statement runs.
+- **Every other write is unchanged** on such a database: a filter with no subquery, and a relation filter that reads another table.
+- **Only the ORM client does this.** A statement built with the SQL builder or as an AST is sent as it is built.
 
 ## Nested writes
 

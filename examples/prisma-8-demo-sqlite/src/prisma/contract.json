@@ -756,7 +756,8 @@
       "limit": true,
       "orderBy": true,
       "outerReferencesInDerivedTables": true,
-      "returning": true
+      "returning": true,
+      "subqueryReadsWrittenTable": true
     }
   },
   "extensions": {},

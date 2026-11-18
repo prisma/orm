@@ -19,6 +19,8 @@ export type LiveClient = MysqlClient<LiveContract, NoCollectionClasses, LiveTarg
 export interface LiveExpectations {
   /** The statement an upsert that changes `role` sends. */
   readonly upsertStatement: string;
+  /** The statement that updates the members whose inviter is named `a`, once the ORM has selected their ids. Its filter reads the table it writes. */
+  readonly updateFilteredBySelfRelation: string;
   /** What reading an ordered include larger than a packet does: fail, or return every row. */
   readonly oversizedOrderedInclude: 'fails' | 'returns every row';
   /** Whether `having` keeps a group whose mean of integers is 5/3 when it asks for a mean greater than 5/3. `having` compares the server's own `AVG`, a decimal each server rounds its own way, not the exact mean a projection reads. */

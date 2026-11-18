@@ -6,6 +6,7 @@ export const sqliteAdapterCapabilities = Object.freeze({
     jsonAgg: true,
     outerReferencesInDerivedTables: true,
     jsonAggWithoutTruncation: true,
+    subqueryReadsWrittenTable: true,
     returning: true,
     foreignKeys: true,
     enums: false,

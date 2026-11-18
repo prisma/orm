@@ -54,3 +54,21 @@ model Tick {
   at    DateTime @id
   label String
 }
+
+model Member {
+  id          Int      @id
+  name        String
+  kind        String
+  invitedBy   Member?  @relation("Invites", fields: [invitedById], references: [id])
+  invitedById Int?
+  invitees    Member[] @relation("Invites")
+
+  @@discriminator(kind)
+}
+
+model Admin {
+  level Int
+
+  @@base(Member, "admin")
+  @@map("Admin")
+}

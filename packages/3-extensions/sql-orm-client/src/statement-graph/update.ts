@@ -6,7 +6,7 @@ import { ormError } from '../orm-errors';
 import { rowIdentity, type WrittenRowOwner } from '../written-keys';
 import { storageOf } from './changed-by';
 import type { NodeId, StorageRow } from './edge';
-import { executeFiltered, filteredWhere, type Linked, withColumns } from './filtered-statement';
+import { executeFiltered, filteredStatement, type Linked, withColumns } from './filtered-statement';
 import type { Graph } from './graph';
 import type { Executed, OutputsOf, Run, StatementAst } from './node';
 import { columnsOf, givesOwnValues, valuesOf } from './own-values';
@@ -14,6 +14,7 @@ import type { PayloadData } from './payload-data';
 import { requirementUnmet } from './requires';
 import { rowsResult } from './run-statement';
 import { StatementNode } from './statement-node';
+import { writeWhere } from './write-where';
 
 type Inputs = Linked & { payload: PayloadData[] };
 
@@ -58,6 +59,7 @@ export class Update extends StatementNode<Inputs> {
   }
 
   override checkIfCanRun(graph: Graph, id: NodeId, context: ExecutionContext): void {
+    writeWhere(context.contract, this.ast.table, this.ast.where);
     if (hasContractCapability(context.contract, 'returning')) {
       return;
     }
@@ -96,7 +98,9 @@ export class Update extends StatementNode<Inputs> {
     ) {
       return rowsResult([]);
     }
-    const statement = ast.withWhere(filteredWhere(ast, filter, link)).withReturning(undefined);
+    const statement = filteredStatement(ast, filter, link, run.context.contract).withReturning(
+      undefined,
+    );
     const set = valuesOf(ast.set);
     const keys = filter.flat().map(({ key }) => key);
     const { returns } = this;

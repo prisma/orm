@@ -31,6 +31,8 @@ export const mariadbLiveServer: LiveServer = {
   expected: {
     upsertStatement:
       'INSERT INTO `User` (`email`, `role`) VALUES (?1, ?2) ON DUPLICATE KEY UPDATE `role` = ?3',
+    updateFilteredBySelfRelation:
+      'UPDATE `Member` SET `name` = ?1 WHERE (EXISTS (SELECT `Member_2`.`id` AS `_exists` FROM `Member` AS `Member_2` WHERE (`Member_2`.`id` = `Member`.`invitedById` AND `Member_2`.`name` = ?2)) AND `Member`.`id` IN (?3, ?4))',
     oversizedOrderedInclude: 'returns every row',
     havingAboveExactMean: 'keeps the group',
   },

@@ -908,6 +908,7 @@ type ContractBase = Omit<
       readonly limit: true;
       readonly orderBy: true;
       readonly outerReferencesInDerivedTables: true;
+      readonly subqueryReadsWrittenTable: true;
     };
   };
   readonly extensions: {};

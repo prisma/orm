@@ -20,6 +20,10 @@
       "model": "Event",
       "namespace": "__unbound__"
     },
+    "Member": {
+      "model": "Member",
+      "namespace": "__unbound__"
+    },
     "Note": {
       "model": "Note",
       "namespace": "__unbound__"
@@ -104,6 +108,31 @@
               },
               "namespaceId": "__unbound__",
               "table": "Account"
+            }
+          },
+          "Admin": {
+            "base": {
+              "model": "Member",
+              "namespace": "__unbound__"
+            },
+            "fields": {
+              "level": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "level": {
+                  "column": "level"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Admin"
             }
           },
           "Author": {
@@ -233,6 +262,104 @@
               },
               "namespaceId": "__unbound__",
               "table": "Event"
+            }
+          },
+          "Member": {
+            "discriminator": {
+              "field": "kind"
+            },
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              },
+              "invitedById": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              },
+              "kind": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/varchar@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 191
+                  }
+                }
+              },
+              "name": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/varchar@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 191
+                  }
+                }
+              }
+            },
+            "relations": {
+              "invitedBy": {
+                "cardinality": "N:1",
+                "nullable": true,
+                "on": {
+                  "localFields": [
+                    "invitedById"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Member",
+                  "namespace": "__unbound__"
+                }
+              },
+              "invitees": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "invitedById"
+                  ]
+                },
+                "to": {
+                  "model": "Member",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "invitedById": {
+                  "column": "invitedById"
+                },
+                "kind": {
+                  "column": "kind"
+                },
+                "name": {
+                  "column": "name"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Member"
+            },
+            "variants": {
+              "admin": {
+                "model": "Admin",
+                "namespace": "__unbound__"
+              }
             }
           },
           "Note": {
@@ -507,6 +634,49 @@
               },
               "uniques": []
             },
+            "Admin": {
+              "columns": {
+                "id": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                },
+                "level": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "primaryKey": true
+                  },
+                  "onDelete": "cascade",
+                  "source": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Admin"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Member"
+                  }
+                }
+              ],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
             "Author": {
               "columns": {
                 "id": {
@@ -595,6 +765,79 @@
                   ],
                   "name": "Event_accountId_idx_cbfb3085",
                   "prefix": "Event_accountId_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "Member": {
+              "columns": {
+                "id": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                },
+                "invitedById": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": true
+                },
+                "kind": {
+                  "codecId": "sql/varchar@1",
+                  "dataType": "mysql/varchar",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 191
+                  },
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Member.kind",
+                    "namespaceId": "__unbound__",
+                    "plane": "storage"
+                  }
+                },
+                "name": {
+                  "codecId": "sql/varchar@1",
+                  "dataType": "mysql/varchar",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 191
+                  }
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "name": "Member_invitedById_idx_61689f37"
+                  },
+                  "source": {
+                    "columns": [
+                      "invitedById"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Member"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Member"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "invitedById"
+                  ],
+                  "name": "Member_invitedById_idx_61689f37",
+                  "prefix": "Member_invitedById_idx",
                   "unique": false
                 }
               ],
@@ -817,6 +1060,12 @@
             }
           },
           "valueSet": {
+            "Member.kind": {
+              "kind": "valueSet",
+              "values": [
+                "admin"
+              ]
+            },
             "Role": {
               "kind": "valueSet",
               "values": [
@@ -829,7 +1078,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "4515728f03f65a482b592c1a3b42852b273481dff3946317231d310f36fe0a3c"
+    "storageHash": "4321b1ae0cc16d2ba12a536297e537ebb99cf2e4efe8aaed75a05a5d1aea6351"
   },
   "capabilities": {
     "sql": {
@@ -838,7 +1087,8 @@
       "foreignKeys": true,
       "jsonAgg": true,
       "limit": true,
-      "orderBy": true
+      "orderBy": true,
+      "subqueryReadsWrittenTable": true
     }
   },
   "extensions": {},

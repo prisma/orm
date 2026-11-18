@@ -27,5 +27,6 @@ export const postgresAdapterCapabilities = Object.freeze({
     jsonAgg: true,
     outerReferencesInDerivedTables: true,
     jsonAggWithoutTruncation: true,
+    subqueryReadsWrittenTable: true,
   },
 } as const);

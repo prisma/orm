@@ -108,6 +108,16 @@ describe('SQLite adapter', () => {
     }).toMatchObject({ profile: includeCapabilities, contract: includeCapabilities });
   });
 
+  it('reports that a subquery of an UPDATE or DELETE may read the written table, in both of its capability lists', () => {
+    expect({
+      profile: adapter.profile.capabilities['sql'],
+      contract: sqliteAdapterDescriptorMeta.capabilities.sql,
+    }).toMatchObject({
+      profile: { subqueryReadsWrittenTable: true },
+      contract: { subqueryReadsWrittenTable: true },
+    });
+  });
+
   it('reports that an insert conflict clause applies only to the columns it names', () => {
     expect({
       profile: adapter.profile.capabilities['sql'],

@@ -1,3 +1,5 @@
+import type { Contract } from '@internal/contract/types';
+import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   type AnyExpression,
   BinaryExpr,
@@ -17,6 +19,7 @@ import type { Executed, OutputsOf, Run } from './node';
 import { type Requires, requirementUnmet } from './requires';
 import { executeStatement, rowsResult } from './run-statement';
 import type { StateEdge } from './state';
+import { writeWhere } from './write-where';
 
 export type Filtered = { filter: FilterData[]; state: StateEdge[]; requires: Requires[] };
 
@@ -44,16 +47,37 @@ export function executeFiltered(
   if (requirementUnmet(inputs.requires)) {
     return rowsResult([]);
   }
-  if (filter.length === 0 && link.length === 0) {
-    return executeStatement(ast, run);
-  }
   if ([...filter, ...link].some((rows) => rows.length === 0)) {
     return rowsResult([]);
   }
-  return executeStatement(ast.withWhere(filteredWhere(ast, filter, link)), run);
+  return executeStatement(filteredStatement(ast, filter, link, run.context.contract), run);
 }
 
-export function filteredWhere(
+/** The statement with the conditions of its filter and link inputs added. The `WHERE` of an `UPDATE` or a `DELETE` is then the one `writeWhere` gives. */
+export function filteredStatement(
+  ast: UpdateAst,
+  filter: readonly (readonly KeyMatch[])[],
+  link: readonly (readonly AnyExpression[])[],
+  contract: Contract<SqlStorage>,
+): UpdateAst;
+export function filteredStatement(
+  ast: SelectAst | UpdateAst | DeleteAst,
+  filter: readonly (readonly KeyMatch[])[],
+  link: readonly (readonly AnyExpression[])[],
+  contract: Contract<SqlStorage>,
+): SelectAst | UpdateAst | DeleteAst;
+export function filteredStatement(
+  ast: SelectAst | UpdateAst | DeleteAst,
+  filter: readonly (readonly KeyMatch[])[],
+  link: readonly (readonly AnyExpression[])[],
+  contract: Contract<SqlStorage>,
+): SelectAst | UpdateAst | DeleteAst {
+  const filtered = filteredWhere(ast, filter, link);
+  const where = ast.kind === 'select' ? filtered : writeWhere(contract, ast.table, filtered);
+  return where === ast.where ? ast : ast.withWhere(where);
+}
+
+function filteredWhere(
   ast: SelectAst | UpdateAst | DeleteAst,
   filter: readonly (readonly KeyMatch[])[],
   link: readonly (readonly AnyExpression[])[],

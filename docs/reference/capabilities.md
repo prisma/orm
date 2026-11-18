@@ -18,6 +18,7 @@ Common SQL features reported by adapters using the `sql` namespace. This is a na
 | `jsonAgg` | boolean | Supports JSON aggregation functions. The ORM's one-query include needs it, with `outerReferencesInDerivedTables` and `jsonAggWithoutTruncation` (see [Capabilities that choose how includes load](#capabilities-that-choose-how-includes-load)). | Stable |
 | `outerReferencesInDerivedTables` | boolean | Resolves a reference to the outer query from inside a derived table (`FROM (SELECT …) alias`) in a subquery. The ORM's one-query include needs it, because every row include reads from such a derived table. MariaDB does not report it. | Stable |
 | `jsonAggWithoutTruncation` | boolean | When the database aggregates rows into a JSON array that is too large, the query fails or the array cannot be decoded; it never returns a shorter valid array. The ORM's one-query include needs it. MariaDB does not report it: it cuts the array with only a warning. | Stable |
+| `subqueryReadsWrittenTable` | boolean | A subquery of an `UPDATE` or a `DELETE` may read the table the statement writes. Where the contract's `sql` group does not report it, the ORM client selects the keys of the matching rows in a derived table and writes the rows with those keys (see the [ORM client README](../../packages/3-extensions/sql-orm-client/README.md#writes-whose-filter-reads-the-written-table)). MySQL does not report it: it refuses such a statement with error 1093. | Stable |
 | `enums` | boolean | Supports native enum storage types | Stable |
 | `foreignKeys` | boolean | Supports FOREIGN KEY constraint DDL | Stable |
 | `checkConstraint` | boolean | Supports CHECK constraint DDL. Gates the `@@check` authoring surface: a PSL contract declaring a check against an adapter that does not report this is refused at authoring. | Stable |
@@ -74,7 +75,7 @@ Postgres adapters should always report `sql.lateral: true` and `sql.returning: t
 Postgres (example):
 ```json
 {
-  "sql": { "lateral": true, "returning": true, "jsonAgg": true, "outerReferencesInDerivedTables": true, "jsonAggWithoutTruncation": true, "enums": true, "foreignKeys": true, "checkConstraint": true, "autoIndexesForeignKeys": false },
+  "sql": { "lateral": true, "returning": true, "jsonAgg": true, "outerReferencesInDerivedTables": true, "jsonAggWithoutTruncation": true, "subqueryReadsWrittenTable": true, "enums": true, "foreignKeys": true, "checkConstraint": true, "autoIndexesForeignKeys": false },
   "postgres": { "partialIndex": true, "transactionalDDL": true, "explainFormat": "json" }
 }
 ```
@@ -250,6 +251,7 @@ Canonical capability keys with descriptions, typical implementers, and ADR refer
 | sql.jsonAgg | JSON aggregation support | adapters that support JSON aggregation | ADR 065 |
 | sql.outerReferencesInDerivedTables | Outer references resolve inside a derived table in a subquery | adapters whose database resolves them | — |
 | sql.jsonAggWithoutTruncation | An oversized JSON aggregate fails rather than returning a shorter array | adapters whose database never truncates silently | — |
+| sql.subqueryReadsWrittenTable | A subquery of an UPDATE or DELETE may read the written table | adapters whose database runs such a statement | — |
 | sql.foreignKeys | FK constraint DDL support | adapters that support FOREIGN KEY | ADR 161 |
 | sql.checkConstraint | CHECK constraint DDL support; gates `@@check` | adapters that support CHECK | ADR 244 |
 | sql.autoIndexesForeignKeys | DB auto-indexes FKs | adapters where DB auto-creates FK indexes | ADR 161 |

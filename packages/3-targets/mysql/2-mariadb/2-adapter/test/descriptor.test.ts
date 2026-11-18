@@ -32,6 +32,7 @@ describe('the MariaDB control adapter descriptor', () => {
           jsonAgg: true,
           outerReferencesInDerivedTables: false,
           jsonAggWithoutTruncation: false,
+          subqueryReadsWrittenTable: true,
         },
       },
       codecTypesImport: {

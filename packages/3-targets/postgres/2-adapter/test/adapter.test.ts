@@ -709,6 +709,7 @@ describe('Postgres adapter', () => {
       jsonAgg: true,
       outerReferencesInDerivedTables: true,
       jsonAggWithoutTruncation: true,
+      subqueryReadsWrittenTable: true,
     });
     expect(typeof adapter.profile.readMarker).toBe('function');
   });

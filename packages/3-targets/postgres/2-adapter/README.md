@@ -209,6 +209,7 @@ The adapter declares the following PostgreSQL capabilities:
 - **`jsonAgg: true`** - Supports JSON aggregation functions (`json_agg`)
 - **`returning: true`** - Supports RETURNING clauses for DML operations (INSERT, UPDATE, DELETE)
 - **`sql.enums: true`** - Supports contract-defined enum storage types
+- **`sql.subqueryReadsWrittenTable: true`** - A subquery of an `UPDATE` or `DELETE` may read the table the statement writes
 
 **Important**: Capabilities must be declared in **both** places:
 

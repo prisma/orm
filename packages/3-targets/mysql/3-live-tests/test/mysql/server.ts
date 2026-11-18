@@ -31,6 +31,8 @@ export const mysqlLiveServer: LiveServer = {
   expected: {
     upsertStatement:
       'INSERT INTO `User` (`email`, `role`) VALUES (?1, ?2) AS `new` ON DUPLICATE KEY UPDATE `role` = ?3',
+    updateFilteredBySelfRelation:
+      'UPDATE `Member` SET `name` = ?1 WHERE (`Member`.`id` IN (SELECT `matching_keys`.`id` AS `id` FROM (SELECT `Member`.`id` AS `id` FROM `Member` WHERE (EXISTS (SELECT `Member_2`.`id` AS `_exists` FROM `Member` AS `Member_2` WHERE (`Member_2`.`id` = `Member`.`invitedById` AND `Member_2`.`name` = ?2)) AND `Member`.`id` IN (?3, ?4))) AS `matching_keys`) AND `Member`.`id` IN (?3, ?4))',
     oversizedOrderedInclude: 'fails',
     havingAboveExactMean: 'drops the group',
   },

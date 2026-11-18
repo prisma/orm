@@ -486,6 +486,7 @@ type ContractBase = Omit<
       readonly outerReferencesInDerivedTables: true;
       readonly returning: true;
       readonly scalarList: true;
+      readonly subqueryReadsWrittenTable: true;
     };
   };
   readonly extensions: {};

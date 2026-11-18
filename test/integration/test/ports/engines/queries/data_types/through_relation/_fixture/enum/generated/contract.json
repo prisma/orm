@@ -278,7 +278,8 @@
       "lockSkipLocked": true,
       "outerReferencesInDerivedTables": true,
       "returning": true,
-      "scalarList": true
+      "scalarList": true,
+      "subqueryReadsWrittenTable": true
     }
   },
   "extensions": {},
