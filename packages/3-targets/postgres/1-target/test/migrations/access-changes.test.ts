@@ -250,6 +250,30 @@ describe('recordedAccessChangesOf', () => {
       { operationIndex: 1, subject: PROFILES, widens: false },
     ]);
   });
+
+  it('recognises a drop and a disable recorded as destructive, as releases up to 8.0.0-rc.16 wrote them', () => {
+    const recordedOps = JSON.parse(`[
+      {
+        "id": "rlsPolicy.public.profiles.read_own_ab12cd34.drop",
+        "label": "Drop RLS policy \\"read_own_ab12cd34\\" on \\"profiles\\"",
+        "operationClass": "destructive",
+        "target": { "id": "postgres", "details": { "schema": "public", "objectType": "rlsPolicy", "name": "read_own_ab12cd34", "table": "profiles" } },
+        "precheck": [], "execute": [], "postcheck": []
+      },
+      {
+        "id": "rowLevelSecurity.public.profiles.disable",
+        "label": "Disable row-level security on \\"profiles\\"",
+        "operationClass": "destructive",
+        "target": { "id": "postgres", "details": { "schema": "public", "objectType": "rowLevelSecurity", "name": "profiles" } },
+        "precheck": [], "execute": [], "postcheck": []
+      }
+    ]`);
+
+    expect(recordedAccessChangesOf(recordedOps)).toEqual([
+      { operationIndex: 0, subject: PROFILES, widens: false },
+      { operationIndex: 1, subject: PROFILES, widens: true },
+    ]);
+  });
 });
 
 describe('rlsIdentity', () => {
