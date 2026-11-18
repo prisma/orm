@@ -27,6 +27,8 @@ interface FilteredMutator {
   where(filter: unknown): FilteredMutator;
   updateAll(data: object): unknown;
   deleteAll(): unknown;
+  update(data: object): unknown;
+  delete(): unknown;
 }
 
 interface VariantMutator {
@@ -704,6 +706,30 @@ describe('disconnect on a variant', () => {
 
 const featureExists = (condition: string) =>
   `exists (select id from tasks tasks_2 inner join features on tasks_2.id = features.id where (id = tasks.id and tasks.type = 'feature'${condition}))`;
+
+describe('update and delete on a variant', () => {
+  it('find the first row of the variant the filter matches among the children of the parent', () => {
+    expect(
+      printGraph(
+        updateOf('Project', {
+          tasks: (tasks: VariantMutator) => [
+            tasks.variant('bug').where({ title: 'Crash' }).update({ title: 'Seen' }),
+            tasks.variant('feature').where({ title: 'Search' }).delete(),
+          ],
+        }),
+      ),
+    ).toBe(
+      [
+        'n1 Find projects_tbl where id = 1',
+        "n2 Find tasks where type = 'bug' and title = 'Crash' limit 1 <- FilterData n1 (id->project_id)",
+        "n3 Update tasks set title = 'Seen' <- FilterData n2 (id->id)",
+        "n4 Find tasks where type = 'feature' and title = 'Search' limit 1 <- FilterData n1 (id->project_id)",
+        'n5 Delete tasks <- FilterData n4 (id->id)',
+        'result: n1',
+      ].join('\n'),
+    );
+  });
+});
 
 describe('updateAll and deleteAll on a variant', () => {
   it('add the discriminator and filter by fields of a variant stored in the base table on 1:N', () => {

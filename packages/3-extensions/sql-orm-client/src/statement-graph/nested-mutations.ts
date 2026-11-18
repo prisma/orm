@@ -55,7 +55,9 @@ import { type CollectionState, emptyState } from '../types';
 import { Assert } from './assert';
 import {
   addDeleteAll,
+  addDeleteFirst,
   addUpdateAll,
+  addUpdateFirst,
   createAllVariantGraph,
   requireOnlyCollidingKey,
   sameRowColumnsOf,
@@ -97,7 +99,8 @@ import {
 
 type Mutation = RelationMutation<Contract<SqlStorage>, string>;
 type CreateOrConnect = Extract<Mutation, { kind: 'create' | 'connect' }>;
-type FilteredWrite = Extract<Mutation, { kind: 'updateAll' | 'deleteAll' }>;
+type FilteredWrite = Extract<Mutation, { kind: 'updateAll' | 'deleteAll' | 'update' | 'delete' }>;
+type SingleRowWrite = Extract<Mutation, { kind: 'update' | 'delete' }>;
 
 export interface Translation extends Builder {
   readonly parentRow: NodeId | undefined;
@@ -278,6 +281,7 @@ export function addBeforeWrite(
   let unlinksAfterWrite = false;
   for (const relationMutation of relationMutations) {
     rejectFilteredWriteOnToOne(relationMutation);
+    rejectSingleRowWrite(relationMutation);
   }
   for (const relationMutation of parentOwned) {
     for (const mutation of relationMutation.mutations) {
@@ -342,7 +346,7 @@ export function addAfterWrite(
 
 function rejectUpdateOnly({ name, mutations }: ParsedRelationMutation): void {
   for (const { kind } of mutations) {
-    if (kind === 'disconnect' || kind === 'updateAll' || kind === 'deleteAll') {
+    if (kind !== 'create' && kind !== 'connect') {
       throw ormError(
         'ORM.OPERATION_UNSUPPORTED',
         `${kind}() is only supported in update() nested mutations`,
@@ -446,11 +450,42 @@ export function rejectNullOnRequiredKey(
 }
 
 function isFilteredWrite(mutation: Mutation): mutation is FilteredWrite {
-  return mutation.kind === 'updateAll' || mutation.kind === 'deleteAll';
+  return (
+    mutation.kind === 'updateAll' ||
+    mutation.kind === 'deleteAll' ||
+    mutation.kind === 'update' ||
+    mutation.kind === 'delete'
+  );
+}
+
+function isSingleRowWrite(mutation: Mutation): mutation is SingleRowWrite {
+  return mutation.kind === 'update' || mutation.kind === 'delete';
+}
+
+function rejectSingleRowWrite({ name, relation, mutations }: ParsedRelationMutation): void {
+  for (const mutation of mutations.filter(isSingleRowWrite)) {
+    const { kind } = mutation;
+    if (relation.cardinality === 'N:1' || relation.through !== undefined) {
+      throw ormError(
+        'ORM.OPERATION_UNSUPPORTED',
+        `${kind}() nested mutation for relation "${name}" is not supported yet on this relation`,
+        { meta: { kind, relation: name, reason: 'single-row-layout' } },
+      );
+    }
+    if (relation.cardinality !== '1:1' && mutation.state.filters.length === 0) {
+      throw ormError(
+        'ORM.ARGUMENT_INVALID',
+        `${kind}() nested mutation for relation "${name}" requires where() on a to-many relation`,
+        { meta: { kind, relation: name, problem: 'missing-where' } },
+      );
+    }
+  }
 }
 
 function rejectFilteredWriteOnToOne({ name, relation, mutations }: ParsedRelationMutation): void {
-  const filtered = mutations.find(isFilteredWrite);
+  const filtered = mutations.find(
+    (mutation) => mutation.kind === 'updateAll' || mutation.kind === 'deleteAll',
+  );
   if (
     filtered !== undefined &&
     (relation.cardinality === 'N:1' || relation.cardinality === '1:1')
@@ -753,6 +788,10 @@ function addFilteredWrite(
     addDeleteAll(t, related, sources);
     return;
   }
+  if (mutation.kind === 'delete') {
+    addDeleteFirst(t, related, sources.filters);
+    return;
+  }
   const set = updateValuesOf(related, mutation.data);
   const linkFields = relation.through === undefined ? relation.on.targetFields : [];
   const linking = linkFields.filter((field) =>
@@ -764,15 +803,25 @@ function addFilteredWrite(
   if (linking.length > 0) {
     throw ormError(
       'ORM.ARGUMENT_INVALID',
-      `updateAll() nested mutation for relation "${name}" cannot set ${linking.map((field) => `"${field}"`).join(', ')}, which links the related rows to their parent`,
+      `${mutation.kind}() nested mutation for relation "${name}" cannot set ${linking.map((field) => `"${field}"`).join(', ')}, which links the related rows to their parent`,
       {
-        meta: { kind: 'updateAll', relation: name, problem: 'parent-link-column', fields: linking },
+        meta: {
+          kind: mutation.kind,
+          relation: name,
+          problem: 'parent-link-column',
+          fields: linking,
+        },
       },
     );
   }
-  if (Object.keys(set).length > 0) {
-    addUpdateAll(t, related, set, sources, 'count');
+  if (Object.keys(set).length === 0) {
+    return;
   }
+  if (mutation.kind === 'update') {
+    addUpdateFirst(t, related, set, sources.filters);
+    return;
+  }
+  addUpdateAll(t, related, set, sources, 'count');
 }
 
 function sourcesOf(

@@ -724,4 +724,117 @@ describe.each(includeStrategies)('integration/nested-mutations (%s)', (strategy)
     },
     timeouts.spinUpPpgDev,
   );
+
+  it(
+    'update() where().update() and where().delete() change the first matching post of the parent only',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime, strategy);
+        await seedTwoUsersWithPosts(runtime);
+        const update = (data: Parameters<typeof users.update>[0]) =>
+          users.where({ id: 1 }).select('id', 'name').update(data);
+
+        const updated = await update({
+          posts: (posts) => posts.where({ title: 'Draft' }).update({ views: 100 }),
+        });
+        const afterUpdate = await postRows(runtime);
+        const unmatched = await update({
+          posts: (posts) => [
+            posts.where({ title: 'Missing' }).update({ views: 0 }),
+            posts.where({ title: 'Missing' }).delete(),
+          ],
+        });
+        const afterUnmatched = await postRows(runtime);
+        const deleted = await update({
+          posts: (posts) => posts.where({ title: 'Draft' }).delete(),
+        });
+
+        expect([updated, unmatched, deleted]).toEqual([
+          { id: 1, name: 'Alice' },
+          { id: 1, name: 'Alice' },
+          { id: 1, name: 'Alice' },
+        ]);
+        expect(afterUpdate).toEqual([
+          { id: 10, title: 'Draft', user_id: 1, views: 100 },
+          { id: 11, title: 'Kept', user_id: 1, views: 20 },
+          { id: 20, title: 'Draft', user_id: 2, views: 3 },
+        ]);
+        expect(afterUnmatched).toEqual(afterUpdate);
+        expect(await postRows(runtime)).toEqual([
+          { id: 11, title: 'Kept', user_id: 1, views: 20 },
+          { id: 20, title: 'Draft', user_id: 2, views: 3 },
+        ]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'update() update() and delete() on a to-one relation change the linked row only when it matches',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime, strategy);
+        await seedUsers(runtime, [
+          { id: 1, name: 'Alice', email: 'alice@example.com' },
+          { id: 2, name: 'Bob', email: 'bob@example.com' },
+        ]);
+        await seedProfiles(runtime, [
+          { id: 100, userId: 1, bio: 'Old' },
+          { id: 200, userId: 2, bio: 'Old' },
+        ]);
+        const profileRows = () =>
+          runtime.query('select id, user_id, bio from profiles order by id');
+
+        await users
+          .where({ id: 1 })
+          .update({ profile: (profile) => profile.update({ bio: 'New' }) });
+        const afterUpdate = await profileRows();
+        await users
+          .where({ id: 1 })
+          .update({ profile: (profile) => profile.where({ bio: 'Old' }).delete() });
+        const afterUnmatched = await profileRows();
+        await users
+          .where({ id: 1 })
+          .update({ profile: (profile) => profile.where({ bio: 'New' }).delete() });
+
+        expect(afterUpdate).toEqual([
+          { id: 100, user_id: 1, bio: 'New' },
+          { id: 200, user_id: 2, bio: 'Old' },
+        ]);
+        expect(afterUnmatched).toEqual(afterUpdate);
+        expect(await profileRows()).toEqual([{ id: 200, user_id: 2, bio: 'Old' }]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'update() refuses where().update() data that sets the link to the parent',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime, strategy);
+        await seedTwoUsersWithPosts(runtime);
+        const before = await postRows(runtime);
+
+        await expect(
+          users.where({ id: 1 }).update({
+            // @ts-expect-error
+            posts: (posts) => posts.where({ id: 10 }).update({ userId: 2 }),
+          }),
+        ).rejects.toThrow(
+          expect.objectContaining({
+            code: 'ORM.ARGUMENT_INVALID',
+            meta: {
+              kind: 'update',
+              relation: 'posts',
+              problem: 'parent-link-column',
+              fields: ['userId'],
+            },
+          }),
+        );
+        expect(await postRows(runtime)).toEqual(before);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
 });

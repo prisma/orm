@@ -753,4 +753,117 @@ describe('integration/nested-mutations on SQLite: update()', () => {
     },
     timeouts.databaseOperation,
   );
+
+  it(
+    'where().update() and where().delete() change the first matching post of the parent only',
+    async () => {
+      await withDatabase(async (collections) => {
+        await seedTwoParents(collections);
+        const { users, rows } = collections;
+        const update = (data: Parameters<typeof users.update>[0]) =>
+          users.where({ id: 1 }).select('id', 'name').update(data);
+
+        const updated = await update({
+          posts: (posts) => posts.where({ title: 'Draft' }).update({ title: 'Published' }),
+        });
+        const afterUpdate = rows(postRowsSql);
+        const unmatched = await update({
+          posts: (posts) => [
+            posts.where({ title: 'Missing' }).update({ title: 'Seen' }),
+            posts.where({ title: 'Missing' }).delete(),
+          ],
+        });
+        const afterUnmatched = rows(postRowsSql);
+        const deleted = await update({
+          posts: (posts) => posts.where({ title: 'Kept' }).delete(),
+        });
+
+        expect([updated, unmatched, deleted]).toEqual([
+          { id: 1, name: 'Alice' },
+          { id: 1, name: 'Alice' },
+          { id: 1, name: 'Alice' },
+        ]);
+        expect(afterUpdate).toEqual([
+          { id: 10, title: 'Published', user_id: 1 },
+          { id: 11, title: 'Kept', user_id: 1 },
+          { id: 20, title: 'Draft', user_id: 2 },
+        ]);
+        expect(afterUnmatched).toEqual(afterUpdate);
+        expect(rows(postRowsSql)).toEqual([
+          { id: 10, title: 'Published', user_id: 1 },
+          { id: 20, title: 'Draft', user_id: 2 },
+        ]);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'update() and delete() on a to-one relation change the linked row only when it matches',
+    async () => {
+      await withDatabase(async ({ users, rows }) => {
+        await users.create({
+          id: 1,
+          name: 'Alice',
+          profile: (profile) => profile.create({ id: 100, bio: 'Old' }),
+        });
+        await users.create({
+          id: 2,
+          name: 'Bob',
+          profile: (profile) => profile.create({ id: 200, bio: 'Old' }),
+        });
+        const profiles = 'select id, user_id, bio from profiles order by id';
+
+        await users
+          .where({ id: 1 })
+          .update({ profile: (profile) => profile.update({ bio: 'New' }) });
+        const afterUpdate = rows(profiles);
+        await users
+          .where({ id: 1 })
+          .update({ profile: (profile) => profile.where({ bio: 'Old' }).delete() });
+        const afterUnmatched = rows(profiles);
+        await users
+          .where({ id: 1 })
+          .update({ profile: (profile) => profile.where({ bio: 'New' }).delete() });
+
+        expect(afterUpdate).toEqual([
+          { id: 100, user_id: 1, bio: 'New' },
+          { id: 200, user_id: 2, bio: 'Old' },
+        ]);
+        expect(afterUnmatched).toEqual(afterUpdate);
+        expect(rows(profiles)).toEqual([{ id: 200, user_id: 2, bio: 'Old' }]);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'refuses where().update() data that sets the link to the parent',
+    async () => {
+      await withDatabase(async (collections) => {
+        await seedTwoParents(collections);
+        const { users, rows } = collections;
+        const before = rows(postRowsSql);
+
+        await expect(
+          users.where({ id: 1 }).update({
+            // @ts-expect-error
+            posts: (posts) => posts.where({ id: 10 }).update({ userId: 2 }),
+          }),
+        ).rejects.toThrow(
+          expect.objectContaining({
+            code: 'ORM.ARGUMENT_INVALID',
+            meta: {
+              kind: 'update',
+              relation: 'posts',
+              problem: 'parent-link-column',
+              fields: ['userId'],
+            },
+          }),
+        );
+        expect(rows(postRowsSql)).toEqual(before);
+      });
+    },
+    timeouts.databaseOperation,
+  );
 });

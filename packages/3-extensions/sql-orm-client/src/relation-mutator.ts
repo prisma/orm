@@ -43,6 +43,12 @@ function createFilteredRelationMutator<
     deleteAll() {
       return { kind: 'deleteAll', state: related.state };
     },
+    update(data: RelationMutationUpdateAllData<TContract, ModelName>) {
+      return { kind: 'update', state: related.state, data: { ...data } };
+    },
+    delete() {
+      return { kind: 'delete', state: related.state };
+    },
   };
 }
 
@@ -138,7 +144,9 @@ export function isRelationMutationDescriptor(
     candidate.kind === 'connect' ||
     candidate.kind === 'disconnect' ||
     candidate.kind === 'updateAll' ||
-    candidate.kind === 'deleteAll'
+    candidate.kind === 'deleteAll' ||
+    candidate.kind === 'update' ||
+    candidate.kind === 'delete'
   );
 }
 
