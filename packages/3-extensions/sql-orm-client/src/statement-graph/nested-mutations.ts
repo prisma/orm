@@ -8,8 +8,10 @@ import {
   columnOfContractField,
   type ResolvedRelation,
   resolveModelTableName,
+  resolvePrimaryKeyColumns,
   resolveRelationTargetColumns,
 } from '../collection-contract';
+import type { DescribeCollectionRowsOptions } from '../collection-dispatch';
 import {
   type CollectionTables,
   createCollectionTables,
@@ -39,7 +41,7 @@ import type { AliasedTable } from '../table-scope';
 import type { MutationCreateInput, MutationUpdateInput, RelationMutation } from '../types';
 import { type CollectionState, emptyState } from '../types';
 import { Assert } from './assert';
-import { addDeleteAll, addUpdateAll, createAllVariantGraph } from './collection-graphs';
+import { addDeleteAll, addUpdateAll } from './collection-graphs';
 import type { ColumnMapping, NodeId } from './edge';
 import {
   addInsert,
@@ -60,9 +62,12 @@ import { Requires } from './requires';
 import { Rows } from './rows';
 import {
   createRowOf,
+  type MtiCreateContext,
   modelOf,
   mtiCreateContextOf,
   updateValuesOf,
+  type VariantCreateRow,
+  variantCreateRowsOf,
   withCreateDefaults,
 } from './storage-rows';
 
@@ -124,6 +129,71 @@ function nestedCreate(
   });
 }
 
+export interface VariantCreate {
+  readonly collection: DescribeCollectionRowsOptions;
+  readonly mti: MtiCreateContext;
+  readonly operation: string;
+}
+
+export interface VariantInserts {
+  readonly base: NodeId;
+  readonly variant: NodeId;
+}
+
+export function addVariantCreates(
+  t: Translation,
+  { collection, mti, operation }: VariantCreate,
+  rows: readonly ParsedMutationInput[],
+  keysFromParent: readonly KeySource[],
+  added: (inserts: VariantInserts) => void,
+): void {
+  const { contract } = t.context;
+  assertReturningCapability(contract, `${operation}()`);
+  for (const { relationMutations } of rows) {
+    for (const relationMutation of relationMutations) {
+      rejectUpdateOnly(relationMutation);
+    }
+  }
+  const model = modelOf(collection);
+  const { root } = model.tables;
+  const variantTable = requireVariantTable(model.tables, mti.variant.value);
+  const keyColumns = resolvePrimaryKeyColumns(
+    contract,
+    root.storage.namespaceId,
+    root.storage.tableName,
+  );
+  const baseKey = columnMappings(contract, root, keyColumns, variantTable, keyColumns);
+  const values = variantCreateRowsOf(
+    collection,
+    mti,
+    variantTable,
+    rows.map((row) => row.scalarData),
+  );
+  rows.forEach(({ relationMutations }, index) => {
+    const row = blindCast<
+      VariantCreateRow,
+      'variantCreateRowsOf returns one pair of rows for each row it is given'
+    >(values[index]);
+    const before = addBeforeWrite(t, model, relationMutations);
+    const base = addInsert(t, root, [row.base], {
+      conflict: undefined,
+      keys: [...keysFromParent, ...before.keys],
+      junction: undefined,
+      requires: keysFromParent.length === 0 ? parentRowRequired(t) : [],
+      owner: { operation, modelName: model.modelName },
+    });
+    const variant = addInsert(t, variantTable, [row.variant], {
+      conflict: undefined,
+      keys: [{ from: base, columns: baseKey }],
+      junction: undefined,
+      requires: [],
+      owner: { operation, modelName: mti.variant.modelName },
+    });
+    added({ base, variant });
+    addAfterWrite(t, model, base, relationMutations);
+  });
+}
+
 function addVariantInOwnTable(
   t: Translation,
   { relation, relatedCollection }: Pick<ParsedRelationMutation, 'relation' | 'relatedCollection'>,
@@ -144,16 +214,9 @@ function addVariantInOwnTable(
   if (mti === undefined) {
     return false;
   }
-  for (const row of data) {
-    parseCreateInput(t, modelOf(collection), row, relatedCollection);
-  }
-  assertReturningCapability(t.context.contract, 'create()');
-  createAllVariantGraph(
-    collection,
-    requireVariantTable(collection.state.tables, mti.variant.value),
-    mti,
-    data,
-    { graph: t.graph, keys, requires: keys.length === 0 ? parentRowRequired(t) : [], added },
+  const rows = data.map((row) => parseCreateInput(t, modelOf(collection), row, relatedCollection));
+  addVariantCreates(t, { collection, mti, operation: 'create' }, rows, keys, ({ base }) =>
+    added(base),
   );
   return true;
 }

@@ -66,7 +66,7 @@ describe('SQLite ORM calls known to fail', () => {
   });
 
   describe('select before create on a variant', () => {
-    it.fails('returns only the selected fields of a variant stored in its own table', async () => {
+    it('returns only the selected fields of a variant stored in its own table', async () => {
       await withDatabase(async (db) => {
         expect(
           await db.orm.Task.variant('feature')
@@ -78,7 +78,7 @@ describe('SQLite ORM calls known to fail', () => {
   });
 
   describe('create on a variant with a relation callback', () => {
-    it.fails('stores a variant in its own table', async () => {
+    it('stores a variant in its own table', async () => {
       await withDatabase(async (db) => {
         await db.orm.Project.createAndCount([{ id: 1 }]);
         expect(

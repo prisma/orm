@@ -13,9 +13,10 @@ import {
 } from '../collection-dispatch';
 import { mapResultRows, stripHiddenMappedFields } from '../collection-runtime';
 import { loadsIncludesPerRelation } from '../include-strategy';
-import { returningProjection } from '../mutation-statements';
+import { projectTableColumns, returningProjection } from '../mutation-statements';
 import { buildOrmQueryPlan, deriveParamsFromAst } from '../query-plan-meta';
 import { queryPlanRows } from '../query-plan-rows';
+import { storageTableForContract } from '../storage-resolution';
 import type { CollectionContext, RuntimeTransaction } from '../types';
 import type { Edge, NodeId, StorageRow } from './edge';
 import type { Graph } from './graph';
@@ -62,12 +63,18 @@ export async function executeGraph(graph: Graph, ctx: Context): Promise<SqlState
 
 function returnCallerColumns(graph: Graph, callerRows: DescribeCollectionRowsOptions): void {
   const { context, modelName, state } = callerRows;
-  const columns = returningProjection(
-    context.contract,
-    modelName,
-    state.tables.root,
-    state.selectedFields,
-  );
+  const { contract } = context;
+  const { root } = state.tables;
+  const { namespaceId, tableName } = root.storage;
+  const rootColumns = storageTableForContract(contract, namespaceId, tableName).columns;
+  const columns =
+    state.selectedFields === undefined
+      ? returningProjection(contract, modelName, root, undefined)
+      : projectTableColumns(
+          contract,
+          root,
+          state.selectedFields.filter((column) => Object.hasOwn(rootColumns, column)),
+        );
   for (const [id, node] of graph.nodes()) {
     if (id === graph.result && node instanceof StatementNode) {
       graph.replace(id, node.withReturning(columns));
