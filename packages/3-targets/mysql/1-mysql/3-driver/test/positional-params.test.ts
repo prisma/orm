@@ -4,14 +4,14 @@ import { positionalParams } from '../src/core/positional-params';
 
 describe('positionalParams', () => {
   it('writes each numbered placeholder as ? and orders the values to match, repeating a value written twice', () => {
-    expect(positionalParams("SELECT ?2, '?1', ?1 /* ?3 */, ?2", ['a', 'b'])).toEqual({
+    expect(positionalParams("SELECT ?2, '?1', ?1 /* ?3 */, ?2", ['a', 'b'], 'MySQL')).toEqual({
       sql: "SELECT ?, '?1', ? /* ?3 */, ?",
       values: ['b', 'a', 'b'],
     });
   });
 
   it('keeps bare placeholders and their values in order', () => {
-    expect(positionalParams('SELECT ? WHERE a = ?', ['x', null])).toEqual({
+    expect(positionalParams('SELECT ? WHERE a = ?', ['x', null], 'MySQL')).toEqual({
       sql: 'SELECT ? WHERE a = ?',
       values: ['x', null],
     });
@@ -19,16 +19,11 @@ describe('positionalParams', () => {
 
   it('passes a finite number and a bigint within the signed 64-bit range as they are, for the package to write as digits', () => {
     expect(
-      positionalParams('SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8', [
-        2,
-        2147483647,
-        2 ** 60,
-        1.5,
-        2n,
-        1e21,
-        -0,
-        -(2n ** 63n),
-      ]).values,
+      positionalParams(
+        'SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8',
+        [2, 2147483647, 2 ** 60, 1.5, 2n, 1e21, -0, -(2n ** 63n)],
+        'MySQL',
+      ).values,
     ).toEqual([2, 2147483647, 2 ** 60, 1.5, 2n, 1e21, -0, -(2n ** 63n)]);
   });
 
@@ -36,7 +31,7 @@ describe('positionalParams', () => {
     for (const value of [-(2n ** 63n) - 1n, 2n ** 63n]) {
       const error = (() => {
         try {
-          positionalParams('SELECT ?1', [value]);
+          positionalParams('SELECT ?1', [value], 'MySQL');
         } catch (thrown) {
           return thrown;
         }
@@ -48,21 +43,20 @@ describe('positionalParams', () => {
       }).toEqual({
         error: expect.objectContaining({
           code: 'RUNTIME.ENCODE_FAILED',
-          meta: { target: 'mysql', paramIndex: 0, received: 'bigint' },
+          meta: { paramIndex: 0, received: 'bigint' },
         }),
         leaked: false,
       });
     }
-    expect(positionalParams('SELECT ?1, ?2', [-(2n ** 63n), 2n ** 63n - 1n]).values).toEqual([
-      -(2n ** 63n),
-      2n ** 63n - 1n,
-    ]);
+    expect(
+      positionalParams('SELECT ?1, ?2', [-(2n ** 63n), 2n ** 63n - 1n], 'MySQL').values,
+    ).toEqual([-(2n ** 63n), 2n ** 63n - 1n]);
   });
 
   it('sends bytes as a Buffer over the same memory, and a Buffer as it is', () => {
     const bytes = new Uint8Array([0, 1, 255, 7]).subarray(1, 3);
     const buffer = Buffer.from([9]);
-    const [sent, kept] = positionalParams('SELECT ?1, ?2', [bytes, buffer]).values;
+    const [sent, kept] = positionalParams('SELECT ?1, ?2', [bytes, buffer], 'MySQL').values;
     expect({
       sent,
       isBuffer: Buffer.isBuffer(sent),
@@ -73,33 +67,33 @@ describe('positionalParams', () => {
 
   it('refuses text with a lone UTF-16 surrogate, which the package writes as ? or U+FFFD by the length of the text, and sends a surrogate pair as it is', () => {
     for (const value of ['a\uD800b', `a\uDC00${'x'.repeat(200)}`, '\uD83D']) {
-      expect(() => positionalParams('SELECT ?1', [value])).toThrow(
+      expect(() => positionalParams('SELECT ?1', [value], 'MySQL')).toThrow(
         expect.objectContaining({
           code: 'RUNTIME.ENCODE_FAILED',
           message: expect.stringContaining('surrogate'),
-          meta: { target: 'mysql', paramIndex: 0, received: 'string' },
+          meta: { paramIndex: 0, received: 'string' },
         }),
       );
     }
-    expect(positionalParams('SELECT ?1', ['😀']).values).toEqual(['😀']);
+    expect(positionalParams('SELECT ?1', ['😀'], 'MySQL').values).toEqual(['😀']);
   });
 
   it('refuses a Date, which the package would encode in the local time zone', () => {
-    expect(() => positionalParams('SELECT ?1, ?2', ['a', new Date(0)])).toThrow(
+    expect(() => positionalParams('SELECT ?1, ?2', ['a', new Date(0)], 'MySQL')).toThrow(
       expect.objectContaining({
         code: 'RUNTIME.ENCODE_FAILED',
         message: expect.stringContaining('Date'),
-        meta: { target: 'mysql', paramIndex: 1, received: 'Date' },
+        meta: { paramIndex: 1, received: 'Date' },
       }),
     );
   });
 
   it('reads the statement as MySQL does: -- before a control character opens a comment, and /*! is refused', () => {
-    expect(positionalParams("SELECT 1 --\x01 '\n, ?1", ['a'])).toEqual({
+    expect(positionalParams("SELECT 1 --\x01 '\n, ?1", ['a'], 'MySQL')).toEqual({
       sql: "SELECT 1 --\x01 '\n, ?",
       values: ['a'],
     });
-    expect(() => positionalParams("SELECT 1 /*! , 'a*/ */ WHERE ?1", ['a'])).toThrow(
+    expect(() => positionalParams("SELECT 1 /*! , 'a*/ */ WHERE ?1", ['a'], 'MySQL')).toThrow(
       expect.objectContaining({ code: 'RUNTIME.AST_INVALID' }),
     );
   });
@@ -111,7 +105,7 @@ describe('positionalParams', () => {
       ['SELECT ?01', [1]],
       ['SELECT ?, ?', [1]],
     ] as const) {
-      expect(() => positionalParams(sql, values)).toThrow(
+      expect(() => positionalParams(sql, values, 'MySQL')).toThrow(
         expect.objectContaining({ code: 'RUNTIME.PARAM_PLACEHOLDER_MISMATCH' }),
       );
     }
@@ -124,12 +118,20 @@ describe('positionalParams', () => {
       [Number.NaN, 'NaN'],
       [Number.POSITIVE_INFINITY, 'Infinity'],
     ] as const) {
-      expect(() => positionalParams('SELECT ?1', [value])).toThrow(
+      expect(() => positionalParams('SELECT ?1', [value], 'MySQL')).toThrow(
         expect.objectContaining({
           code: 'RUNTIME.ENCODE_FAILED',
-          meta: { target: 'mysql', paramIndex: 0, received },
+          meta: { paramIndex: 0, received },
         }),
       );
     }
+  });
+
+  it('names the database it is built for in a refusal', () => {
+    expect(() => positionalParams('SELECT ?1', [2n ** 63n], 'MariaDB')).toThrow(
+      expect.objectContaining({
+        message: "Parameter 1 is an integer outside MariaDB's signed 64-bit BIGINT",
+      }),
+    );
   });
 });

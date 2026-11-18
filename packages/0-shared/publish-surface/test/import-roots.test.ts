@@ -182,16 +182,35 @@ describe('resolveImportSpecifier', () => {
       ]);
     });
 
-    it('gives the MariaDB facade no name for MySQL modules or a query runtime', () => {
+    it('gives the MariaDB facade no name for MySQL modules', () => {
       for (const specifier of [
         '@internal/adapter-mysql/codec-types',
         '@internal/mysql/migration',
-        '@internal/sql-runtime',
       ]) {
         expect(() => resolveImportSpecifier(specifier, mariadbFacade)).toThrow(
           /has no name under @prisma\/orm-mariadb/,
         );
       }
+    });
+
+    it('resolves what a MariaDB application queries with to the MariaDB facade', () => {
+      expect(
+        [
+          '@internal/mariadb/runtime',
+          '@internal/mariadb/static',
+          '@internal/sql-runtime',
+          '@internal/sql-orm-client',
+          '@internal/sql-builder/runtime',
+          '@internal/sql-relational-core/expression',
+        ].map((specifier) => resolveImportSpecifier(specifier, mariadbFacade)),
+      ).toEqual([
+        '@prisma/orm-mariadb/runtime',
+        '@prisma/orm-mariadb/static',
+        '@prisma/orm-mariadb/family-runtime',
+        '@prisma/orm-mariadb/orm-client',
+        '@prisma/orm-mariadb/builder/runtime',
+        '@prisma/orm-mariadb/relational-core/expression',
+      ]);
     });
 
     it('resolves what a MySQL application queries with to the MySQL facade', () => {

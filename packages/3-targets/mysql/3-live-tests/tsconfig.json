@@ -1,0 +1,10 @@
+{
+  "extends": ["@repo/tsconfig/base"],
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    "paths": { "#live-types": ["./test/types/mysql.ts"] }
+  },
+  "include": ["test/**/*.ts", "vitest.config.ts"],
+  "exclude": ["dist", "test/mariadb/**"]
+}

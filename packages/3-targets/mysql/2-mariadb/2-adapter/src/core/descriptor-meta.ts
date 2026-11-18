@@ -1,10 +1,11 @@
 import { mysqlAdapterDescriptorMeta } from '@internal/adapter-mysql/adapter';
+import { mariadbTargetDescriptorMetaRuntime } from '@internal/target-mariadb/descriptor-meta-runtime';
 import { mariadbAdapterCapabilities } from './capabilities';
 
 export const mariadbAdapterDescriptorMeta = {
   ...mysqlAdapterDescriptorMeta,
-  targetId: 'mariadb',
-  id: 'mariadb',
+  targetId: mariadbTargetDescriptorMetaRuntime.targetId,
+  id: mariadbTargetDescriptorMetaRuntime.id,
   capabilities: mariadbAdapterCapabilities,
   types: {
     ...mysqlAdapterDescriptorMeta.types,

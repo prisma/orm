@@ -42,11 +42,20 @@ import {
   WindowFuncExpr,
 } from '@internal/sql-relational-core/ast';
 import { createMysqlBuiltinCodecLookup } from '@internal/target-mysql/codecs';
+import { mysqlTargetDescriptorMetaRuntime } from '@internal/target-mysql/descriptor-meta-runtime';
 import { describe, expect, it } from 'vitest';
-import { renderMysqlSql } from '../src/core/sql-renderer';
+import { MysqlSqlRenderer } from '../src/core/sql-renderer';
 
-const codecs = createMysqlBuiltinCodecLookup();
-const lower = (ast: AnyQueryAst) => renderMysqlSql(ast, undefined, codecs);
+const renderer = new MysqlSqlRenderer(
+  createMysqlBuiltinCodecLookup(),
+  mysqlTargetDescriptorMetaRuntime,
+);
+/** Renders `ast` and records what it rendered as a snapshot, so every input below pins the SQL MySQL is sent. */
+const lower = (ast: AnyQueryAst) => {
+  const lowered = renderer.render(ast, undefined);
+  expect(lowered).toMatchSnapshot();
+  return lowered;
+};
 const sqlOf = (ast: AnyQueryAst) => lower(ast).sql;
 
 const id = ColumnRef.of('user', 'id');
@@ -760,11 +769,28 @@ describe('MySQL lowering of a statement embedded in raw SQL', () => {
         .withReturning([ProjectionItem.of('id', id)]),
     ],
     ['a delete', DeleteAst.from(user).withReturning([ProjectionItem.of('id', id)])],
-  ])('refuses %s with RETURNING, which MySQL lacks', (_name, ast) => {
+  ])('refuses %s with RETURNING, which MySQL lacks', (name, ast) => {
     expect(() => sqlOf(RawQueryAst.affectedCount(['WITH x AS (', ast, ') SELECT 1']))).toThrow(
       expect.objectContaining({
         code: 'RUNTIME.AST_UNSUPPORTED',
-        meta: expect.objectContaining({ feature: 'returning' }),
+        message: `MySQL cannot return the rows ${name} writes; it has no RETURNING`,
+        meta: { target: 'mysql', feature: 'returning' },
+      }),
+    );
+  });
+
+  it('names the database it renders for in a refusal, and carries its target id', () => {
+    const other = new MysqlSqlRenderer(createMysqlBuiltinCodecLookup(), {
+      targetId: 'other',
+      displayName: 'Other',
+    });
+    const fullJoin = fromUser.withJoins([
+      JoinAst.full(TableSource.named('post'), BinaryExpr.eq(id, ColumnRef.of('post', 'userId'))),
+    ]);
+    expect(() => other.render(fullJoin, undefined)).toThrow(
+      expect.objectContaining({
+        message: 'Other has no FULL JOIN',
+        meta: { target: 'other', feature: 'full-join' },
       }),
     );
   });
