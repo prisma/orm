@@ -14,15 +14,15 @@ export interface CliRun {
   readonly result: Record<string, unknown>;
 }
 
-/** Runs the `prisma` CLI in `projectDir` against `databaseUrl`, and returns its JSON result. */
+/** Runs the `prisma` CLI in `projectDir` against `databaseUrl`, or with no database for a command that needs none, and returns its JSON result. */
 export async function prisma(
   projectDir: string,
-  databaseUrl: string,
+  databaseUrl: string | undefined,
   args: string[],
 ): Promise<CliRun> {
   const { stdout, exitCode } = await execFileAsync(prismaBin, [...args, '--json'], {
     cwd: projectDir,
-    env: { ...process.env, MYSQL_URL: databaseUrl },
+    env: databaseUrl === undefined ? process.env : { ...process.env, MYSQL_URL: databaseUrl },
   }).then(
     ({ stdout }) => ({ stdout, exitCode: 0 }),
     (error: { stdout: string; code: number }) => ({ stdout: error.stdout, exitCode: error.code }),
