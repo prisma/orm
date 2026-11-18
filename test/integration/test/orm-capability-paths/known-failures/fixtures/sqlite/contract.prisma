@@ -1,0 +1,14 @@
+// use prisma-8
+
+model Counter {
+  id  Int    @id
+  big BigInt
+}
+
+model Person {
+  id        Int  @id
+  managerId Int?
+
+  manager Person?  @relation("Management", fields: [managerId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  reports Person[] @relation("Management")
+}
