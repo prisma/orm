@@ -100,4 +100,42 @@ describe('recordedAccessChangesOf', () => {
 
     expect(recordedAccessChangesOf(operations)).toEqual([]);
   });
+
+  it('recognises operations as an ops.json written by an earlier release records them', () => {
+    const recordedOps = JSON.parse(`[
+      {
+        "id": "rowLevelSecurity.public.profiles.disable",
+        "label": "Disable row-level security on \\"profiles\\"",
+        "operationClass": "widening",
+        "target": { "id": "postgres", "details": { "schema": "public", "objectType": "rowLevelSecurity", "name": "profiles" } },
+        "precheck": [], "execute": [], "postcheck": []
+      },
+      {
+        "id": "rlsPolicy.public.profiles.read_own_ab12cd34.drop",
+        "label": "Drop RLS policy \\"read_own_ab12cd34\\" on \\"profiles\\"",
+        "operationClass": "widening",
+        "target": { "id": "postgres", "details": { "schema": "public", "objectType": "rlsPolicy", "name": "read_own_ab12cd34", "table": "profiles" } },
+        "precheck": [], "execute": [], "postcheck": []
+      },
+      {
+        "id": "rlsPolicy.public.posts.owner_ab12cd34.drop",
+        "label": "Drop RLS policy \\"owner_ab12cd34\\" on \\"posts\\"",
+        "operationClass": "widening",
+        "target": { "id": "postgres", "details": { "schema": "public", "objectType": "rlsPolicy", "name": "owner_ab12cd34", "table": "posts" } },
+        "precheck": [], "execute": [], "postcheck": []
+      },
+      {
+        "id": "rlsPolicy.public.posts.owner_ef56ab78",
+        "label": "Create RLS policy \\"owner_ef56ab78\\" on \\"posts\\"",
+        "operationClass": "additive",
+        "target": { "id": "postgres", "details": { "schema": "public", "objectType": "rlsPolicy", "name": "owner_ef56ab78", "table": "posts" } },
+        "precheck": [], "execute": [], "postcheck": []
+      }
+    ]`);
+
+    expect(recordedAccessChangesOf(recordedOps)).toEqual([
+      { operationIndex: 0, subject: PROFILES, widens: true },
+      { operationIndex: 1, subject: PROFILES, widens: false },
+    ]);
+  });
 });

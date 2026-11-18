@@ -78,9 +78,10 @@ async function writePackage(
   dirName: string,
   to: string,
   ops: readonly MigrationPlanOperation[],
+  from: string = EMPTY_CONTRACT_HASH,
 ): Promise<void> {
   const base: Omit<MigrationMetadata, 'migrationHash'> = {
-    from: EMPTY_CONTRACT_HASH,
+    from,
     to,
     providedInvariants: [],
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -92,11 +93,23 @@ async function writePackage(
   );
 }
 
-async function migrationsDirWith(appOps: readonly MigrationPlanOperation[]): Promise<string> {
+const MIDDLE_HASH = 'c'.repeat(64);
+const LATER_MIGRATION = '20260102T0000_drop_legacy';
+
+/** The app's migrations: one to the head, or with `earlierOps` one to a middle contract and a later one to the head. */
+async function migrationsDirWith(
+  appOps: readonly MigrationPlanOperation[],
+  earlierOps: readonly MigrationPlanOperation[] | undefined,
+): Promise<string> {
   const projectDir = createTestProjectDir('migrate-data-protection');
   projectDirs.push(projectDir);
   const migrationsDir = join(projectDir, 'migrations');
-  await writePackage(migrationsDir, 'app', APP_MIGRATION, APP_HEAD, appOps);
+  if (earlierOps === undefined) {
+    await writePackage(migrationsDir, 'app', APP_MIGRATION, APP_HEAD, appOps);
+  } else {
+    await writePackage(migrationsDir, 'app', APP_MIGRATION, MIDDLE_HASH, earlierOps);
+    await writePackage(migrationsDir, 'app', LATER_MIGRATION, APP_HEAD, appOps, MIDDLE_HASH);
+  }
   return migrationsDir;
 }
 
@@ -215,8 +228,10 @@ async function migrate(args: {
   readonly ref?: NamedRef;
   readonly permitPolicyChange?: boolean;
   readonly withAuditSpace?: boolean;
+  /** Operations of an earlier pending migration, before the one holding `appOps`. */
+  readonly earlierOps?: readonly MigrationPlanOperation[];
 }) {
-  const migrationsDir = await migrationsDirWith(args.appOps);
+  const migrationsDir = await migrationsDirWith(args.appOps, args.earlierOps);
   if (args.withAuditSpace === true) await addAuditSpace(migrationsDir);
   const { runnerCalls, migrations } = recordingMigrations();
   const result = await executeMigrate({
@@ -415,6 +430,20 @@ describe('executeMigrate, data protection', () => {
     }).toEqual({
       summary: 'Policies updated: dataProtection.dataLoss: data-loss-forbidden',
       written: [['data-loss-forbidden']],
+    });
+  });
+
+  it('names the later of two pending migrations when it holds the drop', async () => {
+    const { result } = await migrate({
+      earlierOps: [CREATE_TABLE],
+      appOps: [DROP_COLUMN],
+      markers: forbidding(DATA_LOSS_FORBIDDEN),
+    });
+
+    const envelope = result.ok ? undefined : result.failure.toEnvelope();
+    expect({ why: envelope?.why, meta: envelope?.meta }).toMatchObject({
+      why: expect.stringContaining(`in migration ${LATER_MIGRATION} of contract space "app"`),
+      meta: { operations: [{ migration: LATER_MIGRATION, operationId: DROP_COLUMN.id }] },
     });
   });
 });
