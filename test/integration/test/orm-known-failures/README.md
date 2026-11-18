@@ -4,7 +4,6 @@ Each test here states what a call should do and is marked `it.fails`, because th
 
 | Test | What happens today |
 | --- | --- |
-| `update` whose filter across a relation its own nested write stops matching | the nested write is kept and the record is not updated |
 | `deleteAll` returning rows, on a model related to itself with `onDelete: SetNull` | with `RETURNING`, a row another deleted row changed comes back with its foreign key `null`; without, as it was before the delete |
 | `update` of a key, on a model related to itself with `onUpdate: Cascade` | with `RETURNING` the call returns the foreign key as written, and the table holds what the cascade left |
 | Postgres: a `TimeTemporal(p)` value from `23:59:59.5` up | the database rounds it to `24:00:00`, and the row can no longer be read |

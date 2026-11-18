@@ -183,6 +183,7 @@ export function updateFirstGraph(
   const model = modelOf(collection);
   const t: Translation = { ...b, parentRow: find };
   const before = addBeforeWrite(t, model, relationMutations);
+  const writesBeforeUpdate = b.graph.writesAnyTable;
   const values = withUpdateDefaults(collection, set, before);
   const owner = { operation: 'update', modelName: collection.modelName };
   if (Object.keys(values).length === 0 && before.keys.length === 0) {
@@ -201,7 +202,7 @@ export function updateFirstGraph(
 
   b.graph.setResult(
     updateRows(b, model, values, {
-      where,
+      where: writesBeforeUpdate ? undefined : where,
       filters: [{ from: find, columns: sameRowColumns(collection) }],
       links: [],
       payloads: before.keys,

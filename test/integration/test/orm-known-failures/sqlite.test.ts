@@ -139,10 +139,14 @@ describe('SQLite ORM calls known to fail', () => {
   });
 
   describe('update whose filter its own nested write stops matching', () => {
-    it.fails('updates the record it found', async () => {
+    it.each([
+      ['with RETURNING', (db: Client) => db.orm.Person],
+      ['without RETURNING', (db: Client) => withoutReturning(db).Person],
+    ])('updates the record it found, %s', async (_path, people) => {
       await withDatabase(async (db) => {
         await db.orm.Person.createAndCount([{ id: 41, managerId: null }]);
-        const updated = await db.orm.Person.whereUnique({ id: 41 })
+        const updated = await people(db)
+          .whereUnique({ id: 41 })
           .where((person) => person.reports.every((report) => report.id.lt(100)))
           .select('id', 'managerId')
           .update({
@@ -159,6 +163,31 @@ describe('SQLite ORM calls known to fail', () => {
           people: [
             { id: 41, managerId: 200 },
             { id: 200, managerId: 41 },
+          ],
+        });
+      });
+    });
+
+    it('updates no record and writes no nested row when the filter matches none', async () => {
+      await withDatabase(async (db) => {
+        await db.orm.Person.createAndCount([
+          { id: 41, managerId: null },
+          { id: 150, managerId: 41 },
+        ]);
+        const updated = await db.orm.Person.whereUnique({ id: 41 })
+          .where((person) => person.reports.every((report) => report.id.lt(100)))
+          .select('id', 'managerId')
+          .update({ manager: (manager) => manager.create({ id: 200 }) });
+        expect({
+          updated,
+          people: await db.orm.Person.select('id', 'managerId')
+            .orderBy((person) => person.id.asc())
+            .all(),
+        }).toEqual({
+          updated: null,
+          people: [
+            { id: 41, managerId: null },
+            { id: 150, managerId: 41 },
           ],
         });
       });

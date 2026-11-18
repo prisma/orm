@@ -368,6 +368,8 @@ On a many-to-many relation, `r.disconnect()` without criteria is refused with `O
 
 On a runtime that provides transactions, a write that takes more than one statement, such as a parent write with nested operations, runs in one transaction, so either all of it is applied or none of it is.
 
+`update()` finds its record once, with the collection's filter, before any nested operation runs. When no record matches, no nested operation is applied and the call returns `null`. When a nested operation writes before the record itself is updated, as a `create` on a relation the record holds the key for does, the record is then updated by its key alone, so a filter across a relation that the nested write stops matching does not stop the update.
+
 ### Several operations on one relation
 
 A callback may return an array of operations. They are applied in array order, each after the previous one has been written. An empty array applies no operation.
