@@ -1,5 +1,6 @@
+import type { SqlQueryable, SqlTransaction } from '@internal/sql-relational-core/ast';
 import { timeouts } from '@repo/test-utils';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, type TestContext, vi } from 'vitest';
 import { withSeededDatabase } from '../live-database';
 import type { LiveServer } from '../live-server';
 
@@ -40,12 +41,66 @@ const seededTasks = [
   { id: 5, title: 'Backlog', type: 'feature', parentId: null, priority: 50 },
 ];
 
-/** The value a write resolves to, or the code and message of the error it is refused with. */
-async function outcome<T>(write: PromiseLike<T>): Promise<T | { refused: unknown }> {
+const isWrite = (sql: string) => /^(UPDATE|DELETE)\b/.test(sql);
+
+function recordStatements(queryable: SqlQueryable, sent: string[]): void {
+  const query = queryable.query.bind(queryable);
+  const execute = queryable.execute.bind(queryable);
+  vi.spyOn(queryable, 'query').mockImplementation((request) => {
+    sent.push(request.sql);
+    return query(request);
+  });
+  vi.spyOn(queryable, 'execute').mockImplementation((request) => {
+    sent.push(request.sql);
+    return execute(request);
+  });
+}
+
+function recordTransaction(transaction: SqlTransaction, sent: string[]): SqlTransaction {
+  const savepoint = transaction.savepoint.bind(transaction);
+  vi.spyOn(transaction, 'savepoint').mockImplementation(async (name) =>
+    recordTransaction(await savepoint(name), sent),
+  );
+  recordStatements(transaction, sent);
+  return transaction;
+}
+
+/** Records the SQL of every statement the clients the server creates from now on send, until the test ends. */
+function watchStatements(server: LiveServer, test: TestContext): string[] {
+  const sent: string[] = [];
+  const create = server.runtimeDriver.create.bind(server.runtimeDriver);
+  const spy = vi.spyOn(server.runtimeDriver, 'create').mockImplementation((...args) => {
+    const driver = create(...args);
+    recordStatements(driver, sent);
+    const acquire = driver.acquireConnection.bind(driver);
+    vi.spyOn(driver, 'acquireConnection').mockImplementation(async () => {
+      const connection = await acquire();
+      recordStatements(connection, sent);
+      const begin = connection.beginTransaction.bind(connection);
+      vi.spyOn(connection, 'beginTransaction').mockImplementation(async (start) =>
+        recordTransaction(await begin(start), sent),
+      );
+      return connection;
+    });
+    return driver;
+  });
+  test.onTestFinished(() => spy.mockRestore());
+  return sent;
+}
+
+/** The value a write resolves to, or the code and message of the error it is refused with and how many UPDATE or DELETE statements it sent. */
+async function outcome<T>(
+  sent: readonly string[],
+  write: PromiseLike<T>,
+): Promise<T | { refused: unknown; writesSent: number }> {
+  const before = sent.length;
   try {
     return await write;
   } catch (error) {
-    return { refused: { code: Object(error).code, message: Object(error).message } };
+    return {
+      refused: { code: Object(error).code, message: Object(error).message },
+      writesSent: sent.slice(before).filter(isWrite).length,
+    };
   }
 }
 
@@ -56,6 +111,7 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
       code: 'RUNTIME.AST_UNSUPPORTED',
       message: `${server.displayName} cannot run an UPDATE or DELETE whose filter or values read the table being written, \`Task\``,
     },
+    writesSent: 0,
   };
 
   describe(`${server.displayName} writes through the ORM whose filter reads the written table`, {
@@ -63,26 +119,31 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
   }, () => {
     it('updates the rows a filter on a relation from the model to itself selects', async (test) => {
       await withSeededDatabase(test, server, taskTree, async (url) => {
+        const sent = watchStatements(server, test);
         await using db = server.client({ url, verifyMarker: false });
         expect({
           updated: await outcome(
+            sent,
             db.orm.Task.where((task) => task.subtasks.some((subtask) => subtask.type.eq('bug')))
               .select('id', 'title')
               .orderBy((task) => task.id.asc())
               .updateAll({ title: 'Has bugs' }),
           ),
           counted: await outcome(
+            sent,
             db.orm.Task.where((task) =>
               task.subtasks.some((subtask) => subtask.type.eq('feature')),
             ).updateAndCount({ title: 'Has features' }),
           ),
           first: await outcome(
+            sent,
             db.orm.Task.where((task) => task.subtasks.none())
               .where({ type: 'feature' })
               .select('id', 'title')
               .update({ title: 'Leaf' }),
           ),
           pinned: await outcome(
+            sent,
             db.orm.Task.where((task) => task.subtasks.none())
               .where({ id: 4 })
               .select('id', 'title')
@@ -91,9 +152,11 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
           stored: await db.orm.Task.select('id', 'title')
             .orderBy((task) => task.id.asc())
             .all(),
+          recordedWrites: sent.some(isWrite),
         }).toEqual(
           runs
             ? {
+                recordedWrites: true,
                 updated: [
                   { id: 1, title: 'Has bugs' },
                   { id: 2, title: 'Has bugs' },
@@ -110,6 +173,7 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
                 ],
               }
             : {
+                recordedWrites: true,
                 updated: refused,
                 counted: refused,
                 first: { id: 5, title: 'Leaf' },
@@ -125,15 +189,18 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
 
     it('deletes the rows a filter on a relation from the model to itself selects', async (test) => {
       await withSeededDatabase(test, server, taskTree, async (url) => {
+        const sent = watchStatements(server, test);
         await using db = server.client({ url, verifyMarker: false });
         expect({
           pinned: await outcome(
+            sent,
             db.orm.Task.where((task) => task.subtasks.none())
               .where({ id: 5 })
               .select('id')
               .delete(),
           ),
           deleted: await outcome(
+            sent,
             db.orm.Task.where((task) => task.subtasks.none())
               .where({ type: 'bug' })
               .select('id')
@@ -141,11 +208,14 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
               .deleteAll(),
           ),
           counted: await outcome(
+            sent,
             db.orm.Task.where((task) => task.subtasks.none()).deleteAndCount(),
           ),
           first: await outcome(
+            sent,
             db.orm.Task.where((task) => task.subtasks.none())
               .select('id', 'title')
+              .orderBy((task) => task.id.asc())
               .delete(),
           ),
           remaining: await db.orm.Task.orderBy((task) => task.id.asc()).all(),
@@ -153,9 +223,11 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
             .select('id')
             .orderBy((task) => task.id.asc())
             .all(),
+          recordedWrites: sent.some(isWrite),
         }).toEqual(
           runs
             ? {
+                recordedWrites: true,
                 pinned: { id: 5 },
                 deleted: [{ id: 3 }, { id: 4 }],
                 counted: 1,
@@ -164,6 +236,7 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
                 features: [],
               }
             : {
+                recordedWrites: true,
                 pinned: refused,
                 deleted: refused,
                 counted: refused,
@@ -198,24 +271,29 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
 
     it('updates the rows of a variant stored in its own table', async (test) => {
       await withSeededDatabase(test, server, taskTree, async (url) => {
+        const sent = watchStatements(server, test);
         await using db = server.client({ url, verifyMarker: false });
         expect({
           updated: await outcome(
+            sent,
             db.orm.Task.variant('feature')
               .where((task) => task.id.gte(2))
               .orderBy((task) => task.id.asc())
               .updateAll({ title: 'Later' }),
           ),
           counted: await outcome(
+            sent,
             db.orm.Task.variant('feature')
               .where((task) => task.subtasks.some((subtask) => subtask.type.eq('feature')))
               .updateAndCount({ title: 'Has features' }),
           ),
           first: await db.orm.Task.variant('feature').where({ id: 2 }).update({ title: 'Second' }),
           stored: await db.orm.Task.orderBy((task) => task.id.asc()).all(),
+          recordedWrites: sent.some(isWrite),
         }).toEqual(
           runs
             ? {
+                recordedWrites: true,
                 updated: [
                   { id: 2, title: 'Later', type: 'feature', parentId: 1, priority: 20 },
                   { id: 5, title: 'Later', type: 'feature', parentId: null, priority: 50 },
@@ -231,6 +309,7 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
                 ],
               }
             : {
+                recordedWrites: true,
                 updated: refused,
                 counted: refused,
                 first: { id: 2, title: 'Second', type: 'feature', parentId: 1, priority: 20 },
@@ -244,24 +323,33 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
 
     it('deletes the rows of a variant stored in its own table', async (test) => {
       await withSeededDatabase(test, server, taskTree, async (url) => {
+        const sent = watchStatements(server, test);
         await using db = server.client({ url, verifyMarker: false });
         expect({
           deleted: await outcome(
+            sent,
             db.orm.Task.variant('feature')
               .where((task) => task.subtasks.none())
               .deleteAll(),
           ),
           counted: await outcome(
+            sent,
             db.orm.Task.variant('feature')
               .where((task) => task.id.gte(2))
               .deleteAndCount(),
           ),
-          first: await db.orm.Task.variant('feature').delete(),
-          second: await db.orm.Task.variant('feature').delete(),
+          first: await db.orm.Task.variant('feature')
+            .orderBy((task) => task.id.asc())
+            .delete(),
+          second: await db.orm.Task.variant('feature')
+            .orderBy((task) => task.id.asc())
+            .delete(),
           remaining: await db.orm.Task.orderBy((task) => task.id.asc()).all(),
+          recordedWrites: sent.some(isWrite),
         }).toEqual(
           runs
             ? {
+                recordedWrites: true,
                 deleted: [
                   { id: 5, title: 'Backlog', type: 'feature', parentId: null, priority: 50 },
                 ],
@@ -274,6 +362,7 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
                 ],
               }
             : {
+                recordedWrites: true,
                 deleted: refused,
                 counted: refused,
                 first: { id: 1, title: 'Launch', type: 'feature', parentId: null, priority: 10 },

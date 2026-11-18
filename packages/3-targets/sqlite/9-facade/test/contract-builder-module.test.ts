@@ -12,10 +12,11 @@ describe('the module the refusal of a contract built for another target names', 
   it('is a subpath of the module base that the package and its published package both export', () => {
     const subpath = contractBuilderModule.slice(moduleBase.length);
     expect({
+      subpath,
       base: contractBuilderModule.startsWith(`${moduleBase}/`),
       internal: `.${subpath}` in exportsOf(facadeDir),
       published:
         `.${subpath}` in exportsOf(resolve(facadeDir, '../../..', '9-public/@prisma/orm-sqlite')),
-    }).toEqual({ base: true, internal: true, published: true });
+    }).toEqual({ subpath: '/contract-builder', base: true, internal: true, published: true });
   });
 });

@@ -36,7 +36,12 @@ describe('defineConfig for MySQL', () => {
 
   it('reads a TypeScript contract with the TypeScript provider', () => {
     const config = defineConfig({ contract: './prisma/contract.ts', output: 'generated' });
-    expect({ output: config.contract?.output, inputs: config.contract?.source.inputs }).toEqual({
+    expect({
+      format: config.contract?.source.format,
+      output: config.contract?.output,
+      inputs: config.contract?.source.inputs,
+    }).toEqual({
+      format: 'typescript',
       output: 'generated/contract.json',
       inputs: ['./prisma/contract.ts'],
     });
