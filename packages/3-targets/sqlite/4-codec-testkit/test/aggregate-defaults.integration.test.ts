@@ -38,7 +38,7 @@ const MAX_SAFE = 9007199254740991n;
 /** The largest total SQLite's `SUM` produces: one row more raises `integer overflow`, which is the bound `sumBigInt` is offered within. */
 const MAX_INT64 = 9223372036854775807n;
 
-/** The result codecs carrying an integer wider than the driver's numeric reads, and so the ones a lowering has to cast out as text. */
+/** The result codecs carrying an integer wider than a JS `number`, and so the ones a lowering has to cast out as text. */
 const WIDE_INTEGER_CODEC_IDS: ReadonlyArray<string> = ['sqlite/bigint@1', 'sqlite/bigintnumber@1'];
 
 /** The codec a resolved row decodes its result through, instantiated as the runtime would. */

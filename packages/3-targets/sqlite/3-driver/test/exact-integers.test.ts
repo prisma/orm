@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import sqliteControlDriverDescriptor from '../src/exports/control';
-import { createBoundDriverFromBinding } from '../src/sqlite-driver';
+import { createBoundDriverFromBinding, SqliteConnectionImpl } from '../src/sqlite-driver';
 import { executeSql, queryRows } from './sql-queryable-test-utils';
 
 const MIN_INT64 = -9223372036854775808n;
@@ -49,6 +49,15 @@ describe('SQLite integers of any 64-bit size', () => {
   it('the control driver reads integers the same way', async () => {
     const driver = await sqliteControlDriverDescriptor.create(testPath);
     expect(await driver.query(WIDE_VALUES_SQL)).toEqual({ rows: [WIDE_VALUES] });
+    await driver.close();
+  });
+
+  it('an explained plan reads its integers as numbers', async () => {
+    const driver = createDriver();
+    await executeSql(driver, 'CREATE TABLE t (id INTEGER PRIMARY KEY)');
+    expect(await driver.explain({ sql: 'SELECT id FROM t' })).toEqual({
+      rows: [{ id: 2, parent: 0, notused: 216, detail: 'SCAN t' }],
+    });
     await driver.close();
   });
 
@@ -122,5 +131,40 @@ describe('a read that stops part-way', () => {
     ]);
     expect(() => writeFromAnotherConnection(13)).not.toThrow();
     await driver.close();
+  });
+});
+
+describe('a read whose row raises an error', () => {
+  function databaseFailingOnSecondRow() {
+    const resets: string[] = [];
+    let rowsRead = 0;
+    const rows: Iterator<Record<string, unknown>> = {
+      next() {
+        rowsRead += 1;
+        if (rowsRead === 2) throw new Error('the second row cannot be read');
+        return { done: false, value: { id: BigInt(rowsRead) } };
+      },
+      return() {
+        resets.push('return');
+        return { done: true, value: undefined };
+      },
+    };
+    const database = {
+      isOpen: true,
+      prepare: () => ({ setReadBigInts: () => {}, iterate: () => rows }),
+    };
+    return { database: database as unknown as DatabaseSync, resets };
+  }
+
+  it('resets its statement once and raises the error', async () => {
+    const { database, resets } = databaseFailingOnSecondRow();
+    const read: unknown[] = [];
+    const readAll = async () => {
+      for await (const row of new SqliteConnectionImpl(database).query({ sql: 'SELECT id' })) {
+        read.push(row);
+      }
+    };
+    await expect(readAll()).rejects.toThrow('the second row cannot be read');
+    expect({ read, resets }).toEqual({ read: [{ id: 1 }], resets: ['return'] });
   });
 });

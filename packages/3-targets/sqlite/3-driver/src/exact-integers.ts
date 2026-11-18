@@ -18,7 +18,8 @@ export function prepareExact(db: DatabaseSync, sql: string): StatementSync {
 export function safeIntegersAsNumbers(
   row: Record<string, SQLOutputValue>,
 ): Record<string, SQLOutputValue> {
-  for (const [key, value] of Object.entries(row)) {
+  for (const key in row) {
+    const value = row[key];
     if (typeof value === 'bigint' && value >= MIN_SAFE_INTEGER && value <= MAX_SAFE_INTEGER) {
       row[key] = Number(value);
     }
