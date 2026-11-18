@@ -8,6 +8,7 @@ import { executeMigrationPlanCommand } from '../../src/control-api/operations/mi
 import type { AnswerPlanQuestions } from '../../src/control-api/statements/plan-questions';
 import type { StatementText } from '../../src/control-api/statements/statement-text';
 import { BIN_GROUPS } from '../../src/orm/cli';
+import { CliStructuredError } from '../../src/utils/cli-errors';
 import { createOrmTestCli } from '../helpers/orm-test-cli';
 import {
   ADDITIVE_OP,
@@ -290,5 +291,34 @@ describe('migration plan --to <ref>, renames', () => {
       code: result.ok ? undefined : result.failure.code,
       migrations,
     }).toEqual({ code: 'MIGRATION.DATA_PROTECTION_FORBIDS', migrations: [] });
+  });
+});
+
+describe('migration plan --to <ref>, a placeholder before the refused operation', () => {
+  it('names the refused operation, not the one after it', async () => {
+    const project = await projectWithProductionRef({
+      dataProtection: { dataLoss: 'data-loss-forbidden' },
+    });
+    const placeholder = new CliStructuredError(
+      'MIGRATION.UNFILLED_PLACEHOLDER',
+      'Unfilled migration placeholder',
+      { meta: { operation: { id: 'fill.x', label: 'Fill x', operationClass: 'data' } } },
+    );
+
+    const planned = await plan(
+      project,
+      {
+        operations: [DESTRUCTIVE_OP, ADDITIVE_OP],
+        throwOnOperations: placeholder,
+        placeholderAt: 0,
+        dataLoss: [{ operationIndex: 1, subject: { kind: 'storage', name: 'legacy' } }],
+      },
+      ['--to', 'production'],
+    );
+
+    expect(planned.error).toMatchObject({
+      code: 'MIGRATION.DATA_PROTECTION_FORBIDS',
+      meta: { operations: [{ operationId: DESTRUCTIVE_OP.id }] },
+    });
   });
 });

@@ -844,7 +844,7 @@ async function executeMigrationPlanCommandInner(
         spaceId: aggregate.app.spaceId,
         ...ifDefined(
           'operationId',
-          entry.operationIndex === undefined ? undefined : leg.plannedOps[entry.operationIndex]?.id,
+          entry.operationIndex === undefined ? undefined : leg.listedOps[entry.operationIndex]?.id,
         ),
         subject: subjectText(entry.subject, {
           origin: fromContract ?? EMPTY_ORIGIN,
