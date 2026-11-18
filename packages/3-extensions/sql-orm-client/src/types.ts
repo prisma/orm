@@ -2086,56 +2086,34 @@ type RelationParentLinkFields<
         : never
       : never;
 
-type IsRequiredField<
-  TContract extends Contract<SqlStorage>,
-  ModelName extends string,
-  FieldName extends string,
-  NsId extends string = never,
-> =
-  FieldStorageColumn<TContract, ModelName, FieldName, NsId> extends infer Column
-    ? [Column] extends [never]
-      ? false
-      : Column extends { readonly nullable: false }
-        ? true
-        : false
-    : false;
-
-type HasRequiredField<
-  TContract extends Contract<SqlStorage>,
-  ModelName extends string,
-  FieldNames extends string,
-  NsId extends string = never,
-> = true extends (
-  FieldNames extends string
-    ? IsRequiredField<TContract, ModelName, FieldNames, NsId>
-    : never
-)
-  ? true
-  : false;
-
-type RelationForeignKeyRequired<
+type RelationLocalFields<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   RelName extends string,
   NsId extends string = never,
-  TargetNs extends string = never,
 > =
-  HasJunctionThrough<TContract, ModelName, RelName, NsId> extends true
-    ? false
-    : RelationsOf<TContract, ModelName, NsId> extends infer Rels extends Record<string, unknown>
-      ? RelName extends keyof Rels
-        ? Rels[RelName] extends {
-            readonly cardinality: 'N:1';
-            readonly on: { readonly localFields: readonly (infer Field extends string)[] };
-          }
-          ? HasRequiredField<TContract, ModelName, Field, NsId>
-          : Rels[RelName] extends {
-                readonly on: { readonly targetFields: readonly (infer Field extends string)[] };
-              }
-            ? HasRequiredField<TContract, RelationModelName<Rels[RelName]>, Field, TargetNs>
-            : false
-        : false
-      : false;
+  RelationsOf<TContract, ModelName, NsId> extends infer Rels extends Record<string, unknown>
+    ? RelName extends keyof Rels
+      ? Rels[RelName] extends {
+          readonly on: { readonly localFields: readonly (infer Field extends string)[] };
+        }
+        ? Field
+        : never
+      : never
+    : never;
+
+type AnyFieldRequired<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  Fields extends string,
+  NsId extends string = never,
+> = false extends (
+  Fields extends string
+    ? FieldNullable<TContract, ModelName, Fields, NsId>
+    : never
+)
+  ? true
+  : false;
 
 /**
  * Resolves a storage table name to its owning domain model by scanning the
@@ -2466,7 +2444,19 @@ type RelationMutationCallback<
     HasJunctionThrough<TContract, ModelName, RelName, NsId>,
     Context extends 'create'
       ? true
-      : RelationForeignKeyRequired<TContract, ModelName, RelName, NsId, TargetNs>,
+      : Cardinality extends 'N:1'
+        ? AnyFieldRequired<
+            TContract,
+            ModelName,
+            RelationLocalFields<TContract, ModelName, RelName, NsId>,
+            NsId
+          >
+        : AnyFieldRequired<
+            TContract,
+            TargetModel,
+            RelationParentLinkFields<TContract, ModelName, RelName, NsId>,
+            TargetNs
+          >,
     Context extends 'create' ? true : Cardinality extends '1:1' | 'N:1' ? true : false,
     RelationParentLinkFields<TContract, ModelName, RelName, NsId>,
     TargetNs,
@@ -2481,7 +2471,12 @@ type RelationMutationCallback<
         ? true
         : Cardinality extends 'N:1'
           ? true
-          : RelationForeignKeyRequired<TContract, ModelName, RelName, NsId, TargetNs>,
+          : AnyFieldRequired<
+              TContract,
+              TargetModel,
+              RelationParentLinkFields<TContract, ModelName, RelName, NsId>,
+              TargetNs
+            >,
       Context extends 'create' ? true : Cardinality extends '1:1' | 'N:1' ? true : false,
       RelationParentLinkFields<TContract, ModelName, RelName, NsId>,
       TargetNs,
