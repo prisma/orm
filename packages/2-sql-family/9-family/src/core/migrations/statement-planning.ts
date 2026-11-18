@@ -710,7 +710,7 @@ class StatementPlanner<TCall extends CallWithCompanions> {
         : `${label}: table "${to}" also stores ${others}, whose rows are not in table "${from}"`,
       shared.kind === 'left'
         ? `A table rename moves every row of the table, and the rows of ${others} do not move to table "${to}". Moving the rows of one model out of a table it shares with others is a data migration, which a plan does not write. ${leaveOutShared(modelsText(moving))} ${HAND_WRITTEN_WITH_MIGRATION_PLAN}${handWrittenMigrationSteps(`the rows of ${modelsText(moving)} into table "${to}"`)}`
-        : `A table rename moves the rows of one table, and table "${to}" would also store the rows of ${others}. Moving the rows of two tables into one is a data migration, which a plan does not write. ${leaveOutShared(modelsText(moving))} ${HAND_WRITTEN_WITH_MIGRATION_PLAN}${handWrittenMigrationSteps(`the rows of ${others} and ${modelsText(moving)} into table "${to}"`)}`,
+        : `A table rename moves the rows of one table, and table "${to}" would also store the rows of ${others}. Moving the rows of two tables into one is a data migration, which a plan does not write. ${leaveOutShared(modelsText(moving))} ${HAND_WRITTEN_WITH_MIGRATION_PLAN}${handWrittenMigrationSteps(`the rows of ${modelsText(moving)}, and those of ${others} that table "${to}" does not already hold, into table "${to}"`)}`,
       change.origin,
     );
   }
@@ -731,7 +731,7 @@ class StatementPlanner<TCall extends CallWithCompanions> {
         : `${label}: column "${to}" also stores ${others}, whose values are not in column "${from}"`,
       shared.kind === 'left'
         ? `A column rename moves the values of every row, and the values of ${others} do not move to column "${to}". Moving the values of one field out of a column it shares with others is a data migration, which a plan does not write. ${leaveOutShared(fieldsText(moving))} ${HAND_WRITTEN_WITH_MIGRATION_PLAN}${handWrittenMigrationSteps(`the values of ${fieldsText(moving)} into column "${to}"`)}`
-        : `A column rename moves the values of one column, and column "${to}" would also store the values of ${others}. Moving the values of two columns into one is a data migration, which a plan does not write. ${leaveOutShared(fieldsText(moving))} ${HAND_WRITTEN_WITH_MIGRATION_PLAN}${handWrittenMigrationSteps(`the values of ${others} and ${fieldsText(moving)} into column "${to}"`)}`,
+        : `A column rename moves the values of one column, and column "${to}" would also store the values of ${others}. Moving the values of two columns into one is a data migration, which a plan does not write. ${leaveOutShared(fieldsText(moving))} ${HAND_WRITTEN_WITH_MIGRATION_PLAN}${handWrittenMigrationSteps(`the values of ${fieldsText(moving)}, and those of ${others} that column "${to}" does not already hold, into column "${to}"`)}`,
       { ...change.origin, column: from },
     );
   }
