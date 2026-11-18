@@ -493,3 +493,11 @@ A fix needs one of: a planner that rewrites the value at every JSON path a union
 **Found:** stored-name renames, review of a reviewer's comment, 2026-11-19.
 
 A SQLite database has table `USERS`, and both the origin and the destination contract store `User` in `users`. With no change at all, `db update` plans `Create table users` and `Drop table "USERS"`, and asks about `USERS` as storage. SQLite takes the two names for one, so the create fails at apply. The storage diff compares table names exactly, while SQLite's `SchemaTables` folds case. A column rename of a field of `User` on that table is not planned either, because `columnsNamed` reads the table by its exact name, but that changes nothing: the diff drops and creates the table anyway. The fix belongs in the SQLite storage diff, which should match a live table to the contract's as SQLite compares names, and then the column lookup should use the matched name. Not caused by the stored-name renames; seen on the branch, not checked on `main`.
+
+## An enum stored-value change rewrites a column that a field of another enum also reads
+
+**Found:** automated review of the stored-name renames pull request (2026-11-19). Not proven with a test.
+
+`Bug` and `Feature` are variants stored in one table and both map a field to column `status`. `Bug.status` is typed by enum `Status` and `Feature.status` by enum `LegacyStatus`; both store `A = "a"`. The change gives `Status.A` the stored value `"b"`. `planEnumValueRewrites` (`packages/2-sql-family/9-family/src/core/migrations/enum-value-planning.ts`) finds column `status` through `Bug.status` and rewrites `"a"` to `"b"` in every row, including the rows of `Feature`, which then hold a value `LegacyStatus` does not list. A `--rename` of the member did the same before this slice; since this slice it also happens with no statement and no question. The contract is already inconsistent here: the column has one check constraint, built from one enum, and the PSL interpreter accepts a second variant field on the same column with no diagnostic.
+
+It needs a decision: reject a column that fields of different enums share when the contract is written, refuse a stored-value change on such a column, or limit the rewrite to the variant's rows by its discriminator.
