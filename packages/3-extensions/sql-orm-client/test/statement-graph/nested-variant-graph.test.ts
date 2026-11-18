@@ -714,3 +714,60 @@ describe('updateAll and deleteAll on a variant', () => {
     });
   });
 });
+
+describe('the discriminator in update data', () => {
+  const refusal = { code: 'ORM.FIELD_IMMUTABLE', meta: { model: 'Task', field: 'type' } };
+
+  it('is refused by every top-level update before any statement runs', async () => {
+    const runtime = createMockRuntime();
+    const tasks = new Collection({ runtime, context }, 'Task', { namespaceId: 'public' });
+    const calls: (() => unknown)[] = [
+      () => tasks.where({ id: 1 }).update({ type: 'bug' } as never),
+      () => tasks.where({ id: 1 }).updateAll({ type: 'bug' } as never),
+      () =>
+        tasks
+          .variant('feature')
+          .where({ id: 1 })
+          .updateAll({ type: 'bug' } as never),
+      () =>
+        tasks
+          .variant('bug')
+          .where({ id: 1 })
+          .updateAll({ type: 'feature' } as never),
+      () => tasks.where({ id: 1 }).updateAndCount({ type: 'bug' } as never),
+      () =>
+        tasks.variant('bug').upsert({
+          create: { id: 1, title: 'Crash', projectId: 1, severity: 'high' } as never,
+          update: { type: 'feature' } as never,
+          conflictOn: { id: 1 } as never,
+        }),
+    ];
+
+    const errors = await Promise.all(
+      calls.map((call) =>
+        Promise.resolve()
+          .then(call)
+          .then(
+            () => undefined,
+            (error: unknown) => error,
+          ),
+      ),
+    );
+
+    expect(errors).toMatchObject(calls.map(() => refusal));
+    expect(runtime.executions).toEqual([]);
+  });
+
+  it('is refused in nested updateAll data, with and without variant()', () => {
+    const errors = [
+      (tasks: VariantMutator & FilteredMutator) => tasks.updateAll({ type: 'bug' }),
+      (tasks: VariantMutator & FilteredMutator) =>
+        tasks.where({ title: 'Crash' }).updateAll({ type: 'bug' }),
+      (tasks: VariantMutator) => tasks.variant('feature').updateAll({ type: 'bug' }),
+      (tasks: VariantMutator) =>
+        tasks.variant('bug').where({ title: 'Crash' }).updateAll({ type: 'feature' }),
+    ].map((tasks) => thrownBy(() => updateOf('Project', { tasks })));
+
+    expect(errors).toMatchObject(errors.map(() => refusal));
+  });
+});
