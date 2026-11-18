@@ -103,7 +103,7 @@ ORM_PROPERTIES_SEED=<seed> ORM_PROPERTIES_SCHEMA=<index> ORM_PROPERTIES_PATH=<pa
 
 **Calls the types reject.** The calls are made through loosely typed interfaces, so a generated call can be one TypeScript refuses. The generators avoid the ones found so far, all about a field a variant declares: it is not accepted in `update`, `updateAll` or `upsert` data, in the object form of `where`, or in `select` on a variant. The types also reject `include` on a variant collection, so calls on a variant are generated without one; before `create` or `createAll` of a variant stored in its own table it is ignored. The first two are refused with `ORM.FIELD_UNKNOWN`; a `select` of such a field on `update`, `updateAll`, `delete` or `deleteAll` of a variant stored in its own table reaches the database and fails with `no such column` when the statement has `RETURNING`.
 
-**Seen once, not reproduced in a small test.** On Postgres, an `update` by a unique field with a filter across a relation that matched no row, setting a string longer than its column, was rejected with SQLSTATE 22001 with `RETURNING` and returned `null` without. Strings longer than a column's length are no longer generated.
+**Values Postgres refuses.** A string longer than its column, or a decimal with more digits than its precision, is not generated. On a statement that matches no row, Postgres raises the error only when it plans the statement with the value folded in, which it does for the first executions of a statement and not after; so the same `update` was rejected on one ORM and returned `null` on the other, depending on how often each statement had run. Run on their own, both ORMs reject it.
 
 **Refused by a codec.** Postgres `IntervalString` refuses a negative duration such as `-PT5S`.
 

@@ -65,7 +65,7 @@ const digits = (most: number) =>
 
 function decimalText(whole: number, fraction: number): fc.Arbitrary<string> {
   return fc
-    .tuple(fc.boolean(), digits(Math.max(whole, 1)), digits(fraction))
+    .tuple(fc.boolean(), digits(whole), digits(fraction))
     .map(([negative, before, after]) => {
       const integer = before.replace(/^0+(?=\d)/, '') || '0';
       return `${negative ? '-' : ''}${integer}${after === '' ? '' : `.${after}`}`;
@@ -173,7 +173,7 @@ const postgresTypes: readonly fc.Arbitrary<ScalarType>[] = [
         ? scalar('NumericString', decimalText(12, 6))
         : scalar(
             written('NumericString', numeric[0], numeric[1]),
-            decimalText(numeric[0] - (numeric[1] ?? 0), (numeric[1] ?? 0) + 1),
+            decimalText(numeric[0] - (numeric[1] ?? 0), numeric[1] ?? 0),
           ),
   ),
   parameterised(precision, (p) => scalar(written('TimestamptzTemporal', p), instant(6))),
