@@ -62,16 +62,18 @@ The CLI holds no template, driver name, connection string or server check for an
 | `quickReference(input)` | Writes it as the quick reference |
 | `readme(input)` | Optional. Writes it as the README in a project that already has `src/index.ts` |
 | `serverRequirement` | Optional. States the minimum server version in the quick reference |
-| `probe(databaseUrl)` | Optional. Connects and reports the server's version, for `--probe-db`, within the deadline `init` gives it |
+| `probe(databaseUrl, signal)` | Optional. Connects and reports the server's version, for `--probe-db`; stops and closes its connection when `signal` aborts |
 | `prisma7QuickReference(input)` | Optional. The quick reference for a project that keeps its Prisma 7 schema as the contract source |
 
 The CLI keeps everything that is the same for every target: which files exist and where they go, package manager detection, `prisma.config.ts` around `configModule` (for a starter contract and for a Prisma 7 schema), `tsconfig.json`, `.gitignore`, `.gitattributes`, the `package.json` scripts, the questions it asks and what it prints.
 
 Two facts are shared by the CLI and every contribution, and the interface states them: the connection string is read from `DATABASE_URL`, and `dotenv` is installed with the target package, so `db.ts` may import `dotenv/config`.
 
+`init` loads the entrypoint as the project would: Node resolves `<package>/init` from the project folder, in a short child process, so the export map is read by Node's own rules.
+
 The `init` entrypoint may import types from the framework but no framework code that runs. The CLI that loads it can be a different installed copy of the framework from the one the target package depends on, and two copies in one process do not recognise each other's values.
 
-A probe reports one of four results: the server's version, a driver that is missing, a driver that is installed but fails to load, or a connection that worked whose version could not be read. It rejects only when it cannot connect. `init` gives every probe a deadline of 60 seconds, so a probe that never settles is reported like one that could not connect. `--probe-db` reads `DATABASE_URL` from the shell's environment, not from `.env`.
+A probe reports one of four results: the server's version, a driver that is missing, a driver that is installed but fails to load, or a connection that worked whose version could not be read. It rejects only when it cannot connect. `init` gives every probe a deadline of 60 seconds. At the deadline it aborts the probe's signal, and reports the probe like one that could not connect. `--probe-db` reads `DATABASE_URL` from the shell's environment, not from `.env`.
 
 ## The target package is installed first
 
