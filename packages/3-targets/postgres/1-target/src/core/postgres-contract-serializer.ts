@@ -34,7 +34,7 @@ import {
 import { postgresError } from './errors';
 import { assertFullTextIndexes } from './full-text-index-definition';
 import { postgresCodecTraitsOf } from './postgres-codec-traits';
-import { PostgresSchema } from './postgres-schema';
+import { PostgresSchema, postgresCreateNamespace } from './postgres-schema';
 
 const POSTGRES_CODEC_LOOKUP = createPostgresBuiltinCodecLookup();
 
@@ -159,7 +159,7 @@ export class PostgresContractSerializer extends SqlContractSerializerBase<Contra
     }
     const valueSetSlot = entries['valueSet'];
     const hasValueSets = valueSetSlot !== undefined && Object.keys(valueSetSlot).length > 0;
-    const schema = new PostgresSchema({
+    const schema = postgresCreateNamespace({
       id,
       entries: {
         ...entries,

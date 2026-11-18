@@ -1,3 +1,4 @@
+import { compareCodeUnits } from '@internal/contract/hashing-utils';
 import type {
   Contract,
   ContractModel,
@@ -17,10 +18,8 @@ import {
 import type { CodecLookup } from '@internal/framework-components/codec';
 import type { AggregateDescriptor } from '@internal/framework-components/components';
 import { settleAggregateOverloads } from '@internal/framework-components/components';
-import type {
-  GenerateContractTypesOptions,
-  ImportSpecifierResolver,
-} from '@internal/framework-components/emission';
+import type { ImportRequirement } from '@internal/framework-components/control';
+import type { GenerateContractTypesOptions } from '@internal/framework-components/emission';
 import { entityAt, type Namespace, UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
   nonEmptyTypeParams,
@@ -65,11 +64,13 @@ function generateAggregateTypes(options?: GenerateContractTypesOptions): string 
     );
   }
 
-  const operations = [...settled.operations].sort(([left], [right]) => left.localeCompare(right));
+  const operations = [...settled.operations].sort(([left], [right]) =>
+    compareCodeUnits(left, right),
+  );
   const entries = operations.map(([operation, entry]) => {
     const rows = [...entry.byCodecId]
       .filter(([codecId]) => contributedIds.has(codecId))
-      .sort(([left], [right]) => left.localeCompare(right))
+      .sort(([left], [right]) => compareCodeUnits(left, right))
       .map(([codecId, descriptor]) => {
         return `readonly ${serializeObjectKey(codecId)}: ${renderAggregateResult(descriptor, codecId, contributedIds)}`;
       });
@@ -222,15 +223,13 @@ export const sqlEmission = {
     ].join('\n');
   },
 
-  getFamilyImports(resolveImportSpecifier: ImportSpecifierResolver): string[] {
+  getFamilyImports(typesModule: string): ReadonlyArray<ImportRequirement> {
     return [
-      'import type {',
-      '  ColumnTypesFromStorage,',
-      '  ContractWithTypeMaps,',
-      '  RelationKeys,',
-      '  TypeMaps as TypeMapsType,',
-      `} from '${resolveImportSpecifier('@internal/sql-contract/types')}';`,
-    ];
+      { symbol: 'ColumnTypesFromStorage' },
+      { symbol: 'ContractWithTypeMaps' },
+      { symbol: 'RelationKeys' },
+      { symbol: 'TypeMaps', alias: 'TypeMapsType' },
+    ].map((name) => ({ ...name, moduleSpecifier: typesModule, typeOnly: true }));
   },
 
   getFamilyTypeAliases(options?: GenerateContractTypesOptions): string {
@@ -367,7 +366,7 @@ function generateDocumentScopedStorageTypesType(types: SqlStorage['types']): str
  */
 function generateValueSetBlockType(valueSets: Readonly<Record<string, StorageValueSet>>): string {
   const entries = Object.entries(valueSets)
-    .sort(([a], [b]) => a.localeCompare(b))
+    .sort(([a], [b]) => compareCodeUnits(a, b))
     .map(([name, valueSet]) => `readonly ${serializeObjectKey(name)}: ${serializeValue(valueSet)}`);
   return `{ ${entries.join('; ')} }`;
 }
@@ -493,7 +492,9 @@ function generateTableLiteralType(table: StorageTable): string {
 
 function generateTablesMapType(tables: Readonly<Record<string, StorageTable>>): string {
   const tableEntries: string[] = [];
-  for (const [tableName, table] of Object.entries(tables).sort(([a], [b]) => a.localeCompare(b))) {
+  for (const [tableName, table] of Object.entries(tables).sort(([a], [b]) =>
+    compareCodeUnits(a, b),
+  )) {
     tableEntries.push(
       `readonly ${serializeObjectKey(tableName)}: ${generateTableLiteralType(table)}`,
     );
@@ -510,7 +511,7 @@ function generateTablesMapType(tables: Readonly<Record<string, StorageTable>>): 
 }
 
 function generateStorageNamespacesType(namespaces: SqlStorage['namespaces']): string {
-  const entries = Object.entries(namespaces ?? {}).sort(([a], [b]) => a.localeCompare(b));
+  const entries = Object.entries(namespaces ?? {}).sort(([a], [b]) => compareCodeUnits(a, b));
   if (entries.length === 0) {
     return 'Record<string, never>';
   }

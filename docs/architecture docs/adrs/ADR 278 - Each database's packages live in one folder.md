@@ -32,6 +32,7 @@ packages/
     mysql/
       1-mysql/                 1-target, 2-adapter, 3-driver, 9-facade of MySQL
       2-mariadb/               1-target, 2-adapter, 3-driver, 9-facade of MariaDB
+      3-live-tests/            @internal/mysql-live-tests, the ORM suites run against both
   3-extensions/                extension packs
 ```
 
@@ -64,7 +65,7 @@ A facade composes one database's target, adapter and driver into the client an a
 ## Consequences
 
 - A developer working on one database opens one folder.
-- Adding MySQL and MariaDB adds `3-targets/mysql/`, with `1-mysql/` and `2-mariadb/` inside it. The ordering check picks it up without changes. The upgrade-coverage check (a facade counts as extension code) also matches `3-targets/*/*/9-facade/`. `architecture.config.json`, `shells.ts` and `coverage.config.json` still need its entries.
+- Adding MySQL and MariaDB adds `3-targets/mysql/`, with `1-mysql/`, `2-mariadb/` and `3-live-tests/` inside it. MariaDB's packages import MySQL's, and the ordering check refuses a dependency between two database folders, so MariaDB sits inside `mysql/` ([ADR 325 — MariaDB is its own target that extends the MySQL target](ADR%20325%20-%20MariaDB%20is%20its%20own%20target%20that%20extends%20the%20MySQL%20target.md)). The ordering check picks it up without changes. The upgrade-coverage check (a facade counts as extension code) also matches `3-targets/*/*/9-facade/`. `architecture.config.json`, `shells.ts` and `coverage.config.json` still need its entries.
 - Folder paths also appear in package scripts, tests and fixtures, which use relative paths; moving a package means recomputing them (`.agents/rules/moving-packages.mdc`).
 - The registration does not yet match the folder: the target pack and facade are in the `extensions` domain and the adapter and driver in the `targets` domain. And `pnpm lint:deps` does not yet see imports between workspace packages, only imports inside one. Both are known gaps to close; until then, the ordering check is what checks the folder numbers.
 

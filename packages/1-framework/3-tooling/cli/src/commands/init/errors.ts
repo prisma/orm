@@ -2,6 +2,7 @@ import { docsUrlFor } from '@internal/utils/structured-error';
 import { formatSourceDiagnostic } from '../../control-api/operations/load-contract-source';
 import { CliStructuredError } from '../../utils/cli-errors';
 import type { Prisma6SideBySideSetup } from './prisma6-side-by-side';
+import { KNOWN_TARGET_PACKAGES, TARGET_SHORT_NAMES } from './target-packages';
 
 /**
  * Non-interactive mode is missing one or more required inputs. Lists every
@@ -23,7 +24,7 @@ export function errorInitMissingFlags(options: {
     .map((flag) => {
       switch (flag) {
         case 'target':
-          return '--target postgres|mongodb';
+          return `--target ${TARGET_SHORT_NAMES.join('|')}`;
         case 'authoring':
           return '--authoring psl|typescript';
         case 'schema-path':
@@ -134,11 +135,9 @@ export function errorInitStrictProbeWithoutProbe(): CliStructuredError {
 }
 
 /**
- * Dependency installation failed and the pnpm → npm fallback (FR7.2)
- * either did not apply (pm ≠ pnpm or stderr did not match a recognised
- * leak) or also failed. Files scaffolded before the install step are
- * already on disk; `meta.filesWritten` carries the list so a follow-up
- * agent can resume manually. Maps to exit code `4 = INSTALL_FAILED`.
+ * Dependency installation failed. Files scaffolded before the install step are already on disk;
+ * `meta.filesWritten` carries the list so a follow-up agent can resume manually. Maps to exit code
+ * `4 = INSTALL_FAILED`.
  */
 export function errorInitInstallFailed(options: {
   readonly addCommand: string;
@@ -150,7 +149,7 @@ export function errorInitInstallFailed(options: {
   const trimmed = options.stderrLines.map((s) => s.trim()).filter(Boolean);
   const why =
     trimmed.length === 0
-      ? 'The package manager exited with an error and no recoverable fallback applied.'
+      ? 'The package manager exited with an error.'
       : `The package manager exited with: ${trimmed[0]}`;
   return new CliStructuredError('CLI.INIT_INSTALL_FAILED', 'Failed to install dependencies', {
     why,
@@ -313,8 +312,7 @@ export function errorInitFlagConflict(options: {
   });
 }
 
-// biome-ignore lint/plugin/no-family-vocabulary: names the providers on purpose — the supported list a user-facing error shows
-const PRISMA7_SUPPORTED_PROVIDERS = ['postgresql', 'mongodb'] as const;
+const PRISMA7_SUPPORTED_PROVIDERS = KNOWN_TARGET_PACKAGES.map((entry) => entry.provider.name);
 
 /**
  * The Prisma 7 schema's provider is one Prisma 8 has no target for, or is not
@@ -433,20 +431,137 @@ export function errorInitPrisma7ConfigUnreadable(options: {
   );
 }
 
-/** Packages init installed before it found out it could not continue. */
+/**
+ * The project does not have the target package: `--skip-install` forbade installing it, or init's
+ * install command succeeded and the package still cannot be found from the project. Init takes
+ * every file it writes from that package, so it stops before writing any scaffold file.
+ */
+export function errorInitTargetPackageNotInstalled(options: {
+  readonly packageName: string;
+  readonly installCommand: string;
+  /** The install command init ran and that exited successfully; `undefined` under `--skip-install`. */
+  readonly ranCommand: string | undefined;
+}): CliStructuredError {
+  const { packageName, ranCommand } = options;
+  return new CliStructuredError(
+    'CLI.INIT_TARGET_PACKAGE_NOT_INSTALLED',
+    ranCommand !== undefined
+      ? `${packageName} cannot be found from the project`
+      : `${packageName} is not installed`,
+    {
+      why:
+        ranCommand !== undefined
+          ? `\`${ranCommand}\` succeeded, but ${packageName} cannot be found from the project, so init cannot read its init contribution. No scaffold file was written.`
+          : `init writes the project from ${packageName}, and \`--skip-install\` forbids installing it. Nothing was changed.`,
+      fix:
+        ranCommand !== undefined
+          ? `Check that \`${options.installCommand}\` makes ${packageName} resolvable from this directory (Yarn Plug'n'Play hides packages from Node), then run \`prisma orm init\` again.`
+          : `Install it with \`${options.installCommand}\`, then run \`prisma orm init\` again, or run it without \`--skip-install\`.`,
+      docsUrl: docsUrlFor('CLI.INIT_TARGET_PACKAGE_NOT_INSTALLED'),
+      meta: { packageName: options.packageName, installCommand: options.installCommand },
+    },
+  );
+}
+
+/**
+ * The target package has no `init` entrypoint, its init module cannot be loaded, or its default
+ * export is not an init contribution. The package is installed and no scaffold file was written.
+ */
+export function errorInitContributionUnavailable(options: {
+  readonly packageName: string;
+  readonly reason: 'no-entrypoint' | 'unloadable' | 'invalid-shape';
+  /** What went wrong, for `unloadable` and `invalid-shape`. */
+  readonly detail: string | undefined;
+}): CliStructuredError {
+  const module = `${options.packageName}/init`;
+  const detail = options.detail ?? 'its shape is wrong';
+  const why = {
+    'no-entrypoint': `${options.packageName} has no \`${module}\` entrypoint, so it does not support \`prisma orm init\`.`,
+    unloadable: `\`${module}\` could not be loaded: ${detail}.`,
+    'invalid-shape': `The default export of \`${module}\` is not an init contribution: ${detail}.`,
+  }[options.reason];
+  const byHand = `Write prisma.config.ts by hand, with the defineConfig import the README of ${options.packageName} shows.`;
+  return new CliStructuredError(
+    'CLI.INIT_CONTRIBUTION_UNAVAILABLE',
+    options.reason === 'unloadable'
+      ? `Could not load ${module}`
+      : `${options.packageName} does not support init`,
+    {
+      why: `${why} ${options.packageName} is installed; no scaffold file was written.`,
+      fix:
+        options.reason === 'unloadable'
+          ? `Reinstall ${options.packageName} with your package manager and run \`prisma orm init\` again, or ${byHand.charAt(0).toLowerCase()}${byHand.slice(1)}`
+          : byHand,
+      docsUrl: docsUrlFor('CLI.INIT_CONTRIBUTION_UNAVAILABLE'),
+      meta: { packageName: options.packageName, module, reason: options.reason },
+    },
+  );
+}
+
+/** `--authoring` names a way to write the contract the target package does not offer. */
+export function errorInitAuthoringUnsupported(options: {
+  readonly packageName: string;
+  readonly authoring: string;
+  readonly offered: readonly string[];
+}): CliStructuredError {
+  return new CliStructuredError(
+    'CLI.INIT_AUTHORING_UNSUPPORTED',
+    `${options.packageName} does not offer --authoring ${options.authoring}`,
+    {
+      why: `${options.packageName} offers: ${options.offered.join(', ')}. No scaffold file was written.`,
+      fix: `Use one of: ${options.offered.map((mode) => `--authoring ${mode}`).join(', ')}.`,
+      docsUrl: docsUrlFor('CLI.INIT_AUTHORING_UNSUPPORTED'),
+      meta: {
+        packageName: options.packageName,
+        authoring: options.authoring,
+        offered: options.offered,
+      },
+    },
+  );
+}
+
+/**
+ * What init's install changed in `package.json` before it found out it could not continue: the
+ * packages it declared, and the declarations whose range it rewrote.
+ */
 export interface PackagesAdded {
   readonly packages: readonly string[];
   readonly removeCommand: string;
+  readonly rewritten: readonly { readonly name: string; readonly before: string }[];
 }
 
-/** The next action that tells the user how to undo what the Prisma 7 check installed. */
-export function packagesAddedAction(added: PackagesAdded): string {
+function listed(items: readonly string[]): string {
+  const last = items.at(-1) ?? '';
+  return items.length <= 1 ? last : `${items.slice(0, -1).join(', ')} and ${last}`;
+}
+
+/** Why init installed the packages it then has to tell the user how to remove. */
+export type InstallReason =
+  | { readonly kind: 'prisma7-check' }
+  | { readonly kind: 'init-contribution'; readonly packageName: string };
+
+export const PRISMA7_CHECK: InstallReason = { kind: 'prisma7-check' };
+
+/** The next action that tells the user how to undo what init installed. */
+export function packagesAddedAction(added: PackagesAdded, reason: InstallReason): string {
+  const rewritten = listed(
+    added.rewritten.map(({ name, before }) => `${name}, which was \`${before}\``),
+  );
+  const rangeNote =
+    added.rewritten.length === 0
+      ? ''
+      : `changed the declared range of ${rewritten}; set it back in package.json.`;
+  if (added.packages.length === 0) {
+    return `init ${rangeNote}`;
+  }
   const pronoun = added.packages.length === 1 ? 'it' : 'them';
-  return `init added ${added.packages.join(' and ')} to package.json before checking; remove ${pronoun} with \`${added.removeCommand}\`.`;
-}
-
-function packagesAddedNote(added: PackagesAdded | undefined): string {
-  return added === undefined ? '' : `\n${packagesAddedAction(added)}`;
+  const packages = listed(added.packages);
+  const remove = `remove ${pronoun} with \`${added.removeCommand}\`.`;
+  const sentence =
+    reason.kind === 'prisma7-check'
+      ? `init added ${packages} to package.json before checking; ${remove}`
+      : `init installed ${packages} to read the init contribution of ${reason.packageName}; ${remove}`;
+  return rangeNote === '' ? sentence : `${sentence} It also ${rangeNote}`;
 }
 
 /**
@@ -454,34 +569,53 @@ function packagesAddedNote(added: PackagesAdded | undefined): string {
  * from the project, or it has no Prisma 7 contract source while
  * `--from-prisma7-schema` asked for one.
  */
-export function errorInitPrisma7SourceUnavailable(options: {
-  readonly schemaPath: string;
-  readonly packageName: string;
-  readonly reason: 'not-resolvable' | 'no-prisma7-source';
-  readonly added: PackagesAdded | undefined;
-}): CliStructuredError {
+export function errorInitPrisma7SourceUnavailable(
+  options: {
+    readonly schemaPath: string;
+    readonly packageName: string;
+  } & (
+    | { readonly reason: 'no-prisma7-source' }
+    | {
+        readonly reason: 'not-resolvable';
+        /** The config module the contribution names. */
+        readonly module: string;
+      }
+    | {
+        readonly reason: 'unloadable';
+        /** The config module the contribution names. */
+        readonly module: string;
+        readonly cause: string;
+      }
+  ),
+): CliStructuredError {
   const { packageName, schemaPath } = options;
   const wording =
-    options.reason === 'not-resolvable'
+    options.reason === 'unloadable'
       ? {
-          summary: `Could not load ${packageName} from the project`,
-          why: `${packageName} was installed but could not be loaded from the project, so init cannot check that Prisma 8 reads ${schemaPath}.`,
-          fix: `Check that ${packageName} is installed and resolves from this directory (Yarn Plug'n'Play hides packages from Node), then run \`prisma orm init\` again.`,
+          summary: `Could not load ${options.module}`,
+          why: `\`${options.module}\` could not be loaded: ${options.cause}. init cannot check that Prisma 8 reads ${schemaPath}.`,
+          fix: `Reinstall ${packageName} with your package manager, then run \`prisma orm init\` again.`,
         }
-      : {
-          summary: 'No Prisma 7 contract source for this database',
-          why: `${packageName} does not provide a Prisma 7 contract source, so it cannot read ${schemaPath}.`,
-          fix: 'Choose a database whose Prisma 8 package reads Prisma 7 schemas, or run `prisma orm init` without `--from-prisma7-schema`.',
-        };
+      : options.reason === 'not-resolvable'
+        ? {
+            summary: `Could not load ${options.module} from the project`,
+            why: `${packageName} was installed, but the project cannot find \`${options.module}\`, the config module its init contribution names, so init cannot check that Prisma 8 reads ${schemaPath}.`,
+            fix: `Check that ${packageName} is installed and exports ${options.module}, resolvable from this directory (Yarn Plug'n'Play hides packages from Node), then run \`prisma orm init\` again.`,
+          }
+        : {
+            summary: 'No Prisma 7 contract source for this database',
+            why: `${packageName} does not provide a Prisma 7 contract source, so it cannot read ${schemaPath}.`,
+            fix: 'Choose a database whose Prisma 8 package reads Prisma 7 schemas, or run `prisma orm init` without `--from-prisma7-schema`.',
+          };
   return new CliStructuredError('CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE', wording.summary, {
     why: wording.why,
-    fix: `${wording.fix}${packagesAddedNote(options.added)}`,
+    fix: wording.fix,
     docsUrl: docsUrlFor('CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE'),
     meta: {
       schemaPath: options.schemaPath,
       packageName: options.packageName,
       reason: options.reason,
-      packagesAdded: options.added?.packages ?? [],
+      ...(options.reason === 'no-prisma7-source' ? {} : { module: options.module }),
     },
   });
 }
@@ -495,7 +629,6 @@ export function errorInitPrisma7SchemaRefused(options: {
   readonly packageName: string;
   readonly summary: string;
   readonly diagnostics: readonly unknown[];
-  readonly added: PackagesAdded | undefined;
 }): CliStructuredError {
   const findings = options.diagnostics.map(
     (diagnostic) => `\n  ${formatSourceDiagnostic(diagnostic)}`,
@@ -505,20 +638,19 @@ export function errorInitPrisma7SchemaRefused(options: {
     `Prisma 8 cannot read ${options.schemaPath}`,
     {
       why: `${options.summary}${findings.join('')}`,
-      fix: `Edit ${options.schemaPath} as each finding says (see the Prisma 7 contract source section of the ${options.packageName} README), or run \`prisma orm init\` without \`--from-prisma7-schema\`.${packagesAddedNote(options.added)}`,
+      fix: `Edit ${options.schemaPath} as each finding says (see the Prisma 7 contract source section of the ${options.packageName} README), or run \`prisma orm init\` without \`--from-prisma7-schema\`.`,
       docsUrl: docsUrlFor('CLI.INIT_PRISMA7_SCHEMA_REFUSED'),
       meta: {
         schemaPath: options.schemaPath,
         summary: options.summary,
         diagnostics: options.diagnostics,
-        packagesAdded: options.added?.packages ?? [],
       },
     },
   );
 }
 
 /**
- * The project's schema is a Prisma 6 MongoDB schema. Init stops before changing anything and gives
+ * The project's schema names a provider only Prisma 6 wrote, so it is a Prisma 6 schema. Init stops before changing anything and gives
  * the side-by-side setup as its next actions: set up by init, Prisma 8 would take the `prisma`
  * package name and `prisma.config.ts` from the Prisma 6 CLI the app still runs.
  */

@@ -1,20 +1,18 @@
-import sqliteAdapter from '@internal/adapter-sqlite/control';
 import type { FormatterConfig, PrismaConfig } from '@internal/config/config-types';
 import {
   defineConfig as coreDefineConfig,
   defaultContractOutputPath,
 } from '@internal/config/config-types';
-import sqliteDriver from '@internal/driver-sqlite/control';
-import sql from '@internal/family-sql/control';
 import type { ControlExtensionDescriptor } from '@internal/framework-components/control';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import { typescriptContractFromPath } from '@internal/sql-contract-ts/config-types';
 import { SQLITE_INTEGER_CODEC_ID, SQLITE_TEXT_CODEC_ID } from '@internal/target-sqlite/codec-ids';
-import sqlite from '@internal/target-sqlite/control';
 import sqlitePackRef from '@internal/target-sqlite/pack';
 import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
+import { contractBuilderModule, contractTypesModule, controlComponents } from './components';
+import { moduleBase } from './module-base';
 
 export interface SqliteConfigOptions {
   readonly contract: string;
@@ -39,7 +37,10 @@ export function defineConfig(options: SqliteConfigOptions): PrismaConfig<'sql', 
 
   const contractConfig =
     ext === '.ts'
-      ? typescriptContractFromPath(options.contract, output)
+      ? typescriptContractFromPath(options.contract, output, {
+          target: sqlitePackRef,
+          contractBuilderModule,
+        })
       : prismaContract(options.contract, {
           output,
           target: sqlitePackRef,
@@ -48,14 +49,11 @@ export function defineConfig(options: SqliteConfigOptions): PrismaConfig<'sql', 
         });
 
   return coreDefineConfig({
-    family: sql,
-    target: sqlite,
-    adapter: sqliteAdapter,
-    driver: sqliteDriver,
+    ...controlComponents,
     extensions,
-    contract: contractConfig,
+    contract: { ...contractConfig, typesModule: contractTypesModule },
+    migrations: { ...options.migrations, module: `${moduleBase}/migration` },
     ...ifDefined('db', options.db),
-    ...ifDefined('migrations', options.migrations),
     ...ifDefined('formatter', options.formatter),
   });
 }

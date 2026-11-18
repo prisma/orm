@@ -1,0 +1,53 @@
+{
+  "name": "@internal/target-package-config",
+  "private": true,
+  "version": "8.0.0-rc.24",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "description": "What every Prisma 8 target package's defineConfig shares: restating its target's and adapter's type declarations with its own module",
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "lint": "biome check . --error-on-warnings",
+    "lint:fix": "biome check --write .",
+    "lint:fix:unsafe": "biome check --write --unsafe .",
+    "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
+  },
+  "dependencies": {
+    "@internal/framework-components": "workspace:8.0.0-rc.24",
+    "@internal/utils": "workspace:8.0.0-rc.24"
+  },
+  "devDependencies": {
+    "@repo/tsconfig": "workspace:8.0.0-rc.24",
+    "@repo/tsdown": "workspace:8.0.0-rc.24",
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "typescript": ">=5.9"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "exports": {
+    "./type-declarations": "./dist/type-declarations.mjs",
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prisma/orm.git",
+    "directory": "packages/3-targets/0-shared/target-package-config"
+  }
+}

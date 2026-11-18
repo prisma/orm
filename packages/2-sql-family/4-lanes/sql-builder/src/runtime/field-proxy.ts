@@ -12,7 +12,14 @@ export function createFieldProxy<S extends Scope>(scope: S): FieldProxy<S> {
         if (Object.hasOwn(scope.topLevel, prop)) {
           const topField = scope.topLevel[prop];
           if (topField) {
-            return new ExpressionImpl(IdentifierRef.of(prop), topField);
+            const owningNamespace = Object.entries(scope.namespaces).find(
+              ([, fields]) => fields[prop] === topField,
+            )?.[0];
+            const ref =
+              owningNamespace !== undefined
+                ? ColumnRef.of(owningNamespace, prop)
+                : IdentifierRef.of(prop);
+            return new ExpressionImpl(ref, topField);
           }
         }
 

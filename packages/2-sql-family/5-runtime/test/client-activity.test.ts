@@ -400,9 +400,7 @@ describe('startActivity', () => {
       const refused = runtime.execute(rawPlan('update t set x = 0'));
       await call.execute(rawPlan('update t set x = 1'));
       const rows = await call.query(rawPlan('select 1')).toArray();
-      const transaction = await call.transaction?.();
-      await transaction?.execute(rawPlan('update t set x = 2'));
-      await transaction?.commit();
+      await call.transaction?.((tx) => tx.execute(rawPlan('update t set x = 2')));
       await call.end({ outcome: 'succeeded' });
       await closing;
 

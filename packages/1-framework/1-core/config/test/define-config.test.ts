@@ -11,7 +11,7 @@ const mockHook = {
   id: 'sql',
   generateStorageType: () => '{}',
   generateModelStorageType: () => '{}',
-  getFamilyImports: () => [] as string[],
+  getFamilyImports: () => [],
   getFamilyTypeAliases: () => '',
   getTypeMapsExpression: () => 'never',
   getContractWrapper: (base: string, tm: string) =>
@@ -111,6 +111,30 @@ describe('defineConfig', () => {
 
     const result = defineConfig(config);
     expect(result.contract?.output).toBe('custom/contract.json');
+  });
+
+  it('preserves the module generated contract types import from', () => {
+    const config = createValidConfig({
+      contract: { source: createSourceProvider(), typesModule: '@acme/orm-db/contract-types' },
+    });
+
+    expect(defineConfig(config).contract).toEqual({
+      source: config.contract?.source,
+      output: 'src/prisma/contract.json',
+      typesModule: '@acme/orm-db/contract-types',
+    });
+  });
+
+  it('preserves the module rendered migration files import from', () => {
+    const config = createValidConfig({
+      contract: { source: createSourceProvider() },
+      migrations: { dir: 'db', module: '@acme/orm-db/migration' },
+    });
+
+    expect(defineConfig(config).migrations).toEqual({
+      dir: 'db',
+      module: '@acme/orm-db/migration',
+    });
   });
 
   it('does not validate structure — invalid shapes pass through for the loader to diagnose', () => {

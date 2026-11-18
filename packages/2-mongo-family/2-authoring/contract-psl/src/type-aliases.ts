@@ -46,6 +46,7 @@ import {
 import type { FieldAttributeAst, PslSources } from '@internal/psl-parser/syntax';
 import { ifDefined } from '@internal/utils/defined';
 import { isInternalError } from '@internal/utils/internal-error';
+import type { DeprecatedTypeNameWarner } from './deprecated-type-names';
 import { unloweredAttributeHint } from './mongo-attribute-specs';
 
 type ScalarFieldType = Extract<ContractField['type'], { readonly kind: 'scalar' }>;
@@ -140,6 +141,7 @@ interface ResolveMongoTypeAliasesInput {
   readonly dataTypes: DataTypeSupport;
   readonly codecLookup: CodecLookupWithDescriptors;
   readonly authoringTypes: AuthoringTypeNamespace | undefined;
+  readonly warnDeprecated: DeprecatedTypeNameWarner;
 }
 
 const GENERATOR_PHASES = ['onCreate', 'onUpdate'] as const;
@@ -207,6 +209,7 @@ function aliasType(
 ): Pick<ResolvedTypeAlias, 'type' | 'valueSet'> | undefined {
   const { base, symbol } = alias;
   if (base.kind === 'typeConstructor') {
+    input.warnDeprecated(symbol, alias.baseName, base.descriptor);
     const type = scalarTypeOfConstructor({
       descriptor: base.descriptor,
       call: base.call,

@@ -1,3 +1,4 @@
+import { workspaceMigrationModule } from '@repo/test-utils';
 /**
  * TypeScript-rendering coverage for the Postgres migration IR call classes:
  *
@@ -24,6 +25,7 @@ import {
   CreateTableCall,
   DataTransformCall,
   DropTableCall,
+  MIGRATION_MODULE,
   SetDefaultCall,
 } from '@internal/target-postgres/op-factory-call';
 import { renderCallsToTypeScript } from '@internal/target-postgres/render-typescript';
@@ -36,6 +38,7 @@ const META = {
   from: FROM_HEX,
   to: TO_HEX,
   snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+  migrationModule: workspaceMigrationModule.postgres,
 } as const;
 
 describe('Postgres call classes - SetDefaultCall rendering', () => {
@@ -58,8 +61,6 @@ describe('Postgres call classes - SetDefaultCall rendering', () => {
 });
 
 describe('Postgres call classes - per-class renderTypeScript coverage', () => {
-  const migrationModule = '@internal/postgres/migration';
-
   it('CreateTableCall emits this.createTable({...}) with col() columns; omits constraints when absent', () => {
     const withoutConstraints = new CreateTableCall('public', 'user', [
       col('id', 'text', { notNull: true }),
@@ -68,7 +69,7 @@ describe('Postgres call classes - per-class renderTypeScript coverage', () => {
       'this.createTable({ schema: "public", table: "user", columns: [col("id", "text", { notNull: true })] })',
     );
     expect(withoutConstraints.importRequirements()).toEqual([
-      { moduleSpecifier: '@internal/postgres/migration', symbol: 'col' },
+      { moduleSpecifier: MIGRATION_MODULE, symbol: 'col' },
     ]);
 
     const withPk = new CreateTableCall(
@@ -81,8 +82,8 @@ describe('Postgres call classes - per-class renderTypeScript coverage', () => {
       'this.createTable({ schema: "public", table: "user", columns: [col("id", "text", { notNull: true })], constraints: [primaryKey(["id"])] })',
     );
     expect(withPk.importRequirements()).toEqual([
-      { moduleSpecifier: '@internal/postgres/migration', symbol: 'col' },
-      { moduleSpecifier: '@internal/postgres/migration', symbol: 'primaryKey' },
+      { moduleSpecifier: MIGRATION_MODULE, symbol: 'col' },
+      { moduleSpecifier: MIGRATION_MODULE, symbol: 'primaryKey' },
     ]);
   });
 
@@ -98,8 +99,8 @@ describe('Postgres call classes - per-class renderTypeScript coverage', () => {
       col('id', 'integer', { notNull: true, default: lit(0) }),
     ]);
     expect(call.importRequirements()).toEqual([
-      { moduleSpecifier: '@internal/postgres/migration', symbol: 'col' },
-      { moduleSpecifier: '@internal/postgres/migration', symbol: 'lit' },
+      { moduleSpecifier: MIGRATION_MODULE, symbol: 'col' },
+      { moduleSpecifier: MIGRATION_MODULE, symbol: 'lit' },
     ]);
   });
 
@@ -109,7 +110,7 @@ describe('Postgres call classes - per-class renderTypeScript coverage', () => {
       'this.addColumn({ schema: "public", table: "user", column: col("email", "text") })',
     );
     expect(call.importRequirements()).toEqual([
-      { moduleSpecifier: migrationModule, symbol: 'col' },
+      { moduleSpecifier: MIGRATION_MODULE, symbol: 'col' },
     ]);
   });
 

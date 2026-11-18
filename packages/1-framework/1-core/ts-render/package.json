@@ -16,6 +16,7 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
+    "@internal/contract": "workspace:8.0.0-rc.24",
     "@internal/utils": "workspace:8.0.0-rc.24"
   },
   "devDependencies": {

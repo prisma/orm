@@ -9,7 +9,9 @@ import { readTextOrBytes } from '../src/core/text-or-bytes';
 
 describe('mysqlConnectionOptions', () => {
   it('reads the server, credentials and database from the URL', () => {
-    expect(mysqlConnectionOptions('mysql://app:p%40ss@db.example:3307/shop')).toMatchObject({
+    expect(
+      mysqlConnectionOptions('mysql://app:p%40ss@db.example:3307/shop', { displayName: 'MySQL' }),
+    ).toMatchObject({
       host: 'db.example',
       port: 3307,
       user: 'app',
@@ -19,19 +21,21 @@ describe('mysqlConnectionOptions', () => {
   });
 
   it('leaves the user unset when the URL leaves it blank, so the connector falls back to its default', () => {
-    const options = mysqlConnectionOptions('mysql://:password@localhost/db');
+    const options = mysqlConnectionOptions('mysql://:password@localhost/db', {
+      displayName: 'MySQL',
+    });
     expect(options).not.toHaveProperty('user');
     expect(options).toMatchObject({ host: 'localhost', password: 'password', database: 'db' });
   });
 
   it('leaves the host unset when the URL leaves it blank', () => {
-    const options = mysqlConnectionOptions('mysql://user:password@/db');
+    const options = mysqlConnectionOptions('mysql://user:password@/db', { displayName: 'MySQL' });
     expect(options).not.toHaveProperty('host');
     expect(options).toMatchObject({ user: 'user', password: 'password', database: 'db' });
   });
 
   it('leaves both unset when the URL names neither', () => {
-    const options = mysqlConnectionOptions('mysql:///db');
+    const options = mysqlConnectionOptions('mysql:///db', { displayName: 'MySQL' });
     expect(options).not.toHaveProperty('user');
     expect(options).not.toHaveProperty('host');
     expect(options.database).toBe('db');
@@ -45,7 +49,7 @@ describe('mysqlConnectionOptions', () => {
       return encodeURIComponent(path);
     };
     const ssl = (query: string) =>
-      mysqlConnectionOptions(`mysql://root@localhost/app?${query}`).ssl;
+      mysqlConnectionOptions(`mysql://root@localhost/app?${query}`, { displayName: 'MySQL' }).ssl;
     try {
       expect({
         none: ssl('allowPublicKeyRetrieval=false'),
@@ -81,18 +85,24 @@ describe('mysqlConnectionOptions', () => {
   });
 
   it('reads an IPv6 host without its brackets', () => {
-    expect(mysqlConnectionOptions('mysql://root@[::1]:3306/app')).toMatchObject({ host: '::1' });
+    expect(
+      mysqlConnectionOptions('mysql://root@[::1]:3306/app', { displayName: 'MySQL' }),
+    ).toMatchObject({ host: '::1' });
   });
 
   it('leaves the port to the package when the URL names none', () => {
-    expect(mysqlConnectionOptions('mysql://root@localhost/app')).not.toHaveProperty('port');
+    expect(
+      mysqlConnectionOptions('mysql://root@localhost/app', { displayName: 'MySQL' }),
+    ).not.toHaveProperty('port');
   });
 
   it('sets up each connection with the session statements alone, in utf8mb4, never logs values, never caches statements and counts matched rows', () => {
-    expect(mysqlConnectionOptions('mysql://root@localhost/app').initSql).toEqual([
-      ...SESSION_SETUP,
-    ]);
-    expect(mysqlConnectionOptions('mysql://root@localhost/app')).toMatchObject({
+    expect(
+      mysqlConnectionOptions('mysql://root@localhost/app', { displayName: 'MySQL' }).initSql,
+    ).toEqual([...SESSION_SETUP]);
+    expect(
+      mysqlConnectionOptions('mysql://root@localhost/app', { displayName: 'MySQL' }),
+    ).toMatchObject({
       collation: 'UTF8MB4_UNICODE_CI',
       foundRows: true,
       logParam: false,
@@ -106,35 +116,45 @@ describe('mysqlConnectionOptions', () => {
 
   it('reads every column as text or bytes, on the pool and on a single connection', () => {
     expect({
-      connection: mysqlConnectionOptions('mysql://root@localhost/app').typeCast,
-      pool: mysqlPoolOptions('mysql://root@localhost/app').typeCast,
+      connection: mysqlConnectionOptions('mysql://root@localhost/app', { displayName: 'MySQL' })
+        .typeCast,
+      pool: mysqlPoolOptions('mysql://root@localhost/app', 'MySQL').typeCast,
     }).toEqual({ connection: readTextOrBytes, pool: readTextOrBytes });
   });
 
   it('fetches the server public key only when allowPublicKeyRetrieval=true', () => {
     expect({
-      default: mysqlConnectionOptions('mysql://root@localhost/app').allowPublicKeyRetrieval,
-      on: mysqlConnectionOptions('mysql://root@localhost/app?allowPublicKeyRetrieval=true')
+      default: mysqlConnectionOptions('mysql://root@localhost/app', { displayName: 'MySQL' })
         .allowPublicKeyRetrieval,
-      off: mysqlConnectionOptions('mysql://root@localhost/app?allowPublicKeyRetrieval=false')
-        .allowPublicKeyRetrieval,
+      on: mysqlConnectionOptions('mysql://root@localhost/app?allowPublicKeyRetrieval=true', {
+        displayName: 'MySQL',
+      }).allowPublicKeyRetrieval,
+      off: mysqlConnectionOptions('mysql://root@localhost/app?allowPublicKeyRetrieval=false', {
+        displayName: 'MySQL',
+      }).allowPublicKeyRetrieval,
     }).toEqual({ default: false, on: true, off: false });
     expect(() =>
-      mysqlConnectionOptions('mysql://root@localhost/app?allowPublicKeyRetrieval=yes'),
+      mysqlConnectionOptions('mysql://root@localhost/app?allowPublicKeyRetrieval=yes', {
+        displayName: 'MySQL',
+      }),
     ).toThrow(expect.objectContaining({ code: 'RUNTIME.BINDING_INVALID' }));
   });
 
   it('refuses TLS settings it does not know', () => {
     for (const query of ['ssl={}', 'ssl=maybe', 'sslmode=allow', 'sslcert=']) {
-      expect(() => mysqlConnectionOptions(`mysql://root@localhost/app?${query}`)).toThrow(
-        expect.objectContaining({ code: 'RUNTIME.BINDING_INVALID' }),
-      );
+      expect(() =>
+        mysqlConnectionOptions(`mysql://root@localhost/app?${query}`, { displayName: 'MySQL' }),
+      ).toThrow(expect.objectContaining({ code: 'RUNTIME.BINDING_INVALID' }));
     }
   });
 
   it('always connects as utf8mb4, and refuses a charset in the URL', () => {
     for (const charset of ['latin1', 'utf8mb4']) {
-      expect(() => mysqlConnectionOptions(`mysql://root@localhost/app?charset=${charset}`)).toThrow(
+      expect(() =>
+        mysqlConnectionOptions(`mysql://root@localhost/app?charset=${charset}`, {
+          displayName: 'MySQL',
+        }),
+      ).toThrow(
         expect.objectContaining({
           code: 'RUNTIME.BINDING_INVALID',
           message: expect.stringContaining('always uses utf8mb4'),
@@ -144,7 +164,7 @@ describe('mysqlConnectionOptions', () => {
   });
 
   it('ignores a URL parameter it does not read, as pg ignores one, so the URL cannot turn on a package option', () => {
-    const plain = mysqlPoolOptions('mysql://root@localhost/app?sslmode=require');
+    const plain = mysqlPoolOptions('mysql://root@localhost/app?sslmode=require', 'MySQL');
     for (const parameter of [
       'multipleStatements=true',
       'namedPlaceholders=true',
@@ -156,14 +176,18 @@ describe('mysqlConnectionOptions', () => {
       'connection_limit=2',
       'sslaccept=accept_invalid_certs',
     ]) {
-      expect(mysqlPoolOptions(`mysql://root@localhost/app?sslmode=require&${parameter}`)).toEqual(
-        plain,
-      );
+      expect(
+        mysqlPoolOptions(`mysql://root@localhost/app?sslmode=require&${parameter}`, 'MySQL'),
+      ).toEqual(plain);
     }
   });
 
   it("refuses sslcert without sslkey, because a Prisma 7 MySQL URL's sslcert named the server's CA, which is now sslrootcert", () => {
-    expect(() => mysqlConnectionOptions('mysql://root@localhost/app?sslcert=/etc/ca.pem')).toThrow(
+    expect(() =>
+      mysqlConnectionOptions('mysql://root@localhost/app?sslcert=/etc/ca.pem', {
+        displayName: 'MySQL',
+      }),
+    ).toThrow(
       expect.objectContaining({
         code: 'RUNTIME.BINDING_INVALID',
         message: expect.stringContaining(
@@ -176,7 +200,10 @@ describe('mysqlConnectionOptions', () => {
 
   it('names a parameter whose value it refuses, and the form the value must take', () => {
     expect(() =>
-      mysqlPoolOptions('mysql://root@localhost/app?sslmode=soon&allowPublicKeyRetrieval=true'),
+      mysqlPoolOptions(
+        'mysql://root@localhost/app?sslmode=soon&allowPublicKeyRetrieval=true',
+        'MySQL',
+      ),
     ).toThrow(
       expect.objectContaining({
         code: 'RUNTIME.BINDING_INVALID',
@@ -199,7 +226,7 @@ describe('mysqlConnectionOptions', () => {
     ]) {
       const error = (() => {
         try {
-          mysqlPoolOptions(url);
+          mysqlPoolOptions(url, 'MySQL');
         } catch (thrown) {
           return thrown;
         }
@@ -213,9 +240,13 @@ describe('mysqlConnectionOptions', () => {
   });
 
   it('waits 20 seconds to connect, as the Postgres facade does, unless the caller says otherwise, and leaves out the pool settings', () => {
-    const given = mysqlConnectionOptions('mysql://root@localhost/app', { connectTimeoutMs: 500 });
+    const given = mysqlConnectionOptions('mysql://root@localhost/app', {
+      connectTimeoutMs: 500,
+      displayName: 'MySQL',
+    });
     expect({
-      default: mysqlConnectionOptions('mysql://root@localhost/app').connectTimeout,
+      default: mysqlConnectionOptions('mysql://root@localhost/app', { displayName: 'MySQL' })
+        .connectTimeout,
       caller: given.connectTimeout,
       poolSettings: 'connectionLimit' in given || 'acquireTimeout' in given,
     }).toEqual({ default: 20_000, caller: 500, poolSettings: false });
@@ -225,8 +256,8 @@ describe('mysqlConnectionOptions', () => {
 describe('mysqlPoolOptions', () => {
   it("sizes and times the pool as the Postgres driver's pg.Pool: no connection opened before one is needed, idle ones closed after 30 seconds, 20 seconds to wait for one", () => {
     expect({
-      defaults: mysqlPoolOptions('mysql://root@localhost/app?ssl=true'),
-      given: mysqlPoolOptions('mysql://root@localhost/app', {
+      defaults: mysqlPoolOptions('mysql://root@localhost/app?ssl=true', 'MySQL'),
+      given: mysqlPoolOptions('mysql://root@localhost/app', 'MySQL', {
         connectionTimeoutMillis: 2000,
         idleTimeoutMillis: 1500,
         max: 5,
@@ -248,6 +279,8 @@ describe('mysqlPoolOptions', () => {
         initSql: [...SESSION_SETUP],
       },
     });
-    expect(mysqlPoolOptions('mysql://root@localhost/app')).not.toHaveProperty('connectionLimit');
+    expect(mysqlPoolOptions('mysql://root@localhost/app', 'MySQL')).not.toHaveProperty(
+      'connectionLimit',
+    );
   });
 });

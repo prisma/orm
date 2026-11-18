@@ -17,6 +17,7 @@ import {
   dateTimeStoredText,
   INT64_RANGE,
   isoDateStringText,
+  readJsonBoolean,
   readJsonFloat,
   readJsonIntegerText,
   readJsonMatching,
@@ -30,6 +31,7 @@ import {
   withoutZerosBelowAMillisecond,
   withThreeFractionDigits,
 } from '@internal/type-implementations/date';
+import { isDecimalText, printedDecimalText } from '@internal/type-implementations/decimal';
 import { ISO_DURATION_AS_WRITTEN } from '@internal/type-implementations/duration';
 import { structuredError } from '@internal/utils/structured-error';
 import { type as arktype } from 'arktype';
@@ -200,6 +202,21 @@ export function sqliteDurationText(text: string): string {
   );
 }
 
+/**
+ * The value of `sqlite/decimal`: decimal text without an exponent, as in `-12.50`, stored without leading zeros or a minus sign on zero. Trailing zeros stay, because they are the scale the value was written with. Throws `CONTRACT.CAST_REFUSED` for other text.
+ */
+export function sqliteDecimalText(text: string): string {
+  if (isDecimalText(text)) return printedDecimalText(text);
+  throw structuredError(
+    'CONTRACT.CAST_REFUSED',
+    `sqlite/decimal cannot read "${text}". Write decimal text, as in "12.50".`,
+    {
+      why: 'sqlite/decimal holds decimal text: an optional minus sign, digits, and an optional fraction, with no exponent.',
+      fix: 'Write the decimal as text, as in "12.50" or "-3".',
+    },
+  );
+}
+
 /** What `read` writes for `text`, or `undefined` when `read` refuses it. */
 function storedOrUndefined(read: (text: string) => string, text: string): string | undefined {
   try {
@@ -281,6 +298,27 @@ export const sqliteDuration = storedTextDataType(
   { respell: false },
 );
 
+/** A decimal, stored as text without leading zeros or a minus sign on zero, `12.50`. Text compares by its characters, so `1.5` and `1.50` are different values. A default is written as text, or as a whole number. */
+export const sqliteDecimal = sqlDataType('sqlite/decimal', {
+  storedAs: sqliteText.id,
+  read: (json) =>
+    typeof json === 'string' && isDecimalText(json)
+      ? json
+      : refuseJsonValue('sqlite/decimal', 'decimal text, as in "12.50"', json),
+  spell: (json) => (typeof json === 'string' ? printedDecimalText(json) : json),
+  casts: {
+    [sqliteText.id]: (value) =>
+      typeof value === 'string' ? sqliteDecimalText(value) : refuseWrongShape(value, 'text'),
+    [sqliteInteger.id]: castUnchanged,
+  },
+});
+
+/** A boolean, stored as the integer 0 or 1, which is what SQLite's own `FALSE` and `TRUE` are. A default is written `true` or `false`. */
+export const sqliteBoolean = sqlDataType('sqlite/boolean', {
+  storedAs: sqliteInteger.id,
+  read: (json) => readJsonBoolean('sqlite/boolean', json),
+});
+
 /** A JSON document, stored as its JSON text with sorted keys and no added whitespace. A column declared `JSON` would have numeric affinity and store the document `"42"` as the integer 42. */
 export const sqliteJson = sqlDataType('sqlite/json', {
   storedAs: sqliteText.id,
@@ -301,6 +339,8 @@ export const sqliteDataTypes: readonly DataType[] = [
   sqliteTime,
   sqliteDuration,
   sqliteJson,
+  sqliteDecimal,
+  sqliteBoolean,
   sqlRawDataType,
 ];
 

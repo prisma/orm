@@ -212,7 +212,7 @@ export const contract = defineContract(
 
 ### Integer Representation Types
 
-PostgreSQL writes them `type.BigInt({ as: 'number' })` and `type.BigInt({ storage: 'numeric' })`, which choose `type.Int8Number()` and `type.NumericBigInt()`; SQLite contributes `type.BigIntNumber()`. Pass the result to `field.column(...)`, or keep it in a constant when several fields share it.
+PostgreSQL writes them `type.BigInt({ as: 'number' })` and `type.BigInt({ storage: 'numeric' })`, which choose `type.Int8Number()` and `type.NumericBigInt()`; SQLite writes `type.BigInt({ as: 'number' })` too, which chooses `type.IntegerNumber()`. Pass the result to `field.column(...)`, or keep it in a constant when several fields share it.
 
 ```typescript
 import sqlFamily from '@internal/family-sql/pack';
@@ -241,7 +241,7 @@ export const contract = defineContract(
 );
 ```
 
-The direct form imports the column helper: `field.column(pgInt8NumberColumn())` or `field.column(pgUnboundedIntColumn())` on PostgreSQL, and `field.column(sqliteBigintNumberColumn())` imported from `@internal/target-sqlite/codecs` on SQLite. Both forms select the same codecs and application types and store the same column.
+The direct form imports the column helper: `field.column(pgInt8NumberColumn())` or `field.column(pgUnboundedIntColumn())` on PostgreSQL, and `field.column(sqliteIntegerColumn())` imported from `@internal/target-sqlite/codecs` on SQLite. Both forms select the same codecs and application types and store the same column.
 
 ### Constraint Placement
 
@@ -288,7 +288,7 @@ constraints.index({ expression: sql`eql_v3.eq_term(email)`, name: 'users_email_e
 
 - Structural helpers: `field.column(...)`, `field.namedType(...)` (an enum handle only), plus `model(...)` and `rel.*`
 - Callback helpers: `type.*` and `gen.*`, as in `field.column(type.UuidString()).id().onCreate(gen.uuid())` or, on Postgres, `field.column(type.Uuid()).id().onCreate(gen.uuid(7))`, which emits `pg/uuid@1`
-- Integer representation types: `field.column(type.BigInt({ as: 'number' }))` / `field.column(type.BigInt({ storage: 'numeric' }))` on PostgreSQL and `field.column(type.BigIntNumber())` on SQLite, or the direct per-codec column helpers with `field.column(...)`. A safe-integer `number` emits `pg/int8number@1` on PostgreSQL or `sqlite/bigintnumber@1` on SQLite and throws outside ±(2^53 − 1); PostgreSQL-only `BigInt({ storage: 'numeric' })` emits `pg/unboundedint@1` and reads and writes exact `bigint` values. `type.BigInt()` keeps the lossless `pg/int8@1`. See [Integer Representation Types](#integer-representation-types) for the TypeScript forms and [Integer representation types](../../../../docs/reference/integer-representation-types.md) for the canonical selection, runtime, JSON, and aggregate behavior reference.
+- Integer representation types: `field.column(type.BigInt({ as: 'number' }))` on PostgreSQL and SQLite and `field.column(type.BigInt({ storage: 'numeric' }))` on PostgreSQL, or the direct per-codec column helpers with `field.column(...)`. A safe-integer `number` emits `pg/int8number@1` on PostgreSQL or `sqlite/integer@1` on SQLite and throws outside ±(2^53 − 1); PostgreSQL-only `BigInt({ storage: 'numeric' })` emits `pg/unboundedint@1` and reads and writes exact `bigint` values. `type.BigInt()` keeps the lossless `pg/int8@1`. See [Integer Representation Types](#integer-representation-types) for the TypeScript forms and [Integer representation types](../../../../docs/reference/integer-representation-types.md) for the canonical selection, runtime, JSON, and aggregate behavior reference.
 - Timestamp aliases mirror PSL: `field.column(type.temporal.CreatedAt())` generates a client-side timestamp on create, while `field.column(type.temporal.UpdatedAt())` uses the same execution generator on create and non-empty update mutations. Neither creates a database default; matching representations share one generated value per operation.
 - Keep field-local and FK-local storage overrides next to the authoring site with `field.sql(...)` and `rel.belongsTo(...).sql({ fk })`
 - Prefer typed local refs such as `field.namedType(Role)`, `User.refs.id`, and `User.ref('id')` when those tokens are available
@@ -356,11 +356,15 @@ import { typescriptContract } from '@internal/sql-contract-ts/config-types';
 import { contract } from './src/prisma/contract';
 
 export default defineConfig({
-  contract: typescriptContract(contract, 'src/prisma/contract.json'),
+  contract: {
+    ...typescriptContract(contract, 'src/prisma/contract.json'),
+    typesModule: '@internal/postgres/contract-types',
+  },
+  migrations: { module: '@internal/postgres/migration' },
 });
 ```
 
-Optional third argument (options bag) for `typescriptContract` / `typescriptContractFromPath`, and `defaultControlPolicy` on `emptyContract`. Stamping a specifier default strips derived checks from tables the policy leaves non-managed, and the strip rebuilds namespaces through the target's factory, so the bag requires `createNamespace` alongside `defaultControlPolicy` — the same factory the PSL specifier takes:
+Optional third argument (options bag) for `typescriptContract`, also accepted beside the target by `typescriptContractFromPath`, and `defaultControlPolicy` on `emptyContract`. Stamping a specifier default strips derived checks from tables the policy leaves non-managed, and the strip rebuilds namespaces through the target's factory, so the bag requires `createNamespace` alongside `defaultControlPolicy` — the same factory the PSL specifier takes:
 
 ```typescript
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
@@ -372,6 +376,15 @@ typescriptContract(contract, 'src/prisma/contract.json', {
 ```
 
 The specifier value applies only when the loaded contract omits `defaultControlPolicy` (a value authored on the contract module wins).
+
+`typescriptContractFromPath` requires the target the config is for, and the module that target's `defineContract` comes from, so no `defineConfig` can leave the check out. It refuses a loaded contract whose `target` is another target's id with `CONTRACT.TARGET_MISMATCH`, naming both targets and that module, with `expected`, `actual` and `contract` in its `meta`. A contract of another family, such as a MongoDB contract, is refused the same way; a contract here is a value with a target family, a target and a storage namespaces record, the fields every family's contract has. Any other export, a SQL one without a target included, is refused with `CONTRACT.EXPORT_INVALID`. Every SQL target's `defineConfig` passes them. `refuseOtherTargetOnLoad(config, { target, contractBuilderModule })` runs the same check on the contract a ready `ContractConfig` loads, and passes any result that is not a successful load of an object through unchanged. Its message names the config's first input, or says the contract is in the config when it has none, and the `fix` names the contract-builder module only for a TypeScript source:
+
+```typescript
+typescriptContractFromPath('prisma/contract.ts', 'prisma/contract.json', {
+  target: postgresPackRef,
+  contractBuilderModule: '@prisma/orm-postgres/contract-builder',
+});
+```
 
 ## Editor JSON schema
 

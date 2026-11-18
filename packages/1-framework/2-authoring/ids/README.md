@@ -30,5 +30,5 @@ const value = generateId({ id: 'uuidv4' });
 
 ## Related docs
 
-- [Data Contract](../../../docs/architecture%20docs/subsystems/1.%20Data%20Contract.md)
-- [Query Lanes](../../../docs/architecture%20docs/subsystems/3.%20Query%20Lanes.md)
+- [Data Contract](../../../../docs/architecture%20docs/subsystems/1.%20Data%20Contract.md)
+- [Query Lanes](../../../../docs/architecture%20docs/subsystems/3.%20Query%20Lanes.md)

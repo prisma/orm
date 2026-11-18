@@ -1,10 +1,10 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
-import postgresAdapter from '@internal/adapter-postgres/runtime';
 import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
+import { includeStrategies, postgresAdapterFor } from './helpers';
 import { timeouts, withPushedContractRuntime } from './integration-helpers';
 
 function wideContract(wideColumns: readonly string[]) {
@@ -24,39 +24,45 @@ function wideContract(wideColumns: readonly string[]) {
   return defineContract({ models: { Post, Comment } });
 }
 
-describe('a to-many include of a model with more than 50 columns', () => {
-  it.each([51, 120])(
-    'returns every column of the related rows in field order, for %i columns',
-    async (columnCount) => {
-      const wideColumns = Array.from(
-        { length: columnCount - 2 },
-        (_, index) => `c${columnCount - 2 - index}`,
-      );
-      const contract = wideContract(wideColumns);
-      const context = createExecutionContext({
-        contract,
-        stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),
-      });
+describe.each(includeStrategies)(
+  'a to-many include of a model with more than 50 columns (%s)',
+  (strategy) => {
+    it.each([51, 120])(
+      'returns every column of the related rows in field order, for %i columns',
+      async (columnCount) => {
+        const wideColumns = Array.from(
+          { length: columnCount - 2 },
+          (_, index) => `c${columnCount - 2 - index}`,
+        );
+        const contract = wideContract(wideColumns);
+        const context = createExecutionContext({
+          contract,
+          stack: createSqlExecutionStack({
+            target: postgresTarget,
+            adapter: postgresAdapterFor(strategy),
+          }),
+        });
 
-      await withPushedContractRuntime(contract, async (runtime) => {
-        await runtime.query(`
+        await withPushedContractRuntime(contract, async (runtime) => {
+          await runtime.query(`
           insert into wide_posts (id) values (1);
           insert into wide_comments (id, post_id, ${wideColumns.join(', ')})
             values (1, 1, ${wideColumns.map((name) => `'${name}'`).join(', ')});
         `);
-        const posts = new Collection({ runtime, context }, 'Post', { namespaceId: 'public' });
+          const posts = new Collection({ runtime, context }, 'Post', { namespaceId: 'public' });
 
-        const rows = await posts.include('comments').all();
+          const rows = await posts.include('comments').all();
 
-        const comment = {
-          id: 1,
-          postId: 1,
-          ...Object.fromEntries(wideColumns.map((name) => [name, name])),
-        };
-        expect(rows).toEqual([{ id: 1, comments: [comment] }]);
-        expect(Object.keys(rows[0]?.comments[0] ?? {})).toEqual(Object.keys(comment));
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-});
+          const comment = {
+            id: 1,
+            postId: 1,
+            ...Object.fromEntries(wideColumns.map((name) => [name, name])),
+          };
+          expect(rows).toEqual([{ id: 1, comments: [comment] }]);
+          expect(Object.keys(rows[0]?.comments[0] ?? {})).toEqual(Object.keys(comment));
+        });
+      },
+      timeouts.spinUpPpgDev,
+    );
+  },
+);

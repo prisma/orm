@@ -29,14 +29,14 @@ sequenceDiagram
     App->>ORM: User.update(data) with invalidateAnnotation
     ORM->>R: startActivity(kind orm-call, annotations)
     R->>M: activityStarted(call)
-    ORM->>R: call.transaction()
+    ORM->>R: call.transaction(fn)
     R->>M: activityStarted(tx, parent call)
     R->>D: BEGIN
     ORM->>R: tx.query(SELECT)
     R->>M: activityStarted, interceptors, activityEnded (statement)
     ORM->>R: tx.query(UPDATE ... RETURNING)
     R->>M: activityStarted, interceptors, activityEnded (statement)
-    ORM->>R: tx.commit()
+    Note over ORM,R: fn resolves
     R->>D: COMMIT
     R->>M: activityEnded(tx)
     R->>M: activityFinalized(SELECT), activityFinalized(UPDATE), activityFinalized(tx): committed
@@ -61,7 +61,7 @@ Middleware has two kinds of hook: **lifecycle events**, which observe, and **int
 Every activity has the same three, and each is one hook whatever the activity's kind:
 
 - **`activityStarted(activity, ctx)`**: the act begins. If a middleware's `activityStarted` throws, the activity fails; the middleware after it never saw the activity start, so they receive no later lifecycle event for it.
-- **`activityEnded(activity, result, ctx)`**: the act ends, with the outcome as the actor saw it: `succeeded`, `failed`, or `stopped` when the caller stopped reading a row stream early. A statement's result also carries its latency, where its result came from (`source: 'driver' | 'middleware'`), and its row count or statistics, discriminated by `result.returns`. An error thrown from this hook fails the activity: the actor receives it. A latency budget fails a statement this way. Every middleware that saw the activity start still receives its `activityEnded`; when several throw, the actor receives the first error. Finalization follows what the database did, not the hook: a statement that succeeded outside a transaction is finalized `committed` even when a hook failed it. For a transaction whose `COMMIT` or `ROLLBACK` the database has already settled, the hook's error cannot undo that outcome: the database outcome stands, and the transaction is finalized with it. A `commit()` then rejects with the hook's error, and a `rollback()` after a failed callback leaves the caller with the callback's original error; `rollback()` after a commit does nothing.
+- **`activityEnded(activity, result, ctx)`**: the act ends, with the outcome as the actor saw it: `succeeded`, `failed`, or `stopped` when the caller stopped reading a row stream early. A statement's result also carries its latency, where its result came from (`source: 'driver' | 'middleware'`), and its row count or statistics, discriminated by `result.returns`. An error thrown from this hook fails the activity: the actor receives it. A latency budget fails a statement this way. Every middleware that saw the activity start still receives its `activityEnded`; when several throw, the actor receives the first error. Finalization follows what the database did, not the hook: a statement that succeeded outside a transaction is finalized `committed` even when a hook failed it. For a transaction whose `COMMIT` or `ROLLBACK` the database has already settled, the hook's error cannot undo that outcome: the database outcome stands, and the transaction is finalized with it. A `commit()` then rejects with the hook's error, and a `rollback()` after a failed callback leaves the caller with the callback's original error; `rollback()` after a commit rejects with `RUNTIME.TRANSACTION_CLOSED` and sends nothing.
 - **`activityFinalized(activity, result, ctx)`**: the act's effects are final, with `committed`, `rolled-back` or `unknown`. An error thrown from this hook is passed to `ctx.log.error` and swallowed; later middleware still run.
 
 A middleware that only cares about some kinds checks `activity.kind` at the top of the hook, and ignores kinds it does not know.
@@ -133,12 +133,12 @@ startActivityOn<K extends ClientActivityKind>(queryable: RuntimeScope, activity:
 interface ActivityHandle<K> extends RuntimeQueryable, ActivitySource, ActivitySourceTarget {
   readonly activity: ClientActivity<K>;
   readonly intercepted: { readonly result: ClientActivityResult<K> } | undefined;
-  readonly transaction?: () => Promise<RuntimeTransaction>;
+  readonly transaction?: <R>(fn: (tx: TransactionContext) => PromiseLike<R>, options?: RuntimeTransactionOptions) => Promise<R>;
   end(result: { readonly outcome: 'succeeded' | 'failed' | 'stopped'; readonly result?: ClientActivityResult<K> }): Promise<void>;
 }
 ```
 
-Statements sent through the handle are the activity's children, and `handle.transaction()` starts a transaction activity beneath it. A handle carries the `activitySource` member too, so `startActivityOn(handle, activity)` nests an activity beneath it. A handle opened under a transaction has no `transaction`, so transactions do not nest. `intercepted` is set when an `intercept.onActivity` handler supplied a result; the client then returns it without running anything. `end()` hands the runtime the value the client returns to its caller, which the runtime passes to middleware without reading it.
+Statements sent through the handle are the activity's children, and `handle.transaction(fn)` runs `fn` in a transaction through `withTransaction`, with the transaction activity beneath it. A handle carries the `activitySource` member too, so `startActivityOn(handle, activity)` nests an activity beneath it. A handle opened under a transaction has no `transaction`, so transactions do not nest. `intercepted` is set when an `intercept.onActivity` handler supplied a result; the client then returns it without running anything. `end()` hands the runtime the value the client returns to its caller, which the runtime passes to middleware without reading it.
 
 Ending an activity while one of its children is still open ends it `failed`, finalizes it, and rejects with a runtime error naming how many children are open. A transaction is the exception: the database ends it, so a child still open then is finalized when it ends (see "When an activity is finalized"). Starting a statement or an activity beneath an activity that no longer accepts children is rejected at entry with `RUNTIME.ACTIVITY_NOT_ACCEPTING_CHILDREN`. A client activity stops accepting children when it ends; a transaction, when its `commit()` or `rollback()` is called, before it ends, and with it every client activity inside it.
 

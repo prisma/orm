@@ -1,3 +1,4 @@
+import { workspaceMigrationModule } from '@repo/test-utils';
 import { type as arktype } from 'arktype';
 /**
  * Op-lowering coverage for the Postgres migration IR call classes:
@@ -24,7 +25,6 @@ import {
   type TypeLookups,
 } from '@internal/framework-components/codec';
 import { APP_SPACE_ID } from '@internal/framework-components/control';
-import { keepInternalSpecifiers } from '@internal/framework-components/emission';
 import { sqlDataType } from '@internal/sql-contract/data-type';
 import type { StorageColumn } from '@internal/sql-contract/types';
 import { col, fn } from '@internal/sql-relational-core/contract-free';
@@ -272,7 +272,7 @@ describe('TypeScriptRenderablePostgresMigration', () => {
       SNAPSHOTS_IMPORT_PATH,
     );
 
-    const source = migration.renderTypeScript(keepInternalSpecifiers);
+    const source = migration.renderTypeScript(workspaceMigrationModule.postgres);
     expect(source).toContain(
       "import { Migration, MigrationCLI } from '@internal/postgres/migration';",
     );

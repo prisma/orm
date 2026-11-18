@@ -64,7 +64,7 @@ describe('init prompts', () => {
         const run = await harness().run(['orm', 'init', ...NO_PACKAGE_WORK], {
           cwd: projectDir,
           isTty: { stdin: true },
-          answers: ['mongo', 'typescript', 'db/schema.ts', false],
+          answers: ['mongodb', 'typescript', 'db/schema.ts', false],
         });
 
         expect(run.exitCode).toBe(0);

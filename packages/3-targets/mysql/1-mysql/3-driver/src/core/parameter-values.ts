@@ -1,9 +1,7 @@
 import { mysqlError } from '@internal/target-mysql/errors';
 
 function unsendable(message: string, paramIndex: number, received: string): Error {
-  return mysqlError('RUNTIME.ENCODE_FAILED', message, {
-    meta: { target: 'mysql', paramIndex, received },
-  });
+  return mysqlError('RUNTIME.ENCODE_FAILED', message, { meta: { paramIndex, received } });
 }
 
 const BIGINT_MIN = -(2n ** 63n);
@@ -24,12 +22,12 @@ function receivedKind(value: unknown): string {
 /**
  * The value the `mariadb` package writes into the statement for a parameter. A finite number or a bigint goes as it is, and the package writes its digits. A non-finite number is refused, because the package would write `NaN` or `Infinity` into the SQL. A bigint must fit a signed BIGINT, so a parameter's type never depends on its value. A `Uint8Array` goes as a Buffer over the same bytes, because the package writes any other `Uint8Array` as JSON text. A `Date` is refused: the package writes it in the process's local time zone, and the MySQL codecs send dates as text. So is text with a lone UTF-16 surrogate, which the package writes as `?` or U+FFFD depending on the text's length.
  */
-export function bindValue(value: unknown, index: number): unknown {
+export function bindValue(value: unknown, index: number, displayName: string): unknown {
   if (value === null || value === undefined) return null;
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) {
       throw unsendable(
-        `Parameter ${index + 1} is ${value}, which MySQL cannot store`,
+        `Parameter ${index + 1} is ${value}, which ${displayName} cannot store`,
         index,
         String(value),
       );
@@ -39,7 +37,7 @@ export function bindValue(value: unknown, index: number): unknown {
   if (typeof value === 'bigint') {
     if (withinBigint(value)) return value;
     throw unsendable(
-      `Parameter ${index + 1} is an integer outside MySQL's signed 64-bit BIGINT`,
+      `Parameter ${index + 1} is an integer outside ${displayName}'s signed 64-bit BIGINT`,
       index,
       'bigint',
     );
@@ -59,7 +57,7 @@ export function bindValue(value: unknown, index: number): unknown {
   if (typeof value === 'boolean') return value;
   const received = receivedKind(value);
   throw unsendable(
-    `Parameter ${index + 1} is of type ${received}; a MySQL parameter must be text, a number, a bigint, a boolean, bytes or null, and a Date is sent as text by its codec`,
+    `Parameter ${index + 1} is of type ${received}; a ${displayName} parameter must be text, a number, a bigint, a boolean, bytes or null, and a Date is sent as text by its codec`,
     index,
     received,
   );

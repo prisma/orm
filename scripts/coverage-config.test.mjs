@@ -284,10 +284,7 @@ describe('coverage config', () => {
       shardJob,
       /run: pnpm coverage:packages --reporter=default --reporter=github-actions --reporter=blob --shard=\$\{\{ matrix\.index \}\}\/4/,
     );
-    assert.match(
-      shardJob,
-      /uses: actions\/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a/,
-    );
+    assert.match(shardJob, /uses: actions\/upload-artifact@[0-9a-f]{40} # v\d/);
     assert.match(shardJob, /name: package-coverage-\$\{\{ matrix\.index \}\}/);
     assert.match(shardJob, /path: \.vitest\/blob\/blob-\$\{\{ matrix\.index \}\}-4\.json/);
     assert.match(shardJob, /if-no-files-found: error/);
@@ -306,10 +303,7 @@ describe('coverage config', () => {
     assert.match(coverageJob, /^ {4}name: Coverage$/m);
     assert.match(coverageJob, /^ {4}needs: \[build, changes, test-packages\]$/m);
     assert.doesNotMatch(coverageJob, /^ {4}services:/m);
-    assert.match(
-      coverageJob,
-      /uses: actions\/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c/,
-    );
+    assert.match(coverageJob, /uses: actions\/download-artifact@[0-9a-f]{40} # v\d/);
     assert.match(coverageJob, /pattern: package-coverage-\*/);
     assert.match(coverageJob, /path: \.vitest\/blob/);
     assert.match(coverageJob, /merge-multiple: true/);

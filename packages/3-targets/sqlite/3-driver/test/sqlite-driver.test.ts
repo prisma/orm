@@ -68,9 +68,9 @@ describe('SqliteBoundDriver', () => {
   });
 
   it('reports affected rows from stmt.run().changes', async () => {
-    const run = vi.fn(() => ({ changes: 3, lastInsertRowid: 0 }));
+    const run = vi.fn(() => ({ changes: 3n, lastInsertRowid: 0n }));
     const db = {
-      prepare: vi.fn(() => ({ columns: () => [], run })),
+      prepare: vi.fn(() => ({ columns: () => [], run, setReadBigInts: vi.fn() })),
     } as unknown as DatabaseSync;
     const connection = new SqliteConnectionImpl(db);
 

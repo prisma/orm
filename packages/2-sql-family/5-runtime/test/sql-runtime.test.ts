@@ -22,6 +22,7 @@ import type { SqlExecutionPlan, SqlQueryPlan } from '@internal/sql-relational-co
 import { applicationDomainOf, timeouts } from '@repo/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import { createTestSqlNamespace } from '../../1-core/contract/test/test-support';
+import { computeSqlFingerprint } from '../src/fingerprint';
 import type { SqlMiddleware, SqlMiddlewareContext } from '../src/middleware/sql-middleware';
 import type {
   SqlRuntimeAdapterDescriptor,
@@ -33,6 +34,11 @@ import { type TransactionContext, withTransaction } from '../src/sql-runtime';
 import { createAsyncSecretCodec, decryptSecret } from './seeded-secret-codec';
 import { defineTestCodec } from './test-codec';
 import { createTestRuntime as createRuntime, descriptorsFromCodecs, stubAst } from './utils';
+
+vi.mock('../src/fingerprint', async (importOriginal) => {
+  const original = await importOriginal<{ computeSqlFingerprint: typeof computeSqlFingerprint }>();
+  return { computeSqlFingerprint: vi.fn(original.computeSqlFingerprint) };
+});
 
 const runtimeSecretSeed = 'sql-runtime-secret';
 
@@ -261,6 +267,37 @@ describe('SqlRuntime', () => {
     });
 
     expect(runtime.telemetry()).toBeNull();
+  });
+
+  it('computes the telemetry fingerprint on first read, once per statement', async () => {
+    const { stackInstance, context, driver } = createTestSetup();
+    const runtime = createRuntime({
+      stackInstance,
+      context,
+      driver,
+      verifyMarker: false,
+    });
+    const fingerprint = vi.mocked(computeSqlFingerprint);
+    fingerprint.mockClear();
+
+    await runtime.execute(createRawExecutionPlan({ sql: 'SELECT id FROM users WHERE id = 123' }));
+    expect(fingerprint).not.toHaveBeenCalled();
+
+    const first = runtime.telemetry();
+    expect(first).toEqual({
+      lane: 'raw',
+      target: 'postgres',
+      outcome: 'success',
+      fingerprint: expect.stringMatching(/^[0-9a-f]{64}$/),
+      durationMs: expect.any(Number),
+    });
+    expect(runtime.telemetry()).toBe(first);
+    expect(fingerprint).toHaveBeenCalledTimes(1);
+
+    await runtime.execute(createRawExecutionPlan({ sql: 'DELETE FROM users WHERE id = 456' }));
+    expect(fingerprint).toHaveBeenCalledTimes(1);
+    expect(runtime.telemetry()?.fingerprint).not.toBe(first?.fingerprint);
+    expect(fingerprint).toHaveBeenCalledTimes(2);
   });
 
   it('closes runtime and driver', async () => {

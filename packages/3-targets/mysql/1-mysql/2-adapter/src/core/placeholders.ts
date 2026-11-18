@@ -14,7 +14,7 @@ export function assertPlaceholdersMatchParams(sql: string, paramCount: number): 
   if (matches) return;
   throw structuredError(
     'RUNTIME.PARAM_PLACEHOLDER_MISMATCH',
-    `The lowered MySQL statement writes placeholders ${JSON.stringify(placeholders)} for ${paramCount} parameter(s); each parameter must be written as its own numbered placeholder, and no other placeholder may appear.`,
+    `The SQL has placeholders ${JSON.stringify(placeholders)} for ${paramCount} value(s); each value needs its own numbered placeholder, and the SQL may contain no other placeholder.`,
     {
       why: 'A placeholder that does not match a parameter binds a value to the wrong place in the statement, or leaves a value unbound.',
       fix: 'Pass values into raw SQL through interpolation rather than writing a `?` in the SQL text.',

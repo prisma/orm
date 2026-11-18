@@ -17,9 +17,11 @@ import {
   signedRange,
 } from '@internal/framework-components/codec';
 import { canonicalizeJson } from '@internal/framework-components/utils';
+import { structuredError } from '@internal/utils/structured-error';
 import {
   sqliteBlob,
   sqliteBlobFromHexText,
+  sqliteBoolean,
   sqliteDate,
   sqliteDateText,
   sqliteDatetime,
@@ -44,6 +46,14 @@ function printNumber(value: JsonValue): string {
   return typeof value === 'number' ? numeralText(value) : String(value);
 }
 
+function readBoolean(text: string): JsonValue {
+  if (text === 'true' || text === 'false') return text === 'true';
+  throw structuredError('CONTRACT.CAST_REFUSED', `"${text}" is not a boolean.`, {
+    why: 'The only text a boolean reads is true or false.',
+    fix: 'Use true or false.',
+  });
+}
+
 export function sqliteDataTypeEntries(): Readonly<Record<string, DataTypeAuthoringEntry>> {
   return {
     [sqliteText.id]: {
@@ -60,6 +70,11 @@ export function sqliteDataTypeEntries(): Readonly<Record<string, DataTypeAuthori
       },
       print: printNumber,
       documentation: 'A number, whose type comes from its own size and precision.',
+    },
+    [sqliteBoolean.id]: {
+      written: { kind: 'plain', syntax: 'boolean', parse: readBoolean },
+      print: (value) => String(value),
+      documentation: 'A boolean, written true or false.',
     },
     [sqliteJson.id]: {
       written: {

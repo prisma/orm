@@ -342,12 +342,16 @@ function fakePlanner(script: FakePlannerScript): Record<string, unknown> {
                 for (const other of others) other.catch(() => undefined);
                 return [...resolved.slice(0, at), placeholder, ...others, ...resolved.slice(at)];
               },
-              renderTypeScript: () => '// planned migration\n',
+              renderTypeScript: (migrationModule: string) =>
+                `// planned migration importing ${migrationModule}\n`,
             },
           }
         : { kind: 'failure', conflicts: script.conflicts };
     },
-    emptyMigration: () => ({ renderTypeScript: () => '// empty migration\n' }),
+    emptyMigration: () => ({
+      renderTypeScript: (migrationModule: string) =>
+        `// empty migration importing ${migrationModule}\n`,
+    }),
   };
 }
 
@@ -367,6 +371,10 @@ function deserializeIntoStorageInstance(json: unknown): unknown {
     ? json
     : { ...json, storage: new HydratedFixtureStorage(storage) };
 }
+
+export const OFFLINE_MIGRATION_MODULE = '@acme/orm-db/migration';
+
+export const OFFLINE_TYPES_MODULE = '@acme/orm-db/contract-types';
 
 export function offlineConfig(options: {
   readonly project: OfflineProject;
@@ -402,8 +410,18 @@ export function offlineConfig(options: {
     contract: {
       source: { format: 'typescript', inputs: [], load: async () => contractJson('unused') },
       output: options.project.contractPath,
+      typesModule: OFFLINE_TYPES_MODULE,
     },
+    migrations: { module: OFFLINE_MIGRATION_MODULE },
   };
+}
+
+export function contractWithoutTypesModule(project: OfflineProject): Record<string, unknown> {
+  const { typesModule: _omitted, ...contract } = blindCast<
+    { readonly typesModule?: string },
+    'offlineConfig always returns a contract section'
+  >(offlineConfig({ project })['contract']);
+  return contract;
 }
 
 export const RENDERED_CONTRACT_DTS = '// rendered\nexport type Contract = { rendered: true };\n';

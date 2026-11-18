@@ -2,9 +2,25 @@
 
 A minimal demo showing how to use `@prisma/orm-mariadb`, the one package a MariaDB application installs. It has the same PSL contract as the MySQL example, with three models, a relation, an enum and the convenience date and time types, and a committed migration written by `prisma migration plan` against MariaDB 10.11.
 
-MariaDB support is early, and this example grows with it. Today it shows the control plane: the contract emits, the committed migration applies to an empty MariaDB database, `db verify` and `db sign` pass, and planning again from the unchanged contract writes nothing. Reads and writes come in a later change, with the `mariadb()` client.
+MariaDB support is early, and this example grows with it. Today it shows the control plane, reads and writes: the contract emits, the committed migration applies to an empty MariaDB database, `db verify` and `db sign` pass, planning again from the unchanged contract writes nothing, the ORM writes the seed rows, and the ORM and the SQL builder read them, includes among them. The reads and writes are the MySQL example's, run with `mariadb()`.
 
 MariaDB has its own target, `mariadb`, built on MySQL's. The target id is part of `contract.json`, its hashes and every migration, so the MariaDB example keeps its own contract and migrations instead of sharing the MySQL example's.
+
+## Reading and writing
+
+`src/prisma/db.ts` builds the client from `@prisma/orm-mariadb/runtime` and the emitted contract, read with `contractFromJson` from `@prisma/orm-mariadb/static`:
+
+```ts
+import mariadb from '@prisma/orm-mariadb/runtime';
+import { contractFromJson } from '@prisma/orm-mariadb/static';
+
+const db = mariadb({ contract: contractFromJson<Contract>(contractJson), url });
+```
+
+`src/orm-client/` holds the ORM reads and writes, `src/queries/` the SQL builder read, `src/raw/` a raw SQL insert and `src/seed.ts` the seed rows, one file each, as in the MySQL example. They return what they return on MySQL. Two things differ in the SQL MariaDB is sent:
+
+- An include is read with a query of its own after the parent rows, since MariaDB cannot read a related row from inside the subquery MySQL's one-query include uses.
+- An upsert writes no row alias, and reads the proposed row's column as `VALUES(column)`, since MariaDB has no `INSERT … AS new`.
 
 ## Setup
 
@@ -35,7 +51,7 @@ pnpm db:sign                                # records the contract the database 
 | `db:sign` | `prisma db sign` | Signs a database whose schema satisfies the contract |
 | `test` | `vitest run` | The whole flow against a fresh database at `MARIADB_URL` |
 
-`pnpm test` uses only the server part of `MARIADB_URL`. It creates a uniquely named database on that server and drops it afterwards. `test/migrations.test.ts` runs `db migrate`, `db verify`, `db sign` and `migration plan` through the `prisma` CLI. Without `MARIADB_URL` the tests are skipped, except in CI, where they fail.
+`pnpm test` uses only the server part of `MARIADB_URL`. It creates a uniquely named database on that server and drops it afterwards. `test/migrations.test.ts` runs `db migrate`, `db verify`, `db sign` and `migration plan` through the `prisma` CLI; `test/reads.test.ts`, `test/writes.test.ts` and `test/events.test.ts` migrate a database and read and write it through `mariadb()`. Without `MARIADB_URL` the tests are skipped, except in CI, where they fail.
 
 ## What the migration creates
 
@@ -71,6 +87,9 @@ plus an index on `Post.authorId` and the foreign key to `User`. The SQL is MySQL
 - `prisma/contract.prisma` — the contract (User, Post, Event, Role)
 - `prisma.config.ts` — CLI config; reads the connection from `MARIADB_URL`
 - `migrations/` — the committed migration and its contract snapshot
+- `src/prisma/db.ts` — the `mariadb()` client
+- `src/orm-client/`, `src/queries/`, `src/raw/`, `src/seed.ts` — the reads and writes
 - `test/migrations.test.ts` — the migration flow
+- `test/reads.test.ts`, `test/writes.test.ts`, `test/events.test.ts` — the reads and writes against a migrated database
 - `test/cli.ts` — runs the `prisma` CLI on a copy of the example
 - `test/database.ts` — creates and drops a database for the test file, and reads `MARIADB_URL`

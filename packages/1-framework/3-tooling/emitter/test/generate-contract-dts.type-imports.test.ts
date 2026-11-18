@@ -2,7 +2,7 @@ import type { TypesImportSpec } from '@internal/framework-components/emission';
 import { describe, expect, it } from 'vitest';
 import { generateContractDts } from '../src/generate-contract-dts';
 import { createMockSpi } from './mock-spi';
-import { createTestContract } from './utils';
+import { createTestContract, TEST_TYPES_MODULE } from './utils';
 
 const HASHES = {
   storageHash: '0000000000000000000000000000000000000000000000000000000000000001',
@@ -32,6 +32,7 @@ describe('generateContractDts codec type imports', () => {
       createMockSpi(),
       [CODEC_TYPES, VECTOR],
       HASHES,
+      TEST_TYPES_MODULE,
     );
 
     expect(importLines(dts)).toContain('CodecTypes as DemoTypes');
@@ -43,7 +44,13 @@ describe('generateContractDts codec type imports', () => {
       getStorageTypeExports: () => 'export type Embedding = Vector<3>;',
     });
 
-    const dts = generateContractDts(createTestContract(), spi, [CODEC_TYPES, VECTOR], HASHES);
+    const dts = generateContractDts(
+      createTestContract(),
+      spi,
+      [CODEC_TYPES, VECTOR],
+      HASHES,
+      TEST_TYPES_MODULE,
+    );
 
     expect(importLines(dts)).toMatch(/\bVector\b/);
   });
@@ -57,9 +64,16 @@ describe('generateContractDts parameterized output types', () => {
   };
 
   it('declares the union of the stack type functions, and imports what it names', () => {
-    const dts = generateContractDts(createTestContract(), createMockSpi(), [CODEC_TYPES], HASHES, {
-      parameterizedOutputTypeImports: [TYPE_FUNCTION],
-    });
+    const dts = generateContractDts(
+      createTestContract(),
+      createMockSpi(),
+      [CODEC_TYPES],
+      HASHES,
+      TEST_TYPES_MODULE,
+      {
+        parameterizedOutputTypeImports: [TYPE_FUNCTION],
+      },
+    );
 
     expect(dts).toContain('type ParameterizedOutputTypeFunctions = DemoParameterizedOutputTypes;');
     expect(importLines(dts)).toContain(
@@ -68,7 +82,13 @@ describe('generateContractDts parameterized output types', () => {
   });
 
   it('declares the union as never when the stack declares no type function', () => {
-    const dts = generateContractDts(createTestContract(), createMockSpi(), [CODEC_TYPES], HASHES);
+    const dts = generateContractDts(
+      createTestContract(),
+      createMockSpi(),
+      [CODEC_TYPES],
+      HASHES,
+      TEST_TYPES_MODULE,
+    );
 
     expect(dts).toContain('type ParameterizedOutputTypeFunctions = never;');
   });
@@ -123,7 +143,13 @@ describe('generateContractDts field type maps', () => {
   });
 
   it('applies the shared generic to the contract domain and storage, with no override for fields the generic types itself', () => {
-    const dts = generateContractDts(contract, createMockSpi(), [CODEC_TYPES], HASHES);
+    const dts = generateContractDts(
+      contract,
+      createMockSpi(),
+      [CODEC_TYPES],
+      HASHES,
+      TEST_TYPES_MODULE,
+    );
 
     expect(dts).toContain('type FieldTypeOverrides = {  };');
     expect(dts).not.toContain('ValueObjectFieldTypeOverrides');
@@ -133,11 +159,19 @@ describe('generateContractDts field type maps', () => {
     expect(dts).toContain(
       "export type FieldInputTypes = FieldTypesFromDomain<ContractBase['domain']['namespaces'], CodecTypes, ParameterizedOutputTypeFunctions, FieldTypeOverrides, \"input\", ContractBase['storage']['namespaces']>;",
     );
-    expect(dts).toMatch(/\n {2}FieldTypesFromDomain,\n/);
+    expect(dts).toMatch(
+      /^import type \{[^}]*\bFieldTypesFromDomain\b[^}]*\} from '@acme\/orm-db\/contract-types';$/m,
+    );
   });
 
   it('passes the storage namespaces to the shared generic for a contract without value objects too', () => {
-    const dts = generateContractDts(createTestContract(), createMockSpi(), [CODEC_TYPES], HASHES);
+    const dts = generateContractDts(
+      createTestContract(),
+      createMockSpi(),
+      [CODEC_TYPES],
+      HASHES,
+      TEST_TYPES_MODULE,
+    );
 
     expect(dts).toContain(
       "export type FieldOutputTypes = FieldTypesFromDomain<ContractBase['domain']['namespaces'], CodecTypes, ParameterizedOutputTypeFunctions, FieldTypeOverrides, \"output\", ContractBase['storage']['namespaces']>;",
@@ -146,12 +180,20 @@ describe('generateContractDts field type maps', () => {
   });
 
   it('types each value object alias through the shared generic, at the storage namespace that holds it', () => {
-    const dts = generateContractDts(contract, createMockSpi(), [CODEC_TYPES], HASHES);
+    const dts = generateContractDts(
+      contract,
+      createMockSpi(),
+      [CODEC_TYPES],
+      HASHES,
+      TEST_TYPES_MODULE,
+    );
 
     expect(dts).toContain(
       'export type AddressOutput = ValueObjectOutputTypes["shared"]["Address"];',
     );
-    expect(dts).toMatch(/\n {2}ValueObjectTypesFromStorage,\n/);
+    expect(dts).toMatch(
+      /^import type \{[^}]*\bValueObjectTypesFromStorage\b[^}]*\} from '@acme\/orm-db\/contract-types';$/m,
+    );
   });
 
   it('writes one alias for a value object name that two storage namespaces hold, from the first', () => {
@@ -170,6 +212,7 @@ describe('generateContractDts field type maps', () => {
       createMockSpi(),
       [CODEC_TYPES],
       HASHES,
+      TEST_TYPES_MODULE,
     );
 
     expect(dts.match(/export type AddressOutput =/g)).toHaveLength(1);
@@ -179,7 +222,13 @@ describe('generateContractDts field type maps', () => {
   });
 
   it('renders a value object field as the coordinate of its storage value object', () => {
-    const dts = generateContractDts(contract, createMockSpi(), [CODEC_TYPES], HASHES);
+    const dts = generateContractDts(
+      contract,
+      createMockSpi(),
+      [CODEC_TYPES],
+      HASHES,
+      TEST_TYPES_MODULE,
+    );
 
     expect(dts).toContain(
       'readonly address: { readonly nullable: true; readonly type: { readonly kind: "valueObject"; readonly plane: "storage"; readonly namespaceId: "shared"; readonly entityKind: "valueObject"; readonly entityName: "Address" } }',
@@ -187,13 +236,25 @@ describe('generateContractDts field type maps', () => {
   });
 
   it('describes value objects only in storage, not in the domain or at the top level', () => {
-    const dts = generateContractDts(contract, createMockSpi(), [CODEC_TYPES], HASHES);
+    const dts = generateContractDts(
+      contract,
+      createMockSpi(),
+      [CODEC_TYPES],
+      HASHES,
+      TEST_TYPES_MODULE,
+    );
 
     expect(dts).not.toContain('readonly valueObjects:');
   });
 
   it('types the fields of a Models member by indexing FieldOutputTypes', () => {
-    const dts = generateContractDts(contract, createMockSpi(), [CODEC_TYPES], HASHES);
+    const dts = generateContractDts(
+      contract,
+      createMockSpi(),
+      [CODEC_TYPES],
+      HASHES,
+      TEST_TYPES_MODULE,
+    );
 
     expect(dts).toContain('id: FieldOutputTypes["public"]["User"]["id"];');
     expect(dts).toContain('address: FieldOutputTypes["public"]["User"]["address"];');

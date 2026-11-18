@@ -1,4 +1,4 @@
-import { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync, type SQLOutputValue } from 'node:sqlite';
 import type { RuntimeDriverInstance } from '@internal/framework-components/execution';
 import type {
   SqlConnection,
@@ -15,6 +15,7 @@ import { validateSqliteIsolationLevel } from '@internal/target-sqlite/runtime';
 import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
 import { closeDatabase, wasClosedByDriver } from './database-state';
+import { prepareExact, safeIntegersAsNumbers } from './exact-integers';
 import { normalizeSqliteError } from './normalize-error';
 import { sqliteParams } from './sqlite-params';
 
@@ -72,19 +73,24 @@ abstract class SqliteQueryable implements SqlQueryable {
   }
 
   async *query<Row = Record<string, unknown>>(request: SqlExecuteRequest): AsyncIterable<Row> {
+    let rows: Iterator<Record<string, SQLOutputValue>> | undefined;
     try {
-      const stmt = this.db.prepare(request.sql);
-      for (const row of stmt.iterate(...sqliteParams(request.params))) {
-        yield blindCast<Row, 'SQLite rows follow the caller query shape'>(row);
+      rows = prepareExact(this.db, request.sql).iterate(...sqliteParams(request.params));
+      for (let next = rows.next(); next.done !== true; next = rows.next()) {
+        yield blindCast<Row, 'SQLite rows follow the caller query shape'>(
+          safeIntegersAsNumbers(next.value),
+        );
       }
     } catch (error) {
       throw normalizeSqliteError(error, wasClosedByDriver(this.db));
+    } finally {
+      if (this.db.isOpen) rows?.return?.();
     }
   }
 
   async execute(request: SqlExecuteRequest): Promise<SqlStatementStats> {
     try {
-      const stmt = this.db.prepare(request.sql);
+      const stmt = prepareExact(this.db, request.sql);
       if (stmt.columns().length !== 0) {
         throw new InternalError('SQLite cannot execute statements that return rows.');
       }
@@ -100,8 +106,8 @@ abstract class SqliteQueryable implements SqlQueryable {
 
   async explain(request: SqlExecuteRequest): Promise<SqlExplainResult> {
     try {
-      const stmt = this.db.prepare(`EXPLAIN QUERY PLAN ${request.sql}`);
-      const rows = stmt.all(...sqliteParams(request.params));
+      const stmt = prepareExact(this.db, `EXPLAIN QUERY PLAN ${request.sql}`);
+      const rows = stmt.all(...sqliteParams(request.params)).map(safeIntegersAsNumbers);
       return { rows };
     } catch (error) {
       throw normalizeSqliteError(error, wasClosedByDriver(this.db));

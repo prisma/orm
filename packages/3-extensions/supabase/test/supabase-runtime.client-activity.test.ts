@@ -61,9 +61,7 @@ describe('a role-bound activity handle', () => {
     const { runtime, driver, started } = createRecordingSetup();
 
     const call = await runtime.forRole(binding)[activitySource].startActivity(testCall);
-    const transaction = await call.transaction?.();
-    await transaction?.execute(stubPlan());
-    await transaction?.commit();
+    await call.transaction?.((tx) => tx.execute(stubPlan()));
     await call.end({ outcome: 'succeeded' });
 
     expect({
@@ -140,7 +138,7 @@ describe('an ended role-bound activity handle', () => {
     await expect(call.query(stubPlan()).toArray()).rejects.toMatchObject({
       code: 'RUNTIME.ACTIVITY_NOT_ACCEPTING_CHILDREN',
     });
-    await expect(call.transaction?.()).rejects.toMatchObject({
+    await expect(call.transaction?.(async () => undefined)).rejects.toMatchObject({
       code: 'RUNTIME.ACTIVITY_NOT_ACCEPTING_CHILDREN',
     });
 

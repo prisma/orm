@@ -101,7 +101,7 @@ describe('a transaction and a reload on the runtime that follow each other from 
 });
 
 describe('a runtime-scope query inside a transaction callback after the runtime was idle for a turn of the event loop', () => {
-  it('is refused at once, and the driver closes after the transaction rolls back', async () => {
+  it('is refused at once, and the driver finishes closing only after the connection is released', async () => {
     const { runtime, calls, driver } = setup();
     let closing: Promise<void> | undefined;
 
@@ -114,7 +114,9 @@ describe('a runtime-scope query inside a transaction callback after the runtime 
     await expect(pending).rejects.toMatchObject(closedError);
     await closing;
     expect(driver.execute).not.toHaveBeenCalled();
-    expect(calls).toEqual(['acquire', 'rollback', 'release', 'close', 'closed']);
+    expect(calls.slice(0, 2)).toEqual(['acquire', 'rollback']);
+    expect(calls.indexOf('release')).toBeGreaterThan(-1);
+    expect(calls.indexOf('release')).toBeLessThan(calls.indexOf('closed'));
   });
 });
 

@@ -95,7 +95,7 @@ function nestedUpdate(runtime: Parameters<typeof orm>[0]['runtime']) {
     .update({ posts: (posts) => posts.connect({ id: 1 }) });
 }
 
-describe('mutation graph with production runtime activities', () => {
+describe('statement graph with production runtime activities', () => {
   it('applies policy and releases a committed graph transaction', async () => {
     const { runtime, connection, transaction } = setup();
     try {

@@ -137,7 +137,7 @@ Code that moves from the Prisma 6 client to the Prisma 8 client reads the same d
 - **Optional fields.** An optional field is typed `T | null`. Prisma 6 leaves an unset optional field out of the document, so a document it wrote can read with the field absent rather than `null`; test for it with `== null`, which covers both.
 - **`Bytes` is a `Uint8Array`**, as in Prisma 6. Write a `Uint8Array`, not a driver `Binary`.
 - **`BigInt` is a `bigint`**, as in Prisma 6, with no precision lost above 2^53.
-- **`Int` stays a `number`.** Prisma 6 stores a plain `Int` (and `Int @db.Long`) as a BSON long and presents it as a `number`. Prisma 8 does the same through the `Int64Number` type (`mongo/int64Number@1`): it reads a stored long as a `number` and writes a `number` back as a long. A value outside ±(2^53 − 1), or a stored fractional number, fails with `RUNTIME.DECODE_FAILED` or `RUNTIME.ENCODE_FAILED` instead of being rounded. `Int @db.Int` is a BSON int (`Int32`), also a `number`.
+- **`Int` stays a `number`.** Prisma 6 stores a plain `Int` (and `Int @db.Long`) as a BSON long and presents it as a `number`. Prisma 8 does the same through `BigInt(as: number)`, the `Int64Number` type (`mongo/int64Number@1`): it reads a stored long as a `number` and writes a `number` back as a long. A value outside ±(2^53 − 1), or a stored fractional number, fails with `RUNTIME.DECODE_FAILED` or `RUNTIME.ENCODE_FAILED` instead of being rounded. `Int @db.Int` is a BSON int (`Int32`), also a `number`.
 - **Native types are read as what they store.** Every native type Prisma 6 accepts on MongoDB gives the field the codec for the BSON type Prisma 6 stores, and most of them store what the plain field stores (`@db.String`, `@db.Bool`, `@db.Double`, `@db.Date`, `@db.BinData`, `@db.Json`, `@db.Long` on `BigInt`). `DateTime @db.Timestamp` is refused: Prisma 8 has no codec for a BSON timestamp.
 - **`Bytes @db.ObjectId` is a hex string.** The field holds an ObjectId, so Prisma 8 reads it as its 24-digit hex string and takes only a hex string (or an ObjectId) when writing it; a 12-byte `Buffer` or `Uint8Array`, which the Prisma 6 client uses, is refused. Convert at the boundary: `Buffer.from(hex, 'hex')` turns the hex string into the 12 bytes, and `bytes.toString('hex')` (or `Buffer.from(bytes).toString('hex')` for a `Uint8Array`) turns the bytes into the hex string.
 - **`Decimal` is a `string`** in Prisma 8, the decimal's text such as `"12.50"`. Prisma 6 refuses `Decimal` on MongoDB, so a schema Prisma 6 accepts has no `Decimal` field.
@@ -251,6 +251,14 @@ export const shoutRuntime: MongoRuntimeExtensionDescriptor<'mongo'> = {
 
 Also exports the `MongoBinding`, `MongoBindingInput`, `MongoClient`, `MongoOptions` and `MongoTargetId` types.
 
+### `@internal/mongo/migration`
+
+Re-exports everything from `@internal/target-mongo/migration`: what a MongoDB `migration.ts` imports. `defineConfig` names this module in `migrations.module`. Published as `@prisma/orm-mongo/migration`.
+
+### `@internal/mongo/contract-types`
+
+Re-exports, as types only, the framework contract types, the MongoDB family contract types and the MongoDB codec types: everything a generated `contract.d.ts` imports. `defineConfig` names this module in `contract.typesModule`. Published as `@prisma/orm-mongo/contract-types`.
+
 ### `@internal/mongo/family`
 
 Re-exports the MongoDB family pack (only needed when using the low-level API; `defineContract` pre-binds this for you).
@@ -258,6 +266,10 @@ Re-exports the MongoDB family pack (only needed when using the low-level API; `d
 ### `@internal/mongo/target`
 
 Re-exports the MongoDB target pack (only needed when using the low-level API; `defineContract` pre-binds this for you).
+
+### `@internal/mongo/init`
+
+The init contribution `prisma orm init` loads after installing the package: its default export is an `InitContribution` (from `@internal/cli/init-contribution`) holding the PSL and TypeScript starter contracts, `db.ts`, the `.env.example` body, the quick reference and README (the `init-*.md` files in `src/init/`, copied into `dist/`), `mongodb` as the driver package init installs, the minimum server version from `@internal/target-mongo/server-version`, and the `--probe-db` probe, which reads `buildInfo` through `mongodb` and answers `version-unreadable` when it holds no version. It has no Prisma 7 quick reference, and `@internal/mongo/config` exports no `prisma7Schema`: Prisma 7 has no MongoDB support. Every module it names is this package's own published name. It imports no framework code that runs. Published as `@prisma/orm-mongo/init`.
 
 ## Related Docs
 

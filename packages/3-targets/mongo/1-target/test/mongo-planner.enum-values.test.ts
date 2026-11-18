@@ -1,4 +1,5 @@
 import type { ResolvedMigrationStatement } from '@internal/framework-components/control';
+import { workspaceMigrationModule } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import type { PlannerProducedMongoMigration } from '../src/core/migrations/planner-produced-migration';
 import {
@@ -101,7 +102,7 @@ const compact = (text: string | undefined) => text?.replace(/\s+/g, '').replace(
 function rendered(result: ReturnType<typeof plan>): readonly string[] {
   if (result.kind !== 'success') throw new Error(JSON.stringify(result.conflicts, null, 2));
   const source = (result.plan as PlannerProducedMongoMigration)
-    .renderTypeScript((specifier) => specifier)
+    .renderTypeScript(workspaceMigrationModule.mongo)
     .replace(/\s+/g, '')
     .replace(/,\}/g, '}');
   return source.match(/(?:replace|remove)StoredValue\(\{(?:[^{}]|\{[^{}]*\})*\}\)/g) ?? [];
@@ -421,7 +422,7 @@ describe('MongoMigrationPlanner, a removed enum value', () => {
     const importsReplace = (result: ReturnType<typeof plan>) => {
       if (result.kind !== 'success') throw new Error('Expected a plan');
       const source = (result.plan as PlannerProducedMongoMigration).renderTypeScript(
-        (specifier) => specifier,
+        workspaceMigrationModule.mongo,
       );
       return /import \{[^}]*\breplaceStoredValue\b[^}]*\}/.test(source);
     };

@@ -83,7 +83,10 @@ export class SqliteDatetimeTemporalCodec extends CodecImpl<
   async toWire(value: Temporal.Instant, _ctx: CodecCallContext): Promise<string> {
     return sqliteDatetimeTemporalEncode(value);
   }
-  async fromWire(wire: string | number, _ctx: CodecCallContext): Promise<Temporal.Instant> {
+  async fromWire(
+    wire: string | number | bigint,
+    _ctx: CodecCallContext,
+  ): Promise<Temporal.Instant> {
     const milliseconds = sqliteInstantMilliseconds(this.id, wire);
     return requireTemporal({ codecId: this.id, operation: 'decode' }).Instant.fromEpochMilliseconds(
       milliseconds,
@@ -134,7 +137,7 @@ export class SqliteDatetimeStringCodec extends CodecImpl<
   async toWire(value: string, _ctx: CodecCallContext): Promise<string> {
     return storedTextForWrite(this.id, value, sqliteDatetimeTextAtMilliseconds);
   }
-  async fromWire(wire: string | number, _ctx: CodecCallContext): Promise<string> {
+  async fromWire(wire: string | number | bigint, _ctx: CodecCallContext): Promise<string> {
     return new Date(sqliteInstantMilliseconds(this.id, wire)).toISOString();
   }
   fromDataTypeValue(value: DataTypeValue<string>): string {

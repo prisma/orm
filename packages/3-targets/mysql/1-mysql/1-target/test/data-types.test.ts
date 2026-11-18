@@ -26,6 +26,7 @@ describe('MySQL data types', () => {
       'mysql/char',
       'mysql/date',
       'mysql/datetime',
+      'mysql/double',
       'mysql/duration',
       'mysql/enum',
       'mysql/int',
@@ -66,6 +67,10 @@ describe('MySQL data types', () => {
       id,
       typeParams,
     });
+  });
+
+  it('claims no reported double, which no authoring name writes yet, so introspection reads a double column as it did before mysql/double existed', () => {
+    expect(resolveReportedSqlType(reported('double'), mysqlDataTypes)).toBeUndefined();
   });
 
   it('claims no reported enum type, which is compared by its catalog text', () => {

@@ -25,7 +25,7 @@ import {
 } from '@internal/sql-relational-core/ast';
 import type { CollectionMethodReceiver } from '@internal/sql-relational-core/collection-methods';
 import { type TraitExpression, toExpr } from '@internal/sql-relational-core/expression';
-import type { Preparable, SqlQueryPlan } from '@internal/sql-relational-core/plan';
+import type { Preparable } from '@internal/sql-relational-core/plan';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import type { SimplifyDeep } from '@internal/utils/simplify-deep';
@@ -41,7 +41,6 @@ import {
 import {
   addressedModel,
   assertDistinctOnCapability,
-  assertInsertConflictSkipCapability,
   assertLockCapability,
   assertReturningCapability,
   columnOfCallerField,
@@ -50,7 +49,6 @@ import {
   isToOneCardinality,
   type ResolvedRelation,
   resolveIncludeRelation,
-  resolveInsertConflictColumns,
   resolveModelTableName,
   resolvePolymorphismInfo,
   resolveUpsertConflictColumns,
@@ -59,7 +57,6 @@ import {
   consumeFirstRow,
   describeCollectionFirst,
   describeCollectionFirstOrThrow,
-  describeCollectionQuery,
   describeCollectionRows,
   runQuery,
 } from './collection-dispatch';
@@ -127,24 +124,13 @@ import {
   isIncludeCombine,
   isIncludeScalar,
 } from './include-descriptors';
+import { assertPreparableIncludes } from './include-strategy';
 import { assertLockCompatible } from './lock-guards';
 import { createModelAccessor, createModelCallbackTools } from './model-accessor';
-import {
-  createAllGraph,
-  createAllVariantGraph,
-  createGraph,
-  deleteAllGraph,
-  deleteFirstGraph,
-  updateAllGraph,
-  updateFirstGraph,
-  upsertGraph,
-} from './mutation-graph/collection-graphs';
-import { Graph } from './mutation-graph/graph';
-import { executeGraph, queryGraph } from './mutation-graph/run-graph';
-import { mtiCreateContextOf, updateValuesOf } from './mutation-graph/storage-rows';
 import { assertCursorCompatibleOrder, assertDistinctOnCompatibleOrder } from './order-by-guards';
 import {
   asPreparedOrmCall,
+  type CallHashInput,
   modelHashInput,
   type OrmCall,
   ormResults,
@@ -160,11 +146,28 @@ import { compileAggregate, type InsertConflictSkip } from './query-plan';
 import { parseMutationInput } from './relation-mutations';
 import type { RelationCollection } from './relation-mutator';
 import {
+  createAllGraph,
+  createAllVariantGraph,
+  createGraph,
+  deleteAllGraph,
+  deleteFirstGraph,
+  updateAllGraph,
+  updateFirstGraph,
+  upsertGraph,
+} from './statement-graph/collection-graphs';
+import { resolveConflict, variantInOwnTableOf } from './statement-graph/conflict-keys';
+import { Graph } from './statement-graph/graph';
+import { describeCollectionRead } from './statement-graph/read-graph';
+import { executeGraph, queryGraph } from './statement-graph/run-graph';
+import { mtiCreateContextOf, updateValuesOf } from './statement-graph/storage-rows';
+import {
   type AggregateBuilder,
   type AggregateIncludeReducers,
   type AggregateResult,
   type AggregateSpec,
+  type CallContext,
   type CollectionContext,
+  type CollectionQueryable,
   type CollectionState,
   type CollectionTypeState,
   type DefaultCollectionTypeState,
@@ -188,7 +191,6 @@ import {
   type RelationTargetNamespace,
   type ResolvedCreateInput,
   type ResolvedScalarCreateInput,
-  type RuntimeQueryable,
   type ScalarUpdateInput,
   type ShorthandWhereFilter,
   type UniqueConstraintCriterion,
@@ -1581,10 +1583,10 @@ export class CollectionBase<
   ): AsyncIterableResult<CollectionRowOf<this>>;
   all(configure?: (meta: MetaBuilder<'read'>) => void): AsyncIterableResult<unknown> {
     const annotations = this.#collectAnnotationsFromMeta(configure, 'read', 'all');
-    const query = describeCollectionQuery<Row>(this.#descriptionOptions());
+    const query = describeCollectionRead<Row>(this.#descriptionOptions());
     return streamOrmCall(
       this.ctx.runtime,
-      this.#readCall('all', annotations, query.plan, ormResults.rows),
+      this.#readCall('all', annotations, query.hashInput, ormResults.rows),
       query.rows,
     );
   }
@@ -1601,6 +1603,7 @@ export class CollectionBase<
     > = {
       aggregate: (fn, configure) => this.#preparedAggregate(fn, configure),
       all: (configure) => {
+        assertPreparableIncludes(this.contract, this.state, 'all');
         const annotations = this.#collectAnnotationsFromMeta(configure, 'read', 'all');
         const description = describeCollectionRows<Row>(this.#descriptionOptions());
         return asPreparedOrmCall(
@@ -1609,6 +1612,7 @@ export class CollectionBase<
         );
       },
       first: (filter, configure) => {
+        assertPreparableIncludes(this.contract, this.state, 'first');
         const scoped = this.#forFirst(filter);
         const annotations = this.#collectAnnotationsFromMeta(configure, 'read', 'first');
         const description = describeCollectionFirst<Row>(scoped.#descriptionOptions());
@@ -1618,6 +1622,7 @@ export class CollectionBase<
         );
       },
       firstOrThrow: (filter, configure) => {
+        assertPreparableIncludes(this.contract, this.state, 'firstOrThrow');
         const scoped = this.#forFirst(filter);
         const annotations = this.#collectAnnotationsFromMeta(configure, 'read', 'firstOrThrow');
         const description = describeCollectionFirstOrThrow<Row>(scoped.#descriptionOptions());
@@ -1674,10 +1679,10 @@ export class CollectionBase<
   #readCall<Result>(
     method: string,
     annotations: Annotations | undefined,
-    plan: () => SqlQueryPlan,
+    hashInput: CallHashInput,
     accepts: (value: unknown) => value is Result,
   ): OrmCall<Result> {
-    return { method, annotations, hashInput: planHashInput(plan), accepts };
+    return { method, annotations, hashInput, accepts };
   }
 
   #writeCall<Result>(
@@ -1693,7 +1698,7 @@ export class CollectionBase<
     };
   }
 
-  #on(queryable: RuntimeQueryable): CollectionContext<TContract> {
+  #on(queryable: CollectionQueryable): CallContext<TContract> {
     return { ...this.ctx, runtime: queryable };
   }
 
@@ -1736,10 +1741,10 @@ export class CollectionBase<
   ): Promise<unknown> {
     const scoped = this.#forFirst(filter);
     const annotations = this.#collectAnnotationsFromMeta(configure, 'read', 'first');
-    const query = describeCollectionQuery<Row>(scoped.#descriptionOptions());
+    const query = describeCollectionRead<Row>(scoped.#descriptionOptions());
     return runOrmCall(
       this.ctx.runtime,
-      this.#readCall('first', annotations, query.plan, ormResults.rowOrNull<Row>),
+      this.#readCall('first', annotations, query.hashInput, ormResults.rowOrNull<Row>),
       (queryable) => consumeFirstRow(query.rows(queryable)),
     );
   }
@@ -1759,10 +1764,10 @@ export class CollectionBase<
   ): Promise<unknown> {
     const scoped = this.#forFirst(filter);
     const annotations = this.#collectAnnotationsFromMeta(configure, 'read', 'firstOrThrow');
-    const query = describeCollectionQuery<Row>(scoped.#descriptionOptions());
+    const query = describeCollectionRead<Row>(scoped.#descriptionOptions());
     return runOrmCall(
       this.ctx.runtime,
-      this.#readCall('firstOrThrow', annotations, query.plan, ormResults.row<Row>),
+      this.#readCall('firstOrThrow', annotations, query.hashInput, ormResults.row<Row>),
       (queryable) => query.rows(queryable).firstOrThrow(),
     );
   }
@@ -1803,7 +1808,7 @@ export class CollectionBase<
       this.#readCall(
         'aggregate',
         annotations,
-        () => description.plan,
+        planHashInput(() => description.plan),
         ormResults.row<AggregateResult<Spec>>,
       ),
       (queryable) => runQuery(queryable, description),
@@ -1954,7 +1959,7 @@ export class CollectionBase<
   }
 
   async #create(
-    queryable: RuntimeQueryable,
+    queryable: CollectionQueryable,
     data:
       | ResolvedCreateInput<TContract, ModelName, State['variantValue'], State['nsId']>
       | MutationCreateInputWithRelations<TContract, ModelName, State['nsId']>,
@@ -2093,7 +2098,7 @@ export class CollectionBase<
     >[],
     method: 'create()' | 'createAll()',
     conflictSkip?: InsertConflictSkip,
-  ): (queryable: RuntimeQueryable) => AsyncIterableResult<Row> {
+  ): (queryable: CollectionQueryable) => AsyncIterableResult<Row> {
     if (data.length === 0) {
       const generator = async function* (): AsyncGenerator<Row, void, unknown> {};
       return () => new AsyncIterableResult(generator());
@@ -2126,45 +2131,31 @@ export class CollectionBase<
     method: string,
   ): InsertConflictSkip | undefined {
     if (options === undefined) return undefined;
-
-    if (options.onConflict !== 'skip') {
-      throw ormError(
-        'ORM.ARGUMENT_INVALID',
-        `${method} onConflict must be "skip"; received ${JSON.stringify(options.onConflict)}`,
-        { meta: { method, model: this.modelName } },
-      );
-    }
-
-    if (method === 'createAll()') {
-      this.#assertConflictSkipNotOnMtiVariant(method);
-    } else {
+    const createAll = method === 'createAll()';
+    if (!createAll) {
       this.#assertNotMtiVariant(method);
     }
-
-    const conflictOn = options.conflictOn ?? [];
-    assertInsertConflictSkipCapability(this.contract, method, conflictOn.length > 0);
-
-    return {
-      columns: resolveInsertConflictColumns(
-        this.contract,
-        this.namespaceId,
-        this.modelName,
-        conflictOn,
-      ),
-    };
+    const { columns } = resolveConflict(
+      this.contract,
+      { action: method, modelName: this.modelName, meta: { method, model: this.modelName } },
+      this.namespaceId,
+      options,
+      createAll
+        ? variantInOwnTableOf(
+            this.contract,
+            this.namespaceId,
+            this.modelName,
+            this.state.variantValue,
+          )
+        : undefined,
+    );
+    return { columns };
   }
 
   #assertNotMtiVariant(method: string): void {
     this.#refuseOnMtiVariant(
       method,
       `${method} is not supported for MTI variant "${this.#variantModelName()}" on model "${this.modelName}". Use createAll() instead.`,
-    );
-  }
-
-  #assertConflictSkipNotOnMtiVariant(method: string): void {
-    this.#refuseOnMtiVariant(
-      method,
-      `The onConflict option is not supported on variant "${this.#variantModelName()}" of model "${this.modelName}" because the variant is stored in its own table. Call createAll(rows) without the option; a duplicate row then makes the call fail.`,
     );
   }
 
@@ -2417,7 +2408,7 @@ export class CollectionBase<
   }
 
   async #update(
-    queryable: RuntimeQueryable,
+    queryable: CollectionQueryable,
     data: MutationUpdateInput<TContract, ModelName, State['nsId']>,
   ): Promise<Row | null> {
     const input = blindCast<

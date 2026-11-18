@@ -5,6 +5,7 @@ import {
   sqliteBigintDescriptor,
   sqliteBlobDescriptor,
   sqliteIntegerDescriptor,
+  sqliteJsonDescriptor,
   sqliteRealDescriptor,
   sqliteSqlFloatDescriptor,
   sqliteSqlIntDescriptor,
@@ -31,8 +32,9 @@ describe('SQLite codec JSON representations', () => {
   it('rejects a malformed string wire with a structured decode error', async () => {
     await expect(bigintCodec.fromWire('not-a-number', {})).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
-      message: 'sqlite/bigint@1 wire value must be a decimal string',
-      meta: { codecId: 'sqlite/bigint@1' },
+      message:
+        'A sqlite/bigint@1 value is "not-a-number", which is not stored as a 64-bit integer. sqlite/bigint@1 reads integers from -9223372036854775808 to 9223372036854775807.',
+      meta: { codecId: 'sqlite/bigint@1', received: 'not-a-number' },
     });
   });
 });
@@ -54,11 +56,12 @@ describe('SQLite codecs read the value an include carries', () => {
     await expect(integer.fromWire('9007199254740993', ctx)).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
       message:
-        'sqlite/integer@1 value must be an integer within the safe integer range, got 9007199254740993',
+        'A sqlite/integer@1 value is "9007199254740993", which is not an integer within the safe integer range. sqlite/integer@1 reads integers from -9007199254740991 to 9007199254740991.',
     });
     await expect(sqlInt.fromWire('4.5', ctx)).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
-      message: 'sql/int@1 wire value must be an integer or its decimal text',
+      message:
+        'A sql/int@1 value is "4.5", which is not an integer within the safe integer range. sql/int@1 reads integers from -9007199254740991 to 9007199254740991.',
     });
   });
 
@@ -67,7 +70,9 @@ describe('SQLite codecs read the value an include carries', () => {
     expect(await sqlFloat.fromWire('-Infinity', ctx)).toBe(Number.NEGATIVE_INFINITY);
     await expect(real.fromWire('NaN', ctx)).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
-      message: 'sqlite/real@1 wire value must be a number, or the text Infinity or -Infinity',
+      message:
+        'A sqlite/real@1 value is "NaN", which is not a number. sqlite/real@1 reads a number, or the text Infinity or -Infinity.',
+      meta: { codecId: 'sqlite/real@1', received: 'NaN' },
     });
   });
 
@@ -77,44 +82,146 @@ describe('SQLite codecs read the value an include carries', () => {
   });
 
   it.each([
-    ['text, which a BLOB column outside a STRICT table holds as text', 'ABCD'],
-    ['a number', 42],
-    ['lowercase hex', ['0abc']],
-  ])('sqlite/blob@1 refuses %s', async (_name, wire) => {
+    ['text, which a BLOB column outside a STRICT table holds as text', 'ABCD', '"ABCD"', 'ABCD'],
+    ['a number', 42, '42', '42'],
+    ['lowercase hex', ['0abc'], "bytes x'0abc'", "x'0abc'"],
+  ])('sqlite/blob@1 refuses %s', async (_name, wire, shown, received) => {
     await expect(blob.fromWire(wire as never, ctx)).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
-      message:
-        'sqlite/blob@1 wire value must be bytes, or the array of their hex text an include carries',
+      message: `A sqlite/blob@1 value is ${shown}, which is not a blob. sqlite/blob@1 reads a blob's bytes.`,
+      meta: { codecId: 'sqlite/blob@1', received },
     });
   });
 
   it.each([
-    ['sqlite/integer@1', integer, 'abc'],
-    ['sqlite/integer@1', integer, new Uint8Array([0x00, 0xff])],
-    ['sql/int@1', sqlInt, 'abc'],
-    ['sql/int@1', sqlInt, new Uint8Array([0x00, 0xff])],
+    ['sqlite/integer@1', integer, 'abc', '"abc"', 'abc'],
+    ['sqlite/integer@1', integer, new Uint8Array([0x35]), "bytes x'35'", "x'35'"],
+    ['sqlite/integer@1', integer, new Uint8Array([0x00, 0xff]), "bytes x'00FF'", "x'00FF'"],
+    ['sqlite/integer@1', integer, ['35'], "bytes x'35'", "x'35'"],
+    ['sql/int@1', sqlInt, 'abc', '"abc"', 'abc'],
+    ['sql/int@1', sqlInt, new Uint8Array([0x35]), "bytes x'35'", "x'35'"],
+    ['sql/int@1', sqlInt, new Uint8Array([0x00, 0xff]), "bytes x'00FF'", "x'00FF'"],
+    ['sql/int@1', sqlInt, ['35'], "bytes x'35'", "x'35'"],
   ])(
     '%s refuses %j, which an INTEGER column outside a STRICT table can hold',
-    async (codecId, codec, wire) => {
+    async (codecId, codec, wire, shown, received) => {
       await expect(codec.fromWire(wire as never, ctx)).rejects.toMatchObject({
         code: 'RUNTIME.DECODE_FAILED',
-        message: `${codecId} wire value must be an integer or its decimal text`,
+        message: `A ${codecId} value is ${shown}, which is not an integer within the safe integer range. ${codecId} reads integers from -9007199254740991 to 9007199254740991.`,
+        meta: { codecId, received },
       });
     },
   );
 
   it.each([
-    ['sqlite/real@1', real, 'abc'],
-    ['sqlite/real@1', real, new Uint8Array([0x00, 0xff])],
-    ['sql/float@1', sqlFloat, 'abc'],
-    ['sql/float@1', sqlFloat, new Uint8Array([0x00, 0xff])],
+    ['sqlite/real@1', real],
+    ['sql/float@1', sqlFloat],
   ])(
-    '%s refuses %j, which a REAL column outside a STRICT table can hold',
-    async (codecId, codec, wire) => {
-      await expect(codec.fromWire(wire as never, ctx)).rejects.toMatchObject({
+    '%s refuses text, which a REAL column outside a STRICT table can hold',
+    async (codecId, codec) => {
+      await expect(codec.fromWire('abc' as never, ctx)).rejects.toMatchObject({
         code: 'RUNTIME.DECODE_FAILED',
-        message: `${codecId} wire value must be a number, or the text Infinity or -Infinity`,
+        message: `A ${codecId} value is "abc", which is not a number. ${codecId} reads a number, or the text Infinity or -Infinity.`,
+        meta: { codecId, received: 'abc' },
       });
     },
   );
+
+  it.each([
+    ['sqlite/real@1', real, new Uint8Array([0x00, 0xff]), "x'00FF'"],
+    ['sqlite/real@1', real, ['35'], "x'35'"],
+    ['sql/float@1', sqlFloat, new Uint8Array([0x00, 0xff]), "x'00FF'"],
+    ['sql/float@1', sqlFloat, ['35'], "x'35'"],
+  ])('%s refuses the blob %j', async (codecId, codec, wire, received) => {
+    await expect(codec.fromWire(wire as never, ctx)).rejects.toMatchObject({
+      code: 'RUNTIME.DECODE_FAILED',
+      message: `A ${codecId} value is bytes ${received}, which is not a number. ${codecId} reads a number, or the text Infinity or -Infinity.`,
+      meta: { codecId, received },
+    });
+  });
+
+  it.each([
+    ['sqlite/real@1', real],
+    ['sql/float@1', sqlFloat],
+  ])(
+    '%s reads an integer outside the safe range as the nearest number',
+    async (_codecId, codec) => {
+      expect(await codec.fromWire(2n ** 60n + 1n, ctx)).toBe(2 ** 60);
+    },
+  );
+
+  it.each([
+    ['sqlite/integer@1', integer],
+    ['sql/int@1', sqlInt],
+  ])(
+    '%s reads an exact integer within the safe range and refuses one outside it',
+    async (codecId, codec) => {
+      expect(await codec.fromWire(-9007199254740991n, ctx)).toBe(-9007199254740991);
+      await expect(codec.fromWire(9007199254740993n, ctx)).rejects.toMatchObject({
+        code: 'RUNTIME.DECODE_FAILED',
+        message: `A ${codecId} value is 9007199254740993, which is not an integer within the safe integer range. ${codecId} reads integers from -9007199254740991 to 9007199254740991.`,
+        meta: { codecId, received: '9007199254740993' },
+      });
+    },
+  );
+
+  it.each([
+    ['sqlite/integer@1', integer],
+    ['sql/int@1', sqlInt],
+  ])('%s refuses a stored real in a row', async (codecId, codec) => {
+    await expect(codec.fromWire(1.5, ctx)).rejects.toMatchObject({
+      code: 'RUNTIME.DECODE_FAILED',
+      message: `A ${codecId} value is 1.5, which is not an integer within the safe integer range. ${codecId} reads integers from -9007199254740991 to 9007199254740991.`,
+    });
+  });
+
+  it.each([
+    ['text', 'a'.repeat(150), `"${'a'.repeat(100)}..."`, `${'a'.repeat(100)}...`],
+    ['a blob', new Uint8Array(80), `bytes x'${'0'.repeat(100)}...'`, `x'${'0'.repeat(100)}...'`],
+    [
+      'a blob as an include carries it',
+      ['0'.repeat(160)],
+      `bytes x'${'0'.repeat(100)}...'`,
+      `x'${'0'.repeat(100)}...'`,
+    ],
+  ])(
+    'shows the first 100 characters of %s it cannot read, marked as cut',
+    async (_name, wire, shown, received) => {
+      await expect(integer.fromWire(wire as never, ctx)).rejects.toMatchObject({
+        message: `A sqlite/integer@1 value is ${shown}, which is not an integer within the safe integer range. sqlite/integer@1 reads integers from -9007199254740991 to 9007199254740991.`,
+        meta: { received },
+      });
+    },
+  );
+
+  it.each([
+    ['text', 'a'.repeat(100), `"${'a'.repeat(100)}"`, 'a'.repeat(100)],
+    ['a blob', new Uint8Array(50), `bytes x'${'0'.repeat(100)}'`, `x'${'0'.repeat(100)}'`],
+  ])('shows %s of 100 characters whole', async (_name, wire, shown, received) => {
+    await expect(integer.fromWire(wire as never, ctx)).rejects.toMatchObject({
+      message: `A sqlite/integer@1 value is ${shown}, which is not an integer within the safe integer range. sqlite/integer@1 reads integers from -9007199254740991 to 9007199254740991.`,
+      meta: { received },
+    });
+  });
+});
+
+describe('sqlite/json@1 reading a stored value', () => {
+  const json = sqliteJsonDescriptor.factory()({ name: 'test' });
+  const column = { table: 'documents', name: 'body' };
+
+  it('reads JSON text as the document it holds', async () => {
+    expect(await json.fromWire('{"a":[1,"b"]}', { column })).toEqual({ a: [1, 'b'] });
+  });
+
+  it.each([
+    ['text that is not JSON', 'abc', '"abc"', 'abc'],
+    ['a blob', new Uint8Array([0x7b]), "bytes x'7B'", "x'7B'"],
+    ['a blob, as an include carries it', ['7B'], "bytes x'7B'", "x'7B'"],
+  ])('refuses %s, naming its column', async (_name, wire, shown, received) => {
+    await expect(json.fromWire(wire as never, { column })).rejects.toMatchObject({
+      code: 'RUNTIME.DECODE_FAILED',
+      message: `Column "documents"."body" holds ${shown}, which is not JSON text. sqlite/json@1 reads JSON text as the document it holds.`,
+      meta: { codecId: 'sqlite/json@1', table: 'documents', column: 'body', received },
+    });
+  });
 });

@@ -15,7 +15,7 @@ const contract = defineContract({
       fields: {
         _id: field.scalar(type.ObjectId()),
         title: field.scalar(type.String()),
-        size: field.scalar(type.Int64()),
+        size: field.scalar(type.Int64BigInt()),
         raw: field.scalar(type.Bson()),
       },
     }),

@@ -9,9 +9,9 @@ Each slice is one PR, branched from `main`. A slice starts only after the one be
 | # | Slice | Linear | State |
 | --- | --- | --- | --- |
 | 1 | PostgreSQL `Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean`, `Bytes`; explicit renames with deprecated aliases; ADR 316 | TML-3715 | Merged, prisma/orm#30942 |
-| 2 | PostgreSQL `Json` as a convenience type that defaults to `json`; explicit name `PlainJson`; `jsonColumn` renamed; `sql.String` renamed `sql.Varchar`; ADR 316 amended; the duplicate ADR 316 renumbered | TML-3789, reopened with this scope | Not started |
-| 3 | MongoDB convenience types; `Int`, `Float` and `Boolean` stop being deprecated; the deprecation warning fires wherever a deprecated name is written; `type.Int64()` removed with an upgrade instruction; new ADR with the shared rules and MongoDB's table | TML-3790 | Not started |
-| 4 | SQLite convenience types and explicit renames; new `Boolean` and `Decimal` codecs; column helpers renamed; shared decimal and boolean value code | TML-3790, TML-3562, TML-3782 | Not started |
+| 2 | PostgreSQL `Json` as a convenience type that defaults to `json`; explicit name `PlainJson`; `jsonColumn` renamed; `sql.String` renamed `sql.Varchar`; ADR 316 amended; the duplicate ADR 316 renumbered | TML-3789 | Merged, prisma/orm#31065 |
+| 3 | MongoDB convenience types; `Int`, `Float` and `Boolean` stop being deprecated; the deprecation warning fires wherever a deprecated name is written; `type.Int64()` removed with an upgrade instruction; new ADR with the shared rules and MongoDB's table | TML-3790 | Merged, prisma/orm#31067 |
+| 4 | SQLite convenience types and explicit renames; new `Boolean` and `Decimal` codecs; column helpers renamed; shared decimal and boolean value code | TML-3790, TML-3562, TML-3782 | In progress |
 | 5 | MySQL convenience types for all eight names, with the codecs it lacks: bigint as number, float, double, decimal, boolean, bytes and JSON; the plain-JSON check shared with MongoDB | TML-3790, TML-3783 | Not started |
 | 6 | Close-out: final retro, definition-of-done evidence, long-lived docs checked, this folder deleted | TML-3715 | Not started |
 
@@ -42,3 +42,7 @@ The architect and principal engineer design reviews of 2026-11-17 are in `review
 - A ticket for clearer errors where a PostgreSQL `json` field hits a limit.
 - Correct the closing comment on prisma/orm#30966 and the description of TML-3789, which say `Json` gets no convenience type.
 - Branch `tml-3789-json-stays-explicit` holds a handover and a decision record that this spec replaces. It is not merged.
+
+## Follow-ups to file at close-out
+
+- The deprecation warner exists in both the SQL and MongoDB PSL interpreters (`deprecated-type-names.ts` in each) because a shared home would be the framework; move it to `@internal/psl-parser/interpret` when a framework change is allowed.

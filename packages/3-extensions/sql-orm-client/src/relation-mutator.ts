@@ -5,6 +5,7 @@ import type {
   CollectionState,
   FilteredRelationMutator,
   MutationCreateInput,
+  NestedCreateOptions,
   RelationMutation,
   RelationMutationConnect,
   RelationMutationCreate,
@@ -54,23 +55,41 @@ export function createRelationMutator<
       data:
         | MutationCreateInput<TContract, ModelName>
         | readonly MutationCreateInput<TContract, ModelName>[],
+      options?: NestedCreateOptions<TContract, ModelName>,
     ) {
       const rows = Array.isArray(data) ? [...data] : [data];
       return {
         kind: 'create',
         data: rows,
+        ...ifDefined('options', options),
       } as RelationMutationCreate<TContract, ModelName>;
     },
     variant(value: string) {
-      const { variantValue } = related.variant(value).state;
+      const variantCollection = related.variant(value);
+      const { state } = variantCollection;
+      const { variantValue } = state;
       return {
+        ...createFilteredRelationMutator<TContract, ModelName>(variantCollection),
         create: (
           data:
             | MutationCreateInput<TContract, ModelName>
             | readonly MutationCreateInput<TContract, ModelName>[],
+          options?: NestedCreateOptions<TContract, ModelName>,
         ): RelationMutationCreate<TContract, ModelName> => ({
-          ...mutator.create(data),
+          ...mutator.create(data, options),
           ...ifDefined('variant', variantValue),
+        }),
+        connect: (
+          criteria: Record<string, unknown> | readonly Record<string, unknown>[],
+        ): RelationMutationConnect<TContract, ModelName> => ({
+          ...mutator.connect(criteria),
+          state,
+        }),
+        disconnect: (
+          criteria?: readonly Record<string, unknown>[],
+        ): RelationMutationDisconnect<TContract, ModelName> => ({
+          ...mutator.disconnect(criteria),
+          state,
         }),
       };
     },

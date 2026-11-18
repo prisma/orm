@@ -24,7 +24,7 @@ The published packages all release in lockstep at the workspace version:
 
 **Publishability is a directory property.** Everything under `packages/9-public/` is publishable and nothing else is; `pnpm lint:publishability` enforces both directions. One module lives in exactly one published package — shells re-export, never copy — so `instanceof` and shared-registry identity hold across package boundaries.
 
-The canonical internal-package → shell-entrypoint mapping is code, not prose: [`packages/0-shared/publish-surface/src/shells.ts`](../../packages/0-shared/publish-surface/src/shells.ts). Emitters and generators resolve published import specifiers through it; do not hand-maintain a copy of that table here or anywhere else.
+The canonical internal-package → shell-entrypoint mapping is code, not prose: [`packages/0-shared/publish-surface/src/shells.ts`](../../packages/0-shared/publish-surface/src/shells.ts). The build of the published packages and the publish checks read it; do not hand-maintain a copy of that table here or anywhere else. Nothing that emits or scaffolds a file reads it: a generated file imports from the modules its config names, and `prisma orm init` names the target package it installs.
 
 ## Directory structure
 

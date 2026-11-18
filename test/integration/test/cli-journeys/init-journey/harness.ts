@@ -107,8 +107,8 @@ export interface JourneyProject {
   readonly cell: CellId;
   /** Result of the `prisma orm init` invocation that materialised the project. */
   readonly initResult: CommandRun;
-  /** Result of the `pnpm install` invocation, or `null` when install was skipped. */
-  readonly installResult: CommandRun | null;
+  /** Result of the `pnpm install` invocation that ran before `init`. */
+  readonly installResult: CommandRun;
   /** Tear down the tmpdir (idempotent). */
   cleanup(): void;
 }
@@ -119,36 +119,26 @@ export interface StepResult extends CommandRun {
   readonly command: string;
 }
 
-interface CreateJourneyProjectOptions {
-  /**
-   * Whether to run `pnpm install` after the scaffold lands. The install
-   * resolves every `@internal/*` dep against the workspace tarballs at
-   * {@link TARBALL_CACHE_DIR} and uses `node-linker=isolated` so transitive
-   * workspace packages are not hoisted into the tmpdir's top-level
-   * `node_modules` — the exact pnpm layout that TML-2485 broke under.
-   * Defaults to `true`.
-   */
-  readonly install?: boolean;
-}
-
 /**
  * Materialises a fresh project tmpdir, writes a minimal `package.json` (init
- * requires one to attach to), runs `prisma orm init --target <t> --authoring
- * <a> --yes --skip-install` via the workspace-built CLI binary as a real
- * subprocess, then optionally runs `pnpm install` against the workspace's
- * pre-packed tarballs with `node-linker=isolated`.
+ * requires one to attach to), runs `pnpm install` against the workspace's
+ * pre-packed tarballs with `node-linker=isolated`, then runs `prisma orm init
+ * --target <t> --authoring <a> --yes --skip-install` via the workspace-built
+ * CLI binary as a real subprocess.
+ *
+ * The install comes first because `init` writes the project from the target
+ * package's init contribution, so the package must be installed before it
+ * runs; under `--skip-install` init refuses a project without it. The install
+ * resolves every `@internal/*` dep against the workspace tarballs at
+ * {@link TARBALL_CACHE_DIR}, so `init`'s own install, which would reach the
+ * registry, is skipped.
  *
  * The install step is what keeps TML-2485-class bugs (pnpm's isolated linker
  * hiding transitive workspace packages from the user's top-level
  * `node_modules`) in the failure surface. A shortcut using the workspace's
  * hoisted `node_modules` would silently mask them.
  */
-export async function createJourneyProject(
-  cell: CellId,
-  options: CreateJourneyProjectOptions = {},
-): Promise<JourneyProject> {
-  const { install = true } = options;
-
+export async function createJourneyProject(cell: CellId): Promise<JourneyProject> {
   const dir = mkdtempSync(join(tmpdir(), `pn-journey-${cell.target}-${cell.authoring}-`));
   // Once the tmpdir exists, any thrown setup step (package.json
   // rewrite, tarball prep, install) would otherwise leak `dir` because
@@ -156,6 +146,12 @@ export async function createJourneyProject(
   // setup in try/catch and remove `dir` before rethrowing.
   try {
     writeMinimalPackageJson(dir);
+
+    const tarballs = await prepareWorkspaceTarballs();
+    rewritePackageJsonForTarballs(dir, cell, tarballs);
+    writeIsolatedNpmrc(dir);
+    const installResult = await runPnpm(['install', '--no-frozen-lockfile'], dir);
+    writeFileSync(join(dir, PROJECT_CLI_FILE), PROJECT_CLI_SOURCE, 'utf-8');
 
     const target = cell.target === 'mongo' ? 'mongodb' : 'postgres';
     const initResult = await runNode(
@@ -172,15 +168,6 @@ export async function createJourneyProject(
       ],
       dir,
     );
-
-    let installResult: CommandRun | null = null;
-    if (install && initResult.exitCode === 0) {
-      const tarballs = await prepareWorkspaceTarballs();
-      rewritePackageJsonForTarballs(dir, cell, tarballs);
-      writeIsolatedNpmrc(dir);
-      installResult = await runPnpm(['install', '--no-frozen-lockfile'], dir);
-      writeFileSync(join(dir, PROJECT_CLI_FILE), PROJECT_CLI_SOURCE, 'utf-8');
-    }
 
     return {
       dir,

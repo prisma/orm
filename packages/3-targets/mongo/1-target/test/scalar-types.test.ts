@@ -1,5 +1,7 @@
 import {
   assembleDataTypeSupport,
+  findAuthoringTypeChoiceCall,
+  instantiateAuthoringTypeCall,
   instantiateAuthoringTypeConstructorFromValues,
   readWrittenValueAs,
 } from '@internal/framework-components/authoring';
@@ -12,32 +14,40 @@ import { mongoTargetDescriptorMeta } from '../src/core/descriptor-meta';
 import mongoTargetPack from '../src/exports/pack';
 
 const expectedScalars = [
-  ['String', 'mongo/string@1'],
+  ['BsonString', 'mongo/string@1'],
   ['Int32', 'mongo/int32@1'],
   ['Bool', 'mongo/bool@1'],
   ['ObjectId', 'mongo/objectId@1'],
   ['Double', 'mongo/double@1'],
-  ['Int64', 'mongo/int64@1'],
+  ['Int64BigInt', 'mongo/int64@1'],
   ['Int64Number', 'mongo/int64Number@1'],
   ['Decimal128', 'mongo/decimal128@1'],
   ['Binary', 'mongo/binary@1'],
 ] as const;
 
-const deprecatedAliases = [
-  ['Int', 'Int32'],
-  ['Float', 'Double'],
-  ['Boolean', 'Bool'],
-] as const;
+const deprecatedAliases = [['Int64', 'Int64BigInt']] as const;
+
+const convenienceTypes = [
+  'Int',
+  'BigInt',
+  'Float',
+  'Decimal',
+  'Boolean',
+  'Bytes',
+  'String',
+  'Json',
+];
 
 describe('mongoScalarAuthoringTypes', () => {
   it('pins every base scalar as a zero-arg type constructor naming its codec', () => {
     expect(Object.keys(mongoScalarAuthoringTypes).sort()).toEqual(
       [
         ...expectedScalars.map(([name]) => name),
-        'Json',
+        'PlainJson',
         'Bson',
         'Vector',
         ...deprecatedAliases.map(([name]) => name),
+        ...convenienceTypes,
       ].sort(),
     );
     for (const [name, codecId] of expectedScalars) {
@@ -61,15 +71,23 @@ describe('mongoScalarAuthoringTypes', () => {
   );
 
   it.each([
-    ['String', 'string'],
+    ['BsonString', 'string'],
     ['Int32', 'int'],
-    ['Int64', 'long'],
+    ['Int64BigInt', 'long'],
+    ['Int64Number', 'long'],
     ['Double', 'double'],
     ['Decimal128', 'decimal'],
     ['Bool', 'bool'],
     ['ObjectId', 'objectId'],
     ['Binary', 'binData'],
     ['Vector', 'array'],
+    ['Int', 'int'],
+    ['BigInt', 'long'],
+    ['Float', 'double'],
+    ['Decimal', 'decimal'],
+    ['Boolean', 'bool'],
+    ['Bytes', 'binData'],
+    ['String', 'string'],
   ] as const)('documents %s by the BSON type it is stored as', (name, bsonType) => {
     expect(mongoScalarAuthoringTypes[name].documentation).toContain(`stored as BSON ${bsonType}`);
   });
@@ -86,7 +104,7 @@ describe('mongoScalarAuthoringTypes', () => {
       'bool',
       'null',
     ]);
-    expect(mongoScalarAuthoringTypes.Json.output).toEqual({ codecId: 'mongo/json@1' });
+    expect(mongoScalarAuthoringTypes.PlainJson.output).toEqual({ codecId: 'mongo/json@1' });
   });
 
   it('pins Bson, whose codec declares no BSON type, to the bson native type', () => {
@@ -123,6 +141,79 @@ describe('mongoScalarAuthoringTypes', () => {
       scalars: mongoScalarTypeConstructors,
       temporal: ['CreatedAt', 'UpdatedAt'],
     });
+  });
+});
+
+const convenienceRows = [
+  ['Int', [], 'Int32', 'mongo/int32@1'],
+  ['Int', ['int'], 'Int32', 'mongo/int32@1'],
+  ['BigInt', [], 'Int64BigInt', 'mongo/int64@1'],
+  ['BigInt', ['bigint', 'long'], 'Int64BigInt', 'mongo/int64@1'],
+  ['BigInt', ['number'], 'Int64Number', 'mongo/int64Number@1'],
+  ['BigInt', ['number', 'long'], 'Int64Number', 'mongo/int64Number@1'],
+  ['Float', [], 'Double', 'mongo/double@1'],
+  ['Float', ['double'], 'Double', 'mongo/double@1'],
+  ['Decimal', [], 'Decimal128', 'mongo/decimal128@1'],
+  ['Decimal', ['decimal'], 'Decimal128', 'mongo/decimal128@1'],
+  ['Boolean', [], 'Bool', 'mongo/bool@1'],
+  ['Boolean', ['bool'], 'Bool', 'mongo/bool@1'],
+  ['Bytes', [], 'Binary', 'mongo/binary@1'],
+  ['Bytes', ['binData'], 'Binary', 'mongo/binary@1'],
+  ['String', [], 'BsonString', 'mongo/string@1'],
+  ['String', ['string'], 'BsonString', 'mongo/string@1'],
+  ['Json', ['bson'], 'PlainJson', 'mongo/json@1'],
+  ['Json', [], 'PlainJson', 'mongo/json@1'],
+] as const;
+
+describe('the MongoDB scalar convenience types', () => {
+  it('are type choices, none deprecated', () => {
+    expect(
+      Object.fromEntries(
+        convenienceTypes.map((name) => {
+          const descriptor =
+            mongoScalarAuthoringTypes[name as keyof typeof mongoScalarAuthoringTypes];
+          return [name, [descriptor.kind, 'deprecated' in descriptor]];
+        }),
+      ),
+    ).toEqual(Object.fromEntries(convenienceTypes.map((name) => [name, ['typeChoice', false]])));
+  });
+
+  it.each(convenienceRows)('%s(%j) is %s, on %s', (name, args, explicit, codecId) => {
+    expect(instantiateAuthoringTypeCall(mongoScalarTypeConstructors, name, args)).toEqual({
+      codecId,
+    });
+    expect(instantiateAuthoringTypeCall(mongoScalarTypeConstructors, explicit, [])).toEqual({
+      codecId,
+    });
+  });
+
+  it.each([
+    ['Int', ['long']],
+    ['BigInt', ['string']],
+    ['BigInt', ['number', 'int']],
+    ['Json', ['string']],
+    ['String', ['bson']],
+  ])('refuse %s(%j), which no row lists', (name, args) => {
+    expect(() => instantiateAuthoringTypeCall(mongoScalarTypeConstructors, name, args)).toThrow();
+  });
+
+  it.each([
+    ['Int32', { path: ['Int'], args: [] }],
+    ['Int64BigInt', { path: ['BigInt'], args: [] }],
+    ['Int64Number', { path: ['BigInt'], args: [{ name: 'as', value: 'number' }] }],
+    ['Double', { path: ['Float'], args: [] }],
+    ['Decimal128', { path: ['Decimal'], args: [] }],
+    ['Bool', { path: ['Boolean'], args: [] }],
+    ['Binary', { path: ['Bytes'], args: [] }],
+    ['BsonString', { path: ['String'], args: [] }],
+    ['PlainJson', { path: ['Json'], args: [] }],
+  ])('write %s as the convenience call %j', (explicit, call) => {
+    expect(
+      findAuthoringTypeChoiceCall({
+        namespace: mongoScalarTypeConstructors,
+        call: { path: [explicit], args: [] },
+      }),
+    ).toEqual({ ...call, becomes: { path: [explicit], args: [] } });
   });
 });
 

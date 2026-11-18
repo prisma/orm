@@ -32,7 +32,7 @@ $ prisma orm init --target @microsoft/prisma-orm-mssql
 ```
 
 ```ts
-import type { Contract as ContractType } from '@microsoft/prisma-orm-mssql/generated-types';
+import type { Contract as ContractType } from '@microsoft/prisma-orm-mssql/contract-types';
 ```
 
 `prisma orm init --target postgres` behaves as it does today, through the same mechanism. The package name and output text above are illustrations; the SQL Server team chooses their package name.
@@ -48,13 +48,13 @@ Each has its own design record in this folder.
 
 ### Generated files import from the module the target package names
 
-[adrs/generated-files-import-from-the-target-package.md](adrs/generated-files-import-from-the-target-package.md)
+[Generated files import from the module the target package names](../../docs/architecture%20docs/adrs/ADR%20324%20-%20Generated%20files%20import%20from%20the%20module%20the%20target%20package%20names.md)
 
 The config a target package's `defineConfig` builds says which module `contract.d.ts` imports its types from and which module a rendered `migration.ts` imports from. The emitter writes those names. It no longer reads the application's `package.json`, and no table of Prisma's package names is consulted when a file is generated.
 
 ### `init` gets everything about a target from the target's package
 
-[adrs/init-contribution.md](adrs/init-contribution.md)
+[ADR 325 - init gets everything about a target from the target package](../../docs/architecture%20docs/adrs/ADR%20325%20-%20init%20gets%20everything%20about%20a%20target%20from%20the%20target%20package.md)
 
 A target package exports an init contribution: its label, starter contract, `db.ts` content, environment example, driver packages, quick reference text and an optional server probe. `init` resolves the package, installs it, loads the contribution and then writes files. The package is named by a short name from a list the CLI holds of packages Prisma vouches for, or by its npm package name.
 
@@ -89,18 +89,25 @@ A target package exports an init contribution: its label, starter contract, `db.
 
 ## Adapter and target impact
 
-- **Postgres and MongoDB facades**: each gains a module for generated types, names it and its migration module in `defineConfig`, and gains an `init` entrypoint holding the templates that move out of the CLI.
-- **SQLite and MySQL facades**: each names its generated-types and migration modules in `defineConfig`, and gains an `init` entrypoint. Neither is in the list of known packages, so they are the first real users of `init` by package name: `prisma orm init --target @prisma/orm-sqlite`.
-- **MariaDB facade**: names its generated-types and migration modules in `defineConfig`. No init contribution, because it has no runtime client.
+- **Postgres and MongoDB facades**: each gains a contract types module, names it and its migration module in `defineConfig`, and gains an `init` entrypoint holding the templates that move out of the CLI.
+- **SQLite and MySQL facades**: each names its contract-types and migration modules in `defineConfig`, and gains an `init` entrypoint. Neither is in the list of known packages, so they are the first real users of `init` by package name: `prisma orm init --target @prisma/orm-sqlite`.
+- **MariaDB facade**: names its contract-types and migration modules in `defineConfig`. No init contribution, because it has no runtime client.
 - **Target renderers** stop naming a module themselves and use the one the config gives.
 - **Extensions** state the module their types come from as the published name.
 
 ## Framework impact
 
-Both changes touch `packages/1-framework`, which the repository rule says not to change without the operator's decision. The operator directed both. The additions are:
+Both changes touch `packages/1-framework`, which the repository rule says not to change without the operator's decision. The operator directed both. What changes there:
 
-- two optional members inside existing config sections: the module for generated contract types in the `contract` section, and the module for migration files in the `migrations` section;
-- the init contribution interface, exported from the CLI package.
+- **Added:** two optional members inside existing config sections: the module for generated contract types in the `contract` section, and the module for migration files in the `migrations` section.
+- **Added:** the init contribution interface, exported from the CLI package.
+- **Unchanged:** a component's declaration of the types it contributes (`TypesImportSpec`). Every component, a target and an adapter included, still names a module.
+- **Changed:** the emission and migration-rendering interfaces take the module name from the config where they took a function that translated private module names. That function, and the code that chose an import root from the application's manifest, are removed.
+- **Changed:** a family's `getFamilyImports` returns import requirements as data where it returned lines of import text.
+- **Changed:** the config loader refuses a module name that is a path or a URL.
+- **Changed:** an emitted contract no longer records where an extension's types are imported from.
+- **Changed:** names in generated files are sorted by UTF-16 code unit where they were sorted by the machine's locale, so output is the same on every machine.
+- **Added and removed error codes:** `CONFIG.CONTRACT_TYPES_MODULE_MISSING` and `CONFIG.MIGRATION_MODULE_MISSING` are added. `CLI.PROJECT_MANIFEST_INVALID` and `CLI.PROJECT_MANIFEST_UNREADABLE` are removed.
 
 No new descriptor field, registry or runtime interface.
 

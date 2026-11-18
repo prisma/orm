@@ -17,6 +17,7 @@ const transactionOptionsSchema = type({
 
 export function validateTransactionOptions(
   options: MysqlTransactionOptions | undefined,
+  targetId: string,
 ): MysqlTransactionOptions | undefined {
   if (options === undefined) return undefined;
   const result = transactionOptionsSchema(options);
@@ -24,7 +25,7 @@ export function validateTransactionOptions(
     throw mysqlClientError('RUNTIME.ARGUMENT_INVALID', 'Invalid transaction options', {
       why: result.summary,
       fix: 'Pass an isolationLevel of ReadUncommitted, ReadCommitted, RepeatableRead, or Serializable, or leave it unset. Timeout must be an integer from 1 to 2147483647 milliseconds; null disables it.',
-      meta: { extension: 'mysql', argument: 'transactionOptions', received: options },
+      meta: { extension: targetId, argument: 'transactionOptions', received: options },
     });
   }
   return result;
@@ -33,13 +34,13 @@ export function validateTransactionOptions(
 const streamOptionSchema = type('boolean | undefined');
 
 /** Checks `stream` when the factory is called, as the Postgres facade checks `cursor`. */
-export function validateStreamOption(stream: boolean | undefined): boolean {
+export function validateStreamOption(stream: boolean | undefined, targetId: string): boolean {
   const result = streamOptionSchema(stream);
   if (result instanceof type.errors) {
     throw mysqlClientError('RUNTIME.ARGUMENT_INVALID', 'Invalid stream option', {
       why: result.summary,
       fix: 'Pass stream: true to stream rows as they arrive, or leave stream unset to read each whole result first.',
-      meta: { extension: 'mysql', helper: 'mysql', argument: 'stream', received: stream },
+      meta: { extension: targetId, helper: targetId, argument: 'stream', received: stream },
     });
   }
   return result ?? false;
