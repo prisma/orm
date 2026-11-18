@@ -134,7 +134,7 @@ export function serializedWithoutCapabilities(contract: Contract<SqlStorage>): u
   const { capabilities: _, ...authored } = JSON.parse(
     JSON.stringify(
       canonicalizeContractToObject(contract, {
-        serializeContract: (value) => serializer.serializeContract(value),
+        serializeContract: () => serializer.serializeContract(contract),
         ...sqlContractCanonicalizationHooks,
       }),
     ),
