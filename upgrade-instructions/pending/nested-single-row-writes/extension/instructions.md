@@ -2,11 +2,12 @@
 changes:
   - id: relation-mutator-writes-parameter
     summary: |
-      The boolean type parameter `FilteredWritesDisabled` of `RelationMutator` (its sixth) and `VariantRelationMutator` (its seventh), exported from `@prisma/orm-family-sql`, is replaced by `Writes extends 'many' | 'manyRows' | 'one' | 'none'`, which also decides whether the mutator offers the new `update(data)` and `delete()` members. Code that passes fewer type arguments than that position is unaffected; code that passes it replaces `false` with `'many'` (or `'manyRows'` through a junction) and `true` with `'one'` on a to-one relation in `update()`, or `'none'` in `create()`.
+      The boolean type parameter `FilteredWritesDisabled` of `RelationMutator` (its sixth) and `VariantRelationMutator` (its seventh), exported from `@prisma/orm-family-sql`, is replaced by `Writes extends 'many' | 'manyRows' | 'one' | 'none'`, which also decides whether the mutator offers the new `update(data)` and `delete()` members. Code that passes the argument replaces `false` with `'many'` (or `'manyRows'` through a junction) and `true` with `'one'` for a one-to-one relation the related row holds the key for in `update()`, or `'none'` for a relation the record holds the key for (many-to-one) or in `create()`. Code that leaves the argument out gets the default `'many'`; that is unchanged for a one-to-many relation, but a type written for a relation through a junction must now pass `'manyRows'`. The types may be imported under another name; follow the local name.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
         - '(?<![\w$])(?:Variant)?RelationMutator\s*<'
+        - 'import\s+(?:type\s+)?\{[^}]*(?<![\w$])(?:Variant)?RelationMutator(?![\w$])[^}]*\}'
 ---
 
 # The relation mutator types take a `Writes` parameter
@@ -22,9 +23,9 @@ changes:
 
 An unavailable member takes a `never` parameter, so a call is a type error.
 
-In every file the detection matches, find each `RelationMutator<...>` or `VariantRelationMutator<...>` that passes the `Writes` argument (the sixth for `RelationMutator`, the seventh for `VariantRelationMutator`) and replace it:
+In every file the detection matches, find each use of `RelationMutator<...>` or `VariantRelationMutator<...>`. A file may import them under another name, as in `import type { RelationMutator as RM } from '@prisma/orm-family-sql'`; follow the local name. Where a use passes the `Writes` argument (the sixth for `RelationMutator`, the seventh for `VariantRelationMutator`), replace it by which row holds the foreign key:
 
 - `false` becomes `'many'`, or `'manyRows'` when the relation goes through a junction table.
-- `true` becomes `'one'` for a to-one relation in `update()` data, and `'none'` in `create()` data or for a relation the record holds the key for.
+- `true` becomes `'one'` only for a one-to-one relation the related row holds the key for, in `update()` data. It becomes `'none'` for a relation the record holds the key for (many-to-one, such as `Post.author`), and in `create()` data.
 
-Uses with fewer type arguments need no change. Code that lists the members of a mutator, for example with `keyof`, also sees `update` and `delete`.
+Where a use leaves the `Writes` argument out, it gets `'many'`. That needs no change for a one-to-many relation. For a relation through a junction table, add the arguments up to `Writes` and pass `'manyRows'`, because the mutator a relation callback receives for such a relation no longer matches `'many'`. Code that lists the members of a mutator, for example with `keyof`, also sees `update` and `delete`.
