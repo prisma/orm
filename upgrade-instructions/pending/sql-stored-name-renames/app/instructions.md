@@ -60,7 +60,7 @@ Before, two models that swapped tables (`User` from `users` to `accounts` and `A
 Cannot rename table "accounts" to "users": table "users" is renamed in the same plan
 ```
 
-The same holds for two fields that swap columns, a chain where one model or field moves to a name another frees, a model or field that takes the storage of one the change removes, and enum members that swap stored values or take the stored value of a removed member. Follow the message: make the change in two plans through names nothing uses, such as `prisma_swap_users`, each planned and applied before the next.
+The same holds for two fields that swap columns, a chain where one model or field moves to a name another frees, a model or field that takes the storage of one the change removes, and enum members that swap stored values or take the stored value of a removed member. Follow the message: make the change in two plans, each planned and applied before the next, through names nothing uses, such as `prisma_swap_users`, or, for a takeover, by first removing the model, field or enum member that holds the name. When that first plan removes an enum member and you answer `--delete`, a required column cannot keep the member's rows: delete them, or set them to a value the enum keeps, before the plan applies.
 
 When the two tables or columns have the same shape and nothing else changes, the storage does not change at all, so `migration plan` still reports no change and writes nothing; `db update` refuses the swap. Make such a swap through a name nothing uses in the same way.
 

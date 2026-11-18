@@ -453,3 +453,23 @@ No pair is made when the control policy is not `managed` on both sides, so the p
 
 - `KeepDataEdit.swapsValues` (`packages/1-framework/1-core/framework-components/src/control/migration-statements.ts`, line 196) is a framework type. After the MongoDB pull request no target produces a `KeepDataEdit` for a member that keeps its name. Remove the field, and the CLI code that only serves it (`twoRuns`, `keepsDataByCommand`, `sharesValueWithKeptMember`), when nothing reaches them. It is a framework interface change.
 - `MIGRATION.TABLE_NAME_CASE_CHANGED` (`packages/2-sql-family/9-family/src/core/migrations/table-name-case-guard.ts`) is in practice reached only without an origin contract now. Remove it once no supported upgrade path reaches the lowering rule.
+
+## SQLite operation labels do not quote names
+
+**Found:** stored-name renames manual QA, 2026-11-18.
+
+PostgreSQL labels a table rename `Rename table "Shop Front" to "Store Front"`, and SQLite labels the same rename `Rename table Shop Front to Store Front`; column renames are `Rename column "users"."x" to "y"` against `Rename column x on users to y`. A name with a space or punctuation is hard to read in the SQLite label, and docs that quote a label have to name the target. The SQLite labels are set in `packages/3-targets/sqlite/1-target/src/core/migrations/op-factory-call.ts` (`RenameTableCall`, `RenameColumnCall` and the other calls) and predate the stored-name renames. Quoting them changes the expected labels in about twenty test and journey files across the SQLite target and adapter packages and `test/integration`, so it was left out of that pull request. Quote every SQLite label as PostgreSQL does, in one pass over all calls.
+
+## Three texts the stored-name renames QA found outside its scope
+
+**Found:** stored-name renames manual QA, 2026-11-18.
+
+- **`CLI.CONSENT_UNUSED` for a statement a stored-name change no longer needs.** `prisma migration plan --name move --from <latest> --delete Shop`, where only `@@map` of `Shop` changed, prints `✘ [CLI.CONSENT_UNUSED] --delete Shop was given but nothing in this run asked about Shop.` and `→ Remove the flag, or spell the subject the way the command names it.` The second half points the user at how the subject is written, which is not the cause: the model keeps its name, so the plan renames its table and asks nothing. The text should say that nothing asked about the subject and to remove the flag, and leave out the advice about how it is written when the subject is a model or field of the contract.
+- **Model names carry `public.` in refusals.** On PostgreSQL, refusals name models with their namespace, as in `The table of model "public.Cat" changes from "cats" to "dogs", and the schema being planned from already has table "dogs", the table of model "public.Dog"`, while the statements a user types name the model as `Cat`. The namespace prefix of the default namespace should be left out, as statements leave it out.
+- **The DDL preview leaves out value rewrites.** `prisma migration plan` for a change of an enum's stored value prints the operations `Drop check constraint "task_level_check_bc15f0e6" on "task"`, `Replace value 1 with 2 in column "level" of "task"` and `Add check constraint "task_level_check_1d419f4a" on "task"`, but its `DDL preview` lists only the two `ALTER TABLE … DROP CONSTRAINT` and `ADD CONSTRAINT` statements, not the `UPDATE` that rewrites the value. The preview should show every statement the migration runs, or say that it shows only DDL.
+
+## No planner sets `leaveOut` any more
+
+**Found:** stored-name renames, fixing the manual QA, 2026-11-18.
+
+The SQL refusal for enum rename statements that move stored values in a cycle was the only conflict that set `leaveOut` (`MigrationPlannerConflict.leaveOut` in `packages/1-framework/1-core/framework-components/src/control/control-migration-types.ts`). Its route, a plan without the renames with the rewrites written by hand into its `migration.ts`, fails on PostgreSQL, where the check constraint that lists the enum's values rejects the value the rewrite goes through, so the refusal no longer offers it. The field, its JSON form in `packages/1-framework/1-core/errors/src/control.ts`, the next action that `planningRefusedError` (`packages/1-framework/3-tooling/cli/src/utils/planning-refused-error.ts`) builds from it, and the copy in `packages/2-sql-family/9-family/src/core/migrations/plan-helpers.ts` are now unused. Remove them, which changes the framework domain, or keep them for a target whose hand-written route does work.
