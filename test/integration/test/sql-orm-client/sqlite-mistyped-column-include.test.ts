@@ -98,7 +98,7 @@ describe('a SQLite column holding a value of another type, read flat and through
       );
       insert into mistyped_sheets (id) values (1), (2), (3), (4), (5), (6), (7), (8), (9), (10), (11), (12), (13), (14),
         (15), (16), (17), (18), (20), (21), (22), (23), (24), (25), (26), (27), (28), (29), (30), (31), (32), (33),
-        (34);
+        (34), (35), (36);
       insert into mistyped_cells (id, sheet_id, integer, sql_int, blob, boolean, decimal) values
         (1, 1, 7, 8, x'00ff', 1, '12.50'),
         (2, 2, 'abc', null, null, null, null),
@@ -135,7 +135,9 @@ describe('a SQLite column holding a value of another type, read flat and through
         (31, 31, '123'),
         (32, 32, 'null'),
         (33, 33, 'true'),
-        (34, 34, '1.5');
+        (34, 34, '1.5'),
+        (35, 35, '["7B7D"]'),
+        (36, 36, '[]');
     `);
     const instance = instantiateExecutionStack(stack);
     if (instance.adapter === undefined || instance.driver === undefined) {
@@ -232,6 +234,8 @@ describe('a SQLite column holding a value of another type, read flat and through
     [32, null],
     [33, true],
     [34, 1.5],
+    [35, ['7B7D']],
+    [36, []],
   ])(
     'reads the JSON document in cell %i the same way flat and through an include',
     async (id, document) => {
