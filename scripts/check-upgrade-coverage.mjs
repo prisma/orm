@@ -46,11 +46,25 @@ export function transitionLabel(prev, head) {
   return `${versionSegment(prev)}-to-${versionSegment(head)}`;
 }
 
-const PENDING = 'upgrade-instructions/pending/';
+export const PENDING = 'upgrade-instructions/pending/';
 const PENDING_INSTRUCTIONS =
   /^upgrade-instructions\/pending\/[^/]+\/(app|extension)\/instructions\.md$/;
-const PUBLISHED_ROOT = 'skills/prisma-8/upgrading/';
+export const PUBLISHED_ROOT = 'skills/prisma-8/upgrading/';
 const PUBLISHED_DIRECTORY = new RegExp(`^(${PUBLISHED_ROOT}(?:app|extension)/upgrades/[^/]+)/`);
+const PUBLISHED_TRANSITION = new RegExp(`^${PUBLISHED_ROOT}(?:app|extension)/upgrades/([^/]+)/`);
+
+/** The transition directory a published guide path lies in, or `undefined` outside the published tree. */
+export function publishedTransitionOf(path) {
+  return PUBLISHED_TRANSITION.exec(path)?.[1];
+}
+
+/** The inverse of `transitionLabel`: a stable segment `major.minor` reads as `major.minor.0`. */
+export function parseTransitionLabel(label) {
+  const match = /^(.+)-to-(.+)$/.exec(label);
+  if (!match) throw new Error(`unparseable transition label "${label}"`);
+  const segment = (text) => parseVersion(/^\d+\.\d+$/.test(text) ? `${text}.0` : text);
+  return { from: segment(match[1]), to: segment(match[2]) };
+}
 function publishedGuide(audience, transition) {
   return `${PUBLISHED_ROOT}${audience}/upgrades/${transition}/instructions.md`;
 }

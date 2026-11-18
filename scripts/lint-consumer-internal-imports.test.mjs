@@ -10,8 +10,10 @@ import { fileURLToPath } from 'node:url';
 import {
   CONSUMER_SCOPES,
   findMatchingLines,
+  findProseNames,
   internalSpecifiersOnLine,
   isScannableFile,
+  isTransitionChecked,
   scanManifests,
 } from './lint-consumer-internal-imports.mjs';
 
@@ -301,5 +303,106 @@ describe('lint-consumer-internal-imports', () => {
     const result = runScript('--list');
     assert.equal(result.status, 1, `expected exit 1; stdout=${result.stdout}`);
     assert.match(result.stdout, /examples\/app\/src\/main\.ts:2: @internal\/sql-orm-client/);
+  });
+});
+
+describe('isTransitionChecked', () => {
+  it('holds guides for releases after 8.0.0-rc.24 to the prose rule', () => {
+    assert.equal(isTransitionChecked('8.0.0-rc.24-to-8.0.0-rc.25'), true);
+    assert.equal(isTransitionChecked('8.0.0-rc.24-to-8.0'), true);
+    assert.equal(isTransitionChecked('8.0-to-8.1'), true);
+  });
+
+  it('leaves guides up to 8.0.0-rc.24 as they shipped', () => {
+    assert.equal(isTransitionChecked('8.0.0-rc.23-to-8.0.0-rc.24'), false);
+    assert.equal(isTransitionChecked('8.0.0-rc.9-to-8.0.0-rc.10'), false);
+    assert.equal(isTransitionChecked('0.17-to-8.0.0-rc.1'), false);
+    assert.equal(isTransitionChecked('0.9-to-0.10'), false);
+  });
+});
+
+describe('findProseNames', () => {
+  const entries = new Map([['@prisma/orm-postgres', new Set(['@prisma/orm-postgres/runtime'])]]);
+  const entriesOf = (name) => entries.get(name);
+
+  it('names the internal package and the missing export it found', () => {
+    const records = findProseNames(
+      'Use `@internal/postgres/runtime`.\nOr `@prisma/orm-postgres/middleware`.\n',
+      entriesOf,
+    );
+    assert.deepEqual(records, [
+      { line: 1, internal: ['@internal/postgres/runtime'], unpublished: [] },
+      { line: 2, internal: [], unpublished: ['@prisma/orm-postgres/middleware'] },
+    ]);
+  });
+
+  it('accepts a published entry, a bare package name and a placeholder', () => {
+    const content =
+      '`@prisma/orm-postgres/runtime`, `@prisma/orm-postgres`, `@prisma/orm-<target>/runtime`, `@prisma/orm-family-*`\n';
+    assert.deepEqual(findProseNames(content, entriesOf), []);
+  });
+
+  it('exempts detection patterns, and the exemption ends at the next key', () => {
+    const content = [
+      '---',
+      'changes:',
+      '  - id: first',
+      '    detection:',
+      '      glob: "**/*.ts"',
+      '      matches:',
+      "        - 'from [''\"]@internal/adapter-postgres/column-types'",
+      '  - id: second',
+      '    summary: |',
+      '      Import it from `@internal/adapter-postgres/column-types`.',
+      '---',
+      '',
+      'Prose naming `@internal/postgres/runtime`.',
+      '',
+    ].join('\n');
+    assert.deepEqual(
+      findProseNames(content, entriesOf).map((record) => record.line),
+      [10, 13],
+    );
+  });
+});
+
+describe('prose scopes', () => {
+  const guide = 'Import it from `@internal/postgres/runtime`.\n';
+
+  it('reads the skill, pending fragments and newer guides, and skips older guides and codemods', () => {
+    writeRepoFile('skills/prisma-8/references/runtime.md', guide);
+    writeRepoFile('upgrade-instructions/pending/renamed/app/instructions.md', guide);
+    writeRepoFile(
+      'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.24-to-8.0.0-rc.25/instructions.md',
+      guide,
+    );
+    writeRepoFile(
+      'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.24-to-8.0.0-rc.25/scripts/fix/fix.ts',
+      "const from = '@internal/postgres/runtime';\n",
+    );
+    writeRepoFile(
+      'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.23-to-8.0.0-rc.24/instructions.md',
+      guide,
+    );
+    commitAll('fixture');
+
+    const result = runScript('--list');
+    assert.equal(result.status, 1);
+    const listed = result.stdout
+      .trim()
+      .split('\n')
+      .map((line) => line.trim().split(':')[0]);
+    assert.deepEqual(listed.sort(), [
+      'skills/prisma-8/references/runtime.md',
+      'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.24-to-8.0.0-rc.25/instructions.md',
+      'upgrade-instructions/pending/renamed/app/instructions.md',
+    ]);
+    assert.match(result.stderr, /@internal\/postgres\/runtime \(not published\)/);
+  });
+
+  it('refuses file arguments rather than skipping the check', () => {
+    const result = runScript('skills/prisma-8/SKILL.md');
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /takes no file arguments/);
   });
 });
