@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { subjectsOfCalls } from '../src/core/migrations/operation-subjects';
 import { NO_RENAMED_ORIGINS } from '../src/core/migrations/statement-planning';
-import { app, byHand, losing, table } from './operation-subjects-fixtures';
+import { app, byHand, losing, renamesBetween, table } from './operation-subjects-fixtures';
 import { contractOf } from './statement-fixtures';
 
 describe('subjectsOfCalls for a table whose model keeps its name', () => {
@@ -14,6 +14,7 @@ describe('subjectsOfCalls for a table whose model keeps its name', () => {
       subjectsOfCalls([losing(table('profiles'))], {
         fromContract: from,
         contract: to,
+        renames: renamesBetween(from, to),
         origins: NO_RENAMED_ORIGINS,
         byHand,
         removedVariants: [],
@@ -37,6 +38,7 @@ describe('subjectsOfCalls for a table whose model keeps its name', () => {
       subjectsOfCalls([losing(table('profiles'))], {
         fromContract: from,
         contract: to,
+        renames: renamesBetween(from, to),
         origins: NO_RENAMED_ORIGINS,
         byHand,
         removedVariants: [],
@@ -62,6 +64,7 @@ describe('subjectsOfCalls for a table whose model keeps its name', () => {
       subjectsOfCalls([losing(table('profiles'))], {
         fromContract: withPeople,
         contract: to,
+        renames: renamesBetween(withPeople, to),
         origins: NO_RENAMED_ORIGINS,
         byHand,
         removedVariants: [],
@@ -82,6 +85,7 @@ describe('subjectsOfCalls for a table whose model keeps its name', () => {
       subjectsOfCalls([losing(table('users')), losing(table('members'))], {
         fromContract: two,
         contract: merged,
+        renames: renamesBetween(two, merged),
         origins: NO_RENAMED_ORIGINS,
         byHand,
         removedVariants: [],
@@ -115,6 +119,7 @@ describe('subjectsOfCalls for a table whose model keeps its name', () => {
       subjectsOfCalls([losing(table('tasks'))], {
         fromContract: shared,
         contract: split,
+        renames: renamesBetween(shared, split),
         origins: NO_RENAMED_ORIGINS,
         byHand,
         removedVariants: [],

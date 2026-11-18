@@ -1,6 +1,7 @@
 import type { Contract } from '@internal/contract/types';
 import {
   type CallSubjects,
+  exactName,
   type MigrationOperationPolicy,
   NO_RENAMED_ORIGINS,
   plannerFailure,
@@ -8,6 +9,7 @@ import {
   type SqlMigrationPlannerPlanOptions,
   type SqlPlannerConflict,
   type SqlPlannerFailureResult,
+  StorageRenames,
   sqlTypeLookupsOf,
   subjectsOfCalls,
   type TableRenameByHand,
@@ -208,6 +210,10 @@ export class MysqlMigrationPlanner<TargetId extends string = 'mysql'>
         fromContract: options.fromContract,
         contract: options.contract,
         origins: NO_RENAMED_ORIGINS,
+        renames:
+          options.fromContract === null
+            ? undefined
+            : new StorageRenames([], options.fromContract, options.contract, exactName),
         byHand: tableRenameByHand(this.#target.targetId),
         removedVariants: [],
       }),

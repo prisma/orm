@@ -18,7 +18,7 @@ const NOTHING = {
   calls: [],
   tableRenames: [],
   columnRenames: [],
-  madeTables: [],
+  alreadyRenamedTables: [],
   plannedStatements: [],
 };
 
@@ -64,7 +64,7 @@ describe('planStatements, storage whose removed objects stay behind', () => {
       calls: ['table app.tasks -> work'],
       tableRenames: [{ namespaceId: 'app', from: 'tasks', to: 'work' }],
       columnRenames: [],
-      madeTables: [],
+      alreadyRenamedTables: [],
       plannedStatements: [],
     });
   });
@@ -91,7 +91,7 @@ describe('planStatements, storage whose removed objects stay behind', () => {
       calls: ['table app.tasks -> jobs'],
       tableRenames: [{ namespaceId: 'app', from: 'tasks', to: 'jobs' }],
       columnRenames: [],
-      madeTables: [],
+      alreadyRenamedTables: [],
       plannedStatements: [{ statement, operations: { kind: 'planned', operationIndexes: [0, 1] } }],
     });
   });
@@ -117,7 +117,7 @@ describe('planStatements, storage whose removed objects stay behind', () => {
       calls: ['column app.tasks.title -> heading'],
       tableRenames: [],
       columnRenames: [{ namespaceId: 'app', table: 'tasks', from: 'title', to: 'heading' }],
-      madeTables: [],
+      alreadyRenamedTables: [],
       plannedStatements: [],
     });
   });
@@ -251,7 +251,7 @@ describe('planStatements, a namespace rename statement', () => {
       ],
       tableRenames: [{ namespaceId: 'finance', from: 'invoices', to: 'bills' }],
       columnRenames: [{ namespaceId: 'finance', table: 'bills', from: 'total', to: 'amount' }],
-      madeTables: [],
+      alreadyRenamedTables: [],
       plannedStatements: [{ statement, operations: { kind: 'planned', operationIndexes: [0] } }],
     });
   });
@@ -271,7 +271,7 @@ describe('planStatements, a namespace rename statement', () => {
       calls: ['rename-namespace billing -> finance', 'column finance.invoices.total -> amount'],
       tableRenames: [],
       columnRenames: [{ namespaceId: 'finance', table: 'invoices', from: 'total', to: 'amount' }],
-      madeTables: [],
+      alreadyRenamedTables: [],
       plannedStatements: [{ statement, operations: { kind: 'planned', operationIndexes: [0] } }],
     });
   });

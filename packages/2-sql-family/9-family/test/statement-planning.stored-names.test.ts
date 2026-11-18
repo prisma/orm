@@ -40,7 +40,7 @@ describe('planStatements, a model whose table changes and whose name both contra
       calls: ['table app.users -> app_users'],
       tableRenames: [{ namespaceId: 'app', from: 'users', to: 'app_users' }],
       columnRenames: [],
-      madeTables: [],
+      alreadyRenamedTables: [],
       plannedStatements: [],
     });
     expect(
@@ -58,7 +58,7 @@ describe('planStatements, a model whose table changes and whose name both contra
       calls: ['column app.users.email -> email_address'],
       tableRenames: [],
       columnRenames: [{ namespaceId: 'app', table: 'users', from: 'email', to: 'email_address' }],
-      madeTables: [],
+      alreadyRenamedTables: [],
       plannedStatements: [],
     });
   });
@@ -75,7 +75,7 @@ describe('planStatements, a model whose table changes and whose name both contra
       columnRenames: [
         { namespaceId: 'app', table: 'app_users', from: 'email', to: 'email_address' },
       ],
-      madeTables: [],
+      alreadyRenamedTables: [],
       plannedStatements: [],
     });
     expect(
@@ -99,7 +99,7 @@ describe('planStatements, a model whose table changes and whose name both contra
       calls: ['table app.users -> app_users', 'column app.app_users.name -> full_name'],
       tableRenames: [{ namespaceId: 'app', from: 'users', to: 'app_users' }],
       columnRenames: [{ namespaceId: 'app', table: 'app_users', from: 'name', to: 'full_name' }],
-      madeTables: [],
+      alreadyRenamedTables: [],
       plannedStatements: [{ statement, operations: { kind: 'planned', operationIndexes: [2, 3] } }],
     });
   });
@@ -119,7 +119,7 @@ describe('planStatements, a model whose table changes and whose name both contra
       calls: ['table app.profile -> users', 'column app.users.email -> email_address'],
       tableRenames: [{ namespaceId: 'app', from: 'profile', to: 'users' }],
       columnRenames: [{ namespaceId: 'app', table: 'users', from: 'email', to: 'email_address' }],
-      madeTables: [],
+      alreadyRenamedTables: [],
       plannedStatements: [{ statement, operations: { kind: 'planned', operationIndexes: [0, 1] } }],
     });
   });
@@ -142,7 +142,7 @@ describe('planStatements, a model whose table changes and whose name both contra
       calls: ['table app.tasks -> work_items'],
       tableRenames: [{ namespaceId: 'app', from: 'tasks', to: 'work_items' }],
       columnRenames: [],
-      madeTables: [],
+      alreadyRenamedTables: [],
       plannedStatements: [],
     });
   });
@@ -163,7 +163,7 @@ describe('planStatements, a model whose table changes and whose name both contra
       calls: ['table app.users -> app_users'],
       tableRenames: [{ namespaceId: 'app', from: 'users', to: 'app_users' }],
       columnRenames: [],
-      madeTables: [],
+      alreadyRenamedTables: [],
       plannedStatements: [],
     });
   });
@@ -183,7 +183,7 @@ describe('planStatements, a model whose table changes and whose name both contra
       calls: ['column app.users.email -> email_address'],
       tableRenames: [],
       columnRenames: [{ namespaceId: 'app', table: 'users', from: 'email', to: 'email_address' }],
-      madeTables: [],
+      alreadyRenamedTables: [],
       plannedStatements: [],
     });
   });
@@ -201,7 +201,7 @@ describe('planStatements, a model whose table changes and whose name both contra
       calls: ['table app.user -> User', 'column app.User.email -> Email'],
       tableRenames: [{ namespaceId: 'app', from: 'user', to: 'User' }],
       columnRenames: [{ namespaceId: 'app', table: 'User', from: 'email', to: 'Email' }],
-      madeTables: [],
+      alreadyRenamedTables: [],
       plannedStatements: [],
     });
   });
@@ -229,7 +229,7 @@ describe('planStatements, storage that does not move whole', () => {
       calls: [],
       tableRenames: [],
       columnRenames: [],
-      madeTables: [],
+      alreadyRenamedTables: [],
       plannedStatements: [],
     });
   });
@@ -256,7 +256,7 @@ describe('planStatements, storage that does not move whole', () => {
       calls: [],
       tableRenames: [],
       columnRenames: [],
-      madeTables: [],
+      alreadyRenamedTables: [],
       plannedStatements: [],
     });
   });
@@ -280,7 +280,7 @@ describe('planStatements, storage that does not move whole', () => {
       calls: [],
       tableRenames: [],
       columnRenames: [],
-      madeTables: [],
+      alreadyRenamedTables: [],
       plannedStatements: [],
     });
   });
@@ -311,7 +311,7 @@ describe('planStatements, storage that does not move whole', () => {
         calls: [],
         tableRenames: [],
         columnRenames: [],
-        madeTables: [],
+        alreadyRenamedTables: [],
         plannedStatements: [],
       });
     },
@@ -332,7 +332,7 @@ describe('planStatements, storage that does not move whole', () => {
       calls: [],
       tableRenames: [],
       columnRenames: [],
-      madeTables: [],
+      alreadyRenamedTables: [],
       plannedStatements: [],
     });
   });
@@ -436,6 +436,40 @@ describe('planStatements, statements on storage that does not move whole', () =>
       why: 'The plan renames a table only when every model stored in it moves to the same new table and its control policy is "managed" in both contracts, so the column would be renamed on a table the destination does not store the model in. Leave out this statement.',
       refusedStatement: statement,
       location: { namespaceId: 'app', entityKind: 'table', entityName: 'tasks', column: 'sev' },
+    });
+  });
+});
+
+describe('planStatements, a large contract whose names both contracts keep', () => {
+  const fieldsOf = (columnOf: (field: string) => string) =>
+    Object.fromEntries(
+      Array.from({ length: 30 }, (_, index) => [`f${index}`, columnOf(`f${index}`)]),
+    );
+  const modelsOf = (columnOf: (model: string, field: string) => string) =>
+    contractOf(
+      Object.fromEntries(
+        Array.from({ length: 1000 }, (_, index) => {
+          const model = `M${index}`;
+          return [
+            model,
+            { table: `m${index}`, fields: fieldsOf((field) => columnOf(model, field)) },
+          ];
+        }),
+      ),
+    );
+
+  it('plans only the column whose name changes, without grouping the fields that keep theirs', () => {
+    const result = plan(
+      modelsOf((_model, field) => field),
+      modelsOf((model, field) => (model === 'M7' && field === 'f3' ? 'renamed' : field)),
+      fakeTarget(['app.m7'], { 'app.m7': Object.keys(fieldsOf((field) => field)) }),
+    );
+    expect(planned(result)).toEqual({
+      calls: ['column app.m7.f3 -> renamed'],
+      tableRenames: [],
+      columnRenames: [{ namespaceId: 'app', table: 'm7', from: 'f3', to: 'renamed' }],
+      alreadyRenamedTables: [],
+      plannedStatements: [],
     });
   });
 });

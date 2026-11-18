@@ -23,9 +23,11 @@ import {
   fieldColumn,
   type ModelTable,
   modelTable,
+  sameTable,
   sqlModelStorage,
   tableControlPolicy,
 } from './model-storage';
+import { capitalized, fieldsText, modelsText } from './plan-text';
 import {
   type ColumnRename,
   type ColumnRenameMismatch,
@@ -42,10 +44,7 @@ import type { SchemaTables } from './schema-tables';
 import {
   type ColumnChange,
   type ConflictLocation,
-  capitalized,
   columnChangeText,
-  fieldsText,
-  modelsText,
   plannedStorageRenames,
   renameRefused,
   StorageRenames,
@@ -182,8 +181,6 @@ export interface NamespaceStatementTarget<TCall extends CallWithCompanions> {
 export interface StatementPlanningTarget<TCall extends CallWithCompanions> {
   /** The tables of the working schema as earlier statements have left it. */
   tables(): SchemaTables;
-  /** Whether the database takes two table or column names for one. */
-  sameName(left: string, right: string): boolean;
   /** The call that renames a table, with its companions, computed against the working schema. */
   renameTableCall(rename: TableRename): TCall;
   /** Namespace renames and model moves; a target that keeps every table in one namespace has none. */
@@ -245,11 +242,14 @@ export interface PlannedStatements<TCall extends CallWithCompanions> {
   readonly columnRenames: readonly ColumnRename[];
   /**
    * The tables whose model keeps its name and whose new table the working schema already has, so
-   * no rename is planned: the diff renames their constraints, which a target puts before creates.
+   * the rename is already done and none is planned: the diff renames their constraints, which a
+   * target puts before creates.
    */
-  readonly madeTables: readonly ModelTable[];
+  readonly alreadyRenamedTables: readonly ModelTable[];
   readonly plannedStatements: readonly PlannedStatement[];
   readonly origins: WorkingSchemaOrigins;
+  /** The renames of the plan, which the questions read too; `undefined` with no origin contract. */
+  readonly renames: StorageRenames | undefined;
 }
 
 const DRIFTED =
@@ -705,10 +705,10 @@ class StatementPlanner<TCall extends CallWithCompanions> {
     const others = modelsText(shared.objects);
     return renameRefused(
       statement,
-      shared.kind === 'left'
+      shared.kind === 'split'
         ? `${label}: table "${from}" also stores ${others}`
         : `${label}: table "${to}" also stores ${others}, whose rows are not in table "${from}"`,
-      shared.kind === 'left'
+      shared.kind === 'split'
         ? `A table rename moves every row of the table, and the rows of ${others} do not move to table "${to}". Moving the rows of one model out of a table it shares with others is a data migration, which a plan does not write. ${leaveOutShared(modelsText(moving))} ${HAND_WRITTEN_WITH_MIGRATION_PLAN}${handWrittenMigrationSteps(`the rows of ${modelsText(moving)} into table "${to}"`)}`
         : `A table rename moves the rows of one table, and table "${to}" would also store the rows of ${others}. Moving the rows of two tables into one is a data migration, which a plan does not write. ${leaveOutShared(modelsText(moving))} ${HAND_WRITTEN_WITH_MIGRATION_PLAN}${handWrittenMigrationSteps(`the rows of ${modelsText(moving)}, and those of ${others} that table "${to}" does not already hold, into table "${to}"`)}`,
       change.origin,
@@ -726,10 +726,10 @@ class StatementPlanner<TCall extends CallWithCompanions> {
     const others = fieldsText(shared.objects);
     return renameRefused(
       statement,
-      shared.kind === 'left'
+      shared.kind === 'split'
         ? `${label}: column "${from}" also stores ${others}`
         : `${label}: column "${to}" also stores ${others}, whose values are not in column "${from}"`,
-      shared.kind === 'left'
+      shared.kind === 'split'
         ? `A column rename moves the values of every row, and the values of ${others} do not move to column "${to}". Moving the values of one field out of a column it shares with others is a data migration, which a plan does not write. ${leaveOutShared(fieldsText(moving))} ${HAND_WRITTEN_WITH_MIGRATION_PLAN}${handWrittenMigrationSteps(`the values of ${fieldsText(moving)} into column "${to}"`)}`
         : `A column rename moves the values of one column, and column "${to}" would also store the values of ${others}. Moving the values of two columns into one is a data migration, which a plan does not write. ${leaveOutShared(fieldsText(moving))} ${HAND_WRITTEN_WITH_MIGRATION_PLAN}${handWrittenMigrationSteps(`the values of ${fieldsText(moving)}, and those of ${others} that column "${to}" does not already hold, into column "${to}"`)}`,
       { ...change.origin, column: from },
@@ -841,10 +841,7 @@ class StatementPlanner<TCall extends CallWithCompanions> {
     const current = this.#current(effect.table);
     const table = current.table;
     const destinationTable = modelTable(this.#contract, statement.to);
-    if (
-      destinationTable !== undefined &&
-      (destinationTable.namespaceId !== current.namespaceId || destinationTable.table !== table)
-    ) {
+    if (destinationTable !== undefined && !sameTable(destinationTable, current)) {
       return notOk(
         renameRefused(
           statement,
@@ -895,8 +892,6 @@ class StatementPlanner<TCall extends CallWithCompanions> {
 
   /** The origins of the working schema's tables and columns, as the statements left them. */
   origins(): WorkingSchemaOrigins {
-    const sameTable = (left: ModelTable, right: ModelTable) =>
-      left.namespaceId === right.namespaceId && left.table === right.table;
     return {
       originTable: (current) => {
         for (const origin of this.#originTables.values()) {
@@ -941,9 +936,10 @@ export function planStatements<TCall extends CallWithCompanions>(input: {
         calls: [],
         tableRenames: [],
         columnRenames: [],
-        madeTables: [],
+        alreadyRenamedTables: [],
         plannedStatements: [],
         origins: NO_RENAMED_ORIGINS,
+        renames: undefined,
       });
     }
     return notOk(
@@ -955,14 +951,15 @@ export function planStatements<TCall extends CallWithCompanions>(input: {
       ),
     );
   }
+  const tables = input.target.tables();
   const renames = new StorageRenames(
     input.statements,
     fromContract,
     input.contract,
-    input.target.sameName,
+    tables.sameName,
   );
-  const storageRenames = plannedStorageRenames(renames, input.target.tables());
-  const conflict = storageRenameConflict(storageRenames, input.target.tables(), renames);
+  const storageRenames = plannedStorageRenames(renames, tables);
+  const conflict = storageRenameConflict(storageRenames, tables, renames);
   if (conflict !== undefined) return notOk(conflict);
   const planner = new StatementPlanner<TCall>({
     ...input,
@@ -1010,11 +1007,12 @@ export function planStatements<TCall extends CallWithCompanions>(input: {
     calls: planner.calls,
     tableRenames: planner.tableRenames,
     columnRenames: planner.columnRenames,
-    madeTables: storageRenames.foundTables
+    alreadyRenamedTables: storageRenames.foundTables
       .filter(({ change }) => !storageRenames.tables.includes(change))
       .map(({ change, name }) => ({ namespaceId: change.destination.namespaceId, table: name })),
     plannedStatements,
     origins: planner.origins(),
+    renames,
   });
 }
 

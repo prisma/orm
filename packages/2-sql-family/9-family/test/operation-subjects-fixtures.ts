@@ -1,6 +1,10 @@
-import { asNamespaceId } from '@internal/contract/types';
+import { asNamespaceId, type Contract } from '@internal/contract/types';
+import type { ResolvedRenameStatement } from '@internal/framework-components/control';
+import type { SqlStorage } from '@internal/sql-contract/types';
+import { exactName, type SameName } from '../src/core/migrations/model-storage';
 import type { CallSubjects, SubjectStorage } from '../src/core/migrations/operation-subjects';
 import type { TableRenameByHand } from '../src/core/migrations/statement-planning';
+import { StorageRenames } from '../src/core/migrations/storage-renames';
 import { contractOf } from './statement-fixtures';
 
 export const app = asNamespaceId('app');
@@ -9,6 +13,15 @@ export const byHand: TableRenameByHand = {
   renderTableRename: ({ from, to }) => `this.renameTable("${from}", "${to}")`,
   tableRenameByHand: ({ from, to }) => [`ALTER TABLE "${from}" RENAME TO "${to}"`],
 };
+
+export function renamesBetween(
+  fromContract: Contract<SqlStorage>,
+  contract: Contract<SqlStorage>,
+  statements: readonly ResolvedRenameStatement[] = [],
+  sameName: SameName = exactName,
+): StorageRenames {
+  return new StorageRenames(statements, fromContract, contract, sameName);
+}
 
 export function table(name: string, storageName = name): SubjectStorage {
   return { storageName, table: { namespaceId: 'app', table: name, column: undefined } };

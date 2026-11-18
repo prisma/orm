@@ -12,6 +12,7 @@ import {
   column,
   losing,
   origin,
+  renamesBetween,
   table,
   unchanged,
 } from './operation-subjects-fixtures';
@@ -23,6 +24,10 @@ describe('subjectsOfCalls', () => {
       subjectsOfCalls([unchanged, losing(table('legacy')), losing(column('user', 'full_name'))], {
         fromContract: origin,
         contract: contractOf({ User: { table: 'user', fields: { id: 'id' } } }),
+        renames: renamesBetween(
+          origin,
+          contractOf({ User: { table: 'user', fields: { id: 'id' } } }),
+        ),
         byHand,
         removedVariants: [],
         origins: NO_RENAMED_ORIGINS,
@@ -67,6 +72,7 @@ describe('subjectsOfCalls', () => {
         {
           fromContract: origin,
           contract: origin,
+          renames: renamesBetween(origin, origin),
           byHand,
           removedVariants: [],
           origins: NO_RENAMED_ORIGINS,
@@ -96,6 +102,7 @@ describe('subjectsOfCalls', () => {
         {
           fromContract: origin,
           contract: origin,
+          renames: renamesBetween(origin, origin),
           byHand,
           removedVariants: [],
           origins: NO_RENAMED_ORIGINS,
@@ -128,6 +135,7 @@ describe('subjectsOfCalls', () => {
         {
           fromContract: origin,
           contract: origin,
+          renames: renamesBetween(origin, origin),
           byHand,
           removedVariants: [],
           origins: NO_RENAMED_ORIGINS,
@@ -158,6 +166,7 @@ describe('subjectsOfCalls', () => {
         {
           fromContract: origin,
           contract: origin,
+          renames: renamesBetween(origin, origin),
           byHand,
           removedVariants: [],
           origins: NO_RENAMED_ORIGINS,
@@ -184,6 +193,7 @@ describe('subjectsOfCalls', () => {
       subjectsOfCalls([losing(column('account', 'display_name'))], {
         fromContract: from,
         contract: destination,
+        renames: renamesBetween(from, destination),
         byHand,
         removedVariants: [],
         origins: {
@@ -218,6 +228,7 @@ describe('subjectsOfCalls', () => {
         {
           fromContract: origin,
           contract: origin,
+          renames: renamesBetween(origin, origin),
           byHand,
           removedVariants: [],
           origins: NO_RENAMED_ORIGINS,
@@ -241,6 +252,7 @@ describe('subjectsOfCalls', () => {
       subjectsOfCalls([losing(column('user', 'full_name'))], {
         fromContract: origin,
         contract: destination,
+        renames: renamesBetween(origin, destination),
         byHand,
         removedVariants: [],
         origins: NO_RENAMED_ORIGINS,
@@ -255,6 +267,7 @@ describe('subjectsOfCalls', () => {
         {
           fromContract: origin,
           contract: origin,
+          renames: renamesBetween(origin, origin),
           byHand,
           removedVariants: [],
           origins: NO_RENAMED_ORIGINS,
@@ -281,6 +294,7 @@ describe('subjectsOfCalls', () => {
       subjectsOfCalls([losing(table('legacy'), column('user', 'full_name'))], {
         fromContract: null,
         contract: origin,
+        renames: undefined,
         byHand,
         removedVariants: [],
         origins: NO_RENAMED_ORIGINS,
@@ -306,6 +320,7 @@ describe('subjectsOfCalls', () => {
       subjectsOfCalls([losing({ storageName: 'public.mood', table: undefined })], {
         fromContract: origin,
         contract: origin,
+        renames: renamesBetween(origin, origin),
         byHand,
         removedVariants: [],
         origins: NO_RENAMED_ORIGINS,
@@ -336,6 +351,7 @@ describe('subjectsOfCalls', () => {
         {
           fromContract: origin,
           contract: origin,
+          renames: renamesBetween(origin, origin),
           byHand,
           removedVariants: [],
           origins: NO_RENAMED_ORIGINS,
@@ -382,6 +398,7 @@ describe('fieldEventStorage', () => {
       {
         fromContract: origin,
         contract: origin,
+        renames: renamesBetween(origin, origin),
         byHand,
         removedVariants: [],
         origins: NO_RENAMED_ORIGINS,

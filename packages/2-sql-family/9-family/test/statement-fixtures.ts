@@ -218,6 +218,7 @@ export function fakeTarget(
   const tables = new Map(initial.map((table) => [table, new Set(columns[table] ?? [])]));
   const existingNamespaces = namespaces === undefined ? undefined : new Set(namespaces);
   const schemaTables: SchemaTables = {
+    sameName,
     hasTable: (namespaceId, table) => tables.has(`${namespaceId}.${table}`),
     hasColumn: (namespaceId, table, column) =>
       tables.get(`${namespaceId}.${table}`)?.has(column) === true,
@@ -243,7 +244,6 @@ export function fakeTarget(
   });
   return {
     tables: () => schemaTables,
-    sameName,
     namespaces: {
       createNamespaceCalls: (namespaceId: string) =>
         existingNamespaces === undefined || existingNamespaces.has(namespaceId)
@@ -334,7 +334,7 @@ export function renameNamespace(from: string, to: string): ResolvedNamespaceRena
 /** The planned statements, with each call given by its text. */
 export function planned(result: ReturnType<typeof planStatements<FakeCall>>) {
   if (!result.ok) throw new Error(`expected a plan, got: ${result.failure.summary}`);
-  const { origins: _origins, ...value } = result.value;
+  const { origins: _origins, renames: _renames, ...value } = result.value;
   return { ...value, calls: value.calls.map((call) => call.text) };
 }
 

@@ -14,10 +14,13 @@ const NOTHING = {
   calls: [],
   tableRenames: [],
   columnRenames: [],
-  madeTables: [],
+  alreadyRenamedTables: [],
   plannedStatements: [],
 };
-const MADE_APP_USERS = { ...NOTHING, madeTables: [{ namespaceId: 'app', table: 'app_users' }] };
+const ALREADY_RENAMED_APP_USERS = {
+  ...NOTHING,
+  alreadyRenamedTables: [{ namespaceId: 'app', table: 'app_users' }],
+};
 
 function plan(
   origin: Record<string, ModelSpec>,
@@ -48,7 +51,7 @@ describe('planStatements against a database whose table already has its new name
       { User: users('app_users') },
       fakeTarget(['app.app_users'], { 'app.app_users': ['id', 'email'] }),
     );
-    expect(planned(result)).toEqual(MADE_APP_USERS);
+    expect(planned(result)).toEqual(ALREADY_RENAMED_APP_USERS);
     expect(originTable('app_users')(result)).toEqual({ namespaceId: 'app', table: 'users' });
   });
 
@@ -64,7 +67,7 @@ describe('planStatements against a database whose table already has its new name
       columnRenames: [
         { namespaceId: 'app', table: 'app_users', from: 'email', to: 'email_address' },
       ],
-      madeTables: [{ namespaceId: 'app', table: 'app_users' }],
+      alreadyRenamedTables: [{ namespaceId: 'app', table: 'app_users' }],
       plannedStatements: [],
     });
     expect(
@@ -88,7 +91,7 @@ describe('planStatements against a database whose table already has its new name
       calls: ['column app.app_users.email -> contact'],
       tableRenames: [],
       columnRenames: [{ namespaceId: 'app', table: 'app_users', from: 'email', to: 'contact' }],
-      madeTables: [{ namespaceId: 'app', table: 'app_users' }],
+      alreadyRenamedTables: [{ namespaceId: 'app', table: 'app_users' }],
       plannedStatements: [{ statement, operations: { kind: 'planned', operationIndexes: [0, 1] } }],
     });
   });
@@ -193,7 +196,7 @@ describe('planStatements against a database whose column already has its new nam
       { User: users('app_users', { email: 'email_address' }) },
       fakeTarget(['app.app_users'], { 'app.app_users': ['id', 'email_address'] }),
     );
-    expect(planned(result)).toEqual(MADE_APP_USERS);
+    expect(planned(result)).toEqual(ALREADY_RENAMED_APP_USERS);
     expect(
       result.ok &&
         result.value.origins.originColumn({ namespaceId: 'app', table: 'users' }, 'email_address'),

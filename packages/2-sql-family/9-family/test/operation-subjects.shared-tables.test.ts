@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { subjectsOfCalls } from '../src/core/migrations/operation-subjects';
 import { NO_RENAMED_ORIGINS } from '../src/core/migrations/statement-planning';
-import { app, byHand, column, losing, table, unchanged } from './operation-subjects-fixtures';
+import {
+  app,
+  byHand,
+  column,
+  losing,
+  renamesBetween,
+  table,
+  unchanged,
+} from './operation-subjects-fixtures';
 import { contractOf } from './statement-fixtures';
 
 describe('subjectsOfCalls for models that share a table', () => {
@@ -26,6 +34,7 @@ describe('subjectsOfCalls for models that share a table', () => {
           {
             fromContract: tasks,
             contract: tasks,
+            renames: renamesBetween(tasks, tasks),
             byHand,
             removedVariants: [bug],
             origins: NO_RENAMED_ORIGINS,
@@ -57,6 +66,7 @@ describe('subjectsOfCalls for models that share a table', () => {
           {
             fromContract: tasks,
             contract: tasks,
+            renames: renamesBetween(tasks, tasks),
             byHand,
             removedVariants: [],
             origins: NO_RENAMED_ORIGINS,
@@ -78,6 +88,7 @@ describe('subjectsOfCalls for models that share a table', () => {
         subjectsOfCalls([losing(column('tasks', 'severity'))], {
           fromContract: tasks,
           contract: tasks,
+          renames: renamesBetween(tasks, tasks),
           byHand,
           removedVariants: [],
           origins: NO_RENAMED_ORIGINS,
@@ -98,6 +109,7 @@ describe('subjectsOfCalls for models that share a table', () => {
         subjectsOfCalls([losing(table('users')), losing(column('users', 'email'))], {
           fromContract: sharing,
           contract: sharing,
+          renames: renamesBetween(sharing, sharing),
           byHand,
           removedVariants: [],
           origins: NO_RENAMED_ORIGINS,
@@ -113,6 +125,7 @@ describe('subjectsOfCalls for models that share a table', () => {
         subjectsOfCalls([losing(column('users', 'level'))], {
           fromContract: sharing,
           contract: sharing,
+          renames: renamesBetween(sharing, sharing),
           byHand,
           removedVariants: [],
           origins: NO_RENAMED_ORIGINS,

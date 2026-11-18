@@ -1,7 +1,9 @@
 import { asNamespaceId, type Contract, coreHash, profileHash } from '@internal/contract/types';
 import {
+  exactName,
   type FieldEventCall,
   NO_RENAMED_ORIGINS,
+  StorageRenames,
   subjectsOfCalls,
 } from '@internal/family-sql/control';
 import type { OpFactoryCall } from '@internal/framework-components/control';
@@ -88,6 +90,7 @@ function subjectsOf(calls: readonly OpFactoryCall[], fieldEvents: readonly Field
     {
       fromContract: contract,
       contract,
+      renames: new StorageRenames([], contract, contract, exactName),
       byHand: postgresTableRenameByHand(contract),
       removedVariants: [],
       origins: NO_RENAMED_ORIGINS,

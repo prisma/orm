@@ -44,7 +44,6 @@ import {
 } from '@internal/sql-schema-ir/types';
 import { ok, type Result } from '@internal/utils/result';
 import { buildSqlitePlanDiff, sqliteActualSchema } from './diff-database-schema';
-import { sqliteIdentifiersCollide } from './identifier-case';
 import { indexNameCaseChange, pairIndexReplacements } from './index-replacements';
 import {
   coalesceSubtreeIssues,
@@ -341,6 +340,7 @@ export class SqliteMigrationPlanner
           fromContract: options.fromContract,
           contract: options.contract,
           origins: statements.value.origins,
+          renames: statements.value.renames,
           byHand: sqliteTableRenameByHand,
           removedVariants: storedRewrites.value.removedVariants,
         },
@@ -367,7 +367,6 @@ export class SqliteMigrationPlanner
       policy: options.policy,
       target: {
         tables: () => sqliteSchemaTables(working.current),
-        sameName: sqliteIdentifiersCollide,
         renameTableCall: (rename) =>
           sqliteTableRenameCall({
             previous: working.current,

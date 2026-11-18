@@ -23,6 +23,7 @@ import { buildColumnCodecRef } from './contract-to-schema-ir';
 import { handWrittenMigrationSteps } from './hand-written-migration';
 import { jsonPathText } from './json-path';
 import { isSqlModelStorage, tableControlPolicy } from './model-storage';
+import { joinedList } from './plan-text';
 import type { SchemaTables } from './schema-tables';
 import type { SqlPlannerConflict } from './types';
 import { type UnlistedValueObjectPlace, valueObjectPlaces } from './value-object-field-planning';
@@ -346,7 +347,7 @@ function cycleTwoPlans(
 ): string {
   const [first, ...rest] = moves;
   const withStatements = moves.some(({ statement }) => statement !== undefined);
-  const others = listText(
+  const others = joinedList(
     rest.map(
       (move) => `"${destinationMemberText(enums, move)}" the stored value ${enums.text(move.to)}`,
     ),
@@ -378,7 +379,9 @@ function cycleRefusal(
 ): SqlPlannerConflict {
   const moves = cycleMoves(cycle);
   const swap = temporaryValue(moves[0].from, taken);
-  const listed = listText(moves.map(({ from, to }) => `${enums.text(from)} to ${enums.text(to)}`));
+  const listed = joinedList(
+    moves.map(({ from, to }) => `${enums.text(from)} to ${enums.text(to)}`),
+  );
   const stated = moves.flatMap((move) => (move.statement === undefined ? [] : [move.statement]));
   const allStated = stated.length === moves.length;
   return {
@@ -415,12 +418,6 @@ function changeMergingRefusal(
   };
 }
 
-function listText(items: readonly string[]): string {
-  return items.length === 1
-    ? (items[0] ?? '')
-    : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`;
-}
-
 /** Members that keep their names and move stored values in a cycle. */
 function changeCycleRefusal(
   cycle: readonly StoredChange[],
@@ -435,7 +432,7 @@ function changeCycleRefusal(
   );
   return {
     kind: 'unsupportedOperation',
-    summary: `Cannot change the stored values of enum "${enumText(enums, first.enumValue)}": enum values ${listText(members)} move stored values in a cycle, ${listText(moves.map(({ from, to }) => `${enums.text(from)} to ${enums.text(to)}`))}, and a rewrite of one would overwrite the other before it is read`,
+    summary: `Cannot change the stored values of enum "${enumText(enums, first.enumValue)}": enum values ${joinedList(members)} move stored values in a cycle, ${joinedList(moves.map(({ from, to }) => `${enums.text(from)} to ${enums.text(to)}`))}, and a rewrite of one would overwrite the other before it is read`,
     why: `${CYCLE_WHY} ${cycleTwoPlans(moves, enums, swap)} With migration plan, you can instead write this change as a hand-written migration: ${handWrittenMigrationSteps(cycleRewrites(moves, enums, swap))}`,
   };
 }

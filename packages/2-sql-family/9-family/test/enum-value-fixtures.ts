@@ -9,6 +9,7 @@ import type { ResolvedEnumValueRenameStatement } from '@internal/framework-compo
 import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
 import { createTestSqlNamespace } from '../../1-core/contract/test/test-support';
 import type { planEnumValueRewrites } from '../src/core/migrations/enum-value-planning';
+import { exactName } from '../src/core/migrations/model-storage';
 import type { SchemaTables } from '../src/core/migrations/schema-tables';
 import { TEXT_CODEC_ID, testCodecLookup, textCodec } from './enum-entity-fixtures';
 
@@ -115,6 +116,7 @@ export function contractWith(options: {
 export function tablesOf(qualifiedColumns: readonly string[]): SchemaTables {
   const has = (key: string) => qualifiedColumns.includes(key);
   return {
+    sameName: exactName,
     hasTable: (namespaceId, table) =>
       qualifiedColumns.some((key) => key.startsWith(`${namespaceId}.${table}.`)),
     hasColumn: (namespaceId, table, column) => has(`${namespaceId}.${table}.${column}`),

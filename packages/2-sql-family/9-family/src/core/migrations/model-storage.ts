@@ -77,7 +77,7 @@ export interface StoredModel {
 export function modelsStoring(
   contract: ContractWithDomain,
   table: ModelTable,
-  sameName: SameName = exactName,
+  sameName: SameName,
 ): readonly StoredModel[] {
   return Object.entries(contract.domain.namespaces).flatMap(([namespaceId, namespace]) =>
     Object.entries(namespace.models).flatMap(([model, definition]) => {
@@ -105,7 +105,7 @@ export function fieldsStoring(
   contract: ContractWithDomain,
   table: ModelTable,
   column: string,
-  sameName: SameName = exactName,
+  sameName: SameName,
 ): readonly FieldCoordinate[] {
   return modelsStoring(contract, table, sameName).flatMap(({ coordinate, fields }) =>
     Object.entries(fields)

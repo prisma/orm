@@ -548,17 +548,20 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       }),
       schemaDiffPartition.kept,
     );
-    const onMadeTable = (call: { readonly schemaName: string; readonly tableName: string }) =>
-      statements.value.madeTables.some(
+    const onAlreadyRenamedTable = (call: {
+      readonly schemaName: string;
+      readonly tableName: string;
+    }) =>
+      statements.value.alreadyRenamedTables.some(
         (table) =>
           call.schemaName === emissionSchemaForNamespace(options.contract, table.namespaceId) &&
           call.tableName === table.table,
       );
     const calls = [
       ...statements.value.calls,
-      ...renamePartition.kept.filter(onMadeTable),
+      ...renamePartition.kept.filter(onAlreadyRenamedTable),
       ...ordered.structural,
-      ...renamePartition.kept.filter((call) => !onMadeTable(call)),
+      ...renamePartition.kept.filter((call) => !onAlreadyRenamedTable(call)),
       ...ordered.policyCalls,
       ...fieldEventPartition.kept,
     ];
@@ -611,6 +614,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
           fromContract: options.fromContract,
           contract: options.contract,
           origins: statements.value.origins,
+          renames: statements.value.renames,
           byHand: postgresTableRenameByHand(options.contract),
           removedVariants: storedRewrites.value.removedVariants,
         },
@@ -873,7 +877,6 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       ownership: { oracle: options.ownership, spaceId: options.spaceId },
       target: {
         tables: () => postgresSchemaTables(working.current, options.contract),
-        sameName: (left, right) => left === right,
         namespaces: {
           createNamespaceCalls: (namespaceId) => {
             const schemaName = ddlSchemaOf(namespaceId);
