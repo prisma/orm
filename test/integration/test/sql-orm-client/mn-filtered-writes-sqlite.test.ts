@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
-import { integerColumn, textColumn } from '@internal/adapter-sqlite/column-types';
+import { integerNumberColumn, textColumn } from '@internal/adapter-sqlite/column-types';
 import sqliteAdapter from '@internal/adapter-sqlite/runtime';
 import { soleDomainNamespaceId } from '@internal/contract/types';
 import sqliteDriver from '@internal/driver-sqlite/runtime';
@@ -18,8 +18,8 @@ import { describe, expect, it } from 'vitest';
 
 const Course = model('Course', {
   fields: {
-    tenantId: field.column(integerColumn).column('tenant_id'),
-    id: field.column(integerColumn),
+    tenantId: field.column(integerNumberColumn).column('tenant_id'),
+    id: field.column(integerNumberColumn),
     name: field.column(textColumn),
   },
 })
@@ -30,9 +30,9 @@ const Course = model('Course', {
 
 const Enrollment = model('Enrollment', {
   fields: {
-    userId: field.column(integerColumn).column('user_id'),
-    tenantId: field.column(integerColumn).column('tenant_id'),
-    courseId: field.column(integerColumn).column('course_id'),
+    userId: field.column(integerNumberColumn).column('user_id'),
+    tenantId: field.column(integerNumberColumn).column('tenant_id'),
+    courseId: field.column(integerNumberColumn).column('course_id'),
   },
 })
   .attributes(({ fields, constraints }) => ({
@@ -41,17 +41,17 @@ const Enrollment = model('Enrollment', {
   .sql({ table: 'enrollments' });
 
 const UserBase = model('User', {
-  fields: { id: field.column(integerColumn).id(), name: field.column(textColumn) },
+  fields: { id: field.column(integerNumberColumn).id(), name: field.column(textColumn) },
 }).sql({ table: 'users' });
 
 const Tag = model('Tag', {
-  fields: { id: field.column(integerColumn).id(), name: field.column(textColumn) },
+  fields: { id: field.column(integerNumberColumn).id(), name: field.column(textColumn) },
 }).sql({ table: 'tags' });
 
 const UserTag = model('UserTag', {
   fields: {
-    userId: field.column(integerColumn).column('user_id'),
-    tagId: field.column(integerColumn).column('tag_id'),
+    userId: field.column(integerNumberColumn).column('user_id'),
+    tagId: field.column(integerNumberColumn).column('tag_id'),
   },
 })
   .attributes(({ fields, constraints }) => ({

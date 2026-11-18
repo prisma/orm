@@ -167,7 +167,7 @@ export function describeOrmWrites(server: LiveServer): void {
       });
     });
 
-    it('updates, upserts and deletes as the project example does, writing the upsert the server takes', async (test) => {
+    it('updates, upserts and deletes users, writing the upsert the server takes', async (test) => {
       await withSeededDatabase(test, server, exampleTablesDdl, async (url) => {
         const statements: string[] = [];
         await using db = server.client({

@@ -38,7 +38,7 @@ const MAX_SAFE = 9007199254740991n;
 /** The largest total SQLite's `SUM` produces: one row more raises `integer overflow`, which is the bound `sumBigInt` is offered within. */
 const MAX_INT64 = 9223372036854775807n;
 
-/** The result codecs carrying an integer wider than the driver's numeric reads, and so the ones a lowering has to cast out as text. */
+/** The result codecs carrying an integer wider than a JS `number`, and so the ones a lowering has to cast out as text. */
 const WIDE_INTEGER_CODEC_IDS: ReadonlyArray<string> = ['sqlite/bigint@1', 'sqlite/bigintnumber@1'];
 
 /** The codec a resolved row decodes its result through, instantiated as the runtime would. */
@@ -175,7 +175,7 @@ describe('SQLite aggregate defaults', { concurrent: false }, () => {
     await expect(pastRange.codec.fromWire(pastRange.wire, {})).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
       message:
-        'sqlite/bigintnumber@1 value must be an integer within the safe integer range, got 9007199254740992',
+        'A sqlite/bigintnumber@1 value is "9007199254740992", which is not an integer within the safe integer range. sqlite/bigintnumber@1 reads integers from -9007199254740991 to 9007199254740991.',
       meta: { codecId: 'sqlite/bigintnumber@1', received: '9007199254740992' },
     });
   });
@@ -217,10 +217,10 @@ describe('SQLite aggregate defaults', { concurrent: false }, () => {
     expect(await codec.fromWire(wire, {})).toBe(10.333333333333334);
   });
 
-  // A wide integer result leaves the database as text, because `node:sqlite`
-  // reads an integer no JS number can hold as an error rather than a value. The
-  // lowering is what renders the cast — and it renders only that: the codec the
-  // descriptor declared is still the codec the registry resolves.
+  // A wide integer result leaves the database as text, the form both integer
+  // codecs read exactly. The lowering is what renders the cast — and it renders
+  // only that: the codec the descriptor declared is still the codec the registry
+  // resolves.
   describe('integer results are lowered to text', () => {
     it('lowers every reachable wide-integer result but a BigIntNumber column extremum', () => {
       const inputs: ReadonlyArray<string | undefined> = [

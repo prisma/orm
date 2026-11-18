@@ -275,11 +275,11 @@ test('criteria disconnect stays available on a pure junction relation in update 
   expectTypeOf(input).toExtend<Input>();
 });
 
-test('bare disconnect stays accepted for a plain 1:N relation', () => {
+test('bare disconnect stays accepted for a plain 1:N relation with an optional foreign key', () => {
   type Input = MutationUpdateInput<Contract, 'User'>;
 
   const input: Input = {
-    posts: (mutator) => mutator.disconnect(),
+    invitedUsers: (mutator) => mutator.disconnect(),
   };
 
   expectTypeOf(input).toExtend<Input>();

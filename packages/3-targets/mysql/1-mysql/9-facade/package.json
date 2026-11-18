@@ -69,6 +69,7 @@
     "./contract-builder": "./dist/contract-builder.mjs",
     "./contract-types": "./dist/contract-types.mjs",
     "./control": "./dist/control.mjs",
+    "./define-contract": "./dist/define-contract.mjs",
     "./migration": "./dist/migration.mjs",
     "./runtime": "./dist/runtime.mjs",
     "./static": "./dist/static.mjs",

@@ -5,11 +5,11 @@
  */
 
 import {
-  bigintColumn,
   blobColumn,
   datetimeColumn,
-  integerColumn,
-  jsonColumn,
+  integerBigIntColumn,
+  integerNumberColumn,
+  plainJsonColumn,
   realColumn,
   textColumn,
 } from '@internal/adapter-sqlite/column-types';
@@ -34,14 +34,14 @@ export const contract = defineContract({
   models: {
     Scalar: model('Scalar', {
       fields: {
-        id: field.column(integerColumn).default(autoincrement()).id(),
+        id: field.column(integerNumberColumn).default(autoincrement()).id(),
         text: field.column(textColumn),
-        integer: field.column(integerColumn),
+        integer: field.column(integerNumberColumn),
         real: field.column(realColumn),
         blob: field.column(blobColumn),
         datetime: field.column(datetimeColumn),
-        json: field.column(jsonColumn),
-        bigint: field.column(bigintColumn),
+        json: field.column(plainJsonColumn),
+        bigint: field.column(integerBigIntColumn),
         bigintNumber: field.column(bigintNumber),
         sqlInt: field.column(sqlInt),
         sqlFloat: field.column(sqlFloat),

@@ -2,11 +2,13 @@ import { SQL_EXPRESSION_DATA_TYPE_ID } from '@internal/sql-contract/sql-expressi
 import { describe, expect, it } from 'vitest';
 import {
   sqliteBlob,
+  sqliteBoolean,
   sqliteCharacter,
   sqliteCharacterVarying,
   sqliteDataTypes,
   sqliteDate,
   sqliteDatetime,
+  sqliteDecimal,
   sqliteDuration,
   sqliteInteger,
   sqliteJson,
@@ -23,10 +25,12 @@ describe('the data types this target registers', () => {
     expect(sqliteDataTypes.map((type) => type.id).sort()).toEqual([
       'sql/raw',
       'sqlite/blob',
+      'sqlite/boolean',
       'sqlite/character',
       'sqlite/character-varying',
       'sqlite/date',
       'sqlite/datetime',
+      'sqlite/decimal',
       'sqlite/duration',
       'sqlite/integer',
       'sqlite/json',
@@ -48,6 +52,8 @@ describe('the data types this target registers', () => {
     ['sqlite/time', sqliteTime, []],
     ['sqlite/duration', sqliteDuration, []],
     ['sqlite/json', sqliteJson, []],
+    ['sqlite/decimal', sqliteDecimal, ['sqlite/integer', 'sqlite/text']],
+    ['sqlite/boolean', sqliteBoolean, []],
   ])('%s casts from exactly the types the design names', (_id, type, sources) => {
     expect(sourcesOf(type)).toEqual(sources);
   });

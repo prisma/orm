@@ -129,3 +129,12 @@ describe('a write on a polymorphic base', () => {
     expectTypeOf(await withProject.deleteAll().toArray()).toEqualTypeOf<TaskWithProjectRow[]>();
   });
 });
+
+describe('update data on a polymorphic model', () => {
+  test('rejects the discriminator on a variant and on the base model', () => {
+    // @ts-expect-error
+    tasks.features().where({ id: 1 }).updateAll({ type: 'bug' });
+    // @ts-expect-error
+    tasks.where({ id: 1 }).updateAll({ type: 'bug' });
+  });
+});

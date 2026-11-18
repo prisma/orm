@@ -12,9 +12,14 @@ export interface EmittedContract {
 }
 
 /** Emits `test/fixtures/<name>.prisma` for MariaDB in memory, as `contract emit` does, and loads the contract as the CLI loads it. */
-export async function emitFixture(name: string): Promise<EmittedContract> {
+export function emitFixture(name: string): Promise<EmittedContract> {
+  return emitContractFile(`${name}.prisma`);
+}
+
+/** Emits the contract file `test/fixtures/<fileName>`, a Prisma schema or a TypeScript contract, for MariaDB in memory, as `contract emit` does. */
+export async function emitContractFile(fileName: string): Promise<EmittedContract> {
   const { contract } = defineConfig({
-    contract: resolve(import.meta.dirname, 'fixtures', `${name}.prisma`),
+    contract: resolve(import.meta.dirname, 'fixtures', fileName),
   });
   if (contract?.typesModule === undefined) {
     throw new Error('defineConfig set no contract types module');

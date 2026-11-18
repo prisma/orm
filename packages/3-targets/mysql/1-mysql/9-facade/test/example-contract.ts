@@ -19,7 +19,7 @@ export const frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'
   mysqlAdapter,
 ];
 
-/** The project's example contract, emitted for MySQL and loaded as the CLI loads it. */
+/** The test contract of users, posts and roles, emitted for MySQL and loaded as the CLI loads it. */
 export function loadExampleContract(): Contract<SqlStorage> {
   return mysql.contractSerializer.deserializeContract(contractJson);
 }

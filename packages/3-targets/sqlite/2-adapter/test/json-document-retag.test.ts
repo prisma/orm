@@ -86,8 +86,9 @@ describe('SQLite JSON-document retag', () => {
     );
   });
 
-  it('is not applied by the sqlite/json@1 descriptor, whose canonical form is the stored text', () => {
+  it('is not applied by the sqlite/json@1 descriptor, which projects stored text as the bare column', () => {
     const descriptor = sqliteCodecDescriptorRegistry.descriptorFor('sqlite/json@1');
-    expect(descriptor?.projectJson(column, { codecId: 'sqlite/json@1' })).toBe(column);
+    const projected = descriptor?.projectJson(column, { codecId: 'sqlite/json@1' });
+    expect(projected).toMatchObject({ kind: 'case', elseExpr: column });
   });
 });

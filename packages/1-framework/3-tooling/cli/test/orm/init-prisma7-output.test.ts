@@ -6,14 +6,17 @@ import { basename, dirname, join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
-import { importFromProject } from '../../src/orm/init-prisma7-check';
+import { importFromProject } from '../../src/orm/project-modules';
 import { createTestProjectDir, fixtureAppDir } from '../utils/test-project-dir';
 
 const FIXTURE = join(fixtureAppDir, 'fixtures/prisma7-project');
 const emit = vi.fn();
 const commands: MountedTree = {
   ...BIN_COMMANDS,
-  'orm init': createInitCommand({ emitScaffoldedContract: emit, importFromProject }),
+  'orm init': createInitCommand({
+    emitScaffoldedContract: emit,
+    importFromProject,
+  }),
 };
 
 let projectDir: string;
@@ -145,7 +148,7 @@ describe('the Prisma 7 result document', () => {
       expect(run.presented?.data).toMatchObject({
         packagesInstalled: {
           status: 'installed',
-          deps: ['@prisma/orm-postgres', 'dotenv', '@prisma/client@7'],
+          deps: ['@prisma/orm-postgres', 'dotenv', 'pg', '@prisma/client@7'],
           devDeps: [
             'prisma@latest',
             '@types/node',
@@ -210,7 +213,7 @@ describe('the Prisma 7 result document', () => {
       expect(run.presented?.data).toMatchObject({
         packagesInstalled: {
           status: 'failed',
-          deps: ['@prisma/orm-postgres', 'dotenv'],
+          deps: ['@prisma/orm-postgres', 'dotenv', 'pg'],
           devDeps: [],
         },
       });

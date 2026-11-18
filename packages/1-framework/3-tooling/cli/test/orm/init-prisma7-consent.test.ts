@@ -12,8 +12,10 @@ import {
   projectFiles,
   resolveInputs,
   SIDE_BY_SIDE_QUESTION,
+  STUB_CONTRIBUTION,
   scriptedPrompt,
   stubCheck,
+  stubPrepare,
 } from './init-prisma7-fixtures';
 
 let projectDir: string;
@@ -167,6 +169,7 @@ describe(
       const ADDED = {
         packages: ['stub-target-package', 'dotenv'],
         removeCommand: 'pnpm remove stub-target-package dotenv',
+        rewritten: [],
       };
 
       it('runs with the target and schema before any consent is asked', async () => {
@@ -175,6 +178,7 @@ describe(
         writeManifest({ name: 'app', devDependencies: { prisma: '^7.3.0' } });
         const { prompt, calls } = scriptedPrompt();
         const refusal = new Error('refused');
+        const prepare = stubPrepare();
         const check = stubCheck();
 
         await expect(
@@ -182,14 +186,21 @@ describe(
             cwd: projectDir,
             flags: prisma7Flags(),
             prompt,
+            prepareTargetPackage: prepare,
             checkPrisma7Source: async (request) => {
               await check(request);
               throw refusal;
             },
           }),
         ).rejects.toBe(refusal);
+        expect(prepare.requests).toEqual(['@prisma/orm-postgres']);
         expect(check.requests).toEqual([
-          { target: 'postgres', schemaPath: 'prisma/schema.prisma' },
+          {
+            packageName: '@prisma/orm-postgres',
+            contribution: STUB_CONTRIBUTION,
+            schemaPath: 'prisma/schema.prisma',
+            added: undefined,
+          },
         ]);
         expect(calls).toEqual([]);
       });
@@ -213,7 +224,7 @@ describe(
                 throw consentRequired;
               },
             },
-            checkPrisma7Source: stubCheck({ installed: ADDED.packages, added: ADDED }),
+            prepareTargetPackage: stubPrepare({ installed: ADDED.packages, added: ADDED }),
           }),
         ).rejects.toMatchObject({
           code: 'CLI.CONSENT_REQUIRED',
@@ -247,7 +258,7 @@ describe(
 
         expect(warned).toEqual([
           {
-            text: 'stub-target-package cannot read Prisma 7 schemas, so init sets up a fresh Prisma 8 project instead and leaves prisma/schema.prisma alone.',
+            text: '@prisma/orm-postgres cannot read Prisma 7 schemas, so init sets up a fresh Prisma 8 project instead and leaves prisma/schema.prisma alone.',
             promptsSoFar: 1,
           },
         ]);
@@ -263,7 +274,7 @@ describe(
           cwd: projectDir,
           flags: prisma7Flags(),
           prompt,
-          checkPrisma7Source: stubCheck({
+          prepareTargetPackage: stubPrepare({
             installed: ADDED.packages,
             added: ADDED,
             warnings: ['from the install'],

@@ -42,14 +42,16 @@ describe('withTransaction when a transaction hook fails', () => {
 });
 
 describe('a transaction whose COMMIT resolved', () => {
-  it('ignores rollback() after a commit() that rejected with a hook error', async () => {
+  it('rejects rollback() after a commit() that rejected with a hook error, sending nothing', async () => {
     const hookError = new Error('transaction ended hook failed');
     const { runtime, events } = createSetup({ middleware: [failingTransactionEnd(hookError)] });
     const transaction = await (await runtime.connection()).transaction();
     await transaction.execute(rawPlan('update t set x = 1'));
 
     await expect(transaction.commit()).rejects.toBe(hookError);
-    await expect(transaction.rollback()).resolves.toBeUndefined();
+    await expect(transaction.rollback()).rejects.toMatchObject({
+      code: 'RUNTIME.TRANSACTION_CLOSED',
+    });
 
     expect(names(events)).not.toContain('rollback');
     expect(names(events).filter((name) => name.includes(':transaction:'))).toEqual([
@@ -58,12 +60,14 @@ describe('a transaction whose COMMIT resolved', () => {
     ]);
   });
 
-  it('ignores rollback() after a commit() that resolved', async () => {
+  it('rejects rollback() after a commit() that resolved, sending nothing', async () => {
     const { runtime, events } = createSetup();
     const transaction = await (await runtime.connection()).transaction();
 
     await transaction.commit();
-    await transaction.rollback();
+    await expect(transaction.rollback()).rejects.toMatchObject({
+      code: 'RUNTIME.TRANSACTION_CLOSED',
+    });
 
     expect(names(events)).not.toContain('rollback');
   });
@@ -116,6 +120,34 @@ describe('withTransaction when the transaction cannot start', () => {
       'release',
     ]);
   });
+
+  it('rejects with the refusal when releasing the refused connection fails', async () => {
+    const refused = new Error('started failed');
+    const failingStart: SqlMiddleware = {
+      name: 'failing-start',
+      familyId: 'sql',
+      async activityStarted(activity) {
+        if (activity.kind === 'transaction') throw refused;
+      },
+    };
+    const { runtime } = createSetup({
+      failures: { release: new Error('release failed') },
+      middleware: [failingStart],
+    });
+
+    await expect(withTransaction(runtime, async () => undefined)).rejects.toBe(refused);
+  });
+
+  it('rejects with the BEGIN error when destroying the connection fails', async () => {
+    const beginFailure = new Error('begin failed');
+    const { runtime, events } = createSetup({
+      failures: { begin: beginFailure, destroy: new Error('destroy failed') },
+    });
+
+    await expect(withTransaction(runtime, async () => undefined)).rejects.toBe(beginFailure);
+
+    expect(names(events)).toContain('destroy');
+  });
 });
 
 describe('withTransaction with a connection the runtime did not make', () => {
@@ -162,7 +194,7 @@ describe('a transaction whose ROLLBACK resolved', () => {
 });
 
 describe('rollback() while commit() is finalizing', () => {
-  it('resolves only after the commit finalization hooks have run', async () => {
+  it('rejects only after the commit finalization hooks have run', async () => {
     let release: () => void = () => {};
     const gate = new Promise<void>((resolve) => {
       release = resolve;
@@ -182,12 +214,12 @@ describe('rollback() while commit() is finalizing', () => {
 
     const committing = transaction.commit();
     await new Promise((resolve) => setTimeout(resolve, 0));
-    const rollingBack = transaction.rollback().then(() => order.push('rollback resolved'));
+    const rollingBack = transaction.rollback().catch(() => order.push('rollback rejected'));
     await new Promise((resolve) => setTimeout(resolve, 0));
     release();
     await Promise.all([committing, rollingBack]);
 
-    expect(order).toEqual(['finalized', 'rollback resolved']);
+    expect(order).toEqual(['finalized', 'rollback rejected']);
   });
 });
 

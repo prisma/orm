@@ -2,7 +2,7 @@
 
 For the team building a SQL Server target for Prisma 8 in their own repository. This replaces the mechanism proposed in [prisma/orm#31008](https://github.com/prisma/orm/pull/31008).
 
-**Status:** the design is approved. The first half, generated files importing from your package, is implemented and in review, and section 1 below describes it as built. The second half, `prisma orm init`, is designed and not yet built, so the names in section 2 can still change. We will post in the Discord thread when each part is released, with the version to pin.
+**Status:** the first half, generated files importing from your package, is merged in [prisma/orm#31078](https://github.com/prisma/orm/pull/31078) and will be in the next release candidate after `8.0.0-rc.24`. Section 1 describes it as built. The second half, `prisma orm init`, is being built now, so the names in section 2 can still change. We will post in the Discord thread when each part is released, with the version to pin.
 
 ## The outcome
 
@@ -132,7 +132,7 @@ Rules:
 - build its own migration planner and renderer;
 - provide its own contract serialiser and runtime client.
 
-**One known gap.** `prisma migration plan` can write a migration with a `placeholder(...)` call for you to fill in by hand. Before `prisma db migrate` applies anything, it checks for a migration that is still unfilled. That check recognises only Prisma's own migration modules today, so it will not catch an unfilled migration that imports from yours. We are fixing it separately. Until then, do not rely on that check: run `node migration.ts` yourself, which fails on an unfilled placeholder.
+**Unfilled migrations are caught.** `prisma migration plan` can write a migration with a `placeholder(...)` call for you to fill in by hand. Before `prisma db migrate` applies anything, it refuses a migration that still calls `placeholder(...)`, whichever package it imports `placeholder` from. Export `placeholder` from your migration module under that name.
 
 **Requirements from your proposal this satisfies**
 

@@ -13,8 +13,8 @@ import { invariant } from '@internal/utils/assertions';
 import type { PreparedExecution, PreparedStatement } from './prepared/types';
 import type {
   RuntimeQueryable,
-  RuntimeTransaction,
   RuntimeTransactionOptions,
+  TransactionContext,
 } from './sql-runtime';
 
 /** What starts client activities and hashes plans. The runtime's queryables and activity handles carry one through `activitySource`. */
@@ -46,8 +46,11 @@ export interface ActivityHandle<K extends ClientActivityKind>
   readonly activity: ClientActivity<K>;
   /** Set when an `intercept.onActivity` handler supplied the result; the client then returns it without running anything. */
   readonly intercepted: { readonly result: ClientActivityResult<K> } | undefined;
-  /** Starts a transaction beneath the activity. Absent on a handle opened under a transaction, or on a connection whose transaction is open. */
-  readonly transaction?: (options?: RuntimeTransactionOptions) => Promise<RuntimeTransaction>;
+  /** Runs `fn` in a transaction beneath the activity, as `withTransaction` does. On a handle opened on a connection, the transaction runs on that connection and leaves it held. Absent on a handle opened under a transaction, or on a connection whose transaction is open. */
+  readonly transaction?: <R>(
+    fn: (tx: TransactionContext) => PromiseLike<R>,
+    options?: RuntimeTransactionOptions,
+  ) => Promise<R>;
   /** Ends the activity. Rejects with `RUNTIME.ACTIVITY_CHILDREN_OPEN` when a statement or activity beneath it has not ended, after ending it `failed`. */
   end(end: ClientActivityEnd<K>): Promise<void>;
 }

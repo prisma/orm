@@ -35,7 +35,11 @@ test('a handle is typed by its kind, and nests through its own members', async (
   >();
   expectTypeOf<keyof SqlTransactionOptions>().toEqualTypeOf<'isolationLevel'>();
   expectTypeOf(call.transaction).toEqualTypeOf<
-    ((start?: RuntimeTransactionOptions) => Promise<RuntimeTransaction>) | undefined
+    | (<R>(
+        fn: (tx: TransactionContext) => PromiseLike<R>,
+        options?: RuntimeTransactionOptions,
+      ) => Promise<R>)
+    | undefined
   >();
   expectTypeOf<RuntimeTransaction['signal']>().toEqualTypeOf<AbortSignal>();
   expectTypeOf<RuntimeTransactionOptions['timeout']>().toEqualTypeOf<number | null | undefined>();

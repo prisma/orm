@@ -122,8 +122,7 @@ describe('forRole(binding) after close()', () => {
     });
     await nextTurn();
     await call.execute(stubPlan());
-    const transaction = await call.transaction?.();
-    await transaction?.commit();
+    await call.transaction?.(async () => undefined);
     const closedBeforeEnd = closed;
     await call.end({ outcome: 'succeeded' });
     await closing;

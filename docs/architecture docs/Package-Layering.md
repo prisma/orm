@@ -357,6 +357,18 @@ In `architecture.config.json` the target pack and facade are registered in the `
 | `packages/3-targets/postgres/1-target/` | `@internal/target-postgres` |
 | `packages/3-targets/postgres/2-adapter/` | `@internal/adapter-postgres` |
 | `packages/3-targets/postgres/3-driver/` | `@internal/driver-postgres` |
+| `packages/3-targets/sqlite/1-target/` | `@internal/target-sqlite` |
+| `packages/3-targets/sqlite/2-adapter/` | `@internal/adapter-sqlite` |
+| `packages/3-targets/sqlite/3-driver/` | `@internal/driver-sqlite` |
+| `packages/3-targets/mysql/1-mysql/1-target/` | `@internal/target-mysql` |
+| `packages/3-targets/mysql/1-mysql/2-adapter/` | `@internal/adapter-mysql` |
+| `packages/3-targets/mysql/1-mysql/3-driver/` | `@internal/driver-mysql` |
+| `packages/3-targets/mysql/1-mysql/9-facade/` | `@internal/mysql` |
+| `packages/3-targets/mysql/2-mariadb/1-target/` | `@internal/target-mariadb` |
+| `packages/3-targets/mysql/2-mariadb/2-adapter/` | `@internal/adapter-mariadb` |
+| `packages/3-targets/mysql/2-mariadb/3-driver/` | `@internal/driver-mariadb` |
+| `packages/3-targets/mysql/2-mariadb/9-facade/` | `@internal/mariadb` |
+| `packages/3-targets/mysql/3-live-tests/` | `@internal/mysql-live-tests` |
 | `packages/3-extensions/sql-orm-client/` | `@internal/sql-orm-client` |
 | `packages/3-extensions/pgvector/` | `@internal/extension-pgvector` |
 

@@ -119,7 +119,13 @@ describe('MySQL lowering of a select', () => {
       sqlOf(
         selectId.withWhere(BinaryExpr.eq(id, ParamRef.of(1, { codec: { codecId: 'pg/x@1' } }))),
       ),
-    ).toThrow(expect.objectContaining({ code: 'RUNTIME.PARAM_REF_MISSING_CODEC' }));
+    ).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.PARAM_REF_MISSING_CODEC',
+        message:
+          'A value in this query uses codec "pg/x@1", which no extension given to the client provides.',
+      }),
+    );
   });
 
   it('numbers params in the order the runtime encodes them', () => {
@@ -314,7 +320,12 @@ describe('MySQL lowering of expressions', () => {
     'refuses the literal %s, which only a caller value could supply',
     (value) => {
       expect(() => projectionOf(LiteralExpr.of(value))).toThrow(
-        expect.objectContaining({ code: 'RUNTIME.AST_UNSUPPORTED' }),
+        expect.objectContaining({
+          code: 'RUNTIME.AST_UNSUPPORTED',
+          message: expect.stringMatching(
+            /^Prisma writes only numbers, booleans and NULL into MySQL SQL as literals, and this query has an? (string|date|object|array) literal; pass the value as a parameter instead$/,
+          ),
+        }),
       );
     },
   );
@@ -396,6 +407,8 @@ describe('MySQL placeholder check', () => {
     expect(() => sqlOf(RawQueryAst.affectedCount(['SELECT ? + ', ParamRef.of(1)]))).toThrow(
       expect.objectContaining({
         code: 'RUNTIME.PARAM_PLACEHOLDER_MISMATCH',
+        message:
+          'The SQL has placeholders ["?","?1"] for 1 value(s); each value needs its own numbered placeholder, and the SQL may contain no other placeholder.',
         meta: { placeholders: ['?', '?1'], params: 1 },
       }),
     );
@@ -405,7 +418,8 @@ describe('MySQL placeholder check', () => {
     expect(() => sqlOf(RawQueryAst.affectedCount(['SELECT ', ParamRef.of('a'), '0 AS x']))).toThrow(
       expect.objectContaining({
         code: 'RUNTIME.PARAM_PLACEHOLDER_MISMATCH',
-        message: expect.stringContaining('digit right after an interpolated value'),
+        message:
+          "Raw SQL puts a digit right after an interpolated value, which would become part of the value's placeholder",
       }),
     );
   });
@@ -508,7 +522,14 @@ describe('MySQL lowering of JSON for includes', () => {
           JsonObjectExpr.entry('x', new CodecJsonValueProjection(rows('x'), { codecId: 'pg/x@1' })),
         ]),
       ),
-    ).toThrow(expect.objectContaining({ code: 'RUNTIME.PARAM_REF_MISSING_CODEC' }));
+    ).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.PARAM_REF_MISSING_CODEC',
+        message:
+          'A column this query reads in an include uses codec "pg/x@1", which no extension given to the client provides.',
+        fix: 'Add the extension that provides codec "pg/x@1" to the client\'s `extensions`.',
+      }),
+    );
   });
 });
 

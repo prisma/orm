@@ -69,7 +69,7 @@ import {
   storedWithinPrecision,
   wireTextOfDate,
 } from './date-time-values';
-import { mysqlError, mysqlQueryNotYetSupported } from './errors';
+import { mysqlError } from './errors';
 
 const DECIMAL_INTEGER = /^-?\d+$/;
 /** A double as MySQL and MariaDB print it: `1.5`, `-2`, `9.007199254740992e15`. */
@@ -111,7 +111,15 @@ export const mysqlSqlVarcharDescriptor = mysqlCodec(sqlVarcharDescriptor, {
 export const mysqlSqlRawDescriptor = mysqlCodec(sqlRawDescriptor, {
   dataType: sqlRawDataType,
   jsonProjection: () => {
-    throw mysqlQueryNotYetSupported('Reading a raw column inside an include');
+    throw mysqlError(
+      'RUNTIME.AST_UNSUPPORTED',
+      'Reading a raw column inside an include is not yet supported on MySQL and MariaDB.',
+      {
+        why: "An include reads its rows as JSON, and Prisma cannot yet write a raw column's value into that JSON on MySQL and MariaDB.",
+        fix: "Leave the raw column out of the include's select, and read it with its own query.",
+        meta: { feature: 'Reading a raw column inside an include' },
+      },
+    );
   },
   factory: (descriptor, dataType, params) => () => new SqlRawCodec(descriptor, dataType, params),
 });

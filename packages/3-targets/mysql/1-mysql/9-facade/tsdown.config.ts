@@ -6,6 +6,7 @@ export default defineConfig({
     'src/exports/contract-builder.ts',
     'src/exports/control.ts',
     'src/exports/contract-types.ts',
+    'src/exports/define-contract.ts',
     'src/exports/migration.ts',
     'src/exports/runtime.ts',
     'src/exports/static.ts',

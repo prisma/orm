@@ -1,10 +1,12 @@
+import { Buffer } from 'node:buffer';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { applySpecifierDefaultControlPolicy } from '@internal/contract/apply-specifier-default-control-policy';
 import type { Contract } from '@internal/contract/types';
 import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
+import { hasPslInterpreter } from '@internal/psl-parser/interpret';
 import { join } from 'pathe';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { prismaContract } from '../src/exports/provider';
 import {
@@ -516,6 +518,102 @@ model Other {
         'PSL_DUPLICATE_DECLARATION',
         'PSL_UNRESOLVED_REFERENCE',
       ]);
+    });
+
+    it('returns PSL_SCHEMA_READ_FAILED naming the file when it is not valid UTF-8', async () => {
+      const tempDir = await mkdtemp(join(tmpdir(), 'psl-provider-utf8-'));
+      tempDirs.push(tempDir);
+      const schemaPath = join(tempDir, 'schema.prisma');
+      await writeFile(
+        schemaPath,
+        Buffer.concat([
+          Buffer.from('// use prisma-8\nmodel User {\n  id Int @id // invalid byte: ', 'utf-8'),
+          Buffer.from([0x97]),
+          Buffer.from('\n}\n', 'utf-8'),
+        ]),
+      );
+
+      process.chdir(tempDir);
+      const contract = prismaContract('./schema.prisma', baseOptions);
+      const result = await contract.source.load(
+        createPostgresTestContext({ resolvedInputs: [schemaPath] }),
+      );
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure).toMatchObject({
+        summary: 'Failed to read Prisma schema files',
+        diagnostics: [
+          {
+            code: 'PSL_SCHEMA_READ_FAILED',
+            message: expect.stringContaining(schemaPath),
+            sourceId: schemaPath,
+          },
+        ],
+      });
+    });
+
+    it('reports only the read failure when the file carrying the directive is not valid UTF-8', async () => {
+      const tempDir = await mkdtemp(join(tmpdir(), 'psl-provider-utf8-'));
+      tempDirs.push(tempDir);
+      const schemaPath = join(tempDir, 'schema.prisma');
+      const draftPath = join(tempDir, 'draft.prisma');
+      await writeFile(
+        schemaPath,
+        Buffer.concat([
+          Buffer.from('// use prisma-8\nmodel User {\n  id Int @id // ', 'utf-8'),
+          Buffer.from([0x97]),
+          Buffer.from('\n}\n', 'utf-8'),
+        ]),
+      );
+      await writeFile(draftPath, 'model Draft {\n  id Int @id\n}\n', 'utf-8');
+
+      process.chdir(tempDir);
+      const contract = prismaContract('./*.prisma', baseOptions);
+      const result = await contract.source.load(
+        createPostgresTestContext({ resolvedInputs: [schemaPath, draftPath] }),
+      );
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.diagnostics.map((d) => d.code)).toEqual(['PSL_SCHEMA_READ_FAILED']);
+    });
+
+    it('loads the opted-in file when a file without the directive has an invalid byte', async () => {
+      const tempDir = await mkdtemp(join(tmpdir(), 'psl-provider-utf8-'));
+      tempDirs.push(tempDir);
+      const schemaPath = join(tempDir, 'schema.prisma');
+      const otherPath = join(tempDir, 'other.prisma');
+      await writeFile(schemaPath, '// use prisma-8\nmodel User {\n  id Int @id\n}\n', 'utf-8');
+      await writeFile(
+        otherPath,
+        Buffer.concat([Buffer.from('// notes: ', 'utf-8'), Buffer.from([0x97])]),
+      );
+
+      process.chdir(tempDir);
+      const contract = prismaContract('./*.prisma', baseOptions);
+      const result = await contract.source.load(
+        createPostgresTestContext({ resolvedInputs: [schemaPath, otherPath] }),
+      );
+
+      expect(result.ok).toBe(true);
+    });
+
+    it('keeps a leading byte-order mark in the text it reads', async () => {
+      const tempDir = await mkdtemp(join(tmpdir(), 'psl-provider-utf8-'));
+      tempDirs.push(tempDir);
+      const schemaPath = join(tempDir, 'schema.prisma');
+      const text = '\uFEFF// use prisma-8\nmodel User {\n  id Int @id\n}\n';
+      await writeFile(schemaPath, text, 'utf-8');
+
+      process.chdir(tempDir);
+      const contract = prismaContract('./schema.prisma', baseOptions);
+      const { source } = contract;
+      if (!hasPslInterpreter(source)) throw new Error('expected an interpret-capable source');
+      const interpret = vi.spyOn(source, 'interpret');
+      await source.load(createPostgresTestContext({ resolvedInputs: [schemaPath] }));
+
+      expect(interpret.mock.calls[0]?.[0].sources.sourceFileNamed(schemaPath).text).toBe(text);
     });
   });
 

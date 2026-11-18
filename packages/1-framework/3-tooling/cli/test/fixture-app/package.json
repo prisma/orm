@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@internal/mongo": "workspace:8.0.0-rc.24",
+    "@internal/postgres": "workspace:8.0.0-rc.24",
     "@prisma/orm-mongo": "workspace:@internal/mongo@8.0.0-rc.24",
     "@prisma/orm-postgres": "workspace:@internal/postgres@8.0.0-rc.24",
     "@types/node": "catalog:",

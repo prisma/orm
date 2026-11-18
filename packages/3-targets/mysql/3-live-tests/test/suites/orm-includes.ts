@@ -178,7 +178,7 @@ export function describeOrmIncludes(server: LiveServer): void {
       );
     });
 
-    it('returns whole rows for the include calls the project spec shows', async (test) => {
+    it('returns whole rows for a user with its posts in order and for posts with their author', async (test) => {
       await withSeededDatabase(test, server, exampleDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const withPosts = await db.orm.User.include('posts', (posts) =>

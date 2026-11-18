@@ -37,10 +37,8 @@
     "@internal/target-postgres": "workspace:8.0.0-rc.24",
     "@internal/utils": "workspace:8.0.0-rc.24",
     "@types/node": "catalog:",
-    "@types/pg": "catalog:",
     "arktype": "catalog:",
     "pathe": "^2.0.3",
-    "pg": "catalog:",
     "temporal-spec": "1.0.1",
     "tinyglobby": "catalog:"
   },
@@ -53,12 +51,16 @@
     "@repo/test-utils": "workspace:8.0.0-rc.24",
     "@repo/tsconfig": "workspace:8.0.0-rc.24",
     "@repo/tsdown": "workspace:8.0.0-rc.24",
+    "@types/pg": "catalog:",
+    "pg": "catalog:",
     "temporal-polyfill": "^1.0.4",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
   "peerDependencies": {
+    "@types/pg": "^8.20.0",
+    "pg": "^8.22.0",
     "temporal-polyfill": "^1.0.4",
     "typescript": ">=5.9"
   },
@@ -78,6 +80,7 @@
     "./contract-types": "./dist/contract-types.mjs",
     "./control": "./dist/control.mjs",
     "./family": "./dist/family.mjs",
+    "./init": "./dist/init.mjs",
     "./internal/options": "./dist/internal/options.mjs",
     "./internal/static-context": "./dist/internal/static-context.mjs",
     "./internal/transaction-members": "./dist/internal/transaction-members.mjs",

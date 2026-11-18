@@ -496,9 +496,15 @@ describe('ports/prisma/functional/relationMode-1-to-1 (foreignKeys)', () => {
 
               await expect(
                 ctx.db.public.UserOneToOne.where({ id: '1' }).update({
+                  // @ts-expect-error
                   profile: (p) => p.disconnect([{ id: '1' }]),
                 }),
-              ).rejects.toThrow();
+              ).rejects.toThrow(
+                expect.objectContaining({
+                  code: 'ORM.OPERATION_UNSUPPORTED',
+                  meta: expect.objectContaining({ reason: 'required-foreign-key' }),
+                }),
+              );
 
               expect(await ctx.db.public.UserOneToOne.orderBy((u) => u.id.asc()).all()).toEqual([
                 { id: '1', enabled: null },

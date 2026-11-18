@@ -1,0 +1,259 @@
+{
+  "schemaVersion": "1",
+  "targetFamily": "sql",
+  "target": "sqlite",
+  "profileHash": "260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53",
+  "roots": {
+    "account": {
+      "model": "Account",
+      "namespace": "__unbound__"
+    },
+    "membership": {
+      "model": "Membership",
+      "namespace": "__unbound__"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "__unbound__": {
+        "models": {
+          "Account": {
+            "fields": {
+              "active": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/boolean@1",
+                  "kind": "scalar"
+                }
+              },
+              "admin": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/boolean@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "memberships": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "accountId"
+                  ]
+                },
+                "to": {
+                  "model": "Membership",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "active": {
+                  "column": "active"
+                },
+                "admin": {
+                  "column": "admin"
+                },
+                "id": {
+                  "column": "id"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "account"
+            }
+          },
+          "Membership": {
+            "fields": {
+              "accountId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
+              "owner": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/boolean@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "account": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "accountId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Account",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "accountId": {
+                  "column": "account_id"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "owner": {
+                  "column": "owner"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "membership"
+            }
+          }
+        }
+      }
+    }
+  },
+  "storage": {
+    "namespaces": {
+      "__unbound__": {
+        "entries": {
+          "table": {
+            "account": {
+              "columns": {
+                "active": {
+                  "codecId": "sqlite/boolean@1",
+                  "dataType": "sqlite/boolean",
+                  "default": {
+                    "kind": "literal",
+                    "value": true
+                  },
+                  "nullable": false
+                },
+                "admin": {
+                  "codecId": "sqlite/boolean@1",
+                  "dataType": "sqlite/boolean",
+                  "nullable": true
+                },
+                "id": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "membership": {
+              "columns": {
+                "account_id": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "nullable": false
+                },
+                "owner": {
+                  "codecId": "sqlite/boolean@1",
+                  "dataType": "sqlite/boolean",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "name": "membership_account_id_idx_3b48271c"
+                  },
+                  "source": {
+                    "columns": [
+                      "account_id"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "membership"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "account"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "account_id"
+                  ],
+                  "name": "membership_account_id_idx_3b48271c",
+                  "prefix": "membership_account_id_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            }
+          }
+        },
+        "id": "__unbound__"
+      }
+    },
+    "storageHash": "d0fbe8f17cb0f4f5cff6a34e9f0698591e4f87b58d0146c530008599e3657d10"
+  },
+  "capabilities": {
+    "sql": {
+      "foreignKeys": true,
+      "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
+      "insertOnConflictWithoutTarget": true,
+      "jsonAgg": true,
+      "jsonAggWithoutTruncation": true,
+      "limit": true,
+      "orderBy": true,
+      "outerReferencesInDerivedTables": true,
+      "returning": true
+    }
+  },
+  "extensions": {},
+  "meta": {},
+  "_generated": {
+    "warning": "⚠️  GENERATED FILE - DO NOT EDIT",
+    "message": "This file is automatically generated by \"prisma contract emit\".",
+    "regenerate": "To regenerate, run: prisma contract emit"
+  }
+}

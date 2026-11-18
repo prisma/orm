@@ -24,7 +24,7 @@ describe('ports/engines/writes/unchecked_writes/unchecked_nested_update_many', (
               a: (a) => a.where({ id: 1 }).updateAll({ b_id: 123 }),
             }),
         ).rejects.toMatchObject({
-          code: 'ORM.RELATION_MUTATION_INVALID',
+          code: 'ORM.ARGUMENT_INVALID',
           meta: {
             kind: 'updateAll',
             relation: 'a',
