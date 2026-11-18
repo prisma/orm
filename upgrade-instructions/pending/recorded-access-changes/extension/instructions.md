@@ -2,12 +2,19 @@
 changes:
   - id: control-family-access-changes-of
     summary: |
-      `ControlFamilyInstance` (from `@prisma/orm-framework/components/control`) has a new required method, `accessChangesOf(operations)`. It takes the operations of one recorded migration and returns a `MigrationAccessChange` (`{ operationIndex, subject, widens }`) for each operation that changes who can read or write rows, `operationIndex` being its position in `operations`. `db migrate` refuses such a migration on a database whose data protection policy records `access-widening-forbidden`. Recognise an operation from its structure, such as its target details and the id its operation factory builds, never from its label. A family whose operations never change access returns `[]`. `SqlControlTargetDescriptor` (from `@prisma/orm-family-sql/control`) has a new required `accessChangesOf` with the same signature, which the SQL family instance calls; a SQL target with no operation that changes access sets `accessChangesOf: () => []`.
+      `ControlFamilyInstance` (from `@prisma/orm-framework/components/control`) has a new required method, `accessChangesOf(operations)`. It takes the operations of one recorded migration and returns a `MigrationAccessChange` (`{ operationIndex, subject, widens }`) for each operation that changes who can read or write data, `operationIndex` being its position in `operations`. `db migrate` refuses such a migration on a database whose data protection policy records `access-widening-forbidden`. Recognise an operation from its structure, such as its target details and the id its operation factory builds, never from its label. A family whose operations never change access returns `[]`. `SqlControlTargetDescriptor` (from `@prisma/orm-family-sql/control`) has a new required `accessChangesOf` with the same signature, which the SQL family instance calls; a SQL target with no operation that changes access sets `accessChangesOf: () => []`.
     detection:
       glob: "**/*.{ts,tsx,mts,cts}"
       matches:
         - '(?<![\s\S])(?![\s\S]*accessChangesOf)(?=[\s\S]*\bControlFamilyInstance\b)[\s\S]*\bstorageNameOf\s*[(:]'
         - '(?<![\s\S])(?![\s\S]*accessChangesOf)(?=[\s\S]*\bSqlControlTargetDescriptor\b)[\s\S]*\bclassifyEntityKind\s*:'
+  - id: aggregate-planner-access-changes-of
+    summary: |
+      `planMigration(...)` and `resolveRecordedPath(...)` from `@prisma/orm-toolchain/migration-tools/aggregate` take a required `accessChangesOf(operations)` beside `storageNameOf`. The aggregate planner calls it once per recorded migration, with that migration's operations, and lists what it returns in the space's `accessChanges`, at positions in the whole path. Pass the family instance's `accessChangesOf`, or `() => []` in a test.
+    detection:
+      glob: "**/*.{ts,tsx,mts,cts}"
+      matches:
+        - '(?<![\s\S])(?![\s\S]*accessChangesOf)(?=[\s\S]*\b(?:planMigration|resolveRecordedPath)\s*\()[\s\S]*\bstorageNameOf\s*:'
 ---
 
 # A family names the recorded operations that change access
@@ -39,3 +46,22 @@ const descriptor: SqlControlTargetDescriptor<'my-target', MyPlanTargetDetails> =
 ```
 
 A target with operations that change who can read or write rows, such as disabling row-level security or dropping a row-level-security policy, returns one entry for each, with `widens: true` when the operation only lets more people read or write and `false` when it can go either way. A test double of either one sets `accessChangesOf: () => []`.
+
+# The aggregate planner asks for each recorded migration's access changes
+
+Pass `accessChangesOf` to each `planMigration({ ... })` and `resolveRecordedPath({ ... })` call, beside `storageNameOf`:
+
+```ts
+// Before
+planMigration({ ...inputs, storageNameOf: (operation) => family.storageNameOf(operation) });
+
+// After
+planMigration({
+  ...inputs,
+  storageNameOf: (operation) => family.storageNameOf(operation),
+  accessChangesOf: (operations) => family.accessChangesOf(operations),
+});
+```
+
+In a test, `accessChangesOf: () => []` lists none.
+
