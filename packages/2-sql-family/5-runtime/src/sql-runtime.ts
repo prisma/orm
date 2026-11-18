@@ -212,6 +212,14 @@ export interface TransactionContext extends RuntimeQueryable {
 
 export type { RuntimeTelemetryEvent, TelemetryOutcome, VerifyMarkerOption };
 
+interface PendingTelemetryData {
+  readonly lane: string;
+  readonly target: string;
+  readonly sql: string;
+  readonly outcome: TelemetryOutcome;
+  readonly durationMs: number | undefined;
+}
+
 type SqlStatementActivityRun = StatementActivityRun<
   SqlExecutionPlan,
   SqlParamRefMutator,
@@ -341,7 +349,8 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     },
   };
   private codecRegistryValidated: boolean;
-  private _telemetry: RuntimeTelemetryEvent | null;
+  private _pendingTelemetry: PendingTelemetryData | null;
+  private _telemetryCache: RuntimeTelemetryEvent | null;
 
   constructor(options: RuntimeOptions<TContract>) {
     const {
@@ -394,7 +403,8 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     this.verifyMarkerPromise = this.verifyMarkerOption === false ? Promise.resolve() : null;
     this.closePromise = null;
     this.ownsDriver = ownsDriver ?? true;
-    this._telemetry = null;
+    this._pendingTelemetry = null;
+    this._telemetryCache = null;
   }
 
   /**
@@ -860,7 +870,8 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     queryable: SqlQueryable,
   ): Promise<void> {
     this.familyAdapter.validatePlan(exec, this.contract);
-    this._telemetry = null;
+    this._pendingTelemetry = null;
+    this._telemetryCache = null;
     if (this.verifyMarkerPromise === null) {
       const markerQueryable = this.#heldQueryables.has(queryable) ? queryable : this.driver;
       this.verifyMarkerPromise = this.verifyMarker(markerQueryable).catch((error: unknown) => {
@@ -1530,7 +1541,18 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   }
 
   telemetry(): RuntimeTelemetryEvent | null {
-    return this._telemetry;
+    const pending = this._pendingTelemetry;
+    if (pending === null) return null;
+    if (this._telemetryCache === null) {
+      this._telemetryCache = Object.freeze({
+        lane: pending.lane,
+        target: pending.target,
+        fingerprint: computeSqlFingerprint(pending.sql),
+        outcome: pending.outcome,
+        ...ifDefined('durationMs', pending.durationMs),
+      });
+    }
+    return this._telemetryCache;
   }
 
   close(): Promise<void> {
@@ -1617,14 +1639,14 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     outcome: TelemetryOutcome,
     durationMs?: number,
   ): void {
-    const contract = this.contract;
-    this._telemetry = Object.freeze({
+    this._pendingTelemetry = {
       lane: plan.meta.lane,
-      target: contract.target,
-      fingerprint: computeSqlFingerprint(plan.sql),
+      target: this.contract.target,
+      sql: plan.sql,
       outcome,
-      ...(durationMs !== undefined ? { durationMs } : {}),
-    });
+      durationMs,
+    };
+    this._telemetryCache = null;
   }
 }
 
