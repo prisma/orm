@@ -9,7 +9,7 @@ changes:
         - '\.transaction\?\.\('
   - id: sql-runtime-base-own-transaction-removed
     summary: |
-      `SqlRuntimeBase.ownTransaction` is removed, and `ActivityRoute.transaction` is now `(parent) => ConnectionProvider`: it returns the connections `withTransaction` runs a transaction beneath `parent` on, instead of beginning the transaction itself. The detection matches TypeScript sources that call `ownTransaction` or build an `ActivityRoute`.
+      `SqlRuntimeBase.ownTransaction` is removed, and `ActivityRoute.transaction` is now `(parent, fn, options) => Promise<R>`: it runs `fn` in a transaction beneath `parent`, usually with `withTransaction(provider, fn, options, parent)`, instead of returning a `RuntimeTransaction`. `withTransaction` takes that optional `parent` and passes it to `provider.connection({ activityParent })`. The detection matches TypeScript sources that call `ownTransaction` or build an `ActivityRoute`.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
@@ -65,7 +65,7 @@ A handle opened on a connection the caller holds runs the transaction on that co
 
 ## `ownTransaction` and `ActivityRoute.transaction`
 
-A `SqlRuntimeBase` subclass that built an `ActivityRoute` with `transaction: (parent, options) => ...` and began the transaction through `this.ownTransaction(...)` now returns a `ConnectionProvider` from `transaction: (parent) => ...`. Its `connection()` opens the connection the transaction runs on, and that connection's `transaction(options)` calls `beginTransactionOn(connection, owner, parent, options)` with the route's `parent`. Delete the method that called `ownTransaction`.
+A `SqlRuntimeBase` subclass that built an `ActivityRoute` with `transaction: (parent, options) => ...` and began the transaction through `this.ownTransaction(...)` now runs the callback with `transaction: (parent, fn, options) => withTransaction(provider, fn, options, parent)`. The provider's `connection(options)` opens the connection beneath `options?.activityParent`, and that connection's `transaction(options)` calls `beginTransactionOn(connection, owner, parent, options)` with the same parent. Delete the method that called `ownTransaction`.
 
 Before:
 
@@ -81,11 +81,12 @@ private async beginRoleTransaction(binding, parent, options) {
 After:
 
 ```ts
-transaction: (parent) => ({
-  connection: async () =>
-    (await runtime().openRoleConnection(binding, { activityParent: parent })).session,
-}),
+connection: (options) => open(options)(),
+
+transaction: (parent, fn, options) => withTransaction(scope, fn, options, parent),
 ```
+
+Here `scope` is the role scope whose `connection(options)` opens a role session with `openRoleConnection(binding, options)`.
 
 In the method that builds the session, take `const parent = options?.activityParent;` and pass `parent` in place of `undefined` to `beginTransactionOn` in the session's `transaction(options)`.
 
