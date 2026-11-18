@@ -1,4 +1,4 @@
-// use prisma-next
+// use prisma-8
 
 enum UserRole {
   @@type("mongo/string@1")
@@ -19,6 +19,8 @@ model User {
   name    String
   email   String
   bio     String?
+  birthday Date?
+  availableFrom Time?
   role    UserRole
   address Address?
   posts   Post[]
@@ -35,7 +37,7 @@ model Post {
   author    User @relation(fields: [authorId], references: [id])
   @@discriminator(kind)
   @@index([authorId])
-  @@index([createdAt(sort: Desc), authorId])
+  @@index([sort(createdAt, Desc), authorId])
   @@map("posts")
 }
 

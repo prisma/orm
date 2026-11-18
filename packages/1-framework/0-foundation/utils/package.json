@@ -1,11 +1,11 @@
 {
   "name": "@internal/utils",
   "private": true,
-  "version": "8.0.0-rc.8",
+  "version": "8.0.0-rc.24",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "Shared utility functions for Prisma Next",
+  "description": "Shared utility functions for Prisma 8",
   "scripts": {
     "build": "tsdown",
     "test": "vitest run",
@@ -14,8 +14,8 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "devDependencies": {
-    "@repo/tsconfig": "workspace:8.0.0-rc.8",
-    "@repo/tsdown": "workspace:8.0.0-rc.8",
+    "@repo/tsconfig": "workspace:8.0.0-rc.24",
+    "@repo/tsdown": "workspace:8.0.0-rc.24",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
@@ -48,6 +48,7 @@
     "./simplify-deep": "./dist/simplify-deep.mjs",
     "./structured-error": "./dist/structured-error.mjs",
     "./suppress-idle-connection-errors": "./dist/suppress-idle-connection-errors.mjs",
+    "./text": "./dist/text.mjs",
     "./types": "./dist/types.mjs",
     "./package.json": "./package.json"
   },

@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful PostgreSQL translation of prisma/prisma@a6d0155
 // packages/client/tests/functional/driver-adapters/error-forwarding/prisma/_schema.ts.
 

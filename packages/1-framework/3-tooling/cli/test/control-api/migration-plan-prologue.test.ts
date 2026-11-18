@@ -5,9 +5,14 @@
  * notOk(CliStructuredError) — never as an unhandled rejection past the Result
  * contract.
  */
-import type { PrismaNextConfig } from '@internal/config-loader';
+import type { PrismaConfig } from '@internal/config-loader';
 import { errorInvalidJson } from '@internal/migration-tools/errors';
-import { describe, expect, it, vi } from 'vitest';
+import { ok } from '@internal/utils/result';
+import { afterAll, describe, expect, it, vi } from 'vitest';
+
+const stubClient = {
+  renderContractDts: async () => ok({ contractDts: 'export type Contract = never;\n' }),
+};
 
 const mocks = vi.hoisted(() => ({
   resolveMigrationPaths: vi.fn(),
@@ -18,9 +23,14 @@ vi.mock('../../src/utils/command-helpers', async (importOriginal) => {
   return { ...actual, resolveMigrationPaths: mocks.resolveMigrationPaths };
 });
 
-const config = { migrations: { dir: 'migrations' } } as unknown as PrismaNextConfig;
+const config = { migrations: { dir: 'migrations' } } as unknown as PrismaConfig;
 
 describe('executeMigrationPlanCommand — mutation-prologue guard', () => {
+  afterAll(() => {
+    vi.doUnmock('../../src/utils/command-helpers');
+    vi.resetModules();
+  });
+
   it('maps a MigrationToolsError thrown in the prologue to a structured failure', async () => {
     const toolsError = errorInvalidJson('/project/prisma.config.ts', 'Unexpected token');
     mocks.resolveMigrationPaths.mockImplementationOnce(() => {
@@ -32,7 +42,13 @@ describe('executeMigrationPlanCommand — mutation-prologue guard', () => {
     );
 
     const result = await executeMigrationPlanCommand(
-      { config, cwd: '/project', configPath: '/project/prisma.config.ts' },
+      {
+        config,
+        cwd: '/project',
+        projectDir: '/project',
+        client: stubClient,
+        answerQuestions: async () => [],
+      },
       Date.now(),
     );
 
@@ -54,7 +70,13 @@ describe('executeMigrationPlanCommand — mutation-prologue guard', () => {
     );
 
     const result = await executeMigrationPlanCommand(
-      { config, cwd: '/project', configPath: '/project/prisma.config.ts' },
+      {
+        config,
+        cwd: '/project',
+        projectDir: '/project',
+        client: stubClient,
+        answerQuestions: async () => [],
+      },
       Date.now(),
     );
 

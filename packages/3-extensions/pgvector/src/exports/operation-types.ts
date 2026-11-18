@@ -4,4 +4,4 @@
  * Re-export from types module for public API.
  */
 
-export type { QueryOperationTypes } from '../types/operation-types';
+export type { QueryOperationTypes, QueryOperationTypesForCodecs } from '../types/operation-types';

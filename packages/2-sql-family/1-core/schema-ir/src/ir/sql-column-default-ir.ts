@@ -1,0 +1,221 @@
+import type { ColumnDefault, JsonValue } from '@internal/contract/types';
+import type { CodecRef, DataTypeValue } from '@internal/framework-components/codec';
+import type { DiffableNode, MismatchExplanation } from '@internal/framework-components/control';
+import { freezeNode } from '@internal/framework-components/ir';
+import { canonicalStringify } from '@internal/utils/canonical-stringify';
+import { blindCast } from '@internal/utils/casts';
+import { RelationalSchemaNodeKind } from './schema-node-kinds';
+import { type SqlDefaultValue, sqlDefaultValuesEqual } from './sql-default-value';
+import { assertNode, defineNonEnumerable, SqlSchemaIRNode } from './sql-schema-ir-node';
+
+/** The `sql` literal that writes a SQL text, or `undefined` when no literal reads back as that text. */
+export type SqlExpressionLiteralFor = (text: string) => string | undefined;
+
+export interface SqlColumnDefaultIRInput {
+  /** Structured default: the contract's, or what introspection read from the database. */
+  readonly resolved?: ColumnDefault;
+  /** Raw database default expression, when known (introspected side). */
+  readonly raw?: string;
+  /** See {@link import('./sql-column-ir').SqlColumnIRInput.authoredDefault}. */
+  readonly authored?: ColumnDefault;
+  /** See {@link import('./sql-column-ir').SqlColumnIRInput.defaultValue}. */
+  readonly value?: SqlDefaultValue;
+  /** See {@link import('./sql-column-ir').SqlColumnIRInput.defaultUnreadable}. */
+  readonly unreadable?: string;
+  /** See {@link import('./sql-column-ir').SqlColumnIRInput.defaultExpressionValue}. */
+  readonly expressionValue?: SqlDefaultValue;
+  /**
+   * The owning column's array-ness, threaded through so the planner's
+   * set-default op-builder can render an array-literal default (e.g.
+   * `ARRAY[...]`) the same way the pre-`plan(start, end)` op-path did. See
+   * {@link import('./sql-column-ir').SqlColumnIRInput.many}.
+   */
+  readonly many?: boolean;
+  /**
+   * The owning column's codec identity, threaded through so the set-default op-builder renders a
+   * list default's cast to the column type the way the column's DDL writes it. See
+   * {@link import('./sql-column-ir').SqlColumnIRInput.codecRef}.
+   */
+  readonly codecRef?: CodecRef;
+  /** See {@link import('./sql-column-ir').SqlColumnIRInput.sqlExpressionLiteralFor}. */
+  readonly sqlExpressionLiteralFor?: SqlExpressionLiteralFor;
+}
+
+/**
+ * Schema-diff node for a column's default value. The default is the one
+ * column attribute with an extra/missing/drift lifecycle of its own, so it
+ * is a child node of the column rather than a compared attribute: an
+ * undeclared live default surfaces as `not-expected`, a declared default the
+ * database lacks as `not-found`, and a divergent value as `not-equal` — the
+ * three reasons cover the legacy `extra_default` / `default_missing` /
+ * `default_mismatch` vocabulary with no attribute inspection.
+ *
+ * `id` is a fixed sentinel — a column has at most one default. Built
+ * transiently by `SqlColumnIR.children()` from the column's own fields;
+ * never constructed by derivation or introspection directly.
+ */
+export class SqlColumnDefaultIR extends SqlSchemaIRNode implements DiffableNode {
+  override readonly nodeKind = RelationalSchemaNodeKind.columnDefault;
+
+  declare readonly resolved?: ColumnDefault;
+  declare readonly raw?: string;
+  /** See {@link SqlColumnDefaultIRInput.authored}. Non-enumerable, same reason as {@link many}. */
+  declare readonly authored?: ColumnDefault;
+  /** See {@link SqlColumnDefaultIRInput.value}. Non-enumerable, same reason as {@link many}. */
+  declare readonly value?: SqlDefaultValue;
+  /** See {@link SqlColumnDefaultIRInput.unreadable}. Non-enumerable, same reason as {@link many}. */
+  declare readonly unreadable?: string;
+  /** See {@link SqlColumnDefaultIRInput.expressionValue}. Non-enumerable, same reason as {@link many}. */
+  declare readonly expressionValue?: SqlDefaultValue;
+  /** See {@link SqlColumnDefaultIRInput.many}. Non-enumerable so it stays out of JSON and structural equality. */
+  declare readonly many?: boolean;
+  /** See {@link SqlColumnDefaultIRInput.codecRef}. Non-enumerable, same reason as {@link many}. */
+  declare readonly codecRef?: CodecRef;
+  /** See {@link SqlColumnDefaultIRInput.sqlExpressionLiteralFor}. Non-enumerable, same reason as {@link many}. */
+  declare readonly sqlExpressionLiteralFor?: SqlExpressionLiteralFor;
+
+  constructor(input: SqlColumnDefaultIRInput) {
+    super();
+    if (input.resolved !== undefined) this.resolved = input.resolved;
+    if (input.raw !== undefined) this.raw = input.raw;
+    defineNonEnumerable(this, 'authored', input.authored);
+    defineNonEnumerable(this, 'value', input.value);
+    defineNonEnumerable(this, 'unreadable', input.unreadable);
+    defineNonEnumerable(this, 'expressionValue', input.expressionValue);
+    defineNonEnumerable(this, 'many', input.many);
+    defineNonEnumerable(this, 'codecRef', input.codecRef);
+    defineNonEnumerable(this, 'sqlExpressionLiteralFor', input.sqlExpressionLiteralFor);
+    freezeNode(this);
+  }
+
+  get id(): string {
+    return 'default';
+  }
+
+  children(): readonly DiffableNode[] {
+    return [];
+  }
+
+  static is(node: SqlSchemaIRNode): node is SqlColumnDefaultIR {
+    return node.nodeKind === RelationalSchemaNodeKind.columnDefault;
+  }
+
+  /**
+   * Compares with `this` as the expected side. Two literals compare as values of the column's type
+   * when both sides hold one, and as canonical JSON otherwise; a `Date` the column's codec could not
+   * read into a value equals nothing. Two expressions compare as text, with
+   * case and whitespace ignored outside quotes. An expected expression that writes a literal, read by
+   * the column's codec during introspection, matches a reported literal when the two values are
+   * equal; when the codec could not read one of them, it compares with the reported text. A resolved
+   * side against a raw-only side is a mismatch; two raw-only nodes compare their text.
+   */
+  isEqualTo(other: DiffableNode): boolean {
+    const node = blindCast<
+      SqlSchemaIRNode,
+      'every diff-tree node the differ pairs is a SqlSchemaIRNode'
+    >(other);
+    assertNode(node, 'SqlColumnDefaultIR', SqlColumnDefaultIR.is);
+    const expected = this.resolved;
+    const actual = node.resolved;
+    if (expected?.kind === 'function' && actual === undefined) {
+      return node.raw !== undefined && sameExpression(expected.expression, node.raw);
+    }
+    if (expected === undefined || actual === undefined) {
+      return expected === actual && this.raw === node.raw;
+    }
+    if (expected.kind === 'function') {
+      if (actual.kind === 'function') {
+        return sameExpression(expected.expression, actual.expression);
+      }
+      if (node.value !== undefined && node.expressionValue !== undefined) {
+        return sqlDefaultValuesEqual(node.expressionValue, node.value);
+      }
+      return node.raw !== undefined && sameExpression(expected.expression, node.raw);
+    }
+    if (actual.kind !== 'literal') return false;
+    if (this.value !== undefined && node.value !== undefined) {
+      return sqlDefaultValuesEqual(this.value, node.value);
+    }
+    if (expected.value instanceof Date || actual.value instanceof Date) return false;
+    return canonicalStringify(expected.value) === canonicalStringify(actual.value);
+  }
+
+  /**
+   * For two default expressions, the text the database reads back, since it may store an expression
+   * in a form of its own. Otherwise why the column's codec could not read the database's default, or
+   * the value each side holds.
+   */
+  explainMismatch(actual: DiffableNode | undefined): MismatchExplanation | undefined {
+    if (!(actual instanceof SqlColumnDefaultIR)) return undefined;
+    if (actual.unreadable !== undefined) return { text: actual.unreadable, cause: 'differs' };
+    return (
+      this.storedExpressionForm(actual) ?? {
+        text: `The contract holds ${describeDefault(this)}, and the database holds ${describeDefault(actual)}.`,
+        cause: 'differs',
+      }
+    );
+  }
+
+  private storedExpressionForm(actual: SqlColumnDefaultIR): MismatchExplanation | undefined {
+    if (this.resolved?.kind !== 'function' || actual.resolved?.kind !== 'function')
+      return undefined;
+    const literalFor = this.sqlExpressionLiteralFor;
+    const shown = (text: string) => literalFor?.(text) ?? JSON.stringify(text);
+    const stored = actual.raw ?? actual.resolved.expression;
+    const written =
+      literalFor === undefined
+        ? stored
+        : [stored, actual.resolved.expression].find((text) => literalFor(text) !== undefined);
+    const advice =
+      written === undefined
+        ? "No `sql` literal writes that text unchanged, so change the default's SQL in the contract until the database stores it as written."
+        : `If they do, write the default as ${shown(written)}.`;
+    return {
+      text: `The database reads this default back as ${shown(written ?? stored)}; the contract declares ${shown(this.resolved.expression)}. The database may store a default expression in its own form, so the two can mean the same. ${advice}`,
+      cause: 'possibly-equivalent',
+    };
+  }
+}
+
+/** A default as a person reads it: a literal as JSON, the value its type read when there is one, an expression as its text, and the text the database reports beside a value read from it. */
+function describeDefault(node: SqlColumnDefaultIR): string {
+  const resolved = node.resolved;
+  if (resolved === undefined) return node.raw ?? 'no default';
+  if (resolved.kind === 'function') return resolved.expression;
+  const shown = JSON.stringify(
+    node.value === undefined ? resolved.value : jsonOfDefaultValue(node.value),
+  );
+  return node.raw === undefined || node.raw === shown ? shown : `${shown} (${node.raw})`;
+}
+
+function isDefaultList(value: SqlDefaultValue): value is readonly (DataTypeValue | null)[] {
+  return Array.isArray(value);
+}
+
+function jsonOfDefaultValue(value: SqlDefaultValue): JsonValue {
+  return isDefaultList(value)
+    ? value.map((element) => (element === null ? null : element.value))
+    : value.value;
+}
+
+function sameExpression(a: string, b: string): boolean {
+  return comparableExpression(a) === comparableExpression(b);
+}
+
+/** The expression with case and whitespace dropped outside quotes; a quoted literal or identifier keeps both, since they change what it means. */
+function comparableExpression(expression: string): string {
+  let result = '';
+  let quote: string | undefined;
+  for (const char of expression) {
+    if (quote !== undefined) {
+      result += char;
+      if (char === quote) quote = undefined;
+    } else if (char === "'" || char === '"') {
+      quote = char;
+      result += char;
+    } else if (!/\s/.test(char)) {
+      result += char.toLowerCase();
+    }
+  }
+  return result;
+}

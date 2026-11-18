@@ -4,7 +4,7 @@
  *
  * Emission writes package names into files the user keeps — generated
  * contract types, scaffolded migrations, `prisma orm init` output. Which
- * name is correct depends on how the application installed Prisma Next, so
+ * name is correct depends on how the application installed Prisma 8, so
  * every emitter resolves through an {@link ImportRoot} rather than hardcoding
  * a specifier. The mapping itself is `./shells`; nothing here duplicates it.
  */
@@ -314,6 +314,6 @@ export function transitiveImports(source: string, root: ImportRoot): string[] {
 /**
  * Published packages this workspace does not own but `init` installs into a
  * scaffolded application directly, so its files may import them:
- * `@prisma/cli-engine` is the config file's `defineConfig` import.
+ * `@prisma/cli-engine` is the config file's `definePrismaConfig` import.
  */
 const EXTERNAL_DIRECT_DEPENDENCIES: ReadonlySet<string> = new Set(['@prisma/cli-engine']);

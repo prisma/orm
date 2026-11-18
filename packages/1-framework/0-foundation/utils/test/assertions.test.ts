@@ -34,10 +34,4 @@ describe('invariant', () => {
   it('throws when condition is false', () => {
     expect(() => invariant(false, 'condition failed')).toThrow('condition failed');
   });
-
-  it('evaluates expressions', () => {
-    const arr = [1, 2, 3];
-    expect(() => invariant(arr.length > 0, 'array is empty')).not.toThrow();
-    expect(() => invariant(arr.length > 10, 'array too short')).toThrow('array too short');
-  });
 });

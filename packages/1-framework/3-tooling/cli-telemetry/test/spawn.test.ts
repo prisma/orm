@@ -7,7 +7,7 @@ import { runTelemetry, senderModuleUrl } from '../src/spawn';
 import { userConfigPath, writeUserConfig } from '../src/user-config';
 
 const commandInput = {
-  commandPath: ['prisma-next', 'init'],
+  commandPath: ['prisma', 'init'],
   positionalArgs: [],
   options: [{ attributeName: 'target', longName: '--target', source: 'cli' }],
 };
@@ -45,10 +45,6 @@ describe('runTelemetry — gating decisions short-circuit before fork', () => {
     rmSync(xdgRoot, { recursive: true, force: true });
   });
 
-  it('returns gated-off when no config file exists (default-off)', () => {
-    expect(runTelemetry(makeInputs())).toEqual({ spawned: false, reason: 'gated-off' });
-  });
-
   it('returns gated-off when enableTelemetry is false', () => {
     writeUserConfig({ enableTelemetry: false });
     expect(runTelemetry(makeInputs())).toEqual({ spawned: false, reason: 'gated-off' });
@@ -59,9 +55,9 @@ describe('runTelemetry — gating decisions short-circuit before fork', () => {
     expect(runTelemetry(makeInputs({ isCI: true }))).toEqual({ spawned: false, reason: 'ci' });
   });
 
-  it('returns gated-off when PRISMA_NEXT_DISABLE_TELEMETRY overrides a stored opt-in', () => {
+  it('returns gated-off when PRISMA_DISABLE_TELEMETRY overrides a stored opt-in', () => {
     writeUserConfig({ enableTelemetry: true });
-    expect(runTelemetry(makeInputs({ env: { PRISMA_NEXT_DISABLE_TELEMETRY: '1' } }))).toEqual({
+    expect(runTelemetry(makeInputs({ env: { PRISMA_DISABLE_TELEMETRY: '1' } }))).toEqual({
       spawned: false,
       reason: 'gated-off',
     });

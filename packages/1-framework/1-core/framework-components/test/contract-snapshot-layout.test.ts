@@ -2,10 +2,21 @@ import { describe, expect, it } from 'vitest';
 import {
   contractSnapshotJsonSpecifier,
   contractSnapshotTypesSpecifier,
+  isStorageHashHex,
   storageHashHex,
 } from '../src/control/contract-snapshot-layout';
 
 const VALID_HASH = 'a'.repeat(64);
+
+describe('isStorageHashHex', () => {
+  it('accepts 64 lowercase hex characters', () => {
+    expect(isStorageHashHex(VALID_HASH)).toBe(true);
+  });
+
+  it('rejects a prefixed hash', () => {
+    expect(isStorageHashHex(`sha256:${VALID_HASH}`)).toBe(false);
+  });
+});
 
 describe('storageHashHex', () => {
   it('returns a valid 64-hex hash unchanged', () => {

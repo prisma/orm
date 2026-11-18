@@ -1,5 +1,4 @@
-import type { SqliteRuntime } from '@prisma/orm-sqlite/runtime';
-import { createOrmClient } from './client';
+import { db } from '../prisma/db';
 
 /**
  * Many-to-many filter example: list posts using relation filter predicates
@@ -10,20 +9,14 @@ import { createOrmClient } from './client';
  * @param mode  'some' | 'none' | 'every' — which predicate to apply
  * @param label Tag label to match (for some/none) or differ from (for every)
  */
-export async function ormClientGetPostsByTagFilter(
-  mode: 'some' | 'none' | 'every',
-  label: string,
-  runtime: SqliteRuntime,
-) {
-  const db = createOrmClient(runtime);
-
+export async function ormClientGetPostsByTagFilter(mode: 'some' | 'none' | 'every', label: string) {
   if (mode === 'some') {
-    return db.Post.where((p) => p.tags.some((t) => t.label.eq(label))).all();
+    return db.orm.Post.where((p) => p.tags.some((t) => t.label.eq(label))).all();
   }
 
   if (mode === 'none') {
-    return db.Post.where((p) => p.tags.none((t) => t.label.eq(label))).all();
+    return db.orm.Post.where((p) => p.tags.none((t) => t.label.eq(label))).all();
   }
 
-  return db.Post.where((p) => p.tags.every((t) => t.label.neq(label))).all();
+  return db.orm.Post.where((p) => p.tags.every((t) => t.label.neq(label))).all();
 }

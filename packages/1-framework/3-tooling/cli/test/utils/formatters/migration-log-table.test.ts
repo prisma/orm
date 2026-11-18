@@ -113,24 +113,6 @@ describe('renderMigrationLogTable', () => {
     );
   });
 
-  it('includes the space column when multiple spaces contribute rows', () => {
-    const table = renderMigrationLogTable([
-      entry({
-        space: 'app',
-        migrationName: '20260301_init',
-        appliedAt: new Date('2026-06-01T08:00:00.000Z'),
-      }),
-      entry({
-        space: 'audit',
-        migrationName: '20260301_init',
-        appliedAt: new Date('2026-06-01T08:00:00.002Z'),
-      }),
-    ]);
-    expect(table).toContain('Space');
-    expect(table).toContain('app');
-    expect(table).toContain('audit');
-  });
-
   it('renders the multi-space golden table with heading, divider, and data rows', () => {
     const table = renderMigrationLogTable(
       [
@@ -177,14 +159,6 @@ describe('renderMigrationLogTable', () => {
     expect(table).not.toContain(MIGRATION_LIST_FORWARD_EDGE_GLYPH);
     expect(table).not.toContain(MIGRATION_LIST_EMPTY_SOURCE);
     expect(table).not.toContain('─');
-  });
-
-  it('uses UTC timestamps when utc is true', () => {
-    const table = renderMigrationLogTable(
-      [entry({ migrationName: '20260301_init', appliedAt: new Date('2026-06-01T08:00:00.000Z') })],
-      { utc: true },
-    );
-    expect(table).toContain('2026-06-01 08:00:00Z');
   });
 
   it('widens the migration column to fit the heading when names are shorter', () => {

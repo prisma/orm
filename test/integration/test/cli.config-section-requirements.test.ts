@@ -10,7 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestDir, runOnEngine } from './utils/cli-test-helpers';
 
 // The fixture cannot import @prisma/cli-engine, so it stamps the engine
-// envelope marker the same way defineConfig does.
+// envelope marker the same way definePrismaConfig does.
 function markedConfig(brokenSection: string): string {
   return `
 const descriptorBase = { familyId: 'sql', targetId: 'postgres', version: '0.0.1', manifest: {} };
@@ -77,8 +77,11 @@ describe('commands declare the config sections they read', () => {
           ok: false,
           diagnostics: expect.arrayContaining([
             expect.objectContaining({
-              code: 'CONFIG.VALIDATION_FAILED',
-              meta: expect.objectContaining({ section: 'contract' }),
+              code: 'CLI.CONFIG_FIELD_INVALID',
+              meta: expect.objectContaining({
+                section: 'orm',
+                field: expect.stringMatching(/^contract(\.|$)/),
+              }),
             }),
           ]),
         },
@@ -102,8 +105,11 @@ describe('commands declare the config sections they read', () => {
           ok: false,
           diagnostics: expect.arrayContaining([
             expect.objectContaining({
-              code: 'CONFIG.VALIDATION_FAILED',
-              meta: expect.objectContaining({ section: 'migrations' }),
+              code: 'CLI.CONFIG_FIELD_INVALID',
+              meta: expect.objectContaining({
+                section: 'orm',
+                field: expect.stringMatching(/^migrations(\.|$)/),
+              }),
             }),
           ]),
         },

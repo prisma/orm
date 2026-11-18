@@ -1,0 +1,15 @@
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  USER @map("user")
+  ADMIN
+
+  @@map("user_role")
+}
+
+model User {
+  id   Int  @id
+  role Role @default(USER)
+}

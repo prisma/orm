@@ -1,0 +1,24 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model Counter {
+  id    String @id @default(auto()) @map("_id") @db.ObjectId
+  name  String
+  hits  Int
+  small Int    @db.Int
+  large Int    @db.Long
+}
+
+model Tally {
+  id      String   @id @default(auto()) @map("_id") @db.ObjectId
+  name    String
+  scores    Int[]
+  address   Address?
+  addresses Address[]
+}
+
+type Address {
+  zip Int
+}

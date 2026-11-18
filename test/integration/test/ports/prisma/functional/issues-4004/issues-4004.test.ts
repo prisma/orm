@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { timeouts, withPostgresPort } from '../../../_harness/postgres';
+import { timeouts, withPostgresPort } from '../../../../_harness/postgres';
 import type { Contract } from './_fixture/generated/contract';
 import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
 
@@ -12,7 +12,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // fields directly so ORM updateAll can target them.
 //
 // Upstream calls `updateMany({ data: { studentId } })` with no where clause
-// (update every row). prisma-next updateAll requires .where(); we use
+// (update every row). Prisma 8 updateAll requires .where(); we use
 // .where((sc) => sc.studentId.isNotNull()) which matches all rows because
 // every StudentClass must have a studentId.
 
@@ -34,7 +34,7 @@ describe('ports/prisma/functional/issues-4004', () => {
         await db.public.StudentClass.create({ studentId: student2.id, classId: class2.id });
 
         // updateMany with no where — update all rows to point to student1.
-        // prisma-next updateAll requires where; match all rows via isNotNull().
+        // Prisma 8 updateAll requires where; match all rows via isNotNull().
         await db.public.StudentClass.where((sc) => sc.studentId.isNotNull()).updateAll({
           studentId: student1.id,
         });
@@ -47,7 +47,7 @@ describe('ports/prisma/functional/issues-4004', () => {
           .all();
 
         studentClasses.forEach((sc) => {
-          expect(sc.student.id).toEqual(student1.id);
+          expect(sc.student!.id).toEqual(student1.id);
         });
       }),
     timeouts.spinUpPpgDev,

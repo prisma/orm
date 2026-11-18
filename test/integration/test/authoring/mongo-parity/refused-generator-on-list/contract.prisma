@@ -1,0 +1,8 @@
+// use prisma-8
+
+model Doc {
+  id     ObjectId @id @map("_id")
+  stamps DateTime[]   @onCreate(now())
+
+  @@map("docs")
+}

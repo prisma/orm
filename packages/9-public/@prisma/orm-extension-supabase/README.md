@@ -1,6 +1,6 @@
 # @prisma/orm-extension-supabase
 
-Supabase's own database schema, its platform roles, and a role-binding runtime for Prisma Next.
+Supabase's own database schema, its platform roles, and a role-binding runtime for Prisma 8.
 
 ```bash
 pnpm add @prisma/orm-extension-supabase

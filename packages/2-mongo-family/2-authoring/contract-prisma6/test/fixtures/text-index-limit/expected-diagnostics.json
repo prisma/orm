@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA6_MONGO_TEXT_INDEX_LIMIT",
+    "file": "schema.prisma",
+    "line": 12,
+    "message": "Model \"Post\" has more than one @@fulltext; MongoDB allows one text index per collection. Merge the fields into one @@fulltext."
+  }
+]

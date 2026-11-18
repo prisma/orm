@@ -96,7 +96,7 @@ bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file o
 ────────────────────────────────────────────────────────────────────────────────
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
 > # Apply additive change, update marker [initialized with base, contract is v2]
-> prisma-next db update
+> prisma db update
 
 
 
@@ -128,7 +128,7 @@ bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file o
 ────────────────────────────────────────────────────────────────────────────────
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
 > # Apply additive change, update marker [initialized with base, contract is v2]
-> prisma-next db update
+> prisma db update
 
 
 
@@ -160,7 +160,7 @@ bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file o
 ────────────────────────────────────────────────────────────────────────────────
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
 > # Apply additive change, update marker [initialized with base, contract is v2]
-> prisma-next db update
+> prisma db update
 
 
 
@@ -192,9 +192,9 @@ bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file o
 ────────────────────────────────────────────────────────────────────────────────
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
 > # Apply additive change, update marker [initialized with base, contract is v2]
-> prisma-next db update
+> prisma db update
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
-prisma-next db update → Update your database schema to match your contract
+prisma db update → Update your database schema to match your contract
 │
 │ config:               prisma.config.ts
 │ contract:             contract.json

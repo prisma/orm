@@ -1,0 +1,14 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model Post {
+  id    Int    @id @map("_id")
+  title String
+}
+
+model Tag {
+  id   String @id @default(auto()) @db.ObjectId
+  name String
+}

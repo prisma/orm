@@ -1,0 +1,14 @@
+[
+  {
+    "code": "PSL.PRISMA7_UNKNOWN_DEFAULT",
+    "file": "schema.prisma",
+    "line": 7,
+    "message": "Field \"Odd.value\": @default function \"sequence()\" is not a Prisma 7 default function this target supports."
+  },
+  {
+    "code": "PSL.PRISMA7_UNKNOWN_DEFAULT",
+    "file": "schema.prisma",
+    "line": 8,
+    "message": "Field \"Odd.role\": @default refers to \"USER\", but the field is not an enum."
+  }
+]

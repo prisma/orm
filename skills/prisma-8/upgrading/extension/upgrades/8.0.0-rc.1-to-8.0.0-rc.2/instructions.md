@@ -252,7 +252,7 @@ changes:
       surface is gated on it. And a check is no longer "derived" merely by being wire-named —
       user-authored checks are wire-named too. Derivation is now decided by whether the wire prefix
       is one derivation would produce for a column of that table. A pack that read
-      `check.prefix !== undefined` to mean "Prisma Next generated this" must use the same
+      `check.prefix !== undefined` to mean "Prisma 8 generated this" must use the same
       prefix-shape test, `derivedCheckPrefixes` from `@internal/sql-schema-ir/naming`. An authored
       name that collides with a derived prefix shape is rejected at authoring with
       `CONTRACT.CHECK_NAME_RESERVED`.

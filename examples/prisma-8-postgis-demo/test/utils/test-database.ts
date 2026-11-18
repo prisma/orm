@@ -110,13 +110,14 @@ export async function resetTestDatabase(contract: unknown): Promise<void> {
   const controlClient = createPostgisControlClient(TEST_DATABASE_URL);
   try {
     const result = await controlClient.dbInit({
+      invocation: { cwd: process.cwd(), configPath: undefined, dbGiven: false },
       contract,
       mode: 'apply',
       migrationsDir: MIGRATIONS_DIR,
     });
     if (!result.ok) {
       throw new Error(
-        `dbInit failed: ${result.failure.summary}\n\nDid you run \`pnpm exec prisma migration plan\` before \`pnpm test\`? (See Linear TML-2495.)\n\n${JSON.stringify(result.failure, null, 2)}`,
+        `dbInit failed: ${result.failure.message}\n\nDid you run \`pnpm exec prisma migration plan\` before \`pnpm test\`? (See Linear TML-2495.)\n\n${JSON.stringify(result.failure, null, 2)}`,
       );
     }
   } finally {

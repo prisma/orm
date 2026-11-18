@@ -95,7 +95,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Preview changes on empty database
-> prisma-next db init --dry-run
+> prisma db init --dry-run
 
 
 
@@ -127,7 +127,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Preview changes on empty database
-> prisma-next db init --dry-run
+> prisma db init --dry-run
 
 
 
@@ -159,7 +159,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Preview changes on empty database
-> prisma-next db init --dry-run
+> prisma db init --dry-run
 
 
 
@@ -191,8 +191,8 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Preview changes on empty database
-> prisma-next db init --dry-run
-prisma-next db init → Bootstrap a database to match the current contract
+> prisma db init --dry-run
+prisma db init → Bootstrap a database to match the current contract
 │
 │ config:               prisma.config.ts
 │ contract:             contract.json

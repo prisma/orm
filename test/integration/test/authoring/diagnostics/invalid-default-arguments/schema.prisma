@@ -1,8 +1,9 @@
-// use prisma-next
+// use prisma-8
 
 model User {
   id Int @id
-  badUuid String @default(uuid(5))
-  badNanoid String @default(nanoid(1))
-  emptyDbExpr String @default(dbgenerated(""))
+  badUuid String @onCreate(uuid(5))
+  badNanoid String @onCreate(nanoid(1))
+  unknownFn String @default(sequence())
+  @@map("user")
 }

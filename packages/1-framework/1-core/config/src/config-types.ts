@@ -24,7 +24,7 @@ export interface ContractConfig {
    */
   readonly source: ContractSourceProvider;
   /**
-   * Path to contract.json artifact. Providers that know an input path (PSL,
+   * Path to contract.json artifact, relative to the config file. Providers that know an input path (PSL,
    * `typescriptContractFromPath`) derive an output colocated with that input
    * so this rarely needs to be set explicitly. The `.d.ts` types file is
    * always emitted next to the JSON (e.g., `contract.json` → `contract.d.ts`).
@@ -58,14 +58,14 @@ export function normalizeContractConfig(
 }
 
 /**
- * Configuration for Prisma Next CLI.
+ * Configuration for Prisma 8 CLI.
  * Uses Control*Descriptor types for type-safe wiring with compile-time compatibility checks.
  *
  * @template TFamilyId - The family ID (e.g., 'sql', 'document')
  * @template TTargetId - The target ID (e.g., 'postgres', 'mysql')
  * @template TConnection - The driver connection input type (defaults to `unknown` for config flexibility)
  */
-export interface PrismaNextConfig<
+export interface PrismaConfig<
   TFamilyId extends string = string,
   TTargetId extends string = string,
   TConnection = unknown,
@@ -107,15 +107,22 @@ export interface PrismaNextConfig<
    * Migration configuration. Controls where on-disk migration packages are stored.
    */
   readonly migrations?: {
-    /** Directory for migration packages, relative to config file. Defaults to 'migrations'. */
+    /** Directory for migration packages, relative to the config file. Defaults to 'migrations'. */
     readonly dir?: string;
   };
   readonly formatter?: FormatterConfig;
+  /**
+   * The directory of the config file that wrote this section, recorded when
+   * the section is validated; every relative path above was resolved against
+   * the file that declared it. Commands that need the project's location
+   * start here.
+   */
+  readonly baseDir?: string;
 }
 
 /**
  * Builds the ORM section of `prisma.config.ts`. The result nests under the
- * `orm` key of the engine's `defineConfig` — the marker lives on the envelope,
+ * `orm` key of the engine's `definePrismaConfig` — the marker lives on the envelope,
  * not here. Structural validation happens in the config loader, which reports
  * per-section diagnostics instead of failing the whole load.
  *
@@ -127,8 +134,8 @@ export interface PrismaNextConfig<
  * @returns Normalized config IR with defaults applied
  */
 export function defineConfig<TFamilyId extends string = string, TTargetId extends string = string>(
-  config: PrismaNextConfig<TFamilyId, TTargetId>,
-): PrismaNextConfig<TFamilyId, TTargetId> {
+  config: PrismaConfig<TFamilyId, TTargetId>,
+): PrismaConfig<TFamilyId, TTargetId> {
   if (config.contract) {
     return {
       ...config,

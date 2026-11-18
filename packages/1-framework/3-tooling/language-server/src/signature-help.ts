@@ -1,0 +1,182 @@
+import { groupedTypeLabel, type Param, type PositionalParam } from '@internal/psl-parser';
+import {
+  MarkupKind,
+  type ParameterInformation,
+  type SignatureHelp,
+  type SignatureInformation,
+} from 'vscode-languageserver';
+import {
+  type ArgumentGrammar,
+  type ArgumentSignature,
+  resolveGrammar,
+} from './attribute-argument-grammar';
+import {
+  type ArgumentOwner,
+  type AttributeSpecSource,
+  argumentRootGrammar,
+} from './attribute-spec-resolution';
+import type { AttributeArgumentPathStep, PslCursorInput } from './attribute-syntax-context';
+import { classifyPslSignatureContext, type SignatureContext } from './signature-context';
+
+export interface ProvidePslSignatureHelpInput extends PslCursorInput {
+  readonly candidates: AttributeSpecSource;
+  readonly clientSupportsLabelOffsets?: boolean;
+}
+
+export function providePslSignatureHelp(input: ProvidePslSignatureHelpInput): SignatureHelp | null {
+  const context = classifyPslSignatureContext(input);
+  if (context === undefined) return null;
+  const root = argumentRootGrammar(context, input.candidates);
+  if (root === undefined) return null;
+  return signatureHelp(context, root, input.clientSupportsLabelOffsets === true);
+}
+
+function rootSignatureName(owner: ArgumentOwner): string | undefined {
+  switch (owner.ownerKind) {
+    case 'field':
+      return `@${owner.attributeName}`;
+    case 'model':
+    case 'block':
+      return `@@${owner.attributeName}`;
+    case 'blockValue':
+      return undefined;
+  }
+}
+
+function signatureHelp(
+  context: SignatureContext,
+  root: ArgumentGrammar,
+  labelOffsets: boolean,
+): SignatureHelp | null {
+  const callIndex = context.path.reduce(
+    (last, step, index) => (step.kind === 'functionCall' ? index : last),
+    -1,
+  );
+  const call = context.path[callIndex];
+  const signaturePath = context.path.slice(0, callIndex + 1);
+  const name = call?.kind === 'functionCall' ? call.name : rootSignatureName(context);
+  if (name === undefined) return null;
+  const signatures = resolveGrammar(root, signaturePath).flatMap((grammar) => {
+    if ('kind' in grammar) return [];
+    const active = context.path[callIndex + 1];
+    const params = resolveSignatureParameters(
+      grammar,
+      active?.kind === 'namedArgument' ? active.name : undefined,
+    );
+    const index = parameterIndex(context, active, params);
+    return [{ signature: renderSignature(name, grammar, params, labelOffsets), index }];
+  });
+  if (signatures.length === 0) return null;
+  const matched = signatures.findIndex(
+    ({ signature, index }) => index >= 0 && index < (signature.parameters?.length ?? 0),
+  );
+  const activeSignature = matched < 0 ? 0 : matched;
+  const activeParameter = signatures[activeSignature]?.index;
+  return {
+    signatures: signatures.map(({ signature }) => signature),
+    activeSignature,
+    ...(matched >= 0 && activeParameter !== undefined ? { activeParameter } : {}),
+  };
+}
+
+function parameterIndex(
+  context: SignatureContext,
+  active: AttributeArgumentPathStep | undefined,
+  params: readonly PositionalParam<unknown, never>[],
+): number {
+  if (active?.kind === 'namedArgument')
+    return params.findIndex((param) => param.key === active.name);
+  if (active?.kind === 'positionalArgument') return active.index;
+  const slot = context.argumentSlot;
+  if (slot !== undefined) {
+    return params.findIndex(
+      (param, index) =>
+        index >= slot.positionalIndex && !slot.existingNamedKeys.includes(param.key),
+    );
+  }
+  return -1;
+}
+
+export function resolveSignatureParameters(
+  signature: ArgumentSignature,
+  activeName: string | undefined,
+): readonly PositionalParam<unknown, never>[] {
+  const positional = signature.positional ?? [];
+  const keys = new Set(positional.map((param) => param.key));
+  const namedAlias = activeName === undefined ? undefined : signature.named?.[activeName];
+  return [
+    ...positional.map((param) =>
+      param.key === activeName && namedAlias !== undefined
+        ? { key: param.key, ...namedAlias }
+        : param,
+    ),
+    ...Object.entries(signature.named ?? {}).flatMap(([key, param]) =>
+      keys.has(key) ? [] : [{ key, ...param }],
+    ),
+  ];
+}
+
+export interface SignatureLabelPart {
+  readonly param: PositionalParam<unknown, never>;
+  readonly text: string;
+  readonly start: number;
+  readonly end: number;
+  readonly positional: boolean;
+}
+
+export interface SignatureLabel {
+  readonly label: string;
+  readonly parts: readonly SignatureLabelPart[];
+}
+
+export function namedParameterText(key: string, type: Param<unknown, never>['type']): string {
+  const optional = 'optional' in type && type.optional === true;
+  return `${key}${optional ? '?' : ''}: ${type.label}`;
+}
+
+export function renderSignatureLabel(
+  name: string,
+  signature: ArgumentSignature,
+  params: readonly PositionalParam<unknown, never>[],
+): SignatureLabel {
+  let label = `${name}(`;
+  const parts: SignatureLabelPart[] = params.map((param, index) => {
+    if (index > 0) label += ', ';
+    const positional = index < (signature.positional?.length ?? 0);
+    const optional = 'optional' in param.type && param.type.optional === true;
+    const typeLabel = optional ? groupedTypeLabel(param.type) : param.type.label;
+    const text = positional
+      ? `${typeLabel}${optional ? '?' : ''}`
+      : namedParameterText(param.key, param.type);
+    const start = label.length;
+    label += text;
+    return { param, text, start, end: label.length, positional };
+  });
+  return { label: `${label})`, parts };
+}
+
+function renderSignature(
+  name: string,
+  signature: ArgumentSignature,
+  params: readonly PositionalParam<unknown, never>[],
+  labelOffsets: boolean,
+): SignatureInformation {
+  const { label, parts } = renderSignatureLabel(name, signature, params);
+  const rendered: ParameterInformation[] = parts.map(({ param, text, start, end, positional }) => {
+    const documentation = positional
+      ? `**${param.key}**\n\n${param.documentation}${signature.named?.[param.key] === undefined ? '' : `\n\nAccepted positionally or by \`${param.key}:\`.`}`
+      : param.documentation;
+    return {
+      label: positional && labelOffsets ? [start, end] : text,
+      documentation: {
+        kind: MarkupKind.Markdown,
+        value: documentation,
+      },
+    };
+  });
+  return {
+    label,
+    documentation: { kind: MarkupKind.Markdown, value: signature.documentation },
+    parameters: rendered,
+  };
+}

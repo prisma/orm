@@ -95,7 +95,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Idempotent re-run — expects no changes [initialized, marker matches contract]
-> prisma-next db init
+> prisma db init
 
 
 
@@ -127,7 +127,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Idempotent re-run — expects no changes [initialized, marker matches contract]
-> prisma-next db init
+> prisma db init
 
 
 
@@ -159,7 +159,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Idempotent re-run — expects no changes [initialized, marker matches contract]
-> prisma-next db init
+> prisma db init
 
 
 
@@ -191,8 +191,8 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Idempotent re-run — expects no changes [initialized, marker matches contract]
-> prisma-next db init
-prisma-next db init → Bootstrap a database to match the current contract
+> prisma db init
+prisma db init → Bootstrap a database to match the current contract
 │
 │ config:               prisma.config.ts
 │ contract:             contract.json

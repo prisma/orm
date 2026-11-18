@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { timeouts, withPostgresPort } from '../../../_harness/postgres';
+import { timeouts, withPostgresPort } from '../../../../_harness/postgres';
 import type { Contract } from './_fixture/generated/contract';
 import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
 
@@ -17,7 +17,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // `prisma.contactAnalytics.createMany({ data: rows })` → `db.public.ContactAnalytics.createAndCount(rows)`
 // `prisma.contactAnalytics.count()` → `db.public.ContactAnalytics.aggregate(a => ({ count: a.count() }))`
 //
-// Upstream uses `undefined` to omit optional fields; prisma-next's CreateInput types
+// Upstream uses `undefined` to omit optional fields; Prisma 8's CreateInput types
 // optional nullable fields as `field?: Date | null`. We construct each row as a
 // partial object and spread only the fields that are present (the varying pattern
 // is preserved faithfully — only which fields are included varies per row/iteration).
@@ -51,7 +51,7 @@ describe('ports/prisma/functional/issues-29331-query-plan-cache-bloat', () => {
     'createMany stress test for cache bloat',
     () =>
       withPostgresPort<Contract>({ contractJson }, async ({ db }) => {
-        // Seed contacts (auto-generated IDs via @default(cuid(2))).
+        // Seed contacts (auto-generated IDs via @onCreate(cuid(2))).
         const contact1 = await db.public.Contact.create({});
         const contact2 = await db.public.Contact.create({});
         const contact3 = await db.public.Contact.create({});

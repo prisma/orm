@@ -63,6 +63,16 @@ describe('ref delete', () => {
     ]);
   });
 
+  it('prints nothing to stdout, its exit code being the result', async () => {
+    const { dir } = await seedRefProject();
+    await writeRef(refsDirIn(dir), 'staging', { hash: HASH_A, invariants: [] });
+
+    const run = await harness().run(['migration', 'ref', 'delete', 'staging'], { cwd: dir });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toBe('');
+  });
+
   it('leaves the contract snapshot the ref pointed at in place', async () => {
     const { dir } = await seedRefProject();
     await writeRef(refsDirIn(dir), 'staging', { hash: HASH_A, invariants: [] });

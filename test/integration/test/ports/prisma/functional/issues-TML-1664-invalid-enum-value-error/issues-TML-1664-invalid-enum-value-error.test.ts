@@ -19,7 +19,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //
 // Subject: inserting an enum value that exists in the schema but was removed from
 // the database native PG ENUM surfaces a structured error (Prisma P2007 →
-// prisma-next: SqlQueryError with sqlState '22P02').
+// Prisma 8: SqlQueryError with sqlState '22P02').
 //
 // Setup: after schema push (which creates native PG ENUM "Status" with 3 values),
 // ALTER the DB enum to remove 'PENDING' via a rename-and-drop pattern, then
@@ -28,7 +28,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //
 // The test uses withDevDatabase + withClient for DDL (ALTER TYPE) because
 // the standard withPostgresPort harness does not expose a raw DDL channel.
-// prisma-next PSL uses native_enum (pg.enum()) for a real PostgreSQL ENUM type.
+// Prisma 8 PSL uses native_enum (pg.enum()) for a real PostgreSQL ENUM type.
 //
 // Disposition:
 //   'returns SqlQueryError(22P02) when inserting an enum value absent from the database enum'
@@ -61,6 +61,8 @@ async function pushContract(connectionString: string): Promise<void> {
       schema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -125,7 +127,7 @@ describe('ports/prisma/functional/issues-TML-1664-invalid-enum-value-error', () 
           capabilities: { ...base.capabilities, returning: { enabled: true } },
         } as PortContract;
 
-        const db = postgres<PortContract>({ contract, url: connectionString, verifyMarker: false });
+        const db = postgres({ contract, url: connectionString, verifyMarker: false });
         const runtime = await db.connect();
         try {
           const error = await db.orm.public.User.create({

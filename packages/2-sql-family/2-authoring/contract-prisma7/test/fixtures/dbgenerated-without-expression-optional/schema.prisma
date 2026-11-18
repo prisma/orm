@@ -1,0 +1,9 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model T {
+  id   Int      @id
+  a    String?  @default(dbgenerated())
+  list String[] @default(dbgenerated())
+}

@@ -1,5 +1,7 @@
 import postgres from '@internal/postgres/runtime';
+import { contractFromJson as postgresContractFromJson } from '@internal/postgres/static';
 import sqlite from '@internal/sqlite/runtime';
+import { contractFromJson as sqliteContractFromJson } from '@internal/sqlite/static';
 import { Client } from 'pg';
 import { expect, it } from 'vitest';
 import type { Contract } from './_fixture/generated/contract';
@@ -11,8 +13,8 @@ it('@prisma/adapter-pg cannot be used with `provider = "mysql"`', () => {
   const mysqlContractJson = { ...contractJson, target: 'mysql' };
 
   expect(() =>
-    postgres<Contract>({
-      contractJson: mysqlContractJson,
+    postgres({
+      contract: postgresContractFromJson<Contract>(mysqlContractJson),
       pg: new Client(),
       verifyMarker: false,
     }),
@@ -30,8 +32,8 @@ it('@prisma/adapter-d1 cannot be used with `provider = "postgresql"`', () => {
   const postgresContractJson = { ...sqliteContractJson, target: 'postgres' };
 
   expect(() =>
-    sqlite<SqliteContract>({
-      contractJson: postgresContractJson,
+    sqlite({
+      contract: sqliteContractFromJson<SqliteContract>(postgresContractJson),
       verifyMarker: false,
     }),
   ).toThrow(

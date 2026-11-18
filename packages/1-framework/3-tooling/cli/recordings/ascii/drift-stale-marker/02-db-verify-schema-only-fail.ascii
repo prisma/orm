@@ -96,7 +96,7 @@ bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file o
 ────────────────────────────────────────────────────────────────────────────────
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
 > # Schema-only fails verify missing name column [base schema, v2 contract expects name column]
-> prisma-next db verify --schema-only
+> prisma db verify --schema-only
 
 
 
@@ -128,7 +128,7 @@ bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file o
 ────────────────────────────────────────────────────────────────────────────────
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
 > # Schema-only fails verify missing name column [base schema, v2 contract expects name column]
-> prisma-next db verify --schema-only
+> prisma db verify --schema-only
 
 
 
@@ -160,7 +160,7 @@ bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file o
 ────────────────────────────────────────────────────────────────────────────────
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
 > # Schema-only fails verify missing name column [base schema, v2 contract expects name column]
-> prisma-next db verify --schema-only
+> prisma db verify --schema-only
 
 
 
@@ -192,9 +192,9 @@ bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file o
 ────────────────────────────────────────────────────────────────────────────────
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
 > # Schema-only fails verify missing name column [base schema, v2 contract expects name column]
-> prisma-next db verify --schema-only
+> prisma db verify --schema-only
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
-prisma-next db verify → Check whether the live database schema matches your contract
+prisma db verify → Check whether the live database schema matches your contract
 │
 │ config:               prisma.config.ts
 │ contract:             contract.json

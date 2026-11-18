@@ -65,7 +65,7 @@ The `createIndex` operation is fully specified by the planner — no user interv
 prisma-next migrate
 ```
 
-The runner reads `ops.json` — never `migration.ts` — verifies the hash, and executes each operation's three-phase loop: precheck, execute, postcheck.
+The runner reads `ops.json` — never `migration.ts` — verifies the hash, and executes each operation's three-phase loop: precheck, execute, postcheck. Before the loop it runs the postchecks and skips an operation whose postchecks already hold ([ADR 038](ADR%20038%20-%20Operation%20idempotency%20classification%20&%20enforcement.md)).
 
 ## Decision
 

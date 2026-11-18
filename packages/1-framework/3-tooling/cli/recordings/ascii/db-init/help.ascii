@@ -113,7 +113,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Show db init help
-> prisma-next db init --help
+> prisma db init --help
 
 
 
@@ -151,7 +151,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Show db init help
-> prisma-next db init --help
+> prisma db init --help
 
 
 
@@ -189,7 +189,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Show db init help
-> prisma-next db init --help
+> prisma db init --help
 
 
 
@@ -227,8 +227,8 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Show db init help
-> prisma-next db init --help
-prisma-next db init → Bootstrap a database to match the current contract and sign it
+> prisma db init --help
+prisma db init → Bootstrap a database to match the current contract and sign it
 │
 │ --json                Output as JSON
 │ -q, --quiet           Quiet mode: errors only
@@ -245,8 +245,8 @@ prisma-next db init → Bootstrap a database to match the current contract and s
 │                       default: false
 │
 │ Examples:
-│   $ prisma-next db init --db $DATABASE_URL
-│   $ prisma-next db init --db $DATABASE_URL --dry-run
+│   $ prisma db init --db $DATABASE_URL
+│   $ prisma db init --db $DATABASE_URL --dry-run
 │
 │ Initializes a database to match your emitted contract using additive-only operations.
 │ Creates any missing tables, columns, indexes, and constraints defined in your contract.

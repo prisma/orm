@@ -6,10 +6,10 @@
 
 `fixtures:emit` regenerates every committed fixture, in this order:
 
-1. `emit` on the fixture-bearing packages (`examples/*`, `apps/*`, `sql-builder`, `sql-orm-client`, `e2e-tests`, `integration-tests`) — runs the **contract emitter** and rewrites each `contract.json` + `contract.d.ts`.
+1. `emit` on the fixture-bearing packages (`examples/*`, `apps/*`, `sql-builder`, `sql-orm-client`, `e2e-tests`, `integration-tests`) — runs the **contract emitter** and rewrites each `contract.json` + `contract.d.ts`. The `integration-tests` package also runs `test/integration/scripts/emit-fixture-configs.mjs`, which walks `test/ports/`, `test/enum-order-by/`, and `test/sql-builder/fixtures/` and re-emits a `prisma.config.ts` only when a committed `generated/` directory sits beside it; every other config is skipped (it belongs to a non-ported suite, or its own test emits to a temp dir).
 2. `build:contract-space` on `packages/3-extensions/*` — the extensions' emitted `contract.json`.
 3. `migrations:regen` (`scripts/regen-extension-migrations.mjs`) — extension migration artifacts.
-4. `migrations:regen:examples` (`scripts/regen-example-migrations.mjs`) — for each example migration: re-emits its bookend contracts into the content-addressed store at `migrations/snapshots/<hex>/contract.*`, then re-runs `tsx migration.ts` to rewrite `ops.json` + `migration.json`.
+4. `migrations:regen:examples` (`scripts/regen-example-migrations.mjs`) — for each example migration: re-emits its bookend contracts into the content-addressed store at `migrations/snapshots/<hex>/contract.*`, then re-runs `tsx migration.ts` to rewrite `ops.json` + `migration.json`. Steps 3 and 4 both write the store through `refreshContractSnapshot` (`scripts/refresh-contract-snapshot.mjs`): the plain `writeContractSnapshot` never rewrites an entry whose hash already exists, so the wrapper compares the entry's `contract.json` and `contract.d.ts` with the fresh emit and replaces the whole entry when either file differs.
 
 `fixtures:check` runs `fixtures:emit` and then:
 
@@ -34,7 +34,7 @@ So `fixtures:check` answers "does the contract emitter still produce identical c
 
 When you change the planner and need to prove the emitted operations are unchanged, use these instead:
 
-- **The planner suites** — e.g. `packages/3-targets/3-targets/postgres/test/migrations/{rls-planner,rls-ops,op-factory-call}.test.ts`, `packages/3-targets/6-adapters/*/test/migrations/planner.*`, and the cross-package `test/integration/test/cross-package/*-issue-planner*.test.ts` — where they assert the **exact** op / SQL output.
+- **The planner suites** — e.g. `packages/3-targets/postgres/1-target/test/migrations/{rls-planner,rls-ops,op-factory-call}.test.ts`, `packages/3-targets/*/2-adapter/test/migrations/planner.*`, and the cross-package `test/integration/test/cross-package/*-issue-planner*.test.ts` — where they assert the **exact** op / SQL output.
 - **The `migration plan` e2e tests** — `cli.migration-plan-ref-aware.e2e`, `cli-journeys/{migration-plan-details,multi-step-migration,drift-migration-dag}.e2e` — which run the real planner end-to-end.
 - **A golden diff of real planner output against the committed example ops.** Run `migration plan --from <prior-migration-dir>` (offline mis-detects the baseline without `--from`) against an example's contract chain and compare the emitted operations to the committed `migration.ts` `operations`. This is the closest thing to a fixture-level byte gate for the planner; there is no automatic one.
 

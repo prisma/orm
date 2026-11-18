@@ -10,6 +10,14 @@ export class AsyncIterableResult<Row> implements AsyncIterable<Row>, PromiseLike
     this.generator = generator;
   }
 
+  /** A result whose first read rejects with `error`, for a member that must report a failure through its result instead of throwing at the call. */
+  static rejected<Row>(error: unknown): AsyncIterableResult<Row> {
+    async function* fail(): AsyncGenerator<Row, void, unknown> {
+      yield* await Promise.reject<readonly Row[]>(error);
+    }
+    return new AsyncIterableResult(fail());
+  }
+
   [Symbol.asyncIterator](): AsyncIterator<Row> {
     if (this.consumed) {
       throw runtimeError(

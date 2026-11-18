@@ -1,0 +1,4 @@
+﻿// use prisma-8
+model C {
+  id String @id @onCreate(nanoid())
+}

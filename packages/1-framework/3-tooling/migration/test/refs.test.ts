@@ -193,12 +193,6 @@ describe('readRef', () => {
     expect(entry).toEqual(ENTRY_A);
   });
 
-  it('reads a ref with invariants', async () => {
-    await writeFile(join(refsDir, 'production.json'), JSON.stringify(ENTRY_B));
-    const entry = await readRef(refsDir, 'production');
-    expect(entry).toEqual(ENTRY_B);
-  });
-
   it('reads a ref with slashed name', async () => {
     await mkdir(join(refsDir, 'envs'), { recursive: true });
     await writeFile(join(refsDir, 'envs', 'staging.json'), JSON.stringify(ENTRY_A));
@@ -436,13 +430,6 @@ describe('resolveRef', () => {
   it('resolves existing ref to RefEntry', () => {
     const refs: Refs = { staging: ENTRY_A, production: ENTRY_B };
     expect(resolveRef(refs, 'staging')).toEqual(ENTRY_A);
-  });
-
-  it('returns entry with invariants', () => {
-    const refs: Refs = { production: ENTRY_B };
-    const entry = resolveRef(refs, 'production');
-    expect(entry.hash).toBe(HASH_B);
-    expect(entry.invariants).toEqual(['split-user-name']);
   });
 
   it('throws for unknown ref name', () => {

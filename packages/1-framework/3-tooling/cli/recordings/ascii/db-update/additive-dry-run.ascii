@@ -101,7 +101,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Preview additive schema changes
-> prisma-next db update --dry-run
+> prisma db update --dry-run
 
 
 
@@ -135,7 +135,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Preview additive schema changes
-> prisma-next db update --dry-run
+> prisma db update --dry-run
 
 
 
@@ -169,7 +169,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Preview additive schema changes
-> prisma-next db update --dry-run
+> prisma db update --dry-run
 
 
 
@@ -203,8 +203,8 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Preview additive schema changes
-> prisma-next db update --dry-run
-prisma-next db update → Update your database schema to match your contract
+> prisma db update --dry-run
+prisma db update → Update your database schema to match your contract
 │
 │ config:               prisma.config.ts
 │ contract:             contract.json

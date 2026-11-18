@@ -11,7 +11,7 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import { TestSqlContractSerializer as SqlContractSerializer } from '../../../2-sql/9-family/test/test-sql-contract-serializer';
+import { TestSqlContractSerializer as SqlContractSerializer } from '../../../2-sql-family/9-family/test/test-sql-contract-serializer';
 import pgvectorControl from '../src/exports/control';
 import pgvectorRuntime from '../src/exports/runtime';
 import {
@@ -36,8 +36,8 @@ const contract = new SqlContractSerializer().deserializeContract({
           table: {
             user: {
               columns: {
-                id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-                vector: { codecId: 'pg/vector@1', nativeType: 'vector', nullable: false },
+                id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+                vector: { codecId: 'pg/vector@1', dataType: 'pgvector/vector', nullable: false },
               },
               uniques: [],
               indexes: [],

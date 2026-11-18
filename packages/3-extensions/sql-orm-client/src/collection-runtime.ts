@@ -3,12 +3,20 @@ import { AsyncIterableResult } from '@internal/framework-components/runtime';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { RuntimeScope } from '@internal/sql-relational-core/types';
 import {
-  getColumnToFieldMap,
-  getCompleteColumnToFieldMap,
-  getFieldToColumnMap,
+  columnOfCallerField,
+  getModelColumnFields,
+  getModelFieldColumns,
+  getOwnColumnFields,
   POLYMORPHIC_DISCRIMINATOR_ALIAS,
   type PolymorphismInfo,
+  type PolymorphismVariantInfo,
 } from './collection-contract';
+import {
+  type CollectionTables,
+  requireVariantTable,
+  variantColumnLabel,
+} from './collection-tables';
+import type { AliasedTable } from './table-scope';
 import type { CollectionContext } from './types';
 
 export interface RowEnvelope {
@@ -27,10 +35,12 @@ export function stripHiddenMappedFields(
     return;
   }
 
-  const columnToField = getColumnToFieldMap(contract, namespaceId, modelName);
+  const columnToField = getModelColumnFields(contract, namespaceId, modelName);
   for (const hiddenColumn of hiddenColumns) {
-    const fieldName = columnToField[hiddenColumn] ?? hiddenColumn;
-    delete mapped[fieldName];
+    const fieldName = Object.hasOwn(columnToField, hiddenColumn)
+      ? columnToField[hiddenColumn]
+      : undefined;
+    if (fieldName !== undefined) delete mapped[fieldName];
   }
 }
 
@@ -52,16 +62,16 @@ export function mapStorageRowToModelFields(
   modelName: string,
   row: Record<string, unknown>,
 ): Record<string, unknown> {
-  const columnToField = getColumnToFieldMap(contract, namespaceId, modelName);
-  if (Object.keys(columnToField).length === 0) {
-    return { ...row };
-  }
+  return mapKnownColumnNames(row, getModelColumnFields(contract, namespaceId, modelName));
+}
 
-  const mapped: Record<string, unknown> = {};
-  for (const [columnName, value] of Object.entries(row)) {
-    mapped[columnToField[columnName] ?? columnName] = value;
-  }
-  return mapped;
+export function createStorageRowMapper(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  modelName: string,
+): (row: Record<string, unknown>) => Record<string, unknown> {
+  const columnToField = getModelColumnFields(contract, namespaceId, modelName);
+  return (row) => mapKnownColumnNames(row, columnToField);
 }
 
 const mergedColumnToFieldCache = new WeakMap<object, Map<string, Record<string, string>>>();
@@ -70,10 +80,10 @@ function getMergedColumnToFieldMap(
   contract: Contract<SqlStorage>,
   namespaceId: string,
   baseModelName: string,
-  variantModelName: string,
-  variantTable: string | undefined,
+  variant: PolymorphismVariantInfo,
+  variantTable: AliasedTable | undefined,
 ): Record<string, string> {
-  const cacheKey = `${namespaceId}:${baseModelName}:${variantModelName}:${variantTable ?? ''}`;
+  const cacheKey = `${namespaceId}:${baseModelName}:${variant.value}:${variantTable?.alias ?? ''}`;
   let perContract = mergedColumnToFieldCache.get(contract);
   if (!perContract) {
     perContract = new Map();
@@ -82,13 +92,13 @@ function getMergedColumnToFieldMap(
   const cached = perContract.get(cacheKey);
   if (cached) return cached;
 
-  const baseMap = getCompleteColumnToFieldMap(contract, namespaceId, baseModelName);
-  const variantMap = getCompleteColumnToFieldMap(contract, namespaceId, variantModelName);
+  const baseMap = getModelColumnFields(contract, namespaceId, baseModelName);
+  const variantMap = getOwnColumnFields(contract, variant.namespaceId, variant.modelName);
 
   const merged: Record<string, string> = { ...baseMap };
   for (const [col, field] of Object.entries(variantMap)) {
     if (variantTable) {
-      merged[`${variantTable}__${col}`] = field;
+      merged[variantColumnLabel(variantTable, col)] = field;
     } else {
       merged[col] = field;
     }
@@ -98,50 +108,121 @@ function getMergedColumnToFieldMap(
   return merged;
 }
 
+function variantTableOf(
+  tables: CollectionTables,
+  variant: PolymorphismVariantInfo,
+): AliasedTable | undefined {
+  return variant.strategy === 'mti' ? requireVariantTable(tables, variant.value) : undefined;
+}
+
 export function mapPolymorphicRow(
   contract: Contract<SqlStorage>,
   namespaceId: string,
   baseModelName: string,
   polyInfo: PolymorphismInfo,
+  tables: CollectionTables,
   row: Record<string, unknown>,
-  variantName?: string,
+  variantValue?: string,
 ): Record<string, unknown> {
   const discriminatorValue =
     row[polyInfo.discriminatorColumn] ?? row[POLYMORPHIC_DISCRIMINATOR_ALIAS];
-  const variant = variantName
-    ? polyInfo.variants.get(variantName)
-    : typeof discriminatorValue === 'string'
-      ? polyInfo.variantsByValue.get(discriminatorValue)
-      : undefined;
+  const selectedValue = variantValue ?? discriminatorValue;
+  const variant =
+    typeof selectedValue === 'string' ? polyInfo.variants.get(selectedValue) : undefined;
 
   if (!variant) {
-    const baseMap = getCompleteColumnToFieldMap(contract, namespaceId, baseModelName);
-    const mapped: Record<string, unknown> = {};
-    for (const [col, val] of Object.entries(row)) {
-      const field = baseMap[col];
-      if (field !== undefined) {
-        mapped[field] = val;
-      }
-    }
-    return mapped;
+    return mapKnownColumnNames(row, getModelColumnFields(contract, namespaceId, baseModelName));
   }
 
-  const mtiTable = variant.strategy === 'mti' ? variant.table : undefined;
   const mergedMap = getMergedColumnToFieldMap(
     contract,
     namespaceId,
     baseModelName,
-    variant.modelName,
-    mtiTable,
+    variant,
+    variantTableOf(tables, variant),
   );
+  return mapKnownColumnNames(row, mergedMap);
+}
+
+export function createPolymorphicRowMapper(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  baseModelName: string,
+  polyInfo: PolymorphismInfo,
+  tables: CollectionTables,
+  variantValue?: string,
+): (row: Record<string, unknown>) => Record<string, unknown> {
+  const baseMapper = captureColumnMapper(() =>
+    getModelColumnFields(contract, namespaceId, baseModelName),
+  );
+  const mappersByValue = new Map<string, typeof baseMapper>();
+  let pinnedMapper = baseMapper;
+  for (const [value, variant] of polyInfo.variants) {
+    if (variantValue && value !== variantValue) continue;
+    const mapper = captureColumnMapper(() =>
+      getMergedColumnToFieldMap(
+        contract,
+        namespaceId,
+        baseModelName,
+        variant,
+        variantTableOf(tables, variant),
+      ),
+    );
+    if (variantValue) pinnedMapper = mapper;
+    mappersByValue.set(value, mapper);
+  }
+  const discriminatorColumn = polyInfo.discriminatorColumn;
+  return (row) => {
+    const value = row[discriminatorColumn] ?? row[POLYMORPHIC_DISCRIMINATOR_ALIAS];
+    const mapper = variantValue
+      ? pinnedMapper
+      : typeof value === 'string'
+        ? (mappersByValue.get(value) ?? baseMapper)
+        : baseMapper;
+    return mapper(row);
+  };
+}
+
+function captureColumnMapper(
+  resolve: () => Readonly<Record<string, string>>,
+): (row: Record<string, unknown>) => Record<string, unknown> {
+  try {
+    const columns = resolve();
+    return (row) => mapKnownColumnNames(row, columns);
+  } catch (error) {
+    return () => {
+      throw error;
+    };
+  }
+}
+
+/** Maps a row from columns to fields. A column no field maps is dropped. */
+function mapKnownColumnNames(
+  row: Record<string, unknown>,
+  columns: Readonly<Record<string, string>>,
+): Record<string, unknown> {
   const mapped: Record<string, unknown> = {};
   for (const [col, val] of Object.entries(row)) {
-    const field = mergedMap[col];
+    const field = Object.hasOwn(columns, col) ? columns[col] : undefined;
     if (field !== undefined) {
       mapped[field] = val;
     }
   }
   return mapped;
+}
+
+/** Refuses any name in `data` with a value that is not a field of the model, as `mapModelDataToStorageRow` would, before anything reads or writes a row. */
+export function assertModelFieldNames(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  modelName: string,
+  data: Readonly<Record<string, unknown>>,
+): void {
+  const fieldColumns = getModelFieldColumns(contract, namespaceId, modelName);
+  for (const [fieldName, value] of Object.entries(data)) {
+    if (value !== undefined)
+      columnOfCallerField(contract, namespaceId, fieldColumns, modelName, fieldName);
+  }
 }
 
 export function mapModelDataToStorageRow(
@@ -150,14 +231,13 @@ export function mapModelDataToStorageRow(
   modelName: string,
   row: Record<string, unknown>,
 ): Record<string, unknown> {
-  const fieldToColumn = getFieldToColumnMap(contract, namespaceId, modelName);
+  const fieldColumns = getModelFieldColumns(contract, namespaceId, modelName);
   const mapped: Record<string, unknown> = {};
   for (const [fieldName, value] of Object.entries(row)) {
     if (value === undefined) {
       continue;
     }
-    const columnName = fieldToColumn[fieldName] ?? fieldName;
-    mapped[columnName] = value;
+    mapped[columnOfCallerField(contract, namespaceId, fieldColumns, modelName, fieldName)] = value;
   }
   return mapped;
 }

@@ -27,10 +27,12 @@ interface TwoNamespaceContract extends Omit<TestContract, 'domain' | 'storage'> 
           readonly User: {
             readonly fields: {
               readonly id: {
+                readonly many: false;
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
               readonly token: {
+                readonly many: false;
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
@@ -59,12 +61,14 @@ interface TwoNamespaceContract extends Omit<TestContract, 'domain' | 'storage'> 
             readonly auth_users: {
               readonly columns: {
                 readonly id: {
-                  readonly nativeType: 'int4';
+                  readonly many: false;
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };
                 readonly token: {
-                  readonly nativeType: 'text';
+                  readonly many: false;
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
@@ -111,7 +115,8 @@ test('the auth-namespace User facet read row carries its unique field `token`', 
  * focused on the field that distinguishes the two namespaces.
  */
 type DefaultedPk = {
-  readonly nativeType: 'int4';
+  readonly many: false;
+  readonly dataType: 'pg/int4';
   readonly codecId: 'pg/int4@1';
   readonly nullable: false;
   readonly default: { readonly kind: 'function'; readonly expression: 'nextval' };
@@ -125,10 +130,12 @@ interface WriteCollisionContract extends Omit<TestContract, 'domain' | 'storage'
           readonly User: {
             readonly fields: {
               readonly id: {
+                readonly many: false;
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
               readonly email: {
+                readonly many: false;
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
@@ -150,10 +157,12 @@ interface WriteCollisionContract extends Omit<TestContract, 'domain' | 'storage'
           readonly User: {
             readonly fields: {
               readonly id: {
+                readonly many: false;
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
               readonly token: {
+                readonly many: false;
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
@@ -183,7 +192,8 @@ interface WriteCollisionContract extends Omit<TestContract, 'domain' | 'storage'
               readonly columns: {
                 readonly id: DefaultedPk;
                 readonly email: {
-                  readonly nativeType: 'text';
+                  readonly many: false;
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
@@ -206,7 +216,8 @@ interface WriteCollisionContract extends Omit<TestContract, 'domain' | 'storage'
               readonly columns: {
                 readonly id: DefaultedPk;
                 readonly token: {
-                  readonly nativeType: 'text';
+                  readonly many: false;
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
@@ -275,4 +286,59 @@ test('each User facet rejects the unique field of the other namespace in create/
   await writeDb.public.User.create({ token: 'tok' });
   // @ts-expect-error `token` belongs to auth.User, not public.User
   writeDb.public.User.where({ token: 'tok' });
+});
+
+test('each User facet resolves select/distinct/cursor/conflictOn fields within its own namespace', () => {
+  expectTypeOf(writeDb.public.User.select('email').all()).resolves.items.toEqualTypeOf<{
+    email: string;
+  }>();
+  expectTypeOf(writeDb.auth.User.select('token').all()).resolves.items.toEqualTypeOf<{
+    token: string;
+  }>();
+  expectTypeOf(writeDb.auth.User.select('id').all()).resolves.items.toEqualTypeOf<{
+    id: number;
+  }>();
+  writeDb.auth.User.distinct('token');
+  writeDb.auth.User.orderBy((user) => user.token.asc()).distinctOn('token');
+  writeDb.auth.User.orderBy((user) => user.token.asc()).cursor({ token: 'tok' });
+  writeDb.auth.User.createAll([{ token: 'tok' }], { onConflict: 'skip', conflictOn: ['token'] });
+});
+
+test('each User facet rejects the other namespace fields in select/distinct/cursor/conflictOn', () => {
+  // @ts-expect-error `email` belongs to public.User, not auth.User
+  writeDb.auth.User.select('email');
+  // @ts-expect-error `token` belongs to auth.User, not public.User
+  writeDb.public.User.select('token');
+  // @ts-expect-error `email` belongs to public.User, not auth.User
+  writeDb.auth.User.distinct('email');
+  // @ts-expect-error `email` belongs to public.User, not auth.User
+  writeDb.auth.User.orderBy((user) => user.id.asc()).cursor({ email: 'a@example.com' });
+  writeDb.auth.User.createAll([{ token: 'tok' }], {
+    onConflict: 'skip',
+    // @ts-expect-error `email` belongs to public.User, not auth.User
+    conflictOn: ['email'],
+  });
+});
+
+test('the auth-namespace User facet resolves upsert update inputs to its own field `token`', async () => {
+  await writeDb.auth.User.upsert({ create: { token: 'tok' }, update: { token: 'next' } });
+  // @ts-expect-error `email` belongs to public.User, not auth.User
+  await writeDb.auth.User.upsert({ create: { token: 'tok' }, update: { email: 'a@example.com' } });
+});
+
+test('each User facet resolves upsert conflictOn and whereUnique within its own namespace', async () => {
+  await writeDb.auth.User.upsert({
+    create: { token: 'tok' },
+    update: {},
+    conflictOn: { token: 'tok' },
+  });
+  await writeDb.auth.User.upsert({
+    create: { token: 'tok' },
+    update: {},
+    // @ts-expect-error `email` belongs to public.User, not auth.User
+    conflictOn: { email: 'a@example.com' },
+  });
+  writeDb.auth.User.whereUnique({ token: 'tok' });
+  // @ts-expect-error `email` belongs to public.User, not auth.User
+  writeDb.auth.User.whereUnique({ email: 'a@example.com' });
 });

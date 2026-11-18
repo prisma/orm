@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { timeouts, withPostgresPort } from '../../../_harness/postgres';
+import { timeouts, withPostgresPort } from '../../../../_harness/postgres';
 import type { Contract as ContractDifferentNames } from './_fixture/different-names/generated/contract';
 import contractDifferentNamesJson from './_fixture/different-names/generated/contract.json' with {
   type: 'json',
@@ -17,7 +17,7 @@ import contractNoMapJson from './_fixture/no-map/generated/contract.json' with {
 // Upstream suite: CRUD across two postgres schemas (base.User, transactional.Post)
 // with three @@map variants: no mapping, identical table names, different table names.
 //
-// Prisma @@schema("x") maps to prisma-next `namespace x { model ... }`.
+// Prisma @@schema("x") maps to Prisma 8 `namespace x { model ... }`.
 // Cross-namespace relation: `posts transactional.Post[]` / `author base.User?`.
 // ORM access: db.base.User, db.transactional.Post.
 //

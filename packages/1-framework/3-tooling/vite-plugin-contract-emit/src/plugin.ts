@@ -1,8 +1,8 @@
 import type { ContractEmitResult } from '@internal/cli/control-api';
 import { disposeEmitQueue, executeContractEmit } from '@internal/cli/control-api';
-import { loadConfigForSections } from '@internal/config-loader';
+import { expandContractInputs, loadConfigForSections } from '@internal/config-loader';
 import { getEmittedArtifactPaths } from '@internal/emitter';
-import { extname, resolve } from 'pathe';
+import { dirname, extname, resolve } from 'pathe';
 import type { Plugin, ViteDevServer } from 'vite';
 import type { PrismaVitePluginOptions } from './types';
 
@@ -21,7 +21,7 @@ const MODULE_GRAPH_EXTENSIONS = new Set([
 ]);
 
 /**
- * Creates a Vite plugin that automatically emits Prisma Next contract artifacts.
+ * Creates a Vite plugin that automatically emits Prisma 8 contract artifacts.
  *
  * The plugin resolves watched files from contract source provider metadata,
  * re-emitting contract artifacts on changes with debounce while serializing
@@ -129,13 +129,16 @@ export function prismaVitePlugin(
       const result = await executeContractEmit({
         config: configResult.value,
         cwd: process.cwd(),
-        configPath: absoluteConfigPath,
+        projectDir: dirname(absoluteConfigPath),
         signal,
       });
 
       log(`Emitted contract (storageHash: ${result.storageHash.slice(0, 8)}...)`);
       log(`  → ${result.files.json}`, 'debug');
       log(`  → ${result.files.dts}`, 'debug');
+      for (const { spaceId, path } of result.pinnedFiles) {
+        log(`Wrote ${path} for extension pack space ${spaceId}`);
+      }
 
       if (server) {
         server.moduleGraph.onFileChange(result.files.json);
@@ -165,7 +168,7 @@ export function prismaVitePlugin(
         server.ws.send({
           type: 'error',
           err: {
-            message: `[prisma-next] ${errorMessage}`,
+            message: `[prisma] ${errorMessage}`,
             stack: errorStack ?? '',
             plugin: PLUGIN_NAME,
           },
@@ -308,7 +311,7 @@ export function prismaVitePlugin(
       }
 
       const files = new Set<string>([absoluteConfigPath]);
-      const inputs = contract.source.inputs ?? [];
+      const inputs = await expandContractInputs(contract.source.inputs);
       for (const outputFile of resolveContractOutputFiles(contract.output)) {
         ignoredOutputFiles.add(outputFile);
       }
@@ -344,7 +347,7 @@ export function prismaVitePlugin(
             ? `Watching the previous dependency set plus ${absoluteConfigPath}`
             : `Watching only ${absoluteConfigPath}`;
         logWarning(
-          `${watchScope} because Prisma Next config inputs could not be resolved.${reason} Contract watch coverage is partial.`,
+          `${watchScope} because Prisma 8 config inputs could not be resolved.${reason} Contract watch coverage is partial.`,
         );
       }
       if (previousWatchedFiles.size > 0) {
@@ -463,7 +466,7 @@ export function prismaVitePlugin(
         viteServer.ws.send({
           type: 'error',
           err: {
-            message: `[prisma-next] ${errorMessage}`,
+            message: `[prisma] ${errorMessage}`,
             stack: '',
             plugin: PLUGIN_NAME,
           },

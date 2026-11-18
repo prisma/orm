@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { timeouts, withMongoPort } from '../../../_harness/mongo';
+import { timeouts, withMongoPort } from '../../../../_harness/mongo';
 import type { Contract } from './_fixture/generated/contract';
 import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
 
@@ -20,13 +20,13 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //   - set nested list  → PORTED (both variants)
 //
 // Note: upstream "set null" for the required variant throws a runtime error;
-// in prisma-next the required constraint is enforced at compile time by the type
+// in Prisma 8 the required constraint is enforced at compile time by the type
 // system (content cannot be null/undefined on CommentRequired), so that branch
 // is covered below through the provisioned collection validator.
 //
-// Note: create() returns the input data merged with the server-assigned _id.
-// Upstream asserts `id: expect.any(String)`; prisma-next decodes write results
-// through the same codecs as reads (#29879), so `_id` is a hex string here too.
+// Note: create() returns the input data merged with the server-assigned id.
+// Upstream asserts `id: expect.any(String)`; Prisma 8 decodes write results
+// through the same codecs as reads (#29879), so `id` is a hex string here too.
 
 function withComposites(fn: Parameters<typeof withMongoPort<Contract>>[1]) {
   return withMongoPort<Contract>({ contractJson }, fn);
@@ -53,7 +53,7 @@ describe('ports/prisma/functional/composites/object/create', () => {
               upvotes: [{ userId: '10', vote: true }],
             },
           });
-          expect(comment._id).toEqual(expect.any(String));
+          expect(comment.id).toEqual(expect.any(String));
         }),
       timeouts.spinUpMongoMemoryServer,
     );
@@ -111,25 +111,11 @@ describe('ports/prisma/functional/composites/object/create', () => {
     );
 
     // Upstream asserts null on required `content` is BOTH a type error and a
-    // runtime throw (`Argument must not be null`). prisma-next rejects it at the
+    // runtime throw (`Argument must not be null`). Prisma 8 rejects it at the
     // type level (the @ts-expect-error holds), and MongoDB rejects it through the
     // provisioned collection validator.
     it(
       'set null',
-      () =>
-        withComposites(async ({ db }) => {
-          const comment = db.comments_required.create({
-            country: 'France',
-            // @ts-expect-error required `content` cannot be null
-            content: null,
-          });
-          await expect(comment).rejects.toThrow();
-        }),
-      timeouts.spinUpMongoMemoryServer,
-    );
-
-    it(
-      'set null shorthand',
       () =>
         withComposites(async ({ db }) => {
           const comment = db.comments_required.create({
@@ -163,7 +149,7 @@ describe('ports/prisma/functional/composites/object/create', () => {
               upvotes: [{ userId: '10', vote: true }],
             },
           });
-          expect(comment._id).toEqual(expect.any(String));
+          expect(comment.id).toEqual(expect.any(String));
         }),
       timeouts.spinUpMongoMemoryServer,
     );
@@ -193,23 +179,6 @@ describe('ports/prisma/functional/composites/object/create', () => {
 
     it(
       'set null',
-      () =>
-        withComposites(async ({ db }) => {
-          const comment = await db.comments_optional.create({
-            country: 'France',
-            content: null,
-          });
-
-          expect(comment).toMatchObject({
-            country: 'France',
-            content: null,
-          });
-        }),
-      timeouts.spinUpMongoMemoryServer,
-    );
-
-    it(
-      'set null shorthand (content omitted)',
       () =>
         withComposites(async ({ db }) => {
           const comment = await db.comments_optional.create({

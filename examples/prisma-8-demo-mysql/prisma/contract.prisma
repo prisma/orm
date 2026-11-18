@@ -1,0 +1,29 @@
+// use prisma-8
+
+model User {
+  id    Int    @id @default(autoincrement())
+  email String @unique
+  role  Role
+  posts Post[]
+}
+
+model Post {
+  id       Int    @id @default(autoincrement())
+  title    String
+  author   User   @relation(fields: [authorId], references: [id])
+  authorId Int
+}
+
+model Event {
+  id        Int      @id @default(autoincrement())
+  title     String
+  startsAt  DateTime
+  day       Date
+  opensAt   Time
+  createdAt DateTime @default(now())
+}
+
+enum Role {
+  USER
+  ADMIN
+}

@@ -5,7 +5,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { assertReviewStateV1, formatCanonicalJson } from './review-artifacts.mjs';
+import { assertReviewStateV2, formatCanonicalJson } from './review-artifacts.mjs';
 
 const EXIT_SUCCESS = 0;
 const EXIT_OPERATIONAL = 1;
@@ -90,7 +90,7 @@ function parseCliArgs(argv) {
 }
 
 export function buildReviewStateSummary(payload) {
-  assertReviewStateV1(payload);
+  assertReviewStateV2(payload);
 
   return {
     version: 1,

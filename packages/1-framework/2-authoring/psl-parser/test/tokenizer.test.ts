@@ -187,6 +187,47 @@ describe('Tokenizer', () => {
       `);
     });
 
+    it('scans a plus as its own token kind', () => {
+      assertLossless('+auth.Timestamps');
+      expect(tokenize('+auth.Timestamps')).toMatchInlineSnapshot(`
+        "Plus           "+"
+        Ident          "auth"
+        Dot            "."
+        Ident          "Timestamps"
+        Eof            """
+      `);
+    });
+
+    it.each([
+      ['an integer', '+1'],
+      ['a decimal', '+1.5'],
+      ['several digits', '+007'],
+    ])('scans a plus directly before %s as one number', (_name, source) => {
+      expect(collectAll(source)).toEqual([
+        { kind: 'NumberLiteral', text: source },
+        { kind: 'Eof', text: '' },
+      ]);
+    });
+
+    it.each([
+      ['a letter', '+a', ['Plus', 'Ident', 'Eof']],
+      ['a space and a digit', '+ 1', ['Plus', 'Whitespace', 'NumberLiteral', 'Eof']],
+      ['nothing', '+', ['Plus', 'Eof']],
+      ['a dot', '+.5', ['Plus', 'Dot', 'NumberLiteral', 'Eof']],
+      ['another plus', '++1', ['Plus', 'NumberLiteral', 'Eof']],
+    ])('scans a plus before %s as a Plus token', (_name, source, kinds) => {
+      assertLossless(source);
+      expect(collectAll(source).map((token) => token.kind)).toEqual(kinds);
+    });
+
+    it('keeps a plus after a digit apart from the number before it', () => {
+      expect(collectAll('1+2').map((token) => [token.kind, token.text])).toEqual([
+        ['NumberLiteral', '1'],
+        ['NumberLiteral', '+2'],
+        ['Eof', ''],
+      ]);
+    });
+
     it('resumes known tokens after Invalid', () => {
       assertLossless('#$model');
       expect(tokenize('#$model')).toMatchInlineSnapshot(`
@@ -201,6 +242,34 @@ describe('Tokenizer', () => {
       expect(tokenize('!/')).toMatchInlineSnapshot(`
         "Invalid        "!"
         Invalid        "/"
+        Eof            """
+      `);
+    });
+
+    it('scans a block comment as one Comment token, across lines', () => {
+      const source = '/**\n * doc\n */\nenum A /* x */ {}';
+      assertLossless(source);
+      expect(tokenize(source)).toMatchInlineSnapshot(`
+        "Comment        "/**\\n * doc\\n */"
+        Newline        "\\n"
+        Ident          "enum"
+        Whitespace     " "
+        Ident          "A"
+        Whitespace     " "
+        Comment        "/* x */"
+        Whitespace     " "
+        LBrace         "{"
+        RBrace         "}"
+        Eof            """
+      `);
+    });
+
+    it('leaves an unterminated block comment as Invalid tokens', () => {
+      expect(tokenize('/* a')).toMatchInlineSnapshot(`
+        "Invalid        "/"
+        Invalid        "*"
+        Whitespace     " "
+        Ident          "a"
         Eof            """
       `);
     });
@@ -228,6 +297,27 @@ describe('Tokenizer', () => {
       expect(peekOne).toEqual(second);
     });
 
+    it('reuses buffered lookahead after consuming an earlier token', () => {
+      const t = new Tokenizer('model User');
+      const peeked = t.peek(2);
+      expect(peeked).toEqual({ kind: 'Ident', text: 'User' });
+      expect(t.peek(2)).toBe(peeked);
+      expect(t.next()).toEqual({ kind: 'Ident', text: 'model' });
+      expect(t.peek(1)).toBe(peeked);
+      expect(t.next()).toEqual({ kind: 'Whitespace', text: ' ' });
+      expect(t.next()).toBe(peeked);
+    });
+
+    it('returns Eof beyond available lookahead without consuming buffered tokens', () => {
+      const t = new Tokenizer('a b');
+      expect(t.peek(10)).toEqual({ kind: 'Eof', text: '' });
+      expect(t.peek(3)).toEqual({ kind: 'Eof', text: '' });
+      expect(t.next()).toEqual({ kind: 'Ident', text: 'a' });
+      expect(t.next()).toEqual({ kind: 'Whitespace', text: ' ' });
+      expect(t.next()).toEqual({ kind: 'Ident', text: 'b' });
+      expect(t.peek(10)).toEqual({ kind: 'Eof', text: '' });
+    });
+
     it('returns Eof indefinitely after source is exhausted', () => {
       const t = new Tokenizer('a');
       expect(t.next().kind).toBe('Ident');
@@ -242,6 +332,96 @@ describe('Tokenizer', () => {
       t.next(); // Eof
       expect(t.peek(0).kind).toBe('Eof');
     });
+  });
+});
+
+describe('backtick strings', () => {
+  it('scans a backtick string as a StringLiteral token, quotes included', () => {
+    expect(tokenize('sql`gen_random_uuid()`')).toMatchInlineSnapshot(`
+      "Ident          "sql"
+      StringLiteral  "\`gen_random_uuid()\`"
+      Eof            """
+    `);
+  });
+
+  it('spans multiple lines', () => {
+    const source = 'sql`\n  now()\n`';
+    assertLossless(source);
+    expect(tokenize(source)).toMatchInlineSnapshot(`
+      "Ident          "sql"
+      StringLiteral  "\`\\n  now()\\n\`"
+      Eof            """
+    `);
+  });
+
+  it('treats a backslash-escaped backtick as part of the string', () => {
+    expect(tokenize('`a\\`b`')).toMatchInlineSnapshot(`
+      "StringLiteral  "\`a\\\\\`b\`"
+      Eof            """
+    `);
+  });
+
+  it('lets an escaped backslash precede the closing backtick', () => {
+    expect(tokenize('`a\\\\` x')).toMatchInlineSnapshot(`
+      "StringLiteral  "\`a\\\\\\\\\`"
+      Whitespace     " "
+      Ident          "x"
+      Eof            """
+    `);
+  });
+
+  it('keeps an unterminated backtick string to the end of the source', () => {
+    const source = '`abc\n  more\n';
+    assertLossless(source);
+    expect(tokenize(source)).toMatchInlineSnapshot(`
+      "StringLiteral  "\`abc\\n  more\\n"
+      Eof            """
+    `);
+  });
+
+  it('ends an unterminated backtick string before the first line that opens with a closing brace', () => {
+    const source = '`abc\n  more\n  }\nnext';
+    assertLossless(source);
+    expect(collectAll(source).map((t) => t.kind)).toEqual([
+      'StringLiteral',
+      'Whitespace',
+      'RBrace',
+      'Newline',
+      'Ident',
+      'Eof',
+    ]);
+    expect(collectAll(source)[0]?.text).toBe('`abc\n  more\n');
+  });
+
+  it.each([
+    ['CR', '\r'],
+    ['CRLF', '\r\n'],
+  ])('recognises %s line breaks when ending an unterminated backtick string', (_name, eol) => {
+    const source = `\`abc${eol}  more${eol}  }${eol}next`;
+    assertLossless(source);
+    expect(collectAll(source).map((t) => t.kind)).toEqual([
+      'StringLiteral',
+      'Whitespace',
+      'RBrace',
+      'Newline',
+      'Ident',
+      'Eof',
+    ]);
+    expect(collectAll(source)[0]?.text).toBe(`\`abc${eol}  more${eol}`);
+  });
+
+  it('still ends an unterminated double- or single-quoted string at the newline', () => {
+    expect(collectAll('"abc\n}').map((t) => t.kind)).toEqual([
+      'StringLiteral',
+      'Newline',
+      'RBrace',
+      'Eof',
+    ]);
+    expect(collectAll("'abc\n}")[0]?.text).toBe("'abc");
+  });
+
+  it('is lossless with a dotted tag, whitespace before the string, and a double-quoted string', () => {
+    assertLossless('postgis.geometry `a` sql"b"');
   });
 });
 
@@ -264,5 +444,18 @@ describe('isTerminatedStringLiteral', () => {
 
   it('treats a real closing quote after an escaped quote as terminated', () => {
     expect(isTerminatedStringLiteral('"a\\""')).toBe(true);
+  });
+
+  it.each([
+    ["'ok'", true],
+    ['`ok`', true],
+    ['``', true],
+    ['`a\\\\`', true],
+    ['`', false],
+    ['`oops', false],
+    ['`a\\`', false],
+    ['"ok\'', false],
+  ])('reads %s as terminated: %s', (text, terminated) => {
+    expect(isTerminatedStringLiteral(text)).toBe(terminated);
   });
 });

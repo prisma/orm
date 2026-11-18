@@ -1,4 +1,5 @@
 import { crossRef, type NamespaceId } from '@internal/contract/types';
+import mongoStatic, { contractFromJson } from '@internal/mongo/static';
 import type {
   MongoContract,
   MongoContractWithTypeMaps,
@@ -18,7 +19,7 @@ import {
   MongoRedactStage,
   MongoSortStage,
 } from '@internal/mongo-query-ast/execution';
-import { acc, fn, mongoQuery } from '@internal/mongo-query-builder';
+import { acc, fn } from '@internal/mongo-query-builder';
 import { describe, expect, it } from 'vitest';
 import { describeWithMongoDB } from './setup';
 
@@ -29,7 +30,10 @@ import { describeWithMongoDB } from './setup';
 type ScalarField<TCodecId extends string> = {
   readonly type: { readonly kind: 'scalar'; readonly codecId: TCodecId };
   readonly nullable: false;
+  readonly many: false;
 };
+
+type StoredAs<TFields extends string> = { readonly [K in TFields]: { readonly field: K } };
 
 type PipelineContract = MongoContract & {
   readonly domain: {
@@ -46,7 +50,12 @@ type PipelineContract = MongoContract & {
               readonly createdAt: ScalarField<'mongo/date@1'>;
             };
             readonly relations: Record<string, never>;
-            readonly storage: { readonly collection: 'products' };
+            readonly storage: {
+              readonly collection: 'products';
+              readonly fields: StoredAs<
+                '_id' | 'name' | 'category' | 'price' | 'tags' | 'createdAt'
+              >;
+            };
           };
           readonly Order: {
             readonly fields: {
@@ -56,7 +65,10 @@ type PipelineContract = MongoContract & {
               readonly status: ScalarField<'mongo/string@1'>;
             };
             readonly relations: Record<string, never>;
-            readonly storage: { readonly collection: 'orders' };
+            readonly storage: {
+              readonly collection: 'orders';
+              readonly fields: StoredAs<'_id' | 'productName' | 'quantity' | 'status'>;
+            };
           };
         };
       };
@@ -102,6 +114,7 @@ type TContract = MongoContractWithTypeMaps<PipelineContract, TestTypeMaps>;
 const scalarField = <TCodecId extends string>(codecId: TCodecId) => ({
   type: { kind: 'scalar' as const, codecId },
   nullable: false,
+  many: false,
 });
 
 const contractJson = {
@@ -122,7 +135,17 @@ const contractJson = {
               createdAt: scalarField('mongo/date@1'),
             },
             relations: {},
-            storage: { collection: 'products' },
+            storage: {
+              collection: 'products',
+              fields: {
+                _id: { field: '_id' },
+                name: { field: 'name' },
+                category: { field: 'category' },
+                price: { field: 'price' },
+                tags: { field: 'tags' },
+                createdAt: { field: 'createdAt' },
+              },
+            },
           },
           Order: {
             fields: {
@@ -132,7 +155,15 @@ const contractJson = {
               status: scalarField('mongo/string@1'),
             },
             relations: {},
-            storage: { collection: 'orders' },
+            storage: {
+              collection: 'orders',
+              fields: {
+                _id: { field: '_id' },
+                productName: { field: 'productName' },
+                quantity: { field: 'quantity' },
+                status: { field: 'status' },
+              },
+            },
           },
         },
       },
@@ -163,7 +194,7 @@ const contractJson = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const query = mongoQuery<TContract>({ contractJson });
+const query = mongoStatic({ contract: contractFromJson<TContract>(contractJson) }).query;
 
 function products() {
   return query.from('products');

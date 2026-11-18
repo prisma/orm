@@ -2,7 +2,7 @@
 
 **Status:** Shared descriptor types for family-specific contract authoring
 
-This package holds the small, target-neutral descriptor vocabulary shared by Prisma Next authoring surfaces, targets, extensions, and ID helpers.
+This package holds the small, target-neutral descriptor vocabulary shared by Prisma 8 authoring surfaces, targets, extensions, and ID helpers.
 
 ## Overview
 

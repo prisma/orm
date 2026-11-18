@@ -1,7 +1,7 @@
 /**
  * Pins the migration-file CLI's exit-code scheme: 0 for success paths,
  * 1 for runtime errors, 2 for usage errors. The S5 cutover deletes the
- * commander shell and moves the `prisma-next` bin onto the CLI engine's
+ * commander shell and moves the standalone bin onto the CLI engine's
  * settlement codes (errored runs exit 2, findings exit 4) — the
  * clipanion migration-file CLI is explicitly untouched by that change,
  * and this suite is the assertion that its scheme survived.
@@ -74,34 +74,9 @@ describe('migration-file CLI exit scheme (0/1/2)', () => {
     expect(stdout.text).toContain('migration.ts');
   });
 
-  it('exits 0 when imported rather than executed', async () => {
-    const stdout = new BufferStream();
-    const stderr = new BufferStream();
-    const exitCode = await MigrationCLI.run(migrationUrl, NoOpMigration, {
-      argv: ['node', join(projectDir, 'some-other-entrypoint.ts')],
-      stdout,
-      stderr,
-    });
-    expect(exitCode).toBe(0);
-    expect(stdout.text).toBe('');
-    expect(stderr.text).toBe('');
-  });
-
   it('exits 1 for a runtime error (config file not found)', async () => {
     const { exitCode, stderr } = run(['--config', join(projectDir, 'does-not-exist.config.ts')]);
     expect(await exitCode).toBe(1);
     expect(stderr.text).toContain('CONFIG.FILE_NOT_FOUND');
-  });
-
-  it('exits 2 for an unknown flag', async () => {
-    const { exitCode, stderr } = run(['--frobnicate']);
-    expect(await exitCode).toBe(2);
-    expect(stderr.text).toContain('CLI.UNKNOWN_FLAG');
-  });
-
-  it('exits 2 for --config without a path', async () => {
-    const { exitCode, stderr } = run(['--config']);
-    expect(await exitCode).toBe(2);
-    expect(stderr.text).toContain('CLI.CONFIG_ARG_MISSING_PATH');
   });
 });

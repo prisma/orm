@@ -1,0 +1,11 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model Post {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  number    Int      @db.ObjectId
+  stamp     DateTime @db.Timestamp
+  ratio     Float    @db.Decimal
+}

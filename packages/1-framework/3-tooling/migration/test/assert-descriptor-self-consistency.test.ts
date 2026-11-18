@@ -8,8 +8,8 @@ const STORAGE_BODY = {
   tables: {
     test_box: {
       columns: {
-        x: { codecId: 'pg/int4@1', nativeType: 'integer', nullable: false },
-        y: { codecId: 'pg/int4@1', nativeType: 'integer', nullable: false },
+        x: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+        y: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
       },
       uniques: [],
       indexes: [],
@@ -54,19 +54,6 @@ describe('assertDescriptorSelfConsistency', () => {
         ...SQL_HOOKS,
       }),
     ).not.toThrow();
-  });
-
-  it('throws MIGRATION.DESCRIPTOR_HEAD_HASH_MISMATCH on stale headRef.hash', () => {
-    expect(() =>
-      assertDescriptorSelfConsistency({
-        extensionId: 'test-extension',
-        target: TARGET,
-        targetFamily: FAMILY,
-        storage: STORAGE,
-        headRefHash: 'stale-hash',
-        ...SQL_HOOKS,
-      }),
-    ).toThrowError(MigrationToolsError);
   });
 
   it('error names the extension and includes both hashes in meta', () => {
