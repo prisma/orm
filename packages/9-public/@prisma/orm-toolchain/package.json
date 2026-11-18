@@ -65,6 +65,7 @@
     "./cli/config-types": "./dist/cli__config-types.mjs",
     "./cli/control-api": "./dist/cli__control-api.mjs",
     "./cli/control-api/testing": "./dist/cli__control-api__testing.mjs",
+    "./cli/init-contribution": "./dist/cli__init-contribution.mjs",
     "./cli/init-output": "./dist/cli__init-output.mjs",
     "./cli/migration-cli": "./dist/cli__migration-cli.mjs",
     "./cli-telemetry": "./dist/cli-telemetry.mjs",
