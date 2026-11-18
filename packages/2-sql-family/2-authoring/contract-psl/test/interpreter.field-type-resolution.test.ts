@@ -8,15 +8,15 @@ import { createTestSqlNamespace } from '../../../1-core/contract/test/test-suppo
 import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
+  fixturePostgresTypeNamespace,
   interpretSqlContract,
-  postgresScalarAuthoringTypes,
   postgresTarget,
 } from './fixtures';
 import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contract-storage';
 import { unboundTables } from './unbound-tables';
 
 const authoringTypes = {
-  ...postgresScalarAuthoringTypes,
+  ...fixturePostgresTypeNamespace,
   db: {
     Text: {
       kind: 'typeConstructor',

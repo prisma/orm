@@ -1,8 +1,10 @@
 import type {
   ControlDriverInstance,
   ControlFamilyInstance,
+  DatabasePolicies,
   MigrationPlan,
   MigrationRunnerFailure,
+  MigrationRunnerPerSpaceOptions,
   MigrationRunnerResult,
   TargetMigrationsCapability,
 } from '@internal/framework-components/control';
@@ -15,7 +17,8 @@ import {
   buildFabricatedMigrationEdge,
   createContractSpaceAggregate,
 } from '@internal/migration-tools/aggregate';
-import { notOk } from '@internal/utils/result';
+import { ifDefined } from '@internal/utils/defined';
+import { notOk, ok } from '@internal/utils/result';
 import { vi } from 'vitest';
 import {
   collectOrdered,
@@ -122,4 +125,38 @@ export async function failureOf(
   return failure === undefined
     ? undefined
     : runnerFailureFacts(failure, collectOrdered(['app'], perSpacePlansFrom(origin)));
+}
+
+/** The per-space options `runMigration` hands the runner for the one space, `app`. */
+export async function runnerOptionsFor(
+  databasePolicies: DatabasePolicies | undefined,
+): Promise<readonly MigrationRunnerPerSpaceOptions[]> {
+  let captured: readonly MigrationRunnerPerSpaceOptions[] = [];
+  const migrations = {
+    createRunner: () => ({
+      execute: async (options: {
+        readonly perSpaceOptions: readonly MigrationRunnerPerSpaceOptions[];
+      }) => {
+        captured = options.perSpaceOptions;
+        return ok({ perSpaceResults: [] });
+      },
+    }),
+  } as unknown as TargetMigrationsCapability<
+    'sql',
+    'postgres',
+    ControlFamilyInstance<'sql', unknown>
+  >;
+  await runMigration<'sql', 'postgres'>({
+    aggregate: makeAggregate(),
+    perSpacePlans: perSpacePlansFrom(null),
+    applyOrder: ['app'],
+    driver: {} as ControlDriverInstance<'sql', 'postgres'>,
+    familyInstance: { familyId: 'sql' } as unknown as ControlFamilyInstance<'sql', unknown>,
+    migrations,
+    frameworkComponents: [],
+    policy: { allowedOperationClasses: ['additive'] },
+    action: 'migrate',
+    ...ifDefined('databasePolicies', databasePolicies),
+  });
+  return captured;
 }

@@ -6,9 +6,9 @@ import type { InterpretPslDocumentToSqlContractInput } from '../src/interpreter'
 import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
+  fixturePostgresTypeNamespace,
   interpretSqlContract,
   modelsOf,
-  postgresScalarAuthoringTypes,
   postgresScalarTypeDescriptors,
   postgresTarget,
   valueObjectRef,
@@ -45,7 +45,7 @@ describe('interpretPslDocumentToSqlContract value objects and list fields', () =
       target: postgresTarget,
       scalarColumnDescriptors: postgresScalarTypeDescriptors,
       authoringContributions: {
-        type: postgresScalarAuthoringTypes,
+        type: fixturePostgresTypeNamespace,
         valueObjectStorageType: 'Jsonb',
       },
       composedExtensionContracts: new Map(),

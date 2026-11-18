@@ -1,0 +1,28 @@
+{
+  "name": "prisma-orm-standin",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A target package from outside this repository, for the packaging test. Not named package.json, so the workspace does not adopt it; the test writes it as package.json with the version of the published packages filled in.",
+  "exports": {
+    "./config": {
+      "types": "./dist/config.d.ts",
+      "default": "./dist/config.js"
+    },
+    "./contract-types": {
+      "types": "./dist/contract-types.d.ts",
+      "default": "./dist/contract-types.js"
+    },
+    "./migration": {
+      "types": "./dist/migration.d.ts",
+      "default": "./dist/migration.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist"],
+  "dependencies": {
+    "@prisma/orm-family-sql": "PUBLISHED_VERSION",
+    "@prisma/orm-framework": "PUBLISHED_VERSION",
+    "@prisma/orm-target-postgres": "PUBLISHED_VERSION"
+  }
+}

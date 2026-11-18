@@ -23,7 +23,7 @@ export interface TestControlClientOptions {
  * The client auto-connects when operations are called because we provide
  * a default connection in options.
  */
-export function createPrismaNextControlClient(options: TestControlClientOptions): ControlClient {
+export function createTestControlClient(options: TestControlClientOptions): ControlClient {
   return createPostgresControlClient({
     extensions: [pgvector],
     connection: options.connection,
@@ -75,7 +75,7 @@ export async function initTestDatabase(options: {
    */
   readonly migrationsDir?: string;
 }): Promise<void> {
-  const client = createPrismaNextControlClient({ connection: options.connection });
+  const client = createTestControlClient({ connection: options.connection });
 
   const ownsMigrationsDir = options.migrationsDir === undefined;
   const migrationsDir =

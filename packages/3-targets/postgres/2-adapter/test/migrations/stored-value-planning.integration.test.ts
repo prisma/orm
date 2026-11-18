@@ -377,7 +377,7 @@ describe('Postgres planner, stored enum values', { concurrent: false }, () => {
     expect(failed).toContain(
       '[MIGRATION.PRECHECK_FAILED] 1 row of "User" holds "guest" in column "role", which takes no NULL, so the value cannot be removed.',
     );
-    expect(failed).toContain('"rowsHoldingValue": {');
+    expect(failed).toContain('"rowsHoldingValue": [');
     expect(failed).toContain('"member": "GUEST"');
     expect(failed).toContain('"keepDataEdit": {');
     expect(failed).toContain('"rows": 1');

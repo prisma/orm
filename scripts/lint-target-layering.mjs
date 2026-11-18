@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const TARGETS_ROOT = join('packages', '3-targets');
 /** The folder of code several targets share, which is no database; its packages depend on no target. */
 const SHARED_FOLDER = '0-shared';
-const NUMBERED_PACKAGE = /^(\d+)-[a-z][a-z0-9-]*$/;
+const NUMBERED_FOLDER = /^(\d+)-[a-z][a-z0-9-]*$/;
 const PRODUCTION_DEPENDENCY_FIELDS = ['dependencies', 'peerDependencies', 'optionalDependencies'];
 const MODULE_SPECIFIER = /\b(?:from|import)\s*\(?\s*(['"])([^'"\n]+)\1/g;
 const SOURCE_FILE = /\.(?:ts|tsx|mts|cts)$/;
@@ -30,21 +30,32 @@ function* sourceFiles(dir) {
   }
 }
 
+function* numberedPackages(dir, path) {
+  for (const folder of directories(dir)) {
+    if (!NUMBERED_FOLDER.test(folder)) continue;
+    const folderDir = join(dir, folder);
+    const folderPath = [...path, folder];
+    const manifestPath = join(folderDir, 'package.json');
+    if (!existsSync(manifestPath)) {
+      yield* numberedPackages(folderDir, folderPath);
+      continue;
+    }
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    yield {
+      name: manifest.name,
+      path: folderPath,
+      label: folderPath.join('/'),
+      dir: folderDir,
+      manifest,
+    };
+  }
+}
+
 export function targetPackages(baseDir = repoRoot) {
   const targetsDir = join(baseDir, TARGETS_ROOT);
-  const databases = directories(targetsDir).filter((folder) => folder !== SHARED_FOLDER);
-  return databases.flatMap((database) =>
-    directories(join(targetsDir, database)).flatMap((folder) => {
-      const numbered = NUMBERED_PACKAGE.exec(folder);
-      const dir = join(targetsDir, database, folder);
-      const manifestPath = join(dir, 'package.json');
-      if (!numbered || !existsSync(manifestPath)) return [];
-      const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
-      return [
-        { name: manifest.name, database, folder, number: Number(numbered[1]), dir, manifest },
-      ];
-    }),
-  );
+  return directories(targetsDir)
+    .filter((folder) => folder !== SHARED_FOLDER)
+    .flatMap((database) => [...numberedPackages(join(targetsDir, database), [database])]);
 }
 
 function packageNamed(specifier, packagesByName) {
@@ -88,11 +99,15 @@ export function siblingDependencies(baseDir = repoRoot) {
   );
 }
 
+function folderNumber(folder) {
+  return Number(NUMBERED_FOLDER.exec(folder)[1]);
+}
+
 function violationReason({ from, to }) {
-  if (from.database !== to.database)
-    return `${from.database}/${from.folder} depends on ${to.database}/${to.folder}, a package of another database`;
-  if (to.number >= from.number)
-    return `${from.database}/${from.folder} depends on ${to.database}/${to.folder}, which is not numbered lower`;
+  const level = from.path.findIndex((folder, index) => folder !== to.path[index]);
+  if (level === 0) return `${from.label} depends on ${to.label}, a package of another database`;
+  if (folderNumber(to.path[level]) >= folderNumber(from.path[level]))
+    return `${from.label} depends on ${to.label}, and ${to.path[level]} is not numbered lower than ${from.path[level]}`;
   return undefined;
 }
 
@@ -107,7 +122,7 @@ export function main(baseDir = repoRoot) {
   const violations = findLayeringViolations(baseDir);
   if (violations.length === 0) {
     console.log(
-      `Every package under ${TARGETS_ROOT}/<database>/ depends only on lower-numbered packages of its own database.`,
+      `Every package under ${TARGETS_ROOT}/<database>/ depends only on packages of its own database in lower-numbered folders.`,
     );
     return 0;
   }
@@ -115,7 +130,7 @@ export function main(baseDir = repoRoot) {
   for (const { reason, specifier, where } of violations)
     console.error(`  ${reason}: ${specifier} (${where})`);
   console.error(
-    `\nA package under ${TARGETS_ROOT}/<database>/ may depend only on packages of the same database with a lower number, so the target never reaches its adapter or driver, and no database reaches another.`,
+    `\nA package under ${TARGETS_ROOT}/<database>/ never depends on a package in a higher-numbered folder. Numbers compare only between folders in the same parent: at the first folder where the two paths differ, the dependency's folder must be numbered lower. No database depends on another.`,
   );
   return 1;
 }

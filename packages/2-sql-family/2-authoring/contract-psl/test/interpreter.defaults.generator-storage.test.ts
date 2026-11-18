@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import { fixtureGeneratorFunctions } from './fixture-generator-functions';
-import { interpretSqlContract, postgresScalarAuthoringTypes, postgresTarget } from './fixtures';
+import { fixturePostgresTypeNamespace, interpretSqlContract, postgresTarget } from './fixtures';
 import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contract-storage';
 import { builtinControlMutationDefaults } from './interpreter-defaults-support';
 
@@ -15,7 +15,7 @@ describe('generator defaults never mutate storage — the type position is the o
   // Mirrors the adapter contribution shape, with the scalar view derived
   // the same way the provider derives it (collectScalarTypeConstructors).
   const authoringTypes = {
-    ...postgresScalarAuthoringTypes,
+    ...fixturePostgresTypeNamespace,
     Uuid: { kind: 'typeConstructor', output: { codecId: 'pg/uuid@1' } },
     Char: {
       kind: 'typeConstructor',

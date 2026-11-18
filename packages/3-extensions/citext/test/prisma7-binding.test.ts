@@ -21,7 +21,7 @@ describe('the Postgres target reads @db.Citext as this pack', () => {
   it('names the citext extension, declared by this pack', () => {
     expect(declared?.extension).toBe('citext');
     expect(citextControl.contractSpace?.contractJson).toMatchObject({
-      storage: { namespaces: { public: { entries: { extension: { citext: {} } } } } },
+      storage: { namespaces: { __unbound__: { entries: { extension: { citext: {} } } } } },
     });
   });
 

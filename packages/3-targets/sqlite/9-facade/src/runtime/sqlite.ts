@@ -22,16 +22,12 @@ import type {
   BindSiteParams,
   Declaration,
   ExecutionContext,
-  Log,
   ParamsFromDeclaration,
   Runtime,
-  RuntimeMode,
+  SqlExecutionOptions,
   SqlExecutionStackWithDriver,
-  SqlMiddleware,
-  SqlRuntimeExtensionDescriptor,
   ToSqlMember,
   TransactionContext,
-  VerifyMarkerOption,
 } from '@internal/sql-runtime';
 import {
   activitySource,
@@ -39,6 +35,7 @@ import {
   createSqlExecutionStack,
   delegatingActivitySource,
   delegatingRuntime,
+  toRuntimeOptions,
   withTransaction,
   withTransactionMembers,
 } from '@internal/sql-runtime';
@@ -52,6 +49,7 @@ import { validateSqliteContract } from '../static/contract-from-json';
 import { buildSqliteStaticContext, type SqliteStaticContext } from '../static/sqlite-static';
 import { resolveOptionalSqliteBinding, resolveSqliteBinding } from './binding';
 import { SqliteRuntimeImpl } from './sqlite-runtime';
+import { type SqliteTransactionOptions, validateTransactionOptions } from './transaction-options';
 
 export type SqliteTargetId = 'sqlite';
 type OrmClient<
@@ -123,6 +121,7 @@ export interface SqliteClient<
   runtime(): Runtime;
   transaction<R>(
     fn: (tx: SqliteTransactionContext<TContract, TCollections>) => PromiseLike<R>,
+    options?: SqliteTransactionOptions,
   ): Promise<R>;
   close(): Promise<void>;
   [Symbol.asyncDispose](): Promise<void>;
@@ -182,12 +181,8 @@ function buildSqliteTransactionMembers<
   };
 }
 
-export interface SqliteOptionsBase {
-  readonly extensions?: readonly SqlRuntimeExtensionDescriptor<SqliteTargetId>[];
-  readonly middleware?: readonly SqlMiddleware[];
-  readonly verifyMarker?: VerifyMarkerOption;
-  readonly log?: Log;
-  readonly mode?: RuntimeMode;
+export interface SqliteOptionsBase extends SqlExecutionOptions<SqliteTargetId> {
+  readonly transactionOptions?: SqliteTransactionOptions | undefined;
 }
 
 export type SqliteOptions<
@@ -220,6 +215,7 @@ export default function sqlite<
   TContract extends Contract<SqlStorage>,
   TCollections extends CollectionClasses = NoCollectionClasses,
 >(options: SqliteOptions<TContract, TCollections>): SqliteClient<TContract, TCollections> {
+  const transactionOptions = validateTransactionOptions(options.transactionOptions);
   const contract = validateSqliteContract(options.contract);
   let binding = resolveOptionalSqliteBinding(options);
 
@@ -300,10 +296,7 @@ export default function sqlite<
       context,
       adapter,
       driver,
-      ...ifDefined('verifyMarker', options.verifyMarker),
-      ...ifDefined('middleware', options.middleware),
-      ...ifDefined('log', options.log),
-      ...ifDefined('mode', options.mode),
+      ...toRuntimeOptions(options),
       closeRefusal: 'at-once',
     });
 
@@ -393,27 +386,38 @@ export default function sqlite<
     },
     prepare,
 
-    transaction<R>(
+    async transaction<R>(
       fn: (tx: SqliteTransactionContext<TContract, TCollections>) => PromiseLike<R>,
+      localOptions?: SqliteTransactionOptions,
     ): Promise<R> {
-      return withTransaction(workRuntime, (txCtx) => {
-        const tx: SqliteTransactionContext<TContract, TCollections> = withTransactionMembers(
-          txCtx,
-          buildSqliteTransactionMembers<TContract, TCollections>(
-            {
-              context,
-              collections: options.collections,
-              rawCodecInferer: stack.adapter.rawCodecInferer,
-              enums,
-              toSql,
-              prepareRuntime: workRuntime,
-            },
+      const local = validateTransactionOptions(localOptions);
+      const isolationLevel =
+        local?.isolationLevel !== undefined
+          ? local.isolationLevel
+          : transactionOptions?.isolationLevel;
+      const timeout = local?.timeout !== undefined ? local.timeout : transactionOptions?.timeout;
+      return withTransaction(
+        workRuntime,
+        (txCtx) => {
+          const tx: SqliteTransactionContext<TContract, TCollections> = withTransactionMembers(
             txCtx,
-          ),
-        );
+            buildSqliteTransactionMembers<TContract, TCollections>(
+              {
+                context,
+                collections: options.collections,
+                rawCodecInferer: stack.adapter.rawCodecInferer,
+                enums,
+                toSql,
+                prepareRuntime: workRuntime,
+              },
+              txCtx,
+            ),
+          );
 
-        return fn(tx);
-      });
+          return fn(tx);
+        },
+        { isolationLevel, timeout },
+      );
     },
 
     close(): Promise<void> {

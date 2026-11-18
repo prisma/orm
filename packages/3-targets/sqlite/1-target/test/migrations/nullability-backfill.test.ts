@@ -1,11 +1,10 @@
 import { asNamespaceId, type Contract, coreHash, profileHash } from '@internal/contract/types';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import { APP_SPACE_ID } from '@internal/framework-components/control';
-import { keepInternalSpecifiers } from '@internal/framework-components/emission';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, type StorageColumn, type StorageTable } from '@internal/sql-contract/types';
 import { SqlTableIR } from '@internal/sql-schema-ir/types';
-import { applicationDomainOf } from '@repo/test-utils';
+import { applicationDomainOf, workspaceMigrationModule } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { createSqliteMigrationPlanner } from '../../src/core/migrations/planner';
 import { sqliteCreateNamespace } from '../../src/core/sqlite-unbound-database';
@@ -179,7 +178,7 @@ describe('nullability-tightening backfill', async () => {
 
     // The rendered TypeScript contains the dataTransform placeholder and
     // the recreate follows it.
-    const ts = result.plan.renderTypeScript(keepInternalSpecifiers);
+    const ts = result.plan.renderTypeScript(workspaceMigrationModule.sqlite);
     const backfillIdx = ts.indexOf('dataTransform(');
     const recreateIdx = ts.indexOf('recreateTable(');
     expect(backfillIdx).toBeGreaterThan(-1);

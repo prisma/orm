@@ -9,7 +9,7 @@
 The planner diffs two contracts and determines that a unique ascending index on `users.email` needs to be created. Rather than directly constructing the full operation ([ADR 188](ADR%20188%20-%20MongoDB%20migration%20operation%20model.md)), it produces an IR node:
 
 ```ts
-const call = new CreateIndexCall('users', [{ field: 'email', direction: 1 }], { unique: true });
+const call = new CreateIndexCall('users', [{ field: 'email', direction: 1 }], { name: 'email_1', unique: true });
 ```
 
 Two renderers interpret this node.
@@ -18,7 +18,7 @@ The **operation renderer** calls the `createIndex` factory function and produces
 
 ```ts
 renderOps([call]);
-// → [{ id: 'index.users.create(email:1)', operationClass: 'additive',
+// → [{ id: 'index.users.create(email_1)', operationClass: 'additive',
 //      precheck: [...], execute: [...], postcheck: [...] }]
 ```
 
@@ -27,7 +27,7 @@ The **TypeScript renderer** produces a line of source code that calls the same f
 ```ts
 renderCallsToTypeScript([call], meta);
 // → ...
-//   createIndex('users', [{ field: 'email', direction: 1 }], { unique: true })
+//   createIndex('users', [{ field: 'email', direction: 1 }], { name: 'email_1', unique: true })
 //   ...
 ```
 

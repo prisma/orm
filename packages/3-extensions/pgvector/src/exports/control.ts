@@ -50,11 +50,25 @@ import upgradeMetadata from '../../migrations/20261029T1342_declare_vector_exten
 import upgradeOps from '../../migrations/20261029T1342_declare_vector_extension/ops.json' with {
   type: 'json',
 };
+import searchPathMetadata from '../../migrations/20261106T1035_find_vector_on_search_path/migration.json' with {
+  type: 'json',
+};
+import searchPathOps from '../../migrations/20261106T1035_find_vector_on_search_path/ops.json' with {
+  type: 'json',
+};
+import searchPathInstallMetadata from '../../migrations/20261106T1401_install_vector_on_search_path/migration.json' with {
+  type: 'json',
+};
+import searchPathInstallOps from '../../migrations/20261106T1401_install_vector_on_search_path/ops.json' with {
+  type: 'json',
+};
 import headRef from '../../migrations/refs/head.json' with { type: 'json' };
 import contractJson from '../contract.json' with { type: 'json' };
 import {
   PGVECTOR_BASELINE_MIGRATION_NAME,
   PGVECTOR_INSTALL_MIGRATION_NAME,
+  PGVECTOR_SEARCH_PATH_INSTALL_MIGRATION_NAME,
+  PGVECTOR_SEARCH_PATH_MIGRATION_NAME,
   PGVECTOR_SPACE_ID,
   PGVECTOR_UPGRADE_MIGRATION_NAME,
 } from '../core/contract-space-constants';
@@ -82,6 +96,16 @@ const pgvectorContractSpace = contractSpaceFromJson<Contract<SqlStorage>>({
     { dirName: PGVECTOR_BASELINE_MIGRATION_NAME, metadata: baselineMetadata, ops: baselineOps },
     { dirName: PGVECTOR_UPGRADE_MIGRATION_NAME, metadata: upgradeMetadata, ops: upgradeOps },
     { dirName: PGVECTOR_INSTALL_MIGRATION_NAME, metadata: installMetadata, ops: installOps },
+    {
+      dirName: PGVECTOR_SEARCH_PATH_MIGRATION_NAME,
+      metadata: searchPathMetadata,
+      ops: searchPathOps,
+    },
+    {
+      dirName: PGVECTOR_SEARCH_PATH_INSTALL_MIGRATION_NAME,
+      metadata: searchPathInstallMetadata,
+      ops: searchPathInstallOps,
+    },
   ],
   headRef,
 });

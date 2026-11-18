@@ -9,7 +9,9 @@ import type {
   ControlFamilyInstance,
   FailedTypeChange,
   MigrationOperationPolicy,
+  MigrationRunner,
   MigrationRunnerFailure,
+  MigrationRunnerPerSpaceOptions,
   MigrationSubject,
   RowsFailingCheck,
   RowsHoldingValue,
@@ -30,6 +32,7 @@ import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { schemaCheckIssues } from '../../utils/schema-check-issues';
 import { subjectText } from '../statements/plan-questions';
+import { isDiscriminatorField } from '../statements/variants';
 import type {
   FailedPrecheckReport,
   FailedTypeChangeReport,
@@ -115,7 +118,7 @@ function failureReports(
   const operationIndex =
     failedTypeChange?.operationIndex ??
     rowsWithoutValue?.[0]?.operationIndex ??
-    rowsHoldingValue?.operationIndex ??
+    rowsHoldingValue?.[0]?.operationIndex ??
     rowsFailingCheck?.operationIndex;
   const edge =
     operationIndex !== undefined
@@ -136,13 +139,16 @@ function failureReports(
         field: field === undefined ? undefined : fieldText(field),
         reason,
         rows,
+        discriminator:
+          field?.kind === 'field' &&
+          isDiscriminatorField(resolution.entry.destinationContract, field),
       })),
     ),
     ...ifDefined(
       'rowsHoldingValue',
-      rowsHoldingValue === undefined
-        ? undefined
-        : rowsHoldingValueReport(rowsHoldingValue, resolution.entry.destinationContract),
+      rowsHoldingValue?.map((fact) =>
+        rowsHoldingValueReport(fact, resolution.entry.destinationContract),
+      ),
     ),
     ...ifDefined('rowsFailingCheck', rowsFailingCheckReport(rowsFailingCheck)),
     ...ifDefined(
@@ -179,7 +185,9 @@ export function runnerFailureFacts(
   };
 }
 
-export interface RunMigrationInputs<TFamilyId extends string, TTargetId extends string> {
+export interface RunMigrationInputs<TFamilyId extends string, TTargetId extends string>
+  extends Pick<MigrationRunnerPerSpaceOptions, 'databasePolicies'>,
+    Pick<Parameters<MigrationRunner['execute']>[0], 'expectedDatabasePolicies'> {
   readonly aggregate: ContractSpaceAggregate;
   /**
    * Per-space plans, keyed by `spaceId`. Produced by either the full
@@ -263,6 +271,8 @@ export async function runMigration<TFamilyId extends string, TTargetId extends s
     migrations,
     frameworkComponents,
     policy,
+    databasePolicies,
+    expectedDatabasePolicies,
     action,
     onProgress,
   } = inputs;
@@ -284,6 +294,7 @@ export async function runMigration<TFamilyId extends string, TTargetId extends s
     driver,
     destinationContract: r.entry.destinationContract,
     policy,
+    ...(r.spaceId === aggregate.app.spaceId ? ifDefined('databasePolicies', databasePolicies) : {}),
     frameworkComponents,
     migrationEdges: r.entry.migrationEdges,
     // Per-space post-apply schema verification is non-strict: each
@@ -293,7 +304,11 @@ export async function runMigration<TFamilyId extends string, TTargetId extends s
     strictVerification: false,
   }));
 
-  const runnerResult = await runner.execute({ driver, perSpaceOptions });
+  const runnerResult = await runner.execute({
+    driver,
+    perSpaceOptions,
+    ...ifDefined('expectedDatabasePolicies', expectedDatabasePolicies),
+  });
 
   if (!runnerResult.ok) {
     onProgress?.({ action, kind: 'spanEnd', spanId: RUN_SPAN_ID, outcome: 'error' });

@@ -11,13 +11,17 @@ export default definePrismaConfig({
     family: sql,
     target: postgres,
     adapter: postgresAdapter,
-    contract: prismaContract('src/contract/contract.prisma', {
-      target: postgres,
-      createNamespace: postgresCreateNamespace,
-      defaultControlPolicy: 'external',
-    }),
+    contract: {
+      ...prismaContract('src/contract/contract.prisma', {
+        target: postgres,
+        createNamespace: postgresCreateNamespace,
+        defaultControlPolicy: 'external',
+      }),
+      typesModule: '#contract-types',
+    },
     migrations: {
       dir: 'migrations',
+      module: '@internal/target-postgres/migration',
     },
   }),
 });

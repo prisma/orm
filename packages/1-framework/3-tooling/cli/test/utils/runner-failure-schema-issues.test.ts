@@ -175,7 +175,7 @@ describe('a failed schema check after apply', () => {
       const error = dbUpdateError(withoutIssues);
       expect({ why: error.why, fix: error.fix }).toEqual({
         why: RUNNER_WHY,
-        fix: 'Inspect the reported conflict, reconcile schema drift if needed, then re-run `{bin} db update`.',
+        fix: 'Resolve the cause the failure names, then re-run `{bin} db update`.',
       });
     });
   });

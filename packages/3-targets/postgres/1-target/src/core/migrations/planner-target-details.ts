@@ -13,12 +13,25 @@ export type OperationClass =
   | 'rlsPolicy'
   | 'rowLevelSecurity';
 
-export interface PostgresPlanTargetDetails {
+/** The target of an operation that names its schema: every operation except creating or dropping an extension the contract leaves to the search path. */
+export interface PostgresSchemaTargetDetails {
   readonly schema: string;
   readonly objectType: OperationClass;
   readonly name: string;
   readonly table?: string;
 }
+
+/** The target of creating or dropping an extension the contract leaves to the connection's search path, which names no schema. */
+export interface PostgresSearchPathExtensionTargetDetails {
+  readonly schema?: never;
+  readonly objectType: 'dependency';
+  readonly name: string;
+  readonly table?: never;
+}
+
+export type PostgresPlanTargetDetails =
+  | PostgresSchemaTargetDetails
+  | PostgresSearchPathExtensionTargetDetails;
 
 export function buildTargetDetails(
   objectType: OperationClass,

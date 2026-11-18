@@ -1,5 +1,5 @@
-import { keepInternalSpecifiers } from '@internal/framework-components/emission';
 import type { MongoMigrationPlanOperation } from '@internal/mongo-query-ast/control';
+import { workspaceMigrationModule } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { CreateIndexCall, DropIndexCall } from '../src/core/migrations/op-factory-call';
 import { PlannerProducedMongoMigration } from '../src/core/migrations/planner-produced-migration';
@@ -31,8 +31,11 @@ describe('PlannerProducedMongoMigration', () => {
 
   it('renders the supplied OpFactoryCall list to runnable mongo operations via the operations getter', () => {
     const calls = [
-      new CreateIndexCall('users', [{ field: 'email', direction: 1 }], { unique: true }),
-      new DropIndexCall('users', [{ field: 'legacy', direction: 1 }]),
+      new CreateIndexCall('users', [{ field: 'email', direction: 1 }], {
+        name: 'email_1',
+        unique: true,
+      }),
+      new DropIndexCall('users', [{ field: 'legacy', direction: 1 }], { name: 'legacy_1' }),
     ];
     const migration = new PlannerProducedMongoMigration(calls, META, SNAPSHOTS_IMPORT_PATH);
 
@@ -50,10 +53,12 @@ describe('PlannerProducedMongoMigration', () => {
   });
 
   it('renders authoring TypeScript that wires up MigrationCLI.run and derives describe() from contract JSON', () => {
-    const calls = [new CreateIndexCall('users', [{ field: 'email', direction: 1 }])];
+    const calls = [
+      new CreateIndexCall('users', [{ field: 'email', direction: 1 }], { name: 'email_1' }),
+    ];
     const migration = new PlannerProducedMongoMigration(calls, META, SNAPSHOTS_IMPORT_PATH);
 
-    const source = migration.renderTypeScript(keepInternalSpecifiers);
+    const source = migration.renderTypeScript(workspaceMigrationModule.mongo);
 
     // New shape: base derives describe() from the imported contract JSON, so the
     // scaffold carries `Migration<Start, End>` + the JSON/field imports and emits
@@ -67,7 +72,7 @@ describe('PlannerProducedMongoMigration', () => {
     expect(source).not.toContain(`'${META.from}'`);
     expect(source).not.toContain(`'${META.to}'`);
     expect(source).toContain(
-      "import { Migration, MigrationCLI, createIndex } from '@internal/target-mongo/migration';",
+      "import { Migration, MigrationCLI, createIndex } from '@internal/mongo/migration';",
     );
     expect(source).toContain('MigrationCLI.run(import.meta.url, M);');
   });
@@ -75,7 +80,7 @@ describe('PlannerProducedMongoMigration', () => {
   it('renders an empty-class stub when constructed with no calls', () => {
     const migration = new PlannerProducedMongoMigration([], META, SNAPSHOTS_IMPORT_PATH);
 
-    const source = migration.renderTypeScript(keepInternalSpecifiers);
+    const source = migration.renderTypeScript(workspaceMigrationModule.mongo);
 
     expect(source).toContain('class M extends Migration<Start, End>');
     expect(source).toContain('override readonly endContractJson = endContract;');
@@ -84,10 +89,12 @@ describe('PlannerProducedMongoMigration', () => {
   });
 
   it('renderTypeScript emits no describe() block (so no labels leak through it)', () => {
-    const calls = [new CreateIndexCall('users', [{ field: 'email', direction: 1 }])];
+    const calls = [
+      new CreateIndexCall('users', [{ field: 'email', direction: 1 }], { name: 'email_1' }),
+    ];
     const migration = new PlannerProducedMongoMigration(calls, META, SNAPSHOTS_IMPORT_PATH);
 
-    const source = migration.renderTypeScript(keepInternalSpecifiers);
+    const source = migration.renderTypeScript(workspaceMigrationModule.mongo);
 
     expect(source).toContain('class M extends Migration<Start, End>');
     expect(source).not.toContain('describe()');

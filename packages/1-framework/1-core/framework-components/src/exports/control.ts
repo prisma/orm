@@ -93,7 +93,9 @@ export type {
   IntrospectSchemaResult,
   MarkerHashes,
   OperationContext,
+  SpaceDatabasePoliciesConflict,
   SpaceMarkerConflict,
+  SpaceMarkerHashConflict,
   SpaceSignature,
   SpaceSigned,
   SpaceToSign,
@@ -141,6 +143,33 @@ export {
   extractParameterizedOutputTypeImports,
   extractQueryOperationTypeImports,
 } from '../control/control-stack';
+export {
+  ACCESS_WIDENING_LEVELS,
+  type AccessWideningLevel,
+  CHANGE_STRATEGIES,
+  type ChangeStrategy,
+  compareMarkerDatabasePolicies,
+  DATA_LOSS_LEVELS,
+  DATA_PROTECTION_KEYS,
+  DATABASE_POLICIES_KEYS,
+  DATABASE_POLICIES_META_KEY,
+  type DatabasePolicies,
+  type DatabasePolicyDifference,
+  type DataLossLevel,
+  DEFAULT_DATABASE_POLICIES,
+  type DeclaredDatabasePolicies,
+  type DeclaredDatabasePoliciesIssue,
+  databasePoliciesMovedFailure,
+  databasePoliciesOf,
+  databasePolicyDifferences,
+  databasePolicyValueText,
+  type MarkerDatabasePoliciesComparison,
+  movedDatabasePoliciesWhy,
+  parseDeclaredDatabasePolicies,
+  storedDatabasePolicies,
+  withDeclaredDatabasePolicies,
+} from '../control/database-policies';
+export type { MarkerDestination, MarkerInsert } from '../control/marker-destination';
 export type {
   AppliedMigrationStatement,
   EnumValueCoordinate,
@@ -168,6 +197,11 @@ export type {
   ResolvedModelRenameStatement,
   ResolvedNamespaceRenameStatement,
   ResolvedRenameStatement,
+  ResolvedValueObjectFieldBackfillStatement,
+  ResolvedValueObjectFieldRenameStatement,
+  ResolvedVariantConvertStatement,
+  ValueObjectFieldCoordinate,
+  ValueObjectFieldCoordinateJson,
 } from '../control/migration-statements';
 export {
   describeMigrationStatement,
@@ -181,6 +215,7 @@ export {
   migrationSubjectKey,
   modelDisplayName,
   modelStatementText,
+  valueObjectFieldStatementText,
 } from '../control/migration-statements';
 export { orderIssuesByDependencies } from '../control/order-issues-by-dependencies';
 export {

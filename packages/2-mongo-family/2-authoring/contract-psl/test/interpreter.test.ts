@@ -799,10 +799,14 @@ model Item {
         fields: { id: { field: '_id' }, code: { field: 'code_value' } },
       });
       expect(getIndexes(ir, 'Child')).toEqual([
-        new MongoIndex({ keys: [{ field: 'parent_id', direction: 1 }] }),
+        new MongoIndex({ name: 'parent_id_1', keys: [{ field: 'parent_id', direction: 1 }] }),
       ]);
       expect(getIndexes(ir, 'parents')).toEqual([
-        new MongoIndex({ keys: [{ field: 'code_value', direction: 1 }], unique: true }),
+        new MongoIndex({
+          name: 'code_value_1',
+          keys: [{ field: 'code_value', direction: 1 }],
+          unique: true,
+        }),
       ]);
     });
 

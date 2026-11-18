@@ -182,12 +182,11 @@ describe('write terminals run as one orm-call', () => {
     );
   });
 
-  it('create() with a relation callback runs its statements and its read-back in a transaction of the call', async () => {
+  it('create() with a relation callback runs its statements in a transaction of the call', async () => {
     const recorded = createActivityCollectionFor('User', { returning: true });
     recorded.runtime.setNextResults([
       [aliceRow],
       [{ id: 10, title: 'Post', user_id: 1, views: 1 }],
-      [aliceRow],
     ]);
 
     const created = await recorded.collection.create(
@@ -200,7 +199,7 @@ describe('write terminals run as one orm-call', () => {
     );
 
     expect(summary(recorded)).toEqual(
-      oneCall(['audit'], 3, { outcome: 'succeeded', result: created }, ['committed']),
+      oneCall(['audit'], 2, { outcome: 'succeeded', result: created }, ['committed']),
     );
   });
 
@@ -211,7 +210,9 @@ describe('write terminals run as one orm-call', () => {
     });
     recorded.runtime.setNextResults([[{ id: 1 }], [aliceRow]]);
 
-    const updated = await recorded.collection.where({ id: 1 }).update({ name: 'Alice' }, audited);
+    const updated = await recorded.collection
+      .where({ name: 'Ada' })
+      .update({ name: 'Alice' }, audited);
 
     expect(summary(recorded)).toEqual(
       oneCall(['audit'], 2, { outcome: 'succeeded', result: updated }),
@@ -222,7 +223,9 @@ describe('write terminals run as one orm-call', () => {
     const recorded = createActivityCollectionFor('User', { returning: true });
     recorded.runtime.setNextResults([[{ id: 1 }], [aliceRow]]);
 
-    const updated = await recorded.collection.where({ id: 1 }).update({ name: 'Alice' }, audited);
+    const updated = await recorded.collection
+      .where({ name: 'Ada' })
+      .update({ name: 'Alice' }, audited);
 
     expect(summary(recorded)).toEqual(
       oneCall(['audit'], 2, { outcome: 'succeeded', result: updated }, ['committed']),
@@ -279,9 +282,39 @@ describe('write terminals run as one orm-call', () => {
     expect(summary(recorded)).toEqual(oneCall(['audit'], 0, { outcome: 'succeeded', result: 0 }));
   });
 
+  it('update() and delete() by the primary key each run one statement and no transaction of the call', async () => {
+    const recorded = createActivityCollectionFor('User', { returning: true });
+    recorded.runtime.setNextResults([[aliceRow], [aliceRow]]);
+
+    const updated = await recorded.collection.where({ id: 1 }).update({ name: 'Alice' }, audited);
+    const deleted = await recorded.collection.where({ id: 1 }).delete(audited);
+
+    expect(summary(recorded)).toEqual({
+      calls: [
+        {
+          kind: 'orm-call',
+          annotations: ['audit'],
+          statements: 1,
+          transactions: [],
+          ended: { outcome: 'succeeded', result: aliceModel },
+        },
+        {
+          kind: 'orm-call',
+          annotations: ['audit'],
+          statements: 1,
+          transactions: [],
+          ended: { outcome: 'succeeded', result: aliceModel },
+        },
+      ],
+      outside: 0,
+      statementAnnotations: [],
+    });
+    expect([updated, deleted]).toEqual([aliceModel, aliceModel]);
+  });
+
   it('upsert() and delete() end with the row', async () => {
     const recorded = createActivityCollectionFor('User', { returning: true });
-    recorded.runtime.setNextResults([[aliceRow], [{ id: 1 }], [aliceRow]]);
+    recorded.runtime.setNextResults([[aliceRow], [aliceRow], []]);
 
     await recorded.collection.upsert(
       { create: alice, update: { name: 'Alice' }, conflictOn: { id: 1 } },

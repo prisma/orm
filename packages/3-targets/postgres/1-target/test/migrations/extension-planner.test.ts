@@ -3,7 +3,7 @@ import type { MigrationOperationPolicy } from '@internal/family-sql/control';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import { APP_SPACE_ID } from '@internal/framework-components/control';
 import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
-import { applicationDomainOf } from '@repo/test-utils';
+import { applicationDomainOf, workspaceMigrationModule } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { createPostgresMigrationPlanner } from '../../src/core/migrations/planner';
 import { PostgresSchema } from '../../src/core/postgres-schema';
@@ -88,7 +88,11 @@ function liveDatabase(
     roles: [],
     extensions: Object.entries(installed).map(
       ([name, schemaName]) =>
-        new PostgresExtensionSchemaNode({ name, schemaName, control: undefined }),
+        new PostgresExtensionSchemaNode({
+          name,
+          location: { kind: 'installed', schemaName, searchPath: ['pg_catalog', 'public'] },
+          control: undefined,
+        }),
     ),
     existingSchemas,
     pgVersion: 'unknown',
@@ -122,7 +126,7 @@ async function plannedOperations(input: {
       execute: op.execute.map((step) => step.sql),
       postcheck: op.postcheck.map((step) => step.sql),
     })),
-    typeScript: result.plan.renderTypeScript((specifier) => specifier),
+    typeScript: result.plan.renderTypeScript(workspaceMigrationModule.postgres),
   };
 }
 

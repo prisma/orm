@@ -507,6 +507,7 @@
                     }
                   ],
                   "kind": "mongo-index",
+                  "name": "email_1",
                   "unique": true
                 }
               ],
@@ -845,7 +846,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "c4a473ccd6718dc606dfcda2d01643cfdcc79efc8d3ab1e1647001ea6086e133"
+    "storageHash": "d21d62bad0c6f37a80ff22bff4936a8336d4a20cb2361cec4342553b0fbd8af0"
   },
   "capabilities": {},
   "extensions": {},

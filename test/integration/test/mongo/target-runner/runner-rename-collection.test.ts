@@ -50,7 +50,7 @@ const CLOSED_PROFILE_SCHEMA = {
 
 function usersContract(): MongoContract {
   const users = new MongoCollection({
-    indexes: [{ keys: [{ field: 'email', direction: 1 }], unique: true }],
+    indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }], unique: true }],
     validator: {
       jsonSchema: { ...CLOSED_PROFILE_SCHEMA },
       validationLevel: 'strict',

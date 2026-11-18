@@ -6,8 +6,8 @@ import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
+  fixturePostgresTypeNamespace,
   interpretSqlContract,
-  postgresScalarAuthoringTypes,
   postgresScalarTypeDescriptors,
   postgresTarget,
   sqliteScalarAuthoringTypes,
@@ -35,7 +35,7 @@ function interpretPostgres(
     target: postgresTarget,
     scalarColumnDescriptors: postgresScalarTypeDescriptors,
     authoringContributions: {
-      type: postgresScalarAuthoringTypes,
+      type: fixturePostgresTypeNamespace,
       dataTypes: fixtureDataTypeSupport.entries,
       ...valueObjectStorage,
     },

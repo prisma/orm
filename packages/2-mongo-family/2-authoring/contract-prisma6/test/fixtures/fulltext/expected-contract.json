@@ -74,7 +74,7 @@
   "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
   "meta": {},
   "storage": {
-    "storageHash": "037f7e60df99c7c0bfa2fc2e8adb36593cebd69c2c086a0157e82afa63d1efec",
+    "storageHash": "d0b81595acb9e6a40043934178c0855f2342f500b4c72288d21aaf09077830e3",
     "namespaces": {
       "__unbound__": {
         "id": "__unbound__",
@@ -86,6 +86,7 @@
               "indexes": [
                 {
                   "kind": "mongo-index",
+                  "name": "Post_title_content_idx",
                   "keys": [
                     {
                       "field": "title",

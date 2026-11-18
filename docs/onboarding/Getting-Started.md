@@ -4,7 +4,7 @@
 - Read the [Architecture Overview](../Architecture%20Overview.md) for the high-level model.
 - Build and test:
   - `pnpm build`
-  - `pnpm test:packages`
+  - the tests of the package you work on: `pnpm --filter <pkg> test` (CI runs the full suites; see [`running-tests.mdc`](../../.agents/rules/running-tests.mdc))
 - Run the demo:
   - `cd examples/prisma-8-demo`
   - follow `[examples/prisma-8-demo/README.md](../../examples/prisma-8-demo/README.md)`

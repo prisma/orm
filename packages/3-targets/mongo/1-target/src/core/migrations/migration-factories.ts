@@ -1,9 +1,16 @@
-import { MONGO_INDEX_OPTION_KEYS, type MongoIndexOptionKey } from '@internal/mongo-contract';
+import type { JsonValue } from '@internal/contract/types';
+import {
+  defaultMongoIndexName,
+  MONGO_INDEX_OPTION_KEYS,
+  type MongoIndexOptionKey,
+} from '@internal/mongo-contract';
 import type {
   MongoDmlCheck,
   MongoDmlOperation,
+  MongoFieldRewriteMeta,
   MongoFilterExpr,
   MongoIndexKey,
+  MongoMigrationCheck,
 } from '@internal/mongo-query-ast/control';
 import {
   buildIndexOpId,
@@ -13,7 +20,6 @@ import {
   type CreateIndexOptions,
   DropCollectionCommand,
   DropIndexCommand,
-  defaultMongoIndexName,
   keysToKeySpec,
   ListCollectionsCommand,
   ListIndexesCommand,
@@ -27,6 +33,7 @@ import {
 import {
   type MongoQueryPlan,
   RawAggregateCommand,
+  RawDeleteManyCommand,
   RawUpdateManyCommand,
 } from '@internal/mongo-query-ast/execution';
 import { createFieldAccessor } from '@internal/mongo-query-builder';
@@ -35,7 +42,19 @@ import type { Document, MongoValue } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { mongoTargetError } from '../mongo-target-errors';
+import { convertKeepsEveryValue, isConvertTarget } from './bson-convert';
 import type { CollModMeta } from './op-factory-call';
+import {
+  documentsWithObject,
+  type Expression,
+  holdsKey,
+  keyOf,
+  keysOf,
+  lacksKey,
+  objectsRewritePipeline,
+  type StoredKeyPath,
+  storedKeyPath,
+} from './stored-key-path';
 
 type StringField = { readonly codecId: 'mongo/string@1'; readonly nullable: false };
 type DocField = { readonly codecId: 'mongo/document@1'; readonly nullable: false };
@@ -113,11 +132,40 @@ export function dataTransform(
   };
 }
 
+/** A raw `aggregate` on a collection, as a data transform's check reads documents. */
+export function rawAggregate(
+  collectionName: string,
+  pipeline: readonly Document[],
+): MongoQueryPlan {
+  return rewritePlan(collectionName, new RawAggregateCommand(collectionName, pipeline));
+}
+
+/**
+ * A raw `updateMany` on a collection, which a data transform's run can make skip document
+ * validation. `update` is an update document, such as `{ $set: { age: 0 } }`, or an aggregation
+ * pipeline, such as `[{ $set: { age: { $toInt: '$age' } } }]`, which can read the document's own
+ * values.
+ */
+export function rawUpdateMany(
+  collectionName: string,
+  filter: Document,
+  update: Document | readonly Document[],
+  options?: { readonly bypassDocumentValidation?: boolean },
+): MongoQueryPlan {
+  return rewritePlan(
+    collectionName,
+    new RawUpdateManyCommand(
+      collectionName,
+      filter,
+      update,
+      ifDefined('bypassDocumentValidation', options?.bypassDocumentValidation),
+    ),
+  );
+}
+
 export interface FieldRewriteOptions {
   readonly filter?: Document;
 }
-
-const REWRITE_PLAN_META = { target: 'mongo', storageHash: '', lane: 'mongo-raw' } as const;
 
 function documentsHolding(fields: readonly string[], filter: Document | undefined): Document {
   const conditions: Document[] = [
@@ -128,26 +176,35 @@ function documentsHolding(fields: readonly string[], filter: Document | undefine
   return conditions.length === 1 && only !== undefined ? only : { $and: conditions };
 }
 
-const UNREWRITABLE_FIELD_NAMES: ReadonlyArray<{
-  readonly matches: (field: string) => boolean;
+const UNREWRITABLE_KEYS: ReadonlyArray<{
+  readonly matches: (key: string) => boolean;
   readonly reason: string;
 }> = [
-  { matches: (field) => field === '', reason: 'it is empty' },
-  { matches: (field) => field === '_id', reason: 'MongoDB does not let a document change its _id' },
+  { matches: (key) => key === '', reason: 'it is empty' },
   {
-    matches: (field) => field.includes('.'),
+    matches: (key) => key.includes('.'),
     reason: 'MongoDB reads a name containing "." as a path into embedded documents',
   },
   {
-    matches: (field) => field.startsWith('$'),
+    matches: (key) => key.startsWith('$'),
     reason: 'MongoDB reads a name starting with "$" as an operator',
   },
 ];
 
+/** Why a key of a document or of an object inside one cannot be rewritten, if it cannot. */
+export function unrewritableKeyReason(key: string): string | undefined {
+  return UNREWRITABLE_KEYS.find((rule) => rule.matches(key))?.reason;
+}
+
 /** Why `renameField` and `unsetField` cannot rewrite a field of this name, if they cannot. */
 export function unrewritableFieldNameReason(field: string): string | undefined {
-  return UNREWRITABLE_FIELD_NAMES.find((rule) => rule.matches(field))?.reason;
+  return field === '_id'
+    ? 'MongoDB does not let a document change its _id'
+    : unrewritableKeyReason(field);
 }
+
+/** The plan meta of the raw queries a migration's operations run and check with. */
+const RAW_PLAN_META = { target: 'mongo', storageHash: '', lane: 'mongo-raw' } as const;
 
 function assertRewritableField(collectionName: string, field: string): void {
   const reason = unrewritableFieldNameReason(field);
@@ -159,8 +216,11 @@ function assertRewritableField(collectionName: string, field: string): void {
   );
 }
 
-function rewritePlan(collectionName: string, command: RawAggregateCommand | RawUpdateManyCommand) {
-  return { collection: collectionName, command, meta: { ...REWRITE_PLAN_META } };
+function rewritePlan(
+  collectionName: string,
+  command: RawAggregateCommand | RawUpdateManyCommand | RawDeleteManyCommand,
+) {
+  return { collection: collectionName, command, meta: { ...RAW_PLAN_META } };
 }
 
 function noDocumentHolds(
@@ -284,15 +344,761 @@ export function unsetField(
   };
 }
 
+export interface CastFieldOptions {
+  readonly collection: string;
+  readonly field: string;
+  /** The BSON types the field held before, which say whether the cast keeps every value. */
+  readonly from: readonly string[];
+  /** The BSON type `$convert` casts the field to. */
+  readonly to: string;
+  /** Whether the field is a list, whose elements are cast one by one. */
+  readonly list?: boolean;
+  readonly filter?: Document;
+}
+
+/**
+ * The documents whose field holds a value of none of the BSON types `types`, or, for a list, an
+ * element of none of them. A single value is read with `$expr`, since a query's `$type` and `$ne`
+ * look at the elements of a list.
+ */
+export function documentsNotOfType(
+  field: string,
+  shape: { readonly types: readonly string[]; readonly list: boolean },
+): Document {
+  if (shape.list) {
+    return { [field]: { $elemMatch: { $ne: null, $not: { $type: [...shape.types] } } } };
+  }
+  return {
+    $expr: { $not: { $in: [{ $type: `$${field}` }, ['missing', 'null', ...shape.types]] } },
+  };
+}
+
+/** The documents where the field is missing or holds `null`, read with `$expr` so a list holding `null` is not one. */
+export function documentsMissingOrNull(field: string): Document {
+  return { $expr: { $in: [{ $type: `$${field}` }, ['missing', 'null']] } };
+}
+
+const NUMBER_TYPES: readonly string[] = ['int', 'long', 'double', 'decimal'];
+
+/**
+ * The documents whose field holds a value of one of the BSON types `types`, or, for a list, an
+ * element of one of them. A single value is read with `$expr`, since a query's `$type` looks at the
+ * elements of a list.
+ */
+function documentsOfType(
+  field: string,
+  shape: { readonly types: readonly string[]; readonly list: boolean },
+): Document {
+  if (shape.list) return { [field]: { $elemMatch: { $type: [...shape.types] } } };
+  return { $expr: { $in: [{ $type: `$${field}` }, [...shape.types]] } };
+}
+
+/**
+ * The documents the cast changes: those holding a value of a type it is planned from, other than
+ * `to`. A value of any other type is left as it is, for the validator change's document check to
+ * name. A cast planned from no type casts every value that is not of type `to`.
+ */
+function documentsToCast(field: string, to: string, options: CastFieldOptions): Document {
+  const list = options.list === true;
+  const from = [
+    ...new Set(options.from.flatMap((type) => (type === 'number' ? NUMBER_TYPES : [type]))),
+  ].filter((type) => type !== to);
+  const condition =
+    options.from.length === 0
+      ? documentsNotOfType(field, { types: [to], list })
+      : documentsOfType(field, { types: from, list });
+  return options.filter === undefined ? condition : { $and: [options.filter, condition] };
+}
+
+function castExpression(field: string, to: string, list: boolean): Document {
+  return list
+    ? {
+        $map: {
+          input: `$${field}`,
+          as: 'value',
+          in: { $convert: { input: '$$value', to } },
+        },
+      }
+    : { $convert: { input: `$${field}`, to } };
+}
+
+/**
+ * Casts a field to the BSON type `to` with `$convert`, in the documents where it holds another
+ * type. A value `$convert` cannot cast fails the update. Widening when every type in `from` casts
+ * to `to` keeping its value, destructive otherwise.
+ */
+export function castField(options: CastFieldOptions): MongoDmlOperation {
+  const { collection: collectionName, field, to, filter } = options;
+  assertRewritableField(collectionName, field);
+  if (!isConvertTarget(to)) {
+    throw mongoTargetError(
+      'MIGRATION.INVALID_OPERATION_ENTRY',
+      `castField casts field "${field}" in collection ${collectionName} to "${to}", which $convert cannot cast to.`,
+      { meta: { context: 'castField', collection: collectionName, field, to } },
+    );
+  }
+  const listOf = (types: string) => (options.list === true ? `list of ${types}` : types);
+  const id = `field.${collectionName}.${field}.cast(${to})${idSuffix(filter)}`;
+  const toCast = documentsToCast(field, to, options);
+  return {
+    id,
+    meta: { rewrite: { kind: 'cast', collection: collectionName, field, to } },
+    label: `Cast field ${field} in collection ${collectionName}${options.from.length === 0 ? '' : ` from ${listOf(options.from.join(', '))}`} to ${listOf(to)}${labelSuffix(filter)}`,
+    operationClass:
+      options.from.length > 0 && options.from.every((from) => convertKeepsEveryValue(from, to))
+        ? 'widening'
+        : 'destructive',
+    name: id,
+    precheck: [],
+    run: [
+      rewritePlan(
+        collectionName,
+        new RawUpdateManyCommand(
+          collectionName,
+          toCast,
+          [{ $set: { [field]: castExpression(field, to, options.list === true) } }],
+          { bypassDocumentValidation: true },
+        ),
+      ),
+    ],
+    postcheck: [
+      {
+        description: `no document in ${collectionName} holds ${field} as ${options.from.length === 0 ? `another type than ${to}` : `a type it is cast from, ${options.from.join(', ')}`}`,
+        source: rewritePlan(
+          collectionName,
+          new RawAggregateCommand(collectionName, [{ $match: toCast }, { $limit: 1 }]),
+        ),
+        filter: MATCH_ALL_FILTER,
+        expect: 'notExists',
+      },
+    ],
+  };
+}
+
+export interface FillFieldOptions {
+  readonly collection: string;
+  readonly field: string;
+  /** An aggregation expression for the value, so it is stored with its BSON type: `{ $toLong: 0 }` stores a long. */
+  readonly value: JsonValue;
+  readonly filter?: Document;
+}
+
+/**
+ * Sets a field to `value` in the documents where it is missing or `null`, skipping document
+ * validation, as a migration fills a new required field with a temporary value.
+ */
+export function fillField(options: FillFieldOptions): MongoDmlOperation {
+  const { collection: collectionName, field, value, filter } = options;
+  assertRewritableField(collectionName, field);
+  const id = `field.${collectionName}.${field}.fill${idSuffix(filter)}`;
+  const unfilled = documentsMissingOrNull(field);
+  const toFill = filter === undefined ? unfilled : { $and: [filter, unfilled] };
+  return {
+    id,
+    meta: { rewrite: { kind: 'fill', collection: collectionName, field } },
+    label: `Fill field ${field} in collection ${collectionName} where it is missing or null${labelSuffix(filter)}`,
+    operationClass: 'widening',
+    name: id,
+    precheck: [],
+    run: [
+      rawUpdateMany(collectionName, toFill, [{ $set: { [field]: value } }], {
+        bypassDocumentValidation: true,
+      }),
+    ],
+    postcheck: [
+      {
+        description: `no document in ${collectionName} has ${field} missing or null`,
+        source: rawAggregate(collectionName, [{ $match: toFill }, { $limit: 1 }]),
+        filter: MATCH_ALL_FILTER,
+        expect: 'notExists',
+      },
+    ],
+  };
+}
+
+export interface StoredKeyOptions {
+  readonly collection: string;
+  /** The stored name of the root field whose value holds the key. */
+  readonly field: string;
+  /** A JSONPath from the field's value to the key, such as `$[*].street`. A wildcard selects the elements of a list; it does not select an object's member values. */
+  readonly path: string;
+  readonly filter?: Document;
+}
+
+export interface RenameStoredKeyOptions extends StoredKeyOptions {
+  readonly to: string;
+}
+
+export interface FillStoredKeyOptions extends StoredKeyOptions {
+  /** An aggregation expression for the value, so it is stored with its BSON type: `{ $toLong: 0 }` stores a long. */
+  readonly value: JsonValue;
+}
+
+/** Where the objects that hold a key are: the path to them, and the root field and collection. */
+function placeAt(options: StoredKeyOptions, path: string): string {
+  return `at path ${JSON.stringify(path)} in field ${options.field} of collection ${options.collection}`;
+}
+
+function keyPlace(options: StoredKeyOptions, keyPath: StoredKeyPath): string {
+  return placeAt(options, keyPath.objectsText);
+}
+
+function assertRewritableKey(options: StoredKeyOptions, keyPath: StoredKeyPath, key: string): void {
+  const reason = unrewritableKeyReason(key);
+  if (reason === undefined) return;
+  throw mongoTargetError(
+    'MIGRATION.FIELD_NAME_UNSUPPORTED',
+    `Key ${JSON.stringify(key)} ${keyPlace(options, keyPath)} cannot be rewritten: ${reason}.`,
+    {
+      meta: {
+        collection: options.collection,
+        field: options.field,
+        path: options.path,
+        key,
+        reason,
+      },
+    },
+  );
+}
+
+/** The key path of a stored key operation, refusing a root field or a key MongoDB cannot rewrite. */
+function rewritableKeyPath(factory: string, options: StoredKeyOptions): StoredKeyPath {
+  assertRewritableField(options.collection, options.field);
+  const keyPath = storedKeyPath(options.field, options.path);
+  if (!keyPath.ok) {
+    throw mongoTargetError(
+      'MIGRATION.INVALID_OPERATION_ENTRY',
+      `${factory} cannot act ${placeAt(options, options.path)}: ${keyPath.failure}.`,
+      {
+        meta: {
+          context: factory,
+          collection: options.collection,
+          field: options.field,
+          path: options.path,
+          reason: keyPath.failure,
+        },
+      },
+    );
+  }
+  for (const key of keysOf(keyPath.value)) assertRewritableKey(options, keyPath.value, key);
+  return keyPath.value;
+}
+
+function withFilter(filter: Document | undefined, condition: Document): Document {
+  return filter === undefined ? condition : { $and: [filter, condition] };
+}
+
+function storedKeyId(options: StoredKeyOptions, action: string): string {
+  return `storedKey.${options.collection}.${options.field}.${options.path}.${action}${idSuffix(options.filter)}`;
+}
+
+function noDocumentMatches(
+  collectionName: string,
+  match: Document,
+  description: string,
+): MongoDmlCheck {
+  return {
+    description,
+    source: rawAggregate(collectionName, [{ $match: match }, { $limit: 1 }]),
+    filter: MATCH_ALL_FILTER,
+    expect: 'notExists',
+  };
+}
+
+function storedKeyRewrite(
+  options: StoredKeyOptions,
+  toRewrite: Document,
+  keyPath: StoredKeyPath,
+  rewrite: (object: Expression) => Document,
+): MongoQueryPlan {
+  return rawUpdateMany(options.collection, toRewrite, objectsRewritePipeline(keyPath, rewrite), {
+    bypassDocumentValidation: true,
+  });
+}
+
+function literal(key: string): Document {
+  return { $literal: key };
+}
+
+/**
+ * Renames the last key of `path` to `to` in every object at the path inside root field `field`,
+ * skipping document validation. The precheck stops when an object holds both names.
+ */
+export function renameStoredKey(options: RenameStoredKeyOptions): MongoDmlOperation {
+  const keyPath = rewritableKeyPath('renameStoredKey', options);
+  const { collection: collectionName, field, path, to, filter } = options;
+  assertRewritableKey(options, keyPath, to);
+  const { key } = keyPath;
+  if (key === to) {
+    throw mongoTargetError(
+      'MIGRATION.INVALID_OPERATION_ENTRY',
+      `renameStoredKey renames key ${JSON.stringify(key)} ${keyPlace(options, keyPath)} to its own name.`,
+      {
+        meta: {
+          context: 'renameStoredKey',
+          collection: collectionName,
+          field,
+          path,
+          reason: 'the new name is the old name',
+        },
+      },
+    );
+  }
+  const place = keyPlace(options, keyPath);
+  const holdingKey = withFilter(
+    filter,
+    documentsWithObject(keyPath, (object) => holdsKey(object, key)),
+  );
+  const holdingBoth = withFilter(
+    filter,
+    documentsWithObject(keyPath, (object) => ({
+      $and: [holdsKey(object, key), holdsKey(object, to)],
+    })),
+  );
+  const id = storedKeyId(options, `rename(${to})`);
+  return {
+    id,
+    meta: { rewrite: { kind: 'renameStoredKey', collection: collectionName, field, path, to } },
+    label: `Rename key ${JSON.stringify(key)} to ${JSON.stringify(to)} ${place}${labelSuffix(filter)}`,
+    operationClass: 'widening',
+    name: id,
+    precheck: [
+      noDocumentMatches(
+        collectionName,
+        holdingBoth,
+        `no object ${place} holds both key ${JSON.stringify(key)} and key ${JSON.stringify(to)}; remove one of the two keys from those objects`,
+      ),
+    ],
+    run: [
+      storedKeyRewrite(options, holdingKey, keyPath, (object) => ({
+        $cond: [
+          holdsKey(object, key),
+          {
+            $setField: {
+              field: literal(to),
+              input: { $unsetField: { field: literal(key), input: object } },
+              value: keyOf(object, key),
+            },
+          },
+          object,
+        ],
+      })),
+    ],
+    postcheck: [
+      noDocumentMatches(
+        collectionName,
+        holdingKey,
+        `no object ${place} holds key ${JSON.stringify(key)}`,
+      ),
+    ],
+  };
+}
+
+/** Removes the last key of `path` from every object at the path inside root field `field`, skipping document validation. */
+export function removeStoredKey(options: StoredKeyOptions): MongoDmlOperation {
+  const keyPath = rewritableKeyPath('removeStoredKey', options);
+  const { collection: collectionName, field, path, filter } = options;
+  const { key } = keyPath;
+  const holdingKey = withFilter(
+    filter,
+    documentsWithObject(keyPath, (object) => holdsKey(object, key)),
+  );
+  const id = storedKeyId(options, 'remove');
+  return {
+    id,
+    meta: { rewrite: { kind: 'removeStoredKey', collection: collectionName, field, path } },
+    label: `Remove key ${JSON.stringify(key)} ${keyPlace(options, keyPath)}${labelSuffix(filter)}`,
+    operationClass: 'destructive',
+    name: id,
+    precheck: [],
+    run: [
+      storedKeyRewrite(options, holdingKey, keyPath, (object) => ({
+        $unsetField: { field: literal(key), input: object },
+      })),
+    ],
+    postcheck: [
+      noDocumentMatches(
+        collectionName,
+        holdingKey,
+        `no object ${keyPlace(options, keyPath)} holds key ${JSON.stringify(key)}`,
+      ),
+    ],
+  };
+}
+
+/**
+ * Sets the last key of `path` to `value` in every object at the path inside root field `field`
+ * where it is missing or `null`, skipping document validation.
+ */
+export function fillStoredKey(options: FillStoredKeyOptions): MongoDmlOperation {
+  const keyPath = rewritableKeyPath('fillStoredKey', options);
+  const { collection: collectionName, field, path, value, filter } = options;
+  const { key } = keyPath;
+  const lackingKey = withFilter(
+    filter,
+    documentsWithObject(keyPath, (object) => lacksKey(object, key)),
+  );
+  const id = storedKeyId(options, 'fill');
+  return {
+    id,
+    meta: { rewrite: { kind: 'fillStoredKey', collection: collectionName, field, path } },
+    label: `Fill key ${JSON.stringify(key)} ${keyPlace(options, keyPath)} where it is missing or null${labelSuffix(filter)}`,
+    operationClass: 'widening',
+    name: id,
+    precheck: [],
+    run: [
+      storedKeyRewrite(options, lackingKey, keyPath, (object) => ({
+        $cond: [
+          lacksKey(object, key),
+          { $setField: { field: literal(key), input: object, value } },
+          object,
+        ],
+      })),
+    ],
+    postcheck: [
+      noDocumentMatches(
+        collectionName,
+        lackingKey,
+        `no object ${keyPlace(options, keyPath)} lacks key ${JSON.stringify(key)} or holds null there`,
+      ),
+    ],
+  };
+}
+
+/** A value a stored value operation matches by equality: an enum's stored value. */
+export type StoredValue = string | number | boolean;
+
+export interface StoredValueOptions {
+  readonly collection: string;
+  /** The stored name of the root field that holds the value, or whose value holds it. */
+  readonly field: string;
+  /** A JSONPath from the field's value to the key that holds the value, such as `$[*].status`; absent for the field itself. */
+  readonly path?: string;
+  readonly filter?: Document;
+}
+
+export interface ReplaceStoredValueOptions extends StoredValueOptions {
+  readonly from: StoredValue;
+  /** An aggregation expression for the new value, so it is stored with its BSON type: `{ $toDouble: 2 }` stores a double. */
+  readonly to: JsonValue;
+}
+
+export interface RemoveStoredValueOptions extends StoredValueOptions {
+  readonly value: StoredValue;
+  /** Whether the field or key must hold a value, so the operation stops while a document holds the value there outside a list. */
+  readonly required?: boolean;
+  /** The enum value whose stored value is removed, which the failure names when a required place holds it. */
+  readonly enumValue?: Extract<MongoFieldRewriteMeta, { kind: 'removeStoredValue' }>['enumValue'];
+}
+
+/** Where a stored value operation acts: the root field, or the key path inside it. */
+interface StoredValuePlace {
+  readonly keyPath: StoredKeyPath | undefined;
+  /** As a label names it: `at path "$.status" in field profile of collection users`. */
+  readonly text: string;
+}
+
+function isStoredValue(value: unknown): value is StoredValue {
+  return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
+}
+
+function storedValuePlace(
+  factory: string,
+  options: StoredValueOptions,
+  value: unknown,
+): StoredValuePlace {
+  const { collection: collectionName, field, path } = options;
+  if (!isStoredValue(value)) {
+    throw mongoTargetError(
+      'MIGRATION.INVALID_OPERATION_ENTRY',
+      `${factory} cannot match value ${JSON.stringify(value)} in field ${field} of collection ${collectionName}: it compares only strings, numbers and booleans.`,
+      {
+        meta: {
+          context: factory,
+          collection: collectionName,
+          field,
+          reason: 'the value is not a string, a number or a boolean',
+        },
+      },
+    );
+  }
+  if (path === undefined) {
+    assertRewritableField(collectionName, field);
+    return { keyPath: undefined, text: `in field ${field} of collection ${collectionName}` };
+  }
+  const at = { collection: collectionName, field, path };
+  return { keyPath: rewritableKeyPath(factory, at), text: placeAt(at, path) };
+}
+
+function equalsValue(held: Expression, value: StoredValue): Document {
+  return { $eq: [held, { $literal: value }] };
+}
+
+/** Whether a value is `value`, or a list with an element equal to it. */
+function holdsValue(held: Expression, value: StoredValue): Document {
+  return {
+    $cond: [{ $isArray: held }, { $in: [{ $literal: value }, held] }, equalsValue(held, value)],
+  };
+}
+
+/** The documents in which the value at the place satisfies `condition`. */
+function documentsWhereValue(
+  options: StoredValueOptions,
+  place: StoredValuePlace,
+  condition: (held: Expression) => Document,
+): Document {
+  const { keyPath } = place;
+  const match =
+    keyPath === undefined
+      ? { $expr: condition(`$${options.field}`) }
+      : documentsWithObject(keyPath, (object) => condition(keyOf(object, keyPath.key)));
+  return withFilter(options.filter, match);
+}
+
+/**
+ * The update pipeline that rewrites the value at the place: a list with `inList`, and a value equal
+ * to `matched` with `replacement`, or, when it is `undefined`, by removing the field or key.
+ */
+function storedValuePipeline(
+  options: StoredValueOptions,
+  place: StoredValuePlace,
+  matched: StoredValue,
+  inList: (list: Expression) => Document,
+  replacement: JsonValue | undefined,
+): readonly Document[] {
+  const { keyPath } = place;
+  if (keyPath === undefined) {
+    const held = `$${options.field}`;
+    return [
+      {
+        $set: {
+          [options.field]: {
+            $cond: [
+              { $isArray: held },
+              inList(held),
+              {
+                $cond: [
+                  equalsValue(held, matched),
+                  replacement === undefined ? '$$REMOVE' : replacement,
+                  held,
+                ],
+              },
+            ],
+          },
+        },
+      },
+    ];
+  }
+  const key = literal(keyPath.key);
+  return objectsRewritePipeline(keyPath, (object) => {
+    const held = keyOf(object, keyPath.key);
+    const set = (value: Expression | JsonValue) => ({
+      $setField: { field: key, input: object, value },
+    });
+    return {
+      $cond: [
+        { $isArray: held },
+        set(inList(held)),
+        {
+          $cond: [
+            equalsValue(held, matched),
+            replacement === undefined
+              ? { $unsetField: { field: key, input: object } }
+              : set(replacement),
+            object,
+          ],
+        },
+      ],
+    };
+  });
+}
+
+function storedValueId(options: StoredValueOptions, action: string): string {
+  const path = options.path === undefined ? '' : `.${options.path}`;
+  return `storedValue.${options.collection}.${options.field}${path}.${action}${idSuffix(options.filter)}`;
+}
+
+const TYPED_CONSTANT = new Set(['$literal', '$toDouble', '$toLong', '$toInt', '$toDecimal']);
+
+/** The constant an expression writes, as a label shows it: unwrapped from `$literal` or a cast. */
+function expressionText(value: JsonValue): string {
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    const entries = Object.entries(value);
+    const [only] = entries;
+    if (entries.length === 1 && only !== undefined && TYPED_CONSTANT.has(only[0])) {
+      return expressionText(only[1] ?? null);
+    }
+  }
+  return JSON.stringify(value);
+}
+
+function holdingDescription(options: StoredValueOptions, value: StoredValue): string {
+  const at = options.path === undefined ? '' : ` at path ${JSON.stringify(options.path)}`;
+  return `no document in ${options.collection} holds value ${JSON.stringify(value)}${at} in field ${options.field}`;
+}
+
+/**
+ * Replaces the stored value `from` with `to` where the field, or the key at `path` inside it, holds
+ * it: the value itself, or each element of a list equal to it. Skips document validation.
+ */
+export function replaceStoredValue(options: ReplaceStoredValueOptions): MongoDmlOperation {
+  const { collection: collectionName, field, path, from, to, filter } = options;
+  const place = storedValuePlace('replaceStoredValue', options, from);
+  const holding = documentsWhereValue(options, place, (held) => holdsValue(held, from));
+  const id = storedValueId(options, `replace(${JSON.stringify(from)})`);
+  return {
+    id,
+    meta: {
+      rewrite: {
+        kind: 'replaceStoredValue',
+        collection: collectionName,
+        field,
+        ...ifDefined('path', path),
+      },
+    },
+    label: `Replace value ${JSON.stringify(from)} with ${expressionText(to)} ${place.text}${labelSuffix(filter)}`,
+    operationClass: 'widening',
+    name: id,
+    precheck: [],
+    run: [
+      rawUpdateMany(
+        collectionName,
+        holding,
+        storedValuePipeline(
+          options,
+          place,
+          from,
+          (list) => ({
+            $map: {
+              input: list,
+              as: 'value',
+              in: { $cond: [equalsValue('$$value', from), to, '$$value'] },
+            },
+          }),
+          to,
+        ),
+        { bypassDocumentValidation: true },
+      ),
+    ],
+    postcheck: [noDocumentMatches(collectionName, holding, holdingDescription(options, from))],
+  };
+}
+
+/**
+ * Removes the stored value `value` where the field, or the key at `path` inside it, holds it: the
+ * field or key goes where it equals the value, and the value is pulled from a list. With
+ * `required`, the operation first checks that no document holds the value there outside a list.
+ * Skips document validation.
+ */
+export function removeStoredValue(options: RemoveStoredValueOptions): MongoDmlOperation {
+  const { collection: collectionName, field, path, value, filter, required, enumValue } = options;
+  const place = storedValuePlace('removeStoredValue', options, value);
+  const holding = documentsWhereValue(options, place, (held) => holdsValue(held, value));
+  const id = storedValueId(options, `remove(${JSON.stringify(value)})`);
+  return {
+    id,
+    meta: {
+      rewrite: {
+        kind: 'removeStoredValue',
+        collection: collectionName,
+        field,
+        ...ifDefined('path', path),
+        value,
+        ...ifDefined('required', required),
+        ...ifDefined('filter', filter),
+        ...ifDefined('enumValue', enumValue),
+      },
+    },
+    label: `Remove value ${JSON.stringify(value)} ${path === undefined ? `from field ${field} of collection ${collectionName}` : place.text}${labelSuffix(filter)}`,
+    operationClass: 'destructive',
+    name: id,
+    precheck:
+      required === true
+        ? [
+            noDocumentMatches(
+              collectionName,
+              documentsWhereValue(options, place, (held) => equalsValue(held, value)),
+              `${holdingDescription(options, value)}, which is required`,
+            ),
+          ]
+        : [],
+    run: [
+      rawUpdateMany(
+        collectionName,
+        holding,
+        storedValuePipeline(
+          options,
+          place,
+          value,
+          (list) => ({
+            $filter: {
+              input: list,
+              as: 'value',
+              cond: { $not: [equalsValue('$$value', value)] },
+            },
+          }),
+          undefined,
+        ),
+        { bypassDocumentValidation: true },
+      ),
+    ],
+    postcheck: [noDocumentMatches(collectionName, holding, holdingDescription(options, value))],
+  };
+}
+
+export interface DeleteDocumentsOptions {
+  readonly collection: string;
+  readonly filter: Document;
+}
+
+/** The documents a filter selects, in words where the planner wrote it, for an operation's label. */
+function selectedText(filter: Document): string {
+  const words = Object.entries(filter).map(([field, condition]) =>
+    conditionInWords(field, condition),
+  );
+  return words.length > 0 && words.every((word) => word !== undefined)
+    ? `whose ${words.join(' and ')}`
+    : `matching ${JSON.stringify(filter)}`;
+}
+
+/** Deletes the documents of a collection that `filter` selects, as a variant's documents are deleted. */
+export function deleteDocuments(options: DeleteDocumentsOptions): MongoDmlOperation {
+  const { collection: collectionName, filter } = options;
+  const id = `documents.${collectionName}.delete${idSuffix(filter)}`;
+  return {
+    id,
+    label: `Delete the documents of collection ${collectionName} ${selectedText(filter)}`,
+    operationClass: 'destructive',
+    name: id,
+    precheck: [],
+    run: [rewritePlan(collectionName, new RawDeleteManyCommand(collectionName, filter))],
+    postcheck: [
+      noDocumentMatches(
+        collectionName,
+        filter,
+        `no document in ${collectionName} matches ${JSON.stringify(filter)}`,
+      ),
+    ],
+  };
+}
+
 function formatKeys(keys: ReadonlyArray<MongoIndexKey>): string {
   return keys.map((k) => `${k.field}:${k.direction}`).join(', ');
 }
 
-/** What an index check matches, which is the index's keys and collection, not its name. */
+/** What an index content check matches: the index's keys and options in its collection, whatever its name. */
 function indexObject(collectionName: string, keys: ReadonlyArray<MongoIndexKey>): string {
   if (isTextIndex(keys)) return `a text index in "${collectionName}"`;
   const spec = keys.map((key) => `${key.field}: ${JSON.stringify(key.direction)}`).join(', ');
   return `an index on { ${spec} } in "${collectionName}"`;
+}
+
+function namedIndexObject(collectionName: string, name: string): string {
+  return `an index named "${name}" in "${collectionName}"`;
+}
+
+function nameFilter(name: string): MongoFilterExpr {
+  return MongoFieldFilter.eq('name', name);
 }
 
 function isTextIndex(keys: ReadonlyArray<MongoIndexKey>): boolean {
@@ -372,7 +1178,7 @@ const textIndexOnly =
   (options, keys) =>
     isTextIndex(keys) ? filter(options, keys) : [];
 
-/** `name` is derived from the keys, so it tells no two indexes apart. */
+/** The name is checked on its own, beside the definition. */
 type UncomparedCreateIndexOption = 'name';
 
 /**
@@ -436,30 +1242,40 @@ function indexDefinitionFilter(
 const TEXT_INDEX_DEFAULT_LANGUAGE = 'english';
 const TEXT_INDEX_DEFAULT_LANGUAGE_OVERRIDE = 'language';
 
+/**
+ * Creates an index under `options.name`, or under the name MongoDB would give it when the call gives none. The precheck requires that the collection holds no index with that name and none with the same keys and options; the postcheck requires an index with that name, keys and options.
+ */
 export function createIndex(
   collectionName: string,
   keys: ReadonlyArray<MongoIndexKey>,
   options?: CreateIndexOptions,
 ): MongoMigrationPlanOperation {
-  const name = defaultMongoIndexName(keys);
-  const filter = keyFilter(keys);
+  const name = options?.name ?? defaultMongoIndexName(keys);
+  const definition = indexDefinitionFilter(keys, options);
 
   return {
-    id: buildIndexOpId('create', collectionName, keys),
-    label: `Create index on ${collectionName} (${formatKeys(keys)})`,
+    id: buildIndexOpId('create', collectionName, name),
+    label: `Create index ${name} on ${collectionName} (${formatKeys(keys)})`,
     operationClass: 'additive',
     precheck: [
       {
-        description: `index does not already exist on ${collectionName}`,
+        description: `no index named ${name} exists on ${collectionName}`,
         source: new ListIndexesCommand(collectionName),
-        filter,
+        filter: nameFilter(name),
+        expect: 'notExists',
+        object: namedIndexObject(collectionName, name),
+      },
+      {
+        description: `no index with the same keys and options exists on ${collectionName}`,
+        source: new ListIndexesCommand(collectionName),
+        filter: definition,
         expect: 'notExists',
         object: indexObject(collectionName, keys),
       },
     ],
     execute: [
       {
-        description: `create index on ${collectionName}`,
+        description: `create index ${name} on ${collectionName}`,
         command: collection(collectionName).createIndex(keys, {
           ...options,
           name,
@@ -468,48 +1284,52 @@ export function createIndex(
     ],
     postcheck: [
       {
-        description: `index exists on ${collectionName}`,
+        description: `index ${name} exists on ${collectionName}`,
         source: new ListIndexesCommand(collectionName),
-        filter: indexDefinitionFilter(keys, options),
+        filter: MongoAndExpr.of([nameFilter(name), definition]),
         expect: 'exists',
       },
     ],
   };
 }
 
+/**
+ * Drops the index named `options.name`, or the name MongoDB would give the keys when the call gives none. `options` lists every option the index has, as `migration plan` writes them: the precheck requires an index with that name, those keys and exactly those options, so an option left out must be absent from the index. A call without options checks the keys only. The postcheck requires that no index with that name is left.
+ */
 export function dropIndex(
   collectionName: string,
   keys: ReadonlyArray<MongoIndexKey>,
+  options?: CreateIndexOptions,
 ): MongoMigrationPlanOperation {
-  const indexName = defaultMongoIndexName(keys);
-  const filter = keyFilter(keys);
+  const name = options?.name ?? defaultMongoIndexName(keys);
+  const content = options === undefined ? keyFilter(keys) : indexDefinitionFilter(keys, options);
 
   return {
-    id: buildIndexOpId('drop', collectionName, keys),
-    label: `Drop index on ${collectionName} (${formatKeys(keys)})`,
+    id: buildIndexOpId('drop', collectionName, name),
+    label: `Drop index ${name} on ${collectionName} (${formatKeys(keys)})`,
     operationClass: 'widening',
     precheck: [
       {
-        description: `index exists on ${collectionName}`,
+        description: `index ${name} exists on ${collectionName} with the expected keys and options`,
         source: new ListIndexesCommand(collectionName),
-        filter,
+        filter: MongoAndExpr.of([nameFilter(name), content]),
         expect: 'exists',
-        object: indexObject(collectionName, keys),
+        object: namedIndexObject(collectionName, name),
       },
     ],
     execute: [
       {
-        description: `drop index on ${collectionName}`,
-        command: new DropIndexCommand(collectionName, indexName),
+        description: `drop index ${name} on ${collectionName}`,
+        command: new DropIndexCommand(collectionName, name),
       },
     ],
     postcheck: [
       {
-        description: `index no longer exists on ${collectionName}`,
+        description: `index ${name} no longer exists on ${collectionName}`,
         source: new ListIndexesCommand(collectionName),
-        filter,
+        filter: nameFilter(name),
         expect: 'notExists',
-        object: indexObject(collectionName, keys),
+        object: namedIndexObject(collectionName, name),
       },
     ],
   };
@@ -590,24 +1410,34 @@ export function renameCollection(from: string, to: string): MongoMigrationPlanOp
 export function setValidation(
   collectionName: string,
   schema: Record<string, unknown>,
-  options?: { validationLevel?: 'strict' | 'moderate'; validationAction?: 'error' | 'warn' },
+  options?: {
+    validationLevel?: 'strict' | 'moderate';
+    validationAction?: 'error' | 'warn';
+    /** Whether to check first that every document fits the new validator, and stop if one does not. */
+    checkDocuments?: boolean;
+  },
 ): MongoMigrationPlanOperation {
+  const validator: CollModOptions = {
+    validator: { $jsonSchema: schema },
+    ...ifDefined('validationLevel', options?.validationLevel),
+    ...ifDefined('validationAction', options?.validationAction),
+  };
+  const checks =
+    options?.checkDocuments === true
+      ? collMod(collectionName, validator, { checkDocuments: true })
+      : { precheck: [], postcheck: [] };
   return {
     id: `collection.${collectionName}.setValidation`,
     label: `Set validation on ${collectionName}`,
     operationClass: 'widening',
-    precheck: [],
+    precheck: checks.precheck,
     execute: [
       {
         description: `set validation on ${collectionName}`,
-        command: new CollModCommand(collectionName, {
-          validator: { $jsonSchema: schema },
-          ...ifDefined('validationLevel', options?.validationLevel),
-          ...ifDefined('validationAction', options?.validationAction),
-        }),
+        command: new CollModCommand(collectionName, validator),
       },
     ],
-    postcheck: [],
+    postcheck: checks.postcheck,
   };
 }
 
@@ -626,12 +1456,42 @@ function validatorBodyFilter(validator: Readonly<Record<string, unknown>>): Mong
     : MongoFieldFilter.eq('options.validator', documentValue(validator));
 }
 
+/**
+ * A check that no document of `collection` fails `validator`: an aggregate that matches the
+ * documents the validator rejects.
+ */
+function documentsFitValidator(
+  collection: string,
+  validator: Readonly<Record<string, unknown>>,
+): MongoMigrationCheck {
+  return {
+    description: `every document in ${collection} fits the new validator`,
+    source: {
+      collection,
+      command: new RawAggregateCommand(collection, [
+        { $match: { $nor: [validator] } },
+        { $limit: 1 },
+      ]),
+      meta: { ...RAW_PLAN_META },
+    },
+    filter: MongoExistsExpr.exists('_id'),
+    expect: 'notExists',
+  };
+}
+
 export function collMod(
   collectionName: string,
   options: CollModOptions,
   meta?: CollModMeta,
 ): MongoMigrationPlanOperation {
   const hasValidator = options.validator != null && Object.keys(options.validator).length > 0;
+  if (meta?.checkDocuments === true && !hasValidator) {
+    throw mongoTargetError(
+      'MIGRATION.INVALID_OPERATION_ENTRY',
+      `collMod of collection ${collectionName} checks the documents, but sets no validator to check them against.`,
+      { meta: { context: 'collMod', collection: collectionName } },
+    );
+  }
 
   return {
     id: meta?.id ?? `collection.${collectionName}.collMod`,
@@ -647,6 +1507,9 @@ export function collMod(
               expect: 'exists' as const,
               object: `collection "${collectionName}"`,
             },
+            ...(meta?.checkDocuments === true
+              ? [documentsFitValidator(collectionName, options.validator)]
+              : []),
           ]
         : [],
     execute: [

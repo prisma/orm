@@ -1,6 +1,6 @@
 import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
-import { modelsOf, postgresScalarAuthoringTypes, postgresScalarTypeDescriptors } from './fixtures';
+import { fixturePostgresTypeNamespace, modelsOf, postgresScalarTypeDescriptors } from './fixtures';
 import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contract-storage';
 import {
   builtinControlMutationDefaults,
@@ -9,7 +9,7 @@ import {
 import { unboundTables } from './unbound-tables';
 
 const types: AuthoringTypeNamespace = {
-  ...postgresScalarAuthoringTypes,
+  ...fixturePostgresTypeNamespace,
   TimestampString: {
     kind: 'typeConstructor',
     args: [{ kind: 'value', dataType: 'pg/int4', name: 'precision', optional: true }],

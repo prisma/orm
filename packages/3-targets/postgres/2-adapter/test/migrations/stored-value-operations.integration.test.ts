@@ -7,6 +7,7 @@ import { asNamespaceId } from '@internal/contract/types';
 import type { SqlMigrationPlanOperation } from '@internal/family-sql/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
+  DeleteRowsCall,
   RemoveStoredValueCall,
   ReplaceStoredValueCall,
 } from '@internal/target-postgres/op-factory-call';
@@ -189,6 +190,19 @@ describe('Postgres stored value operations', { concurrent: false }, () => {
     ]);
   });
 
+  it('deletes the rows that hold a value, and keeps the others', {
+    timeout: testTimeout,
+  }, async () => {
+    await driver.query(
+      `insert into app.task (id, state, rank) values (1, 'Bug', 1), (2, 'Feature', 2), (3, null, 3), (4, 'Bug', 4)`,
+    );
+
+    await runTwice(await new DeleteRowsCall('app', 'task', 'state', 'Bug').toOp());
+    await runTwice(await new DeleteRowsCall('app', 'task', 'rank', 3).toOp());
+
+    expect(await rows('state')).toEqual([{ id: 2, state: 'Feature' }]);
+  });
+
   it('finds a table of the unbound namespace on the search path', {
     timeout: testTimeout,
   }, async () => {
@@ -270,7 +284,7 @@ describe('Postgres stored value operations', { concurrent: false }, () => {
     const uncounted = (await runnerResult(op, failingCount)).assertNotOk();
 
     expect({
-      counted: { message: counted.message, rows: counted.meta.rowsHoldingValue?.rows },
+      counted: { message: counted.message, rows: counted.meta.rowsHoldingValue?.[0]?.rows },
       uncounted: {
         code: uncounted.code,
         message: uncounted.message,

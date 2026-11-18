@@ -14,10 +14,11 @@ import { postgresTextDataTypes } from './data-types';
 import { postgresTargetDescriptorMetaRuntime } from './descriptor-meta-runtime';
 import { postgresGeneratorDescriptors, postgresGeneratorFunctions } from './generator-functions';
 import { postgresIndexTypes } from './index-types';
+import { moduleBase } from './module-base';
 import { DEFAULT_NAMESPACE_ID } from './namespace-ids';
 import { postgresCreateNamespace } from './postgres-schema';
 import { prisma7PostgresRenamedNativeTypes } from './prisma7-type-map';
-import { postgresScalarAndNativeTypeConstructors } from './type-constructors';
+import { postgresScalarTypes } from './type-constructors';
 
 const postgresTargetDescriptorMetaBase = {
   ...postgresTargetDescriptorMetaRuntime,
@@ -26,7 +27,7 @@ const postgresTargetDescriptorMetaBase = {
   displayName: 'Postgres',
   indexTypes: postgresIndexTypes,
   authoring: {
-    type: { ...postgresScalarAndNativeTypeConstructors, ...postgresAuthoringTypes },
+    type: { ...postgresScalarTypes, ...postgresAuthoringTypes },
     dataTypes: postgresDataTypeEntries(),
     textDataTypes: postgresTextDataTypes,
     renamedTypeConstructors: prisma7PostgresRenamedNativeTypes,
@@ -46,7 +47,7 @@ const postgresTargetDescriptorMetaBase = {
   types: {
     queryOperationTypes: {
       import: {
-        package: '@internal/target-postgres/operation-types',
+        package: `${moduleBase}/operation-types`,
         named: 'QueryOperationTypes',
         alias: 'PgTargetQueryOps',
       },

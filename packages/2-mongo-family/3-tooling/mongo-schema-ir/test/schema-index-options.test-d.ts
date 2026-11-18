@@ -5,7 +5,7 @@ import type { MongoSchemaIndexOptions } from '../src/schema-index';
 describe('MongoSchemaIndexOptions', () => {
   test('has every index option the contract identifies an index by', () => {
     expectTypeOf<
-      Exclude<keyof MongoSchemaIndexOptions, 'keys'>
+      Exclude<keyof MongoSchemaIndexOptions, 'keys' | 'name'>
     >().toEqualTypeOf<MongoIndexOptionKey>();
   });
 });

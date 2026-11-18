@@ -7,7 +7,7 @@
  *
  * - V1: the first migration creates the value object check. A row the ORM writes is accepted; a row with a key `Address` does not declare is refused, naming the check.
  * - V2: adding a member, and then making a member nullable, each drop the old check and add the new one, on a table whose rows fit the new shape.
- * - V3: adding a required member to a table that holds a row without it fails at apply, names the check, the table and the column, gives the query that finds the rows and the route that keeps them, and changes nothing. Following that route applies the change and keeps the row.
+ * - V3: changing the type of a member on a table that holds a row with a value of the old type fails at apply, names the check, the table and the column, gives the query that finds the rows and the route that keeps them, and changes nothing. Following that route applies the change and keeps the row. (A new required member is filled instead: see `value-object-backfill.e2e.test.ts`.)
  * - V4: adding a variant replaces the discriminator check, and the new variant's value is accepted.
  * - V5: changing a value object that only an external table's column holds changes the storage hash and needs no operation: `migration plan` writes a migration with no operations, and `migrate` moves the marker.
  */
@@ -59,7 +59,7 @@ const ADDRESS_WITH_ZIP = userContract('  street String\n  city   String\n  zip  
 const ADDRESS_WITH_OPTIONAL_CITY = userContract(
   '  street String\n  city   String?\n  zip    String?\n',
 );
-const ADDRESS_WITH_COUNTRY = userContract('  street  String\n  city    String\n  country String\n');
+const ADDRESS_WITH_NUMBERED_CITY = userContract('  street String\n  city   Int\n');
 
 function taskContract(variants: readonly string[]): string {
   const models = variants.map(
@@ -185,16 +185,16 @@ async function expectSettled(ctx: JourneyContext, via: Via, label: string): Prom
   ).toEqual([]);
 }
 
-const GIVE_EVERY_ADDRESS_A_COUNTRY = `rawSql({
-        id: 'data.user.address.country',
-        label: 'Give every address a country',
+const NUMBER_EVERY_CITY = `rawSql({
+        id: 'data.user.address.city',
+        label: 'Number every city',
         operationClass: 'data',
         target: { id: 'postgres' },
         precheck: [],
         execute: [
           {
-            description: 'give every address a country',
-            sql: \`UPDATE "public"."user" SET address = address || '{"country": "NO"}' WHERE address IS NOT NULL\`,
+            description: 'number every city',
+            sql: \`UPDATE "public"."user" SET address = address || '{"city": 0}' WHERE address IS NOT NULL\`,
           },
         ],
         postcheck: [],
@@ -212,7 +212,7 @@ async function followTheAdvice(
     await sql(connectionString, `ALTER TABLE "public"."user" DROP CONSTRAINT "${oldCheck}"`);
     await sql(
       connectionString,
-      `UPDATE "public"."user" SET address = address || '{"country": "NO"}' WHERE address IS NOT NULL`,
+      `UPDATE "public"."user" SET address = address || '{"city": 0}' WHERE address IS NOT NULL`,
     );
     const update = await runDbUpdate(ctx, ['--json']);
     expect(update.exitCode, `V3.06: db update: ${JSON.stringify(engineError(update))}`).toBe(0);
@@ -223,7 +223,7 @@ async function followTheAdvice(
   const written = readFileSync(path, 'utf-8');
   const filled = written
     .replace(/import \{ ([^}]*) \} from '([^']+\/migration)';/, "import { $1, rawSql } from '$2';")
-    .replace('this.addCheckConstraint(', `${GIVE_EVERY_ADDRESS_A_COUNTRY}this.addCheckConstraint(`);
+    .replace('this.addCheckConstraint(', `${NUMBER_EVERY_CITY}this.addCheckConstraint(`);
   expect(filled, 'V3.06: the update sits before the new check').toContain('rawSql({');
   expect(filled, 'V3.06: rawSql is imported').toContain('rawSql }');
   writeFileSync(path, filled);
@@ -397,14 +397,10 @@ withTempDir(({ createTempDir }) => {
         const before = await checkNames(db.connectionString, 'user');
         const marker = await markerHash(db.connectionString);
 
-        await emit(ctx, ADDRESS_WITH_COUNTRY, 'V3.03');
+        await emit(ctx, ADDRESS_WITH_NUMBERED_CITY, 'V3.03');
         let failed: Parameters<typeof engineError>[0];
         if (via === 'migrate') {
-          const plan = await planMigrationAndSelfEmit(ctx, [
-            ...fromLatest(ctx),
-            '--name',
-            'country',
-          ]);
+          const plan = await planMigrationAndSelfEmit(ctx, [...fromLatest(ctx), '--name', 'city']);
           expect(plan.exitCode, `V3.04: plan: ${plan.stderr}`).toBe(0);
           failed = await runMigrate(ctx, ['--json']);
         } else {
@@ -456,7 +452,7 @@ withTempDir(({ createTempDir }) => {
         expect(
           (await sql(db.connectionString, 'SELECT id, address FROM "user"')).rows,
           'V3.06: the row is kept and fits',
-        ).toEqual([{ id: 1, address: { street: 'Main St', city: 'Oslo', country: 'NO' } }]);
+        ).toEqual([{ id: 1, address: { street: 'Main St', city: 0 } }]);
         const verify = await runDbVerify(ctx, ['--strict']);
         expect(verify.exitCode, `V3.07: db verify --strict: ${verify.stderr}`).toBe(0);
       },

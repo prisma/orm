@@ -989,6 +989,8 @@ it('reads user', async () => {
 
 ### Test Commands
 
+Agents run only their own packages' tests and the files that cover their change, and leave the full suites to CI: see [`running-tests.mdc`](../.agents/rules/running-tests.mdc).
+
 ```bash
 # Run all tests (packages + examples)
 pnpm test

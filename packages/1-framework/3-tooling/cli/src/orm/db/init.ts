@@ -22,7 +22,6 @@ import type { MigrationCommandResult } from '../../utils/formatters/migrations';
 import { type CliInvocation, cliCommand, cliInvocation } from '../../utils/printed-command';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
-import { baseDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 import { controlProgressReporter } from '../progress';
 import { migrationResultBlocks, migrationResultNextActions } from './migration-blocks';
@@ -108,7 +107,7 @@ function initDocument(inputs: {
     ...ifDefined('perSpace', value.perSpace),
     advancedRef: inputs.advancedRef,
     plannedAdvanceRef: inputs.plannedAdvanceRef,
-    ...(inputs.plannerWarnings.length > 0 ? { warnings: inputs.plannerWarnings } : {}),
+    ...(inputs.plannerWarnings.length > 0 ? { plannerWarnings: inputs.plannerWarnings } : {}),
     summary: value.summary,
     timings: { total: Date.now() - inputs.startedAt },
   };
@@ -167,7 +166,7 @@ export function createDbInitCommand(createClient: CreateControlClient) {
           name: refName,
           contractJson,
           contractJsonPath: contractPath,
-          projectDir: baseDirFor(ctx.config),
+          config: ctx.config,
           client,
         });
         if (!preflight.ok) {

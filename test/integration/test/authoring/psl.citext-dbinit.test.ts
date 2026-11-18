@@ -1,5 +1,5 @@
 /**
- * A PSL contract with a `citext.Citext` column, applied with `db init` to a database where nothing has created the citext extension. The citext pack's migration from the empty contract installs it before the table, `db verify --strict` reports nothing, and an equality filter through the ORM matches without regard to case.
+ * A PSL contract with a `citext.Citext` column, applied with `db init` to a database where nothing has created the citext extension. The citext pack's migrations from the empty contract install it before the table, `db verify --strict` reports nothing, and an equality filter through the ORM matches without regard to case.
  */
 
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -40,18 +40,17 @@ async function materialiseCitextPinnedArtifacts(projectRoot: string): Promise<st
   const migrationsDir = join(projectRoot, 'migrations');
   mkdirSync(migrationsDir, { recursive: true });
   const space = citext.contractSpace;
-  const createExtension = space?.migrations[0];
-  if (space === undefined || createExtension === undefined) {
-    throw new Error(
-      'the citext descriptor declares a contract space with a migration from the empty contract',
-    );
+  if (space === undefined || space.migrations.length === 0) {
+    throw new Error('the citext descriptor declares a contract space with migrations');
   }
   await emitContractSpaceArtifacts(migrationsDir, 'citext', {
     contract: space.contractJson,
     contractDts: '// rendered .d.ts for the citext contract space\nexport interface Contract {}\n',
     headRef: { hash: space.headRef.hash, invariants: [...space.headRef.invariants] },
   });
-  await materialiseMigrationPackage(join(migrationsDir, 'citext'), createExtension);
+  for (const migration of space.migrations) {
+    await materialiseMigrationPackage(join(migrationsDir, 'citext'), migration);
+  }
   return migrationsDir;
 }
 

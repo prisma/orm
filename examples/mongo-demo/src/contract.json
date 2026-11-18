@@ -206,10 +206,24 @@
                   "plane": "storage"
                 }
               },
+              "availableFrom": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mongo/time-string@1",
+                  "kind": "scalar"
+                }
+              },
               "bio": {
                 "nullable": true,
                 "type": {
                   "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              },
+              "birthday": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mongo/date-string@1",
                   "kind": "scalar"
                 }
               },
@@ -271,8 +285,14 @@
                 "address": {
                   "field": "address"
                 },
+                "availableFrom": {
+                  "field": "availableFrom"
+                },
                 "bio": {
                   "field": "bio"
+                },
+                "birthday": {
+                  "field": "birthday"
                 },
                 "email": {
                   "field": "email"
@@ -307,7 +327,8 @@
                       "field": "authorId"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "authorId_1"
                 },
                 {
                   "keys": [
@@ -320,7 +341,8 @@
                       "field": "authorId"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "createdAt_-1_authorId_1"
                 },
                 {
                   "keys": [
@@ -330,6 +352,7 @@
                     }
                   ],
                   "kind": "mongo-index",
+                  "name": "summary_1",
                   "partialFilterExpression": {
                     "kind": "article"
                   },
@@ -487,10 +510,22 @@
                         }
                       ]
                     },
+                    "availableFrom": {
+                      "bsonType": [
+                        "null",
+                        "string"
+                      ]
+                    },
                     "bio": {
                       "bsonType": [
                         "null",
                         "string"
+                      ]
+                    },
+                    "birthday": {
+                      "bsonType": [
+                        "null",
+                        "date"
                       ]
                     },
                     "email": {
@@ -570,7 +605,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "406b672b68a6b01f04c0d6f910f5fefa4ac16d48b26e6c91b43856cd42c8cc5d"
+    "storageHash": "4a982736e89b99615c530abbd19d92cf955a27063db9ec4dcf0bddcc2dcc6595"
   },
   "capabilities": {},
   "extensions": {},

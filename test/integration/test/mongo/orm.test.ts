@@ -13,7 +13,14 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
   it('loads generated collection indexes and options', () => {
     expect(contract.storage.namespaces.__unbound__.entries.collection.users).toEqual({
       kind: 'mongo-collection',
-      indexes: [{ kind: 'mongo-index', keys: [{ field: 'email', direction: 1 }], unique: true }],
+      indexes: [
+        {
+          kind: 'mongo-index',
+          name: 'email_1',
+          keys: [{ field: 'email', direction: 1 }],
+          unique: true,
+        },
+      ],
       options: {
         kind: 'mongo-collection-options',
         collation: { kind: 'mongo-collation-options', locale: 'en', strength: 2 },

@@ -28,7 +28,8 @@ describeTemporalFallbackEntries({
     '@prisma/orm-sqlite ./target/control',
   ],
   decode: {
-    lookupFactory: 'createSqliteBuiltinCodecLookup',
+    exportName: 'createSqliteBuiltinCodecLookup',
+    codecOf: (codecId) => `createSqliteBuiltinCodecLookup().get(${codecId})`,
     codecId: 'sqlite/datetime-temporal@1',
     contractValue: '2024-01-01T00:00:00.000Z',
     decoded: '2024-01-01T00:00:00Z',

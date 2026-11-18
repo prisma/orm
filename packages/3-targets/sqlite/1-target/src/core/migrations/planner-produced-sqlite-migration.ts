@@ -4,7 +4,6 @@ import type {
   MigrationPlanWithAuthoringSurface,
   OpFactoryCall,
 } from '@internal/framework-components/control';
-import type { ImportSpecifierResolver } from '@internal/framework-components/emission';
 import type { MigrationMeta } from '@internal/migration-tools/migration';
 import type { SqlitePlanTargetDetails } from './planner-target-details';
 import { renderOps } from './render-ops';
@@ -69,12 +68,12 @@ export class TypeScriptRenderableSqliteMigration
     return this.#spaceId;
   }
 
-  renderTypeScript(resolveImportSpecifier: ImportSpecifierResolver): string {
+  renderTypeScript(migrationModule: string): string {
     return renderCallsToTypeScript(this.#calls, {
       from: this.#meta.from,
       to: this.#meta.to,
       snapshotsImportPath: this.#snapshotsImportPath,
-      resolveImportSpecifier,
+      migrationModule,
     });
   }
 }

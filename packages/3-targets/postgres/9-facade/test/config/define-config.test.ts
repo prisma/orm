@@ -3,6 +3,7 @@ import { defineConfig as coreDefineConfig } from '@internal/config/config-types'
 import postgresDriver from '@internal/driver-postgres/control';
 import sql from '@internal/family-sql/control';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
+import { restateTypeDeclarations } from '@internal/target-package-config/type-declarations';
 import postgres from '@internal/target-postgres/control';
 import postgresPackRef from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
@@ -31,8 +32,12 @@ describe('defineConfig facade', () => {
     });
 
     expect(facadeConfig.family).toBe(manualConfig.family);
-    expect(facadeConfig.target).toBe(manualConfig.target);
-    expect(facadeConfig.adapter).toBe(manualConfig.adapter);
+    expect(facadeConfig.target).toEqual(
+      restateTypeDeclarations(postgres, '@internal/postgres/contract-types'),
+    );
+    expect(facadeConfig.adapter).toEqual(
+      restateTypeDeclarations(postgresAdapter, '@internal/postgres/contract-types'),
+    );
     expect(facadeConfig.driver).toBe(manualConfig.driver);
     expect(facadeConfig.extensions).toEqual(manualConfig.extensions);
     expect(facadeConfig.contract?.output).toBe(manualConfig.contract?.output);
@@ -132,13 +137,33 @@ describe('defineConfig facade', () => {
     expect(config.migrations?.dir).toBe('custom-migrations');
   });
 
-  it('omits db and migrations when they are not provided', () => {
+  it('omits db when it is not provided', () => {
     const config = defineConfig({
       contract: './prisma/contract.prisma',
     });
 
     expect(Object.hasOwn(config, 'db')).toBe(false);
-    expect(Object.hasOwn(config, 'migrations')).toBe(false);
+  });
+
+  it('names its own modules for generated files', () => {
+    const config = defineConfig({ contract: './prisma/contract.prisma' });
+
+    expect(config.contract?.typesModule).toBe('@internal/postgres/contract-types');
+    expect(config.migrations).toEqual({ module: '@internal/postgres/migration' });
+  });
+
+  it('names its own modules alongside a given migrations dir and a ready contract config', () => {
+    const config = defineConfig({
+      contract: prismaContract('./prisma/contract.prisma', {
+        output: './prisma/contract.json',
+        target: postgresPackRef,
+        createNamespace: postgresCreateNamespace,
+      }),
+      migrations: { dir: 'db' },
+    });
+
+    expect(config.contract?.typesModule).toBe('@internal/postgres/contract-types');
+    expect(config.migrations).toEqual({ dir: 'db', module: '@internal/postgres/migration' });
   });
 
   it('passes extensions through to config', () => {
@@ -160,5 +185,20 @@ describe('defineConfig facade', () => {
     });
 
     expect(config.extensions).toContain(mockExtension);
+  });
+
+  it('passes formatter config through', () => {
+    const config = defineConfig({
+      contract: './prisma/contract.prisma',
+      formatter: { indent: 'tab', newline: 'CRLF' },
+    });
+
+    expect(config.formatter).toEqual({ indent: 'tab', newline: 'CRLF' });
+  });
+
+  it('leaves formatter out when it is not given', () => {
+    const config = defineConfig({ contract: './prisma/contract.prisma' });
+
+    expect(Object.hasOwn(config, 'formatter')).toBe(false);
   });
 });

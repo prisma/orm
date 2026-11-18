@@ -231,6 +231,7 @@ describe('migration file E2E', () => {
       from: '0'.repeat(64),
       to: '1'.repeat(64),
       snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+      migrationModule: '@internal/target-mongo/migration',
     } as const;
 
     it('produces ops.json identical to direct factory invocation', async () => {
@@ -243,7 +244,10 @@ describe('migration file E2E', () => {
           validator: { $jsonSchema: { required: ['email'] } },
           validationLevel: 'strict',
         }),
-        new CreateIndexCall('users', [{ field: 'email', direction: 1 as const }], { unique: true }),
+        new CreateIndexCall('users', [{ field: 'email', direction: 1 as const }], {
+          name: 'email_1',
+          unique: true,
+        }),
       ];
 
       const tsSource = renderCallsToTypeScript(calls, defaultMeta);
@@ -311,6 +315,178 @@ describe('migration file E2E', () => {
       expect(ops[0].execute[0].command.kind).toBe('collMod');
     });
 
+    it('reproduces a collMod that checks the documents', async () => {
+      const { renderCallsToTypeScript } = await import('../src/core/migrations/render-typescript');
+      const { CollModCall } = await import('../src/core/migrations/op-factory-call');
+      const { serializeMongoOps } = await import('../src/core/migrations/mongo-ops-serializer');
+      const call = new CollModCall(
+        'users',
+        {
+          validator: { $jsonSchema: { required: ['email'] } },
+          validationLevel: 'strict',
+          validationAction: 'error',
+        },
+        {
+          id: 'validator.users.update',
+          label: 'Update validator on users',
+          operationClass: 'widening',
+          checkDocuments: true,
+        },
+      );
+
+      const tsSource = renderCallsToTypeScript([call], defaultMeta);
+      const resolvedSource = tsSource.replace(
+        "'@internal/target-mongo/migration'",
+        `'${factoryExport}'`,
+      );
+      await writeFile(join(tmpDir, 'migration.ts'), resolvedSource);
+      await writeContractFixtures(defaultMeta);
+
+      const result = await runFile('migration.ts');
+      expect(result.exitCode).toBe(0);
+
+      const ops = JSON.parse(await readFile(join(tmpDir, 'ops.json'), 'utf-8'));
+      expect(ops).toEqual(JSON.parse(serializeMongoOps([call.toOp()])));
+      expect(ops[0].precheck.at(-1).source.command.pipeline[0]).toEqual({
+        $match: { $nor: [{ $jsonSchema: { required: ['email'] } }] },
+      });
+    });
+
+    it('reproduces a castField with list and filter', async () => {
+      const { renderCallsToTypeScript } = await import('../src/core/migrations/render-typescript');
+      const { CastFieldCall } = await import('../src/core/migrations/op-factory-call');
+      const { serializeMongoOps } = await import('../src/core/migrations/mongo-ops-serializer');
+      const call = new CastFieldCall({
+        collection: 'tasks',
+        field: 'scores',
+        from: ['int'],
+        to: 'long',
+        list: true,
+        filter: { type: 'bug' },
+      });
+
+      const tsSource = renderCallsToTypeScript([call], defaultMeta);
+      await writeFile(
+        join(tmpDir, 'migration.ts'),
+        tsSource.replace("'@internal/target-mongo/migration'", `'${factoryExport}'`),
+      );
+      await writeContractFixtures(defaultMeta);
+
+      const result = await runFile('migration.ts');
+      expect(result.exitCode).toBe(0);
+      expect(JSON.parse(await readFile(join(tmpDir, 'ops.json'), 'utf-8'))).toEqual(
+        JSON.parse(serializeMongoOps([call.toOp()])),
+      );
+    });
+
+    it('reproduces a fillField with a typed value and a filter', async () => {
+      const { renderCallsToTypeScript } = await import('../src/core/migrations/render-typescript');
+      const { FillFieldCall } = await import('../src/core/migrations/op-factory-call');
+      const { serializeMongoOps } = await import('../src/core/migrations/mongo-ops-serializer');
+      const call = new FillFieldCall({
+        collection: 'tasks',
+        field: 'severity',
+        value: { $toLong: 0 },
+        filter: { type: 'bug' },
+      });
+
+      const tsSource = renderCallsToTypeScript([call], defaultMeta);
+      await writeFile(
+        join(tmpDir, 'migration.ts'),
+        tsSource.replace("'@internal/target-mongo/migration'", `'${factoryExport}'`),
+      );
+      await writeContractFixtures(defaultMeta);
+
+      const result = await runFile('migration.ts');
+      expect(result.exitCode).toBe(0);
+      expect(JSON.parse(await readFile(join(tmpDir, 'ops.json'), 'utf-8'))).toEqual(
+        JSON.parse(serializeMongoOps([call.toOp()])),
+      );
+    });
+
+    it('reproduces renameStoredKey, removeStoredKey and fillStoredKey', async () => {
+      const { renderCallsToTypeScript } = await import('../src/core/migrations/render-typescript');
+      const { FillStoredKeyCall, RemoveStoredKeyCall, RenameStoredKeyCall } = await import(
+        '../src/core/migrations/op-factory-call'
+      );
+      const { serializeMongoOps } = await import('../src/core/migrations/mongo-ops-serializer');
+      const calls = [
+        new RenameStoredKeyCall({
+          collection: 'users',
+          field: 'addresses',
+          path: '$[*].street',
+          to: 'line1',
+        }),
+        new RemoveStoredKeyCall({
+          collection: 'users',
+          field: 'profile',
+          path: "$.addresses[*]['zip code']",
+          filter: { kind: 'admin' },
+        }),
+        new FillStoredKeyCall({
+          collection: 'users',
+          field: 'addresses',
+          path: '$[*].city',
+          value: { $literal: '$none' },
+        }),
+      ];
+
+      const tsSource = renderCallsToTypeScript(calls, defaultMeta);
+      await writeFile(
+        join(tmpDir, 'migration.ts'),
+        tsSource.replace("'@internal/target-mongo/migration'", `'${factoryExport}'`),
+      );
+      await writeContractFixtures(defaultMeta);
+
+      const result = await runFile('migration.ts');
+      expect(result.exitCode).toBe(0);
+      expect(JSON.parse(await readFile(join(tmpDir, 'ops.json'), 'utf-8'))).toEqual(
+        JSON.parse(serializeMongoOps(await Promise.all(calls.map((call) => call.toOp())))),
+      );
+    });
+
+    it('reproduces a filled data transform scaffold with a variant filter', async () => {
+      const { renderCallsToTypeScript } = await import('../src/core/migrations/render-typescript');
+      const { DataTransformCall } = await import('../src/core/migrations/op-factory-call');
+      const { serializeMongoOps } = await import('../src/core/migrations/mongo-ops-serializer');
+      const { dataTransform, rawAggregate, rawUpdateMany } = await import(
+        '../src/core/migrations/migration-factories'
+      );
+      const filter = {
+        $and: [
+          { type: 'bug' },
+          { $expr: { $not: { $in: [{ $type: '$severity' }, ['missing', 'null', 'int']] } } },
+        ],
+      };
+      const update = [
+        { $set: { severity: { $convert: { input: '$severity', to: 'int', onError: 0 } } } },
+      ];
+      const call = new DataTransformCall('Bug.severity', 'tasks', filter);
+
+      const scaffold = renderCallsToTypeScript([call], defaultMeta);
+      expect(scaffold).toContain('placeholder("Bug.severity:update")');
+      await writeFile(
+        join(tmpDir, 'migration.ts'),
+        scaffold
+          .replace('placeholder("Bug.severity:update")', JSON.stringify(update))
+          .replace("'@internal/target-mongo/migration'", `'${factoryExport}'`),
+      );
+      await writeContractFixtures(defaultMeta);
+
+      const result = await runFile('migration.ts');
+      expect(result.exitCode).toBe(0);
+      expect(JSON.parse(await readFile(join(tmpDir, 'ops.json'), 'utf-8'))).toEqual(
+        JSON.parse(
+          serializeMongoOps([
+            dataTransform('Bug.severity', {
+              check: { source: () => rawAggregate('tasks', [{ $match: filter }, { $limit: 1 }]) },
+              run: () => rawUpdateMany('tasks', filter, update, { bypassDocumentValidation: true }),
+            }),
+          ]),
+        ),
+      );
+    });
+
     it('reproduces the renameCollection operation in ops.json', async () => {
       const { renderCallsToTypeScript } = await import('../src/core/migrations/render-typescript');
       const { RenameCollectionCall } = await import('../src/core/migrations/op-factory-call');
@@ -374,6 +550,7 @@ describe('migration file E2E', () => {
         from: 'a'.repeat(64),
         to: 'b'.repeat(64),
         snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+        migrationModule: '@internal/target-mongo/migration',
       } as const;
       const tsSource = renderCallsToTypeScript(calls, meta);
       const resolvedSource = tsSource.replace(
@@ -550,13 +727,17 @@ describe('migration file E2E', () => {
       );
       const calls = [
         new CreateCollectionCall('users'),
-        new CreateIndexCall('users', [{ field: 'email', direction: 1 as const }], { unique: true }),
+        new CreateIndexCall('users', [{ field: 'email', direction: 1 as const }], {
+          name: 'email_1',
+          unique: true,
+        }),
       ];
 
       const directRunMeta = {
         from: '0'.repeat(64),
         to: '1'.repeat(64),
         snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+        migrationModule: '@internal/target-mongo/migration',
       } as const;
       const migrationSource = renderCallsToTypeScript(calls, directRunMeta).replace(
         "'@internal/target-mongo/migration'",

@@ -32,6 +32,8 @@ export type {
   ExtractMongoFieldOutputTypes,
   ExtractMongoTypeMaps,
   InferModelRow,
+  MongoCodecInput,
+  MongoCodecTypesBase,
   MongoContract,
   MongoContractWithTypeMaps,
   MongoIndexAuthoringInput,
@@ -57,6 +59,7 @@ export type {
 } from '../contract-types';
 export type { MongoContractAccessors, MongoContractView } from '../contract-view';
 export { buildMongoContractView } from '../contract-view';
+export { defaultMongoIndexName } from '../default-index-name';
 export {
   defaultMongoDomainNamespaceId,
   defaultMongoStorageNamespaceId,
@@ -118,6 +121,14 @@ export type { MongoValueObjectInput } from '../ir/mongo-value-object';
 export { MongoValueObject } from '../ir/mongo-value-object';
 export type { MongoValueSetInput } from '../ir/mongo-value-set';
 export { MongoValueSet } from '../ir/mongo-value-set';
+export type { MongoModelReference } from '../model-collections';
+export { collectionOfModel, embeddingModelOf, modelFieldStoredAs } from '../model-collections';
+export type { SelectedVariant } from '../model-documents';
+export {
+  otherModelsReached,
+  selectedVariantOf,
+  variantFilter,
+} from '../model-documents';
 export { mongoValueSetsOf } from '../mongo-enum';
 export { modelAndBasesOf, mongoModelsOf } from '../mongo-models';
 export type {
@@ -125,6 +136,7 @@ export type {
   PolymorphicIndexScope,
 } from '../polymorphic-index-scope';
 export { applyPolymorphicScopeToMongoIndex } from '../polymorphic-index-scope';
+export { modelKey, recursiveGroupsOf, valueObjectKey } from '../recursive-groups';
 export type { MongoToOneRelationFields } from '../relation-fields';
 export { isEmbedRelation, resolveMongoToOneRelationFields } from '../relation-fields';
 export {
@@ -144,5 +156,17 @@ export {
   validatorEnumMemberRefusalOf,
   validatorEnumRefusalOf,
 } from '../validator-enum-refusal';
-export type { ValidatorRootShape, ValidatorShape } from '../validator-shapes';
-export { validatorFieldNamesOf, validatorRootShapesOf } from '../validator-shapes';
+export type {
+  SameKindOfDocument,
+  ValidatorDiscriminator,
+  ValidatorDocumentShape,
+  ValidatorRootShape,
+  ValidatorShape,
+} from '../validator-shapes';
+export {
+  propertyBsonTypesOf,
+  sameKindOfDocumentIn,
+  validatorDocumentShapesOf,
+  validatorFieldNamesOf,
+  validatorRootShapesOf,
+} from '../validator-shapes';

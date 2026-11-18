@@ -3,7 +3,15 @@ import type { FamilyPackRef, TargetPackRef } from '@internal/framework-component
 import { type SqlStorage, StorageTable } from '@internal/sql-contract/types';
 import { validateSqlContractFully } from '@internal/sql-contract/validators';
 import { defineContract } from '@internal/sql-contract-ts/contract-builder';
-import { type ParamRef, RawQueryAst } from '@internal/sql-relational-core/ast';
+import {
+  DeleteAst,
+  InsertAst,
+  type ParamRef,
+  RawExpr,
+  RawQueryAst,
+  SelectAst,
+  UpdateAst,
+} from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../../1-core/contract/test/test-support';
@@ -126,6 +134,125 @@ describe('contract-bound raw statements', () => {
     const ast = plan.ast as RawQueryAst;
     expect(ast.parts.some((part) => part instanceof RawQueryAst)).toBe(false);
     expect(ast.collectParamRefs()).toHaveLength(1);
+  });
+});
+
+describe('a builder query interpolated into a raw template', () => {
+  it('embeds the query select AST at the interpolation point', () => {
+    const invitees = db()
+      .public.users.select('id', 'email')
+      .where((f, fns) => fns.eq(f.invited_by_id, 5));
+
+    const plan = rawLane().sql`INSERT INTO archive (id, email) ${invitees} RETURNING id`
+      .returnsRow({ id: 'pg/int4@1' })
+      .build();
+
+    const ast = plan.ast as RawQueryAst;
+    expect(ast.parts).toEqual([
+      'INSERT INTO archive (id, email) ',
+      invitees.buildAst(),
+      ' RETURNING id',
+    ]);
+    expect(ast.parts[1]).toBeInstanceOf(SelectAst);
+  });
+
+  it('orders params before, inside and after the embedded query as written', () => {
+    const invitees = db()
+      .public.users.select('id')
+      .where((f, fns) => fns.eq(f.invited_by_id, 5));
+
+    const plan = rawLane()
+      .sql`WITH x AS (SELECT ${1}) INSERT INTO archive (id) ${invitees} WHERE id > ${9}`
+      .returnsRow({ id: 'pg/int4@1' })
+      .build();
+
+    expect(
+      (plan.ast as RawQueryAst).collectParamRefs().map((ref) => (ref as ParamRef).value),
+    ).toEqual([1, 5, 9]);
+  });
+
+  it('embeds a grouped query', () => {
+    const counted = db().public.posts.select('user_id').groupBy('user_id');
+
+    const plan = rawLane().sql`WITH counted AS (${counted}) SELECT count(*) AS n FROM counted`
+      .returnsRow({ n: 'pg/int8@1' })
+      .build();
+
+    expect((plan.ast as RawQueryAst).parts[1]).toBeInstanceOf(SelectAst);
+  });
+
+  it('embeds a builder query into fns.raw', () => {
+    const d = db();
+    const posts = d.public.posts.select('id').where((f, fns) => fns.gt(f.views, 100));
+
+    const query = d.public.users
+      .select('id')
+      .where((_f, fns) => fns.raw`EXISTS (${posts})`.returns('pg/bool@1'));
+
+    const where = query.buildAst().where;
+    expect(where).toBeInstanceOf(RawExpr);
+    expect((where as RawExpr).parts).toEqual(['EXISTS (', posts.buildAst(), ')']);
+  });
+});
+
+describe('a row-returning builder mutation interpolated into a raw template', () => {
+  it('embeds an insert AST with its params in template order', () => {
+    const insert = db()
+      .public.users.insert([{ id: 3, name: 'Ada', email: 'ada@example.com' }])
+      .returning('id');
+
+    const plan = rawLane().sql`WITH inserted AS (${insert}) SELECT id FROM inserted WHERE id > ${9}`
+      .returnsRow({ id: 'pg/int4@1' })
+      .build();
+
+    const ast = plan.ast as RawQueryAst;
+    expect(ast.parts[1]).toBeInstanceOf(InsertAst);
+    expect(ast.parts[1]).toEqual(insert.buildAst());
+    expect(ast.collectParamRefs().map((ref) => (ref as ParamRef).value)).toEqual([
+      3,
+      'Ada',
+      'ada@example.com',
+      9,
+    ]);
+  });
+
+  it('embeds an update AST with its params in template order', () => {
+    const update = db()
+      .public.users.update({ name: 'Ada' })
+      .where((f, fns) => fns.eq(f.id, 4))
+      .returning('id');
+
+    const plan = rawLane()
+      .sql`SELECT ${1} AS one; WITH updated AS (${update}) SELECT id FROM updated`
+      .returnsRow({ id: 'pg/int4@1' })
+      .build();
+
+    const ast = plan.ast as RawQueryAst;
+    expect(ast.parts[3]).toBeInstanceOf(UpdateAst);
+    expect(ast.collectParamRefs().map((ref) => (ref as ParamRef).value)).toEqual([1, 'Ada', 4]);
+  });
+
+  it('embeds a delete AST with its params in template order', () => {
+    const remove = db()
+      .public.users.delete()
+      .where((f, fns) => fns.eq(f.id, 5))
+      .returning('id');
+
+    const plan = rawLane().sql`WITH removed AS (${remove}) SELECT id FROM removed`
+      .returnsRow({ id: 'pg/int4@1' })
+      .build();
+
+    const ast = plan.ast as RawQueryAst;
+    expect(ast.parts[1]).toBeInstanceOf(DeleteAst);
+    expect(ast.collectParamRefs().map((ref) => (ref as ParamRef).value)).toEqual([5]);
+  });
+
+  it('builds the same AST from buildAst() as from build()', () => {
+    const insert = db()
+      .public.users.insert([{ id: 3, name: 'Ada', email: 'ada@example.com' }])
+      .returning('id');
+
+    expect(insert.build().ast).toEqual(insert.buildAst());
   });
 });
 

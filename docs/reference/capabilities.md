@@ -15,19 +15,26 @@ Common SQL features reported by adapters using the `sql` namespace. This is a na
 |------------|------|-------------|-----------|
 | `lateral` | boolean | Supports LATERAL joins | Stable |
 | `returning` | boolean | Supports RETURNING clauses for DML operations (INSERT, UPDATE, DELETE) | Stable |
-| `jsonAgg` | boolean | Supports JSON aggregation functions | Stable |
+| `jsonAgg` | boolean | Supports JSON aggregation functions. The ORM's one-query include needs it, with `outerReferencesInDerivedTables` and `jsonAggWithoutTruncation` (see [Capabilities that choose how includes load](#capabilities-that-choose-how-includes-load)). | Stable |
+| `outerReferencesInDerivedTables` | boolean | Resolves a reference to the outer query from inside a derived table (`FROM (SELECT …) alias`) in a subquery. The ORM's one-query include needs it, because every row include reads from such a derived table. MariaDB does not report it. | Stable |
+| `jsonAggWithoutTruncation` | boolean | When the database aggregates rows into a JSON array that is too large, the query fails or the array cannot be decoded; it never returns a shorter valid array. The ORM's one-query include needs it. MariaDB does not report it: it cuts the array with only a warning. | Stable |
 | `enums` | boolean | Supports native enum storage types | Stable |
 | `foreignKeys` | boolean | Supports FOREIGN KEY constraint DDL | Stable |
 | `checkConstraint` | boolean | Supports CHECK constraint DDL. Gates the `@@check` authoring surface: a PSL contract declaring a check against an adapter that does not report this is refused at authoring. | Stable |
 | `autoIndexesForeignKeys` | boolean | Database automatically creates indexes for foreign keys | Stable |
 | `defaultInInsert` | boolean | Supports `DEFAULT` as a value in multi-row `INSERT ... VALUES` (e.g. `INSERT INTO t (a, b) VALUES (1, DEFAULT)`). When false, the ORM splits multi-row inserts by column signature so each statement has a uniform column list. | Stable |
 | `insertOnConflictSkip` | boolean | Can skip rows that collide with a unique constraint instead of failing the statement. Gates `createAll(rows, { onConflict: 'skip' })` and the same option on `createAndCount`. | Stable |
-| `insertOnConflictWithoutTarget` | boolean | Can skip colliding rows without naming the constraint that was violated. Gates the same option when `conflictOn` is omitted. | Stable |
+| `insertOnConflictWithoutTarget` | boolean | Can skip colliding rows without naming the constraint that was violated. Gates the same option when `conflictOn` is omitted. It covers skipping only, not an upsert without conflict columns. | Stable |
+| `insertOnConflictTarget` | boolean | An insert's conflict clause applies only to the unique columns it names. MySQL's `ON DUPLICATE KEY UPDATE` fires on any unique key, so the MySQL adapter does not report it. When an adapter does not report it, the ORM sends an upsert as an insert whose update-on-conflict clause names no conflict columns, meaning any unique key; the adapter must render that clause as "any unique key" or refuse it. | Stable |
 | `forUpdate` | boolean | Can render the row-locking clause `FOR UPDATE` on a select. Gates `forUpdate()`. | Stable |
 | `forShare` | boolean | Can render `FOR SHARE` or its equivalent on a select. Gates `forShare()`. | Stable |
 | `lockOf` | boolean | Can limit a locking clause to named tables or aliases (`OF "t"`). Needed by the `of` option of the SQL builder's locking methods, and by all four ORM locking methods, which always render `OF` the model's table. | Stable |
 | `lockNowait` | boolean | Can make a locking clause fail at once on a locked row (`NOWAIT`). Gates the `nowait` option of the locking methods. | Stable |
 | `lockSkipLocked` | boolean | Can make a locking clause leave locked rows out of the result (`SKIP LOCKED`). Gates the `skipLocked` option of the locking methods. | Stable |
+
+### Capabilities that choose how includes load
+
+The ORM client loads includes with the one-query include, a correlated subquery per include that aggregates the related rows into JSON, only when the contract's `sql` group reports all three of `jsonAgg`, `outerReferencesInDerivedTables` and `jsonAggWithoutTruncation`. A key reported only in another group, such as `postgres.jsonAgg`, does not count. When any of the three is missing or `false`, the ORM client loads includes with one query per relation: it reads the parent rows, then the related rows of all those parents in one statement per include, and attaches them in memory. A very large set of parents is split: each statement carries at most 10 000 bound parameters and about 1 MiB of key values, so one include can take several statements. Every parent table in the include tree needs a primary key or a unique key with no nullable column; without one the read fails with `ORM.ROW_IDENTITY_MISSING`. There is no user switch between the two ([ADR 164](../architecture%20docs/adrs/ADR%20164%20-%20Repository%20Layer.md)). The Postgres, SQLite and MySQL adapters report all three; the MariaDB adapter reports only `jsonAgg`.
 
 ### `postgres`
 PostgreSQL-specific capabilities managed by the adapter.
@@ -62,12 +69,12 @@ SQLite-specific capabilities managed by the adapter.
 | `rtree` | boolean | Supports R*Tree spatial indexing | Stable |
 
 ### Example adapter reports
-Postgres adapters should always report `sql.lateral: true` and `sql.returning: true`. MySQL and SQLite should report those as `false` unless the adapter can prove otherwise.
+Postgres adapters should always report `sql.lateral: true` and `sql.returning: true`. The MySQL adapter reports neither.
 
 Postgres (example):
 ```json
 {
-  "sql": { "lateral": true, "returning": true, "jsonAgg": true, "enums": true, "foreignKeys": true, "checkConstraint": true, "autoIndexesForeignKeys": false },
+  "sql": { "lateral": true, "returning": true, "jsonAgg": true, "outerReferencesInDerivedTables": true, "jsonAggWithoutTruncation": true, "enums": true, "foreignKeys": true, "checkConstraint": true, "autoIndexesForeignKeys": false },
   "postgres": { "partialIndex": true, "transactionalDDL": true, "explainFormat": "json" }
 }
 ```
@@ -75,8 +82,16 @@ Postgres (example):
 MySQL (example):
 ```json
 {
-  "sql": { "lateral": false, "returning": false, "jsonAgg": false, "enums": false },
-  "mysql": { "jsonFunctions": true, "generatedColumns": true, "explainFormat": "text" }
+  "sql": {
+    "orderBy": true,
+    "limit": true,
+    "foreignKeys": true,
+    "enums": true,
+    "defaultInInsert": true,
+    "jsonAgg": true,
+    "outerReferencesInDerivedTables": true,
+    "jsonAggWithoutTruncation": true
+  }
 }
 ```
 
@@ -233,12 +248,15 @@ Canonical capability keys with descriptions, typical implementers, and ADR refer
 | sql.lateral | LATERAL join lowering | adapters that support LATERAL | ADR 065 |
 | sql.returning | RETURNING support for DML | adapters that support RETURNING | ADR 065 |
 | sql.jsonAgg | JSON aggregation support | adapters that support JSON aggregation | ADR 065 |
+| sql.outerReferencesInDerivedTables | Outer references resolve inside a derived table in a subquery | adapters whose database resolves them | — |
+| sql.jsonAggWithoutTruncation | An oversized JSON aggregate fails rather than returning a shorter array | adapters whose database never truncates silently | — |
 | sql.foreignKeys | FK constraint DDL support | adapters that support FOREIGN KEY | ADR 161 |
 | sql.checkConstraint | CHECK constraint DDL support; gates `@@check` | adapters that support CHECK | ADR 244 |
 | sql.autoIndexesForeignKeys | DB auto-indexes FKs | adapters where DB auto-creates FK indexes | ADR 161 |
 | sql.defaultInInsert | Supports DEFAULT in multi-row INSERT VALUES | adapters that support DEFAULT keyword as a value | — |
 | sql.insertOnConflictSkip | Skip rows colliding with a unique constraint; gates `onConflict: 'skip'` | adapters that can skip conflicting rows | — |
 | sql.insertOnConflictWithoutTarget | Skip colliding rows without naming the constraint | adapters that can skip without a conflict target | — |
+| sql.insertOnConflictTarget | A conflict clause applies only to the columns it names | adapters whose conflict clause can be limited to named columns | — |
 | postgres.partialIndex | Partial/filtered index support | postgres adapter | ADR 065 |
 | mysql.generatedColumns | Generated column support | mysql adapter | ADR 065 |
 | sqlite.fts5 | FTS5 support | sqlite adapter | ADR 065 |

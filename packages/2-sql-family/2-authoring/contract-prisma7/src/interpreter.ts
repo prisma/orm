@@ -99,7 +99,6 @@ import {
 import {
   composePackAdvice,
   type DatasourceExtension,
-  type DeclaringPack,
   readDatasourceExtensions,
 } from './extensions';
 import { type IndexAttribute, indexNode, parseIndexAttribute } from './indexes';
@@ -455,8 +454,8 @@ export function interpretPrisma7Documents(
       generators,
       binding: binding.extensions,
       composedExtensions: new Set(input.composedExtensions),
-      declaringPack: (extensionName) =>
-        packDeclaring(
+      declaredByPack: (extensionName) =>
+        packDeclares(
           input.composedExtensionContracts,
           binding.extensions.entityKind,
           extensionName,
@@ -965,17 +964,16 @@ function readEnumDeclaration(
   return { name: block.name, typeName, namespaceId, members, span: block.span, sourceId };
 }
 
-function packDeclaring(
+function packDeclares(
   packContracts: ReadonlyMap<string, Contract>,
   entityKind: string,
   name: string,
-): DeclaringPack | undefined {
-  for (const [packId, contract] of packContracts) {
-    for (const [namespaceId, namespace] of Object.entries(contract.storage.namespaces)) {
-      if (Object.hasOwn(namespace.entries[entityKind] ?? {}, name)) return { packId, namespaceId };
-    }
-  }
-  return undefined;
+): boolean {
+  return [...packContracts.values()].some((contract) =>
+    Object.values(contract.storage.namespaces).some((namespace) =>
+      Object.hasOwn(namespace.entries[entityKind] ?? {}, name),
+    ),
+  );
 }
 
 function entityContext(

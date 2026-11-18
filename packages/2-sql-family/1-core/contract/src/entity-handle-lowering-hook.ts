@@ -110,7 +110,7 @@ export function providesPslEntityPlacement(output: unknown): output is SqlPslEnt
 }
 
 /**
- * An entity-type output whose entities are unique by name across the whole contract, not per namespace: the PSL interpreter refuses one name declared in two namespaces.
+ * An entity-type output whose entities are unique by name across the whole contract, not per namespace: the PSL interpreter refuses one name declared in two namespaces. An extension pack declares such entities in the unbound namespace, and only one contract space may declare each.
  */
 export interface SqlNameUniqueAcrossNamespacesOutput {
   readonly nameUniqueAcrossNamespaces: true;

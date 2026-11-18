@@ -159,7 +159,7 @@ function discriminatorFieldError(
       const { dataType } = refusal.refusal;
       return contractError(
         'CONTRACT.ARGUMENT_INVALID',
-        `${field} must be text, such as field.string(), but its data type is ${dataType === undefined ? 'not a scalar' : `"${dataType}"`}.`,
+        `${field} must be text, such as field.scalar(type.String()), but its data type is ${dataType === undefined ? 'not a scalar' : `"${dataType}"`}.`,
         { meta: { ...meta, dataType, reason: 'discriminator-not-text' } },
       );
     }
@@ -358,6 +358,21 @@ export function refusalError(refusal: BuildRefusal): StructuredError {
             collection: refusal.collection,
             first: refusal.firstModel,
             second: refusal.key.model,
+          },
+        },
+      );
+    case 'indexNameDuplicate':
+      return contractError(
+        'CONTRACT.NAME_DUPLICATE',
+        `Collection "${refusal.collection}" has two indexes named "${refusal.name}": index ${refusal.firstPosition} of model "${refusal.firstModel}" and index ${refusal.key.position} of model "${refusal.key.model}". An index without a name is named after its keys and directions. Give one of them another name with the index option name.`,
+        {
+          meta: {
+            kind: 'index',
+            name: refusal.name,
+            collection: refusal.collection,
+            first: refusal.firstModel,
+            second: refusal.key.model,
+            reason: 'index-name-duplicate',
           },
         },
       );

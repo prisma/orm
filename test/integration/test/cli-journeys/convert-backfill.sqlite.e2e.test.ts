@@ -295,7 +295,7 @@ withTempDir(({ createTempDir }) => {
           .nextActions.map(({ label }) => label)
           .join('\n');
         expect(unconvertedAdvice).toContain(
-          `\`${relative(ctx.testDir, migrationTs)}\` has no conversion for field "User.age": write one there, run \`node ${relative(ctx.testDir, migrationTs)}`,
+          `\`${relative(ctx.testDir, migrationTs)}\` changes field "User.age" with the database's cast, which met a value it cannot cast: replace that cast with your own conversion of the values there, run \`node ${relative(ctx.testDir, migrationTs)}`,
         );
         expect(query(ctx.dbPath, `SELECT id, age FROM "User" ORDER BY id`)).toEqual([
           { id: 1, age: 'ten' },
@@ -439,7 +439,7 @@ withTempDir(({ createTempDir }) => {
         );
         expect(castFailed).not.toContain('The conversion of field');
         expect(castFailed).toContain(
-          'has no conversion for field "User.nickname": write one there',
+          'changes field "User.nickname" with the database\'s cast, which met a value it cannot cast: replace that cast with your own conversion of the values there',
         );
 
         exec(
@@ -978,7 +978,7 @@ withTempDir(({ createTempDir }) => {
         const added = await runDbUpdate(ctx);
         expect(added.exitCode, `db update name: ${added.stdout}\n${added.stderr}`).toBe(0);
         expect(`${added.stdout}${added.stderr}`).toContain(
-          `Existing rows got '' in field "User.name". To choose the value, plan a migration with prisma-test migration plan --backfill User.name instead.`,
+          `Field "User.name" got the temporary value '' where existing data has none. To choose the value, plan a migration with prisma-test migration plan --backfill User.name instead.`,
         );
         expect(query(ctx.dbPath, `SELECT id, name FROM "User" ORDER BY id`)).toEqual([
           { id: 1, name: '' },

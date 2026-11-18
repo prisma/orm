@@ -14,7 +14,6 @@ import { type EnumTypeHandle, resolveToOneRelationNullable } from '@internal/con
 import type {
   AuthoringContributions,
   AuthoringEntityContext,
-  AuthoringTypeConstructorDescriptor,
   DataTypeSupport,
   ParsedPslExtensionBlock,
   WrittenValue,
@@ -43,6 +42,7 @@ import {
   type IndexNode,
   type ModelNode,
   mergeRedundantIndexes,
+  nameIndexes,
   type RelationNode,
   type RemovedIndex,
   type ValueObjectNode,
@@ -60,6 +60,7 @@ import type {
   ParsedWrittenScalar,
   PslSpan,
   Resolution,
+  ResolvedAttribute,
   SymbolTable,
 } from '@internal/psl-parser';
 import {
@@ -69,7 +70,6 @@ import {
   diagnosticSource,
   interpretExtensionBlocks,
   isContributedTypeChoice,
-  mapPslDiagnostics,
   nodePslSpan,
   type PslDiagnosticCollector,
   refuseRepeatedTypeAliasAttributes,
@@ -99,6 +99,7 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
+import { type DeprecatedTypeNameWarner, deprecatedTypeNameWarner } from './deprecated-type-names';
 import {
   interpretFieldAttribute,
   interpretModelAttribute,
@@ -114,6 +115,7 @@ import {
   type EnumSite,
   type FieldSite,
   fieldSiteKey,
+  type IndexSite,
   type ModelSites,
   refusalDiagnostic,
   type SchemaSites,
@@ -145,43 +147,12 @@ export interface InterpretPslDocumentToMongoContractInput {
   readonly authoringContributions?: AuthoringContributions;
   /** The target's default codec ids for an `enum` block that omits `@@type`. */
   readonly enumInferenceCodecs?: { readonly text: string; readonly int: string };
-  /** Receives a warning for each field typed with a deprecated scalar name. */
+  /** Receives a warning for each field, value object member or type alias typed with a deprecated scalar name. */
   readonly reportWarning?: (diagnostic: ContractSourceDiagnostic) => void;
 }
 
-/**
- * Reports `PSL_DEPRECATED_SCALAR_NAME` at the type of a field whose scalar name is a deprecated alias, naming the replacement. The alias resolves to the same codec, so the contract does not change.
- */
-function deprecatedScalarWarner(input: {
-  readonly sources: PslSources;
-  readonly reportWarning: ((diagnostic: ContractSourceDiagnostic) => void) | undefined;
-}): (field: FieldSymbol, descriptor: AuthoringTypeConstructorDescriptor) => void {
-  const { reportWarning } = input;
-  if (reportWarning === undefined) return () => {};
-  return (field, descriptor) => {
-    if (descriptor.deprecated === undefined) {
-      return;
-    }
-    const typeNode = field.node.typeAnnotation()?.name()?.syntax ?? field.node.syntax;
-    const [warning] = mapPslDiagnostics(
-      [
-        {
-          code: 'PSL_DEPRECATED_SCALAR_NAME',
-          message: `Scalar type "${field.typeName}" is deprecated and will be removed; use "${descriptor.deprecated.replacement}".`,
-          ...diagnosticSource(input.sources, typeNode).at(),
-        },
-      ],
-      input.sources,
-    );
-    if (warning !== undefined) reportWarning({ ...warning, severity: 'warning' });
-  };
-}
-
 interface ScalarNames {
-  readonly warnDeprecated: (
-    field: FieldSymbol,
-    descriptor: AuthoringTypeConstructorDescriptor,
-  ) => void;
+  readonly warnDeprecated: DeprecatedTypeNameWarner;
 }
 
 /** What resolving a field's type reports to. */
@@ -517,6 +488,7 @@ function buildNormalIndex(
   return {
     fields: resolved.fields,
     options: indexOptions({
+      ...ifDefined('name', parsed.map),
       ...(unique && { unique: true }),
       ...ifDefined('sparse', parsed.sparse),
       ...ifDefined('expireAfterSeconds', parsed.expireAfterSeconds),
@@ -546,6 +518,7 @@ function buildTextIndex(parsed: TextIndexArgs, ctx: IndexBuildContext): IndexNod
   return {
     fields: resolved.fields,
     options: indexOptions({
+      ...ifDefined('name', parsed.map),
       ...ifDefined('partialFilterExpression', parsed.filter),
       ...ifDefined('collation', collation),
       ...ifDefined('weights', parsed.weights),
@@ -596,12 +569,13 @@ function collectIndexes(
   sources: PslSources,
   binder: Binder,
   diagnostics: PslDiagnosticCollector,
-): (Site & { readonly index: IndexNode })[] {
-  const indexes: (Site & { readonly index: IndexNode })[] = [];
+): IndexSite[] {
+  const indexes: IndexSite[] = [];
   for (const field of Object.values(pslModel.fields)) {
     if (fieldTypeResolution(field, binder)?.kind === 'model') continue;
-    const uniqueNode = field.attributes.find((attr) => attr.name === 'unique')?.node;
-    if (!uniqueNode) continue;
+    const uniqueAttribute = field.attributes.find((attr) => attr.name === 'unique');
+    const uniqueNode = uniqueAttribute?.node;
+    if (!uniqueAttribute || !uniqueNode) continue;
     const unique = interpretFieldAttribute({
       symbols: specContext.symbols,
       node: uniqueNode,
@@ -622,10 +596,20 @@ function collectIndexes(
       diagnostics,
     });
     if (unique === undefined) continue;
+    const source = diagnosticSource(sources, uniqueNode.syntax);
+    const span = nodePslSpan(uniqueNode.syntax, sources);
+    if (unique.map === '') {
+      reportEmptyIndexMap(diagnostics, source, span);
+      continue;
+    }
     indexes.push({
-      index: { fields: { [field.name]: 1 }, options: { unique: true } },
-      source: diagnosticSource(sources, uniqueNode.syntax),
-      span: nodePslSpan(uniqueNode.syntax, sources),
+      index: {
+        fields: { [field.name]: 1 },
+        options: { unique: true, ...ifDefined('name', unique.map) },
+      },
+      source,
+      span,
+      label: `${attributeText('@', uniqueAttribute)} on field "${pslModel.name}.${field.name}"`,
     });
   }
 
@@ -674,9 +658,40 @@ function collectIndexes(
       if (!parsed) continue;
       index = buildNormalIndex(parsed, unique, ctx);
     }
-    if (index !== undefined) indexes.push({ index, source, span: attr.span });
+    if (index === undefined) continue;
+    if (index.options?.name === '') {
+      reportEmptyIndexMap(diagnostics, source, attr.span);
+      continue;
+    }
+    indexes.push({
+      index,
+      source,
+      span: attr.span,
+      label: `${attributeText('@@', attr)} on model "${pslModel.name}"`,
+    });
   }
   return indexes;
+}
+
+/** An attribute as the schema writes it, with its arguments as written. */
+function attributeText(prefix: '@' | '@@', attribute: ResolvedAttribute): string {
+  if (attribute.args.length === 0) return `${prefix}${attribute.name}`;
+  const args = attribute.args.map((arg) =>
+    arg.kind === 'named' ? `${arg.name}: ${arg.value}` : arg.value,
+  );
+  return `${prefix}${attribute.name}(${args.join(', ')})`;
+}
+
+function reportEmptyIndexMap(
+  diagnostics: PslDiagnosticCollector,
+  source: DiagnosticSource,
+  span: PslSpan,
+): void {
+  diagnostics.push({
+    code: 'PSL_INVALID_INDEX',
+    message: 'The `map` argument of an index cannot be an empty string.',
+    ...source.at(span),
+  });
 }
 
 function fieldTypeResolution(field: FieldSymbol, binder: Binder): Resolution | undefined {
@@ -901,6 +916,7 @@ function resolveNonRelationField(
     invariant(typeAlias !== undefined, 'A contributed type alias always resolves');
     return fieldOfTypeAlias(field, typeAlias);
   }
+  scalarNames.warnDeprecated(field, path.join('.'), descriptor);
   if (call === undefined && !isBareTypeConstructor(descriptor)) {
     reportTypeConstructorNotCalled({
       entityLabel,
@@ -913,14 +929,24 @@ function resolveNonRelationField(
     return undefined;
   }
 
-  if (call === undefined) scalarNames.warnDeprecated(field, descriptor);
-  return {
-    field: {
-      type: scalarTypeOfConstructor(descriptor, call),
-      nullable: field.optional,
-      many: field.list ? { elementNullable: field.elementOptional } : false,
-    },
-  };
+  const type = scalarTypeOfConstructor({
+    descriptor,
+    call,
+    codecLookup,
+    diagnostics: context.diagnostics,
+    source,
+    entityLabel,
+    dataTypes: context.dataTypes,
+  });
+  return type === undefined
+    ? undefined
+    : {
+        field: {
+          type,
+          nullable: field.optional,
+          many: field.list ? { elementNullable: field.elementOptional } : false,
+        },
+      };
 }
 
 function processEnumDeclarations(input: {
@@ -1071,9 +1097,8 @@ export function interpretPslDocumentToMongoContract(
     diagnostics,
     dataTypes: input.dataTypes,
   };
-  const scalarNames: ScalarNames = {
-    warnDeprecated: deprecatedScalarWarner({ sources, reportWarning: input.reportWarning }),
-  };
+  const warnDeprecated = deprecatedTypeNameWarner({ sources, reportWarning: input.reportWarning });
+  const scalarNames: ScalarNames = { warnDeprecated };
   const { binder } = input;
   const { parsedBlocks, diagnostics: blockDiagnostics } = interpretExtensionBlocks({
     symbolTable,
@@ -1164,6 +1189,7 @@ export function interpretPslDocumentToMongoContract(
     dataTypes: input.dataTypes,
     codecLookup: input.codecLookup,
     authoringTypes: input.authoringContributions?.type,
+    warnDeprecated,
   });
 
   const polymorphism = collectPolymorphismDeclarations({
@@ -1462,7 +1488,7 @@ export function interpretPslDocumentToMongoContract(
     warnings: undefined,
   };
   const { definition, removedIndexes } = mergeRedundantIndexes(
-    written,
+    nameIndexes(written),
     codecLookup,
     input.dataTypes,
   );

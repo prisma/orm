@@ -46,7 +46,12 @@
     },
     "record": {
       "dependsOn": ["build"],
-      "inputs": ["scripts/record.ts", "recordings/config.ts", "recordings/fixtures/**"],
+      "inputs": [
+        "scripts/record.ts",
+        "recordings/config.ts",
+        "recordings/fixtures/**",
+        "$TURBO_ROOT$/test/integration/test/fixtures/cli/cli-e2e-test-app/fixtures/recordings/**"
+      ],
       "outputs": ["recordings/svgs/**", "recordings/ascii/**"]
     },
     "clean": {
@@ -65,6 +70,7 @@
         "@prisma/orm-target-postgres#build",
         "@prisma/orm-target-sqlite#build",
         "@prisma/orm-target-mysql#build",
+        "@prisma/orm-target-mariadb#build",
         "@prisma/orm-target-mongo#build"
       ],
       "inputs": ["test/**", "dist/**", "vitest.config.ts"]
@@ -75,6 +81,14 @@
     },
     "@prisma/orm-target-sqlite#test": {
       "dependsOn": ["build", "^build", "@prisma/orm-sqlite#build"],
+      "inputs": ["test/**", "dist/**", "vitest.config.ts"]
+    },
+    "@prisma/orm-target-mysql#test": {
+      "dependsOn": ["build", "^build", "@prisma/orm-mysql#build"],
+      "inputs": ["test/**", "dist/**", "vitest.config.ts"]
+    },
+    "@prisma/orm-target-mongo#test": {
+      "dependsOn": ["build", "^build", "@prisma/orm-mongo#build"],
       "inputs": ["test/**", "dist/**", "vitest.config.ts"]
     }
   }

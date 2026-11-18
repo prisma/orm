@@ -48,7 +48,15 @@ describe('forRole(binding)', () => {
     }).toEqual({
       rows: [{ id: 1 }],
       stats: { affectedRows: 2 },
-      connectionSql: [...roleSql, 'RESET ALL', ...roleSql, expect.any(String), 'RESET ALL'],
+      connectionSql: [
+        ...roleSql,
+        'RESET ALL',
+        'RESET ROLE',
+        ...roleSql,
+        expect.any(String),
+        'RESET ALL',
+        'RESET ROLE',
+      ],
       released: 2,
       driverQueried: 0,
     });
@@ -65,7 +73,7 @@ describe('forRole(binding)', () => {
       committed: driver.connection.transaction.commit.mock.calls.length,
       released: driver.connection.release.mock.calls.length,
     }).toEqual({
-      connectionSql: [...roleSql, 'RESET ALL'],
+      connectionSql: [...roleSql, 'RESET ALL', 'RESET ROLE'],
       transactionSql: ['select 1'],
       committed: 1,
       released: 1,
@@ -83,6 +91,7 @@ describe('forRole(binding)', () => {
       ...roleSql,
       'select 1',
       'RESET ALL',
+      'RESET ROLE',
     ]);
   });
 });
@@ -155,7 +164,7 @@ describe('forRole(binding) after close()', () => {
       }).toEqual({
         closedWhileOpen: false,
         transactionSql: ['select 1'],
-        lastConnectionSql: 'RESET ALL',
+        lastConnectionSql: 'RESET ROLE',
         released: 1,
         destroyed: 0,
         driverClosed: 1,

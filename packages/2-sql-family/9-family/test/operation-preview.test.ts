@@ -122,6 +122,7 @@ describe('SqlControlFamilyInstance OperationPreviewCapable', () => {
         defaultFunctionPrintersByGenerator: new Map(),
         componentIdsByGenerator: new Map(),
       },
+      authoringContributions: { entityTypes: {} },
       // biome-ignore lint/suspicious/noExplicitAny: minimal stub
     } as any;
     return sqlFamilyDescriptor.create(stack);

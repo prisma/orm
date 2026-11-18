@@ -30,6 +30,7 @@ function planWith(
   return {
     dataLoss: losses.map((loss) => ({ loss: 'drop', ...loss, subject: ratio })),
     accessChanges: [],
+    temporaryValues: [],
   };
 }
 
@@ -80,7 +81,7 @@ describe('a rename typed at the prompt', () => {
     expect(asked).toEqual([
       ['Drop column "ratio" from "T" would lose the values of field "T.ratio".'],
       [
-        'Alter type of "T"."ratio2" to int4 would change the type of field "T.ratio" and can change or lose its values.',
+        'Alter type of "T"."ratio2" to int4 would change the type of field "T.ratio" and can change or lose its values. --convert writes a conversion for you to fill in; --delete keeps the field and lets the database cast its values, which can change or lose some.',
       ],
     ]);
   });
@@ -106,7 +107,11 @@ describe('questions about storage when the origin contract is unknown', () => {
       loss: 'drop' as const,
     });
     await askPlanQuestions({
-      plan: { dataLoss: [storage('Legacy', 0), storage('Profile', 1)], accessChanges: [] },
+      plan: {
+        dataLoss: [storage('Legacy', 0), storage('Profile', 1)],
+        accessChanges: [],
+        temporaryValues: [],
+      },
       askAccess: false,
       canConvert: true,
       statements: [],
@@ -119,7 +124,7 @@ describe('questions about storage when the origin contract is unknown', () => {
         asked.push(...questions.map(({ question }) => question));
         return questions.map(({ subject }) => ({ verb: 'delete', text: subject }));
       },
-      replan: async () => ok({ dataLoss: [], accessChanges: [] }),
+      replan: async () => ok({ dataLoss: [], accessChanges: [], temporaryValues: [] }),
     });
 
     expect(asked).toEqual([
@@ -175,6 +180,7 @@ describe('questions about access', () => {
             widens: false,
           },
         ],
+        temporaryValues: [],
       },
       askAccess: true,
       canConvert: false,
@@ -191,7 +197,7 @@ describe('questions about access', () => {
           text: subject,
         }));
       },
-      replan: async () => ok({ dataLoss: [], accessChanges: [] }),
+      replan: async () => ok({ dataLoss: [], accessChanges: [], temporaryValues: [] }),
     });
 
     expect(subjects).toEqual(['finance.Invoice.number', 'finance.Invoice']);
@@ -217,6 +223,7 @@ describe('questions about access', () => {
             widens: true,
           },
         ],
+        temporaryValues: [],
       },
       askAccess: true,
       canConvert: false,
@@ -230,7 +237,7 @@ describe('questions about access', () => {
         asked.push(...questions.map(({ question }) => question));
         return questions.map(({ subject }) => ({ verb: 'allow', text: subject }));
       },
-      replan: async () => ok({ dataLoss: [], accessChanges: [] }),
+      replan: async () => ok({ dataLoss: [], accessChanges: [], temporaryValues: [] }),
     });
 
     expect(asked).toEqual([
@@ -259,6 +266,7 @@ describe('allow statements given as pre-answers', () => {
       { operationIndex: 0, label: 'Drop RLS policy "readers" on "T"', subject: t, widens: false },
       { operationIndex: 1, label: 'Disable row-level security on "T"', subject: t, widens: true },
     ],
+    temporaryValues: [],
   };
   const ask = (preAnswers: readonly { verb: 'allow'; text: string }[]) => {
     const asked: string[] = [];
@@ -276,7 +284,7 @@ describe('allow statements given as pre-answers', () => {
         asked.push(...questions.map(({ question }) => question));
         return questions.map(({ subject }) => ({ verb: 'allow', text: subject }));
       },
-      replan: async () => ok({ dataLoss: [], accessChanges: [] }),
+      replan: async () => ok({ dataLoss: [], accessChanges: [], temporaryValues: [] }),
     });
     return { asked, result };
   };
@@ -323,6 +331,7 @@ describe('an access change consented before a typed rename', () => {
       plan: {
         dataLoss: [{ ...dropRatio, operationIndex: 0, subject: ratio, loss: 'drop' }],
         accessChanges: [{ ...policyDrop, operationIndex: 1 }],
+        temporaryValues: [],
       },
       askAccess: true,
       canConvert: false,
@@ -341,7 +350,11 @@ describe('an access change consented before a typed rename', () => {
         );
       },
       replan: async () =>
-        ok({ dataLoss: [], accessChanges: [{ ...policyDrop, operationIndex: 3 }] }),
+        ok({
+          dataLoss: [],
+          accessChanges: [{ ...policyDrop, operationIndex: 3 }],
+          temporaryValues: [],
+        }),
     });
 
     expect(rounds).toBe(1);
@@ -390,7 +403,7 @@ describe('a convert typed at the prompt', () => {
   }
 
   it('plans again with the convert, and returns it among the statements', async () => {
-    const { replans, result } = ask({ dataLoss: [], accessChanges: [] });
+    const { replans, result } = ask({ dataLoss: [], accessChanges: [], temporaryValues: [] });
 
     const outcome = await result;
     expect({ replans, statements: outcome.ok && outcome.value.statements }).toEqual({
@@ -422,7 +435,7 @@ describe('a delete that answers a type change', () => {
       originKnown: true,
       destination,
       answer: async () => [],
-      replan: async () => ok({ dataLoss: [], accessChanges: [] }),
+      replan: async () => ok({ dataLoss: [], accessChanges: [], temporaryValues: [] }),
     });
 
     expect(result.ok && result.value.consented.map(({ verb, loss }) => ({ verb, loss }))).toEqual([

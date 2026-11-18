@@ -35,7 +35,11 @@ function databaseWith(installed: Readonly<Record<string, string>>): PostgresData
     roles: [],
     extensions: Object.entries(installed).map(
       ([name, schemaName]) =>
-        new PostgresExtensionSchemaNode({ name, schemaName, control: undefined }),
+        new PostgresExtensionSchemaNode({
+          name,
+          location: { kind: 'installed', schemaName, searchPath: ['pg_catalog', 'public'] },
+          control: undefined,
+        }),
     ),
     existingSchemas: ['public'],
     pgVersion: 'unknown',

@@ -1,7 +1,7 @@
 import mongoFamilyPack from '@internal/family-mongo/pack';
 import mongoTargetPack from '@internal/target-mongo/pack';
 import { expectTypeOf } from 'vitest';
-import { defineContract, field, model } from '../../src/exports/contract-builder';
+import { defineContract, field, model, type } from '../../src/exports/contract-builder';
 
 type SoleNamespaceModels<
   T extends { domain: { namespaces: Record<string, { models: unknown }> } },
@@ -21,17 +21,23 @@ expectTypeOf(result.targetFamily).toEqualTypeOf<'mongo'>();
 // Model-shape inference flows through the return type (definition form)
 const withModel = defineContract({
   models: {
-    User: model('User', { fields: { id: field.objectId() } }),
+    User: model('User', { fields: { id: field.scalar(type.ObjectId()) } }),
   },
 });
 expectTypeOf(withModel.target).toEqualTypeOf<'mongo'>();
 expectTypeOf<SoleNamespaceModels<typeof withModel>['User']>().not.toBeNever();
 
 // Model-shape inference flows through the return type (factory form)
-const withFactory = defineContract({}, ({ model: m, field: f }) => ({
+const withFactory = defineContract({}, ({ model: m, field: f, type: t }) => ({
   models: {
-    Post: m('Post', { fields: { id: f.objectId() } }),
+    Post: m('Post', { fields: { id: f.scalar(t.ObjectId()) } }),
   },
 }));
 expectTypeOf(withFactory.target).toEqualTypeOf<'mongo'>();
 expectTypeOf<SoleNamespaceModels<typeof withFactory>['Post']>().not.toBeNever();
+
+// A deprecated PSL scalar name is a PSL name only; the convenience types have helpers
+expectTypeOf(type).not.toHaveProperty('Int64');
+expectTypeOf(type).toHaveProperty('Int');
+expectTypeOf(type).toHaveProperty('Float');
+expectTypeOf(type).toHaveProperty('Boolean');

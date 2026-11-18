@@ -20,6 +20,7 @@ import {
 } from '../../utils/contract-ref-forms';
 import { previewBlockHeader } from '../../utils/formatters/migrations';
 import { runCommandAction } from '../../utils/next-actions';
+import { plannerWarningText } from '../../utils/planner-warning-text';
 import {
   type CliInvocation,
   cliCommand,
@@ -32,13 +33,7 @@ import { normalizeError } from '../normalize-error';
 import { promptPlanQuestions } from '../plan-question-prompt';
 import { appliedStatementBlocks } from '../statement-blocks';
 import { migrationPlanStatementVerbs } from '../statement-verbs';
-import {
-  appMigrationsDirFor,
-  baseDirFor,
-  contractPathFor,
-  displayPath,
-  migrationsDirFor,
-} from './paths';
+import { appMigrationsDirFor, contractPathFor, displayPath, migrationsDirFor } from './paths';
 
 function hashRow(label: string, hash: string | null): { label: string; value: Text } {
   return {
@@ -164,13 +159,16 @@ function temporaryValueBlocks(result: MigrationPlanResult): readonly Block[] {
     ({ field, value }): Block => ({
       kind: 'summary',
       status: 'warn',
-      text: `Existing rows get ${value} in field "${field}". To choose the value, plan again with ${statementFlag({ verb: 'backfill', text: field })}.`,
+      text: `Field "${field}" gets the temporary value ${value} where existing data has none. To choose the value, plan again with ${statementFlag({ verb: 'backfill', text: field })}.`,
     }),
   );
 }
 
 function warningBlocks(result: MigrationPlanResult): readonly Block[] {
-  return (result.warnings ?? []).map((text): Block => ({ kind: 'summary', status: 'warn', text }));
+  return [
+    ...(result.warnings ?? []),
+    ...(result.plannerWarnings ?? []).map(plannerWarningText),
+  ].map((text): Block => ({ kind: 'summary', status: 'warn', text }));
 }
 
 function planBlocks(result: MigrationPlanResult, migrationsRelative: string): readonly Block[] {
@@ -354,7 +352,6 @@ export function createMigrationPlanCommand(createClient: CreateControlClient) {
         {
           config: ctx.config,
           cwd: ctx.cwd,
-          projectDir: baseDirFor(ctx.config),
           ...ifDefined('configPath', ctx.configPath),
           ...ifDefined('name', args.flags.name),
           ...ifDefined('from', args.flags.from),

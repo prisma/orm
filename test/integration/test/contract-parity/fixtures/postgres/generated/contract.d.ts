@@ -4,27 +4,22 @@
 import type { CodecTypes as ArktypeJsonTypes } from '@internal/extension-arktype-json/codec-types';
 import type {
   CodecTypes as PgTypes,
-  ParameterizedOutputTypesForTypeParams as PgParameterizedOutputTypes,
-} from '@internal/target-postgres/codec-types';
-import type { QueryOperationTypes as PgTargetQueryOps } from '@internal/target-postgres/operation-types';
-
-import type {
   ColumnTypesFromStorage,
-  ContractWithTypeMaps,
-  RelationKeys,
-  TypeMaps as TypeMapsType,
-} from '@internal/sql-contract/types';
-import type {
   Contract as ContractType,
+  ContractWithTypeMaps,
   ExecutionHashBase,
   FieldTypesFromDomain,
   NamespaceId,
+  ParameterizedOutputTypesForTypeParams as PgParameterizedOutputTypes,
   ProfileHashBase,
+  QueryOperationTypes as PgTargetQueryOps,
+  RelationKeys,
   StorageHashBase,
-} from '@internal/contract/types';
+  TypeMaps as TypeMapsType,
+} from '@internal/postgres/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'4e5aa929c76c9181dd640f59692e6743a0626b5ab9023a02e5960ec96509c225'>;
+  StorageHashBase<'3617e76539b0a1fbc3c24d944dca4ca185ff8417945261f87a04a99949fb3ddc'>;
 export type ExecutionHash =
   ExecutionHashBase<'4a96a7146e13898bf97aa37dba3cc7c9cae8e2599993a25be7fe3bdb78b45b9e'>;
 export type ProfileHash =
@@ -36,14 +31,14 @@ export type QueryOperationTypes = PgTargetQueryOps<CodecTypes>;
 export type AggregateTypes = {
   readonly avg: {
     readonly byCodec: {
-      readonly 'pg/float@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
       readonly 'pg/float4@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
       readonly 'pg/float8@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
-      readonly 'pg/int@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
+      readonly 'pg/float@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
       readonly 'pg/int2@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
       readonly 'pg/int4@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
       readonly 'pg/int8@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
       readonly 'pg/int8number@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
+      readonly 'pg/int@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
       readonly 'pg/interval-string@1': {
         readonly output: 'pg/interval-string@1';
         readonly nullable: true;
@@ -59,11 +54,11 @@ export type AggregateTypes = {
   };
   readonly avgDecimal: {
     readonly byCodec: {
-      readonly 'pg/int@1': { readonly output: 'pg/numeric@1'; readonly nullable: true };
       readonly 'pg/int2@1': { readonly output: 'pg/numeric@1'; readonly nullable: true };
       readonly 'pg/int4@1': { readonly output: 'pg/numeric@1'; readonly nullable: true };
       readonly 'pg/int8@1': { readonly output: 'pg/numeric@1'; readonly nullable: true };
       readonly 'pg/int8number@1': { readonly output: 'pg/numeric@1'; readonly nullable: true };
+      readonly 'pg/int@1': { readonly output: 'pg/numeric@1'; readonly nullable: true };
       readonly 'pg/numeric@1': { readonly output: 'pg/numeric@1'; readonly nullable: true };
       readonly 'pg/unboundedint@1': { readonly output: 'pg/numeric@1'; readonly nullable: true };
       readonly 'sql/int@1': { readonly output: 'pg/numeric@1'; readonly nullable: true };
@@ -88,15 +83,15 @@ export type AggregateTypes = {
         readonly nullable: true;
       };
       readonly 'pg/enum@1': { readonly output: 'pg/enum@1'; readonly nullable: true };
-      readonly 'pg/float@1': { readonly output: 'pg/float@1'; readonly nullable: true };
       readonly 'pg/float4@1': { readonly output: 'pg/float4@1'; readonly nullable: true };
       readonly 'pg/float8@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
+      readonly 'pg/float@1': { readonly output: 'pg/float@1'; readonly nullable: true };
       readonly 'pg/inet@1': { readonly output: 'pg/inet@1'; readonly nullable: true };
-      readonly 'pg/int@1': { readonly output: 'pg/int@1'; readonly nullable: true };
       readonly 'pg/int2@1': { readonly output: 'pg/int2@1'; readonly nullable: true };
       readonly 'pg/int4@1': { readonly output: 'pg/int4@1'; readonly nullable: true };
       readonly 'pg/int8@1': { readonly output: 'pg/int8@1'; readonly nullable: true };
       readonly 'pg/int8number@1': { readonly output: 'pg/int8number@1'; readonly nullable: true };
+      readonly 'pg/int@1': { readonly output: 'pg/int@1'; readonly nullable: true };
       readonly 'pg/interval-string@1': {
         readonly output: 'pg/interval-string@1';
         readonly nullable: true;
@@ -162,15 +157,15 @@ export type AggregateTypes = {
         readonly nullable: true;
       };
       readonly 'pg/enum@1': { readonly output: 'pg/enum@1'; readonly nullable: true };
-      readonly 'pg/float@1': { readonly output: 'pg/float@1'; readonly nullable: true };
       readonly 'pg/float4@1': { readonly output: 'pg/float4@1'; readonly nullable: true };
       readonly 'pg/float8@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
+      readonly 'pg/float@1': { readonly output: 'pg/float@1'; readonly nullable: true };
       readonly 'pg/inet@1': { readonly output: 'pg/inet@1'; readonly nullable: true };
-      readonly 'pg/int@1': { readonly output: 'pg/int@1'; readonly nullable: true };
       readonly 'pg/int2@1': { readonly output: 'pg/int2@1'; readonly nullable: true };
       readonly 'pg/int4@1': { readonly output: 'pg/int4@1'; readonly nullable: true };
       readonly 'pg/int8@1': { readonly output: 'pg/int8@1'; readonly nullable: true };
       readonly 'pg/int8number@1': { readonly output: 'pg/int8number@1'; readonly nullable: true };
+      readonly 'pg/int@1': { readonly output: 'pg/int@1'; readonly nullable: true };
       readonly 'pg/interval-string@1': {
         readonly output: 'pg/interval-string@1';
         readonly nullable: true;
@@ -229,14 +224,14 @@ export type AggregateTypes = {
   };
   readonly sum: {
     readonly byCodec: {
-      readonly 'pg/float@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
       readonly 'pg/float4@1': { readonly output: 'pg/float4@1'; readonly nullable: true };
       readonly 'pg/float8@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
-      readonly 'pg/int@1': { readonly output: 'pg/int8number@1'; readonly nullable: true };
+      readonly 'pg/float@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
       readonly 'pg/int2@1': { readonly output: 'pg/int8number@1'; readonly nullable: true };
       readonly 'pg/int4@1': { readonly output: 'pg/int8number@1'; readonly nullable: true };
       readonly 'pg/int8@1': { readonly output: 'pg/int8number@1'; readonly nullable: true };
       readonly 'pg/int8number@1': { readonly output: 'pg/int8number@1'; readonly nullable: true };
+      readonly 'pg/int@1': { readonly output: 'pg/int8number@1'; readonly nullable: true };
       readonly 'pg/interval-string@1': {
         readonly output: 'pg/interval-string@1';
         readonly nullable: true;
@@ -256,11 +251,11 @@ export type AggregateTypes = {
   };
   readonly sumBigInt: {
     readonly byCodec: {
-      readonly 'pg/int@1': { readonly output: 'pg/int8@1'; readonly nullable: true };
       readonly 'pg/int2@1': { readonly output: 'pg/int8@1'; readonly nullable: true };
       readonly 'pg/int4@1': { readonly output: 'pg/int8@1'; readonly nullable: true };
       readonly 'pg/int8@1': { readonly output: 'pg/unboundedint@1'; readonly nullable: true };
       readonly 'pg/int8number@1': { readonly output: 'pg/unboundedint@1'; readonly nullable: true };
+      readonly 'pg/int@1': { readonly output: 'pg/int8@1'; readonly nullable: true };
       readonly 'pg/unboundedint@1': {
         readonly output: 'pg/unboundedint@1';
         readonly nullable: true;
@@ -896,15 +891,8 @@ type ContractBase = Omit<
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
-              uniques: readonly [];
-              indexes: readonly [
-                {
-                  readonly name: 'profiles_userId_idx_a489d58a';
-                  readonly prefix: 'profiles_userId_idx';
-                  readonly columns: readonly ['userId'];
-                  readonly unique: false;
-                },
-              ];
+              uniques: readonly [{ readonly columns: readonly ['userId'] }];
+              indexes: readonly [];
               foreignKeys: readonly [
                 {
                   readonly source: {
@@ -2061,11 +2049,15 @@ type ContractBase = Omit<
       readonly forShare: true;
       readonly forUpdate: true;
       readonly insertOnConflictSkip: true;
+      readonly insertOnConflictTarget: true;
       readonly insertOnConflictWithoutTarget: true;
+      readonly jsonAgg: true;
+      readonly jsonAggWithoutTruncation: true;
       readonly lateral: true;
       readonly lockNowait: true;
       readonly lockOf: true;
       readonly lockSkipLocked: true;
+      readonly outerReferencesInDerivedTables: true;
       readonly returning: true;
       readonly scalarList: true;
     };
@@ -2076,15 +2068,6 @@ type ContractBase = Omit<
       readonly id: 'arktype-json';
       readonly kind: 'extension';
       readonly targetId: 'postgres';
-      readonly types: {
-        readonly codecTypes: {
-          readonly import: {
-            readonly alias: 'ArktypeJsonTypes';
-            readonly named: 'CodecTypes';
-            readonly package: '@internal/extension-arktype-json/codec-types';
-          };
-        };
-      };
       readonly version: '0.0.1';
     };
   };

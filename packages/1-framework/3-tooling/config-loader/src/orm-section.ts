@@ -1,4 +1,4 @@
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import { blindCast } from '@internal/utils/casts';
 import type { ConfigSection as EngineConfigSection, SectionProvenance } from '@prisma/cli-engine';
 import {
@@ -84,8 +84,9 @@ const ormSubsectionsSchema = configSchema({
   'contract?': {
     source: contractSource,
     output: ['path', '=', () => 'src/prisma/contract.json'],
+    'typesModule?': 'string',
   },
-  migrations: [{ dir: ['path', '=', () => './migrations'] }, '=', () => ({})],
+  migrations: [{ dir: ['path', '=', () => './migrations'], 'module?': 'string' }, '=', () => ({})],
   'formatter?': { 'indent?': "number.integer >= 1 | 'tab'", 'newline?': "'LF' | 'CRLF'" },
 });
 
@@ -154,6 +155,39 @@ export function descriptorRelationshipProblems(
   return problems;
 }
 
+const NAMING_ADVICE =
+  'Name the module the way a package is imported, or by a `#` import declared in the `imports` of the package that holds the generated files';
+
+function namesPathOrUrl(specifier: string): boolean {
+  const startsLikePath = /^[./\\]/.test(specifier) || specifier.includes('\\');
+  const startsWithSchemeOrDrive = /^[A-Za-z][\w+.-]*:/.test(specifier);
+  return startsLikePath || startsWithSchemeOrDrive;
+}
+
+function moduleNameProblem(member: string, module: string): string | undefined {
+  if (module === '') {
+    return `Config.${member} is empty. ${NAMING_ADVICE}`;
+  }
+  if (namesPathOrUrl(module)) {
+    return `Config.${member} names the path or URL '${module}': generated files are written into more than one folder, beside the contract and beside each migration, so a path resolves from at most one of them. ${NAMING_ADVICE}`;
+  }
+  return undefined;
+}
+
+function generatedFileModuleProblems(config: {
+  readonly contract?: { readonly typesModule?: string | undefined } | undefined;
+  readonly migrations?: { readonly module?: string | undefined } | undefined;
+}): { readonly path: readonly string[]; readonly message: string }[] {
+  const named: ReadonlyArray<readonly [readonly string[], string | undefined]> = [
+    [['contract', 'typesModule'], config.contract?.typesModule],
+    [['migrations', 'module'], config.migrations?.module],
+  ];
+  return named.flatMap(([path, module]) => {
+    const message = module === undefined ? undefined : moduleNameProblem(path.join('.'), module);
+    return message === undefined ? [] : [{ path, message }];
+  });
+}
+
 /**
  * The shape of the `orm` section of `prisma.config.ts`, declared once. The
  * CLI engine derives validation, the diagnostics naming a bad field and the
@@ -172,7 +206,11 @@ export const ormConfigSchema = ormSubsectionsSchema.narrow((config, ctx) => {
   for (const problem of problems) {
     ctx.error({ path: [...problem.path], expected: problem.expected, actual: problem.actual });
   }
-  return problems.length === 0;
+  const modulePaths = generatedFileModuleProblems(config);
+  for (const problem of modulePaths) {
+    ctx.reject(problem);
+  }
+  return problems.length === 0 && modulePaths.length === 0;
 });
 
 /**
@@ -181,9 +219,9 @@ export const ormConfigSchema = ormSubsectionsSchema.narrow((config, ctx) => {
  * handler the value: absolute paths, `migrations.dir` defaulted, `baseDir`
  * recorded.
  */
-export const ormConfigSection: EngineConfigSection<PrismaNextConfig> = blindCast<
-  EngineConfigSection<PrismaNextConfig>,
-  'the schema declares the shape PrismaNextConfig describes; descriptor generics are erased by validation'
+export const ormConfigSection: EngineConfigSection<PrismaConfig> = blindCast<
+  EngineConfigSection<PrismaConfig>,
+  'the schema declares the shape PrismaConfig describes; descriptor generics are erased by validation'
 >(defineConfigSection({ name: ORM_CONFIG_SECTION_NAME, schema: ormConfigSchema }));
 
 /**
@@ -196,7 +234,7 @@ export function validateOrmSection(
 ): ReturnType<typeof ormConfigSection.validate> {
   return blindCast<
     ReturnType<typeof ormConfigSection.validate>,
-    'the schema declares the shape PrismaNextConfig describes; descriptor generics are erased by validation'
+    'the schema declares the shape PrismaConfig describes; descriptor generics are erased by validation'
   >(validateSectionWithSchema(ORM_CONFIG_SECTION_NAME, ormConfigSchema, raw, provenance));
 }
 

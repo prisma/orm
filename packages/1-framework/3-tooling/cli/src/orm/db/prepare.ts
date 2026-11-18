@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import { castAs } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import type { CliStructuredError, Result } from '@prisma/cli-engine/protocol';
@@ -69,7 +69,7 @@ export async function readContractDocument(
 }
 
 export async function prepareMigrationRun(inputs: {
-  readonly config: PrismaNextConfig;
+  readonly config: PrismaConfig;
   readonly cwd: string;
   readonly db: string | undefined;
   readonly commandName: string;

@@ -1,13 +1,13 @@
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import { CliStructuredError, errorConfigValidation } from '@internal/errors/control';
 import { timeouts } from '@repo/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { type LoadedConfig, loadConfigForSections, requireConfigSections } from '../src/load';
 
-const config = { family: {}, target: {}, adapter: {} } as unknown as PrismaNextConfig;
+const config = { family: {}, target: {}, adapter: {} } as unknown as PrismaConfig;
 
 function loaded(diagnostics: readonly CliStructuredError[]): LoadedConfig {
   return { config, diagnostics };

@@ -280,7 +280,7 @@ describe('supabase() factory — behavioral binding via set_config', () => {
     await db.close();
   });
 
-  it('RESET ALL is sent after the stream drains', async () => {
+  it('RESET ALL and RESET ROLE are sent after the stream drains', async () => {
     const fakeClient = makeFakeClient();
     poolConnectSpy().mockResolvedValue(fakeClient);
 
@@ -297,7 +297,7 @@ describe('supabase() factory — behavioral binding via set_config', () => {
       .toArray();
 
     const sqlsSeen = fakeClient.queryCalls.map((c) => c.sql);
-    expect(sqlsSeen[sqlsSeen.length - 1]).toBe('RESET ALL');
+    expect(sqlsSeen[sqlsSeen.length - 1]).toBe('RESET ROLE');
 
     await db.close();
   });
@@ -318,7 +318,7 @@ describe('supabase() factory — behavioral binding via set_config', () => {
     );
 
     expect(stats).toEqual({ affectedRows: 6 });
-    expect(fakeClient.queryCalls.at(-1)?.sql).toBe('RESET ALL');
+    expect(fakeClient.queryCalls.at(-1)?.sql).toBe('RESET ROLE');
     expect(fakeClient.release).toHaveBeenCalled();
 
     await db.close();

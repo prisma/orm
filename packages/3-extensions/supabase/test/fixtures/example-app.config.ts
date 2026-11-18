@@ -7,6 +7,7 @@ import postgres from '@internal/target-postgres/control';
 import postgresPackRef from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { definePrismaConfig } from '@prisma/cli-engine';
+import { workspaceTypesModule } from '@repo/test-utils';
 import supabasePack from '../../src/exports/pack';
 
 // The fixture app the hermetic integration tests exercise (Profile with a
@@ -20,11 +21,14 @@ export default definePrismaConfig({
     adapter: postgresAdapter,
     driver: postgresDriver,
     extensions: [supabasePack],
-    contract: prismaContract('./example-app/contract.prisma', {
-      output: 'example-app/contract.json',
-      target: postgresPackRef,
-      createNamespace: postgresCreateNamespace,
-    }),
+    contract: {
+      ...prismaContract('./example-app/contract.prisma', {
+        output: 'example-app/contract.json',
+        target: postgresPackRef,
+        createNamespace: postgresCreateNamespace,
+      }),
+      typesModule: workspaceTypesModule.postgres,
+    },
     migrations: {
       dir: 'migrations',
     },

@@ -11,6 +11,7 @@ import {
   planned,
   plan as planStatementsFixture,
   schemaCollection,
+  settledOperations,
 } from './mongo-statement-fixtures';
 
 const ALL_CLASSES_POLICY: MigrationOperationPolicy = {
@@ -73,13 +74,16 @@ function plan(
 ) {
   const result = new MongoMigrationPlanner().plan({
     contract,
-    schema: new MongoSchemaIR([
-      new MongoSchemaCollection({ name: 'users' }),
-      new MongoSchemaCollection({
-        name: 'events',
-        indexes: [new MongoSchemaIndex({ keys: [{ field: 'at', direction: 1 }] })],
-      }),
-    ]),
+    schema: new MongoSchemaIR(
+      [
+        new MongoSchemaCollection({ name: 'users' }),
+        new MongoSchemaCollection({
+          name: 'events',
+          indexes: [new MongoSchemaIndex({ name: 'at_1', keys: [{ field: 'at', direction: 1 }] })],
+        }),
+      ],
+      { fromDatabase: false },
+    ),
     policy: ALL_CLASSES_POLICY,
     fromContract,
     origin: null,
@@ -90,10 +94,10 @@ function plan(
   if (result.kind !== 'success') throw new Error(JSON.stringify(result.conflicts));
   expectDataLossMatchesDestructive(
     result,
-    (result.plan as PlannerProducedMongoMigration).operations,
+    settledOperations(result.plan as PlannerProducedMongoMigration),
   );
   return {
-    operations: (result.plan as PlannerProducedMongoMigration).operations.map(
+    operations: settledOperations(result.plan as PlannerProducedMongoMigration).map(
       (operation) => operation.label,
     ),
     dataLoss: result.dataLoss,
@@ -201,7 +205,7 @@ describe('MongoDB planner, data loss', () => {
       creates: labels.filter((label) => label.startsWith('Create')),
       advice: dataLoss.map(({ keepDataAdvice }) => keepDataAdvice),
     }).toEqual({
-      creates: ['Create index on occasions (name:1)'],
+      creates: ['Create index name_1 on occasions (name:1)'],
       advice: [
         'To keep its documents, rename collection "events" to "occasions" instead; a statement cannot rename the collection of a model that keeps its name. With db update, rename the collection in the database yourself, for example db.getCollection("events").renameCollection("occasions") in mongosh, then run db update. With migration plan, plan it, passing --delete Event to answer its question; in its migration.ts make renameCollection("events", "occasions") the first operation, imported with the other operations, delete the drop of "events", and delete the create of "occasions" if there is one; run node on that migration.ts so it writes ops.json again; then apply it with prisma db migrate.',
       ],

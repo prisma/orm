@@ -51,6 +51,7 @@ function makeContract(
     string,
     {
       indexes?: Array<{
+        name: string;
         keys: Array<{ field: string; direction: 1 | -1 }>;
         unique?: boolean;
         sparse?: boolean;
@@ -84,7 +85,7 @@ function makeContract(
 
 function planForContract(
   contract: ReturnType<typeof makeContract>,
-  origin: MongoSchemaIR = new MongoSchemaIR([]),
+  origin: MongoSchemaIR = new MongoSchemaIR([], { fromDatabase: false }),
 ): MigrationPlan {
   const planner = new MongoMigrationPlanner();
   const result = planner.plan({
@@ -130,7 +131,9 @@ function synthEdges(plan: MigrationPlan): readonly AggregateMigrationEdgeRef[] {
 describe('MongoMigrationRunner schema verification (integration)', () => {
   it('verifies the live schema, then writes marker + ledger when it matches the contract', async () => {
     const contract = makeContract({
-      users: { indexes: [{ keys: [{ field: 'email', direction: 1 }], unique: true }] },
+      users: {
+        indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }], unique: true }],
+      },
     });
     const plan = serializePlan(planForContract(contract));
 
@@ -164,7 +167,9 @@ describe('MongoMigrationRunner schema verification (integration)', () => {
     await db.collection('users').createIndex({ legacy_field: 1 }, { name: 'legacy_field_1' });
 
     const contract = makeContract({
-      users: { indexes: [{ keys: [{ field: 'email', direction: 1 }], unique: true }] },
+      users: {
+        indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }], unique: true }],
+      },
     });
     const plan = serializePlan(planForContract(contract));
 
@@ -236,7 +241,9 @@ describe('MongoMigrationRunner schema verification (integration)', () => {
     await db.collection('users').createIndex({ legacy_field: 1 }, { name: 'legacy_field_1' });
 
     const contract = makeContract({
-      users: { indexes: [{ keys: [{ field: 'email', direction: 1 }], unique: true }] },
+      users: {
+        indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }], unique: true }],
+      },
     });
     const plan = serializePlan(planForContract(contract));
 

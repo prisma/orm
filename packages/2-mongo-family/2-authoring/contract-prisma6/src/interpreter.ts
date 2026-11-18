@@ -77,6 +77,8 @@ import {
   type IndexDirection,
   parseFieldUnique,
   parseIndexAttribute,
+  prisma6IndexName,
+  prisma6IndexNameProblem,
 } from './indexes';
 import {
   fieldSiteKey,
@@ -1520,6 +1522,13 @@ function buildIndexes(
   let textIndexes = 0;
   const attributes = [...build.uniqueFields, ...build.modelIndexes];
   const clashing = clashingIndexes(attributes);
+  const nameOf = (attribute: IndexAttribute) =>
+    attribute.map ??
+    prisma6IndexName(
+      build.collection,
+      attribute.fields.map((field) => build.storedNames.get(field.name) ?? field.name),
+      attribute.kind === 'unique',
+    );
   for (const attribute of attributes) {
     const names = attribute.fields.map((field) => field.name);
     const usedBy: IgnoredFieldUse = {
@@ -1559,6 +1568,32 @@ function buildIndexes(
       );
       continue;
     }
+    const name = nameOf(attribute);
+    const nameProblem = attribute.map === undefined ? undefined : prisma6IndexNameProblem(name);
+    if (nameProblem !== undefined) {
+      diagnostics.push(
+        prisma6Diagnostic(
+          'PSL.PRISMA6_MONGO_INDEX_NAME_INVALID',
+          `${indexLabel(build, attribute)}: Prisma 6 refuses this name: "${nameProblem}" Give the index another name with \`map\`.`,
+          sourceId,
+          attribute.span,
+        ),
+      );
+      continue;
+    }
+    const sameName = attributes.filter((other) => other !== attribute && nameOf(other) === name);
+    if (sameName.length > 0) {
+      const others = sameName.map((other) => indexLabel(build, other)).join(' and ');
+      diagnostics.push(
+        prisma6Diagnostic(
+          'PSL.PRISMA6_MONGO_INDEX_NAME_DUPLICATE',
+          `${indexLabel(build, attribute)} is named "${name}", as is ${others}. Prisma 6 refuses this: "The given constraint name \`${name}\` has to be unique in the following namespace: on model \`${symbol.name}\` for indexes and unique constraints. Please provide a different name using the \`map\` argument."`,
+          sourceId,
+          attribute.span,
+        ),
+      );
+      continue;
+    }
     const text = attribute.kind === 'fulltext';
     if (text) {
       textIndexes++;
@@ -1573,7 +1608,7 @@ function buildIndexes(
     ]);
     const index: IndexNode = {
       fields: Object.fromEntries(keys),
-      ...(attribute.kind === 'unique' ? { options: { unique: true } } : {}),
+      options: { name, ...(attribute.kind === 'unique' ? { unique: true } : {}) },
     };
     indexes.push({ index, sourceId, span: attribute.span, label: indexLabel(build, attribute) });
   }

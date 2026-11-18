@@ -716,11 +716,15 @@
       "forShare": true,
       "forUpdate": true,
       "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
       "insertOnConflictWithoutTarget": true,
+      "jsonAgg": true,
+      "jsonAggWithoutTruncation": true,
       "lateral": true,
       "lockNowait": true,
       "lockOf": true,
       "lockSkipLocked": true,
+      "outerReferencesInDerivedTables": true,
       "returning": true,
       "scalarList": true
     }
@@ -731,15 +735,6 @@
       "id": "citext",
       "kind": "extension",
       "targetId": "postgres",
-      "types": {
-        "codecTypes": {
-          "import": {
-            "alias": "CitextTypes",
-            "named": "CodecTypes",
-            "package": "@internal/extension-citext/codec-types"
-          }
-        }
-      },
       "version": "0.0.1"
     }
   },

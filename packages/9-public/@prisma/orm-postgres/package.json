@@ -1,6 +1,6 @@
 {
   "name": "@prisma/orm-postgres",
-  "version": "8.0.0-rc.22",
+  "version": "8.0.0-rc.24",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -16,10 +16,10 @@
     "clean": "rm -rf dist src-gen skills"
   },
   "dependencies": {
-    "@prisma/orm-family-sql": "workspace:8.0.0-rc.22",
-    "@prisma/orm-framework": "workspace:8.0.0-rc.22",
-    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.22",
-    "@prisma/orm-toolchain": "workspace:8.0.0-rc.22",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.24",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.24",
+    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.24",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.24",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
     "arktype": "catalog:",
@@ -29,9 +29,9 @@
     "tinyglobby": "catalog:"
   },
   "devDependencies": {
-    "@internal/postgres": "workspace:8.0.0-rc.22",
-    "@repo/tsconfig": "workspace:8.0.0-rc.22",
-    "@repo/tsdown": "workspace:8.0.0-rc.22",
+    "@internal/postgres": "workspace:8.0.0-rc.24",
+    "@repo/tsconfig": "workspace:8.0.0-rc.24",
+    "@repo/tsdown": "workspace:8.0.0-rc.24",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },
@@ -81,6 +81,7 @@
     "./contract/validate-once": "./dist/contract__validate-once.mjs",
     "./contract/validate-storage": "./dist/contract__validate-storage.mjs",
     "./contract-builder": "./dist/contract-builder.mjs",
+    "./contract-types": "./dist/contract-types.mjs",
     "./control": "./dist/control.mjs",
     "./driver": "./dist/driver.mjs",
     "./driver/control": "./dist/driver__control.mjs",
@@ -120,6 +121,7 @@
     "./family-contract/value-set-derivation-hook": "./dist/family-contract__value-set-derivation-hook.mjs",
     "./family-runtime": "./dist/family-runtime.mjs",
     "./family-runtime/internal/prepared-query": "./dist/family-runtime__internal__prepared-query.mjs",
+    "./internal/options": "./dist/internal__options.mjs",
     "./internal/static-context": "./dist/internal__static-context.mjs",
     "./internal/transaction-members": "./dist/internal__transaction-members.mjs",
     "./internal/validate-contract": "./dist/internal__validate-contract.mjs",
@@ -182,6 +184,7 @@
     "./target/rls-canonicalize": "./dist/target__rls-canonicalize.mjs",
     "./target/runtime": "./dist/target__runtime.mjs",
     "./target/schema-ir-annotations": "./dist/target__schema-ir-annotations.mjs",
+    "./target/server-version": "./dist/target__server-version.mjs",
     "./target/sql-utils": "./dist/target__sql-utils.mjs",
     "./target/types": "./dist/target__types.mjs",
     "./utils": "./dist/utils.mjs",

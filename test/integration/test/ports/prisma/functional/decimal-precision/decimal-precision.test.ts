@@ -10,7 +10,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // entry it generates in-range decimal strings, writes them via Prisma.Decimal,
 // and asserts `result.decimal.toFixed() === input` (no precision loss). The
 // postgres-applicable precisions are (10,0), (20,10) and (38,30) — each a
-// distinct `Numeric(p, s)` column here (see the fixture named types).
+// distinct `NumericString(p, s)` column here (see the fixture named types).
 //
 // The port replaces random generation with representative full-precision values
 // per column and asserts the same round-trip property. Prisma 8 returns

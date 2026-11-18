@@ -14,7 +14,7 @@ PSL-to-Mongo contract interpreter for Prisma 8. Transforms Prisma Schema Languag
 
 ```prisma
 types {
-  Stamp = Date @onCreate(now()) @onUpdate(now())
+  Stamp = DateTime @onCreate(now()) @onUpdate(now())
 }
 
 model Post {
@@ -29,8 +29,12 @@ model Post {
 - An alias's base is a type constructor or an enum. It may not name another alias or a contributed alias (`PSL_UNSUPPORTED_NAMED_TYPE_BASE`).
 - An alias may carry `@onCreate` and `@onUpdate`. `@default` is refused at the alias, because MongoDB has no database defaults, and so are `@id` and `@unique` (`PSL_UNSUPPORTED_NAMED_TYPE_ATTRIBUTE`). A refused attribute is dropped and the alias is kept.
 - A field that writes an attribute its alias already sets is `PSL_DUPLICATE_ATTRIBUTE`. A list field typed by an alias that generates a value is refused, as `@onCreate` on a list is; an optional one is accepted, as an optional field with `@onCreate` is. Generated values are keyed by the field's stored name, so a `@map`-ped field works.
-- The Mongo target contributes `temporal.CreatedAt` (`now()` on create) and `temporal.UpdatedAt` (`now()` on create and on update), on `Date` (`mongo/date@1`). They take no arguments. A call to a removed field preset, `temporal.createdAt()`, `temporal.updatedAt()` or `temporal.timestamp(...)`, is refused with `PSL_UNRESOLVED_REFERENCE` and the message names its replacement, such as `Write temporal.CreatedAt.`
+- The Mongo target contributes `temporal.CreatedAt` (`now()` on create) and `temporal.UpdatedAt` (`now()` on create and on update), on `mongo/date@1`, the codec of `DateTime`. They take no arguments. A call to a removed field preset, `temporal.createdAt()`, `temporal.updatedAt()` or `temporal.timestamp(...)`, is refused with `PSL_UNRESOLVED_REFERENCE` and the message names its replacement, such as `Write temporal.CreatedAt.`
 - The `@updatedAt` attribute is refused with the hint `Use @onCreate(now()) @onUpdate(now()), or type the field temporal.UpdatedAt.`
+
+## Index names
+
+`map:` on `@@index`, `@@unique`, `@@textIndex` and `@unique` names the index MongoDB stores, for example `@@index([email], map: "by_email")`. An index without `map:` is named after its stored keys and directions, such as `email_1`, as MongoDB names an index created without a name. Two indexes of one collection with one name are refused with `PSL_INVALID_INDEX`, so a unique and a plain index on the same field, or an `@@index` on the same field in two variants of one base, need `map:` on one of them. An empty `map:` is refused. See [ADR 317](../../../../docs/architecture%20docs/adrs/ADR%20317%20-%20MongoDB%20indexes%20carry%20their%20names.md).
 
 ## Index sort directions
 
@@ -38,15 +42,7 @@ Use `sort(field, Asc)` or `sort(field, Desc)` in `@@index`, `@@unique`, and `@@t
 
 ## Unresolved type names
 
-The family descriptor contributes `describeUnresolvedMongoType` as its `pslDiagnostics.describeUnresolvedType`, so the binder reports a field type it cannot resolve in Mongo terms. A bare, unqualified name that an earlier Prisma schema used for a Mongo scalar gets the current name and its BSON storage:
-
-| Earlier name | Current name |
-| --- | --- |
-| `BigInt` | `Int64` |
-| `Bytes` | `Binary` |
-| `Decimal` | `Decimal128` |
-
-These earlier names are not registered in the `type` namespace, so the binder never resolves them. Any other bare name gets a message that it is not a scalar type, an enum, a composite type or a model, followed by the registered Mongo scalar types. A qualified name (`ns.Name`) or a constructor call (`Name()`) keeps the binder's default `Cannot find type "…"` message.
+The family descriptor contributes `describeUnresolvedMongoType` as its `pslDiagnostics.describeUnresolvedType`, so the binder reports a field type it cannot resolve in Mongo terms. A bare name gets a message that it is not a scalar type, an enum, a composite type or a model, followed by the scalar types to write: the type choices first, then the explicit types no type choice reaches, such as `ObjectId` and `Bson`. Explicit types a type choice reaches and deprecated names are left out. The names Prisma 6 used, such as `BigInt`, `Bytes` and `Decimal`, are MongoDB convenience types, so they resolve. A qualified name (`ns.Name`) or a constructor call (`Name()`) keeps the binder's default `Cannot find type "…"` message.
 
 ## Test helpers
 

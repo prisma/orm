@@ -504,17 +504,17 @@ const byKind = await db.orm.public.User
 | --- | --- | --- |
 | `count()` | `number` | `0` |
 | `countBigInt()` | `bigint` | `0n` |
-| `sum(field)` over `int2` / `int4` / `int8` / `BigIntNumber` | `number \| null` | `null` (SQL `SUM` over zero rows is `NULL`) |
+| `sum(field)` over `int2` / `int4` / `int8` / `BigInt(as: number)` | `number \| null` | `null` (SQL `SUM` over zero rows is `NULL`) |
 | `sumBigInt(field)` over any integer | `bigint \| null` | `null` |
 | `sum(field)` over `float4` / `float8` | `number \| null` | `null` |
 | `sum(field)` over `numeric` | decimal `string \| null` | `null` |
-| `sum(field)` over `UnboundedInt` | `bigint \| null` — that column's own family | `null` |
+| `sum(field)` over `BigInt(storage: numeric)` | `bigint \| null` — that column's own family | `null` |
 | `avg(field)` over any integer | `number \| null` | `null` |
 | `avgDecimal(field)` over any integer or `numeric` | decimal `string \| null` | `null` |
 | `avg(field)` over a float | `number \| null` | `null` |
 | `min(field)` / `max(field)` | the column's own type `\| null` — `text` where the column is `varchar` | `null` |
 
-**`count()`, and `sum` over an integer column, throw outside ±(2^53 − 1) — they never round.** Those two are the results a guarded integer codec produces. The rows above the guard does not reach: `sum` over `numeric`, `UnboundedInt`, or a float column, and every `avg`, which is a fraction already. The error is `RUNTIME.DECODE_FAILED` (`… value must be an integer within the safe integer range, got …`), and it fires on the include path too. That is the trade the defaults make: a `number` you can compare, serialise, and do arithmetic with, and a loud failure instead of a quietly wrong total. Switch that one call to `sumBigInt` / `countBigInt` where the magnitude is real.
+**`count()`, and `sum` over an integer column, throw outside ±(2^53 − 1) — they never round.** Those two are the results a guarded integer codec produces. The rows above the guard does not reach: `sum` over `numeric`, `BigInt(storage: numeric)`, or a float column, and every `avg`, which is a fraction already. The error is `RUNTIME.DECODE_FAILED` (`… value must be an integer within the safe integer range, got …`), and it fires on the include path too. That is the trade the defaults make: a `number` you can compare, serialise, and do arithmetic with, and a loud failure instead of a quietly wrong total. Switch that one call to `sumBigInt` / `countBigInt` where the magnitude is real.
 
 **Float and Decimal columns keep their own family.** `sum` over `numeric` is still a decimal string, and `sum` over `float8` still a `number` — the defaults policy is about integers, and a column whose author chose `numeric` already chose its representation.
 

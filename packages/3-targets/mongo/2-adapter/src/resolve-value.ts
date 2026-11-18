@@ -6,7 +6,12 @@ import {
 } from '@internal/framework-components/runtime';
 import type { MongoCodecRegistry } from '@internal/mongo-codec';
 import type { Document, MongoValue } from '@internal/mongo-value';
-import { MongoParamRef } from '@internal/mongo-value';
+import {
+  isMongoPreparedParamRef,
+  MongoParamRef,
+  type MongoPreparedParamRef,
+} from '@internal/mongo-value';
+import { dateOfThisRealm, isDate } from '@internal/type-implementations/date';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { isInternalError } from '@internal/utils/internal-error';
@@ -16,7 +21,7 @@ import { isStructuredError } from '@internal/utils/structured-error';
  * A value the driver serializes as one BSON value rather than a document: a `Date`, `RegExp` or `Uint8Array`, or an instance of a `bson` class, recognised by its `_bsontype` tag because the driver's classes come from its own load of `bson`. A plain object carrying a `_bsontype` key is a stored subdocument, not a class.
  */
 function isWireScalar(value: object): boolean {
-  if (value instanceof Date || value instanceof RegExp || value instanceof Uint8Array) return true;
+  if (isDate(value) || value instanceof RegExp || value instanceof Uint8Array) return true;
   const prototype: unknown = Object.getPrototypeOf(value);
   return (
     prototype !== Object.prototype &&
@@ -30,6 +35,8 @@ function isWireScalar(value: object): boolean {
  * driver-ready wire shape. When a leaf has a `codecId` and the registry has a
  * codec for it, the codec's async `encode` is awaited so codecs may perform
  * asynchronous work (e.g. lookups, key derivations).
+ *
+ * A `MongoParamRef` holding `null` and marked `nullable` resolves to `null` without its codec. A `MongoPreparedParamRef` throws `RUNTIME.PREPARE_BIND_ON_ADHOC`: the plan was built inside `prepare(...)` and run without it.
  *
  * Object/array nodes dispatch their child resolutions concurrently via
  * `Promise.all` so independent leaves encode in parallel.
@@ -67,7 +74,13 @@ export async function resolveValue(
   checkAborted(ctx, 'encode');
   const signal = ctx.signal;
 
+  if (isMongoPreparedParamRef(value)) {
+    throw bindOnAdhocError(value);
+  }
   if (value instanceof MongoParamRef) {
+    if (value.value === null && value.nullable === true) {
+      return null;
+    }
     if (value.codecId) {
       const codec = codecs.get(value.codecId);
       if (codec?.toWire) {
@@ -84,8 +97,9 @@ export async function resolveValue(
         }
       }
     }
-    return value.value;
+    return isDate(value.value) ? dateOfThisRealm(value.value) : value.value;
   }
+  if (isDate(value)) return dateOfThisRealm(value);
   if (value === null || typeof value !== 'object' || isWireScalar(value)) {
     return value;
   }
@@ -118,9 +132,10 @@ async function resolveDraftSlot(
   codecs: MongoCodecRegistry,
   ctx: CodecCallContext,
 ): Promise<unknown> {
-  if (value instanceof MongoParamRef) {
+  if (value instanceof MongoParamRef || isMongoPreparedParamRef(value)) {
     return resolveValue(value, codecs, ctx);
   }
+  if (isDate(value)) return dateOfThisRealm(value);
   if (value === null || typeof value !== 'object' || isWireScalar(value)) return value;
   if (Array.isArray(value)) {
     const tasks = Promise.all(value.map((v: unknown) => resolveDraftSlot(v, codecs, ctx)));
@@ -160,6 +175,14 @@ export async function resolveDraftDoc(
     }
   }
   return result;
+}
+
+function bindOnAdhocError(placeholder: MongoPreparedParamRef): Error {
+  return runtimeError(
+    'RUNTIME.PREPARE_BIND_ON_ADHOC',
+    `The plan has a placeholder for '${placeholder.name}'. A plan built inside prepare(...) runs only as a prepared statement.`,
+    { name: placeholder.name },
+  );
 }
 
 function paramRefLabel(ref: MongoParamRef, codecId: string): string {

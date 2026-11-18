@@ -48,9 +48,54 @@ A duration is stored as written, because ISO 8601 gives a duration no single for
 
 SQLite gets no `storage: integer` for epoch milliseconds, the form the Prisma ORM query engine wrote: `DatetimeJsDate` already reads such rows, and no Prisma 7 schema reader for SQLite exists to need it.
 
-## Not decided here
+## MySQL
 
-MySQL and MongoDB. Until their tables are recorded here, MySQL's `DateTime` and MongoDB's `Date`, which is a moment in time, are explicit types.
+MySQL has `datetime`, `timestamp`, `date` and `time` columns, so its explicit types are named after them. It has no interval type, so `Duration` is ISO 8601 text.
+
+| Convenience type | `as` | `storage` | Explicit type | Codec | Column |
+| --- | --- | --- | --- | --- | --- |
+| `DateTime` | `jsDate` (default) | `datetime` (default) | `DatetimeJsDate`, precision 3 unless written | `mysql/datetime@1` | `datetime(p)` |
+| | `temporal` | `datetime` | `DatetimeTemporal`, precision 6 unless written | `mysql/datetime-temporal@1` | `datetime(p)` |
+| | `string` | `datetime` | `DatetimeString`, precision 6 unless written | `mysql/datetime-string@1` | `datetime(p)` |
+| | `jsDate` | `timestamp` | `TimestampJsDate`, precision 3 unless written | `mysql/timestamp-date@1` | `timestamp(p)` |
+| | `temporal` | `timestamp` | `TimestampTemporal`, precision 6 unless written | `mysql/timestamp-temporal@1` | `timestamp(p)` |
+| | `string` | `timestamp` | `TimestampString`, precision 6 unless written | `mysql/timestamp-string@1` | `timestamp(p)` |
+| `Date` | `string` (default) | `date` | `DateString` | `mysql/date-string@1` | `date` |
+| | `temporal` | `date` | `DateTemporal` | `mysql/date-temporal@1` | `date` |
+| `Time` | `string` (default) | `time` | `TimeString`, precision 6 unless written | `mysql/time-string@1` | `time(p)` |
+| | `temporal` | `time` | `TimeTemporal`, precision 6 unless written | `mysql/time-temporal@1` | `time(p)` |
+| `Duration` | `string` (default) | `varchar` | `DurationString` | `mysql/duration-string@1` | `varchar(191)` |
+
+- **Precision.** A MySQL `datetime`, `timestamp` or `time` column with no written precision holds whole seconds. So the `temporal` and `string` rows default to 6 fraction digits, which is what an omitted precision holds on PostgreSQL, and the `jsDate` rows to 3, which is what a `Date` holds. A bare `DateTime` is `DatetimeJsDate(3)`, a `datetime(3)` column, which is what `DateTime` named before.
+- **Every instant is UTC.** The driver sets each session's `time_zone` to `+00:00`, so `datetime` and `timestamp` both hold the instant in UTC, and both are read as an instant. That is why `TimestampTemporal` reads a `Temporal.Instant` on MySQL, while the same name reads a `Temporal.PlainDateTime` on PostgreSQL, whose `timestamp` has two Temporal codecs. A `datetime` read as a `Temporal.PlainDateTime` would need a name that says its Temporal type, as PostgreSQL's `TimestampInstant` does.
+- **Ranges.** `datetime` and `date` hold the years 1000 to 9999, and `timestamp` holds 1970-01-01T00:00:01Z to 2038-01-19T03:14:07.999999Z. A value outside its column's range is refused on write. A value MySQL returns is read as it is, so a row written outside Prisma with an earlier year still reads. MySQL's `time` holds -838:59:59 to 838:59:59, but `Time` is a time of day, so `TimeString` and `TimeTemporal` refuse a value outside 00:00:00 to 23:59:59.999999 on write and on read.
+- **Fraction digits.** MySQL rounds a value with more fraction digits than its column holds, which can carry it into the next second, the next day or past its range. So a write is cut to its column's precision before it is sent, where a column with no written precision holds whole seconds, and a literal default with more fraction digits than its column holds is refused. A value with digits below a microsecond, which MySQL holds in no column, is refused rather than cut. The `now()` generators also round down. A raw query parameter that names a codec but gives no precision is sent whole, because it names no column.
+- **`now()`.** `@default(now())` is `CURRENT_TIMESTAMP(p)` on a `datetime` or `timestamp` column, `CURRENT_DATE` on a `date` column and `CURRENT_TIME(p)` on a `time` column. MySQL reports them back as `current_timestamp(p)`, `curdate()` and `curtime(p)`, and each is read back under its own name, so `db verify` tells them apart. `now()` on a column that holds no date or time, such as a `Duration`, is refused.
+- **`Duration`** is stored as written, in `varchar(191)` like `String`, so a `Duration` field can be indexed, which MySQL refuses for a `text` column. As on SQLite, it compares its text, not its length.
+- **Codec ids.** `DatetimeJsDate` keeps `mysql/datetime@1`, which existing contracts record. Every new codec carries a suffix for its value, as on PostgreSQL, so the `timestamp` read as a `Date` is `mysql/timestamp-date@1`.
+- **Changing a field's type.** MySQL's migration planner does not change a column's type yet. Changing a field between these types makes `db verify` report the difference, and `migration plan` refuses it.
+- `temporal.CreatedAt` and `temporal.UpdatedAt` are `DateTime` on MySQL too.
+
+## MongoDB
+
+BSON has one date type, an instant in milliseconds. So an instant and a calendar date are both BSON dates, and a time of day and a duration are strings.
+
+| Convenience type | `as` | `storage` | Explicit type | Codec | Stored as |
+| --- | --- | --- | --- | --- | --- |
+| `DateTime` | `jsDate` (default) | `date` | `DateJsDate` | `mongo/date@1` | a BSON date |
+| | `temporal` | `date` | `DateInstant` | `mongo/date-instant@1` | a BSON date |
+| | `string` | `date` | `DateInstantString` | `mongo/date-instant-string@1` | a BSON date |
+| `Date` | `string` (default) | `date` | `DateString` | `mongo/date-string@1` | a BSON date at midnight UTC |
+| | `temporal` | `date` | `DateTemporal` | `mongo/date-temporal@1` | a BSON date at midnight UTC |
+| `Time` | `string` (default) | `string` | `TimeString` | `mongo/time-string@1` | a BSON string, `09:30:00.000` |
+| | `temporal` | `string` | `TimeTemporal` | `mongo/time-temporal@1` | a BSON string |
+| `Duration` | `string` (default) | `string` | `DurationString` | `mongo/duration-string@1` | a BSON string, as written |
+
+- **A calendar date is a BSON date at midnight UTC,** with its own data type, `mongo/calendar-date`, beside the instant's `mongo/date`; both are stored as a BSON date. MongoDB's Java driver (`LocalDateCodec`) and C# driver (`DateOnlySerializer`) store a date without a time this way, so data they wrote reads as it is, and MongoDB's date operators and range queries work on it. A calendar date refuses to read a BSON date that is not at midnight UTC, naming the field, rather than drop its time. Prisma 6's `DateTime @db.Date` is not such a date: Prisma 6 stores the full instant there, so the Prisma 6 schema reader keeps it `DateJsDate`.
+- **The explicit types are named after the stored type, the BSON date.** Both of its concepts are `Date…`. The calendar date keeps the names it has on every other target, `DateString` and `DateTemporal`, and the instant's readings are qualified: `DateInstant` and `DateInstantString`, with `DateJsDate`, which has no calendar twin. `Time` and `Duration` are stored as strings, so their types are named after the data types `mongo/time` and `mongo/duration`, as on SQLite.
+- **`Date` changed concept.** Before, MongoDB's `Date` was `mongo/date@1`, an instant, the concept other targets call `DateTime`. It is now the calendar date, and `DateTime`, which was a deprecated name for it, is the convenience type whose default is that same codec, renamed `DateJsDate`. A schema written before emits the same contract once `Date` is rewritten to `DateTime`; the upgrade instructions do this with a script. A schema that misses the rewrite still compiles. Its TypeScript type becomes `string` and its contract changes; reading a stored instant with a time of day fails, naming the field; and `@onCreate(now())` on it writes today's date at midnight, losing the time, with no error. The upgrade script and its detection are what catch it. It has no deprecated alias, because one name cannot mean both.
+- **The instant and the time hold milliseconds,** what a BSON date and a JavaScript `Date` hold. A time of day is stored with three fraction digits, so strings compare in time order. A write refuses digits below a millisecond rather than round them.
+- MongoDB has no database defaults, so `now()` is only `@onCreate(now())` and `@onUpdate(now())`, which the ORM fills. `temporal.CreatedAt` and `temporal.UpdatedAt` are `DateTime`.
 
 ## Consequences
 

@@ -28,7 +28,8 @@ describeTemporalFallbackEntries({
     '@prisma/orm-postgres ./target/control',
   ],
   decode: {
-    lookupFactory: 'createPostgresBuiltinCodecLookup',
+    exportName: 'createPostgresBuiltinCodecLookup',
+    codecOf: (codecId) => `createPostgresBuiltinCodecLookup().get(${codecId})`,
     codecId: 'pg/timestamptz-temporal@1',
     contractValue: '2024-01-01T00:00:00Z',
     decoded: '2024-01-01T00:00:00Z',

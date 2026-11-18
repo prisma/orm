@@ -238,9 +238,9 @@ describe('SQLite planner, stored enum values', { timeout: timeouts.databaseOpera
     expect(failed).toContain(
       '[MIGRATION.PRECHECK_FAILED] 1 row of "User" holds "guest" in column "role", which takes no NULL, so the value cannot be removed.',
     );
-    expect(failed).toContain('"rowsHoldingValue": {');
+    expect(failed).toContain('"rowsHoldingValue": [');
     expect(failed).toContain(
-      '"enumValue": {\n      "enum": "Role",\n      "member": "GUEST"\n    }',
+      '"enumValue": {\n        "enum": "Role",\n        "member": "GUEST"\n      }',
     );
     expect(failed).toContain('"keepDataEdit": {');
     expect(failed).toContain('"rows": 1');

@@ -109,11 +109,15 @@
       "forShare": true,
       "forUpdate": true,
       "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
       "insertOnConflictWithoutTarget": true,
+      "jsonAgg": true,
+      "jsonAggWithoutTruncation": true,
       "lateral": true,
       "lockNowait": true,
       "lockOf": true,
       "lockSkipLocked": true,
+      "outerReferencesInDerivedTables": true,
       "returning": true,
       "scalarList": true
     }
@@ -129,34 +133,6 @@
       "id": "pgvector",
       "kind": "extension",
       "targetId": "postgres",
-      "types": {
-        "codecTypes": {
-          "import": {
-            "alias": "PgVectorTypes",
-            "named": "CodecTypes",
-            "package": "@internal/extension-pgvector/codec-types"
-          },
-          "parameterizedOutputTypes": {
-            "alias": "PgVectorParameterizedOutputTypes",
-            "named": "ParameterizedOutputTypesForTypeParams",
-            "package": "@internal/extension-pgvector/codec-types"
-          }
-        },
-        "operationTypes": {
-          "import": {
-            "alias": "PgVectorOperationTypes",
-            "named": "OperationTypes",
-            "package": "@internal/extension-pgvector/operation-types"
-          }
-        },
-        "queryOperationTypes": {
-          "import": {
-            "alias": "PgVectorQueryOperationTypes",
-            "named": "QueryOperationTypes",
-            "package": "@internal/extension-pgvector/operation-types"
-          }
-        }
-      },
       "version": "0.0.1"
     }
   },

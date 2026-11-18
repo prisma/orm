@@ -97,6 +97,17 @@ export function refusalDiagnostic(
         site.span,
       );
     }
+    case 'indexNameDuplicate': {
+      const site = sites.indexes.get(refusal.key.model)?.[refusal.key.position];
+      const first = sites.indexes.get(refusal.firstModel)?.[refusal.firstPosition];
+      if (site === undefined || first === undefined) break;
+      return prisma6Diagnostic(
+        'PSL.PRISMA6_MONGO_INDEX_NAME_DUPLICATE',
+        `${site.label} and ${first.label} are both named "${refusal.name}" in collection "${refusal.collection}". MongoDB cannot hold two indexes with one name in a collection. Give one of them another name with \`map\`.`,
+        site.sourceId,
+        site.span,
+      );
+    }
     case 'generatedConflict': {
       const site = fieldSiteOf(sites, refusal.key);
       if (site === undefined) break;

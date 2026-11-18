@@ -3,8 +3,9 @@
  *
  * A number is the smallest MongoDB type that holds it: an `int` in 32 bits, a `long` in 64, a
  * `decimal` when a Decimal128 holds it exactly, `NaN` and the infinities included, and a `double`
- * otherwise. The `date` tag yields `mongo/date`, stored as the text `Date.toISOString()` writes; the
- * `binary` tag `mongo/binary`, written in base64 as MongoDB prints bytes; the `json` tag `mongo/json`.
+ * otherwise. The `date` tag yields `mongo/date`, stored as the text `Date.toISOString()` writes; a
+ * calendar date is written as a string, or as a `date` tag at midnight UTC; the `time` and `duration`
+ * tags yield `mongo/time` and `mongo/duration`; the `binary` tag `mongo/binary`, written in base64 as MongoDB prints bytes; the `json` tag `mongo/json`.
  * `mongo/bson` has no entry: no position takes a BSON value written in PSL. ADR 254.
  */
 
@@ -27,10 +28,14 @@ import {
   mongoDate,
   mongoDecimal128,
   mongoDouble,
+  mongoDuration,
+  mongoDurationText,
   mongoInt32,
   mongoInt64,
   mongoJson,
   mongoString,
+  mongoTime,
+  mongoTimeText,
 } from './data-types';
 
 const classifyAsDecimal = createNumberClassifier({
@@ -103,6 +108,18 @@ export function mongoDataTypeEntries(): Readonly<Record<string, DataTypeAuthorin
       print: (value) => String(value),
       documentation:
         'An instant, as in date`2024-01-01T00:00:00Z`. Reads ISO 8601 with a UTC offset and stores the instant in UTC with three fraction digits, as Date.toISOString() writes it.',
+    },
+    [mongoTime.id]: {
+      written: { kind: 'tag', tag: 'time', parse: mongoTimeText },
+      print: (value) => String(value),
+      documentation:
+        'A time of day without a UTC offset, as in time`09:30:00`. Stores it with three fraction digits, as in 09:30:00.000.',
+    },
+    [mongoDuration.id]: {
+      written: { kind: 'tag', tag: 'duration', parse: mongoDurationText },
+      print: (value) => String(value),
+      documentation:
+        'A length of time, as in duration`PT1H30M`. Reads an ISO 8601 duration and stores it as written.',
     },
     [mongoBinary.id]: {
       written: { kind: 'tag', tag: 'binary', parse: base64Text },

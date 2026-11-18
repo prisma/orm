@@ -51,7 +51,7 @@ model User {
 }
 
 types {
-  Slug = VarChar(191)
+  Slug = Varchar(191)
 }
 `);
     if (!result.ok) throw new Error(JSON.stringify(result.failure.diagnostics));
@@ -69,11 +69,11 @@ types {
   it('reports a named type repeated in another types block', async () => {
     const { schemaPath, result } = await load(`// use prisma-8
 types {
-  Slug = VarChar(191)
+  Slug = Varchar(191)
 }
 
 types {
-  Slug = VarChar(10)
+  Slug = Varchar(10)
 }
 
 model User {

@@ -1,1 +1,10 @@
-export { hasDigitsBelowAMillisecond, isValidDate, utcIsoTextOf } from '../date';
+export {
+  dateOfThisRealm,
+  hasDigitsBelow,
+  hasDigitsBelowAMillisecond,
+  isDate,
+  isValidDate,
+  utcIsoTextOf,
+  withoutZerosBelowAMillisecond,
+  withThreeFractionDigits,
+} from '../date';

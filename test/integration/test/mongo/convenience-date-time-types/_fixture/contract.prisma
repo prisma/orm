@@ -1,0 +1,22 @@
+// use prisma-8
+
+model Order {
+  id          ObjectId                @id @map("_id")
+  label       String
+  paidAt      DateTime
+  settledAt   DateTime(as: temporal)
+  shippedAt   DateTime(as: string)
+  shipBy      Date
+  deliverBy   Date(as: temporal)
+  opensAt     Time
+  closesAt    Time(as: temporal)
+  lasts       Duration
+  createdAt   DateTime                @onCreate(now())
+  createdAtT  DateTime(as: temporal)  @onCreate(now())
+  createdAtS  DateTime(as: string)    @onCreate(now())
+  createdOn   Date                    @onCreate(now())
+  createdOnT  Date(as: temporal)      @onCreate(now())
+  createdAtTime  Time                 @onCreate(now())
+  createdAtTimeT Time(as: temporal)   @onCreate(now())
+  @@map("orders")
+}

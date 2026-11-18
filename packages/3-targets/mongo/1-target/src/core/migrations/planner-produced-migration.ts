@@ -1,5 +1,4 @@
 import type { MigrationPlanWithAuthoringSurface } from '@internal/framework-components/control';
-import type { ImportSpecifierResolver } from '@internal/framework-components/emission';
 import { Migration, type MigrationMeta } from '@internal/migration-tools/migration';
 import type { AnyMongoMigrationOperation } from '@internal/mongo-query-ast/control';
 import type { OpFactoryCall } from './op-factory-call';
@@ -35,7 +34,10 @@ export class PlannerProducedMongoMigration
     super();
   }
 
-  override get operations(): readonly AnyMongoMigrationOperation[] {
+  override get operations(): readonly (
+    | AnyMongoMigrationOperation
+    | Promise<AnyMongoMigrationOperation>
+  )[] {
     return renderOps(this.calls);
   }
 
@@ -43,12 +45,12 @@ export class PlannerProducedMongoMigration
     return this.meta;
   }
 
-  renderTypeScript(resolveImportSpecifier: ImportSpecifierResolver): string {
+  renderTypeScript(migrationModule: string): string {
     return renderCallsToTypeScript(this.calls, {
       from: this.meta.from,
       to: this.meta.to,
       snapshotsImportPath: this.snapshotsImportPath,
-      resolveImportSpecifier,
+      migrationModule,
     });
   }
 }

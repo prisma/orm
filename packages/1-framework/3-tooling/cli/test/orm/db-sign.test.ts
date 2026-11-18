@@ -1,7 +1,10 @@
+import { DEFAULT_DATABASE_POLICIES } from '@internal/framework-components/control';
 import { writeRef } from '@internal/migration-tools/refs';
 import { notOk, ok } from '@internal/utils/result';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { CliStructuredError } from '../../src/utils/cli-errors';
+import { errorDatabasePoliciesMovedDuringSign } from '../../src/utils/policy-errors';
+import type { CliInvocation } from '../../src/utils/printed-command';
 import {
   CONNECTION,
   cleanupProjectDirs,
@@ -487,5 +490,39 @@ describe('db sign', () => {
 
     expect(run.exitCode).toBe(0);
     expect(envelopeOf(run)?.ok).toBe(true);
+  });
+});
+
+describe('db sign when the policies move while it runs', () => {
+  it('advises signing again with the contract and ref flags the user gave', async () => {
+    mocks.dbSign.mockImplementation(async (options: { invocation: CliInvocation }) =>
+      notOk(
+        errorDatabasePoliciesMovedDuringSign({
+          spaceId: 'app',
+          checked: DEFAULT_DATABASE_POLICIES,
+          found: { ...DEFAULT_DATABASE_POLICIES, change: ['migrate'] },
+          invocation: options.invocation,
+        }),
+      ),
+    );
+    const dir = await projectDir();
+    await writeRef(refsDirOf(dir), 'production', { hash: HASH_A, invariants: [] });
+
+    const run = await harness(ormConfig()).run(
+      ['db', 'sign', '--contract', 'production', '--no-advance-ref', '--json'],
+      { cwd: dir },
+    );
+
+    expect(run.exitCode).toBe(2);
+    expect(envelopeOf(run)?.error).toMatchObject({
+      code: 'MIGRATION.MARKER_CAS_FAILURE',
+      nextActions: [
+        {
+          kind: 'run-command',
+          label: 'Sign again',
+          command: 'prisma-test db sign --contract production --no-advance-ref',
+        },
+      ],
+    });
   });
 });

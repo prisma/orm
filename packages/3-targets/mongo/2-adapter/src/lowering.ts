@@ -10,7 +10,7 @@ import type {
   MongoWindowField,
 } from '@internal/mongo-query-ast/execution';
 import { isExprArray, isRecordArgs } from '@internal/mongo-query-ast/execution';
-import { type Document, MongoParamRef } from '@internal/mongo-value';
+import { type Document, isMongoPreparedParamRef, MongoParamRef } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
 import { assertNever, InternalError } from '@internal/utils/internal-error';
 import { resolveValue } from './resolve-value';
@@ -122,7 +122,7 @@ const aggExprLoweringVisitor: MongoAggExprVisitor<unknown> = {
 };
 
 function needsLiteralWrap(value: unknown): boolean {
-  if (value instanceof MongoParamRef) {
+  if (value instanceof MongoParamRef || isMongoPreparedParamRef(value)) {
     return true;
   }
   if (typeof value === 'string' && value.startsWith('$')) {
@@ -267,9 +267,9 @@ export async function lowerStage(
     case 'sort':
       return { $sort: { ...stage.sort } };
     case 'limit':
-      return { $limit: stage.limit };
+      return { $limit: await resolveValue(stage.limit, codecs, ctx) };
     case 'skip':
-      return { $skip: stage.skip };
+      return { $skip: await resolveValue(stage.skip, codecs, ctx) };
     case 'lookup': {
       const lookup: Record<string, unknown> = {
         from: stage.from,

@@ -130,7 +130,7 @@ changes:
         - 'import\s+(?:type\s+)?\{[^}]*(?<![\w$])Interval(?![\w$])[^}]*\}\s*from\s*[\x27"]@prisma/orm-postgres/(?:contract-builder|target/codec-types)[\x27"]'
   - id: branded-time-types-removed
     summary: |
-      The string types `Timestamp`, `Timestamptz`, `Time` and `Interval` are no longer exported from `@prisma/orm-postgres/target/codec-types` (and `Interval` no longer from `@prisma/orm-postgres/contract-builder`). No column was typed by the first three. Remove each of these names from the import that names it, and delete the import if it names nothing else. A `contract.d.ts` written by an earlier release, such as one in a migration snapshot, imports them without using them, so removing them from its import is the only change it needs.
+      The string types `Timestamp`, `Timestamptz`, `Time` and `Interval` are no longer exported from `@prisma/orm-postgres/target/codec-types` (and `Interval` no longer from `@prisma/orm-postgres/contract-builder`). No column was typed by the first three. Remove each of these names from the import that names it, and delete the import if it names nothing else. An emitted `contract.d.ts` imports them without using them. Re-emit it with `prisma contract emit`; do not edit it by hand. Only a frozen copy in a migration snapshot, `migrations/snapshots/<hash>/contract.d.ts`, is never re-emitted: remove the names from its import by hand, and change nothing else in it.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
@@ -144,7 +144,7 @@ changes:
         - '(?<![\s\S])(?![\s\S]*import\s+(?:type\s+)?\{[^}]*(?<![\w$])Temporal(?![\w$])(?!\s+as(?![\w$]))[^}]*\}\s*from\s*[\x27"]temporal-spec[\x27"])[\s\S]*toEqualTypeOf<\s*Temporal\.'
   - id: contract-types-list-new-aggregates
     summary: |
-      Optional. An emitted `contract.d.ts` lists the aggregates of every codec in the stack, so `prisma contract emit` now adds rows for the three new codecs to it, and the contract itself does not change. An extension that commits an emitted `contract.d.ts` re-emits it when it next changes the contract; until then the existing `contract.d.ts` keeps working. A migration snapshot's `contract.d.ts` does not need the new rows; it needs only the import change `branded-time-types-removed` describes.
+      Optional. An emitted `contract.d.ts` lists the aggregates of every codec in the stack, so `prisma contract emit` now adds rows for the three new codecs to it, and the contract itself does not change. An extension that commits an emitted `contract.d.ts` re-emits it when it next changes the contract; until then the existing `contract.d.ts` keeps working. A frozen `contract.d.ts` in a migration snapshot, `migrations/snapshots/<hash>/contract.d.ts`, is never re-emitted and does not need the new rows; it needs only the hand edit to its import that `branded-time-types-removed` describes.
   - id: driver-ensures-target-session-settings
     summary: |
       A target descriptor may declare `sessionSettings`, the settings its codecs need on every database session; the PostgreSQL target declares `DateStyle=ISO`. A stack passes them to each driver it creates: a runtime driver descriptor's `create(options, sessionSettings)` receives them as a second argument, and a control driver's connect options carry them as `sessionSettings`. A driver for a target that declares them must ensure them on every connection it hands out. A wrapper around a driver descriptor's `create` passes `sessionSettings` on.
@@ -435,7 +435,7 @@ const span: PgInterval = row.span; // an IntervalParts(6) column
 
 ### `branded-time-types-removed`
 
-Remove the four names from the import, and leave the rest of the file as it is:
+In source files you wrote, remove the four names from the import. Re-emit every emitted `contract.d.ts` with `prisma contract emit` instead of editing it. The only `contract.d.ts` files to edit by hand are the frozen copies in migration snapshots, `migrations/snapshots/<hash>/contract.d.ts`, which are never re-emitted. In those, remove the four names from the import and leave the rest of the file as it is:
 
 ```ts
 import type {

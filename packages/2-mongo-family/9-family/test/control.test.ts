@@ -1,4 +1,11 @@
-import { createControlStack, hasSchemaView } from '@internal/framework-components/control';
+import type { ContractMarkerRecord } from '@internal/contract/types';
+import {
+  compareMarkerDatabasePolicies,
+  createControlStack,
+  type DatabasePolicies,
+  DEFAULT_DATABASE_POLICIES,
+  hasSchemaView,
+} from '@internal/framework-components/control';
 import {
   MongoSchemaCollection,
   MongoSchemaCollectionOptions,
@@ -82,7 +89,7 @@ describe('createMongoFamilyInstance', () => {
     expect(() =>
       instance.verifySchema({
         contract: {},
-        schema: new MongoSchemaIR([]),
+        schema: new MongoSchemaIR([], { fromDatabase: false }),
         strict: false,
         frameworkComponents: [],
       }),
@@ -153,6 +160,7 @@ describe('createMongoFamilyInstance', () => {
     expect(signatures).toEqual([
       {
         status: 'conflict',
+        reason: 'storageHash',
         space: 'app',
         contract: {
           storageHash: contract.storage.storageHash,
@@ -241,6 +249,7 @@ describe('createMongoFamilyInstance', () => {
     expect(signatures).toEqual([
       {
         status: 'conflict',
+        reason: 'storageHash',
         space: 'app',
         contract: {
           storageHash: contract.storage.storageHash,
@@ -251,6 +260,185 @@ describe('createMongoFamilyInstance', () => {
       },
     ]);
     expect(writes).toEqual([]);
+  });
+
+  describe('signSpaces() given the policies the caller checked', () => {
+    const recorded = { change: ['migrate'] };
+    const migrateOnly = { ...DEFAULT_DATABASE_POLICIES, change: ['migrate'] as const };
+    const expected = { storageHash: 'old', profileHash: 'old-profile' };
+
+    function policiesStore(options: { readonly policiesAfterCheck?: unknown } = {}) {
+      const writes: unknown[][] = [];
+      let policies: unknown = recorded;
+      let changed = false;
+      const adapter = {
+        readMarker: async () => ({ ...expected, meta: { policies } }),
+        initMarker: async (...args: unknown[]) => {
+          writes.push(['init', ...args.slice(1)]);
+        },
+        updateMarker: async (...args: unknown[]) => {
+          writes.push(['update', ...args.slice(1)]);
+          if (options.policiesAfterCheck !== undefined && !changed) {
+            policies = options.policiesAfterCheck;
+            changed = true;
+          }
+          const held = args[4] as DatabasePolicies | undefined;
+          return (
+            held === undefined ||
+            compareMarkerDatabasePolicies(
+              { ...expected, meta: { policies } } as unknown as ContractMarkerRecord,
+              held,
+            ).kind === 'held'
+          );
+        },
+      } as unknown as MongoControlAdapter<'mongo'>;
+      const instance = createMongoFamilyInstance(
+        createControlStack({
+          family: mongoFamilyDescriptor,
+          target: stubMongoTargetDescriptor,
+          adapter: stubAdapterDescriptor(adapter),
+        }),
+      );
+      const contract = instance.deserializeContract(mongoContractJson({}));
+      const driver = { targetId: 'mongo' } as Parameters<typeof instance.signSpaces>[0]['driver'];
+      const contractHashes = {
+        storageHash: contract.storage.storageHash,
+        profileHash: contract.profileHash,
+      };
+      return { instance, contract, driver, contractHashes, writes };
+    }
+
+    it('signs no space when the policies moved before the first write, and reports them on the application space', async () => {
+      const { instance, contract, driver, writes } = policiesStore();
+
+      const signatures = await instance.signSpaces({
+        driver,
+        spaces: [
+          { space: 'audit', contract, expected: null },
+          { space: 'app', contract, expected },
+        ],
+        expectedDatabasePolicies: DEFAULT_DATABASE_POLICIES,
+      });
+
+      expect({ signatures, writes }).toEqual({
+        signatures: [
+          {
+            status: 'conflict',
+            reason: 'databasePolicies',
+            space: 'app',
+            checked: DEFAULT_DATABASE_POLICIES,
+            comparison: { kind: 'moved', found: migrateOnly },
+          },
+        ],
+        writes: [],
+      });
+    });
+
+    it('swaps the application marker only while it stores the policies read', async () => {
+      const { instance, contract, driver, contractHashes, writes } = policiesStore();
+
+      const [signature] = await instance.signSpaces({
+        driver,
+        spaces: [{ space: 'app', contract, expected }],
+        expectedDatabasePolicies: migrateOnly,
+      });
+
+      expect({ status: signature?.status, writes }).toEqual({
+        status: 'updated',
+        writes: [['update', 'app', 'old', contractHashes, migrateOnly]],
+      });
+    });
+
+    it('reports a swap that fails while the hashes hold as moved policies', async () => {
+      const { instance, contract, driver } = policiesStore({
+        policiesAfterCheck: { change: ['reconcile'] },
+      });
+
+      const [signature] = await instance.signSpaces({
+        driver,
+        spaces: [{ space: 'app', contract, expected }],
+        expectedDatabasePolicies: migrateOnly,
+      });
+
+      expect(signature).toMatchObject({
+        status: 'conflict',
+        reason: 'databasePolicies',
+        comparison: { kind: 'moved', found: { change: ['reconcile'] } },
+      });
+    });
+
+    it('signs an extension space without the application space, checking the policies all the same', async () => {
+      const { instance, contract, driver, contractHashes, writes } = policiesStore();
+
+      const signatures = await instance.signSpaces({
+        driver,
+        spaces: [{ space: 'audit', contract, expected }],
+        expectedDatabasePolicies: migrateOnly,
+      });
+
+      expect({ signatures, writes }).toEqual({
+        signatures: [
+          { status: 'updated', space: 'audit', contract: contractHashes, previous: expected },
+        ],
+        writes: [['update', 'audit', 'old', contractHashes, undefined]],
+      });
+    });
+
+    it('signs no extension space without the application space when the policies moved', async () => {
+      const { instance, contract, driver, writes } = policiesStore();
+
+      const signatures = await instance.signSpaces({
+        driver,
+        spaces: [{ space: 'audit', contract, expected }],
+        expectedDatabasePolicies: DEFAULT_DATABASE_POLICIES,
+      });
+
+      expect({ signatures, writes }).toEqual({
+        signatures: [
+          {
+            status: 'conflict',
+            reason: 'databasePolicies',
+            space: 'app',
+            checked: DEFAULT_DATABASE_POLICIES,
+            comparison: { kind: 'moved', found: migrateOnly },
+          },
+        ],
+        writes: [],
+      });
+    });
+
+    it('reports policies that become unreadable while the hashes hold as unreadable, not as a moved hash', async () => {
+      const { instance, contract, driver } = policiesStore({ policiesAfterCheck: 'strict' });
+
+      const [signature] = await instance.signSpaces({
+        driver,
+        spaces: [{ space: 'app', contract, expected }],
+        expectedDatabasePolicies: migrateOnly,
+      });
+
+      expect(signature).toMatchObject({
+        status: 'conflict',
+        reason: 'databasePolicies',
+        comparison: { kind: 'unreadable' },
+      });
+    });
+
+    it('signs when another process stored the same policies in another form', async () => {
+      const { instance, contract, driver, contractHashes, writes } = policiesStore({
+        policiesAfterCheck: migrateOnly,
+      });
+
+      const [signature] = await instance.signSpaces({
+        driver,
+        spaces: [{ space: 'app', contract, expected }],
+        expectedDatabasePolicies: migrateOnly,
+      });
+
+      expect({ status: signature?.status, writes }).toEqual({
+        status: 'updated',
+        writes: [['update', 'app', 'old', contractHashes, migrateOnly]],
+      });
+    });
   });
 
   it('createRunnerDependencies() returns the dependencies the adapter builds for the driver', () => {
@@ -299,7 +487,7 @@ describe('toSchemaView', () => {
 
   it('returns an empty root for an empty schema', () => {
     const instance = createInstance();
-    const ir = new MongoSchemaIR([]);
+    const ir = new MongoSchemaIR([], { fromDatabase: false });
 
     const view = instance.toSchemaView(ir);
 
@@ -311,10 +499,10 @@ describe('toSchemaView', () => {
 
   it('maps collections to collection nodes', () => {
     const instance = createInstance();
-    const ir = new MongoSchemaIR([
-      new MongoSchemaCollection({ name: 'users' }),
-      new MongoSchemaCollection({ name: 'posts' }),
-    ]);
+    const ir = new MongoSchemaIR(
+      [new MongoSchemaCollection({ name: 'users' }), new MongoSchemaCollection({ name: 'posts' })],
+      { fromDatabase: false },
+    );
 
     const view = instance.toSchemaView(ir);
 
@@ -327,23 +515,28 @@ describe('toSchemaView', () => {
 
   it('maps ascending indexes omitting direction', () => {
     const instance = createInstance();
-    const ir = new MongoSchemaIR([
-      new MongoSchemaCollection({
-        name: 'users',
-        indexes: [
-          new MongoSchemaIndex({
-            keys: [{ field: 'email', direction: 1 }],
-            unique: true,
-          }),
-          new MongoSchemaIndex({
-            keys: [
-              { field: 'lastName', direction: 1 },
-              { field: 'firstName', direction: 1 },
-            ],
-          }),
-        ],
-      }),
-    ]);
+    const ir = new MongoSchemaIR(
+      [
+        new MongoSchemaCollection({
+          name: 'users',
+          indexes: [
+            new MongoSchemaIndex({
+              name: 'email_1',
+              keys: [{ field: 'email', direction: 1 }],
+              unique: true,
+            }),
+            new MongoSchemaIndex({
+              name: 'lastName_1_firstName_1',
+              keys: [
+                { field: 'lastName', direction: 1 },
+                { field: 'firstName', direction: 1 },
+              ],
+            }),
+          ],
+        }),
+      ],
+      { fromDatabase: false },
+    );
 
     const view = instance.toSchemaView(ir);
 
@@ -361,19 +554,23 @@ describe('toSchemaView', () => {
 
   it('shows descending direction as "desc"', () => {
     const instance = createInstance();
-    const ir = new MongoSchemaIR([
-      new MongoSchemaCollection({
-        name: 'events',
-        indexes: [
-          new MongoSchemaIndex({
-            keys: [
-              { field: 'userId', direction: 1 },
-              { field: 'timestamp', direction: -1 },
-            ],
-          }),
-        ],
-      }),
-    ]);
+    const ir = new MongoSchemaIR(
+      [
+        new MongoSchemaCollection({
+          name: 'events',
+          indexes: [
+            new MongoSchemaIndex({
+              name: 'userId_1_timestamp_-1',
+              keys: [
+                { field: 'userId', direction: 1 },
+                { field: 'timestamp', direction: -1 },
+              ],
+            }),
+          ],
+        }),
+      ],
+      { fromDatabase: false },
+    );
 
     const view = instance.toSchemaView(ir);
 
@@ -383,22 +580,27 @@ describe('toSchemaView', () => {
 
   it('shows special index types as-is', () => {
     const instance = createInstance();
-    const ir = new MongoSchemaIR([
-      new MongoSchemaCollection({
-        name: 'products',
-        indexes: [
-          new MongoSchemaIndex({
-            keys: [{ field: 'code', direction: 'hashed' }],
-          }),
-          new MongoSchemaIndex({
-            keys: [
-              { field: '_fts', direction: 'text' },
-              { field: '_ftsx', direction: 1 },
-            ],
-          }),
-        ],
-      }),
-    ]);
+    const ir = new MongoSchemaIR(
+      [
+        new MongoSchemaCollection({
+          name: 'products',
+          indexes: [
+            new MongoSchemaIndex({
+              name: 'code_hashed',
+              keys: [{ field: 'code', direction: 'hashed' }],
+            }),
+            new MongoSchemaIndex({
+              name: 'description_text',
+              keys: [
+                { field: '_fts', direction: 'text' },
+                { field: '_ftsx', direction: 1 },
+              ],
+            }),
+          ],
+        }),
+      ],
+      { fromDatabase: false },
+    );
 
     const view = instance.toSchemaView(ir);
 
@@ -409,16 +611,19 @@ describe('toSchemaView', () => {
 
   it('maps validator with labeled level and action', () => {
     const instance = createInstance();
-    const ir = new MongoSchemaIR([
-      new MongoSchemaCollection({
-        name: 'products',
-        validator: new MongoSchemaValidator({
-          jsonSchema: { bsonType: 'object' },
-          validationLevel: 'strict',
-          validationAction: 'error',
+    const ir = new MongoSchemaIR(
+      [
+        new MongoSchemaCollection({
+          name: 'products',
+          validator: new MongoSchemaValidator({
+            jsonSchema: { bsonType: 'object' },
+            validationLevel: 'strict',
+            validationAction: 'error',
+          }),
         }),
-      }),
-    ]);
+      ],
+      { fromDatabase: false },
+    );
 
     const view = instance.toSchemaView(ir);
 
@@ -430,25 +635,28 @@ describe('toSchemaView', () => {
 
   it('expands validator properties as child nodes', () => {
     const instance = createInstance();
-    const ir = new MongoSchemaIR([
-      new MongoSchemaCollection({
-        name: 'users',
-        validator: new MongoSchemaValidator({
-          jsonSchema: {
-            bsonType: 'object',
-            required: ['_id', 'email'],
-            properties: {
-              _id: { bsonType: 'objectId' },
-              email: { bsonType: 'string' },
-              name: { bsonType: 'string' },
-              age: { bsonType: 'int' },
+    const ir = new MongoSchemaIR(
+      [
+        new MongoSchemaCollection({
+          name: 'users',
+          validator: new MongoSchemaValidator({
+            jsonSchema: {
+              bsonType: 'object',
+              required: ['_id', 'email'],
+              properties: {
+                _id: { bsonType: 'objectId' },
+                email: { bsonType: 'string' },
+                name: { bsonType: 'string' },
+                age: { bsonType: 'int' },
+              },
             },
-          },
-          validationLevel: 'strict',
-          validationAction: 'error',
+            validationLevel: 'strict',
+            validationAction: 'error',
+          }),
         }),
-      }),
-    ]);
+      ],
+      { fromDatabase: false },
+    );
 
     const view = instance.toSchemaView(ir);
 
@@ -464,20 +672,23 @@ describe('toSchemaView', () => {
 
   it('labels a property the validator does not constrain as any', () => {
     const instance = createInstance();
-    const ir = new MongoSchemaIR([
-      new MongoSchemaCollection({
-        name: 'posts',
-        validator: new MongoSchemaValidator({
-          jsonSchema: {
-            bsonType: 'object',
-            required: ['meta'],
-            properties: { meta: {}, notes: {} },
-          },
-          validationLevel: 'strict',
-          validationAction: 'error',
+    const ir = new MongoSchemaIR(
+      [
+        new MongoSchemaCollection({
+          name: 'posts',
+          validator: new MongoSchemaValidator({
+            jsonSchema: {
+              bsonType: 'object',
+              required: ['meta'],
+              properties: { meta: {}, notes: {} },
+            },
+            validationLevel: 'strict',
+            validationAction: 'error',
+          }),
         }),
-      }),
-    ]);
+      ],
+      { fromDatabase: false },
+    );
 
     const view = instance.toSchemaView(ir);
 
@@ -490,16 +701,55 @@ describe('toSchemaView', () => {
     ]);
   });
 
+  it('joins the types of a property that admits several BSON types with |', () => {
+    const instance = createInstance();
+    const ir = new MongoSchemaIR(
+      [
+        new MongoSchemaCollection({
+          name: 'posts',
+          validator: new MongoSchemaValidator({
+            jsonSchema: {
+              bsonType: 'object',
+              required: ['meta'],
+              properties: {
+                meta: {
+                  bsonType: ['object', 'array', 'string', 'double', 'int', 'long', 'bool', 'null'],
+                },
+                subtitle: { bsonType: ['null', 'string'] },
+              },
+            },
+            validationLevel: 'strict',
+            validationAction: 'error',
+          }),
+        }),
+      ],
+      { fromDatabase: false },
+    );
+
+    const view = instance.toSchemaView(ir);
+
+    const validatorNode = view.root.children![0]!.children!.find(
+      (n) => n.id === 'validator-posts',
+    )!;
+    expect(validatorNode.children!.map((n) => n.label)).toEqual([
+      'meta: object | array | string | double | int | long | bool | null (required)',
+      'subtitle: null | string',
+    ]);
+  });
+
   it('maps collection options to a child node', () => {
     const instance = createInstance();
-    const ir = new MongoSchemaIR([
-      new MongoSchemaCollection({
-        name: 'logs',
-        options: new MongoSchemaCollectionOptions({
-          capped: { size: 1048576, max: 1000 },
+    const ir = new MongoSchemaIR(
+      [
+        new MongoSchemaCollection({
+          name: 'logs',
+          options: new MongoSchemaCollectionOptions({
+            capped: { size: 1048576, max: 1000 },
+          }),
         }),
-      }),
-    ]);
+      ],
+      { fromDatabase: false },
+    );
 
     const view = instance.toSchemaView(ir);
 
