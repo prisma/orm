@@ -4,7 +4,7 @@
  * A journey starts at a contract through `migration plan` and `db migrate`, or through `db update`, and then plans the change with the same command. The database is reached the same way on both targets, so the journeys compare rows with the same queries.
  */
 
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import type { Diagnostic } from '@prisma/cli-engine/protocol';
 import { join } from 'pathe';
@@ -234,15 +234,6 @@ export function latestMigrationSource(journey: StoredNameJourney): string {
   return readFileSync(
     join(journey.testDir, 'migrations', 'app', latestMigrationDirName(journey), 'migration.ts'),
     'utf-8',
-  );
-}
-
-export function dump(label: string, value: unknown): void {
-  const dir = join(__dirname, '../../../../wip/stored-name-renames/out/d5-dump');
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(
-    join(dir, `${label.replace(/[^\w.-]+/g, '_')}.json`),
-    JSON.stringify(value, null, 2),
   );
 }
 
