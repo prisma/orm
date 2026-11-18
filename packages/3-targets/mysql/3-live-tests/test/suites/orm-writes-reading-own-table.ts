@@ -88,18 +88,19 @@ function watchStatements(server: LiveServer, test: TestContext): string[] {
   return sent;
 }
 
-/** The value a write resolves to, or the code and message of the error it is refused with and how many UPDATE or DELETE statements it sent. */
+/** The value a write resolves to, or the code and message of the error it is refused with, and whether it sent an UPDATE or DELETE. */
 async function outcome<T>(
   sent: readonly string[],
   write: PromiseLike<T>,
-): Promise<T | { refused: unknown; writesSent: number }> {
+): Promise<{ readonly result: T | { refused: unknown }; readonly wrote: boolean }> {
   const before = sent.length;
+  const wrote = () => sent.slice(before).some(isWrite);
   try {
-    return await write;
+    return { result: await write, wrote: wrote() };
   } catch (error) {
     return {
-      refused: { code: Object(error).code, message: Object(error).message },
-      writesSent: sent.slice(before).filter(isWrite).length,
+      result: { refused: { code: Object(error).code, message: Object(error).message } },
+      wrote: wrote(),
     };
   }
 }
@@ -107,12 +108,15 @@ async function outcome<T>(
 export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
   const runs = server.expected.writeReadingWrittenTable === 'runs';
   const refused = {
-    refused: {
-      code: 'RUNTIME.AST_UNSUPPORTED',
-      message: `${server.displayName} cannot run an UPDATE or DELETE whose filter or values read the table being written, \`Task\``,
+    result: {
+      refused: {
+        code: 'RUNTIME.AST_UNSUPPORTED',
+        message: `${server.displayName} cannot run an UPDATE or DELETE whose filter or values read the table being written, \`Task\``,
+      },
     },
-    writesSent: 0,
+    wrote: false,
   };
+  const written = <T>(result: T) => ({ result, wrote: true });
 
   describe(`${server.displayName} writes through the ORM whose filter reads the written table`, {
     timeout: timeouts.databaseOperation,
@@ -152,18 +156,16 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
           stored: await db.orm.Task.select('id', 'title')
             .orderBy((task) => task.id.asc())
             .all(),
-          recordedWrites: sent.some(isWrite),
         }).toEqual(
           runs
             ? {
-                recordedWrites: true,
-                updated: [
+                updated: written([
                   { id: 1, title: 'Has bugs' },
                   { id: 2, title: 'Has bugs' },
-                ],
-                counted: 1,
-                first: { id: 5, title: 'Leaf' },
-                pinned: { id: 4, title: 'Pinned' },
+                ]),
+                counted: written(1),
+                first: written({ id: 5, title: 'Leaf' }),
+                pinned: written({ id: 4, title: 'Pinned' }),
                 stored: [
                   { id: 1, title: 'Has features' },
                   { id: 2, title: 'Has bugs' },
@@ -173,10 +175,9 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
                 ],
               }
             : {
-                recordedWrites: true,
                 updated: refused,
                 counted: refused,
-                first: { id: 5, title: 'Leaf' },
+                first: written({ id: 5, title: 'Leaf' }),
                 pinned: refused,
                 stored: seededTasks.map(({ id, title }) => ({
                   id,
@@ -223,24 +224,21 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
             .select('id')
             .orderBy((task) => task.id.asc())
             .all(),
-          recordedWrites: sent.some(isWrite),
         }).toEqual(
           runs
             ? {
-                recordedWrites: true,
-                pinned: { id: 5 },
-                deleted: [{ id: 3 }, { id: 4 }],
-                counted: 1,
-                first: { id: 1, title: 'Launch' },
+                pinned: written({ id: 5 }),
+                deleted: written([{ id: 3 }, { id: 4 }]),
+                counted: written(1),
+                first: written({ id: 1, title: 'Launch' }),
                 remaining: [],
                 features: [],
               }
             : {
-                recordedWrites: true,
                 pinned: refused,
                 deleted: refused,
                 counted: refused,
-                first: { id: 3, title: 'Crash' },
+                first: written({ id: 3, title: 'Crash' }),
                 remaining: seededTasks.filter((task) => task.id !== 3),
                 features: [{ id: 1 }, { id: 2 }, { id: 5 }],
               },
@@ -289,16 +287,14 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
           ),
           first: await db.orm.Task.variant('feature').where({ id: 2 }).update({ title: 'Second' }),
           stored: await db.orm.Task.orderBy((task) => task.id.asc()).all(),
-          recordedWrites: sent.some(isWrite),
         }).toEqual(
           runs
             ? {
-                recordedWrites: true,
-                updated: [
+                updated: written([
                   { id: 2, title: 'Later', type: 'feature', parentId: 1, priority: 20 },
                   { id: 5, title: 'Later', type: 'feature', parentId: null, priority: 50 },
-                ],
-                counted: 1,
+                ]),
+                counted: written(1),
                 first: { id: 2, title: 'Second', type: 'feature', parentId: 1, priority: 20 },
                 stored: [
                   { id: 1, title: 'Has features', type: 'feature', parentId: null, priority: 10 },
@@ -309,7 +305,6 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
                 ],
               }
             : {
-                recordedWrites: true,
                 updated: refused,
                 counted: refused,
                 first: { id: 2, title: 'Second', type: 'feature', parentId: 1, priority: 20 },
@@ -345,15 +340,13 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
             .orderBy((task) => task.id.asc())
             .delete(),
           remaining: await db.orm.Task.orderBy((task) => task.id.asc()).all(),
-          recordedWrites: sent.some(isWrite),
         }).toEqual(
           runs
             ? {
-                recordedWrites: true,
-                deleted: [
+                deleted: written([
                   { id: 5, title: 'Backlog', type: 'feature', parentId: null, priority: 50 },
-                ],
-                counted: 1,
+                ]),
+                counted: written(1),
                 first: { id: 1, title: 'Launch', type: 'feature', parentId: null, priority: 10 },
                 second: null,
                 remaining: [
@@ -362,7 +355,6 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
                 ],
               }
             : {
-                recordedWrites: true,
                 deleted: refused,
                 counted: refused,
                 first: { id: 1, title: 'Launch', type: 'feature', parentId: null, priority: 10 },
