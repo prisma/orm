@@ -105,6 +105,11 @@ const identityJsonProjection = (expression: ProjectionExpr): ProjectionExpr => e
 const decimalTextJsonProjection = (expression: ProjectionExpr): ProjectionExpr =>
   CastExpr.as(expression, 'TEXT');
 
+const decimalTextRowProjection = (expression: ProjectionExpr): ProjectionExpr =>
+  expression.kind === 'cast' && expression.targetType.toLowerCase() === 'text'
+    ? expression
+    : CastExpr.as(expression, 'TEXT');
+
 /**
  * Projects a blob as a one-element array of its hexadecimal text.
  *
@@ -780,6 +785,9 @@ export class SqliteBigintDescriptor extends SqliteCodecDescriptor<void> {
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return decimalTextJsonProjection(expression);
   }
+  projectRow(expression: ProjectionExpr): ProjectionExpr {
+    return decimalTextRowProjection(expression);
+  }
   override readonly dataType = sqliteInteger.id;
   override readonly codecId = SQLITE_BIGINT_CODEC_ID;
   readonly jsonType = 'number' as const;
@@ -846,6 +854,9 @@ export class SqliteBigintNumberCodec extends CodecImpl<
 export class SqliteBigintNumberDescriptor extends SqliteCodecDescriptor<void> {
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return decimalTextJsonProjection(expression);
+  }
+  projectRow(expression: ProjectionExpr): ProjectionExpr {
+    return decimalTextRowProjection(expression);
   }
   override readonly dataType = sqliteInteger.id;
   override readonly codecId = SQLITE_BIGINT_NUMBER_CODEC_ID;

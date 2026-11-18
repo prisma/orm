@@ -95,6 +95,7 @@ flowchart TD
 - Renders DML operations (INSERT, UPDATE, DELETE) with RETURNING clauses
 - Renders ON CONFLICT (DO NOTHING / DO UPDATE SET) for upserts
 - Uses `CAST(expr AS type)` instead of Postgres `::type` syntax
+- Returns a result column through its codec descriptor's `projectRow`, in the result columns of a `SELECT` and in `RETURNING`: a `sqlite/bigint@1` or `sqlite/bigintnumber@1` column is cast to `TEXT`, because `node:sqlite` refuses to read an INTEGER outside ±(2^53 − 1) as a number (`row-projection.ts`; see [Integer representation types](../../../../docs/reference/integer-representation-types.md))
 - Advertises SQLite capabilities (`returning`, `jsonAgg`)
 
 **Codecs (`codecs.ts`)**

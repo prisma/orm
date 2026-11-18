@@ -41,7 +41,11 @@ import type {
   UpdateAst,
   WindowFuncExpr,
 } from '@internal/sql-relational-core/ast';
-import { collectOrderedParamRefs, isDdlNode } from '@internal/sql-relational-core/ast';
+import {
+  collectOrderedParamRefs,
+  IdentifierRef,
+  isDdlNode,
+} from '@internal/sql-relational-core/ast';
 import type { RawCodecInferer } from '@internal/sql-relational-core/expression';
 import type { SqliteCodecDescriptorRegistry } from '@internal/target-sqlite/codec-descriptor';
 import type { SqliteCodecRegistry } from '@internal/target-sqlite/codecs';
@@ -57,6 +61,7 @@ import { assertNever, InternalError } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
 import { SqliteControlAdapter } from './control-adapter';
 import { assertPlaceholdersMatchParams } from './placeholders';
+import { rowProjection, withRowProjections } from './row-projection';
 import type { SqliteAdapterOptions, SqliteContract, SqliteLoweredStatement } from './types';
 
 function nodeKind(value: unknown): string {
@@ -212,7 +217,7 @@ export function renderLoweredSql(
   const node = ast;
   switch (node.kind) {
     case 'select':
-      sql = renderSelect(node, ctx);
+      sql = renderSelect(withRowProjections(node, contract, codecs), ctx);
       break;
     case 'insert':
       sql = renderInsert(node, ctx);
@@ -941,12 +946,13 @@ function renderReturning(
     .map((item) => {
       if (item.expr.kind === 'column-ref') {
         // SQLite's RETURNING can only refer to the table being modified and does not accept that table's alias (https://www.sqlite.org/lang_returning.html), so returned columns are written without a qualifier.
-        const rendered = quoteIdentifier(item.expr.column);
-        return item.expr.column === item.alias
-          ? rendered
-          : `${rendered} AS ${quoteIdentifier(item.alias)}`;
+        const column = IdentifierRef.of(item.expr.column);
+        const projected = rowProjection(item, column, ctx.codecs);
+        return projected === column && item.expr.column === item.alias
+          ? renderExpr(column, ctx)
+          : `${renderExpr(projected, ctx)} AS ${quoteIdentifier(item.alias)}`;
       }
-      return `${renderExpr(item.expr, ctx)} AS ${quoteIdentifier(item.alias)}`;
+      return `${renderExpr(rowProjection(item, item.expr, ctx.codecs), ctx)} AS ${quoteIdentifier(item.alias)}`;
     })
     .join(', ')}`;
 }
