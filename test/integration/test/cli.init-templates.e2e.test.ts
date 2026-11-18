@@ -3,16 +3,13 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import type { InitContribution } from '@internal/cli/init-contribution';
+import type { ContractSourceFormat } from '@internal/config/config-types';
+import mongoContribution from '@internal/mongo/init';
+import postgresContribution from '@internal/postgres/init';
 import { timeouts } from '@repo/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import {
-  type AuthoringId,
-  configFile,
-  dbFile,
-  starterSchema,
-  type TargetId,
-  workspaceTargetPackageName,
-} from '../../../packages/1-framework/3-tooling/cli/src/commands/init/templates/code-templates';
+import { configFile } from '../../../packages/1-framework/3-tooling/cli/src/commands/init/templates/code-templates';
 import {
   defaultTsConfig,
   mergeTsConfig,
@@ -22,6 +19,14 @@ import { createIntegrationTestDir } from './utils/cli-test-helpers';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const execFileAsync = promisify(execFile);
+
+type TargetId = 'postgres' | 'mongo';
+type AuthoringId = ContractSourceFormat;
+
+const CONTRIBUTIONS: Record<TargetId, InitContribution> = {
+  postgres: postgresContribution,
+  mongo: mongoContribution,
+};
 const tscPath = resolve(__dirname, '../node_modules/.bin/tsc');
 
 /**
@@ -45,24 +50,13 @@ function writeInitFiles(
   const schemaDir = dirname(schemaPath);
 
   mkdirSync(join(testDir, schemaDir), { recursive: true });
-  writeFileSync(
-    join(testDir, schemaPath),
-    starterSchema(target, authoring, workspaceTargetPackageName(target)),
-    'utf-8',
-  );
+  const contribution = CONTRIBUTIONS[target];
+  writeFileSync(join(testDir, schemaPath), contribution.starterContract(authoring), 'utf-8');
 
   const configPath = join(testDir, 'prisma.config.ts');
-  writeFileSync(
-    configPath,
-    configFile(`./${schemaPath}`, workspaceTargetPackageName(target)),
-    'utf-8',
-  );
+  writeFileSync(configPath, configFile(`./${schemaPath}`, contribution.configModule), 'utf-8');
 
-  writeFileSync(
-    join(testDir, schemaDir, 'db.ts'),
-    dbFile(target, workspaceTargetPackageName(target)),
-    'utf-8',
-  );
+  writeFileSync(join(testDir, schemaDir, 'db.ts'), contribution.databaseFile(), 'utf-8');
   writeFileSync(join(testDir, 'tsconfig.json'), tsconfig, 'utf-8');
 
   return { schemaPath, configPath };

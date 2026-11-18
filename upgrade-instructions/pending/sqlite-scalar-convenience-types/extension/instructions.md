@@ -161,7 +161,7 @@ Set each row it returns to an integer within the range. A fraction inside the ra
 
 ## `ts-renamed-sqlite-column-helpers`
 
-The detection matches a file that imports or re-exports `integerColumn`, `bigintColumn` or `jsonColumn` from `@prisma/orm-sqlite/adapter/column-types`, `@prisma/orm-target-sqlite/adapter/column-types` or `@internal/adapter-sqlite/column-types`, or imports one of them as a namespace and reads one of those names from it. In that file, rename the import or re-export and every use of the name:
+The detection matches a file that imports or re-exports `integerColumn`, `bigintColumn` or `jsonColumn` from `@prisma/orm-sqlite/adapter/column-types` or `@prisma/orm-target-sqlite/adapter/column-types`, or imports one of them as a namespace and reads one of those names from it. In that file, rename the import or re-export and every use of the name:
 
 | Old name | New name | Explicit type |
 | --- | --- | --- |

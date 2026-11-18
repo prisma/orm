@@ -106,6 +106,8 @@ export function buildInitNextActions(inputs: {
 
 const DONE_TEXT = 'Done. Open prisma-8.md to get started.';
 const INCOMPLETE_TEXT = 'Scaffold written. Finish the steps above to complete setup.';
+const NOTHING_WRITTEN_TEXT =
+  'Nothing was written. Finish the steps above, then run `prisma orm init` again.';
 
 export function initPresentations(inputs: {
   readonly document: InitOutput;
@@ -128,7 +130,11 @@ export function initPresentations(inputs: {
       scaffoldTree(document),
       inputs.complete
         ? { kind: 'summary', status: 'ok', text: DONE_TEXT }
-        : { kind: 'summary', status: 'warn', text: INCOMPLETE_TEXT },
+        : {
+            kind: 'summary',
+            status: 'warn',
+            text: document.filesWritten.length === 0 ? NOTHING_WRITTEN_TEXT : INCOMPLETE_TEXT,
+          },
     ],
     json: () => document,
     next: () => inputs.nextActions,

@@ -267,6 +267,10 @@ Re-exports the MongoDB family pack (only needed when using the low-level API; `d
 
 Re-exports the MongoDB target pack (only needed when using the low-level API; `defineContract` pre-binds this for you).
 
+### `@internal/mongo/init`
+
+The init contribution `prisma orm init` loads after installing the package: its default export is an `InitContribution` (from `@internal/cli/init-contribution`) holding the PSL and TypeScript starter contracts, `db.ts`, the `.env.example` body, the quick reference and README (the `init-*.md` files in `src/init/`, copied into `dist/`), `mongodb` as the driver package init installs, the minimum server version from `@internal/target-mongo/server-version`, and the `--probe-db` probe, which reads `buildInfo` through `mongodb` and answers `version-unreadable` when it holds no version. It has no Prisma 7 quick reference, and `@internal/mongo/config` exports no `prisma7Schema`: Prisma 7 has no MongoDB support. Every module it names is this package's own published name. It imports no framework code that runs. Published as `@prisma/orm-mongo/init`.
+
 ## Related Docs
 
 - Architecture: `docs/Architecture Overview.md`

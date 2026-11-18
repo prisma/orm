@@ -19,6 +19,21 @@
  * that the count is zero, and a check that admits a number invites the number
  * to grow.
  *
+ * The shipped `prisma-8` skill is a consumer too: an agent copies its imports
+ * into an application. Its prose scopes ({@link proseScopeFiles}) are measured
+ * a third way:
+ *
+ *   - **prose** — a Markdown line naming an `@internal/*` package anywhere, or
+ *     naming an `@prisma/orm-*` entry that the package's `exports` lacks.
+ *
+ * The prose scopes are the skill's router and references, pending upgrade
+ * fragments, and the upgrade guides of every release after
+ * {@link UPGRADE_GUIDES_CHECKED_AFTER}; the guides up to it stay as they
+ * shipped. Two things in an upgrade guide must match what extension code
+ * contains, workspace names included, so they are not prose and are not read:
+ * the patterns of a change's `detection` block, and the codemod scripts beside
+ * the guide (only `.md` files are read).
+ *
  * This is not `lint-single-import-root.mjs`. That one forbids a consumer
  * naming *both* roots at once, which loads two copies of every module they
  * share. This one forbids naming the internal root at all.
@@ -26,14 +41,23 @@
  * Exit codes:
  *   0 — no scope names an internal package
  *   1 — at least one does
+ *   2 — the command line names files; the check always scans every scope
  *
  * The script uses process.cwd() as the git root so tests can supply a
  * temporary fixture repo by setting cwd on the child process.
  */
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import {
+  comparePrecedence,
+  PENDING,
+  PUBLISHED_ROOT,
+  parseTransitionLabel,
+  parseVersion,
+  publishedTransitionOf,
+} from './check-upgrade-coverage.mjs';
 
 const GIT_ROOT = process.cwd();
 
@@ -143,6 +167,162 @@ export function scanScope(scanDir, scopePath) {
   return records;
 }
 
+export const UPGRADE_GUIDES_CHECKED_AFTER = '8.0.0-rc.24';
+const ALWAYS_PROSE = ['skills/prisma-8/SKILL.md', 'skills/prisma-8/references'];
+
+/** Whether the guide for the transition `<from>-to-<to>` is held to the prose rule. */
+export function isTransitionChecked(transition) {
+  return (
+    comparePrecedence(
+      parseTransitionLabel(transition).to,
+      parseVersion(UPGRADE_GUIDES_CHECKED_AFTER),
+    ) > 0
+  );
+}
+
+/** The tracked Markdown files whose prose must name only published entries. */
+export function proseScopeFiles(scanDir) {
+  const always = trackedFiles(scanDir, ALWAYS_PROSE[0])
+    .concat(trackedFiles(scanDir, ALWAYS_PROSE[1]))
+    .concat(trackedFiles(scanDir, PENDING));
+  const guides = trackedFiles(scanDir, PUBLISHED_ROOT).filter((relPath) => {
+    const transition = publishedTransitionOf(relPath);
+    return transition !== undefined && isTransitionChecked(transition);
+  });
+  return [...always, ...guides].filter((relPath) => relPath.endsWith('.md'));
+}
+
+const INTERNAL_NAME = /@internal\/[A-Za-z0-9._/-]*[A-Za-z0-9_]/g;
+const PUBLISHED_NAME = /@prisma\/orm-[^\s`'"()[\],;:]+/g;
+// A placeholder such as `@prisma/orm-<target>/runtime`, `@prisma/orm-family-*` or `{a,b}` names no
+// entry, and neither does a prefix such as `@prisma/orm-extension-` in code that tests for it.
+const PLACEHOLDER = /[<*{]|-$/;
+
+/**
+ * The published names a line mentions, each without a version (`@8.0.0`) or
+ * sentence punctuation. A name inside a URL path, such as
+ * `npmjs.com/package/@prisma/orm-postgres/v/8.0.0`, keeps only its package: the
+ * rest of the path is the site's, not an entry.
+ */
+export function publishedNamesOnLine(line) {
+  const names = [];
+  for (const match of line.matchAll(PUBLISHED_NAME)) {
+    let name = match[0].replace(/^(@prisma\/[^@/]+(?:\/[^@]*)?)@.*$/, '$1').replace(/[.!?]+$/, '');
+    const opening = line[match.index - 1];
+    if (opening === '*' || opening === '_') {
+      while (name.endsWith(opening)) name = name.slice(0, -1);
+    }
+    if (!name.includes('<')) name = name.replace(/>+$/, '');
+    if (PLACEHOLDER.test(name)) continue;
+    if (line[match.index - 1] === '/') name = name.split('/').slice(0, 2).join('/');
+    if (!names.includes(name)) names.push(name);
+  }
+  return names;
+}
+
+/** The indexes of the frontmatter lines inside a `detection` block, the key's own line included; they hold patterns, not prose. */
+function detectionLines(lines) {
+  const frontmatterEnd = lines[0]?.trim() === '---' ? lines.indexOf('---', 1) : -1;
+  const inside = new Set();
+  let keyIndent = -1;
+  for (let i = 1; i < frontmatterEnd; i++) {
+    const line = lines[i];
+    const indent = line.search(/\S/);
+    if (indent === -1) continue;
+    if (keyIndent !== -1 && indent > keyIndent) {
+      inside.add(i);
+      continue;
+    }
+    const key = /^(\s*(?:-\s+)?)detection:/.exec(line);
+    keyIndent = key ? key[1].length : -1;
+    if (key) inside.add(i);
+  }
+  return inside;
+}
+
+/** Whether an export target, under some condition, names a file; `null` excludes the subpath. */
+function resolvesToAFile(target) {
+  if (typeof target === 'string') return true;
+  if (target === null || typeof target !== 'object') return false;
+  return Object.values(target).some(resolvesToAFile);
+}
+
+/**
+ * The published entries a package declares, as `@prisma/orm-x/<subpath>`, or
+ * `undefined` when the package is not in the repository. A bare package name
+ * is allowed whenever the package exists: prose names it to install it.
+ */
+export function publishedEntries(scanDir, packageName) {
+  const manifest = join(scanDir, 'packages/9-public', packageName, 'package.json');
+  if (!existsSync(manifest)) return undefined;
+  const exports = JSON.parse(readFileSync(manifest, 'utf-8')).exports ?? {};
+  const targets = typeof exports === 'string' ? { '.': exports } : exports;
+  const specifierOf = (key) => (key === '.' ? packageName : `${packageName}/${key.slice(2)}`);
+  const exact = new Map();
+  const wildcards = [];
+  for (const [key, target] of Object.entries(targets)) {
+    if (!key.includes('*')) {
+      exact.set(specifierOf(key), target);
+      continue;
+    }
+    const [before, after] = specifierOf(key).split('*');
+    wildcards.push({ before, after, target });
+  }
+  wildcards.sort((a, b) => b.before.length - a.before.length || b.after.length - a.after.length);
+  const targetOf = (specifier) => {
+    if (exact.has(specifier)) return exact.get(specifier);
+    const match = wildcards.find(
+      ({ before, after }) =>
+        specifier.length > before.length + after.length &&
+        specifier.startsWith(before) &&
+        specifier.endsWith(after),
+    );
+    return match?.target ?? null;
+  };
+  return { has: (specifier) => resolvesToAFile(targetOf(specifier)) };
+}
+
+/** One record per prose line naming an internal package or a published entry that does not exist. */
+export function findProseNames(content, entriesOf) {
+  const lines = content.split(/\r?\n/);
+  const patterns = detectionLines(lines);
+  const records = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (patterns.has(i)) continue;
+    const internal = [...new Set(line.match(INTERNAL_NAME) ?? [])];
+    const unpublished = publishedNamesOnLine(line).filter((specifier) => {
+      const packageName = specifier.split('/').slice(0, 2).join('/');
+      const entries = entriesOf(packageName);
+      if (entries === undefined) return true;
+      return specifier !== packageName && !entries.has(specifier);
+    });
+    if (internal.length > 0 || unpublished.length > 0) {
+      records.push({ line: i + 1, internal, unpublished });
+    }
+  }
+  return records;
+}
+
+/** The skill describes the current release; an upgrade guide also names the entries a release removed. */
+function describesThePresent(relPath) {
+  return ALWAYS_PROSE.some((scope) => relPath === scope || relPath.startsWith(`${scope}/`));
+}
+
+export function scanProse(scanDir) {
+  const cache = new Map();
+  const entriesOf = (packageName) => {
+    if (!cache.has(packageName)) cache.set(packageName, publishedEntries(scanDir, packageName));
+    return cache.get(packageName);
+  };
+  return proseScopeFiles(scanDir).flatMap((relPath) =>
+    findProseNames(readFileSync(join(scanDir, relPath), 'utf-8'), entriesOf)
+      .map((record) => (describesThePresent(relPath) ? record : { ...record, unpublished: [] }))
+      .filter((record) => record.internal.length > 0 || record.unpublished.length > 0)
+      .map((record) => ({ file: relPath, ...record })),
+  );
+}
+
 const MANIFEST_FIELDS = ['dependencies', 'devDependencies'];
 
 function isRecord(value) {
@@ -203,7 +383,15 @@ function report(scopePath, label, records, render) {
 }
 
 export function main(scopes = CONSUMER_SCOPES) {
-  const list = process.argv.slice(2).includes('--list');
+  const args = process.argv.slice(2);
+  const positional = args.filter((arg) => !arg.startsWith('--'));
+  if (positional.length > 0) {
+    console.error(
+      `lint-consumer-internal-imports takes no file arguments (got ${positional.join(', ')}); it always scans every scope.`,
+    );
+    return 2;
+  }
+  const list = args.includes('--list');
   let failed = false;
 
   for (const scopePath of scopes) {
@@ -238,11 +426,33 @@ export function main(scopes = CONSUMER_SCOPES) {
     }
   }
 
+  const prose = scanProse(GIT_ROOT);
+  if (prose.length > 0) {
+    report(
+      'the shipped skill and upgrade instructions',
+      'prose line(s) naming a package an application cannot import',
+      prose,
+      (r) =>
+        `${r.file}:${r.line}: ${[
+          ...r.internal.map((name) => `${name} (not published)`),
+          ...r.unpublished.map((name) => `${name} (no such export)`),
+        ].join(', ')}`,
+    );
+    failed = true;
+  }
+  if (list) {
+    for (const r of prose) {
+      console.log(`  ${r.file}:${r.line}: ${[...r.internal, ...r.unpublished].join(', ')}`);
+    }
+  }
+
   if (failed) {
     console.error(`\n${CONSUMER_RULE}\n`);
     return 1;
   }
-  console.log(`No consumer project under ${scopes.join(', ')} names an @internal/* package.`);
+  console.log(
+    `No consumer project under ${scopes.join(', ')}, and no prose in the shipped skill or upgrade instructions, names an @internal/* package. The skill names no entry its package does not export.`,
+  );
   return 0;
 }
 

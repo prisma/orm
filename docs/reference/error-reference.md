@@ -111,9 +111,17 @@ A file the command needs does not exist at the given path. Produced by several c
 
 Writing a file failed: currently raised when `contract format` cannot write the formatted PSL source back to disk (e.g. the file is not writable). The underlying failure is attached as `cause`. Payload: none.
 
+### CLI.INIT_AUTHORING_UNSUPPORTED
+
+`prisma orm init --authoring <mode>` names a way to write the contract that the target package's init contribution does not offer. Raised after the target package is installed and before any scaffold file is written. When init's install added declarations to `package.json`, the next actions name them and give the command that removes them; when it only rewrote a declared range, `packagesAdded` is empty and the next action names the declaration and its old range to restore. When the install changed nothing, there is no such action. Maps to init exit code 2 (PRECONDITION). Payload: `packageName`, `authoring`, `offered` (the modes the package lists), and `packagesAdded` when init's install changed `package.json`: the declarations it added, or an empty list when it only rewrote a declared range.
+
 ### CLI.INIT_AUTHORING_SCHEMA_PATH_MISMATCH
 
 During `prisma orm init`, `--authoring` and `--schema-path` disagree on file extension, for example `--authoring psl` with a schema path ending in `.ts`. Raised before any scaffold files are written, so the project tree stays untouched. Payload: `authoring`, `schemaPath`, `actualExtension`, `expectedExtension`.
+
+### CLI.INIT_CONTRIBUTION_UNAVAILABLE
+
+`prisma orm init` installed the target package, but the package does not export `./init` (`reason: no-entrypoint`), its init module cannot be loaded because the file its export names is missing or the module throws while loading (`reason: unloadable`, with the cause in `why`), or the default export of `<package>/init` is not an init contribution (`reason: invalid-shape`, with what is wrong in `why`). `invalid-shape` also covers a package whose config module exports `prisma7Schema` while its contribution has no `prisma7QuickReference`. Init resolves `./init` with the `import` condition. The package stays installed and no scaffold file is written. The next actions name what init's install changed in `package.json`, read from the file before and after: the packages it declared, with the command that removes them, and any declaration whose range it rewrote, with the old range. They are left out when the install changed nothing. The fix is to write `prisma.config.ts` by hand, importing `defineConfig` from the package, or, for `unloadable`, to reinstall it. Maps to init exit code 2 (PRECONDITION). Payload: `packageName`, `module`, `reason`, and `packagesAdded` when init's install changed `package.json`: the declarations it added, or an empty list when it only rewrote a declared range.
 
 ### CLI.INIT_EMIT_FAILED
 
@@ -125,7 +133,7 @@ During `prisma orm init`, the `prisma contract emit` step failed after a success
 
 ### CLI.INIT_INSTALL_FAILED
 
-During `prisma orm init`, dependency installation failed. On a normal run the scaffold is already on disk, and the next actions carry the install command that was attempted and the emit that was waiting on it. On the Prisma 7 path the first install runs before anything is written, to check that the target package can read the schema; when that install fails, `filesWritten` is empty and the next action is to run `orm init` again once the dependencies install. `orm init` completes with this as a finding and exits 4. Payload: `filesWritten`, plus `install` (the attempted command, the manager, its exit code and the tail of its stderr).
+During `prisma orm init`, dependency installation failed. The first install, of the target package and `dotenv`, runs before anything is written, because init writes the project from the target package; when that install fails, `filesWritten` is empty and the next action is to run `orm init` again once the dependencies install. When a later install fails, the scaffold is already on disk, and the next actions carry the install command that was attempted and the emit that was waiting on it. `orm init` completes with this as a finding and exits 4. Payload: `filesWritten`, plus `install` (the attempted command, the manager, its exit code and the tail of its stderr).
 
 ### CLI.INIT_INVALID_FLAG_VALUE
 
@@ -169,11 +177,11 @@ The path `prisma orm init` was asked to use as a Prisma 7 schema (`--from-prisma
 
 ### CLI.INIT_PRISMA7_SCHEMA_REFUSED
 
-On the Prisma 7 path of `prisma orm init`, the target package's Prisma 7 contract source refused the schema, for example because it contains a `view` block. Init runs the source after installing the target package and `dotenv` and before any consent question or file change, so the project is unchanged apart from those two packages. The `why` lists each diagnostic as `<sourceId>:<line>:<column> <code> <message>`. The next actions say to edit the schema as each finding says (the target package's README lists every refusal and its fix) or to run init without `--from-prisma7-schema`, and give the command that removes the two packages. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `summary`, `diagnostics`, `packagesAdded` (the packages the project did not declare before the check; the remove command names only these).
+On the Prisma 7 path of `prisma orm init`, the target package's Prisma 7 contract source refused the schema, for example because it contains a `view` block. Init runs the source after installing the target package, `dotenv` and the drivers the list entry names, and before any consent question or file change, so no scaffold file is written. The `why` lists each diagnostic as `<sourceId>:<line>:<column> <code> <message>`. The next actions say to edit the schema as each finding says (the target package's README lists every refusal and its fix) or to run init without `--from-prisma7-schema`. When init's install added declarations to `package.json`, the next actions name them and give the command that removes them; when it only rewrote a declared range, `packagesAdded` is empty and the next action names the declaration and its old range to restore. When the install changed nothing, there is no such action. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `summary`, `diagnostics`, and `packagesAdded` when the install changed `package.json`: the declarations it added (the remove command names only these), or an empty list when it only rewrote a declared range.
 
 ### CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE
 
-On the Prisma 7 path of `prisma orm init`, the target package cannot read the Prisma 7 schema. Either it has no `prisma7Schema` export while `--from-prisma7-schema` asked for one (`reason: no-prisma7-source`), or it could not be loaded from the project after init installed it (`reason: not-resolvable`). When the user entered the Prisma 7 path by answering yes to init's question instead of passing the flag, a package without `prisma7Schema` is not an error: init warns and runs as a fresh init. Nothing is written apart from the target package and `dotenv` the check installed, and the next actions give the command that removes them. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `packageName`, `reason`, `packagesAdded` (the packages the project did not declare before the check).
+On the Prisma 7 path of `prisma orm init`, the target package cannot read the Prisma 7 schema. Either it has no `prisma7Schema` export while `--from-prisma7-schema` asked for one (`reason: no-prisma7-source`), or the config module its contribution names could not be found from the project (`reason: not-resolvable`), or was found but could not be loaded because its file is missing or it throws while loading (`reason: unloadable`, with the module in `module` and the cause in `why`). When the user entered the Prisma 7 path by answering yes to init's question instead of passing the flag, a package without a Prisma 7 source is not an error: init warns and runs as a fresh init. No scaffold file is written; the install before the check may have changed `package.json`. When init's install added declarations to `package.json`, the next actions name them and give the command that removes them; when it only rewrote a declared range, `packagesAdded` is empty and the next action names the declaration and its old range to restore. When the install changed nothing, there is no such action. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `packageName`, `reason`, `module` for `not-resolvable` and `unloadable`, and `packagesAdded` when init's install changed `package.json`: the declarations it added, or an empty list when it only rewrote a declared range.
 
 ### CLI.INIT_PRISMA7_TARGET_MISMATCH
 
@@ -181,7 +189,7 @@ On the Prisma 7 path of `prisma orm init`, `--target` names a different database
 
 ### CLI.INIT_PROBE_FAILED
 
-`prisma orm init --probe-db --strict-probe` was run and the database probe could not complete (no `DATABASE_URL`, network or auth error, driver not installed). Without `--strict-probe` these surface as warnings; strict mode escalates them to fatal. Scaffolded files are already on disk when this fires. Maps to init exit code 2 (PRECONDITION). Payload: `filesWritten`, `cause`.
+`prisma orm init --probe-db --strict-probe` was run and the database probe could not complete. Every case needs `--strict-probe`; without it each is a warning and init succeeds. The cases: `DATABASE_URL` is not set in the shell environment (the probe does not read `.env`); the target package's probe could not connect (a network or authentication error, or the probe threw); it did not finish within 60 seconds; its driver is not installed, or is installed but failed to load; it connected but its version query failed or the answer held no readable version; it gave a malformed answer; or the target package has no probe. A server older than the stated minimum is never this error, only a warning. Scaffolded files are already on disk when this fires. Maps to init exit code 2 (PRECONDITION). Payload: `filesWritten`, `cause`.
 
 ### CLI.INIT_REINIT_NEEDS_FORCE
 
@@ -196,6 +204,10 @@ Retired. `prisma orm init` used to fetch the agent skills from GitHub with `skil
 ### CLI.INIT_STRICT_PROBE_WITHOUT_PROBE
 
 `prisma orm init --strict-probe` was supplied without `--probe-db`. Init is offline-by-default, so no probe runs without `--probe-db`; rather than silently ignoring the strict flag, init errors and tells the user to add `--probe-db` or drop `--strict-probe`. Maps to init exit code 2 (PRECONDITION). Payload: none.
+
+### CLI.INIT_TARGET_PACKAGE_NOT_INSTALLED
+
+`prisma orm init` cannot find the target package from the project, so it cannot read the init contribution it writes every scaffold file from, and it stops before writing any of them. Either `--skip-install` forbade installing the package and the project does not have it, in which case nothing at all was changed, or init's install command exited successfully and the package still cannot be found from the project (for example under Yarn Plug'n'Play), in which case the install may have changed `package.json` and the lockfile. The summary and `why` say which, and the second names the command that ran. The next action names the install command, for example `pnpm add @prisma/orm-postgres pg`. When init's install added declarations to `package.json`, the next actions name them and give the command that removes them; when it only rewrote a declared range, `packagesAdded` is empty and the next action names the declaration and its old range to restore. When the install changed nothing, there is no such action. Maps to init exit code 2 (PRECONDITION). Payload: `packageName`, `installCommand`, and `packagesAdded` when init's install changed `package.json`: the declarations it added, or an empty list when it only rewrote a declared range.
 
 ### CLI.INIT_USER_ABORTED
 

@@ -23,6 +23,8 @@ Each ported test lands in exactly one of three buckets, and every in-scope sourc
 2. **Ported and failing** — a faithful port that does not pass against today's prisma-next: converted to `test.fails`, with an entry in `failing.md` naming its location and the reason for failure.
 3. **Non-portable** — an individual entry in `non-ported.md` naming the exact source location, what the test verifies, and the specific reason it cannot be faithfully expressed. One line per test; no generalized "and similar" entries.
 
+A non-portable entry whose reason Prisma 8 has since removed keeps its place and starts its reason with **Not yet ported** (the test can now be expressed, and the entry names the API) or **Needs re-examination** (the old reason no longer holds and the new answer is not settled). Both still count as non-portable until the test is ported or a reason that holds is written; [`test/integration/test/ports/README.md`](../../test/integration/test/ports/README.md) gives the command that counts them, and their checklist lines are unchecked and marked with the same status.
+
 Worked example of a faithful port (prisma/prisma functional test → prisma-next):
 
 ```ts

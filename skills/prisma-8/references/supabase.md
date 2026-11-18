@@ -23,7 +23,7 @@ This skill covers using Prisma 8 against a **Supabase** project end-to-end: comp
 
 ## Key Concepts
 
-- **The pack is an `external` contract space.** `@internal/extension-supabase/pack` ships a complete, introspection-generated contract of everything Supabase owns — the `auth` and `storage` schemas, their native enum types, and the platform roles (`anon`, `authenticated`, `service_role`) — all with control policy `external`. Composed via `extensions`, it means: the migration planner **emits no DDL** for those objects (Supabase manages them), and `db verify` **confirms they exist** in the live database. Your own tables stay `managed` as usual.
+- **The pack is an `external` contract space.** `@prisma/orm-extension-supabase/pack` ships a complete, introspection-generated contract of everything Supabase owns — the `auth` and `storage` schemas, their native enum types, and the platform roles (`anon`, `authenticated`, `service_role`) — all with control policy `external`. Composed via `extensions`, it means: the migration planner **emits no DDL** for those objects (Supabase manages them), and `db verify` **confirms they exist** in the live database. Your own tables stay `managed` as usual.
 - **Roles come from the pack; you never declare them.** RLS `roles = [authenticated]` identifiers resolve against the composed contract. Pointing the runtime at a non-Supabase Postgres fails verify with a `not-found` issue naming the missing role — the common "wrong database" misconfiguration surfaces before queries run.
 - **The runtime is role-first.** `supabase()` returns a `SupabaseDb` with **no top-level query surface** — there is no `db.sql` / `db.orm` until you bind a role. `await db.asUser(jwt)` / `db.asAnon()` / `db.asServiceRole()` each return a `RoleBoundDb` exposing `.sql`, `.orm`, `.raw`, `.prepare(...)`, `.query(plan)` (rows), `.execute(plan)` (affected count), `.enums`, `.nativeEnums`, and `.transaction(fn)`. This is deliberate: in a Supabase app there is no meaningful "no role" execution context, and defaulting to the connection's login role is a silent-RLS-bypass footgun.
 - **Role binding is below middleware and cannot leak.** Each role-bound query runs on a connection that had `set_config('role', …)` and `set_config('request.jwt.claims', …)` applied beneath the user-middleware chain, with `RESET ALL` on release. Postgres-side `auth.uid()` / `auth.jwt()` read those session vars — RLS enforcement is Postgres's job; the runtime's job is binding the context.
@@ -38,8 +38,8 @@ The concept: the pack registers the Supabase contract space so your contract can
 ```typescript
 // prisma.config.ts
 import { definePrismaConfig } from '@prisma/cli-engine';
-import supabasePack from '@internal/extension-supabase/pack';
-import { defineConfig as ormConfig } from '@internal/postgres/config';
+import supabasePack from '@prisma/orm-extension-supabase/pack';
+import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
 
 export default definePrismaConfig({
   orm: ormConfig({
@@ -97,7 +97,7 @@ The pieces:
 - **Per-operation policy blocks**: `policy_select`, `policy_insert`, `policy_update`, `policy_delete`, `policy_all`. Body is `key = value`: `target` (a model in this namespace), `roles` (resolve against the composed contract — the pack supplies `anon` / `authenticated` / `service_role`), `using`, and (for write operations) `withCheck`. `using` and `withCheck` are `sql` literals, as in `` using = sql`"userId"::uuid = auth.uid()` ``; a quoted string is refused, and the error message gives the rewrite. Multiple permissive policies per `(target, operation)` are valid — Postgres ORs them. A block may also carry `@@map("physical name")` to adopt an existing live policy under its exact name (no wire-name hash; drift detection then byte-compares the body against Postgres's reprint, so keep the text as captured — hand-authoring it warns).
 - **`@@rls` is required on policy targets.** A `policy_*` block whose target model lacks `@@rls` fails emit with `PSL_EXTENSION_TARGET_MODEL_MISSING_ATTRIBUTE`. A model with `@@rls` and *no* policies is also meaningful: RLS enabled, deny-all.
 - **Predicates are `sql` literals holding verbatim SQL.** Quote camelCase column names inside them with ordinary double quotes (`"userId"`; inside a backtick `sql` literal the only escapes are `` \` `` and `\\`), and cast where needed — `auth.uid()` returns `uuid`. Renames in your contract do not rewrite predicate bodies.
-- **TS-builder parity exists.** `@internal/postgres/contract-builder` exports `policySelect` / `policyInsert` / `policyUpdate` / `policyDelete` / `policyAll`, `rlsEnabled(Model)`, and `role('anon')` — mirroring the PSL lowering key-for-key (identical emitted wire names). PSL is the canonical path shown here.
+- **TS-builder parity exists.** `@prisma/orm-postgres/contract-builder` exports `policySelect` / `policyInsert` / `policyUpdate` / `policyDelete` / `policyAll`, `rlsEnabled(Model)`, and `role('anon')` — mirroring the PSL lowering key-for-key (identical emitted wire names). PSL is the canonical path shown here.
 
 Emit + migrate as usual (`prisma contract emit`, then `references/migrations.md`). The plan creates your table, its FK, `ENABLE ROW LEVEL SECURITY`, and the `CREATE POLICY` statements — and **no DDL for `auth.*`**.
 
@@ -107,8 +107,8 @@ The concept: instead of the stock `postgres()` factory, a Supabase app builds it
 
 ```typescript
 // src/prisma/db.ts
-import { supabase } from '@internal/extension-supabase/runtime';
-import { contractFromJson } from '@internal/postgres/static';
+import { supabase } from '@prisma/orm-extension-supabase/runtime';
+import { contractFromJson } from '@prisma/orm-postgres/static';
 import type { Contract } from './contract.d';
 import contractJson from './contract.json' with { type: 'json' };
 
@@ -226,7 +226,7 @@ The concept: the runtime needs a **direct, session-capable** Postgres connection
 - [ ] `extensions: [supabasePack]` (the `pack` export) in `ormConfig({...})` inside `definePrismaConfig({ orm: ... })`.
 - [ ] Cross-space FK typed `supabase:auth.AuthUser` with explicit `fields` / `references` (+ `onDelete` if wanted).
 - [ ] Every policy target model carries `@@rls`; predicates quote camelCase columns and cast for `auth.uid()`.
-- [ ] `db.ts` uses `await supabase({ contract, url, jwksUrl | jwtSecret })`, with `contract` from `contractFromJson<Contract>(contractJson)` of `@internal/postgres/static` — exactly one JWT key source; `jwksUrl` for current projects, `jwtSecret` only for legacy HS256.
+- [ ] `db.ts` uses `await supabase({ contract, url, jwksUrl | jwtSecret })`, with `contract` from `contractFromJson<Contract>(contractJson)` of `@prisma/orm-postgres/static` — exactly one JWT key source; `jwksUrl` for current projects, `jwtSecret` only for legacy HS256.
 - [ ] Queries go through a `RoleBoundDb` from `asUser` / `asAnon` / `asServiceRole`; `asUser` is awaited.
 - [ ] `auth.*` / `storage.*` reads go through `asServiceRole().supabase` only, after the one-time narrow grant (`GRANT USAGE ON SCHEMA auth` + `GRANT SELECT` on the tables you read).
 - [ ] No per-table grants added for your own `public` tables — Supabase default privileges cover them; RLS does the protecting.

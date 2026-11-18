@@ -1,15 +1,15 @@
 # Prisma 8 — Queries (Postgres)
 
-> Load this guide when `db.ts` imports from `@internal/postgres/runtime`.
+> Load this guide when `db.ts` imports from `@prisma/orm-postgres/runtime`.
 
 Shared concepts (result consumption, script teardown, cross-target pitfalls, capability gaps) live in [`queries.md`](./queries.md).
 
 ## Key Concepts
 
-**Postgres** (`postgres({ contract, ... })` from `@internal/postgres/runtime`):
+**Postgres** (`postgres({ contract, ... })` from `@prisma/orm-postgres/runtime`):
 
 - **`db.orm.<ns>.<Model>`** — ORM, PascalCase model name (`db.orm.public.User`). Fluent `.where(...).select(...).orderBy(...).all()`, fully typed against `Contract`. Default lane for CRUD with relations.
-- **`db.sql.<ns>.<table>`** — SQL builder, lowercase storage name (`db.sql.public.user`). Produces a *plan*. A plan that returns rows (`select`, or a write with `.returning(...)`) runs through `db.query(plan)`; a write with no `RETURNING` runs through `db.execute(plan)`, which resolves `{ affectedRows }`. Use when the ORM is too high-level — explicit `JOIN`, computed projections, set operations, window functions.
+- **`db.sql.<ns>.<table>`** — SQL builder, lowercase storage name (`db.sql.public.user`). Produces a *plan*. A plan that returns rows (`select`, or a write with `.returning(...)`) runs through `db.query(plan)`; a write with no `RETURNING` runs through `db.execute(plan)`, which resolves `{ affectedRows }`. Use when the ORM is too high-level — explicit `JOIN`, computed projections, row locks on a plan. The SQL builder has no set operations (`UNION`, `INTERSECT`, `EXCEPT`), no window functions (`OVER (...)`) and no `WITH`; write those as raw SQL with ``db.raw.sql`…` `` (see *A raw-SQL lane* in [`queries.md`](./queries.md)).
 
 Reach for the ORM first; drop to `db.sql` when the ORM can't express the shape. Lane choice is local — one query function picks one lane, not the whole app.
 
@@ -22,8 +22,9 @@ Reach for the ORM first; drop to `db.sql` when the ORM can't express the shape. 
 | Aggregate (count, sum, avg) | **ORM `.aggregate(...)`** | Typed result; works with grouping (`.groupBy(...).aggregate(...)`). |
 | `INSERT ... RETURNING` / `UPDATE ... RETURNING` typed result | **ORM mutations** (returns updated rows) or **`db.sql.<ns>.<t>.insert(...).returning(...)`** | ORM returns inserted/updated rows; SQL builder exposes `.returning(...)` explicitly. |
 | Computed projection (e.g. `ST_DistanceSphere(location, point) AS meters`) alongside model fields | **SQL builder (`db.sql.<ns>.<t>`)** | The ORM projects model fields; arbitrary expression projection is the SQL builder's seam. |
-| Complex `JOIN`, set operation, window function | **SQL builder** | The ORM doesn't express arbitrary joins. |
-| Postgres-specific feature (`LATERAL`, `FILTER`, custom aggregates) | **SQL builder**, falling back to extension operators when the extension provides them | DSL first; extensions can contribute operators (`postgis`, `pgvector`). |
+| Complex `JOIN` | **SQL builder** | The ORM doesn't express arbitrary joins. |
+| Postgres-specific feature (`LATERAL` joins, `DISTINCT ON`, row locks, custom aggregates) | **SQL builder**, falling back to extension operators when the extension provides them | DSL first; extensions can contribute operators (`postgis`, `pgvector`). |
+| Set operation (`UNION`, `INTERSECT`, `EXCEPT`), window function (`ROW_NUMBER() OVER (...)`), `WITH`, aggregate `FILTER (WHERE ...)` | **Raw SQL (``db.raw.sql`…` ``)** | Neither the ORM nor the SQL builder expresses them. Declare the result columns with `.returnsRow({ ... })` so the rows stay typed. |
 
 ## Workflow — ORM reads
 
@@ -299,7 +300,7 @@ await db.orm.public.User.include('posts', (posts) =>
 
 A reducer's result type is the one the target declares for that aggregate — the same types *Workflow — Aggregates* tabulates below, including the `null` a field-taking reducer answers for a parent with no related rows. The reducer set is read from the contract, so an operation a target or extension contributes shows up as a reducer under its own name, with no client change.
 
-Nested `1:N → 1:N` includes (e.g. `User → posts → comments`) require the contract to advertise the `lateral` + `jsonAgg` capabilities for the active target. The Postgres adapter advertises both by default, so most apps get this for free; if the type system rejects a nested include with a *missing capability* error, route to `references/contract.md` to add the required capability declarations and use `references/queries.md` for query-shape guidance.
+Nested includes (e.g. `User → posts → comments`) need no setup. On Postgres, SQLite and MySQL the ORM loads a read and all its includes in one statement. On a database whose adapter does not report the `jsonAgg`, `outerReferencesInDerivedTables` and `jsonAggWithoutTruncation` capabilities (MariaDB), it runs one statement per relation instead; `limit`, `offset`, `distinct` and reducers still run in SQL per parent there, but a `.prepared` read with includes is refused with `ORM.CAPABILITY_MISSING`.
 
 ## Workflow — ORM writes
 
@@ -600,10 +601,11 @@ const plan = db.sql.public.cafe
   .build();
 const rows = await db.query(plan);
 
-// Self-join with an alias.
+// Self-join: alias both sides, and read each side through its alias.
 db.sql.public.post
+  .as('p1')
   .innerJoin(db.sql.public.post.as('p2'), (f, fns) => fns.ne(f.p1.userId, f.p2.userId))
-  // ...
+  .select((f) => ({ first: f.p1.id, second: f.p2.id }))
   .build();
 ```
 
@@ -677,7 +679,7 @@ Cross-namespace relations (e.g. `public.Profile` → `auth.User`) follow the sam
 2. **Using `.all()` when you wanted one row.** `.all()` issues no implicit limit. Use `.first()` or `.first({ pk })`.
 3. **Coalescing `count()` with `?? 0` "just in case".** `count()` is `number`, not `number | null` — SQL answers an empty set with `0`. The `?? 0` belongs on `sum` / `avg` / `min` / `max`, and its zero should match the aggregate's own type (`0` for an integer sum, `0n` for `sumBigInt`, `'0'` where the result is a decimal string).
 4. **Reaching for `.between(a, b)` on a field proxy.** It doesn't exist. Either chain `.where((m) => m.field.gte(a)).where((m) => m.field.lte(b))` or use `and(m.field.gte(a), m.field.lte(b))` inside one `.where()` clause.
-5. **Importing `and` / `or` / `not` from an internal package.** They are exported from `@prisma/orm-postgres/orm-client`; do not reach into `@internal/sql-orm-client`.
+5. **Importing `and` / `or` / `not` from an internal package.** They are exported from `@prisma/orm-postgres/orm-client`; do not import them from a platform package such as `@prisma/orm-family-sql`.
 6. **Trying to `db.sql.from(tables.user)`.** That surface does not exist. The builder is table-shaped: `db.sql.<ns>.<tableName>.select(...)`. There is no `db.schema.tables` either.
 7. **Reading rows with `execute`.** Plans run through the client: `db.query(plan)` for rows, `db.execute(plan)` for a non-returning write (`{ affectedRows }`). Inside a transaction, `tx.query(plan)` / `tx.execute(plan)`. `execute` never yields rows — a `select` or `.returning(...)` plan passed to it gives you statistics, not data.
 8. **Setting `capabilities: { lateral: true }` in `prisma.config.ts`.** The ORM config (`ormConfig({...})`) does not take `capabilities`. Capabilities are declared by the active adapter and become part of the emitted contract; the Postgres adapter advertises `lateral`, `jsonAgg`, and `returning` out of the box. Enable extension capabilities through `extensions: [...]` in the config (see `references/contract.md`).
