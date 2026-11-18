@@ -564,10 +564,6 @@ export function packagesAddedAction(added: PackagesAdded, reason: InstallReason)
   return rangeNote === '' ? sentence : `${sentence} It also ${rangeNote}`;
 }
 
-function packagesAddedNote(added: PackagesAdded | undefined): string {
-  return added === undefined ? '' : `\n${packagesAddedAction(added, PRISMA7_CHECK)}`;
-}
-
 /**
  * The target package init loads to read the Prisma 7 schema cannot be loaded
  * from the project, or it has no Prisma 7 contract source while
@@ -577,7 +573,6 @@ export function errorInitPrisma7SourceUnavailable(
   options: {
     readonly schemaPath: string;
     readonly packageName: string;
-    readonly added: PackagesAdded | undefined;
   } & (
     | { readonly reason: 'no-prisma7-source' }
     | {
@@ -614,14 +609,13 @@ export function errorInitPrisma7SourceUnavailable(
           };
   return new CliStructuredError('CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE', wording.summary, {
     why: wording.why,
-    fix: `${wording.fix}${packagesAddedNote(options.added)}`,
+    fix: wording.fix,
     docsUrl: docsUrlFor('CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE'),
     meta: {
       schemaPath: options.schemaPath,
       packageName: options.packageName,
       reason: options.reason,
       ...(options.reason === 'no-prisma7-source' ? {} : { module: options.module }),
-      packagesAdded: options.added?.packages ?? [],
     },
   });
 }
@@ -635,7 +629,6 @@ export function errorInitPrisma7SchemaRefused(options: {
   readonly packageName: string;
   readonly summary: string;
   readonly diagnostics: readonly unknown[];
-  readonly added: PackagesAdded | undefined;
 }): CliStructuredError {
   const findings = options.diagnostics.map(
     (diagnostic) => `\n  ${formatSourceDiagnostic(diagnostic)}`,
@@ -645,13 +638,12 @@ export function errorInitPrisma7SchemaRefused(options: {
     `Prisma 8 cannot read ${options.schemaPath}`,
     {
       why: `${options.summary}${findings.join('')}`,
-      fix: `Edit ${options.schemaPath} as each finding says (see the Prisma 7 contract source section of the ${options.packageName} README), or run \`prisma orm init\` without \`--from-prisma7-schema\`.${packagesAddedNote(options.added)}`,
+      fix: `Edit ${options.schemaPath} as each finding says (see the Prisma 7 contract source section of the ${options.packageName} README), or run \`prisma orm init\` without \`--from-prisma7-schema\`.`,
       docsUrl: docsUrlFor('CLI.INIT_PRISMA7_SCHEMA_REFUSED'),
       meta: {
         schemaPath: options.schemaPath,
         summary: options.summary,
         diagnostics: options.diagnostics,
-        packagesAdded: options.added?.packages ?? [],
       },
     },
   );

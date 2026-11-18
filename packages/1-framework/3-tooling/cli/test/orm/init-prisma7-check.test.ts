@@ -530,6 +530,33 @@ describe('the Prisma 7 check before init changes the project', () => {
   );
 
   it(
+    'names the packages it installed when the check itself rejects',
+    async () => {
+      copyFixture();
+      loadTargetConfig = async () => {
+        throw new Error('could not read the config module manifest');
+      };
+
+      const run = await harness().run([...prisma7Argv(), '--json'], { cwd: projectDir });
+
+      expect(envelopeOf(run)).toMatchObject({
+        ok: false,
+        error: {
+          meta: expect.objectContaining({
+            packagesAdded: ['@prisma/orm-postgres', 'dotenv', 'pg'],
+          }),
+          nextActions: expect.arrayContaining([
+            expect.objectContaining({
+              label: expect.stringMatching(/^init added @prisma\/orm-postgres, dotenv and pg/),
+            }),
+          ]),
+        },
+      });
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
     'checks the installed target package under --skip-install without installing anything',
     async () => {
       copyFixture();

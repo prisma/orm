@@ -534,21 +534,20 @@ async function resolvePrisma7Inputs(ctx: {
     { authoring: 'prisma7', schemaPath: schema.path },
     PRISMA7_CHECK,
   );
-  const check = await ctx.checkPrisma7Source({
-    packageName: target.packageName,
-    contribution: prepared.contribution,
-    schemaPath: schema.path,
-    added: prepared.added,
-  });
-  if (check.outcome === 'no-source' && flags.fromPrisma7Schema !== undefined) {
-    throw errorInitPrisma7SourceUnavailable({
-      schemaPath: schema.path,
-      packageName: target.packageName,
-      reason: 'no-prisma7-source',
-      added: prepared.added,
-    });
-  }
+  // Every refusal from here on comes after the install, so each carries the undo instruction.
   try {
+    const check = await ctx.checkPrisma7Source({
+      packageName: target.packageName,
+      contribution: prepared.contribution,
+      schemaPath: schema.path,
+    });
+    if (check.outcome === 'no-source' && flags.fromPrisma7Schema !== undefined) {
+      throw errorInitPrisma7SourceUnavailable({
+        schemaPath: schema.path,
+        packageName: target.packageName,
+        reason: 'no-prisma7-source',
+      });
+    }
     if (check.outcome === 'no-source') {
       ctx.warn(freshInitWarning(target.packageName, detection));
       return await resolveStarterInputs({
