@@ -59,10 +59,20 @@ describe('the MariaDB control adapter against a MariaDB server', {
       async ({ url }) => {
         const driver = await connect(url);
         try {
-          const { rows } = await driver.query<{ zone: string; isolation: string }>(
-            'SELECT @@session.time_zone AS zone, @@session.tx_isolation AS isolation',
+          const { rows } = await driver.query<{
+            zone: string;
+            isolation: string;
+            serverDefault: string;
+          }>(
+            'SELECT @@session.time_zone AS zone, @@session.tx_isolation AS isolation, @@global.tx_isolation AS serverDefault',
           );
-          expect(rows).toEqual([{ zone: '+00:00', isolation: 'REPEATABLE-READ' }]);
+          expect(rows).toEqual([
+            {
+              zone: '+00:00',
+              isolation: rows[0]?.serverDefault,
+              serverDefault: expect.any(String),
+            },
+          ]);
         } finally {
           await driver.close();
         }

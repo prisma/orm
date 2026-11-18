@@ -42,6 +42,7 @@
   },
   "exports": {
     "./adapter": "./dist/adapter.mjs",
+    "./adapter/adapter": "./dist/adapter__adapter.mjs",
     "./adapter/codec-types": "./dist/adapter__codec-types.mjs",
     "./adapter/control": "./dist/adapter__control.mjs",
     "./adapter/runtime": "./dist/adapter__runtime.mjs",
@@ -73,6 +74,7 @@
     "./contract/validate-domain": "./dist/contract__validate-domain.mjs",
     "./contract/validate-once": "./dist/contract__validate-once.mjs",
     "./contract/validate-storage": "./dist/contract__validate-storage.mjs",
+    "./contract-builder": "./dist/contract-builder.mjs",
     "./contract-types": "./dist/contract-types.mjs",
     "./control": "./dist/control.mjs",
     "./driver": "./dist/driver.mjs",

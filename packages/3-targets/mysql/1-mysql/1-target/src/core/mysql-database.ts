@@ -224,8 +224,8 @@ export function mysqlCreateNamespace(input: SqlNamespaceInput): MysqlDatabase {
   if (input.id !== UNBOUND_NAMESPACE_ID) {
     throw mysqlError(
       'CONTRACT.NAMESPACE_INVALID',
-      `The MySQL and MariaDB targets have one namespace, "${UNBOUND_NAMESPACE_ID}"; it received "${input.id}".`,
-      { meta: { received: input.id } },
+      `MySQL and MariaDB do not support namespaces, but the contract puts a model in namespace "${input.id}".`,
+      { fix: 'Remove `namespace` from the model.', meta: { received: input.id } },
     );
   }
   rejectSqlBodyIndexes(input);

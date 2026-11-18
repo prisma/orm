@@ -11,7 +11,7 @@ import sqlitePackRef from '@internal/target-sqlite/pack';
 import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
-import { contractTypesModule, controlComponents } from './components';
+import { contractBuilderModule, contractTypesModule, controlComponents } from './components';
 import { moduleBase } from './module-base';
 
 export interface SqliteConfigOptions {
@@ -37,7 +37,10 @@ export function defineConfig(options: SqliteConfigOptions): PrismaConfig<'sql', 
 
   const contractConfig =
     ext === '.ts'
-      ? typescriptContractFromPath(options.contract, output)
+      ? typescriptContractFromPath(options.contract, output, {
+          target: sqlitePackRef,
+          contractBuilderModule,
+        })
       : prismaContract(options.contract, {
           output,
           target: sqlitePackRef,

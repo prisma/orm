@@ -24,6 +24,7 @@ export type {
   AttachedEntities,
   AuthoredColumnDefault,
   AuthoredColumnDefaultLiteralValue,
+  CapabilityContributor,
   CheckNode,
   ColumnNode,
   ContractDefinition,

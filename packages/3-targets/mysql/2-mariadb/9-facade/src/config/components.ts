@@ -7,6 +7,8 @@ import { moduleBase } from './module-base';
 
 export const contractTypesModule = `${moduleBase}/contract-types`;
 
+export const contractBuilderModule = `${moduleBase}/contract-builder`;
+
 export const migrationModule = `${moduleBase}/migration`;
 
 export const mariadbTarget: typeof mariadb = restateTypeDeclarations(mariadb, contractTypesModule);

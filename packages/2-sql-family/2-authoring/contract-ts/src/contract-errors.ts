@@ -34,12 +34,14 @@ type ContractSubcode =
   | 'FIELD_HELPER_UNKNOWN'
   | 'MODEL_TOKEN_INVALID'
   | 'MODULE_EXPORT_MISSING'
+  | 'EXPORT_INVALID'
   | 'ENTITY_KIND_UNKNOWN'
   | 'ENTITY_KIND_INVALID'
   | 'TABLE_MISMATCH'
   | 'SQL_EXPRESSION_INVALID'
   | 'TABLE_OWNED_BY_MODEL'
-  | 'TABLE_UNKNOWN';
+  | 'TABLE_UNKNOWN'
+  | 'TARGET_MISMATCH';
 
 export function contractError(
   code: ContractCode,

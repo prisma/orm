@@ -4,6 +4,7 @@ import {
   BinaryExpr,
   ColumnRef,
   DeleteAst,
+  ExistsExpr,
   InsertAst,
   InsertOnConflict,
   JsonArrayAggExpr,
@@ -12,6 +13,7 @@ import {
   ParamRef,
   ProjectionItem,
   SelectAst,
+  SubqueryExpr,
   TableSource,
   UpdateAst,
 } from '@internal/sql-relational-core/ast';
@@ -91,6 +93,59 @@ describe('MariaDB lowering of other statements', () => {
       mysql.render(select, undefined).sql,
       mysql.render(insert, undefined).sql,
     ]);
+  });
+});
+
+describe('MariaDB lowering of an update or delete whose statement reads the written table', () => {
+  it('reads the written table in the WHERE and in a value the update sets as it reads any table, which MariaDB runs and MySQL refuses', () => {
+    const childrenOf = SelectAst.from(TableSource.named('task', 'task_2'))
+      .withProjection([ProjectionItem.of('_exists', ColumnRef.of('task_2', 'parentId'))])
+      .withWhere(BinaryExpr.eq(ColumnRef.of('task_2', 'parentId'), ColumnRef.of('task', 'id')));
+    const anyId = SelectAst.from(TableSource.named('task', 'task_2')).withProjection([
+      ProjectionItem.of('id', ColumnRef.of('task_2', 'id')),
+    ]);
+    expect({
+      update: mariadb.render(
+        UpdateAst.table(TableSource.named('task'))
+          .withSet({ title: ParamRef.of('Leaf') })
+          .withWhere(ExistsExpr.notExists(childrenOf)),
+        undefined,
+      ),
+      delete: sqlOf(
+        DeleteAst.from(TableSource.named('task')).withWhere(ExistsExpr.notExists(childrenOf)),
+      ),
+      set: sqlOf(
+        UpdateAst.table(TableSource.named('task')).withSet({ parentId: SubqueryExpr.of(anyId) }),
+      ),
+    }).toEqual({
+      update: {
+        sql: 'UPDATE `task` SET `title` = ?1 WHERE NOT EXISTS (SELECT `task_2`.`parentId` AS `_exists` FROM `task` AS `task_2` WHERE `task_2`.`parentId` = `task`.`id`)',
+        params: [{ kind: 'literal', value: 'Leaf' }],
+      },
+      delete:
+        'DELETE FROM `task` WHERE NOT EXISTS (SELECT `task_2`.`parentId` AS `_exists` FROM `task` AS `task_2` WHERE `task_2`.`parentId` = `task`.`id`)',
+      set: 'UPDATE `task` SET `parentId` = (SELECT `task_2`.`id` AS `id` FROM `task` AS `task_2`)',
+    });
+  });
+
+  it('writes an update or delete whose subqueries read only other tables as MySQL does', () => {
+    const postsOf = SelectAst.from(TableSource.named('post', 'post'))
+      .withProjection([ProjectionItem.of('_exists', ColumnRef.of('post', 'id'))])
+      .withWhere(BinaryExpr.eq(ColumnRef.of('post', 'authorId'), ColumnRef.of('user', 'id')));
+    const update = UpdateAst.table(TableSource.named('user'))
+      .withSet({ email: ParamRef.of('x') })
+      .withWhere(ExistsExpr.exists(postsOf));
+    const remove = DeleteAst.from(TableSource.named('user')).withWhere(ExistsExpr.exists(postsOf));
+    expect({ update: sqlOf(update), delete: sqlOf(remove) }).toEqual({
+      update:
+        'UPDATE `user` SET `email` = ?1 WHERE EXISTS (SELECT `post`.`id` AS `_exists` FROM `post` AS `post` WHERE `post`.`authorId` = `user`.`id`)',
+      delete:
+        'DELETE FROM `user` WHERE EXISTS (SELECT `post`.`id` AS `_exists` FROM `post` AS `post` WHERE `post`.`authorId` = `user`.`id`)',
+    });
+    expect({ update: sqlOf(update), delete: sqlOf(remove) }).toEqual({
+      update: mysql.render(update, undefined).sql,
+      delete: mysql.render(remove, undefined).sql,
+    });
   });
 });
 

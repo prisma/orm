@@ -79,7 +79,7 @@ Inside a request, `db` does everything the `db` from `postgres()` does: `db.orm`
 
 ### `@internal/postgres/config`
 
-Simplified `defineConfig` that pre-wires all Postgres internals (family, target, adapter, driver, contract providers). Pass a contract path (`.prisma` or `.ts`) or a ready `ContractConfig`, and optional `db`, `extensions`, `migrations.dir`, and `formatter` (the indent and line endings `contract format` and the language server use for PSL files).
+Simplified `defineConfig` that pre-wires all Postgres internals (family, target, adapter, driver, contract providers). Pass a contract path (`.prisma` or `.ts`) or a ready `ContractConfig`, and optional `db`, `extensions`, `migrations.dir`, and `formatter` (the indent and line endings `contract format` and the language server use for PSL files). A contract built for another target is refused with `CONTRACT.TARGET_MISMATCH` when it loads, whether it comes from a path or a ready `ContractConfig`.
 
 #### A PSL source with a default control policy
 
