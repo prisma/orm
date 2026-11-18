@@ -2,6 +2,7 @@ import type { AuthoringTypeNamespace } from '@internal/framework-components/auth
 import {
   SQLITE_BIGINT_CODEC_ID,
   SQLITE_BLOB_CODEC_ID,
+  SQLITE_BOOLEAN_CODEC_ID,
   SQLITE_DATE_STRING_CODEC_ID,
   SQLITE_DATE_TEMPORAL_CODEC_ID,
   SQLITE_DATETIME_CODEC_ID,
@@ -49,6 +50,12 @@ export const sqliteExplicitScalarTypes = {
     kind: 'typeConstructor',
     documentation: 'Text, stored as SQLite text.',
     output: { codecId: SQLITE_TEXT_CODEC_ID },
+  },
+  IntegerBoolean: {
+    kind: 'typeConstructor',
+    documentation:
+      'A boolean, stored as SQLite integer: 0 for false and 1 for true, as SQLite writes FALSE and TRUE.',
+    output: { codecId: SQLITE_BOOLEAN_CODEC_ID },
   },
   Blob: {
     kind: 'typeConstructor',
@@ -120,6 +127,13 @@ export const sqliteConvenienceScalarTypes = {
     documentation: 'Text, stored as SQLite text.',
     args: [storageOption('text')],
     choices: [{ when: { storage: 'text' }, type: 'Text' }],
+  },
+  Boolean: {
+    kind: 'typeChoice',
+    documentation:
+      'A boolean, stored as SQLite integer: 0 for false and 1 for true, as SQLite writes FALSE and TRUE.',
+    args: [storageOption('integer')],
+    choices: [{ when: { storage: 'integer' }, type: 'IntegerBoolean' }],
   },
   Bytes: {
     kind: 'typeChoice',

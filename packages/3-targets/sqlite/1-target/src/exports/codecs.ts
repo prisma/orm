@@ -1,3 +1,5 @@
+export type { SqliteIntegerBooleanDescriptor } from '../core/boolean-codec';
+export { sqliteIntegerBooleanColumn } from '../core/boolean-codec';
 export type { JsonValue } from '../core/codec-helpers';
 export {
   assembleSqliteCodecRegistry,

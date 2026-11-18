@@ -192,18 +192,26 @@ const FIXTURES: readonly AggregateFixture[] = [
     storageClass: 'text',
     samples: ["'1.50'", "'-2'"],
   },
+  {
+    codecId: 'sqlite/boolean@1',
+    storageType: 'INTEGER',
+    storageClass: 'integer',
+    samples: ['0', '1'],
+  },
 ];
 
 /**
  * The pairs SQLite computes and this target declines to type: `sum` and `avg`
  * over every non-numeric codec, whose result is whatever leading numbers the
- * stored text or blob happens to contain.
+ * stored text or blob happens to contain, or a count of the true values of a
+ * boolean.
  */
 const COERCED_RATHER_THAN_TYPED = [
   'avg(sql/char@1)',
   'avg(sql/raw@1)',
   'avg(sql/varchar@1)',
   'avg(sqlite/blob@1)',
+  'avg(sqlite/boolean@1)',
   'avg(sqlite/date-string@1)',
   'avg(sqlite/date-temporal@1)',
   'avg(sqlite/datetime-string@1)',
@@ -219,6 +227,7 @@ const COERCED_RATHER_THAN_TYPED = [
   'sum(sql/raw@1)',
   'sum(sql/varchar@1)',
   'sum(sqlite/blob@1)',
+  'sum(sqlite/boolean@1)',
   'sum(sqlite/date-string@1)',
   'sum(sqlite/date-temporal@1)',
   'sum(sqlite/datetime-string@1)',
@@ -235,13 +244,15 @@ const COERCED_RATHER_THAN_TYPED = [
 /**
  * The pairs SQLite computes and this target declines to offer because the codec declares no
  * `order` trait: a raw column's values are not interpreted, so the ORM offers no extremum of them
- * (ADR 273), and neither a duration's text nor a decimal's sorts in the order of the values.
+ * (ADR 273), neither a duration's text nor a decimal's sorts in the order of the values, and a boolean is not ordered.
  */
 const UNORDERED = [
   'max(sql/raw@1)',
+  'max(sqlite/boolean@1)',
   'max(sqlite/decimal@1)',
   'max(sqlite/duration-string@1)',
   'min(sql/raw@1)',
+  'min(sqlite/boolean@1)',
   'min(sqlite/decimal@1)',
   'min(sqlite/duration-string@1)',
 ];

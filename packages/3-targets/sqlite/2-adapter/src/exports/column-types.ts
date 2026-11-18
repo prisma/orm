@@ -3,6 +3,7 @@ export {
   datetimeColumn,
   decimalStringColumn,
   integerBigIntColumn,
+  integerBooleanColumn,
   integerNumberColumn,
   plainJsonColumn,
   rawColumn,

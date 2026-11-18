@@ -80,6 +80,8 @@ const rows = [
   ['Decimal(storage: text)', 'DecimalString', 'sqlite/decimal@1'],
   ['String', 'Text', 'sqlite/text@1'],
   ['String(storage: text)', 'Text', 'sqlite/text@1'],
+  ['Boolean', 'IntegerBoolean', 'sqlite/boolean@1'],
+  ['Boolean(storage: integer)', 'IntegerBoolean', 'sqlite/boolean@1'],
   ['Bytes', 'Blob', 'sqlite/blob@1'],
   ['Bytes(storage: blob)', 'Blob', 'sqlite/blob@1'],
   ['Json', 'PlainJson', 'sqlite/json@1'],
@@ -113,6 +115,8 @@ model Event {
   price   ${names['Decimal']} @default("12.50")
   fee     ${names['Decimal']}? @default(3)
   name    ${names['String']} @unique @default("x")
+  active  ${names['Boolean']} @default(true)
+  hidden  ${names['Boolean']}?
   avatar  ${names['Bytes']}?
   payload ${names['Json']}?
   count   Count
@@ -137,6 +141,7 @@ model Owner {
         Float: 'Float',
         Decimal: 'Decimal',
         String: 'String',
+        Boolean: 'Boolean',
         Bytes: 'Bytes',
         Json: 'Json',
       }),
@@ -149,6 +154,7 @@ model Owner {
         Float: 'Real',
         Decimal: 'DecimalString',
         String: 'Text',
+        Boolean: 'IntegerBoolean',
         Bytes: 'Blob',
         Json: 'PlainJson',
       }),
@@ -165,6 +171,7 @@ model Owner {
     ['Int(storage: text)', 'Argument \\"storage\\" of Int is text; write one of: integer.'],
     ['BigInt(as: string)', 'Argument \\"as\\" of BigInt is string; write one of: bigint, number.'],
     ['Json(storage: jsonb)', 'Argument \\"storage\\" of Json is jsonb; write one of: text.'],
+    ['Boolean(storage: text)', 'Argument \\"storage\\" of Boolean is text; write one of: integer.'],
   ])('refuses %s at its argument, naming the accepted choices', (written, message) => {
     const { result } = interpret(model(`value ${written}`));
     expect(result.ok ? '' : JSON.stringify(result.failure)).toContain(message);
@@ -194,6 +201,32 @@ model Owner {
       'sqlite/decimal cannot read \\"twelve\\". Write decimal text, as in \\"12.50\\".',
     );
   });
+
+  it('gives Boolean its own codec, sqlite/boolean@1, on an integer column, and stores a default as a boolean', () => {
+    const { contract, warnings } = emit(
+      model('active Boolean @default(true)', 'hidden Boolean @default(false)', 'flag Boolean?'),
+    );
+    expect(warnings).toEqual([]);
+    expect(contract).toMatchObject(
+      withColumns({
+        active: {
+          codecId: 'sqlite/boolean@1',
+          dataType: 'sqlite/boolean',
+          default: { kind: 'literal', value: true },
+        },
+        hidden: { codecId: 'sqlite/boolean@1', default: { kind: 'literal', value: false } },
+        flag: { codecId: 'sqlite/boolean@1', nullable: true },
+      }),
+    );
+  });
+
+  it.each(['1', '"true"'])(
+    'refuses the Boolean default %s, which is not true or false',
+    (written) => {
+      const { result } = interpret(model(`active Boolean @default(${written})`));
+      expect(result.ok).toBe(false);
+    },
+  );
 
   it('warns that BigIntNumber is deprecated, and emits the contract IntegerNumber emits', () => {
     const deprecated = emit(
@@ -235,6 +268,8 @@ describe('the SQLite scalar convenience types in a TypeScript contract', () => {
             price: field.column(type.Decimal()),
             storedPrice: field.column(type.Decimal({ storage: 'text' })),
             name: field.column(type.String()),
+            active: field.column(type.Boolean()).default(true),
+            storedActive: field.column(type.Boolean({ storage: 'integer' })),
             avatar: field.column(type.Bytes()),
             payload: field.column(type.Json()),
             document: field.column(type.Json({ storage: 'text' })),
@@ -254,6 +289,8 @@ describe('the SQLite scalar convenience types in a TypeScript contract', () => {
             price: field.column(type.DecimalString()),
             storedPrice: field.column(type.DecimalString()),
             name: field.column(type.Text()),
+            active: field.column(type.IntegerBoolean()).default(true),
+            storedActive: field.column(type.IntegerBoolean()),
             avatar: field.column(type.Blob()),
             payload: field.column(type.PlainJson()),
             document: field.column(type.PlainJson()),
@@ -272,6 +309,8 @@ describe('the SQLite scalar convenience types in a TypeScript contract', () => {
         ratio: { codecId: 'sqlite/real@1' },
         price: { codecId: 'sqlite/decimal@1' },
         name: { codecId: 'sqlite/text@1' },
+        active: { codecId: 'sqlite/boolean@1', default: { kind: 'literal', value: true } },
+        storedActive: { codecId: 'sqlite/boolean@1' },
         avatar: { codecId: 'sqlite/blob@1' },
         payload: { codecId: 'sqlite/json@1' },
         document: { codecId: 'sqlite/json@1' },
@@ -287,6 +326,11 @@ describe('the SQLite scalar convenience types in a TypeScript contract', () => {
       'Argument "as" of BigInt is string; write one of: bigint, number.',
     ],
     ['Json', { storage: 'jsonb' }, 'Argument "storage" of Json is jsonb; write one of: text.'],
+    [
+      'Boolean',
+      { storage: 'text' },
+      'Argument "storage" of Boolean is text; write one of: integer.',
+    ],
   ])('refuses %s(%o) at its argument', (name, written, message) => {
     expect(() =>
       defineContract({}, ({ type }) => {

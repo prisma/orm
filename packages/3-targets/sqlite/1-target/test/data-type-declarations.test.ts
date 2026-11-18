@@ -44,8 +44,13 @@ const STORED_AS_TEXT: readonly string[] = [
   'sqlite/decimal',
 ];
 
+/** The types stored as `sqlite/integer`, which declare no texts of their own. */
+const STORED_AS_INTEGER: readonly string[] = ['sqlite/boolean'];
+
 const registered: readonly DataType[] = sqliteTargetDescriptorMeta.dataTypes;
-const withTexts = registered.filter((type) => !STORED_AS_TEXT.includes(type.id));
+const withTexts = registered.filter(
+  (type) => !STORED_AS_TEXT.includes(type.id) && !STORED_AS_INTEGER.includes(type.id),
+);
 
 function sqlTypeOf(id: string): SqlDataType {
   const type = registered.find((candidate) => candidate.id === id);
@@ -62,6 +67,17 @@ describe('the SQLite data type declarations', () => {
       const { sql } = sqlTypeOf(id);
       expect({ storedAs: sql.storedAs, texts: sql.texts }).toEqual({
         storedAs: 'sqlite/text',
+        texts: [],
+      });
+    },
+  );
+
+  it.each(STORED_AS_INTEGER.map((id) => [id] as const))(
+    '%s is stored as sqlite/integer and declares no texts, so it claims no reported type',
+    (id) => {
+      const { sql } = sqlTypeOf(id);
+      expect({ storedAs: sql.storedAs, texts: sql.texts }).toEqual({
+        storedAs: 'sqlite/integer',
         texts: [],
       });
     },

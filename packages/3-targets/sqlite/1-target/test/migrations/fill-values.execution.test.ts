@@ -68,6 +68,7 @@ describe('the temporary value a new required SQLite column takes', () => {
       'sqlite/bigint@1': 0n,
       'sqlite/bigintnumber@1': 0,
       'sqlite/decimal@1': '0',
+      'sqlite/boolean@1': false,
     });
   });
 });

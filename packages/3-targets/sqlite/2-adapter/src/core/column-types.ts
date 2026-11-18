@@ -4,6 +4,7 @@ import {
   SQL_RAW_CODEC_ID,
   SQLITE_BIGINT_CODEC_ID,
   SQLITE_BLOB_CODEC_ID,
+  SQLITE_BOOLEAN_CODEC_ID,
   SQLITE_DATE_STRING_CODEC_ID,
   SQLITE_DATE_TEMPORAL_CODEC_ID,
   SQLITE_DATETIME_CODEC_ID,
@@ -33,6 +34,10 @@ export const realColumn = {
 
 export const decimalStringColumn = {
   codecId: SQLITE_DECIMAL_CODEC_ID,
+} as const;
+
+export const integerBooleanColumn = {
+  codecId: SQLITE_BOOLEAN_CODEC_ID,
 } as const;
 
 export const blobColumn = {

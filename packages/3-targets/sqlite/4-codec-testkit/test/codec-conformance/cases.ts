@@ -435,6 +435,8 @@ export const sqliteConformanceCases: readonly SqliteCodecConformanceCase[] = [
   },
   { codecId: 'sqlite/duration-string@1', label: 'zero', value: 'PT0S', storageType: 'TEXT' },
   { codecId: 'sqlite/decimal@1', label: 'decimal', value: '12.50', storageType: 'TEXT' },
+  { codecId: 'sqlite/boolean@1', label: 'true', value: true, storageType: 'INTEGER' },
+  { codecId: 'sqlite/boolean@1', label: 'false', value: false, storageType: 'INTEGER' },
   { codecId: 'sqlite/decimal@1', label: 'negative', value: '-0.001', storageType: 'TEXT' },
   {
     codecId: 'sqlite/decimal@1',
@@ -486,6 +488,13 @@ export const sqliteConformanceCases: readonly SqliteCodecConformanceCase[] = [
   },
   {
     codecId: 'sqlite/bigintnumber@1',
+    label: 'null',
+    value: undefined,
+    storageType: 'INTEGER',
+    nullValue: true,
+  },
+  {
+    codecId: 'sqlite/boolean@1',
     label: 'null',
     value: undefined,
     storageType: 'INTEGER',

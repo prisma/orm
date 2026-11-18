@@ -12,6 +12,8 @@ test('each scalar convenience call has the type of the explicit type helper it c
     expectTypeOf(type.Decimal({ storage: 'text' })).toEqualTypeOf(type.DecimalString());
     expectTypeOf(type.BigIntNumber()).toEqualTypeOf(type.IntegerNumber());
     expectTypeOf(type.String()).toEqualTypeOf(type.Text());
+    expectTypeOf(type.Boolean()).toEqualTypeOf(type.IntegerBoolean());
+    expectTypeOf(type.Boolean({ storage: 'integer' })).toEqualTypeOf(type.IntegerBoolean());
     expectTypeOf(type.Bytes()).toEqualTypeOf(type.Blob());
     expectTypeOf(type.Json()).toEqualTypeOf(type.PlainJson());
     expectTypeOf(type.Json({ storage: 'text' })).toEqualTypeOf(type.PlainJson());
@@ -20,6 +22,7 @@ test('each scalar convenience call has the type of the explicit type helper it c
     expectTypeOf(type.Real().codecId).toEqualTypeOf<'sqlite/real@1'>();
     expectTypeOf(type.DecimalString().codecId).toEqualTypeOf<'sqlite/decimal@1'>();
     expectTypeOf(type.Text().codecId).toEqualTypeOf<'sqlite/text@1'>();
+    expectTypeOf(type.IntegerBoolean().codecId).toEqualTypeOf<'sqlite/boolean@1'>();
     expectTypeOf(type.Blob().codecId).toEqualTypeOf<'sqlite/blob@1'>();
     expectTypeOf(type.PlainJson().codecId).toEqualTypeOf<'sqlite/json@1'>();
     return { models: {} };
@@ -38,6 +41,8 @@ test('a scalar convenience call with no row does not compile', () => {
     type.Json({ as: 'string' });
     // @ts-expect-error Decimal stores only text
     type.Decimal({ storage: 'real' });
+    // @ts-expect-error Boolean stores only integer
+    type.Boolean({ storage: 'text' });
     // @ts-expect-error Float has no as option
     type.Float({ as: 'number' });
     return { models: {} };

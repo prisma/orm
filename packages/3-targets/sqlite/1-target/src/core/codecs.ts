@@ -50,6 +50,7 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { isValidDate } from '@internal/type-implementations/date';
 import { blindCast } from '@internal/utils/casts';
+import { sqliteIntegerBooleanDescriptor } from './boolean-codec';
 import { defineSqliteCodecs, SqliteCodecDescriptor, sqliteCodec } from './codec-descriptor';
 import {
   SQLITE_BIGINT_CODEC_ID,
@@ -893,4 +894,5 @@ export const codecDescriptors = defineSqliteCodecs([
   sqliteBigintDescriptor,
   sqliteBigintNumberDescriptor,
   sqliteDecimalStringDescriptor,
+  sqliteIntegerBooleanDescriptor,
 ]);

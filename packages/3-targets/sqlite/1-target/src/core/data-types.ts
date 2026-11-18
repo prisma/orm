@@ -17,6 +17,7 @@ import {
   dateTimeStoredText,
   INT64_RANGE,
   isoDateStringText,
+  readJsonBoolean,
   readJsonFloat,
   readJsonIntegerText,
   readJsonMatching,
@@ -312,6 +313,12 @@ export const sqliteDecimal = sqlDataType('sqlite/decimal', {
   },
 });
 
+/** A boolean, stored as the integer 0 or 1, which is what SQLite's own `FALSE` and `TRUE` are. A default is written `true` or `false`. */
+export const sqliteBoolean = sqlDataType('sqlite/boolean', {
+  storedAs: sqliteInteger.id,
+  read: (json) => readJsonBoolean('sqlite/boolean', json),
+});
+
 /** A JSON document, stored as its JSON text with sorted keys and no added whitespace. A column declared `JSON` would have numeric affinity and store the document `"42"` as the integer 42. */
 export const sqliteJson = sqlDataType('sqlite/json', {
   storedAs: sqliteText.id,
@@ -333,6 +340,7 @@ export const sqliteDataTypes: readonly DataType[] = [
   sqliteDuration,
   sqliteJson,
   sqliteDecimal,
+  sqliteBoolean,
   sqlRawDataType,
 ];
 

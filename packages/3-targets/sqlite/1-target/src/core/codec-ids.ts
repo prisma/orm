@@ -21,3 +21,4 @@ export const SQLITE_TIME_STRING_CODEC_ID = 'sqlite/time-string@1' as const;
 export const SQLITE_TIME_TEMPORAL_CODEC_ID = 'sqlite/time-temporal@1' as const;
 export const SQLITE_DURATION_STRING_CODEC_ID = 'sqlite/duration-string@1' as const;
 export const SQLITE_DECIMAL_CODEC_ID = 'sqlite/decimal@1' as const;
+export const SQLITE_BOOLEAN_CODEC_ID = 'sqlite/boolean@1' as const;

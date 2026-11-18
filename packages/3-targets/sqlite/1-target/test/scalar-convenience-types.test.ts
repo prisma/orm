@@ -5,6 +5,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import {
   sqliteConvenienceScalarTypes,
+  sqliteDeprecatedScalarTypes,
   sqliteExplicitScalarTypes,
 } from '../src/core/type-constructors';
 import sqliteTargetPack from '../src/exports/pack';
@@ -17,6 +18,7 @@ const explicitTypes = [
   ['Real', 'sqlite/real@1', 'stored as SQLite real'],
   ['DecimalString', 'sqlite/decimal@1', 'stored as SQLite text'],
   ['Text', 'sqlite/text@1', 'stored as SQLite text'],
+  ['IntegerBoolean', 'sqlite/boolean@1', 'stored as SQLite integer'],
   ['Blob', 'sqlite/blob@1', 'stored as SQLite blob'],
   ['PlainJson', 'sqlite/json@1', 'stored as SQLite text'],
 ] as const;
@@ -34,6 +36,8 @@ const convenienceRows = [
   ['Decimal', ['text'], 'DecimalString', 'sqlite/decimal@1'],
   ['String', [], 'Text', 'sqlite/text@1'],
   ['String', ['text'], 'Text', 'sqlite/text@1'],
+  ['Boolean', [], 'IntegerBoolean', 'sqlite/boolean@1'],
+  ['Boolean', ['integer'], 'IntegerBoolean', 'sqlite/boolean@1'],
   ['Bytes', [], 'Blob', 'sqlite/blob@1'],
   ['Bytes', ['blob'], 'Blob', 'sqlite/blob@1'],
   ['Json', [], 'PlainJson', 'sqlite/json@1'],
@@ -73,6 +77,7 @@ describe('the SQLite scalar convenience types', () => {
       Float: ['typeChoice', false, ['storage']],
       Decimal: ['typeChoice', false, ['storage']],
       String: ['typeChoice', false, ['storage']],
+      Boolean: ['typeChoice', false, ['storage']],
       Bytes: ['typeChoice', false, ['storage']],
       Json: ['typeChoice', false, ['storage']],
     });
@@ -92,6 +97,7 @@ describe('the SQLite scalar convenience types', () => {
     ['Float', ['integer']],
     ['Decimal', ['real']],
     ['String', ['blob']],
+    ['Boolean', ['text']],
     ['Bytes', ['text']],
     ['Json', ['blob']],
   ])('refuse %s(%j), which no row lists', (name, args) => {
@@ -106,22 +112,53 @@ describe('the SQLite scalar convenience types', () => {
     ).toEqual({ path: ['Int'], args: [], becomes: { path: ['IntegerNumber'], args: [] } });
   });
 
-  it.each([
-    ['IntegerNumber', 'Int'],
-    ['IntegerBigInt', 'BigInt'],
-    ['Real', 'Float'],
-    ['DecimalString', 'Decimal'],
-    ['Text', 'String'],
-    ['Blob', 'Bytes'],
-    ['PlainJson', 'Json'],
-  ])('write %s as the convenience call %s()', (explicit, convenience) => {
-    expect(
-      findAuthoringTypeChoiceCall({ namespace, call: { path: [explicit], args: [] } }),
-    ).toEqual({ path: [convenience], args: [], becomes: { path: [explicit], args: [] } });
+  it('are the eight convenience names every target declares', () => {
+    expect(Object.keys(sqliteConvenienceScalarTypes).sort()).toEqual([
+      'BigInt',
+      'Boolean',
+      'Bytes',
+      'Decimal',
+      'Float',
+      'Int',
+      'Json',
+      'String',
+    ]);
   });
 });
 
+describe('the convenience call each SQLite explicit scalar type is written as', () => {
+  const convenienceCallOf: Readonly<Record<keyof typeof sqliteExplicitScalarTypes, string>> = {
+    IntegerNumber: 'Int',
+    IntegerBigInt: 'BigInt',
+    Real: 'Float',
+    DecimalString: 'Decimal',
+    Text: 'String',
+    IntegerBoolean: 'Boolean',
+    Blob: 'Bytes',
+    PlainJson: 'Json',
+  };
+
+  it('names every explicit type', () => {
+    expect(Object.keys(convenienceCallOf).sort()).toEqual(
+      Object.keys(sqliteExplicitScalarTypes).sort(),
+    );
+  });
+
+  it.each(Object.entries(convenienceCallOf))(
+    '%s is written as the bare convenience call %s',
+    (explicit, convenience) => {
+      expect(
+        findAuthoringTypeChoiceCall({ namespace, call: { path: [explicit], args: [] } }),
+      ).toEqual({ path: [convenience], args: [], becomes: { path: [explicit], args: [] } });
+    },
+  );
+});
+
 describe('the deprecated SQLite scalar names', () => {
+  it('are BigIntNumber only: Boolean is new on SQLite, so no earlier name stands for it', () => {
+    expect(Object.keys(sqliteDeprecatedScalarTypes)).toEqual(['BigIntNumber']);
+  });
+
   it('BigIntNumber is a deprecated alias of IntegerNumber, on its codec', () => {
     expect(namespace.BigIntNumber).toEqual({
       ...sqliteExplicitScalarTypes.IntegerNumber,
