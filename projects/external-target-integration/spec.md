@@ -54,7 +54,7 @@ The config a target package's `defineConfig` builds says which module `contract.
 
 ### `init` gets everything about a target from the target's package
 
-[adrs/init-contribution.md](adrs/init-contribution.md)
+[ADR 325 - init gets everything about a target from the target package](../../docs/architecture%20docs/adrs/ADR%20325%20-%20init%20gets%20everything%20about%20a%20target%20from%20the%20target%20package.md)
 
 A target package exports an init contribution: its label, starter contract, `db.ts` content, environment example, driver packages, quick reference text and an optional server probe. `init` resolves the package, installs it, loads the contribution and then writes files. The package is named by a short name from a list the CLI holds of packages Prisma vouches for, or by its npm package name.
 

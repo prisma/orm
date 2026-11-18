@@ -1,7 +1,7 @@
 # `init` scaffolds from the target package's init contribution
 
 Linear: [TML-3702](https://linear.app/prisma-company/issue/TML-3702).
-Design record: [../../adrs/init-contribution.md](../../adrs/init-contribution.md). It is approved; this spec does not restate its reasoning.
+Design record: [ADR 325 - init gets everything about a target from the target package](../../../../docs/architecture%20docs/adrs/ADR%20325%20-%20init%20gets%20everything%20about%20a%20target%20from%20the%20target%20package.md). It is approved; this spec does not restate its reasoning.
 
 ## At a glance
 

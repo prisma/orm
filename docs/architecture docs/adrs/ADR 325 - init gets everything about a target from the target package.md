@@ -1,8 +1,9 @@
-# `init` gets everything about a target from the target's package
+# ADR 325 — `init` gets everything about a target from the target package
 
-**Status:** Proposed
+**Status:** Accepted
+**Date:** 2026-11-18
 
-## At a glance
+---
 
 `prisma orm init` sets up Prisma 8 in a project. It writes a handful of files and installs what they need:
 
@@ -17,13 +18,13 @@ prisma-8.md               a quick reference
 tsconfig.json, .gitignore, .gitattributes, package.json scripts
 ```
 
-Everything in the first five files depends on the target: which package to import, what a starter contract looks like, what the connection string looks like, which driver to install. This record decides where `init` gets that from.
+Most of what goes into these files depends on the target: which package to import, what a starter contract looks like, what the connection string looks like, which driver to install. This record decides where `init` gets that from.
 
 A **target** is the database an application uses, such as Postgres or MongoDB. A **target package** is the package an application installs to use that target, such as `@prisma/orm-postgres`.
 
 ## Decision
 
-`init` gets it from the target package. The package exports an **init contribution**, and `init` installs the package, loads the contribution and writes the project from it.
+`init` gets it from the target package. The package exports an **init contribution** as the default export of its `init` entrypoint. `init` installs the package, loads the contribution and writes the project from it.
 
 ```ts
 // @prisma/orm-postgres/init
@@ -36,11 +37,10 @@ export default {
   authoringModes: ['psl', 'typescript'],
   starterContract: (mode) => (mode === 'psl' ? starterPsl : starterTs),
   contractSample: (mode) => (mode === 'psl' ? samplePsl : sampleTs),
-  databaseFile: ({ contractImport }) => dbFile(contractImport),
+  databaseFile: () => dbFile,
   envExample: () => 'DATABASE_URL="postgresql://user:password@localhost:5432/mydb"\n',
   quickReference: (input) => renderQuickReference(input),
-  readme: (input) => renderReadme(input),
-  serverRequirement: { minVersion: '15', checkCommand: 'SELECT version()' },
+  serverRequirement: { minVersion: POSTGRES_MIN_SERVER_VERSION, checkCommand: 'SELECT version()' },
   probe: (databaseUrl) => probePostgres(databaseUrl),
 } satisfies InitContribution;
 ```
@@ -51,30 +51,36 @@ The CLI holds no template, driver name, connection string or server check for an
 
 | Member | What `init` does with it |
 | --- | --- |
-| `label` | Shows it as the target's name |
+| `label` | Shows it as the target's name in the quick reference |
 | `configModule` | Writes `prisma.config.ts` importing `defineConfig` from it |
 | `peerPackages` | Installs these driver packages into the application |
 | `authoringModes` | Offers these ways to write the contract: PSL, TypeScript or both |
 | `starterContract(mode)` | Writes it as the starter contract |
 | `contractSample(mode)` | Shows it in the quick reference |
-| `databaseFile(input)` | Writes it as `db.ts` |
+| `databaseFile()` | Writes it as `db.ts`, beside the emitted contract |
 | `envExample()` | Writes it into `.env.example`, and into `.env` when the user asks for one |
-| `quickReference(input)`, `readme(input)` | Writes them as the quick reference and the README |
+| `quickReference(input)` | Writes it as the quick reference |
+| `readme(input)` | Optional. Writes it as the README in a project that already has `src/index.ts` |
 | `serverRequirement` | Optional. States the minimum server version in the quick reference |
 | `probe(databaseUrl)` | Optional. Connects and reports the server's version, for `--probe-db` |
-| `prisma7ConfigFile(input)` | Optional. The config for a project that keeps its Prisma 7 schema as the contract source |
+| `prisma7QuickReference(input)` | Optional. The quick reference for a project that keeps its Prisma 7 schema as the contract source |
 
-The CLI keeps everything that is the same for every target: which files exist and where they go, package manager detection, `tsconfig.json`, `.gitignore`, `.gitattributes`, the `package.json` scripts, the questions it asks and what it prints.
+The CLI keeps everything that is the same for every target: which files exist and where they go, package manager detection, `prisma.config.ts` around `configModule` (for a starter contract and for a Prisma 7 schema), `tsconfig.json`, `.gitignore`, `.gitattributes`, the `package.json` scripts, the questions it asks and what it prints.
+
+Two facts are shared by the CLI and every contribution, and the interface states them: the connection string is read from `DATABASE_URL`, and `dotenv` is installed with the target package, so `db.ts` may import `dotenv/config`.
 
 The `init` entrypoint may import types from the framework but no framework code that runs. The CLI that loads it can be a different installed copy of the framework from the one the target package depends on, and two copies in one process do not recognise each other's values.
+
+A probe reports one of three results: the server's version, a missing driver, or a connection that worked whose version could not be read. It rejects only when it cannot connect.
 
 ## The target package is installed first
 
 The files come from the target package, so it has to be present before `init` can write anything.
 
 ```text
-resolve the target package
-  → install it
+check the flags
+  → resolve the target package
+  → install it, with dotenv
   → load its contribution
   → ask: authoring mode, contract path, and consent to replace files if the project is already set up
   → write the files
@@ -83,9 +89,13 @@ resolve the target package
   → check the server, when asked to
 ```
 
-`init` asks nothing before installing the target package. The user named it, and installing it is what they asked for.
+`init` asks nothing before installing the target package. The user named it, and installing it is what they asked for. Any refusal that depends only on the flags happens before the install.
+
+When a refusal comes after the install, the error says the package was added and gives the command to remove it.
 
 With `--skip-install`, `init` installs nothing, so the target package must already be there. If it is not, `init` stops before changing anything and prints the install command.
+
+A failed install stops `init`, as [ADR 323](ADR%20323%20-%20Prisma%208%20is%20not%20a%20package%20manager%20and%20does%20not%20second-guess%20one.md) requires.
 
 ## How the user names the target
 
@@ -94,38 +104,28 @@ prisma orm init --target postgres                 # a short name
 prisma orm init --target prisma-orm-cockroachdb   # a package name
 ```
 
-The CLI holds a list of known target packages. `--target` is looked up in it, and a value that is not in the list is taken as a package name.
+The CLI holds a list of known target packages. `--target` is looked up in it, and a value that is not in the list is taken as a package name. Until package names are accepted, `--target` takes the short names only.
 
-Each entry holds names only:
-
-| Short name | Aliases | Package | Label | Prisma 7 provider |
-| --- | --- | --- | --- | --- |
-| `postgres` | `postgresql` | `@prisma/orm-postgres` | PostgreSQL | `postgresql` |
-| `mongodb` | `mongo` | `@prisma/orm-mongo` | MongoDB | `mongodb` |
+| Short name | Aliases | Package | Name in this repository | Label | Provider in an earlier Prisma schema | Driver for the Prisma 6 setup |
+| --- | --- | --- | --- | --- | --- | --- |
+| `postgres` | `postgresql` | `@prisma/orm-postgres` | `@internal/postgres` | PostgreSQL | `postgresql`, written by Prisma 7 | none |
+| `mongodb` | `mongo` | `@prisma/orm-mongo` | `@internal/mongo` | MongoDB | `mongodb`, written by Prisma 6 | `mongodb` |
 
 - **A target package is listed because Prisma vouches for it.** Who wrote it does not matter, and a community package can be listed.
-- **The list changes no behaviour.** A listed package and an unlisted one run the same code. Listing gives a short name, a line in the interactive picker, and the mapping from a Prisma 7 provider.
-- **The picker** shows the listed packages and an entry for typing another package name. The label is in the list because the picker shows it before any package is installed.
+- **The list holds names and the facts `init` needs before anything is installed.** The picker shows the label before the package is installed. A Prisma 6 project gets printed setup instructions and no install at all, so the instructions name the driver from the list.
+- **A listed package runs the same code as an unlisted one.** Listing gives a short name, a line in the interactive picker, and the mapping from an earlier Prisma's provider.
+- **The list must agree with the contributions.** A test loads each listed package's published contribution and checks that its label, driver packages and config module match the list entry.
 
-## When it cannot proceed
+## Projects coming from Prisma 6 and Prisma 7
 
-| Situation | What happens |
-| --- | --- |
-| The value is neither a short name nor a valid package name | `init` stops before changing anything |
-| The package has no `init` entrypoint | `init` stops with the package installed and no file written. The error says the package does not support `init` and to write `prisma.config.ts` by hand |
-| The authoring mode asked for is not one the package offers | `init` stops before writing, naming the modes the package offers |
-| `--probe-db` and the contribution has no `probe` | A warning that this target package cannot check the server. With `--strict-probe` it is an error |
+`init` reads the `provider` from an existing Prisma schema and finds the target package through the list. Only listed packages take part. A provider with no entry is refused, with advice to name a package with `--target` and start a fresh project.
 
-## Projects coming from Prisma 7
-
-`init` can set Prisma 8 up beside an existing Prisma 7 project and keep the Prisma 7 schema as the contract source. It reads the `provider` from that schema and finds the target package through the list.
-
-- Only listed packages take part. A provider with no entry is refused, with advice to name a package with `--target` and start a fresh project.
-- A contribution with no `prisma7ConfigFile` means the target package cannot take a Prisma 7 schema. `init` sets up a fresh project instead.
+- **A provider only Prisma 6 wrote**, such as `mongodb`, marks a Prisma 6 project. `init` changes nothing and prints how to set Prisma 8 up beside it.
+- **A Prisma 7 schema** can be kept as the contract source. A target package can take one when its `configModule` exports `prisma7Schema`. The CLI then writes the config around it, and the contribution must give `prisma7QuickReference`. A package without `prisma7Schema` cannot take a Prisma 7 schema, and `init` sets up a fresh project instead.
 
 ## Output
 
-The `--json` result reports `package`, the name of the target package that was installed, and `target`: the short name for a listed package, the package name otherwise.
+The `--json` result reports `target`: the short name for a listed package. When package names are accepted, it also reports `package`, the name of the target package that was installed.
 
 ## Why
 
@@ -140,6 +140,7 @@ The `--json` result reports `package`, the name of the target package that was i
 - A target package without a runtime client cannot provide a contribution, because there is no `db.ts` to write.
 - `init` cannot write a project for a target package that is not installed. `--skip-install` in a project without it is refused.
 - `init` runs code from the package the user names. It is the same package the config loads a moment later.
+- The minimum server version has one source, the target package's code. The CLI keeps no copy of it.
 
 ## Alternatives considered
 
@@ -157,6 +158,10 @@ The application names the target package in a `package.json` field, and the pack
 
 This keeps package code from running before the project is set up. Rejected because `init` loads the config and emits immediately afterwards, which runs the same package, and a server check cannot be data.
 
+### The contribution writes the Prisma 7 config
+
+Each target package would carry its own copy of the config the CLI already writes for a starter contract, differing only in the contract line. A change to that text would have to be made in every target package, and the contribution's member would be a second answer to whether the package can take a Prisma 7 schema, beside the `prisma7Schema` export. Rejected.
+
 ### Package names only, with no list
 
 `prisma orm init --target @prisma/orm-postgres` for everyone. Rejected because a first-time user cannot discover the package name, and the interactive picker would have nothing to show.
@@ -167,4 +172,4 @@ A question, or a typed consent, before `init` installs and runs an unlisted pack
 
 ### The list lives outside the framework's CLI
 
-Considered so that the framework names no target at all. Rejected as unnecessary. A table of package names decides no behaviour, and the rule against target names in the framework exists to prevent behaviour that depends on the target.
+Considered so that the framework names no target at all. Rejected as unnecessary. The list decides no behaviour that depends on the target, and the rule against target names in the framework exists to prevent such behaviour.
