@@ -41,7 +41,7 @@ const seededTasks = [
 ];
 
 /** The value a write resolves to, or the code and message of the error it is refused with. */
-async function outcome<T>(write: Promise<T>): Promise<T | { refused: unknown }> {
+async function outcome<T>(write: PromiseLike<T>): Promise<T | { refused: unknown }> {
   try {
     return await write;
   } catch (error) {
