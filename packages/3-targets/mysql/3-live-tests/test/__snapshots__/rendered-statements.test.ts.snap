@@ -204,7 +204,7 @@ exports[`the statements MySQL live tests send > reads through the ORM and the SQ
         "params": [
           9007199254740993n,
         ],
-        "sql": "SELECT \`id\` AS \`id\` FROM \`Counter\` WHERE \`big\` + 0 = ?1",
+        "sql": "SELECT \`id\` AS \`id\` FROM \`Counter\` WHERE \`Counter\`.\`big\` + 0 = ?1",
       },
     ],
   },
@@ -226,7 +226,7 @@ exports[`the statements MySQL live tests send > reads through the ORM and the SQ
         "params": [
           "ADMIN",
         ],
-        "sql": "SELECT \`id\` AS \`id\`, \`email\` AS \`email\` FROM \`User\` WHERE \`role\` = ?1 ORDER BY \`id\` ASC",
+        "sql": "SELECT \`id\` AS \`id\`, \`email\` AS \`email\` FROM \`User\` WHERE \`User\`.\`role\` = ?1 ORDER BY \`id\` ASC",
       },
     ],
   },
@@ -238,7 +238,7 @@ exports[`the statements MySQL live tests send > reads through the ORM and the SQ
           "ADMIN",
           "Delta",
         ],
-        "sql": "SELECT \`email\` AS \`email\`, \`title\` AS \`title\` FROM \`User\` INNER JOIN (SELECT \`authorId\` AS \`authorId\`, \`title\` AS \`title\` FROM \`Post\` WHERE \`title\` = ?2) AS \`titled\` ON \`User\`.\`id\` = \`titled\`.\`authorId\` WHERE \`User\`.\`role\` = ?1",
+        "sql": "SELECT \`email\` AS \`email\`, \`title\` AS \`title\` FROM \`User\` INNER JOIN (SELECT \`authorId\` AS \`authorId\`, \`title\` AS \`title\` FROM \`Post\` WHERE \`Post\`.\`title\` = ?2) AS \`titled\` ON \`User\`.\`id\` = \`titled\`.\`authorId\` WHERE \`User\`.\`role\` = ?1",
       },
     ],
   },
@@ -361,7 +361,7 @@ exports[`the statements MySQL live tests send > runs raw SQL 1`] = `
         "params": [
           10,
         ],
-        "sql": "SELECT \`id\` AS \`id\`, \`title\` AS \`title\`, \`authorId\` AS \`authorId\` FROM \`Post\` WHERE \`id\` > ?1 ORDER BY \`id\` ASC",
+        "sql": "SELECT \`id\` AS \`id\`, \`title\` AS \`title\`, \`authorId\` AS \`authorId\` FROM \`Post\` WHERE \`Post\`.\`id\` > ?1 ORDER BY \`id\` ASC",
       },
     ],
   },

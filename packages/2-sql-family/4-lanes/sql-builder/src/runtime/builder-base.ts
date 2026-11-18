@@ -333,8 +333,12 @@ export function orderByScopeOf<S extends Scope, R extends Record<string, ScopeFi
   scope: S,
   rowFields: R,
 ): OrderByScope<S, R> {
+  const aliasFields = { ...rowFields };
+  for (const alias in aliasFields) {
+    aliasFields[alias] = { ...rowFields[alias] };
+  }
   return {
-    topLevel: { ...scope.topLevel, ...rowFields },
+    topLevel: { ...scope.topLevel, ...aliasFields },
     namespaces: scope.namespaces,
   };
 }

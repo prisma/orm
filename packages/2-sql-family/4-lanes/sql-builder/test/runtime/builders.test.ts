@@ -387,7 +387,7 @@ describe('orderBy', () => {
     );
     expect(ast.orderBy).toEqual([
       OrderByItem.asc(IdentifierRef.of('name'), { nulls: 'last' }),
-      OrderByItem.desc(ColumnRef.of('users', 'id'), { nulls: 'first' }),
+      OrderByItem.desc(IdentifierRef.of('id'), { nulls: 'first' }),
     ]);
   });
 
@@ -419,7 +419,25 @@ describe('orderBy', () => {
         .orderBy((f) => f.id),
     );
     expect(ast.orderBy).toHaveLength(1);
-    expect(ast.orderBy![0]!.expr).toBeInstanceOf(ColumnRef);
+    expect(ast.orderBy![0]!.expr).toBeInstanceOf(IdentifierRef);
+  });
+
+  it('orderBy callback qualifies a column the select does not name', () => {
+    const ast = getAst(
+      db()
+        .public.users.select('id')
+        .orderBy((f) => f.name),
+    );
+    expect(ast.orderBy).toEqual([OrderByItem.asc(ColumnRef.of('users', 'name'))]);
+  });
+
+  it('orderBy callback reads a select alias that passes its own column through', () => {
+    const ast = getAst(
+      db()
+        .public.users.select('name', (f) => f.name)
+        .orderBy((f) => f.name),
+    );
+    expect(ast.orderBy).toEqual([OrderByItem.asc(IdentifierRef.of('name'))]);
   });
 
   it('orderBy callback reads a select alias, not the column it shadows', () => {
