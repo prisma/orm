@@ -1,11 +1,12 @@
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { InitContribution } from '@internal/cli/init-contribution';
 import type { ContractSourceFormat } from '@internal/config/config-types';
 import mongoContribution from '@internal/mongo/init';
 import postgresContribution from '@internal/postgres/init';
+import { normalize as portablePath, relative as portableRelative } from 'pathe';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import { configFile } from '../../../packages/1-framework/3-tooling/cli/src/commands/init/templates/code-templates';
@@ -151,9 +152,39 @@ const FRAMEWORK_LOCATIONS = [
   'packages/9-public/@prisma/orm-toolchain/',
 ];
 
-/** The modules a built file imports, statically or dynamically; text inside its strings is not an import. */
+/**
+ * The modules a built file imports, statically, dynamically or through a re-export, including
+ * `export * as name from`; text inside its strings is not an import.
+ */
 function moduleSpecifiers(source: string): readonly string[] {
-  return ts.preProcessFile(source, true, true).importedFiles.map((imported) => imported.fileName);
+  const file = ts.createSourceFile(
+    'built.mjs',
+    source,
+    ts.ScriptTarget.Latest,
+    false,
+    ts.ScriptKind.JS,
+  );
+  const found: string[] = [];
+  const visit = (node: ts.Node): void => {
+    if (
+      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+      node.moduleSpecifier !== undefined &&
+      ts.isStringLiteral(node.moduleSpecifier)
+    ) {
+      found.push(node.moduleSpecifier.text);
+    }
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      node.arguments[0] !== undefined &&
+      ts.isStringLiteral(node.arguments[0])
+    ) {
+      found.push(node.arguments[0].text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+  return found;
 }
 
 function isOurs(specifier: string): boolean {
@@ -174,13 +205,13 @@ function workspaceModulesLoadedBy(entry: string): { files: string[]; specifiers:
   const pending = [realpathSync(entry)];
   while (pending.length > 0) {
     const file = pending.pop();
-    if (file === undefined || files.includes(relative(REPO_ROOT, file))) continue;
-    files.push(relative(REPO_ROOT, file));
+    if (file === undefined || files.includes(portableRelative(REPO_ROOT, file))) continue;
+    files.push(portableRelative(REPO_ROOT, file));
     for (const specifier of moduleSpecifiers(readFileSync(file, 'utf-8'))) {
       specifiers.push(specifier);
       if (!isOurs(specifier)) continue;
       const resolved = realpathSync(createRequire(file).resolve(specifier));
-      if (!resolved.includes('/node_modules/')) pending.push(resolved);
+      if (!portablePath(resolved).includes('/node_modules/')) pending.push(resolved);
     }
   }
   return { files, specifiers };
@@ -200,7 +231,7 @@ describe('the init entrypoints import no framework code that runs', () => {
       const entry = join(dir, 'init.mjs');
       writeFileSync(
         entry,
-        'const text = `import "./not-an-import.js"`;\nimport "@internal/utils/casts";\n',
+        'const text = `import "./not-an-import.js"`;\nexport * as casts from "@internal/utils/casts";\n',
       );
 
       const { files, specifiers } = workspaceModulesLoadedBy(entry);
