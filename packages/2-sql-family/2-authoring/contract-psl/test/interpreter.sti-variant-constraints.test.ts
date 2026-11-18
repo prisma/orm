@@ -1,79 +1,14 @@
-import type { SqlStorage } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
-import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import {
-  createBuiltinLikeControlMutationDefaults,
-  interpretSqlContract,
-  postgresScalarTypeDescriptors,
-  postgresTarget,
-} from './fixtures';
-
-const controlMutationDefaults = createBuiltinLikeControlMutationDefaults();
-
-function interpret(schema: string) {
-  return interpretSqlContract(schema, {
-    target: postgresTarget,
-    scalarColumnDescriptors: postgresScalarTypeDescriptors,
-    composedExtensionContracts: new Map(),
-    createNamespace: createTestSqlNamespace,
-    ...fixtureInterpreterTypes,
-    capabilities: { sql: { scalarList: true } },
-    controlMutationDefaults,
-  });
-}
-
-function tablesOf(schema: string) {
-  const result = interpret(schema);
-  if (!result.ok) throw new Error(JSON.stringify(result.failure.diagnostics));
-  const storage = result.value.storage as SqlStorage;
-  return storage.namespaces['public']?.entries.table ?? {};
-}
-
-function diagnosticsOf(schema: string) {
-  const result = interpret(schema);
-  if (result.ok) throw new Error('expected the schema to be refused');
-  return result.failure.diagnostics;
-}
-
-const contactOf = (backRelations: string) => `model Contact {
-  id     Int          @id
-  humans HumanActor[] @relation("Human")
-${backRelations}
-  @@map("contact")
-}`;
-
-const contact = contactOf('');
-
-const team = `model Team {
-  id   Int        @id
-  bots BotActor[] @relation("Bot")
-
-  @@map("team")
-}`;
-
-const actor = `model Actor {
-  id   Int    @id
-  kind String
-
-  @@discriminator(kind)
-  @@map("actor")
-}`;
-
-const humanWithContact = (body: string) => `model HumanActor {
-  contact   Contact  @relation("Human", fields: [contactId], references: [id], onDelete: Cascade)
-  contactId Int
-  email     String?
-${body}
-  @@base(Actor, "human")
-}`;
-
-const botWithOwner = (target: 'Contact' | 'Team') => `model BotActor {
-  owner     ${target} @relation("Bot", fields: [contactId], references: [id], onDelete: Cascade)
-  contactId Int
-
-  @@base(Actor, "bot")
-}`;
+  actor,
+  botWithOwner,
+  contact,
+  contactOf,
+  diagnosticsOf,
+  humanWithContact,
+  tablesOf,
+  team,
+} from './sti-variant-support';
 
 describe('constraints declared on a single-table variant', () => {
   it("puts the variant's foreign key on the base table, keeping its referential action", () => {
@@ -227,7 +162,7 @@ model HumanActor {
       diagnosticsOf([contact, actor, humanWithContact(`  ${attribute}`)].join('\n\n')),
     ).toEqual([
       expect.objectContaining({
-        message: `Model "HumanActor" shares the table of its base model "Actor" (single-table inheritance), so "${attribute.split('(')[0]}" would also cover the rows of other variants. Without a condition, only a plain @@index, @unique or @@unique over exactly the fields of one of its own relations is accepted. Scope it to this variant instead: ${advice}`,
+        message: `Model "HumanActor" shares the table of its base model "Actor" (single-table inheritance), so "${attribute.split('(')[0]}" would also cover the rows of other variants. Without a condition, only a plain @@index, @unique or @@unique over exactly the fields of one of its own relations is accepted, and only when no other model maps those columns differently. Scope it to this variant instead: ${advice}`,
       }),
     ]);
   });

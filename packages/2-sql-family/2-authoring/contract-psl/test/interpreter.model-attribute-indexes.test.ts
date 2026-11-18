@@ -180,4 +180,35 @@ describe('a contributed model attribute that lowers to an index', () => {
       ]),
     );
   });
+
+  it('refuses the index on a single-table variant, where it would cover the other variants', () => {
+    const schema = `model Message {
+  id   Int    @id
+  kind String
+
+  @@discriminator(kind)
+}
+
+model Note {
+  text String
+
+  @@searchIndex([text], name: "note_text_search")
+  @@base(Message, "note")
+}`;
+    const result = interpret(schema, searchIndexContributions());
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_UNSCOPED_INDEX_ON_STI_VARIANT',
+        message: expect.stringContaining(
+          "Scope it to this variant instead with where: sql`kind = 'note'`.",
+        ),
+        span: expect.objectContaining({
+          start: expect.objectContaining({ offset: schema.indexOf('@@searchIndex') }),
+        }),
+      }),
+    ]);
+  });
 });

@@ -68,4 +68,11 @@ export type {
   EnumTypeHandle,
 } from '../enum-type';
 export { bindEnumType, enumType, member } from '../enum-type';
+export {
+  mergeSharedTable,
+  type SharedForeignKeyView,
+  type SharedTableMerge,
+  type SharedTableRefusal,
+  type TableSharer,
+} from '../shared-table-constraints';
 export { unbound } from '../unbound';
