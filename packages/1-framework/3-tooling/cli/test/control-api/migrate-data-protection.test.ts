@@ -64,7 +64,7 @@ const DROP_AUDIT: MigrationPlanOperation = {
 };
 
 const KEEP_DATA =
-  "This database's data protection policy forbids losing data, so these operations cannot run on it. If a model or field was only renamed, or its type changed, plan this migration again with --rename or --convert. Otherwise remove the operation from the migration. To do it anyway, whoever owns the database must first change its data protection policy.";
+  "This database's data protection policy forbids losing data, so these operations cannot run on it. If a model or field was only renamed, or its type changed, delete this migration and plan it again with --rename or --convert. Otherwise remove the operation from the migration. To do it anyway, whoever owns the database must first change its data protection policy.";
 
 const projectDirs: string[] = [];
 

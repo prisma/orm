@@ -178,7 +178,7 @@ function keepProtected(
     refusingPolicy(refusal.source, 'losing data'),
     ...(migrated
       ? [
-          'If a model or field was only renamed, or its type changed, plan this migration again with --rename or --convert.',
+          'If a model or field was only renamed, or its type changed, delete this migration and plan it again with --rename or --convert.',
           'Otherwise remove the operation from the migration.',
         ]
       : [

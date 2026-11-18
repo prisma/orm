@@ -225,7 +225,7 @@ describe('errorDataProtectionForbids', () => {
     'To do it anyway, whoever owns that database must first change the data protection policy production declares.';
   const lossForbidden =
     "This database's data protection policy forbids losing data, so these operations cannot run on it.";
-  const keepData = `${lossForbidden} If a model or field was only renamed, or its type changed, plan this migration again with --rename or --convert. Otherwise remove the operation from the migration. ${markerCloses}`;
+  const keepData = `${lossForbidden} If a model or field was only renamed, or its type changed, delete this migration and plan it again with --rename or --convert. Otherwise remove the operation from the migration. ${markerCloses}`;
   const keepAccess = `production declares a data protection policy that forbids changing who can read or write data, so these operations cannot run on the database it describes. Keep the contract's access rules as they are. ${refCloses}`;
   const keepDataPlanned = `${lossForbidden} If a model or field was only renamed, state the rename with --rename <old>:<new>. Otherwise keep it in the contract. ${markerCloses}`;
 
