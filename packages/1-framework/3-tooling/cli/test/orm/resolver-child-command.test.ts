@@ -7,7 +7,7 @@ describe('resolverChildCommand', () => {
       resolverChildCommand({ node: '24.0.0' }, '/usr/bin/node', 'SCRIPT', 'acme-db/init'),
     ).toEqual({
       command: '/usr/bin/node',
-      args: ['--input-type=module', '-e', 'SCRIPT', 'acme-db/init'],
+      args: ['--input-type=module', '-e', 'SCRIPT', '--', 'acme-db/init'],
     });
   });
 
@@ -19,6 +19,16 @@ describe('resolverChildCommand', () => {
         'SCRIPT',
         'acme-db/init',
       ),
-    ).toEqual({ command: '/opt/bin/deno', args: ['eval', 'SCRIPT', 'acme-db/init'] });
+    ).toEqual({ command: '/opt/bin/deno', args: ['eval', 'SCRIPT', '--', 'acme-db/init'] });
+  });
+
+  it('passes a specifier that starts with a dash as an argument, not an option', () => {
+    const { args } = resolverChildCommand(
+      { node: '24.0.0' },
+      '/usr/bin/node',
+      'SCRIPT',
+      '--version',
+    );
+    expect(args.slice(-2)).toEqual(['--', '--version']);
   });
 });

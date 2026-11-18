@@ -6,7 +6,7 @@ export function resolverChildCommand(
   argument: string,
 ): { readonly command: string; readonly args: readonly string[] } {
   if (versions['deno'] !== undefined) {
-    return { command: execPath, args: ['eval', script, argument] };
+    return { command: execPath, args: ['eval', script, '--', argument] };
   }
-  return { command: execPath, args: ['--input-type=module', '-e', script, argument] };
+  return { command: execPath, args: ['--input-type=module', '-e', script, '--', argument] };
 }
