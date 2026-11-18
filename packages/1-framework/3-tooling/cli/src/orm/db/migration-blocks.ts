@@ -12,7 +12,7 @@ import {
 } from '../../utils/formatters/migrations';
 import { runCommandAction } from '../../utils/next-actions';
 import { plannerWarningText } from '../../utils/planner-warning-text';
-import { declaredSettingsText } from '../../utils/policy-errors';
+import { type DataProtectionSetting, declaredSettingsText } from '../../utils/policy-errors';
 import { type CliInvocation, cliCommand, printedPlanCommand } from '../../utils/printed-command';
 import { appliedStatementBlocks } from '../statement-blocks';
 
@@ -216,9 +216,16 @@ function answerGroups<TEntry extends { readonly text: string; readonly operation
  * answered by `--delete` or `--rename`, and each that would change access, answered by `--allow`.
  */
 function questionBlocks(result: MigrationCommandResult): readonly Block[] {
+  const asks = (setting: DataProtectionSetting) => result.permitted?.includes(setting) !== true;
   const entries = [
-    ...(result.dataLoss ?? []).map((entry) => ({ entry, verb: 'delete' as const })),
-    ...(result.accessChanges ?? []).map((entry) => ({ entry, verb: 'allow' as const })),
+    ...(asks('dataLoss') ? (result.dataLoss ?? []) : []).map((entry) => ({
+      entry,
+      verb: 'delete' as const,
+    })),
+    ...(asks('accessWidening') ? (result.accessChanges ?? []) : []).map((entry) => ({
+      entry,
+      verb: 'allow' as const,
+    })),
   ];
   if (entries.length === 0) {
     return [];

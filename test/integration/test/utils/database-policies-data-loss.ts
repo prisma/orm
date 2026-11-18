@@ -153,10 +153,34 @@ export function definePolicyDataLossJourneys(
         await atNext(project, 'data-loss-permitted');
         await emitRenamed(project);
 
+        const dryRun = await runDbUpdate(project.ctx, ['--dry-run', '--json']);
         const applied = await runDbUpdate(project.ctx, ['--no-interactive', '--json']);
 
+        expect(parseJsonOutput(dryRun)).toMatchObject({
+          permitted: ['dataLoss'],
+          dataLoss: [{ text: 'User.name', answered: true }],
+        });
         expect(applied.exitCode, `db update: ${applied.stdout}\n${applied.stderr}`).toBe(0);
         expect(parseJsonOutput(applied)).toMatchObject({ mode: 'apply' });
+      });
+    },
+    timeout,
+  );
+
+  it(
+    'db update under data-loss-permitted accepts a --delete given anyway, and refuses one that names nothing it loses',
+    async (test) => {
+      await withProject(test, async (project) => {
+        await atNext(project, 'data-loss-permitted');
+        await emitRenamed(project);
+
+        const unused = await runDbUpdate(project.ctx, ['--delete', 'User.email', '--json']);
+        const applied = await runDbUpdate(project.ctx, [...DELETE_NAME, '--json']);
+
+        expect(errorOf(unused)).toMatchObject({ code: 'CLI.CONSENT_UNUSED' });
+        expect(applied.exitCode, `db update --delete: ${applied.stdout}\n${applied.stderr}`).toBe(
+          0,
+        );
       });
     },
     timeout,

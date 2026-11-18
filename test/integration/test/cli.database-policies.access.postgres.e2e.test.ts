@@ -21,6 +21,7 @@ import {
 } from './utils/database-policies-journey';
 import {
   getLatestMigrationDir,
+  parseJsonOutput,
   planMigrationAndSelfEmit,
   runContractEmit,
   runDbUpdate,
@@ -181,14 +182,24 @@ withTempDir(({ createTempDir }) => {
     );
 
     it(
-      'db update under access-widening-permitted applies the change without asking',
+      'db update under access-widening-permitted lists nothing an apply asks about, and accepts an --allow given anyway',
       async () => {
         await withProject(async (project) => {
           await migratedTo(project, WITH_POLICY, 'access-widening-permitted');
           await emit(project, NO_RLS);
 
-          const applied = await runDbUpdate(project.ctx, ['--no-interactive', '--json']);
+          const dryRun = await runDbUpdate(project.ctx, ['--dry-run', '--json']);
+          const applied = await runDbUpdate(project.ctx, [
+            '--allow',
+            'User',
+            '--no-interactive',
+            '--json',
+          ]);
 
+          expect(parseJsonOutput(dryRun)).toMatchObject({
+            permitted: ['accessWidening'],
+            accessChanges: [{ answered: true }, { answered: true }],
+          });
           expect(applied.exitCode, `db update: ${applied.stdout}\n${applied.stderr}`).toBe(0);
           expect(await policiesOnUser(project)).toBe(0);
         });

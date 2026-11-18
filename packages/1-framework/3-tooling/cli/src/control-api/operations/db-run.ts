@@ -60,6 +60,7 @@ import { dbUpdateKeepDataEditAdvice } from '../../utils/keep-data-edit-advice';
 import { planningRefusedError } from '../../utils/planning-refused-error';
 import {
   type DataProtectionRefusedOperation,
+  type DataProtectionSetting,
   declaredSettingsText,
 } from '../../utils/policy-errors';
 import type { CliInvocation } from '../../utils/printed-command';
@@ -110,8 +111,8 @@ import {
   type CheckedDatabasePolicies,
   checkRunPolicies,
   databasePoliciesInForce,
-  dataProtectionOfRun,
   forbiddingSettingsOfRun,
+  permittedSettingsOfRun,
   refuseForbiddenChanges,
 } from './database-policies';
 import { stripOperations } from './migration-helpers';
@@ -426,8 +427,6 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
   // A `forbidden` data protection setting refuses what a plan still loses or changes after the
   // renames it was given, before anyone is asked about it; a `permitted` one answers every question
   // it covers.
-  const protection =
-    checkedPolicies === undefined ? undefined : dataProtectionOfRun(checkedPolicies);
   const refuseForbidden = (
     planned: PlannedRun,
     texts: readonly StatementText[],
@@ -454,13 +453,12 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
   if (forbidden !== undefined) {
     return notOk(forbidden);
   }
+  const permitted = checkedPolicies === undefined ? [] : permittedSettingsOfRun(checkedPolicies);
   const consentAll =
     options.action === 'dbUpdate'
       ? {
-          delete: options.acceptDataLoss || protection?.dataLoss === 'data-loss-permitted',
-          allow:
-            options.acceptAccessChanges ||
-            protection?.accessWidening === 'access-widening-permitted',
+          delete: options.acceptDataLoss || permitted.includes('dataLoss'),
+          allow: options.acceptAccessChanges || permitted.includes('accessWidening'),
         }
       : { delete: false, allow: false };
   // 3a. Questions: an apply of `db update` asks what each operation that would lose data means,
@@ -604,6 +602,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
       appliedStatements,
       subjects,
       databaseStorageHash,
+      permitted,
     });
   }
 
@@ -930,9 +929,11 @@ function wrapPlanResult(args: {
     | undefined;
   /** `undefined` for `db init`, which prints no `migration plan`. */
   readonly databaseStorageHash: string | undefined;
+  readonly permitted: readonly DataProtectionSetting[];
 }): DbInitResult | DbUpdateResult {
   const success: DbInitSuccess | DbUpdateSuccess = {
     mode: 'plan',
+    ...(args.permitted.length > 0 ? { permitted: args.permitted } : {}),
     ...ifDefined('databaseStorageHash', args.databaseStorageHash),
     ...ifDefined('appliedStatements', args.appliedStatements),
     ...args.subjects,

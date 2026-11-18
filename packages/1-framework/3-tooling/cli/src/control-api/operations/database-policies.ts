@@ -120,6 +120,21 @@ export function dataProtectionOfRun(
   return checked.toWrite?.policies.dataProtection ?? checked.inForce.dataProtection;
 }
 
+const PERMITTED_LEVEL = {
+  dataLoss: 'data-loss-permitted',
+  accessWidening: 'access-widening-permitted',
+} as const satisfies {
+  readonly [S in DataProtectionSetting]: DatabasePolicies['dataProtection'][S];
+};
+
+/** The data protection settings a checked run obeys at their `permitted` level: nobody is asked about what they cover. */
+export function permittedSettingsOfRun(
+  checked: CheckedDatabasePolicies,
+): readonly DataProtectionSetting[] {
+  const levels = dataProtectionOfRun(checked);
+  return DATA_PROTECTION_KEYS.filter((setting) => levels[setting] === PERMITTED_LEVEL[setting]);
+}
+
 /** Each data protection setting at its `forbidden` level, with where that level is recorded. */
 export type ForbiddingSettings = Partial<Record<DataProtectionSetting, PolicySource>>;
 

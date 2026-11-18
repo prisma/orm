@@ -423,3 +423,15 @@ describe('executeDbUpdate, --rename under data-loss-permitted', () => {
     }).toEqual({ statements: ['rename'], executed: 1 });
   });
 });
+
+describe('executeDbUpdate --dry-run under permitted', () => {
+  it('names the permitted settings, about whose operations an apply asks nothing', async () => {
+    const { result } = await update({
+      policies: { dataProtection: { dataLoss: 'data-loss-permitted' } },
+      mode: 'plan',
+      changesAccess: true,
+    });
+
+    expect(result.ok ? result.value.permitted : result.failure).toEqual(['dataLoss']);
+  });
+});
