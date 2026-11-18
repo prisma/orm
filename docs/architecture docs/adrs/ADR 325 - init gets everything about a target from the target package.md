@@ -80,16 +80,18 @@ The files come from the target package, so it has to be present before `init` ca
 ```text
 check the flags
   → resolve the target package
-  → install it, with dotenv
+  → install it, with dotenv and the drivers it requires
   → load its contribution
   → ask: authoring mode, contract path, and consent to replace files if the project is already set up
   → write the files
-  → install the driver packages, the CLI and the rest
+  → install the CLI and the rest
   → emit the contract
   → check the server, when asked to
 ```
 
 `init` asks nothing before installing the target package. The user named it, and installing it is what they asked for. Any refusal that depends only on the flags happens before the install.
+
+The drivers go in the same install. A target package declares its driver as a required peer dependency ([ADR 219](ADR%20219%20-%20Database%20driver%20coupling%20-%20framework%20owns%20user-facing%20types%20and%20driver%20is%20a%20single-major%20peer%20dependency.md)), and some package managers refuse to install a package without its required peers. For a listed package the list names the drivers, because they must be known before the package is installed.
 
 When a refusal comes after the install, the error says the package was added and gives the command to remove it.
 
@@ -106,13 +108,13 @@ prisma orm init --target prisma-orm-cockroachdb   # a package name
 
 The CLI holds a list of known target packages. `--target` is looked up in it, and a value that is not in the list is taken as a package name. Until package names are accepted, `--target` takes the short names only.
 
-| Short name | Aliases | Package | Name in this repository | Label | Provider in an earlier Prisma schema | Driver for the Prisma 6 setup |
+| Short name | Aliases | Package | Name in this repository | Label | Provider in an earlier Prisma schema | Drivers it requires |
 | --- | --- | --- | --- | --- | --- | --- |
-| `postgres` | `postgresql` | `@prisma/orm-postgres` | `@internal/postgres` | PostgreSQL | `postgresql`, written by Prisma 7 | none |
+| `postgres` | `postgresql` | `@prisma/orm-postgres` | `@internal/postgres` | PostgreSQL | `postgresql`, written by Prisma 7 | `pg` |
 | `mongodb` | `mongo` | `@prisma/orm-mongo` | `@internal/mongo` | MongoDB | `mongodb`, written by Prisma 6 | `mongodb` |
 
 - **A target package is listed because Prisma vouches for it.** Who wrote it does not matter, and a community package can be listed.
-- **The list holds names and the facts `init` needs before anything is installed.** The picker shows the label before the package is installed. A Prisma 6 project gets printed setup instructions and no install at all, so the instructions name the driver from the list.
+- **The list holds names and the facts `init` needs before anything is installed.** The picker shows the label before the package is installed. The drivers go into the package's own install, and a Prisma 6 project gets printed setup instructions and no install at all, so both take the drivers from the list.
 - **A listed package runs the same code as an unlisted one.** Listing gives a short name, a line in the interactive picker, and the mapping from an earlier Prisma's provider.
 - **The list must agree with the contributions.** A test loads each listed package's published contribution and checks that its label, driver packages and config module match the list entry.
 
@@ -140,6 +142,7 @@ The `--json` result reports `target`: the short name for a listed package. When 
 - A target package without a runtime client cannot provide a contribution, because there is no `db.ts` to write.
 - `init` cannot write a project for a target package that is not installed. `--skip-install` in a project without it is refused.
 - `init` runs code from the package the user names. It is the same package the config loads a moment later.
+- When `--target` accepts a package name, `init` will not know an unlisted package's drivers before installing it. How it learns them is decided with that change.
 - The minimum server version has one source, the target package's code. The CLI keeps no copy of it.
 
 ## Alternatives considered
