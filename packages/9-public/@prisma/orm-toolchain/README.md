@@ -15,9 +15,6 @@ Applications get it as an exact-pinned dependency of their database facade (`@pr
 | `/migration-tools` | migration graph, packages, refs, IO |
 | `/cli-telemetry` | CLI telemetry |
 | `/vite-plugin-contract-emit` | Vite plugin for contract emission |
-| `/publish-surface` | the published-surface model as a whole |
-| `/publish-surface/shells` | the map from internal package to published entrypoint (ADR 242) |
-| `/publish-surface/import-roots` | import-root resolution: which package name emitted code should carry |
 
 ## Responsibilities
 

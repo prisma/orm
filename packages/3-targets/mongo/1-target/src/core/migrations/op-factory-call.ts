@@ -83,14 +83,7 @@ export interface CollModMeta {
   readonly checkDocuments?: boolean;
 }
 
-/**
- * The single module a scaffolded Mongo `migration.ts` imports from: the
- * operation factories below, plus the `Migration` base and `MigrationCLI`
- * that `render-typescript.ts` adds. The authored name; `render-typescript.ts`
- * maps it to whatever the consuming application's import root calls it,
- * once over the whole assembled import list.
- */
-export const TARGET_MIGRATION_MODULE = '@internal/target-mongo/migration';
+export const MIGRATION_MODULE = '<migrations.module>';
 
 abstract class OpFactoryCallNode extends TsExpression implements FrameworkOpFactoryCall {
   abstract readonly factoryName: string;
@@ -99,7 +92,7 @@ abstract class OpFactoryCallNode extends TsExpression implements FrameworkOpFact
   abstract toOp(): AnyMongoMigrationOperation | Promise<AnyMongoMigrationOperation>;
 
   importRequirements(): readonly ImportRequirement[] {
-    return [{ moduleSpecifier: TARGET_MIGRATION_MODULE, symbol: this.factoryName }];
+    return [{ moduleSpecifier: MIGRATION_MODULE, symbol: this.factoryName }];
   }
 
   protected freeze(): void {
@@ -400,7 +393,7 @@ export class DataTransformCall extends OpFactoryCallNode {
 
   override importRequirements(): readonly ImportRequirement[] {
     return ['dataTransform', 'rawAggregate', 'rawUpdateMany', 'placeholder'].map((symbol) => ({
-      moduleSpecifier: TARGET_MIGRATION_MODULE,
+      moduleSpecifier: MIGRATION_MODULE,
       symbol,
     }));
   }
@@ -524,7 +517,7 @@ export class FillStoredKeyCall extends OpFactoryCallNode {
     return [
       ...super.importRequirements(),
       ...(this.options.value instanceof UnfilledValue
-        ? [{ moduleSpecifier: TARGET_MIGRATION_MODULE, symbol: 'placeholder' }]
+        ? [{ moduleSpecifier: MIGRATION_MODULE, symbol: 'placeholder' }]
         : []),
     ];
   }
@@ -609,7 +602,7 @@ export class RemoveStoredValueCall extends OpFactoryCallNode {
     return [
       ...super.importRequirements(),
       ...(this.imports.importsReplacement
-        ? [{ moduleSpecifier: TARGET_MIGRATION_MODULE, symbol: 'replaceStoredValue' }]
+        ? [{ moduleSpecifier: MIGRATION_MODULE, symbol: 'replaceStoredValue' }]
         : []),
     ];
   }

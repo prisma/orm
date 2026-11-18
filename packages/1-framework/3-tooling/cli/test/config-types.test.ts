@@ -15,7 +15,7 @@ describe('defineConfig', () => {
     id: 'sql',
     generateStorageType: () => '{}',
     generateModelStorageType: () => '{}',
-    getFamilyImports: () => [] as string[],
+    getFamilyImports: () => [],
     getFamilyTypeAliases: () => '',
     getTypeMapsExpression: () => 'never',
     getContractWrapper: (base: string, tm: string) =>

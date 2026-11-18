@@ -1,6 +1,7 @@
 import { mysqlAdapterDescriptorMeta } from '@internal/adapter-mysql/adapter';
 import { mariadbTargetDescriptorMetaRuntime } from '@internal/target-mariadb/descriptor-meta-runtime';
 import { mariadbAdapterCapabilities } from './capabilities';
+import { moduleBase } from './module-base';
 
 export const mariadbAdapterDescriptorMeta = {
   ...mysqlAdapterDescriptorMeta,
@@ -12,7 +13,7 @@ export const mariadbAdapterDescriptorMeta = {
     codecTypes: {
       ...mysqlAdapterDescriptorMeta.types.codecTypes,
       import: {
-        package: '@internal/adapter-mariadb/codec-types',
+        package: `${moduleBase}/codec-types`,
         named: 'CodecTypes',
         alias: 'MariadbTypes',
       },

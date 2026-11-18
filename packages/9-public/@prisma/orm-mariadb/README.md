@@ -44,11 +44,12 @@ These hold on MariaDB 10.11 as on MySQL 8.4; each was checked on a live MariaDB 
 | Namespace | Surface |
 | --- | --- |
 | `/config` | `defineConfig` for `prisma.config.ts` |
+| `/contract-types` | the types a generated `contract.d.ts` imports |
 | `/migration`, `/control` | migration classes and the control client |
 | `/runtime` | `mariadb({ contract, url })`, the query client |
 | `/static` | `contractFromJson` and the statically composed runtime |
 
-Generated contract files and migrations import from the facade, so an application never has to depend on a package it did not install:
+A generated `contract.d.ts` imports every framework, family and target type it names from `/contract-types`, and a generated `migration.ts` imports from `/migration`: the modules this package's `defineConfig` sets as `contract.typesModule` and `migrations.module`. The facade also forwards the namespaces of the packages it is built from, so an application never has to depend on a package it did not install:
 
 | Namespace | Forwards |
 | --- | --- |

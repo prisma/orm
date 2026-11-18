@@ -16,7 +16,8 @@ Wires the MariaDB target, adapter and driver together for a project's `prisma.co
 
 - **`defineConfig`** (`./config`): a MariaDB project's configuration, built with MySQL's `createMysqlDefineConfig`. The contract is a Prisma schema: a `.prisma` file, a folder of them, or a glob. `createMysqlDefineConfig` refuses a TypeScript contract (`.ts`, `.mts`, `.cts`, `.tsx`) with `CONFIG.VALIDATION_FAILED`.
 - **`createMariadbControlClient`** (`./control`): a control client for `migration plan`, `db migrate`, `db verify`, `db sign` and introspection.
-- **`./migration`**: what a MariaDB `migration.ts` imports: `Migration`, which is `MariadbMigration`, `MigrationCLI` and the rest of MySQL's migration module.
+- **`./migration`**: what a MariaDB `migration.ts` imports: `Migration`, which is `MariadbMigration`, `MigrationCLI` and the rest of MySQL's migration module. `defineConfig` names it in `migrations.module`.
+- **`./contract-types`**: re-exports, as types only, the framework contract types, the SQL family contract types and the MariaDB codec types: everything a generated `contract.d.ts` imports. `defineConfig` names it in `contract.typesModule`.
 - **`mariadb({ contract, url })`** (`./runtime`): MySQL's `createMysqlClient` applied to MariaDB's runtime target, adapter and driver. It takes every option `mysql()` takes (`MariadbOptions`) and returns a `MariadbClient`. Every type the entry exports has a MariaDB name: `MariadbPoolOptions`, `MariadbTransactionOptions`, `MariadbBindingInput` and the rest alias MySQL's. The URL must use `mariadb://` or `mysql://`. A contract emitted for another target fails with `RUNTIME.CONTRACT_TARGET_MISMATCH`. MariaDB loads includes with one query per relation, since its adapter reports neither `sql.outerReferencesInDerivedTables` nor `sql.jsonAggWithoutTruncation`.
 - **`contractFromJson`** and the static context (`./static`): both from one call to MySQL's `createMysqlStatic`, so they validate with one validator.
 

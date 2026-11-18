@@ -5,7 +5,8 @@ import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { migrationWithUnfilledPlaceholders } from '../../src/control-api/operations/unfilled-placeholders';
 
-const FILLED = `import { Migration, MigrationCLI, placeholder } from '@internal/sqlite/migration';
+const MODULE = '@internal/sqlite/migration';
+const FILLED = `import { Migration, MigrationCLI, placeholder } from '${MODULE}';
 export default class M extends Migration {
   override get operations() {
     return [this.fillStoredKey({ table: 'user', column: 'address', path: '$.country', value: 'NO' })];
@@ -109,7 +110,7 @@ export default class M extends Migration {}`,
       ],
       [
         'a namespace import',
-        `import * as m from '@prisma/orm-postgres/migration';
+        `import * as m from '${MODULE}';
 export default class M extends m.Migration {
   override get operations() { return [this.fillStoredKey({ value: m.placeholder('x') })]; }
 }`,
@@ -117,6 +118,29 @@ export default class M extends m.Migration {
       ['a template expression', FILLED.replace("'NO'", `\`${'$'}{placeholder('x')}\``)],
     ])('finds a placeholder called through %s', async (_, source) => {
       expect(await unfilled(source)).toBe(join(migrationsDir, named));
+    });
+  });
+
+  describe('finds a placeholder whatever package it is imported from', () => {
+    const plans = new Map([['app', plan([{ dirName: '1_country', operationCount: 0 }])]]);
+
+    it.each([
+      ['a Prisma module', '@prisma/orm-mongo/migration'],
+      ['a module an earlier release wrote', '@prisma/orm-mongo/target/migration'],
+      ['an unscoped package outside Prisma', 'prisma-orm-standin/migration'],
+      ['a name private to the package the migration is in', '#migration'],
+    ])('%s', async (_, module) => {
+      await migration('1_country', UNFILLED.replace(`'${MODULE}'`, `'${module}'`));
+      expect(await migrationWithUnfilledPlaceholders(plans, ['app'], migrationsDir)).toBe(
+        join(migrationsDir, 'app', '1_country'),
+      );
+    });
+
+    it('but not one imported from a file of the migration', async () => {
+      await migration('1_country', UNFILLED.replace(`'${MODULE}'`, "'../helpers/migration'"));
+      expect(
+        await migrationWithUnfilledPlaceholders(plans, ['app'], migrationsDir),
+      ).toBeUndefined();
     });
   });
 });

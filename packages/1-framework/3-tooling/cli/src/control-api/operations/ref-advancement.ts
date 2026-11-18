@@ -2,8 +2,8 @@ import { writeContractSnapshot } from '@internal/migration-tools/contract-snapsh
 import { errorInvalidRefName, MigrationToolsError } from '@internal/migration-tools/errors';
 import { advanceRef, validateRefName } from '@internal/migration-tools/refs';
 import { notOk, ok, type Result } from '@internal/utils/result';
-import { CliStructuredError } from '../../utils/cli-errors';
-import { createProjectSpecifierResolver } from '../../utils/project-import-root';
+import type { CliStructuredError } from '../../utils/cli-errors';
+import { contractTypesModuleOf } from '../../utils/command-helpers';
 import type { ControlClient } from '../types';
 import { renderSnapshotDeclarations } from './snapshot-declarations';
 
@@ -39,35 +39,29 @@ export function computeRefAdvancementName(options: {
 /**
  * Everything `executeRefAdvancement` needs, produced before a command does the
  * work that precedes the ref write: the ref name is validated and the
- * declarations of the contract to snapshot are rendered from its JSON, with
- * the import names the project owning `configPath` can resolve. Nothing is
- * read or rendered after the database is touched, so a contract that cannot
+ * declarations of the contract to snapshot are rendered from its JSON. Nothing
+ * is read or rendered after the database is touched, so a contract that cannot
  * be snapshotted refuses the command before it changes anything.
  */
 export async function preflightRefAdvancement(args: {
   readonly name: string;
   readonly contractJson: Record<string, unknown>;
   readonly contractJsonPath: string;
-  readonly projectDir: string;
+  readonly config: { readonly contract?: { readonly typesModule?: string } };
   readonly client: Pick<ControlClient, 'renderContractDts'>;
 }): Promise<Result<ContractIR, CliStructuredError>> {
   if (!validateRefName(args.name)) {
     return notOk(errorInvalidRefName(args.name));
   }
-  let resolveImportSpecifier: ReturnType<typeof createProjectSpecifierResolver>;
-  try {
-    resolveImportSpecifier = createProjectSpecifierResolver(args.projectDir);
-  } catch (error) {
-    if (CliStructuredError.is(error)) {
-      return notOk(error);
-    }
-    throw error;
+  const typesModule = contractTypesModuleOf(args.config);
+  if (!typesModule.ok) {
+    return typesModule;
   }
   const rendered = await renderSnapshotDeclarations({
     client: args.client,
     contractJson: args.contractJson,
     contractJsonPath: args.contractJsonPath,
-    resolveImportSpecifier,
+    typesModule: typesModule.value,
   });
   if (!rendered.ok) {
     return rendered;

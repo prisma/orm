@@ -154,6 +154,7 @@ function ormConfig(cwd: string, overrides: Record<string, unknown> = {}): Record
     contract: {
       source: { format: 'typescript', inputs: [], load: async () => ({}) },
       output: join(cwd, 'contract.json'),
+      typesModule: '@acme/orm-db/contract-types',
     },
     migrations: { dir: 'migrations' },
     ...overrides,
@@ -242,7 +243,7 @@ describe('migrate', () => {
       });
       expect(mocks.renderContractDts).toHaveBeenCalledWith({
         contract: expect.objectContaining({ storage: { storageHash: C2, namespaces: {} } }),
-        resolveImportSpecifier: expect.any(Function),
+        typesModule: '@acme/orm-db/contract-types',
       });
       expect(mocks.renderContractDts.mock.invocationCallOrder[0]).toBeLessThan(
         mocks.migrate.mock.invocationCallOrder[0]!,

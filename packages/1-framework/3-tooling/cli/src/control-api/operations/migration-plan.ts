@@ -29,7 +29,6 @@ import { formatMigrationDirName, writeMigrationPackage } from '@internal/migrati
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
 import { writeMigrationTs } from '@internal/migration-tools/migration-ts';
 import type { NamedRef } from '@internal/migration-tools/refs';
-import type { ImportSpecifierResolver } from '@internal/publish-surface/import-roots';
 import { castAs } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
@@ -47,7 +46,9 @@ import {
   type PlanDestination,
 } from '../../utils/cli-errors';
 import {
+  contractTypesModuleOf,
   getTargetMigrations,
+  migrationModuleOf,
   resolveContractPath,
   resolveMigrationPaths,
 } from '../../utils/command-helpers';
@@ -58,7 +59,6 @@ import { migrationPlanKeepDataEditAdvice } from '../../utils/keep-data-edit-advi
 import { planningRefusedError } from '../../utils/planning-refused-error';
 import type { DataProtectionRefusedOperation } from '../../utils/policy-errors';
 import { type CliInvocation, selfEmitCommand } from '../../utils/printed-command';
-import { createProjectSpecifierResolver } from '../../utils/project-import-root';
 import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
 import {
   type AnswerPlanQuestions,
@@ -103,8 +103,6 @@ export interface MigrationPlanOptions {
   readonly config: PrismaConfig;
   /** Directory the command was invoked from. */
   readonly cwd: string;
-  /** The project's directory, normally the validated config's `baseDir`; locates the project manifest. */
-  readonly projectDir?: string;
   /** The `--config` the command was given, repeated in the command that runs a written `migration.ts`. */
   readonly configPath?: string;
   readonly name?: string;
@@ -195,7 +193,7 @@ async function runPlannerLeg(
   spaceId: string,
   ownership: SchemaOwnership,
   snapshotsImportPath: string,
-  resolveImportSpecifier: ImportSpecifierResolver,
+  migrationModule: string,
   refused: (conflicts: readonly MigrationPlannerConflict[]) => CliStructuredError = (conflicts) =>
     errorMigrationPlanningFailed({ conflicts: castAs<readonly CliErrorConflict[]>(conflicts) }),
 ): Promise<Result<PlannerSuccess, CliStructuredError>> {
@@ -264,7 +262,7 @@ async function runPlannerLeg(
   return ok({
     plannedOps,
     listedOps: listed.filter((op): op is OperationSummary => op !== undefined),
-    migrationTsContent: plannerResult.plan.renderTypeScript(resolveImportSpecifier),
+    migrationTsContent: plannerResult.plan.renderTypeScript(migrationModule),
     hasPlaceholders,
     dataLoss: plannerResult.dataLoss.map(
       ({ operationIndex, subject, loss, label, keepDataAdvice, keepDataEdit }) => ({
@@ -550,6 +548,14 @@ async function executeMigrationPlanCommandInner(
 ): Promise<Result<MigrationPlanResult, CliStructuredError>> {
   const config = options.config;
   const cwd = options.cwd;
+  const migrationModule = migrationModuleOf(config);
+  if (!migrationModule.ok) {
+    return migrationModule;
+  }
+  const typesModule = contractTypesModuleOf(config);
+  if (!typesModule.ok) {
+    return typesModule;
+  }
   const { configPath, migrationsDir, appMigrationsDir, appMigrationsRelative } =
     resolveMigrationPaths(config, cwd);
 
@@ -727,21 +733,13 @@ async function executeMigrationPlanCommandInner(
         resolved,
       });
 
-  // Before the seed phase, which is the first thing here that writes: an
-  // unreadable or contradictory project manifest fails the command outright
-  // rather than after artifacts are already on disk.
-  const resolveImportSpecifier = createProjectSpecifierResolver(options.projectDir);
-
-  // Likewise the destination snapshot's declarations: rendered now, written
-  // with the planned package later. A plan whose source already is the
-  // destination writes no new snapshot, so it renders nothing.
   let destinationDeclarations: string | null = null;
   if (!destinationInStore && fromHash !== toStorageHash) {
     const rendered = await renderSnapshotDeclarations({
       client: options.client,
       contractJson: emittedContractJson,
       contractJsonPath: contractPathAbsolute,
-      resolveImportSpecifier,
+      typesModule: typesModule.value,
     });
     if (!rendered.ok) {
       return notOk(rendered.failure);
@@ -928,7 +926,7 @@ async function executeMigrationPlanCommandInner(
         aggregate.app.spaceId,
         aggregate,
         snapshotsImportPathFrom(baselinePackageDir, migrationsDir),
-        resolveImportSpecifier,
+        migrationModule.value,
       );
       if (!baselineLeg.ok) {
         return baselineLeg;
@@ -950,7 +948,7 @@ async function executeMigrationPlanCommandInner(
           aggregate.app.spaceId,
           aggregate,
           snapshotsImportPathFrom(deltaPackageDir, migrationsDir),
-          resolveImportSpecifier,
+          migrationModule.value,
           refusedWith(texts, resolved),
         );
       const plannedDelta =
@@ -1152,7 +1150,7 @@ async function executeMigrationPlanCommandInner(
         aggregate.app.spaceId,
         aggregate,
         snapshotsImportPathFrom(packageDir, migrationsDir),
-        resolveImportSpecifier,
+        migrationModule.value,
         refusedWith(texts, resolved),
       );
     const plannedDelta = await planDelta(statementTexts, statements);

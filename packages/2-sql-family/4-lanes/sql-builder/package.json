@@ -57,6 +57,9 @@
     "./runtime": "./dist/runtime/index.mjs",
     "./package.json": "./package.json"
   },
+  "imports": {
+    "#fixture-contract-types": "./test/fixtures/contract-types.ts"
+  },
   "engines": {
     "node": ">=24"
   },

@@ -7,7 +7,7 @@ import {
 } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
-import { applicationDomainOf } from '@repo/test-utils';
+import { applicationDomainOf, workspaceMigrationModule } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { sqliteContractToSchema } from '../../src/core/migrations/diff-database-schema';
 import { createSqliteMigrationPlanner } from '../../src/core/migrations/planner';
@@ -156,7 +156,7 @@ async function planned(...args: Parameters<typeof plan>) {
 }
 
 function rendered(...args: Parameters<typeof plan>): string {
-  return plan(...args).plan.renderTypeScript((specifier) => specifier);
+  return plan(...args).plan.renderTypeScript(workspaceMigrationModule.sqlite);
 }
 
 const hex = (letter: string) => letter.repeat(64);

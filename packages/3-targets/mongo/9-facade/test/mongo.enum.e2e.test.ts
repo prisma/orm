@@ -30,6 +30,8 @@ import {
 } from '../src/exports/contract-builder';
 import mongo, { type MongoClient as MongoFacadeClient } from '../src/runtime/mongo';
 
+const TYPES_MODULE = '@internal/mongo/contract-types';
+
 const Role = enumType(
   'Role',
   { codecId: 'mongo/string@1' },
@@ -312,6 +314,7 @@ describe('the field type overrides the emitter writes for enum fields', () => {
       mongoEmission,
       mongoCodecImports,
       testHashes,
+      TYPES_MODULE,
       undefined,
       codecLookup,
     );
@@ -343,6 +346,7 @@ describe('the field type overrides the emitter writes for enum fields', () => {
       mongoEmission,
       mongoCodecImports,
       testHashes,
+      TYPES_MODULE,
       undefined,
       codecLookup,
     );

@@ -351,6 +351,8 @@ export interface EmitContractConfig {
    * The .d.ts types file will be colocated (e.g., contract.json → contract.d.ts).
    */
   readonly output: string;
+  /** The module the generated `contract.d.ts` imports the framework and family contract types from. */
+  readonly typesModule: string;
 }
 
 /**
@@ -807,14 +809,6 @@ export interface ContractEmitOptions {
   readonly config: PrismaConfig;
   /** Directory the caller was invoked from. */
   readonly cwd: string;
-  /**
-   * The project's directory, normally the validated config's `baseDir`. Used
-   * to find the project manifest whose dependencies decide the import
-   * specifiers in emitted files. Omit it and the manifest is looked up from
-   * the directory the artifacts are written to, which is the package that
-   * will import them.
-   */
-  readonly projectDir?: string;
   /**
    * Directory to write contract artifacts into. When set, `contract.json` and
    * `contract.d.ts` are written inside this directory, taking precedence over

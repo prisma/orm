@@ -32,19 +32,11 @@ Compose the pack into your application contract via `extensions`. The pack's con
 
 ```ts
 // prisma.config.ts
-import { defineConfig } from '@internal/cli/config-types';
-import postgresAdapter from '@internal/adapter-postgres/control';
-import sql from '@internal/family-sql/control';
-import postgres from '@internal/target-postgres/control';
-import postgresPackRef from '@internal/target-postgres/pack';
-import { prismaContract } from '@internal/sql-contract-psl/provider';
+import { defineConfig } from '@internal/postgres/config';
 import supabasePack from '@internal/extension-supabase/pack';
 
 export default defineConfig({
-  family: sql,
-  target: postgres,
-  adapter: postgresAdapter,
-  contract: prismaContract('./src/contract.prisma', { target: postgresPackRef }),
+  contract: './src/contract.prisma',
   extensions: [supabasePack],
 });
 ```
