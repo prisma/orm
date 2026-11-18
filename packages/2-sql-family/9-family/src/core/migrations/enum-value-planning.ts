@@ -207,19 +207,19 @@ function unlistedRefusal(
       : 'The plan rewrites an enum value inside JSON only in a column that holds a value object or a list of them.';
   const [first] = changes;
   invariant(first !== undefined, 'an enum with no changed value plans no rewrite to refuse');
-  const routes = `Keep the members and stored values of enum "${enumText(enums, first.enumValue)}" as the origin contract has them, and plan again.`;
+  const advice = `This change cannot be planned yet. Until it can, keep the members and stored values of enum "${enumText(enums, first.enumValue)}" as the origin contract has them, and plan again.`;
   const statement = changes.find((change) => change.statement !== undefined)?.statement;
   if (statement === undefined) {
     return {
       kind: 'unsupportedOperation',
       summary: `${changeText(enums, first)}: ${reason}`,
-      why: `${why} ${routes}`,
+      why: `${why} ${advice}`,
     };
   }
   return {
     kind: 'statementRefused',
     summary: `Cannot rename enum value "${enumValueStatementText(enums.fromContract, statement.from)}" to "${enumValueStatementText(contract, statement.to)}": ${reason}`,
-    why: `${why} ${routes}`,
+    why: `${why} ${advice}`,
     refusedStatement: statement,
   };
 }
