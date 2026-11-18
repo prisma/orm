@@ -15,9 +15,9 @@ Canonical channels:
 ## When to Use
 
 - A capability-gap entry from another `prisma-8` skill fired and the user said *"yes, file the feature request"*.
-- User says *"this is a bug"*, *"file this"*, *"report this"*, *"file an issue against PN"*, *"send feedback"*, *"this should be a feature"*.
+- User says *"this is a bug"*, *"file this"*, *"report this"*, *"file an issue against Prisma 8"*, *"send feedback"*, *"this should be a feature"*.
 - User describes an unexpected behaviour — wrong exit code, error message that didn't match what happened, type signature that doesn't match runtime behaviour, planner refused a migration that looked safe — and wants it on the framework team's radar.
-- User asks *"can I ask the Prisma team about this?"*, *"is there somewhere I can talk to the team?"*, *"is this the intended way to do X?"*, *"how should I integrate <my extension / my tool> with PN?"*, or any other open-ended Q&A or design-feedback prompt — including extension authors asking integration questions.
+- User asks *"can I ask the Prisma team about this?"*, *"is there somewhere I can talk to the team?"*, *"is this the intended way to do X?"*, *"how should I integrate <my extension / my tool> with Prisma 8?"*, or any other open-ended Q&A or design-feedback prompt — including extension authors asking integration questions.
 
 ## When Not to Use
 
@@ -71,7 +71,7 @@ The user is filing a GitHub issue. Is it a bug or a feature request?
 
 **Feature request** if any of:
 
-- The user wants a capability that doesn't exist yet (most of the *What PN doesn't do yet* entries land here).
+- The user wants a capability that doesn't exist yet (most of the *What Prisma 8 doesn't do yet* entries land here).
 - The user wants a better error message, an additional CLI flag, a new middleware, an additional bundler plugin, etc.
 
 If both — a bug *and* the user wants a related feature — file two separate issues. Mixing them makes the framework team's triage harder.
@@ -80,7 +80,7 @@ If both — a bug *and* the user wants a related feature — file two separate i
 
 For **either** kind:
 
-- **Prisma 8 version**: `pnpm ls @internal/postgres` (or `@internal/mongo`). If the project uses a target package, that version is canonical.
+- **Prisma 8 version**: `pnpm ls @prisma/orm-postgres` (or `@prisma/orm-mongo`). If the project uses a target package, that version is canonical.
 - **Node version**: `node -v`.
 - **Package manager**: `pnpm` / `npm` / `yarn` / `bun` / `deno`.
 - **OS**: `darwin` / `linux` / `win32` and the version string is enough.
@@ -98,7 +98,7 @@ For **bug reports**, additionally:
 For **feature requests**, additionally:
 
 - **Desired API or behaviour** — one paragraph. Concrete shape (CLI flag, config field, middleware export, plugin API) where possible.
-- **Where the gap surfaces today** — which skill's *What PN doesn't do yet* entry triggered the request, or the workflow the user was trying to complete.
+- **Where the gap surfaces today** — which skill's *What Prisma 8 doesn't do yet* entry triggered the request, or the workflow the user was trying to complete.
 - **Current workaround**, if any — one sentence (and the skill body the user is following may already say this).
 
 ### 4. Render the body
@@ -110,7 +110,7 @@ Bug-report body shape (fields named to match `.github/ISSUE_TEMPLATE/bug_report.
 ~~~markdown
 ## Package and version
 
-<e.g. @internal/postgres@0.5.2>
+<e.g. @prisma/orm-postgres@8.0.0-rc.24>
 
 ## What happened?
 
@@ -209,7 +209,7 @@ When step 1 picked the Discord channel (steps 2–7 do not apply):
    - Extension-author / partner-integration / breaking-change-coordination questions → the public extension-authors channel, or the user can ping a maintainer directly once they're in the server.
 2. **Help draft the opening message.** Prisma's Discord is searchable; a well-framed opening message gets a faster, more useful answer. The agent drafts a short message with:
    - One-sentence summary of what the user is trying to do.
-   - The Prisma 8 version (`pnpm ls @internal/postgres` or equivalent).
+   - The Prisma 8 version (`pnpm ls @prisma/orm-postgres` or equivalent).
    - A short code snippet (PSL excerpt, query, config file) where relevant — redacted the same way as a GitHub issue body (no `DATABASE_URL`, no customer schema names).
    - The specific question the user wants answered.
 3. **Do not auto-post.** The agent surfaces the drafted message to the user — *"here's an opening message you can paste into Discord; want to adjust before sending?"* — and lets the user decide whether to paste it as-is, edit it, or pick a different framing.
@@ -241,7 +241,7 @@ When step 1 picked the Discord channel (steps 2–7 do not apply):
 ## Checklist
 
 - [ ] Classified as bug or feature request (not both in one issue).
-- [ ] Environment block present: PN version, Node, package manager, OS.
+- [ ] Environment block present: Prisma 8 version, Node, package manager, OS.
 - [ ] Reproduction is minimal, public-safe, secret-free.
 - [ ] Schema fragments use original names where safe; renamed to neutral placeholders only where original names would leak confidential domain detail.
 - [ ] Title in conventional-commit form (`bug(area): …` / `feat(area): …`).

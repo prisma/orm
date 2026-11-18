@@ -1,10 +1,10 @@
 # MongoDB in Prisma 8 — The User Promise
 
-What does Prisma 8 offer a MongoDB user, and why would they choose it over the `mongodb` driver or Mongoose? This document articulates the value proposition from the user's perspective — what they get, what they give up, and where PN sits in the spectrum between "raw driver" and "full ORM."
+What does Prisma 8 offer a MongoDB user, and why would they choose it over the `mongodb` driver or Mongoose? This document states the value proposition from the user's perspective: what they get, what they give up, and where Prisma 8 sits between "raw driver" and "full ORM". Every example uses the API as it ships; `examples/mongo-demo` is the worked application.
 
-See also: [design-questions.md](../planning/mongo-target/1-design-docs/design-questions.md), [MongoDB primitives reference](mongodb-primitives-reference.md)
+See also: [MongoDB primitives reference](mongodb-primitives-reference.md), [MongoDB Family subsystem](../architecture%20docs/subsystems/10.%20MongoDB%20Family.md).
 
-**External input**: The MongoDB Node.js Driver team provided a [feature gap analysis](mongodb-feature-support-priorities.md) and a [user journey narrative](mongodb-user-journey.md) that informed this document.
+**External input**: The MongoDB Node.js Driver team provided a [feature gap analysis](mongodb-feature-support-priorities.md) of Prisma ORM 6 and a [user journey narrative](mongodb-user-journey.md) that informed this document.
 
 ---
 
@@ -14,9 +14,7 @@ A TypeScript developer building an application backed by MongoDB. They want to m
 
 - **New to MongoDB** — coming from SQL/Prisma ORM, want familiar patterns
 - **Experienced with MongoDB** — frustrated by Mongoose's type gaps, want better DX without losing Mongo idioms
-- **Using both SQL and Mongo** — want a familiar, symmetric interface across both, without learning two entirely different tools
-
-All three should find something in PN that they can't get elsewhere.
+- **Using both SQL and Mongo** — want one contract model and one toolchain across both
 
 ---
 
@@ -24,281 +22,200 @@ All three should find something in PN that they can't get elsewhere.
 
 ### 1. Your domain model is the source of truth
 
-**The problem without PN**: MongoDB is schemaless. The "schema" lives in scattered Mongoose model definitions, ad-hoc TypeScript interfaces, or — worst case — nowhere at all. When the schema drifts, nobody notices until production data is wrong. There's no single artifact that says "this is what a User looks like."
+**The problem without Prisma 8**: MongoDB is schemaless. The "schema" lives in scattered Mongoose model definitions, ad-hoc TypeScript interfaces, or nowhere at all. When the schema drifts, nobody notices until production data is wrong.
 
-**What PN gives you**: You describe your domain once — your models, their fields, their types, and how they relate to each other. This description becomes a contract: a machine-readable, validated, versioned artifact that the rest of the system derives from. Your TypeScript types, your ORM operations, your query filters, your runtime validation — all flow from the contract. Change the contract, and everything downstream updates.
-
-The contract separates **what your data means** (models, fields, relations) from **how it's stored** (collections, embedded documents, references). You think in domain terms; the storage mapping is a separate, explicit decision.
+**What Prisma 8 gives you**: You describe your domain once, in a data contract. The contract is a machine-readable, validated, versioned artifact: your TypeScript types, ORM operations, migrations and the collections' validators all derive from it.
 
 #### What this looks like
 
-You describe your domain:
+Adapted from `examples/mongo-demo/src/contract.prisma`:
 
-```typescript
-// Models and their fields
-model User {
-  id        ObjectId
-  name      String
-  email     String
-  address   Address     // embedded — stored inside the User document
-  posts     Post[]      // referenced — stored in a separate collection
+```prisma
+enum UserRole {
+  @@type("mongo/string@1")
+  Admin  = "admin"
+  Author = "author"
+  Reader = "reader"
 }
 
-model Address {
-  street    String
-  city      String
-  state     String
+type Address {
+  street  String
+  city    String
+  zip     String?
+  country String
+}
+
+model User {
+  id      ObjectId @id @map("_id")
+  name    String
+  email   String
+  role    UserRole
+  address Address?   // embedded: stored inside the user document
+  posts   Post[]     // referenced: stored in the posts collection
+  @@map("users")
 }
 
 model Post {
-  id        ObjectId
+  id        ObjectId @id @map("_id")
   title     String
-  content   String
-  author    User        // the other side of the User.posts relation
+  kind      String
+  views     Int
   tags      String[]
-  comments  Comment[]   // embedded — stored inside the Post document
+  createdAt DateTime
+  authorId  ObjectId
+  author    User @relation(fields: [authorId], references: [id])
+  @@discriminator(kind)
+  @@map("posts")
 }
 
-model Comment {
-  text      String
-  createdAt DateTime
-  author    User        // referenced
+model Article {
+  summary String
+  @@base(Post, "article")
 }
 ```
 
 The contract captures:
-- **Models and fields**: User has `name: String`, `email: String`, etc.
-- **Relations and their cardinality**: User → Post is 1:N, User → Address is 1:1
-- **Model ownership**: Address is owned by User (lives inside the User document), Post is independent (lives in its own collection). Embedding is a cross-family concern that the contract makes explicit via the `owner` property.
-- **Field types**: mapped to BSON types via codecs, with TypeScript types derived automatically
 
-The distinction between embedded and referenced is a **data modeling decision** that the user makes explicitly. PN doesn't hide it — it surfaces it as a first-class choice, because it affects query semantics, atomicity, and performance.
+- **Models and fields**, with types mapped to BSON through codecs and TypeScript types derived from them.
+- **Embedded documents** as value objects (`type Address`), stored inside the parent document.
+- **References** between collections (`@relation`), which the ORM can load with `include`.
+- **Polymorphism**: `@@discriminator` on a base model and `@@base` on each variant, stored in one collection.
 
 #### What the contract guarantees
 
-- **Type derivation**: The contract produces TypeScript types for every model. The ORM client, query filters, and mutation inputs are all derived from these types. If a field is `String`, the filter for that field accepts `string`. If it's `ObjectId`, the filter accepts `ObjectId`.
-- **Schema validation**: PN can optionally push `$jsonSchema` validation rules to MongoDB, giving database-level enforcement of the contract's type expectations. Even without server-side validation, the contract serves as documentation and the basis for runtime validation.
-- **Cross-family consistency**: A consumer library (a validator, a GraphQL schema generator, a visualization tool) can accept any PN contract — SQL or document — and traverse its models and relations without family-specific code.
+- **Type derivation**: every model has TypeScript types, and ORM inputs and results are derived from them.
+- **Server-side validation**: migrations give each managed collection a `$jsonSchema` validator built from the contract, so writes that bypass Prisma 8 are checked too. A collection whose control policy is `tolerated`, `external` or `observed` gets no validator, and neither does any collection of a contract read from a Prisma 6 schema.
+- **Cross-family consistency**: a SQL contract and a MongoDB contract share one model, so a tool can traverse the models and relations of either.
 
-#### Bringing structure to existing databases (introspection)
+#### Existing databases
 
-Many MongoDB users have existing databases with no formal schema. The [user journey](mongodb-user-journey.md) from the MongoDB team describes a developer introspecting an existing database and hitting friction: plural collection names, manually defining every relationship, and polymorphic fields falling back to untyped `Json`.
-
-PN should offer introspection that generates a contract from an existing MongoDB database — sampling documents to infer field types, detecting embedded subdocuments, and normalizing collection names to model names. Relationships can't be fully inferred (MongoDB has no foreign keys), but conventions (fields ending in `Id`, arrays of `ObjectId`) can suggest candidates. The generated contract is a starting point that the user refines, not a finished artifact.
-
-This is out of scope for the PoC but is table-stakes for real Mongo adoption. See [design question #11](../planning/mongo-target/1-design-docs/design-questions.md#11-introspection-generating-a-contract-from-an-existing-database).
+A Prisma 6 MongoDB schema can be the contract source as it is (`prisma6Schema`), which lets an existing Prisma 6 application adopt Prisma 8 without rewriting its schema first.
 
 ---
 
-### 2. Querying feels natural and is type-safe
+### 2. Querying is type-safe and stays Mongo-native
 
-**The problem without PN**: The `mongodb` driver's TypeScript support is shallow — top-level field names are checked, but dot-notation for nested fields is untyped, aggregation pipelines are `Document[]` (effectively `any`), and update operators have no compile-time validation against your schema. Mongoose has to relax `FilterQuery` to `any` for generic functions to compile. Prisma ORM's MongoDB support doesn't handle embedded documents at all.
+**The problem without Prisma 8**: The `mongodb` driver's TypeScript support is shallow: dot-notation for nested fields is untyped, aggregation pipelines are `Document[]`, and update operators are not checked against your schema. Mongoose relaxes `FilterQuery` to `any` for generic functions to compile.
 
-**What PN gives you**: A type-safe query surface where operations are checked against your contract at compile time. Available operations depend on the field type — you can `ilike` a string field but not a number. Relations are traversable in queries. The experience is consistent with SQL-PN, but Mongo-native where it matters.
+**What Prisma 8 gives you**: two query surfaces on one `db` value. The ORM (`db.orm.<collection>`) covers CRUD and references. The pipeline builder (`db.query.from('<collection>')`) covers aggregation.
 
 #### Reading data
 
 ```typescript
-const db = mongo.orm({ contract, runtime });
+// ORM roots are the keys of the contract's `roots` map. An authored contract names each after its collection (`@@map`).
+const users = await db.orm.users.limit(10).all();
 
-// Simple query — returns typed User objects
-const users = await db.User.limit(10).all();
+// Equality filters are a plain object; values are encoded through the field's codec.
+const alice = await db.orm.users.where({ email: 'alice@example.com' }).first();
 
-// Filter with type-safe operators
-const admins = await db.User
-  .where((user) => user.email.ilike('%@company.com'))
-  .orderBy((user) => user.name.asc())
-  .all();
+// Sorting uses Mongo's directions.
+const recent = await db.orm.posts.orderBy({ createdAt: -1 }).limit(10).all();
 
-// Include referenced relations — PN resolves the reference automatically
-const usersWithPosts = await db.User
-  .include('posts', (posts) =>
-    posts
-      .where((post) => post.title.ilike('%mongo%'))
-      .orderBy((post) => post.createdAt.desc())
-      .limit(5)
-  )
-  .limit(10)
-  .all();
+// A reference is loaded with include, which lowers to $lookup.
+const posts = await db.orm.posts.include('author').all();
 
-// Embedded data comes for free — Address is part of the User document
-// No include needed, it's always there
-const user = await db.User.where({ id: userId }).first();
-console.log(user.address.city); // typed as string
+// A variant narrows the collection and adds the discriminator filter.
+const articles = await db.orm.posts.variant('article').all();
+
+// Embedded data is part of the document; no include is needed.
+const user = await db.orm.users.where({ id: userId }).first();
+console.log(user?.address?.city);
 ```
 
 The key behaviors:
-- **Embedded relations are always loaded** — they're part of the parent document, so there's no cost to including them and no way to exclude them (short of projection).
-- **Referenced relations require explicit include** — just like SQL includes. PN resolves them via a second query (application-level join) or, when beneficial, via `$lookup`.
-- **Filter operators are type-gated** — string fields get `eq`, `ne`, `ilike`, `contains`; number fields get `eq`, `ne`, `gt`, `lt`, `gte`, `lte`; arrays get `has`, `hasEvery`, `hasSome`. This is the same trait-based operator system SQL-PN uses.
-- **Dot-notation for embedded fields** — querying nested fields in embedded documents is type-safe: `user.address.city.eq("Springfield")` checks that `address` exists on `User`, `city` exists on `Address`, and `city` is a `string`.
+
+- **Embedded documents need no `include`**, because they are part of the parent document. A `select` still limits the fields returned, so `select('name')` leaves out `address`.
+- **References are loaded only when included.** `include` takes the relation name and loads one level; there is no refinement callback, so the included documents cannot be filtered, ordered or limited.
+- **The ORM's `where` takes an object of equalities or a filter expression.** For comparisons, `$in` and boolean composition, pass a filter built with `MongoFieldFilter` (`eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `in`, `nin`, `isNull`, `isNotNull`) and combine filters with `.and(...)`, `.not()` and `MongoOrExpr.of([...])`. These name fields as strings, so the field names are not checked at compile time. There is no callback form of `where` and no `ilike`, `contains` or list operators such as `has`.
+
+#### Aggregation
+
+```typescript
+import { acc } from '@prisma/orm-mongo/query-builder';
+
+const plan = db.query
+  .from('posts')
+  .match((f) => f.authorId.eq(authorId))
+  .group((f) => ({ _id: f.kind, postCount: acc.count() }))
+  .sort({ postCount: -1 })
+  .build();
+const byKind = await (await db.runtime()).query(plan);
+```
+
+The pipeline builder is typed against the contract: stage by stage, it knows the shape of the documents flowing through it. It also has `lookup`, `geoNear`, `search` and `vectorSearch` stages.
 
 #### Writing data
 
 ```typescript
-// Create — type-safe input derived from the contract
-const newUser = await db.User.create({
+const user = await db.orm.users.create({
   name: 'Alice',
   email: 'alice@example.com',
-  address: {
-    street: '123 Main St',
-    city: 'Springfield',
-    state: 'IL',
-  },
+  role: 'reader',
+  address: { street: '123 Main St', city: 'Springfield', country: 'US' },
 });
 
-// Update — basic field-level updates
-const updated = await db.User
-  .where({ id: userId })
-  .update({ name: 'Bob' });
+// Plain-object update: replaces the named top-level fields with $set.
+await db.orm.users.where({ id: user.id }).update({ name: 'Bob' });
 
-// Delete with cascading — PN handles referenced relations
-await db.User.where({ id: userId }).delete();
-// If User.posts has onDelete: cascade, PN deletes the user's posts too
+// Field operations: atomic, server-side, checked against the field's type.
+await db.orm.posts
+  .where({ id: postId })
+  .update((p) => [p.views.inc(1), p.tags.push('mongodb')]);
+
+// One update takes one operation per field, so a second change to `tags` is its own update.
+await db.orm.posts.where({ id: postId }).update((p) => [p.tags.addToSet('unique-tag')]);
+
+await db.orm.users.where({ id: user.id }).delete();
 ```
 
-Mutations on embedded data are part of the parent mutation — updating a User's address is a single atomic operation (no transaction needed). Mutations involving referenced relations may span multiple collections and are orchestrated by PN.
-
-#### Mongo-native operations (beyond the shared ORM surface)
-
-Some Mongo operations don't exist in SQL and deserve first-class support:
-
-```typescript
-// Atomic increment — no read-modify-write cycle
-await db.Post.where({ id: postId }).update({
-  views: { $inc: 1 },
-});
-
-// Array operations — atomic, server-side
-await db.Post.where({ id: postId }).update({
-  tags: { $push: 'mongodb' },
-});
-await db.Post.where({ id: postId }).update({
-  tags: { $pull: 'deprecated' },
-});
-
-// Atomic add-to-set (append only if not already present)
-await db.Post.where({ id: postId }).update({
-  tags: { $addToSet: 'unique-tag' },
-});
-```
-
-These extend the shared ORM `update` surface with Mongo-specific operator syntax. The shared interface (plain data objects) still works — `{ name: 'Bob' }` compiles to `{ $set: { name: 'Bob' } }`. The operators are additive.
+Writes other than `create` and `createAll` require a `where`. Updating an embedded document is part of the parent's update, so it is atomic without a transaction.
 
 #### The escape hatch
 
-When the ORM isn't enough, users can drop to raw MongoDB commands through the runtime:
-
-```typescript
-// Raw aggregation pipeline — untyped, full MongoDB power
-const results = await runtime.execute({
-  collection: 'posts',
-  pipeline: [
-    { $match: { published: true } },
-    { $group: { _id: '$authorId', count: { $sum: 1 } } },
-    { $sort: { count: -1 } },
-    { $limit: 5 },
-  ],
-});
-```
-
-A type-safe aggregation pipeline builder (the Mongo equivalent of the SQL DSL) is a future goal, not a PoC deliverable. The raw escape hatch validates that the runtime can handle non-SQL query shapes.
-
-#### MongoDB-specific capabilities via extension packs
-
-PN's extension pack architecture (the same system that delivers pgvector for Postgres) enables MongoDB-specific capabilities without bloating the core ORM. The [MongoDB feature support priorities](mongodb-feature-support-priorities.md) identifies several candidates:
-
-- **Vector Search** (`$vectorSearch`) — contributes a vector field type, similarity search operators, and vector search index definitions. Analogous to pgvector for Postgres.
-- **Atlas Search** (`$search`) — full-text search via MongoDB Atlas. Contributes search index definitions and search query operators.
-- **Geospatial** (`$near`, `$geoWithin`, `2dsphere` indexes) — contributes GeoJSON field types, geospatial query operators, and geospatial index types.
-
-These are delivered as extension packs that the user adds to their configuration, just as a Postgres user adds pgvector. The ORM and query surfaces then expose the contributed types and operations with full type safety.
-
-This is out of scope for the PoC but is a key part of the longer-term Mongo-native story. See [design question #12](../planning/mongo-target/1-design-docs/design-questions.md#12-mongodb-specific-extension-packs).
+`db.raw` sends MongoDB commands as written, for anything the ORM and the pipeline builder do not express.
 
 ---
 
-### 3. PN provides guardrails that MongoDB doesn't
+### 3. Prisma 8 manages schema evolution
 
-**The problem without PN**: MongoDB provides no foreign key constraints, no cascading deletes, no schema enforcement by default, and no type checking on stored data. Application developers must build all of these by hand — and they frequently don't, leading to orphaned references, inconsistent data, and silent type mismatches.
+**The problem without Prisma 8**: MongoDB enforces no schema by default, so schema changes are ad-hoc scripts, and nobody can say which documents have been migrated.
 
-**What PN gives you**: Configurable guardrails that bring structure to MongoDB's flexibility without eliminating that flexibility.
+**What Prisma 8 gives you**: the same migration workflow as on SQL. `migration plan` compares two contracts and writes a migration that creates collections and indexes, updates validators, renames fields, and rewrites documents. Changes the planner cannot write itself are data transforms: a `check` that finds the documents still needing the change and a `run` that changes them. The runner skips a transform whose work is done and fails the migration if `check` still finds documents afterwards, so a migration is safe to run on any database at its starting point. See `skills/prisma-8/references/migrations.md`.
 
-#### Referential integrity
+#### Runtime middleware
 
-The contract declares relations and their semantics. PN enforces them:
-
-- **Cascade delete**: Delete a User → PN automatically deletes their Posts (if the relation declares `onDelete: cascade`). For embedded data this is automatic (deleting the parent deletes embedded children). For referenced data, PN orchestrates cross-collection deletes within a multi-document transaction.
-- **Restrict delete**: PN rejects a delete if it would orphan required references (`onDelete: restrict`).
-- **Set null**: PN nullifies the reference field on related documents (`onDelete: setNull`).
-- **No action**: PN does nothing — the user manages integrity themselves. This is the MongoDB default and should be the PN default too, so users opt *in* to enforcement rather than being surprised by it.
-
-This is one of PN's strongest differentiators for Mongo. Raw MongoDB and Mongoose both leave referential integrity entirely to the developer.
-
-#### Schema validation
-
-PN validates data at the application layer:
-
-- **On writes**: PN always validates that data being written matches the contract. A mutation that would write a string to a number field is rejected before it reaches MongoDB.
-- **On reads (configurable)**: In strict mode, PN validates that data returned from MongoDB matches the contract. Documents that don't match produce an error. In permissive mode, mismatches produce a warning through the runtime's diagnostic channel. This is important for users migrating from untyped Mongo usage — their existing data may not match the contract.
-- **Server-side validation (optional)**: PN can push `$jsonSchema` rules to MongoDB collections, adding database-level enforcement that applies even to writes that bypass PN.
-
-#### Schema evolution via data invariants
-
-In SQL, schema evolution is split cleanly: structural migrations change the DDL (add a column, change a type), and data migrations transform content (populate the new column). In MongoDB, **that distinction collapses**. There's no DDL — collections don't have enforced schemas. "Adding a field" means updating documents to include it. "Splitting `name` into `firstName` + `lastName`" is a data migration. "Moving data from embedded to referenced" is a data migration. In Mongo, schema evolution IS data migration.
-
-The [user journey](mongodb-user-journey.md) from the MongoDB team confirms this is a pain point: "The lack of an automated data migration feature for this common MongoDB evolution made him feel disappointed."
-
-PN's data invariant model — being built for the SQL migration workstream (see [ADR 176 — Data migrations as invariant-guarded transitions](../architecture%20docs/adrs/ADR%20176%20-%20Data%20migrations%20as%20invariant-guarded%20transitions.md)) — is a natural foundation for Mongo schema evolution. The model treats data migrations as guarded transitions with machine-checkable postconditions:
-
-- **"Done"** = the contract describes v2 + the invariant "all documents migrated to v2" holds
-- **Postcondition check** = a Mongo query: `db.users.countDocuments({ schemaVersion: { $ne: 2 } }) === 0`
-- **Transformation** = a Mongo update: `db.users.updateMany({ schemaVersion: 1 }, [{ $set: { firstName: ... } }])`
-- **Idempotent** by construction — only touches documents that still need it
-
-This gives Mongo users something no other ODM provides: managed, verifiable schema evolution with the same invariant-based model PN uses for SQL, but expressed entirely as data transforms rather than DDL + data transforms.
-
-This is out of scope for the PoC but is a cross-workstream connection worth tracking. See [design question #14](../planning/mongo-target/1-design-docs/design-questions.md#14-schema-evolution-as-data-migration-cross-workstream).
-
-#### Runtime guardrails
-
-The aspiration is that the same plugin pipeline that works for SQL also works for Mongo — plugins written for one family should work for both without modification. This is unvalidated and depends on the plugin interface being truly family-agnostic, which the PoC will test:
-
-- **Budget enforcement**: Limit the number of rows returned, query execution time, etc.
-- **Query linting**: Reject dangerous operations (e.g. unbounded queries).
-- **Telemetry**: Automatic logging of query operations, latency, row counts.
-- **Middleware**: Caching, rate limiting, access control — all family-agnostic.
+`mongo({ middleware: [...] })` takes a middleware chain that sees every execution, for logging, telemetry and caching.
 
 ---
 
-## What PN does NOT promise (for Mongo)
+## What Prisma 8 does NOT promise (for Mongo)
 
-Clarity about what's out of scope is as important as the promises:
-
-- **Portability between SQL and Mongo.** The shared ORM interface means the *patterns* are consistent, but a SQL contract and a Mongo contract are not interchangeable. You can't swap your Postgres database for MongoDB by changing a config line. The domain model transfers; the storage details and query capabilities do not.
-- **Full MongoDB feature coverage.** PN covers the common CRUD and relation patterns. Advanced features (sharding configuration, capped collections, GridFS, time-series collections) are out of scope for the ORM client. Users who need these use the raw driver through PN's escape hatch.
-- **Hiding that it's MongoDB.** PN is mongo-native, not mongo-agnostic. Embedded documents, `ObjectId`, array operations, and aggregation pipelines are all concepts the user will encounter. PN makes them type-safe and ergonomic, not invisible.
-- **Field-level encryption management.** MongoDB's CSFLE and Queryable Encryption are driver-level concerns. PN can pass encryption configuration through to the MongoDB driver, but it doesn't implement encryption itself. This is a future adapter-level capability, not an ORM concern. See [design question #13](../planning/mongo-target/1-design-docs/design-questions.md#13-client-side-field-level-encryption-csfle-and-queryable-encryption).
+- **Portability between SQL and Mongo.** The contract model is shared, but a SQL contract and a Mongo contract are not interchangeable, and the ORM surfaces differ: the SQL ORM's `where` takes a callback with typed operators, Mongo's takes an object or a filter expression.
+- **Referential integrity.** Prisma 8 does not enforce referential actions on MongoDB: deleting a document does not cascade to, restrict on, or null out the documents that reference it.
+- **Transactions.** The Mongo client has no `db.transaction(...)`.
+- **Change streams.** There is no change-stream surface.
+- **Hiding that it's MongoDB.** Embedded documents, `ObjectId`, array operations and aggregation pipelines are all concepts the user will meet. Prisma 8 makes them type-safe, not invisible.
+- **Field-level encryption.** MongoDB's CSFLE and Queryable Encryption are driver-level concerns that Prisma 8 does not manage.
 
 ---
 
-## Where PN sits in the ecosystem
+## Where Prisma 8 sits in the ecosystem
 
-| Concern | Raw `mongodb` driver | Mongoose | Prisma ORM (Mongo) | **Prisma 8** |
+| Concern | Raw `mongodb` driver | Mongoose | Prisma ORM 7 (Mongo) | **Prisma 8** |
 |---|---|---|---|---|
-| Schema definition | ❌ None | 🟡 JS schemas, partial TS | 🟡 PSL (no embedded docs) | ✅ Contract (TS or PSL, full embedding) |
-| Type safety (queries) | 🟡 Top-level only | ❌ FilterQuery → any | 🟡 Generated (no embedding) | ✅ Full (filters, operators, nested) |
-| Type safety (mutations) | ❌ None | 🟡 Partial | 🟡 Generated types | ✅ Full (including Mongo operators) |
-| Referential integrity | ❌ None | 🟡 Manual (middleware) | ❌ None | ✅ Configurable (cascade, restrict, setNull) |
-| Embedded documents | ✅ Native | ✅ Native | ❌ Not supported | ✅ First-class in contract |
-| Polymorphism / unions | 🟡 Native (untyped) | 🟡 Discriminator plugin | ❌ Json fallback | 🟡 Discriminated unions (April) |
-| Schema validation | 🟡 Manual $jsonSchema | 🟡 Plugin-based | ❌ None | ✅ Built-in (write + configurable read) |
-| Aggregation pipelines | 🟡 Untyped arrays | 🟡 Untyped arrays | ❌ Not exposed | 🟡 Raw escape hatch (typed DSL later) |
-| Vector / Atlas Search | 🟡 Raw pipeline stages | 🟡 Raw pipeline stages | 🟡 Raw queries | 🔲 Extension packs (planned) |
-| Change streams | ✅ Native | ✅ Native | ❌ Not supported | 🔲 Planned (async iterable) |
-| Schema evolution | ❌ Manual scripts | 🟡 Manual (middleware) | ❌ No Mongo migrations | 🔲 Data invariant model (planned) |
-| Introspection | ➖ N/A | ➖ N/A | 🟡 db pull (limited) | 🔲 Planned (type inference) |
-| Cross-family support | ➖ N/A | ➖ N/A | 🟡 SQL + Mongo (separate) | ✅ SQL + Mongo (shared interface) |
-| Plugin/middleware | ❌ None | 🟡 Mongoose plugins | 🟡 Limited | ✅ Full (shared with SQL) |
+| Schema definition | ❌ None | 🟡 JS schemas, partial TS | 🟡 PSL (composite types) | ✅ Contract (PSL or TS, value objects for embedded documents) |
+| Type safety (queries) | 🟡 Top-level only | ❌ FilterQuery → any | 🟡 Generated | 🟡 Typed roots, fields and equality filters; operator filters name fields as strings; typed pipeline builder |
+| Type safety (mutations) | ❌ None | 🟡 Partial | 🟡 Generated types | ✅ Typed inputs and field operations (`inc`, `push`, `pull`, `addToSet`) |
+| Referential integrity | ❌ None | 🟡 Manual (middleware) | 🟡 Emulated referential actions | ❌ None |
+| Embedded documents | ✅ Native | ✅ Native | 🟡 Composite types | ✅ Value objects |
+| Polymorphism / unions | 🟡 Native (untyped) | 🟡 Discriminator plugin | ❌ Json fallback | ✅ Discriminator and variants |
+| Schema validation | 🟡 Manual $jsonSchema | 🟡 Plugin-based | ❌ None | ✅ `$jsonSchema` validators kept in step with the contract by migrations |
+| Aggregation pipelines | 🟡 Untyped arrays | 🟡 Untyped arrays | 🟡 `aggregateRaw` | ✅ Typed pipeline builder (`db.query`) |
+| Vector / Atlas Search | 🟡 Raw pipeline stages | 🟡 Raw pipeline stages | 🟡 Raw queries | 🟡 `vectorSearch` and `search` stages on the pipeline builder |
+| Change streams | ✅ Native | ✅ Native | ❌ Not supported | ❌ Not supported |
+| Schema evolution | ❌ Manual scripts | 🟡 Manual (middleware) | ❌ No Mongo migrations | ✅ Planned migrations with data transforms |
+| Transactions | ✅ Sessions | ✅ Sessions | ✅ `$transaction` (replica set) | ❌ Not supported |
+| Cross-family support | ➖ N/A | ➖ N/A | 🟡 SQL + Mongo (separate) | ✅ One contract model and toolchain for SQL and Mongo |
+| Plugin/middleware | ❌ None | 🟡 Mongoose plugins | 🟡 Limited | ✅ Middleware chain on `mongo()` |
 
-Legend: ✅ strong / native — 🟡 partial / manual — ❌ missing / none — 🔲 planned — ➖ not applicable
+Legend: ✅ strong / native — 🟡 partial / manual — ❌ missing / none — ➖ not applicable
