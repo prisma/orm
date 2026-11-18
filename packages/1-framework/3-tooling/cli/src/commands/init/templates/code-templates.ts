@@ -11,8 +11,12 @@ export function workspaceTargetPackageName(target: TargetId): string {
   return target === 'postgres' ? '@internal/postgres' : '@internal/mongo';
 }
 
-// biome-ignore lint/plugin/no-family-vocabulary: the driver the target package declares as a required peer dependency, which init installs with it
-const DRIVER_PEERS: ReadonlyMap<TargetId, string> = new Map([['mongo', 'mongodb']]);
+const DRIVER_PEERS: ReadonlyMap<TargetId, string> = new Map([
+  // biome-ignore lint/plugin/no-family-vocabulary: the driver the target package declares as a required peer dependency, which init installs with it
+  ['postgres', 'pg'],
+  // biome-ignore lint/plugin/no-family-vocabulary: the driver the target package declares as a required peer dependency, which init installs with it
+  ['mongo', 'mongodb'],
+]);
 
 /** Packages the target package declares as required peer dependencies; init installs them with it. */
 export function targetPeerPackages(target: TargetId): readonly string[] {
