@@ -1,9 +1,9 @@
 /**
  * Renaming a table keeps its rows (Postgres).
  *
- * A model whose table name changes plans as `dropTable` plus `createTable`. A user who wants the rows makes the rename its own schema change, creates its migration with `migration new --from <the hash the database is at>`, and writes `...this.renameTable({ table, to })`, which renames the table and each constraint and index named after the old table.
+ * A model whose table name changes while it keeps its name is planned as `renameTable`, which renames the table and each constraint and index named after the old table. A hand-written migration can make the same rename with `...this.renameTable({ table, to })`.
  *
- * Journey R1 creates `userProfile` with rows, a unique constraint, a foreign key, an index, row-level security and a policy, then drops the model's `@@map` so it names `UserProfile`. Planning the change is refused by the case-change guard, which points at the `renameTable` call; a call naming a table the end contract lacks fails when `migration.ts` builds its operations. After `migrate` the rows, the policy and RLS are kept, every constraint and index carries the new table name, `db verify --schema-only` is clean, a plan with no schema change is empty, and a later migration that removes the unique constraint, the foreign key and the index applies.
+ * Journey R1 creates `userProfile` with rows, a unique constraint, a foreign key, an index, row-level security and a policy, then drops the model's `@@map` so it names `UserProfile`. A hand-written `renameTable` call naming a table the end contract lacks fails when `migration.ts` builds its operations; `migration plan` plans the rename with no question, and its `migration.ts` holds the `renameTable` call. After `migrate` the rows, the policy and RLS are kept, every constraint and index carries the new table name, `db verify --schema-only` is clean, a plan with no schema change is empty, and a later migration that removes the unique constraint, the foreign key and the index applies.
  *
  * Journey R5 changes a table's name and its foreign key's target in one schema change. A hand-written migration that only renames fails at `migrate`, which verifies the database against the migration's end contract. Made as two changes, a rename-only migration and then a planned foreign key change, it keeps the rows and verifies clean.
  */
@@ -217,11 +217,11 @@ function operationsOf(ctx: JourneyContext, dirName: string) {
 }
 
 withTempDir(({ createTempDir }) => {
-  describe('Journey R1: rename a table with migration new and this.renameTable', () => {
+  describe("Journey R1: drop a model's @@map, and the plan renames its table", () => {
     const db = useDevDatabase();
 
     it(
-      'guard points at renameTable; a call naming a missing table fails; the call renames the table and its named objects, keeps rows and policies, and later changes apply',
+      'a call naming a missing table fails; a plan with no question renames the table and its named objects, keeps rows and policies, and later changes apply',
       async () => {
         const ctx = setupJourney({
           connectionString: db.connectionString,
@@ -229,21 +229,6 @@ withTempDir(({ createTempDir }) => {
           contractMode: 'psl',
         });
         const origin = await seedTableWithObjects(ctx, db.connectionString, 'R1');
-
-        const bare = await runMigrationPlan(ctx, ['--name', 'bare', '--from', origin, '--json']);
-        expect(bare.exitCode, 'R1.05: bare plan is refused').not.toBe(0);
-        const bareError = engineError(bare);
-        expect(bareError?.code, 'R1.05: guard code').toBe('MIGRATION.PLANNING_FAILED');
-        expect(bareError?.why, 'R1.05: guard names the case change').toContain(
-          'MIGRATION.TABLE_NAME_CASE_CHANGED',
-        );
-        expect(
-          bareError?.nextActions?.map((action) => action.label).join('\n'),
-          'R1.05: guard points at migration new and renameTable',
-        ).toContain(
-          'create its migration with prisma migration new --from <hash of the migration the database is at>, and add ...this.renameTable({ table: "userProfile", to: "UserProfile" })',
-        );
-        expect(getMigrationDirs(ctx), 'R1.05: nothing written').toHaveLength(1);
 
         const stale = await authorMigration(
           ctx,
@@ -257,17 +242,28 @@ withTempDir(({ createTempDir }) => {
         );
         rmSync(join(ctx.testDir, 'migrations', 'app', stale.dirName), { recursive: true });
 
-        const rename = await authorMigration(ctx, 'rename-user-profile', RENAME_CALL, origin);
-        expect(rename.emit.exitCode, `R1.07: self-emit: ${rename.emit.stderr}`).toBe(0);
-        const ops = operationsOf(ctx, rename.dirName);
+        const plan = await planMigrationAndSelfEmit(ctx, [
+          '--name',
+          'rename-user-profile',
+          '--from',
+          latestMigrationDirName(ctx),
+          '--json',
+        ]);
+        expect(plan.exitCode, `R1.07: the plan asks nothing: ${plan.stderr}`).toBe(0);
+        const dirName = latestMigrationDirName(ctx);
         expect(
-          ops.map((op) => op.label),
+          operationsOf(ctx, dirName).map(({ label, operationClass }) => ({
+            label,
+            operationClass,
+          })),
           'R1.07: the rename, then a rename of each object named after the old table',
-        ).toEqual(RENAME_LABELS);
+        ).toEqual(RENAME_LABELS.map((label) => ({ label, operationClass: 'widening' })));
         expect(
-          ops.every((op) => op.operationClass === 'widening'),
-          'R1.07: every operation is a widening rename',
-        ).toBe(true);
+          readFileSync(join(ctx.testDir, 'migrations', 'app', dirName, 'migration.ts'), 'utf-8'),
+          'R1.07: migration.ts renames the table',
+        ).toContain(
+          "...this.renameTable({ schema: 'public', table: 'userProfile', to: 'UserProfile' })",
+        );
 
         const apply = await runMigrate(ctx);
         expect(apply.exitCode, `R1.08: migrate: ${apply.stderr}`).toBe(0);
