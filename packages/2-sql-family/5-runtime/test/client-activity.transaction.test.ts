@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { startClientActivity } from '@internal/framework-components/runtime';
+import { describe, expect, it, vi } from 'vitest';
 import { startActivityOn } from '../src/activity-handle';
+import { withTransaction } from '../src/sql-runtime';
 import { testCall } from './client-activity-kinds';
 import { createSetup, type HookEvent, names, rawPlan } from './transaction-activity-fixtures';
 
@@ -52,7 +54,54 @@ describe('the transaction of an activity handle', () => {
     });
   });
 
+  it('of withTransaction starts beneath the parent it is given', async () => {
+    const { runtime, events } = createSetup();
+    await runtime.execute(rawPlan('select 1'));
+    const context = eventOf(events, 'started:statement')?.ctx;
+    if (context === undefined) throw new Error('no statement context');
+    const parent = await startClientActivity(testCall, {
+      middleware: [],
+      context,
+      parent: undefined,
+      holdFinishedChildren: false,
+    });
+
+    await withTransaction(runtime, async () => undefined, undefined, parent);
+    await parent.end({ outcome: 'succeeded' });
+
+    expect(eventOf(events, 'started:transaction')?.ctx?.parent).toBe(parent.ctx);
+  });
+
   describe('opened on a connection', () => {
+    it('never releases the connection, after a commit, a rollback or a refused start', async () => {
+      let transactionStarts = 0;
+      const { runtime } = createSetup({
+        middleware: [
+          {
+            name: 'refuse-third',
+            familyId: 'sql',
+            async activityStarted(activity) {
+              if (activity.kind === 'transaction' && ++transactionStarts === 3) {
+                throw new Error('refused');
+              }
+            },
+          },
+        ],
+      });
+      const connection = await runtime.connection();
+      const release = vi.spyOn(connection, 'release');
+      const call = await startActivityOn(connection, testCall);
+
+      await call.transaction?.(async () => undefined);
+      await call.transaction?.(async () => Promise.reject(new Error('failed'))).catch(() => {});
+      await call.transaction?.(async () => undefined).catch(() => {});
+      await call.end({ outcome: 'succeeded' });
+
+      expect(release).not.toHaveBeenCalled();
+      release.mockRestore();
+      await connection.release();
+    });
+
     it('begins on that connection and leaves it held after commit and after rollback', async () => {
       const { runtime, events } = createSetup();
       const connection = await runtime.connection();

@@ -22,7 +22,7 @@ import type {
   RuntimeTransaction,
   RuntimeTransactionOptions,
 } from '@internal/sql-runtime';
-import { activitySource } from '@internal/sql-runtime';
+import { activitySource, withTransaction } from '@internal/sql-runtime';
 import type {
   PreparedStatementExecuteTarget,
   PreparedStatementQueryTarget,
@@ -216,7 +216,7 @@ export class SupabaseRuntimeImpl<
             session[preparedStatementExecute](statement, params, options),
           );
         },
-        connection: open(undefined),
+        connection: (options?: ActivityExecuteOptions) => open(options)(),
         [activitySource]: {
           startActivity: async (activity) =>
             runtime().startActivityOnRoute(route, activity, undefined),
@@ -235,10 +235,7 @@ export class SupabaseRuntimeImpl<
           scope[preparedStatementQuery](statement, params, options),
         preparedExecute: (statement, params, options) =>
           scope[preparedStatementExecute](statement, params, options),
-        transaction: (parent) => ({
-          connection: async () =>
-            (await runtime().openRoleConnection(binding, { activityParent: parent })).session,
-        }),
+        transaction: (parent, fn, options) => withTransaction(scope, fn, options, parent),
       };
       return scope;
     };

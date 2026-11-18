@@ -247,8 +247,13 @@ export interface ActivityRoute {
     params: Params,
     options: ActivityExecuteOptions,
   ): Promise<SqlStatementStats>;
-  /** The connections `withTransaction` runs a transaction beneath `parent` on; absent where the route is a transaction. */
-  readonly transaction: ((parent: ActivityParent) => ConnectionProvider) | undefined;
+  readonly transaction:
+    | (<R>(
+        parent: ActivityParent,
+        fn: (tx: TransactionContext) => PromiseLike<R>,
+        options?: RuntimeTransactionOptions,
+      ) => Promise<R>)
+    | undefined;
   /** Whether an open activity on the route is runtime work that `close()` waits for. */
   readonly runtimeWork: boolean;
 }
@@ -540,9 +545,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       activity: StartActivity<K>,
     ): Promise<ActivityHandle<K>> => {
       this.#runtimeRoute ??= this.queryableRoute(this.driver, 'runtime', () => undefined, {
-        transaction: (parent) => ({
-          connection: () => this.openConnection({ activityParent: parent }),
-        }),
+        transaction: (parent, fn, options) => withTransaction(this, fn, options, parent),
         runtimeWork: true,
       });
       return this.startActivityOnRoute(this.#runtimeRoute, activity, undefined);
@@ -659,32 +662,34 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     return this.queryableRoute(connection, 'connection', () => openTransaction, {
       transaction:
         openTransaction === undefined
-          ? (parent) => this.heldConnectionProvider(connection, owner, parent)
+          ? (parent, fn, options) =>
+              this.transactionOnHeldConnection(connection, owner, parent, fn, options)
           : undefined,
       runtimeWork: false,
     });
   }
 
   // A connection runs one transaction at a time; a second one would send BEGIN inside the first.
-  private heldConnectionProvider(
+  private async transactionOnHeldConnection<R>(
     connection: SqlConnection,
     owner: TransactionStartTarget,
     parent: ActivityParent,
-  ): ConnectionProvider {
-    const held: HeldConnection = {
-      [transactionStart]: owner[transactionStart],
-      transaction: (options) => {
-        const openTransaction = this.#transactions.get(connection);
-        if (openTransaction !== undefined) {
-          owner[transactionStart].refusedBeforeBegin = true;
-          return Promise.reject(transactionAlreadyOpenError(parent, openTransaction.activity));
-        }
-        return this.beginTransactionOn(connection, owner, parent, options);
+    fn: (tx: TransactionContext) => PromiseLike<R>,
+    options: RuntimeTransactionOptions | undefined,
+  ): Promise<R> {
+    const openTransaction = this.#transactions.get(connection);
+    if (openTransaction !== undefined) {
+      throw transactionAlreadyOpenError(parent, openTransaction.activity);
+    }
+    return runTransactionOn(
+      {
+        [transactionStart]: owner[transactionStart],
+        transaction: (start) => this.beginTransactionOn(connection, owner, parent, start),
       },
-      release: async () => {},
-      destroy: (reason) => connection.destroy(reason),
-    };
-    return { connection: async () => held };
+      fn,
+      options,
+      (reason) => connection.destroy(reason),
+    );
   }
 
   /** The `activitySource` member of a held connection that `owner()` wraps. */
@@ -794,15 +799,15 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
         });
       },
     };
-    const connections = route.transaction;
-    if (connections === undefined) return handle;
+    const transaction = route.transaction;
+    if (transaction === undefined) return handle;
     return Object.assign(handle, {
       transaction: async <R>(
         fn: (tx: TransactionContext) => PromiseLike<R>,
         options?: RuntimeTransactionOptions,
       ): Promise<R> => {
         run.assertAcceptsChildren();
-        return withTransaction(connections(run), fn, options);
+        return transaction(run, fn, options);
       },
     });
   }
@@ -1403,8 +1408,10 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     );
   }
 
-  async connection(): Promise<RuntimeConnection> {
-    return this.openConnection();
+  async connection(
+    options?: Pick<ActivityExecuteOptions, 'activityParent'>,
+  ): Promise<RuntimeConnection> {
+    return this.openConnection(options);
   }
 
   private async openConnection(
@@ -1746,13 +1753,10 @@ class RowsBeneath<Row> implements AsyncGenerator<Row, void, unknown> {
  * Minimal structural type `withTransaction` depends on — anything that can open a connection. A connection the runtime made also carries its last transaction start, and its transactions carry their settlement; `withTransaction` reads both to decide whether a failure left the connection clean and which error to report.
  */
 export interface ConnectionProvider {
-  connection(): Promise<
-    Pick<RuntimeConnection, 'transaction' | 'release' | 'destroy'> & Partial<TransactionStartTarget>
-  >;
+  connection(
+    options?: Pick<ActivityExecuteOptions, 'activityParent'>,
+  ): Promise<RuntimeConnection & Partial<TransactionStartTarget>>;
 }
-
-type HeldConnection = Pick<RuntimeConnection, 'transaction' | 'release' | 'destroy'> &
-  TransactionStartTarget;
 
 /**
  * Adds a client's members to the context `withTransaction` passes. The context is the prototype, not spread, so live accessors such as `invalidated` keep reading the transaction's state; spreading would copy their value once.
@@ -1768,19 +1772,44 @@ export async function withTransaction<R>(
   runtime: ConnectionProvider,
   fn: (tx: TransactionContext) => PromiseLike<R>,
   options?: RuntimeTransactionOptions,
+  parent?: ActivityParent,
+): Promise<R> {
+  validateTransactionTimeout(options?.timeout);
+  const connection = await runtime.connection(
+    parent === undefined ? undefined : { activityParent: parent },
+  );
+  let destroyed = false;
+  try {
+    return await runTransactionOn(connection, fn, options, (reason) => {
+      destroyed = true;
+      return connection.destroy(reason);
+    });
+  } finally {
+    if (!destroyed) {
+      if (wasRefusedBeforeBegin(connection)) {
+        await connection.release().catch(() => undefined);
+      } else {
+        await connection.release();
+      }
+    }
+  }
+}
+
+async function runTransactionOn<R>(
+  connection: Pick<RuntimeConnection, 'transaction'> & Partial<TransactionStartTarget>,
+  fn: (tx: TransactionContext) => PromiseLike<R>,
+  options: RuntimeTransactionOptions | undefined,
+  destroy: (reason: unknown) => Promise<void>,
 ): Promise<R> {
   validateTransactionTimeout(options?.timeout);
   let invalidated = false;
-  const connection = await runtime.connection();
   let transaction: RuntimeTransaction;
   try {
     transaction = await connection.transaction(options);
   } catch (error) {
-    // A teardown error would mask the start error.
-    if (wasRefusedBeforeBegin(connection)) {
-      await connection.release().catch(() => undefined);
-    } else {
-      await connection.destroy(error).catch(() => undefined);
+    if (!wasRefusedBeforeBegin(connection)) {
+      // A teardown error would mask the start error.
+      await destroy(error).catch(() => undefined);
     }
     throw error;
   }
@@ -1898,7 +1927,7 @@ export async function withTransaction<R>(
     if (connectionDisposed) return;
     connectionDisposed = true;
     // SqlConnection.destroy() propagates teardown errors so callers can decide what to do with them. Here, we're already about to throw a more informative error describing why we're evicting the connection (rollback/commit failure), so swallowing the teardown error is the right call — surfacing it would mask the original cause.
-    await connection.destroy(reason).catch(() => undefined);
+    await destroy(reason).catch(() => undefined);
   };
 
   let commitRequested = false;
@@ -1952,8 +1981,5 @@ export async function withTransaction<R>(
   } finally {
     invalidated = true;
     signal.removeEventListener('abort', onAbort);
-    if (!connectionDisposed) {
-      await connection.release();
-    }
   }
 }
