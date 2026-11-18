@@ -75,7 +75,7 @@ A setting the ref does not declare is not checked. `migration plan` given no ref
 
 - **summary:** says which setting forbids the change.
 - **why:** the setting and where it is recorded, then each refused operation: its subject, and for `db migrate` the migration that contains it.
-- **meta:** `{ spaceId, command, settings: [{ setting, level }], operations: [{ setting, spaceId, migration?, operationId?, subject, label }] }`.
+- **meta:** `{ spaceId, command, settings: [{ setting, level }], operations: [{ setting, spaceId, migration?, operationId?, subject, label, loss? }] }`. `loss` says how a planned operation loses data (`drop` or `typeChange`), when the plan says so.
 - **next actions:** `user-choice`, no command. For data loss: the operation cannot run on this database; state a `--rename` if it was only a rename, convert a type change with `migration plan --convert`, or keep the data; really dropping it takes a change to the database's policy by its owner first. A migration that copies the data and then drops it is still refused. For access: change the contract or the migration so it does not change who can read or write the rows, or have the owner change the policy first. It never offers `--permit-policy-change`, `--delete` or `--allow`.
 
 When one run breaks both settings, one error reports both.
