@@ -96,7 +96,7 @@ describe('createMysqlDefineConfig', () => {
         expect.objectContaining({
           name: 'StructuredError',
           code: 'CONFIG.VALIDATION_FAILED',
-          message: `defineConfig for target "mariadb" cannot build a contract from "${contract}".`,
+          message: `The config for target "mariadb" cannot read the contract "${contract}".`,
           why: 'A TypeScript contract must be a .ts file.',
           fix: 'Rename the contract to a .ts file, or point `contract` at a Prisma schema: a .prisma file, a folder of them, or a glob.',
           meta: { contract },

@@ -36,7 +36,7 @@ describe('a TypeScript contract built for another target', () => {
     ).toMatchObject({
       code: 'CONTRACT_SOURCE_INVALID',
       summary: `The TypeScript contract "${contract}" was built for target "mysql", but the config is for target "mariadb".`,
-      why: "Its defineContract came from another target's contract-builder entry, so the contract carries that target's id and capabilities.",
+      why: 'The contract file imports defineContract from the package for target "mysql".',
       meta: {
         code: 'CONTRACT.TARGET_MISMATCH',
         contract,
@@ -53,7 +53,7 @@ describe('a TypeScript contract built for another target', () => {
     ).toMatchObject({
       code: 'CONTRACT_SOURCE_INVALID',
       summary: `The TypeScript contract "${contract}" was built for target "mariadb", but the config is for target "mysql".`,
-      why: "Its defineContract came from another target's contract-builder entry, so the contract carries that target's id and capabilities.",
+      why: 'The contract file imports defineContract from the package for target "mariadb".',
       meta: {
         code: 'CONTRACT.TARGET_MISMATCH',
         contract,

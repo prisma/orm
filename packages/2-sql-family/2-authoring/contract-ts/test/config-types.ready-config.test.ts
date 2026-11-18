@@ -51,8 +51,8 @@ describe('refuseOtherTargetOnLoad', () => {
       code: 'CONTRACT.TARGET_MISMATCH',
       message:
         'The TypeScript contract in the config was built for target "mysql", but the config is for target "postgres".',
-      why: "The contract carries another target's id and capabilities, so it was built or emitted for that target.",
-      fix: 'Pass a contract built for postgres, such as one made with the defineContract from @prisma/orm-postgres/contract-builder.',
+      why: 'The contract was built for target "mysql".',
+      fix: 'Pass a contract built with defineContract imported from @prisma/orm-postgres/contract-builder.',
       meta: { expected: 'postgres', actual: 'mysql' },
     });
   });
@@ -62,8 +62,8 @@ describe('refuseOtherTargetOnLoad', () => {
       code: 'CONTRACT.TARGET_MISMATCH',
       message:
         'The contract "./prisma/schema.prisma" was built for target "sqlite", but the config is for target "postgres".',
-      why: "Its contract config was made with another target's components, so the contract carries that target's id and capabilities.",
-      fix: "Make the contract config with postgres's components, or pass the schema's path as `contract`.",
+      why: 'The contract config read the schema for target "sqlite".',
+      fix: 'Pass the schema\'s path as `contract`, so the config reads it for target "postgres".',
       meta: { contract: './prisma/schema.prisma', expected: 'postgres', actual: 'sqlite' },
     });
   });

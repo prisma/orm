@@ -35,6 +35,7 @@ describe('typescriptContractFromPath with the target the config is for', () => {
             refused: {
               code: Object(error).code,
               message: Object(error).message,
+              why: Object(error).why,
               fix: Object(error).fix,
               meta: Object(error).meta,
             },
@@ -57,6 +58,7 @@ describe('typescriptContractFromPath with the target the config is for', () => {
           code: 'CONTRACT.TARGET_MISMATCH',
           message:
             'The TypeScript contract "./contract.ts" was built for target "mysql", but the config is for target "postgres".',
+          why: 'The contract file imports defineContract from the package for target "mysql".',
           fix: 'Import defineContract from @prisma/orm-postgres/contract-builder.',
           meta: { contract: './contract.ts', expected: 'postgres', actual: 'mysql' },
         },
@@ -82,7 +84,8 @@ describe('typescriptContractFromPath with the target the config is for', () => {
             code: 'CONTRACT.EXPORT_INVALID',
             message:
               'The TypeScript contract "./contract.ts" exports a value that is not a SQL contract.',
-            fix: "Export the result of the target package's defineContract as the module's default or contract export.",
+            why: 'A contract file must export the contract that defineContract returns, and this export is something else.',
+            fix: 'Import defineContract from @prisma/orm-postgres/contract-builder and export the contract it returns as the default export or as `export const contract`.',
             meta: { path: expect.stringMatching(/contract\.ts$/), reason: 'not-a-contract' },
           },
         },
@@ -152,6 +155,7 @@ describe('typescriptContractFromPath with the target the config is for', () => {
           code: 'CONTRACT.TARGET_MISMATCH',
           message:
             'The TypeScript contract "./contract.ts" was built for target "mongo", but the config is for target "postgres".',
+          why: 'The contract file imports defineContract from the package for target "mongo".',
           fix: 'Import defineContract from @prisma/orm-postgres/contract-builder.',
           meta: { contract: './contract.ts', expected: 'postgres', actual: 'mongo' },
         },

@@ -441,7 +441,7 @@ A Mongo field references an enum that is not declared in `defineContract({ enums
 
 ### CONTRACT.EXPORT_INVALID
 
-The TS contract module's export is not a plain JSON-serializable contract object: a non-object export, circular references, getters, or function-valued properties. Raised by the CLI while loading a TypeScript contract source. Payload: `path`, `reason`, `key`. A SQL target's `defineConfig` also raises it when the module's `default` or `contract` export is not a SQL contract (it has no SQL target family, no target, or no storage namespaces, so it was not built with `defineContract`): `The TypeScript contract "<path>" exports a value that is not a SQL contract.`, with `reason: 'not-a-contract'`.
+The TS contract module's export is not a plain JSON-serializable contract object: a non-object export, circular references, getters, or function-valued properties. Raised by the CLI while loading a TypeScript contract source. Payload: `path`, `reason`, `key`. `contract emit` also raises it when a SQL config's TypeScript contract file exports, as its `default` or `contract` export, something other than the contract `defineContract` returns: `The TypeScript contract "<path>" exports a value that is not a SQL contract.`, with `reason: 'not-a-contract'`; its fix names the module to import `defineContract` from.
 
 ### CONTRACT.FIELD_HELPER_UNKNOWN
 
@@ -543,7 +543,7 @@ A polymorphic base names a variant that is not a model in the contract, so the `
 
 ### CONTRACT.MODULE_EXPORT_MISSING
 
-The contract module at the configured path loads but exposes neither a `default` nor a `contract` export, so the CLI cannot obtain the contract from it. Raised when resolving a TS contract from config (SQL and Mongo). Payload: `path`.
+The contract module at the configured path loads but exposes neither a `default` nor a `contract` export, so the CLI cannot obtain the contract from it. Raised when resolving a TS contract from config (SQL and Mongo). Payload: `path`. For a SQL config the message names the file as the config writes it: `The contract file "<path>" has no default export or named export \`contract\`.`, with the fix to export the contract `defineContract` returns either way.
 
 ### CONTRACT.NAME_DUPLICATE
 
@@ -551,7 +551,7 @@ Two declarations claim the same name: duplicate namespace entries, model names, 
 
 ### CONTRACT.NAMESPACE_INVALID
 
-A namespace name is empty, whitespace-only, or a reserved sentinel (`__unbound__`, `__unspecified__`, or Postgres's reserved `unbound`), either in the declared `namespaces` list or on a model. Raised by the SQL contract builder. Payload: `namespace`, `reason`, `modelKey`.
+A namespace name is empty, whitespace-only, or a reserved sentinel (`__unbound__`, `__unspecified__`, or Postgres's reserved `unbound`), either in the declared `namespaces` list or on a model. Raised by the SQL contract builder. Payload: `namespace`, `reason`, `modelKey`. MySQL and MariaDB also raise it when a TypeScript contract puts a model in a namespace, which they do not support: `MySQL and MariaDB do not support namespaces, but the contract puts a model in namespace "<name>".`, with the fix to remove `namespace` from the model. Payload: `received`.
 
 ### CONTRACT.NAMESPACE_UNKNOWN
 
@@ -653,7 +653,7 @@ A foreign key names its target by table, and no model or table node of the contr
 
 The contract's target does not match the target configured in `prisma.config.ts` (e.g. a Postgres contract with a SQLite config). `db verify` reports it as an `error` diagnostic on a completed run that exits `4`. Payload: `expected` (the configured target), `actual` (the contract's target), and `contract` (the contract's path) when a `defineConfig` raises it.
 
-A SQL target's `defineConfig` also raises it when it loads a TypeScript contract whose `target` is another target's id, because the contract was built with another target's `defineContract`: `The TypeScript contract "<path>" was built for target "<actual>", but the config is for target "<expected>".`, with the fix `Import defineContract from <module>.`, where the module is the configured target package's `contract-builder` entry. `contract emit` reports it under this code, in the terminal and with `--json`; the programmatic control client's `emit` returns it as `CONTRACT_SOURCE_INVALID` with this code in `meta.code`. A module that exports a contract of another family, such as a MongoDB contract, gets this code too; a contract here is a value with a target family, a target and storage namespaces, the fields every family's contract has. A module whose export is not a contract at all is refused with `CONTRACT.EXPORT_INVALID` instead. PostgreSQL's `defineConfig` also raises it when a ready `ContractConfig` passed as `contract`, such as `typescriptContract(contract)`, loads a contract built for another target. The message then names the config's first input (`The contract "<path>" was built for target ...`, with `TypeScript contract` for a TypeScript source), or says `passed to defineConfig` when the config has no input, in which case `meta` has no `contract`.
+`contract emit` also raises it when a SQL config's TypeScript contract imports `defineContract` from another target's package: `The TypeScript contract "<path>" was built for target "<actual>", but the config is for target "<expected>".`, with the fix `Import defineContract from <module>.`, where the module is the configured target package's `contract-builder` entry. `contract emit` reports it under this code, in the terminal and with `--json`; the programmatic control client's `emit` returns it as `CONTRACT_SOURCE_INVALID` with this code in `meta.code`. A module that exports a contract of another family, such as a MongoDB contract, gets this code too; a contract here is a value with a target family, a target and storage namespaces, the fields every family's contract has. A module whose export is not a contract at all is refused with `CONTRACT.EXPORT_INVALID` instead. It is also raised when a PostgreSQL config's `contract` is a ready `ContractConfig`, such as `typescriptContract(contract)`, loads a contract built for another target. The message then names the config's first input (`The contract "<path>" was built for target ...`, with `TypeScript contract` for a TypeScript source), or says `in the config` when the config has no input, in which case `meta` has no `contract`.
 
 ### CONTRACT.TYPE_PARAMS_INVALID
 
@@ -1416,7 +1416,7 @@ The SQLite SQL renderer wrote a statement whose placeholders do not match its pa
 
 MySQL raises it in three places, each refusing the statement before it runs:
 
-- The MySQL adapter, after lowering, when a placeholder is not a numbered `?N` naming one of the statement's parameters, or a parameter has no placeholder, usually because of a `?` written into raw SQL text. Payload: `placeholders`, `params`.
+- The MySQL adapter, when a placeholder is not a numbered `?N` naming one of the statement's parameters, or a parameter has no placeholder, usually because of a `?` written into raw SQL text. Payload: `placeholders`, `params`.
 - The MySQL adapter, when raw SQL puts a digit right after an interpolated value, which would read as part of the value's `?N` (`?1` followed by `0` reads as `?10`). Payload: `reason: 'digit-after-value'`, `part`.
 - The MySQL drivers, when a statement mixes numbered `?N` and bare `?` placeholders, or its placeholders and values do not match. Payload: `placeholders`, `params`.
 

@@ -57,23 +57,23 @@ function describeContract({ format, inputs }: ContractOrigin): string {
 
 function otherTargetGuidance(
   { format, inputs }: ContractOrigin,
+  actual: string,
   expected: ConfigTarget,
 ): { readonly why: string; readonly fix: string } {
-  const configured = expected.target.targetId;
   if (format === 'psl') {
     return {
-      why: "Its contract config was made with another target's components, so the contract carries that target's id and capabilities.",
-      fix: `Make the contract config with ${configured}'s components, or pass the schema's path as \`contract\`.`,
+      why: `The contract config read the schema for target "${actual}".`,
+      fix: `Pass the schema's path as \`contract\`, so the config reads it for target "${expected.target.targetId}".`,
     };
   }
   if (inputs?.[0] === undefined) {
     return {
-      why: "The contract carries another target's id and capabilities, so it was built or emitted for that target.",
-      fix: `Pass a contract built for ${configured}, such as one made with the defineContract from ${expected.contractBuilderModule}.`,
+      why: `The contract was built for target "${actual}".`,
+      fix: `Pass a contract built with defineContract imported from ${expected.contractBuilderModule}.`,
     };
   }
   return {
-    why: "Its defineContract came from another target's contract-builder entry, so the contract carries that target's id and capabilities.",
+    why: `The contract file imports defineContract from the package for target "${actual}".`,
     fix: `Import defineContract from ${expected.contractBuilderModule}.`,
   };
 }
@@ -90,7 +90,7 @@ function refuseOtherTarget(
     'CONTRACT.TARGET_MISMATCH',
     `${describeContract(origin)} was built for target "${actual}", but the config is for target "${configured}".`,
     {
-      ...otherTargetGuidance(origin, expected),
+      ...otherTargetGuidance(origin, actual, expected),
       meta: { ...ifDefined('contract', origin.inputs?.[0]), expected: configured, actual },
     },
   );
@@ -218,8 +218,11 @@ export function typescriptContractFromPath(
         if (mod.default === undefined && mod.contract === undefined) {
           throw contractError(
             'CONTRACT.MODULE_EXPORT_MISSING',
-            `typescriptContractFromPath: module at "${absolutePath}" has no "default" or "contract" export.`,
-            { meta: { path: absolutePath } },
+            `The contract file "${contractPath}" has no default export or named export \`contract\`.`,
+            {
+              fix: 'Export the contract that defineContract returns as the default export or as `export const contract`.',
+              meta: { path: absolutePath },
+            },
           );
         }
         const exported: unknown = mod.default ?? mod.contract;
@@ -230,8 +233,8 @@ export function typescriptContractFromPath(
             'CONTRACT.EXPORT_INVALID',
             `The TypeScript contract "${contractPath}" exports a value that is not a SQL contract.`,
             {
-              why: 'The value has no SQL target family, no target, or no storage namespaces, so it was not built with defineContract.',
-              fix: "Export the result of the target package's defineContract as the module's default or contract export.",
+              why: 'A contract file must export the contract that defineContract returns, and this export is something else.',
+              fix: `Import defineContract from ${options.contractBuilderModule} and export the contract it returns as the default export or as \`export const contract\`.`,
               meta: { path: absolutePath, reason: 'not-a-contract' },
             },
           );

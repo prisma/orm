@@ -137,7 +137,13 @@ describe('typescriptContract', () => {
             ...stubContext,
             resolvedInputs: [contractPath],
           }),
-        ).rejects.toThrow(/has no "default" or "contract" export/);
+        ).rejects.toThrow(
+          expect.objectContaining({
+            message:
+              'The contract file "./contract.ts" has no default export or named export `contract`.',
+            fix: 'Export the contract that defineContract returns as the default export or as `export const contract`.',
+          }),
+        );
 
         await expect(
           config.source.load({
