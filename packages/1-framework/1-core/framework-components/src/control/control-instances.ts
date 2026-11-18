@@ -15,6 +15,7 @@ import type {
   VerifyDatabaseSchemaResult,
 } from './control-operation-results';
 import type { DatabasePolicies } from './database-policies';
+import type { MigrationAccessChange } from './migration-statements';
 
 export interface ControlFamilyInstance<TFamilyId extends string, TSchemaIR>
   extends FamilyInstance<TFamilyId> {
@@ -30,6 +31,11 @@ export interface ControlFamilyInstance<TFamilyId extends string, TSchemaIR>
 
   /** The name the database knows the object an operation acts on by. */
   storageNameOf(operation: MigrationPlanOperation): string;
+
+  /**
+   * The operations of one recorded migration that change who can read or write rows, each by its position in `operations`. Recognised from each operation's structure, never its label. An operation whose effect the family cannot read, such as raw SQL, is not listed.
+   */
+  accessChangesOf(operations: readonly MigrationPlanOperation[]): readonly MigrationAccessChange[];
 
   /** Where the database keeps the contract markers, as messages name it to the user, such as `prisma_contract.marker`. The control adapter names it. */
   readonly markerLocation: string;

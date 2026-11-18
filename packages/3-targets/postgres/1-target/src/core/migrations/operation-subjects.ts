@@ -124,7 +124,7 @@ function knownTarget(locator: Locator, call: OpFactoryCall): SubjectStorage | un
  * A policy's identity across a replacement: its name, or the prefix of a generated (wire) name,
  * whose hash changes with the policy's body.
  */
-function policyKey(schemaName: string, tableName: string, policyName: string): string {
+export function policyKey(schemaName: string, tableName: string, policyName: string): string {
   return JSON.stringify([schemaName, tableName, parseWireName(policyName)?.prefix ?? policyName]);
 }
 
