@@ -1,10 +1,7 @@
 import { timeouts } from '@repo/test-utils';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
-import {
-  prisma7ConfigFile,
-  workspaceTargetPackageName,
-} from '../../../src/commands/init/templates/code-templates';
+import { prisma7ConfigFile } from '../../src/init/templates';
 
 function syntaxErrors(source: string): readonly string[] {
   const { diagnostics = [] } = ts.transpileModule(source, { reportDiagnostics: true });
@@ -57,11 +54,7 @@ describe('prisma7ConfigFile', { timeout: timeouts.typeScriptCompilation }, () =>
   ])(
     'writes paths with %s as string literals equal to the paths',
     (_case, schemaPath, outputDir) => {
-      const source = prisma7ConfigFile(
-        schemaPath,
-        outputDir,
-        workspaceTargetPackageName('postgres'),
-      );
+      const source = prisma7ConfigFile({ schemaPath, outputDir });
 
       expect(syntaxErrors(source)).toEqual([]);
       expect(configLiterals(source)).toEqual({ schema: schemaPath, output: outputDir });

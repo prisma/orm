@@ -362,6 +362,7 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
             'control-api',
             'control-api/testing',
             'config-types',
+            'init-contribution',
             'init-output',
           ],
         },
@@ -402,7 +403,6 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
           entry: 'vite-plugin-contract-emit',
         },
       ],
-      copy: ['packages/1-framework/3-tooling/cli/dist/*.md'],
     },
   ],
   [
@@ -698,6 +698,7 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
       packages: [
         { dir: 'packages/3-targets/postgres/9-facade', name: '@internal/postgres', entry: '' },
       ],
+      copy: ['packages/3-targets/postgres/9-facade/dist/*.md'],
       reexports: facadeReexports({
         family: '@internal/sql-contract',
         familyPack: '@internal/family-sql',
@@ -818,6 +819,7 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
       dir: 'packages/9-public/@prisma/orm-mongo',
       kind: 'facade',
       packages: [{ dir: 'packages/3-targets/mongo/9-facade', name: '@internal/mongo', entry: '' }],
+      copy: ['packages/3-targets/mongo/9-facade/dist/*.md'],
       reexports: facadeReexports({
         family: '@internal/mongo-contract',
         familyPack: '@internal/family-mongo',
