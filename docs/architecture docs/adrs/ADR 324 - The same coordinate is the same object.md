@@ -17,7 +17,7 @@ model User {                       model User {
 }                                  }
 ```
 
-`prisma migration plan` and `prisma db update` both plan these operations, with no question and no statement (as `--json` reports them):
+On PostgreSQL, `prisma migration plan` and `prisma db update` both plan these operations, with no question and no statement (as `--json` reports them):
 
 ```json
 [
