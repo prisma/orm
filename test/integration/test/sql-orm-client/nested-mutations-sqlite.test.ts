@@ -896,7 +896,10 @@ describe('integration/nested-mutations on SQLite: update()', () => {
         await posts.create({ id: 11, title: 'Unlinked' });
         const linked = posts.where({ id: 10 }).select('id', 'userId');
 
-        await linked.update({ author: (author) => author.update({ name: 'Ada L.' }) });
+        await linked.update({
+          title: 'Linked again',
+          author: (author) => author.update({ name: 'Ada L.' }),
+        });
         const afterUpdate = rows('select id, name from users order by id');
         const unmatched = await linked.update({
           author: (author) => author.where({ name: 'Nobody' }).delete(),

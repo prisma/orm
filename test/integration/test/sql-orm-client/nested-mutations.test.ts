@@ -873,7 +873,10 @@ describe.each(includeStrategies)('integration/nested-mutations (%s)', (strategy)
           runtime.query('select id, name, invited_by_id from users order by id');
         const bob = users.where({ id: 2 }).select('id', 'invitedById');
 
-        await bob.update({ invitedBy: (inviter) => inviter.update({ name: 'Alice A.' }) });
+        await bob.update({
+          name: 'Bob B.',
+          invitedBy: (inviter) => inviter.update({ name: 'Alice A.' }),
+        });
         const afterUpdate = await userRows();
         const unmatched = await bob.update({
           invitedBy: (inviter) => inviter.where({ name: 'Nobody' }).delete(),
@@ -892,12 +895,12 @@ describe.each(includeStrategies)('integration/nested-mutations (%s)', (strategy)
         ]);
         expect(afterUpdate).toEqual([
           { id: 1, name: 'Alice A.', invited_by_id: null },
-          { id: 2, name: 'Bob', invited_by_id: 1 },
+          { id: 2, name: 'Bob B.', invited_by_id: 1 },
           { id: 3, name: 'Carol', invited_by_id: null },
         ]);
         expect(afterUnmatched).toEqual(afterUpdate);
         expect(await userRows()).toEqual([
-          { id: 2, name: 'Bob', invited_by_id: null },
+          { id: 2, name: 'Bob B.', invited_by_id: null },
           { id: 3, name: 'Carol', invited_by_id: null },
         ]);
       });

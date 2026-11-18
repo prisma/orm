@@ -162,6 +162,43 @@ describe('update() and delete() on a relation the parent holds the key for', () 
     );
   });
 
+  it('reads the key of the linked row from the parent row found before its own Update', () => {
+    expect(
+      printUpdate(
+        { invitedBy: (inviter: SingleRowMutator) => inviter.update({ name: 'Grace H.' }) },
+        'User',
+        { name: 'Ada' },
+      ),
+    ).toBe(
+      [
+        'n1 Find users where id = 1',
+        "n2 Update users set name = 'Ada' where id = 1",
+        'n3 Find users limit 1 <- FilterData n1 (invited_by_id->id)',
+        "n4 Update users set name = 'Grace H.' <- FilterData n3 (id->id), FilterData n1 (invited_by_id->id)",
+        'n5 Find users <- FilterData n2 (id->id)',
+        'result: n5',
+      ].join('\n'),
+    );
+  });
+
+  it('deletes the linked row after the parent writes its own values', () => {
+    expect(
+      printUpdate({ invitedBy: (inviter: SingleRowMutator) => inviter.delete() }, 'User', {
+        name: 'Ada',
+      }),
+    ).toBe(
+      [
+        'n1 Find users where id = 1',
+        "n2 Update users set name = 'Ada' where id = 1",
+        'n3 Find users limit 1 <- FilterData n1 (invited_by_id->id)',
+        'n4 Update users set invited_by_id = null <- FilterData n2 (id->id), FilterData n3 (id->invited_by_id)',
+        'n5 Delete users <- FilterData n3 (id->id)',
+        'n6 Find users <- FilterData n2 (id->id)',
+        'result: n6',
+      ].join('\n'),
+    );
+  });
+
   it('finds the linked row, sets the key of the parent to null only if it found one, then deletes it', () => {
     expect(
       printUpdate({

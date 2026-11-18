@@ -520,8 +520,8 @@ function addLinkedRowWrite(
   const localColumns = localColumnsOf(contract, model, relation);
   const targetColumns = resolveRelationTargetColumns(contract, relation);
   const target = mutation.state.tables.root;
+  const linked = t.parentRow ?? parent;
   if (mutation.kind === 'delete') {
-    const linked = t.parentRow ?? parent;
     const toTarget = columnMappings(
       contract,
       model.tables.root,
@@ -569,7 +569,7 @@ function addLinkedRowWrite(
   const sources = {
     filters: [
       {
-        from: parent,
+        from: linked,
         columns: columnMappings(contract, model.tables.root, localColumns, target, targetColumns),
       },
     ],
