@@ -94,6 +94,7 @@
     "./psl-printer": "./dist/psl-printer.mjs",
     "./ts-render": "./dist/ts-render.mjs",
     "./type-implementations": "./dist/type-implementations.mjs",
+    "./type-implementations/boolean": "./dist/type-implementations__boolean.mjs",
     "./type-implementations/date": "./dist/type-implementations__date.mjs",
     "./type-implementations/decimal": "./dist/type-implementations__decimal.mjs",
     "./type-implementations/duration": "./dist/type-implementations__duration.mjs",
