@@ -120,7 +120,6 @@ function isRecord(value: unknown): value is object {
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === 'string' && value.length > 0;
 
-/** Has the fields every family's contract has: a target family, a target, and storage namespaces. */
 function isContractOfAnyFamily(value: unknown): value is object {
   if (!isRecord(value)) return false;
   const { targetFamily, target, storage } = Object(value);
