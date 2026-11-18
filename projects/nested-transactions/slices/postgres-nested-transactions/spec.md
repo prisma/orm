@@ -51,7 +51,7 @@ export function withSavepoint<TCtx, R>(
 ): Promise<R>
 ```
 
-1. **It takes the context `withTransaction` or an enclosing `withSavepoint` passed to its callback.** That context carries an internal symbol-keyed member through which `withSavepoint` opens a savepoint on the context's transaction (`RuntimeTransaction.transaction()`, slice 3). The member is not on the `TransactionContext` type and not exported from the package, as the transaction's settlement member is not. A context the runtime did not make has no such member, and `withSavepoint` rejects with an error that says so. The member's name and exact shape are the implementer's choice.
+1. **It takes the context `withTransaction` or an enclosing `withSavepoint` passed to its callback.** That context carries an internal symbol-keyed member through which `withSavepoint` opens a savepoint on the context's transaction (`RuntimeTransaction.transaction()`, slice 3). The member is not on the `TransactionContext` type and not exported from the package, as the transaction's settlement member is not. A context the runtime did not make has no such member, and `withSavepoint` fails an `invariant` that says so, as `activitySourceOf` does; this is a mistake by a facade author, so it gets no `RUNTIME.*` code. The member's name and exact shape are the implementer's choice.
 2. **No options** (project spec decision 2). `withSavepoint` has no options parameter, and the facade's `tx.transaction` type has exactly one parameter.
 3. **One guarded context for every level.** The code in `runTransactionOn` that builds the guarded context (`guardedStream`, `guardedQueryable`, `guardedSource`, `guardedHandle`, the context object) becomes a function that builds the context for any `RuntimeTransaction`, given a way to ask whether the level is closed. `runTransactionOn` and `withSavepoint` both call it. Keep the functions nested as they are, so the diff shows the new wrapper and not ninety moved lines.
    - A nested context is closed once its callback has settled, or once any enclosing context is closed (the enclosing callback settled, or the outer transaction's signal aborted). Closed means what it means for `tx` today: `invalidated` is `true`, and `query`, `execute`, the prepared-statement members, `startActivity` and `transaction` reject with `RUNTIME.TRANSACTION_CLOSED` before anything reaches the driver.
@@ -161,7 +161,7 @@ About 560 changed lines, measured against the code: about 170 production (`sql-r
 - **Validation gate:**
   - `pnpm build`, then `pnpm typecheck`.
   - `pnpm --filter @internal/sql-runtime test`, `pnpm --filter @internal/postgres test`, `pnpm --filter @internal/extension-supabase test`.
-  - `pnpm --filter <pkg> lint` for the three packages, and `pnpm lint:deps`.
+  - `pnpm --filter <pkg> lint` for the three packages, `pnpm lint:deps` and `pnpm check:error-reference`.
   - `pnpm test:integration`: `runTransactionOn` is restructured, and every facade and the ORM run through it.
 
 ## References
