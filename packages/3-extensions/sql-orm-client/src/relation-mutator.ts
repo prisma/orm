@@ -138,16 +138,28 @@ export function isRelationMutationDescriptor(
     return false;
   }
 
-  const candidate = value as { kind?: unknown };
+  const candidate = value as { kind?: unknown; state?: unknown; data?: unknown };
+  if (candidate.kind === 'update') {
+    return hasFilters(candidate.state) && isObject(candidate.data);
+  }
+  if (candidate.kind === 'delete') {
+    return hasFilters(candidate.state);
+  }
   return (
     candidate.kind === 'create' ||
     candidate.kind === 'connect' ||
     candidate.kind === 'disconnect' ||
     candidate.kind === 'updateAll' ||
-    candidate.kind === 'deleteAll' ||
-    candidate.kind === 'update' ||
-    candidate.kind === 'delete'
+    candidate.kind === 'deleteAll'
   );
+}
+
+function isObject(value: unknown): value is object {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasFilters(state: unknown): boolean {
+  return isObject(state) && 'filters' in state && Array.isArray(state.filters);
 }
 
 export function isRelationMutationCallback(

@@ -219,6 +219,10 @@ describe('relation-mutator', () => {
       true,
     );
     expect(isRelationMutationDescriptor({ kind: 'delete', state: posts.state })).toBe(true);
+    expect(isRelationMutationDescriptor({ kind: 'delete' })).toBe(false);
+    expect(isRelationMutationDescriptor({ kind: 'delete', state: {} })).toBe(false);
+    expect(isRelationMutationDescriptor({ kind: 'update', state: posts.state })).toBe(false);
+    expect(isRelationMutationDescriptor({ kind: 'update', data: {} })).toBe(false);
     expect(isRelationMutationDescriptor(createRelationMutator(posts).where({ id: 1 }))).toBe(false);
     expect(isRelationMutationDescriptor(null)).toBe(false);
     expect(isRelationMutationDescriptor({ kind: 'unknown' })).toBe(false);

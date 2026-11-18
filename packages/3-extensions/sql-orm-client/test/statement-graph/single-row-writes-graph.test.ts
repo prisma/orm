@@ -179,6 +179,17 @@ describe('rejections of update() and delete() on a relation', () => {
     );
   });
 
+  it('rejects an update or delete descriptor without a state or data as an invalid descriptor', () => {
+    for (const descriptor of [{ kind: 'delete' }, { kind: 'update', state: {} }]) {
+      expect(() => printUpdate({ profile: () => descriptor })).toThrow(
+        expect.objectContaining({
+          code: 'ORM.ARGUMENT_INVALID',
+          meta: expect.objectContaining({ relation: 'profile', problem: 'invalid-descriptor' }),
+        }),
+      );
+    }
+  });
+
   it('rejects update() inside create()', () => {
     const target = {
       context: getTestContext(),
