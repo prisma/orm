@@ -10,14 +10,23 @@ export const PROBE_DEADLINE_MILLIS = 60_000;
 
 const TIMED_OUT = Symbol('timed-out');
 
-/** The probe's answer, or `TIMED_OUT` when it has not settled by the deadline. */
-async function withinDeadline<T>(probe: Promise<T>): Promise<T | typeof TIMED_OUT> {
+/**
+ * The probe's answer, or `TIMED_OUT` when it has not settled by the deadline, at which point the
+ * probe's signal is aborted so it can close its client.
+ */
+async function withinDeadline<T>(
+  probe: (signal: AbortSignal) => Promise<T>,
+): Promise<T | typeof TIMED_OUT> {
+  const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<typeof TIMED_OUT>((resolve) => {
-    timer = setTimeout(() => resolve(TIMED_OUT), PROBE_DEADLINE_MILLIS);
+    timer = setTimeout(() => {
+      controller.abort();
+      resolve(TIMED_OUT);
+    }, PROBE_DEADLINE_MILLIS);
   });
   try {
-    return await Promise.race([probe, deadline]);
+    return await Promise.race([probe(controller.signal), deadline]);
   } finally {
     clearTimeout(timer);
   }
@@ -117,7 +126,8 @@ export async function probeServerVersion(ctx: ProbeContext): Promise<ProbeOutcom
 
   let answer: unknown;
   try {
-    answer = await withinDeadline(contribution.probe(databaseUrl));
+    const { probe } = contribution;
+    answer = await withinDeadline((signal) => probe(databaseUrl, signal));
   } catch (err) {
     const cause = redactUrlCredentials(causeMessage(err));
     return {

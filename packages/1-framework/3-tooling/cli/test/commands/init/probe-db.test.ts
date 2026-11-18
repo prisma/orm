@@ -48,7 +48,7 @@ describe('compareVersionPrefix (FR8.3)', () => {
 
 function probeContext(
   databaseUrl: string | undefined,
-  probe: ((url: string) => Promise<InitProbeResult>) | undefined,
+  probe: ((url: string, signal: AbortSignal) => Promise<InitProbeResult>) | undefined,
   minVersion = '14',
 ): ProbeContext {
   return {
@@ -218,10 +218,14 @@ describe('probeServerVersion (FR8.3)', () => {
       vi.useRealTimers();
     });
 
-    it('gives up after 60 seconds, naming the package', async () => {
+    it('gives up after 60 seconds, naming the package, and aborts the probe', async () => {
       vi.useFakeTimers();
+      let signal: AbortSignal | undefined;
       const pending = probeServerVersion(
-        probeContext('postgres://localhost:5432/db', () => new Promise(() => {})),
+        probeContext('postgres://localhost:5432/db', (_url, probeSignal) => {
+          signal = probeSignal;
+          return new Promise(() => {});
+        }),
       );
 
       await vi.advanceTimersByTimeAsync(59_999);
@@ -231,6 +235,7 @@ describe('probeServerVersion (FR8.3)', () => {
       });
       await Promise.resolve();
       expect(settled).toBe(false);
+      expect(signal?.aborted).toBe(false);
 
       await vi.advanceTimersByTimeAsync(1);
       await expect(pending).resolves.toMatchObject({
@@ -238,6 +243,7 @@ describe('probeServerVersion (FR8.3)', () => {
         message:
           '--probe-db gave up: the probe of @example/target did not finish within 60 seconds.',
       });
+      expect(signal?.aborted).toBe(true);
     });
   });
 
@@ -281,7 +287,7 @@ describe('probeServerVersion (FR8.3)', () => {
     );
 
     expect(probe).toHaveBeenCalledTimes(1);
-    expect(probe).toHaveBeenCalledWith('mongodb://localhost:27017/db');
+    expect(probe).toHaveBeenCalledWith('mongodb://localhost:27017/db', expect.any(AbortSignal));
     expect(outcome.kind).toBe('ok');
   });
 });

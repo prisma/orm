@@ -61,7 +61,7 @@ const contribution: InitContribution = {
     minVersion: MONGO_MIN_SERVER_VERSION,
     checkCommand: 'db.runCommand({ buildInfo: 1 })',
   },
-  probe: (databaseUrl) => probeMongo(databaseUrl),
+  probe: (databaseUrl, signal) => probeMongo(databaseUrl, signal),
 };
 
 export default contribution;

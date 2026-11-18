@@ -78,7 +78,7 @@ const contribution: InitContribution = {
   quickReference,
   readme,
   serverRequirement: { minVersion: POSTGRES_MIN_SERVER_VERSION, checkCommand: 'SELECT version()' },
-  probe: (databaseUrl) => probePostgres(databaseUrl),
+  probe: (databaseUrl, signal) => probePostgres(databaseUrl, signal),
   prisma7QuickReference,
 };
 

@@ -32,6 +32,7 @@ function isModuleNotFound(error: unknown): boolean {
 
 export async function probePostgres(
   databaseUrl: string,
+  signal: AbortSignal,
   loadDriver: LoadDriver = () => import('pg'),
 ): Promise<InitProbeResult> {
   let pg: { readonly default: typeof pgDriver };
@@ -50,6 +51,10 @@ export async function probePostgres(
     query_timeout: PROBE_TIMEOUT_MILLIS,
   });
   client.on('error', () => {});
+  const endOnAbort = (): void => {
+    void client.end().catch(() => undefined);
+  };
+  signal.addEventListener('abort', endOnAbort, { once: true });
   try {
     await client.connect();
     // pg reads query_timeout from a query's config as well, where the URL cannot override it.
@@ -75,6 +80,7 @@ export async function probePostgres(
         }
       : { kind: 'server-version', serverVersion };
   } finally {
+    signal.removeEventListener('abort', endOnAbort);
     await client.end().catch(() => undefined);
   }
 }

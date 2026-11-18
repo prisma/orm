@@ -4,6 +4,7 @@ const clients: FakeClient[] = [];
 let connectError: Error | undefined;
 let versionRow = 'PostgreSQL 16.1 on x86_64-pc-linux-gnu';
 let queryError: Error | undefined;
+let connectStalls = false;
 const endSpy = vi.fn(async () => {});
 
 class FakeClient {
@@ -18,6 +19,7 @@ class FakeClient {
   listenedWhileConnecting = false;
   async connect(): Promise<void> {
     this.listenedWhileConnecting = this.listeners.has('error');
+    if (connectStalls) await new Promise(() => {});
     if (connectError !== undefined) throw connectError;
   }
   readonly queries: unknown[] = [];
@@ -38,6 +40,7 @@ beforeEach(() => {
   connectError = undefined;
   versionRow = 'PostgreSQL 16.1 on x86_64-pc-linux-gnu';
   queryError = undefined;
+  connectStalls = false;
   endSpy.mockClear();
 });
 
@@ -59,7 +62,9 @@ describe('parsePostgresVersion (FR8.3)', () => {
 
 describe('probePostgres', () => {
   it('reads the server version', async () => {
-    await expect(probePostgres('postgres://localhost:5432/db')).resolves.toEqual({
+    await expect(
+      probePostgres('postgres://localhost:5432/db', new AbortController().signal),
+    ).resolves.toEqual({
       kind: 'server-version',
       serverVersion: '16.1',
     });
@@ -68,7 +73,9 @@ describe('probePostgres', () => {
   it('says it could not read the version when the connected server refuses the query', async () => {
     queryError = new Error('permission denied for function version');
 
-    await expect(probePostgres('postgres://localhost:5432/db')).resolves.toEqual({
+    await expect(
+      probePostgres('postgres://localhost:5432/db', new AbortController().signal),
+    ).resolves.toEqual({
       kind: 'version-unreadable',
       detail: 'SELECT version() failed: permission denied for function version',
     });
@@ -77,7 +84,7 @@ describe('probePostgres', () => {
 
   it('reports a driver that is installed but fails to load, keeping the cause', async () => {
     await expect(
-      probePostgres('postgres://localhost:5432/db', async () => {
+      probePostgres('postgres://localhost:5432/db', new AbortController().signal, async () => {
         throw new Error('native binding failed');
       }),
     ).resolves.toEqual({ kind: 'driver-failed', driver: 'pg', cause: 'native binding failed' });
@@ -89,7 +96,7 @@ describe('probePostgres', () => {
     });
 
     await expect(
-      probePostgres('postgres://localhost:5432/db', async () => {
+      probePostgres('postgres://localhost:5432/db', new AbortController().signal, async () => {
         throw missing;
       }),
     ).resolves.toEqual({ kind: 'driver-missing', driver: 'pg', cause: "Cannot find package 'pg'" });
@@ -98,14 +105,16 @@ describe('probePostgres', () => {
   it('says the version could not be read when the row holds none', async () => {
     versionRow = 'CockroachDB CCL v23.1';
 
-    await expect(probePostgres('postgres://localhost:5432/db')).resolves.toEqual({
+    await expect(
+      probePostgres('postgres://localhost:5432/db', new AbortController().signal),
+    ).resolves.toEqual({
       kind: 'version-unreadable',
       detail: 'could not parse PostgreSQL version from `CockroachDB CCL v23.1`',
     });
   });
 
   it('bounds the connection and the version query with the driver timeouts', async () => {
-    await probePostgres('postgres://localhost:5432/db');
+    await probePostgres('postgres://localhost:5432/db', new AbortController().signal);
 
     expect(clients[0]?.config).toEqual({
       connectionString: 'postgres://localhost:5432/db',
@@ -115,7 +124,10 @@ describe('probePostgres', () => {
   });
 
   it('bounds the version query itself, so a query_timeout in the URL cannot lift the limit', async () => {
-    await probePostgres('postgres://localhost:5432/db?query_timeout=0');
+    await probePostgres(
+      'postgres://localhost:5432/db?query_timeout=0',
+      new AbortController().signal,
+    );
 
     expect(clients[0]?.queries).toEqual([
       { text: 'SELECT version() as version', query_timeout: 20_000 },
@@ -123,7 +135,7 @@ describe('probePostgres', () => {
   });
 
   it('attaches an error listener so a dropped connection cannot crash the process', async () => {
-    await probePostgres('postgres://localhost:5432/db');
+    await probePostgres('postgres://localhost:5432/db', new AbortController().signal);
 
     expect(clients).toHaveLength(1);
     expect(clients[0]?.listenedWhileConnecting).toBe(true);
@@ -132,12 +144,25 @@ describe('probePostgres', () => {
     expect(() => errorListener?.(new Error('connection terminated unexpectedly'))).not.toThrow();
   });
 
+  it('ends the client when the signal aborts while it waits', async () => {
+    connectStalls = true;
+    const controller = new AbortController();
+
+    const pending = probePostgres('postgres://localhost:5432/db', controller.signal);
+    void pending.catch(() => undefined);
+    await vi.waitFor(() => expect(clients[0]?.listenedWhileConnecting).toBe(true));
+    expect(endSpy).not.toHaveBeenCalled();
+    controller.abort();
+
+    expect(endSpy).toHaveBeenCalled();
+  });
+
   it('ends the client when connect() rejects', async () => {
     connectError = new Error('password authentication failed');
 
-    await expect(probePostgres('postgres://localhost:5432/db')).rejects.toThrow(
-      'password authentication failed',
-    );
+    await expect(
+      probePostgres('postgres://localhost:5432/db', new AbortController().signal),
+    ).rejects.toThrow('password authentication failed');
     expect(endSpy).toHaveBeenCalledTimes(1);
   });
 });

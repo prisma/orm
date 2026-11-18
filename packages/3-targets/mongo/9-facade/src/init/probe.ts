@@ -21,6 +21,7 @@ function causeMessage(error: unknown): string {
 
 export async function probeMongo(
   databaseUrl: string,
+  signal: AbortSignal,
   loadDriver: LoadDriver = () => import('mongodb'),
 ): Promise<InitProbeResult> {
   let mongodb: Pick<typeof MongoDriver, 'MongoClient'>;
@@ -38,8 +39,12 @@ export async function probeMongo(
     connectTimeoutMS: PROBE_TIMEOUT_MS,
     socketTimeoutMS: PROBE_TIMEOUT_MS,
   });
-  await client.connect();
+  const closeOnAbort = (): void => {
+    void client.close().catch(() => undefined);
+  };
+  signal.addEventListener('abort', closeOnAbort, { once: true });
   try {
+    await client.connect();
     let buildInfo: MongoDriver.Document;
     try {
       buildInfo = await client.db().admin().command({ buildInfo: 1 });
@@ -51,6 +56,7 @@ export async function probeMongo(
       ? { kind: 'version-unreadable', detail: 'buildInfo did not include a `version` field' }
       : { kind: 'server-version', serverVersion: versionString };
   } finally {
+    signal.removeEventListener('abort', closeOnAbort);
     await client.close().catch(() => undefined);
   }
 }

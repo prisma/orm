@@ -78,11 +78,12 @@ export interface InitContribution {
   readonly serverRequirement?: ServerRequirement;
   /**
    * Connects to the `DATABASE_URL` of the shell environment that ran `init` (not `.env`) and
-   * reads the server's version; rejects when it cannot connect. `init` waits 60 seconds
-   * for it and then reports the probe as not finished, so a probe should bound its own connect and
-   * query with its driver's timeouts, well inside that.
+   * reads the server's version; rejects when it cannot connect. `init` waits 60 seconds for it,
+   * then aborts `signal` and reports the probe as not finished. A probe should close its client when
+   * `signal` aborts, and bound its own connect and query with its driver's timeouts, well inside
+   * the 60 seconds.
    */
-  readonly probe?: (databaseUrl: string) => Promise<InitProbeResult>;
+  readonly probe?: (databaseUrl: string, signal: AbortSignal) => Promise<InitProbeResult>;
   /** The quick reference for a project that keeps its Prisma 7 schema as the contract source. */
   readonly prisma7QuickReference?: (input: Prisma7QuickReferenceInput) => string;
 }

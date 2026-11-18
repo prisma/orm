@@ -32,7 +32,9 @@ describe('probeMongo', () => {
   it('reads the server version from buildInfo and closes the client', async () => {
     const { load, close, commands } = driverAnswering({ version: '8.0.4' });
 
-    await expect(probeMongo('mongodb://localhost:27017/db', load)).resolves.toEqual({
+    await expect(
+      probeMongo('mongodb://localhost:27017/db', new AbortController().signal, load),
+    ).resolves.toEqual({
       kind: 'server-version',
       serverVersion: '8.0.4',
     });
@@ -43,7 +45,7 @@ describe('probeMongo', () => {
   it('bounds server selection, the connection and buildInfo with the driver timeout', async () => {
     const { load, constructed } = driverAnswering({ version: '8.0.4' });
 
-    await probeMongo('mongodb://localhost:27017/db', load);
+    await probeMongo('mongodb://localhost:27017/db', new AbortController().signal, load);
 
     expect(constructed).toEqual([
       [
@@ -56,17 +58,48 @@ describe('probeMongo', () => {
   it('says it could not read the version when the server refuses buildInfo', async () => {
     const { load, close } = driverAnswering(new Error('not authorized on admin'));
 
-    await expect(probeMongo('mongodb://localhost:27017/db', load)).resolves.toEqual({
+    await expect(
+      probeMongo('mongodb://localhost:27017/db', new AbortController().signal, load),
+    ).resolves.toEqual({
       kind: 'version-unreadable',
       detail: 'buildInfo failed: not authorized on admin',
     });
     expect(close).toHaveBeenCalledTimes(1);
   });
 
+  it('closes the client when the signal aborts while it waits', async () => {
+    const close = vi.fn(async () => {});
+    class StallingClient {
+      async connect(): Promise<void> {
+        await new Promise(() => {});
+      }
+      close = close;
+    }
+    const driver = { MongoClient: StallingClient } as unknown as Pick<
+      typeof MongoDriver,
+      'MongoClient'
+    >;
+    const controller = new AbortController();
+
+    const pending = probeMongo(
+      'mongodb://localhost:27017/db',
+      controller.signal,
+      async () => driver,
+    );
+    void pending.catch(() => undefined);
+    await Promise.resolve();
+    await Promise.resolve();
+    controller.abort();
+
+    expect(close).toHaveBeenCalled();
+  });
+
   it('says the version could not be read when buildInfo has none', async () => {
     const { load } = driverAnswering({});
 
-    await expect(probeMongo('mongodb://localhost:27017/db', load)).resolves.toEqual({
+    await expect(
+      probeMongo('mongodb://localhost:27017/db', new AbortController().signal, load),
+    ).resolves.toEqual({
       kind: 'version-unreadable',
       detail: 'buildInfo did not include a `version` field',
     });
@@ -78,7 +111,7 @@ describe('probeMongo', () => {
     });
 
     await expect(
-      probeMongo('mongodb://localhost:27017/db', async () => {
+      probeMongo('mongodb://localhost:27017/db', new AbortController().signal, async () => {
         throw missing;
       }),
     ).resolves.toEqual({
@@ -90,7 +123,7 @@ describe('probeMongo', () => {
 
   it('reports a driver that is installed but fails to load, keeping the cause', async () => {
     await expect(
-      probeMongo('mongodb://localhost:27017/db', async () => {
+      probeMongo('mongodb://localhost:27017/db', new AbortController().signal, async () => {
         throw new Error('broken driver');
       }),
     ).resolves.toEqual({ kind: 'driver-failed', driver: 'mongodb', cause: 'broken driver' });
