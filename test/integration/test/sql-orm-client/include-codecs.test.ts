@@ -1,18 +1,16 @@
 import {
   byteaColumn,
   int4Column,
-  timestampColumn,
-  timestamptzColumn,
+  timestampTemporalColumn,
+  timestamptzTemporalColumn,
 } from '@internal/adapter-postgres/column-types';
-import postgresAdapter from '@internal/adapter-postgres/runtime';
-import type { JsonValue } from '@internal/contract/types';
 import {
   type CodecCallContext,
   CodecDescriptorImpl,
   CodecImpl,
   type CodecInstanceContext,
   type ColumnTypeDescriptor,
-  voidParamsSchema,
+  type DataTypeValue,
 } from '@internal/framework-components/codec';
 import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
 import { Collection } from '@internal/sql-orm-client';
@@ -22,9 +20,16 @@ import {
   type SqlRuntimeExtensionDescriptor,
 } from '@internal/sql-runtime';
 import { postgresCodec } from '@internal/target-postgres/codec-descriptor';
+import { createPostgresCodecRegistryWithBuiltins } from '@internal/target-postgres/codecs';
+import { pgText } from '@internal/target-postgres/data-types';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
-import { timeouts, withCollectionRuntime } from './integration-helpers';
+import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
+import {
+  expectPerRelationStatements,
+  timeouts,
+  withCollectionRuntime,
+} from './integration-helpers';
 import type { PgIntegrationRuntime } from './runtime-helpers';
 
 const TEST_INCLUDED_TEXT_CODEC_ID = 'test/included-text@1' as const;
@@ -36,37 +41,34 @@ class IncludedTextCodec extends CodecImpl<
   string,
   string
 > {
-  async encode(value: string, _ctx: CodecCallContext): Promise<string> {
+  async toWire(value: string, _ctx: CodecCallContext): Promise<string> {
     return value;
   }
 
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
-    return wire;
-  }
-
-  encodeJson(value: string): JsonValue {
-    return value;
-  }
-
-  decodeJson(json: JsonValue): string {
-    if (typeof json !== 'string') {
-      throw new TypeError(`expected included text database JSON value, got ${typeof json}`);
-    }
-    if (json === SENSITIVE_DATABASE_VALUE) {
+  async fromWire(wire: string, _ctx: CodecCallContext): Promise<string> {
+    if (wire === SENSITIVE_DATABASE_VALUE) {
       throw new Error('intentional included text decode failure');
     }
-    return `decoded-json:${json}`;
+    return `decoded-wire:${wire}`;
+  }
+
+  toDataTypeValue(value: string): DataTypeValue {
+    return this.dataTypeValueOf(value);
+  }
+
+  fromDataTypeValue(value: DataTypeValue<string>): string {
+    return value.value;
   }
 }
 
 class IncludedTextDescriptor extends CodecDescriptorImpl<void> {
+  override readonly dataType = pgText.id;
   override readonly codecId = TEST_INCLUDED_TEXT_CODEC_ID;
   override readonly traits = ['textual'] as const;
-  override readonly targetTypes = ['text'] as const;
-  override readonly paramsSchema = voidParamsSchema;
+  override readonly paramsSchema = undefined;
 
   override factory(): (ctx: CodecInstanceContext) => IncludedTextCodec {
-    return () => new IncludedTextCodec(this);
+    return () => new IncludedTextCodec(this, pgText);
   }
 }
 
@@ -75,13 +77,16 @@ class IncludedTextDescriptor extends CodecDescriptorImpl<void> {
  * column reaches JSON, since the renderer asks the descriptor rather than
  * assuming. This one stores and projects text unchanged.
  */
-const includedTextDescriptor = postgresCodec(new IncludedTextDescriptor(), {
-  nativeType: () => 'text',
-  jsonProjection: (expression) => expression,
-});
+const includedTextDescriptor = postgresCodec(
+  Object.assign(new IncludedTextDescriptor(), { jsonType: 'any' as const }),
+  {
+    dataType: pgText,
+    jsonProjection: (expression) => expression,
+    factory: (descriptor, dataType) => () => new IncludedTextCodec(descriptor, dataType),
+  },
+);
 const includedTextColumn = {
   codecId: TEST_INCLUDED_TEXT_CODEC_ID,
-  nativeType: 'text',
 } as const satisfies ColumnTypeDescriptor;
 
 const includedTextExtension: SqlRuntimeExtensionDescriptor<'postgres'> = {
@@ -103,8 +108,8 @@ const Project = model('Project', {
   fields: {
     id: field.column(int4Column).id(),
     wrappedDek: field.column(byteaColumn).column('wrapped_dek').optional(),
-    deletedAt: field.column(timestampColumn).column('deleted_at').optional(),
-    deletedAtTz: field.column(timestamptzColumn).column('deleted_at_tz').optional(),
+    deletedAt: field.column(timestampTemporalColumn).column('deleted_at').optional(),
+    deletedAtTz: field.column(timestamptzTemporalColumn).column('deleted_at_tz').optional(),
     customText: field.column(includedTextColumn).column('custom_text').optional(),
   },
 }).sql({ table: 'codec_projects' });
@@ -119,15 +124,20 @@ const Branch = model('Branch', {
   },
 }).sql({ table: 'codec_branches' });
 
-const contract = defineContract({ models: { Project, Branch } });
-const context = createExecutionContext({
-  contract,
-  stack: createSqlExecutionStack({
-    target: postgresTarget,
-    adapter: postgresAdapter,
-    extensions: [includedTextExtension],
-  }),
+const contract = defineContract({
+  codecLookup: createPostgresCodecRegistryWithBuiltins([includedTextDescriptor]),
+  models: { Project, Branch },
 });
+function contextOf(strategy: IncludeStrategy) {
+  return createExecutionContext({
+    contract,
+    stack: createSqlExecutionStack({
+      target: postgresTarget,
+      adapter: postgresAdapterFor(strategy),
+      extensions: [includedTextExtension],
+    }),
+  });
+}
 
 async function setupCodecTables(runtime: PgIntegrationRuntime): Promise<void> {
   await runtime.query('drop table if exists codec_branches');
@@ -149,9 +159,10 @@ async function setupCodecTables(runtime: PgIntegrationRuntime): Promise<void> {
   `);
 }
 
-describe('integration/include codecs', () => {
+describe.each(includeStrategies)('integration/include codecs (%s)', (strategy) => {
+  const context = contextOf(strategy);
   it(
-    'delegates database JSON values to codec.decodeJson',
+    'reads JSON values with codec.fromWire',
     async () => {
       await withCollectionRuntime(
         async (runtime) => {
@@ -195,21 +206,23 @@ describe('integration/include codecs', () => {
           const branches = new Collection({ runtime, context }, 'Branch', {
             namespaceId: 'public',
           });
+          runtime.resetExecutions();
           const rows = await branches
             .select('id')
             .include('project', (project) =>
               project.select('wrappedDek', 'deletedAt', 'deletedAtTz', 'customText'),
             )
             .all();
+          expectPerRelationStatements(runtime, strategy, 2);
 
           expect(rows).toEqual([
             {
               id: 1,
               project: {
                 wrappedDek: new Uint8Array([1, 2, 3, 4]),
-                deletedAt: new Date('2026-07-09T15:23:33.037Z'),
-                deletedAtTz: new Date('2026-07-09T15:23:33.037Z'),
-                customText: 'decoded-json:extension value',
+                deletedAt: Temporal.PlainDateTime.from('2026-07-09T15:23:33.037'),
+                deletedAtTz: Temporal.Instant.from('2026-07-09T15:23:33.037Z'),
+                customText: 'decoded-wire:extension value',
               },
             },
           ]);
@@ -220,9 +233,13 @@ describe('integration/include codecs', () => {
     },
     timeouts.spinUpPpgDev,
   );
+});
 
+describe.each(includeStrategies)('integration/include codecs, decode errors (%s)', (strategy) => {
+  const context = contextOf(strategy);
+  const previewsRawValue = { join: false, query: true }[strategy];
   it(
-    'omits raw database values from include decode errors',
+    'names the column of an included row that fails to decode, previewing the raw value only where the row is read as an ordinary row',
     async () => {
       await withCollectionRuntime(
         async (runtime) => {
@@ -254,8 +271,15 @@ describe('integration/include codecs', () => {
               codec: TEST_INCLUDED_TEXT_CODEC_ID,
             },
           });
-          expect(decodeError).not.toHaveProperty('details.wirePreview');
-          expect(JSON.stringify(decodeError)).not.toContain(SENSITIVE_DATABASE_VALUE);
+          expect({
+            wirePreview: (decodeError as { details: Record<string, unknown> }).details[
+              'wirePreview'
+            ],
+            rawValueInError: JSON.stringify(decodeError).includes(SENSITIVE_DATABASE_VALUE),
+          }).toEqual({
+            wirePreview: previewsRawValue ? SENSITIVE_DATABASE_VALUE : undefined,
+            rawValueInError: previewsRawValue,
+          });
         },
         contract,
         [includedTextExtension],

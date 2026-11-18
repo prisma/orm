@@ -33,10 +33,10 @@ function harness() {
 }
 
 function scaffoldArgv(...extra: string[]): string[] {
-  return ['init', '--target', 'postgres', '--authoring', 'psl', ...extra];
+  return ['orm', 'init', '--target', 'postgres', '--authoring', 'psl', ...extra];
 }
 
-const SKIP_ALL = ['--skip-install', '--skip-skills'] as const;
+const SKIP_ALL = ['--skip-install'] as const;
 
 /**
  * The emit step spawns the project-local `@prisma/cli` bin, which the mocked
@@ -44,18 +44,18 @@ const SKIP_ALL = ['--skip-install', '--skip-skills'] as const;
  * do not pass `--skip-install`.
  */
 function installFakeProjectLocalCli(dir: string): void {
-  const packageDir = join(dir, 'node_modules/@prisma/cli');
+  const packageDir = join(dir, 'node_modules/prisma');
   mkdirSync(join(packageDir, 'bin'), { recursive: true });
   writeFileSync(
     join(packageDir, 'package.json'),
     JSON.stringify({
-      name: '@prisma/cli',
+      name: 'prisma',
       version: '0.0.0-test',
       type: 'module',
-      bin: { 'prisma-cli': './bin/prisma-cli.mjs' },
+      bin: { prisma: './bin/prisma.mjs' },
     }),
   );
-  writeFileSync(join(packageDir, 'bin/prisma-cli.mjs'), '');
+  writeFileSync(join(packageDir, 'bin/prisma.mjs'), '');
 }
 
 function envelopeOf(run: { readonly json: readonly { readonly kind: string }[] }) {
@@ -91,6 +91,62 @@ describe('init scaffold', () => {
     );
 
     it(
+      'leaves a nodenext project on nodenext and scaffolds a db.ts that resolves there',
+      async () => {
+        writeFileSync(
+          join(projectDir, 'tsconfig.json'),
+          JSON.stringify(
+            { compilerOptions: { module: 'nodenext', moduleResolution: 'nodenext' } },
+            null,
+            2,
+          ),
+          'utf-8',
+        );
+
+        const run = await harness().run(scaffoldArgv(...SKIP_ALL), { cwd: projectDir });
+        const merged = JSON.parse(readFileSync(join(projectDir, 'tsconfig.json'), 'utf-8'));
+        const db = readFileSync(join(projectDir, 'src/prisma/db.ts'), 'utf-8');
+
+        expect(run.exitCode).toBe(0);
+        expect(merged.compilerOptions).toMatchObject({
+          module: 'nodenext',
+          moduleResolution: 'nodenext',
+          resolveJsonModule: true,
+        });
+        expect(db).toContain("from './contract.d.js'");
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
+      'moves a nodenext project with no package.json type to bundler, where its CommonJS db.ts typechecks',
+      async () => {
+        writeFileSync(
+          join(projectDir, 'tsconfig.json'),
+          JSON.stringify({ compilerOptions: { module: 'nodenext', moduleResolution: 'nodenext' } }),
+          'utf-8',
+        );
+        writeFileSync(
+          join(projectDir, 'package.json'),
+          JSON.stringify({ name: 'app', dependencies: { express: '5.0.0' } }),
+          'utf-8',
+        );
+
+        const run = await harness().run(scaffoldArgv(...SKIP_ALL), { cwd: projectDir });
+        const merged = JSON.parse(readFileSync(join(projectDir, 'tsconfig.json'), 'utf-8'));
+        const manifest = JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf-8'));
+
+        expect(run.exitCode).toBe(0);
+        expect(manifest.type).toBeUndefined();
+        expect(merged.compilerOptions).toMatchObject({
+          module: 'preserve',
+          moduleResolution: 'bundler',
+        });
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
       'synthesises a manifest for a bare directory and says so',
       async () => {
         const run = await harness().run(scaffoldArgv(...SKIP_ALL), { cwd: projectDir });
@@ -100,6 +156,64 @@ describe('init scaffold', () => {
         expect(run.presented?.data).toMatchObject({
           warnings: expect.arrayContaining([expect.stringContaining('created a minimal one')]),
         });
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
+      'keeps the module type of an existing project that declares dependencies, and says why',
+      async () => {
+        writeFileSync(
+          join(projectDir, 'package.json'),
+          `${JSON.stringify({ name: 'app', dependencies: { express: '^5.0.0' } }, null, 2)}\n`,
+          'utf-8',
+        );
+
+        const run = await harness().run(scaffoldArgv(...SKIP_ALL), { cwd: projectDir });
+        const manifest = JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf-8'));
+
+        expect(manifest).not.toHaveProperty('type');
+        expect(run.presented?.data).toMatchObject({
+          warnings: expect.arrayContaining([
+            expect.stringMatching(
+              /^package\.json declares no "type".*MODULE_TYPELESS_PACKAGE_JSON warning/,
+            ),
+          ]),
+        });
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
+      'sets the module type of a TypeScript project that declares only devDependencies',
+      async () => {
+        writeFileSync(
+          join(projectDir, 'package.json'),
+          `${JSON.stringify({ name: 'app', devDependencies: { typescript: '^5.9.0', tsx: '^4.0.0' } }, null, 2)}\n`,
+          'utf-8',
+        );
+
+        await harness().run(scaffoldArgv(...SKIP_ALL), { cwd: projectDir });
+        const manifest = JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf-8'));
+
+        expect(manifest).toMatchObject({ type: 'module' });
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
+      'sets the module type of a manifest that declares no dependencies yet',
+      async () => {
+        writeFileSync(
+          join(projectDir, 'package.json'),
+          `${JSON.stringify({ name: 'app' }, null, 2)}\n`,
+          'utf-8',
+        );
+
+        await harness().run(scaffoldArgv(...SKIP_ALL), { cwd: projectDir });
+        const manifest = JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf-8'));
+
+        expect(manifest).toMatchObject({ type: 'module' });
       },
       timeouts.coldTransformImport,
     );
@@ -152,13 +266,55 @@ describe('init scaffold', () => {
     );
   });
 
+  describe('an absolute schema path', () => {
+    it(
+      'writes the schema at that path and lists it relative to the working directory',
+      async () => {
+        const schemaPath = join(projectDir, 'db/contract.prisma');
+
+        const run = await harness().run(scaffoldArgv(...SKIP_ALL, '--schema-path', schemaPath), {
+          cwd: projectDir,
+        });
+
+        expect(run.exitCode).toBe(0);
+        expect(existsSync(schemaPath)).toBe(true);
+        expect(run.presented?.data).toMatchObject({
+          filesWritten: expect.arrayContaining(['db/contract.prisma']),
+        });
+        expect(run.presented?.data).not.toMatchObject({
+          filesWritten: expect.arrayContaining([schemaPath]),
+        });
+      },
+      timeouts.coldTransformImport,
+    );
+  });
+
+  describe('the skill-sync wiring it does not write', () => {
+    it(
+      'adds no postinstall script and no skill gitignore entries',
+      async () => {
+        const run = await harness().run(scaffoldArgv('--skip-install'), { cwd: projectDir });
+        const manifest = JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf-8'));
+        const gitignore = readFileSync(join(projectDir, '.gitignore'), 'utf-8');
+
+        expect(run.exitCode).toBe(0);
+        expect(manifest.scripts?.postinstall).toBeUndefined();
+        expect(gitignore).not.toContain('skills/prisma-8/');
+      },
+      timeouts.coldTransformImport,
+    );
+  });
+
   describe('the files it removes', () => {
     it(
-      'deletes a retired agent-skill directory even on a first run',
+      'deletes a retired agent-skill directory even on a first run, leaving an installed skill alone',
       async () => {
         const retired = join(projectDir, '.claude/skills/prisma-next-queries');
         mkdirSync(retired, { recursive: true });
         writeFileSync(join(retired, 'SKILL.md'), '# stale\n', 'utf-8');
+        const installed = join(projectDir, '.agents/skills/prisma-8');
+        mkdirSync(installed, { recursive: true });
+        writeFileSync(join(installed, 'SKILL.md'), '# installed\n', 'utf-8');
 
         const run = await harness().run(scaffoldArgv(...SKIP_ALL), { cwd: projectDir });
 
@@ -167,6 +323,7 @@ describe('init scaffold', () => {
           filesDeleted: ['.claude/skills/prisma-next-queries'],
         });
         expect(existsSync(retired)).toBe(false);
+        expect(existsSync(join(installed, 'SKILL.md'))).toBe(true);
       },
       timeouts.coldTransformImport,
     );
@@ -199,7 +356,9 @@ describe('init scaffold', () => {
         // write fail: `writeFileSync` raises EISDIR whatever the permissions.
         mkdirSync(join(projectDir, '.env.example'), { recursive: true });
 
-        const run = await harness().run(scaffoldArgv(...SKIP_ALL), { cwd: projectDir });
+        const run = await harness().run([...scaffoldArgv(...SKIP_ALL), '--json'], {
+          cwd: projectDir,
+        });
 
         expect(run.exitCode).toBe(2);
         expect(envelopeOf(run)).toMatchObject({
@@ -212,7 +371,7 @@ describe('init scaffold', () => {
                 'src/prisma/contract.prisma',
                 'prisma.config.ts',
                 'src/prisma/db.ts',
-                'prisma-next.md',
+                'prisma-8.md',
               ],
             },
           },
@@ -233,11 +392,12 @@ describe('init scaffold', () => {
         );
         installFakeProjectLocalCli(projectDir);
 
-        const run = await harness().run(scaffoldArgv('--skip-skills'), { cwd: projectDir });
+        const run = await harness().run([...scaffoldArgv(), '--json'], { cwd: projectDir });
 
         expect(envelopeOf(run)).toMatchObject({ ok: true });
         expect(run.exitCode).toBe(0);
-        expect(calls[1]?.args).toEqual(['add', '-D', '@prisma/cli@next', '@prisma/cli-engine']);
+        expect(calls[1]?.args).toEqual(['add', '-D', 'prisma@latest']);
+        expect(calls[2]?.args).toEqual(['add', '-D', '@prisma/cli-engine@latest']);
       },
       timeouts.coldTransformImport,
     );
@@ -252,7 +412,7 @@ describe('init scaffold', () => {
           'utf-8',
         );
 
-        const run = await harness().run(scaffoldArgv('--skip-skills'), { cwd: projectDir });
+        const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
 
         expect(run.presented?.data).toMatchObject({
           warnings: expect.arrayContaining([expect.stringContaining('catalog overrides detected')]),
@@ -281,9 +441,12 @@ describe('init scaffold', () => {
     it(
       'errors under --strict-probe when the probe cannot run',
       async () => {
-        const run = await harness().run(scaffoldArgv('--probe-db', '--strict-probe', ...SKIP_ALL), {
-          cwd: projectDir,
-        });
+        const run = await harness().run(
+          [...scaffoldArgv('--probe-db', '--strict-probe', ...SKIP_ALL), '--json'],
+          {
+            cwd: projectDir,
+          },
+        );
 
         expect(run.exitCode).toBe(2);
         expect(envelopeOf(run)).toMatchObject({

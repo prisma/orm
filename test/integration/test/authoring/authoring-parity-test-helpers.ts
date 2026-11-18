@@ -7,8 +7,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const authoringParityFixtureDir = join(__dirname, 'parity');
 const authoringDiagnosticsFixtureDir = join(__dirname, 'diagnostics');
 const authoringTemplateDir = join(__dirname, 'templates');
-const parityTsConfigTemplatePath = join(authoringTemplateDir, 'prisma.config.parity-ts.ts');
-const parityPslConfigTemplatePath = join(authoringTemplateDir, 'prisma.config.parity-psl.ts');
 
 const parityRequiredFileNames = [
   'schema.prisma',
@@ -26,6 +24,10 @@ export interface AuthoringParityFixtureCase {
   readonly contractPath: string;
   readonly packsPath: string;
   readonly expectedContractPath: string;
+  /** The case's own TS config, for a case on another target; the Postgres template otherwise. */
+  readonly tsConfigTemplatePath: string;
+  /** The case's own PSL config, for a case on another target; the Postgres template otherwise. */
+  readonly pslConfigTemplatePath: string;
 }
 
 export interface AuthoringDiagnosticsFixtureCase {
@@ -64,8 +66,15 @@ export function listAuthoringParityFixtureCases(): readonly AuthoringParityFixtu
       contractPath: join(caseDir, 'contract.ts'),
       packsPath: join(caseDir, 'packs.ts'),
       expectedContractPath: join(caseDir, 'expected.contract.json'),
+      tsConfigTemplatePath: ownOrTemplate(caseDir, 'prisma.config.parity-ts.ts'),
+      pslConfigTemplatePath: ownOrTemplate(caseDir, 'prisma.config.parity-psl.ts'),
     };
   });
+}
+
+function ownOrTemplate(caseDir: string, fileName: string): string {
+  const own = join(caseDir, fileName);
+  return existsSync(own) ? own : join(authoringTemplateDir, fileName);
 }
 
 export function listAuthoringDiagnosticsFixtureCases(): readonly AuthoringDiagnosticsFixtureCase[] {
@@ -121,8 +130,8 @@ export function setupIntegrationTestDirectoryForAuthoringParityCase(
   const tsConfigPath = join(testDir, 'prisma.config.parity-ts.ts');
   const pslConfigPath = join(testDir, 'prisma.config.parity-psl.ts');
 
-  copyFileSync(parityTsConfigTemplatePath, tsConfigPath);
-  copyFileSync(parityPslConfigTemplatePath, pslConfigPath);
+  copyFileSync(fixtureCase.tsConfigTemplatePath, tsConfigPath);
+  copyFileSync(fixtureCase.pslConfigTemplatePath, pslConfigPath);
 
   const cleanup = () => {
     if (existsSync(testDir)) {

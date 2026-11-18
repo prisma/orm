@@ -3,7 +3,7 @@ import { blindCast } from '@internal/utils/casts';
 /**
  * The package.json `scripts` entries `init` adds idempotently (FR3.5).
  * The script *name* mirrors the CLI subcommand path (`contract:emit` →
- * `prisma-cli contract emit`) so the script is greppable: a user
+ * `prisma contract emit`) so the script is greppable: a user
  * encountering `npm run contract:emit` in CI logs can navigate
  * straight to the equivalent CLI invocation.
  *
@@ -16,7 +16,7 @@ export interface RequiredScript {
 }
 
 export const REQUIRED_SCRIPTS: readonly RequiredScript[] = [
-  { name: 'contract:emit', command: 'prisma-cli contract emit' },
+  { name: 'contract:emit', command: 'prisma contract emit' },
 ];
 
 export interface PackageScriptsMergeResult {
@@ -86,7 +86,7 @@ export function mergePackageScripts(
     }
     if (existingValue !== command) {
       warnings.push(
-        `package.json already has a "${name}" script with a different command — keeping yours.\n  existing: ${existingValue}\n  expected: ${command}\nIf you want the default, remove your "${name}" script and re-run \`init\`.`,
+        `package.json already has a "${name}" script with a different command — keeping yours.\n  existing: ${existingValue}\n  expected: ${command}\nIf you want the default, remove your "${name}" script and re-run \`orm init\`.`,
       );
     }
   }
@@ -140,7 +140,13 @@ export interface EsmModuleTypeResult {
  *   and surface a structured warning. The user explicitly opted out of
  *   ESM and we don't silently overwrite that.
  */
-export function ensureEsmModuleType(existing: string): EsmModuleTypeResult {
+export function ensureEsmModuleType(
+  existing: string,
+  options: {
+    /** An app that already declares runtime dependencies: its `type` is left alone, since changing it changes how the app's own files load. */
+    readonly existingProject: boolean;
+  } = { existingProject: false },
+): EsmModuleTypeResult {
   const parsed = blindCast<
     Record<string, unknown>,
     'JSON.parse returns `unknown`; package.json is a JSON object so its top level is a string-keyed record'
@@ -149,6 +155,14 @@ export function ensureEsmModuleType(existing: string): EsmModuleTypeResult {
 
   if (currentType === 'module') {
     return { content: null, warning: null };
+  }
+
+  if (options.existingProject && currentType === undefined) {
+    return {
+      content: null,
+      warning:
+        'package.json declares no "type", so Node loads the project\'s .js files as CommonJS. init leaves that alone, because setting it would change how the project\'s own files load. The scaffolded db.ts is an ES module (it imports the contract with `with { type: \'json\' }`): Node still loads it, and CommonJS code can require it, but Node prints a MODULE_TYPELESS_PACKAGE_JSON warning and reparses the file as an ES module; a TypeScript runner such as tsx loads it without the warning. Set "type": "module" in package.json when the project is ready for it, and the warning goes away.',
+    };
   }
 
   if (typeof currentType === 'string' && currentType !== 'module') {

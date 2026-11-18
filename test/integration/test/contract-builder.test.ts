@@ -1,6 +1,10 @@
 // Intentionally uses verbose sql-contract-ts/contract-builder import: this file tests the
 // base defineContract API directly (not the facade wrapper).
-import { int4Column, textColumn, timestamptzColumn } from '@internal/adapter-postgres/column-types';
+import {
+  int4Column,
+  textColumn,
+  timestamptzTemporalColumn,
+} from '@internal/adapter-postgres/column-types';
 import sqlFamilyPack from '@internal/family-sql/pack';
 import type { ResultType } from '@internal/framework-components/runtime';
 import { sql } from '@internal/sql-builder/runtime';
@@ -11,13 +15,15 @@ import { createStubAdapter, createTestContext } from '@internal/sql-runtime/test
 import postgresPack from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { TestSqlContractSerializer as SqlContractSerializer } from '../../../packages/2-sql/9-family/test/test-sql-contract-serializer';
+import { TestSqlContractSerializer as SqlContractSerializer } from '../../../packages/2-sql-family/9-family/test/test-sql-contract-serializer';
 import type { Contract } from './fixtures/contract.d';
 import contractJson from './fixtures/contract.json' with { type: 'json' };
+import { postgresTypeLookups } from './postgres-type-lookups';
 
 describe('builder integration', () => {
   it('builds a contract matching fixture structure', () => {
     const contract = defineContract({
+      ...postgresTypeLookups,
       family: sqlFamilyPack,
       target: postgresPack,
       createNamespace: postgresCreateNamespace,
@@ -27,7 +33,7 @@ describe('builder integration', () => {
           fields: {
             id: field.column(int4Column).id(),
             email: field.column(textColumn),
-            createdAt: field.column(timestamptzColumn),
+            createdAt: field.column(timestamptzTemporalColumn),
           },
         }).sql({ table: 'user' }),
       },
@@ -99,7 +105,7 @@ describe('builder integration', () => {
     // Runtime check that they match expected values
     expect(userTableType.columns.id.codecId).toBe('pg/int4@1');
     expect(userTableType.columns.email.codecId).toBe('pg/text@1');
-    expect(userTableType.columns.createdAt.codecId).toBe('pg/timestamptz@1');
+    expect(userTableType.columns.createdAt.codecId).toBe('pg/timestamptz-temporal@1');
 
     // Verify nullable is literal false, not boolean
     expectTypeOf(userTableType.columns.id.nullable).toEqualTypeOf<false>();
@@ -126,6 +132,7 @@ describe('builder integration', () => {
 
   it('contract can be validated via the SPI serializer', () => {
     const contract = defineContract({
+      ...postgresTypeLookups,
       family: sqlFamilyPack,
       target: postgresPack,
       createNamespace: postgresCreateNamespace,
@@ -135,7 +142,7 @@ describe('builder integration', () => {
           fields: {
             id: field.column(int4Column).id(),
             email: field.column(textColumn),
-            createdAt: field.column(timestamptzColumn),
+            createdAt: field.column(timestamptzTemporalColumn),
           },
         }).sql({ table: 'user' }),
       },
@@ -147,6 +154,7 @@ describe('builder integration', () => {
 
   it('contract works with sql() function', () => {
     const contract = defineContract({
+      ...postgresTypeLookups,
       family: sqlFamilyPack,
       target: postgresPack,
       createNamespace: postgresCreateNamespace,
@@ -156,7 +164,7 @@ describe('builder integration', () => {
           fields: {
             id: field.column(int4Column).id(),
             email: field.column(textColumn),
-            createdAt: field.column(timestamptzColumn),
+            createdAt: field.column(timestamptzTemporalColumn),
           },
         }).sql({ table: 'user' }),
       },
@@ -190,6 +198,7 @@ describe('builder integration', () => {
 
   it('ResultType inference works with builder contract', () => {
     const contract = defineContract({
+      ...postgresTypeLookups,
       family: sqlFamilyPack,
       target: postgresPack,
       createNamespace: postgresCreateNamespace,
@@ -199,7 +208,7 @@ describe('builder integration', () => {
           fields: {
             id: field.column(int4Column).id(),
             email: field.column(textColumn),
-            createdAt: field.column(timestamptzColumn),
+            createdAt: field.column(timestamptzTemporalColumn),
           },
         }).sql({ table: 'user' }),
       },
@@ -220,7 +229,7 @@ describe('builder integration', () => {
     const row: Row = {
       id: 1,
       email: 'test@example.com',
-      createdAt: new Date('2024-01-01T00:00:00Z'),
+      createdAt: Temporal.Instant.from('2024-01-01T00:00:00Z'),
     };
     expect(row).toBeDefined();
 
@@ -236,6 +245,7 @@ describe('builder integration', () => {
 
   it('contract structure matches fixture contract', () => {
     const builderContract = defineContract({
+      ...postgresTypeLookups,
       family: sqlFamilyPack,
       target: postgresPack,
       createNamespace: postgresCreateNamespace,
@@ -245,7 +255,7 @@ describe('builder integration', () => {
           fields: {
             id: field.column(int4Column).id(),
             email: field.column(textColumn),
-            createdAt: field.column(timestamptzColumn),
+            createdAt: field.column(timestamptzTemporalColumn),
           },
         }).sql({ table: 'user' }),
       },
@@ -318,6 +328,7 @@ describe('builder integration', () => {
 
   it('supports type option with column-type constants', () => {
     const contract = defineContract({
+      ...postgresTypeLookups,
       family: sqlFamilyPack,
       target: postgresPack,
       createNamespace: postgresCreateNamespace,
@@ -345,24 +356,26 @@ describe('builder integration', () => {
     });
   });
 
-  it('accepts any codecId format in descriptor (validation happens at runtime)', () => {
-    // Column descriptors accept any codecId format - validation happens at runtime when the contract is used, not at build time
-    const contract = defineContract({
-      family: sqlFamilyPack,
-      target: postgresPack,
-      createNamespace: postgresCreateNamespace,
-      models: {
-        User: model('User', {
-          fields: {
-            // biome-ignore lint/suspicious/noExplicitAny: Testing invalid type descriptor
-            id: field.column({ codecId: 'invalid', nativeType: 'invalid' } as any),
-          },
-        }).sql({ table: 'user' }),
-      },
-    });
-    // Contract builds successfully - invalid codecId will cause errors at runtime
-    expect(contract.storage.namespaces['public'].entries.table.user.columns.id.codecId).toBe(
-      'invalid',
+  it('refuses a column whose codec the lookup does not register', () => {
+    expect(() =>
+      defineContract({
+        ...postgresTypeLookups,
+        family: sqlFamilyPack,
+        target: postgresPack,
+        createNamespace: postgresCreateNamespace,
+        models: {
+          User: model('User', {
+            fields: {
+              id: field.column({ codecId: 'invalid' }),
+            },
+          }).sql({ table: 'user' }),
+        },
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.CODEC_DESCRIPTOR_MISSING',
+        message: 'No codec "invalid" is registered, so its column type cannot be named.',
+      }),
     );
   });
 
@@ -391,6 +404,7 @@ describe('builder integration', () => {
       }).sql({ table: 'user' });
 
       const contract = defineContract({
+        ...postgresTypeLookups,
         family: sqlFamilyPack,
         target: postgresPack,
         createNamespace: postgresCreateNamespace,
@@ -464,6 +478,7 @@ describe('builder integration', () => {
       }).sql({ table: 'user' });
 
       const contract = defineContract({
+        ...postgresTypeLookups,
         family: sqlFamilyPack,
         target: postgresPack,
         createNamespace: postgresCreateNamespace,
@@ -488,8 +503,5 @@ describe('builder integration', () => {
         },
       });
     });
-
-    // TODO: The following 4 validation tests tested legacy chain builder validation logic (parentTable/childTable/through matching). In the new DSL, these constraints are enforced structurally by rel.belongsTo/hasMany/manyToMany and cannot be violated. Equivalent DSL validation tests exist in contract-builder.dsl.test.ts (e.g., "rejects belongsTo relations whose field arity does not match the target", "rejects hasMany
-    // relations whose child fields do not match the parent identity arity", "rejects many-to-many relations whose through mappings do not match anchor arity").
   });
 });

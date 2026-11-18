@@ -1,7 +1,17 @@
+import type { AuthoringAttributeSpecContributions } from '@internal/framework-components/authoring';
 import type { ControlFamilyDescriptor, ControlStack } from '@internal/framework-components/control';
+import {
+  describeUnresolvedMongoType,
+  describeUnsupportedMongoAttribute,
+  mongoAttributeSpecs,
+} from '@internal/mongo-contract-psl';
 import { mongoEmission } from '@internal/mongo-emitter';
 import { mongoFamilyEntityTypes, mongoFamilyPslBlockDescriptors } from './authoring-entity-types';
 import { createMongoFamilyInstance, type MongoControlFamilyInstance } from './control-instance';
+
+const mongoFamilyAttributeSpecs: AuthoringAttributeSpecContributions = mongoAttributeSpecs;
+const mongoFamilyDescribeUnsupportedAttribute: unknown = describeUnsupportedMongoAttribute;
+const mongoFamilyDescribeUnresolvedType: unknown = describeUnresolvedMongoType;
 
 class MongoFamilyDescriptor
   implements ControlFamilyDescriptor<'mongo', MongoControlFamilyInstance>
@@ -14,6 +24,11 @@ class MongoFamilyDescriptor
   readonly authoring = {
     entityTypes: mongoFamilyEntityTypes,
     pslBlockDescriptors: mongoFamilyPslBlockDescriptors,
+    attributeSpecs: mongoFamilyAttributeSpecs,
+  } as const;
+  readonly pslDiagnostics = {
+    describeUnsupportedAttribute: mongoFamilyDescribeUnsupportedAttribute,
+    describeUnresolvedType: mongoFamilyDescribeUnresolvedType,
   } as const;
 
   create<TTargetId extends string>(

@@ -11,7 +11,7 @@ export interface NamedArraySortTarget {
 // Order by UTF-16 code unit, not locale collation: canonicalization feeds
 // storageHash, which must be byte-identical across hosts, and locale
 // collation (localeCompare/Intl) varies by the engine's ICU build.
-function compareCodeUnits(a: string, b: string): number {
+export function compareCodeUnits(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 

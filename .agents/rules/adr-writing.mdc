@@ -13,3 +13,4 @@ alwaysApply: false
 - Use fenced code blocks for SQL (` ```sql `) and TS (` ```ts `); avoid nested backticks inside inline code
 - Worked examples should be end-to-end and make it obvious which layer owns each step (lane, adapter, codec, driver, runtime)
 - If the decision instantiates a structural pattern recorded in [`docs/architecture docs/patterns/`](../../docs/architecture%20docs/patterns/README.md), link forward to the pattern entry from the ADR (existing ADRs are not retroactively edited)
+- **Maintain the ADR in the PR that changes the decision.** When a decision evolves mid-project, update its ADR (and add supersession notes to any ADR it displaces) in the same PR — not in a follow-up. An ADR whose examples drift from the shipped surface violates `adr-examples-must-match-code.mdc` and misleads longer than it informs.

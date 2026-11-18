@@ -6,6 +6,8 @@
 
 import { crossRef, type NamespaceId } from '@internal/contract/types';
 import mongoFamilyPack from '@internal/family-mongo/pack';
+import { type } from '@internal/mongo/contract-builder';
+import mongoStatic, { contractFromJson } from '@internal/mongo/static';
 import type {
   AnyMongoTypeMaps,
   MongoContract,
@@ -13,7 +15,7 @@ import type {
 } from '@internal/mongo-contract';
 import { defineContract, field, model, rel } from '@internal/mongo-contract-ts/contract-builder';
 import type { MongoQueryPlan } from '@internal/mongo-query-ast/execution';
-import { acc, fn, mongoQuery } from '@internal/mongo-query-builder';
+import { acc, fn } from '@internal/mongo-query-builder';
 import mongoTargetPack from '@internal/target-mongo/pack';
 import { timeouts } from '@repo/test-utils';
 import { ObjectId } from 'mongodb';
@@ -23,29 +25,44 @@ import { withMongod } from '../mongo/setup';
 type ScalarField<TCodecId extends string> = {
   readonly type: { readonly kind: 'scalar'; readonly codecId: TCodecId };
   readonly nullable: false;
+  readonly many: false;
 };
 
+type StoredAs<TFields extends string> = { readonly [K in TFields]: { readonly field: K } };
+
 type TestContract = MongoContract & {
-  readonly models: {
-    readonly Order: {
-      readonly fields: {
-        readonly _id: ScalarField<'mongo/objectId@1'>;
-        readonly department: ScalarField<'mongo/string@1'>;
-        readonly amount: ScalarField<'mongo/double@1'>;
-        readonly status: ScalarField<'mongo/string@1'>;
+  readonly domain: {
+    readonly namespaces: {
+      readonly __unbound__: {
+        readonly models: {
+          readonly Order: {
+            readonly fields: {
+              readonly _id: ScalarField<'mongo/objectId@1'>;
+              readonly department: ScalarField<'mongo/string@1'>;
+              readonly amount: ScalarField<'mongo/double@1'>;
+              readonly status: ScalarField<'mongo/string@1'>;
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly collection: 'orders';
+              readonly fields: StoredAs<'_id' | 'department' | 'amount' | 'status'>;
+            };
+          };
+          readonly User: {
+            readonly fields: {
+              readonly _id: ScalarField<'mongo/objectId@1'>;
+              readonly firstName: ScalarField<'mongo/string@1'>;
+              readonly lastName: ScalarField<'mongo/string@1'>;
+              readonly orderId: ScalarField<'mongo/objectId@1'>;
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly collection: 'users';
+              readonly fields: StoredAs<'_id' | 'firstName' | 'lastName' | 'orderId'>;
+            };
+          };
+        };
       };
-      readonly relations: Record<string, never>;
-      readonly storage: { readonly collection: 'orders' };
-    };
-    readonly User: {
-      readonly fields: {
-        readonly _id: ScalarField<'mongo/objectId@1'>;
-        readonly firstName: ScalarField<'mongo/string@1'>;
-        readonly lastName: ScalarField<'mongo/string@1'>;
-        readonly orderId: ScalarField<'mongo/objectId@1'>;
-      };
-      readonly relations: Record<string, never>;
-      readonly storage: { readonly collection: 'users' };
     };
   };
   readonly roots: {
@@ -60,6 +77,7 @@ type PlanRow<TPlan> = TPlan extends MongoQueryPlan<infer Row> ? Row : never;
 const scalarField = <TCodecId extends string>(codecId: TCodecId) => ({
   type: { kind: 'scalar' as const, codecId },
   nullable: false,
+  many: false,
 });
 
 const contractJson = {
@@ -78,7 +96,15 @@ const contractJson = {
               status: scalarField('mongo/string@1'),
             },
             relations: {},
-            storage: { collection: 'orders' },
+            storage: {
+              collection: 'orders',
+              fields: {
+                _id: { field: '_id' },
+                department: { field: 'department' },
+                amount: { field: 'amount' },
+                status: { field: 'status' },
+              },
+            },
           },
           User: {
             fields: {
@@ -88,7 +114,15 @@ const contractJson = {
               orderId: scalarField('mongo/objectId@1'),
             },
             relations: {},
-            storage: { collection: 'users' },
+            storage: {
+              collection: 'users',
+              fields: {
+                _id: { field: '_id' },
+                firstName: { field: 'firstName' },
+                lastName: { field: 'lastName' },
+                orderId: { field: 'orderId' },
+              },
+            },
           },
         },
       },
@@ -118,19 +152,19 @@ const contractJson = {
 const User = model('User', {
   collection: 'users',
   fields: {
-    _id: field.objectId(),
-    name: field.string(),
-    email: field.string(),
+    _id: field.scalar(type.ObjectId()),
+    name: field.scalar(type.String()),
+    email: field.scalar(type.String()),
   },
 });
 
 const Task = model('Task', {
   collection: 'tasks',
   fields: {
-    _id: field.objectId(),
-    title: field.string(),
-    type: field.string(),
-    assigneeId: field.objectId(),
+    _id: field.scalar(type.ObjectId()),
+    title: field.scalar(type.String()),
+    type: field.scalar(type.String()),
+    assigneeId: field.scalar(type.ObjectId()),
   },
   relations: {
     assignee: rel.belongsTo(User, {
@@ -147,7 +181,7 @@ const contract = defineContract({
 });
 
 describe('pipeline builder integration', { timeout: timeouts.spinUpMongoMemoryServer }, () => {
-  const p = mongoQuery<TContract>({ contractJson });
+  const p = mongoStatic({ contract: contractFromJson<TContract>(contractJson) }).query;
 
   it('match → group → sort → limit analytics query', async () => {
     await withMongod(async (ctx) => {
@@ -325,8 +359,8 @@ describe('pipeline builder integration', { timeout: timeouts.spinUpMongoMemorySe
         },
       ]);
 
-      const plan = mongoQuery<typeof contract>({ contractJson: contract })
-        .from('tasks')
+      const plan = mongoStatic({ contract })
+        .query.from('tasks')
         .group((f) => ({
           _id: f.type,
           count: acc.count(),

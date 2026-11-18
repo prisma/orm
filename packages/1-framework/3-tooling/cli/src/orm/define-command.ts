@@ -8,6 +8,7 @@ import type {
   NeedsSpec,
   PositionalSpec,
   SpawnDeclarations,
+  StatementSpec,
 } from '@prisma/cli-engine';
 import { defineCommand } from '@prisma/cli-engine';
 import { notOk } from '@prisma/cli-engine/protocol';
@@ -24,9 +25,10 @@ import { normalizeError } from './normalize-error';
  *
  * An `InternalError` is the one thing this boundary does not convert. Its own contract says never
  * to catch it outside the outermost boundary: it means an invariant broke, which is a bug in
- * Prisma Next rather than something the user did. Re-throwing lets the engine settle it as a bug
+ * Prisma ORM rather than something the user did. Re-throwing lets the engine settle it as a bug
  * at exit 1, where converting it would report the same number as a bad connection string.
  */
+
 export function defineOrmCommand<
   TFlags extends Record<string, FlagSpec<unknown>> = Record<never, FlagSpec<unknown>>,
   TPositionals extends Record<string, PositionalSpec<unknown>> = Record<
@@ -43,6 +45,8 @@ export function defineOrmCommand<
     readonly needs?: NeedsSpec<TConfig>;
     readonly exitCodes?: Readonly<Record<TCode, string>>;
     readonly installsPackages?: TInstallsPackages;
+    /** The statement verbs the command may ask with; see the engine README § Statement prompts. */
+    readonly statements?: Readonly<Record<string, StatementSpec>>;
     readonly handler: Handler<TFlags, TPositionals, TConfig, TCode, false, TInstallsPackages>;
   } & SpawnDeclarations,
 ): CommandDefinition<TFlags, TPositionals, TConfig, TCode, false, TInstallsPackages> {

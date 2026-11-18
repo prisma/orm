@@ -36,6 +36,7 @@ Rules below are listed by bare filename; the canonical file is `.agents/rules/<n
 **Always-apply rules must be short, globally relevant, and stable.** If a rule only applies to a specific area (SQL, CLI, tests, package layout), scope it with `globs` and set `alwaysApply: false`. These are the rules currently carrying `alwaysApply: true`:
 
 - `read-agents-md.mdc` — Read AGENTS.md (onboarding deep dive is optional)
+- `never-change-the-framework-domain.mdc` — Never add to or reshape the framework domain; a design that needs to is wrong — stop and tell the operator
 - `schema-driven-architecture.mdc` — Read the architecture overview before writing code
 - `doc-maintenance.mdc` — Keep docs/READMEs/rules up‑to‑date
 - `no-direct-lockfile-edits.mdc` — Never edit `pnpm-lock.yaml` manually; use `pnpm install`
@@ -52,6 +53,7 @@ Rules below are listed by bare filename; the canonical file is `.agents/rules/<n
 - `fix-the-class-not-the-instance.mdc` — A review comment names a class of defect; sweep the whole diff for the class, fix every instance in one round
 
 ## Testing
+- `non-vacuous-verification.mdc` — Make every verification able to fail: regression tests red pre-fix, verifiers fail on empty input, `not.toBeAny()` sentinels
 - `test-import-patterns.mdc` — Test import patterns (source files, relative paths, don't export for tests)
 - `test-file-organization.mdc` — Test file organization (max 500 lines, split by functionality)
 - `test-intent-readability.mdc` — Tests must be readable by context (BDD-style grouping)
@@ -78,7 +80,7 @@ Rules below are listed by bare filename; the canonical file is `.agents/rules/<n
 
 ## Imports & Layering
 - `import-validation.mdc` — Layering rules and exceptions
-- `no-family-vocabulary-in-framework.mdc` — No family/target vocabulary in packages/1-framework; enforced by the `no-family-vocabulary` Biome plugin + the `lint:framework-vocabulary` ratchet
+- `no-family-vocabulary-in-framework.mdc` — No family/target vocabulary in packages/1-framework, and no name of a Prisma version before 8 outside its CLI; enforced by the `no-family-vocabulary` Biome plugin + `pnpm lint:ratchets`
 - `no-inline-imports.mdc` — Prohibit inline type imports in source files
 - `shared-plane-packages.mdc` — Pattern for creating shared plane packages
 - `multi-plane-packages.mdc` — Packages that span multiple planes (shared, migration, runtime)
@@ -132,6 +134,7 @@ Rules below are listed by bare filename; the canonical file is `.agents/rules/<n
 - `tsdown-config-package-source-only.mdc` — Keep `@repo/tsdown` exports source-only (no `.js` workaround files)
 
 ## Git, CI & workflow
+- `ci-failure-classification.mdc` — Classify CI failures from evidence: frozen install first, non-inert controls, known flake fingerprints
 - `running-tests.mdc` — How to run tests (and other slow verification commands): save output to a file once, read the file; don't re-run to grep different lines
 - `no-target-branches.mdc` — Don't branch on target; use adapters
 - `no-pull-request-target.mdc` — Never add `pull_request_target` to GitHub Actions workflows

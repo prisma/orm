@@ -1,12 +1,14 @@
+import { fstatSync } from 'node:fs';
+import process from 'node:process';
 import { ifDefined } from '@internal/utils/defined';
 import type { Cli, HostProcess, MountedTree, Runtime } from '@prisma/cli-engine';
 import { createCli, telemetryCommandGroup } from '@prisma/cli-engine';
 import { version as CLI_VERSION } from '../../package.json' with { type: 'json' };
 import { createControlClient } from '../control-api/client';
 import type { CreateControlClient } from '../control-api/types';
-import { isCI } from '../utils/is-ci';
 import { contractEmitCommand } from './contract/emit';
 import { contractInferCommand } from './contract/infer';
+import { contractPrintCommand } from './contract/print';
 import { createDbInitCommand } from './db/init';
 import { createDbSchemaCommand } from './db/schema';
 import { createDbSignCommand } from './db/sign';
@@ -22,8 +24,8 @@ import { migrationCheckCommand } from './migration/check';
 import { migrationGraphCommand } from './migration/graph';
 import { migrationListCommand } from './migration/list';
 import { migrationLogCommand } from './migration/log';
-import { migrationNewCommand } from './migration/new';
-import { migrationPlanCommand } from './migration/plan';
+import { createMigrationNewCommand } from './migration/new';
+import { createMigrationPlanCommand } from './migration/plan';
 import { migrationShowCommand } from './migration/show';
 import { migrationStatusCommand } from './migration/status';
 import { normalizeError } from './normalize-error';
@@ -33,9 +35,18 @@ import { refListCommand } from './ref/list';
 import { refSetCommand } from './ref/set';
 import { resolveTelemetryHooks } from './telemetry/reporting';
 
-export const BIN_NAME = 'prisma-next';
+/**
+ * This repo's stand-in for the unified Prisma CLI: it mounts the ORM command
+ * family exactly the way the real host does — every command at its family
+ * key, which spells the unified CLI's mount path (`contract format`,
+ * `db migrate`, `migration ref …`, `orm init`) — same command paths, same
+ * `prisma.config.ts`, so examples and e2e tests exercise the commands as
+ * users run them. The real host lives in the prisma-cli repo and consumes
+ * {@link ormCommandFamily} from this package's exports.
+ */
+export const BIN_NAME = 'prisma';
 
-export const TELEMETRY_DOCS_URL = 'https://prisma-next.dev/docs/cli/telemetry';
+export const TELEMETRY_DOCS_URL = 'https://www.prisma.io/docs/cli/telemetry';
 
 /**
  * The engine's consent surface — `telemetry status|enable|disable` and the
@@ -45,6 +56,12 @@ export const TELEMETRY_DOCS_URL = 'https://prisma-next.dev/docs/cli/telemetry';
 const telemetry = telemetryCommandGroup({ docsUrl: TELEMETRY_DOCS_URL });
 
 export const BIN_GROUPS = {
+  orm: {
+    brief: 'Initialize a Prisma ORM project',
+    description:
+      'Project initialization for the ORM. The other ORM commands mount under\n' +
+      'their workflow groups (contract, db, migration); only init lives here.',
+  },
   contract: {
     brief: 'Contract management commands',
     description:
@@ -64,7 +81,7 @@ export const BIN_GROUPS = {
       'Plan, apply, and scaffold on-disk migration packages. Migrations are\n' +
       'contract-to-contract edges stored as versioned directories under migrations/.',
   },
-  ref: {
+  'migration ref': {
     brief: 'Named pointers at contracts',
     description:
       'Manage the named refs under migrations/app/refs/. A ref maps a logical\n' +
@@ -80,28 +97,29 @@ export const BIN_GROUPS = {
  */
 export function createBinCommands(createClient: CreateControlClient): MountedTree {
   return {
+    'contract print': contractPrintCommand,
     'contract emit': contractEmitCommand,
+    'contract format': formatCommand,
     'contract infer': contractInferCommand,
     'db init': createDbInitCommand(createClient),
+    'db migrate': createMigrateCommand(createClient),
     'db schema': createDbSchemaCommand(createClient),
     'db sign': createDbSignCommand(createClient),
     'db update': createDbUpdateCommand(createClient),
     'db verify': createDbVerifyCommand(createClient),
-    format: formatCommand,
-    init: initCommand,
     lsp: lspCommand,
-    migrate: createMigrateCommand(createClient),
     'migration check': migrationCheckCommand,
     'migration graph': migrationGraphCommand,
     'migration list': migrationListCommand,
     'migration log': migrationLogCommand,
-    'migration new': migrationNewCommand,
-    'migration plan': migrationPlanCommand,
+    'migration new': createMigrationNewCommand(createClient),
+    'migration plan': createMigrationPlanCommand(createClient),
+    'migration ref delete': refDeleteCommand,
+    'migration ref list': refListCommand,
+    'migration ref set': refSetCommand,
     'migration show': migrationShowCommand,
     'migration status': migrationStatusCommand,
-    'ref delete': refDeleteCommand,
-    'ref list': refListCommand,
-    'ref set': refSetCommand,
+    'orm init': initCommand,
     ...telemetry.commands,
   };
 }
@@ -119,10 +137,32 @@ export function createOrmCli(): Cli {
 }
 
 /**
+ * The file identity behind a stream's fd, or undefined where the host exposes
+ * no fd (a harness stream) or the fd cannot be stat-ed.
+ */
+function streamFileIdentity(
+  stream: HostProcess['stdout'] | HostProcess['stderr'],
+): string | undefined {
+  if (!('fd' in stream) || typeof stream.fd !== 'number') {
+    return undefined;
+  }
+  try {
+    const stat = fstatSync(stream.fd);
+    return `${stat.dev}:${stat.ino}`;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Everything environmental the engine is given, adapted from the host process
  * once. The engine owns signal policy; the bin is dumb wiring.
  */
 export function runtimeFromProcess(proc: HostProcess): Runtime {
+  const stdoutFile = streamFileIdentity(proc.stdout);
+  const stderrFile = streamFileIdentity(proc.stderr);
+  const outputStreamsShareDevice =
+    stdoutFile !== undefined && stderrFile !== undefined ? stdoutFile === stderrFile : undefined;
   return {
     stdout: { write: (text) => void proc.stdout.write(text) },
     // The terminal width the drawings get to use, read once with everything
@@ -140,7 +180,12 @@ export function runtimeFromProcess(proc: HostProcess): Runtime {
       stdout: proc.stdout.isTTY === true,
       stderr: proc.stderr.isTTY === true,
     },
-    isCI: isCI(),
+    ...ifDefined('outputStreamsShareDevice', outputStreamsShareDevice),
+    host: {
+      runtime: { name: 'node', version: proc.version },
+      platform: proc.platform,
+      arch: proc.arch,
+    },
     exit: (code) => proc.exit(code),
     onSignal: (callback) => {
       const onInterrupt = () => callback('SIGINT');
@@ -153,12 +198,7 @@ export function runtimeFromProcess(proc: HostProcess): Runtime {
       };
     },
     loadConfig: (configPath) =>
-      loadOrmConfig({
-        cwd: proc.cwd(),
-        ...ifDefined('configPath', configPath),
-        // Mirrors the engine's warn-diagnostic line shape on stderr.
-        warn: (message) => void proc.stderr.write(`⚠ ${message}\n`),
-      }),
+      loadOrmConfig({ cwd: proc.cwd(), ...ifDefined('configPath', configPath) }),
     managementApi: { baseUrl: 'https://api.prisma.io' },
     // No `packageManager`: a host's answer overrides the engine's detection
     // outright, and this bin knows nothing the engine's own walk from cwd —
@@ -190,4 +230,15 @@ export async function runOrmCli(proc: HostProcess): Promise<number> {
   } catch (error) {
     return reportStartupFailure(proc, error);
   }
+}
+
+/**
+ * Runs the CLI as this process's `prisma` command: the exit code becomes `process.exitCode`, and
+ * stdin is released so the process exits once the run settles. A command that read stdin leaves it
+ * referenced — `lsp` reads it for its whole run — and with fd 0 closed Node substitutes a stream
+ * that has no `unref`.
+ */
+export async function runOrmBin(): Promise<void> {
+  process.exitCode = await runOrmCli(process);
+  process.stdin.unref?.();
 }

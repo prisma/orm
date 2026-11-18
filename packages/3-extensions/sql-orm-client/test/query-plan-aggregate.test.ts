@@ -28,7 +28,7 @@ import { describe, expect, it } from 'vitest';
 import { compileAggregate, compileGroupedAggregate } from '../src/query-plan';
 import { bindWhereExpr } from '../src/where-binding';
 import { baseContract } from './collection-fixtures';
-import { getTestAggregates } from './helpers';
+import { emptyTableState, getTestAggregates, publicTables } from './helpers';
 
 const defaultAggSpec = {
   totalViews: { kind: 'aggregate' as const, fn: 'sum' as const, column: 'views' },
@@ -38,9 +38,7 @@ function compileWithHaving(having: AnyExpression) {
   return compileGroupedAggregate(
     baseContract,
     getTestAggregates(),
-    'public',
-    'posts',
-    [],
+    emptyTableState(baseContract, 'posts'),
     ['user_id'],
     defaultAggSpec,
     having,
@@ -51,16 +49,22 @@ describe('query plan aggregate', () => {
   const filteredViews = bindWhereExpr(
     baseContract,
     BinaryExpr.gte(ColumnRef.of('posts', 'views'), LiteralExpr.of(100)),
+    publicTables('posts'),
   );
 
   it('rejects empty aggregate specs and selectors without required fields', () => {
     expect(() =>
-      compileAggregate(baseContract, getTestAggregates(), 'public', 'posts', [], {}),
+      compileAggregate(
+        baseContract,
+        getTestAggregates(),
+        emptyTableState(baseContract, 'posts'),
+        {},
+      ),
     ).toThrow('aggregate() requires at least one aggregation selector');
     // Whether an operation answers a call without an input is the descriptor's
     // to declare; the target declares no such overload for sum.
     expect(() =>
-      compileAggregate(baseContract, getTestAggregates(), 'public', 'posts', [], {
+      compileAggregate(baseContract, getTestAggregates(), emptyTableState(baseContract, 'posts'), {
         totalViews: { kind: 'aggregate', fn: 'sum' },
       }),
     ).toThrow("The composed target declares no 'sum' aggregate for a call without an input");
@@ -69,9 +73,7 @@ describe('query plan aggregate', () => {
       compileGroupedAggregate(
         baseContract,
         getTestAggregates(),
-        'public',
-        'posts',
-        [],
+        emptyTableState(baseContract, 'posts'),
         [],
         {
           totalViews: { kind: 'aggregate', fn: 'sum', column: 'views' },
@@ -84,9 +86,7 @@ describe('query plan aggregate', () => {
       compileGroupedAggregate(
         baseContract,
         getTestAggregates(),
-        'public',
-        'posts',
-        [],
+        emptyTableState(baseContract, 'posts'),
         ['user_id'],
         {},
         undefined,
@@ -103,9 +103,7 @@ describe('query plan aggregate', () => {
       compileGroupedAggregate(
         baseContract,
         getTestAggregates(),
-        'public',
-        'posts',
-        [],
+        emptyTableState(baseContract, 'posts'),
         ['user_id'],
         { totalViews: { kind: 'aggregate', fn: 'sum', column: 'views' } },
         BinaryExpr.gte(
@@ -119,9 +117,7 @@ describe('query plan aggregate', () => {
       compileGroupedAggregate(
         baseContract,
         getTestAggregates(),
-        'public',
-        'posts',
-        [],
+        emptyTableState(baseContract, 'posts'),
         ['user_id'],
         { totalViews: { kind: 'aggregate', fn: 'sum', column: 'views' } },
         BinaryExpr.in(
@@ -135,9 +131,7 @@ describe('query plan aggregate', () => {
       compileGroupedAggregate(
         baseContract,
         getTestAggregates(),
-        'public',
-        'posts',
-        [],
+        emptyTableState(baseContract, 'posts'),
         ['user_id'],
         { totalViews: { kind: 'aggregate', fn: 'sum', column: 'views' } },
         ExistsExpr.exists(scalarSubquery),
@@ -148,9 +142,7 @@ describe('query plan aggregate', () => {
       compileGroupedAggregate(
         baseContract,
         getTestAggregates(),
-        'public',
-        'posts',
-        [],
+        emptyTableState(baseContract, 'posts'),
         ['user_id'],
         { totalViews: { kind: 'aggregate', fn: 'sum', column: 'views' } },
         NullCheckExpr.isNull(ColumnRef.of('posts', 'views')),
@@ -162,9 +154,7 @@ describe('query plan aggregate', () => {
     const plan = compileGroupedAggregate(
       baseContract,
       getTestAggregates(),
-      'public',
-      'posts',
-      [],
+      emptyTableState(baseContract, 'posts'),
       ['user_id'],
       {
         postCount: { kind: 'aggregate', fn: 'count' },
@@ -197,9 +187,7 @@ describe('query plan aggregate', () => {
     const plan = compileGroupedAggregate(
       baseContract,
       getTestAggregates(),
-      'public',
-      'posts',
-      [],
+      emptyTableState(baseContract, 'posts'),
       ['user_id'],
       {
         postCount: { kind: 'aggregate', fn: 'count' },
@@ -223,9 +211,7 @@ describe('query plan aggregate', () => {
     const plan = compileAggregate(
       baseContract,
       getTestAggregates(),
-      'public',
-      'posts',
-      [filteredViews],
+      { ...emptyTableState(baseContract, 'posts'), filters: [filteredViews] },
       {
         totalViews: { kind: 'aggregate', fn: 'sum', column: 'views' },
       },
@@ -243,10 +229,15 @@ describe('query plan aggregate', () => {
   });
 
   it('stamps min/max ProjectionItem.codec from the underlying column', () => {
-    const plan = compileAggregate(baseContract, getTestAggregates(), 'public', 'posts', [], {
-      minViews: { kind: 'aggregate', fn: 'min', column: 'views' },
-      maxViews: { kind: 'aggregate', fn: 'max', column: 'views' },
-    });
+    const plan = compileAggregate(
+      baseContract,
+      getTestAggregates(),
+      emptyTableState(baseContract, 'posts'),
+      {
+        minViews: { kind: 'aggregate', fn: 'min', column: 'views' },
+        maxViews: { kind: 'aggregate', fn: 'max', column: 'views' },
+      },
+    );
 
     expect(plan.ast.kind).toBe('select');
     const ast = plan.ast as SelectAst;
@@ -259,11 +250,16 @@ describe('query plan aggregate', () => {
   // `pg/int8number@1` and `avg` as `pg/float8@1`, whatever the database itself
   // computes them into.
   it('stamps the resolved output codec on count, sum, and avg', () => {
-    const plan = compileAggregate(baseContract, getTestAggregates(), 'public', 'posts', [], {
-      total: { kind: 'aggregate', fn: 'count' },
-      sumViews: { kind: 'aggregate', fn: 'sum', column: 'views' },
-      avgViews: { kind: 'aggregate', fn: 'avg', column: 'views' },
-    });
+    const plan = compileAggregate(
+      baseContract,
+      getTestAggregates(),
+      emptyTableState(baseContract, 'posts'),
+      {
+        total: { kind: 'aggregate', fn: 'count' },
+        sumViews: { kind: 'aggregate', fn: 'sum', column: 'views' },
+        avgViews: { kind: 'aggregate', fn: 'avg', column: 'views' },
+      },
+    );
 
     const ast = plan.ast as SelectAst;
     const byAlias = Object.fromEntries(ast.projection.map((p) => [p.alias, p.codec?.codecId]));
@@ -278,9 +274,7 @@ describe('query plan aggregate', () => {
     const plan = compileGroupedAggregate(
       baseContract,
       getTestAggregates(),
-      'public',
-      'posts',
-      [],
+      emptyTableState(baseContract, 'posts'),
       ['user_id'],
       { peakViews: { kind: 'aggregate', fn: 'max', column: 'views' } },
       undefined,
@@ -323,7 +317,6 @@ describe('query plan aggregate', () => {
         returns: { codecId: 'core/bool', nullable: false },
         lowering: {
           targetFamily: 'sql',
-          strategy: 'function',
           template: 'position({1} in {0}) > 0',
         },
       });

@@ -6,7 +6,7 @@ import packageJson from '../package.json' with { type: 'json' };
 
 const binPath = join(import.meta.dirname, '../dist/bin.mjs');
 
-describe('prisma-next --version', () => {
+describe('prisma --version', () => {
   it('--version reports the package.json version in the completed envelope', {
     timeout: timeouts.coldTransformImport,
   }, () => {

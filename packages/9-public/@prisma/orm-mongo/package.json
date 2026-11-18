@@ -1,34 +1,40 @@
 {
   "name": "@prisma/orm-mongo",
-  "version": "8.0.0-rc.1",
+  "version": "8.0.0-rc.24",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "Prisma Next for MongoDB: the one package a MongoDB application installs",
+  "description": "Prisma 8 for MongoDB: the one package a MongoDB application installs",
   "files": [
-    "dist"
+    "dist",
+    "skills"
   ],
   "scripts": {
     "build": "tsdown",
+    "prepack": "node ../../../../scripts/sync-package-skills.ts @prisma/orm-mongo",
     "lint": "biome check . --error-on-warnings",
-    "clean": "rm -rf dist src-gen"
+    "clean": "rm -rf dist src-gen skills"
   },
   "dependencies": {
-    "@prisma/orm-family-mongo": "workspace:8.0.0-rc.1",
-    "@prisma/orm-framework": "workspace:8.0.0-rc.1",
-    "@prisma/orm-target-mongo": "workspace:8.0.0-rc.1",
-    "@prisma/orm-toolchain": "workspace:8.0.0-rc.1",
-    "pathe": "^2.0.3"
+    "@prisma/orm-family-mongo": "workspace:8.0.0-rc.24",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.24",
+    "@prisma/orm-target-mongo": "workspace:8.0.0-rc.24",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.24",
+    "mongodb-connection-string-url": "catalog:",
+    "pathe": "^2.0.3",
+    "tinyglobby": "catalog:",
+    "temporal-spec": "1.0.1"
   },
   "devDependencies": {
-    "@internal/mongo": "workspace:8.0.0-rc.1",
-    "@repo/tsconfig": "workspace:8.0.0-rc.1",
-    "@repo/tsdown": "workspace:8.0.0-rc.1",
+    "@internal/mongo": "workspace:8.0.0-rc.24",
+    "@repo/tsconfig": "workspace:8.0.0-rc.24",
+    "@repo/tsdown": "workspace:8.0.0-rc.24",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },
   "peerDependencies": {
     "mongodb": "^7.0.0",
+    "temporal-polyfill": "^1.0.4",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {
@@ -38,9 +44,6 @@
   },
   "exports": {
     "./adapter": "./dist/adapter.mjs",
-    "./adapter/codec-ids": "./dist/adapter__codec-ids.mjs",
-    "./adapter/codec-types": "./dist/adapter__codec-types.mjs",
-    "./adapter/codecs": "./dist/adapter__codecs.mjs",
     "./adapter/control": "./dist/adapter__control.mjs",
     "./adapter/runtime": "./dist/adapter__runtime.mjs",
     "./bson": "./dist/bson.mjs",
@@ -67,10 +70,13 @@
     "./contract/resolve-domain-model": "./dist/contract__resolve-domain-model.mjs",
     "./contract/types": "./dist/contract__types.mjs",
     "./contract/validate-domain": "./dist/contract__validate-domain.mjs",
+    "./contract/validate-once": "./dist/contract__validate-once.mjs",
+    "./contract/validate-storage": "./dist/contract__validate-storage.mjs",
     "./contract-builder": "./dist/contract-builder.mjs",
     "./control": "./dist/control.mjs",
     "./driver": "./dist/driver.mjs",
     "./driver/control": "./dist/driver__control.mjs",
+    "./driver/runtime": "./dist/driver__runtime.mjs",
     "./family": "./dist/family.mjs",
     "./family/control": "./dist/family__control.mjs",
     "./family/control-adapter": "./dist/family__control-adapter.mjs",
@@ -81,6 +87,7 @@
     "./family/schema-verify": "./dist/family__schema-verify.mjs",
     "./family-contract": "./dist/family-contract.mjs",
     "./family-contract/canonicalization-hooks": "./dist/family-contract__canonicalization-hooks.mjs",
+    "./family-contract/data-type": "./dist/family-contract__data-type.mjs",
     "./family-contract/entity-kinds": "./dist/family-contract__entity-kinds.mjs",
     "./family-runtime": "./dist/family-runtime.mjs",
     "./migration-tools/aggregate": "./dist/migration-tools__aggregate.mjs",
@@ -97,11 +104,15 @@
     "./runtime": "./dist/runtime.mjs",
     "./static": "./dist/static.mjs",
     "./target": "./dist/target.mjs",
+    "./target/codec-ids": "./dist/target__codec-ids.mjs",
     "./target/codec-types": "./dist/target__codec-types.mjs",
+    "./target/codecs": "./dist/target__codecs.mjs",
     "./target/control": "./dist/target__control.mjs",
+    "./target/data-types": "./dist/target__data-types.mjs",
     "./target/migration": "./dist/target__migration.mjs",
     "./target/pack": "./dist/target__pack.mjs",
     "./target/runtime": "./dist/target__runtime.mjs",
+    "./target/server-version": "./dist/target__server-version.mjs",
     "./utils": "./dist/utils.mjs",
     "./utils/abortable": "./dist/utils__abortable.mjs",
     "./utils/array-equal": "./dist/utils__array-equal.mjs",
@@ -117,6 +128,8 @@
     "./utils/result": "./dist/utils__result.mjs",
     "./utils/simplify-deep": "./dist/utils__simplify-deep.mjs",
     "./utils/structured-error": "./dist/utils__structured-error.mjs",
+    "./utils/suppress-idle-connection-errors": "./dist/utils__suppress-idle-connection-errors.mjs",
+    "./utils/text": "./dist/utils__text.mjs",
     "./utils/types": "./dist/utils__types.mjs",
     "./value": "./dist/value.mjs",
     "./value/mongodb-types": "./dist/value__mongodb-types.mjs",
@@ -125,7 +138,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/9-public/@prisma/orm-mongo"
   }
 }

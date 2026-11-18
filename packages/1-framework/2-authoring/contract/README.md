@@ -2,7 +2,7 @@
 
 **Status:** Shared descriptor types for family-specific contract authoring
 
-This package holds the small, target-neutral descriptor vocabulary shared by Prisma Next authoring surfaces, targets, extensions, and ID helpers.
+This package holds the small, target-neutral descriptor vocabulary shared by Prisma 8 authoring surfaces, targets, extensions, and ID helpers.
 
 ## Overview
 
@@ -25,10 +25,6 @@ This package is the extracted shared descriptor layer from the contract authorin
 - **No builders or lowering**: This package does not own `defineContract`, `field`, `model`, `rel`, or any lowering pipeline
 - **No target-specific logic**: It must remain target-family agnostic and cannot import from `@internal/sql-*` or other family-specific modules
 - **Shared by multiple layers**: SQL authoring, target packs, extension packs, and ID helpers all consume these types
-
-## Dependencies
-
-- Runtime dependencies: none
 
 ## Exports
 

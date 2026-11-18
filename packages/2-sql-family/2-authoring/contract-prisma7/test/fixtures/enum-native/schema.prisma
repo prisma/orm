@@ -1,0 +1,49 @@
+datasource db {
+  provider = "postgresql"
+  schemas  = ["public", "audit"]
+}
+
+generator client {
+  provider        = "prisma-client"
+  output          = "../generated/prisma"
+  previewFeatures = ["multiSchema"]
+}
+
+enum Role {
+  USER  @map("user")
+  ADMIN
+
+  @@map("user_role")
+  @@schema("public")
+}
+
+enum AuditAction {
+  CREATE
+  DELETE
+
+  @@schema("audit")
+}
+
+enum Unused {
+  A
+  B
+
+  @@schema("public")
+}
+
+model User {
+  id       Int    @id
+  role     Role
+  roleOpt  Role?
+  roleList Role[]
+
+  @@schema("public")
+}
+
+model AuditLog {
+  id     Int         @id
+  action AuditAction
+
+  @@map("audit_log")
+  @@schema("audit")
+}

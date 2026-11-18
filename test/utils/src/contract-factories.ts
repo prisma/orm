@@ -5,6 +5,7 @@ import {
   computeStorageHash,
 } from '@internal/contract/hashing';
 import type {
+  ApplicationDomainNamespace,
   Contract,
   ContractEnum,
   ContractModel,
@@ -22,7 +23,10 @@ type ContractOverrides<TStorage extends StorageBase = StorageBase> = {
   targetFamily?: string;
   roots?: Record<string, CrossReference>;
   models?: Record<string, ContractModel>;
+  /** Named domain namespaces; replaces the single unbound namespace `models` fills. */
+  namespaces?: Record<string, ApplicationDomainNamespace>;
   storage?: Omit<TStorage, 'storageHash'>;
+  /** Value objects, written to `entries.valueObject` of the storage's unbound namespace. */
   valueObjects?: Record<string, ContractValueObject>;
   enum?: Record<string, ContractEnum>;
   capabilities?: Record<string, Record<string, boolean>>;
@@ -49,6 +53,27 @@ const DEFAULT_SQL_STORAGE = {
   },
 } as const;
 
+type StorageWithoutHash = Omit<StorageBase, 'storageHash'>;
+
+function withValueObjects(
+  storage: StorageWithoutHash,
+  valueObjects: Record<string, ContractValueObject> | undefined,
+): StorageWithoutHash {
+  if (valueObjects === undefined) return storage;
+  const namespace = storage.namespaces[UNBOUND_NAMESPACE_ID];
+  return {
+    ...storage,
+    namespaces: {
+      ...storage.namespaces,
+      [UNBOUND_NAMESPACE_ID]: {
+        id: UNBOUND_NAMESPACE_ID,
+        ...namespace,
+        entries: { ...namespace?.entries, valueObject: valueObjects },
+      },
+    },
+  };
+}
+
 export function createContract<TStorage extends StorageBase = StorageBase>(
   overrides: ContractOverrides<TStorage> = {},
 ): Contract<TStorage> {
@@ -56,7 +81,10 @@ export function createContract<TStorage extends StorageBase = StorageBase>(
   const targetFamily = overrides.targetFamily ?? 'sql';
   const capabilities = overrides.capabilities ?? {};
 
-  const rawStorage = overrides.storage ?? DEFAULT_FRAMEWORK_STORAGE;
+  const rawStorage = withValueObjects(
+    overrides.storage ?? DEFAULT_FRAMEWORK_STORAGE,
+    overrides.valueObjects,
+  );
 
   const storageHash = computeStorageHash({
     target,
@@ -79,10 +107,9 @@ export function createContract<TStorage extends StorageBase = StorageBase>(
     targetFamily,
     roots: overrides.roots ?? {},
     domain: {
-      namespaces: {
+      namespaces: overrides.namespaces ?? {
         [UNBOUND_DOMAIN_NAMESPACE_ID]: {
           models: overrides.models ?? {},
-          ...ifDefined('valueObjects', overrides.valueObjects),
           ...ifDefined('enum', overrides.enum),
         },
       },
@@ -120,14 +147,29 @@ type SqlStorageLike = StorageBase & {
   readonly types?: Record<string, unknown>;
 };
 
-export function createSqlContract(
-  overrides: ContractOverrides<SqlStorageLike> = {},
-): Contract<SqlStorageLike> {
+type SqlContractOverrides = ContractOverrides<SqlStorageLike> & {
+  /** Storage tables keyed by namespace id, then table name; builds `storage.namespaces`. */
+  tables?: Record<string, Record<string, unknown>>;
+};
+
+function storageFromTables(
+  tables: Record<string, Record<string, unknown>>,
+): Omit<SqlStorageLike, 'storageHash'> {
+  return {
+    namespaces: Object.fromEntries(
+      Object.entries(tables).map(([id, table]) => [id, { id, entries: { table } }]),
+    ),
+  };
+}
+
+export function createSqlContract(overrides: SqlContractOverrides = {}): Contract<SqlStorageLike> {
+  const { tables, ...rest } = overrides;
   return createContract<SqlStorageLike>({
-    ...overrides,
+    ...rest,
     target: overrides.target ?? 'postgres',
     targetFamily: overrides.targetFamily ?? 'sql',
-    storage: overrides.storage ?? DEFAULT_SQL_STORAGE,
+    storage:
+      overrides.storage ?? (tables !== undefined ? storageFromTables(tables) : DEFAULT_SQL_STORAGE),
   });
 }
 

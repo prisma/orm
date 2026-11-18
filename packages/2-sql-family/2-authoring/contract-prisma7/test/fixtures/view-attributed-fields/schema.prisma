@@ -1,0 +1,21 @@
+generator client {
+  provider        = "prisma-client"
+  output          = "../generated/prisma"
+  previewFeatures = ["views"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id    Int    @id
+  email String @unique
+}
+
+view ActiveUsers {
+  id    Int    @unique
+  email String @map("user_email")
+
+  @@map("active_users")
+}

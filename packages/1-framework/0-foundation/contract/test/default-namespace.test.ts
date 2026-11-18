@@ -1,6 +1,6 @@
 import { isStructuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
-import { soleDomainNamespaceId, UNBOUND_DOMAIN_NAMESPACE_ID } from '../src/default-namespace';
+import { soleDomainNamespaceId } from '../src/default-namespace';
 
 function capture(run: () => unknown): unknown {
   try {
@@ -10,12 +10,6 @@ function capture(run: () => unknown): unknown {
   }
   return expect.unreachable('expected the call to throw');
 }
-
-describe('UNBOUND_DOMAIN_NAMESPACE_ID', () => {
-  it('is the late-bound domain sentinel', () => {
-    expect(UNBOUND_DOMAIN_NAMESPACE_ID).toBe('__unbound__');
-  });
-});
 
 describe('soleDomainNamespaceId', () => {
   it('throws CONTRACT.NAMESPACE_INVALID when the domain declares no namespaces', () => {

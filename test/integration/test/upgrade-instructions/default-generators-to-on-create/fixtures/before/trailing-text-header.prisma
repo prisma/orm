@@ -1,0 +1,4 @@
+// use prisma-8 -- the shop schema
+model D {
+  id String @id @default(cuid(2))
+}

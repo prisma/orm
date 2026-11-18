@@ -24,7 +24,7 @@ The CLI verb taxonomy ([namespacing rule](./README.md#namespacing-rule-subject-n
 **Question:** "How do I get from `pnpm init` to a project that can talk to a database?"
 
 ```bash
-prisma-next init        # scaffold project (schema.psl, config, etc.)
+prisma orm init        # scaffold project (schema.psl, config, etc.)
 contract emit           # produce contract.json + contract.d.ts
 db init                 # lay down marker + ledger tables in an empty DB
 ```
@@ -44,7 +44,7 @@ contract emit
 db update               # off-graph reconciliation; rebuild from desired state
 ```
 
-`db update` is *not* the dev-DB equivalent of `migrate`. It does not produce a migration, does not walk the graph, does not advance a ref. It tears down and rebuilds the database to satisfy the current contract. That makes it the right verb during iteration (no junk migrations in the PR) and the wrong verb for anything reaching production (no audit trail; destructive).
+`db update` is *not* the dev-DB equivalent of `migrate`. It does not produce a migration and does not walk the graph. It compares the live database with the contract and applies the difference, asking before any operation that would lose data, and on the default dev URL it advances the `db` ref to record the contract the dev database now satisfies — the checkpoint `migration plan` chains from (see [ADR 218](../../../architecture%20docs/adrs/ADR%20218%20-%20Refs%20with%20paired%20contract%20snapshots%20and%20universal%20graph-node%20invariant.md)). That makes it the right verb during iteration (no junk migrations in the PR) and the wrong verb for a database that changes only through migrations, such as production (it leaves no migration behind).
 
 A rewind during iteration is also `db update --to <contract>` — same verb, parameterised by target.
 
@@ -88,7 +88,7 @@ migrate --to <ref>      # walk the graph from marker to the ref's contract,
 
 This is the dominant CD operation. The verb is dead-simple by design: the *only* question the verb answers is "what state should the DB be in?", and the answer is a ref name. The directional vocabulary (`--to`) is reserved for `migrate`; signing the marker is a static claim and uses different vocabulary ([see `db sign`](./README.md#verbs)).
 
-`migrate` is forward-only. It walks the directed graph from the current marker to the ref. Backward motion is not a `migrate` mode — that's `db update --to <contract>` (off-graph rebuild, destructive, dev-only).
+`migrate` is forward-only. It walks the directed graph from the current marker to the ref. Backward motion is not a `migrate` mode — that's `db update --to <contract>` (off-graph reconciliation, which asks before losing data).
 
 **Exercised by:** `schema-evolution-migrations.e2e.test.ts`, `multi-step-migration.e2e.test.ts`, every journey that lands a real schema change.
 
@@ -159,7 +159,7 @@ Two distinct verification verbs, two distinct questions:
 | `db verify` | Live DB satisfies its contract | Yes (read-only) |
 | `migration check [<m>]` | Migration artifact / graph integrity | No |
 
-The two are deliberately separately named — sharing `verify` across both would make "which verification?" the question at every call site. There is no sandbox-execution verb: no shadow database will ever exist, so a migration's behaviour is enforced during the real apply (pre/post invariants, destination-hash check), not previewed in a sandbox. See the [glossary entry for `migration check`](../../../glossary.md#migration-check) for the per-PN-code breakdown of what graph-integrity covers.
+The two are deliberately separately named — sharing `verify` across both would make "which verification?" the question at every call site. There is no core sandbox-execution verb: the CLI never provisions a shadow database, so a migration's behaviour is enforced during the real apply (pre/post invariants, destination-hash check). Rehearsal against a fork of a real database is a preflight hook a database extension may provide. See the [glossary entry for `migration check`](../../../glossary.md#migration-check) for the per-PN-code breakdown of what graph-integrity covers.
 
 **Exercised by:** `migration-check.e2e.test.ts`.
 
@@ -169,18 +169,18 @@ The two are deliberately separately named — sharing `verify` across both would
 
 ### Brownfield: bring an existing database into the graph
 
-**Persona:** application developer adopting Prisma Next on a database that already has schema and data.
+**Persona:** application developer adopting Prisma 8 on a database that already has schema and data.
 **Question:** "I have a real database with real tables. How do I start managing it with migrations without nuking it?"
 
 ```bash
 # point the CLI at the existing DB
 contract infer            # introspect -> derive a contract that matches the DB
 # review/edit the inferred contract.json
-db sign                   # write the marker: 'this DB satisfies <contract>'
+db sign                   # write the marker ('this DB satisfies <contract>') and set the db ref
 # from here, the normal author + migrate flow applies
 ```
 
-The contract becomes the graph's root node (an `∅`-from migration is not produced — brownfield contracts simply exist as graph nodes the marker points at). Subsequent contract changes go through the normal `migration plan` / `migrate --to <ref>` flow.
+`db sign` sets the `db` ref to the signed contract's hash, and the first `migration plan` after it auto-emits the baseline `null → signed-hash`, so the signed contract becomes the graph's root node; once the contract has moved on from the signed one, the plan also emits the delta `signed-hash → contract`. Subsequent contract changes go through the normal `migration plan` / `migrate --to <ref>` flow.
 
 Step-count ergonomics for this path are a tracked concern — the underlying steps are correct but the user-facing sequence is currently more verbs than it should be. Follow-up: [TML-2561](https://linear.app/prisma-company/issue/TML-2561) (brownfield adoption ergonomics).
 
@@ -189,7 +189,7 @@ Step-count ergonomics for this path are a tracked concern — the underlying ste
 ### Adopting migrations on production
 
 **Persona:** operator enabling the migration workflow on a database that's been running without it.
-**Question:** "We've been using `db update` (or no Prisma Next at all) on production; how do we switch to managing it with migrations from now on?"
+**Question:** "We've been using `db update` (or no Prisma 8 at all) on production; how do we switch to managing it with migrations from now on?"
 
 ```bash
 # on the running DB
@@ -242,13 +242,13 @@ Three shapes the merge can take, all valid:
 
 The graph is content-addressed: migration hashes change when ancestry changes, but the rules for "does this migration make sense from this contract?" are encoded in the verb taxonomy (`migration check`'s PN codes), not in branch ordering.
 
-**Exercised by:** `converging-paths.e2e.test.ts`, `diamond-convergence.e2e.test.ts`, `divergence-and-refs.e2e.test.ts`.
+**Exercised by:** `diamond-convergence.e2e.test.ts`, `divergence-and-refs.e2e.test.ts`.
 
 ---
 
 ## What this doc deliberately does not cover
 
-- **Mechanics of individual verbs.** Argument grammars, exit codes, output shapes — see the [domain README](./README.md) and `prisma-next <verb> --help`.
+- **Mechanics of individual verbs.** Argument grammars, exit codes, output shapes — see the [domain README](./README.md) and `prisma orm <verb> --help`.
 - **The full e2e test suite.** Drift edge cases, resolver internals, single-verb regression probes, error-envelope golden tests — these live in `test/integration/test/cli-journeys/` but are not load-bearing as user stories.
 - **Extension-author workflows.** Authors of new contract spaces follow a parallel surface (contract-space namespaces, pinned mirrors). That surface is captured separately in `docs/architecture docs/subsystems/7. Migration System.md`.
 - **Disaster recovery and squashing.** Squashing the migration graph, baselining from `∅`, recovering from a corrupted ledger — these are operational topics tracked separately and not part of the day-to-day user surface.

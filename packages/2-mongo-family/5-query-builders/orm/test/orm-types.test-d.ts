@@ -1,3 +1,4 @@
+import type { NamespaceId } from '@internal/contract/types';
 import type { AsyncIterableResult } from '@internal/framework-components/runtime';
 import { expectTypeOf, test } from 'vitest';
 import type {
@@ -9,7 +10,6 @@ import type {
   DotPath,
   FieldAccessor,
   FieldExpression,
-  FieldOperation,
   ResolveDotPathType,
 } from '../src/field-accessor';
 import type { MongoOrmClient } from '../src/mongo-orm';
@@ -17,15 +17,16 @@ import type {
   CreateInput,
   EmbedRelationKeys,
   IncludedRow,
+  IncludeResultFields,
   InferFullRow,
   InferRootRow,
   MongoIncludeSpec,
   MongoWhereFilter,
+  NoIncludes,
   ReferenceRelationKeys,
   ResolvedCreateInput,
   VariantCreateInput,
   VariantModelRow,
-  VariantNames,
 } from '../src/types';
 
 // --- Root accessors ---
@@ -169,20 +170,10 @@ test('InferRootRow for non-polymorphic model returns plain row', () => {
   expectTypeOf<UserRow>().toHaveProperty('addresses');
 });
 
-// --- VariantNames / VariantModelRow ---
-
-test('VariantNames extracts variant names from polymorphic model', () => {
-  type Names = VariantNames<Contract, 'Task'>;
-  expectTypeOf<Names>().toEqualTypeOf<'Bug' | 'Feature'>();
-});
-
-test('VariantNames is never for non-polymorphic model', () => {
-  type Names = VariantNames<Contract, 'User'>;
-  expectTypeOf<Names>().toBeNever();
-});
+// --- VariantModelRow ---
 
 test('VariantModelRow narrows to Bug-specific fields', () => {
-  type BugRow = VariantModelRow<Contract, 'Task', 'Bug'>;
+  type BugRow = VariantModelRow<Contract, 'Task', 'bug'>;
   expectTypeOf<BugRow>().toHaveProperty('severity');
   expectTypeOf<BugRow>().toHaveProperty('_id');
   expectTypeOf<BugRow>().toHaveProperty('title');
@@ -190,7 +181,7 @@ test('VariantModelRow narrows to Bug-specific fields', () => {
 });
 
 test('VariantModelRow narrows to Feature-specific fields', () => {
-  type FeatureRow = VariantModelRow<Contract, 'Task', 'Feature'>;
+  type FeatureRow = VariantModelRow<Contract, 'Task', 'feature'>;
   expectTypeOf<FeatureRow>().toHaveProperty('priority');
   expectTypeOf<FeatureRow>().toHaveProperty('targetRelease');
   expectTypeOf<FeatureRow['type']>().toEqualTypeOf<'feature'>();
@@ -208,6 +199,25 @@ test('first() returns Promise of InferRootRow or null', () => {
   type Col = MongoCollection<Contract, 'User'>;
   type FirstResult = ReturnType<Col['first']>;
   expectTypeOf<FirstResult>().toExtend<Promise<InferRootRow<Contract, 'User'> | null>>();
+});
+
+test('firstOrThrow() returns the first() row without null', () => {
+  const col = {} as MongoCollection<Contract, 'User'>;
+  expectTypeOf(col.firstOrThrow()).toEqualTypeOf<
+    Promise<NonNullable<Awaited<ReturnType<typeof col.first>>>>
+  >();
+  expectTypeOf(col.firstOrThrow()).toExtend<Promise<InferRootRow<Contract, 'User'>>>();
+  expectTypeOf<Parameters<typeof col.firstOrThrow>>().toEqualTypeOf<[]>();
+});
+
+test('include().firstOrThrow() returns the included row without null', () => {
+  const col = ({} as MongoCollection<Contract, 'Task'>).include('assignee');
+  expectTypeOf(col.firstOrThrow()).toEqualTypeOf<
+    Promise<NonNullable<Awaited<ReturnType<typeof col.first>>>>
+  >();
+  expectTypeOf(col.firstOrThrow()).toExtend<
+    Promise<InferRootRow<Contract, 'Task'> & { assignee: InferFullRow<Contract, 'User'> | null }>
+  >();
 });
 
 test('include() accepts reference relation keys', () => {
@@ -257,6 +267,58 @@ test('where().select().all() returns AsyncIterableResult<InferRootRow>', () => {
   expectTypeOf(result).toExtend<AsyncIterableResult<InferRootRow<Contract, 'User'>>>();
 });
 
+type AssigneeRelation<Nullable extends boolean> = {
+  readonly to: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'User' };
+  readonly cardinality: 'N:1';
+  readonly nullable: Nullable;
+  readonly on: {
+    readonly localFields: readonly ['assigneeId'];
+    readonly targetFields: readonly ['_id'];
+  };
+};
+
+type ContractWithAssignee<Nullable extends boolean> = Omit<Contract, 'domain'> & {
+  readonly domain: {
+    readonly namespaces: {
+      readonly __unbound__: {
+        readonly models: {
+          readonly User: Contract['domain']['namespaces']['__unbound__']['models']['User'];
+          readonly Task: Omit<
+            Contract['domain']['namespaces']['__unbound__']['models']['Task'],
+            'relations'
+          > & { readonly relations: { readonly assignee: AssigneeRelation<Nullable> } };
+        };
+      };
+    };
+  };
+};
+
+type IncludedAssignee<Nullable extends boolean> = IncludeResultFields<
+  ContractWithAssignee<Nullable>,
+  'Task',
+  { assignee: true }
+>['assignee'];
+
+test('an explicit nullable: false relation includes a non-null row', () => {
+  expectTypeOf<IncludedAssignee<false>>().toEqualTypeOf<
+    InferFullRow<ContractWithAssignee<false>, 'User'>
+  >();
+});
+
+test('an explicit nullable: true relation includes row | null', () => {
+  expectTypeOf<IncludedAssignee<true>>().toEqualTypeOf<InferFullRow<
+    ContractWithAssignee<true>,
+    'User'
+  > | null>();
+});
+
+test('a relation whose nullable is widened to boolean includes row | null', () => {
+  expectTypeOf<IncludedAssignee<boolean>>().toEqualTypeOf<InferFullRow<
+    ContractWithAssignee<boolean>,
+    'User'
+  > | null>();
+});
+
 test('include().first() returns row with included relation field', () => {
   const col = {} as MongoCollection<Contract, 'Task'>;
   const result = col.include('assignee').first();
@@ -282,13 +344,13 @@ test('all() without include() does not have relation field', () => {
   expectTypeOf<Row>().not.toHaveProperty('assignee');
 });
 
-test('where().orderBy().skip().take().all() preserves row type', () => {
+test('where().orderBy().offset().limit().all() preserves row type', () => {
   const col = {} as MongoCollection<Contract, 'User'>;
   const result = col
     .where({} as never)
     .orderBy({ name: 1 })
-    .skip(10)
-    .take(5)
+    .offset(10)
+    .limit(5)
     .all();
   expectTypeOf(result).toExtend<AsyncIterableResult<InferRootRow<Contract, 'User'>>>();
 });
@@ -303,7 +365,7 @@ test('select() rejects nonexistent field after chaining', () => {
 // --- VariantCreateInput ---
 
 test('VariantCreateInput includes base + variant fields minus _id and discriminator', () => {
-  type BugCreate = VariantCreateInput<Contract, 'Task', 'Bug'>;
+  type BugCreate = VariantCreateInput<Contract, 'Task', 'bug'>;
   expectTypeOf<BugCreate>().toHaveProperty('title');
   expectTypeOf<BugCreate>().toHaveProperty('assigneeId');
   expectTypeOf<BugCreate>().toHaveProperty('severity');
@@ -311,26 +373,26 @@ test('VariantCreateInput includes base + variant fields minus _id and discrimina
 });
 
 test('VariantCreateInput excludes other variant fields', () => {
-  type BugCreate = VariantCreateInput<Contract, 'Task', 'Bug'>;
+  type BugCreate = VariantCreateInput<Contract, 'Task', 'bug'>;
   expectTypeOf<BugCreate>().not.toHaveProperty('priority');
   expectTypeOf<BugCreate>().not.toHaveProperty('targetRelease');
 });
 
-test('ResolvedCreateInput falls through to CreateInput when TVariant is never', () => {
+test('ResolvedCreateInput falls through to CreateInput when TVariantValue is never', () => {
   type Resolved = ResolvedCreateInput<Contract, 'Task', never>;
   type Expected = CreateInput<Contract, 'Task'>;
   expectTypeOf<Resolved>().toEqualTypeOf<Expected>();
 });
 
 test('ResolvedCreateInput resolves to VariantCreateInput when variant is specified', () => {
-  type Resolved = ResolvedCreateInput<Contract, 'Task', 'Bug'>;
-  type Expected = VariantCreateInput<Contract, 'Task', 'Bug'>;
+  type Resolved = ResolvedCreateInput<Contract, 'Task', 'bug'>;
+  type Expected = VariantCreateInput<Contract, 'Task', 'bug'>;
   expectTypeOf<Resolved>().toEqualTypeOf<Expected>();
 });
 
 test('variant().create() accepts variant-specific fields without discriminator', () => {
   const col = {} as MongoCollection<Contract, 'Task'>;
-  const bug = col.variant('Bug');
+  const bug = col.variant('bug');
   type CreateParam = Parameters<typeof bug.create>[0];
   expectTypeOf<CreateParam>().toHaveProperty('title');
   expectTypeOf<CreateParam>().toHaveProperty('severity');
@@ -344,15 +406,79 @@ test('non-variant create() uses base CreateInput', () => {
   expectTypeOf<CreateParam>().toHaveProperty('title');
 });
 
-test('variant() preserves TVariant through chaining', () => {
+test('variant() preserves TVariantValue through chaining', () => {
   const col = {} as MongoCollection<Contract, 'Task'>;
   const chained = col
-    .variant('Bug')
+    .variant('bug')
     .where({} as never)
-    .take(10);
+    .limit(10);
   type CreateParam = Parameters<typeof chained.create>[0];
   expectTypeOf<CreateParam>().toHaveProperty('severity');
   expectTypeOf<CreateParam>().not.toHaveProperty('type');
+});
+
+test('variant() accepts a declared discriminator value', () => {
+  const col = {} as MongoCollection<Contract, 'Task'>;
+  expectTypeOf(col.variant('bug')).toEqualTypeOf<
+    MongoCollection<Contract, 'Task', NoIncludes, 'bug'>
+  >();
+});
+
+test('variant() rejects a variant model name', () => {
+  const col = {} as MongoCollection<Contract, 'Task'>;
+  // @ts-expect-error variant() takes a discriminator value, not a model name
+  col.variant('Bug');
+});
+
+test('variant() rejects an undeclared discriminator value', () => {
+  const col = {} as MongoCollection<Contract, 'Task'>;
+  // @ts-expect-error 'epic' is not a declared discriminator value of Task
+  col.variant('epic');
+});
+
+test('variant() cannot be called on a non-polymorphic receiver', () => {
+  const col = {} as MongoCollection<Contract, 'User'>;
+  // @ts-expect-error User declares no discriminator values
+  col.variant('bug');
+});
+
+test('variant() keeps a union of values', () => {
+  const col = {} as MongoCollection<Contract, 'Task'>;
+  const value = 'bug' as 'bug' | 'feature';
+  expectTypeOf(col.variant(value)).toEqualTypeOf<
+    MongoCollection<Contract, 'Task', NoIncludes, 'bug' | 'feature'>
+  >();
+  expectTypeOf<VariantModelRow<Contract, 'Task', 'bug' | 'feature'>>().toEqualTypeOf<
+    VariantModelRow<Contract, 'Task', 'bug'> | VariantModelRow<Contract, 'Task', 'feature'>
+  >();
+});
+
+test('variant() cannot be called on a collection with a variant selected', () => {
+  const col = {} as MongoCollection<Contract, 'Task'>;
+  expectTypeOf(col.where({ title: 'X' }).variant('bug')).not.toBeNever();
+  const bugs = col.variant('bug');
+  // @ts-expect-error a variant is already selected; select from the base collection
+  bugs.variant('feature');
+  const value = 'bug' as 'bug' | 'feature';
+  // @ts-expect-error a variant is already selected, even when it is a union
+  col.variant(value).variant('bug');
+});
+
+test('a variant helper result rejects a second variant selection', () => {
+  const tasks = {} as MongoCollection<Contract, 'Task'>;
+  const bugs = () => tasks.variant('bug');
+  expectTypeOf(bugs().where({ title: 'X' })).not.toBeNever();
+  // @ts-expect-error bugs() already selected a variant
+  bugs().variant('feature');
+});
+
+test('a zero-argument custom helper exposes the variant collection and create input', () => {
+  const tasks = {} as MongoCollection<Contract, 'Task'>;
+  const bugs = () => tasks.variant('bug');
+  expectTypeOf(bugs).returns.toEqualTypeOf<MongoCollection<Contract, 'Task', NoIncludes, 'bug'>>();
+  expectTypeOf<Parameters<ReturnType<typeof bugs>['create']>[0]>().toEqualTypeOf<
+    VariantCreateInput<Contract, 'Task', 'bug'>
+  >();
 });
 
 // --- 1:N reference relation include ---
@@ -380,10 +506,7 @@ test('include() on 1:N reference relation all() returns array type', () => {
 test('FieldAccessor has FieldExpression for scalar fields', () => {
   type Accessor = FieldAccessor<Contract, 'User', CodecTypes>;
   expectTypeOf<Accessor['name']>().toExtend<FieldExpression<string>>();
-  expectTypeOf<Accessor['loginCount']>().toMatchTypeOf<{
-    set: (v: unknown) => FieldOperation;
-    unset: () => FieldOperation;
-  }>();
+  expectTypeOf<Accessor['loginCount']>().toExtend<FieldExpression<number>>();
 });
 
 test('FieldAccessor has FieldExpression for array fields', () => {
@@ -427,4 +550,26 @@ test('FieldExpression inc/mul restricted to numeric types', () => {
 
   void ({} as NumberExpr).inc(1);
   void ({} as NumberExpr).mul(2);
+});
+
+test('FieldExpression inc/mul available on nullable numeric types', () => {
+  type NullableNumberExpr = FieldExpression<number | null>;
+  type NullableBigintExpr = FieldExpression<bigint | null>;
+  type NullableStringExpr = FieldExpression<string | null>;
+
+  expectTypeOf<Parameters<NullableNumberExpr['inc']>>().toEqualTypeOf<[value: number]>();
+  expectTypeOf<Parameters<NullableNumberExpr['mul']>>().toEqualTypeOf<[value: number]>();
+  expectTypeOf<Parameters<NullableBigintExpr['inc']>>().toEqualTypeOf<[value: bigint]>();
+  expectTypeOf<NullableStringExpr>().not.toHaveProperty('inc');
+  expectTypeOf<FieldExpression<null>>().not.toHaveProperty('inc');
+  expectTypeOf<FieldExpression<never>>().not.toHaveProperty('inc');
+});
+
+test('FieldExpression inc/mul on a bigint take a bigint', () => {
+  type BigintExpr = FieldExpression<bigint>;
+
+  expectTypeOf<Parameters<BigintExpr['inc']>>().toEqualTypeOf<[value: bigint]>();
+  expectTypeOf<Parameters<BigintExpr['mul']>>().toEqualTypeOf<[value: bigint]>();
+  // @ts-expect-error a bigint field is not incremented by a number
+  void ({} as BigintExpr).inc(1);
 });

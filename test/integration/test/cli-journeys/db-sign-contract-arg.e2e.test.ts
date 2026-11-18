@@ -17,10 +17,10 @@ import {
   engineDocument,
   type JourneyContext,
   parseJsonOutput,
+  planMigrationAndSelfEmit,
   runContractEmit,
   runDbInit,
   runDbSign,
-  runMigrationPlanAndEmit,
   runRef,
   setupJourney,
   timeouts,
@@ -42,7 +42,7 @@ withTempDir(({ createTempDir }) => {
         const emit = await runContractEmit(ctx);
         expect(emit.exitCode, 'emit').toBe(0);
 
-        const plan = await runMigrationPlanAndEmit(ctx, ['--name', 'init', '--json']);
+        const plan = await planMigrationAndSelfEmit(ctx, ['--name', 'init', '--json']);
         expect(plan.exitCode, 'plan').toBe(0);
 
         const planJson = parseJsonOutput(plan);
@@ -72,8 +72,12 @@ withTempDir(({ createTempDir }) => {
         expect(signRef.exitCode, 'sign (--contract ref)').toBe(0);
         const markerRef = engineDocument(signRef);
 
-        const extractHash = (json: Record<string, unknown> | undefined) =>
-          (json?.['contract'] as Record<string, unknown> | undefined)?.['storageHash'];
+        const extractHash = (json: Record<string, unknown> | undefined) => {
+          const spaces = json?.['spaces'] as
+            | ReadonlyArray<{ readonly space: string; readonly contract: { storageHash: string } }>
+            | undefined;
+          return spaces?.find((entry) => entry.space === 'app')?.contract.storageHash;
+        };
 
         const h1 = extractHash(markerDefault);
         const h2 = extractHash(markerPositional);

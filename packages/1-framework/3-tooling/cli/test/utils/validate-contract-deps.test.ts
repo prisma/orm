@@ -1,3 +1,4 @@
+import { relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   extractPackageSpecifiers,
@@ -57,6 +58,15 @@ describe('validateContractDeps', () => {
     const result = validateContractDeps(dts, __dirname);
 
     expect(result.missing).toEqual(['@nonexistent-scope/fake-package']);
+  });
+
+  it('accepts a relative project root — createRequire needs an absolute path', () => {
+    const dts = `import type { Foo } from '@internal/contract/types';`;
+    const relativeRoot = relative(process.cwd(), __dirname);
+
+    const result = validateContractDeps(dts, `./${relativeRoot}`);
+
+    expect(result.missing).toEqual([]);
   });
 
   it('formats a warning message listing missing packages', () => {

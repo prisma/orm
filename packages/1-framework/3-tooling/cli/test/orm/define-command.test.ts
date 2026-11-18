@@ -37,7 +37,7 @@ describe('defineOrmCommand', () => {
   describe('a handler that throws a prisma/prisma structured error', () => {
     const thrown = new CliStructuredError('MIGRATION.SPACE_NOT_FOUND', 'Unknown contract space', {
       why: 'No directory named "billing" exists under the migrations root.',
-      fix: 'Run `prisma-cli migration list` to see every space.',
+      fix: 'Run `{bin} migration list` to see every space.',
     });
 
     it('settles as an errored envelope carrying the dotted code', async () => {
@@ -55,7 +55,7 @@ describe('defineOrmCommand', () => {
       const envelope = erroredEnvelope(run);
 
       expect(envelope.nextActions).toEqual([
-        { kind: 'user-choice', label: 'Run `prisma-cli migration list` to see every space.' },
+        { kind: 'user-choice', label: 'Run `prisma-test migration list` to see every space.' },
       ]);
       expect(envelope.error).not.toHaveProperty('fix');
     });
@@ -101,17 +101,6 @@ describe('defineOrmCommand', () => {
         ok: false,
         error: { code: 'CLI.INTERNAL_ERROR', summary: 'the per-space map was empty' },
       });
-    });
-
-    it('does not restate it as a CLI.UNEXPECTED failure at exit 2', async () => {
-      const run = await cliThatThrows(new InternalError('invariant broke')).run(
-        ['boom', '--json'],
-        {
-          cwd: process.cwd(),
-        },
-      );
-
-      expect(erroredEnvelope(run).error.code).not.toBe('CLI.UNEXPECTED');
     });
   });
 

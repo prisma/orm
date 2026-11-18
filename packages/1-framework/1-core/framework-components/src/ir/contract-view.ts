@@ -118,8 +118,9 @@ export function buildSingleNamespaceView<TView>(
 
 /**
  * Builds the namespace-keyed entity-view map (`{ <nsId>: SingleNamespaceView }`)
- * for every namespace in the storage, keyed by raw namespace id. Mirrors
- * `buildNamespacedEnums(domain)` — the storage-side twin.
+ * for every namespace in the storage, keyed by raw namespace id. It is the storage-side
+ * counterpart of `buildNamespacedEnums(domain, codecFor)`, which builds the same map of enum
+ * accessors from the domain, reading each enum through the codec `codecFor` returns.
  */
 export function buildNamespacedEntities<TMap>(
   storage: Storage,

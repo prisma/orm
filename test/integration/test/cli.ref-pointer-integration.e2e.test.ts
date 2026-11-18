@@ -10,8 +10,8 @@ import {
   type EngineCommandResult,
   getLatestMigrationDir,
   type JourneyContext,
+  planMigrationAndSelfEmit,
   runContractEmit,
-  runMigrationPlanAndEmit,
   runOnEngine,
 } from './utils/journey-test-helpers';
 
@@ -66,7 +66,7 @@ async function seedPlannedMigration(
   if (emit.exitCode !== 0) {
     throw new Error(`seedPlannedMigration: contract emit exited ${emit.exitCode}\n${emit.stderr}`);
   }
-  const plan = await runMigrationPlanAndEmit(ctx, ['--name', 'initial', '--no-color']);
+  const plan = await planMigrationAndSelfEmit(ctx, ['--name', 'initial', '--no-color']);
   if (plan.exitCode !== 0) {
     throw new Error(`seedPlannedMigration: migration plan exited ${plan.exitCode}\n${plan.stderr}`);
   }
@@ -88,7 +88,7 @@ withTempDir(({ createTempDir }) => {
       ctx: JourneyContext,
       args: readonly string[],
     ): Promise<EngineCommandResult> {
-      return runOnEngine(ctx, ['ref', ...args]);
+      return runOnEngine(ctx, ['migration', 'ref', ...args]);
     }
 
     it(

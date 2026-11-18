@@ -3,7 +3,7 @@ import { ifDefined } from '@internal/utils/defined';
 import type { StreamEvent } from '@prisma/cli-engine';
 import { createTestCli } from '@prisma/cli-engine/testing';
 import type { setupTestDirectoryFromFixtures } from './cli-test-helpers';
-import { setupDbTestFixture } from './cli-test-helpers';
+import { ormEngineMount, setupDbTestFixture } from './cli-test-helpers';
 
 export type DbInitTestSetup = ReturnType<typeof setupTestDirectoryFromFixtures>;
 
@@ -54,22 +54,18 @@ export async function runDbInit(
   testSetup: DbInitTestSetup,
   args: readonly string[],
 ): Promise<DbInitRun> {
+  const mount = ormEngineMount();
   const cli = createTestCli({
     commandFamilies: [ormCommandFamily],
-    commands: ormCommandFamily.commands,
-    groups: {
-      contract: { brief: 'Contract authoring commands' },
-      db: { brief: 'Live database commands' },
-      ref: { brief: 'Migration reference commands' },
-      migration: { brief: 'On-disk migration management commands' },
-    },
+    commands: mount.commands,
+    groups: mount.groups,
     // The engine parses `--config` itself and hands the path to this loader,
     // exactly as the real runtime does.
     loadConfig: (configPath) =>
       loadOrmConfig({ cwd: testSetup.testDir, ...ifDefined('configPath', configPath) }),
   });
-  // Format auto-selection is the engine's: json off a TTY. A step that asks for
-  // human output has to say its streams are terminals, as the journey harness does.
+  // Both streams are one terminal, as in the journey harness, so stdout carries
+  // no data lines. A step that wants the JSON frames passes --json.
   const run = await cli.run(['db', 'init', ...args], {
     cwd: testSetup.testDir,
     isTty: { stdout: true, stderr: true },

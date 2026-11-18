@@ -2,9 +2,8 @@
 
 The one package a PostgreSQL application installs. It wires the framework, the SQL family, and the Postgres target into a single lazy client, and brings the rest of the stack along as exact-pinned dependencies:
 
-```jsonc
-// package.json
-{ "dependencies": { "@prisma/orm-postgres": "0.16.0" } }
+```sh
+pnpm add @prisma/orm-postgres
 ```
 
 ```
@@ -14,6 +13,8 @@ The one package a PostgreSQL application installs. It wires the framework, the S
 ├── @prisma/orm-target-postgres target descriptor + adapter + pg driver
 └── @prisma/orm-toolchain       ORM command family for the `prisma` CLI, emitter, config loader
 ```
+
+`temporal-polyfill` is a required peer dependency. The control plane, such as the `prisma` commands and the Vite plugin, loads it as a fallback `Temporal` when the runtime has none, and a project that already installs it for its own code has one copy. npm, pnpm and bun install it automatically; with Yarn, add `temporal-polyfill` to your dependencies.
 
 ## Entrypoints
 
@@ -50,7 +51,3 @@ An application that outgrows the default wiring installs the four platform packa
 ## Responsibilities
 
 Composition only. Every behavior it exposes lives in the platform packages; this package chooses the default combination of them and gives it one name.
-
-## Dependencies
-
-`@prisma/orm-framework`, `@prisma/orm-family-sql`, `@prisma/orm-target-postgres`, and `@prisma/orm-toolchain` at exact lockstep versions, plus `pg` and `pathe`.

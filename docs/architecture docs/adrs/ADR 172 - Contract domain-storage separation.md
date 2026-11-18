@@ -2,7 +2,7 @@
 
 ## At a glance
 
-A User model in both families, showing the domain/storage separation. Note how `name` maps to a different column (`display_name`) in SQL — this is why SQL needs field-to-column mappings. Mongo doesn't have this indirection, so its storage block is just the collection name.
+A User model in both families, showing the domain/storage separation. Note how `name` maps to a different column (`display_name`) in SQL — this is why SQL needs field-to-column mappings. Mongo has the same bridge: `model.storage.fields` records the key each field is stored under, which differs from the field's name for `id`, stored as `_id`.
 
 **SQL contract:**
 
@@ -31,9 +31,9 @@ A User model in both families, showing the domain/storage separation. Note how `
     "tables": {
       "users": {
         "columns": {
-          "id": { "nativeType": "int4", "nullable": false, "default": "autoincrement" },
-          "email": { "nativeType": "text", "nullable": false },
-          "display_name": { "nativeType": "text", "nullable": true }
+          "id": { "dataType": "pg/int4", "nullable": false, "default": "autoincrement" },
+          "email": { "dataType": "pg/text", "nullable": false },
+          "display_name": { "dataType": "pg/text", "nullable": true }
         },
         "primaryKey": ["id"],
         "indexes": [],
@@ -58,7 +58,12 @@ A User model in both families, showing the domain/storage separation. Note how `
       },
       "relations": {},
       "storage": {
-        "collection": "users"
+        "collection": "users",
+        "fields": {
+          "id": { "field": "_id" },
+          "email": { "field": "email" },
+          "name": { "field": "name" }
+        }
       }
     }
   },
@@ -72,7 +77,7 @@ A User model in both families, showing the domain/storage separation. Note how `
 }
 ```
 
-The domain sections (`roots`, `fields`, `relations`) have the same structure — same TypeScript type across families. The `codecId` values differ (`pg/text@1` vs `mongo/string@1`), but that's values, not structure. Only `storage` differs structurally, and for Mongo it's minimal.
+The domain sections (`roots`, `fields`, `relations`) have the same structure — same TypeScript type across families. The `codecId` values differ (`pg/text@1` vs `mongo/string@1`), but that's values, not structure. Only `storage` differs structurally: both families map each field to where it is stored, a column on SQL and a document key on Mongo.
 
 Notice the redundancy in the SQL contract: `name` appears in three places — `model.fields` (domain: what the field is), `model.storage.fields` (bridge: which column it maps to), and `storage.tables.users.columns` (database: the column's native type and constraints). Nullability also appears twice — as a domain concept on `model.fields` and as a database constraint on `storage.tables`. This is intentional; see [Three levels of the contract](#three-levels-of-the-contract) below.
 
@@ -94,7 +99,7 @@ The Prisma Next contract is a JSON document that describes an application's data
 Each field carried both its column mapping (a storage concern) and its type (a domain concern). This worked for SQL alone, but when we built the Mongo contract (M2 of the Mongo PoC), the structures couldn't converge:
 
 - **SQL** has column indirection: the database schema defines tables and columns independently of the application. A field named `name` might map to a column called `display_name`. The contract needs to track both.
-- **Mongo** has no column indirection: there's no enforced database schema. Document fields are whatever the application writes. There's nothing to indirect through.
+- **Mongo** has no enforced database schema: document fields are whatever the application writes. A field can still be stored under a key other than its name, most often `id` stored as `_id`.
 
 We originally planned to keep `MongoContract` structurally parallel to `SqlContract` so extracting a shared base would be mechanical. The M2 implementation proved this isn't feasible — a mechanical extraction either produces something too loose to be useful, or forces one family into the other's shape.
 
@@ -110,7 +115,7 @@ We need a contract structure that:
 ## Constraints
 
 - **Co-location matters for SQL.** Field-to-column mappings need their table context nearby. If the table name is in a different section (e.g., a top-level `roots` entry), column references are left dangling — a reader or tool has to cross-reference a different section to understand what table those columns belong to.
-- **Mongo has no column indirection.** Any structure that forces Mongo to mirror SQL's field → column → codec chain adds meaningless indirection.
+- **Mongo has no columns.** A Mongo field is stored under a document key, with no column, native type or column default, so Mongo must not mirror SQL's field → column → codec chain; it needs only the field → stored name step.
 - **The contract is emitted, not hand-written.** The emitter guarantees consistency, so redundancy (e.g., field names appearing in both `model.fields` and `model.storage.fields`) is acceptable. The cost is readability and JSON size, not correctness.
 - **Machine-readability is a first-class goal.** The contract is designed to be read by agents, consumer libraries, and tooling. A consumer should be able to extract the domain model without understanding family-specific storage details.
 
@@ -131,8 +136,10 @@ Each model's domain section should give a reader a complete picture of the field
 The contract has three levels, each serving a different consumer:
 
 1. **Domain level** (`roots`, `model.fields`, `model.relations`, `model.owner`, `model.discriminator`/`variants`) — what the application models. Family-agnostic structure. Consumed by the ORM for type inference, by agents for understanding the data model, by any tool that doesn't need to know about storage.
-2. **Model storage bridge** (`model.storage`) — how domain fields connect to persistence. Sits on the model to preserve co-location. SQL carries field-to-column mappings because field names and column names can differ; Mongo carries only the collection name. `model.storage.fields` is available to Mongo should field name remapping ever be needed (e.g., `createdAt` → `_created_at`), but typically Mongo doesn't need it.
+2. **Model storage bridge** (`model.storage`) — how domain fields connect to persistence. Sits on the model to preserve co-location. SQL carries field-to-column mappings because field names and column names can differ; Mongo carries the collection name and, in `model.storage.fields`, the key each field is stored under (`{ "field": "<stored name>" }`, an entry for every field), because field names and stored names can differ too (`id` → `_id`, `createdAt` → `_created_at`).
 3. **Top-level storage** (`storage`) — the database schema itself. SQL: every table, every column with its native type, nullability constraint, default, plus indexes and foreign keys. Mongo: collection metadata (indexes, validators). Consumed by migration tooling, schema introspection, and DDL generation.
+
+**Note:** value objects are not at the domain level. They live in storage, at `storage.namespaces.<ns>.entries.valueObject`, and a domain field that holds one refers to it by its storage coordinate, because their fields are the keys every row stores ([ADR 309](ADR%20309%20-%20Value%20objects%20are%20storage%20entities%2C%20and%20a%20discriminator%20column%20names%20a%20value%20set.md)).
 
 `model.storage` sits on the model (not in a separate section) to preserve co-location. In SQL, field-to-column mappings like `"name": { "column": "display_name" }` need their table context nearby — separating them would leave column references dangling. For a consumer that only cares about the domain, `model.storage` is a clearly scoped block to skip. The separation is logical, not physical.
 
@@ -147,14 +154,14 @@ The three levels describe the same data from different perspectives:
 | --------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------ |
 | **Field name**  | `"name"` — the application's vocabulary                                      | `"name": { "column": "display_name" }` — maps to storage | `"display_name"` — the column name                           |
 | **Nullability** | `"nullable": true` — can the domain field be absent? Drives TypeScript types | —                                                        | `"nullable": true` — does the column accept NULL? Drives DDL |
-| **Type**        | `"codecId": "pg/text@1"` — the framework's type abstraction                  | —                                                        | `"nativeType": "text"` — the database's native type          |
+| **Type**        | `"codecId": "pg/text@1"` — the framework's type abstraction                  | —                                                        | `"dataType": "pg/text"` — the database type the codec represents |
 
 
 These look redundant, but they answer different questions and serve different consumers. Domain nullability ("can a User have no name?") drives `string | null` in TypeScript. Storage nullability ("does the `display_name` column accept NULL?") drives `ALTER TABLE` statements. They usually agree, but they don't have to — a migration might change the column constraint while the domain model hasn't caught up yet. The emitter is responsible for keeping them consistent in normal operation.
 
 The contract is emitted, not hand-written — redundancy doesn't create a maintenance burden. The cost is JSON size. The payoff is that each level is self-contained: a domain consumer never needs to reach into `storage.tables` to understand a field's type, and a migration tool never needs to parse `model.fields` to generate DDL.
 
-For Mongo, the redundancy is much smaller. There's no column indirection, so `model.storage` is just a collection name. The top-level `storage.collections` section is sparse — typically just indexes — because MongoDB doesn't enforce a column schema.
+For Mongo, the redundancy is much smaller. `model.storage` is a collection name and a stored name per field, with no column types. The top-level `storage.collections` section is sparse — typically just indexes — because MongoDB doesn't enforce a column schema.
 
 ### Other domain-level properties
 
@@ -171,7 +178,7 @@ For Mongo, the redundancy is much smaller. There's no column indirection, so `mo
 - **Shared contract base is viable.** The domain level (`roots`, `models` with `fields`/`discriminator`/`variants`/`owner`, `relations`) is structurally identical between families. A `ContractBase` type can capture this, with `model.storage` as a generic/family-specific extension point.
 - **Consumer libraries can be family-agnostic** for domain-level operations (listing models, traversing relations, finding aggregate roots).
 - **Each family controls its own storage representation** without compromising the other.
-- **The storage divergence is narrower.** Moving `codecId` to the domain level means Mongo's `model.storage` is just a collection name. The remaining divergence (SQL's field-to-column mappings) reflects a genuine structural difference.
+- **The storage divergence is narrower.** Moving `codecId` to the domain level means Mongo's `model.storage` is a collection name and a stored name per field. The remaining divergence (SQL's columns, with their types and defaults) reflects a genuine structural difference.
 
 ### Costs
 

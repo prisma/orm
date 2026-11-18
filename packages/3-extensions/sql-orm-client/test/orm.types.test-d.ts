@@ -1,3 +1,4 @@
+import { test } from 'vitest';
 import { Collection } from '../src/collection';
 import { orm } from '../src/orm';
 import { createMockRuntime, getTestContext, type TestContract } from './helpers';
@@ -23,47 +24,38 @@ const db = orm({
   collections: { User: UserCollection, Post: PostCollection },
 });
 
-db.public.User.named('Alice');
-db.public.Post.published();
+test('custom collections and trait-gated operations compile', () => {
+  db.public.User.named('Alice');
+  db.public.Post.published();
 
-orm({
-  runtime,
-  context,
-  collections: {
-    // @ts-expect-error collections values must be classes, not instances
-    User: new UserCollection({ runtime, context }, 'User', { namespaceId: 'public' }),
-  },
+  orm({
+    runtime,
+    context,
+    collections: {
+      // @ts-expect-error collections values must be classes, not instances
+      User: new UserCollection({ runtime, context }, 'User', { namespaceId: 'public' }),
+    },
+  });
+
+  db.public.User.where((user) => user.name.eq('x'));
+  db.public.User.where((user) => user.name.like('x%'));
+  db.public.User.where((user) => user.name.gt('a'));
+  db.public.User.orderBy((user) => user.name.asc());
+
+  db.public.Post.where((post) => post.views.eq(1));
+  db.public.Post.where((post) => post.views.gt(5));
+  db.public.Post.orderBy((post) => post.views.asc());
+
+  db.public.User.where((user) => user.name.isNull());
+  db.public.Post.where((post) => post.views.isNotNull());
+
+  // @ts-expect-error int4 has no textual trait → like() not available
+  db.public.Post.where((post) => post.views.like('%'));
+  // @ts-expect-error int4 has no textual trait → ilike extension op not available
+  db.public.Post.where((post) => post.views.ilike('%'));
+
+  db.public.Post.aggregate((agg) => ({
+    // @ts-expect-error text field is not numeric
+    total: agg.sum('title'),
+  }));
 });
-
-// ---------------------------------------------------------------------------
-// Type-level trait-gating assertions
-// ---------------------------------------------------------------------------
-// TestContract uses the real generated contract which has PgTypes (CodecTypes)
-// with proper traits: int4 → 'equality' | 'order' | 'numeric',
-// text → 'equality' | 'order' | 'textual'.
-
-// Text fields: equality + order + textual
-db.public.User.where((user) => user.name.eq('x'));
-db.public.User.where((user) => user.name.like('x%'));
-db.public.User.where((user) => user.name.gt('a'));
-db.public.User.orderBy((user) => user.name.asc());
-
-// Int fields: equality + order + numeric (no textual)
-db.public.Post.where((post) => post.views.eq(1));
-db.public.Post.where((post) => post.views.gt(5));
-db.public.Post.orderBy((post) => post.views.asc());
-
-// isNull/isNotNull always available
-db.public.User.where((user) => user.name.isNull());
-db.public.Post.where((post) => post.views.isNotNull());
-
-// @ts-expect-error int4 has no textual trait → like() not available
-db.public.Post.where((post) => post.views.like('%'));
-// @ts-expect-error int4 has no textual trait → ilike extension op not available
-db.public.Post.where((post) => post.views.ilike('%'));
-
-// text has no numeric trait → sum/avg restricted
-db.public.Post.aggregate((agg) => ({
-  // @ts-expect-error text field is not numeric
-  total: agg.sum('title'),
-}));

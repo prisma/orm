@@ -63,6 +63,54 @@ export function computeNextReleaseVersion(current: string): string {
 export interface VersionResult {
   version: string;
   tag: string;
+  devVersion?: string;
+}
+
+export type PreviousVersionLookup =
+  | { available: true; version: string | undefined }
+  | { available: false };
+
+/**
+ * The publish plan for a push to `main`. A changed root version means
+ * the push is a release bump: publish `<base>` under `latest`, plus a
+ * `<base>-dev.N` follow-up so the `dev` dist-tag never falls behind
+ * `latest`. An unchanged (or unreadable — a transient git error must
+ * never silently promote to `latest`) previous version means the usual
+ * dev-only publish. Adopted from prisma/composer#241.
+ */
+export function planPushPublish(
+  base: string,
+  previous: PreviousVersionLookup,
+  latestDevVersion: string | undefined,
+): VersionResult {
+  const isReleaseBump = previous.available && previous.version !== base;
+  if (isReleaseBump) {
+    return {
+      version: base,
+      tag: 'latest',
+      devVersion: composeDevVersion(base, latestDevVersion).version,
+    };
+  }
+  return composeDevVersion(base, latestDevVersion);
+}
+
+/**
+ * The publish plan for a `workflow_dispatch`. A real (non-dry-run)
+ * `latest` dispatch is the recovery path for a failed release publish,
+ * so it carries the same `<base>-dev.N` follow-up as a release push —
+ * recovering the release must also recover the `dev` dist-tag.
+ * Dry runs and non-`latest` dispatches publish only the requested tag.
+ */
+export function planDispatchPublish(
+  base: string,
+  tag: string,
+  isDryRun: boolean,
+  latestDevVersion: string | undefined,
+): VersionResult {
+  if (tag === 'latest' && !isDryRun) {
+    return { version: base, tag, devVersion: composeDevVersion(base, latestDevVersion).version };
+  }
+  return { version: base, tag };
 }
 
 /**

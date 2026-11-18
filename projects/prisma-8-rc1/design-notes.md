@@ -32,7 +32,7 @@ The repo rename (`prisma/prisma` → `prisma/prisma-orm`) is parked: GitHub redi
 
 ## Version floors: already ratified, one under revisit
 
-ADR 222 ratified Node ≥24, TS ≥5.9 (optional peer), ESM-only, Postgres 17, MongoDB 8.0 — so "clear Node + TS version requirements" is announcement copy, not engineering. Node ≥24 and ESM-only are themselves headline breaking changes and lead the upgrade guide. The **Postgres 17 floor was an EA-era convenience** and was lowered to 15 on August 11 (ADR 244): the migrating-from-v7 audience skews to older Postgres, and a floor that excludes them contradicts the incremental-migration promise. Each supported floor version is a permanent CI matrix row — that cost is the decision.
+ADR 222 ratified Node ≥24, TS ≥5.9 (optional peer), ESM-only, Postgres 17, MongoDB 8.0 — so "clear Node + TS version requirements" is announcement copy, not engineering. Node ≥24 and ESM-only are themselves headline breaking changes and lead the upgrade guide. The **Postgres 17 floor was an EA-era convenience** and was lowered to 15 on August 11 (ADR 248): the migrating-from-v7 audience skews to older Postgres, and a floor that excludes them contradicts the incremental-migration promise. Each supported floor version is a permanent CI matrix row — that cost is the decision.
 
 ## Error codes: one scheme, decided before the freeze
 

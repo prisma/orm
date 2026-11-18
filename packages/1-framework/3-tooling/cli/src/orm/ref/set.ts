@@ -1,15 +1,17 @@
+import { ormConfigSection } from '@internal/config-loader';
 import type { Block, Presentations } from '@prisma/cli-engine';
 import { positional } from '@prisma/cli-engine';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import type { RefSetResult } from '../../control-api/operations/ref';
 import { executeRefSetCommand } from '../../control-api/operations/ref';
-import { ormConfigSection } from '../config-section';
+import { RECORDED_CONTRACT_REF_FORMS } from '../../utils/contract-ref-forms';
+import { valueLines } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
 
 function setPresentations(document: RefSetResult): Presentations {
   return {
-    stdout: () => [],
+    stdout: () => valueLines([document.hash]),
     next: () => [],
     human: (): readonly Block[] => [
       {
@@ -38,9 +40,9 @@ export function createRefSetCommand(execute: typeof executeRefSetCommand = execu
         "migration's source contract. Offline — the contract must already be a\n" +
         'node of the on-disk migration graph, with its snapshot present.',
       examples: [
-        'ref set staging 4cb4256',
-        'ref set production 20260101T1000_add_user',
-        'ref set staging production --json',
+        'migration ref set staging 4cb4256',
+        'migration ref set production 20260101T1000_add_user',
+        'migration ref set staging production --json',
       ],
     },
     args: {
@@ -50,7 +52,7 @@ export function createRefSetCommand(execute: typeof executeRefSetCommand = execu
           placeholder: 'name',
         }),
         contract: positional.string({
-          brief: 'Contract reference: hash, prefix, ref name, migration dir name, or <dir>^',
+          brief: `Contract reference (${RECORDED_CONTRACT_REF_FORMS})`,
           placeholder: 'contract',
         }),
       },

@@ -1,0 +1,14 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Post {
+  id   Int   @id @ignore
+  slug String @unique
+  tags Tag[]
+}
+
+model Tag {
+  id    Int    @id
+  posts Post[]
+}

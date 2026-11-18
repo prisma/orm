@@ -15,14 +15,17 @@ import { pathToFileURL } from 'node:url';
 import { errorConfigFileNotFound } from '@internal/errors/control';
 import { Migration } from '@internal/migration-tools/migration';
 import { notOk, ok } from '@internal/utils/result';
+import { structuredError } from '@internal/utils/structured-error';
 import { join } from 'pathe';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const loadConfigMock = vi.fn();
-const createControlStackMock = vi.fn();
+const { loadConfigMock, createControlStackMock } = vi.hoisted(() => ({
+  loadConfigMock: vi.fn(),
+  createControlStackMock: vi.fn(),
+}));
 
-vi.mock('@internal/config-loader', () => ({
-  loadConfigForSections: loadConfigMock,
+vi.mock('../src/utils/migration-file-config', () => ({
+  loadMigrationFileConfig: loadConfigMock,
 }));
 
 vi.mock('@internal/framework-components/control', async () => {
@@ -32,7 +35,13 @@ vi.mock('@internal/framework-components/control', async () => {
   return { ...actual, createControlStack: createControlStackMock };
 });
 
+vi.resetModules();
 const { MigrationCLI } = await import('../src/migration-cli');
+
+afterAll(() => {
+  vi.doUnmock('../src/utils/migration-file-config');
+  vi.resetModules();
+});
 
 /**
  * `node:stream.Writable` subclass that captures every chunk written to
@@ -70,6 +79,25 @@ class FakeMigration extends Migration {
   }
   override describe() {
     return { from: 'from', to: 'to' };
+  }
+}
+
+class RefusedDefaultMigration extends FakeMigration {
+  override get operations(): never {
+    throw structuredError(
+      'CONTRACT.DEFAULT_INVALID',
+      'Column "Note"."at" has a default its codec sqlite/datetime@1 refuses',
+      { why: "A migration.ts can hold a default this version's codec refuses." },
+    );
+  }
+}
+
+class RefusedArgumentMigration extends FakeMigration {
+  override get operations(): never {
+    throw structuredError(
+      'CONTRACT.ARGUMENT_INVALID',
+      'fillStoredKey({ table: "user", column: "address" }): value 12 for field "Address.country" is not a String',
+    );
   }
 }
 
@@ -217,7 +245,7 @@ describe('MigrationCLI.run', () => {
     });
 
     expect(exitCode).toBe(1);
-    expect(stderr.text).toMatch(/config|prisma-next/i);
+    expect(stderr.text).toMatch(/config|prisma/i);
   });
 
   it('no-ops silently when the file is being imported (not the entrypoint)', async () => {
@@ -332,10 +360,26 @@ describe('MigrationCLI.run', () => {
 
     expect(exitCode).toBe(0);
     expect(loadConfigMock).toHaveBeenCalledWith(
-      '/explicit/config.ts',
-      expect.any(Array),
-      expect.any(Object),
+      expect.objectContaining({ configPath: '/explicit/config.ts' }),
     );
+  });
+
+  it('loads the config that owns the migration file when --config is not given', async () => {
+    loadConfigMock.mockResolvedValue(ok(okConfig));
+    createControlStackMock.mockReturnValue({ adapter: { create: () => ({}) } });
+
+    await MigrationCLI.run(pathToFileURL(migrationFile).href, FakeMigration, {
+      argv: entrypointArgv(),
+      stdout: new BufferStream(),
+      stderr: new BufferStream(),
+    });
+
+    expect(loadConfigMock).toHaveBeenCalledWith({
+      configPath: undefined,
+      migrationFile,
+      cwd: process.cwd(),
+      sections: expect.any(Array),
+    });
   });
 
   it('forwards --config=<path> (equals form) to loadConfig', async () => {
@@ -352,9 +396,7 @@ describe('MigrationCLI.run', () => {
 
     expect(exitCode).toBe(0);
     expect(loadConfigMock).toHaveBeenCalledWith(
-      '/equals/config.ts',
-      expect.any(Array),
-      expect.any(Object),
+      expect.objectContaining({ configPath: '/equals/config.ts' }),
     );
   });
 
@@ -410,6 +452,45 @@ describe('MigrationCLI.run', () => {
 
     const onDisk = readFileSync(join(workDir, 'migration.json'), 'utf-8');
     expect(onDisk).toBe(malformed);
+  });
+
+  it('writes an error a library raised with a structured code with that code', async () => {
+    loadConfigMock.mockResolvedValue(ok(okConfig));
+    createControlStackMock.mockReturnValue({ adapter: { create: () => ({}) } });
+    const stdout = new BufferStream();
+    const stderr = new BufferStream();
+
+    const exitCode = await MigrationCLI.run(
+      pathToFileURL(migrationFile).href,
+      RefusedDefaultMigration,
+      { argv: entrypointArgv(), stdout, stderr },
+    );
+
+    expect({ exitCode, stderr: stderr.text }).toEqual({
+      exitCode: 1,
+      stderr:
+        'CONTRACT.DEFAULT_INVALID: Column "Note"."at" has a default its codec sqlite/datetime@1 refuses\n' +
+        "A migration.ts can hold a default this version's codec refuses.\n",
+    });
+  });
+
+  it('writes the message of an error with no why once', async () => {
+    loadConfigMock.mockResolvedValue(ok(okConfig));
+    createControlStackMock.mockReturnValue({ adapter: { create: () => ({}) } });
+    const stdout = new BufferStream();
+    const stderr = new BufferStream();
+
+    const exitCode = await MigrationCLI.run(
+      pathToFileURL(migrationFile).href,
+      RefusedArgumentMigration,
+      { argv: entrypointArgv(), stdout, stderr },
+    );
+
+    expect({ exitCode, stderr: stderr.text }).toEqual({
+      exitCode: 1,
+      stderr:
+        'CONTRACT.ARGUMENT_INVALID: fillStoredKey({ table: "user", column: "address" }): value 12 for field "Address.country" is not a String\n',
+    });
   });
 
   it('rejects --config when followed by another flag with CLI.CONFIG_ARG_MISSING_PATH and exit 2', async () => {
@@ -521,29 +602,5 @@ describe('MigrationCLI.run', () => {
     expect(stderr.text).toContain('--help');
     expect(stderr.text).toContain('--dry-run');
     expect(stderr.text).toContain('--config');
-  });
-
-  it('uses injected argv exclusively, never reading process.argv', async () => {
-    // Regression guard for the stream-injection contract: when argv is
-    // injected, the runner must not fall back to process.argv. In
-    // vitest, process.argv[1] points at vitest's own binary — if the
-    // implementation read it, the entrypoint guard
-    // (realpathSync(argv[1]) === realpathSync(importMetaUrl)) would
-    // not match and the runner would silently no-op, leaving
-    // loadConfigMock uncalled. The injected argv points argv[1] at
-    // migrationFile, so the guard fires and loadConfig is called.
-    loadConfigMock.mockResolvedValue(ok(okConfig));
-    createControlStackMock.mockReturnValue({ adapter: { create: () => ({}) } });
-
-    const stdout = new BufferStream();
-    const stderr = new BufferStream();
-    const exitCode = await MigrationCLI.run(pathToFileURL(migrationFile).href, FakeMigration, {
-      argv: entrypointArgv(),
-      stdout,
-      stderr,
-    });
-
-    expect(exitCode).toBe(0);
-    expect(loadConfigMock).toHaveBeenCalled();
   });
 });

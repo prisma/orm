@@ -20,6 +20,9 @@ export async function getPostgisVersion(): Promise<string | null> {
     connectionString: getDatabaseUrl(),
     connectionTimeoutMillis: 1500,
   });
+  // A dropped connection emits 'error' on the client; without a listener that
+  // is an uncaught exception, not something the catch below can see.
+  client.on('error', () => {});
   try {
     await client.connect();
     const result = await client.query<{ v: string }>('SELECT PostGIS_Full_Version() AS v');

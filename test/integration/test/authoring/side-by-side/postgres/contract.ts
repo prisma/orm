@@ -1,9 +1,19 @@
-import { int4Column, textColumn, timestamptzColumn } from '@internal/adapter-postgres/column-types';
-import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
+import {
+  int4Column,
+  textColumn,
+  timestamptzTemporalColumn,
+} from '@internal/adapter-postgres/column-types';
+import {
+  autoincrement,
+  defineContract,
+  field,
+  model,
+  rel,
+} from '@internal/postgres/contract-builder';
 
 const UserBase = model('User', {
   fields: {
-    id: field.column(int4Column).defaultSql('autoincrement()').id(),
+    id: field.column(int4Column).default(autoincrement()).id(),
     name: field.column(textColumn),
     email: field.column(textColumn),
     bio: field.column(textColumn).optional(),
@@ -12,10 +22,10 @@ const UserBase = model('User', {
 
 const Post = model('Post', {
   fields: {
-    id: field.column(int4Column).defaultSql('autoincrement()').id(),
+    id: field.column(int4Column).default(autoincrement()).id(),
     authorId: field.column(int4Column),
     title: field.column(textColumn),
-    publishedAt: field.column(timestamptzColumn).optional(),
+    publishedAt: field.column(timestamptzTemporalColumn).optional(),
   },
   relations: {
     author: rel.belongsTo(UserBase, { from: 'authorId', to: 'id' }).sql({ fk: {} }),

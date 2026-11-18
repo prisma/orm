@@ -1,6 +1,8 @@
 import { createRequire } from 'node:module';
 import { CliStructuredError } from '@internal/errors/control';
+import { suppressIdleConnectionErrors } from '@internal/utils/suppress-idle-connection-errors';
 import { join } from 'pathe';
+import { redactUrlCredentials } from '../../utils/url-credentials';
 import type { TargetId } from './templates/code-templates';
 
 /**
@@ -122,10 +124,10 @@ export async function probeServerVersion(
         minVersion,
         meetsMinimum: null,
         cause: err.message,
-        message: `Skipped --probe-db: ${err.message}. (Run with install enabled, or install the driver yourself, then re-run \`prisma-cli init --probe-db\`.)`,
+        message: `Skipped --probe-db: ${err.message}. (Run with install enabled, or install the driver yourself, then re-run \`prisma orm init --probe-db\`.)`,
       };
     }
-    const cause = redactDatabaseUrlSecrets(causeMessage(err));
+    const cause = redactUrlCredentials(causeMessage(err));
     return {
       kind: 'connection-failed',
       minVersion,
@@ -193,20 +195,6 @@ function causeMessage(err: unknown): string {
   return String(err);
 }
 
-/**
- * Strips `user:password@` userinfo from any URL-shaped substring before
- * we surface the cause to the user. Mirrors `redactSecrets` in
- * `init.ts` — the probe path has its own redactor because the inputs
- * here include the raw connection string by construction (driver
- * errors echo the URL back).
- *
- * Exported for unit tests.
- */
-export function redactDatabaseUrlSecrets(text: string): string {
-  if (!text) return text;
-  return text.replace(/([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)([^/@\s]+)@/g, '$1***@');
-}
-
 async function defaultProbePostgres(
   databaseUrl: string,
   baseDir: string,
@@ -217,9 +205,9 @@ async function defaultProbePostgres(
     baseDir,
     overrides,
   );
-  const client = new pg.Client({ connectionString: databaseUrl });
-  await client.connect();
+  const client = suppressIdleConnectionErrors(new pg.Client({ connectionString: databaseUrl }));
   try {
+    await client.connect();
     const result = await client.query('SELECT version() as version');
     const versionString = String(result?.rows?.[0]?.version ?? '');
     const parsed = parsePostgresVersion(versionString);
@@ -230,6 +218,7 @@ async function defaultProbePostgres(
 }
 
 interface PgClient {
+  on(event: 'error', listener: (err: Error) => void): unknown;
   connect(): Promise<void>;
   query(sql: string): Promise<{ rows: ReadonlyArray<{ version: string }> }>;
   end(): Promise<void>;

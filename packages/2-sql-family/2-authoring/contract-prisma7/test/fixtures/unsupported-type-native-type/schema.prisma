@@ -1,0 +1,9 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Post {
+  id     Int                @id
+  body   Unsupported("text") @db.Text
+  seenAt Unsupported("timestamp") @updatedAt
+}

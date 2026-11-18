@@ -10,6 +10,7 @@ import {
   HOSTILE_INPUTS,
   isSectionValidation,
   packageRootOf,
+  packedEntrySpecifiers,
   runCheck,
 } from './check-conformance.mjs';
 
@@ -207,6 +208,27 @@ describe('findValidatorViolations', () => {
     assert.match(violations[0].message, /boom/);
   });
 
+  it('passes the provenance the engine would supply', () => {
+    const calls = [];
+    const section = {
+      name: 'orm',
+      validate: (value, provenance) => {
+        calls.push({ value, provenance });
+        return { ok: false, diagnostics: [] };
+      },
+    };
+    assert.deepEqual(findValidatorViolations(section), []);
+    const provenanceOf = (label) =>
+      calls[HOSTILE_INPUTS.findIndex((hostile) => hostile.label === label)].provenance;
+    assert.deepEqual(provenanceOf('null'), { files: [], keys: {} });
+    assert.deepEqual(provenanceOf('a populated array'), { files: [], keys: {} });
+    assert.deepEqual(provenanceOf('a proxy whose ownKeys trap throws'), { files: [], keys: {} });
+    assert.deepEqual(provenanceOf('a frozen object'), {
+      files: ['/conformance-hostile/prisma.config.ts'],
+      keys: { contract: '/conformance-hostile/prisma.config.ts' },
+    });
+  });
+
   it('reports a malformed return as a violation', () => {
     const section = { name: 'orm', validate: () => 'not a SectionValidation' };
     const violations = findValidatorViolations(section);
@@ -327,7 +349,7 @@ describe('runCheck', () => {
         version: '8.0.0-rc.1',
         dependencies: { declared: '1.0.0' },
         peerDependencies: { '@prisma/cli-engine': '0.0.9' },
-        bin: { 'prisma-next': './dist/bin__prisma-next.mjs' },
+        bin: { 'prisma-cli': './dist/bin__prisma-cli.mjs' },
       }),
       readPackedJsSources: () => new Map([['dist/index.mjs', cleanJs]]),
       listPackedCommonJs: () => [],
@@ -443,7 +465,7 @@ describe('runCheck', () => {
         version: '8.0.0-rc.1',
         dependencies: { declared: '1.0.0' },
         peerDependencies: { '@prisma/cli-engine': '0.0.9' },
-        bin: { 'prisma-next': './dist/bin__prisma-next.mjs', other: './dist/other.mjs' },
+        bin: { 'prisma-cli': './dist/bin__prisma-cli.mjs', other: './dist/other.mjs' },
       }),
       runBin: async (...args) => {
         runBin(...args);
@@ -453,7 +475,7 @@ describe('runCheck', () => {
     assert.equal(await runCheck({ argv: [], io }), 0);
     assert.equal(runBin.calls.length, 2);
     assert.deepEqual(runBin.calls.map((c) => c[0].relPath).sort(), [
-      './dist/bin__prisma-next.mjs',
+      './dist/bin__prisma-cli.mjs',
       './dist/other.mjs',
     ]);
   });
@@ -465,7 +487,7 @@ describe('runCheck', () => {
         name: '@prisma/orm-toolchain',
         version: '8.0.0-rc.1',
         dependencies: { declared: '1.0.0', '@prisma/cli-engine': '0.0.9' },
-        bin: { 'prisma-next': './dist/bin__prisma-next.mjs' },
+        bin: { 'prisma-cli': './dist/bin__prisma-cli.mjs' },
       }),
       stdoutWrite,
     });
@@ -501,7 +523,7 @@ describe('runCheck', () => {
           '@prisma/orm-framework': '8.0.0-rc.1',
         },
         peerDependencies: { '@prisma/cli-engine': '0.0.9' },
-        bin: { 'prisma-next': './dist/bin__prisma-next.mjs' },
+        bin: { 'prisma-cli': './dist/bin__prisma-cli.mjs' },
       },
       'prisma-orm-framework-8.0.0-rc.1.tgz': {
         name: '@prisma/orm-framework',
@@ -536,7 +558,7 @@ describe('runCheck', () => {
     });
   });
 
-  it('a manifest with no bin smokes the published cli entry instead', async () => {
+  it('a manifest with no bin smokes every published entry point', async () => {
     const importEntry = recorder();
     const io = makeIo({
       readPackedManifest: () => ({
@@ -544,6 +566,11 @@ describe('runCheck', () => {
         version: '8.0.0-rc.1',
         dependencies: { declared: '1.0.0' },
         peerDependencies: { '@prisma/cli-engine': '0.0.9' },
+        exports: {
+          './cli': './dist/cli.mjs',
+          './emitter': './dist/emitter.mjs',
+          './package.json': './package.json',
+        },
       }),
       importEntry: async (...args) => {
         importEntry(...args);
@@ -551,26 +578,152 @@ describe('runCheck', () => {
       },
     });
     assert.equal(await runCheck({ argv: [], io }), 0);
-    assert.equal(importEntry.calls.length, 1);
-    assert.equal(importEntry.calls[0][0].specifier, '@prisma/orm-toolchain/cli');
+    assert.deepEqual(
+      importEntry.calls.map((c) => c[0].specifier),
+      ['@prisma/orm-toolchain/cli', '@prisma/orm-toolchain/emitter'],
+    );
   });
 
-  it('a failing entry import in the sandbox is a finding', async () => {
+  it('a failing entry import in the sandbox is a finding that names the entry', async () => {
+    const stdoutWrite = recorder();
     const io = makeIo({
       readPackedManifest: () => ({
         name: '@prisma/orm-toolchain',
         version: '8.0.0-rc.1',
         dependencies: { declared: '1.0.0' },
         peerDependencies: { '@prisma/cli-engine': '0.0.9' },
+        exports: { './cli': './dist/cli.mjs', './emitter': './dist/emitter.mjs' },
       }),
-      importEntry: async () => ({
-        exitCode: 1,
-        stdout: '',
-        stderr: 'ERR_MODULE_NOT_FOUND',
-        timedOut: false,
-      }),
+      importEntry: async ({ specifier }) =>
+        specifier.endsWith('/emitter')
+          ? { exitCode: 1, stdout: '', stderr: 'ERR_MODULE_NOT_FOUND', timedOut: false }
+          : { exitCode: 0, stdout: '', stderr: '', timedOut: false },
+      stdoutWrite,
     });
-    assert.equal(await runCheck({ argv: [], io }), 1);
+    assert.equal(await runCheck({ argv: ['--json'], io }), 1);
+    const payload = JSON.parse(stdoutWrite.calls[0][0]);
+    const failed = payload.findings.filter((f) => f.kind === 'entry-failed');
+    assert.equal(failed.length, 1);
+    assert.match(failed[0].summary, /@prisma\/orm-toolchain\/emitter/);
+    assert.match(failed[0].detail, /ERR_MODULE_NOT_FOUND/);
+  });
+
+  it('a bin-less manifest that exports nothing importable is a finding (anti-vacuity)', async () => {
+    const stdoutWrite = recorder();
+    const io = makeIo({
+      readPackedManifest: () => ({
+        name: '@prisma/orm-toolchain',
+        version: '8.0.0-rc.1',
+        dependencies: { declared: '1.0.0' },
+        peerDependencies: { '@prisma/cli-engine': '0.0.9' },
+        exports: { './package.json': './package.json' },
+      }),
+      stdoutWrite,
+    });
+    assert.equal(await runCheck({ argv: ['--json'], io }), 1);
+    const payload = JSON.parse(stdoutWrite.calls[0][0]);
+    assert.ok(
+      payload.findings.some((f) => f.check === 'tarball' && f.kind === 'no-subjects'),
+      'expected a tarball no-subjects finding',
+    );
+  });
+});
+
+describe('packedEntrySpecifiers', () => {
+  it('joins each exported subpath onto the package name, sorted', () => {
+    assert.deepEqual(
+      packedEntrySpecifiers({
+        name: '@prisma/orm-toolchain',
+        exports: { './emitter': './dist/emitter.mjs', './cli': './dist/cli.mjs' },
+      }),
+      ['@prisma/orm-toolchain/cli', '@prisma/orm-toolchain/emitter'],
+    );
+  });
+
+  it('names the package itself for the root export', () => {
+    assert.deepEqual(packedEntrySpecifiers({ name: 'x', exports: { '.': './dist/index.mjs' } }), [
+      'x',
+    ]);
+  });
+
+  it('skips ./package.json, which is data rather than a module', () => {
+    assert.deepEqual(
+      packedEntrySpecifiers({
+        name: 'x',
+        exports: { './a': './dist/a.mjs', './package.json': './package.json' },
+      }),
+      ['x/a'],
+    );
+  });
+
+  it('skips wildcard subpaths, which name no single module', () => {
+    assert.deepEqual(
+      packedEntrySpecifiers({
+        name: 'x',
+        exports: { './a': './dist/a.mjs', './g/*': './dist/g/*' },
+      }),
+      ['x/a'],
+    );
+  });
+
+  it('reads the import condition of a conditional export', () => {
+    assert.deepEqual(
+      packedEntrySpecifiers({
+        name: 'x',
+        exports: { './a': { types: './dist/a.d.mts', import: './dist/a.mjs' } },
+      }),
+      ['x/a'],
+    );
+  });
+
+  it('skips an export with no importable target', () => {
+    assert.deepEqual(
+      packedEntrySpecifiers({
+        name: 'x',
+        exports: { './a': { types: './dist/a.d.mts' }, './b': null, './c': './dist/c.mjs' },
+      }),
+      ['x/c'],
+    );
+  });
+
+  it('treats the string shorthand as the root export', () => {
+    assert.deepEqual(packedEntrySpecifiers({ name: 'x', exports: './dist/index.mjs' }), ['x']);
+  });
+
+  it('treats a bare conditions object as the root export, not as subpaths', () => {
+    assert.deepEqual(
+      packedEntrySpecifiers({
+        name: 'x',
+        exports: { types: './dist/index.d.mts', import: './dist/index.mjs' },
+      }),
+      ['x'],
+    );
+  });
+
+  it('recognises node-addons, which Node resolves before node', () => {
+    assert.deepEqual(
+      packedEntrySpecifiers({ name: 'x', exports: { 'node-addons': './dist/native.mjs' } }),
+      ['x'],
+    );
+    assert.deepEqual(
+      packedEntrySpecifiers({ name: 'x', exports: { './a': { 'node-addons': './dist/a.mjs' } } }),
+      ['x/a'],
+    );
+  });
+
+  it('treats an array fallback as the root export', () => {
+    assert.deepEqual(
+      packedEntrySpecifiers({ name: 'x', exports: ['./dist/index.mjs', './dist/fallback.mjs'] }),
+      ['x'],
+    );
+  });
+
+  it('yields nothing for a bare conditions object with no importable condition', () => {
+    assert.deepEqual(packedEntrySpecifiers({ name: 'x', exports: { types: './x.d.mts' } }), []);
+  });
+
+  it('yields nothing for a manifest with no exports', () => {
+    assert.deepEqual(packedEntrySpecifiers({ name: 'x' }), []);
   });
 });
 

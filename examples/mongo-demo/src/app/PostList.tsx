@@ -59,7 +59,7 @@ export function PostList({ posts }: { posts: PostsResponse }) {
       </h2>
       <div className="cards">
         {posts.map((post) => (
-          <PostCard key={post._id} post={post} />
+          <PostCard key={post.id} post={post} />
         ))}
       </div>
     </div>

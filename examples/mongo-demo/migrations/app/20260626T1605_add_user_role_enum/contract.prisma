@@ -45,6 +45,6 @@ model Article {
 
 model Tutorial {
   difficulty String
-  duration   Int
+  duration   Int32
   @@base(Post, "tutorial")
 }

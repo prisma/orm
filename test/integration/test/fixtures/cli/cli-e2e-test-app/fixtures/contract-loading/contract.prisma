@@ -1,0 +1,10 @@
+// use prisma-8
+
+type Address {
+  street String
+}
+
+model User {
+  id      Int     @id
+  address Address
+}

@@ -1,9 +1,12 @@
-import { mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type * as configLoader from '@internal/config-loader';
 import type { Contract } from '@internal/contract/types';
 import type { EmitResult } from '@internal/emitter';
+import { CliStructuredError } from '@internal/errors/control';
+import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { executeContractEmit } from '../../src/control-api/operations/contract-emit';
 import type { ContractEmitOptions } from '../../src/control-api/types';
@@ -11,20 +14,6 @@ import { disposeEmitQueue } from '../../src/utils/emit-queue';
 
 const mockedEmit = vi.fn<typeof import('@internal/emitter')['emit']>();
 
-vi.mock('node:fs/promises', async () => {
-  const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
-  return {
-    ...actual,
-    mkdir: vi.fn(actual.mkdir),
-    rename: vi.fn(actual.rename),
-    writeFile: vi.fn(actual.writeFile),
-  };
-});
-
-type FsModule = typeof import('node:fs/promises');
-
-const mockedRename = vi.mocked(rename);
-const mockedWriteFile = vi.mocked(writeFile);
 const emitDependencies = { emit: mockedEmit };
 
 function executeContractEmitWithMock(options: ContractEmitOptions) {
@@ -42,14 +31,15 @@ function mockConfigWithContract(contractOverrides: Record<string, unknown>) {
     family: stubDescriptor('family', 'test'),
     target: stubDescriptor('target', 'test'),
     contract: contractOverrides,
-  } as unknown as configLoader.PrismaNextConfig;
+  } as unknown as configLoader.PrismaConfig;
 }
 
 function createSourceProvider(load: () => Promise<unknown>): {
+  readonly format: 'typescript';
   readonly inputs?: readonly string[];
   load: () => Promise<unknown>;
 } {
-  return { load };
+  return { format: 'typescript', load };
 }
 
 function createMockContract(): Contract {
@@ -107,39 +97,31 @@ function createSuccessfulConfig(output: string) {
       })),
       output,
     },
-  } as unknown as configLoader.PrismaNextConfig;
+  } as unknown as configLoader.PrismaConfig;
 }
 
 describe('executeContractEmit', () => {
   let tmpDir = '';
-  let actualFs: FsModule;
 
   beforeEach(async () => {
-    actualFs = await vi.importActual<FsModule>('node:fs/promises');
     tmpDir = await mkdtemp(join(tmpdir(), 'contract-emit-'));
     mockedEmit.mockReset();
-    mockedRename.mockReset();
-    mockedWriteFile.mockReset();
-    mockedRename.mockImplementation(async (...args) => actualFs.rename(...args));
-    mockedWriteFile.mockImplementation(async (...args) => actualFs.writeFile(...args));
   });
 
   afterEach(async () => {
     if (tmpDir.length > 0) {
       await rm(tmpDir, { recursive: true, force: true });
     }
-    // isolate: false — avoid vi.restoreAllMocks(); it restores hoisted vi.mock
-    // modules from other test files loaded in this worker (e.g. node:child_process).
   });
 
-  function emitOptions(config: configLoader.PrismaNextConfig, configPath = 'prisma.config.ts') {
+  function emitOptions(config: configLoader.PrismaConfig, configPath = 'prisma.config.ts') {
     return { config, cwd: tmpDir, configPath };
   }
 
   it('throws when the config declares no contract section', async () => {
     const config = {
       family: stubDescriptor('family', 'test'),
-    } as unknown as configLoader.PrismaNextConfig;
+    } as unknown as configLoader.PrismaConfig;
     await expect(executeContractEmitWithMock(emitOptions(config))).rejects.toThrow();
   });
 
@@ -171,6 +153,7 @@ describe('executeContractEmit', () => {
     {
       label: 'rejects non-provider source object',
       source: { invalid: true },
+      expectedCode: undefined,
       expectedSubstring: 'valid source provider object',
     },
     {
@@ -179,13 +162,27 @@ describe('executeContractEmit', () => {
         ok: false,
         failure: {
           summary: 'Provider parse failed',
-          diagnostics: [{ code: 'PSL_PARSE_ERROR', message: 'Unexpected token' }],
+          diagnostics: [
+            { code: 'PSL_PARSE_ERROR', message: 'Unexpected token', sourceId: 'schema.prisma' },
+          ],
           meta: { sourceId: 'schema.prisma' },
         },
       })),
       expectedCode: 'CONTRACT.SOURCE_LOAD_FAILED',
       expectedSubstring: 'Provider parse failed',
     },
+    ...[undefined, 42].map((sourceId) => ({
+      label: `rejects diagnostic with invalid sourceId ${sourceId}`,
+      source: createSourceProvider(async () => ({
+        ok: false,
+        failure: {
+          summary: 'Provider parse failed',
+          diagnostics: [{ code: 'PSL_PARSE_ERROR', message: 'Unexpected token', sourceId }],
+        },
+      })),
+      expectedCode: 'CONTRACT.SOURCE_LOAD_FAILED',
+      expectedSubstring: 'each diagnostic must include a string sourceId',
+    })),
     {
       label: 'rejects malformed failure result',
       source: createSourceProvider(async () => ({ ok: false }) as unknown),
@@ -195,6 +192,18 @@ describe('executeContractEmit', () => {
     {
       label: 'rejects malformed success result',
       source: createSourceProvider(async () => ({ ok: true }) as unknown),
+      expectedCode: 'CONTRACT.SOURCE_LOAD_FAILED',
+      expectedSubstring: 'malformed success result',
+    },
+    {
+      label: 'rejects a success result whose value is undefined',
+      source: createSourceProvider(async () => ({ ok: true, value: undefined }) as unknown),
+      expectedCode: 'CONTRACT.SOURCE_LOAD_FAILED',
+      expectedSubstring: 'malformed success result',
+    },
+    {
+      label: 'rejects a success result whose value is null',
+      source: createSourceProvider(async () => ({ ok: true, value: null }) as unknown),
       expectedCode: 'CONTRACT.SOURCE_LOAD_FAILED',
       expectedSubstring: 'malformed success result',
     },
@@ -214,6 +223,234 @@ describe('executeContractEmit', () => {
         return true;
       });
     });
+  });
+
+  describe('a source that fails with diagnostics', () => {
+    const sourceDiagnostics = [
+      {
+        code: 'PSL.FIXTURE_VIEW_UNSUPPORTED',
+        message: 'View "ActiveUsers" is not supported; Prisma 8 has no views.',
+        sourceId: 'prisma/schema.prisma',
+        span: {
+          start: { offset: 80, line: 9, column: 1 },
+          end: { offset: 90, line: 9, column: 11 },
+        },
+      },
+      { code: 'PSL.FIXTURE_SCHEMA_READ_FAILED', message: 'ENOENT', sourceId: 'prisma/schema' },
+      { code: 'PSL_PARSE_ERROR', message: 'Unexpected token', sourceId: 'prisma/models.prisma' },
+    ];
+
+    function emitFailure(): Promise<unknown> {
+      const source = createSourceProvider(async () => ({
+        ok: false,
+        failure: {
+          summary: 'Source interpretation failed',
+          diagnostics: sourceDiagnostics,
+          meta: { schemaPath: 'prisma/schema.prisma' },
+        },
+      }));
+      return executeContractEmitWithMock(
+        emitOptions(mockConfigWithContract({ source, output: './src/prisma/contract.json' })),
+      ).then(
+        () => expect.unreachable('contract emit succeeded'),
+        (error: unknown) => error,
+      );
+    }
+
+    it('fails with CONTRACT.SOURCE_LOAD_FAILED', async () => {
+      expect(await emitFailure()).toMatchObject({
+        code: 'CONTRACT.SOURCE_LOAD_FAILED',
+        why: 'Source interpretation failed',
+        fix: 'Edit the source where each finding points, then run the command again.',
+      });
+    });
+
+    it('reports a dotted source code as the finding code, and wraps an undotted one', async () => {
+      expect(await emitFailure()).toHaveProperty('diagnostics', [
+        {
+          code: 'PSL.FIXTURE_VIEW_UNSUPPORTED',
+          severity: 'error',
+          summary:
+            'prisma/schema.prisma:9:1 View "ActiveUsers" is not supported; Prisma 8 has no views.',
+          nextActions: [],
+          where: { path: 'prisma/schema.prisma', line: 9 },
+        },
+        {
+          code: 'PSL.FIXTURE_SCHEMA_READ_FAILED',
+          severity: 'error',
+          summary: 'prisma/schema ENOENT',
+          nextActions: [],
+          where: { path: 'prisma/schema' },
+        },
+        {
+          code: 'CONTRACT.SOURCE_DIAGNOSTIC',
+          severity: 'error',
+          summary: 'prisma/models.prisma PSL_PARSE_ERROR: Unexpected token',
+          nextActions: [],
+          where: { path: 'prisma/models.prisma' },
+          meta: { code: 'PSL_PARSE_ERROR' },
+        },
+      ]);
+    });
+
+    it('names a file under the working directory by its relative path', async () => {
+      const source = createSourceProvider(async () => ({
+        ok: false,
+        failure: {
+          summary: 'Source interpretation failed',
+          diagnostics: [
+            {
+              code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+              message: 'Field "P6.big" has type "BigInt"',
+              sourceId: `${tmpDir}/prisma/schema.prisma`,
+              span: {
+                start: { offset: 4, line: 5, column: 3 },
+                end: { offset: 7, line: 5, column: 6 },
+              },
+            },
+          ],
+        },
+      }));
+      const error = await executeContractEmitWithMock(
+        emitOptions(mockConfigWithContract({ source, output: './src/prisma/contract.json' })),
+      ).then(
+        () => expect.unreachable('contract emit succeeded'),
+        (thrown: unknown) => thrown,
+      );
+      expect(error).toHaveProperty('diagnostics', [
+        expect.objectContaining({
+          summary:
+            'prisma/schema.prisma:5:3 PSL_UNSUPPORTED_FIELD_TYPE: Field "P6.big" has type "BigInt"',
+          where: { path: 'prisma/schema.prisma', line: 5 },
+        }),
+      ]);
+    });
+
+    it('keeps the raw diagnostics, their issues, and the provider meta in meta', async () => {
+      expect(await emitFailure()).toHaveProperty('meta', {
+        diagnostics: sourceDiagnostics,
+        issues: [
+          {
+            kind: 'PSL.FIXTURE_VIEW_UNSUPPORTED',
+            message:
+              'View "ActiveUsers" is not supported; Prisma 8 has no views. (prisma/schema.prisma:9:1)',
+          },
+          { kind: 'PSL.FIXTURE_SCHEMA_READ_FAILED', message: 'ENOENT (prisma/schema)' },
+          { kind: 'PSL_PARSE_ERROR', message: 'Unexpected token (prisma/models.prisma)' },
+        ],
+        providerMeta: { schemaPath: 'prisma/schema.prisma' },
+      });
+    });
+  });
+
+  describe('a source that reports a warning', () => {
+    const warning = {
+      code: 'PSL_DEPRECATED_SCALAR_NAME',
+      message: 'Scalar type "Int" is deprecated and will be removed; use "Int32".',
+      sourceId: 'prisma/schema.prisma',
+      severity: 'warning' as const,
+    };
+
+    async function emitWith(load: (context: { reportWarning?: (d: unknown) => void }) => unknown) {
+      const outputJsonPath = join(tmpDir, 'src/prisma/contract.json');
+      const config = createSuccessfulConfig(outputJsonPath);
+      mockedEmit.mockResolvedValueOnce(createEmitResult('same'));
+      const result = await executeContractEmitWithMock(
+        emitOptions(
+          {
+            ...config,
+            contract: {
+              ...config.contract,
+              source: { load: async (context: never) => load(context) },
+            },
+          } as unknown as configLoader.PrismaConfig,
+          join(tmpDir, 'prisma.config.ts'),
+        ),
+      );
+      return { result, json: await readFile(outputJsonPath, 'utf-8') };
+    }
+
+    it('emits the same contract as a source that reports none, and returns the warning', async () => {
+      const withWarning = await emitWith((context) => {
+        context.reportWarning?.(warning);
+        return { ok: true, value: createMockContract() };
+      });
+      const withoutWarning = await emitWith(() => ({ ok: true, value: createMockContract() }));
+
+      expect(withWarning.json).toBe(withoutWarning.json);
+      expect(withWarning.result.sourceWarnings).toEqual([warning]);
+      expect(withoutWarning.result).not.toHaveProperty('sourceWarnings');
+    });
+
+    it.each([
+      {
+        label: 'returns diagnostics',
+        failWith: () => ({
+          ok: false,
+          failure: {
+            summary: 'Source interpretation failed',
+            diagnostics: [
+              {
+                code: 'PSL_PARSE_ERROR',
+                message: 'Unexpected token',
+                sourceId: 'prisma/schema.prisma',
+              },
+            ],
+          },
+        }),
+        code: 'CONTRACT.SOURCE_LOAD_FAILED',
+        firstFinding: { severity: 'error', code: 'CONTRACT.SOURCE_DIAGNOSTIC' },
+      },
+      {
+        label: 'throws a structured error',
+        failWith: () => {
+          throw new CliStructuredError('CONTRACT.DEFAULT_INVALID', 'Default refused', {
+            diagnostics: [
+              {
+                code: 'CONTRACT.DEFAULT_INVALID',
+                severity: 'error',
+                summary: 'Default refused',
+                nextActions: [],
+              },
+            ],
+          });
+        },
+        code: 'CONTRACT.DEFAULT_INVALID',
+        firstFinding: { severity: 'error', code: 'CONTRACT.DEFAULT_INVALID' },
+      },
+    ])(
+      'keeps the warning when the source then $label',
+      async ({ failWith, code, firstFinding }) => {
+        const source = {
+          load: async (context: { reportWarning?: (d: unknown) => void }) => {
+            context.reportWarning?.(warning);
+            return failWith();
+          },
+        };
+        const error = await executeContractEmitWithMock(
+          emitOptions(mockConfigWithContract({ source, output: './src/prisma/contract.json' })),
+        ).then(
+          () => expect.unreachable('contract emit succeeded'),
+          (thrown: unknown) => thrown,
+        );
+
+        expect(error).toMatchObject({
+          code,
+          diagnostics: [
+            expect.objectContaining(firstFinding),
+            {
+              code: 'CONTRACT.SOURCE_DIAGNOSTIC',
+              severity: 'warn',
+              summary:
+                'prisma/schema.prisma PSL_DEPRECATED_SCALAR_NAME: Scalar type "Int" is deprecated and will be removed; use "Int32".',
+              nextActions: [],
+              where: { path: 'prisma/schema.prisma' },
+              meta: { code: 'PSL_DEPRECATED_SCALAR_NAME' },
+            },
+          ],
+        });
+      },
+    );
   });
 
   it('passes deserializeContract output to emit, not the pre-hydration envelope', async () => {
@@ -245,11 +482,155 @@ describe('executeContractEmit', () => {
     expect(emitContract).not.toBe(plainEnvelope);
   });
 
+  it('threads the target supportsNamespaces declaration into emit', async () => {
+    const outputJsonPath = join(tmpDir, 'generated/contract.json');
+    const config = createSuccessfulConfig(outputJsonPath);
+    mockedEmit.mockResolvedValueOnce(createEmitResult('namespaces'));
+
+    await executeContractEmitWithMock(
+      emitOptions(
+        { ...config, target: { ...config.target, supportsNamespaces: false } },
+        join(tmpDir, 'prisma.config.ts'),
+      ),
+    );
+
+    expect(mockedEmit.mock.calls.at(-1)?.[3]?.supportsNamespaces).toBe(false);
+  });
+
+  it('writes each composed pack space under the migrations directory', async () => {
+    const config = createSuccessfulConfig(join(tmpDir, 'src/contract.json'));
+    const packHash = 'a'.repeat(64);
+    const pack = {
+      kind: 'extension',
+      id: 'testpack',
+      version: '0.0.1',
+      familyId: 'test-family',
+      targetId: 'test-target',
+      contractSpace: {
+        contractJson: { storage: { storageHash: packHash } },
+        headRef: { hash: packHash, invariants: [] },
+        migrations: [
+          {
+            dirName: '20260101T0000_create_testpack',
+            metadata: {
+              from: null,
+              to: packHash,
+              migrationHash: 'mh',
+              providedInvariants: [],
+              createdAt: '2026-01-01T00:00:00.000Z',
+            },
+            ops: [],
+          },
+        ],
+      },
+    };
+    mockedEmit.mockResolvedValueOnce(createEmitResult('pack'));
+
+    const result = await executeContractEmitWithMock(
+      emitOptions({ ...config, extensions: [pack] } as unknown as typeof config),
+    );
+
+    const spaceDir = join(tmpDir, 'migrations', 'testpack');
+    expect(result.pinnedFiles).toEqual([
+      { spaceId: 'testpack', path: contractSnapshotDir(join(tmpDir, 'migrations'), packHash) },
+      { spaceId: 'testpack', path: join(spaceDir, 'refs', 'head.json') },
+      { spaceId: 'testpack', path: join(spaceDir, '20260101T0000_create_testpack') },
+    ]);
+    expect(JSON.parse(await readFile(join(spaceDir, 'refs', 'head.json'), 'utf-8'))).toEqual({
+      hash: packHash,
+      invariants: [],
+    });
+    expect(
+      JSON.parse(
+        await readFile(join(spaceDir, '20260101T0000_create_testpack', 'migration.json'), 'utf-8'),
+      ),
+    ).toMatchObject({ from: null, to: packHash });
+  });
+
+  it('publishes no contract when writing a pack space fails', async () => {
+    const config = createSuccessfulConfig(join(tmpDir, 'src/contract.json'));
+    const pack = {
+      kind: 'extension',
+      id: 'testpack',
+      version: '0.0.1',
+      familyId: 'test-family',
+      targetId: 'test-target',
+      contractSpace: {
+        contractJson: { storage: { storageHash: 'b'.repeat(64) } },
+        headRef: { hash: 'a'.repeat(64), invariants: [] },
+        migrations: [],
+      },
+    };
+    mockedEmit.mockResolvedValueOnce(createEmitResult('broken-pack'));
+
+    await expect(
+      executeContractEmitWithMock(
+        emitOptions({ ...config, extensions: [pack] } as unknown as typeof config),
+      ),
+    ).rejects.toThrow();
+    expect(existsSync(join(tmpDir, 'src/contract.json'))).toBe(false);
+  });
+
+  it('writes no pack space and no contract once cancelled during emit', async () => {
+    const config = createSuccessfulConfig(join(tmpDir, 'src/contract.json'));
+    const pack = {
+      kind: 'extension',
+      id: 'testpack',
+      version: '0.0.1',
+      familyId: 'test-family',
+      targetId: 'test-target',
+      contractSpace: {
+        contractJson: { storage: { storageHash: 'a'.repeat(64) } },
+        headRef: { hash: 'a'.repeat(64), invariants: [] },
+        migrations: [],
+      },
+    };
+    const controller = new AbortController();
+    mockedEmit.mockImplementationOnce(async () => {
+      queueMicrotask(() => controller.abort());
+      return createEmitResult('cancelled');
+    });
+
+    await expect(
+      executeContractEmitWithMock({
+        ...emitOptions({ ...config, extensions: [pack] } as unknown as typeof config),
+        signal: controller.signal,
+      }),
+    ).rejects.toSatisfy((error: unknown) => error instanceof Error && error.name === 'AbortError');
+    expect(existsSync(join(tmpDir, 'migrations'))).toBe(false);
+    expect(existsSync(join(tmpDir, 'src/contract.json'))).toBe(false);
+  });
+
+  it('writes no pack space when the contract goes to an output path of its own', async () => {
+    const config = createSuccessfulConfig(join(tmpDir, 'src/contract.json'));
+    const pack = {
+      kind: 'extension',
+      id: 'testpack',
+      version: '0.0.1',
+      familyId: 'test-family',
+      targetId: 'test-target',
+      contractSpace: {
+        contractJson: { storage: { storageHash: 'a'.repeat(64) } },
+        headRef: { hash: 'a'.repeat(64), invariants: [] },
+        migrations: [],
+      },
+    };
+    mockedEmit.mockResolvedValueOnce(createEmitResult('elsewhere'));
+
+    const result = await executeContractEmitWithMock({
+      ...emitOptions({ ...config, extensions: [pack] } as unknown as typeof config),
+      outputPath: join(tmpDir, 'elsewhere'),
+    });
+
+    expect(existsSync(join(tmpDir, 'migrations'))).toBe(false);
+    expect(result.pinnedFiles).toEqual([]);
+  });
+
   describe('the import root the emitted files are written against', () => {
     async function emitInto(project: string, options: { readonly namesConfig: boolean }) {
       const outputJsonPath = join(tmpDir, project, 'generated/contract.json');
-      await actualFs.mkdir(join(tmpDir, project), { recursive: true });
-      await actualFs.writeFile(
+      await mkdir(join(tmpDir, project), { recursive: true });
+      await writeFile(
         join(tmpDir, project, 'package.json'),
         JSON.stringify({
           name: project,

@@ -1,9 +1,13 @@
 export {
   type ContractSnapshotInput,
   contractSnapshotDir,
-  readContractSnapshotDts,
+  contractSnapshotFiles,
+  createSnapshotContentVerifier,
   readContractSnapshotJson,
   readContractSnapshotJsonTolerant,
+  type SnapshotCanonicalizationHooks,
+  type SnapshotContentVerifier,
+  singleLineDeclarations,
   snapshotsImportPathFrom,
   writeContractSnapshot,
 } from '../contract-snapshot-store';

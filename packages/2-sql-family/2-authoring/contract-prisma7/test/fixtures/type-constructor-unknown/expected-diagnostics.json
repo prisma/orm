@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA7_UNSUPPORTED_TYPE",
+    "file": "schema.prisma",
+    "line": 7,
+    "message": "Field \"Post.body\" has type \"Text(...)\", which is not a Prisma 7 type. Prisma 7 refuses this schema too."
+  }
+]

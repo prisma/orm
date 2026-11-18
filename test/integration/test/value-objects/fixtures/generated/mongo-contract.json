@@ -19,6 +19,36 @@
             "shops": {
               "kind": "mongo-collection"
             }
+          },
+          "valueObject": {
+            "Location": {
+              "fields": {
+                "street": {
+                  "many": false,
+                  "type": {
+                    "kind": "scalar",
+                    "codecId": "mongo/string@1"
+                  },
+                  "nullable": false
+                },
+                "city": {
+                  "many": false,
+                  "type": {
+                    "kind": "scalar",
+                    "codecId": "mongo/string@1"
+                  },
+                  "nullable": false
+                },
+                "zip": {
+                  "many": false,
+                  "type": {
+                    "kind": "scalar",
+                    "codecId": "mongo/string@1"
+                  },
+                  "nullable": false
+                }
+              }
+            }
           }
         }
       }
@@ -35,6 +65,7 @@
           "Shop": {
             "fields": {
               "_id": {
+                "many": false,
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
@@ -42,6 +73,7 @@
                 "nullable": false
               },
               "name": {
+                "many": false,
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/string@1"
@@ -49,49 +81,44 @@
                 "nullable": false
               },
               "location": {
+                "many": false,
                 "type": {
                   "kind": "valueObject",
-                  "name": "Location"
+                  "plane": "storage",
+                  "namespaceId": "__unbound__",
+                  "entityKind": "valueObject",
+                  "entityName": "Location"
                 },
                 "nullable": false
               },
               "notes": {
+                "many": false,
                 "type": {
                   "kind": "valueObject",
-                  "name": "Location"
+                  "plane": "storage",
+                  "namespaceId": "__unbound__",
+                  "entityKind": "valueObject",
+                  "entityName": "Location"
                 },
                 "nullable": true
               }
             },
             "relations": {},
             "storage": {
-              "collection": "shops"
-            }
-          }
-        },
-        "valueObjects": {
-          "Location": {
-            "fields": {
-              "street": {
-                "type": {
-                  "kind": "scalar",
-                  "codecId": "mongo/string@1"
+              "collection": "shops",
+              "fields": {
+                "_id": {
+                  "field": "_id"
                 },
-                "nullable": false
-              },
-              "city": {
-                "type": {
-                  "kind": "scalar",
-                  "codecId": "mongo/string@1"
+                "name": {
+                  "field": "name"
                 },
-                "nullable": false
-              },
-              "zip": {
-                "type": {
-                  "kind": "scalar",
-                  "codecId": "mongo/string@1"
+                "location": {
+                  "field": "location"
                 },
-                "nullable": false
+                "notes": {
+                  "field": "notes"
+                }
               }
             }
           }

@@ -1,7 +1,7 @@
 /**
  * CLI recording configuration.
  *
- * Defines VHS settings and recording scenarios for `prisma-next` CLI commands.
+ * Defines VHS settings and recording scenarios for `prisma` CLI commands.
  * Run with: `npx tsx scripts/record.ts` from the CLI package directory.
  */
 
@@ -111,14 +111,14 @@ export const config: RecordingsConfig = {
       {
         name: 'help',
         description: 'Show db init help',
-        command: 'prisma-next db init --help',
+        command: 'prisma db init --help',
         height: 'dynamic',
         sleepAfterEnter: '3s',
       },
       {
         name: 'dry-run',
         description: 'Preview changes on empty database',
-        command: 'prisma-next db init --dry-run',
+        command: 'prisma db init --dry-run',
         setup: 'empty',
         height: 'dynamic',
         sleepAfterEnter: '15s',
@@ -126,7 +126,7 @@ export const config: RecordingsConfig = {
       {
         name: 'apply',
         description: 'Initialize empty database',
-        command: 'prisma-next db init',
+        command: 'prisma db init',
         setup: 'empty',
         height: 'dynamic',
         sleepAfterEnter: '15s',
@@ -137,14 +137,14 @@ export const config: RecordingsConfig = {
       {
         name: 'help',
         description: 'Show db update help',
-        command: 'prisma-next db update --help',
+        command: 'prisma db update --help',
         height: 'dynamic',
         sleepAfterEnter: '3s',
       },
       {
         name: 'no-changes',
         description: 'No changes when database matches contract',
-        command: 'prisma-next db update --dry-run',
+        command: 'prisma db update --dry-run',
         setup: 'initialized',
         height: 'dynamic',
         sleepAfterEnter: '15s',
@@ -152,7 +152,7 @@ export const config: RecordingsConfig = {
       {
         name: 'additive-dry-run',
         description: 'Preview additive schema changes',
-        command: 'prisma-next db update --dry-run',
+        command: 'prisma db update --dry-run',
         setup: 'initialized',
         contract: 'contract-additive.ts',
         height: 'dynamic',
@@ -171,7 +171,7 @@ export const config: RecordingsConfig = {
         {
           ordinal: '01',
           slug: 'contract-emit',
-          command: 'prisma-next contract emit',
+          command: 'prisma contract emit',
           description: 'Emit contract.json + contract.d.ts',
           dbState: 'empty database, no contract yet',
           sleepAfterEnter: '5s',
@@ -179,7 +179,7 @@ export const config: RecordingsConfig = {
         {
           ordinal: '02',
           slug: 'db-init-dry-run',
-          command: 'prisma-next db init --dry-run',
+          command: 'prisma db init --dry-run',
           description: 'Preview planned CREATE TABLE operations',
           dbState: 'empty database, contract emitted',
           sleepAfterEnter: '12s',
@@ -187,7 +187,7 @@ export const config: RecordingsConfig = {
         {
           ordinal: '03',
           slug: 'db-init',
-          command: 'prisma-next db init',
+          command: 'prisma db init',
           description: 'Create tables and write contract marker',
           dbState: 'empty database, contract emitted',
           sleepAfterEnter: '12s',
@@ -195,7 +195,7 @@ export const config: RecordingsConfig = {
         {
           ordinal: '04',
           slug: 'db-init-idempotent',
-          command: 'prisma-next db init',
+          command: 'prisma db init',
           description: 'Idempotent re-run — expects no changes',
           dbState: 'initialized, marker matches contract',
           sleepAfterEnter: '10s',
@@ -203,7 +203,7 @@ export const config: RecordingsConfig = {
         {
           ordinal: '05',
           slug: 'db-verify',
-          command: 'prisma-next db verify',
+          command: 'prisma db verify',
           description: 'Verify marker and schema match contract',
           dbState: 'initialized, marker matches contract',
           sleepAfterEnter: '10s',
@@ -211,7 +211,7 @@ export const config: RecordingsConfig = {
         {
           ordinal: '06',
           slug: 'db-verify-schema-only',
-          command: 'prisma-next db verify --schema-only',
+          command: 'prisma db verify --schema-only',
           description: 'Verify schema satisfies contract without marker checks',
           dbState: 'initialized, schema matches contract',
           sleepAfterEnter: '10s',
@@ -219,7 +219,7 @@ export const config: RecordingsConfig = {
         {
           ordinal: '07',
           slug: 'db-verify-strict',
-          command: 'prisma-next db verify --strict',
+          command: 'prisma db verify --strict',
           description: 'Verify marker + schema in strict mode (no extras)',
           dbState: 'initialized, schema matches contract exactly',
           sleepAfterEnter: '10s',
@@ -227,7 +227,7 @@ export const config: RecordingsConfig = {
         {
           ordinal: '08',
           slug: 'db-introspect',
-          command: 'prisma-next db schema',
+          command: 'prisma db schema',
           description: 'Inspect the live database schema tree',
           dbState: 'initialized with user(id, email)',
           sleepAfterEnter: '10s',
@@ -235,7 +235,7 @@ export const config: RecordingsConfig = {
         {
           ordinal: '09',
           slug: 'db-verify-json',
-          command: 'prisma-next db verify --json',
+          command: 'prisma db verify --json',
           description: 'Verify marker + schema (JSON output for CI/agents)',
           dbState: 'initialized, marker matches contract',
           sleepAfterEnter: '10s',
@@ -243,7 +243,7 @@ export const config: RecordingsConfig = {
         {
           ordinal: '10',
           slug: 'db-verify-schema-only-json',
-          command: 'prisma-next db verify --schema-only --json',
+          command: 'prisma db verify --schema-only --json',
           description: 'Schema-only verification (JSON output for CI/agents)',
           dbState: 'initialized, schema matches contract',
           sleepAfterEnter: '10s',
@@ -251,7 +251,7 @@ export const config: RecordingsConfig = {
         {
           ordinal: '11',
           slug: 'contract-infer',
-          command: 'prisma-next contract infer',
+          command: 'prisma contract infer',
           description: 'Infer a PSL contract from the live database',
           dbState: 'initialized with user(id, email)',
           sleepAfterEnter: '10s',
@@ -274,7 +274,7 @@ export const config: RecordingsConfig = {
         {
           ordinal: '01',
           slug: 'contract-emit-v2',
-          command: 'prisma-next contract emit',
+          command: 'prisma contract emit',
           description: 'Emit updated contract with new nullable column',
           dbState: 'initialized with base contract',
           before: [{ type: 'swap-contract', contract: 'contract-additive.ts' }],
@@ -283,7 +283,7 @@ export const config: RecordingsConfig = {
         {
           ordinal: '02',
           slug: 'db-update-dry-run',
-          command: 'prisma-next db update --dry-run',
+          command: 'prisma db update --dry-run',
           description: 'Preview planned ADD COLUMN operation',
           dbState: 'initialized with base, contract is v2',
           sleepAfterEnter: '12s',
@@ -291,7 +291,7 @@ export const config: RecordingsConfig = {
         {
           ordinal: '03',
           slug: 'db-update-apply',
-          command: 'prisma-next db update',
+          command: 'prisma db update',
           description: 'Apply additive change, update marker',
           dbState: 'initialized with base, contract is v2',
           sleepAfterEnter: '12s',
@@ -299,7 +299,7 @@ export const config: RecordingsConfig = {
         {
           ordinal: '04',
           slug: 'db-update-noop',
-          command: 'prisma-next db update',
+          command: 'prisma db update',
           description: 'No-op — database already matches contract',
           dbState: 'updated to v2, marker matches',
           sleepAfterEnter: '10s',
@@ -307,7 +307,7 @@ export const config: RecordingsConfig = {
         {
           ordinal: '05',
           slug: 'db-verify',
-          command: 'prisma-next db verify',
+          command: 'prisma db verify',
           description: 'Verify marker and schema match updated contract',
           dbState: 'updated to v2, marker matches',
           sleepAfterEnter: '10s',
@@ -324,7 +324,7 @@ export const config: RecordingsConfig = {
         {
           ordinal: '01',
           slug: 'db-verify-fail',
-          command: 'prisma-next db verify',
+          command: 'prisma db verify',
           description: 'Verify fails — no marker, db init never run',
           dbState: 'empty database, contract emitted',
           before: [{ type: 'emit-contract' }],
@@ -333,7 +333,7 @@ export const config: RecordingsConfig = {
         {
           ordinal: '02',
           slug: 'db-verify-schema-only-fail',
-          command: 'prisma-next db verify --schema-only',
+          command: 'prisma db verify --schema-only',
           description: 'Schema-only verify fails — no tables exist',
           dbState: 'empty database',
           sleepAfterEnter: '10s',
@@ -341,7 +341,7 @@ export const config: RecordingsConfig = {
         {
           ordinal: '03',
           slug: 'db-introspect-empty',
-          command: 'prisma-next db schema',
+          command: 'prisma db schema',
           description: 'Schema inspection shows an empty database',
           dbState: 'empty database',
           sleepAfterEnter: '10s',
@@ -349,7 +349,7 @@ export const config: RecordingsConfig = {
         {
           ordinal: '04',
           slug: 'db-init-recovery',
-          command: 'prisma-next db init',
+          command: 'prisma db init',
           description: 'Recovery — initialize database from scratch',
           dbState: 'empty database, contract emitted',
           sleepAfterEnter: '12s',
@@ -357,7 +357,7 @@ export const config: RecordingsConfig = {
         {
           ordinal: '05',
           slug: 'db-verify-pass',
-          command: 'prisma-next db verify',
+          command: 'prisma db verify',
           description: 'Verify passes after recovery',
           dbState: 'initialized, marker matches contract',
           sleepAfterEnter: '10s',
@@ -372,7 +372,7 @@ export const config: RecordingsConfig = {
         {
           ordinal: '01',
           slug: 'db-verify-fail',
-          command: 'prisma-next db verify',
+          command: 'prisma db verify',
           description: 'Verify fails — marker hash does not match new contract',
           dbState: 'initialized with base, contract swapped to v2',
           before: [
@@ -384,7 +384,7 @@ export const config: RecordingsConfig = {
         {
           ordinal: '02',
           slug: 'db-verify-schema-only-fail',
-          command: 'prisma-next db verify --schema-only',
+          command: 'prisma db verify --schema-only',
           description: 'Schema-only verify fails — missing name column',
           dbState: 'base schema, v2 contract expects name column',
           sleepAfterEnter: '10s',
@@ -392,7 +392,7 @@ export const config: RecordingsConfig = {
         {
           ordinal: '03',
           slug: 'db-update-recovery',
-          command: 'prisma-next db update',
+          command: 'prisma db update',
           description: 'Recovery — apply pending change, update marker',
           dbState: 'base schema, v2 contract',
           sleepAfterEnter: '12s',
@@ -400,7 +400,7 @@ export const config: RecordingsConfig = {
         {
           ordinal: '04',
           slug: 'db-verify-pass',
-          command: 'prisma-next db verify',
+          command: 'prisma db verify',
           description: 'Verify passes after recovery',
           dbState: 'updated to v2, marker matches',
           sleepAfterEnter: '10s',
@@ -415,7 +415,7 @@ export const config: RecordingsConfig = {
         {
           ordinal: '01',
           slug: 'db-verify-fail',
-          command: 'prisma-next db verify',
+          command: 'prisma db verify',
           description: 'Verify fails — the live schema no longer matches the contract',
           dbState: 'manual DDL dropped email column, marker unchanged',
           before: [{ type: 'sql', query: 'ALTER TABLE "user" DROP COLUMN "email"' }],
@@ -424,7 +424,7 @@ export const config: RecordingsConfig = {
         {
           ordinal: '02',
           slug: 'db-verify-marker-only-pass',
-          command: 'prisma-next db verify --marker-only',
+          command: 'prisma db verify --marker-only',
           description: 'Marker-only verification still passes when the marker row is unchanged',
           dbState: 'email column dropped, marker still matches contract',
           sleepAfterEnter: '10s',
@@ -432,7 +432,7 @@ export const config: RecordingsConfig = {
         {
           ordinal: '03',
           slug: 'db-introspect-diverged',
-          command: 'prisma-next db schema',
+          command: 'prisma db schema',
           description: 'Schema inspection shows the missing email column',
           dbState: 'user table has only id column',
           sleepAfterEnter: '10s',
@@ -440,7 +440,7 @@ export const config: RecordingsConfig = {
         {
           ordinal: '04',
           slug: 'db-update-recovery',
-          command: 'prisma-next db update',
+          command: 'prisma db update',
           description: 'Recovery — re-add missing column, update marker',
           dbState: 'email column missing, contract expects it',
           sleepAfterEnter: '12s',
@@ -448,7 +448,7 @@ export const config: RecordingsConfig = {
         {
           ordinal: '05',
           slug: 'db-verify-schema-only-pass',
-          command: 'prisma-next db verify --schema-only',
+          command: 'prisma db verify --schema-only',
           description: 'Schema-only verification passes after recovery',
           dbState: 'schema restored, marker matches contract',
           sleepAfterEnter: '10s',

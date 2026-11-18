@@ -9,7 +9,6 @@
  */
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { contractSnapshotDir } from '@prisma/orm-postgres/migration-tools/contract-snapshot-store';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
@@ -17,12 +16,13 @@ import {
   engineDiagnosticCodes,
   engineDocument,
   type JourneyContext,
+  planMigrationAndSelfEmit,
   runContractEmit,
   runMigrationCheck,
-  runMigrationPlanAndEmit,
   setupJourney,
   timeouts,
 } from '../utils/journey-test-helpers';
+import { attestMigration, contractSnapshotFile } from '../utils/journey-workspace-helpers';
 
 interface CheckDocument {
   readonly ok: boolean;
@@ -41,7 +41,7 @@ function findLatestMigrationDir(ctx: JourneyContext): string {
 }
 
 function snapshotContractJsonPath(ctx: JourneyContext, storageHash: string): string {
-  return join(contractSnapshotDir(join(ctx.testDir, 'migrations'), storageHash), 'contract.json');
+  return contractSnapshotFile(ctx.testDir, storageHash, 'contract.json');
 }
 
 withTempDir(({ createTempDir }) => {
@@ -53,7 +53,7 @@ withTempDir(({ createTempDir }) => {
 
         const emit = await runContractEmit(ctx);
         expect(emit.exitCode, 'emit').toBe(0);
-        const plan = await runMigrationPlanAndEmit(ctx, ['--name', 'init']);
+        const plan = await planMigrationAndSelfEmit(ctx, ['--name', 'init']);
         expect(plan.exitCode, 'plan').toBe(0);
 
         const check = await runMigrationCheck(ctx, ['--json']);
@@ -71,7 +71,7 @@ withTempDir(({ createTempDir }) => {
 
         const emit = await runContractEmit(ctx);
         expect(emit.exitCode, 'emit').toBe(0);
-        const plan = await runMigrationPlanAndEmit(ctx, ['--name', 'init']);
+        const plan = await planMigrationAndSelfEmit(ctx, ['--name', 'init']);
         expect(plan.exitCode, 'plan').toBe(0);
 
         const migDir = findLatestMigrationDir(ctx);
@@ -99,7 +99,7 @@ withTempDir(({ createTempDir }) => {
 
         const emit = await runContractEmit(ctx);
         expect(emit.exitCode, 'emit').toBe(0);
-        const plan = await runMigrationPlanAndEmit(ctx, ['--name', 'init']);
+        const plan = await planMigrationAndSelfEmit(ctx, ['--name', 'init']);
         expect(plan.exitCode, 'plan').toBe(0);
 
         const appDir = join(ctx.testDir, 'migrations', 'app');
@@ -121,7 +121,7 @@ withTempDir(({ createTempDir }) => {
 
         const emit = await runContractEmit(ctx);
         expect(emit.exitCode, 'emit').toBe(0);
-        const plan = await runMigrationPlanAndEmit(ctx, ['--name', 'init']);
+        const plan = await planMigrationAndSelfEmit(ctx, ['--name', 'init']);
         expect(plan.exitCode, 'plan').toBe(0);
 
         const migDir = findLatestMigrationDir(ctx);
@@ -139,10 +139,9 @@ withTempDir(({ createTempDir }) => {
         };
         const orphanOps = readFileSync(join(migDir, 'ops.json'), 'utf-8');
 
-        const { computeMigrationHash } = await import('@prisma/orm-postgres/migration-tools/hash');
-        orphanManifest.migrationHash = computeMigrationHash(orphanManifest, JSON.parse(orphanOps));
+        const attested = attestMigration(orphanManifest, JSON.parse(orphanOps));
 
-        writeFileSync(join(orphanDir, 'migration.json'), JSON.stringify(orphanManifest, null, 2));
+        writeFileSync(join(orphanDir, 'migration.json'), JSON.stringify(attested, null, 2));
         writeFileSync(join(orphanDir, 'ops.json'), orphanOps);
 
         const check = await runMigrationCheck(ctx, ['--json']);
@@ -160,7 +159,7 @@ withTempDir(({ createTempDir }) => {
 
         const emit = await runContractEmit(ctx);
         expect(emit.exitCode, 'emit').toBe(0);
-        const plan = await runMigrationPlanAndEmit(ctx, ['--name', 'init']);
+        const plan = await planMigrationAndSelfEmit(ctx, ['--name', 'init']);
         expect(plan.exitCode, 'plan').toBe(0);
 
         const danglingHash = `${'f'.repeat(64)}`;
@@ -186,7 +185,7 @@ withTempDir(({ createTempDir }) => {
 
         const emit = await runContractEmit(ctx);
         expect(emit.exitCode, 'emit').toBe(0);
-        const plan = await runMigrationPlanAndEmit(ctx, ['--name', 'init']);
+        const plan = await planMigrationAndSelfEmit(ctx, ['--name', 'init']);
         expect(plan.exitCode, 'plan').toBe(0);
 
         const migDir = findLatestMigrationDir(ctx);
@@ -217,7 +216,7 @@ withTempDir(({ createTempDir }) => {
 
         const emit = await runContractEmit(ctx);
         expect(emit.exitCode, 'emit').toBe(0);
-        const plan = await runMigrationPlanAndEmit(ctx, ['--name', 'init']);
+        const plan = await planMigrationAndSelfEmit(ctx, ['--name', 'init']);
         expect(plan.exitCode, 'plan').toBe(0);
 
         const migDir = findLatestMigrationDir(ctx);
@@ -246,7 +245,7 @@ withTempDir(({ createTempDir }) => {
 
         const emit = await runContractEmit(ctx);
         expect(emit.exitCode, 'emit').toBe(0);
-        const plan = await runMigrationPlanAndEmit(ctx, ['--name', 'init']);
+        const plan = await planMigrationAndSelfEmit(ctx, ['--name', 'init']);
         expect(plan.exitCode, 'plan').toBe(0);
 
         const check = await runMigrationCheck(ctx, ['nonexistent-migration', '--json']);

@@ -1,16 +1,16 @@
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import { CliStructuredError, errorConfigValidation } from '@internal/errors/control';
 import { timeouts } from '@repo/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { type LoadedConfig, loadConfigForSections, requireConfigSections } from '../src/load';
 
-const config = { family: {}, target: {}, adapter: {} } as unknown as PrismaNextConfig;
+const config = { family: {}, target: {}, adapter: {} } as unknown as PrismaConfig;
 
 function loaded(diagnostics: readonly CliStructuredError[]): LoadedConfig {
-  return { config, diagnostics, deprecations: [] };
+  return { config, diagnostics };
 }
 
 describe('requireConfigSections', () => {
@@ -45,17 +45,11 @@ describe('requireConfigSections', () => {
   });
 });
 
-// Temp-dir fixtures cannot import @internal/config, so they stamp the marker
-// the same way defineConfig does: a non-enumerable well-known symbol.
+// Temp-dir fixtures cannot import @prisma/cli-engine, so they stamp the marker
+// the same way definePrismaConfig does: an enumerable $prismaConfig key wrapping the
+// orm section.
 const PARTIAL_CONFIG_SOURCE = `
-const config = {
-  family: { kind: 'family' },
-};
-Object.defineProperty(config, Symbol.for('prisma-next.config-format-version'), {
-  value: 1,
-  enumerable: false,
-});
-export default config;
+export default { $prismaConfig: 1, orm: { family: { kind: 'family' } } };
 `;
 
 describe('loadConfigForSections', () => {
@@ -72,7 +66,7 @@ describe('loadConfigForSections', () => {
   it(
     'returns the config when no diagnostic concerns the requested sections',
     async () => {
-      const configPath = join(tempDir, 'prisma-next.config.ts');
+      const configPath = join(tempDir, 'prisma.config.ts');
       writeFileSync(configPath, PARTIAL_CONFIG_SOURCE);
 
       const result = await loadConfigForSections(configPath, ['migrations']);
@@ -85,7 +79,7 @@ describe('loadConfigForSections', () => {
   it(
     'fails with the diagnostic when it concerns a requested section',
     async () => {
-      const configPath = join(tempDir, 'prisma-next.config.ts');
+      const configPath = join(tempDir, 'prisma.config.ts');
       writeFileSync(configPath, PARTIAL_CONFIG_SOURCE);
 
       const result = await loadConfigForSections(configPath, ['target']);
@@ -104,22 +98,6 @@ describe('loadConfigForSections', () => {
       const result = await loadConfigForSections(join(tempDir, 'missing.config.ts'), ['target']);
 
       expect(result.assertNotOk().code).toBe('CONFIG.FILE_NOT_FOUND');
-    },
-    timeouts.typeScriptCompilation,
-  );
-
-  it(
-    'reports deprecations through onDeprecation',
-    async () => {
-      const configPath = join(tempDir, 'prisma-next.config.ts');
-      writeFileSync(configPath, PARTIAL_CONFIG_SOURCE);
-      const seen: string[] = [];
-
-      await loadConfigForSections(configPath, ['migrations'], {
-        onDeprecation: (deprecation) => seen.push(deprecation.code),
-      });
-
-      expect(seen).toEqual(['CONFIG.DEPRECATED_FILENAME', 'CONFIG.DEPRECATED_SHAPE']);
     },
     timeouts.typeScriptCompilation,
   );

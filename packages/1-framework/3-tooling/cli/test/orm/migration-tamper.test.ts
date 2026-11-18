@@ -1,16 +1,18 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { writeRef } from '@internal/migration-tools/refs';
-import { createTestCli } from '@prisma/cli-engine/testing';
 import { join } from 'pathe';
-import { afterEach, describe, expect, it } from 'vitest';
-import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { BIN_GROUPS } from '../../src/orm/cli';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
 import {
   ADDITIVE_OP,
   contractJson,
   createOfflineProject,
+  OFFLINE_COMMANDS,
   type OfflineProject,
   offlineConfig,
   removeOfflineProjects,
+  resetRenderContractDtsMock,
   seedMigrationPackage,
 } from './fixtures/offline-project';
 
@@ -23,6 +25,7 @@ import {
  * commands (migration show) load the tolerant aggregate and succeed.
  */
 
+beforeEach(resetRenderContractDtsMock);
 afterEach(removeOfflineProjects);
 
 const HASH_TO = `${'a'.repeat(64)}`;
@@ -67,7 +70,7 @@ function driverConfig(project: OfflineProject): {
 }
 
 function harness(config: Record<string, unknown>) {
-  return createTestCli({ commands: BIN_COMMANDS, groups: BIN_GROUPS, config: { orm: config } });
+  return createOrmTestCli({ commands: OFFLINE_COMMANDS, groups: BIN_GROUPS, orm: config });
 }
 
 /** A project whose only migration's ops.json was rewritten after attestation. */
@@ -129,7 +132,7 @@ describe('migration tamper detection', () => {
     const project = await tamperedProject();
     const { config, counters } = driverConfig(project);
 
-    const run = await harness(config).run(['migrate', '--json'], { cwd: project.dir });
+    const run = await harness(config).run(['db', 'migrate', '--json'], { cwd: project.dir });
 
     expectIntegrityRefusal(run);
     expect(counters.connections).toBe(0);
@@ -138,9 +141,14 @@ describe('migration tamper detection', () => {
   it('migration plan refuses before planning work', async () => {
     const project = await tamperedProject();
 
-    const run = await harness(offlineConfig({ project })).run(['migration', 'plan', '--json'], {
-      cwd: project.dir,
-    });
+    // --from @empty settles origin resolution (the tampered project has
+    // migrations but no db ref) so the run reaches the integrity check.
+    const run = await harness(offlineConfig({ project })).run(
+      ['migration', 'plan', '--from', '@empty', '--json'],
+      {
+        cwd: project.dir,
+      },
+    );
 
     expectIntegrityRefusal(run);
   });

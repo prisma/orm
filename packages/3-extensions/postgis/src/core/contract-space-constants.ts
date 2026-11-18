@@ -16,9 +16,21 @@
 
 export const POSTGIS_SPACE_ID = 'postgis' as const;
 
+export const POSTGIS_EXTENSION_NAME = 'postgis' as const;
+
 export const POSTGIS_NATIVE_TYPE = 'geometry' as const;
 
 export const POSTGIS_BASELINE_MIGRATION_NAME = '20260601T0000_install_postgis_extension' as const;
+
+export const POSTGIS_UPGRADE_MIGRATION_NAME = '20261029T1342_declare_postgis_extension' as const;
+
+export const POSTGIS_INSTALL_MIGRATION_NAME = '20261029T1342_create_postgis_extension' as const;
+
+export const POSTGIS_SEARCH_PATH_MIGRATION_NAME =
+  '20261106T1036_find_postgis_on_search_path' as const;
+
+export const POSTGIS_SEARCH_PATH_INSTALL_MIGRATION_NAME =
+  '20261106T1401_install_postgis_on_search_path' as const;
 
 /**
  * `postgis:*` invariantIds emitted by the baseline migration. Each id,

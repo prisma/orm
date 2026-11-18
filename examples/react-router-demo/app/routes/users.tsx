@@ -9,11 +9,11 @@ export async function loader() {
     .orderBy('createdAt', { direction: 'desc' })
     .limit(20)
     .build();
-  const rows = await db.runtime().query(plan);
+  const rows = await db.query(plan);
   return { rows };
 }
 
-// This example is a validation harness for Prisma Next's Vite plugin auto-emit
+// This example is a validation harness for Prisma 8's Vite plugin auto-emit
 // flow, not a production starter. The action deliberately omits server-side
 // input validation (arktype/zod-style); a real app should validate `email`
 // before persisting it. Browser-side `<input type="email" required />` is not
@@ -26,7 +26,7 @@ export async function action({ request }: Route.ActionArgs) {
   }
   const db = getDb();
   const plan = db.sql.public.user.insert([{ email }]).build();
-  await db.runtime().execute(plan);
+  await db.execute(plan);
   return redirect('/');
 }
 

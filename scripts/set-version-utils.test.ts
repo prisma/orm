@@ -4,7 +4,9 @@ import { describe, it } from 'node:test';
 import {
   type MutablePackageJson,
   participatesInLockstep,
+  restampExtensionVersion,
   rewriteWorkspaceDeps,
+  stampSkillMetadata,
 } from './set-version-utils.ts';
 
 describe('participatesInLockstep', () => {
@@ -116,6 +118,22 @@ describe('rewriteWorkspaceDeps', () => {
     assert.equal(pkg.optionalDependencies!['@internal/d'], 'workspace:1.0.0');
   });
 
+  it('keeps the package name of an aliased workspace spec', () => {
+    const pkg: MutablePackageJson = {
+      name: 'aliased',
+      version: '0.7.0',
+      devDependencies: {
+        prisma: 'workspace:@internal/cli@0.7.0',
+        other: 'workspace:@internal/other@*',
+      },
+    };
+    rewriteWorkspaceDeps(pkg, '0.8.0');
+    assert.deepEqual(pkg.devDependencies, {
+      prisma: 'workspace:@internal/cli@0.8.0',
+      other: 'workspace:@internal/other@0.8.0',
+    });
+  });
+
   it('does not rewrite a non-workspace @internal/* spec (e.g. a published-version pin)', () => {
     // An extension package installs a published @internal/* dep via
     // its own author's `extension-upgrade-skill` flow. That spec is an
@@ -157,5 +175,112 @@ describe('rewriteWorkspaceDeps', () => {
     rewriteWorkspaceDeps(pkg, '0.8.0');
     assert.equal(pkg.version, '0.7.0'); // version is the caller's job, not the helper's
     assert.equal(pkg.dependencies, undefined);
+  });
+});
+
+describe('stampSkillMetadata', () => {
+  const skillMd = [
+    '---',
+    'name: prisma-8',
+    'description: >-',
+    '  Something about library_version that must not be rewritten.',
+    'metadata:',
+    "  library: '@prisma/orm-postgres'",
+    "  library_version: '0.16.0'",
+    '---',
+    '',
+    '# Prisma 8 (Prisma 8)',
+    '',
+    'library_version: 0.16.0 in the body is prose, not the stamp.',
+    '',
+  ].join('\n');
+
+  it('leaves everything but the stamp alone', () => {
+    const stamped = stampSkillMetadata(skillMd, 'library_version', '8.1.0');
+    assert.equal(stamped, skillMd.replace("library_version: '0.16.0'", "library_version: '8.1.0'"));
+  });
+
+  it('rewrites any metadata key, not only the version', () => {
+    const stamped = stampSkillMetadata(skillMd, 'library', '@prisma/orm-sqlite');
+    assert.match(stamped, /^ {2}library: '@prisma\/orm-sqlite'$/m);
+    assert.match(stamped, /^ {2}library_version: '0\.16\.0'$/m);
+  });
+
+  it('is idempotent', () => {
+    const once = stampSkillMetadata(skillMd, 'library_version', '8.1.0');
+    assert.equal(stampSkillMetadata(once, 'library_version', '8.1.0'), once);
+  });
+
+  it('rejects a skill whose metadata block carries no such key', () => {
+    const unstamped = ['---', 'name: prisma-8', 'metadata:', '  library: x', '---', ''].join('\n');
+    assert.throws(
+      () => stampSkillMetadata(unstamped, 'library_version', '8.1.0'),
+      /library_version/,
+    );
+  });
+
+  it('rejects a skill with no metadata block', () => {
+    const bare = ['---', 'name: prisma-8', 'description: x', '---', ''].join('\n');
+    assert.throws(() => stampSkillMetadata(bare, 'library_version', '8.1.0'), /metadata/);
+  });
+
+  it('rejects a file with no frontmatter', () => {
+    assert.throws(
+      () => stampSkillMetadata('# no frontmatter\n', 'library_version', '8.1.0'),
+      /frontmatter/,
+    );
+  });
+});
+
+describe('restampExtensionVersion', () => {
+  const contractJson = [
+    '{',
+    '  "extensions": {',
+    '    "supabase": {',
+    '      "familyId": "sql",',
+    '      "id": "supabase",',
+    '      "kind": "extension",',
+    '      "targetId": "postgres",',
+    '      "version": "8.0.0-rc.9"',
+    '    }',
+    '  },',
+    '  "meta": { "version": "8.0.0-rc.9" }',
+    '}',
+    '',
+  ].join('\n');
+
+  const contractDts = [
+    '  readonly extensions: {',
+    '    readonly supabase: {',
+    "      readonly familyId: 'sql';",
+    "      readonly id: 'supabase';",
+    "      readonly kind: 'extension';",
+    "      readonly targetId: 'postgres';",
+    "      readonly version: '8.0.0-rc.9';",
+    '    };',
+    '  };',
+    "  readonly other: { readonly version: '8.0.0-rc.9' };",
+    '',
+  ].join('\n');
+
+  it('moves an extension version stamp in contract.json and leaves other version fields alone', () => {
+    const out = restampExtensionVersion(contractJson, '8.0.0-rc.9', '8.0.0-rc.10');
+    assert.match(out, /"targetId": "postgres",\n {6}"version": "8\.0\.0-rc\.10"/);
+    assert.match(out, /"meta": \{ "version": "8\.0\.0-rc\.9" \}/);
+  });
+
+  it('moves an extension version stamp in contract.d.ts and leaves other version fields alone', () => {
+    const out = restampExtensionVersion(contractDts, '8.0.0-rc.9', '8.0.0-rc.10');
+    assert.match(out, /readonly targetId: 'postgres';\n {6}readonly version: '8\.0\.0-rc\.10';/);
+    assert.match(out, /readonly other: \{ readonly version: '8\.0\.0-rc\.9' \}/);
+  });
+
+  it('returns the text unchanged when the stamp is not the from-version', () => {
+    assert.equal(restampExtensionVersion(contractJson, '8.0.0-rc.8', '8.0.0-rc.10'), contractJson);
+  });
+
+  it('is idempotent', () => {
+    const once = restampExtensionVersion(contractDts, '8.0.0-rc.9', '8.0.0-rc.10');
+    assert.equal(restampExtensionVersion(once, '8.0.0-rc.9', '8.0.0-rc.10'), once);
   });
 });

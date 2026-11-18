@@ -1,15 +1,14 @@
 {
   "name": "@internal/cli-telemetry",
   "private": true,
-  "version": "8.0.0-rc.1",
+  "version": "8.0.0-rc.24",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "CLI telemetry client for Prisma Next: detached subprocess sender, gating resolution, user-config store, and consent surface",
+  "description": "CLI telemetry client for Prisma 8: detached subprocess sender, gating resolution, user-config store, and consent surface",
   "scripts": {
     "build": "tsdown",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --project tsconfig.json --noEmit",
     "lint": "biome check . --error-on-warnings",
     "lint:fix": "biome check --write .",
@@ -17,17 +16,18 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/config": "workspace:8.0.0-rc.1",
-    "@internal/utils": "workspace:8.0.0-rc.1",
+    "@internal/config": "workspace:8.0.0-rc.24",
+    "@internal/config-loader": "workspace:8.0.0-rc.24",
+    "@internal/utils": "workspace:8.0.0-rc.24",
     "@vercel/detect-agent": "^1.2.4",
     "arktype": "catalog:",
     "c12": "^3.3.4",
     "pathe": "^2.0.3"
   },
   "devDependencies": {
-    "@repo/test-utils": "workspace:8.0.0-rc.1",
-    "@repo/tsconfig": "workspace:8.0.0-rc.1",
-    "@repo/tsdown": "workspace:8.0.0-rc.1",
+    "@repo/test-utils": "workspace:8.0.0-rc.24",
+    "@repo/tsconfig": "workspace:8.0.0-rc.24",
+    "@repo/tsdown": "workspace:8.0.0-rc.24",
     "@types/node": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:",
@@ -60,7 +60,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/1-framework/3-tooling/cli-telemetry"
   }
 }

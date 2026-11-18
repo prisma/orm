@@ -9,13 +9,7 @@ export default defineConfig({
     // (root vitest, which injects the env) and `pnpm --filter @internal/cli-telemetry test`
     // (vitest reading only this package's config).
     env: {
-      PRISMA_NEXT_DISABLE_TELEMETRY: '1',
-    },
-    coverage: {
-      provider: 'v8',
-      reporter: ['text', 'json', 'html'],
-      include: ['src/**/*.ts'],
-      exclude: ['dist/**', 'test/**', '**/*.test.ts', '**/*.config.ts', '**/exports/**'],
+      PRISMA_DISABLE_TELEMETRY: '1',
     },
   },
 });

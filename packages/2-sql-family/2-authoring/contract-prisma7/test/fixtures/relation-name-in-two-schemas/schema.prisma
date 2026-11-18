@@ -1,0 +1,32 @@
+datasource db {
+  provider = "postgresql"
+  schemas  = ["one", "two"]
+}
+
+model A {
+  id Int @id
+  bs B[] @relation("X")
+
+  @@schema("one")
+}
+
+model B {
+  id Int @id
+  as A[] @relation("X")
+
+  @@schema("one")
+}
+
+model C {
+  id Int @id
+  ds D[] @relation("X")
+
+  @@schema("two")
+}
+
+model D {
+  id Int @id
+  cs C[] @relation("X")
+
+  @@schema("two")
+}

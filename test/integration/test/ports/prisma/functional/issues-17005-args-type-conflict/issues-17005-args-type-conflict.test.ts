@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { timeouts, withPostgresPort } from '../../../_harness/postgres';
+import { timeouts, withPostgresPort } from '../../../../_harness/postgres';
 import type { Contract } from './_fixture/generated/contract';
 import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
 
@@ -10,7 +10,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // Upstream: the test verifies that `include` still works when a model has field
 // names ("postId"/"mediaId") that historically conflicted with Prisma-generated
 // args types. The runtime assertion is that `post.findFirst()` resolves without
-// throwing. prisma-next uses structural types with no codegen naming conflicts,
+// throwing. Prisma 8 uses structural types with no codegen naming conflicts,
 // so this is a straightforward runtime port.
 //
 // Upstream test: prisma.post.findFirst() → resolves.not.toThrow()

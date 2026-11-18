@@ -1,8 +1,8 @@
 import { writeRef } from '@internal/migration-tools/refs';
-import { createTestCli } from '@prisma/cli-engine/testing';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
 import {
   createOfflineProject,
   invariantOp,
@@ -58,7 +58,7 @@ function driverConfig(project: OfflineProject, marker: MarkerScript = {}): Recor
 }
 
 function harness(config: Record<string, unknown>) {
-  return createTestCli({ commands: BIN_COMMANDS, groups: BIN_GROUPS, config: { orm: config } });
+  return createOrmTestCli({ commands: BIN_COMMANDS, groups: BIN_GROUPS, orm: config });
 }
 
 /**
@@ -100,9 +100,12 @@ describe('migrate --to invariant pre-check', () => {
       edgeInvariants: ['real-id'],
     });
 
-    const run = await harness(driverConfig(project)).run(['migrate', '--to', 'prod', '--json'], {
-      cwd: project.dir,
-    });
+    const run = await harness(driverConfig(project)).run(
+      ['db', 'migrate', '--to', 'prod', '--json'],
+      {
+        cwd: project.dir,
+      },
+    );
 
     expect(run.exitCode).not.toBe(0);
     expect(run.json.at(-1)).toMatchObject({
@@ -122,7 +125,7 @@ describe('migrate --to invariant pre-check', () => {
 
     const run = await harness(
       driverConfig(project, { hash: TO_HASH, invariants: ['retired-id'] }),
-    ).run(['migrate', '--to', 'prod', '--json'], { cwd: project.dir });
+    ).run(['db', 'migrate', '--to', 'prod', '--json'], { cwd: project.dir });
 
     expect(errorCodeOf(run)).not.toBe('MIGRATION.UNKNOWN_INVARIANT');
     expect(JSON.stringify(run.json)).not.toContain('MIGRATION.UNKNOWN_INVARIANT');
@@ -131,9 +134,12 @@ describe('migrate --to invariant pre-check', () => {
   it('skips the pre-check when the ref requires no invariants', async () => {
     const project = await projectWithRef({ refInvariants: [], edgeInvariants: ['real-id'] });
 
-    const run = await harness(driverConfig(project)).run(['migrate', '--to', 'prod', '--json'], {
-      cwd: project.dir,
-    });
+    const run = await harness(driverConfig(project)).run(
+      ['db', 'migrate', '--to', 'prod', '--json'],
+      {
+        cwd: project.dir,
+      },
+    );
 
     expect(errorCodeOf(run)).not.toBe('MIGRATION.UNKNOWN_INVARIANT');
     expect(JSON.stringify(run.json)).not.toContain('MIGRATION.UNKNOWN_INVARIANT');

@@ -1,5 +1,5 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import type { MigrationPlanOperation } from '@internal/framework-components/control';
 import {
   contractSnapshotDir,
@@ -36,7 +36,7 @@ describe('resolveContractRefToSnapshot', () => {
   let appMigrationsDir: string;
   let refsDir: string;
   let contractPathAbsolute: string;
-  let config: PrismaNextConfig;
+  let config: PrismaConfig;
 
   async function seedBaselineMigration(): Promise<void> {
     const timestamp = new Date(2026, 0, 1, 10, 0);
@@ -85,7 +85,7 @@ describe('resolveContractRefToSnapshot', () => {
       },
       contract: { output: contractPathAbsolute },
       migrations: { dir: 'migrations' },
-    } as unknown as PrismaNextConfig;
+    } as unknown as PrismaConfig;
   });
 
   afterEach(async () => {
@@ -99,6 +99,7 @@ describe('resolveContractRefToSnapshot', () => {
       migrationsDir,
       refInput: HASH_A,
       contractPathAbsolute,
+      argument: 'the contract argument',
       fallbackToEmitted: true,
     });
     expect(result.ok).toBe(true);
@@ -120,6 +121,7 @@ describe('resolveContractRefToSnapshot', () => {
       migrationsDir,
       refInput: 'floating',
       contractPathAbsolute,
+      argument: 'the contract argument',
       fallbackToEmitted: true,
     });
     expect(result.ok).toBe(true);
@@ -129,6 +131,7 @@ describe('resolveContractRefToSnapshot', () => {
         contractJson: contractJsonForHash(HASH_FLOAT),
         contractJsonPath: contractPathAbsolute,
         source: 'emitted',
+        ref: { name: 'floating', hash: HASH_FLOAT, invariants: [] },
       });
     }
   });
@@ -142,6 +145,7 @@ describe('resolveContractRefToSnapshot', () => {
       migrationsDir,
       refInput: 'floating',
       contractPathAbsolute,
+      argument: 'the contract argument',
       fallbackToEmitted: true,
     });
     expect(result.ok).toBe(false);
@@ -164,9 +168,8 @@ describe('resolveContractRefToSnapshot', () => {
       config,
       migrationsDir,
       refInput: 'floating',
-      contractPathAbsolute,
+      argument: '--to',
       fallbackToEmitted: false,
-      missingBundleFlag: '--to',
     });
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -193,6 +196,7 @@ describe('resolveContractRefToSnapshot', () => {
       migrationsDir,
       refInput: 'floating',
       contractPathAbsolute,
+      argument: 'the contract argument',
       fallbackToEmitted: true,
     });
     expect(result.ok).toBe(false);
@@ -213,6 +217,7 @@ describe('resolveContractRefToSnapshot', () => {
       migrationsDir,
       refInput: 'floating',
       contractPathAbsolute,
+      argument: 'the contract argument',
       fallbackToEmitted: true,
     });
     expect(result.ok).toBe(false);
@@ -233,6 +238,7 @@ describe('resolveContractRefToSnapshot', () => {
       migrationsDir,
       refInput: 'floating',
       contractPathAbsolute,
+      argument: 'the contract argument',
       fallbackToEmitted: true,
     });
     expect(result.ok).toBe(false);
@@ -244,15 +250,15 @@ describe('resolveContractRefToSnapshot', () => {
     }
   });
 
-  it('requires missingBundleFlag when fallbackToEmitted is false (type-level)', () => {
+  it('requires the emitted contract path when fallbackToEmitted is true (type-level)', () => {
     const build = (o: ResolveContractRefToSnapshotOptions) => o;
-    // @ts-expect-error missingBundleFlag is required when fallbackToEmitted is false
+    // @ts-expect-error contractPathAbsolute is required when fallbackToEmitted is true
     build({
       config,
       migrationsDir,
       refInput: 'x',
-      contractPathAbsolute,
-      fallbackToEmitted: false,
+      argument: 'the contract argument',
+      fallbackToEmitted: true,
     });
     expect(true).toBe(true);
   });
@@ -264,6 +270,7 @@ describe('resolveContractRefToSnapshot', () => {
       migrationsDir,
       refInput: 'no-such-ref',
       contractPathAbsolute,
+      argument: 'the contract argument',
       fallbackToEmitted: true,
     });
     expect(result.ok).toBe(false);

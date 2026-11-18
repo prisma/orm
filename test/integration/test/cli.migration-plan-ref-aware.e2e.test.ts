@@ -9,13 +9,13 @@ import {
   getMigrationDirs,
   type JourneyContext,
   parseJsonOutput,
+  planMigrationAndSelfEmit,
   runContractEmit,
   runDbInit,
   runDbUpdate,
   runMigrate,
-  runMigrationEmit,
   runMigrationPlan,
-  runMigrationPlanAndEmit,
+  selfEmitMigration,
   setupJourney,
   swapContract,
 } from './utils/journey-test-helpers';
@@ -24,37 +24,6 @@ const JOURNEY_FIXTURES_DIR = join(
   import.meta.dirname,
   'fixtures/cli/cli-e2e-test-app/fixtures/cli-journeys',
 );
-
-function writeCompositePkContract(ctx: JourneyContext): void {
-  writeFileSync(
-    join(ctx.testDir, 'contract.ts'),
-    `import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
-import sqlFamily from '@internal/family-sql/pack';
-import { defineContract, field, model } from '@internal/sql-contract-ts/contract-builder';
-import postgresPack from '@internal/target-postgres/pack';
-import { postgresCreateNamespace } from '@internal/target-postgres/types';
-
-const User = model('User', {
-  fields: {
-    id: field.column(int4Column),
-    email: field.column(textColumn),
-  },
-})
-  .attributes(({ fields, constraints }) => ({
-    id: constraints.id([fields.id, fields.email]),
-  }))
-  .sql({ table: 'user' });
-
-export const contract = defineContract({
-  family: sqlFamily,
-  target: postgresPack,
-  createNamespace: postgresCreateNamespace,
-  models: { User },
-});
-`,
-    'utf-8',
-  );
-}
 
 interface MigrationManifest {
   readonly from: string | null;
@@ -103,7 +72,7 @@ function listAppMigrationBundleDirs(ctx: JourneyContext): string[] {
 
 async function emitAllAppMigrations(ctx: JourneyContext): Promise<void> {
   for (const dir of listAppMigrationBundleDirs(ctx)) {
-    const result = await runMigrationEmit(ctx, ['--dir', `migrations/app/${dir}`]);
+    const result = await selfEmitMigration(ctx, ['--dir', `migrations/app/${dir}`]);
     expect(result.exitCode, `emit ${dir}`).toBe(0);
   }
 }
@@ -143,14 +112,15 @@ function setupExtensionJourney(
   writeFileSync(
     ctx.configPath,
     `import postgresAdapter from '@internal/adapter-postgres/control';
-import { defineConfig } from '@internal/cli/config-types';
+import { definePrismaConfig } from '@prisma/cli-engine';
 import postgresDriver from '@internal/driver-postgres/control';
 import pgvector from '@internal/extension-pgvector/control';
 import sql from '@internal/family-sql/control';
 import postgres from '@internal/target-postgres/control';
 import { contract } from './contract';
 
-export default defineConfig({
+export default definePrismaConfig({
+  orm: {
   family: sql,
   target: postgres,
   adapter: postgresAdapter,
@@ -158,6 +128,7 @@ export default defineConfig({
   extensions: [pgvector],
   contract: {
     source: {
+      format: 'typescript',
       load: async () => ({ ok: true as const, value: contract }),
     },
     output: 'output/contract.json',
@@ -169,6 +140,7 @@ export default defineConfig({
   migrations: {
     dir: 'migrations',
   },
+},
 });
 `,
     'utf-8',
@@ -202,7 +174,13 @@ withTempDir(({ createTempDir }) => {
           await withJourney(createTempDir, connectionString, async (ctx) => {
             const { dbRefHash } = await seedDevToShipTrap(ctx);
 
-            const plan = await runMigrationPlan(ctx, ['--name', 'add-phone', '--json']);
+            const plan = await runMigrationPlan(ctx, [
+              '--name',
+              'add-phone',
+              '--delete',
+              'User.name',
+              '--json',
+            ]);
             expect(plan.exitCode).toBe(0);
             const planJson = parseJsonOutput<PlanJsonResult>(plan);
             expect(planJson.baselineDir).toBeDefined();
@@ -251,7 +229,15 @@ withTempDir(({ createTempDir }) => {
           await withJourney(createTempDir, connectionString, async (ctx) => {
             await seedDevToShipTrap(ctx);
             expect(
-              (await runAutoBaselinePlanAndEmit(ctx, ['--name', 'trap-close', '--json'])).exitCode,
+              (
+                await runAutoBaselinePlanAndEmit(ctx, [
+                  '--name',
+                  'trap-close',
+                  '--delete',
+                  'User.name',
+                  '--json',
+                ])
+              ).exitCode,
             ).toBe(0);
             expect((await runMigrate(ctx)).exitCode).toBe(0);
 
@@ -259,7 +245,7 @@ withTempDir(({ createTempDir }) => {
             expect((await runContractEmit(ctx)).exitCode).toBe(0);
 
             const dbRefHash = readDbRefHash(ctx);
-            const plan = await runMigrationPlan(ctx, ['--json']);
+            const plan = await runMigrationPlan(ctx, ['--delete', 'User.name', '--json']);
             expect(plan.exitCode).toBe(0);
             const planJson = parseJsonOutput<PlanJsonResult>(plan);
             expect(planJson.baselineDir).toBeUndefined();
@@ -323,7 +309,7 @@ withTempDir(({ createTempDir }) => {
         await withDevDatabase(async ({ connectionString }) => {
           await withJourney(createTempDir, connectionString, async (ctx) => {
             expect((await runContractEmit(ctx)).exitCode).toBe(0);
-            const plan0 = await runMigrationPlanAndEmit(ctx, ['--name', 'init', '--json']);
+            const plan0 = await planMigrationAndSelfEmit(ctx, ['--name', 'init', '--json']);
             expect(plan0.exitCode).toBe(0);
             const c1Hash = parseJsonOutput<{ to: string }>(plan0).to;
             expect((await runMigrate(ctx)).exitCode).toBe(0);
@@ -354,7 +340,7 @@ withTempDir(({ createTempDir }) => {
           await withJourney(createTempDir, connectionString, async (ctx) => {
             expect((await runContractEmit(ctx)).exitCode).toBe(0);
             expect(
-              (await runMigrationPlanAndEmit(ctx, ['--name', 'init', '--json'])).exitCode,
+              (await planMigrationAndSelfEmit(ctx, ['--name', 'init', '--json'])).exitCode,
             ).toBe(0);
             expect((await runMigrate(ctx)).exitCode).toBe(0);
 
@@ -397,19 +383,21 @@ withTempDir(({ createTempDir }) => {
     );
 
     it(
-      'auto-baseline with extension pack seeds extension space separately from app bundles (pgvector)',
+      'auto-baseline with extension pack keeps the extension space emit pinned apart from app bundles (pgvector)',
       async () => {
         await withDevDatabase(async ({ connectionString }) => {
           const ctx = setupExtensionJourney(connectionString, createTempDir);
           expect((await runContractEmit(ctx)).exitCode).toBe(0);
+          expect(existsSync(join(ctx.testDir, 'migrations', 'pgvector', 'refs', 'head.json'))).toBe(
+            true,
+          );
 
           const plan = await runMigrationPlan(ctx, ['--name', 'initial', '--json']);
           expect(plan.exitCode).toBe(0);
           const planJson = parseJsonOutput<PlanJsonResult & { emittedExtensionDirs?: unknown[] }>(
             plan,
           );
-          expect(planJson.emittedExtensionDirs?.length).toBeGreaterThan(0);
-          expect(existsSync(join(ctx.testDir, 'migrations', 'pgvector'))).toBe(true);
+          expect(planJson.emittedExtensionDirs).toEqual([]);
           expect(listAppMigrationBundleDirs(ctx)).toHaveLength(1);
         });
       },
@@ -417,22 +405,20 @@ withTempDir(({ createTempDir }) => {
     );
 
     it(
-      'keeps baseline on disk when delta planner fails after baseline succeeded',
+      'writes nothing when the delta planner refuses after the baseline was planned',
       async () => {
         await withDevDatabase(async ({ connectionString }) => {
           await withJourney(createTempDir, connectionString, async (ctx) => {
             expect((await runContractEmit(ctx)).exitCode).toBe(0);
             expect((await runDbInit(ctx)).exitCode).toBe(0);
 
-            writeCompositePkContract(ctx);
+            swapContract(ctx, 'contract-destructive');
             expect((await runContractEmit(ctx)).exitCode).toBe(0);
 
             const plan = await runMigrationPlan(ctx, ['--name', 'blocked-delta', '--json']);
             expect(plan.exitCode).toBe(2);
 
-            const dirs = listAppMigrationBundleDirs(ctx);
-            expect(dirs).toHaveLength(1);
-            expect(readManifest(ctx, dirs[0]!).from).toBeNull();
+            expect(listAppMigrationBundleDirs(ctx)).toHaveLength(0);
           });
         });
       },
@@ -495,7 +481,13 @@ withTempDir(({ createTempDir }) => {
           await withJourney(createTempDir, connectionString, async (ctx) => {
             await seedDevToShipTrap(ctx);
 
-            const implicit = await runMigrationPlan(ctx, ['--name', 'implicit', '--json']);
+            const implicit = await runMigrationPlan(ctx, [
+              '--name',
+              'implicit',
+              '--delete',
+              'User.name',
+              '--json',
+            ]);
             expect(implicit.exitCode).toBe(0);
             const implicitJson = parseJsonOutput<PlanJsonResult>(implicit);
 
@@ -506,6 +498,8 @@ withTempDir(({ createTempDir }) => {
               'db',
               '--name',
               'explicit',
+              '--delete',
+              'User.name',
               '--json',
             ]);
             expect(explicit.exitCode).toBe(0);

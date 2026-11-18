@@ -96,7 +96,7 @@ bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file o
 ────────────────────────────────────────────────────────────────────────────────
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
 > # Marker-only verification still passes when the marker row is unchanged [email column dropped, marker still matches contract]
-> prisma-next db verify --marker-only
+> prisma db verify --marker-only
 
 
 
@@ -128,7 +128,7 @@ bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file o
 ────────────────────────────────────────────────────────────────────────────────
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
 > # Marker-only verification still passes when the marker row is unchanged [email column dropped, marker still matches contract]
-> prisma-next db verify --marker-only
+> prisma db verify --marker-only
 
 
 
@@ -160,7 +160,7 @@ bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file o
 ────────────────────────────────────────────────────────────────────────────────
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
 > # Marker-only verification still passes when the marker row is unchanged [email column dropped, marker still matches contract]
-> prisma-next db verify --marker-only
+> prisma db verify --marker-only
 
 
 
@@ -192,9 +192,9 @@ bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file o
 ────────────────────────────────────────────────────────────────────────────────
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
 > # Marker-only verification still passes when the marker row is unchanged [email column dropped, marker still matches contract]
-> prisma-next db verify --marker-only
+> prisma db verify --marker-only
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
-prisma-next db verify → Check whether the database marker matches your contract
+prisma db verify → Check whether the database marker matches your contract
 │
 │ config:               prisma.config.ts
 │ contract:             contract.json

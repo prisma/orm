@@ -1,8 +1,8 @@
-import { createMongoRunnerDeps, extractDb } from '@internal/adapter-mongo/control';
+import { MongoControlAdapterImpl } from '@internal/adapter-mongo/control';
 import { coreHash, crossRef, profileHash } from '@internal/contract/types';
-import { MongoDriverImpl } from '@internal/driver-mongo';
 import mongoControlDriver from '@internal/driver-mongo/control';
-import { contractToMongoSchemaIR, createMongoFamilyInstance } from '@internal/family-mongo/control';
+import { contractToMongoSchemaIR } from '@internal/family-mongo/control';
+import { planOriginOf } from '@internal/framework-components/control';
 import {
   MongoCollection,
   type MongoCollectionInput,
@@ -24,13 +24,6 @@ const ALL_POLICY = {
   allowedOperationClasses: ['additive', 'widening', 'destructive'] as const,
 };
 
-function makeFamily(): ReturnType<typeof createMongoFamilyInstance> {
-  // ControlStack arg is unused by the mongo factory; an empty object suffices for these integration tests.
-  return createMongoFamilyInstance(
-    {} as unknown as Parameters<typeof createMongoFamilyInstance>[0],
-  );
-}
-
 function makeContract(
   collections: Record<string, MongoCollectionInput>,
   hashSeed: string,
@@ -51,11 +44,12 @@ function makeContract(
             fields: {
               _id: {
                 nullable: false,
+                many: false as const,
                 type: { kind: 'scalar' as const, codecId: 'mongo/objectId@1' },
               },
             },
             relations: {},
-            storage: { collection: c },
+            storage: { collection: c, fields: { _id: { field: '_id' } } },
           },
         ]),
       ),
@@ -90,6 +84,8 @@ async function planAndApply(
     schema,
     policy: ALL_POLICY,
     fromContract: origin,
+    origin: planOriginOf(origin),
+    statements: [],
     frameworkComponents: [],
     snapshotsImportPath: '../../snapshots',
   });
@@ -104,11 +100,7 @@ async function planAndApply(
   const controlDriver = await mongoControlDriver.create(replSetUri);
   try {
     const runner = new MongoMigrationRunner(
-      createMongoRunnerDeps(
-        controlDriver,
-        MongoDriverImpl.fromDb(extractDb(controlDriver)),
-        makeFamily(),
-      ),
+      new MongoControlAdapterImpl().createRunnerDependencies(controlDriver),
     );
     const plan = {
       targetId: 'mongo',
@@ -173,6 +165,7 @@ describe('MongoDB migration M2 vocabulary E2E', {
           users: {
             indexes: [
               {
+                name: 'lastName_1_firstName_-1',
                 keys: [
                   { field: 'lastName', direction: 1 },
                   { field: 'firstName', direction: -1 },
@@ -201,6 +194,7 @@ describe('MongoDB migration M2 vocabulary E2E', {
           articles: {
             indexes: [
               {
+                name: 'title_text_body_text',
                 keys: [
                   { field: 'title', direction: 'text' },
                   { field: 'body', direction: 'text' },
@@ -233,6 +227,7 @@ describe('MongoDB migration M2 vocabulary E2E', {
           sessions: {
             indexes: [
               {
+                name: 'expiresAt_1',
                 keys: [{ field: 'expiresAt', direction: 1 }],
                 expireAfterSeconds: 3600,
               },
@@ -256,7 +251,9 @@ describe('MongoDB migration M2 vocabulary E2E', {
       const contract = makeContract(
         {
           items: {
-            indexes: [{ keys: [{ field: 'shard_key', direction: 'hashed' }] }],
+            indexes: [
+              { name: 'shard_key_hashed', keys: [{ field: 'shard_key', direction: 'hashed' }] },
+            ],
           },
         },
         'hashed-idx',
@@ -275,7 +272,9 @@ describe('MongoDB migration M2 vocabulary E2E', {
       const contract = makeContract(
         {
           places: {
-            indexes: [{ keys: [{ field: 'location', direction: '2dsphere' }] }],
+            indexes: [
+              { name: 'location_2dsphere', keys: [{ field: 'location', direction: '2dsphere' }] },
+            ],
           },
         },
         '2dsphere-idx',
@@ -296,6 +295,7 @@ describe('MongoDB migration M2 vocabulary E2E', {
           users: {
             indexes: [
               {
+                name: 'email_1',
                 keys: [{ field: 'email', direction: 1 }],
                 unique: true,
                 partialFilterExpression: { email: { $exists: true } },
@@ -323,6 +323,7 @@ describe('MongoDB migration M2 vocabulary E2E', {
           users: {
             indexes: [
               {
+                name: 'name_1',
                 keys: [{ field: 'name', direction: 1 }],
                 collation: { locale: 'en', strength: 2 },
               },
@@ -349,6 +350,7 @@ describe('MongoDB migration M2 vocabulary E2E', {
           events: {
             indexes: [
               {
+                name: '$**_1',
                 keys: [{ field: '$**', direction: 1 }],
                 wildcardProjection: { metadata: 1 },
               },
@@ -371,7 +373,7 @@ describe('MongoDB migration M2 vocabulary E2E', {
       const v1 = makeContract(
         {
           users: {
-            indexes: [{ keys: [{ field: 'email', direction: 1 }], unique: true }],
+            indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }], unique: true }],
           },
         },
         'modify-v1',
@@ -385,7 +387,7 @@ describe('MongoDB migration M2 vocabulary E2E', {
       const v2 = makeContract(
         {
           users: {
-            indexes: [{ keys: [{ field: 'name', direction: 1 }], sparse: true }],
+            indexes: [{ name: 'name_1', keys: [{ field: 'name', direction: 1 }], sparse: true }],
           },
         },
         'modify-v2',
@@ -406,7 +408,7 @@ describe('MongoDB migration M2 vocabulary E2E', {
       const v1 = makeContract(
         {
           users: {
-            indexes: [{ keys: [{ field: 'email', direction: 1 }] }],
+            indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }],
           },
         },
         'validator-v1',
@@ -417,7 +419,7 @@ describe('MongoDB migration M2 vocabulary E2E', {
       const v2 = makeContract(
         {
           users: {
-            indexes: [{ keys: [{ field: 'email', direction: 1 }] }],
+            indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }],
             validator: {
               jsonSchema: {
                 bsonType: 'object',
@@ -448,7 +450,7 @@ describe('MongoDB migration M2 vocabulary E2E', {
       const withValidator = makeContract(
         {
           users: {
-            indexes: [{ keys: [{ field: 'email', direction: 1 }] }],
+            indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }],
             validator: {
               jsonSchema: {
                 bsonType: 'object',
@@ -468,7 +470,7 @@ describe('MongoDB migration M2 vocabulary E2E', {
       const withoutValidator = makeContract(
         {
           users: {
-            indexes: [{ keys: [{ field: 'email', direction: 1 }] }],
+            indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }],
           },
         },
         'val-remove-v2',
@@ -651,10 +653,10 @@ describe('MongoDB migration M2 vocabulary E2E', {
       const v1 = makeContract(
         {
           users: {
-            indexes: [{ keys: [{ field: 'email', direction: 1 }] }],
+            indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }],
           },
           posts: {
-            indexes: [{ keys: [{ field: 'title', direction: 1 }] }],
+            indexes: [{ name: 'title_1', keys: [{ field: 'title', direction: 1 }] }],
           },
         },
         'drop-v1',
@@ -669,7 +671,7 @@ describe('MongoDB migration M2 vocabulary E2E', {
       const v2 = makeContract(
         {
           users: {
-            indexes: [{ keys: [{ field: 'email', direction: 1 }] }],
+            indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }] }],
           },
         },
         'drop-v2',
@@ -692,6 +694,7 @@ describe('MongoDB migration M2 vocabulary E2E', {
           articles: {
             indexes: [
               {
+                name: 'title_text_body_text',
                 keys: [
                   { field: 'title', direction: 'text' },
                   { field: 'body', direction: 'text' },
@@ -699,7 +702,11 @@ describe('MongoDB migration M2 vocabulary E2E', {
                 weights: { title: 10, body: 5 },
                 default_language: 'english',
               },
-              { keys: [{ field: 'createdAt', direction: 1 }], expireAfterSeconds: 86400 },
+              {
+                name: 'createdAt_1',
+                keys: [{ field: 'createdAt', direction: 1 }],
+                expireAfterSeconds: 86400,
+              },
             ],
           },
         },
@@ -717,6 +724,7 @@ describe('MongoDB migration M2 vocabulary E2E', {
           articles: {
             indexes: [
               {
+                name: 'title_text_body_text',
                 keys: [
                   { field: 'title', direction: 'text' },
                   { field: 'body', direction: 'text' },
@@ -724,7 +732,7 @@ describe('MongoDB migration M2 vocabulary E2E', {
                 weights: { title: 10, body: 5 },
                 default_language: 'english',
               },
-              { keys: [{ field: 'authorId', direction: 1 }] },
+              { name: 'authorId_1', keys: [{ field: 'authorId', direction: 1 }] },
             ],
             validator: {
               jsonSchema: {

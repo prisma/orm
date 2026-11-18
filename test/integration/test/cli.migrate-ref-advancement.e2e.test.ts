@@ -1,21 +1,17 @@
-import { execFile } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { promisify } from 'node:util';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { timeouts, withDevDatabase } from '@repo/test-utils';
-import { dirname, join, resolve } from 'pathe';
+import { dirname, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import {
-  appendImplicitMigrationPlanFrom,
   type EngineRunResult,
+  runMigrationFile,
   runOnEngine,
   setupTestDirectoryFromFixtures,
   withTempDir,
 } from './utils/cli-test-helpers';
 import { replaceInFileOrThrow } from './utils/contract-fixture-editing';
 
-const execFileAsync = promisify(execFile);
-const TSX_BIN = resolve(__dirname, '../../../node_modules/.bin/tsx');
 const fixtureSubdir = 'migration-apply';
 
 interface Project {
@@ -53,18 +49,20 @@ async function selfEmitLatestMigration(testDir: string): Promise<void> {
   const latest = getLatestMigrationDir(testDir);
   if (!latest) return;
   const migrationTs = join(testDir, 'migrations', 'app', latest, 'migration.ts');
-  await execFileAsync(TSX_BIN, [migrationTs], { cwd: testDir });
+  const emitted = await runMigrationFile(migrationTs, [], testDir);
+  if (emitted.exitCode !== 0) {
+    throw new Error(`migration.ts self-emit failed (exit ${emitted.exitCode}): ${emitted.stderr}`);
+  }
 }
 
 async function runMigrationPlan(project: Project, args: readonly string[]): Promise<void> {
-  const planArgs = appendImplicitMigrationPlanFrom(project.testDir, args);
-  const run = await runOnEngine(project, ['migration', 'plan', ...planArgs]);
+  const run = await runOnEngine(project, ['migration', 'plan', ...args]);
   expect(run.exitCode, `migration plan failed:\n${run.stderr}`).toBe(0);
   await selfEmitLatestMigration(project.testDir);
 }
 
 async function runMigrate(project: Project, args: readonly string[]): Promise<EngineRunResult> {
-  const run = await runOnEngine(project, ['migrate', ...args]);
+  const run = await runOnEngine(project, ['db', 'migrate', ...args]);
   expect(run.exitCode, `migrate failed:\n${run.stderr}`).toBe(0);
   return run;
 }
@@ -74,7 +72,7 @@ function runMigrateAllowFailure(
   project: Project,
   args: readonly string[],
 ): Promise<EngineRunResult> {
-  return runOnEngine(project, ['migrate', ...args]);
+  return runOnEngine(project, ['db', 'migrate', ...args]);
 }
 
 function appRefsDir(testDir: string): string {

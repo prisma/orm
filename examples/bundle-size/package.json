@@ -2,7 +2,7 @@
   "name": "bundle-size",
   "private": true,
   "type": "module",
-  "version": "8.0.0-rc.1",
+  "version": "8.0.0-rc.24",
   "engines": {
     "node": ">=24"
   },
@@ -11,8 +11,8 @@
     "start:pg:emit": "tsx src/postgres/main-emit.ts",
     "start:mongo": "tsx src/mongo/main.ts",
     "start:mongo:emit": "tsx src/mongo/main-emit.ts",
-    "emit:pg": "prisma-next contract emit --config src/postgres/prisma.config.ts",
-    "emit:mongo": "prisma-next contract emit --config src/mongo/prisma.config.ts",
+    "emit:pg": "prisma contract emit --config src/postgres/prisma.config.ts",
+    "emit:mongo": "prisma contract emit --config src/mongo/prisma.config.ts",
     "emit": "pnpm emit:pg && pnpm emit:mongo",
     "bundle": "tsx scripts/bundle.ts",
     "size": "size-limit",
@@ -22,25 +22,26 @@
     "lint": "biome check . --error-on-warnings"
   },
   "dependencies": {
-    "@prisma/orm-mongo": "workspace:8.0.0-rc.1",
-    "@prisma/orm-postgres": "workspace:8.0.0-rc.1",
+    "@prisma/orm-mongo": "workspace:8.0.0-rc.24",
+    "@prisma/orm-postgres": "workspace:8.0.0-rc.24",
     "mongodb": "catalog:",
     "pg": "catalog:"
   },
   "devDependencies": {
-    "@prisma/cli-engine": "0.0.9",
+    "@prisma/cli-engine": "0.10.0",
     "@prisma/dev": "catalog:",
-    "@repo/test-utils": "workspace:8.0.0-rc.1",
-    "@repo/tsconfig": "workspace:8.0.0-rc.1",
+    "@repo/prisma-bin": "workspace:8.0.0-rc.24",
+    "@repo/test-utils": "workspace:8.0.0-rc.24",
+    "@repo/tsconfig": "workspace:8.0.0-rc.24",
     "@size-limit/file": "^12.1.0",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
-    "esbuild": "^0.28.1",
+    "esbuild": "^0.28.2",
     "mongodb-memory-server": "catalog:",
     "size-limit": "^12.1.0",
     "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
-    "wrangler": "4.118.0"
+    "wrangler": "4.119.0"
   }
 }

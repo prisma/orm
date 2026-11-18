@@ -58,7 +58,7 @@ export function App() {
     <div className="container">
       <header>
         <h1>Blog</h1>
-        <p className="subtitle">Prisma Next — Mongo ORM demo with emitter-generated contract</p>
+        <p className="subtitle">Prisma 8 — Mongo ORM demo with emitter-generated contract</p>
       </header>
 
       <nav className="tabs">

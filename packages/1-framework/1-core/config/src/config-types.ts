@@ -24,7 +24,7 @@ export interface ContractConfig {
    */
   readonly source: ContractSourceProvider;
   /**
-   * Path to contract.json artifact. Providers that know an input path (PSL,
+   * Path to contract.json artifact, relative to the config file. Providers that know an input path (PSL,
    * `typescriptContractFromPath`) derive an output colocated with that input
    * so this rarely needs to be set explicitly. The `.d.ts` types file is
    * always emitted next to the JSON (e.g., `contract.json` → `contract.d.ts`).
@@ -58,14 +58,14 @@ export function normalizeContractConfig(
 }
 
 /**
- * Configuration for Prisma Next CLI.
+ * Configuration for Prisma 8 CLI.
  * Uses Control*Descriptor types for type-safe wiring with compile-time compatibility checks.
  *
  * @template TFamilyId - The family ID (e.g., 'sql', 'document')
  * @template TTargetId - The target ID (e.g., 'postgres', 'mysql')
  * @template TConnection - The driver connection input type (defaults to `unknown` for config flexibility)
  */
-export interface PrismaNextConfig<
+export interface PrismaConfig<
   TFamilyId extends string = string,
   TTargetId extends string = string,
   TConnection = unknown,
@@ -107,52 +107,23 @@ export interface PrismaNextConfig<
    * Migration configuration. Controls where on-disk migration packages are stored.
    */
   readonly migrations?: {
-    /** Directory for migration packages, relative to config file. Defaults to 'migrations'. */
+    /** Directory for migration packages, relative to the config file. Defaults to 'migrations'. */
     readonly dir?: string;
   };
   readonly formatter?: FormatterConfig;
+  /**
+   * The directory of the config file that wrote this section, recorded when
+   * the section is validated; every relative path above was resolved against
+   * the file that declared it. Commands that need the project's location
+   * start here.
+   */
+  readonly baseDir?: string;
 }
 
 /**
- * Version of the config format produced by this `defineConfig`. Bumped when
- * the config shape changes incompatibly.
- */
-export const CONFIG_FORMAT_VERSION = 1;
-
-const CONFIG_FORMAT_VERSION_KEY = Symbol.for('prisma-next.config-format-version');
-
-function stampConfigFormatVersion<T extends object>(config: T): T {
-  Object.defineProperty(config, CONFIG_FORMAT_VERSION_KEY, {
-    value: CONFIG_FORMAT_VERSION,
-    enumerable: false,
-    configurable: false,
-    writable: false,
-  });
-  return config;
-}
-
-/**
- * Reads the config-format version stamped by `defineConfig`, or `undefined`
- * when the value was not produced by `defineConfig`. The marker is
- * non-enumerable and does not survive spreads: configs must export the
- * `defineConfig` result directly.
- */
-export function readConfigFormatVersion(value: unknown): number | undefined {
-  if (typeof value !== 'object' || value === null) {
-    return undefined;
-  }
-  const version: unknown = Reflect.get(value, CONFIG_FORMAT_VERSION_KEY);
-  return typeof version === 'number' ? version : undefined;
-}
-
-export function hasCurrentConfigFormatVersion(value: unknown): boolean {
-  return readConfigFormatVersion(value) === CONFIG_FORMAT_VERSION;
-}
-
-/**
- * Helper function to define a Prisma Next config.
- * Normalizes the config and stamps it with the config-format version marker.
- * Structural validation happens in the config loader, which reports
+ * Builds the ORM section of `prisma.config.ts`. The result nests under the
+ * `orm` key of the engine's `definePrismaConfig` — the marker lives on the envelope,
+ * not here. Structural validation happens in the config loader, which reports
  * per-section diagnostics instead of failing the whole load.
  *
  * Normalization:
@@ -163,15 +134,15 @@ export function hasCurrentConfigFormatVersion(value: unknown): boolean {
  * @returns Normalized config IR with defaults applied
  */
 export function defineConfig<TFamilyId extends string = string, TTargetId extends string = string>(
-  config: PrismaNextConfig<TFamilyId, TTargetId>,
-): PrismaNextConfig<TFamilyId, TTargetId> {
+  config: PrismaConfig<TFamilyId, TTargetId>,
+): PrismaConfig<TFamilyId, TTargetId> {
   if (config.contract) {
-    return stampConfigFormatVersion({
+    return {
       ...config,
       contract: normalizeContractConfig(config.contract),
-    });
+    };
   }
 
   // Return config as-is if no contract (preserve literal types)
-  return stampConfigFormatVersion(config);
+  return config;
 }

@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.5.7/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.8/schema.json",
   // Example apps use a standalone biome config rather than extending the root
   // config, to keep example-specific settings self-contained (matches mongo-demo).
   "extends": "//",

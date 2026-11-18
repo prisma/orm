@@ -58,8 +58,8 @@ The framework layer's contract is intentionally minimal — `factoryName`, `oper
 | Implementation | Path | Demonstrates |
 |---|---|---|
 | Framework `OpFactoryCall` interface | [`packages/1-framework/1-core/framework-components/src/control/control-migration-types.ts`](../../../packages/1-framework/1-core/framework-components/src/control/control-migration-types.ts) (search for `export interface OpFactoryCall`) | The minimum contract every target's migration-op IR satisfies. |
-| Postgres target concrete classes | [`packages/3-targets/3-targets/postgres/src/core/migrations/op-factory-call.ts`](../../../packages/3-targets/3-targets/postgres/src/core/migrations/op-factory-call.ts) | `PostgresOpFactoryCallNode` abstract base implementing the framework interface; concrete `CreateTableCall`, `AddColumnCall`, etc.; **plus** target-only kinds like `CreateExtensionCall` with no family analog. |
-| Mongo target concrete classes | [`packages/3-mongo-target/1-mongo-target/src/core/op-factory-call.ts`](../../../packages/3-mongo-target/1-mongo-target/src/core/op-factory-call.ts) | The same layering on the document side; demonstrates the pattern is family-shaped, not Postgres-shaped. |
+| Postgres target concrete classes | [`packages/3-targets/postgres/1-target/src/core/migrations/op-factory-call.ts`](../../../packages/3-targets/postgres/1-target/src/core/migrations/op-factory-call.ts) | `PostgresOpFactoryCallNode` abstract base implementing the framework interface; concrete `CreateTableCall`, `AddColumnCall`, etc.; **plus** target-only kinds like `CreateExtensionCall` with no family analog. |
+| Mongo target concrete classes | [`packages/3-targets/mongo/1-target/src/core/op-factory-call.ts`](../../../packages/3-targets/mongo/1-target/src/core/op-factory-call.ts) | The same layering on the document side; demonstrates the pattern is family-shaped, not Postgres-shaped. |
 
 ## Related ADRs
 

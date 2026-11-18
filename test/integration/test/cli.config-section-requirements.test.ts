@@ -9,8 +9,8 @@ import { timeouts } from '@repo/test-utils';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestDir, runOnEngine } from './utils/cli-test-helpers';
 
-// The fixture cannot import @internal/config, so it stamps the
-// config-format marker the same way defineConfig does.
+// The fixture cannot import @prisma/cli-engine, so it stamps the engine
+// envelope marker the same way definePrismaConfig does.
 function markedConfig(brokenSection: string): string {
   return `
 const descriptorBase = { familyId: 'sql', targetId: 'postgres', version: '0.0.1', manifest: {} };
@@ -21,11 +21,7 @@ const config = {
   driver: { ...descriptorBase, kind: 'driver', id: 'postgres', create: () => ({}) },
 ${brokenSection}
 };
-Object.defineProperty(config, Symbol.for('prisma-next.config-format-version'), {
-  value: 1,
-  enumerable: false,
-});
-export default config;
+export default { $prismaConfig: 1, orm: config };
 `;
 }
 
@@ -50,7 +46,7 @@ const readsContract: ReadonlyArray<[string, readonly string[]]> = [
   ['migration list', ['migration', 'list']],
   ['migration graph', ['migration', 'graph']],
   ['migration check', ['migration', 'check']],
-  ['migrate', ['migrate', '--to', 'HEAD']],
+  ['db migrate', ['db', 'migrate', '--to', 'HEAD']],
   ['db init', ['db', 'init']],
   ['db update', ['db', 'update']],
   ['db sign', ['db', 'sign']],
@@ -69,11 +65,10 @@ describe('commands declare the config sections they read', () => {
   it.each(readsContract)(
     '%s reports a malformed contract section as a config error',
     async (_name, argv) => {
-      const run = await runOnEngine(
-        { testDir, configPath: brokenContractConfig },
-        [...argv, '--json'],
-        { settleConfigFailures: true },
-      );
+      const run = await runOnEngine({ testDir, configPath: brokenContractConfig }, [
+        ...argv,
+        '--json',
+      ]);
 
       expect(run.exitCode).toBe(2);
       expect(run.json.at(-1)).toMatchObject({
@@ -82,8 +77,11 @@ describe('commands declare the config sections they read', () => {
           ok: false,
           diagnostics: expect.arrayContaining([
             expect.objectContaining({
-              code: 'CONFIG.VALIDATION_FAILED',
-              meta: expect.objectContaining({ section: 'contract' }),
+              code: 'CLI.CONFIG_FIELD_INVALID',
+              meta: expect.objectContaining({
+                section: 'orm',
+                field: expect.stringMatching(/^contract(\.|$)/),
+              }),
             }),
           ]),
         },
@@ -95,11 +93,10 @@ describe('commands declare the config sections they read', () => {
   it.each(readsMigrations)(
     '%s reports a malformed migrations section as a config error',
     async (_name, argv) => {
-      const run = await runOnEngine(
-        { testDir, configPath: brokenMigrationsConfig },
-        [...argv, '--json'],
-        { settleConfigFailures: true },
-      );
+      const run = await runOnEngine({ testDir, configPath: brokenMigrationsConfig }, [
+        ...argv,
+        '--json',
+      ]);
 
       expect(run.exitCode).toBe(2);
       expect(run.json.at(-1)).toMatchObject({
@@ -108,8 +105,11 @@ describe('commands declare the config sections they read', () => {
           ok: false,
           diagnostics: expect.arrayContaining([
             expect.objectContaining({
-              code: 'CONFIG.VALIDATION_FAILED',
-              meta: expect.objectContaining({ section: 'migrations' }),
+              code: 'CLI.CONFIG_FIELD_INVALID',
+              meta: expect.objectContaining({
+                section: 'orm',
+                field: expect.stringMatching(/^migrations(\.|$)/),
+              }),
             }),
           ]),
         },

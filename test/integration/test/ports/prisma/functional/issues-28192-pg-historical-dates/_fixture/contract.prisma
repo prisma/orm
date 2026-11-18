@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma@a6d0155
 // packages/client/tests/functional/issues/28192-pg-historical-dates (postgres only).
 //
@@ -13,10 +15,11 @@
 // Subject: postgres timestamps with historical/2-digit-year dates (years 00-99 AD)
 // round-trip correctly.
 // Note: @db.Date/@db.Timestamp/@db.Timestamptz are authored as type-position
-// types in prisma-next PSL.
+// types in Prisma 8 PSL.
 model TestData {
-  id          String     @id @default(cuid(2))
-  date        Date
-  timestamp   Timestamp
-  timestamptz Timestamptz
+  id          String     @id @onCreate(cuid(2))
+  date        DateTemporal
+  timestamp   TimestampTemporal
+  timestamptz TimestamptzTemporal
+  @@map("testData")
 }

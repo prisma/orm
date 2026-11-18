@@ -9,13 +9,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 const execFileAsync = promisify(execFile);
 
 const exampleDir = dirname(dirname(fileURLToPath(import.meta.url)));
-// The workspace root links the local prisma-next bin; the example itself
+// The workspace root links the local prisma bin; the example itself
 // names no @internal/* package (lint:consumer-internal-imports).
-const prismaNextBin = join(exampleDir, '..', '..', 'node_modules', '.bin', 'prisma-next');
+const prismaBin = join(exampleDir, 'node_modules', '.bin', 'prisma');
 const contractJsonPath = join(exampleDir, 'src', 'prisma', 'contract.json');
 const contractDtsPath = join(exampleDir, 'src', 'prisma', 'contract.d.ts');
 
-// Locks in AC9: `prisma-next contract emit` must succeed when DATABASE_URL is
+// Locks in AC9: `prisma contract emit` must succeed when DATABASE_URL is
 // unset, so a fresh checkout / CI typegen step does not need a database. The
 // example's `prisma.config.ts` was specifically modified (commit
 // `6d11148af`) to keep `db.connection` undefined when DATABASE_URL is missing
@@ -48,7 +48,7 @@ describe('react-router-demo offline emit (e2e)', () => {
   });
 
   it('emits contract artifacts with no DATABASE_URL set', async () => {
-    expect(existsSync(prismaNextBin)).toBe(true);
+    expect(existsSync(prismaBin)).toBe(true);
 
     // Strip DATABASE_URL (and any sibling PG* vars libpq would silently honour
     // as a fallback) from the child env. Vitest forwards process.env to the
@@ -62,16 +62,13 @@ describe('react-router-demo offline emit (e2e)', () => {
     delete baseEnv['PGPASSWORD'];
     delete baseEnv['PGDATABASE'];
 
-    const { stdout, stderr } = await execFileAsync(prismaNextBin, ['contract', 'emit'], {
+    const { stdout, stderr } = await execFileAsync(prismaBin, ['contract', 'emit'], {
       cwd: exampleDir,
       env: baseEnv,
     });
 
-    expect(stderr).toBe('');
-    // The CLI writes a JSON envelope to stdout that includes the emitted file
-    // paths; assert at least one of them references our expected output dir
-    // so a silent no-op would not pass.
-    expect(stdout).toContain('contract.json');
+    expect(stderr).toContain('Emitted contract.json and contract.d.ts');
+    expect(stdout).toBe('src/prisma/contract.json\nsrc/prisma/contract.d.ts\n');
 
     expect(existsSync(contractJsonPath)).toBe(true);
     expect(existsSync(contractDtsPath)).toBe(true);

@@ -1,413 +1,315 @@
-import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
-import { buildSymbolTable } from '@internal/psl-parser';
-import { parse } from '@internal/psl-parser/syntax';
+import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
+import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { describe, expect, it } from 'vitest';
-import { CompletionItemKind, InsertTextFormat } from 'vscode-languageserver';
-import { classifyPslCompletionContext } from '../src/completion-context';
-import { providePslCompletionItems } from '../src/completion-provider';
-
-const scalarTypes = ['String', 'Int', 'Boolean', 'DateTime'] as const;
-const nameSnippetPlaceholder = '$' + '{1:Name}';
-
-const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
-  policy: {
-    kind: 'pslBlock',
-    keyword: 'policy',
-    discriminator: 'fixture-policy',
-    name: { required: true },
-    parameters: {
-      on: { kind: 'ref', refKind: 'model', scope: 'same-space' },
-      where: { kind: 'value', codecId: 'fixture/text@1' },
-      mode: { kind: 'option', values: ['permissive', 'restrictive'] },
-      using: { kind: 'value', codecId: 'fixture/text@1' },
-    },
-  },
-  access: {
-    audit: {
-      kind: 'pslBlock',
-      keyword: 'audit',
-      discriminator: 'fixture-audit',
-      name: { required: true },
-      parameters: {
-        on: { kind: 'ref', refKind: 'model', scope: 'same-space' },
-      },
-    },
-  },
-};
-
-const candidateSource = [
-  'types {',
-  '  Email = String',
-  '  UserId = User',
-  '}',
-  'model User {',
-  '  id Int',
-  '}',
-  'type Address {',
-  '  street String',
-  '}',
-  'policy Audit {',
-  '  on = read',
-  '}',
-  'namespace auth {',
-  '  model Account {',
-  '    id Int',
-  '  }',
-  '  model User {',
-  '    id Int',
-  '  }',
-  '  type Profile {',
-  '    displayName String',
-  '  }',
-  '  policy ScopedAudit {',
-  '    on = read',
-  '  }',
-  '}',
-].join('\n');
-
-function complete(
-  markedFieldSource: string,
-  options: { readonly clientSupportsSnippets?: boolean } = {},
-) {
-  const markedSource = `${candidateSource}\n${markedFieldSource}`;
-  const cursorOffset = markedSource.indexOf('|');
-  expect(cursorOffset).toBeGreaterThanOrEqual(0);
-  const source = `${markedSource.slice(0, cursorOffset)}${markedSource.slice(cursorOffset + 1)}`;
-  const { document, sourceFile } = parse(source);
-  const { table: symbolTable } = buildSymbolTable({
-    document,
-    sourceFile,
-    pslBlockDescriptors,
-  });
-  const context = classifyPslCompletionContext({
-    document,
-    sourceFile,
-    position: sourceFile.positionAt(cursorOffset),
-  });
-
-  return {
-    items: providePslCompletionItems({
-      context,
-      sourceFile,
-      candidates: { scalarTypes, pslBlockDescriptors, symbolTable },
-      clientSupportsSnippets: options.clientSupportsSnippets === true,
-    }),
-    sourceFile,
-    cursorOffset,
-  };
-}
+import { CompletionItemKind, CompletionItemTag, InsertTextFormat } from 'vscode-languageserver';
+import {
+  complete,
+  completeWithSource,
+  completionItemByLabel,
+  constructorArgumentDataTypes,
+  pslBlockDescriptors,
+} from './helpers/completion-provider';
 
 describe('providePslCompletionItems', () => {
-  it('returns document-level declaration keyword candidates with stable plain-text edits', () => {
-    const { items, sourceFile, cursorOffset } = complete('|');
+  it('filters candidates after nearest-name shadowing and includes namespace locals', () => {
+    const { items } = completeWithSource({
+      pslBlockDescriptors,
+      markedSource: `model Shared { id Int }
+model ZRoot { id Int }
+type ZAddress { value String }
+namespace app {
+  enum Shared { VALUE }
+  model Int { id String }
+  model Local { value | }
+  type Address { value String }
+}
+namespace other { model Hidden { id Int } }`,
+    });
+    expect(items.map(({ label, detail }) => [label, detail]).sort()).toEqual([
+      ['Address', 'Composite type'],
+      ['Boolean', 'Configured scalar type'],
+      ['DateTime', 'Configured scalar type'],
+      ['Int', 'Model'],
+      ['Local', 'Model'],
+      ['String', 'Configured scalar type'],
+      ['ZAddress', 'Composite type'],
+      ['ZRoot', 'Model'],
+      ['app', 'Namespace'],
+      ['other', 'Namespace'],
+      ['public', 'Namespace'],
+    ]);
+    expect(items.find(({ label }) => label === 'Int')?.kind).toBe(CompletionItemKind.Class);
+  });
 
-    expect(items.map((item) => item.label)).toEqual([
-      'model',
-      'type',
-      'types',
-      'namespace',
-      'audit',
-      'policy',
-    ]);
-    expect(items.map((item) => item.detail)).toEqual([
-      'PSL declaration keyword',
-      'PSL declaration keyword',
-      'PSL declaration keyword',
-      'PSL declaration keyword',
-      'Generic block keyword',
-      'Generic block keyword',
-    ]);
-    expect(items[0]).toMatchObject({
-      kind: CompletionItemKind.Keyword,
-      filterText: 'model',
-      textEdit: {
-        range: {
-          start: sourceFile.positionAt(cursorOffset),
-          end: sourceFile.positionAt(cursorOffset),
+  it('enumerates only contributed members for a qualified completion', () => {
+    const { items } = completeWithSource({
+      markedSource: 'model Top { id Int }\nmodel Owner { value custom.| }',
+      pslBlockDescriptors: {},
+      authoringContributions: assembleAuthoringContributions([
+        {
+          id: 'constructors',
+          authoring: {
+            type: {
+              custom: {
+                Value: {
+                  kind: 'typeConstructor',
+                  documentation: 'Custom value',
+                  output: { codecId: 'value' },
+                },
+              },
+            },
+          },
         },
-        newText: 'model ',
-      },
+      ]),
     });
-    expect(items[0]?.insertTextFormat).toBeUndefined();
-  });
-
-  it('returns the full document-level declaration keyword set with a replace range over the typed segment', () => {
-    const { items, sourceFile, cursorOffset } = complete('mo|');
-
-    expect(items.map((item) => item.label)).toEqual([
-      'model',
-      'type',
-      'types',
-      'namespace',
-      'audit',
-      'policy',
+    expect(items.map(({ label, kind, detail }) => ({ label, kind, detail }))).toEqual([
+      { label: 'Value', kind: CompletionItemKind.Class, detail: 'Custom value' },
     ]);
-    expect(items[0]).toMatchObject({
-      filterText: 'model',
-      textEdit: {
-        range: {
-          start: sourceFile.positionAt(cursorOffset - 'mo'.length),
-          end: sourceFile.positionAt(cursorOffset),
+  });
+
+  it.each([false, true])('inserts namespace dots with negotiated suggestions: %s', (supported) => {
+    for (const qualifier of ['', 'custom.']) {
+      const { items } = completeWithSource({
+        markedSource: `namespace local {}\nmodel Owner { value ${qualifier}| }`,
+        pslBlockDescriptors: {},
+        clientSupportsSnippets: supported,
+        clientSupportsTriggerSuggestCommand: supported,
+        authoringContributions: assembleAuthoringContributions([
+          { id: 'namespaces', authoring: { type: { custom: { nested: {} } } } },
+        ]),
+      });
+      for (const label of qualifier === '' ? ['local', 'custom'] : ['nested']) {
+        const item = completionItemByLabel(items, label);
+        expect({
+          label: item.label,
+          kind: item.kind,
+          filterText: item.filterText,
+          newText: item.textEdit?.newText,
+          format: item.insertTextFormat,
+          command: item.command,
+        }).toEqual({
+          label,
+          kind: CompletionItemKind.Module,
+          filterText: label,
+          newText: `${label}.`,
+          format: undefined,
+          command: supported
+            ? { title: 'Suggest namespace members', command: 'editor.action.triggerSuggest' }
+            : undefined,
+        });
+      }
+    }
+  });
+
+  it.each([false, true])(
+    'renders scalar and constructor presentations with snippets: %s',
+    (snippets) => {
+      const types: AuthoringTypeNamespace = {
+        Scalar: {
+          kind: 'typeConstructor',
+          output: { codecId: 'fixture/value' },
         },
-        newText: 'model ',
-      },
-    });
-  });
-
-  it('returns namespace-body declaration keywords without document-only native keywords', () => {
-    const { items } = complete(['namespace feature {', '  |', '}'].join('\n'));
-
-    expect(items.map((item) => item.label)).toEqual(['model', 'type', 'audit', 'policy']);
-    expect(items.map((item) => item.label)).not.toContain('types');
-    expect(items.map((item) => item.label)).not.toContain('namespace');
-  });
-
-  it('returns the full namespace-body declaration keyword set with a replace range over the typed segment', () => {
-    const { items, sourceFile, cursorOffset } = complete(
-      ['namespace feature {', '  po|', '}'].join('\n'),
-    );
-
-    expect(items.map((item) => item.label)).toEqual(['model', 'type', 'audit', 'policy']);
-    expect(items.find((item) => item.label === 'policy')).toMatchObject({
-      filterText: 'policy',
-      textEdit: {
-        range: {
-          start: sourceFile.positionAt(cursorOffset - 'po'.length),
-          end: sourceFile.positionAt(cursorOffset),
+        Deprecated: {
+          kind: 'typeConstructor',
+          deprecated: { replacement: 'Scalar' },
+          output: { codecId: 'fixture/value' },
         },
-        newText: 'policy ',
+        Empty: {
+          kind: 'typeConstructor',
+          args: [],
+          output: { codecId: 'fixture/value' },
+        },
+        Required: {
+          kind: 'typeConstructor',
+          args: [
+            { name: 'size', kind: 'value', dataType: 'fixture/int' },
+            { name: 'label', kind: 'value', dataType: 'fixture/expression' },
+            { name: 'scale', kind: 'value', dataType: 'fixture/int', optional: true },
+          ],
+          output: { codecId: 'fixture/value' },
+        },
+        Optional: {
+          kind: 'typeConstructor',
+          args: [{ name: 'size', kind: 'value', dataType: 'fixture/int', optional: true }],
+          output: { codecId: 'fixture/value' },
+        },
+        Entity: {
+          kind: 'typeConstructor',
+          entityRefArg: { index: 0, entityKind: 'choice' },
+          output: { codecId: 'fixture/value' },
+        },
+      };
+      for (const qualifier of ['', 'custom.']) {
+        const { items } = completeWithSource({
+          markedSource: `model Owner { value ${qualifier}| }`,
+          pslBlockDescriptors: {},
+          scalarTypes: [],
+          clientSupportsSnippets: snippets,
+          authoringContributions: assembleAuthoringContributions([
+            { id: 'constructors', authoring: { type: { ...types, custom: types } } },
+          ]),
+          dataTypes: constructorArgumentDataTypes,
+        });
+        for (const [label, snippet] of [
+          ['Scalar', 'Scalar'],
+          ['Deprecated', 'Deprecated'],
+          ['Empty', 'Empty()'],
+          ['Required', 'Required($' + '{1:size}, sql`$' + '{2:label}`)'],
+          ['Optional', 'Optional($' + '{1:})'],
+          ['Entity', 'Entity($' + '{1:choice})'],
+        ] as const) {
+          const item = completionItemByLabel(items, label);
+          const callable = label !== 'Scalar' && label !== 'Deprecated';
+          expect({
+            label: item.label,
+            kind: item.kind,
+            newText: item.textEdit?.newText,
+            format: item.insertTextFormat,
+            command: item.command,
+            tags: item.tags,
+          }).toEqual({
+            label,
+            kind: callable ? CompletionItemKind.Function : CompletionItemKind.Class,
+            newText: snippets ? snippet : callable ? `${label}()` : label,
+            format: callable && snippets ? InsertTextFormat.Snippet : undefined,
+            command: undefined,
+            tags: label === 'Deprecated' ? [CompletionItemTag.Deprecated] : undefined,
+          });
+        }
+      }
+    },
+  );
+
+  it('renders a contributed type alias as a type with its documentation', () => {
+    const now = { name: 'now', args: {} } as const;
+    const { items } = completeWithSource({
+      markedSource: 'model Owner { value temporal.| }',
+      pslBlockDescriptors: {},
+      scalarTypes: [],
+      clientSupportsSnippets: true,
+      authoringContributions: assembleAuthoringContributions([
+        {
+          id: 'aliases',
+          authoring: {
+            type: {
+              temporal: {
+                CreatedAt: {
+                  kind: 'typeAlias',
+                  documentation: 'Set to now when a row is created.',
+                  output: { type: { codecId: 'fixture/value' }, onCreate: now },
+                },
+                UpdatedAt: {
+                  kind: 'typeAlias',
+                  output: { type: { codecId: 'fixture/value' }, onCreate: now, onUpdate: now },
+                },
+              },
+            },
+          },
+        },
+      ]),
+    });
+    expect(
+      items.map((item) => ({
+        label: item.label,
+        kind: item.kind,
+        detail: item.detail,
+        newText: item.textEdit?.newText,
+        format: item.insertTextFormat,
+      })),
+    ).toEqual([
+      {
+        label: 'CreatedAt',
+        kind: CompletionItemKind.Class,
+        detail: 'Set to now when a row is created.',
+        newText: 'CreatedAt',
+        format: undefined,
       },
-    });
-  });
-
-  it('returns snippet declaration keyword edits only when the client supports snippets', () => {
-    const { items } = complete('|', { clientSupportsSnippets: true });
-
-    expect(items.find((item) => item.label === 'model')).toMatchObject({
-      insertTextFormat: InsertTextFormat.Snippet,
-      textEdit: { newText: `model ${nameSnippetPlaceholder} {\n  $0\n}` },
-    });
-    expect(items.find((item) => item.label === 'policy')).toMatchObject({
-      insertTextFormat: InsertTextFormat.Snippet,
-      textEdit: { newText: `policy ${nameSnippetPlaceholder} {\n  $0\n}` },
-    });
-  });
-
-  it('returns an empty list for ordinary model attribute contexts', () => {
-    const { items } = complete(['model Post {', '  id Int', '  @@|', '}'].join('\n'));
-
-    expect(items).toEqual([]);
-  });
-
-  it('returns stable bare model field type completion candidates', () => {
-    const { items, sourceFile, cursorOffset } = complete(
-      ['model Post {', '  author |', '}'].join('\n'),
-    );
-
-    expect(items.map((item) => item.label)).toEqual([
-      'Boolean',
-      'DateTime',
-      'Int',
-      'String',
-      'Post',
-      'User',
-      'Address',
-      'Email',
-      'UserId',
-      'auth',
+      {
+        label: 'UpdatedAt',
+        kind: CompletionItemKind.Class,
+        detail: 'Type alias',
+        newText: 'UpdatedAt',
+        format: undefined,
+      },
     ]);
-    expect(items.map((item) => item.detail)).toEqual([
-      'Configured scalar type',
-      'Configured scalar type',
-      'Configured scalar type',
-      'Configured scalar type',
-      'Model',
-      'Model',
-      'Composite type',
-      'Scalar type',
-      'Type alias',
-      'Namespace',
-    ]);
-    expect(items[0]?.textEdit).toEqual({
-      range: {
-        start: sourceFile.positionAt(cursorOffset),
-        end: sourceFile.positionAt(cursorOffset),
-      },
-      newText: 'Boolean',
-    });
   });
 
-  it('returns the full bare candidate set with a replace range over the typed segment', () => {
-    const { items, sourceFile, cursorOffset } = complete(
-      ['model Post {', '  reviewer U|', '}'].join('\n'),
-    );
-
-    expect(items.map((item) => item.label)).toEqual([
-      'Boolean',
-      'DateTime',
-      'Int',
-      'String',
-      'Post',
-      'User',
-      'Address',
-      'Email',
-      'UserId',
-      'auth',
-    ]);
-    expect(items.find((item) => item.label === 'User')).toMatchObject({
-      filterText: 'User',
-      textEdit: {
-        range: {
-          start: sourceFile.positionAt(cursorOffset - 'U'.length),
-          end: sourceFile.positionAt(cursorOffset),
+  it('completes a type choice as its bare name, which writes its default choice', () => {
+    const { items } = completeWithSource({
+      markedSource: 'model Owner { value | }',
+      pslBlockDescriptors: {},
+      scalarTypes: [],
+      clientSupportsSnippets: true,
+      authoringContributions: assembleAuthoringContributions([
+        {
+          id: 'choices',
+          authoring: {
+            type: {
+              Moment: {
+                kind: 'typeChoice',
+                documentation: 'A moment in time.',
+                args: [
+                  {
+                    kind: 'option',
+                    name: 'as',
+                    values: ['date', 'text'],
+                    default: 'date',
+                    optional: true,
+                  },
+                ],
+                choices: [
+                  { when: { as: 'date' }, type: 'Stamp' },
+                  { when: { as: 'text' }, type: 'Stamp' },
+                ],
+              },
+              Undocumented: {
+                kind: 'typeChoice',
+                args: [],
+                choices: [{ when: {}, type: 'Stamp' }],
+              },
+              Stamp: { kind: 'typeConstructor', output: { codecId: 'fixture/value' } },
+            },
+          },
         },
-        newText: 'User',
-      },
+      ]),
     });
-  });
-
-  it('returns the full bare candidate set including the namespace qualifier with a replace range over the typed segment', () => {
-    const { items, sourceFile, cursorOffset } = complete(
-      ['model Post {', '  reviewer a|', '}'].join('\n'),
-    );
-
-    expect(items.map((item) => item.label)).toEqual([
-      'Boolean',
-      'DateTime',
-      'Int',
-      'String',
-      'Post',
-      'User',
-      'Address',
-      'Email',
-      'UserId',
-      'auth',
+    expect(
+      items
+        .filter((item) => item.label === 'Moment' || item.label === 'Undocumented')
+        .map((item) => ({
+          kind: item.kind,
+          detail: item.detail,
+          newText: item.textEdit?.newText,
+          format: item.insertTextFormat,
+        })),
+    ).toEqual([
+      {
+        kind: CompletionItemKind.Class,
+        detail: 'A moment in time.',
+        newText: 'Moment',
+        format: undefined,
+      },
+      {
+        kind: CompletionItemKind.Class,
+        detail: 'Convenience type',
+        newText: 'Undocumented',
+        format: undefined,
+      },
     ]);
-    expect(items.find((item) => item.label === 'auth')).toMatchObject({
-      kind: CompletionItemKind.Module,
-      detail: 'Namespace',
-      filterText: 'auth',
-      textEdit: {
-        range: {
-          start: sourceFile.positionAt(cursorOffset - 'a'.length),
-          end: sourceFile.positionAt(cursorOffset),
-        },
-        newText: 'auth',
-      },
-    });
   });
 
-  it('returns namespace members after a namespace qualifier', () => {
-    const { items, sourceFile, cursorOffset } = complete(
-      ['model Post {', '  owner auth.|', '}'].join('\n'),
-    );
-
-    expect(items.map((item) => item.label)).toEqual(['Account', 'User', 'Profile']);
-    expect(items[0]?.textEdit).toEqual({
-      range: {
-        start: sourceFile.positionAt(cursorOffset),
-        end: sourceFile.positionAt(cursorOffset),
-      },
-      newText: 'Account',
-    });
-  });
-
-  it('returns the full namespace member set with replacement metadata for the typed segment', () => {
-    const { items, sourceFile, cursorOffset } = complete(
-      ['model Post {', '  owner auth.U|', '}'].join('\n'),
-    );
-
-    expect(items.map((item) => item.label)).toEqual(['Account', 'User', 'Profile']);
-    expect(items.find((item) => item.label === 'User')).toMatchObject({
-      filterText: 'User',
-      detail: 'Model in namespace auth',
-      textEdit: {
-        range: {
-          start: sourceFile.positionAt(cursorOffset - 'U'.length),
-          end: sourceFile.positionAt(cursorOffset),
-        },
-        newText: 'User',
-      },
-    });
-  });
-
-  it('does not leak local namespace members into a foreign contract-space reference', () => {
-    const { items } = complete(['model Post {', '  owner supabase:auth.P|', '}'].join('\n'));
-
-    expect(items).toEqual([]);
-  });
-
-  it('returns no completions for a contract-space-qualified position', () => {
-    const { items } = complete(['model Post {', '  external supabase:|', '}'].join('\n'));
-
-    expect(items).toEqual([]);
-  });
-
-  it('returns no completions for a generic block value position', () => {
-    const { items } = complete(['policy Rule {', '  on = |', '}'].join('\n'));
-
-    expect(items).toEqual([]);
-  });
-
-  it('returns descriptor-backed generic block parameter completions', () => {
-    const { items, sourceFile, cursorOffset } = complete(['policy Rule {', '  |', '}'].join('\n'));
-
-    expect(items.map((item) => item.label)).toEqual(['on', 'where', 'mode', 'using']);
-    expect(items.map((item) => item.detail)).toEqual([
-      'Generic block parameter',
-      'Generic block parameter',
-      'Generic block parameter',
-      'Generic block parameter',
-    ]);
-    expect(items[0]?.textEdit).toEqual({
-      range: {
-        start: sourceFile.positionAt(cursorOffset),
-        end: sourceFile.positionAt(cursorOffset),
-      },
-      newText: 'on',
-    });
-  });
-
-  it('returns the full descriptor-backed generic block parameter set excluding already-present sibling keys', () => {
-    const { items, sourceFile, cursorOffset } = complete(
-      ['policy Rule {', '  on = User', '  wh|', '}'].join('\n'),
-    );
-
-    expect(items.map((item) => item.label)).toEqual(['where', 'mode', 'using']);
-    expect(items.find((item) => item.label === 'where')).toMatchObject({
-      filterText: 'where',
-      textEdit: {
-        range: {
-          start: sourceFile.positionAt(cursorOffset - 'wh'.length),
-          end: sourceFile.positionAt(cursorOffset),
-        },
-        newText: 'where',
-      },
-    });
-  });
-
-  it('still offers the in-progress key while excluding an already-present sibling key', () => {
-    const { items } = complete(['policy Rule {', '  where = "x"', '  on|', '}'].join('\n'));
-
-    expect(items.map((item) => item.label)).toEqual(['on', 'mode', 'using']);
-  });
-
-  it('returns no generic block parameter completions without a matching descriptor', () => {
-    const { items } = complete(['extension Rule {', '  |', '}'].join('\n'));
-
+  it('does not complete a global namespace when its qualifier is shadowed locally', () => {
+    const { items } = complete(`namespace remote { model Item { id Int } }
+namespace app {
+  model remote { id Int }
+  model Owner { value remote.| }
+}`);
     expect(items).toEqual([]);
   });
 
   it('returns an empty list for unsupported classifier contexts', () => {
-    const { items } = complete(['model Post {', '  id Int @|', '}'].join('\n'));
+    const { items } = complete(['model Post {', '  // @|', '}'].join('\n'));
 
     expect(items).toEqual([]);
-  });
-
-  it('does not return generic block symbols as model field type candidates', () => {
-    const { items } = complete(['model Post {', '  audit |', '}'].join('\n'));
-
-    expect(items.map((item) => item.label)).not.toContain('Audit');
-    expect(items.map((item) => item.label)).not.toContain('auth.ScopedAudit');
   });
 });

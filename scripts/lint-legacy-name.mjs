@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 /**
- * The old `prisma-next` name does not come back.
+ * The old `prisma-next` name does not come back, in any spelling: `Prisma Next`,
+ * `PrismaNext`, `prismaNext`, `PRISMA_NEXT` and the rest.
  *
  * Prisma 8 publishes 17 packages under `@prisma/*`, its repository is
- * `prisma/prisma`, and its examples read `prisma-8-*`. The working name
- * survives in a few places that are either a record of what really shipped or
- * a user-facing name that cannot be changed without an upgrade path. Every
- * other occurrence is a mistake, and this check is what keeps it from
- * accumulating again.
+ * `prisma/orm`, and its examples read `prisma-8-*`. The working name survives
+ * only where it is a record of what really shipped, a pointer into the old
+ * repository, a third party's package name, or a test proving the retired name
+ * stays gone. Every other occurrence is a mistake, and this check is what keeps
+ * it from accumulating again.
  *
  * There is no threshold and no count. Each allowance below is a category with
- * a reason, and the two that are temporary name the roadmap task that removes
- * them — so an allowance cannot quietly become permanent.
+ * a reason.
  *
  * Exit codes:
  *   0 — no disallowed occurrence
@@ -26,8 +26,45 @@ const GIT_ROOT = process.cwd();
 
 const LEGACY = 'prisma-next';
 
-/** The roadmap task both temporary allowances are waiting on. */
-const ROADMAP_TASK = 'ROADMAP.md § 3, "Decide the config filename and the command name"';
+/**
+ * Any case, joined by nothing, a hyphen or an underscore. Joined by a space,
+ * not after a dot, so `contract.prisma next to` is a file name followed by a
+ * word, and not before `js`, so `Prisma Next.js` is the framework.
+ */
+const LEGACY_PATTERN = /prisma[_-]?next|(?<!\.)prisma next(?!\.?js\b)/gi;
+
+function occurrences(line) {
+  return [...line.matchAll(LEGACY_PATTERN)].map((match) => ({
+    at: match.index,
+    length: match[0].length,
+  }));
+}
+
+/** Files that carry the retired name only to prove it stays gone, this check included. */
+const RETIREMENT_PROOFS = new Set([
+  'scripts/lint-legacy-name.mjs',
+  'packages/1-framework/3-tooling/cli/src/commands/init/skill-sources.ts',
+  'packages/1-framework/3-tooling/cli/test/commands/init/skill-sources.test.ts',
+  'packages/1-framework/3-tooling/cli/test/orm/init-scaffold.test.ts',
+  'packages/1-framework/1-core/errors/test/next-actions.test.ts',
+  'packages/1-framework/3-tooling/migration/test/next-actions.test.ts',
+  'test/integration/test/packaging/facade-tarball.test.ts',
+  'packages/9-public/@prisma/orm-target-postgres/test/cross-shell-tarball.test.ts',
+  'test/integration/test/cli.init-skill-distribution.integration.test.ts',
+]);
+
+/** Files that read the retired name so projects and shells set up by earlier releases keep working. */
+const COMPATIBILITY_SITES = new Set([
+  'packages/1-framework/2-authoring/psl-parser/src/schema-directive.ts',
+  'packages/1-framework/2-authoring/psl-parser/test/schema-directive.test.ts',
+  'packages/1-framework/3-tooling/language-server/test/server.test.ts',
+  'packages/1-framework/3-tooling/cli-telemetry/src/gating.ts',
+  'packages/1-framework/3-tooling/cli-telemetry/test/gating.test.ts',
+  'docs/Telemetry.md',
+  'test/integration/test/upgrade-instructions/default-generators-to-on-create/fixtures/before/older-header.prisma',
+  'test/integration/test/upgrade-instructions/default-generators-to-on-create/fixtures/after/older-header.prisma',
+  'test/integration/test/upgrade-instructions/default-generators-to-on-create/detection.test.ts',
+]);
 
 /**
  * An occurrence that is allowed, with the reason. Each returns true when it
@@ -43,47 +80,40 @@ const ROADMAP_TASK = 'ROADMAP.md § 3, "Decide the config filename and the comma
  */
 const ALLOWED = [
   {
-    why: 'a dated record of past work — the changelog, the release notes, the ADRs, and the `projects/` and `drive/` write-ups. Each says what was true, decided, or observed at a time when the old name was the name; rewriting one would misreport it',
+    why: 'a dated record of past work — the changelog, the release notes, the ADRs, the upgrade instructions, pending or shipped, and their archived sources (each names what it renames from), the gotcha logs, the framework-gaps review, the `projects/` and `drive/` write-ups, and committed migration steps and their content-addressed contract snapshots. Each says what was true, decided, or observed at a time when the old name was the name; rewriting one would misreport it (or break its hash)',
     matches: (relPath) =>
-      /^(CHANGELOG\.md|docs\/releases\/v[^/]*\.md|docs\/architecture docs\/adrs\/|projects\/|drive\/)/.test(
+      /^(CHANGELOG\.md|docs\/releases\/v[^/]*\.md|docs\/architecture docs\/adrs\/|docs\/reference\/framework-gaps\.md|skills\/prisma-8\/upgrading\/|upgrade-instructions\/(?:releases|pending)\/|projects\/|drive\/)/.test(
         relPath,
-      ),
+      ) ||
+      /(^|\/)gotchas\.md$/.test(relPath) ||
+      /\/migrations\/(?:snapshots|app)\//.test(relPath),
   },
   {
-    why: 'a link pinned to something in the old repository — a pull request, issue, commit or release by number, or a file at a released tag — or a Linear ticket whose URL carries a generated slug. Each names a thing that exists there and only there, so repointing would send the reader somewhere else entirely',
+    why: 'a link pinned to something in the old repository — a pull request, issue, commit or release by number, or a file at a released tag — a Linear ticket whose URL carries a generated slug, or a link to an ADR whose filename carries the old name. Each names a thing that exists there and only there, so repointing would send the reader somewhere else entirely',
     matches: (relPath, line, before, after) =>
       (/prisma\/$/.test(before) &&
         /^\/(?:pull|issues|commit|compare|releases|blob\/v[\d.]|tree\/v[\d.])\b/.test(after)) ||
-      /linear\.app\/[^\s)]*$/.test(before),
+      /linear\.app\/[^\s)]*$/.test(before) ||
+      /adrs\/ADR(?:%20| )\d+(?:%20| )-(?:%20| )$/.test(before),
   },
   {
-    why: `a name a user types or a path in their project — the published bin \`prisma-next\`, the \`prisma.config.ts\` it reads, the \`prisma-next.md\` and \`.prisma-next/\` it writes, the per-user \`config/prisma-next/\` directory, and the shim package carrying the bin. Renaming any of these is a breaking change needing an upgrade path, tracked in ${ROADMAP_TASK}`,
-    matches: (relPath, line, before, after) => {
-      // Never the package scope, and never a path inside the old repository —
-      // those are what this check exists to catch.
-      if (/@$/.test(before)) return false;
-      if (/(?:github\.com\/)?prisma\/$/.test(before)) return false;
-      // The shim package that carries the bin.
-      if (/^packages\/9-public\/prisma-next\//.test(relPath)) return true;
-      // The files and directories the command reads and writes.
-      if (/^\.(?:config|md|png)\b/.test(after)) return true;
-      if (/\.$/.test(before) && /^-regen\.config/.test(after)) return true;
-      // The bare command, and the directories named after it.
-      return !/^[-\w]/.test(after);
-    },
-  },
-  {
-    why: `the published skill cluster — users install these by name (\`skills add prisma/prisma#v<version>\`), so the directory names are user-facing and move with the same sweep as the command name, tracked in ${ROADMAP_TASK}`,
+    why: 'the Prisma 8 skill’s description naming its former name once, so an agent matches a user who still says it',
     matches: (relPath, line, before, after) =>
-      /^skills\//.test(relPath) ||
-      (/skills\/(?:upgrade\/|extension-author\/)?$/.test(before) && /^[-/]/.test(after)) ||
-      /^-(?:quickstart|contract|migrations|migration-review|queries|supabase|runtime|build|debug|feedback|upgrade|extension-upgrade)\b/.test(
-        after,
-      ),
+      relPath === 'skills/prisma-8/SKILL.md' &&
+      /\(Prisma 8, formerly $/.test(before) &&
+      after.startsWith(')'),
   },
   {
-    why: 'the roadmap narrates the move out of the old repository, so naming it is the point of the sentence',
-    matches: (relPath) => /^ROADMAP\.(?:md|html)$/.test(relPath),
+    why: 'a third party’s package name — `@cipherstash/prisma-next` is published under that name and only that name',
+    matches: (relPath, line, before) => /@cipherstash\/$/.test(before),
+  },
+  {
+    why: 'the retired name kept only to prove it stays gone — this check, the list of skill directories `init` deletes from older projects, and the tests asserting that no `prisma-next` bin or skill directory is installed any more',
+    matches: (relPath) => RETIREMENT_PROOFS.has(relPath),
+  },
+  {
+    why: 'compatibility with what earlier releases wrote into user projects and shells — the language server still serves a schema headed `// use prisma-next` (and formatting renames it), the upgrade script that rewrites `@default` generators still rewrites such a schema, as `contract emit` reads it, and the telemetry opt-out still honours `PRISMA_NEXT_DISABLE_TELEMETRY`',
+    matches: (relPath) => COMPATIBILITY_SITES.has(relPath),
   },
 ];
 
@@ -108,9 +138,10 @@ export function trackedFiles(scanDir) {
  * `at` is the index of the occurrence within `line`; it defaults to the first,
  * which is what a caller checking a single-occurrence string wants.
  */
-export function allowanceFor(relPath, line, at = line.indexOf(LEGACY)) {
+export function allowanceFor(relPath, line, at = occurrences(line)[0]?.at ?? -1) {
+  const length = occurrences(line).find((occurrence) => occurrence.at === at)?.length ?? 0;
   const before = line.slice(0, at);
-  const after = line.slice(at + LEGACY.length);
+  const after = line.slice(at + length);
   return ALLOWED.find((allowance) => allowance.matches(relPath, line, before, after));
 }
 
@@ -124,9 +155,10 @@ export function findViolations(scanDir, files = trackedFiles(scanDir)) {
     } catch {
       continue;
     }
-    if (!content.includes(LEGACY)) continue;
+    if (!LEGACY_PATTERN.test(content)) continue;
+    LEGACY_PATTERN.lastIndex = 0;
     content.split('\n').forEach((line, index) => {
-      for (let at = line.indexOf(LEGACY); at !== -1; at = line.indexOf(LEGACY, at + 1)) {
+      for (const { at } of occurrences(line)) {
         if (allowanceFor(relPath, line, at) !== undefined) continue;
         violations.push({ file: relPath, line: index + 1, column: at + 1, text: line.trim() });
         return;
@@ -139,19 +171,20 @@ export function findViolations(scanDir, files = trackedFiles(scanDir)) {
 export function main(scanDir = GIT_ROOT) {
   const violations = findViolations(scanDir);
   if (violations.length === 0) {
-    console.log(`No disallowed \`${LEGACY}\` occurrence.`);
+    console.log(`No disallowed \`${LEGACY}\` occurrence, in any spelling.`);
     return 0;
   }
 
-  console.error(`${violations.length} disallowed \`${LEGACY}\` occurrence(s):\n`);
+  console.error(`${violations.length} disallowed \`${LEGACY}\` occurrence(s), in any spelling:\n`);
   for (const violation of violations.slice(0, 40)) {
     console.error(`  ${violation.file}:${violation.line}: ${violation.text.slice(0, 140)}`);
   }
   if (violations.length > 40) console.error(`  … and ${violations.length - 40} more`);
   console.error(
-    '\nPrisma 8 publishes under `@prisma/*` from `prisma/prisma`. The old name is\n' +
+    '\nPrisma 8 publishes under `@prisma/*` from `prisma/orm`. The old name is\n' +
       'allowed only where it is a record of what shipped, a link into the old\n' +
-      'repository by number, or a user-facing name waiting on an upgrade path:\n',
+      "repository by number, a third party's package name, or a test that the\n" +
+      'retired name stays gone:\n',
   );
   for (const allowance of ALLOWED) console.error(`  - ${allowance.why}\n`);
   return 1;

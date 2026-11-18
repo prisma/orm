@@ -2,11 +2,16 @@
  * Seeds the demo schema with users, posts, and tasks.
  *
  * Mirrors examples/prisma-8-demo/scripts/seed.ts minus the pgvector
- * embeddings (this example exercises the per-request facade, not vectors).
+ * embeddings (this example exercises the serverless client and its connections, not vectors).
  */
 
-import { db } from '../src/prisma/db';
+import 'temporal-polyfill/full/global';
+import { Client } from 'pg';
+import { postgres } from '../src/prisma/db';
 import { EXAMPLE_ROOT, HYPERDRIVE_VAR, loadLocalEnv } from './env';
+import { GENERATED_POST_COUNT, insertGeneratedPosts } from './seed-posts';
+
+const firstPostDay = Temporal.PlainDate.from('2026-04-10');
 
 async function main() {
   loadLocalEnv(EXAMPLE_ROOT);
@@ -16,15 +21,27 @@ async function main() {
     throw new Error(`Set ${HYPERDRIVE_VAR} in .env (or DATABASE_URL) before running pnpm seed.`);
   }
 
-  await using runtime = await db.connect({ url });
+  const bulk = new Client({ connectionString: url });
+  await bulk.connect();
+  try {
+    await seed(bulk, url);
+  } finally {
+    await bulk.end();
+  }
+}
 
-  await runtime.execute(
+async function seed(bulk: Client, url: string) {
+  await using db = await postgres.connect({ url });
+
+  await bulk.query('TRUNCATE "post", "task", "user" RESTART IDENTITY CASCADE');
+
+  await db.execute(
     db.sql.public.user
       .insert([
         {
           email: 'alice@example.com',
           displayName: 'Alice',
-          createdAt: new Date('2026-04-01T00:00:00.000Z'),
+          createdAt: Temporal.Instant.from('2026-04-01T00:00:00.000Z'),
           kind: 'admin',
           address: { street: '123 Main St', city: 'San Francisco', zip: '94102', country: 'US' },
         },
@@ -32,13 +49,13 @@ async function main() {
       .build(),
   );
 
-  await runtime.execute(
+  await db.execute(
     db.sql.public.user
       .insert([
         {
           email: 'bob@example.com',
           displayName: 'Bob',
-          createdAt: new Date('2026-04-02T00:00:00.000Z'),
+          createdAt: Temporal.Instant.from('2026-04-02T00:00:00.000Z'),
           kind: 'user',
           address: { street: '456 Oak Ave', city: 'Portland', zip: null, country: 'US' },
         },
@@ -46,14 +63,14 @@ async function main() {
       .build(),
   );
 
-  const aliceRows = await runtime.query(
+  const aliceRows = await db.query(
     db.sql.public.user
       .select('id', 'email')
       .where((f, fns) => fns.eq(f.email, 'alice@example.com'))
       .limit(1)
       .build(),
   );
-  const bobRows = await runtime.query(
+  const bobRows = await db.query(
     db.sql.public.user
       .select('id', 'email')
       .where((f, fns) => fns.eq(f.email, 'bob@example.com'))
@@ -67,13 +84,13 @@ async function main() {
   }
 
   for (let i = 0; i < 5; i++) {
-    await runtime.execute(
+    await db.execute(
       db.sql.public.post
         .insert([
           {
             title: `Alice post ${i + 1}`,
             userId: alice.id,
-            createdAt: new Date(Date.UTC(2026, 3, 10 + i)),
+            createdAt: firstPostDay.add({ days: i }).toZonedDateTime('UTC').toInstant(),
           },
         ])
         .build(),
@@ -81,21 +98,28 @@ async function main() {
   }
 
   for (let i = 0; i < 3; i++) {
-    await runtime.execute(
+    await db.execute(
       db.sql.public.post
         .insert([
           {
             title: `Bob post ${i + 1}`,
             userId: bob.id,
-            createdAt: new Date(Date.UTC(2026, 3, 20 + i)),
+            createdAt: firstPostDay
+              .add({ days: 10 + i })
+              .toZonedDateTime('UTC')
+              .toInstant(),
           },
         ])
         .build(),
     );
   }
 
+  await insertGeneratedPosts(bulk, [alice.id, bob.id], GENERATED_POST_COUNT);
+
   console.log(`Seeded users: alice=${alice.id}, bob=${bob.id}`);
-  console.log('Seed complete (tasks/bugs/features intentionally empty — exercised by tests).');
+  console.log(
+    `Seeded 8 posts of theirs plus ${GENERATED_POST_COUNT} generated posts for /cursor/large (tasks/bugs/features intentionally empty — exercised by tests). Running seed again starts from empty tables.`,
+  );
 }
 
 main().catch((err) => {

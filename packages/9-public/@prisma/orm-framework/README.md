@@ -1,6 +1,6 @@
 # @prisma/orm-framework
 
-The target-agnostic core of Prisma Next: the contract model, the component/registry system, and the authoring surface that emitted contracts and application code reach at runtime.
+The target-agnostic core of Prisma 8: the contract model, the component/registry system, and the authoring surface that emitted contracts and application code reach at runtime.
 
 Most applications never install this package directly — it arrives as an exact-pinned dependency of a database facade (`@prisma/orm-postgres`, `@prisma/orm-sqlite`, `@prisma/orm-mongo`), which is the package app developers should install. Extension authors and decomposed installs (applications replacing part of the default wiring) depend on it directly.
 
@@ -21,7 +21,3 @@ Each subpath namespace consolidates one internal framework module; a bare namesp
 ## Responsibilities
 
 Everything runtime and authoring code needs independently of a concrete database: contract representation and validation, component wiring, PSL handling, and shared utilities. No database drivers, no build tooling (that is `@prisma/orm-toolchain`).
-
-## Dependencies
-
-Self-contained apart from small third-party runtime libraries (`arktype`, `@standard-schema/spec`, `pathe`, `uniku`). It is the root of the platform-package graph: the family, target, and toolchain packages all depend on it.

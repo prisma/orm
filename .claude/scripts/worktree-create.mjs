@@ -12,7 +12,12 @@ const cwd = input.cwd;
 
 const dir = resolve(cwd, '.claude/worktrees', name);
 
-execSync(`git worktree add -b "worktree/${name}" "${dir}" HEAD`, {
+execSync('git fetch origin +main:refs/remotes/origin/main', {
+  stdio: 'ignore',
+  cwd,
+});
+
+execSync(`git worktree add -b "worktree/${name}" "${dir}" origin/main`, {
   stdio: 'ignore',
   cwd,
 });

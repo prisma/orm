@@ -5,13 +5,7 @@ import type {
 } from '@internal/framework-components/control';
 import { ok } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
-import {
-  CONFIG_FORMAT_VERSION,
-  defineConfig,
-  hasCurrentConfigFormatVersion,
-  type PrismaNextConfig,
-  readConfigFormatVersion,
-} from '../src/config-types';
+import { defineConfig, type PrismaConfig } from '../src/config-types';
 
 const mockHook = {
   id: 'sql',
@@ -26,12 +20,13 @@ const mockHook = {
 
 function createSourceProvider(overrides: Record<string, unknown> = {}) {
   return {
+    format: 'typescript',
     load: async () => ok({ targetFamily: 'sql' } as Contract),
     ...overrides,
   };
 }
 
-function createValidConfig(overrides: Record<string, unknown> = {}): PrismaNextConfig {
+function createValidConfig(overrides: Record<string, unknown> = {}): PrismaConfig {
   return {
     family: {
       kind: 'family',
@@ -46,6 +41,7 @@ function createValidConfig(overrides: Record<string, unknown> = {}): PrismaNextC
       kind: 'target',
       familyId: 'sql',
       targetId: 'postgres',
+      defaultNamespaceId: 'public',
       id: 'postgres',
       version: '0.0.1',
       manifest: {},
@@ -81,7 +77,7 @@ function createValidConfig(overrides: Record<string, unknown> = {}): PrismaNextC
     },
     extensions: [],
     ...overrides,
-  } as PrismaNextConfig;
+  } as PrismaConfig;
 }
 
 describe('defineConfig', () => {
@@ -118,63 +114,7 @@ describe('defineConfig', () => {
   });
 
   it('does not validate structure — invalid shapes pass through for the loader to diagnose', () => {
-    const invalidConfig = { family: null } as unknown as PrismaNextConfig;
+    const invalidConfig = { family: null } as unknown as PrismaConfig;
     expect(() => defineConfig(invalidConfig)).not.toThrow();
-  });
-});
-
-describe('config format version marker', () => {
-  it('stamps the current format version on the result', () => {
-    const result = defineConfig(createValidConfig());
-    expect(readConfigFormatVersion(result)).toBe(CONFIG_FORMAT_VERSION);
-    expect(hasCurrentConfigFormatVersion(result)).toBe(true);
-  });
-
-  it('stamps the normalized copy when contract is present', () => {
-    const result = defineConfig(
-      createValidConfig({ contract: { source: createSourceProvider() } }),
-    );
-    expect(hasCurrentConfigFormatVersion(result)).toBe(true);
-  });
-
-  it('keeps the marker out of enumeration and JSON serialization', () => {
-    const result = defineConfig(createValidConfig());
-    const markerSymbol = Symbol.for('prisma-next.config-format-version');
-    expect(Object.getOwnPropertySymbols(result)).toContain(markerSymbol);
-    expect(Object.getOwnPropertyDescriptor(result, markerSymbol)?.enumerable).toBe(false);
-    expect(JSON.stringify({ marker: readConfigFormatVersion(result) })).toContain('1');
-    expect(JSON.stringify(defineConfig(createValidConfig({ contract: undefined })))).not.toContain(
-      'config-format-version',
-    );
-  });
-
-  it('does not survive a spread — configs must export the defineConfig result directly', () => {
-    const result = defineConfig(createValidConfig());
-    const spread = { ...result };
-    expect(hasCurrentConfigFormatVersion(spread)).toBe(false);
-  });
-
-  it('is idempotent when defineConfig wraps an already-stamped object', () => {
-    const config = createValidConfig();
-    const once = defineConfig(config);
-    const twice = defineConfig(once);
-    expect(hasCurrentConfigFormatVersion(twice)).toBe(true);
-  });
-
-  it('reports no version for plain objects and non-objects', () => {
-    expect(readConfigFormatVersion({})).toBeUndefined();
-    expect(readConfigFormatVersion(null)).toBeUndefined();
-    expect(readConfigFormatVersion('config')).toBeUndefined();
-    expect(hasCurrentConfigFormatVersion({})).toBe(false);
-  });
-
-  it('rejects a stale format version', () => {
-    const stale = {};
-    Object.defineProperty(stale, Symbol.for('prisma-next.config-format-version'), {
-      value: CONFIG_FORMAT_VERSION - 1,
-      enumerable: false,
-    });
-    expect(readConfigFormatVersion(stale)).toBe(CONFIG_FORMAT_VERSION - 1);
-    expect(hasCurrentConfigFormatVersion(stale)).toBe(false);
   });
 });

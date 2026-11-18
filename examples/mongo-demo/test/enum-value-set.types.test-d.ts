@@ -27,18 +27,12 @@ type NoEmitRoleValues = EnumValues<NamespacedEnums<Contract>['__unbound__']['Use
 
 test('emit: FieldOutputTypes types the enum field as the value union, not string', () => {
   expectTypeOf<EmittedRole>().toEqualTypeOf<RoleUnion>();
-  expectTypeOf<EmittedRole>().not.toEqualTypeOf<string>();
 });
 
 test('emit: the ORM read row narrows the enum field to the value union', () => {
   expectTypeOf<OrmRole>().toEqualTypeOf<RoleUnion>();
-  expectTypeOf<OrmRole>().not.toEqualTypeOf<string>();
 });
 
 test('no-emit: the domain enum value union equals the same value union', () => {
   expectTypeOf<NoEmitRoleValues>().toEqualTypeOf<RoleUnion>();
-});
-
-test('emit and no-emit agree: the emitted field type equals the no-emit value union', () => {
-  expectTypeOf<EmittedRole>().toEqualTypeOf<NoEmitRoleValues>();
 });

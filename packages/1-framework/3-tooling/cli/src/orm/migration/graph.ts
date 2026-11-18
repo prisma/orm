@@ -1,3 +1,4 @@
+import { ormConfigSection } from '@internal/config-loader';
 import { ifDefined } from '@internal/utils/defined';
 import type { Block, Presentations } from '@prisma/cli-engine';
 import { flag } from '@prisma/cli-engine';
@@ -23,7 +24,7 @@ import {
 import { createToneMigrationListStyler } from '../../utils/formatters/migration-list-styler';
 import { toneDrawing } from '../../utils/formatters/tone-markup';
 import type { GlyphMode } from '../../utils/glyph-mode';
-import { ormConfigSection } from '../config-section';
+import { dataLine } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
 import { displayPath, migrationsDirFor } from './paths';
@@ -39,7 +40,10 @@ interface MigrationGraphDotResult extends MigrationGraphJsonResult {
 
 /**
  * The tree is a drawing for a reader; the DOT document is a graph description
- * for another program, so it is the one thing here that belongs on stdout.
+ * for another program, so it is also the stdout payload. It appears in both
+ * surfaces because the engine treats the payload as a mirror of the human
+ * output: on one shared screen it suppresses the stdout copy, so the human
+ * block is what keeps `--dot` visible there, while split sinks receive both.
  */
 function graphPresentations(inputs: {
   readonly document: MigrationGraphJsonResult | MigrationGraphDotResult;
@@ -51,7 +55,14 @@ function graphPresentations(inputs: {
 }): Presentations {
   const { tree, dot, legend } = inputs;
   return {
-    stdout: () => [],
+    stdout: () =>
+      dot === undefined
+        ? inputs.document.spaces.flatMap((space) =>
+            space.migrations.map((migration) =>
+              dataLine([space.space, migration.name, migration.fromContract, migration.toContract]),
+            ),
+          )
+        : dot.split('\n'),
     next: () => [],
     human: (): readonly Block[] => [
       {
@@ -63,9 +74,9 @@ function graphPresentations(inputs: {
         ],
       },
       ...(tree === undefined ? [] : [{ kind: 'drawing' as const, lines: toneDrawing(tree) }]),
+      ...(dot === undefined ? [] : [{ kind: 'drawing' as const, lines: dot.split('\n') }]),
       ...(legend === undefined ? [] : [{ kind: 'drawing' as const, lines: toneDrawing(legend) }]),
     ],
-    ...(dot === undefined ? {} : { stdout: () => dot.split('\n') }),
     json: () => inputs.document,
   };
 }
@@ -108,7 +119,7 @@ export const migrationGraphCommand = defineOrmCommand({
       return notOk(normalizeError(errorLegendHumanOnly('--dot')));
     }
 
-    const migrationsDir = migrationsDirFor(ctx.config, ctx.cwd);
+    const migrationsDir = migrationsDirFor(ctx.config);
     const loaded = await buildReadAggregate(ctx.config, { migrationsDir });
     if (!loaded.ok) {
       return notOk(normalizeError(loaded.failure));

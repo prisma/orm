@@ -5,7 +5,12 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { participatesInLockstep, rewriteWorkspaceDeps } from './set-version-utils.ts';
+import {
+  participatesInLockstep,
+  restampExtensionVersion,
+  rewriteWorkspaceDeps,
+  stampSkillMetadata,
+} from './set-version-utils.ts';
 
 const rootDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
@@ -38,6 +43,10 @@ const output = execSync('pnpm list -r --json', {
 });
 
 const workspacePackages: PnpmPackage[] = JSON.parse(output);
+
+const previousVersion: string = JSON.parse(
+  await fs.readFile(path.join(rootDir, 'package.json'), 'utf-8'),
+).version;
 
 let updatedCount = 0;
 
@@ -85,5 +94,36 @@ for (const manifestPath of trackedManifests) {
   );
   updatedCount++;
 }
+
+// Extension packs stamp their own package version into every contract they
+// contribute to, so the tracked emitted artefacts (examples and extension
+// test fixtures) carry the old version after a bump and `fixtures:check`
+// diffs them. Restamping here is exactly the change a re-emit would make.
+// Migration snapshots are content-addressed and are never rewritten.
+const trackedArtefacts = execSync("git ls-files -- '*contract.json' '*contract.d.ts'", {
+  cwd: rootDir,
+  encoding: 'utf-8',
+})
+  .split('\n')
+  .filter((rel) => rel && !/(^|\/)migrations\/snapshots\//.test(rel));
+
+for (const rel of trackedArtefacts) {
+  const artefactPath = path.join(rootDir, rel);
+  const before = await fs.readFile(artefactPath, 'utf-8');
+  const after = restampExtensionVersion(before, previousVersion, version);
+  if (after === before) continue;
+  await fs.writeFile(artefactPath, after);
+  console.log(`Restamped extension version in ${rel}`);
+}
+
+// The user-facing skills ship inside the `@prisma/orm-*` tarballs and carry
+// the version they were published with in their frontmatter, so a consumer
+// can tell whether its synced copy still matches its installed packages.
+const skillPath = path.join(rootDir, 'skills', 'prisma-8', 'SKILL.md');
+await fs.writeFile(
+  skillPath,
+  stampSkillMetadata(await fs.readFile(skillPath, 'utf-8'), 'library_version', version),
+);
+console.log(`Stamped ${path.relative(rootDir, skillPath)} with library_version ${version}`);
 
 console.log(`\nDone! Updated ${updatedCount} packages.`);

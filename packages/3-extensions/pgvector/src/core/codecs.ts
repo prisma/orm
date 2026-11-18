@@ -3,14 +3,13 @@
  *
  * Mirrors the patterns in `postgres/codecs-class.ts` and `sqlite/codecs-class.ts` for the single `pg/vector@1` codec. Three artifacts:
  *
- * 1. `PgVectorCodec` extends {@link CodecImpl} with the runtime encode/decode/encodeJson/decodeJson conversions inline. Conversions are simple enough (PostgreSQL `[1,2,3]` text format) that no shared helper module is warranted; the class body is the source of truth.
- * 2. `PgVectorDescriptor` extends {@link PostgresCodecDescriptor} with the codec id, traits, target types, params schema (`{ length: number }`, validated against {@link VECTOR_MAX_DIM}), the postgres native type `vector`, explicit target behavior, and the emit-path `renderOutputType` producing `Vector<${length}>`.
- * 3. `pgVectorColumn(length)` per-codec column helper invoking `descriptor.factory({ length })` directly + passing the bare `nativeType: 'vector'`. The family-layer {@link expandNativeType} hook renders the parameterized form (`vector(1536)`) at emit/verify time from `nativeType` + `typeParams`.
+ * 1. `PgVectorCodec` extends {@link CodecImpl} with the wire and value conversions inline. Conversions are simple enough (PostgreSQL `[1,2,3]` text format) that no shared helper module is warranted; the class body is the source of truth.
+ * 2. `PgVectorDescriptor` extends {@link PostgresCodecDescriptor} with the codec id, traits, the `pgvector/vector` data type and its params schema, and explicit target behavior. The column's type, `Vector<${length}>`, comes from the pack's type function in `types/codec-types.ts`. The data type declares the type's name and the bounds of `length`.
+ * 3. `pgVectorColumn(length)` per-codec column helper invoking `descriptor.factory({ length })` directly.
  *
- * `length` threads into the runtime codec via the constructor so encode/decode/encodeJson/decodeJson enforce the declared dimension at every ingress path. Without this, `vector(3)` and `vector(1536)` would produce codecs with identical behaviour and a dimension-mismatched value would round-trip undetected.
+ * `length` threads into the runtime codec via the constructor so the wire methods enforce the declared dimension, and `pgvector/vector` checks it for every stored value. Without this, `vector(3)` and `vector(1536)` would produce codecs with identical behaviour and a dimension-mismatched value would round-trip undetected.
  */
 
-import type { JsonValue } from '@internal/contract/types';
 import {
   type AnyCodecDescriptor,
   type CodecCallContext,
@@ -19,36 +18,22 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
+  type DataTypeValue,
 } from '@internal/framework-components/codec';
 import type { ExtractCodecTypes, ProjectionExpr } from '@internal/sql-relational-core/ast';
-import { CastExpr, FunctionCallExpr } from '@internal/sql-relational-core/ast';
+import { CastExpr } from '@internal/sql-relational-core/ast';
 import {
   definePostgresCodecs,
   PostgresCodecDescriptor,
 } from '@internal/target-postgres/codec-descriptor';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
-import { type as arktype } from 'arktype';
-import { VECTOR_CODEC_ID, VECTOR_MAX_DIM } from './constants';
+import { VECTOR_CODEC_ID } from './constants';
+import { pgvectorVector, pgvectorVectorParams } from './data-types';
 import { pgVectorError } from './errors';
 
 type VectorConversionCode = 'RUNTIME.ENCODE_FAILED' | 'RUNTIME.DECODE_FAILED';
 
 type VectorParams = { readonly length: number };
-
-const vectorParamsSchema = arktype({
-  length: 'number',
-}).narrow((params, ctx) => {
-  const { length } = params;
-  if (!Number.isInteger(length)) {
-    return ctx.mustBe('an integer');
-  }
-  if (length < 1 || length > VECTOR_MAX_DIM) {
-    return ctx.mustBe(`in the range [1, ${VECTOR_MAX_DIM}]`);
-  }
-  return true;
-}) satisfies StandardSchemaV1<VectorParams>;
-
-const PG_VECTOR_NATIVE_TYPE = 'vector';
 
 function parseVector(value: string): number[] {
   if (!value.startsWith('[') || !value.endsWith(']')) {
@@ -89,7 +74,7 @@ export class PgVectorCodec extends CodecImpl<
   readonly length: number;
 
   constructor(descriptor: AnyCodecDescriptor, length: number) {
-    super(descriptor);
+    super(descriptor, pgvectorVector, { length });
     this.length = length;
   }
 
@@ -118,12 +103,12 @@ export class PgVectorCodec extends CodecImpl<
     }
   }
 
-  async encode(value: number[], _ctx: CodecCallContext): Promise<string> {
+  async toWire(value: number[], _ctx: CodecCallContext): Promise<string> {
     this.assertVector(value, 'RUNTIME.ENCODE_FAILED');
     return `[${value.join(',')}]`;
   }
 
-  async decode(wire: string, _ctx: CodecCallContext): Promise<number[]> {
+  async fromWire(wire: string, _ctx: CodecCallContext): Promise<number[]> {
     if (typeof wire !== 'string') {
       throw pgVectorError('RUNTIME.DECODE_FAILED', 'Vector wire value must be a string', {
         meta: { codecId: VECTOR_CODEC_ID },
@@ -134,57 +119,37 @@ export class PgVectorCodec extends CodecImpl<
     return value;
   }
 
-  encodeJson(value: number[]): JsonValue {
-    this.assertVector(value, 'RUNTIME.ENCODE_FAILED');
-    return [...value];
+  fromDataTypeValue(value: DataTypeValue<readonly number[]>): number[] {
+    return [...value.value];
   }
 
-  decodeJson(json: JsonValue): number[] {
-    if (!Array.isArray(json)) {
-      throw pgVectorError('RUNTIME.DECODE_FAILED', 'Vector database JSON value must be an array', {
-        meta: { codecId: VECTOR_CODEC_ID },
-      });
-    }
-    const value = [...json];
-    this.assertVector(value, 'RUNTIME.DECODE_FAILED');
-    return value;
+  toDataTypeValue(input: number[]): DataTypeValue {
+    this.assertVector(input, 'RUNTIME.ENCODE_FAILED');
+    return this.dataTypeValueOf([...input]);
   }
 }
 
 /**
- * Projects a `vector` as a JSON numeric array.
- *
- * A `vector` handed straight to a JSON constructor is rendered through its text
- * output function, so it arrives as the *string* `"[1,2,3]"` rather than as an
- * array.
- *
- * The route matters as much as the destination. A vector's elements are `real`,
- * and its text form prints the shortest decimal that round-trips *as a `real`* —
- * `0.1` for a value the application holds as `0.10000000149011612`. Reading that
- * text back as a double therefore lands on a different number, so casting the
- * text to `json` would lose precision the value still had. Widening each element
- * to `float8` first keeps the exact value the `real` denotes, which is what
- * `encodeJson` returns.
+ * Projects a `vector` as the text PostgreSQL prints for it, the value the runtime driver returns for
+ * an ordinary row, so `fromWire` reads an included vector as it reads a row. A JSON array of the
+ * elements would not do: an element is a `real`, and the text holds the shortest decimal that
+ * reads back as that `real`, so the row reads `0.1` where the element widened to a double is
+ * `0.10000000149011612`.
  */
-const jsonArrayFromVectorElements = (expression: ProjectionExpr): ProjectionExpr =>
-  FunctionCallExpr.of('array_to_json', [
-    CastExpr.as(CastExpr.as(expression, 'real[]'), 'float8[]'),
-  ]);
+const vectorTextJsonProjection = (expression: ProjectionExpr): ProjectionExpr =>
+  CastExpr.as(expression, 'text');
 
 export class PgVectorDescriptor extends PostgresCodecDescriptor<VectorParams> {
-  protected override nativeType(): string {
-    return PG_VECTOR_NATIVE_TYPE;
-  }
+  override readonly jsonType = 'array' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return jsonArrayFromVectorElements(expression);
+    return vectorTextJsonProjection(expression);
   }
+  override readonly dataType = pgvectorVector.id;
   override readonly codecId = VECTOR_CODEC_ID;
   override readonly traits = ['equality'] as const;
-  override readonly targetTypes = ['vector'] as const;
-  override readonly paramsSchema: StandardSchemaV1<VectorParams> = vectorParamsSchema;
-  override renderOutputType(params: VectorParams): string {
-    return `Vector<${params.length}>`;
-  }
+  override readonly enumRefusal =
+    'The contract stores a vector member as an array of numbers, which no CHECK can list. No enum can use a vector codec; use a text enum instead.';
+  override readonly paramsSchema: StandardSchemaV1<VectorParams> = pgvectorVectorParams;
   override factory(params: VectorParams): (ctx: CodecInstanceContext) => PgVectorCodec {
     return () => new PgVectorCodec(this, params.length);
   }
@@ -194,11 +159,9 @@ export const pgVectorDescriptor = new PgVectorDescriptor();
 
 /**
  * Per-codec column helper for `pg/vector@1`. Generic over `N extends number` so the column site preserves the dimension literal in `typeParams` (e.g. `pgVectorColumn(1536)` packs `typeParams: { length: 1536 }`).
- *
- * Passes the bare `nativeType: 'vector'`; the family-layer `expandNativeType` hook renders the parameterized form (`vector(1536)`) at emit/verify time from `nativeType` + `typeParams`.
  */
 export const pgVectorColumn = <N extends number>(length: N) =>
-  column(pgVectorDescriptor.factory({ length }), pgVectorDescriptor.codecId, { length }, 'vector');
+  column(pgVectorDescriptor.factory({ length }), pgVectorDescriptor.codecId, { length });
 
 pgVectorColumn satisfies ColumnHelperFor<PgVectorDescriptor>;
 pgVectorColumn satisfies ColumnHelperForStrict<PgVectorDescriptor>;

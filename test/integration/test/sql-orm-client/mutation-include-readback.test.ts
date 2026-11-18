@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { includeStrategies } from './helpers';
 import {
   createReturningUsersCollection,
+  expectPerRelationStatements,
   timeouts,
   withCollectionRuntime,
 } from './integration-helpers';
@@ -23,13 +25,13 @@ import { seedComments, seedPosts, seedProfiles, seedUsers } from './runtime-help
 // row order for a set-returning mutation, only that each row carries its
 // own relations.
 
-describe('integration/mutation-include-readback', () => {
+describe.each(includeStrategies)('integration/mutation-include-readback (%s)', (strategy) => {
   describe('create()', () => {
     it(
       'returns the inserted row with its to-many relation, selected fields only',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const users = createReturningUsersCollection(runtime);
+          const users = createReturningUsersCollection(runtime, strategy);
 
           // No FK on posts.user_id, so the relation can be seeded ahead
           // of the parent it points at.
@@ -38,10 +40,12 @@ describe('integration/mutation-include-readback', () => {
             { id: 11, title: 'Post B', userId: 9, views: 200 },
           ]);
 
+          runtime.resetExecutions();
           const created = await users
             .select('name')
             .include('posts', (posts) => posts.select('title').orderBy((post) => post.id.asc()))
             .create({ id: 9, name: 'Neo', email: 'neo@example.com', invitedById: null });
+          expectPerRelationStatements(runtime, strategy, 2);
 
           expect(created).toEqual({
             name: 'Neo',
@@ -56,12 +60,14 @@ describe('integration/mutation-include-readback', () => {
       'resolves a to-many relation to an empty array when the inserted row owns none',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const users = createReturningUsersCollection(runtime);
+          const users = createReturningUsersCollection(runtime, strategy);
 
+          runtime.resetExecutions();
           const created = await users
             .select('name')
             .include('posts', (posts) => posts.select('title'))
             .create({ id: 9, name: 'Neo', email: 'neo@example.com', invitedById: null });
+          expectPerRelationStatements(runtime, strategy, 2);
 
           expect(created).toEqual({ name: 'Neo', posts: [] });
         });
@@ -73,14 +79,16 @@ describe('integration/mutation-include-readback', () => {
       'returns a populated to-one relation, selected fields only',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const users = createReturningUsersCollection(runtime);
+          const users = createReturningUsersCollection(runtime, strategy);
 
           await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
 
+          runtime.resetExecutions();
           const created = await users
             .select('name')
             .include('invitedBy', (inviter) => inviter.select('name'))
             .create({ id: 2, name: 'Bob', email: 'bob@example.com', invitedById: 1 });
+          expectPerRelationStatements(runtime, strategy, 2);
 
           expect(created).toEqual({ name: 'Bob', invitedBy: { name: 'Alice' } });
         });
@@ -92,12 +100,14 @@ describe('integration/mutation-include-readback', () => {
       'resolves a to-one relation to null when the foreign key is null',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const users = createReturningUsersCollection(runtime);
+          const users = createReturningUsersCollection(runtime, strategy);
 
+          runtime.resetExecutions();
           const created = await users
             .select('name')
             .include('invitedBy', (inviter) => inviter.select('name'))
             .create({ id: 2, name: 'Bob', email: 'bob@example.com', invitedById: null });
+          expectPerRelationStatements(runtime, strategy, 2);
 
           expect(created).toEqual({ name: 'Bob', invitedBy: null });
         });
@@ -111,7 +121,7 @@ describe('integration/mutation-include-readback', () => {
       'keys each inserted row to its own relations',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const users = createReturningUsersCollection(runtime);
+          const users = createReturningUsersCollection(runtime, strategy);
 
           await seedPosts(runtime, [
             { id: 10, title: 'Alice A', userId: 1, views: 100 },
@@ -119,6 +129,7 @@ describe('integration/mutation-include-readback', () => {
             { id: 12, title: 'Bob B', userId: 2, views: 300 },
           ]);
 
+          runtime.resetExecutions();
           const created = await users
             .select('name')
             .include('posts', (posts) => posts.select('title').orderBy((post) => post.id.asc()))
@@ -126,6 +137,7 @@ describe('integration/mutation-include-readback', () => {
               { id: 1, name: 'Alice', email: 'alice@example.com', invitedById: null },
               { id: 2, name: 'Bob', email: 'bob@example.com', invitedById: null },
             ]);
+          expectPerRelationStatements(runtime, strategy, 2);
 
           const sorted = [...created].sort((a, b) => a.name.localeCompare(b.name));
           expect(sorted).toEqual([
@@ -143,7 +155,7 @@ describe('integration/mutation-include-readback', () => {
       'returns the updated row with its to-many relation, selected fields only',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const users = createReturningUsersCollection(runtime);
+          const users = createReturningUsersCollection(runtime, strategy);
 
           await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
           await seedPosts(runtime, [
@@ -151,11 +163,13 @@ describe('integration/mutation-include-readback', () => {
             { id: 11, title: 'Post B', userId: 1, views: 200 },
           ]);
 
+          runtime.resetExecutions();
           const updated = await users
             .where({ id: 1 })
             .select('name')
             .include('posts', (posts) => posts.select('title').orderBy((post) => post.id.asc()))
             .update({ name: 'Alice Updated' });
+          expectPerRelationStatements(runtime, strategy, 2);
 
           expect(updated).toEqual({
             name: 'Alice Updated',
@@ -172,7 +186,7 @@ describe('integration/mutation-include-readback', () => {
       'keys each updated row to its own relations',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const users = createReturningUsersCollection(runtime);
+          const users = createReturningUsersCollection(runtime, strategy);
 
           await seedUsers(runtime, [
             { id: 1, name: 'Draft', email: 'a@example.com' },
@@ -184,11 +198,13 @@ describe('integration/mutation-include-readback', () => {
             { id: 12, title: 'Post C', userId: 2, views: 300 },
           ]);
 
+          runtime.resetExecutions();
           const updated = await users
             .where({ name: 'Draft' })
             .select('email')
             .include('posts', (posts) => posts.select('title').orderBy((post) => post.id.asc()))
             .updateAll({ name: 'Ready' });
+          expectPerRelationStatements(runtime, strategy, 2);
 
           const sorted = [...updated].sort((a, b) => a.email.localeCompare(b.email));
           expect(sorted).toEqual([
@@ -206,11 +222,12 @@ describe('integration/mutation-include-readback', () => {
       'returns the updated row with its relation on the conflict (update) branch',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const users = createReturningUsersCollection(runtime);
+          const users = createReturningUsersCollection(runtime, strategy);
 
           await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
           await seedPosts(runtime, [{ id: 10, title: 'Post A', userId: 1, views: 100 }]);
 
+          runtime.resetExecutions();
           const upserted = await users
             .select('name')
             .include('posts', (posts) => posts.select('title').orderBy((post) => post.id.asc()))
@@ -218,6 +235,7 @@ describe('integration/mutation-include-readback', () => {
               create: { id: 1, name: 'Alice', email: 'alice@example.com', invitedById: null },
               update: { name: 'Alice Updated' },
             });
+          expectPerRelationStatements(runtime, strategy, 2);
 
           expect(upserted).toEqual({
             name: 'Alice Updated',
@@ -232,10 +250,11 @@ describe('integration/mutation-include-readback', () => {
       'returns the inserted row with its relation on the create branch',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const users = createReturningUsersCollection(runtime);
+          const users = createReturningUsersCollection(runtime, strategy);
 
           await seedPosts(runtime, [{ id: 10, title: 'Fresh Post', userId: 5, views: 100 }]);
 
+          runtime.resetExecutions();
           const upserted = await users
             .select('name')
             .include('posts', (posts) => posts.select('title'))
@@ -243,6 +262,7 @@ describe('integration/mutation-include-readback', () => {
               create: { id: 5, name: 'Carol', email: 'carol@example.com', invitedById: null },
               update: { name: 'Carol Updated' },
             });
+          expectPerRelationStatements(runtime, strategy, 2);
 
           expect(upserted).toEqual({
             name: 'Carol',
@@ -259,7 +279,7 @@ describe('integration/mutation-include-readback', () => {
       'returns the deleted row with a pre-delete snapshot of its relation, selected fields only',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const users = createReturningUsersCollection(runtime);
+          const users = createReturningUsersCollection(runtime, strategy);
 
           await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
           await seedPosts(runtime, [
@@ -267,11 +287,13 @@ describe('integration/mutation-include-readback', () => {
             { id: 11, title: 'Post B', userId: 1, views: 200 },
           ]);
 
+          runtime.resetExecutions();
           const deleted = await users
             .where({ id: 1 })
             .select('name')
             .include('posts', (posts) => posts.select('title').orderBy((post) => post.id.asc()))
             .delete();
+          expectPerRelationStatements(runtime, strategy, 3);
 
           expect(deleted).toEqual({
             name: 'Alice',
@@ -291,7 +313,7 @@ describe('integration/mutation-include-readback', () => {
       'keys each deleted row to its own relation snapshot',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const users = createReturningUsersCollection(runtime);
+          const users = createReturningUsersCollection(runtime, strategy);
 
           await seedUsers(runtime, [
             { id: 1, name: 'Remove', email: 'a@example.com' },
@@ -304,11 +326,13 @@ describe('integration/mutation-include-readback', () => {
             { id: 12, title: 'Post C', userId: 2, views: 300 },
           ]);
 
+          runtime.resetExecutions();
           const deleted = await users
             .where({ name: 'Remove' })
             .select('email')
             .include('posts', (posts) => posts.select('title').orderBy((post) => post.id.asc()))
             .deleteAll();
+          expectPerRelationStatements(runtime, strategy, 3);
 
           const sorted = [...deleted].sort((a, b) => a.email.localeCompare(b.email));
           expect(sorted).toEqual([
@@ -329,7 +353,7 @@ describe('integration/mutation-include-readback', () => {
       'update() resolves a depth-2 relation, selected fields at every level',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const users = createReturningUsersCollection(runtime);
+          const users = createReturningUsersCollection(runtime, strategy);
 
           await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
           await seedPosts(runtime, [{ id: 10, title: 'Post A', userId: 1, views: 100 }]);
@@ -338,6 +362,7 @@ describe('integration/mutation-include-readback', () => {
             { id: 101, body: 'Second', postId: 10 },
           ]);
 
+          runtime.resetExecutions();
           const updated = await users
             .where({ id: 1 })
             .select('name')
@@ -350,6 +375,7 @@ describe('integration/mutation-include-readback', () => {
                 ),
             )
             .update({ name: 'Alice Updated' });
+          expectPerRelationStatements(runtime, strategy, 3);
 
           expect(updated).toEqual({
             name: 'Alice Updated',
@@ -369,7 +395,7 @@ describe('integration/mutation-include-readback', () => {
       'updateAll() resolves a scalar count() relation per row',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const users = createReturningUsersCollection(runtime);
+          const users = createReturningUsersCollection(runtime, strategy);
 
           await seedUsers(runtime, [
             { id: 1, name: 'Draft', email: 'a@example.com' },
@@ -381,11 +407,13 @@ describe('integration/mutation-include-readback', () => {
             { id: 12, title: 'Post C', userId: 2, views: 300 },
           ]);
 
+          runtime.resetExecutions();
           const updated = await users
             .where({ name: 'Draft' })
             .select('email')
             .include('posts', (posts) => posts.count())
             .updateAll({ name: 'Ready' });
+          expectPerRelationStatements(runtime, strategy, 2);
 
           const sorted = [...updated].sort((a, b) => a.email.localeCompare(b.email));
           expect(sorted).toEqual([
@@ -401,7 +429,7 @@ describe('integration/mutation-include-readback', () => {
       'createAll() resolves a combine() relation per row',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const users = createReturningUsersCollection(runtime);
+          const users = createReturningUsersCollection(runtime, strategy);
 
           await seedPosts(runtime, [
             { id: 10, title: 'Post A', userId: 1, views: 100 },
@@ -409,6 +437,7 @@ describe('integration/mutation-include-readback', () => {
             { id: 12, title: 'Post C', userId: 1, views: 300 },
           ]);
 
+          runtime.resetExecutions();
           const created = await users
             .select('name')
             .include('posts', (posts) =>
@@ -416,7 +445,7 @@ describe('integration/mutation-include-readback', () => {
                 recent: posts
                   .select('title')
                   .orderBy((post) => post.id.desc())
-                  .take(2),
+                  .limit(2),
                 total: posts.count(),
               }),
             )
@@ -424,6 +453,7 @@ describe('integration/mutation-include-readback', () => {
               { id: 1, name: 'Alice', email: 'alice@example.com', invitedById: null },
               { id: 2, name: 'Bob', email: 'bob@example.com', invitedById: null },
             ]);
+          expectPerRelationStatements(runtime, strategy, 3);
 
           const sorted = [...created].sort((a, b) => a.name.localeCompare(b.name));
           expect(sorted).toEqual([
@@ -448,16 +478,18 @@ describe('integration/mutation-include-readback', () => {
       'update() resolves a populated to-one profile relation, selected fields only',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const users = createReturningUsersCollection(runtime);
+          const users = createReturningUsersCollection(runtime, strategy);
 
           await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
           await seedProfiles(runtime, [{ id: 50, userId: 1, bio: 'Hello' }]);
 
+          runtime.resetExecutions();
           const updated = await users
             .where({ id: 1 })
             .select('name')
             .include('profile', (profile) => profile.select('bio'))
             .update({ name: 'Alice Updated' });
+          expectPerRelationStatements(runtime, strategy, 2);
 
           expect(updated).toEqual({
             name: 'Alice Updated',
@@ -478,8 +510,9 @@ describe('integration/mutation-include-readback', () => {
       'create() with a nested create() resolves the just-written relation',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const users = createReturningUsersCollection(runtime);
+          const users = createReturningUsersCollection(runtime, strategy);
 
+          runtime.resetExecutions();
           const created = await users
             .select('name')
             .include('posts', (posts) => posts.select('title').orderBy((post) => post.id.asc()))
@@ -493,6 +526,7 @@ describe('integration/mutation-include-readback', () => {
                   { id: 11, title: 'Second', views: 200 },
                 ]),
             });
+          expectPerRelationStatements(runtime, strategy, 3);
 
           expect(created).toEqual({
             name: 'Nested',
@@ -507,10 +541,11 @@ describe('integration/mutation-include-readback', () => {
       'update() with a deep nested create() resolves a depth-2 relation',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const users = createReturningUsersCollection(runtime);
+          const users = createReturningUsersCollection(runtime, strategy);
 
           await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
 
+          runtime.resetExecutions();
           const updated = await users
             .where({ id: 1 })
             .select('name')
@@ -533,6 +568,7 @@ describe('integration/mutation-include-readback', () => {
                   },
                 ]),
             });
+          expectPerRelationStatements(runtime, strategy, 6);
 
           expect(updated).toEqual({
             name: 'Alice',

@@ -1,0 +1,104 @@
+import type { PlanMeta } from '@internal/contract/types';
+import { type DataTypeValue, dataType, readJsonString } from '@internal/framework-components/codec';
+import { mongoCodec, mongoCodecDescriptor } from '@internal/mongo-codec';
+import type { MongoDriver, MongoLoweredDraft } from '@internal/mongo-lowering';
+import type { MongoQueryPlan } from '@internal/mongo-query-ast/execution';
+import type { AnyMongoWireCommand } from '@internal/mongo-wire';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  createMongoExecutionContext,
+  createMongoExecutionStack,
+  type MongoRuntimeAdapterInstance,
+} from '../src/mongo-execution-stack';
+import { createMongoRuntime } from '../src/mongo-runtime';
+import { testContract } from './mongo-middleware-fixtures';
+
+const textType = dataType('test/text', { read: (json) => readJsonString('test/text', json) });
+
+const meta: PlanMeta = { target: 'mongo', targetFamily: 'mongo', storageHash: 'test', lane: 'orm' };
+
+const adapterInstance = {
+  familyId: 'mongo',
+  targetId: 'mongo',
+  lower: vi.fn(),
+  structuralLower: vi.fn(
+    (plan: MongoQueryPlan): MongoLoweredDraft => ({
+      kind: 'rawAggregate',
+      collection: plan.collection,
+      pipeline: [],
+    }),
+  ),
+  resolveParams: vi.fn(async () => ({}) as unknown as AnyMongoWireCommand),
+} as unknown as MongoRuntimeAdapterInstance<'mongo'>;
+
+function runtimeOver(driver: MongoDriver) {
+  const stack = createMongoExecutionStack({
+    target: {
+      kind: 'target',
+      id: 'test-target',
+      familyId: 'mongo',
+      targetId: 'mongo',
+      version: '0.0.1',
+      types: {
+        codecTypes: {
+          codecDescriptors: [
+            mongoCodecDescriptor(
+              mongoCodec({
+                typeId: 'test/upper@1',
+                fromWire: (wire: string) => wire.toUpperCase(),
+                toWire: (value: string) => value,
+                dataType: textType,
+                fromDataTypeValue: (value: DataTypeValue<string>) => value.value,
+              }),
+              { traits: [] },
+            ),
+          ],
+        },
+      },
+      create: () => ({ familyId: 'mongo', targetId: 'mongo' }),
+    },
+    adapter: {
+      kind: 'adapter',
+      id: 'test-adapter',
+      familyId: 'mongo',
+      targetId: 'mongo',
+      version: '0.0.1',
+      create: () => adapterInstance,
+    },
+  });
+  const context = createMongoExecutionContext({ contract: testContract, stack });
+  return createMongoRuntime({ context, adapter: stack.adapter.create(stack), driver });
+}
+
+function driverYielding(rows: readonly Record<string, unknown>[]): MongoDriver {
+  return {
+    execute: vi.fn(async function* <Row>() {
+      for (const row of rows) yield row as Row;
+    }),
+    close: vi.fn(async () => {}),
+  } as unknown as MongoDriver;
+}
+
+describe('MongoRuntime', () => {
+  it('decodes each row through the plan result shape', async () => {
+    const runtime = runtimeOver(driverYielding([{ name: 'alice' }]));
+    const rows = await runtime
+      .query({
+        collection: 'users',
+        command: { kind: 'find', filter: {} },
+        meta,
+        resultShape: {
+          kind: 'document',
+          fields: { name: { kind: 'leaf', codecId: 'test/upper@1', nullable: false } },
+        },
+      } as unknown as MongoQueryPlan)
+      .toArray();
+    expect(rows).toEqual([{ name: 'ALICE' }]);
+  });
+
+  it('closes the driver', async () => {
+    const driver = driverYielding([]);
+    await runtimeOver(driver).close();
+    expect(driver.close).toHaveBeenCalledTimes(1);
+  });
+});

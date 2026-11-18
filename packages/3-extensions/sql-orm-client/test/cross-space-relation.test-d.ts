@@ -8,6 +8,7 @@
  */
 import type { Contract, NamespaceId } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
+import { expectTypeOf, test } from 'vitest';
 import { Collection } from '../src/collection';
 import type { RelationNames } from '../src/types';
 import { createMockRuntime } from './helpers';
@@ -29,10 +30,12 @@ type CrossSpaceModels = {
     };
     fields: {
       id: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
         readonly nullable: false;
       };
       userId: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
         readonly nullable: false;
       };
@@ -59,10 +62,12 @@ type CrossSpaceModels = {
     };
     fields: {
       id: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
         readonly nullable: false;
       };
       profileId: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
         readonly nullable: false;
       };
@@ -115,3 +120,7 @@ void profileCollection.include('posts');
 // Negative: a cross-space (non-navigable) relation must NOT compile.
 // @ts-expect-error — 'user' is a cross-space relation (emitted as `never`) and must not be navigable via include
 profileCollection.include('user');
+
+test('cross-space relation type assertions compile', () => {
+  expectTypeOf<RelationNamesTypeAssertions>().toMatchTypeOf<readonly true[]>();
+});

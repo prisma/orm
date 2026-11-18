@@ -1,3 +1,5 @@
+import { blindCast } from '@internal/utils/casts';
+
 export type TokenKind =
   | 'Ident'
   | 'StringLiteral'
@@ -15,6 +17,7 @@ export type TokenKind =
   | 'Dot'
   | 'Comma'
   | 'Colon'
+  | 'Plus'
   | 'Whitespace'
   | 'Newline'
   | 'Comment'
@@ -66,7 +69,10 @@ export class Tokenizer {
       this.#buffer.push(token);
     }
 
-    return this.#buffer[offset] as Token;
+    return blindCast<
+      Token,
+      'For a nonnegative integer offset, the loop fills the buffer through that offset or returns EOF'
+    >(this.#buffer[offset]);
   }
 
   #scanNext(): Token {
@@ -74,6 +80,15 @@ export class Tokenizer {
     this.#pos += token.text.length;
     return token;
   }
+}
+
+/**
+ * Whether the tokenizer reads `text` as one identifier: a letter or `_`, then letters, `_`, ASCII
+ * digits or `-`, and not one of the number words `NaN` and `Infinity`.
+ */
+export function isPslIdentifier(text: string): boolean {
+  const token = scan(text, 0);
+  return token.kind === 'Ident' && token.text === text;
 }
 
 function scan(source: string, pos: number): Token {
@@ -119,7 +134,9 @@ function scanWhitespace(source: string, pos: number): Token | undefined {
 }
 
 function scanComment(source: string, pos: number): Token | undefined {
-  if (source.charAt(pos) !== '/' || source.charAt(pos + 1) !== '/') return undefined;
+  if (source.charAt(pos) !== '/') return undefined;
+  if (source.charAt(pos + 1) === '*') return scanBlockComment(source, pos);
+  if (source.charAt(pos + 1) !== '/') return undefined;
   let end = pos + 2;
   while (end < source.length) {
     const c = source.charAt(end);
@@ -127,6 +144,12 @@ function scanComment(source: string, pos: number): Token | undefined {
     end++;
   }
   return { kind: 'Comment', text: source.slice(pos, end) };
+}
+
+function scanBlockComment(source: string, pos: number): Token | undefined {
+  const close = source.indexOf('*/', pos + 2);
+  if (close === -1) return undefined;
+  return { kind: 'Comment', text: source.slice(pos, close + 2) };
 }
 
 function scanAt(source: string, pos: number): Token | undefined {
@@ -168,7 +191,7 @@ function scanKeywordNumber(source: string, pos: number): Token | undefined {
 
 function scanNumber(source: string, pos: number): Token | undefined {
   let end = pos;
-  if (source.charAt(end) === '-') {
+  if (source.charAt(end) === '-' || source.charAt(end) === '+') {
     if (end + 1 >= source.length || !isDigit(source.charAt(end + 1))) return undefined;
     end++;
   } else if (!isDigit(source.charAt(end))) {
@@ -187,9 +210,21 @@ function scanNumber(source: string, pos: number): Token | undefined {
   return { kind: 'NumberLiteral', text: source.slice(pos, end) };
 }
 
+const QUOTES: ReadonlySet<string> = new Set(['"', "'", '`']);
+
+/**
+ * A string in any of the three quote styles. A backslash escapes the next
+ * character, so it never closes the string. A `"` or `'` string ends at the
+ * end of its line when unterminated. A backtick string may span lines; when
+ * unterminated it ends before the first later line whose first non-blank
+ * character is `}`, so the parser resumes at the block's closing brace, or at
+ * the end of the input. That recovery only applies when no later backtick
+ * exists: a later backtick closes the string first.
+ */
 function scanString(source: string, pos: number): Token | undefined {
   const quote = source.charAt(pos);
-  if (quote !== '"' && quote !== "'") return undefined;
+  if (!QUOTES.has(quote)) return undefined;
+  const multiline = quote === '`';
   let end = pos + 1;
   while (end < source.length) {
     const c = source.charAt(end);
@@ -201,13 +236,36 @@ function scanString(source: string, pos: number): Token | undefined {
       end++;
       return { kind: 'StringLiteral', text: source.slice(pos, end) };
     }
-    if (c === '\n' || c === '\r') {
-      // Unterminated string: stop before the newline.
+    if (!multiline && (c === '\n' || c === '\r')) {
       return { kind: 'StringLiteral', text: source.slice(pos, end) };
     }
     end++;
   }
-  return { kind: 'StringLiteral', text: source.slice(pos, end) };
+  const unterminatedEnd = multiline ? unterminatedBacktickStringEnd(source, pos + 1) : end;
+  return { kind: 'StringLiteral', text: source.slice(pos, unterminatedEnd) };
+}
+
+function unterminatedBacktickStringEnd(source: string, from: number): number {
+  let lineStart = nextLineStart(source, from);
+  while (lineStart !== undefined) {
+    let cursor = lineStart;
+    while (source.charAt(cursor) === ' ' || source.charAt(cursor) === '\t') {
+      cursor++;
+    }
+    if (source.charAt(cursor) === '}') return lineStart;
+    lineStart = nextLineStart(source, cursor);
+  }
+  return source.length;
+}
+
+/** The offset just past the next `\r\n`, `\r`, or `\n` at or after `from`. */
+function nextLineStart(source: string, from: number): number | undefined {
+  for (let index = from; index < source.length; index++) {
+    const c = source.charAt(index);
+    if (c === '\n') return index + 1;
+    if (c === '\r') return source.charAt(index + 1) === '\n' ? index + 2 : index + 1;
+  }
+  return undefined;
 }
 
 /**
@@ -224,7 +282,7 @@ function scanString(source: string, pos: number): Token | undefined {
  */
 export function isTerminatedStringLiteral(text: string): boolean {
   const quote = text.charAt(0);
-  if (quote !== '"' && quote !== "'") return false;
+  if (!QUOTES.has(quote)) return false;
   if (text.length < 2 || text.charAt(text.length - 1) !== quote) {
     return false;
   }
@@ -270,4 +328,5 @@ const PUNCTUATION: Record<string, TokenKind> = {
   '.': 'Dot',
   ',': 'Comma',
   ':': 'Colon',
+  '+': 'Plus',
 };

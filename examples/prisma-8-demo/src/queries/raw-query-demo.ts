@@ -6,7 +6,9 @@ import { db } from '../prisma/db';
  * (see `raw-sql-demo.ts`, which drops raw *fragments* into a typed builder
  * query).
  *
- * `db.sql.raw` is the same tagged template, terminated differently:
+ * `db.raw` is the client's raw lane, composed beside `sql` and `runtime()`.
+ * Its `sql` key is the same tagged template as `fns.raw`, with different
+ * terminators:
  *
  * - `.returnsRow(spec)` declares the result columns and yields a plan the
  *   runtime's `query()` streams decoded rows from.
@@ -30,7 +32,7 @@ const post = db.sql.public.post;
  * codec directly and reads back as a `bigint`.
  */
 export async function rawQueryReport(limit = 10, runtime?: Runtime) {
-  const plan = db.sql.raw`
+  const plan = db.raw.sql`
     SELECT u.id, u.email, count(p.id) AS "postCount"
     FROM "user" u
     LEFT JOIN "post" p ON p."userId" = u.id
@@ -45,18 +47,18 @@ export async function rawQueryReport(limit = 10, runtime?: Runtime) {
     })
     .build();
 
-  return (runtime ?? db.runtime()).query(plan);
+  return (runtime ?? db).query(plan);
 }
 
 /**
  * Mutation reporting how many rows it touched.
  *
  * `.affectedCount()` takes no row spec — the statement returns no rows, so
- * there is nothing to declare. The plan goes to the runtime's `execute()`,
+ * there is nothing to declare. The plan goes to the client's `execute()`,
  * which answers with the statement's row count rather than a row stream.
  */
 export async function rawQueryBumpViews(kind = 'admin', runtime?: Runtime) {
-  const plan = db.sql.raw`
+  const plan = db.raw.sql`
     UPDATE "post"
     SET "viewCount" = "viewCount" + 1
     WHERE "userId" IN (SELECT id FROM "user" WHERE kind = ${kind})
@@ -64,7 +66,7 @@ export async function rawQueryBumpViews(kind = 'admin', runtime?: Runtime) {
     .affectedCount()
     .build();
 
-  return (runtime ?? db.runtime()).execute(plan);
+  return (runtime ?? db).execute(plan);
 }
 
 /**
@@ -72,10 +74,14 @@ export async function rawQueryBumpViews(kind = 'admin', runtime?: Runtime) {
  *
  * A row-returning raw query is embeddable: interpolating it splices its SQL
  * and its parameters into the outer template, in order. The inner row spec
- * describes the inner statement; the outer template declares its own.
+ * describes the inner statement, and the outer template declares its own.
+ *
+ * A column the inner query already declared can be inherited from its
+ * `.returns` record instead of restating the codec id. That keeps the two
+ * declarations from drifting apart.
  */
 export async function rawQueryActiveAuthors(minPosts = 1, runtime?: Runtime) {
-  const authorsWithPosts = db.sql.raw`
+  const authorsWithPosts = db.raw.sql`
     SELECT p."userId" AS "userId", count(*) AS "postCount"
     FROM "post" p
     GROUP BY p."userId"
@@ -85,7 +91,7 @@ export async function rawQueryActiveAuthors(minPosts = 1, runtime?: Runtime) {
     postCount: 'pg/int8@1',
   });
 
-  const plan = db.sql.raw`
+  const plan = db.raw.sql`
     WITH active AS (${authorsWithPosts})
     SELECT u.email, active."postCount"
     FROM active
@@ -94,11 +100,11 @@ export async function rawQueryActiveAuthors(minPosts = 1, runtime?: Runtime) {
   `
     .returnsRow({
       email: user.columns.email,
-      postCount: 'pg/int8@1',
+      postCount: authorsWithPosts.returns.postCount,
     })
     .build();
 
-  return (runtime ?? db.runtime()).query(plan);
+  return (runtime ?? db).query(plan);
 }
 
 /**
@@ -110,10 +116,10 @@ export async function rawQueryActiveAuthors(minPosts = 1, runtime?: Runtime) {
  * and is rejected as an interpolation.
  */
 export async function rawQueryPromoteAndList(titleTerm: string, runtime?: Runtime) {
-  const promoted = db.sql.raw`
+  const promoted = db.raw.sql`
     UPDATE "post"
-    SET priority = 'high'
-    WHERE title ILIKE ${`%${titleTerm}%`} AND priority <> 'high'
+    SET priority = ${db.enums.public.Priority.members.High}
+    WHERE title ILIKE ${`%${titleTerm}%`} AND priority <> ${db.enums.public.Priority.members.High}
     RETURNING id, title, "userId"
   `.returnsRow({
     id: post.columns.id,
@@ -121,7 +127,7 @@ export async function rawQueryPromoteAndList(titleTerm: string, runtime?: Runtim
     userId: post.columns.userId,
   });
 
-  const plan = db.sql.raw`
+  const plan = db.raw.sql`
     WITH promoted AS (${promoted})
     SELECT promoted.title, u.email
     FROM promoted
@@ -134,5 +140,37 @@ export async function rawQueryPromoteAndList(titleTerm: string, runtime?: Runtim
     })
     .build();
 
-  return (runtime ?? db.runtime()).query(plan);
+  return (runtime ?? db).query(plan);
+}
+
+export async function rawQueryCopyPosts(
+  fromEmail: string,
+  toEmail: string,
+  titlePrefix = 'Copy of ',
+  runtime?: Runtime,
+) {
+  const copies = post
+    .innerJoin(user, (f, fns) => fns.eq(f.user.id, f.post.userId))
+    .innerJoin(user.as('target'), (f, fns) => fns.eq(f.target.email, toEmail))
+    .select((f, fns) => ({
+      id: fns.raw`gen_random_uuid()`.returns('pg/uuid@1'),
+      title: fns.raw`${titlePrefix} || ${f.post.title}`.returns('pg/text@1'),
+      body: f.post.body,
+      userId: f.target.id,
+    }))
+    .where((f, fns) => fns.eq(f.user.email, fromEmail));
+
+  const plan = db.raw.sql`
+    INSERT INTO "post" (id, title, body, "userId")
+    ${copies}
+    RETURNING id, title, "userId"
+  `
+    .returnsRow({
+      id: post.columns.id,
+      title: post.columns.title,
+      userId: post.columns.userId,
+    })
+    .build();
+
+  return (runtime ?? db).query(plan);
 }

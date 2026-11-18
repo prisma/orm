@@ -11,5 +11,5 @@ export async function similaritySearch(queryVector: number[], limit = 10) {
     .orderBy((f, fns) => fns.cosineDistance(f.embedding, queryVector), { direction: 'asc' })
     .limit(limit)
     .build();
-  return db.runtime().query(plan);
+  return db.query(plan);
 }

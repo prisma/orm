@@ -1,5 +1,7 @@
 # ADR 171 — Parameterized native types in contracts
 
+**Status:** Superseded by [ADR 254 — Data types and casts](ADR%20254%20-%20Data%20types%20and%20casts.md). A data type now declares how its name is written, with and without parameters, and the bounds of those parameters. The planners, the schema verifier and `contractToSchema` write a column's type from the data type its codec represents. `CodecControlHooks.expandNativeType`, `expandLength`, `expandPrecision`, `expandNumeric` and `NativeTypeExpander` no longer exist. Contracts store the data type's id in `dataType` next to structured `typeParams`, and no type name. The content below is preserved as a historical record.
+
 ## Context
 
 Some storage types are **parameterized** at the database level (for example `varchar(255)`, `bit(16)`, `vector(1536)`).

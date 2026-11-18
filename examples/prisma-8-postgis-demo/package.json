@@ -6,11 +6,11 @@
     "node": ">=24"
   },
   "scripts": {
-    "emit": "prisma-next contract emit",
+    "emit": "prisma contract emit",
     "emit:check": "pnpm emit && git diff --exit-code src/prisma/contract.json src/prisma/contract.d.ts",
     "db:up": "docker compose up -d --wait",
     "db:down": "docker compose down --volumes",
-    "db:init": "prisma-next db init",
+    "db:init": "prisma db init",
     "db:drop": "tsx scripts/drop-db.ts",
     "seed": "tsx scripts/seed.ts",
     "dev": "next dev",
@@ -21,21 +21,22 @@
     "lint": "biome check . --error-on-warnings"
   },
   "dependencies": {
-    "@prisma/orm-extension-postgis": "workspace:8.0.0-rc.1",
-    "@prisma/orm-postgres": "workspace:8.0.0-rc.1",
+    "@prisma/orm-extension-postgis": "workspace:8.0.0-rc.24",
+    "@prisma/orm-postgres": "workspace:8.0.0-rc.24",
     "arktype": "^2.2.2",
     "dotenv": "^17.4.2",
     "leaflet": "^1.9.4",
-    "next": "^16.2.12",
+    "next": "^16.3.0",
     "pg": "catalog:",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-leaflet": "^5.0.0"
   },
   "devDependencies": {
-    "@prisma/cli-engine": "0.0.9",
-    "@repo/test-utils": "workspace:8.0.0-rc.1",
-    "@repo/tsconfig": "workspace:8.0.0-rc.1",
+    "@prisma/cli-engine": "0.10.0",
+    "@repo/prisma-bin": "workspace:8.0.0-rc.24",
+    "@repo/test-utils": "workspace:8.0.0-rc.24",
+    "@repo/tsconfig": "workspace:8.0.0-rc.24",
     "@types/leaflet": "^1.9.22",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
@@ -45,5 +46,5 @@
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
-  "version": "8.0.0-rc.1"
+  "version": "8.0.0-rc.24"
 }

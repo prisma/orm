@@ -4,7 +4,7 @@ Source: `packages/client/tests/functional/extensions/defineExtension.ts`
 
 Every test in this file exercises `Prisma.defineExtension` — the standalone factory for building
 `$extends` extensions (client/model/result components, callback and object forms, chaining, generic
-type utilities). prisma-next has no `$extends` client-extension surface and no `Prisma.defineExtension`
+type utilities). Prisma 8 has no `$extends` client-extension surface and no `Prisma.defineExtension`
 (zero hits for `$extends`/`defineExtension`/`getExtensionContext` across `packages/` outside
 node_modules/dist; `packages/3-extensions/` is database extensions, not client extensions). The
 subject of each test IS the `defineExtension` mechanism itself.

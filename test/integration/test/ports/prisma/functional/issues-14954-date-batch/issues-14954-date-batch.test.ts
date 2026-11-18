@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { timeouts, withPostgresPort } from '../../../_harness/postgres';
+import { timeouts, withPostgresPort } from '../../../../_harness/postgres';
 import type { Contract } from './_fixture/generated/contract';
 import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
 
@@ -8,22 +8,21 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //
 // Upstream seeds two Resource rows (date @unique) at 2011-01-01 and 2022-02-02 and
 // reads them back concurrently, asserting each round-trips to the matching `Date`.
-// prisma-next DateTime (pg/timestamptz@1) round-trips to a `Date`, matching upstream.
-// Upstream passes ISO strings; prisma-next's DateTime input is a `Date`, so create
-// and the where/first filters use the equivalent `Date` (same instant).
+// Prisma 8 DateTime is `pg/timestamptz-temporal@1`, whose application value is a
+// `Temporal.Instant` rather than a `Date`.
 //
 // Dispositions (per upstream test):
 //   - 'findUnique date with Promise.all'      → PORTED: two concurrent `.first({date})`.
 //   - 'findFirst  date with Promise.all'      → PORTED: two concurrent `.where({date}).first()`.
 //   - 'findUnique date with $transaction([])' → NON-PORTED: array/batch `$transaction([...])`
-//     is absent; prisma-next only has the interactive `transaction(cb)` facade, a different
+//     is absent; Prisma 8 only has the interactive `transaction(cb)` facade, a different
 //     execution path that does not exercise the batch request pipeline this regression depends on.
 //   - 'findFirst  date with $transaction([])' → NON-PORTED (same reason).
 
 const dateInput1 = '2011-01-01T00:00:00Z';
 const dateInput2 = '2022-02-02T00:00:00Z';
-const dateOutput1 = new Date(dateInput1);
-const dateOutput2 = new Date(dateInput2);
+const dateOutput1 = Temporal.Instant.from(dateInput1);
+const dateOutput2 = Temporal.Instant.from(dateInput2);
 
 function withDateBatch(fn: Parameters<typeof withPostgresPort<Contract>>[1]) {
   return withPostgresPort<Contract>({ contractJson }, async (ctx) => {

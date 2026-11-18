@@ -18,21 +18,21 @@ const seed = [
     id: '10000000-0000-0000-0000-00000000000a',
     title: 'Ship it',
     userId: authorId,
-    priority: 'high',
+    priority: 1,
   },
   {
     id: '10000000-0000-0000-0000-00000000000b',
     title: 'Sketch',
     userId: authorId,
-    priority: 'low',
+    priority: 0,
   },
   {
     id: '10000000-0000-0000-0000-00000000000c',
     title: 'Polish',
     userId: authorId,
-    priority: 'urgent',
+    priority: 2,
   },
-  { id: '10000000-0000-0000-0000-00000000000d', title: 'Draft', userId: authorId, priority: 'low' },
+  { id: '10000000-0000-0000-0000-00000000000d', title: 'Draft', userId: authorId, priority: 0 },
 ] as const;
 
 async function openRuntime(
@@ -56,13 +56,13 @@ describe('TS-authored enum on the demo contract (Post.priority)', () => {
         const { close } = await openRuntime(connectionString);
         try {
           const priority = getPriorityEnum();
-          expect(priority.values).toEqual(['low', 'high', 'urgent']);
+          expect(priority.values).toEqual([0, 1, 2]);
           expect(priority.names).toEqual(['Low', 'High', 'Urgent']);
-          expect(priority.members.Urgent).toBe('urgent');
-          expect(priority.has('high')).toBe(true);
-          const notAMember = 'nope' as 'low' | 'high' | 'urgent';
+          expect(priority.members.Urgent).toBe(2);
+          expect(priority.has(1)).toBe(true);
+          const notAMember = 3 as 0 | 1 | 2;
           expect(priority.has(notAMember)).toBe(false);
-          expect(priority.ordinalOf('urgent')).toBe(2);
+          expect(priority.ordinalOf(2)).toBe(2);
         } finally {
           await close();
         }
@@ -72,7 +72,7 @@ describe('TS-authored enum on the demo contract (Post.priority)', () => {
   );
 
   it(
-    'reading Post.priority narrows to the value union and sorts by declaration order',
+    'reading Post.priority narrows to the value union and sorts by value',
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
@@ -93,9 +93,7 @@ describe('TS-authored enum on the demo contract (Post.priority)', () => {
           const priorities = ordered.map((row) => row.priority);
           expectTypeOf(priorities).toEqualTypeOf<PriorityValue[]>();
 
-          // Declaration order is low -> high -> urgent; lexical would be
-          // high, low, low, urgent.
-          expect(priorities).toEqual(['low', 'low', 'high', 'urgent']);
+          expect(priorities).toEqual([0, 0, 1, 2]);
           expect(ordered.map((row) => row.id)).toEqual([
             '10000000-0000-0000-0000-00000000000b',
             '10000000-0000-0000-0000-00000000000d',
@@ -137,7 +135,7 @@ describe('TS-authored enum on the demo contract (Post.priority)', () => {
               .where((f, fns) => fns.eq(f.id, '10000000-0000-0000-0000-0000000000fe'))
               .build(),
           );
-          expect(rows[0]?.priority).toBe('low');
+          expect(rows[0]?.priority).toBe(0);
         } finally {
           await close();
         }
@@ -164,7 +162,7 @@ describe('TS-authored enum on the demo contract (Post.priority)', () => {
                     id: '10000000-0000-0000-0000-0000000000ff',
                     title: 'Bad',
                     userId: authorId,
-                    priority: 'nope' as 'low',
+                    priority: 3 as 0,
                   },
                 ])
                 .build(),

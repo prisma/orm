@@ -1,0 +1,20 @@
+---
+description: A green check that would also pass with the defect present proves nothing — make every verification able to fail
+globs:
+  - "**/*.test.ts"
+  - "**/*.test-d.ts"
+  - "**/*.integration.test.ts"
+  - "test/**"
+alwaysApply: false
+---
+
+# Non-vacuous verification
+
+A verification that cannot fail converts absence of evidence into false confidence. Before trusting a green result, name what would have made it red.
+
+- **A regression test must be red before the fix** — run it against the unfixed code and record the failure. If the triggering scenario cannot be reproduced (e.g. a transport race), don't ship a test that is green in both worlds: make the seam testable and test the seam directly.
+- **A verifier must fail (or loudly warn) on empty input.** "All 0 known cases verified" is a discovery failure, not a pass.
+- **Guard type tests against `any` poisoning.** `skipLibCheck` + an unresolvable import in a fixture `.d.ts` makes every dependent assertion vacuous (`T & any` is `any`). Add a `not.toBeAny()` sentinel on the fixture's central types.
+- **Comments are not evidence.** A comment describing a guard does not mean it exists — read the code it claims to describe; correct the comment when it lies.
+- **Generated files: test claims by regenerating.** Reading the generator is not evidence; running it is.
+- **Instrument before designing a fix** for a hard-to-reproduce failure — a counter proving "this catch never runs" kills a wrong hypothesis in one run.

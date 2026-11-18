@@ -20,27 +20,22 @@
  * them and expects migrate to succeed afterwards.
  */
 
-import { execFile } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { promisify } from 'node:util';
 import { storageHashHex } from '@internal/framework-components/control';
 import { timeouts, withClient, withDevDatabase } from '@repo/test-utils';
-import { join, resolve } from 'pathe';
+import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import {
   TEST_EXTERNAL_HEAD_HASH,
   TEST_EXTERNAL_SPACE_ID,
 } from './contract-space-fixture/external-space';
 import {
-  appendImplicitMigrationPlanFrom,
   type EngineRunResult,
+  runMigrationFile,
   runOnEngine,
   setupTestDirectoryFromFixtures,
   withTempDir,
 } from './utils/cli-test-helpers';
-
-const execFileAsync = promisify(execFile);
-const TSX_BIN = resolve(__dirname, '../../../node_modules/.bin/tsx');
 
 interface Project {
   readonly testDir: string;
@@ -77,15 +72,17 @@ async function selfEmitLatestMigration(testDir: string): Promise<void> {
   const latest = getLatestMigrationDir(testDir);
   if (!latest) return;
   const migrationTs = join(testDir, 'migrations', 'app', latest, 'migration.ts');
-  await execFileAsync(TSX_BIN, [migrationTs], { cwd: testDir });
+  const emitted = await runMigrationFile(migrationTs, [], testDir);
+  if (emitted.exitCode !== 0) {
+    throw new Error(`migration.ts self-emit failed (exit ${emitted.exitCode}): ${emitted.stderr}`);
+  }
 }
 
 async function runMigrationPlan(
   project: Project,
   args: readonly string[],
 ): Promise<EngineRunResult> {
-  const planArgs = appendImplicitMigrationPlanFrom(project.testDir, args);
-  const run = await runOnEngine(project, ['migration', 'plan', ...planArgs]);
+  const run = await runOnEngine(project, ['migration', 'plan', ...args]);
   if (run.exitCode === 0) {
     await selfEmitLatestMigration(project.testDir);
   }
@@ -94,7 +91,7 @@ async function runMigrationPlan(
 
 /** The engine settles failures into the exit code instead of throwing. */
 function runMigrate(project: Project, args: readonly string[]): Promise<EngineRunResult> {
-  return runOnEngine(project, ['migrate', ...args]);
+  return runOnEngine(project, ['db', 'migrate', ...args]);
 }
 
 withTempDir(({ createTempDir }) => {
@@ -204,15 +201,15 @@ withTempDir(({ createTempDir }) => {
             expect(command).not.toMatch(/--to [0-9a-f]{64}/);
           }
           expect(remediationCommands).toEqual([
-            'prisma-cli migration plan --name <slug>',
-            'prisma-cli migrate',
+            'prisma-test migration plan --name <slug>',
+            'prisma-test db migrate',
           ]);
 
           // Execute the presented remediation: derive each command's argv from
           // the action text itself, substituting the <slug> placeholder.
           const [planCommand, migrateCommand] = remediationCommands;
           const planArgs = (planCommand ?? '')
-            .replace(/^prisma-cli migration plan\s*/, '')
+            .replace(/^prisma-test migration plan\s*/, '')
             .replaceAll('<slug>', 'initial')
             .split(/\s+/)
             .filter((arg) => arg.length > 0);
@@ -220,7 +217,7 @@ withTempDir(({ createTempDir }) => {
           expect(plan.exitCode).toBe(0);
 
           const migrateArgs = (migrateCommand ?? '')
-            .replace(/^prisma-cli migrate\s*/, '')
+            .replace(/^prisma-test db migrate\s*/, '')
             .split(/\s+/)
             .filter((arg) => arg.length > 0);
           const apply = await runMigrate(project, [...migrateArgs, '--json']);

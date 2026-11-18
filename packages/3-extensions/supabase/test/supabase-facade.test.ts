@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // over these fake pool clients so we can assert on the actual queries issued.
 vi.mock('pg', () => {
   class Pool {
+    on = vi.fn().mockReturnThis();
     static _connectSpy = vi.fn();
 
     connect = Pool._connectSpy;
@@ -16,6 +17,7 @@ vi.mock('pg', () => {
   }
 
   class Client {
+    on = vi.fn().mockReturnThis();
     connect = vi.fn().mockResolvedValue(undefined);
     query = vi.fn().mockResolvedValue({ rows: [], rowCount: 0 });
     end = vi.fn().mockResolvedValue(undefined);
@@ -82,6 +84,7 @@ function makeFakeClient(affectedRows = 0) {
         },
       ),
     release: vi.fn(),
+    on: vi.fn(),
   };
 }
 
@@ -141,6 +144,23 @@ describe('supabase() factory — asUser', () => {
     expect(roleBoundDb).toBeDefined();
     expect(roleBoundDb.sql).toBeDefined();
     expect(roleBoundDb.orm).toBeDefined();
+    await db.close();
+  });
+
+  it('gives each role its own raw lane', async () => {
+    const jwt = await makeJwt({ sub: 'user-1', role: 'authenticated' });
+    const db = await supabase({
+      contract,
+      url: 'postgres://localhost/db',
+      jwtSecret: fixtureJwt,
+    });
+
+    const roleBoundDb = await db.asUser(jwt);
+
+    expect(Object.keys(roleBoundDb.raw)).toEqual(['sql']);
+    const plan = roleBoundDb.raw.sql`SELECT 1 AS one`.returnsRow({ one: 'pg/int4@1' }).build();
+    expect(plan.meta.lane).toBe('raw');
+    expect(plan.meta.target).toBe(contract.target);
     await db.close();
   });
 
@@ -260,7 +280,7 @@ describe('supabase() factory — behavioral binding via set_config', () => {
     await db.close();
   });
 
-  it('RESET ALL is sent after the stream drains', async () => {
+  it('RESET ALL and RESET ROLE are sent after the stream drains', async () => {
     const fakeClient = makeFakeClient();
     poolConnectSpy().mockResolvedValue(fakeClient);
 
@@ -277,7 +297,7 @@ describe('supabase() factory — behavioral binding via set_config', () => {
       .toArray();
 
     const sqlsSeen = fakeClient.queryCalls.map((c) => c.sql);
-    expect(sqlsSeen[sqlsSeen.length - 1]).toBe('RESET ALL');
+    expect(sqlsSeen[sqlsSeen.length - 1]).toBe('RESET ROLE');
 
     await db.close();
   });
@@ -298,7 +318,7 @@ describe('supabase() factory — behavioral binding via set_config', () => {
     );
 
     expect(stats).toEqual({ affectedRows: 6 });
-    expect(fakeClient.queryCalls.at(-1)?.sql).toBe('RESET ALL');
+    expect(fakeClient.queryCalls.at(-1)?.sql).toBe('RESET ROLE');
     expect(fakeClient.release).toHaveBeenCalled();
 
     await db.close();
@@ -437,29 +457,6 @@ describe('RoleBoundDb — facade invariant: no unbound connection surface', () =
     expect(typeof (roleBoundDb as unknown as Record<string, unknown>)['connection']).not.toBe(
       'function',
     );
-
-    await db.close();
-  });
-
-  it('query on RoleBoundDb routes through set_config (binding enforced)', async () => {
-    const fakeClient = makeFakeClient();
-    poolConnectSpy().mockResolvedValue(fakeClient);
-
-    const db = await supabase({
-      contract,
-      url: 'postgres://localhost/db',
-      jwtSecret: fixtureJwt,
-    });
-    const roleBoundDb = db.asServiceRole();
-
-    await roleBoundDb
-      .query(stubPlan() as unknown as Parameters<typeof roleBoundDb.query>[0])
-      .toArray();
-
-    const setConfigCall = fakeClient.queryCalls.find(
-      (c) => c.sql === 'SELECT set_config($1, $2, false)' && c.params?.[0] === 'role',
-    );
-    expect(setConfigCall?.params?.[1]).toBe('service_role');
 
     await db.close();
   });

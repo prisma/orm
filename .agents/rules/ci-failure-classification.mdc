@@ -1,0 +1,36 @@
+---
+description: Classify CI failures from evidence before acting — install state first, controls that can fail, known flake fingerprints
+globs:
+  - ".github/**"
+  - "scripts/**"
+alwaysApply: false
+---
+
+# CI failure classification
+
+Classify every CI failure from evidence before re-running, "fixing", or blaming it: **(a)** caused by this PR — fix the code; **(b)** infra/flake — retry and record the fingerprint; **(c)** already broken on the base — prove it, route to its own fix.
+
+## Before classifying anything
+
+- `pnpm install --frozen-lockfile` first. Stale install state fakes both reds and greens: stale `dist/` (TS2307 on `@internal/*`), stale deps (a pin moved on the base is invisible until reinstall), stale fixtures. Install after a rebase, not before.
+- Read the actual job log; save it to a file once and grep the file (`running-tests.mdc`).
+- Find the first failure. One dead shared connection fails dozens of tests at 0ms — count one event, not N failures.
+- Check the diff can reach the failing package at all.
+
+## Control experiments
+
+- A control proves a failure pre-existing only if it ran the same steps. CI skips heavy steps on inert (docs-only) diffs and still reports green — use a non-inert control diff.
+- When the base never runs the failing workflow (pull_request-triggered), a concurrent trivial PR (e.g. dependabot bump) with the identical signature is the equivalent evidence.
+- Reproduce with the real test file at the real commit; an approximate harness produces the right symptom for the wrong cause.
+
+## Known flake fingerprints
+
+- **Different assertions across retry attempts** of one test — impossible for a deterministic defect; only the raw log shows it.
+- **`ECONNRESET` / `Connection terminated unexpectedly` at setup**, or one connection error then siblings failing at 0ms — the shared dev database died mid-run.
+- **All tests green, run exits 1 on an unhandled rejection** — teardown race; classify from the rejection's stack.
+
+A fingerprint match is a hypothesis, not a verdict — and a "flake" recurring on consecutive runs of the same tree is a real defect in a timing costume.
+
+## When a gate (not a test) fails
+
+Read the gate's own output. If satisfying it would mean describing changes the PR does not contain, or contorting tense to avoid falsehoods, suspect the gate's comparison base — fix the gate, don't contort.

@@ -25,7 +25,9 @@ const tagId = (s: string): TagId => s as unknown as TagId;
 // timestamp wired to the canonical `timestampNow` mutation default for
 // both onCreate and onUpdate. The postgres test stack already registers
 // the `timestampNow` runtime generator, so the contract round-trips.
-function buildTagWithUpdatedAtContract(): TestContract {
+function buildTagWithUpdatedAtContract(
+  codecId: 'pg/timestamptz-temporal@1' | 'pg/timestamptz-string@1' = 'pg/timestamptz-temporal@1',
+): TestContract {
   const contract = JSON.parse(
     JSON.stringify(withReturningCapability(getTestContract())),
   ) as TestContract;
@@ -39,7 +41,8 @@ function buildTagWithUpdatedAtContract(): TestContract {
   const tagFields = tagModel['fields'] as Record<string, unknown>;
   tagFields['updatedAt'] = {
     nullable: false,
-    type: { kind: 'scalar', codecId: 'pg/timestamptz@1' },
+    many: false,
+    type: { kind: 'scalar', codecId },
   };
   const tagStorage = tagModel['storage'] as Record<string, unknown>;
   const tagStorageFields = tagStorage['fields'] as Record<string, unknown>;
@@ -52,8 +55,8 @@ function buildTagWithUpdatedAtContract(): TestContract {
     throw new Error('Test contract is missing the tags table');
   }
   tagsTable.columns['updated_at'] = {
-    nativeType: 'timestamptz',
-    codecId: 'pg/timestamptz@1',
+    dataType: 'pg/timestamptz',
+    codecId,
     nullable: false,
   };
 
@@ -64,7 +67,7 @@ function buildTagWithUpdatedAtContract(): TestContract {
     throw new Error('Test contract is missing the execution block');
   }
   execution.mutations.defaults.push({
-    ref: { namespace: 'public', table: 'tags', column: 'updated_at' },
+    ref: { namespace: 'public', entry: 'tags', field: 'updated_at' },
     onCreate: { kind: 'generator', id: 'timestampNow' },
     onUpdate: { kind: 'generator', id: 'timestampNow' },
   });
@@ -72,12 +75,12 @@ function buildTagWithUpdatedAtContract(): TestContract {
   return deserializeTestContract(contract);
 }
 
-function setupTagCollection(): {
+function setupTagCollection(codecId?: 'pg/timestamptz-temporal@1' | 'pg/timestamptz-string@1'): {
   collection: Collection<TestContract, 'Tag'>;
   runtime: MockRuntime;
   contract: TestContract;
 } {
-  const contract = buildTagWithUpdatedAtContract();
+  const contract = buildTagWithUpdatedAtContract(codecId);
   const context = createExecutionContext({
     contract,
     stack: createSqlExecutionStack({
@@ -170,6 +173,30 @@ describe('@updatedAt mutation defaults via Collection', () => {
       expect(dateParams[2]).toBe(first);
     });
 
+    it('gives every row in an insert one value on a *String column too', async () => {
+      const { collection, runtime } = setupTagCollection('pg/timestamptz-string@1');
+      runtime.setNextResults([
+        [
+          { id: TAG_A_ID, name: 'one', updated_at: new Date() },
+          { id: TAG_B_ID, name: 'two', updated_at: new Date() },
+        ],
+      ]);
+
+      await collection
+        .createAll([
+          { id: tagId(TAG_A_ID), name: 'one' },
+          { id: tagId(TAG_B_ID), name: 'two' },
+        ])
+        .toArray();
+
+      const dateParams = planParams(runtime.executions[0]).filter(
+        (p) => p instanceof Date,
+      ) as Date[];
+
+      expect(dateParams).toHaveLength(2);
+      expect(dateParams[1]).toBe(dateParams[0]);
+    });
+
     it("keeps per-row variability for stability: 'field' generators (id stays distinct)", async () => {
       const { collection, runtime } = setupTagCollection();
       runtime.setNextResults([
@@ -233,7 +260,7 @@ describe('@updatedAt mutation defaults via Collection', () => {
       expect(dateParams[0]?.getTime()).toBe(explicit.getTime());
     });
 
-    it('emits no SQL and no timestamp on an empty update payload', async () => {
+    it('reads the rows and writes no timestamp on an empty update payload', async () => {
       const { collection, runtime } = setupTagCollection();
 
       await collection
@@ -241,7 +268,9 @@ describe('@updatedAt mutation defaults via Collection', () => {
         .updateAll({})
         .toArray();
 
-      expect(runtime.executions).toHaveLength(0);
+      expect(runtime.executions).toHaveLength(1);
+      expect(runtime.executions[0]?.plan).toMatchObject({ ast: { kind: 'select' } });
+      expect(planParams(runtime.executions[0]).filter((p) => p instanceof Date)).toEqual([]);
     });
   });
 

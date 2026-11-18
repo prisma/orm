@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { timeouts, withPostgresPort } from '../../../_harness/postgres';
+import { timeouts, withPostgresPort } from '../../../../_harness/postgres';
 import type { Contract } from './_fixture/generated/contract';
 import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
 
@@ -43,10 +43,10 @@ describe('ports/prisma/functional/methods-count', () => {
   );
 
   it(
-    'take',
+    'limit',
     () =>
       withCount(async ({ db }) => {
-        const rows = await db.public.User.take(2).all();
+        const rows = await db.public.User.limit(2).all();
         expect(rows.length).toBe(2);
       }),
     timeouts.spinUpPpgDev,

@@ -6,7 +6,6 @@ import {
   type ProbeOverrides,
   parsePostgresVersion,
   probeServerVersion,
-  redactDatabaseUrlSecrets,
 } from '../../../src/commands/init/probe-db';
 
 // ---------------------------------------------------------------------------
@@ -68,18 +67,6 @@ describe('parsePostgresVersion (FR8.3)', () => {
     }
     expect(isStructuredError(thrown)).toBe(true);
     expect(thrown).toMatchObject({ code: 'CLI.INIT_PROBE_FAILED' });
-  });
-});
-
-describe('redactDatabaseUrlSecrets (FR8.3)', () => {
-  it('strips userinfo from any URL-shaped substring', () => {
-    expect(redactDatabaseUrlSecrets('failed: postgres://alice:hunter2@localhost:5432')).toBe(
-      'failed: postgres://***@localhost:5432',
-    );
-  });
-
-  it('passes empty input through untouched', () => {
-    expect(redactDatabaseUrlSecrets('')).toBe('');
   });
 });
 
@@ -172,11 +159,10 @@ describe('probeServerVersion (FR8.3)', () => {
       },
     );
 
-    expect(outcome.kind).toBe('connection-failed');
-    if (outcome.kind === 'connection-failed') {
-      expect(outcome.cause).not.toContain('hunter2');
-      expect(outcome.cause).toContain('***@');
-    }
+    expect(outcome).toMatchObject({
+      kind: 'connection-failed',
+      cause: 'connect ECONNREFUSED postgres://****:****@localhost:5432',
+    });
   });
 
   it('returns driver-missing when require() cannot resolve the peer driver', async () => {
@@ -218,5 +204,72 @@ describe('probeServerVersion (FR8.3)', () => {
     expect(probePostgres).not.toHaveBeenCalled();
     expect(probeMongo).toHaveBeenCalledTimes(1);
     expect(outcome.kind).toBe('ok');
+  });
+});
+
+describe('defaultProbePostgres idle connection errors', () => {
+  it('attaches an error listener so a dropped connection cannot crash the process', async () => {
+    const clients: FakeProbeClient[] = [];
+    class FakeProbeClient {
+      readonly listeners = new Map<string, (err: Error) => void>();
+      constructor(_cfg: { connectionString: string }) {
+        clients.push(this);
+      }
+      on(event: string, listener: (err: Error) => void): this {
+        this.listeners.set(event, listener);
+        return this;
+      }
+      async connect(): Promise<void> {}
+      async query(): Promise<{ rows: Array<{ version: string }> }> {
+        return { rows: [{ version: 'PostgreSQL 16.1 on x86_64-pc-linux-gnu' }] };
+      }
+      async end(): Promise<void> {}
+    }
+
+    const outcome = await probeServerVersion(
+      {
+        baseDir: '/tmp',
+        target: 'postgres',
+        databaseUrl: 'postgres://localhost:5432/db',
+        minVersion: '14',
+      },
+      { requireFromBaseDir: () => ({ Client: FakeProbeClient }) },
+    );
+
+    expect(outcome.kind).toBe('ok');
+    expect(clients).toHaveLength(1);
+    const errorListener = clients[0]?.listeners.get('error');
+    expect(errorListener).toBeDefined();
+    expect(() => errorListener?.(new Error('connection terminated unexpectedly'))).not.toThrow();
+  });
+
+  it('ends the client when connect() rejects', async () => {
+    const endSpy = vi.fn(async () => {});
+    class FailingConnectClient {
+      constructor(_cfg: { connectionString: string }) {}
+      on(): this {
+        return this;
+      }
+      async connect(): Promise<void> {
+        throw new Error('password authentication failed');
+      }
+      async query(): Promise<never> {
+        throw new Error('query must not be reached');
+      }
+      end = endSpy;
+    }
+
+    const outcome = await probeServerVersion(
+      {
+        baseDir: '/tmp',
+        target: 'postgres',
+        databaseUrl: 'postgres://localhost:5432/db',
+        minVersion: '14',
+      },
+      { requireFromBaseDir: () => ({ Client: FailingConnectClient }) },
+    );
+
+    expect(outcome.kind).toBe('connection-failed');
+    expect(endSpy).toHaveBeenCalledTimes(1);
   });
 });

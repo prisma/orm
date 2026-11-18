@@ -1,0 +1,443 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`aggregate plan baseline for chains naming no aggregate input > groupBy().aggregate() with no other clause 1`] = `
+{
+  "ast": SelectAst {
+    "distinct": undefined,
+    "distinctOn": undefined,
+    "from": TableSource {
+      "alias": undefined,
+      "kind": "table-source",
+      "name": "posts",
+      "namespaceId": "public",
+    },
+    "groupBy": [
+      ColumnRef {
+        "column": "user_id",
+        "kind": "column-ref",
+        "table": "posts",
+      },
+    ],
+    "having": undefined,
+    "joins": undefined,
+    "kind": "select",
+    "limit": undefined,
+    "locking": undefined,
+    "offset": undefined,
+    "orderBy": undefined,
+    "projection": [
+      ProjectionItem {
+        "alias": "user_id",
+        "codec": {
+          "codecId": "pg/int4@1",
+        },
+        "expr": ColumnRef {
+          "column": "user_id",
+          "kind": "column-ref",
+          "table": "posts",
+        },
+        "kind": "projection-item",
+      },
+      ProjectionItem {
+        "alias": "totalViews",
+        "codec": {
+          "codecId": "pg/int8number@1",
+        },
+        "expr": AggregateExpr {
+          "expr": ColumnRef {
+            "column": "views",
+            "kind": "column-ref",
+            "table": "posts",
+          },
+          "fn": "sum",
+          "kind": "aggregate",
+        },
+        "kind": "projection-item",
+      },
+    ],
+    "selectAllIntent": undefined,
+    "where": undefined,
+  },
+  "params": [],
+}
+`;
+
+exports[`aggregate plan baseline for chains naming no aggregate input > groupBy().aggregate() with where() 1`] = `
+{
+  "ast": SelectAst {
+    "distinct": undefined,
+    "distinctOn": undefined,
+    "from": TableSource {
+      "alias": undefined,
+      "kind": "table-source",
+      "name": "posts",
+      "namespaceId": "public",
+    },
+    "groupBy": [
+      ColumnRef {
+        "column": "user_id",
+        "kind": "column-ref",
+        "table": "posts",
+      },
+    ],
+    "having": undefined,
+    "joins": undefined,
+    "kind": "select",
+    "limit": undefined,
+    "locking": undefined,
+    "offset": undefined,
+    "orderBy": undefined,
+    "projection": [
+      ProjectionItem {
+        "alias": "user_id",
+        "codec": {
+          "codecId": "pg/int4@1",
+        },
+        "expr": ColumnRef {
+          "column": "user_id",
+          "kind": "column-ref",
+          "table": "posts",
+        },
+        "kind": "projection-item",
+      },
+      ProjectionItem {
+        "alias": "totalViews",
+        "codec": {
+          "codecId": "pg/int8number@1",
+        },
+        "expr": AggregateExpr {
+          "expr": ColumnRef {
+            "column": "views",
+            "kind": "column-ref",
+            "table": "posts",
+          },
+          "fn": "sum",
+          "kind": "aggregate",
+        },
+        "kind": "projection-item",
+      },
+    ],
+    "selectAllIntent": undefined,
+    "where": BinaryExpr {
+      "kind": "binary",
+      "left": ColumnRef {
+        "column": "views",
+        "kind": "column-ref",
+        "table": "posts",
+      },
+      "op": "gte",
+      "right": ParamRef {
+        "codec": {
+          "codecId": "pg/int4@1",
+        },
+        "kind": "param-ref",
+        "name": undefined,
+        "value": 100,
+      },
+    },
+  },
+  "params": [
+    100,
+  ],
+}
+`;
+
+exports[`aggregate plan baseline for chains naming no aggregate input > groupBy().having().aggregate() 1`] = `
+{
+  "ast": SelectAst {
+    "distinct": undefined,
+    "distinctOn": undefined,
+    "from": TableSource {
+      "alias": undefined,
+      "kind": "table-source",
+      "name": "posts",
+      "namespaceId": "public",
+    },
+    "groupBy": [
+      ColumnRef {
+        "column": "user_id",
+        "kind": "column-ref",
+        "table": "posts",
+      },
+    ],
+    "having": BinaryExpr {
+      "kind": "binary",
+      "left": AggregateExpr {
+        "expr": undefined,
+        "fn": "count",
+        "kind": "aggregate",
+      },
+      "op": "gte",
+      "right": LiteralExpr {
+        "kind": "literal",
+        "value": 1,
+      },
+    },
+    "joins": undefined,
+    "kind": "select",
+    "limit": undefined,
+    "locking": undefined,
+    "offset": undefined,
+    "orderBy": undefined,
+    "projection": [
+      ProjectionItem {
+        "alias": "user_id",
+        "codec": {
+          "codecId": "pg/int4@1",
+        },
+        "expr": ColumnRef {
+          "column": "user_id",
+          "kind": "column-ref",
+          "table": "posts",
+        },
+        "kind": "projection-item",
+      },
+      ProjectionItem {
+        "alias": "totalViews",
+        "codec": {
+          "codecId": "pg/int8number@1",
+        },
+        "expr": AggregateExpr {
+          "expr": ColumnRef {
+            "column": "views",
+            "kind": "column-ref",
+            "table": "posts",
+          },
+          "fn": "sum",
+          "kind": "aggregate",
+        },
+        "kind": "projection-item",
+      },
+    ],
+    "selectAllIntent": undefined,
+    "where": undefined,
+  },
+  "params": [],
+}
+`;
+
+exports[`aggregate plan baseline for chains naming no aggregate input > root aggregate() with multiple selectors including a no-column count() 1`] = `
+{
+  "ast": SelectAst {
+    "distinct": undefined,
+    "distinctOn": undefined,
+    "from": TableSource {
+      "alias": undefined,
+      "kind": "table-source",
+      "name": "posts",
+      "namespaceId": "public",
+    },
+    "groupBy": undefined,
+    "having": undefined,
+    "joins": undefined,
+    "kind": "select",
+    "limit": undefined,
+    "locking": undefined,
+    "offset": undefined,
+    "orderBy": undefined,
+    "projection": [
+      ProjectionItem {
+        "alias": "total",
+        "codec": {
+          "codecId": "pg/int8number@1",
+        },
+        "expr": AggregateExpr {
+          "expr": undefined,
+          "fn": "count",
+          "kind": "aggregate",
+        },
+        "kind": "projection-item",
+      },
+      ProjectionItem {
+        "alias": "totalViews",
+        "codec": {
+          "codecId": "pg/int8number@1",
+        },
+        "expr": AggregateExpr {
+          "expr": ColumnRef {
+            "column": "views",
+            "kind": "column-ref",
+            "table": "posts",
+          },
+          "fn": "sum",
+          "kind": "aggregate",
+        },
+        "kind": "projection-item",
+      },
+      ProjectionItem {
+        "alias": "avgViews",
+        "codec": {
+          "codecId": "pg/float8@1",
+        },
+        "expr": CastExpr {
+          "expr": AggregateExpr {
+            "expr": ColumnRef {
+              "column": "views",
+              "kind": "column-ref",
+              "table": "posts",
+            },
+            "fn": "avg",
+            "kind": "aggregate",
+          },
+          "kind": "cast",
+          "targetType": "float8",
+        },
+        "kind": "projection-item",
+      },
+    ],
+    "selectAllIntent": undefined,
+    "where": undefined,
+  },
+  "params": [],
+}
+`;
+
+exports[`aggregate plan baseline for chains naming no aggregate input > root aggregate() with no other clause 1`] = `
+{
+  "ast": SelectAst {
+    "distinct": undefined,
+    "distinctOn": undefined,
+    "from": TableSource {
+      "alias": undefined,
+      "kind": "table-source",
+      "name": "posts",
+      "namespaceId": "public",
+    },
+    "groupBy": undefined,
+    "having": undefined,
+    "joins": undefined,
+    "kind": "select",
+    "limit": undefined,
+    "locking": undefined,
+    "offset": undefined,
+    "orderBy": undefined,
+    "projection": [
+      ProjectionItem {
+        "alias": "totalViews",
+        "codec": {
+          "codecId": "pg/int8number@1",
+        },
+        "expr": AggregateExpr {
+          "expr": ColumnRef {
+            "column": "views",
+            "kind": "column-ref",
+            "table": "posts",
+          },
+          "fn": "sum",
+          "kind": "aggregate",
+        },
+        "kind": "projection-item",
+      },
+    ],
+    "selectAllIntent": undefined,
+    "where": undefined,
+  },
+  "params": [],
+}
+`;
+
+exports[`aggregate plan baseline for chains naming no aggregate input > root aggregate() with orderBy() stays inert 1`] = `
+{
+  "ast": SelectAst {
+    "distinct": undefined,
+    "distinctOn": undefined,
+    "from": TableSource {
+      "alias": undefined,
+      "kind": "table-source",
+      "name": "posts",
+      "namespaceId": "public",
+    },
+    "groupBy": undefined,
+    "having": undefined,
+    "joins": undefined,
+    "kind": "select",
+    "limit": undefined,
+    "locking": undefined,
+    "offset": undefined,
+    "orderBy": undefined,
+    "projection": [
+      ProjectionItem {
+        "alias": "totalViews",
+        "codec": {
+          "codecId": "pg/int8number@1",
+        },
+        "expr": AggregateExpr {
+          "expr": ColumnRef {
+            "column": "views",
+            "kind": "column-ref",
+            "table": "posts",
+          },
+          "fn": "sum",
+          "kind": "aggregate",
+        },
+        "kind": "projection-item",
+      },
+    ],
+    "selectAllIntent": undefined,
+    "where": undefined,
+  },
+  "params": [],
+}
+`;
+
+exports[`aggregate plan baseline for chains naming no aggregate input > root aggregate() with where() 1`] = `
+{
+  "ast": SelectAst {
+    "distinct": undefined,
+    "distinctOn": undefined,
+    "from": TableSource {
+      "alias": undefined,
+      "kind": "table-source",
+      "name": "posts",
+      "namespaceId": "public",
+    },
+    "groupBy": undefined,
+    "having": undefined,
+    "joins": undefined,
+    "kind": "select",
+    "limit": undefined,
+    "locking": undefined,
+    "offset": undefined,
+    "orderBy": undefined,
+    "projection": [
+      ProjectionItem {
+        "alias": "totalViews",
+        "codec": {
+          "codecId": "pg/int8number@1",
+        },
+        "expr": AggregateExpr {
+          "expr": ColumnRef {
+            "column": "views",
+            "kind": "column-ref",
+            "table": "posts",
+          },
+          "fn": "sum",
+          "kind": "aggregate",
+        },
+        "kind": "projection-item",
+      },
+    ],
+    "selectAllIntent": undefined,
+    "where": BinaryExpr {
+      "kind": "binary",
+      "left": ColumnRef {
+        "column": "views",
+        "kind": "column-ref",
+        "table": "posts",
+      },
+      "op": "gte",
+      "right": ParamRef {
+        "codec": {
+          "codecId": "pg/int4@1",
+        },
+        "kind": "param-ref",
+        "name": undefined,
+        "value": 100,
+      },
+    },
+  },
+  "params": [
+    100,
+  ],
+}
+`;

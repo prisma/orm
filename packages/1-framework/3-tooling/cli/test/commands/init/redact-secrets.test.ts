@@ -5,20 +5,32 @@ describe('redactSecrets', () => {
   describe('credentials inside a URL', () => {
     it('redacts userinfo from URLs in stderr', () => {
       expect(redactSecrets('failed: https://user:pass@registry.example.com/foo')).toBe(
-        'failed: https://***@registry.example.com/foo',
+        'failed: https://****:****@registry.example.com/foo',
       );
     });
 
     it('redacts a bare token URL', () => {
       expect(redactSecrets('npm error: https://npm-token-123@registry.npmjs.org/')).toBe(
-        'npm error: https://***@registry.npmjs.org/',
+        'npm error: https://****@registry.npmjs.org/',
       );
     });
 
     it('redacts even when the URL is in the middle of a longer line', () => {
       expect(
         redactSecrets('GET https://alice:secret@registry.example.com/foo failed: 401 Unauthorized'),
-      ).toBe('GET https://***@registry.example.com/foo failed: 401 Unauthorized');
+      ).toBe('GET https://****:****@registry.example.com/foo failed: 401 Unauthorized');
+    });
+
+    it('redacts up to the last @ of the authority', () => {
+      expect(redactSecrets('failed: https://user:p@ss@registry.example.com/foo')).toBe(
+        'failed: https://****:****@registry.example.com/foo',
+      );
+    });
+
+    it('leaves an @ in the path alone', () => {
+      expect(redactSecrets('404 GET https://registry.npmjs.org/@prisma%2fclient')).toBe(
+        '404 GET https://registry.npmjs.org/@prisma%2fclient',
+      );
     });
 
     it('leaves URLs without userinfo untouched', () => {

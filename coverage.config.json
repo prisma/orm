@@ -1,81 +1,79 @@
 {
   "$schema": "./coverage.config.schema.json",
-  "description": "WARNING-ONLY PACKAGES: Time-limited exceptions for packages with coverage/test failures. Each entry MUST have an expiry date. When expired, CI will fail until issues are resolved or config is updated with justification.",
+  "description": "WARNING-ONLY PACKAGES: Time-limited exceptions for package coverage failures. Each entry MUST have an expiry date. When expired, CI coverage will fail until issues are resolved or config is updated with justification.",
   "warningOnly": [
     {
       "package": "1-framework/0-foundation/contract",
       "reason": "S1.C cross-reference encoding added CrossReference shape to Contract.roots and domain field support to canonicalization.ts. The new canonicalization branches (domain-plane key ordering, domain-unbound type params preservation) are exercised end-to-end through emit integration tests but fall ~2% below the 94% branch threshold. Direct canonicalization branch tests deferred to a follow-up slice.",
-      "addedDate": "2026-05-29",
+      "addedDate": "2026-08-28",
       "expiryDays": 90,
       "assignee": null,
       "linear": "TML-2624",
-      "notes": "Recovery via dedicated canonicalization.ts branch tests covering the domain-plane ordering and typeParams preservation paths."
+      "notes": "Recovery via dedicated canonicalization.ts branch tests covering the domain-plane ordering and typeParams preservation paths. Renewed 2026-08-28: expired 2026-08-27 and turned the Coverage check red on every open PR; the underlying coverage situation is unchanged (93.75% branches against a 94% threshold, the same 15 uncovered branches as when the waiver was written) and the recovery above still applies (tracked on the entry's Linear issue)."
     },
     {
-      "package": "3-targets/3-targets/sqlite",
+      "package": "3-targets/sqlite/1-target",
       "reason": "runner.ts, statement-builders.ts, codecs.ts, default-normalizer.ts, and other foundational files moved into target-sqlite to break a workspace cycle. They are exhaustively exercised by full target\u2194adapter\u2194driver tests in adapter-sqlite/test/migrations and the e2e framework's sqlite migrations suite, but those run in a separate vitest config so the per-package coverage report doesn't see them. Mirrors the equivalent Postgres situation.",
-      "addedDate": "2026-07-27",
+      "addedDate": "2026-10-27",
       "expiryDays": 90,
       "assignee": null,
-      "linear": null,
-      "notes": "See packages/3-targets/6-adapters/sqlite/test/migrations/* (runner.basic, runner.errors, runner.idempotency, planner-introspection.integration, render-typescript.roundtrip) and test/e2e/framework/test/sqlite/migrations/* for the integration coverage. Recovery requires either reorganizing coverage scopes or adding unit-level tests inside target-sqlite. Renewed 2026-07-27 (lapsed mid-flight on TML-3099): the cross-config coverage situation is unchanged; recovery options above still apply."
+      "linear": "TML-3756",
+      "notes": "See packages/3-targets/sqlite/2-adapter/test/migrations/* (runner.basic, runner.errors, runner.idempotency, planner-introspection.integration, render-typescript.roundtrip) and test/e2e/framework/test/sqlite/migrations/* for the integration coverage. Recovery requires either reorganizing coverage scopes or adding unit-level tests inside target-sqlite. Renewed 2026-07-27 (lapsed mid-flight on TML-3099): the cross-config coverage situation is unchanged; recovery options above still apply. Renewed 2026-10-27: expired 2026-10-25 and turned the Coverage check red on every open PR; the coverage is unchanged (85.49% functions against an 88% threshold) and the recovery above still applies (tracked on TML-3756)."
     },
     {
       "package": "3-extensions/sql-orm-client",
       "reason": "Several test files were moved from packages/3-extensions/sql-orm-client/test/ into test/integration/test/sql-orm-client/ to break a workspace build cycle (the package depended on pgvector / postgres test fixtures through its devDependencies). The covered behaviour is still exercised end-to-end in test/integration; only the per-package coverage report regressed because those tests no longer run under the package's vitest config.",
-      "addedDate": "2026-05-22",
+      "addedDate": "2026-11-16",
       "expiryDays": 90,
       "assignee": null,
       "linear": "TML-2526",
-      "notes": "Recovery requires either reorganising coverage scopes (so integration tests count toward this package's report) or adding equivalent unit-level tests inside the package that don't need pgvector fixtures."
+      "notes": "Recovery requires either reorganising coverage scopes (so integration tests count toward this package's report) or adding equivalent unit-level tests inside the package that don't need pgvector fixtures. Renewed 2026-08-21: expired 2026-08-20 before the cross-config coverage recovery was completed; the underlying coverage situation is unchanged and recovery remains tracked in TML-2526. Renewed 2026-11-16, before it expires on 2026-11-19: the underlying coverage situation is unchanged (92.48% branches against a 93% threshold) and recovery remains tracked in TML-2526."
     },
     {
-      "package": "2-sql/1-core/contract",
+      "package": "2-sql-family/1-core/contract",
       "reason": "M9 target-extensible-IR refactor introduced new SQL Contract IR classes (postgres-enum-storage-entry.ts, sql-storage.ts, storage-column.ts, storage-table.ts, storage-type-instance.ts, unique-constraint.ts) and grew validators.ts to handle polymorphic storage type entries. IR classes are exercised through integration paths (contract-ts builder, family serializer round-trips, target-postgres hydration); per-class direct unit tests and additional validator branch coverage tracked as a follow-up before 0.9 release.",
-      "addedDate": "2026-08-17",
+      "addedDate": "2026-11-16",
       "expiryDays": 90,
       "assignee": null,
       "linear": "TML-2521",
-      "notes": "vitest.config.ts excludes the IR class-only files from coverage (mirroring the existing pack-types.ts pattern); validators.ts and index-type-validation.ts remain under-covered pending dedicated branch-coverage tests. Renewed 2026-08-17: expired 2026-08-14 and turned the Coverage check red on every open PR; the underlying coverage situation is unchanged and the recovery above still applies (tracked on the entry's Linear issue)."
+      "notes": "vitest.config.ts excludes the IR class-only files from coverage (mirroring the existing pack-types.ts pattern); validators.ts and index-type-validation.ts remain under-covered pending dedicated branch-coverage tests. Renewed 2026-08-17: expired 2026-08-14 and turned the Coverage check red on every open PR; the underlying coverage situation is unchanged and the recovery above still applies (tracked on the entry's Linear issue). Renewed 2026-11-16: expired 2026-11-15 and turned the Coverage check red in the merge queue for every pull request; the underlying coverage situation is unchanged and the recovery above still applies (tracked on the entry's Linear issue)."
     },
     {
-      "package": "2-sql/2-authoring/contract-ts",
+      "package": "2-sql-family/2-authoring/contract-ts",
       "reason": "M9 target-extensible-IR refactor reshaped build-contract.ts, composed-authoring-helpers.ts, config-types.ts, contract-builder.ts, and contract-warnings.ts to thread polymorphic storage type entries and composed authoring contributions through the SQL contract-ts builder. Coverage delta is small (1-5% below threshold) and falls on new authoring branches exercised through integration paths.",
-      "addedDate": "2026-08-17",
+      "addedDate": "2026-11-16",
       "expiryDays": 90,
       "assignee": null,
       "linear": "TML-2521",
-      "notes": "Direct branch-coverage tests for the new authoring helpers tracked as a follow-up before 0.9 release. Renewed 2026-08-17: expired 2026-08-14 and turned the Coverage check red on every open PR; the underlying coverage situation is unchanged and the recovery above still applies (tracked on the entry's Linear issue)."
+      "notes": "Direct branch-coverage tests for the new authoring helpers tracked as a follow-up before 0.9 release. Renewed 2026-08-17: expired 2026-08-14 and turned the Coverage check red on every open PR; the underlying coverage situation is unchanged and the recovery above still applies (tracked on the entry's Linear issue). Renewed 2026-11-16: expired 2026-11-15 and turned the Coverage check red in the merge queue for every pull request; the underlying coverage situation is unchanged (91.95% branches against a 94% threshold) and the recovery above still applies (tracked on the entry's Linear issue)."
     },
     {
-      "package": "3-mongo-target/1-mongo-target",
+      "package": "3-targets/mongo/1-target",
       "reason": "M9 target-extensible-IR refactor formed the target-mongo package alongside its family residence. Per-target unit coverage is not yet present; the target is exercised through mongo-family integration tests and the retail-store/mongo-blog-leaderboard examples.",
-      "addedDate": "2026-08-17",
+      "addedDate": "2026-11-16",
       "expiryDays": 90,
       "assignee": null,
       "linear": "TML-2521",
-      "notes": "Per-target unit tests tracked as a follow-up before 0.9 release; mirrors the equivalent target-postgres/target-sqlite warning entries for the same architectural reason. Renewed 2026-08-17: expired 2026-08-14 and turned the Coverage check red on every open PR; the underlying coverage situation is unchanged and the recovery above still applies (tracked on the entry's Linear issue)."
+      "notes": "Per-target unit tests tracked as a follow-up before 0.9 release; mirrors the equivalent target-postgres/target-sqlite warning entries for the same architectural reason. Renewed 2026-08-17: expired 2026-08-14 and turned the Coverage check red on every open PR; the underlying coverage situation is unchanged and the recovery above still applies (tracked on the entry's Linear issue). Renewed 2026-11-16: expired 2026-11-15 and turned the Coverage check red in the merge queue for every pull request; the underlying coverage situation is unchanged (92.63% branches against a 100% threshold) and the recovery above still applies (tracked on the entry's Linear issue)."
     },
     {
-      "package": "3-mongo-target/2-mongo-adapter",
+      "package": "3-targets/mongo/2-adapter",
       "reason": "M9 target-extensible-IR refactor introduced mongo-control-adapter.ts, mongo-control-driver.ts, and runner-deps.ts in the mongo-adapter package. They are exercised end-to-end through mongo-family integration tests rather than per-class unit tests at the adapter layer.",
-      "addedDate": "2026-08-17",
+      "addedDate": "2026-11-16",
       "expiryDays": 90,
       "assignee": null,
       "linear": "TML-2521",
-      "notes": "Per-class unit tests tracked as a follow-up before 0.9 release; mirrors the equivalent adapter-postgres/adapter-sqlite warning entries for the same architectural reason. Renewed 2026-08-17: expired 2026-08-14 and turned the Coverage check red on every open PR; the underlying coverage situation is unchanged and the recovery above still applies (tracked on the entry's Linear issue)."
+      "notes": "Per-class unit tests tracked as a follow-up before 0.9 release; mirrors the equivalent adapter-postgres/adapter-sqlite warning entries for the same architectural reason. Renewed 2026-08-17: expired 2026-08-14 and turned the Coverage check red on every open PR; the underlying coverage situation is unchanged and the recovery above still applies (tracked on the entry's Linear issue). Renewed 2026-11-16: expired 2026-11-15 and turned the Coverage check red in the merge queue for every pull request; the underlying coverage situation is unchanged (78.23% statements against a 95% threshold) and the recovery above still applies (tracked on the entry's Linear issue)."
     },
     {
       "package": "1-framework/3-tooling/cli",
       "reason": "Migration CLI restructure added src/commands/migration-check.ts (artifact / graph integrity verb). Behaviour is exercised end-to-end through adversarial fixture journey tests in test/integration/test/cli-journeys/migration-check.e2e.test.ts (covering all five PN-MIG-CHECK-001..005 codes) and through per-migration vs graph-wide regression tests, but the per-package coverage report sees 0% because the CLI's unit suite does not import the command directly.",
-      "addedDate": "2026-08-17",
+      "addedDate": "2026-11-16",
       "expiryDays": 90,
       "assignee": null,
       "linear": "TML-2552",
-      "notes": "Add direct unit tests for migration-check (command-level argument parsing, exit-code mapping, and one happy-path / one PN-code-per-failure-mode assertion) so per-package coverage recovers. Tracked alongside the residual internal-renames work in TML-2552. Renewed 2026-08-17: expired 2026-08-14 and turned the Coverage check red on every open PR; the underlying coverage situation is unchanged and the recovery above still applies (tracked on the entry's Linear issue)."
+      "notes": "Add direct unit tests for migration-check (command-level argument parsing, exit-code mapping, and one happy-path / one PN-code-per-failure-mode assertion) so per-package coverage recovers. Tracked alongside the residual internal-renames work in TML-2552. Renewed 2026-08-17: expired 2026-08-14 and turned the Coverage check red on every open PR; the underlying coverage situation is unchanged and the recovery above still applies (tracked on the entry's Linear issue). Renewed 2026-11-16: expired 2026-11-15 and turned the Coverage check red in the merge queue for every pull request; the underlying coverage situation is unchanged (84.73% branches against a 95% threshold) and the recovery above still applies (tracked on the entry's Linear issue)."
     }
   ],
-  "excludedPackages": [
-    "1-framework/3-tooling/eslint-plugin"
-  ]
+  "excludedPackages": ["1-framework/3-tooling/eslint-plugin"]
 }

@@ -1,15 +1,14 @@
 {
   "name": "@internal/contract",
   "private": true,
-  "version": "8.0.0-rc.1",
+  "version": "8.0.0-rc.24",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "Data contract type definitions and JSON schema for Prisma Next",
+  "description": "Data contract type definitions and JSON schema for Prisma 8",
   "scripts": {
     "build": "tsdown",
     "test": "vitest run --passWithNoTests",
-    "test:coverage": "vitest run --coverage --passWithNoTests",
     "typecheck": "tsc --project tsconfig.json --noEmit",
     "lint": "biome check . --error-on-warnings",
     "lint:fix": "biome check --write .",
@@ -17,13 +16,13 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/utils": "workspace:8.0.0-rc.1",
+    "@internal/utils": "workspace:8.0.0-rc.24",
     "@standard-schema/spec": "^1.1.0",
     "arktype": "catalog:"
   },
   "devDependencies": {
-    "@repo/tsconfig": "workspace:8.0.0-rc.1",
-    "@repo/tsdown": "workspace:8.0.0-rc.1",
+    "@repo/tsconfig": "workspace:8.0.0-rc.24",
+    "@repo/tsdown": "workspace:8.0.0-rc.24",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
@@ -52,6 +51,8 @@
     "./resolve-domain-model": "./dist/resolve-domain-model.mjs",
     "./types": "./dist/types.mjs",
     "./validate-domain": "./dist/validate-domain.mjs",
+    "./validate-once": "./dist/validate-once.mjs",
+    "./validate-storage": "./dist/validate-storage.mjs",
     "./package.json": "./package.json"
   },
   "engines": {
@@ -59,7 +60,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/1-framework/0-foundation/contract"
   }
 }
