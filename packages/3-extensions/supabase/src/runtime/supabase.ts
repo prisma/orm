@@ -103,7 +103,7 @@ export interface RoleBoundDb<
 export type SupabaseTransactionContext<
   TContract extends Contract<SqlStorage>,
   TCollections extends CollectionClasses = NoCollectionClasses,
-> = PostgresTransactionContext<TContract, TCollections>;
+> = Omit<PostgresTransactionContext<TContract, TCollections>, 'transaction'>;
 
 /**
  * Query surface for the Supabase-internal contract (`auth`, `storage`). Exposed

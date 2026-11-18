@@ -58,7 +58,9 @@ test('a role-bound client and its transaction have the enums and nativeEnums a p
 });
 
 test('a role-bound transaction has the members of a postgres transaction', () => {
-  expectTypeOf<Tx>().toEqualTypeOf<PostgresTransactionContext<Contract, Classes>>();
+  expectTypeOf<Tx>().toEqualTypeOf<
+    Omit<PostgresTransactionContext<Contract, Classes>, 'transaction'>
+  >();
 });
 
 test('role callback options use PostgreSQL levels and preserve result inference', () => {

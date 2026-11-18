@@ -39,8 +39,6 @@ test('a serverless connection gives its transactions the same members', () => {
   expectTypeOf<ConnectionTx>().toEqualTypeOf<Tx>();
 });
 
-test('a transaction has no lifecycle members, transaction or runtime', () => {
-  expectTypeOf<
-    Extract<keyof Tx, 'close' | 'transaction' | 'runtime' | typeof Symbol.asyncDispose>
-  >().toBeNever();
+test('a transaction has no lifecycle members or runtime', () => {
+  expectTypeOf<Extract<keyof Tx, 'close' | 'runtime' | typeof Symbol.asyncDispose>>().toBeNever();
 });
