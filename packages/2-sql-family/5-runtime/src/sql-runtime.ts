@@ -321,6 +321,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   readonly #holdFinishedChildren: boolean;
   // Each transaction and savepoint this runtime began, keyed by its driver transaction, and each open transaction keyed by its connection until its commit() or rollback() is called. A statement sent on any of them is the transaction's child. The statement looks its transaction up when it starts and checks it again just before it reaches the driver, so it is refused if the transaction closed in between.
   readonly #transactions = new WeakMap<SqlQueryable, OpenTransaction>();
+  readonly #startingTransactions = new WeakSet<SqlConnection>();
   readonly #transactionRuntime: TransactionRuntime = {
     route: (driverTx, activity) =>
       this.queryableRoute(driverTx, 'transaction', () => activity, {
@@ -678,8 +679,8 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     options: RuntimeTransactionOptions | undefined,
   ): Promise<R> {
     const openTransaction = this.#transactions.get(connection);
-    if (openTransaction !== undefined) {
-      throw transactionAlreadyOpenError(parent, openTransaction.activity);
+    if (openTransaction !== undefined || this.#startingTransactions.has(connection)) {
+      throw transactionAlreadyOpenError(parent, openTransaction?.activity);
     }
     return runTransactionOn(
       {
@@ -1502,12 +1503,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     owner[transactionStart].refusedBeforeBegin = false;
     const endTransactionWork = this.#openTransactionWork.begin();
     this.#transactionWorkOn.set(connection, endTransactionWork);
-    const starting: OpenTransaction = {
-      activity: undefined,
-      assertAcceptsStatements: undefined,
-      assertBeforeDeadline: undefined,
-    };
-    this.#transactionRuntime.register(connection, starting);
+    this.#startingTransactions.add(connection);
     let activity: TransactionActivityRun<SqlMiddlewareContext>;
     try {
       activity = await startTransactionActivity<SqlMiddlewareContext>({
@@ -1518,7 +1514,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       });
     } catch (error) {
       endTransactionWork();
-      this.#transactionRuntime.unregister(connection, starting);
+      this.#startingTransactions.delete(connection);
       owner[transactionStart].refusedBeforeBegin = true;
       throw error;
     }
@@ -1529,12 +1525,12 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       );
     } catch (error) {
       endTransactionWork();
-      this.#transactionRuntime.unregister(connection, starting);
+      this.#startingTransactions.delete(connection);
       await activity.end({ by: 'rollback', outcome: 'failed', commitAttempted: false });
       throw error;
     }
     if (this.#heldQueryables.has(connection)) this.#heldQueryables.add(driverTx);
-    return new OuterTransaction(
+    const transaction = new OuterTransaction(
       this.#transactionRuntime,
       connection,
       driverTx,
@@ -1542,6 +1538,8 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       endTransactionWork,
       timeout,
     );
+    this.#startingTransactions.delete(connection);
+    return transaction;
   }
 
   telemetry(): RuntimeTelemetryEvent | null {
