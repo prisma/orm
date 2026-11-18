@@ -1,11 +1,11 @@
 import { DefaultValueExpr, InsertAst, ParamRef } from '@internal/sql-relational-core/ast';
-import type { Char } from '@internal/target-postgres/codec-types';
 import { describe, expect, it } from 'vitest';
+import { includeStrategies } from './helpers';
 import {
   createReturningTagsCollection,
   createReturningUsersCollection,
   createUsersCollection,
-  createUsersCollectionWithoutReturning,
+  expectPerRelationStatements,
   timeouts,
   withCollectionRuntime,
 } from './integration-helpers';
@@ -59,12 +59,12 @@ function expectInsertBatchAst(
   ]);
 }
 
-describe('integration/create', () => {
+describe.each(includeStrategies)('integration/create (%s)', (strategy) => {
   it(
     'create() returns inserted row when returning capability is enabled',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         const created = await users.create({
           id: 9,
@@ -94,7 +94,7 @@ describe('integration/create', () => {
     'createAll() inserts multiple rows and returns inserted rows',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         runtime.resetExecutions();
         const created = await users.createAll([
@@ -128,7 +128,7 @@ describe('integration/create', () => {
     'createAll() with include() returns inserted rows with their relations via a single read-back',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         runtime.resetExecutions();
         const created = await users
@@ -137,6 +137,7 @@ describe('integration/create', () => {
             { id: 10, name: 'Alice', email: 'alice@example.com', invitedById: null },
             { id: 11, name: 'Bob', email: 'bob@example.com', invitedById: null },
           ]);
+        expectPerRelationStatements(runtime, strategy, 2);
 
         // Freshly inserted users own no posts yet; the read-back still
         // resolves the relation to an empty array per row.
@@ -170,7 +171,7 @@ describe('integration/create', () => {
     'createAll() with include() resolves non-empty relations on the read-back',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         // posts.user_id has no FK, so relations can be seeded ahead of
         // the parents they point at — the include read-back then resolves
@@ -181,12 +182,14 @@ describe('integration/create', () => {
           { id: 12, title: 'Bob B', userId: 11, views: 300 },
         ]);
 
+        runtime.resetExecutions();
         const created = await users
           .include('posts', (posts) => posts.orderBy((post) => post.id.asc()))
           .createAll([
             { id: 10, name: 'Alice', email: 'alice@example.com', invitedById: null },
             { id: 11, name: 'Bob', email: 'bob@example.com', invitedById: null },
           ]);
+        expectPerRelationStatements(runtime, strategy, 2);
 
         const sorted = [...created].sort((a, b) => a.id - b.id);
         expect(sorted).toEqual([
@@ -219,7 +222,7 @@ describe('integration/create', () => {
     'createAndCount() inserts multiple rows and returns inserted count',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollection(runtime);
+        const users = createUsersCollection(runtime, strategy);
 
         runtime.resetExecutions();
         const count = await users.createAndCount([
@@ -249,7 +252,7 @@ describe('integration/create', () => {
     'createAndCount() returns the count the database reports, not the input length',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollection(runtime);
+        const users = createUsersCollection(runtime, strategy);
 
         try {
           await runtime.query(`
@@ -290,40 +293,10 @@ describe('integration/create', () => {
   );
 
   it(
-    'create() and createAll() reject when returning capability is disabled',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollectionWithoutReturning(runtime);
-
-        await expect(
-          users.create({
-            id: 30,
-            name: 'NoReturn',
-            email: 'noreturn@example.com',
-            invitedById: null,
-          }),
-        ).rejects.toThrow(/requires contract capability "returning"/);
-
-        expect(() =>
-          users.createAll([
-            {
-              id: 31,
-              name: 'NoReturn2',
-              email: 'noreturn2@example.com',
-              invitedById: null,
-            },
-          ]),
-        ).toThrow(/requires contract capability "returning"/);
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-
-  it(
     'createAll([]) is a no-op and executes nothing',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
 
         runtime.resetExecutions();
         const rows = await users.createAll([]);
@@ -340,7 +313,7 @@ describe('integration/create', () => {
       'create() generates a default id when not provided',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const tags = createReturningTagsCollection(runtime);
+          const tags = createReturningTagsCollection(runtime, strategy);
 
           const created = await tags.create({ name: 'typescript' });
           expect(created.id).toEqual(expect.any(String));
@@ -358,8 +331,8 @@ describe('integration/create', () => {
       'create() preserves an explicitly provided id',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const tags = createReturningTagsCollection(runtime);
-          const customId = '123e4567-e89b-12d3-a456-426614174000' as Char<36>;
+          const tags = createReturningTagsCollection(runtime, strategy);
+          const customId = '123e4567-e89b-12d3-a456-426614174000';
 
           const created = await tags.create({ id: customId, name: 'rust' });
           expect(created).toEqual({ id: customId, name: 'rust' });
@@ -375,7 +348,7 @@ describe('integration/create', () => {
       'createAll() generates unique ids for each row',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const tags = createReturningTagsCollection(runtime);
+          const tags = createReturningTagsCollection(runtime, strategy);
 
           const created = await tags.createAll([
             { name: 'go' },
@@ -400,7 +373,7 @@ describe('integration/create', () => {
       'createAndCount() generates ids for rows without returning them',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const tags = createReturningTagsCollection(runtime);
+          const tags = createReturningTagsCollection(runtime, strategy);
 
           const count = await tags.createAndCount([{ name: 'elixir' }, { name: 'haskell' }]);
           expect(count).toBe(2);

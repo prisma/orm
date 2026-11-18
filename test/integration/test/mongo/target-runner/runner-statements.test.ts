@@ -269,3 +269,41 @@ describe('MongoMigrationPlanner and runner - statements', () => {
     timeouts.spinUpMongoMemoryServer,
   );
 });
+
+describe('MongoMigrationPlanner and runner - a field removed from an embedded model', () => {
+  it(
+    "leaves the owner's documents as they are, top-level fields of the same name included",
+    async () => {
+      await live.db().createCollection('users');
+      await live
+        .db()
+        .collection('users')
+        .insertMany([{ street: 'Main', addresses: [{ street: 'Elm', city: 'Oslo' }] }]);
+      const withAddress = (hash: string, address: readonly string[]) =>
+        contract(
+          hash,
+          {
+            User: { collection: 'users', fields: ['_id', 'street'] },
+            Address: { owner: 'User', fields: address },
+          },
+          { users: new MongoCollection({}) },
+        );
+
+      const { planned, result } = await live.planAndRun(
+        withAddress('from', ['street', 'city']),
+        withAddress('to', ['city']),
+      );
+
+      expect({
+        executed: result.ok ? result.value.operationsExecuted : result.failure,
+        dataLoss: planned.kind === 'success' ? planned.dataLoss : undefined,
+        users: await live.documents('users'),
+      }).toEqual({
+        executed: 0,
+        dataLoss: [],
+        users: [{ street: 'Main', addresses: [{ street: 'Elm', city: 'Oslo' }] }],
+      });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+});

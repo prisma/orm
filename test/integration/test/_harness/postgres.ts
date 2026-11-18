@@ -184,7 +184,7 @@ export async function withPostgresPort<TContract extends Contract<SqlStorage>>(
     await clearRows(database.connectionString);
   }
 
-  const client = postgres<TContract>({
+  const client = postgres({
     contract,
     url: database.connectionString,
     verifyMarker: false,

@@ -2,6 +2,7 @@ import type {
   AuthoringPslBlockDescriptorNamespace,
   DataTypeSupport,
 } from '@internal/framework-components/authoring';
+import type { GeneratorFunctionRegistry } from '@internal/framework-components/components';
 import type {
   AssembledAuthoringContributions,
   ControlMutationDefaults,
@@ -13,6 +14,7 @@ import {
   type BlockAttributeSpecFactory,
   blockSpecContext,
   blockSpecFactoryOf,
+  contributedTypeOf,
   EMPTY_DATA_TYPES,
   findBlockDescriptor,
   type MixinSymbol,
@@ -38,6 +40,7 @@ export interface AttributeSpecSource {
   readonly symbolTable: SymbolTable;
   readonly authoringContributions?: AssembledAuthoringContributions;
   readonly controlMutationDefaults?: ControlMutationDefaults;
+  readonly generatorFunctions: GeneratorFunctionRegistry;
   readonly dataTypes?: DataTypeSupport;
 }
 
@@ -167,6 +170,7 @@ export function attributeSpecResolver(
         symbols: source.symbolTable,
         model,
         defaultFunctionRegistry: source.controlMutationDefaults.defaultFunctionRegistry,
+        generatorFunctions: source.generatorFunctions,
         dataTypes: source.dataTypes ?? EMPTY_DATA_TYPES,
       };
       return (name) => specs.model[name]?.(specContext);
@@ -184,11 +188,18 @@ export function attributeSpecResolver(
         symbols: source.symbolTable,
         model,
         defaultFunctionRegistry: source.controlMutationDefaults.defaultFunctionRegistry,
+        generatorFunctions: source.generatorFunctions,
         dataTypes: source.dataTypes ?? EMPTY_DATA_TYPES,
       };
       const node = typeReferenceNode(field);
       const typeResolution = node === undefined ? undefined : source.binder.symbolForNode(node);
-      return (name) => specs.field[name]?.({ ...specContext, field, typeResolution });
+      const contributedType = contributedTypeOf(
+        typeResolution,
+        source.binder,
+        field.typeConstructor,
+      );
+      return (name) =>
+        specs.field[name]?.({ ...specContext, field, typeResolution, contributedType });
     }
   }
 }

@@ -1,0 +1,13 @@
+{
+  "ts": {
+    "code": "CONTRACT.INDEX_INVALID",
+    "message": "Model \"Doc\" index {\"fields\":{\"$**\":\"hashed\"}} combines a wildcard key with a hashed, 2d or 2dsphere key, which MongoDB does not allow."
+  },
+  "psl": [
+    {
+      "code": "PSL_INVALID_INDEX",
+      "message": "wildcard() fields cannot be combined with type: hashed",
+      "spanText": "@@index([wildcard()], type: \"hashed\")"
+    }
+  ]
+}

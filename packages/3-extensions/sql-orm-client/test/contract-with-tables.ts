@@ -25,6 +25,8 @@ export function defineContractWithTables(
     family: sqlFamilyPack,
     target: postgresPack,
     createNamespace: postgresCreateNamespace,
+    codecLookup,
+    dataTypeLookup,
     models,
   });
   return buildSqlContractFromDefinition({ ...definition, tables }, codecLookup, dataTypeLookup);

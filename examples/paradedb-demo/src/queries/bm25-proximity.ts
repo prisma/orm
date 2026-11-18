@@ -10,5 +10,5 @@ export async function bm25Proximity(term1: string, term2: string, distance: numb
     .orderBy((f, fns) => fns.paradeDbScore(f.id), { direction: 'desc' })
     .limit(limit)
     .build();
-  return db.runtime().query(plan);
+  return db.query(plan);
 }

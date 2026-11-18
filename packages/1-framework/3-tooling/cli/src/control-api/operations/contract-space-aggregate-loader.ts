@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
 import type {
   ControlExtensionDescriptor,
@@ -15,6 +15,7 @@ import type {
 import { loadContractSpaceAggregate } from '@internal/migration-tools/aggregate';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
+import { errorInvalidRefFile } from '@internal/migration-tools/errors';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
@@ -104,6 +105,26 @@ function describeIntegrityViolation(violation: IntegrityViolation): string {
  * target mismatch, then disjointness, then a contract-validation
  * failure, then any remaining structural integrity violation.
  */
+function layoutFix(
+  layout: readonly Extract<
+    IntegrityViolation,
+    { kind: 'orphanSpaceDir' | 'declaredButUnmigrated' }
+  >[],
+  migrationsDir: string,
+): string {
+  const spaceDir = `\`${migrationsDir}/<space>/\``;
+  return [
+    layout.some((v) => v.kind === 'declaredButUnmigrated')
+      ? `Run \`prisma contract emit\` or \`prisma migration plan\` to write the pinned files of each declared extension pack under ${spaceDir}.`
+      : [],
+    layout.some((v) => v.kind === 'orphanSpaceDir')
+      ? `For a directory no extension declares, declare its extension in \`extensions\` or remove ${spaceDir}.`
+      : [],
+  ]
+    .flat()
+    .join(' ');
+}
+
 export function mapIntegrityViolations(
   violations: readonly IntegrityViolation[],
   migrationsDir: string,
@@ -122,7 +143,7 @@ export function mapIntegrityViolations(
         : `Contract-space layout violations detected (${layout.length})`;
     return new CliStructuredError('MIGRATION.CONTRACT_SPACE_LAYOUT_VIOLATION', summary, {
       why: `The on-disk \`${migrationsDir}/\` directory and your \`extensions\` declaration are not in agreement.\n${lines.join('\n')}`,
-      fix: `Declare the extension in \`extensions\` and re-emit its contract-space artefacts, or remove the orphan \`${migrationsDir}/<space>\` directory.`,
+      fix: layoutFix(layout, migrationsDir),
       docsUrl: CONTRACT_SPACES_DOCS_URL,
       meta: { violations: layout },
     });
@@ -158,6 +179,15 @@ export function mapIntegrityViolations(
         fix: 'Re-emit the extension contract with `{bin} contract emit`, or fix the extension pack descriptor producing the invalid contract.',
         violations: [contractUnreadable],
       },
+    );
+  }
+
+  const refUnreadable = violations.find((v) => v.kind === 'refUnreadable');
+  if (refUnreadable && refUnreadable.kind === 'refUnreadable') {
+    return errorInvalidRefFile(
+      refUnreadable.path,
+      refUnreadable.detail,
+      refUnreadable.policyIssues,
     );
   }
 
@@ -356,7 +386,7 @@ export async function loadContractRawSafely(config: {
  * load without requiring a readable contract.
  */
 export async function buildReadAggregate(
-  config: PrismaNextConfig,
+  config: PrismaConfig,
   options: {
     readonly migrationsDir: string;
     /** Command-scoped verifier to share the verified-hash memo; defaults to one built from `config`. */
@@ -368,6 +398,8 @@ export async function buildReadAggregate(
       readonly aggregate: ContractSpaceAggregate;
       readonly contractHash: string;
       readonly storageNameOf: (operation: MigrationPlanOperation) => string;
+      /** Where the family keeps its markers, which an unreadable marker's error names. */
+      readonly markerLocation: string;
     },
     CliStructuredError
   >
@@ -417,6 +449,7 @@ export async function buildReadAggregate(
       aggregate: loaded.value,
       contractHash,
       storageNameOf: (operation: MigrationPlanOperation) => familyInstance.storageNameOf(operation),
+      markerLocation: familyInstance.markerLocation,
     });
   } catch (error) {
     return notOk(

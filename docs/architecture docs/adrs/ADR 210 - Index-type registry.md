@@ -151,7 +151,7 @@ This split is load-bearing:
 
 A target may still check its own index types when it loads a contract, because it knows them without a registry. The Postgres target does so for `fullText`: loading a `contract.json` refuses a full-text index that breaks its rules, including one over a column whose codec the target does not know to be `textual`.
 
-The validator that runs at the lowering seam lives in `packages/2-sql/1-core/contract/src/index-type-validation.ts`, separate from the JSON-internal-consistency validators in `validators.ts`. The file boundary signals the layering.
+The validator that runs at the lowering seam lives in `packages/2-sql-family/1-core/contract/src/index-type-validation.ts`, separate from the JSON-internal-consistency validators in `validators.ts`. The file boundary signals the layering.
 
 ## Strictness is a registrant choice
 

@@ -1,3 +1,4 @@
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { expect } from 'vitest';
@@ -36,6 +37,7 @@ export function completeBlockValueSource(
       binder: testBinder({ sources, symbolTable, pslBlockDescriptors: blockValueDescriptors }),
       scalarTypes: [],
       pslBlockDescriptors: blockValueDescriptors,
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
       symbolTable,
     },
     clientSupportsSnippets: options.clientSupportsSnippets === true,

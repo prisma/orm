@@ -32,7 +32,6 @@ interface MockExec extends ExecutionPlan {
 
 class MockRuntime extends RuntimeCore<MockPlan, MockExec, RuntimeMiddleware<MockExec>> {
   readonly events: string[] = [];
-  closeCalls = 0;
 
   constructor(
     middleware: ReadonlyArray<RuntimeMiddleware<MockExec>>,
@@ -72,9 +71,7 @@ class MockRuntime extends RuntimeCore<MockPlan, MockExec, RuntimeMiddleware<Mock
     return Promise.resolve({ affectedRows: 0 });
   }
 
-  async close(): Promise<void> {
-    this.closeCalls++;
-  }
+  async close(): Promise<void> {}
 }
 
 const ctx: ActivityContextFields = {
@@ -157,13 +154,5 @@ describe('RuntimeCore with mock family', () => {
       'activityEnded',
       'activityFinalized',
     ]);
-  });
-
-  it('exposes `close()` for resource teardown', async () => {
-    const contract: MockContract = { target: 'mock', storageHash: 'test-core' };
-    const runtime = new MockRuntime([], ctx, contract, []);
-
-    await expect(runtime.close()).resolves.toBeUndefined();
-    expect(runtime.closeCalls).toBe(1);
   });
 });

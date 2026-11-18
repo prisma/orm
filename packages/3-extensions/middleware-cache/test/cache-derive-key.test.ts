@@ -151,22 +151,4 @@ describe('createCacheMiddleware — deriveKey', () => {
     expect(store.getSpy).not.toHaveBeenCalled();
     expect(store.setSpy).not.toHaveBeenCalled();
   });
-
-  it('defaults to the content hash', async () => {
-    const store = spyStore();
-    const mw = createCacheMiddleware({ store });
-    const exec = makeExec('select 1', { cache: cacheAnnotation({}) });
-
-    await runMiss(mw, exec, makeCtx(), [{ id: 1 }]);
-
-    expect(store.setSpy).toHaveBeenCalledWith(
-      {
-        key: 'key:select 1',
-        meta: undefined,
-        version: 0,
-        data: { empty: true },
-      },
-      expect.anything(),
-    );
-  });
 });

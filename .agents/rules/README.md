@@ -36,6 +36,7 @@ Rules below are listed by bare filename; the canonical file is `.agents/rules/<n
 **Always-apply rules must be short, globally relevant, and stable.** If a rule only applies to a specific area (SQL, CLI, tests, package layout), scope it with `globs` and set `alwaysApply: false`. These are the rules currently carrying `alwaysApply: true`:
 
 - `read-agents-md.mdc` — Read AGENTS.md (onboarding deep dive is optional)
+- `never-change-the-framework-domain.mdc` — Never add to or reshape the framework domain; a design that needs to is wrong — stop and tell the operator
 - `schema-driven-architecture.mdc` — Read the architecture overview before writing code
 - `doc-maintenance.mdc` — Keep docs/READMEs/rules up‑to‑date
 - `no-direct-lockfile-edits.mdc` — Never edit `pnpm-lock.yaml` manually; use `pnpm install`
@@ -79,7 +80,7 @@ Rules below are listed by bare filename; the canonical file is `.agents/rules/<n
 
 ## Imports & Layering
 - `import-validation.mdc` — Layering rules and exceptions
-- `no-family-vocabulary-in-framework.mdc` — No family/target vocabulary in packages/1-framework, and no name of a Prisma version before 8 outside its CLI; enforced by the `no-family-vocabulary` Biome plugin + the `lint:framework-vocabulary` ratchet
+- `no-family-vocabulary-in-framework.mdc` — No family/target vocabulary in packages/1-framework, and no name of a Prisma version before 8 outside its CLI; enforced by the `no-family-vocabulary` Biome plugin + `pnpm lint:ratchets`
 - `no-inline-imports.mdc` — Prohibit inline type imports in source files
 - `shared-plane-packages.mdc` — Pattern for creating shared plane packages
 - `multi-plane-packages.mdc` — Packages that span multiple planes (shared, migration, runtime)

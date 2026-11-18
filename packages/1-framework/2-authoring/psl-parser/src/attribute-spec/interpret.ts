@@ -16,11 +16,11 @@ import type {
   PositionalParam,
 } from './types';
 
-// The positional/named argument-binding for an attribute or a function call. `name` labels the
+// The positional/named argument-binding for an attribute or a function call. `label` names the
 // callee in binding diagnostics (`Attribute "<name>" …`); `span` anchors the arity diagnostics
 // (too-many / missing) that have no per-argument node to point at.
 export interface ArgBindingSpec<Ctx extends AttributeCtx> {
-  readonly name: string;
+  readonly label: string;
   readonly positional: readonly PositionalParam<unknown, Ctx>[];
   readonly named: Readonly<Record<string, Param<unknown, Ctx>>>;
 }
@@ -52,7 +52,7 @@ export function interpretArgs<Ctx extends AttributeCtx>(
             outcome,
             notOk([
               diagnostic(
-                `Attribute "${spec.name}" received too many positional arguments`,
+                `${spec.label} received too many positional arguments`,
                 ctx,
                 span,
                 sourceNode,
@@ -73,7 +73,7 @@ export function interpretArgs<Ctx extends AttributeCtx>(
           outcome,
           notOk([
             diagnostic(
-              `Attribute "${spec.name}" received unknown argument "${name}"`,
+              `${spec.label} received unknown argument "${name}"`,
               ctx,
               nodePslSpan(arg.syntax, ctx.sources),
               arg.syntax,
@@ -91,7 +91,7 @@ export function interpretArgs<Ctx extends AttributeCtx>(
         outcome,
         notOk([
           diagnostic(
-            `Attribute "${spec.name}" received duplicate argument "${key}"`,
+            `${spec.label} received duplicate argument "${key}"`,
             ctx,
             nodePslSpan(arg.syntax, ctx.sources),
             arg.syntax,
@@ -123,12 +123,7 @@ export function interpretArgs<Ctx extends AttributeCtx>(
     outcome = and(
       outcome,
       notOk([
-        diagnostic(
-          `Attribute "${spec.name}" is missing required argument "${key}"`,
-          ctx,
-          span,
-          sourceNode,
-        ),
+        diagnostic(`${spec.label} is missing required argument "${key}"`, ctx, span, sourceNode),
       ]),
     );
   };
@@ -153,7 +148,7 @@ export function interpretAttribute<Out, Ctx extends AttributeCtx>(
   const attributeSpan = nodePslSpan(attrNode.syntax, ctx.sources);
   const bound = interpretArgs(
     attrNode.argList()?.args() ?? [],
-    spec,
+    { ...spec, label: `Attribute "${spec.name}"` },
     ctx,
     attributeSpan,
     attrNode.syntax,

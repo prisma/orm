@@ -1,4 +1,3 @@
-import { ifDefined } from '@internal/utils/defined';
 import { docsUrlFor } from '@internal/utils/structured-error';
 import { flag } from '@prisma/cli-engine';
 import type { Diagnostic, NextAction } from '@prisma/cli-engine/protocol';
@@ -15,11 +14,7 @@ import {
 } from '../commands/init/output';
 import { versionMajor } from '../commands/init/prisma7-detect';
 import { type ProbeOutcome, probeServerVersion } from '../commands/init/probe-db';
-import {
-  type TargetId,
-  targetPackageName,
-  targetPeerPackages,
-} from '../commands/init/templates/code-templates';
+import { type TargetId, targetPeerPackages } from '../commands/init/templates/code-templates';
 import { MIN_SERVER_VERSION } from '../commands/init/templates/env';
 import { chooseAction } from '../utils/next-actions';
 import { defineOrmCommand } from './define-command';
@@ -173,9 +168,6 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         if (!(error instanceof Prisma7CheckInstallFailed)) {
           throw error;
         }
-        for (const warning of error.warnings) {
-          warn(warning);
-        }
         const document: InitOutput = {
           ok: true,
           target: outputTarget(error.target),
@@ -229,7 +221,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
       // workspace or catalog, is left alone: only a declared major below 7 moves.
       const moveClient = movePackages !== null && clientMajor !== undefined && clientMajor < 7;
       const deps = [
-        targetPackageName(inputs.target, scaffold.resolveImportSpecifier),
+        scaffold.targetPackage,
         'dotenv',
         ...targetPeerPackages(inputs.target),
         ...(moveClient ? ['@prisma/client@7'] : []),
@@ -334,30 +326,27 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
       };
 
       if (inputs.install) {
-        const outcome = await installProjectDependencies({
+        const installFailure = await installProjectDependencies({
           packages: ctx.packages,
           cwd: ctx.cwd,
           deps: depsToInstall,
           devDeps,
-          catalogWarnings:
-            packageManager === 'pnpm'
-              ? buildCatalogWarnings(ctx.cwd, [...depsToInstall, ...devDeps])
-              : [],
         });
-        for (const warning of outcome.warnings) {
-          warn(warning);
-        }
-        if (outcome.failure !== undefined) {
+        if (installFailure !== undefined) {
           packagesInstalled = 'failed';
-          findings.push(installFailedFinding(outcome.failure, scaffold.filesWritten));
+          findings.push(installFailedFinding(installFailure, scaffold.filesWritten));
           return settle(4);
+        }
+        if (packageManager === 'pnpm') {
+          for (const warning of buildCatalogWarnings(ctx.cwd, [...depsToInstall, ...devDeps])) {
+            warn(warning);
+          }
         }
         const engineSpec = engineDevDependencySpec(ctx.cwd);
         const engineInstall = await ctx.packages.install({
           packages: [engineSpec],
           dev: true,
           cwd: ctx.cwd,
-          ...ifDefined('manager', outcome.manager),
         });
         if (!engineInstall.ok) {
           packagesInstalled = 'failed';

@@ -43,13 +43,6 @@ describe('document snapshot', () => {
     expect(parse).toHaveBeenCalledExactlyOnceWith(text, uri, {});
   });
 
-  it('reports an over-qualified field type as a raw parser diagnostic', () => {
-    const result = new DocumentSnapshot(uri, 'model Profile {\n  user a.b.c\n}').parse();
-    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain(
-      'PSL_INVALID_QUALIFIED_NAME',
-    );
-  });
-
   it.each(['model {', 'model User {\n  id '])(
     'preserves malformed input artifacts and raw diagnostics: %s',
     (text) => {

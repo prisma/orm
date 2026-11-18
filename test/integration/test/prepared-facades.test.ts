@@ -18,6 +18,7 @@ import type {
 } from '@internal/sql-runtime';
 import { defineContract, field, model, rel } from '@internal/sqlite/contract-builder';
 import sqlite from '@internal/sqlite/runtime';
+import { contractFromJson } from '@internal/sqlite/static';
 import { createDevDatabase, timeouts } from '@repo/test-utils';
 import { join } from 'pathe';
 import { Client } from 'pg';
@@ -249,8 +250,8 @@ async function sqliteEnvironment(name: string): Promise<Environment> {
   );
   database.prepare('insert into users values (1, ?)').run(name);
   const db = sqlite({ contract, path, verifyMarker: false });
-  const aggregateDb = sqlite<AggregateContract>({
-    contractJson: aggregateContractJson,
+  const aggregateDb = sqlite({
+    contract: contractFromJson<AggregateContract>(aggregateContractJson),
     path,
     verifyMarker: false,
   });
@@ -624,9 +625,11 @@ for (const [name, setup] of [
           expect(await sql.query(target.runtime, { id: 99 })).toEqual([]);
           expect(sqlCallback).toHaveBeenCalledOnce();
           expect(lowerings[name].mock.calls.length - beforeSql).toBe(1);
-          expect(await (await authoring.stats()).execute(target.runtime, {})).toEqual({
-            affectedRows: 1,
-          });
+          expect(await (await authoring.stats()).execute(target.runtime, {})).toEqual(
+            name === 'sqlite'
+              ? { affectedRows: 1, insertId: expect.any(String) }
+              : { affectedRows: 1 },
+          );
           expect(await (await authoring.shapedRows()).query(target.runtime, {})).toEqual([
             { affectedRows: 7 },
           ]);

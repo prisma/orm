@@ -1,15 +1,21 @@
 import {
   isSqlDataType,
-  type ReportedSqlType,
   renderSqlCatalogText,
   renderSqlTypeName,
-  resolveReportedSqlType,
+  resolveReportedSqlType as resolveReported,
   type SqlDataType,
   sqlBaseName,
 } from '@internal/sql-contract/data-type';
+import type { ReportedSqlType } from '@internal/sql-schema-ir/types';
 import { describe, expect, it } from 'vitest';
 import { pgVectorDescriptor } from '../src/core/codecs';
 import { pgvectorPackMeta } from '../src/core/descriptor-meta';
+
+/** resolveReportedSqlType, with each resolved data type named by its id for the expectations. */
+const resolveReportedSqlType = (...args: Parameters<typeof resolveReported>) => {
+  const resolved = resolveReported(...args);
+  return resolved && { dataType: resolved.dataType.id, typeParams: resolved.typeParams };
+};
 
 const invalidParams = expect.objectContaining({ code: 'CONTRACT.TYPE_PARAMS_INVALID' });
 

@@ -16,7 +16,11 @@
       {
         "description": "ensure index \"post_title_search_e0dd1131\" does not exist",
         "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
-        "params": ["\"public\".\"post_title_search_e0dd1131\""]
+        "params": ["\"public\".\"post_title_search_e0dd1131\""],
+        "expectation": {
+          "expects": "absent",
+          "object": "index \"post_title_search_e0dd1131\""
+        }
       }
     ],
     "execute": [
@@ -28,9 +32,15 @@
     ],
     "postcheck": [
       {
-        "description": "verify index \"post_title_search_e0dd1131\" exists",
-        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
-        "params": ["\"public\".\"post_title_search_e0dd1131\""]
+        "description": "verify index \"post_title_search_e0dd1131\" exists on \"post\" with the planned definition",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" INNER JOIN \"pg_index\" AS \"i\" ON \"i\".\"indexrelid\" = \"c\".\"oid\" INNER JOIN \"pg_am\" AS \"m\" ON \"m\".\"oid\" = \"c\".\"relam\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3) AND \"i\".\"indrelid\" = to_regclass($4) AND NOT (\"i\".\"indisunique\") AND \"m\".\"amname\" = $5 AND \"i\".\"indpred\" IS NULL)) AS \"result\"",
+        "params": [
+          "\"public\".\"post_title_search_e0dd1131\"",
+          "i",
+          "I",
+          "\"public\".\"post\"",
+          "gin"
+        ]
       }
     ]
   }

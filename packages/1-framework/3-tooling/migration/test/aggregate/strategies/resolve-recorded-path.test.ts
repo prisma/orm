@@ -43,7 +43,7 @@ describe('resolveRecordedPath', () => {
           label: 'Drop table legacy',
         },
       ],
-      accessWidening: [],
+      accessChanges: [],
     });
     expect(outcome.kind === 'ok' && outcome.result.dataLoss[0]).not.toHaveProperty('loss');
   });

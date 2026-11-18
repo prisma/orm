@@ -1,0 +1,33 @@
+{
+  "storage": {
+    "namespaces": {
+      "__unbound__": {
+        "entries": {
+          "collection": {
+            "users": {
+              "indexes": [
+                {
+                  "keys": [
+                    {
+                      "direction": 1,
+                      "field": "email"
+                    }
+                  ],
+                  "kind": "mongo-index",
+                  "name": "User_email_key",
+                  "unique": true
+                }
+              ],
+              "kind": "mongo-collection"
+            }
+          }
+        },
+        "id": "__unbound__",
+        "kind": "mongo-database"
+      }
+    },
+    "storageHash": "new-a"
+  },
+  "target": "mongo",
+  "targetFamily": "mongo"
+}

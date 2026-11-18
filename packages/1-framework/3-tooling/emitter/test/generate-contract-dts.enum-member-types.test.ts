@@ -1,36 +1,27 @@
 import type { ContractEnum, JsonValue } from '@internal/contract/types';
-import type { Codec, CodecLookup } from '@internal/framework-components/codec';
+import type { CodecLookup } from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
 import { generateContractDts } from '../src/generate-contract-dts';
 import { createMockSpi } from './mock-spi';
-import { createTestContract } from './utils';
+import { createTestContract, TEST_TYPES_MODULE } from './utils';
 
 const HASHES = {
   storageHash: '0000000000000000000000000000000000000000000000000000000000000001',
   profileHash: '0000000000000000000000000000000000000000000000000000000000000002',
 };
 
-function stubCodec(id: string, decodeJson: (json: JsonValue) => unknown): Codec {
-  return {
-    id,
-    encode: async (value) => value,
-    decode: async (wire) => wire,
-    encodeJson: (value) => value as JsonValue,
-    decodeJson,
-  };
-}
-
-const codecs: Record<string, Codec> = {
-  'test/text@1': stubCodec('test/text@1', (json) => json),
-  'test/bigint@1': stubCodec('test/bigint@1', (json) => BigInt(json as string)),
-  'test/date@1': stubCodec('test/date@1', (json) => new Date(json as string)),
-  'test/float@1': stubCodec('test/float@1', (json) => Number(json)),
-  'test/bool@1': stubCodec('test/bool@1', (json) => json),
+const valueLiterals: Record<string, (value: JsonValue) => string | undefined> = {
+  'test/text@1': (value) => JSON.stringify(value),
+  'test/bigint@1': (value) => `${value}n`,
+  'test/date@1': () => undefined,
+  'test/float@1': (value) => (typeof value === 'number' ? String(value) : undefined),
+  'test/bool@1': (value) => String(value),
 };
 
 const codecLookup: CodecLookup = {
-  get: (id) => codecs[id],
+  get: () => undefined,
   renderOutputTypeFor: () => undefined,
+  renderValueLiteralFor: (id, value) => valueLiterals[id]?.(value),
 };
 
 function enumOf(codecId: string, ...members: [string, JsonValue][]): ContractEnum {
@@ -41,7 +32,15 @@ function emitEnums(enums: Record<string, ContractEnum>, lookup: CodecLookup | un
   const contract = createTestContract({
     namespaces: { public: { models: {}, enum: enums } },
   });
-  return generateContractDts(contract, createMockSpi(), [], HASHES, undefined, lookup);
+  return generateContractDts(
+    contract,
+    createMockSpi(),
+    [],
+    HASHES,
+    TEST_TYPES_MODULE,
+    undefined,
+    lookup,
+  );
 }
 
 function memberTypesOf(dts: string): string {
@@ -51,7 +50,7 @@ function memberTypesOf(dts: string): string {
 }
 
 describe('generateContractDts enum member types', () => {
-  it('types each member as the literal its codec reads from the stored form', () => {
+  it('types each member as the literal its codec renders for the stored form', () => {
     const dts = emitEnums(
       {
         Role: enumOf('test/text@1', ['User', 'user']),
@@ -85,13 +84,36 @@ describe('generateContractDts enum member types', () => {
     );
   });
 
-  it("types members as their codec's output type when the lookup has no codec for them", () => {
+  it("types members as their codec's output type when the lookup renders no literal for them", () => {
     const withoutCodec = emitEnums({ Level: enumOf('test/missing@1', ['Low', '1']) }, codecLookup);
+    const withoutRenderer = emitEnums(
+      { Level: enumOf('test/bigint@1', ['Low', '1']) },
+      { get: () => undefined, renderOutputTypeFor: () => undefined },
+    );
     const withoutLookup = emitEnums({ Level: enumOf('test/bigint@1', ['Low', '1']) }, undefined);
-    expect([memberTypesOf(withoutCodec), memberTypesOf(withoutLookup)]).toEqual([
+    expect([
+      memberTypesOf(withoutCodec),
+      memberTypesOf(withoutRenderer),
+      memberTypesOf(withoutLookup),
+    ]).toEqual([
       'readonly enumMemberTypes?: { readonly Level: readonly [{ readonly name: "Low"; readonly value: CodecTypes["test/missing@1"]["output"] }] };',
       'readonly enumMemberTypes?: { readonly Level: readonly [{ readonly name: "Low"; readonly value: CodecTypes["test/bigint@1"]["output"] }] };',
+      'readonly enumMemberTypes?: { readonly Level: readonly [{ readonly name: "Low"; readonly value: CodecTypes["test/bigint@1"]["output"] }] };',
     ]);
+  });
+
+  it("types a member as its codec's output type when the rendered literal is not a safe type expression", () => {
+    const dts = emitEnums(
+      { Level: enumOf('test/unsafe@1', ['Low', 'low']) },
+      {
+        get: () => undefined,
+        renderOutputTypeFor: () => undefined,
+        renderValueLiteralFor: () => '"low"; export type Injected = 1; type X = "x"',
+      },
+    );
+    expect(memberTypesOf(dts)).toBe(
+      'readonly enumMemberTypes?: { readonly Level: readonly [{ readonly name: "Low"; readonly value: CodecTypes["test/unsafe@1"]["output"] }] };',
+    );
   });
 
   it('keeps the stored forms in the enum entry', () => {

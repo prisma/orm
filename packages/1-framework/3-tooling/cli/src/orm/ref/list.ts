@@ -4,6 +4,7 @@ import type { Block, Presentations, Text } from '@prisma/cli-engine';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import type { RefListResult } from '../../control-api/operations/ref';
 import { executeRefListCommand } from '../../control-api/operations/ref';
+import { dataLine } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
 
@@ -41,7 +42,10 @@ function refsGrid(refs: Refs): Block {
 
 function listPresentations(document: RefListResult): Presentations {
   return {
-    stdout: () => [],
+    stdout: () =>
+      Object.entries(document.refs).map(([name, entry]) =>
+        dataLine([name, entry.hash, entry.invariants.join(',')]),
+      ),
     next: () => [],
     human: (): readonly Block[] =>
       Object.keys(document.refs).length === 0

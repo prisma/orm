@@ -105,7 +105,7 @@ export function effectiveControlPolicy(
 
 The contract carries the default as a top-level `defaultControlPolicy?: ControlPolicy`. This is the field that does the work in practice: an extension that wraps an externally-owned schema sets `defaultControlPolicy: 'external'` once, and every object it declares inherits it. An application that owns its whole schema sets nothing and gets `managed` everywhere, which is the behaviour the framework had before control policy existed.
 
-The resolver is deliberately framework-agnostic — it takes two raw optional values, not typed IR nodes — so that the verifier and the planner call the *same* function without depending on each other's types. There is one definition of "effective policy" in the system, and both consumers read it. Neither re-derives the precedence chain on its own, so the two can never disagree about what an object's policy is.
+The resolver is deliberately framework-agnostic — it takes two raw optional values, not typed IR nodes — so that the verifier and the planner call the *same* function without depending on each other's types. There is one definition of "effective policy" in the system, and both consumers read it. Neither re-derives the precedence chain on its own, so the two cannot disagree about an object's declared policy. The floor below is the exception today: the SQL planner applies it and the SQL verifier does not yet, so for a `managed` table under an `external` default the two still disagree. The MongoDB planner, validator derivation and verifier all apply it.
 
 Because the default absorbs the common case, the field is **omitted from the serialized contract whenever an object's effective policy equals the contract default**. A contract that names no policies serializes identically to one with no notion of control policy at all, and therefore hashes identically. Control hashing is content-addressed, so this property is what lets the field exist without disturbing any contract that does not use it.
 
@@ -143,8 +143,8 @@ The Mongo family base mirrors the same four-way severity dispatch over collectio
 The planner refuses. When the contract default is `external`, every object in that contract space resolves to `external` regardless of any per-object override — the floor is not overridable:
 
 ```ts
-export function controlPolicyForCall(
-  subject: ControlPolicySubject | undefined,
+export function governingControlPolicy(
+  subject: { readonly explicitNodeControlPolicy?: ControlPolicy | undefined } | undefined,
   defaultControlPolicy: ControlPolicy | undefined,
 ): ControlPolicy {
   if (defaultControlPolicy === 'external') {
@@ -156,7 +156,7 @@ export function controlPolicyForCall(
 
 A mistake of this kind is not silently swallowed. When the floor suppresses DDL that an override would otherwise have produced, the planner records a `warn`-level conflict identifying the suppressed object by its coordinates. The plan still succeeds — the safe outcome already happened — but the contradiction is visible.
 
-The choice to enforce this at the planner, rather than reject the override at authoring time, is deliberate. A hard authoring error would forbid a legitimate pattern: an extension that is `external` by default but genuinely owns one object within its space. The floor lets that object's declaration stand while guaranteeing the dangerous interpretation can never reach the database. Enforcement lives in one place; the authoring surface does not duplicate it.
+The choice to enforce this where the policy is resolved, rather than reject the override at authoring time, is deliberate. A hard authoring error would forbid a legitimate pattern: an extension that is `external` by default but genuinely owns one object within its space. The floor lets that object's declaration stand while guaranteeing the dangerous interpretation can never reach the database. One resolver, `governingControlPolicy`, applies the floor, and every consumer that should honour it calls that resolver; the authoring surface does not duplicate it. MongoDB's collection validator derivation and its verifier resolve each collection with the same `governingControlPolicy`, so a `managed` collection under an `external` default gets no validator in the contract and is verified as `external`: in MongoDB the validator is part of the contract, so a contract that described one would promise the database something the planner will never apply, and a verifier that graded the collection as `managed` would fail on differences the planner will never repair.
 
 ## Authoring surfaces
 

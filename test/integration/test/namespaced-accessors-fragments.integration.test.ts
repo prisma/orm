@@ -1,5 +1,6 @@
-import { field } from '@internal/postgres/contract-builder';
+import { field, type } from '@internal/postgres/contract-builder';
 import postgres from '@internal/postgres/runtime';
+import { contractFromJson } from '@internal/postgres/static';
 import type { CollectionRowOf } from '@internal/sql-orm-client';
 import { timeouts, withDevDatabase } from '@repo/test-utils';
 import { Client } from 'pg';
@@ -16,7 +17,7 @@ describe('fragments on a contract with the same model name in two namespaces', (
       await withDevDatabase(async ({ connectionString }) => {
         const client = new Client({ connectionString });
         await client.connect();
-        const db = postgres<Contract>({ contractJson });
+        const db = postgres({ contract: contractFromJson<Contract>(contractJson) });
         try {
           await client.query('create schema if not exists auth');
           await client.query(
@@ -47,7 +48,9 @@ describe('fragments on a contract with the same model name in two namespaces', (
           void _wrongNamespace;
 
           const withToken = (token: string) =>
-            orm.fragment({ token: field.text() }, (rows) => rows.where((r) => r.token.eq(token)));
+            orm.fragment({ token: field.column(type.String()) }, (rows) =>
+              rows.where((r) => r.token.eq(token)),
+            );
           expect(await orm.auth.User.with(withToken('tok-2')).all()).toEqual([
             { id: 2, token: 'tok-2' },
           ]);
@@ -81,7 +84,7 @@ describe('fragments on a contract with the same model name in two namespaces', (
               message: 'Cannot apply a fragment for auth.Note to a collection of public.Note',
             }),
           );
-          const withBody = orm.fragment({ body: field.text() }, (rows) =>
+          const withBody = orm.fragment({ body: field.column(type.String()) }, (rows) =>
             rows.where((r) => r.body.like('%note')),
           );
           expect(await orm.public.Note.with(withBody).all()).toEqual([

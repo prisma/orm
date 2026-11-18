@@ -119,13 +119,3 @@ test('modelAttribute infers the same shape fieldAttribute would for equivalent p
     readonly count?: number;
   }>();
 });
-
-test('a model positional slot contributes its key into the keyspace', () => {
-  const spec = modelAttribute('demo', {
-    documentation: 'Declares a model attribute for argument binding.',
-    positional: [
-      { key: 'k', type: int(), documentation: 'The value bound to this positional slot.' },
-    ],
-  });
-  expectTypeOf<InferAttr<typeof spec>>().toEqualTypeOf<{ k: number }>();
-});

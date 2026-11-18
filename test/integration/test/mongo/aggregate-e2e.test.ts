@@ -90,7 +90,10 @@ function buildAppContract(): MongoContract {
             },
           },
           relations: {},
-          storage: { collection: 'users' },
+          storage: {
+            collection: 'users',
+            fields: { _id: { field: '_id' }, email: { field: 'email' } },
+          },
         },
       },
     }),
@@ -106,6 +109,7 @@ function buildAppContract(): MongoContract {
                 indexes: [
                   {
                     kind: 'mongo-index' as const,
+                    name: 'email_1',
                     keys: [{ field: 'email', direction: 1 as const }],
                     unique: true,
                   },

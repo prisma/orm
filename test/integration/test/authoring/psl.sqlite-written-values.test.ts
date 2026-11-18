@@ -6,8 +6,9 @@ import sql from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
-import sqlite, { sqliteCreateNamespace } from '@internal/target-sqlite/control';
+import sqlite from '@internal/target-sqlite/control';
 import sqlitePackRef from '@internal/target-sqlite/pack';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { findStorageColumn } from '../scalar-lists/psl-list-authoring';
@@ -36,6 +37,7 @@ async function author(fields: string, blocks = '') {
     codecLookup: stack.codecLookup,
     dataTypes: stack.dataTypes,
     controlMutationDefaults: stack.controlMutationDefaults,
+    generatorFunctions: stack.generatorFunctions,
     resolvedInputs: [schemaPath],
     capabilities: stack.capabilities,
   });
@@ -72,12 +74,6 @@ describe('written values on SQLite', () => {
       '{"a":[true,null],"b":1}',
     ],
     [
-      'a json literal on a String column, whose value is text',
-      `String @default(${json('{"a":1}')})`,
-      'sqlite/text@1',
-      '{"a":1}',
-    ],
-    [
       'a whole number on an Int column, as digit text',
       'Int @default(-42)',
       'sqlite/integer@1',
@@ -90,6 +86,8 @@ describe('written values on SQLite', () => {
       '9223372036854775807',
     ],
     ['a number with a fraction on a Float column', 'Float @default(1.5)', 'sqlite/real@1', 1.5],
+    ['Infinity on a Float column', 'Float @default(Infinity)', 'sqlite/real@1', 'Infinity'],
+    ['-Infinity on a Float column', 'Float @default(-Infinity)', 'sqlite/real@1', '-Infinity'],
     [
       'a whole number on a Float column, through the cast from integer',
       'Float @default(2)',
@@ -97,19 +95,19 @@ describe('written values on SQLite', () => {
       2,
     ],
     [
-      'an instant on a DateTime column, as the canonical text its codec declares',
-      'DateTime @default("2020-01-02T03:04:05.000Z")',
+      'an instant on a DateTime column, as the text sqlite/datetime stores',
+      'DateTime @default(datetime`2020-01-02T03:04:05Z`)',
       'sqlite/datetime@1',
-      '2020-01-02T03:04:05Z',
+      '2020-01-02T03:04:05.000Z',
     ],
   ])('stores %s', async (_name, field, codecId, value) => {
     expect(await storedDefault(field)).toEqual({ codecId, default: { kind: 'literal', value } });
   });
 
   it.each([
-    ['Json', 'sqlite/text'],
+    ['Json', 'sqlite/json'],
     ['String', 'sqlite/text'],
-    ['DateTime', 'sqlite/text'],
+    ['DateTime', 'sqlite/datetime'],
     ['Int', 'sqlite/integer'],
     ['BigInt', 'sqlite/integer'],
     ['Float', 'sqlite/real'],
@@ -118,12 +116,27 @@ describe('written values on SQLite', () => {
     expect((await storedColumn(`${scalar}?`)).dataType).toBe(dataType);
   });
 
-  it('refuses a plain string on a Json column, because the codec cannot read it as JSON', async () => {
-    expect(await diagnostics('Json @default("hello")')).toEqual([
+  it('refuses a quoted string on a Json column, showing the tag to write', async () => {
+    expect(await diagnostics('Json @default("{}")')).toEqual([
       expect.objectContaining({
-        code: 'PSL_INVALID_DEFAULT_LITERAL',
-        message: expect.stringContaining('sqlite/json@1 contract value must be the JSON text'),
+        code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
+        message: 'Field "Row.value": Expected json`...`; write json`{}`',
       }),
+    ]);
+  });
+
+  it('refuses a quoted string on a DateTime column, showing the tag to write', async () => {
+    expect(await diagnostics('DateTime @default("2024-01-01T00:00:00Z")')).toEqual([
+      expect.objectContaining({
+        code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
+        message: 'Field "Row.value": Expected datetime`...`; write datetime`2024-01-01T00:00:00Z`',
+      }),
+    ]);
+  });
+
+  it('refuses a json literal on a String column, whose text type casts from no document', async () => {
+    expect(await diagnostics('String @default(json`{}`)')).toEqual([
+      expect.objectContaining({ code: 'PSL_VALUE_TYPE_INCOMPATIBLE' }),
     ]);
   });
 
@@ -212,18 +225,26 @@ describe('enum members on SQLite', () => {
     ['sqlite/bigint@1', '"9223372036854775807"', '9223372036854775807'],
     ['sqlite/bigintnumber@1', '"42"', '42'],
   ])(
-    'accepts a %s member written as the string %s, read by the codec',
-    async (codecId, written, stored) => {
-      expect(await storedEnumValues(codecId, `Low = ${written}`)).toEqual({ values: [stored] });
+    'refuses a %s member written as the string %s, which is text, saying to write the number',
+    async (codecId, written, number) => {
+      expect(await storedEnumValues(codecId, `Low = ${written}`)).toEqual({
+        diagnostics: [
+          {
+            code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
+            message: `enum "Priority" member "Low": Expected a number; write ${number}`,
+          },
+        ],
+      });
     },
   );
 
   it.each([
-    [`'"low"'`, '"low"'],
-    [`'{"b": 2, "a": 1}'`, '{"a":1,"b":2}'],
-    ['"1"', '1'],
+    ['json`"low"`', '"low"'],
+    ['json`{"a":1,"b":2}`', '{"a":1,"b":2}'],
+    ['json`{"b": 2, "a": 1}`', '{"a":1,"b":2}'],
+    ['json`1`', '1'],
   ])(
-    'accepts a sqlite/json@1 member written as a string of JSON text, %s, and stores the text the upgrade script writes',
+    'stores a sqlite/json@1 member written as %s as the JSON text sqlite/json stores',
     async (written, stored) => {
       expect(await storedEnumValues('sqlite/json@1', `Low = ${written}`)).toEqual({
         values: [stored],
@@ -231,10 +252,76 @@ describe('enum members on SQLite', () => {
     },
   );
 
-  it('refuses a sqlite/json@1 member written as a number, which no cast takes to text', async () => {
-    expect((await storedEnumValues('sqlite/json@1', 'Low = 1')).diagnostics).toContainEqual({
-      code: 'PSL_EXTENSION_INVALID_VALUE',
-      message: 'enum "Priority" member "Low": Expected a quoted string',
+  it('refuses a sqlite/json@1 member written as quoted text, saying to write it with the json tag', async () => {
+    expect(await storedEnumValues('sqlite/json@1', `Low = '"low"'`)).toEqual({
+      diagnostics: [
+        {
+          code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
+          message: 'enum "Priority" member "Low": Expected json`...`; write json`"low"`',
+        },
+      ],
     });
+  });
+
+  it('refuses a sqlite/json@1 member whose tagged literal holds a NUL character, rather than storing null', async () => {
+    expect(await storedEnumValues('sqlite/json@1', `Low = ${json('"a\0b"')}`)).toEqual({
+      diagnostics: [
+        {
+          code: 'PSL_TAGGED_LITERAL_NUL',
+          message: 'Tagged literals must not contain NUL characters.',
+        },
+      ],
+    });
+  });
+
+  it('refuses a sqlite/datetime@1 member whose tagged literal is not a date', async () => {
+    expect(
+      await storedEnumValues(
+        'sqlite/datetime@1',
+        `Launch = datetime${BACKTICK}not a date${BACKTICK}`,
+      ),
+    ).toEqual({ diagnostics: [{ code: 'PSL_INVALID_LITERAL', message: expect.any(String) }] });
+  });
+
+  it('refuses a sqlite/json@1 member written as a number, which no cast takes to a document', async () => {
+    expect((await storedEnumValues('sqlite/json@1', 'Low = 1')).diagnostics).toEqual([
+      {
+        code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
+        message: 'enum "Priority" member "Low": Expected json`...`',
+      },
+    ]);
+  });
+
+  it('stores an Infinity member of a sqlite/real@1 enum, and refuses NaN, which SQLite cannot store', async () => {
+    expect({
+      infinity: await storedEnumValues('sqlite/real@1', 'Low = Infinity'),
+      nan: await storedEnumValues('sqlite/real@1', 'Low = NaN'),
+    }).toEqual({
+      infinity: { values: ['Infinity'] },
+      nan: { diagnostics: [{ code: expect.any(String), message: expect.stringContaining('NaN') }] },
+    });
+  });
+});
+
+describe('a raw column in a SQLite schema', () => {
+  it('reads Raw(sql`...`) as the raw data type, with a sql default', async () => {
+    expect(
+      await storedColumn(
+        `Raw(sql${BACKTICK}circle${BACKTICK}) @default(sql${BACKTICK}'x'${BACKTICK})`,
+      ),
+    ).toEqual({
+      dataType: 'sql/raw',
+      codecId: 'sql/raw@1',
+      default: { kind: 'function', expression: "'x'" },
+    });
+  });
+
+  it('refuses a literal default, saying what to write', async () => {
+    expect(await diagnostics(`Raw(sql${BACKTICK}circle${BACKTICK}) @default("x")`)).toEqual([
+      expect.objectContaining({
+        code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
+        message: expect.stringContaining(`Expected sql${BACKTICK}...${BACKTICK}`),
+      }),
+    ]);
   });
 });

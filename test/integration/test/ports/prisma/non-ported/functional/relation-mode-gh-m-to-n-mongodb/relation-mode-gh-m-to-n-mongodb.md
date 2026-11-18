@@ -7,9 +7,8 @@ Source: `packages/client/tests/functional/relationMode-in-separate-gh-action/tes
 *two-way embedded implicit many-to-many* relation: on both models a scalar FK-array plus a
 list relation over it (`categoryIDs String[]` + `categories CategoryManyToMany[] @relation(fields: [categoryIDs], references: [id])`,
 and the mirror on the category side). Prisma 8's mongo authoring cannot express this shape.
-Confirmed empirically by emitting the faithful fixture (`contract emit`), which rejects it with:
+Confirmed empirically by emitting the faithful fixture (`contract emit`), which rejects it with the diagnostic below. (It also refused the suite's `String @id @map("_id")` string ids; a string `_id` now builds.)
 
-- `PSL_MONGO_ID_REQUIRED` — each model must declare `id ObjectId @id @map("_id")`; the suite uses `String @id @map("_id")` with arbitrary string ids (`'1-cat-a'`).
 - `PSL_ORPHANED_BACKRELATION` — "Backrelation list field ... has no matching FK-side relation ... use an explicit join model for many-to-many." Prisma 8 has no two-way embedded implicit m2m; the only supported m:n is an explicit junction model with two FKs, which is a *different* schema shape (different collections, no `categoryIDs`/`postIDs` scalar arrays, different result shapes) — porting via a junction would change the subject under test.
 
 Additionally the mongo ORM `create` accepts only a flat document — there is no nested-relation

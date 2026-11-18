@@ -1,8 +1,7 @@
-import type { Runtime } from '@prisma/orm-postgres/family-runtime';
 import type { DefaultModelRow } from '@prisma/orm-postgres/orm-client';
 import { blindCast } from '@prisma/orm-postgres/utils/casts';
 import type { Contract } from '../prisma/contract.d';
-import { createOrmClient } from './client';
+import type { DemoOrm } from '../prisma/db';
 
 type TagId = DefaultModelRow<Contract, 'Tag'>['id'];
 
@@ -11,9 +10,8 @@ type TagId = DefaultModelRow<Contract, 'Tag'>['id'];
  * posts that carry it via the Tag.posts N:M relation — the same PostTag
  * junction as Post.tags, walked from the other side.
  */
-export async function ormClientGetTagPosts(tagId: string, runtime: Runtime) {
-  const db = createOrmClient(runtime);
-  return db.Tag.select('id', 'label')
+export async function ormClientGetTagPosts(tagId: string, orm: DemoOrm) {
+  return orm.Tag.select('id', 'label')
     .include('posts', (post) => post.select('id', 'title').orderBy((p) => p.title.asc()))
     .where({ id: toTagId(tagId) })
     .first();

@@ -37,7 +37,7 @@ async function migrate(
 ): Promise<void> {
   const result = planner.plan({
     contract: to,
-    schema: await familyInstance.introspect({ driver: database }),
+    schema: await familyInstance.introspect({ driver: database, contract: to }),
     policy: INIT_ADDITIVE_POLICY,
     fromContract: from,
     origin: planOriginOf(from),
@@ -67,7 +67,7 @@ async function verify(database: MemoryDatabase, contract: Contract<SqlStorage>) 
 const created = `model Event {
   id    Int      @id
   label String
-  at    DateTime @default("2024-01-01T01:00:00+01:00")
+  at    DateTime @default(datetime\`2024-01-01T01:00:00+01:00\`)
 
   @@map("event")
 }`;
@@ -75,8 +75,8 @@ const created = `model Event {
 const altered = `model Event {
   id    Int      @id
   label String
-  at    DateTime @default("2024-01-01T01:00:00+01:00")
-  later DateTime @default("2024-06-30T12:34:56.5Z")
+  at    DateTime @default(datetime\`2024-01-01T01:00:00+01:00\`)
+  later DateTime @default(datetime\`2024-06-30T12:34:56.5Z\`)
 
   @@map("event")
 }`;
@@ -94,13 +94,13 @@ describe('a SQLite datetime default', () => {
     await database.query("INSERT INTO event (id, label) VALUES (1, 'default')");
     await database.query('INSERT INTO event (id, label, at, later) VALUES (2, ?, ?, ?)', [
       'application',
-      await codec.encode(new Date('2024-01-01T00:00:00Z'), {}),
-      await codec.encode(new Date('2024-06-30T12:34:56.5Z'), {}),
+      await codec.toWire(new Date('2024-01-01T00:00:00Z'), {}),
+      await codec.toWire(new Date('2024-06-30T12:34:56.5Z'), {}),
     ]);
     await database.query('INSERT INTO event (id, label, at, later) VALUES (3, ?, ?, ?)', [
       'half a second later',
-      await codec.encode(new Date('2024-01-01T00:00:00.5Z'), {}),
-      await codec.encode(new Date('2024-06-30T12:34:57Z'), {}),
+      await codec.toWire(new Date('2024-01-01T00:00:00.5Z'), {}),
+      await codec.toWire(new Date('2024-06-30T12:34:57Z'), {}),
     ]);
 
     const { rows } = await database.query(
@@ -138,7 +138,7 @@ describe('a SQLite datetime default', () => {
     const database = memoryDatabase();
     const contract = await sqliteContractFromPsl(`model Event {
   id Int      @id
-  at DateTime @default("2024-01-01T00:00:00.123Z")
+  at DateTime @default(datetime\`2024-01-01T00:00:00.123Z\`)
 
   @@map("event")
 }`);
@@ -150,7 +150,7 @@ describe('a SQLite datetime default', () => {
     const result = await verify(database, contract);
     const replan = planner.plan({
       contract,
-      schema: await familyInstance.introspect({ driver: database }),
+      schema: await familyInstance.introspect({ driver: database, contract }),
       policy: INIT_ADDITIVE_POLICY,
       fromContract: contract,
       origin: planOriginOf(contract),

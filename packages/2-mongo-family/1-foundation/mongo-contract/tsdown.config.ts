@@ -6,5 +6,6 @@ export default defineConfig({
     'canonicalization-hooks': 'src/exports/canonicalization-hooks.ts',
     'data-type': 'src/exports/data-type.ts',
     'entity-kinds': 'src/exports/entity-kinds.ts',
+    test: 'src/exports/test.ts',
   },
 });

@@ -46,7 +46,6 @@ interface RecorderEntry {
 
 class MockRuntime extends RuntimeCore<MockPlan, MockExec, RuntimeMiddleware<MockExec>> {
   readonly events: RecorderEntry[] = [];
-  closeCalls = 0;
 
   constructor(
     middleware: ReadonlyArray<RuntimeMiddleware<MockExec>>,
@@ -84,9 +83,7 @@ class MockRuntime extends RuntimeCore<MockPlan, MockExec, RuntimeMiddleware<Mock
     return { affectedRows: 3 };
   }
 
-  async close(): Promise<void> {
-    this.closeCalls++;
-  }
+  async close(): Promise<void> {}
 }
 
 function recorder(label: string, log: RecorderEntry[]): RuntimeMiddleware<MockExec> {
@@ -321,13 +318,6 @@ describe('RuntimeCore', () => {
       );
     },
   );
-
-  it('subclasses can implement close() and it is invoked', async () => {
-    const runtime = new MockRuntime([], ctx, []);
-    expect(runtime.closeCalls).toBe(0);
-    await runtime.close();
-    expect(runtime.closeCalls).toBe(1);
-  });
 
   describe('signal propagation', () => {
     it('exposes the query signal by identity to every middleware hook', async () => {

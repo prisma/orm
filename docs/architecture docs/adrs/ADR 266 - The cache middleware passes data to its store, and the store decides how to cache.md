@@ -10,15 +10,17 @@ import {
   cacheAnnotation,
   createCacheMiddleware,
   createInMemoryCacheStore,
+  invalidateAnnotation,
 } from '@internal/middleware-cache';
+import { contractFromJson } from '@internal/postgres/static';
 import type { Contract } from './contract.d';
 import contractJson from './contract.json' with { type: 'json' };
 
 // How long entries live is an option of the store, not of the middleware.
 const store = createInMemoryCacheStore({ maxEntries: 1000, ttlMs: 60_000 });
 const cache = createCacheMiddleware({ store });
-const db = postgres<Contract>({
-  contractJson,
+const db = postgres({
+  contract: contractFromJson<Contract>(contractJson),
   url: process.env['DATABASE_URL']!,
   middleware: [cache],
 });
@@ -28,8 +30,12 @@ const alice = await db.orm.public.User.first({ id: 1 }, (m) =>
   m.annotate(cacheAnnotation({ key: 'user-1' })),
 );
 
-// After a write has returned, the application removes the entry.
-await db.orm.public.User.where({ id: 1 }).update({ name: 'Alicia' });
+// The write carries its invalidation, which runs once the write has committed.
+await db.orm.public.User.where({ id: 1 }).update({ name: 'Alicia' }, (m) =>
+  m.annotate(invalidateAnnotation({ keys: ['user-1'] })),
+);
+
+// Or, after a write has returned, the application removes the entry itself.
 await cache.invalidate({ keys: ['user-1'] });
 ```
 
@@ -40,7 +46,7 @@ The cache middleware in [`@internal/middleware-cache`](../../../packages/3-exten
 | The string a read is stored under | Middleware | The annotation's `key`, else a key derived from the query ([Keys](#keys)) |
 | Data that groups entries, such as tags or table names | Application | `meta` on the annotation and on `invalidate`, passed to the store unread ([Grouping entries](#grouping-entries-with-meta)) |
 | Finding entries by `meta`, how long they live, and whether a read that overlapped an invalidation may store its rows | Store | The three store methods ([The store contract](#the-store-contract)) |
-| When to remove entries | Application or extension | `cache.invalidate({ keys, meta })` |
+| When to remove entries | Application or extension | `cache.invalidate({ keys, meta })`, or `invalidateAnnotation({ keys, meta })` on the write |
 
 An operation belongs in the middleware only if it cannot be built outside it.
 
@@ -75,6 +81,8 @@ A key the annotation names never passes through `deriveKey`, so `invalidate({ ke
 `cache.invalidate({ keys })` passes the keys to the store, which removes them. This is how an application removes entries from the default store: by the keys it named. A derived key is a hash the application never sees, so entries stored under derived keys are removed by `meta`, described next, or left to expire.
 
 The application calls `invalidate` after its write has returned. Outside a transaction, the write has committed by the time it returns. Inside one, the application calls `invalidate` after `db.transaction()` returns. Calling it before the commit is unsafe: a concurrent read could fetch the old, still-committed row and store it after the invalidation ran.
+
+A write can instead carry its invalidation: `invalidateAnnotation({ keys, meta })` on an ORM write or a SQL builder write. The middleware makes the same `invalidate` call from the runtime's `activityFinalized` event ([ADR 271](ADR%20271%20-%20The%20runtime%20middleware%20observes%20a%20tree%20of%20activities%2C%20each%20started%2C%20ended%20and%20finalized.md)), once the write's effects are final: right after the write outside a transaction, or when the outermost enclosing transaction ends. It does not invalidate when the outcome is `rolled-back`, and does when it is `unknown`, since the write may have landed and an unneeded invalidation costs one miss.
 
 ### Grouping entries with `meta`
 
@@ -122,9 +130,9 @@ To prevent this, the store keeps a version number for every key, including keys 
 const store = createInMemoryCacheStore();
 const cache = createCacheMiddleware({ store });
 
-const entry = await store.get({ key: 'user-1', meta: undefined }); // version 0, no value
-await cache.invalidate({ keys: ['user-1'] });                      // the store moves user-1 to version 1
-await store.set(entry, rows);                                      // false: version 0 is no longer current
+const entry = await store.get({ key: 'user-1' }); // version 0, no value
+await cache.invalidate({ keys: ['user-1'] });     // the store moves user-1 to version 1
+await store.set(entry, rows);                     // false: version 0 is no longer current
 ```
 
 For each read in flight, the middleware keeps the entry `get` returned. When the read completes from the database, the middleware calls `set` with that entry and the rows. If the store refuses, the middleware logs the debug event `middleware.cache.store-skipped` and moves on. The middleware keeps no counters of its own. Because the version lives in the store, the check works across every process that shares the store: an invalidation in one process stops a read already running in another process from storing its rows.
@@ -151,22 +159,26 @@ A store must also keep a version it has increased for at least as long as a read
 // packages/3-extensions/middleware-cache/src/cache-store.ts
 export type CachedRows = readonly Record<string, unknown>[];
 
-export interface CacheEntry<TMeta = unknown, TValue = CachedRows> {
+export type CachedValue =
+  | { readonly kind: 'statement-rows'; readonly rows: CachedRows }
+  | { readonly kind: 'call-result'; readonly result: unknown };
+
+export interface CacheEntry<TMeta = unknown, TValue = CachedValue> {
   readonly key: string;
   readonly meta: TMeta | undefined;
   readonly version: number;
   readonly data: { readonly empty: true } | { readonly empty: false; readonly value: TValue };
 }
 
-export interface CacheStore<TMeta = unknown, TValue = CachedRows> {
+export interface CacheStore<TMeta = unknown, TValue = CachedValue> {
   get(target: {
     readonly key: string;
-    readonly meta: TMeta | undefined;
+    readonly meta?: TMeta | undefined;
   }): Promise<CacheEntry<TMeta, TValue>>;
   set(entry: CacheEntry<TMeta, TValue>, value: TValue): Promise<boolean>;
   unset(target: {
-    readonly keys: readonly string[] | undefined;
-    readonly meta: TMeta | undefined;
+    readonly keys?: readonly string[] | undefined;
+    readonly meta?: TMeta | undefined;
   }): Promise<void>;
 }
 ```
@@ -183,23 +195,25 @@ A store author takes on these obligations:
 3. `unset` removes a key from every `meta` index when it removes the key.
 4. An increased version is kept at least as long as a read can take.
 5. A store that cannot act on a `meta` it is given throws rather than ignoring it.
-6. `unset` does not run queries through the runtime that uses the middleware.
+6. A field the caller leaves out of `get` or `unset` means the same as `undefined`. The store does not tell the two apart.
+7. `unset` does not run queries through the runtime that uses the middleware.
+8. `get` gives back a value equivalent to the one `set` was given, `kind` included. A call result holds the values codecs decoded, such as `Date`, `bigint`, Temporal values and extension class instances, so a store that serializes needs a serializer that rebuilds those types; JSON does not. The key does not cover how values are decoded, so a deploy that changes what a codec returns needs a new key prefix for a shared store.
 
-The value type defaults to `CachedRows`, the rows this middleware stores, and `createCacheMiddleware` accepts only a store of rows. The value type is a parameter so the same store type can serve other caches. Every method takes one object, or an entry and a value, so a store written against a different argument shape fails to compile instead of misreading its arguments. `unset` is required, because a store that cannot remove entries brings back the stale reads this design exists to prevent.
+The value type defaults to `CachedValue`, what this middleware stores: the raw rows of a statement, or the result of a client activity, such as an ORM call (ADR 271). The middleware tags each value with what produced it, `statement-rows` or `call-result`, and serves `statement-rows` only to a statement and `call-result` only to a client activity, so under one key a statement's rows and a client activity's result never stand in for each other. `createCacheMiddleware` accepts only a store of `CachedValue`. The value type is a parameter so the same store type can serve other caches. Every method takes one object, or an entry and a value, so a store written against a different argument shape fails to compile instead of misreading its arguments. `unset` is required, because a store that cannot remove entries brings back the stale reads this design exists to prevent.
 
 ## Example: a tagging store
 
 A store that groups entries by `meta.tags`, kept short by never expiring entries or forgetting versions:
 
 ```ts
-import type { CachedRows, CacheStore } from '@internal/middleware-cache';
+import type { CachedValue, CacheStore } from '@internal/middleware-cache';
 
 interface TagMeta {
   readonly tags: readonly string[];
 }
 
 function createTagStore(): CacheStore<TagMeta> {
-  const values = new Map<string, CachedRows>();
+  const values = new Map<string, CachedValue>();
   const versions = new Map<string, number>();
   const keysByTag = new Map<string, Set<string>>();
   const versionOf = (name: string) => versions.get(name) ?? 0;
@@ -264,7 +278,7 @@ Invalidating the `users` tag increases the tag's version, so a read tagged `user
 - An annotated read that completes from the database is always offered to the store, unless it is bypassed or runs inside a transaction or on a dedicated connection. The store decides whether to keep it, and for how long.
 - With the default store, the application removes entries by the keys it named. Grouping entries by `meta` requires a store that indexes it.
 - Store authors take on the obligations listed under [The store contract](#the-store-contract).
-- Removing entries when a write commits, rather than by calling `invalidate` after the write returns, belongs in this package rather than in an extension. It makes no decisions of its own: it names keys or `meta` and reaches the same `invalidate` call. What it adds is waiting until the write's transaction has committed, which is best done once, by the middleware that already holds the store, rather than rebuilt by every extension. That waiting needs a runtime hook that runs after a transaction commits.
+- Removing entries when a write commits, rather than by calling `invalidate` after the write returns, belongs in this package rather than in an extension. `invalidateAnnotation` makes no decisions of its own: it names keys or `meta` and reaches the same `invalidate` call. What it adds is waiting until the write's effects are final, which is best done once, by the middleware that already holds the store, rather than rebuilt by every extension. The middleware waits for the runtime's `activityFinalized` event ([ADR 271](ADR%20271%20-%20The%20runtime%20middleware%20observes%20a%20tree%20of%20activities%2C%20each%20started%2C%20ended%20and%20finalized.md)).
 - Serving an expired entry while refreshing it cannot be built outside. A store can return the expired rows, but only the middleware can serve them and also let the query run to refresh the entry.
 
 ### What stays outside the middleware, and how to build it
@@ -272,9 +286,9 @@ Invalidating the `users` tag increases the tag's version, so a read tagged `user
 - **Tags.** The store indexes `meta.tags` when it stores an entry, and `unset({ meta: { tags } })` removes the tagged keys and increases their versions and the tag's version. The [example](#example-a-tagging-store) above is a complete sketch.
 - **Namespaces.** A namespace is one label per entry in `meta`, handled like a tag, or a prefix that `deriveKey` adds to every key.
 - **Named stores.** One store that receives every entry and routes it by `meta.store` to the real backend.
-- **Invalidating by table.** Each read's `meta` lists the tables it touches, typically through the extension's annotation helper, and the store indexes them. The extension's own middleware reads a write's tables from its query plan and calls `cache.invalidate({ meta: { tables } })`. Inside a transaction it must wait until the transaction commits, which needs the runtime hook named under the consequences above.
+- **Invalidating by table.** Each read's `meta` lists the tables it touches, typically through the extension's annotation helper, and the store indexes them. The extension's own middleware reads a write's tables from its query plan and calls `cache.invalidate({ meta: { tables } })`. It must wait until the write's effects are final, which it does from `activityFinalized`: it invalidates when the outcome is `committed` or `unknown`, since a write with an `unknown` outcome may have landed, and skips only `rolled-back`, as the cache's own `invalidateAnnotation` does.
 - **Versioned keys.** `deriveKey` includes a generation number in every key, and an invalidation increases it. The number lives in the store's backend so that every process reads the same one. Old keys are never looked up again and expire on the store's schedule.
-- **Sharing one read among identical concurrent requests.** A separate middleware placed after the cache, built on the runtime's `interceptQuery` and `afterQuery` hooks. Its `interceptQuery` runs only for reads the cache did not answer.
+- **Sharing one read among identical concurrent requests.** A separate middleware placed after the cache, built on `intercept.onQuery` and `activityEnded`. Its `intercept.onQuery` runs only for reads the cache did not answer, and `activityEnded` on the statement tells it when the shared read has finished.
 
 ## Alternatives considered
 

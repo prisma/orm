@@ -50,7 +50,7 @@ const CLOSED_PROFILE_SCHEMA = {
 
 function usersContract(): MongoContract {
   const users = new MongoCollection({
-    indexes: [{ keys: [{ field: 'email', direction: 1 }], unique: true }],
+    indexes: [{ name: 'email_1', keys: [{ field: 'email', direction: 1 }], unique: true }],
     validator: {
       jsonSchema: { ...CLOSED_PROFILE_SCHEMA },
       validationLevel: 'strict',
@@ -197,10 +197,10 @@ describe('MongoMigrationRunner - renameCollection', () => {
       const result = await runRename();
 
       expect(
-        result.ok ? result.value : { code: result.failure.code, summary: result.failure.summary },
+        result.ok ? result.value : { code: result.failure.code, message: result.failure.message },
       ).toEqual({
         code: 'MIGRATION.PRECHECK_FAILED',
-        summary:
+        message:
           'Operation collection.profiles.rename(users) stopped: collection users already exists, so collection profiles cannot be renamed to it',
       });
       expect({

@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA7_EXTENSION_PACK_MISSING",
+    "file": "schema.prisma",
+    "line": 7,
+    "message": "Field \"Account.nickname\": native type \"@db.Citext\" is a column type of the \"citext\" extension pack, which is not available. Add the pack to extensions in prisma.config.ts: import citext from '@prisma/orm-postgres-contrib/citext/control', then extensions: [citext]."
+  }
+]

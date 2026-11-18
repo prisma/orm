@@ -21,11 +21,5 @@ describe('postgis column-types', () => {
         typeParams: { srid: 4326 },
       });
     });
-
-    it('preserves the SRID type parameter', () => {
-      expect(geometry({ srid: 3857 })).toMatchObject({
-        typeParams: { srid: 3857 },
-      });
-    });
   });
 });

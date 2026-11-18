@@ -9,6 +9,7 @@ import type {
   ControlDriverInstance,
   ControlExtensionDescriptor,
   ControlFamilyInstance,
+  DatabasePolicyDifference,
   MigrationOperationPolicy,
   MigrationOperationSubject,
   MigrationPlannerConflict,
@@ -31,25 +32,41 @@ import {
   collectAggregateNamespaces,
   type PlannerError,
   planMigration,
+  requireHeadRef,
 } from '@internal/migration-tools/aggregate';
+import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import {
   contractSnapshotDir,
   readContractSnapshotJson,
   type SnapshotContentVerifier,
 } from '@internal/migration-tools/contract-snapshot-store';
 import { MigrationToolsError } from '@internal/migration-tools/errors';
-import { blindCast } from '@internal/utils/casts';
+import type { NamedRef } from '@internal/migration-tools/refs';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { join } from 'pathe';
-import { CliStructuredError } from '../../utils/cli-errors';
+import { withEditsAsWritten } from '../../utils/calls-as-written';
+import { CliStructuredError, errorStatementNeedsMigrationFile } from '../../utils/cli-errors';
+import { dbInitPlanningFailedError, dbInitRunnerFailureError } from '../../utils/db-init-failure';
+import { dbUpdateRunnerFailureError } from '../../utils/db-update-failure';
+import {
+  errorExtensionNoInvariantPath,
+  errorExtensionPathUnreachable,
+  type UnplannableExtensionSpace,
+} from '../../utils/extension-path-failure';
+import { dbUpdateKeepDataEditAdvice } from '../../utils/keep-data-edit-advice';
+import { planningRefusedError } from '../../utils/planning-refused-error';
+import { declaredSettingsText } from '../../utils/policy-errors';
+import type { CliInvocation } from '../../utils/printed-command';
 import {
   type AnswerPlanQuestions,
   askPlanQuestions,
   type ConsentedSubject,
+  givenConsents,
   type PlannedQuestions,
   refuseUnusedConsents,
+  removedNamespaceOf,
   subjectText,
 } from '../statements/plan-questions';
 import {
@@ -57,33 +74,46 @@ import {
   reportAppliedStatements,
   reportConsentStatement,
 } from '../statements/report-applied-statements';
-import { resolveStatements, type StatementOrigin } from '../statements/resolve-statements';
+import {
+  fieldConvertsInDestination,
+  resolveStatements,
+  type StatementOrigin,
+} from '../statements/resolve-statements';
 import { isPlannedStatement, type StatementText } from '../statements/statement-text';
 import { reportTemporaryValues, type TemporaryValueReport } from '../statements/temporary-values';
 import type {
   AskedAccessChange,
   AskedDataLoss,
-  DbInitFailure,
   DbInitResult,
   DbInitSuccess,
-  DbUpdateFailure,
   DbUpdateResult,
   DbUpdateSuccess,
-  FailedTypeChangeReport,
   OnControlProgress,
   PerSpaceExecutionEntry,
-  RowsWithoutValueReport,
+  PlannerWarningsListener,
 } from '../types';
+import {
+  type ChangedStorageEntity,
+  changedStorageEntities,
+  whatChangedSentence,
+} from './changed-storage-entities';
 import {
   type BuildAggregateInputs,
   buildContractSpaceAggregate,
 } from './contract-space-aggregate-loader';
+import {
+  type CheckedDatabasePolicies,
+  checkRunPolicies,
+  databasePoliciesInForce,
+} from './database-policies';
 import { stripOperations } from './migration-helpers';
+import { structuralPathOf } from './no-invariant-path';
 import {
   buildPerSpaceBreakdown,
   collectOrdered,
   type OrderedResolution,
   runMigration,
+  runnerFailureFacts,
 } from './run-migration';
 
 /**
@@ -105,7 +135,8 @@ const SPAN_IDS = {
  * loader gathers the rest from disk + descriptors. The CLI is the
  * descriptor-import boundary; everything downstream is descriptor-free.
  */
-export interface ExecuteRunSharedOptions<TFamilyId extends string, TTargetId extends string> {
+export interface ExecuteRunSharedOptions<TFamilyId extends string, TTargetId extends string>
+  extends PlannerWarningsListener {
   readonly driver: ControlDriverInstance<TFamilyId, TTargetId>;
   readonly adapter: ControlAdapterInstance<TFamilyId, TTargetId>;
   readonly familyInstance: ControlFamilyInstance<TFamilyId, unknown>;
@@ -121,6 +152,8 @@ export interface ExecuteRunSharedOptions<TFamilyId extends string, TTargetId ext
   readonly extensions: ReadonlyArray<ControlExtensionDescriptor<TFamilyId, TTargetId>>;
   readonly targetId: TTargetId;
   readonly policy: MigrationOperationPolicy;
+  /** The command line the advice of a failure repeats. */
+  readonly invocation: CliInvocation;
   /** Content check for contract snapshots the aggregate loader resolves. */
   readonly verifySnapshotContent?: SnapshotContentVerifier;
   readonly onProgress?: OnControlProgress;
@@ -129,8 +162,8 @@ export interface ExecuteRunSharedOptions<TFamilyId extends string, TTargetId ext
 /**
  * `db init` takes no statements. `db update` takes the statements as the user wrote them, in
  * order, and the answer to each question its plan raises: what an operation that would lose data
- * means and, when it applies, whether an operation may widen access. `acceptDataLoss` answers
- * every data-loss question with consent, and `acceptAccessWidening` every access question.
+ * means and, when it applies, whether an operation may change access. `acceptDataLoss` answers
+ * every data-loss question with consent, and `acceptAccessChanges` every access question.
  */
 export type ExecuteRunOptions<
   TFamilyId extends string,
@@ -143,7 +176,9 @@ export type ExecuteRunOptions<
         readonly statements: readonly StatementText[];
         readonly answerQuestions: AnswerPlanQuestions;
         readonly acceptDataLoss: boolean;
-        readonly acceptAccessWidening: boolean;
+        readonly acceptAccessChanges: boolean;
+        readonly ref?: NamedRef;
+        readonly permitPolicyChange: boolean;
       }
   );
 
@@ -163,9 +198,9 @@ export type ExecuteRunOptions<
  *    behaviour); every extension space walks its on-disk graph via
  *    `resolveRecordedPath`.
  * 4. **Apply** (when `mode === 'apply'`): every per-space `MigrationPlan`
- *    feeds into the runner's `execute` — one outer
- *    transaction across every space; failure on any space rolls back
- *    every space's writes.
+ *    feeds into the runner's `execute`. On a target whose DDL is
+ *    transactional a failure rolls back every space's writes; otherwise
+ *    the operations that already ran stay applied.
  */
 export async function executeRun<TFamilyId extends string, TTargetId extends string>(
   options: ExecuteRunOptions<TFamilyId, TTargetId>,
@@ -204,6 +239,29 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
   // 2. Read live DB state (markers + schema).
   const markerRows = await familyInstance.readAllMarkers({ driver });
 
+  // 2c. The database's policies decide whether `db update` may move it, before anything is planned.
+  let checkedPolicies: CheckedDatabasePolicies | undefined;
+  if (options.action === 'dbUpdate') {
+    const checked = checkRunPolicies({
+      command: 'db update',
+      appSpaceId: aggregate.app.spaceId,
+      inForce: databasePoliciesInForce(
+        markerRows,
+        aggregate.app.spaceId,
+        familyInstance.markerLocation,
+      ),
+      ref: options.ref,
+      permitPolicyChange: options.permitPolicyChange,
+      targetHash: contract.storage.storageHash,
+      invocation: options.invocation,
+    });
+    if (!checked.ok) {
+      return notOk(checked.failure);
+    }
+    checkedPolicies = checked.value;
+  }
+  const policiesToWrite = checkedPolicies?.toWrite;
+
   // 2b. The application space's origin is the contract its marker names, read from the snapshot
   // store. The planner names each subject it would lose through it, and rename statements resolve
   // against it. Without a readable snapshot every subject is a storage name, and a rename cannot
@@ -233,7 +291,27 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
     }
     return resolved.value;
   };
-  const statements = resolveRenames(statementTexts);
+  const consentTexts = statementTexts.filter((statement) => !isPlannedStatement(statement));
+  const fieldConverts =
+    appOrigin?.origin.kind === 'missing'
+      ? fieldConvertsInDestination(statementTexts, contract)
+      : [];
+  const firstResolved = fieldConverts.length > 0 ? [] : resolveRenames(statementTexts);
+  const needsMigrationFile =
+    fieldConverts.length > 0
+      ? fieldConverts
+      : statementsNeedingMigrationFile(statementTexts, firstResolved);
+  if (needsMigrationFile.length > 0) {
+    const markerHash = markerRows.get(aggregate.app.spaceId)?.storageHash;
+    throw errorStatementNeedsMigrationFile(
+      statementTexts,
+      needsMigrationFile,
+      options.invocation,
+      aggregate.app.packages.some(({ metadata }) => metadata.to === markerHash)
+        ? markerHash
+        : undefined,
+    );
+  }
 
   // 2a. Orphan-marker pre-flight: refuse to *apply* when a marker row
   // exists for a space that is not declared in the aggregate. Plan mode
@@ -243,7 +321,11 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
   // run would do. Apply mode tells the user to clean up the orphan
   // before silently advancing the app's marker.
   if (mode === 'apply') {
-    const orphanMarkerError = detectOrphanMarkers(aggregate, markerRows);
+    const orphanMarkerError = detectOrphanMarkers(
+      aggregate,
+      markerRows,
+      familyInstance.markerLocation,
+    );
     if (orphanMarkerError !== null) {
       throw orphanMarkerError;
     }
@@ -257,7 +339,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
   });
   const schemaIR = await familyInstance.introspect({
     driver,
-    contract: collectAggregateNamespaces(aggregate),
+    contract: collectAggregateNamespaces(aggregate, fromContract),
   });
   onProgress?.({ action, kind: 'spanEnd', spanId: SPAN_IDS.introspect, outcome: 'ok' });
 
@@ -265,8 +347,9 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
   // (today's `db init` / `db update` daily-driver behaviour); extensions
   // walk their on-disk migration graphs via resolveRecordedPath.
   const plan = async (
+    texts: readonly StatementText[],
     resolved: readonly ResolvedMigrationStatement[],
-  ): Promise<Result<PlannedRun, DbInitResult | DbUpdateResult>> => {
+  ): Promise<Result<PlannedRun, PlanningRefused>> => {
     onProgress?.({
       action,
       kind: 'spanStart',
@@ -286,14 +369,23 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
     });
     if (!planned.ok) {
       onProgress?.({ action, kind: 'spanEnd', spanId: SPAN_IDS.plan, outcome: 'error' });
-      return notOk(mapPlannerError(planned.failure));
+      return notOk({
+        refused: mapPlannerError(planned.failure, {
+          action,
+          aggregate,
+          markerRows,
+          invocation: options.invocation,
+          statements: texts,
+          resolved,
+        }),
+      });
     }
     onProgress?.({ action, kind: 'spanEnd', spanId: SPAN_IDS.plan, outcome: 'ok' });
     const orderedResolutions = collectOrdered(planned.value.applyOrder, planned.value.perSpace);
     const subjects: MigrationPlanSubjects =
       action === 'dbUpdate'
         ? subjectsAcrossSpaces(orderedResolutions)
-        : { dataLoss: [], accessWidening: [], temporaryValues: [] };
+        : { dataLoss: [], accessChanges: [], temporaryValues: [] };
     const operations = orderedResolutions.flatMap((r) => r.entry.displayOps);
     const labelled = <TEntry extends MigrationOperationSubject>(entries: readonly TEntry[]) =>
       entries.map((entry) => ({
@@ -305,19 +397,25 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
       orderedResolutions,
       subjects,
       dataLoss: labelled(subjects.dataLoss).map((entry) => ({ ...entry, loss: entry.loss })),
-      accessWidening: labelled(subjects.accessWidening),
+      accessChanges: labelled(subjects.accessChanges),
+      temporaryValues: subjects.temporaryValues,
+      ...ifDefined(
+        'namespaces',
+        orderedResolutions.find(({ spaceId }) => spaceId === aggregate.app.spaceId)?.entry
+          .namespaces,
+      ),
     });
   };
 
-  const first = await plan(statements);
+  const first = await plan(statementTexts, firstResolved);
   if (!first.ok) {
-    return first.failure;
+    return notOk(first.failure.refused);
   }
   let run = first.value;
   let plannedTexts: readonly StatementText[] = statementTexts.filter(isPlannedStatement);
   let consented: readonly ConsentedSubject[] = [];
   // 3a. Questions: an apply of `db update` asks what each operation that would lose data means,
-  // and whether each that would widen access may run, before it applies anything. A dry run asks
+  // and whether each that would change access may run, before it applies anything. A dry run asks
   // nothing and lists them.
   if (options.action === 'dbUpdate' && mode === 'apply') {
     const answered = await askPlanQuestions({
@@ -325,19 +423,23 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
       askAccess: true,
       canConvert: false,
       statements: plannedTexts,
-      preAnswers: statementTexts.filter((statement) => !isPlannedStatement(statement)),
-      consentAll: { delete: options.acceptDataLoss, allow: options.acceptAccessWidening },
+      preAnswers: consentTexts,
+      consentAll: { delete: options.acceptDataLoss, allow: options.acceptAccessChanges },
       origin: fromContract ?? EMPTY_ORIGIN,
       originKnown: fromContract !== null,
       destination: contract,
       answer: options.answerQuestions,
-      replan: (planned) => plan(resolveRenames(planned)),
+      keepDataEditAdvice: dbUpdateKeepDataEditAdvice(
+        options.invocation,
+        recordedDatabaseContract(aggregate, markerRows),
+      ),
+      replan: (planned) => plan([...consentTexts, ...planned], resolveRenames(planned)),
     });
     if (!answered.ok) {
       if (CliStructuredError.is(answered.failure)) {
         throw answered.failure;
       }
-      return answered.failure;
+      return notOk(answered.failure.refused);
     }
     run = answered.value.plan;
     plannedTexts = answered.value.statements;
@@ -356,9 +458,20 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
     if (!refused.ok) {
       throw refused.failure;
     }
+    consented = givenConsents({
+      plan: run,
+      statements: statementTexts,
+      consentAll: { delete: options.acceptDataLoss, allow: options.acceptAccessChanges },
+      contracts: {
+        origin: fromContract ?? EMPTY_ORIGIN,
+        destination: contract,
+        statements: plannedTexts,
+      },
+    });
   }
   const { planned, orderedResolutions } = run;
   const plannerWarnings = aggregatePlannerWarnings(orderedResolutions);
+  if (plannerWarnings !== undefined) options.onPlannerWarnings?.(plannerWarnings);
 
   // The destination's structural shape comes from the app's plan — its
   // `destination` is the storage hash users see in CLI output.
@@ -398,16 +511,23 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
     destination: contract,
     statements: plannedTexts,
   };
+  const namespaceAnswersOf = (subject: MigrationOperationSubject['subject']) =>
+    ifDefined('removedNamespace', removedNamespaceOf(subject, run.namespaces));
   const asked = <TEntry extends MigrationOperationSubject>(entries: readonly TEntry[]) =>
-    entries.map((entry) => ({ ...entry, text: subjectText(entry.subject, contractsAsked) }));
+    entries.map((entry) => ({
+      ...entry,
+      text: subjectText(entry.subject, contractsAsked),
+      ...namespaceAnswersOf(entry.subject),
+    }));
   const databaseStorageHash =
     action === 'dbUpdate' ? recordedDatabaseContract(aggregate, markerRows) : undefined;
   const subjects =
     action === 'dbUpdate'
       ? {
           dataLoss: asked(run.subjects.dataLoss),
-          accessWidening: asked(run.subjects.accessWidening),
+          accessChanges: asked(run.subjects.accessChanges),
           temporaryValues: reportTemporaryValues(run.subjects.temporaryValues, contract),
+          ...ifDefined('namespaces', run.namespaces),
         }
       : undefined;
 
@@ -430,7 +550,6 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
       appliedStatements,
       subjects,
       databaseStorageHash,
-      ...ifDefined('warnings', plannerWarnings),
     });
   }
 
@@ -449,29 +568,44 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
     migrations,
     frameworkComponents,
     policy,
+    ...ifDefined('databasePolicies', policiesToWrite?.policies),
+    ...ifDefined('expectedDatabasePolicies', checkedPolicies?.inForce),
     action,
     ...ifDefined('onProgress', onProgress),
   });
   if (!applied.ok) {
-    return buildRunnerFailure({
-      summary: applied.failure.summary,
-      ...ifDefined('why', applied.failure.why),
-      meta: applied.failure.meta,
-      ...ifDefined('warnings', plannerWarnings),
-      ...ifDefined('failedTypeChange', applied.failure.failedTypeChange),
-      ...ifDefined('rowsWithoutValue', applied.failure.rowsWithoutValue),
-      ...ifDefined('databaseStorageHash', databaseStorageHash),
-      ...ifDefined('cause', applied.failure.cause),
-    });
+    const facts = await withEditsAsWritten(runnerFailureFacts(applied.failure, orderedResolutions));
+    return notOk(
+      action === 'dbInit'
+        ? dbInitRunnerFailureError(applied.failure, facts, options.invocation)
+        : dbUpdateRunnerFailureError(applied.failure, facts, {
+            databaseStorageHash,
+            invocation: options.invocation,
+          }),
+    );
   }
 
   const aggregateOps = applied.value.orderedResolutions.flatMap((r) => r.entry.displayOps);
-  const summary =
+  const signedWithoutOperations =
+    action === 'dbUpdate' &&
+    applied.value.totalOpsExecuted === 0 &&
+    markerRows.get(aggregate.app.spaceId)?.storageHash !== appPlan.destination.storageHash;
+  const runSummary =
     action === 'dbInit'
       ? `Applied ${applied.value.totalOpsExecuted} operation(s) across ${applied.value.orderedResolutions.length} space(s), database signed`
-      : applied.value.totalOpsExecuted === 0
-        ? `Database already matches contract across ${applied.value.orderedResolutions.length} space(s), signature updated`
-        : `Applied ${applied.value.totalOpsExecuted} operation(s) across ${applied.value.orderedResolutions.length} space(s), signature updated`;
+      : signedWithoutOperations
+        ? `The storage the contract describes changed, but the database needs no operation for it, so none ran and the database was signed with the new contract. ${whatChangedSentence(fromContract, contract)}`
+        : applied.value.totalOpsExecuted === 0
+          ? `Database already matches contract across ${applied.value.orderedResolutions.length} space(s), signature updated`
+          : `Applied ${applied.value.totalOpsExecuted} operation(s) across ${applied.value.orderedResolutions.length} space(s), signature updated`;
+  const policiesText =
+    policiesToWrite === undefined ? undefined : declaredSettingsText(policiesToWrite.differences);
+  const summary =
+    policiesText === undefined
+      ? runSummary
+      : signedWithoutOperations
+        ? `${runSummary} Policies updated: ${policiesText}.`
+        : `${runSummary}; policies updated: ${policiesText}`;
 
   return wrapApplyResult({
     operations: aggregateOps,
@@ -483,14 +617,22 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
     appliedStatements,
     subjects,
     databaseStorageHash,
-    ...ifDefined('warnings', plannerWarnings),
+    changedStorageEntities: signedWithoutOperations
+      ? changedStorageEntities(fromContract, contract)
+      : undefined,
+    databasePoliciesUpdated: policiesToWrite?.differences,
   });
 }
 
 /** The origin of a database whose marker names no readable contract: no models. */
-const EMPTY_ORIGIN = { domain: { namespaces: {} } };
+const EMPTY_ORIGIN = { domain: { namespaces: {} }, storage: { namespaces: {} } };
 
-/** A plan of every space, and what it would lose and whose access it would widen. */
+/** The planner refused to plan: the error the command reports. */
+interface PlanningRefused {
+  readonly refused: CliStructuredError;
+}
+
+/** A plan of every space, and what it would lose and whose access it would change. */
 interface PlannedRun extends PlannedQuestions {
   readonly planned: AggregatePlan;
   readonly orderedResolutions: readonly OrderedResolution[];
@@ -554,7 +696,7 @@ function operationsBefore(
 }
 
 /**
- * What the planned operations lose and whose access they widen, across every space, each at its
+ * What the planned operations lose and whose access they change, across every space, each at its
  * position in the operations the result reports.
  */
 function subjectsAcrossSpaces(
@@ -573,8 +715,8 @@ function subjectsAcrossSpaces(
     dataLoss: orderedResolutions.flatMap((resolution) =>
       offset(resolution, resolution.entry.dataLoss),
     ),
-    accessWidening: orderedResolutions.flatMap((resolution) =>
-      offset(resolution, resolution.entry.accessWidening),
+    accessChanges: orderedResolutions.flatMap((resolution) =>
+      offset(resolution, resolution.entry.accessChanges),
     ),
     temporaryValues: orderedResolutions.flatMap((resolution) =>
       offset(resolution, resolution.entry.temporaryValues),
@@ -590,7 +732,7 @@ function aggregatePlannerWarnings(
 }
 
 /**
- * Compare the live `_prisma_marker` rows against the aggregate's
+ * Compare the live marker rows, kept in `markerLocation`, against the aggregate's
  * declared contract spaces. Any marker row whose `space` is not a space of
  * the aggregate is an "orphan" — typically a marker left behind by
  * an extension that was removed from `extensions` without first
@@ -607,6 +749,7 @@ function aggregatePlannerWarnings(
 function detectOrphanMarkers(
   aggregate: ContractSpaceAggregate,
   markerRows: ReadonlyMap<string, unknown>,
+  markerLocation: string,
 ): CliStructuredError | null {
   const aggregateSpaceIds = new Set<string>([
     aggregate.app.spaceId,
@@ -625,12 +768,12 @@ function detectOrphanMarkers(
       ? `Orphan contract-space marker detected for "${orphans[0]}"`
       : `Orphan contract-space markers detected for ${orphans.length} spaces`;
   return new CliStructuredError('MIGRATION.CONTRACT_SPACE_VIOLATION', summary, {
-    why: `The database has \`_prisma_marker\` rows for spaces (${orphans
+    why: `The database has \`${markerLocation}\` rows for spaces (${orphans
       .map((s) => `"${s}"`)
       .join(
         ', ',
       )}) that are not declared in the project's \`extensions\`. The aggregate pipeline refuses to advance markers it cannot account for.`,
-    fix: 'Either re-declare the missing extension(s) in `extensions` (so the aggregate owns them again), or remove the orphan marker row(s) from `_prisma_marker` once you have confirmed the corresponding tables can be safely retired.',
+    fix: `Either re-declare the missing extension(s) in \`extensions\` (so the aggregate owns them again), or remove the orphan marker row(s) from \`${markerLocation}\` once you have confirmed the corresponding tables can be safely retired.`,
     docsUrl: 'https://pris.ly/contract-spaces',
     meta: {
       violations: orphans.map((spaceId) => ({ kind: 'orphanMarker', spaceId })),
@@ -638,41 +781,55 @@ function detectOrphanMarkers(
   });
 }
 
-function mapPlannerError(error: PlannerError): DbInitResult | DbUpdateResult {
+function mapPlannerError(
+  error: PlannerError,
+  context: {
+    readonly action: 'dbInit' | 'dbUpdate';
+    readonly aggregate: ContractSpaceAggregate;
+    readonly markerRows: ReadonlyMap<string, { readonly storageHash: string }>;
+    readonly invocation: CliInvocation;
+    readonly statements: readonly StatementText[];
+    readonly resolved: readonly ResolvedMigrationStatement[];
+  },
+): CliStructuredError {
   if (error.kind === 'planFromDiffFailed') {
-    const failure: DbInitFailure | DbUpdateFailure = {
-      code: 'PLANNING_FAILED',
-      summary: 'Migration planning failed due to conflicts',
-      conflicts: error.conflicts,
-      why: undefined,
-      meta: undefined,
-    };
-    return blindCast<
-      DbInitResult | DbUpdateResult,
-      'notOk(failure) is shape-compatible with both DbInitResult and DbUpdateResult; the union is the return type of the surrounding function'
-    >(notOk(failure));
+    return context.action === 'dbInit'
+      ? dbInitPlanningFailedError(error.conflicts)
+      : planningRefusedError(error.conflicts, {
+          invocation: context.invocation,
+          from: recordedDatabaseContract(context.aggregate, context.markerRows),
+          to: undefined,
+          statements: context.statements,
+          resolved: context.resolved,
+        });
   }
+  if (error.kind === 'policyConflict') {
+    throw new InternalError(
+      `The planner refused the planning policy db init and db update give it, which plans the app space from the diff and walks every extension space's graph: ${error.detail}`,
+    );
+  }
+  const space = context.aggregate.extensions.find(({ spaceId }) => spaceId === error.spaceId);
+  if (space === undefined) {
+    throw new InternalError(
+      `The planner named extension space "${error.spaceId}", which the aggregate does not hold.`,
+    );
+  }
+  const headRef = requireHeadRef(space);
+  const unplannable: UnplannableExtensionSpace = {
+    spaceId: error.spaceId,
+    fromHash: context.markerRows.get(error.spaceId)?.storageHash ?? EMPTY_CONTRACT_HASH,
+    targetHash: headRef.hash,
+    command: context.action === 'dbInit' ? 'db init' : 'db update',
+    invocation: context.invocation,
+  };
   if (error.kind === 'extensionPathUnreachable') {
-    return buildRunnerFailure({
-      summary: `Cannot resolve apply path for extension space "${error.spaceId}"`,
-      why: `No path in the on-disk migration graph for extension space "${error.spaceId}" reaches the on-disk head ref hash "${error.target}".`,
-      meta: { spaceId: error.spaceId, target: error.target },
-    });
+    return errorExtensionPathUnreachable(unplannable);
   }
-  if (error.kind === 'extensionPathUnsatisfiable') {
-    return buildRunnerFailure({
-      summary: `Cannot resolve apply path for extension space "${error.spaceId}"`,
-      why: `On-disk migration graph for extension space "${error.spaceId}" reaches the on-disk head ref but does not cover required invariants: ${error.missingInvariants.join(', ')}.`,
-      meta: { spaceId: error.spaceId, missingInvariants: error.missingInvariants },
-    });
-  }
-  // policyConflict — surfaces as a runner-style failure naming the
-  // space; conceptually a configuration bug, but mapping it onto the
-  // existing failure surface keeps callers untouched.
-  return buildRunnerFailure({
-    summary: `Aggregate planner policy conflict for space "${error.spaceId}"`,
-    why: error.detail,
-    meta: { spaceId: error.spaceId },
+  return errorExtensionNoInvariantPath({
+    ...unplannable,
+    required: headRef.invariants,
+    missing: error.missingInvariants,
+    structuralPath: structuralPathOf(space.graph(), unplannable.fromHash, unplannable.targetHash),
   });
 }
 
@@ -688,7 +845,6 @@ function wrapPlanResult(args: {
   readonly subjects:
     | MigrationPlanSubjects<AskedDataLoss, AskedAccessChange, TemporaryValueReport>
     | undefined;
-  readonly warnings?: readonly MigrationPlannerConflict[];
   /** `undefined` for `db init`, which prints no `migration plan`. */
   readonly databaseStorageHash: string | undefined;
 }): DbInitResult | DbUpdateResult {
@@ -707,7 +863,6 @@ function wrapPlanResult(args: {
     },
     perSpace: args.perSpace,
     summary: args.summary,
-    ...ifDefined('warnings', args.warnings),
   };
   return ok(success);
 }
@@ -725,13 +880,17 @@ function wrapApplyResult(args: {
   readonly subjects:
     | MigrationPlanSubjects<AskedDataLoss, AskedAccessChange, TemporaryValueReport>
     | undefined;
-  readonly warnings?: readonly MigrationPlannerConflict[];
   /** `undefined` for `db init`, which prints no `migration plan`. */
   readonly databaseStorageHash: string | undefined;
+  /** Set when `db update` signed the database with a changed contract and ran no operation. */
+  readonly changedStorageEntities: readonly ChangedStorageEntity[] | undefined;
+  readonly databasePoliciesUpdated: readonly DatabasePolicyDifference[] | undefined;
 }): DbInitResult | DbUpdateResult {
   const success: DbInitSuccess | DbUpdateSuccess = {
     mode: 'apply',
+    ...ifDefined('databasePoliciesUpdated', args.databasePoliciesUpdated),
     ...ifDefined('databaseStorageHash', args.databaseStorageHash),
+    ...ifDefined('changedStorageEntities', args.changedStorageEntities),
     ...ifDefined('appliedStatements', args.appliedStatements),
     ...args.subjects,
     plan: { operations: stripOperations(args.operations) },
@@ -748,38 +907,8 @@ function wrapApplyResult(args: {
       : { storageHash: args.destination.storageHash },
     perSpace: args.perSpace,
     summary: args.summary,
-    ...ifDefined('warnings', args.warnings),
   };
   return ok(success);
-}
-
-function buildRunnerFailure(args: {
-  readonly summary: string;
-  readonly why?: string;
-  readonly meta: Record<string, unknown>;
-  readonly warnings?: readonly MigrationPlannerConflict[];
-  readonly failedTypeChange?: FailedTypeChangeReport;
-  readonly rowsWithoutValue?: readonly RowsWithoutValueReport[];
-  /** The contract the database is at, when a migration of the graph ends at it. */
-  readonly databaseStorageHash?: string;
-  readonly cause?: unknown;
-}): DbInitResult | DbUpdateResult {
-  const failure: DbInitFailure | DbUpdateFailure = {
-    code: 'RUNNER_FAILED',
-    summary: args.summary,
-    why: args.why,
-    meta: args.meta,
-    conflicts: undefined,
-    ...ifDefined('warnings', args.warnings),
-    ...ifDefined('failedTypeChange', args.failedTypeChange),
-    ...ifDefined('rowsWithoutValue', args.rowsWithoutValue),
-    ...ifDefined('databaseStorageHash', args.databaseStorageHash),
-    ...ifDefined('cause', args.cause),
-  };
-  return blindCast<
-    DbInitResult | DbUpdateResult,
-    'notOk(failure) is shape-compatible with both DbInitResult and DbUpdateResult; the union is the return type of the surrounding function'
-  >(notOk(failure));
 }
 
 /**
@@ -793,4 +922,24 @@ function recordedDatabaseContract(
 ): string | undefined {
   const hash = markerRows.get(aggregate.app.spaceId)?.storageHash;
   return hash !== undefined && aggregate.app.graph().nodes.has(hash) ? hash : undefined;
+}
+
+/**
+ * The convert and backfill statements of `texts` that ask for code the user writes in a migration
+ * file: every one but a variant convert, which rewrites a stored value the contracts already give.
+ * `resolved` are the planned statements of `texts`, resolved in the order given.
+ */
+function statementsNeedingMigrationFile(
+  texts: readonly StatementText[],
+  resolved: readonly ResolvedMigrationStatement[],
+): readonly StatementText[] {
+  const planned = texts.filter(isPlannedStatement);
+  return planned.filter((_, index) => {
+    const statement = resolved[index];
+    return (
+      statement !== undefined &&
+      statement.kind !== 'rename' &&
+      !(statement.kind === 'convert' && statement.entity === 'model')
+    );
+  });
 }

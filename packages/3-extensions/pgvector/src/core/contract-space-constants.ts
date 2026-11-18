@@ -16,9 +16,21 @@
 
 export const PGVECTOR_SPACE_ID = 'pgvector' as const;
 
+export const PGVECTOR_EXTENSION_NAME = 'vector' as const;
+
 export const PGVECTOR_NATIVE_TYPE = 'vector' as const;
 
 export const PGVECTOR_BASELINE_MIGRATION_NAME = '20260601T0000_install_vector_extension' as const;
+
+export const PGVECTOR_UPGRADE_MIGRATION_NAME = '20261029T1342_declare_vector_extension' as const;
+
+export const PGVECTOR_INSTALL_MIGRATION_NAME = '20261029T1342_create_vector_extension' as const;
+
+export const PGVECTOR_SEARCH_PATH_MIGRATION_NAME =
+  '20261106T1035_find_vector_on_search_path' as const;
+
+export const PGVECTOR_SEARCH_PATH_INSTALL_MIGRATION_NAME =
+  '20261106T1401_install_vector_on_search_path' as const;
 
 /**
  * `pgvector:*` invariantIds emitted by the baseline migration. Each id,

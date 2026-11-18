@@ -390,4 +390,4 @@ export function validateUser(value: unknown): User {
 }
 ```
 
-For a comprehensive real-world example, see `packages/2-sql/2-authoring/contract-ts/src/contract.ts`.
+For a comprehensive real-world example, see `packages/2-sql-family/2-authoring/contract-ts/src/contract.ts`.

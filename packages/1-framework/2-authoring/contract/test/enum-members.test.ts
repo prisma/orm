@@ -3,24 +3,28 @@ import {
   type AnyCodecDescriptor,
   type Codec,
   type CodecLookupWithDescriptors,
+  dataType,
   emptyCodecLookup,
 } from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
 import { encodeEnumTypeMembers } from '../src/enum-members';
 import { enumType, member } from '../src/enum-type';
 
+const anyJsonType = dataType('test/any-json', { read: (json) => json });
+
 function codecOf(
   id: string,
-  encodeJson: (v: unknown) => JsonValue,
-  decodeJson: (j: JsonValue) => unknown,
-) {
+  toStored: (value: unknown) => JsonValue,
+  fromStored: (json: JsonValue) => unknown,
+): Codec {
   return {
     id,
-    encode: async (v: unknown) => v,
-    decode: async (w: unknown) => w,
-    encodeJson,
-    decodeJson,
-  } as Codec;
+    dataType: anyJsonType,
+    toWire: async (v: unknown) => v,
+    fromWire: async (w: unknown) => w,
+    toDataTypeValue: (value) => anyJsonType.valueFrom(toStored(value), {}),
+    fromDataTypeValue: (value) => fromStored(value.value),
+  };
 }
 
 const codecs = [

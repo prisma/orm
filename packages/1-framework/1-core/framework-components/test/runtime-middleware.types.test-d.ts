@@ -2,13 +2,13 @@ import type { PlanMeta } from '@internal/contract/types';
 import { assertType, expectTypeOf, test } from 'vitest';
 import type { ExecutionPlan, QueryPlan } from '../src/execution/query-plan';
 import type {
+  Activity,
   ActivityContext,
   ActivityEndedResult,
   ActivityFinalizedResult,
   CrossFamilyMiddleware,
   ExecuteInterceptResult,
   QueryInterceptResult,
-  RuntimeActivity,
   RuntimeExecutor,
   RuntimeMiddleware,
   RuntimeStatementStats,
@@ -90,12 +90,12 @@ test('the statement hooks narrow the plan parameter to the family plan', () => {
 test('a middleware with only lifecycle events is a cross-family middleware', () => {
   const observer = {
     name: 'observer',
-    async activityStarted(activity: RuntimeActivity, ctx: ActivityContext) {
+    async activityStarted(activity: Activity, ctx: ActivityContext) {
       void activity;
       void ctx;
     },
-    async activityEnded(_activity: RuntimeActivity, _result: ActivityEndedResult) {},
-    async activityFinalized(_activity: RuntimeActivity, _result: ActivityFinalizedResult) {},
+    async activityEnded(_activity: Activity, _result: ActivityEndedResult) {},
+    async activityFinalized(_activity: Activity, _result: ActivityFinalizedResult) {},
   };
   expectTypeOf(observer).toExtend<CrossFamilyMiddleware>();
   expectTypeOf(observer).toExtend<RuntimeMiddleware>();
@@ -139,13 +139,13 @@ test('intercept.onQuery returning statistics does not compile, nor onExecute ret
 test('the lifecycle events receive the activity, its result and its context', () => {
   type Middleware = Required<RuntimeMiddleware>;
   expectTypeOf<Parameters<Middleware['activityStarted']>>().toEqualTypeOf<
-    [RuntimeActivity, ActivityContext]
+    [Activity, ActivityContext]
   >();
   expectTypeOf<Parameters<Middleware['activityEnded']>>().toEqualTypeOf<
-    [RuntimeActivity, ActivityEndedResult, ActivityContext]
+    [Activity, ActivityEndedResult, ActivityContext]
   >();
   expectTypeOf<Parameters<Middleware['activityFinalized']>>().toEqualTypeOf<
-    [RuntimeActivity, ActivityFinalizedResult, ActivityContext]
+    [Activity, ActivityFinalizedResult, ActivityContext]
   >();
   expectTypeOf<ReturnType<Middleware['activityFinalized']>>().toEqualTypeOf<Promise<void>>();
   expectTypeOf<ActivityFinalizedResult['outcome']>().toEqualTypeOf<
@@ -167,6 +167,7 @@ test('activityEnded narrows its result by kind and by returns', () => {
         void result.latencyMs;
         return;
       }
+      if (result.kind !== 'statement') return;
       expectTypeOf(result.outcome).toEqualTypeOf<'succeeded' | 'failed' | 'stopped'>();
       expectTypeOf(result.latencyMs).toEqualTypeOf<number>();
       expectTypeOf(result.source).toEqualTypeOf<'driver' | 'middleware'>();

@@ -44,10 +44,13 @@ withTempDir(({ createTempDir }) => {
         expect(human.stderr, 'DOT reaches the reader').toContain('digraph migrations {');
         expect(human.stdout, 'stdout mirror suppressed on one screen').toBe('');
 
-        // Piping selects json, and the DOT rides the result rather than
-        // shadowing it: a caller that asked for json never receives DOT where
-        // json was promised.
-        const json = await runMigrationGraph(ctx, ['--dot'], { isTTY: false });
+        // A pipe receives the DOT itself, ready for `dot -Tsvg`.
+        const piped = await runMigrationGraph(ctx, ['--dot'], { isTTY: false });
+        expect(piped.stdout.split('\n')[0], 'piped DOT preamble').toBe('digraph migrations {');
+
+        // With --json the DOT rides the result rather than shadowing it: a
+        // caller that asked for json never receives DOT where json was promised.
+        const json = await runMigrationGraph(ctx, ['--dot', '--json']);
         const document = json.presented?.data as { dot: string; spaces: readonly unknown[] };
         expect(json.exitCode, 'graph json exit code').toBe(0);
         expect(document.dot, 'result carries the DOT').toContain('digraph migrations {');
@@ -67,7 +70,7 @@ withTempDir(({ createTempDir }) => {
         const plan = await planMigrationAndSelfEmit(ctx, ['--name', 'init']);
         expect(plan.exitCode, 'plan').toBe(0);
 
-        const graph = await runMigrationGraph(ctx, [], { isTTY: false });
+        const graph = await runMigrationGraph(ctx, ['--json']);
 
         expect(graph.exitCode, 'graph exit code').toBe(0);
         expect(graph.presented?.data).not.toHaveProperty('dot');
@@ -84,7 +87,7 @@ withTempDir(({ createTempDir }) => {
         const emit = await runContractEmit(ctx);
         expect(emit.exitCode, 'emit').toBe(0);
 
-        const graph = await runMigrationGraph(ctx, ['--dot', '--legend'], { isTTY: false });
+        const graph = await runMigrationGraph(ctx, ['--dot', '--legend', '--json']);
         const terminal = graph.json.at(-1);
         const envelope =
           terminal !== undefined && terminal.kind === 'result' ? terminal.envelope : undefined;

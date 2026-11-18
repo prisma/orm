@@ -10,7 +10,7 @@ import { setupJourney } from '../utils/journey-test-helpers';
 
 const configPath = join(
   import.meta.dirname,
-  '../fixtures/cli/cli-test-app/fixtures/lsp-emit-parity/prisma.config.ts',
+  '../fixtures/cli/cli-test-app/fixtures/lsp-workspace-packages/prisma.config.ts',
 );
 
 interface LspResponse {
@@ -111,6 +111,83 @@ withTempDir(({ createTempDir }) => {
 
           expect(completion.error).toBeUndefined();
           expect(completion.result).toEqual([expect.objectContaining({ label: 'sql' })]);
+        } finally {
+          await client.close();
+        }
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
+      'offers in @default only the tags whose type the column type is or casts from',
+      async () => {
+        const ctx = setupJourney({ createTempDir, contractMode: 'psl' });
+        copyFileSync(configPath, ctx.configPath);
+        const schemaPath = join(ctx.testDir, 'contract.prisma');
+        const uri = pathToFileURL(schemaPath).href;
+        const lines = [
+          '// use prisma-8',
+          'types {',
+          '  Day = Date',
+          '}',
+          'model Post {',
+          '  id    Int   @id',
+          '  when  Day   @default()',
+          '  day   Date  @default()',
+          '  meta  Jsonb @default()',
+          '  bytes Bytes @default()',
+          '}',
+        ];
+        const text = lines.join('\n');
+        writeFileSync(schemaPath, text);
+        const allTags = new Set([
+          'sql',
+          'json',
+          'date',
+          'time',
+          'timetz',
+          'timestamp',
+          'timestamptz',
+          'interval',
+          'bytea',
+        ]);
+        const client = lspClient();
+        try {
+          const initialized = await client.request('initialize', {
+            processId: null,
+            rootUri: pathToFileURL(ctx.testDir).href,
+            capabilities: {},
+          });
+          expect(initialized.error).toBeUndefined();
+          client.notify('initialized', {});
+          client.notify('textDocument/didOpen', {
+            textDocument: { uri, languageId: 'prisma', version: 1, text },
+          });
+
+          const tagsOffered = async (field: string) => {
+            const line = lines.findIndex((entry) => entry.startsWith(`  ${field} `));
+            const completion = await client.request('textDocument/completion', {
+              textDocument: { uri },
+              position: { line, character: (lines[line] ?? '').indexOf('@default(') + 9 },
+            });
+            expect(completion.error).toBeUndefined();
+            const items = Array.isArray(completion.result) ? completion.result : [];
+            return items
+              .map((item: { readonly label: string }) => item.label)
+              .filter((label: string) => allTags.has(label));
+          };
+
+          expect({
+            when: await tagsOffered('when'),
+            day: await tagsOffered('day'),
+            meta: await tagsOffered('meta'),
+            bytes: await tagsOffered('bytes'),
+          }).toEqual({
+            when: ['sql', 'date'],
+            day: ['sql', 'date'],
+            meta: ['sql', 'json'],
+            bytes: ['sql', 'bytea'],
+          });
         } finally {
           await client.close();
         }

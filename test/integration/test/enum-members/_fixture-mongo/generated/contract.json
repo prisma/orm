@@ -56,13 +56,6 @@
         "models": {
           "Reading": {
             "fields": {
-              "_id": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/objectId@1",
-                  "kind": "scalar"
-                }
-              },
               "double": {
                 "nullable": false,
                 "type": {
@@ -74,6 +67,13 @@
                   "entityName": "DoubleLevel",
                   "namespaceId": "__unbound__",
                   "plane": "domain"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
                 }
               },
               "int32": {
@@ -105,7 +105,21 @@
             },
             "relations": {},
             "storage": {
-              "collection": "readings"
+              "collection": "readings",
+              "fields": {
+                "double": {
+                  "field": "double"
+                },
+                "id": {
+                  "field": "_id"
+                },
+                "int32": {
+                  "field": "int32"
+                },
+                "text": {
+                  "field": "text"
+                }
+              }
             }
           }
         }

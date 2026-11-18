@@ -1,6 +1,6 @@
 # ADR 263 — A serverless Postgres connection has the same query interface as a `postgres()` client
 
-**Status:** Implemented
+**Status:** Implemented. Amended by [ADR 311](ADR%20311%20-%20connect%28%29%20on%20a%20client%20is%20safe%20to%20call%20again.md): `connect()` on a client may be called again; see the table in "`connect` on a client and on a serverless client".
 **Domain:** Adapters / Targets, Runtime
 
 ## At a glance
@@ -10,10 +10,12 @@ A Node server creates one `db` when the process starts and uses it for every req
 ```ts
 import { createServer } from 'node:http';
 import postgres from '@prisma/orm-postgres/runtime';
+import { contractFromJson } from '@prisma/orm-postgres/static';
 import type { Contract } from './prisma/contract.d';
 import contractJson from './prisma/contract.json' with { type: 'json' };
 
-const db = postgres<Contract>({ contractJson, url: process.env['DATABASE_URL']! });
+const contract = contractFromJson<Contract>(contractJson);
+const db = postgres({ contract, url: process.env['DATABASE_URL']! });
 
 createServer(async (_request, response) => {
   const posts = await db.orm.public.Post.orderBy((post) => post.createdAt.desc())
@@ -27,6 +29,7 @@ A Cloudflare Worker opens a new `db` inside each request, and `await using` clos
 
 ```ts
 import postgresServerless from '@prisma/orm-postgres/serverless';
+import { contractFromJson } from '@prisma/orm-postgres/static';
 import type { Contract } from './prisma/contract.d';
 import contractJson from './prisma/contract.json' with { type: 'json' };
 
@@ -34,7 +37,7 @@ interface Env {
   HYPERDRIVE: { connectionString: string };
 }
 
-const postgres = postgresServerless<Contract>({ contractJson });
+const postgres = postgresServerless({ contract: contractFromJson<Contract>(contractJson) });
 
 export default {
   async fetch(_request: Request, env: Env): Promise<Response> {
@@ -69,7 +72,7 @@ The serverless client holds no database connection and has no member that needs 
 
 `connect` on a serverless client opens the database connection before it returns. It rejects with `DRIVER.CONNECTION_FAILED` when the database refuses the connection, rejects the credentials, or does not answer within 20 seconds, so a handler deals with an unreachable database at `connect` and not at its first query.
 
-This gives users one rule: inside a request, `db` does everything the `db` from `postgres()` does. `db.orm...`, `db.sql...`, `db.raw...`, `db.transaction(...)`, `db.prepare(...)` and `db.runtime().query(...)` all work. Documentation and examples name the serverless client `postgres` and the connection `db`, so that code taken from a Node application reads the same inside a request.
+This gives users one rule: inside a request, `db` does everything the `db` from `postgres()` does. `db.orm...`, `db.sql...`, `db.raw...`, `db.transaction(...)`, `db.prepare(...)` and `db.query(...)` all work. Documentation and examples name the serverless client `postgres` and the connection `db`, so that code taken from a Node application reads the same inside a request.
 
 `postgres()` and `postgresServerless()` take the same options, apart from where the database is and the pool settings, with the same defaults. Both read without a cursor unless `cursor` is set.
 
@@ -96,11 +99,11 @@ Every member belongs to one of three groups:
 
 | Group | Members | Needs a database connection |
 | --- | --- | --- |
-| Static members | `sql`, `raw`, `enums`, `nativeEnums`, `context`, `contract`, `stack` | no |
-| Runtime-bound members | `orm`, `runtime()`, `transaction(fn)`, `prepare(...)` | yes |
+| Static members | `sql`, `raw`, `enums`, `nativeEnums`, `toSql(plan)`, `context`, `contract`, `stack` | no |
+| Runtime-bound members | `orm`, `query(plan)`, `execute(plan)`, `runtime()`, `transaction(fn)`, `prepare(...)` | yes |
 | Lifecycle members | `close()`, `[Symbol.asyncDispose]` | they close it |
 
-The static members build queries and describe the contract. They are computed from the contract and never touch the database. The runtime-bound members run queries. `db.runtime()` returns the runtime, which is the object that executes a query plan; `orm`, `transaction` and `prepare` all run on it.
+The static members build queries and describe the contract. They are computed from the contract and never touch the database. The runtime-bound members run queries. `db.runtime()` returns the runtime, which is the object that executes a query plan; `orm`, `query`, `execute`, `transaction` and `prepare` all run on it.
 
 Each of the three objects has these groups:
 
@@ -124,16 +127,16 @@ The `await using` line shows the lifetime of the connection at the place where t
 
 ## A connection is not a runtime
 
-A connection wraps a runtime. It is not one: it has no `query` or `execute` of its own. Code that needs a runtime calls `db.runtime()`, exactly as with a client. Three functions take a runtime:
+A connection wraps a runtime. It is not one: its `query(plan)` and `execute(plan)` have the types a transaction's have, and it has no `connection()` or `telemetry()`. Code that needs the runtime itself calls `db.runtime()`, exactly as with a client. Three functions take a runtime:
 
-- `orm({ runtime, context, collections })`, which builds an ORM with custom collection classes;
+- `orm({ runtime, context, collections })`, the lower-level function a connection's `orm` is built on;
 - `withTransaction(runtime, fn)`;
 - a prepared statement's `query(runtime, params)`.
 
-This sample and the ones below continue the Worker sample above, so `postgres` is its serverless client and `Contract` is its contract type:
+An application does not call `orm()` for custom collection classes. It passes them to its serverless client with the `collections` option, and every connection's `db.orm` returns them. This sample and the ones below continue the Worker sample above, so `contract` and `Contract` are its contract value and type, and `postgres` is its serverless client, here created with the classes:
 
 ```ts
-import { Collection, orm } from '@prisma/orm-postgres/orm-client';
+import { Collection } from '@prisma/orm-postgres/orm-client';
 
 class UserCollection extends Collection<Contract, 'User'> {
   admins() {
@@ -141,18 +144,15 @@ class UserCollection extends Collection<Contract, 'User'> {
   }
 }
 
+const postgres = postgresServerless({ contract, collections: { User: UserCollection } });
+
 export async function listAdmins(url: string) {
   await using db = await postgres.connect({ url });
-  const customOrm = orm({
-    runtime: db.runtime(),
-    context: db.context,
-    collections: { User: UserCollection },
-  });
-  return await customOrm.public.User.admins().all();
+  return await db.orm.public.User.admins().all();
 }
 ```
 
-A custom ORM like this is built inside the request, so that it runs on that request's connection.
+The classes are registered once, at module scope. Each query still runs on the connection of the request that calls it.
 
 ## Cursors are off by default
 
@@ -170,8 +170,8 @@ The default is off because, with cursors on, every read hangs behind Cloudflare 
 A Worker that needs streaming on one route creates a second serverless client with the option and opens that route's connection from it. Every other route keeps the serverless client without the option:
 
 ```ts
-const postgres = postgresServerless<Contract>({ contractJson });
-const streamingPostgres = postgresServerless<Contract>({ contractJson, cursor: { batchSize: 100 } });
+const postgres = postgresServerless({ contract });
+const streamingPostgres = postgresServerless({ contract, cursor: { batchSize: 100 } });
 ```
 
 ## Three rules that follow from one database connection
@@ -187,7 +187,7 @@ A client has a pool. A connection has one database connection. Three rules follo
 | a `db.orm` read | runs inside the open transaction |
 | a `db.orm` create of a single row | runs inside the open transaction |
 | a `db.orm` `updateAll(...)` or `deleteAll()` | runs inside the open transaction |
-| `db.runtime().query(...)` | runs inside the open transaction |
+| `db.query(...)` | runs inside the open transaction |
 | a `db.orm` `update(...)` or `delete()` of one row | waits forever, and the request hangs |
 | `db.runtime().connection()` | waits forever, and the request hangs |
 | a `db.orm` create that also writes related rows | waits forever, and the request hangs |
@@ -219,7 +219,7 @@ export async function listUsers(url: string) {
 }
 ```
 
-Writing `return db.orm.public.User.all()` in this function rejects with `DRIVER.NOT_CONNECTED` ("Runtime is closed"), whose `fix` names the missing `await`: `all()` returns a lazy result whose work starts when the caller awaits it, after the close. `return db.runtime().query(plan)` behaves the same way. `return db.orm.public.User.first()`, `return db.runtime().execute(plan)`, `return db.transaction(fn)`, an ORM write and its reload, including `include(...).create()` and a nested `create()`, and an async helper whose steps go through `db.orm`, `db.transaction()` or `db.prepare()` keep the runtime busy from the close onward, so the close waits for them and they complete; the transaction commits. Every query and statement follows the [shutdown rule](../subsystems/4.%20Runtime%20&%20Middleware%20Framework.md#shutdown): `close()` waits until the runtime has been idle for one turn of the event loop, then refuses new work. Work that keeps the runtime busy from the close onward is never refused because of the close; if it fails for its own reason, it rejects like any unawaited promise. A helper that calls `db.runtime()` after the scope has ended throws "Postgres connection is closed" at that call. Work that starts after the runtime was idle for a turn is refused; whether a query sent after waiting on something other than the database counts as idle depends on when that callback runs relative to the timer, so do not rely on it; an unawaited promise that fails then, or fails for its own reason, rejects like any unawaited promise, and Node reports it as unhandled. With a client the version without `await` works, because a client is not closed at the end of each request.
+Writing `return db.orm.public.User.all()` in this function rejects with `DRIVER.NOT_CONNECTED` ("Runtime is closed"), whose `fix` names the missing `await`: `all()` returns a lazy result whose work starts when the caller awaits it, after the close. `return db.query(plan)` behaves the same way. `return db.orm.public.User.first()`, `return db.execute(plan)`, `return db.transaction(fn)`, an ORM write and its reload, including `include(...).create()` and a nested `create()`, and an async helper whose steps go through `db.orm`, `db.transaction()` or `db.prepare()` keep the runtime busy from the close onward, so the close waits for them and they complete; the transaction commits. Every query and statement follows the [shutdown rule](../subsystems/4.%20Runtime%20&%20Middleware%20Framework.md#shutdown): `close()` waits until the runtime has been idle for one turn of the event loop, then refuses new work. Work that keeps the runtime busy from the close onward is never refused because of the close; if it fails for its own reason, it rejects like any unawaited promise. A helper that calls `db.runtime()` after the scope has ended throws "Postgres connection is closed" at that call. Work that starts after the runtime was idle for a turn is refused; whether a query sent after waiting on something other than the database counts as idle depends on when that callback runs relative to the timer, so do not rely on it; an unawaited promise that fails then, or fails for its own reason, rejects like any unawaited promise, and Node reports it as unhandled. With a client the version without `await` works, because a client is not closed at the end of each request.
 
 ### On a connection with cursors on, a `for await` over a read ends before the next query through `db`
 
@@ -229,7 +229,7 @@ With `cursor` set, a read holds the connection's only database connection until 
 export async function firstTitles(url: string) {
   await using db = await streamingPostgres.connect({ url });
   const titles: string[] = [];
-  for await (const post of db.runtime().query(db.sql.public.post.select('title').limit(500).build())) {
+  for await (const post of db.query(db.sql.public.post.select('title').limit(500).build())) {
     titles.push(post.title);
     if (titles.length === 100) break;
   }
@@ -255,14 +255,16 @@ Both have a method named `connect`, and the two methods do different things.
 
 The three member groups are three interfaces: `PostgresStaticMembers`, `PostgresRuntimeBoundMembers` and `PostgresLifecycleMembers`. `PostgresStaticMembers` is `PostgresStaticContext`, the object that `postgresStatic()` from the `/static` entry point returns, plus `stack`, which `/static` cannot offer because its stack has no driver. `PostgresClient` and `PostgresServerlessConnection` both extend all three. A member added to one of the interfaces reaches both. A member added to `PostgresClient` alone does not reach a connection.
 
+A fourth interface, `PostgresQueryMembers`, holds the members a transaction and a Supabase role-bound client share with the client: `sql`, `raw`, `toSql`, `orm`, `prepare`, `query` and `execute`. It mixes static and runtime-bound members, so it overlaps the first two groups. `PostgresClient`, `PostgresServerlessConnection` and `PostgresTransactionContext` extend it; the serverless client does not. A transaction also has `enums` and `nativeEnums`. A transaction's `query` and `execute` run on the transaction: the builder takes them from the transaction context and builds the other members. A member a transaction must offer goes in `PostgresQueryMembers`. The exception is `enums` and `nativeEnums`: a transaction has them, but they are not in `PostgresQueryMembers`, and Supabase role-bound clients do not have them yet, which is recorded as deferred work.
+
 Two functions build the members for both:
 
-- `buildPostgresStaticContext` builds `sql`, `raw`, `enums` and `nativeEnums` from the execution context.
-- `buildPostgresRuntimeBoundMembers` builds `orm`, `runtime()`, `transaction(fn)` and `prepare(...)`. One of its arguments is a function, `getRuntime`, that returns the runtime to run on.
+- `buildPostgresStaticContext` builds `sql`, `raw`, `enums`, `nativeEnums` and `toSql` from the execution context and the stack.
+- `buildPostgresRuntimeBoundMembers` builds `orm`, `query(plan)`, `execute(plan)`, `runtime()`, `transaction(fn)` and `prepare(...)`. One of its arguments is a function, `getRuntime`, that returns the runtime to run on.
 
-A client and a connection differ only in the two functions they pass. `getRuntime` returns the runtime for `runtime()` and throws once the owner is closed. `getRuntimeForWork` returns the runtime for the ORM, `transaction()` and `prepare()`. A client passes the same function for both. A connection's `getRuntimeForWork` returns its runtime even after `close()`, so the runtime's shutdown rule decides.
+A client and a connection differ only in the two functions they pass. `getRuntime` returns the runtime for `runtime()` and throws once the owner is closed. `getRuntimeForWork` returns the runtime for the ORM, `query()`, `execute()`, `transaction()` and `prepare()`. A client passes the same function for both. A connection's `getRuntimeForWork` returns its runtime even after `close()`, so the runtime's shutdown rule decides.
 
-`postgres()` and `postgresServerless()` share one declaration of the options that say how queries run: `extensions`, `middleware`, `verifyMarker`, `log` and `cursor`. Both also take `contractJson` or `contract`. `postgres()` alone takes `url`, `pg` or `binding`, because a connection gets its URL from each `connect` call, and `poolOptions`, because a connection has no pool. A connection's `pg.Client` gets the same 20 second connect timeout that a client's pool gets by default, and there is no option to change it. A type test checks that the two option types differ in exactly `binding`, `url`, `pg` and `poolOptions`, so an option added to one factory's options and not the other's fails the build. Both compose the same execution stack of `postgresTarget`, `postgresAdapter` and `postgresDriver`.
+`postgres()` and `postgresServerless()` share one declaration of the options that say how queries run: `extensions`, `middleware`, `verifyMarker`, `log`, `cursor` and `mode`. Both also take `contract`. `postgres()` alone takes `url`, `pg` or `binding`, because a connection gets its URL from each `connect` call, and `poolOptions`, because a connection has no pool. A connection's `pg.Client` gets the same 20 second connect timeout that a client's pool gets by default, and there is no option to change it. A type test checks that the two option types differ in exactly `binding`, `url`, `pg` and `poolOptions`, so an option added to one factory's options and not the other's fails the build. Both compose the same execution stack of `postgresTarget`, `postgresAdapter` and `postgresDriver`.
 
 ## Consequences
 
@@ -278,7 +280,7 @@ A client and a connection differ only in the two functions they pass. `getRuntim
 - **The `/serverless` entry point includes the ORM, about 32 kB gzipped.** It is in the bundle even for code that uses only the SQL builder, `db.sql`.
 - **The three rules are documented, not enforced.** A break of any of them fails or hangs when the code runs, with no earlier warning.
 - **`connect` has two meanings**, as the table above shows.
-- **One missing `await` has two outcomes.** It fails for a lazy read, `all()` or `runtime().query()`, and silently succeeds for `first()`, `execute()` and `transaction()`. The eager form can pass tests and code review, and shows up only when the code changes to a lazy read. This is accepted because the alternative, failing every form of the mistake, can avoid neither the unhandled rejection nor the deadlock with a held transaction (see the rejected alternative "Refuse everything after `close()` has started and hold the rejection until the close settles"). Waiting for an idle turn rather than refusing at a fixed moment makes the eager outcome cover a whole chain of dependent queries, such as an ORM write and its reload, so the mistake does not fail halfway through a write that has already committed. This differs from `pool.end()` and Node's `server.close()`, which refuse new work at once and wait only for work already started. It is safe on a connection because every caller of a connection is the same request. A pooled `postgres()` client keeps refusing every new call at once, as `pool.end()` does, so unrelated callers cannot hold its close open; there an ORM write must be awaited before `close()`. The runtime has two close policies for this: a connection builds its runtime with `'when-idle'`, which waits for an idle turn before refusing, and a client builds its runtime with `'at-once'`, which refuses from the call of `close()`, so a runtime captured with `db.runtime()` before `close()` is refused at once too.
+- **One missing `await` has two outcomes.** It fails for a lazy read, `all()` or `query()`, and silently succeeds for `first()`, `execute()` and `transaction()`. The eager form can pass tests and code review, and shows up only when the code changes to a lazy read. This is accepted because the alternative, failing every form of the mistake, can avoid neither the unhandled rejection nor the deadlock with a held transaction (see the rejected alternative "Refuse everything after `close()` has started and hold the rejection until the close settles"). Waiting for an idle turn rather than refusing at a fixed moment makes the eager outcome cover a whole chain of dependent queries, such as an ORM write and its reload, so the mistake does not fail halfway through a write that has already committed. This differs from `pool.end()` and Node's `server.close()`, which refuse new work at once and wait only for work already started. It is safe on a connection because every caller of a connection is the same request. A pooled `postgres()` client keeps refusing every new call at once, as `pool.end()` does, so unrelated callers cannot hold its close open; there an ORM write must be awaited before `close()`. The runtime has two close policies for this: a connection builds its runtime with `'when-idle'`, which waits for an idle turn before refusing, and a client builds its runtime with `'at-once'`, which refuses from the call of `close()`, so a runtime captured with `db.runtime()` before `close()` is refused at once too.
 - **A connection costs a database connection even when no query follows.** `connect` opens the database connection before it returns, so a request that opens a connection and then answers without a query still pays for the handshake. A handler answers such requests, for example an unknown route or a missing parameter, before `connect`.
 
 ## Related ADRs

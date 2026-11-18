@@ -2,7 +2,7 @@
 
 model TelemetryEvent {
   id             BigInt   @id @default(autoincrement())
-  ingestedAt     DateTime @default(now())
+  ingestedAt     DateTime(as: temporal) @default(now())
   installationId String
   version        String
   command        String
@@ -18,6 +18,6 @@ model TelemetryEvent {
   extensions     Jsonb
   exitCode       Int?
 
-  @@index([ingestedAt])
+  @@index([ingestedAt], map: "telemetry_event_ingestedAt_idx")
   @@map("telemetry_event")
 }

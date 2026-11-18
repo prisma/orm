@@ -1,11 +1,15 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
-import postgresAdapter from '@internal/adapter-postgres/runtime';
 import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
-import { timeouts, withCollectionRuntime } from './integration-helpers';
+import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
+import {
+  expectPerRelationStatements,
+  timeouts,
+  withCollectionRuntime,
+} from './integration-helpers';
 import type { PgIntegrationRuntime } from './runtime-helpers';
 
 const CustomerBase = model('Customer', {
@@ -38,14 +42,15 @@ const Customer = CustomerBase.relations({
 }).sql({ table: 'composite_customers' });
 
 const contract = defineContract({ models: { Customer, Order } });
-const context = createExecutionContext({
-  contract,
-  stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),
-});
-
-// The DSL types a relation's target model as any string and its cardinality as a union. So an
-// include refinement here sees an accessor keyed by any string, and its count() is typed away.
-const countRelated = (related: unknown): unknown => (related as { count: () => unknown }).count();
+function contextOf(strategy: IncludeStrategy) {
+  return createExecutionContext({
+    contract,
+    stack: createSqlExecutionStack({
+      target: postgresTarget,
+      adapter: postgresAdapterFor(strategy),
+    }),
+  });
+}
 
 async function seedCompositeTables(runtime: PgIntegrationRuntime): Promise<void> {
   await runtime.query('drop table if exists composite_orders');
@@ -82,88 +87,103 @@ async function seedCompositeTables(runtime: PgIntegrationRuntime): Promise<void>
 }
 
 async function withCompositeTables(
+  strategy: IncludeStrategy,
   fn: (collections: {
+    runtime: PgIntegrationRuntime;
     customers: Collection<typeof contract, 'Customer'>;
     orders: Collection<typeof contract, 'Order'>;
   }) => Promise<void>,
 ): Promise<void> {
+  const context = contextOf(strategy);
   await withCollectionRuntime(async (runtime) => {
     await seedCompositeTables(runtime);
     await fn({
+      runtime,
       customers: new Collection({ runtime, context }, 'Customer', { namespaceId: 'public' }),
       orders: new Collection({ runtime, context }, 'Order', { namespaceId: 'public' }),
     });
   }, contract);
 }
 
-describe('integration/include over a composite foreign key', () => {
-  it(
-    'a to-one include returns the parent that matches every key column',
-    async () => {
-      await withCompositeTables(async ({ orders }) => {
-        const rows = await orders
-          .select('id', 'label')
-          .orderBy((order) => order.id.asc())
-          .include('customer', (customer) => customer.select('tenantId', 'id', 'name'))
-          .all();
+describe.each(includeStrategies)(
+  'integration/include over a composite foreign key (%s)',
+  (strategy) => {
+    it(
+      'a to-one include returns the parent that matches every key column',
+      async () => {
+        await withCompositeTables(strategy, async ({ runtime, orders }) => {
+          runtime.resetExecutions();
+          const rows = await orders
+            .select('id', 'label')
+            .orderBy((order) => order.id.asc())
+            .include('customer', (customer) => customer.select('tenantId', 'id', 'name'))
+            .all();
+          expectPerRelationStatements(runtime, strategy, 2);
 
-        expect(rows).toEqual([
-          { id: 10, label: 'ada-1', customer: { tenantId: 1, id: 1, name: 'Ada' } },
-          { id: 11, label: 'grace-1', customer: { tenantId: 1, id: 2, name: 'Grace' } },
-          { id: 12, label: 'ada-2', customer: { tenantId: 1, id: 1, name: 'Ada' } },
-          { id: 13, label: 'unassigned', customer: null },
-          { id: 14, label: 'edsger-1', customer: { tenantId: 2, id: 1, name: 'Edsger' } },
-        ]);
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
+          expect(rows).toEqual([
+            { id: 10, label: 'ada-1', customer: { tenantId: 1, id: 1, name: 'Ada' } },
+            { id: 11, label: 'grace-1', customer: { tenantId: 1, id: 2, name: 'Grace' } },
+            { id: 12, label: 'ada-2', customer: { tenantId: 1, id: 1, name: 'Ada' } },
+            { id: 13, label: 'unassigned', customer: null },
+            { id: 14, label: 'edsger-1', customer: { tenantId: 2, id: 1, name: 'Edsger' } },
+          ]);
+        });
+      },
+      timeouts.spinUpPpgDev,
+    );
 
-  it(
-    'a to-many include returns only the children that match every key column',
-    async () => {
-      await withCompositeTables(async ({ customers }) => {
-        const rows = await customers
-          .select('tenantId', 'id', 'name')
-          .orderBy([(customer) => customer.tenantId.asc(), (customer) => customer.id.asc()])
-          .include('orders', (order) => order.select('id', 'label').orderBy((o) => o['id']!.asc()))
-          .all();
+    it(
+      'a to-many include returns only the children that match every key column',
+      async () => {
+        await withCompositeTables(strategy, async ({ runtime, customers }) => {
+          runtime.resetExecutions();
+          const rows = await customers
+            .select('tenantId', 'id', 'name')
+            .orderBy([(customer) => customer.tenantId.asc(), (customer) => customer.id.asc()])
+            .include('orders', (order) =>
+              order.select('id', 'label').orderBy((o) => o['id']!.asc()),
+            )
+            .all();
+          expectPerRelationStatements(runtime, strategy, 2);
 
-        expect(rows).toEqual([
-          {
-            tenantId: 1,
-            id: 1,
-            name: 'Ada',
-            orders: [
-              { id: 10, label: 'ada-1' },
-              { id: 12, label: 'ada-2' },
-            ],
-          },
-          { tenantId: 1, id: 2, name: 'Grace', orders: [{ id: 11, label: 'grace-1' }] },
-          { tenantId: 2, id: 1, name: 'Edsger', orders: [{ id: 14, label: 'edsger-1' }] },
-        ]);
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
+          expect(rows).toEqual([
+            {
+              tenantId: 1,
+              id: 1,
+              name: 'Ada',
+              orders: [
+                { id: 10, label: 'ada-1' },
+                { id: 12, label: 'ada-2' },
+              ],
+            },
+            { tenantId: 1, id: 2, name: 'Grace', orders: [{ id: 11, label: 'grace-1' }] },
+            { tenantId: 2, id: 1, name: 'Edsger', orders: [{ id: 14, label: 'edsger-1' }] },
+          ]);
+        });
+      },
+      timeouts.spinUpPpgDev,
+    );
 
-  it(
-    'a count() include counts only the children that match every key column',
-    async () => {
-      await withCompositeTables(async ({ customers }) => {
-        const rows = await customers
-          .select('tenantId', 'id', 'name')
-          .orderBy([(customer) => customer.tenantId.asc(), (customer) => customer.id.asc()])
-          .include('orders', (order) => countRelated(order) as never)
-          .all();
+    it(
+      'a count() include counts only the children that match every key column',
+      async () => {
+        await withCompositeTables(strategy, async ({ runtime, customers }) => {
+          runtime.resetExecutions();
+          const rows = await customers
+            .select('tenantId', 'id', 'name')
+            .orderBy([(customer) => customer.tenantId.asc(), (customer) => customer.id.asc()])
+            .include('orders', (order) => order.count())
+            .all();
+          expectPerRelationStatements(runtime, strategy, 2);
 
-        expect(rows).toEqual([
-          { tenantId: 1, id: 1, name: 'Ada', orders: 2 },
-          { tenantId: 1, id: 2, name: 'Grace', orders: 1 },
-          { tenantId: 2, id: 1, name: 'Edsger', orders: 1 },
-        ]);
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-});
+          expect(rows).toEqual([
+            { tenantId: 1, id: 1, name: 'Ada', orders: 2 },
+            { tenantId: 1, id: 2, name: 'Grace', orders: 1 },
+            { tenantId: 2, id: 1, name: 'Edsger', orders: 1 },
+          ]);
+        });
+      },
+      timeouts.spinUpPpgDev,
+    );
+  },
+);

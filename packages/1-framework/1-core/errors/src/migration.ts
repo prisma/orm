@@ -1,4 +1,5 @@
 import { CliStructuredError } from './control';
+import { UPGRADE_GUIDES_URL } from './upgrade-guides';
 
 // ============================================================================
 // Migration Errors (MIGRATION.*)
@@ -184,8 +185,6 @@ export function errorMigrationPlanNotArray(
     },
   );
 }
-
-const UPGRADE_GUIDES_URL = 'https://github.com/prisma/orm/tree/main/skills/prisma-8/upgrading';
 
 /**
  * A `migration.ts` passes an operation an option in the form an earlier version wrote, which this version no longer reads. `node migration.ts` strips types without checking them, so such a file runs; the operation refuses the option rather than leave out what it carries. `subject` names what the option was for, `rewrite` says how to write it now, and `upgradeEntry` is the id of the upgrade entry that shows the new form.

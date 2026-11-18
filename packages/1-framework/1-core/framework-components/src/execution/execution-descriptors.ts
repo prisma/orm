@@ -3,6 +3,7 @@ import type {
   DriverDescriptor,
   ExtensionDescriptor,
   FamilyDescriptor,
+  SessionSettings,
   TargetDescriptor,
 } from '../shared/framework-components';
 import type {
@@ -64,7 +65,8 @@ export interface RuntimeDriverDescriptor<
     TTargetId
   >,
 > extends DriverDescriptor<TFamilyId, TTargetId> {
-  create(options?: TCreateOptions): TDriverInstance;
+  /** Creates an unbound driver. `sessionSettings` are the settings the stack's target declares, which the driver ensures on every connection it hands out. */
+  create(options?: TCreateOptions, sessionSettings?: SessionSettings): TDriverInstance;
 }
 
 export interface RuntimeExtensionDescriptor<

@@ -47,14 +47,14 @@ export async function rawQueryReport(limit = 10, runtime?: Runtime) {
     })
     .build();
 
-  return (runtime ?? db.runtime()).query(plan);
+  return (runtime ?? db).query(plan);
 }
 
 /**
  * Mutation reporting how many rows it touched.
  *
  * `.affectedCount()` takes no row spec — the statement returns no rows, so
- * there is nothing to declare. The plan goes to the runtime's `execute()`,
+ * there is nothing to declare. The plan goes to the client's `execute()`,
  * which answers with the statement's row count rather than a row stream.
  */
 export async function rawQueryBumpViews(kind = 'admin', runtime?: Runtime) {
@@ -66,7 +66,7 @@ export async function rawQueryBumpViews(kind = 'admin', runtime?: Runtime) {
     .affectedCount()
     .build();
 
-  return (runtime ?? db.runtime()).execute(plan);
+  return (runtime ?? db).execute(plan);
 }
 
 /**
@@ -104,7 +104,7 @@ export async function rawQueryActiveAuthors(minPosts = 1, runtime?: Runtime) {
     })
     .build();
 
-  return (runtime ?? db.runtime()).query(plan);
+  return (runtime ?? db).query(plan);
 }
 
 /**
@@ -140,5 +140,37 @@ export async function rawQueryPromoteAndList(titleTerm: string, runtime?: Runtim
     })
     .build();
 
-  return (runtime ?? db.runtime()).query(plan);
+  return (runtime ?? db).query(plan);
+}
+
+export async function rawQueryCopyPosts(
+  fromEmail: string,
+  toEmail: string,
+  titlePrefix = 'Copy of ',
+  runtime?: Runtime,
+) {
+  const copies = post
+    .innerJoin(user, (f, fns) => fns.eq(f.user.id, f.post.userId))
+    .innerJoin(user.as('target'), (f, fns) => fns.eq(f.target.email, toEmail))
+    .select((f, fns) => ({
+      id: fns.raw`gen_random_uuid()`.returns('pg/uuid@1'),
+      title: fns.raw`${titlePrefix} || ${f.post.title}`.returns('pg/text@1'),
+      body: f.post.body,
+      userId: f.target.id,
+    }))
+    .where((f, fns) => fns.eq(f.user.email, fromEmail));
+
+  const plan = db.raw.sql`
+    INSERT INTO "post" (id, title, body, "userId")
+    ${copies}
+    RETURNING id, title, "userId"
+  `
+    .returnsRow({
+      id: post.columns.id,
+      title: post.columns.title,
+      userId: post.columns.userId,
+    })
+    .build();
+
+  return (runtime ?? db).query(plan);
 }

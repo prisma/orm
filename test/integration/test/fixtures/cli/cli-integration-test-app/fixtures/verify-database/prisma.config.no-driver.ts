@@ -13,7 +13,10 @@ export default definePrismaConfig({
     target: postgres,
     adapter: postgresAdapter,
     extensions: [],
-    contract: typescriptContract(contract, 'output/contract.json'),
+    contract: {
+      ...typescriptContract(contract, 'output/contract.json'),
+      typesModule: '@internal/postgres/contract-types',
+    },
     db: {
       connection: '{{DB_URL}}', // Placeholder to be replaced in tests
     },

@@ -3,12 +3,15 @@
  */
 
 import { readFile } from 'node:fs/promises';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import type { Contract, ContractWithDomain } from '@internal/contract/types';
 import {
   createControlStack,
   hasOperationPreview,
+  type MigrationPlanNamespaces,
+  type MigrationPlannerConflict,
   type MigrationPlanOperation,
+  type MigrationTemporaryValue,
   migrationSubjectKey,
   type OperationPreview,
   planOriginOf,
@@ -24,10 +27,10 @@ import { deriveProvidedInvariants } from '@internal/migration-tools/invariants';
 import { formatMigrationDirName, writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
 import { writeMigrationTs } from '@internal/migration-tools/migration-ts';
-import type { ImportSpecifierResolver } from '@internal/publish-surface/import-roots';
 import { castAs } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
+import { type } from 'arktype';
 import { join, relative } from 'pathe';
 import {
   type CliErrorConflict,
@@ -38,17 +41,20 @@ import {
   errorPlanProducedNoOperations,
   errorTargetMigrationNotSupported,
   type PlanDestination,
-  type PlanLegOrigin,
 } from '../../utils/cli-errors';
 import {
+  contractTypesModuleOf,
   getTargetMigrations,
+  migrationModuleOf,
   resolveContractPath,
   resolveMigrationPaths,
 } from '../../utils/command-helpers';
+import { contractValidationMeta } from '../../utils/contract-validation-meta';
 import { toExtensionInputs } from '../../utils/extension-pack-inputs';
 import { assertFrameworkComponentsCompatible } from '../../utils/framework-components';
+import { migrationPlanKeepDataEditAdvice } from '../../utils/keep-data-edit-advice';
+import { planningRefusedError } from '../../utils/planning-refused-error';
 import { type CliInvocation, selfEmitCommand } from '../../utils/printed-command';
-import { createProjectSpecifierResolver } from '../../utils/project-import-root';
 import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
 import {
   type AnswerPlanQuestions,
@@ -66,6 +72,11 @@ import { reportTemporaryValues, type TemporaryValueReport } from '../statements/
 import type { ControlClient } from '../types';
 import { errorFromCaught } from './caught-errors';
 import {
+  type ChangedStorageEntity,
+  changedStorageEntities,
+  whatChangedSentence,
+} from './changed-storage-entities';
+import {
   buildContractSpaceAggregate,
   loadContractSpaceAggregateForCli,
 } from './contract-space-aggregate-loader';
@@ -81,11 +92,9 @@ function isEnoent(error: unknown): boolean {
 }
 
 export interface MigrationPlanOptions {
-  readonly config: PrismaNextConfig;
+  readonly config: PrismaConfig;
   /** Directory the command was invoked from. */
   readonly cwd: string;
-  /** The project's directory, normally the validated config's `baseDir`; locates the project manifest. */
-  readonly projectDir?: string;
   /** The `--config` the command was given, repeated in the command that runs a written `migration.ts`. */
   readonly configPath?: string;
   readonly name?: string;
@@ -111,12 +120,20 @@ export interface MigrationPlanOptions {
 
 type PlannerSuccess = {
   readonly plannedOps: readonly MigrationPlanOperation[];
+  /** The operations the result lists: those that resolved and each unfilled placeholder that names the operation it stands for. */
+  readonly listedOps: readonly OperationSummary[];
   readonly migrationTsContent: string;
   readonly hasPlaceholders: boolean;
   readonly appliedStatements: readonly AppliedStatementReport[];
   /** The operations that would lose data, positioned in the plan's operations. */
   readonly dataLoss: readonly PlannedDataLoss[];
   readonly temporaryValues: readonly TemporaryValueReport[];
+  /** The new required fields the plan gives a temporary value, as the planner reports them. */
+  readonly plannedTemporaryValues: readonly MigrationTemporaryValue[];
+  /** The namespaces the plan removes and adds, when the planner reports them. */
+  readonly namespaces?: MigrationPlanNamespaces;
+  /** What the planner flagged without refusing to plan it. */
+  readonly plannerWarnings: readonly MigrationPlannerConflict[];
 };
 
 function placeholderSummary(
@@ -139,42 +156,37 @@ function invocationOf(options: {
 }
 
 /** The origin of a plan from an empty database: no models, so no statement resolves. */
-const EMPTY_ORIGIN: ContractWithDomain = { domain: { namespaces: {} } };
+const EMPTY_ORIGIN: ContractWithDomain = {
+  domain: { namespaces: {} },
+  storage: { namespaces: {} },
+};
 
 type TargetMigrationsApi = NonNullable<ReturnType<typeof getTargetMigrations>>;
 
-/** A plan origin whose earlier contract the planner diffs against. */
-type PlanLegOriginWithContract =
-  | Exclude<PlanLegOrigin, { readonly kind: 'contract' }>
-  | (Extract<PlanLegOrigin, { readonly kind: 'contract' }> & { readonly contract: Contract });
-
 /**
- * Why a planner leg failed: the planner refused (a conflict, such as a refused statement), or it
- * produced no operations for a changed contract.
+ * Where a `migration plan` leg plans from: an empty database, an empty database toward the `db`
+ * ref's contract (the automatic baseline), or an earlier contract the planner diffs against.
  */
-interface PlannerLegFailure {
-  readonly reason: 'refused' | 'noOperations';
-  readonly error: CliStructuredError;
-}
+type PlanLegOrigin =
+  | { readonly kind: 'empty' }
+  | { readonly kind: 'baseline' }
+  | { readonly kind: 'contract'; readonly contract: Contract };
 
 async function runPlannerLeg(
   planner: ReturnType<TargetMigrationsApi['createPlanner']>,
   migrations: TargetMigrationsApi,
   frameworkComponents: ReturnType<typeof assertFrameworkComponentsCompatible>,
   contract: Contract,
-  origin: PlanLegOriginWithContract,
+  origin: PlanLegOrigin,
   destination: PlanDestination,
   statements: readonly ResolvedMigrationStatement[],
-  /**
-   * True when the storage did not change and statements were given: a plan of
-   * no operations then means the statements need none, not a planning failure.
-   */
-  noOperationsExpected: boolean,
   spaceId: string,
   ownership: SchemaOwnership,
   snapshotsImportPath: string,
-  resolveImportSpecifier: ImportSpecifierResolver,
-): Promise<Result<PlannerSuccess, PlannerLegFailure>> {
+  migrationModule: string,
+  refused: (conflicts: readonly MigrationPlannerConflict[]) => CliStructuredError = (conflicts) =>
+    errorMigrationPlanningFailed({ conflicts: castAs<readonly CliErrorConflict[]>(conflicts) }),
+): Promise<Result<PlannerSuccess, CliStructuredError>> {
   const fromContract = origin.kind === 'contract' ? origin.contract : null;
   const fromSchema = migrations.contractToSchema(fromContract, frameworkComponents);
   const plannerResult = planner.plan({
@@ -195,57 +207,61 @@ async function runPlannerLeg(
     snapshotsImportPath,
   });
   if (plannerResult.kind === 'failure') {
-    return notOk({
-      reason: 'refused',
-      error: errorMigrationPlanningFailed({
-        conflicts: castAs<readonly CliErrorConflict[]>(plannerResult.conflicts),
-      }),
-    });
+    return notOk(refused(plannerResult.conflicts));
   }
 
   // The operation at each position of the plan, or `undefined` where it is an unfilled placeholder.
   let resolved: readonly (MigrationPlanOperation | undefined)[] = [];
+  // The operation each unfilled placeholder stands for, when its call names it.
+  let standingFor: readonly (OperationSummary | undefined)[] = [];
   let hasPlaceholders = false;
   try {
-    resolved = await Promise.all(plannerResult.plan.operations);
-    if (resolved.length === 0 && !noOperationsExpected) {
-      return notOk({
-        reason: 'noOperations',
-        error: errorPlanProducedNoOperations(origin, destination),
-      });
+    const settled = await Promise.allSettled(plannerResult.plan.operations);
+    for (const entry of settled) {
+      if (entry.status === 'fulfilled') continue;
+      const reason: unknown = entry.reason;
+      if (!CliStructuredError.is(reason)) throw reason;
+      if (reason.code !== 'MIGRATION.UNFILLED_PLACEHOLDER') throw reason;
+      hasPlaceholders = true;
     }
+    resolved = settled.map((entry) => (entry.status === 'fulfilled' ? entry.value : undefined));
+    standingFor = settled.map((entry) =>
+      entry.status === 'rejected' ? placeholderOperationOf(entry.reason) : undefined,
+    );
   } catch (e) {
+    // A planner whose `operations` accessor throws synchronously on an unfilled placeholder
+    // exposes no operations at all.
     if (CliStructuredError.is(e) && e.code === 'MIGRATION.UNFILLED_PLACEHOLDER') {
       hasPlaceholders = true;
-      // The operations that DID resolve still matter: the data-loss questions
-      // must see them, or a placeholder would smuggle a loss past them.
-      // Writers stay gated on hasPlaceholders. A planner whose `operations`
-      // accessor throws synchronously on an unfilled placeholder (rather than
-      // rejecting one op's promise) exposes no operations at all.
-      try {
-        const settled = await Promise.allSettled(plannerResult.plan.operations);
-        resolved = settled.map((entry) => (entry.status === 'fulfilled' ? entry.value : undefined));
-      } catch {
-        resolved = [];
-      }
+      resolved = [];
     } else {
       throw e;
     }
   }
+  if (!hasPlaceholders && resolved.length === 0 && origin.kind === 'empty') {
+    return notOk(errorPlanProducedNoOperations(destination));
+  }
 
   const plannedOps = resolved.filter((op): op is MigrationPlanOperation => op !== undefined);
-  const position = resolvedPositions(resolved);
+  const listed = resolved.map((op, index) =>
+    op === undefined
+      ? standingFor[index]
+      : { id: op.id, label: op.label, operationClass: op.operationClass },
+  );
+  const position = resolvedPositions(listed);
   return ok({
     plannedOps,
-    migrationTsContent: plannerResult.plan.renderTypeScript(resolveImportSpecifier),
+    listedOps: listed.filter((op): op is OperationSummary => op !== undefined),
+    migrationTsContent: plannerResult.plan.renderTypeScript(migrationModule),
     hasPlaceholders,
     dataLoss: plannerResult.dataLoss.map(
-      ({ operationIndex, subject, loss, label, keepDataAdvice }) => ({
+      ({ operationIndex, subject, loss, label, keepDataAdvice, keepDataEdit }) => ({
         operationIndex: position(operationIndex),
         subject,
         loss,
         label,
         ...ifDefined('keepDataAdvice', keepDataAdvice),
+        ...ifDefined('keepDataEdit', keepDataEdit),
       }),
     ),
     appliedStatements: reportAppliedStatements(
@@ -261,6 +277,9 @@ async function runPlannerLeg(
       0,
     ),
     temporaryValues: reportTemporaryValues(plannerResult.temporaryValues, contract),
+    plannedTemporaryValues: plannerResult.temporaryValues,
+    ...ifDefined('namespaces', plannerResult.namespaces),
+    plannerWarnings: plannerResult.warnings ?? [],
   });
 }
 
@@ -269,7 +288,7 @@ async function runPlannerLeg(
  * resolved, which is what a result's `operations` lists: `undefined` for an unfilled placeholder.
  */
 function resolvedPositions(
-  resolved: readonly (MigrationPlanOperation | undefined)[],
+  resolved: readonly (OperationSummary | undefined)[],
 ): (planIndex: number) => number | undefined {
   const positions: (number | undefined)[] = [];
   let next = 0;
@@ -280,12 +299,24 @@ function resolvedPositions(
   return (planIndex) => positions[planIndex];
 }
 
-/**
- * The operations a result lists. For a leg with unfilled placeholders these are the operations
- * that resolved; the placeholders themselves are not operations yet.
- */
-function operationSummaries(ops: readonly MigrationPlanOperation[]) {
-  return ops.map((op) => ({ id: op.id, label: op.label, operationClass: op.operationClass }));
+type OperationSummary = Pick<MigrationPlanOperation, 'id' | 'label' | 'operationClass'>;
+
+const PlaceholderOperation = type({
+  code: "'MIGRATION.UNFILLED_PLACEHOLDER'",
+  meta: {
+    operation: {
+      id: 'string',
+      label: 'string',
+      operationClass: "'additive' | 'widening' | 'destructive' | 'data'",
+    },
+  },
+});
+
+/** The operation an unfilled placeholder's rejection says it stands for, when it says. */
+function placeholderOperationOf(reason: unknown): OperationSummary | undefined {
+  if (!CliStructuredError.is(reason)) return undefined;
+  const read = PlaceholderOperation({ code: reason.code, meta: reason.meta ?? {} });
+  return read instanceof type.errors ? undefined : read.meta.operation;
 }
 
 async function writePlannedMigrationPackage(
@@ -325,6 +356,7 @@ async function answerPlannedDataLoss(input: {
   readonly originKnown: boolean;
   readonly destination: ContractWithDomain;
   readonly answer: AnswerPlanQuestions;
+  readonly invocation: CliInvocation;
   readonly planDelta: (
     statements: readonly StatementText[],
   ) => Promise<Result<PlannerSuccess, CliStructuredError>>;
@@ -340,7 +372,9 @@ async function answerPlannedDataLoss(input: {
   const legs = (delta: PlannerSuccess | undefined) => ({
     delta,
     dataLoss: [...(input.baseline?.dataLoss ?? []), ...(delta?.dataLoss ?? [])],
-    accessWidening: [],
+    accessChanges: [],
+    ...ifDefined('namespaces', delta?.namespaces),
+    temporaryValues: delta?.plannedTemporaryValues ?? [],
   });
   const answered = await askPlanQuestions({
     plan: legs(input.delta),
@@ -353,6 +387,7 @@ async function answerPlannedDataLoss(input: {
     originKnown: input.originKnown,
     destination: input.destination,
     answer: input.answer,
+    keepDataEditAdvice: migrationPlanKeepDataEditAdvice(input.invocation),
     replan: async (statements) => {
       const replanned = await input.planDelta(statements);
       return replanned.ok ? ok(legs(replanned.value)) : replanned;
@@ -423,6 +458,8 @@ export interface MigrationPlanResult {
    * presentation and carried verbatim for JSON consumers.
    */
   readonly warnings?: readonly string[];
+  /** What the planner flagged without refusing to plan it, as `db update` and `db init` list it. */
+  readonly plannerWarnings?: readonly MigrationPlannerConflict[];
   /**
    * When true, `migration.ts` was written but contains unfilled
    * `placeholder(...)` calls. The user must edit the file and then run
@@ -444,6 +481,10 @@ export interface MigrationPlanResult {
   readonly appliedStatements: readonly AppliedStatementReport[];
   /** The new required fields whose existing rows the plan gives a temporary value. */
   readonly temporaryValues: readonly TemporaryValueReport[];
+  /**
+   * The storage entities that differ between the origin and the destination. Empty when nothing was written (`noOp`), since the storage hashes are equal. A written migration whose `operations` is empty still lists them. A coordinate in the unbound namespace has no `namespaceId`, since that id is internal.
+   */
+  readonly changedStorageEntities: readonly ChangedStorageEntity[];
   readonly timings: {
     readonly total: number;
   };
@@ -488,6 +529,14 @@ async function executeMigrationPlanCommandInner(
 ): Promise<Result<MigrationPlanResult, CliStructuredError>> {
   const config = options.config;
   const cwd = options.cwd;
+  const migrationModule = migrationModuleOf(config);
+  if (!migrationModule.ok) {
+    return migrationModule;
+  }
+  const typesModule = contractTypesModuleOf(config);
+  if (!typesModule.ok) {
+    return typesModule;
+  }
   const { configPath, migrationsDir, appMigrationsDir, appMigrationsRelative } =
     resolveMigrationPaths(config, cwd);
 
@@ -528,7 +577,7 @@ async function executeMigrationPlanCommandInner(
     return notOk(
       errorContractValidationFailed(
         `Contract at ${contractPathAbsolute} failed to deserialize: ${error instanceof Error ? error.message : String(error)}`,
-        { where: { path: contractPathAbsolute } },
+        { where: { path: contractPathAbsolute }, meta: contractValidationMeta(error) },
       ),
     );
   }
@@ -577,6 +626,7 @@ async function executeMigrationPlanCommandInner(
   }
 
   const warnings: string[] = [];
+  const plannerWarnings: MigrationPlannerConflict[] = [];
   const warnForks = (forks: {
     readonly refName: string;
     readonly refHash: string;
@@ -614,14 +664,10 @@ async function executeMigrationPlanCommandInner(
       break;
   }
   const resolvedFrom = resolutionResult.value;
-  const fromOrigin: PlanLegOriginWithContract =
+  const fromOrigin: PlanLegOrigin =
     resolvedFrom.kind === 'greenfield'
       ? { kind: 'empty' }
-      : {
-          kind: 'contract',
-          hash: resolvedFrom.fromHash,
-          contract: resolvedFrom.fromContract,
-        };
+      : { kind: 'contract', contract: resolvedFrom.fromContract };
 
   // `--to <ref>` swaps the planner destination to an arbitrary resolved
   // contract (e.g. an ancestor / rollback target). The from-side resolution
@@ -643,6 +689,7 @@ async function executeMigrationPlanCommandInner(
   // is written. A plan from an empty database has no model to rename.
   let statements: readonly ResolvedMigrationStatement[] = [];
   const statementTexts = options.statements ?? [];
+  const consentTexts = statementTexts.filter((statement) => !isPlannedStatement(statement));
   if (statementTexts.length > 0) {
     const resolved = resolveStatements({
       statements: statementTexts,
@@ -654,22 +701,24 @@ async function executeMigrationPlanCommandInner(
     }
     statements = resolved.value;
   }
+  const refusedWith =
+    (texts: readonly StatementText[], resolved: readonly ResolvedMigrationStatement[]) =>
+    (conflicts: readonly MigrationPlannerConflict[]) =>
+      planningRefusedError(conflicts, {
+        invocation: invocationOf(options),
+        from: fromHash ?? undefined,
+        to: options.to,
+        statements: texts,
+        resolved,
+      });
 
-  // Before the seed phase, which is the first thing here that writes: an
-  // unreadable or contradictory project manifest fails the command outright
-  // rather than after artifacts are already on disk.
-  const resolveImportSpecifier = createProjectSpecifierResolver(options.projectDir);
-
-  // Likewise the destination snapshot's declarations: rendered now, written
-  // with the planned package later. A plan whose source already is the
-  // destination writes no new snapshot, so it renders nothing.
   let destinationDeclarations: string | null = null;
   if (!destinationInStore && fromHash !== toStorageHash) {
     const rendered = await renderSnapshotDeclarations({
       client: options.client,
       contractJson: emittedContractJson,
       contractJsonPath: contractPathAbsolute,
-      resolveImportSpecifier,
+      typesModule: typesModule.value,
     });
     if (!rendered.ok) {
       return notOk(rendered.failure);
@@ -706,8 +755,10 @@ async function executeMigrationPlanCommandInner(
       operations: [],
       emittedExtensionDirs,
       ...(warnings.length > 0 ? { warnings } : {}),
+      ...(plannerWarnings.length > 0 ? { plannerWarnings } : {}),
       appliedStatements: [],
       temporaryValues: [],
+      changedStorageEntities: [],
       summary: 'No changes detected between contracts',
       timings: { total: Date.now() - startTime },
     };
@@ -770,18 +821,20 @@ async function executeMigrationPlanCommandInner(
       baseline: PlannerSuccess | undefined,
       delta: PlannerSuccess | undefined,
       planDelta: (
+        texts: readonly StatementText[],
         resolved: readonly ResolvedMigrationStatement[],
-      ) => Promise<Result<PlannerSuccess, PlannerLegFailure>>,
+      ) => Promise<Result<PlannerSuccess, CliStructuredError>>,
     ) =>
       answerPlannedDataLoss({
         baseline,
         delta,
         statements: statementTexts.filter(isPlannedStatement),
-        consents: statementTexts.filter((statement) => !isPlannedStatement(statement)),
+        consents: consentTexts,
         origin: fromContract ?? EMPTY_ORIGIN,
         originKnown: true,
         destination: toContract,
         answer: options.answerQuestions,
+        invocation: invocationOf(options),
         planDelta: async (planned) => {
           const resolved = resolveStatements({
             statements: planned,
@@ -789,8 +842,7 @@ async function executeMigrationPlanCommandInner(
             destination: toContract,
           });
           if (!resolved.ok) return resolved;
-          const leg = await planDelta(resolved.value);
-          return leg.ok ? leg : notOk(leg.failure.error);
+          return planDelta([...consentTexts, ...planned], resolved.value);
         },
       });
 
@@ -807,20 +859,22 @@ async function executeMigrationPlanCommandInner(
         migrations,
         frameworkComponents,
         fromContract,
-        { kind: 'baseline', hash: fromHash },
+        { kind: 'baseline' },
         { hash: fromHash, isEmitted: false },
         [],
-        false,
         aggregate.app.spaceId,
         aggregate,
         snapshotsImportPathFrom(baselinePackageDir, migrationsDir),
-        resolveImportSpecifier,
+        migrationModule.value,
       );
       if (!baselineLeg.ok) {
-        return notOk(baselineLeg.failure.error);
+        return baselineLeg;
       }
 
-      const planBaselineDelta = (resolved: readonly ResolvedMigrationStatement[]) =>
+      const planBaselineDelta = (
+        texts: readonly StatementText[],
+        resolved: readonly ResolvedMigrationStatement[],
+      ) =>
         runPlannerLeg(
           planner,
           migrations,
@@ -829,22 +883,18 @@ async function executeMigrationPlanCommandInner(
           fromOrigin,
           planDestination,
           resolved,
-          false,
           aggregate.app.spaceId,
           aggregate,
           snapshotsImportPathFrom(deltaPackageDir, migrationsDir),
-          resolveImportSpecifier,
+          migrationModule.value,
+          refusedWith(texts, resolved),
         );
       const plannedDelta =
-        fromHash === toStorageHash ? undefined : await planBaselineDelta(statements);
-      // A refused delta writes nothing. A delta with no operations still writes the baseline, so
-      // the `migration new --from` its error advises has the history to start from.
-      if (
-        plannedDelta !== undefined &&
-        !plannedDelta.ok &&
-        plannedDelta.failure.reason === 'refused'
-      ) {
-        return notOk(plannedDelta.failure.error);
+        fromHash === toStorageHash
+          ? undefined
+          : await planBaselineDelta(statementTexts, statements);
+      if (plannedDelta !== undefined && !plannedDelta.ok) {
+        return plannedDelta;
       }
 
       const answered = await answerDataLoss(
@@ -856,10 +906,12 @@ async function executeMigrationPlanCommandInner(
         return notOk(answered.failure);
       }
       const deltaLeg =
-        plannedDelta === undefined || !plannedDelta.ok || answered.value.delta === undefined
-          ? plannedDelta
-          : ok(answered.value.delta);
+        plannedDelta === undefined ? undefined : (answered.value.delta ?? plannedDelta.value);
       const deletes = answered.value.deletes;
+      plannerWarnings.push(
+        ...baselineLeg.value.plannerWarnings,
+        ...(deltaLeg?.plannerWarnings ?? []),
+      );
 
       await writePlannedMigrationPackage(
         baselinePackageDir,
@@ -868,10 +920,6 @@ async function executeMigrationPlanCommandInner(
         baselineTimestamp,
         baselineLeg.value,
       );
-
-      if (deltaLeg !== undefined && !deltaLeg.ok) {
-        return notOk(deltaLeg.failure.error);
-      }
 
       if (deltaLeg === undefined) {
         const statementsWithoutOperations = reportAppliedStatements(
@@ -890,13 +938,15 @@ async function executeMigrationPlanCommandInner(
             to: toStorageHash,
             dir: baselineDir,
             baselineDir,
-            operations: operationSummaries(baselineLeg.value.plannedOps),
+            operations: baselineLeg.value.listedOps,
             emittedExtensionDirs,
             ...(warnings.length > 0 ? { warnings } : {}),
+            ...(plannerWarnings.length > 0 ? { plannerWarnings } : {}),
             pendingPlaceholders: true,
             placeholderDirs: [baselineDir],
             appliedStatements: [...statementsWithoutOperations, ...deletes],
             temporaryValues: baselineLeg.value.temporaryValues,
+            changedStorageEntities: changedStorageEntities(fromContract, toContract),
             summary: placeholderSummary('baseline', [baselinePackageDir], invocationOf(options)),
             timings: { total: Date.now() - startTime },
           };
@@ -920,8 +970,10 @@ async function executeMigrationPlanCommandInner(
           emittedExtensionDirs,
           ...(preview !== undefined ? { preview } : {}),
           ...(warnings.length > 0 ? { warnings } : {}),
+          ...(plannerWarnings.length > 0 ? { plannerWarnings } : {}),
           appliedStatements: [...statementsWithoutOperations, ...deletes],
           temporaryValues: baselineLeg.value.temporaryValues,
+          changedStorageEntities: changedStorageEntities(fromContract, toContract),
           summary: buildAutoBaselinePlanSummary(baselineOps.length, 0, emittedExtensionDirs.length),
           timings: { total: Date.now() - startTime },
         };
@@ -933,13 +985,13 @@ async function executeMigrationPlanCommandInner(
         fromHash,
         toStorageHash,
         deltaTimestamp,
-        deltaLeg.value,
+        deltaLeg,
       );
       await writeDestinationSnapshot(toStorageHash);
 
       const baselineOps = baselineLeg.value.hasPlaceholders ? [] : baselineLeg.value.plannedOps;
-      const deltaOps = deltaLeg.value.hasPlaceholders ? [] : deltaLeg.value.plannedOps;
-      if (baselineLeg.value.hasPlaceholders || deltaLeg.value.hasPlaceholders) {
+      const deltaOps = deltaLeg.hasPlaceholders ? [] : deltaLeg.plannedOps;
+      if (baselineLeg.value.hasPlaceholders || deltaLeg.hasPlaceholders) {
         const baselineDir = relative(cwd, baselinePackageDir);
         const deltaDir = relative(cwd, deltaPackageDir);
         const result: MigrationPlanResult = {
@@ -949,17 +1001,19 @@ async function executeMigrationPlanCommandInner(
           to: toStorageHash,
           dir: deltaDir,
           baselineDir,
-          operations: operationSummaries(deltaLeg.value.plannedOps),
-          baselineOperations: operationSummaries(baselineLeg.value.plannedOps),
+          operations: deltaLeg.listedOps,
+          baselineOperations: baselineLeg.value.listedOps,
           emittedExtensionDirs,
           ...(warnings.length > 0 ? { warnings } : {}),
+          ...(plannerWarnings.length > 0 ? { plannerWarnings } : {}),
           pendingPlaceholders: true,
           placeholderDirs: [
             ...(baselineLeg.value.hasPlaceholders ? [relative(cwd, baselinePackageDir)] : []),
-            ...(deltaLeg.value.hasPlaceholders ? [relative(cwd, deltaPackageDir)] : []),
+            ...(deltaLeg.hasPlaceholders ? [relative(cwd, deltaPackageDir)] : []),
           ],
-          appliedStatements: [...deltaLeg.value.appliedStatements, ...deletes],
-          temporaryValues: deltaLeg.value.temporaryValues,
+          appliedStatements: [...deltaLeg.appliedStatements, ...deletes],
+          temporaryValues: deltaLeg.temporaryValues,
+          changedStorageEntities: changedStorageEntities(fromContract, toContract),
           summary: placeholderSummary(
             'baseline + migration',
             [baselinePackageDir, deltaPackageDir],
@@ -995,12 +1049,18 @@ async function executeMigrationPlanCommandInner(
         emittedExtensionDirs,
         ...(preview !== undefined ? { preview } : {}),
         ...(warnings.length > 0 ? { warnings } : {}),
-        appliedStatements: [...deltaLeg.value.appliedStatements, ...deletes],
-        temporaryValues: deltaLeg.value.temporaryValues,
-        summary: buildAutoBaselinePlanSummary(
-          baselineOps.length,
-          deltaOps.length,
-          emittedExtensionDirs.length,
+        ...(plannerWarnings.length > 0 ? { plannerWarnings } : {}),
+        appliedStatements: [...deltaLeg.appliedStatements, ...deletes],
+        temporaryValues: deltaLeg.temporaryValues,
+        ...withNoOperationsReport(
+          buildAutoBaselinePlanSummary(
+            baselineOps.length,
+            deltaOps.length,
+            emittedExtensionDirs.length,
+          ),
+          deltaOps.length === 0,
+          fromContract,
+          toContract,
         ),
         timings: { total: Date.now() - startTime },
       };
@@ -1012,7 +1072,10 @@ async function executeMigrationPlanCommandInner(
     const dirName = formatMigrationDirName(timestamp, slug);
     const packageDir = join(appMigrationsDir, dirName);
 
-    const planDelta = (resolved: readonly ResolvedMigrationStatement[]) =>
+    const planDelta = (
+      texts: readonly StatementText[],
+      resolved: readonly ResolvedMigrationStatement[],
+    ) =>
       runPlannerLeg(
         planner,
         migrations,
@@ -1021,24 +1084,29 @@ async function executeMigrationPlanCommandInner(
         fromOrigin,
         planDestination,
         resolved,
-        resolved.length > 0 && fromHash === toStorageHash,
         aggregate.app.spaceId,
         aggregate,
         snapshotsImportPathFrom(packageDir, migrationsDir),
-        resolveImportSpecifier,
+        migrationModule.value,
+        refusedWith(texts, resolved),
       );
-    const plannedDelta = await planDelta(statements);
+    const plannedDelta = await planDelta(statementTexts, statements);
     if (!plannedDelta.ok) {
-      return notOk(plannedDelta.failure.error);
+      return plannedDelta;
     }
     const answered = await answerDataLoss(undefined, plannedDelta.value, planDelta);
     if (!answered.ok) {
       return notOk(answered.failure);
     }
-    const deltaLeg = ok(answered.value.delta ?? plannedDelta.value);
+    const deltaLeg = answered.value.delta ?? plannedDelta.value;
     const deletes = answered.value.deletes;
+    plannerWarnings.push(...deltaLeg.plannerWarnings);
 
-    if (!deltaLeg.value.hasPlaceholders && deltaLeg.value.plannedOps.length === 0) {
+    if (
+      !deltaLeg.hasPlaceholders &&
+      deltaLeg.plannedOps.length === 0 &&
+      fromHash === toStorageHash
+    ) {
       const result: MigrationPlanResult = {
         ok: true,
         noOp: true,
@@ -1047,24 +1115,20 @@ async function executeMigrationPlanCommandInner(
         operations: [],
         emittedExtensionDirs,
         ...(warnings.length > 0 ? { warnings } : {}),
-        appliedStatements: [...deltaLeg.value.appliedStatements, ...deletes],
-        temporaryValues: deltaLeg.value.temporaryValues,
+        ...(plannerWarnings.length > 0 ? { plannerWarnings } : {}),
+        appliedStatements: [...deltaLeg.appliedStatements, ...deletes],
+        temporaryValues: deltaLeg.temporaryValues,
+        changedStorageEntities: [],
         summary: 'No changes to plan: the statements need no operations',
         timings: { total: Date.now() - startTime },
       };
       return ok(result);
     }
 
-    await writePlannedMigrationPackage(
-      packageDir,
-      fromHash,
-      toStorageHash,
-      timestamp,
-      deltaLeg.value,
-    );
+    await writePlannedMigrationPackage(packageDir, fromHash, toStorageHash, timestamp, deltaLeg);
     await writeDestinationSnapshot(toStorageHash);
 
-    if (deltaLeg.value.hasPlaceholders) {
+    if (deltaLeg.hasPlaceholders) {
       const dir = relative(cwd, packageDir);
       const result: MigrationPlanResult = {
         ok: true,
@@ -1072,21 +1136,23 @@ async function executeMigrationPlanCommandInner(
         from: fromHash,
         to: toStorageHash,
         dir,
-        operations: operationSummaries(deltaLeg.value.plannedOps),
+        operations: deltaLeg.listedOps,
         emittedExtensionDirs,
         ...(warnings.length > 0 ? { warnings } : {}),
+        ...(plannerWarnings.length > 0 ? { plannerWarnings } : {}),
         pendingPlaceholders: true,
         placeholderDirs: [relative(cwd, packageDir)],
         ...(fromDefaulted ? { fromDefaulted } : {}),
-        appliedStatements: [...deltaLeg.value.appliedStatements, ...deletes],
-        temporaryValues: deltaLeg.value.temporaryValues,
+        appliedStatements: [...deltaLeg.appliedStatements, ...deletes],
+        temporaryValues: deltaLeg.temporaryValues,
+        changedStorageEntities: changedStorageEntities(fromContract, toContract),
         summary: placeholderSummary('migration', [packageDir], invocationOf(options)),
         timings: { total: Date.now() - startTime },
       };
       return ok(result);
     }
 
-    const plannedOps = deltaLeg.value.plannedOps;
+    const plannedOps = deltaLeg.plannedOps;
     const preview = hasOperationPreview(familyInstance)
       ? familyInstance.toOperationPreview(plannedOps)
       : undefined;
@@ -1105,9 +1171,15 @@ async function executeMigrationPlanCommandInner(
       ...(preview !== undefined ? { preview } : {}),
       ...(fromDefaulted ? { fromDefaulted } : {}),
       ...(warnings.length > 0 ? { warnings } : {}),
-      appliedStatements: [...deltaLeg.value.appliedStatements, ...deletes],
-      temporaryValues: deltaLeg.value.temporaryValues,
-      summary: buildPlanSummary(plannedOps.length, emittedExtensionDirs.length),
+      ...(plannerWarnings.length > 0 ? { plannerWarnings } : {}),
+      appliedStatements: [...deltaLeg.appliedStatements, ...deletes],
+      temporaryValues: deltaLeg.temporaryValues,
+      ...withNoOperationsReport(
+        buildPlanSummary(plannedOps.length, emittedExtensionDirs.length),
+        plannedOps.length === 0,
+        fromContract,
+        toContract,
+      ),
       timings: { total: Date.now() - startTime },
     };
     return ok(result);
@@ -1116,6 +1188,24 @@ async function executeMigrationPlanCommandInner(
       errorFromCaught(error, (message) => `Unexpected error during migration plan: ${message}`),
     );
   }
+}
+
+/**
+ * The summary of a written migration and, when it has no operations, the storage entities that
+ * changed, with a sentence added to the summary that says the database needs no operation for them.
+ */
+function withNoOperationsReport(
+  summary: string,
+  hasNoOperations: boolean,
+  fromContract: Contract | null,
+  toContract: Contract,
+): Pick<MigrationPlanResult, 'changedStorageEntities' | 'summary'> {
+  const reported = { changedStorageEntities: changedStorageEntities(fromContract, toContract) };
+  if (!hasNoOperations) return { ...reported, summary };
+  return {
+    ...reported,
+    summary: `${summary}. The storage the contract describes changed, but the database needs no operation for it, so the migration has none. ${whatChangedSentence(fromContract, toContract)}`,
+  };
 }
 
 /**

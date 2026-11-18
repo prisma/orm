@@ -1,7 +1,7 @@
 import { createPostgresAdapter } from '@internal/adapter-postgres/adapter';
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
-import type { PostgresContract } from '../../../3-targets/6-adapters/postgres/src/core/types';
+import type { PostgresContract } from '../../../3-targets/postgres/2-adapter/src/core/types';
 import { resolveIncludeRelation } from '../src/collection-contract';
 import { type CollectionTables, createIncludeTables } from '../src/collection-tables';
 import { compileSelectWithIncludes } from '../src/query-plan-select';

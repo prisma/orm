@@ -1,53 +1,22 @@
 import { DEFAULT_CONTRACT_SOURCE_DIR } from '@internal/config/config-types';
-import {
-  type ImportSpecifierResolver,
-  keepInternalSpecifiers,
-} from '@internal/framework-components/emission';
-import { createScaffoldSpecifierResolver } from '@internal/publish-surface/import-roots';
 
 export type TargetId = 'postgres' | 'mongo';
 export type AuthoringId = 'psl' | 'typescript';
 
-/**
- * The resolver a scaffold for `target` is written against.
- *
- * A scaffold is always on the facade root: `init` writes an application around
- * one database package, and the workspace names are not published, so a project
- * scaffolded against them could not install (ADR 242). Both the files `init`
- * writes and the dependency it adds go through this, so they cannot disagree.
- */
-export function scaffoldSpecifierResolverFor(target: TargetId): ImportSpecifierResolver {
-  return createScaffoldSpecifierResolver({
-    mode: 'facade',
-    facade: target === 'postgres' ? '@prisma/orm-postgres' : '@prisma/orm-mongo',
-  });
+export function targetPackageName(target: TargetId): string {
+  return target === 'postgres' ? '@prisma/orm-postgres' : '@prisma/orm-mongo';
 }
 
-/**
- * The package name a scaffolded project depends on and imports from, for the
- * import root it is being scaffolded against.
- *
- * Every specifier the scaffold writes derives from this one, and `init` builds
- * a single resolver and hands it to both the file templates and the dependency
- * it installs — so the two cannot disagree. The one caller that deliberately
- * does not thread a resolver is the re-init cleanup in `inputs.ts`, which
- * inspects a manifest an earlier run wrote rather than writing one.
- *
- * Resolvers for scaffolding should come from `createScaffoldSpecifierResolver`
- * in the publish-surface package, which rejects the roots a facade-shaped
- * scaffold cannot express. (Named without its scope on purpose: JSDoc survives
- * into the published bundle, where an internal package name would trip the
- * shell tarball checks.)
- */
-export function targetPackageName(
-  target: TargetId,
-  resolveImportSpecifier: ImportSpecifierResolver = keepInternalSpecifiers,
-): string {
-  return resolveImportSpecifier(target === 'postgres' ? '@internal/postgres' : '@internal/mongo');
+export function workspaceTargetPackageName(target: TargetId): string {
+  return target === 'postgres' ? '@internal/postgres' : '@internal/mongo';
 }
 
-// biome-ignore lint/plugin/no-family-vocabulary: the driver the target package declares as a required peer dependency, which init installs with it
-const DRIVER_PEERS: ReadonlyMap<TargetId, string> = new Map([['mongo', 'mongodb']]);
+const DRIVER_PEERS: ReadonlyMap<TargetId, string> = new Map([
+  // biome-ignore lint/plugin/no-family-vocabulary: the driver the target package declares as a required peer dependency, which init installs with it
+  ['postgres', 'pg'],
+  // biome-ignore lint/plugin/no-family-vocabulary: the driver the target package declares as a required peer dependency, which init installs with it
+  ['mongo', 'mongodb'],
+]);
 
 /** Packages the target package declares as required peer dependencies; init installs them with it. */
 export function targetPeerPackages(target: TargetId): readonly string[] {
@@ -56,13 +25,8 @@ export function targetPeerPackages(target: TargetId): readonly string[] {
 }
 
 /** One entrypoint of the scaffolded project's target package. */
-export function targetEntrypoint(
-  target: TargetId,
-  subpath: string,
-  resolveImportSpecifier: ImportSpecifierResolver = keepInternalSpecifiers,
-): string {
-  const internal = target === 'postgres' ? '@internal/postgres' : '@internal/mongo';
-  return resolveImportSpecifier(`${internal}/${subpath}`);
+export function targetEntrypoint(targetPackage: string, subpath: string): string {
+  return `${targetPackage}/${subpath}`;
 }
 
 export function targetLabel(target: TargetId): string {
@@ -79,10 +43,10 @@ export function defaultSchemaPath(authoring: AuthoringId): string {
 export function starterSchema(
   target: TargetId,
   authoring: AuthoringId,
-  resolveImportSpecifier: ImportSpecifierResolver = keepInternalSpecifiers,
+  targetPackage: string,
 ): string {
   if (authoring === 'typescript') {
-    const builder = targetEntrypoint(target, 'contract-builder', resolveImportSpecifier);
+    const builder = targetEntrypoint(targetPackage, 'contract-builder');
     return target === 'mongo' ? starterSchemaTsMongo(builder) : starterSchemaTsPostgres(builder);
   }
   return target === 'mongo' ? starterSchemaPslMongo() : starterSchemaPslPostgres();
@@ -100,10 +64,10 @@ export function starterSchema(
 export function schemaSample(
   target: TargetId,
   authoring: AuthoringId,
-  resolveImportSpecifier: ImportSpecifierResolver = keepInternalSpecifiers,
+  targetPackage: string,
 ): string {
   if (authoring === 'typescript') {
-    const builder = targetEntrypoint(target, 'contract-builder', resolveImportSpecifier);
+    const builder = targetEntrypoint(targetPackage, 'contract-builder');
     return target === 'mongo' ? schemaSampleTsMongo(builder) : schemaSampleTsPostgres(builder);
   }
   return target === 'mongo' ? schemaSamplePslMongo() : schemaSamplePslPostgres();
@@ -138,14 +102,14 @@ import { defineContract } from '${builder}';
 
 export const contract = defineContract(
   {},
-  ({ field, model }) => ({
+  ({ field, model, gen, type }) => ({
     models: {
       User: model('User', {
         fields: {
-          id: field.id.uuidv7String(),
-          email: field.text().unique(),
-          username: field.text().optional(),
-          name: field.text().optional(),
+          id: field.column(type.Uuid()).id().onCreate(gen.uuid(7)),
+          email: field.column(type.String()).unique(),
+          username: field.column(type.String()).optional(),
+          name: field.column(type.String()).optional(),
         },
       }),
     },
@@ -160,15 +124,15 @@ import { defineContract } from '${builder}';
 
 export const contract = defineContract(
   {},
-  ({ field, model }) => ({
+  ({ field, model, type }) => ({
     models: {
       User: model('User', {
         collection: 'users',
         fields: {
-          _id: field.objectId(),
-          email: field.string(),
-          username: field.string().optional(),
-          name: field.string().optional(),
+          id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
+          email: field.scalar(type.String()),
+          username: field.scalar(type.String()).optional(),
+          name: field.scalar(type.String()).optional(),
         },
       }),
     },
@@ -181,23 +145,23 @@ function starterSchemaPslPostgres(): string {
   return `// use prisma-8
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
+  id        Int                @id @default(autoincrement())
+  email     String             @unique
   username  String?
   name      String?
   posts     Post[]
-  createdAt TimestamptzString @default(now())
-  updatedAt temporal.updatedAtString()
+  createdAt DateTime           @default(now()) @onCreate(now())
+  updatedAt temporal.UpdatedAt
 }
 
 model Post {
-  id        Int      @id @default(autoincrement())
+  id        Int                @id @default(autoincrement())
   title     String
   content   String?
-  author    User     @relation(fields: [authorId], references: [id])
+  author    User               @relation(fields: [authorId], references: [id])
   authorId  Int
-  createdAt TimestamptzString @default(now())
-  updatedAt temporal.updatedAtString()
+  createdAt DateTime           @default(now()) @onCreate(now())
+  updatedAt temporal.UpdatedAt
 }
 `;
 }
@@ -226,28 +190,28 @@ model Post {
 }
 
 function starterSchemaTsPostgres(builder: string): string {
-  return `import { defineContract } from '${builder}';
+  return `import { defineContract, now } from '${builder}';
 
-export const contract = defineContract({}, ({ field, model, rel }) => {
+export const contract = defineContract({}, ({ field, model, rel, gen, type }) => {
   const User = model('User', {
     fields: {
-      id: field.id.uuidv7String(),
-      email: field.text().unique(),
-      username: field.text().optional(),
-      name: field.text().optional(),
-      createdAt: field.temporal.createdAtString(),
-      updatedAt: field.temporal.updatedAtString(),
+      id: field.column(type.Uuid()).id().onCreate(gen.uuid(7)),
+      email: field.column(type.String()).unique(),
+      username: field.column(type.String()).optional(),
+      name: field.column(type.String()).optional(),
+      createdAt: field.column(type.DateTime()).default(now()).onCreate(gen.now()),
+      updatedAt: field.column(type.temporal.UpdatedAt()),
     },
   });
 
   const Post = model('Post', {
     fields: {
-      id: field.id.uuidv7String(),
-      title: field.text(),
-      content: field.text().optional(),
-      authorId: field.uuidString(),
-      createdAt: field.temporal.createdAtString(),
-      updatedAt: field.temporal.updatedAtString(),
+      id: field.column(type.Uuid()).id().onCreate(gen.uuid(7)),
+      title: field.column(type.String()),
+      content: field.column(type.String()).optional(),
+      authorId: field.column(type.Uuid()),
+      createdAt: field.column(type.DateTime()).default(now()).onCreate(gen.now()),
+      updatedAt: field.column(type.temporal.UpdatedAt()),
     },
   });
 
@@ -270,31 +234,31 @@ function starterSchemaTsMongo(builder: string): string {
 
 export const contract = defineContract(
   {},
-  ({ field, model, rel }) => ({
+  ({ field, model, rel, type }) => ({
     models: {
       User: model('User', {
         collection: 'users',
         fields: {
-          _id: field.objectId(),
-          email: field.string(),
-          username: field.string().optional(),
-          name: field.string().optional(),
+          id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
+          email: field.scalar(type.String()),
+          username: field.scalar(type.String()).optional(),
+          name: field.scalar(type.String()).optional(),
         },
         relations: {
-          posts: rel.hasMany('Post', { from: '_id', to: 'authorId' }),
+          posts: rel.hasMany('Post', { from: 'id', to: 'authorId' }),
         },
       }),
 
       Post: model('Post', {
         collection: 'posts',
         fields: {
-          _id: field.objectId(),
-          title: field.string(),
-          content: field.string().optional(),
-          authorId: field.objectId(),
+          id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
+          title: field.scalar(type.String()),
+          content: field.scalar(type.String()).optional(),
+          authorId: field.scalar(type.ObjectId()),
         },
         relations: {
-          author: rel.belongsTo('User', { from: 'authorId', to: '_id' }),
+          author: rel.belongsTo('User', { from: 'authorId', to: 'id' }),
         },
       }),
     },
@@ -303,12 +267,8 @@ export const contract = defineContract(
 `;
 }
 
-export function configFile(
-  target: TargetId,
-  contractPath: string,
-  resolveImportSpecifier: ImportSpecifierResolver = keepInternalSpecifiers,
-): string {
-  const configEntrypoint = targetEntrypoint(target, 'config', resolveImportSpecifier);
+export function configFile(contractPath: string, targetPackage: string): string {
+  const configEntrypoint = targetEntrypoint(targetPackage, 'config');
   return `import 'dotenv/config';
 import { definePrismaConfig } from '@prisma/cli-engine';
 import { defineConfig as ormConfig } from '${configEntrypoint}';
@@ -331,12 +291,11 @@ export default definePrismaConfig({
  * own directory (`output` is the directory; the facade names `contract.json`).
  */
 export function prisma7ConfigFile(
-  target: TargetId,
   schemaPath: string,
   outputDir: string,
-  resolveImportSpecifier: ImportSpecifierResolver = keepInternalSpecifiers,
+  targetPackage: string,
 ): string {
-  const configEntrypoint = targetEntrypoint(target, 'config', resolveImportSpecifier);
+  const configEntrypoint = targetEntrypoint(targetPackage, 'config');
   return `import 'dotenv/config';
 import { definePrismaConfig } from '@prisma/cli-engine';
 import { defineConfig as ormConfig, prisma7Schema } from '${configEntrypoint}';
@@ -353,31 +312,20 @@ export default definePrismaConfig({
 `;
 }
 
-export function dbFile(
-  target: TargetId,
-  resolveImportSpecifier: ImportSpecifierResolver = keepInternalSpecifiers,
-): string {
-  const runtime = targetEntrypoint(target, 'runtime', resolveImportSpecifier);
-  if (target === 'postgres') {
-    return `import 'dotenv/config';
-import postgres from '${runtime}';
-import type { Contract } from './contract.d';
-import contractJson from './contract.json' with { type: 'json' };
-
-export const db = postgres<Contract>({
-  contractJson,
-  url: process.env['DATABASE_URL']!,
-});
-`;
-  }
-
+export function dbFile(target: TargetId, targetPackage: string): string {
+  const runtime = targetEntrypoint(targetPackage, 'runtime');
+  const staticEntry = targetEntrypoint(targetPackage, 'static');
+  const factory = target === 'postgres' ? 'postgres' : 'mongo';
   return `import 'dotenv/config';
-import mongo from '${runtime}';
-import type { Contract } from './contract.d';
+import ${factory} from '${runtime}';
+import { contractFromJson } from '${staticEntry}';
+import type { Contract } from './contract.d.js';
 import contractJson from './contract.json' with { type: 'json' };
 
-export const db = mongo<Contract>({
-  contractJson,
+export const contract = contractFromJson<Contract>(contractJson);
+
+export const db = ${factory}({
+  contract,
   url: process.env['DATABASE_URL']!,
 });
 `;

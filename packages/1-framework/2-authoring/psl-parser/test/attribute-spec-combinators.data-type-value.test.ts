@@ -13,7 +13,7 @@ import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
 import type { AttributeCtx } from '../src/attribute-spec/types';
-import { dataTypeValue, funcCall, oneOf, str } from '../src/exports';
+import { dataTypeValue, funcCall, leafDiagnostic, oneOf, refineArg, str } from '../src/exports';
 import { Cursor, parseAttribute } from '../src/parse';
 import { PslSources } from '../src/source-file';
 import { buildSymbolTable } from '../src/symbol-table';
@@ -25,14 +25,18 @@ import { supportBinder } from './support';
 
 const unchanged = (value: JsonValue) => value;
 
-const sqlExpression = dataType('sql/expression', {});
-const pgText = dataType('pg/text', {});
-const pgBool = dataType('pg/bool', {});
-const pgInt2 = dataType('pg/int2', {});
-const pgInt4 = dataType('pg/int4', { casts: { [pgInt2.id]: (value) => String(value) } });
-const pgNumeric = dataType('pg/numeric', {});
-const pgJson = dataType('pg/json', {});
+const sqlExpression = dataType('sql/expression', { read: (json) => json });
+const pgText = dataType('pg/text', { read: (json) => json });
+const pgBool = dataType('pg/bool', { read: (json) => json });
+const pgInt2 = dataType('pg/int2', { read: (json) => json });
+const pgInt4 = dataType('pg/int4', {
+  read: (json) => json,
+  casts: { [pgInt2.id]: (value) => String(value) },
+});
+const pgNumeric = dataType('pg/numeric', { read: (json) => json });
+const pgJson = dataType('pg/json', { read: (json) => json });
 const pgUuid = dataType('pg/uuid', {
+  read: (json) => json,
   casts: {
     [pgText.id]: (value) => {
       if (typeof value === 'string' && value.length === 36) return value;
@@ -94,6 +98,7 @@ const support: DataTypeSupport = {
     pgJson,
     pgUuid,
   ]),
+  dataTypeOfCodec: () => undefined,
 };
 
 function argOf(source: string): { expr: ExpressionAst; ctx: AttributeCtx } {
@@ -144,6 +149,14 @@ function colonQualifiedArgOf(source: string): { expr: ExpressionAst; ctx: Attrib
 function parse(type: DataTypeId, source: string, over: DataTypeSupport = support) {
   const { expr, ctx } = argOf(source);
   return dataTypeValue(type, over).parse(expr, ctx);
+}
+
+function parseWith(
+  type: { readonly parse: (expr: ExpressionAst, ctx: AttributeCtx) => unknown },
+  source: string,
+) {
+  const { expr, ctx } = argOf(source);
+  return type.parse(expr, ctx);
 }
 
 /** The diagnostic for the argument `source`, which starts after `@x(` on the first line. */
@@ -198,7 +211,7 @@ describe('dataTypeValue', () => {
   });
 
   it('labels a type by its own tag before the tags of its cast sources', () => {
-    const geo = dataType('pg/geo', { casts: { [pgJson.id]: unchanged } });
+    const geo = dataType('pg/geo', { read: (json) => json, casts: { [pgJson.id]: unchanged } });
     const withGeo: DataTypeSupport = {
       entries: {
         ...entries,
@@ -209,6 +222,7 @@ describe('dataTypeValue', () => {
         },
       },
       lookup: createDataTypeLookup([pgJson, geo]),
+      dataTypeOfCodec: () => undefined,
     };
     const type = dataTypeValue(geo.id, withGeo);
     expect({ label: type.label, tags: type.tags }).toEqual({
@@ -217,11 +231,10 @@ describe('dataTypeValue', () => {
     });
   });
 
-  it('returns the canonical value, its type and the span of the argument', () => {
+  it('returns the value its type constructs and the span of the argument', () => {
     expect(parse(sqlExpression.id, 'sql`\n  now()\n`')).toEqual(
       ok({
-        type: 'sql/expression',
-        value: 'now()',
+        value: sqlExpression.fromContract('now()', {}),
         span: { start: { offset: 3, line: 1, column: 4 }, end: { offset: 17, line: 3, column: 2 } },
       }),
     );
@@ -230,8 +243,7 @@ describe('dataTypeValue', () => {
   it('takes a value of a type the receiving type casts from, returning the cast value', () => {
     expect(parse(pgInt4.id, '8')).toEqual(
       ok({
-        type: 'pg/int4',
-        value: '8',
+        value: pgInt4.fromContract('8', {}),
         span: { start: { offset: 3, line: 1, column: 4 }, end: { offset: 4, line: 1, column: 5 } },
       }),
     );
@@ -298,6 +310,7 @@ describe('dataTypeValue', () => {
     const noText: DataTypeSupport = {
       entries: { [sqlExpression.id]: entries[sqlExpression.id] ?? fail() },
       lookup: support.lookup,
+      dataTypeOfCodec: () => undefined,
     };
     const source = '"x"';
     expect(parse(sqlExpression.id, source, noText)).toEqual(
@@ -355,10 +368,10 @@ describe('dataTypeValue', () => {
     },
   );
 
-  it('refuses a string for a type without a tag by naming its written form', () => {
+  it('refuses a string for a type without a tag by naming its written form and the number to write', () => {
     const source = '"8"';
     expect(parse(pgInt4.id, source)).toEqual(
-      refusal(source, 'PSL_VALUE_TYPE_INCOMPATIBLE', 'Expected a number'),
+      refusal(source, 'PSL_VALUE_TYPE_INCOMPATIBLE', 'Expected a number; write 8'),
     );
   });
 
@@ -405,8 +418,12 @@ describe('dataTypeValue', () => {
   });
 
   it('throws an internal error when parsing for a registered type that nothing writes', () => {
-    const pgBlob = dataType('pg/blob', {});
-    const withBlob: DataTypeSupport = { entries, lookup: createDataTypeLookup([pgBlob]) };
+    const pgBlob = dataType('pg/blob', { read: (json) => json });
+    const withBlob: DataTypeSupport = {
+      entries,
+      lookup: createDataTypeLookup([pgBlob]),
+      dataTypeOfCodec: () => undefined,
+    };
     const { expr, ctx } = argOf('"x"');
     expect(() => dataTypeValue(pgBlob.id, withBlob).parse(expr, ctx)).toThrow(
       new InternalError(
@@ -426,7 +443,61 @@ describe('dataTypeValue', () => {
     const [, rewrite] = message.split('; write ');
     expect(rewrite).toBeDefined();
     expect(parse(sqlExpression.id, rewrite ?? '')).toMatchObject(
-      ok({ type: 'sql/expression', value: text }),
+      ok({ value: sqlExpression.fromContract(text, {}) }),
+    );
+  });
+
+  it('takes the label it is given in place of the forms it admits', () => {
+    expect({
+      given: dataTypeValue(pgInt4.id, support, { label: '4 | 7' }).label,
+      none: dataTypeValue(pgInt4.id, support).label,
+    }).toEqual({ given: '4 | 7', none: 'a number' });
+  });
+
+  it('offers the suggestions it is given, and none by default', () => {
+    expect({
+      given: dataTypeValue(pgInt4.id, support, { suggestions: ['4', '7'] }).suggestions,
+      none: dataTypeValue(pgInt4.id, support).suggestions,
+    }).toEqual({ given: ['4', '7'], none: [] });
+  });
+
+  describe('refined by a check on its value', () => {
+    const version = refineArg(dataTypeValue(pgInt4.id, support), (parsed, arg, ctx) =>
+      Number(parsed.value.value) === 7
+        ? ok(7)
+        : notOk([leafDiagnostic(ctx, arg, 'version must be 7', 'PSL_FIXTURE_CHECK')]),
+    );
+
+    it('keeps the metadata of the value it refines', () => {
+      expect({ kind: version.kind, label: version.label }).toEqual({
+        kind: 'dataTypeValue',
+        label: 'a number',
+      });
+    });
+
+    it('returns what the check returns', () => {
+      const { expr, ctx } = argOf('7');
+      expect(version.parse(expr, ctx)).toEqual(ok(7));
+    });
+
+    it('refuses at the argument with the diagnostic of the check', () => {
+      expect(parseWith(version, '5')).toEqual(
+        refusal('5', 'PSL_FIXTURE_CHECK', 'version must be 7'),
+      );
+    });
+
+    it('passes a refusal of the value through without running the check', () => {
+      expect(parseWith(version, '"7"')).toEqual(
+        refusal('"7"', 'PSL_VALUE_TYPE_INCOMPATIBLE', 'Expected a number; write 7'),
+      );
+    });
+  });
+
+  it('is refused as an arm of oneOf when the oneOf is built', () => {
+    expect(() => oneOf(str(), dataTypeValue(pgInt4.id, support))).toThrow(
+      new InternalError(
+        'oneOf was given an arm typed by data type "pg/int4" (a number). A value of a data type is a parameter of an attribute, a block or a function call, never an arm of oneOf.',
+      ),
     );
   });
 
@@ -456,8 +527,7 @@ describe('dataTypeValue', () => {
           },
           args: {
             length: {
-              type: 'pg/int4',
-              value: '8',
+              value: pgInt4.fromContract('8', {}),
               span: {
                 start: { offset: 10, line: 1, column: 11 },
                 end: { offset: 11, line: 1, column: 12 },
@@ -474,7 +544,7 @@ describe('dataTypeValue', () => {
         notOk([
           {
             code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
-            message: 'Expected a number',
+            message: 'Expected a number; write 8',
             filename: 'schema.prisma',
             range: { start: { line: 0, character: 10 }, end: { line: 0, character: 13 } },
           },
@@ -508,7 +578,7 @@ describe('oneOf given a call to a function one arm names', () => {
       notOk([
         {
           code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
-          message: 'Expected a number',
+          message: 'Expected a number; write 8',
           filename: 'schema.prisma',
           range: { start: { line: 0, character: 10 }, end: { line: 0, character: 13 } },
         },
@@ -527,8 +597,7 @@ describe('oneOf given a call to a function one arm names', () => {
         },
         args: {
           length: {
-            type: 'pg/int4',
-            value: '8',
+            value: pgInt4.fromContract('8', {}),
             span: {
               start: { offset: 10, line: 1, column: 11 },
               end: { offset: 11, line: 1, column: 12 },

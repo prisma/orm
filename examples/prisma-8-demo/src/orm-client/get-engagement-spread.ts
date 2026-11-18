@@ -1,5 +1,4 @@
-import type { Runtime } from '@prisma/orm-postgres/family-runtime';
-import { createOrmClient } from './client';
+import type { DemoOrm } from '../prisma/db';
 
 /**
  * An extension-contributed aggregate, called like any other.
@@ -19,9 +18,8 @@ export interface EngagementSpread {
   readonly impressionSpread: string | null;
 }
 
-export async function ormClientGetEngagementSpread(runtime: Runtime): Promise<EngagementSpread> {
-  const db = createOrmClient(runtime);
-  return db.Post.aggregate((aggregate) => ({
+export async function ormClientGetEngagementSpread(orm: DemoOrm): Promise<EngagementSpread> {
+  return orm.Post.aggregate((aggregate) => ({
     posts: aggregate.count(),
     meanViews: aggregate.avg('viewCount'),
     viewSpread: aggregate.stddev('viewCount'),

@@ -29,6 +29,7 @@ export function mongoSourceContext(resolvedInputs: readonly string[]): ContractS
     codecLookup: mongoStack.codecLookup,
     dataTypes: mongoStack.dataTypes,
     controlMutationDefaults: mongoStack.controlMutationDefaults,
+    generatorFunctions: mongoStack.generatorFunctions,
     resolvedInputs,
     capabilities: mongoStack.capabilities,
   };

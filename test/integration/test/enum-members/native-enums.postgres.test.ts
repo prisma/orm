@@ -1,10 +1,11 @@
 import postgres from '@internal/postgres/runtime';
+import { contractFromJson } from '@internal/postgres/static';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import type { Contract } from './_fixture-native-enums/generated/contract';
 import contractJson from './_fixture-native-enums/generated/contract.json' with { type: 'json' };
 
 describe('db.nativeEnums on a contract emitted from PSL', () => {
-  const db = postgres<Contract>({ contractJson });
+  const db = postgres({ contract: contractFromJson<Contract>(contractJson) });
 
   it('lists the native enums, a mapped one and an unused one, and no domain enum', () => {
     expect({

@@ -82,7 +82,7 @@ export function CheckoutForm({ defaultAddress, locations, cartItems }: CheckoutF
       if (res.ok) {
         invalidateCart();
         const order = await res.json();
-        router.push(`/orders/${order._id}`);
+        router.push(`/orders/${order.id}`);
       }
     } finally {
       setLoading(false);

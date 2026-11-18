@@ -54,5 +54,3 @@ A cast that agrees with the codec type still typechecks and can be removed. A ca
 ```
 
 `first()` returns `null` when no row matches, which its type now says, so code that read a field of the result without checking for `null` fails to typecheck too.
-
-Rows of an included relation are still typed `unknown`; casts on those still typecheck.

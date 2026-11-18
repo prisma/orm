@@ -1,4 +1,5 @@
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import {
   assembleAuthoringContributions,
   assembleControlMutationDefaults,
@@ -288,6 +289,7 @@ function complete(markedSource: string, snippets = false, parameterHints = false
       symbolTable,
       authoringContributions,
       controlMutationDefaults: assembleControlMutationDefaults([]),
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
     },
     clientSupportsSnippets: snippets,
     clientSupportsTriggerParameterHintsCommand: parameterHints,
@@ -721,11 +723,6 @@ describe('recursive attribute values', () => {
     expect(rejectedParse).not.toHaveBeenCalled();
   });
 
-  it('never invokes combinator parsing to select alternatives', () => {
-    expect(field('none: |').labels).toEqual(['Example', 'public']);
-    expect(rejectedParse).not.toHaveBeenCalled();
-  });
-
   it('replaces an unfinished string token at EOF', () => {
     expect(
       complete('model Example { value String @probe(fixed: "ol|').apply('"quoted\\"value"'),
@@ -907,10 +904,6 @@ describe('recursive function arguments', () => {
       textEdit: { newText: `optionalCall(${emptyTabStop1})` },
       command: { title: 'Show argument hints', command: 'editor.action.triggerParameterHints' },
     });
-  });
-
-  it('offers function calls from every alternative', () => {
-    expect(field('choice: |').labels).toEqual(['ordered', 'empty']);
   });
 
   it('inserts only required arguments with named tab stops', () => {

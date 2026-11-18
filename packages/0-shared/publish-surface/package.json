@@ -1,11 +1,11 @@
 {
   "name": "@internal/publish-surface",
-  "version": "8.0.0-rc.18",
+  "version": "8.0.0-rc.24",
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "Canonical map of internal workspace packages to published @prisma/orm-* entrypoints (ADR 242), plus the import-root modes emission resolves generated import specifiers through",
+  "description": "Canonical map of internal workspace packages to published @prisma/orm-* entrypoints (ADR 242)",
   "scripts": {
     "build": "tsdown",
     "test": "vitest run",
@@ -16,7 +16,7 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "devDependencies": {
-    "@repo/tsconfig": "workspace:8.0.0-rc.18",
+    "@repo/tsconfig": "workspace:8.0.0-rc.24",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
@@ -34,7 +34,7 @@
     "src"
   ],
   "exports": {
-    "./import-roots": "./dist/import-roots.mjs",
+    "./platform-entrypoints": "./dist/platform-entrypoints.mjs",
     "./shells": "./dist/shells.mjs",
     "./package.json": "./package.json"
   },

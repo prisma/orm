@@ -120,6 +120,37 @@ function checkConsumer(options: ts.CompilerOptions, declaration: string) {
   );
 }
 
+/** Typechecks a file on its own, so the program holds only what that file and the contract's types import. */
+function checkAlone(options: ts.CompilerOptions, source: string) {
+  const program = ts.createProgram([temporalGlobals, source], { ...options, noEmit: true });
+  return messages(ts.getPreEmitDiagnostics(program, program.getSourceFile(source)));
+}
+
+describe('contributed collection methods in a program of its own', () => {
+  it(
+    'are absent when the program imports only the ORM client and the contract types',
+    () => {
+      expect(
+        checkAlone(
+          demoCompilerOptions(),
+          resolve(demoRoot, 'isolated-programs/contract-only-library.ts'),
+        ),
+      ).toEqual([]);
+    },
+    timeouts.typeScriptCompilation,
+  );
+
+  it(
+    'are present when the program imports the Postgres facade and pgvector',
+    () => {
+      expect(
+        checkAlone(demoCompilerOptions(), resolve(demoRoot, 'isolated-programs/facade-library.ts')),
+      ).toEqual([]);
+    },
+    timeouts.typeScriptCompilation,
+  );
+});
+
 describe('declaration emit through the published facade', () => {
   const options = demoCompilerOptions();
   const emitted = emitLibraryDeclaration(options);

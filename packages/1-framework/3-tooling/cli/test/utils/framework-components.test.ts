@@ -128,17 +128,6 @@ describe('assertFrameworkComponentsCompatible', () => {
     const result = assertFrameworkComponentsCompatible('sql', 'postgres', []);
     expect(result).toEqual([]);
   });
-
-  it('validates all component kinds', () => {
-    const target = createComponent('target');
-    const adapter = createComponent('adapter');
-    const extension = createComponent('extension');
-    const driver = createComponent('driver');
-
-    expect(() => {
-      assertFrameworkComponentsCompatible('sql', 'postgres', [target, adapter, extension, driver]);
-    }).not.toThrow();
-  });
 });
 
 describe('assertContractRequirementsSatisfied', () => {

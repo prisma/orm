@@ -5,7 +5,7 @@ import type {
   MongoContractWithTypeMaps,
   MongoTypeMaps,
 } from '@internal/mongo-contract';
-import type { MongoQueryPlan } from '@internal/mongo-query-ast/execution';
+import type { MongoExecutionContext, MongoQueryPlan } from '@internal/mongo-query-ast/execution';
 import { mongoQuery } from '@internal/mongo-query-builder';
 import { expectTypeOf } from 'vitest';
 import type { MongoRuntime } from '../src/mongo-runtime';
@@ -30,7 +30,14 @@ type TestModels = {
       };
     };
     readonly relations: Record<string, never>;
-    readonly storage: { readonly collection: 'orders' };
+    readonly storage: {
+      readonly collection: 'orders';
+      readonly fields: {
+        readonly _id: { readonly field: '_id' };
+        readonly status: { readonly field: 'status' };
+        readonly amount: { readonly field: 'amount' };
+      };
+    };
   };
 };
 
@@ -82,10 +89,11 @@ type PlanRow<P extends MongoQueryPlan> = P extends MongoQueryPlan<infer R> ? R :
 
 type OrderRow = { readonly _id: string; readonly status: string; readonly amount: number };
 
+declare const context: MongoExecutionContext<TContract>;
+
 describe('runtime type safety', () => {
   it('query() returns AsyncIterableResult<Row> where Row matches build() row type', () => {
-    const contractJson = {} as unknown;
-    const plan = mongoQuery<TContract>({ contractJson }).from('orders').build();
+    const plan = mongoQuery({ context }).from('orders').build();
     type Row = PlanRow<typeof plan>;
     expectTypeOf<Row>().toEqualTypeOf<OrderRow>();
 
@@ -95,20 +103,11 @@ describe('runtime type safety', () => {
   });
 
   it('query() result awaits to Row[]', () => {
-    const contractJson = {} as unknown;
-    const plan = mongoQuery<TContract>({ contractJson }).from('orders').build();
+    const plan = mongoQuery({ context }).from('orders').build();
     type Row = PlanRow<typeof plan>;
 
     const runtime = {} as MongoRuntime;
     const rows = runtime.query(plan).toArray();
     expectTypeOf(rows).resolves.toEqualTypeOf<Row[]>();
-  });
-
-  it('query() infers Row from MongoQueryPlan generic parameter', () => {
-    const runtime = {} as MongoRuntime;
-    const plan = {} as MongoQueryPlan<OrderRow>;
-    const result = runtime.query(plan);
-
-    expectTypeOf(result).toEqualTypeOf<AsyncIterableResult<OrderRow>>();
   });
 });

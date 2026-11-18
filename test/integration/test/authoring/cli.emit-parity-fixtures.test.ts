@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync } from 'node:fs';
-import type { ContractSourceContext, PrismaNextConfig } from '@internal/cli/config-types';
+import type { ContractSourceContext, PrismaConfig } from '@internal/cli/config-types';
 import { enrichContract } from '@internal/cli/control-api';
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import { loadConfig } from '@internal/config-loader';
@@ -46,7 +46,7 @@ function relativizeDiagnostics(
   }));
 }
 
-function sourceContextFromConfig(config: PrismaNextConfig): ContractSourceContext {
+function sourceContextFromConfig(config: PrismaConfig): ContractSourceContext {
   const stack = createControlStack({
     family: config.family,
     target: config.target,
@@ -61,6 +61,7 @@ function sourceContextFromConfig(config: PrismaNextConfig): ContractSourceContex
     codecLookup: stack.codecLookup,
     dataTypes: stack.dataTypes,
     controlMutationDefaults: stack.controlMutationDefaults,
+    generatorFunctions: stack.generatorFunctions,
     resolvedInputs: config.contract?.source.inputs ?? [],
     capabilities: stack.capabilities,
   };

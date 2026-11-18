@@ -81,15 +81,18 @@ Each link in the chain produces a precise downstream row type:
 
 ```ts
 import mongo from '@prisma/orm-mongo/runtime';
+import { contractFromJson } from '@prisma/orm-mongo/static';
 import contractJson from './contract.json' with { type: 'json' };
 import type { Contract } from './contract';
 
+export const contract = contractFromJson<Contract>(contractJson);
+
 export function createClient({ url, dbName }: { url: string; dbName?: string }) {
-  return mongo<Contract>({ contractJson, url, dbName });
+  return mongo({ contract, url, dbName });
 }
 ```
 
-> **The emitted `contract.d.ts` imports only from `@prisma/orm-mongo`**, including the codec generics it takes from `@prisma/orm-mongo/target/codec-types`. That matters under pnpm's strict hoisting: a generated file that named a package the application does not depend on directly would not resolve, and TypeScript would report `TS2307: Cannot find module`. The emitter picks its import root by reading this example's `package.json`, so the names it writes are always ones the example installed.
+> **The emitted `contract.d.ts` imports only from `@prisma/orm-mongo/contract-types`**, including the codec generics. That matters under pnpm's strict hoisting: a generated file that named a package the application does not depend on directly would not resolve, and TypeScript would report `TS2307: Cannot find module`. The emitter imports from the module the config names in `contract.typesModule`, which the `defineConfig` from `@prisma/orm-mongo/config` sets, so the names it writes come from the package the example installed.
 
 The returned `MongoClient` exposes:
 

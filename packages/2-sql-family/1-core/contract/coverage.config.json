@@ -1,0 +1,21 @@
+{
+  "include": ["src/**/*.ts"],
+  "exclude": [
+    "dist/**",
+    "test/**",
+    "**/*.test.ts",
+    "**/*.test-d.ts",
+    "**/*.config.ts",
+    "**/exports/**",
+    "**/types.ts",
+    "src/index.ts",
+    "src/pack-types.ts",
+    "src/index-type-validation.ts"
+  ],
+  "thresholds": {
+    "lines": 95,
+    "branches": 85,
+    "functions": 92,
+    "statements": 91
+  }
+}

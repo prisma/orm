@@ -4,7 +4,7 @@ import type { CodecTypes } from '@prisma/orm-postgres/target/codec-types';
 import type { ProfileHashBase, StorageHashBase } from '@prisma/orm-postgres/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'ffcb5620e06a06ea2c6dad025087d882406fe4c66a282dbda185b6d54638b155'>;
+  StorageHashBase<'8fe84ef30e8c9db2239923e644dd230639c7b97965a2d235dcc841806046ae34'>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
 type DefaultLiteralValue<CodecId extends string, _Encoded> = CodecId extends keyof CodecTypes
@@ -46,20 +46,12 @@ export type Contract = {
                   readonly nativeType: 'vector';
                   readonly codecId: 'pg/vector@1';
                   readonly nullable: true;
-                  readonly typeRef: 'Embedding3';
+                  readonly typeParams: { readonly length: 203 };
                 };
               };
             };
           };
         };
-      };
-    };
-    readonly types: {
-      readonly Embedding3: {
-        readonly kind: 'codec-instance';
-        readonly codecId: 'pg/vector@1';
-        readonly nativeType: 'vector';
-        readonly typeParams: { readonly length: 203 };
       };
     };
     readonly storageHash: StorageHash;

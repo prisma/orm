@@ -1,0 +1,60 @@
+[
+  {
+    "id": "schema.public",
+    "label": "Create schema \"public\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres"
+    },
+    "precheck": [],
+    "execute": [
+      {
+        "description": "Create schema \"public\"",
+        "sql": "CREATE SCHEMA IF NOT EXISTS \"public\"",
+        "params": []
+      }
+    ],
+    "postcheck": []
+  },
+  {
+    "id": "extension.vector",
+    "label": "Create extension \"vector\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "dependency",
+        "name": "vector"
+      }
+    },
+    "precheck": [
+      {
+        "description": "verify extension \"vector\" is not installed",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_extension\" WHERE \"extname\" = $1) AS \"result\"",
+        "params": ["vector"],
+        "expectation": {
+          "expects": "absent",
+          "object": "extension \"vector\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create extension \"vector\"",
+        "sql": "CREATE EXTENSION IF NOT EXISTS \"vector\" WITH SCHEMA \"public\""
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "confirm extension \"vector\" is installed",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_extension\" WHERE \"extname\" = $1) AS \"result\"",
+        "params": ["vector"],
+        "expectation": {
+          "expects": "present",
+          "object": "extension \"vector\""
+        }
+      }
+    ]
+  }
+]

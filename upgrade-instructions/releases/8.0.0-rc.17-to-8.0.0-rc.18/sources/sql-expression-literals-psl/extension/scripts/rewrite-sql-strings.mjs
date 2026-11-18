@@ -142,7 +142,7 @@ export function decodePslString(raw) {
   return out;
 }
 
-/** A `sql` literal holding `text`: the backtick form, or the double-quote form when the text holds a backtick. */
+/** A `sql` literal holding `text`: the backtick form, or the double-quote form when the text holds a backtick. A backtick body doubles a backslash only before another backslash or at its end, where it would be read as an escape. */
 export function printSqlLiteral(text) {
   if (text.includes('`')) {
     const escaped = text
@@ -152,7 +152,7 @@ export function printSqlLiteral(text) {
       .replace(/\r/g, '\\r');
     return `${TAG}"${escaped}"`;
   }
-  const fenced = text.replace(/\\/g, '\\\\');
+  const fenced = text.replace(/\\(?=\\|$)/g, '\\\\');
   return text.includes('\n') ? `${TAG}\`\n${fenced}\n\`` : `${TAG}\`${fenced}\``;
 }
 

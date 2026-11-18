@@ -1,3 +1,4 @@
+import { postgresAdapterCapabilities } from '@internal/adapter-postgres/adapter';
 import postgresAdapter from '@internal/adapter-postgres/runtime';
 import {
   domainModelsAtDefaultNamespace,
@@ -14,7 +15,14 @@ import type { RuntimeQueryable } from '@internal/sql-orm-client';
 import type { SelectAst, SqlStatementStats } from '@internal/sql-relational-core/ast';
 import type { SqlExecutionPlan, SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
-import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
+import type { RuntimeScope } from '@internal/sql-relational-core/types';
+import {
+  type ActivityHandle,
+  type ActivitySource,
+  activitySource,
+  createExecutionContext,
+  createSqlExecutionStack,
+} from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
 import type { Contract as ExecutionDefaultedTagsContract } from './fixtures/execution-defaulted-tags/generated/contract';
 import executionDefaultedTagsContractJson from './fixtures/execution-defaulted-tags/generated/contract.json' with {
@@ -105,17 +113,65 @@ function unboundDomainModels(raw: {
   >;
 }
 
-const testContext: ExecutionContext<TestContract> = createExecutionContext({
-  contract: baseTestContract,
-  stack: createSqlExecutionStack({
-    target: postgresTarget,
-    adapter: postgresAdapter,
-    extensions: [pgvectorRuntime],
-  }),
-});
+/** How the ORM loads includes: in one query (`'join'`), or with one query per relation (`'query'`). */
+export type IncludeStrategy = 'join' | 'query';
 
-export function getTestContext(): ExecutionContext<TestContract> {
-  return testContext;
+export const includeStrategies: readonly IncludeStrategy[] = ['join', 'query'];
+
+type CapabilityMatrix = Readonly<Record<string, Readonly<Record<string, boolean>>>>;
+
+const strategyCapabilities: Record<IncludeStrategy, Record<string, boolean>> = {
+  join: { jsonAgg: true, outerReferencesInDerivedTables: true, jsonAggWithoutTruncation: true },
+  query: { outerReferencesInDerivedTables: false, jsonAggWithoutTruncation: false },
+};
+
+/** The Postgres adapter reporting `reported`, and under `'query'` that the database cannot run the one-query include. */
+export function postgresAdapterFor(
+  strategy: IncludeStrategy,
+  reported: CapabilityMatrix = postgresAdapterCapabilities,
+): typeof postgresAdapter {
+  return {
+    ...postgresAdapter,
+    capabilities: {
+      ...reported,
+      sql: { ...reported['sql'], ...strategyCapabilities[strategy] },
+    },
+  };
+}
+
+const testContexts: Record<IncludeStrategy, ExecutionContext<TestContract>> = {
+  join: testContextFor('join'),
+  query: testContextFor('query'),
+};
+
+function testContextFor(strategy: IncludeStrategy): ExecutionContext<TestContract> {
+  return createExecutionContext({
+    contract: baseTestContract,
+    stack: createSqlExecutionStack({
+      target: postgresTarget,
+      adapter: postgresAdapterFor(strategy),
+      extensions: [pgvectorRuntime],
+    }),
+  });
+}
+
+export function getTestContext(strategy: IncludeStrategy = 'join'): ExecutionContext<TestContract> {
+  return testContexts[strategy];
+}
+
+/** A context for a contract a test built itself, whose capabilities the adapter reports, with the include strategy's. */
+export function contextFor<TContract extends FrameworkContract<SqlStorage>>(
+  contract: TContract,
+  strategy: IncludeStrategy,
+): ExecutionContext<TContract> {
+  return createExecutionContext({
+    contract,
+    stack: createSqlExecutionStack({
+      target: postgresTarget,
+      adapter: postgresAdapterFor(strategy, contract.capabilities),
+      extensions: [pgvectorRuntime],
+    }),
+  });
 }
 
 export type { PolyContract };
@@ -137,17 +193,26 @@ export function getExecutionDefaultedTagsContract(): ExecutionDefaultedTagsContr
 
 const polyTestContract = deserializePolyContract();
 
-const polyTestContext: ExecutionContext<PolyContract> = createExecutionContext({
-  contract: polyTestContract,
-  stack: createSqlExecutionStack({
-    target: postgresTarget,
-    adapter: postgresAdapter,
-    extensions: [pgvectorRuntime],
-  }),
-});
+function polyTestContextFor(strategy: IncludeStrategy): ExecutionContext<PolyContract> {
+  return createExecutionContext({
+    contract: polyTestContract,
+    stack: createSqlExecutionStack({
+      target: postgresTarget,
+      adapter: postgresAdapterFor(strategy),
+      extensions: [pgvectorRuntime],
+    }),
+  });
+}
 
-export function getPolyTestContext(): ExecutionContext<PolyContract> {
-  return polyTestContext;
+const polyTestContexts: Record<IncludeStrategy, ExecutionContext<PolyContract>> = {
+  join: polyTestContextFor('join'),
+  query: polyTestContextFor('query'),
+};
+
+export function getPolyTestContext(
+  strategy: IncludeStrategy = 'join',
+): ExecutionContext<PolyContract> {
+  return polyTestContexts[strategy];
 }
 
 export interface MockExecution {
@@ -315,12 +380,36 @@ export function buildStiPolyContract(): TestContract {
   return deserializeTestContract(raw);
 }
 
+/** An activity source for a test stub: each activity's handle sends its statements through `target` itself, and ends doing nothing. */
+export function stubActivitySource(target: RuntimeScope): ActivitySource {
+  const source: ActivitySource = {
+    async startActivity(start) {
+      const handle = Object.assign(Object.create(target), {
+        activity: {
+          id: 'stub-activity',
+          kind: start.kind,
+          contentHash: start.contentHash,
+          annotations: start.annotations ?? new Map(),
+        },
+        intercepted: undefined,
+        end: async () => {},
+        startActivity: source.startActivity,
+        planContentHash: source.planContentHash,
+        [activitySource]: source,
+      });
+      return handle as ActivityHandle<typeof start.kind>;
+    },
+    planContentHash: async () => 'stub-plan-hash',
+  };
+  return source;
+}
+
 export function createMockRuntime(): MockRuntime {
   const executions: MockExecution[] = [];
   let nextResults: Record<string, unknown>[][] = [];
   let nextStats: SqlStatementStats[] = [];
 
-  const runtime: MockRuntime = {
+  const base = {
     executions,
     setNextResults(results: Record<string, unknown>[][]) {
       nextResults = [...results];
@@ -350,6 +439,7 @@ export function createMockRuntime(): MockRuntime {
       return stats;
     },
   };
+  const runtime: MockRuntime = Object.assign(base, { [activitySource]: stubActivitySource(base) });
 
   return runtime;
 }

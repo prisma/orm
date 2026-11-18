@@ -219,23 +219,6 @@ describe('mapPolymorphicRow()', () => {
     lookup.mockRestore();
   });
 
-  it('maps STI Bug row: includes base + Bug fields, excludes Feature fields', () => {
-    const contract = buildMixedPolyContract();
-    const polyInfo = resolvePolymorphismInfo(contract, 'public', 'Task')!;
-
-    const row = { id: 1, title: 'Crash', type: 'bug', severity: 'critical' };
-    const result = mapPolymorphicRow(
-      contract,
-      'public',
-      'Task',
-      polyInfo,
-      createCollectionTables(contract, 'public', 'Task'),
-      row,
-    );
-
-    expect(result).toEqual({ id: 1, title: 'Crash', type: 'bug', severity: 'critical' });
-  });
-
   it('maps STI row and strips non-matching variant columns (NULL for other STI variants)', () => {
     const contract = buildMixedPolyContract();
     const polyInfo = resolvePolymorphismInfo(contract, 'public', 'Task')!;

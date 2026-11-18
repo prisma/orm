@@ -5,10 +5,11 @@ import {
   type Expression,
   toExpr,
 } from '@internal/sql-relational-core/expression';
-import type { CodecTypes } from '../types/codec-types';
-import type { QueryOperationTypes } from '../types/operation-types';
+import type { CodecTypes, ParameterizedOutputTypesForTypeParams } from '../types/codec-types';
+import type { QueryOperationTypes, QueryOperationTypesForCodecs } from '../types/operation-types';
 import { pgvectorAuthoringTypes } from './authoring';
 import { pgvectorDataTypes } from './data-types';
+import { moduleBase } from './module-base';
 import { pgvectorCodecRegistry } from './registry';
 
 const pgvectorTypeId = 'pg/vector@1' as const;
@@ -75,28 +76,26 @@ const pgvectorPackMetaBase = {
     codecTypes: {
       codecDescriptors: Array.from(pgvectorCodecRegistry.values()),
       import: {
-        package: '@internal/extension-pgvector/codec-types',
+        package: `${moduleBase}/codec-types`,
         named: 'CodecTypes',
         alias: 'PgVectorTypes',
       },
-      typeImports: [
-        {
-          package: '@internal/extension-pgvector/codec-types',
-          named: 'Vector',
-          alias: 'Vector',
-        },
-      ],
+      parameterizedOutputTypes: {
+        package: `${moduleBase}/codec-types`,
+        named: 'ParameterizedOutputTypesForTypeParams',
+        alias: 'PgVectorParameterizedOutputTypes',
+      },
     },
     operationTypes: {
       import: {
-        package: '@internal/extension-pgvector/operation-types',
+        package: `${moduleBase}/operation-types`,
         named: 'OperationTypes',
         alias: 'PgVectorOperationTypes',
       },
     },
     queryOperationTypes: {
       import: {
-        package: '@internal/extension-pgvector/operation-types',
+        package: `${moduleBase}/operation-types`,
         named: 'QueryOperationTypes',
         alias: 'PgVectorQueryOperationTypes',
       },
@@ -106,4 +105,6 @@ const pgvectorPackMetaBase = {
 
 export const pgvectorPackMeta: typeof pgvectorPackMetaBase & {
   readonly __codecTypes?: CodecTypes;
+  readonly __queryOperationTypes?: QueryOperationTypesForCodecs;
+  readonly __parameterizedOutputTypes?: ParameterizedOutputTypesForTypeParams;
 } = pgvectorPackMetaBase;

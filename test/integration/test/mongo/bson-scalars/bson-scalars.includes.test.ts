@@ -20,7 +20,7 @@ async function seed(mongoDb: Db): Promise<void> {
 }
 
 const decodedAuthor = {
-  _id: authorId.toHexString(),
+  id: authorId.toHexString(),
   karma: 9_007_199_254_740_993n,
   balance: '12.50',
   avatar: new Uint8Array([1, 2, 3]),
@@ -28,7 +28,7 @@ const decodedAuthor = {
   address: { zip: 2n ** 60n, city: null },
 };
 
-const decodedBook = { _id: bookId.toHexString(), title: 'Dune', authorId: authorId.toHexString() };
+const decodedBook = { id: bookId.toHexString(), title: 'Dune', authorId: authorId.toHexString() };
 
 describe('Mongo documents read through the ORM', () => {
   it(
@@ -43,12 +43,12 @@ describe('Mongo documents read through the ORM', () => {
           role: 'USER',
         });
 
-        const authors = await db.authors.orderBy({ _id: 1 }).all();
+        const authors = await db.authors.orderBy({ id: 1 }).all();
 
         expect(authors).toStrictEqual([
           decodedAuthor,
           {
-            _id: '65f0000000000000000000c2',
+            id: '65f0000000000000000000c2',
             karma: 0n,
             balance: '0',
             avatar: null,

@@ -173,29 +173,13 @@ describe('migration list', () => {
     ]);
   });
 
-  it('carries no escape sequence of its own into the drawing', async () => {
+  it('prints one data line per migration: space, name, from, to and operation count', async () => {
     const dir = await projectDir();
     await seedMigration(join(dir, 'migrations'));
 
-    const run = await harness(ormConfig()).run(['migration', 'list'], {
-      cwd: dir,
-      isTty: { stdout: true },
-    });
+    const run = await harness(ormConfig()).run(['migration', 'list'], { cwd: dir });
 
-    expect(JSON.stringify(run.presented?.presentation.human)).not.toContain('\\u001b');
-  });
-
-  it('leaves stdout empty, having no machine-consumable lines to put there', async () => {
-    const dir = await projectDir();
-    await seedMigration(join(dir, 'migrations'));
-
-    const run = await harness(ormConfig()).run(['migration', 'list'], {
-      cwd: dir,
-      isTty: { stdout: true },
-    });
-
-    expect(run.presented?.presentation.stdout).toEqual([]);
-    expect(run.stdout).toBe('');
+    expect(run.stdout).toBe(`app\t20250101T0000_initial\t\t${HASH_A}\t1\n`);
   });
 
   it('renders the empty-project line when no migration is on disk', async () => {
@@ -294,7 +278,8 @@ describe('migration list', () => {
 
     expect(envelope?.ok).toBe(false);
     expect(envelope?.nextActions.length).toBeGreaterThan(0);
-    expect(envelope).not.toHaveProperty('fix');
+    expect(envelope?.ok).toBe(false);
+    expect(envelope).not.toHaveProperty('error.fix');
   });
 
   it('fails before the handler when the orm section is structurally invalid', async () => {

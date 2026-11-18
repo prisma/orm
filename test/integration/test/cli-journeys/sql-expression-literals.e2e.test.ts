@@ -16,6 +16,7 @@ import stripAnsi from 'strip-ansi';
 import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
 import {
+  expectStrictVerifyIssues,
   type JourneyContext,
   planMigrationAndSelfEmit,
   runContractEmit,
@@ -108,11 +109,7 @@ withTempDir(({ createTempDir }) => {
 
         const emitInferred = await runContractEmit(ctx);
         expect(emitInferred.exitCode, `emit inferred\n${stripAnsi(emitInferred.stderr)}`).toBe(0);
-        const verifyInferred = await runDbVerify(ctx, ['--schema-only']);
-        expect(
-          verifyInferred.exitCode,
-          `verify inferred\n${stripAnsi(verifyInferred.stderr)}`,
-        ).toBe(0);
+        await expectStrictVerifyIssues(ctx, 'inferred sql literals');
 
         const reinfer = await runContractInfer(ctx);
         expect(reinfer.exitCode, `re-infer\n${stripAnsi(reinfer.stderr)}`).toBe(0);

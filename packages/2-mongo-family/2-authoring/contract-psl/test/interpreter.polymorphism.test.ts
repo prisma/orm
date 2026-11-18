@@ -7,13 +7,14 @@ function modelsOf(ir: Contract): Record<string, unknown> {
   return ir.domain.namespaces[UNBOUND_NAMESPACE_ID]!.models;
 }
 
+import { mongoCodecLookup } from '@internal/mongo-contract/test';
 import { describe, expect, it } from 'vitest';
-import { mongoCodecLookup, mongoDataTypeLookup } from './derive-json-schema-helpers';
 import {
   expectInvalidAttributeSyntax,
   expectUnresolvedReference,
   interpretMongoContract,
 } from './interpreter-test-helpers';
+import { mongoDataTypeSupport } from './mongo-type-lookups';
 
 const mongoScalarTypeDescriptors: ReadonlyMap<string, string> = new Map([
   ['String', 'mongo/string@1'],
@@ -35,10 +36,10 @@ function interpret(schema: string) {
   return interpretMongoContract(
     schema,
     {
-      scalarTypeCodecIds: mongoScalarTypeDescriptors,
+      scalarTypes: mongoScalarTypeDescriptors,
       defaultFunctionRegistry: new Map(),
       codecLookup: mongoCodecLookup,
-      dataTypes: { entries: {}, lookup: mongoDataTypeLookup },
+      dataTypes: mongoDataTypeSupport,
     },
     'test.prisma',
   );
@@ -69,12 +70,12 @@ describe('interpretPslDocumentToMongoContract — polymorphism', () => {
     expect(forward).toEqual(interpretOk(`${base}\n${variant}`));
     expect(modelsOf(forward)['Bug']).toEqual({
       fields: {
-        _id: {
+        id: {
           type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
           nullable: false,
           many: false,
         },
-        level: {
+        severity: {
           type: { kind: 'scalar', codecId: 'mongo/string@1' },
           nullable: false,
           many: false,
@@ -82,29 +83,36 @@ describe('interpretPslDocumentToMongoContract — polymorphism', () => {
       },
       relations: {},
       base: crossRef('Task', UNBOUND_NAMESPACE_ID),
-      storage: { collection: 'tasks' },
+      storage: {
+        collection: 'tasks',
+        fields: { id: { field: '_id' }, severity: { field: 'level' } },
+      },
     });
     expect(modelsOf(forward)['Task']).toEqual({
       fields: {
-        _id: {
+        id: {
           type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
           nullable: false,
           many: false,
         },
-        task_kind: {
+        kind: {
           type: { kind: 'scalar', codecId: 'mongo/string@1' },
           nullable: false,
           many: false,
         },
       },
       relations: {},
-      storage: { collection: 'tasks' },
-      discriminator: { field: 'task_kind' },
+      storage: {
+        collection: 'tasks',
+        fields: { id: { field: '_id' }, kind: { field: 'task_kind' } },
+      },
+      discriminator: { field: 'kind' },
       variants: { bug: crossRef('Bug', UNBOUND_NAMESPACE_ID) },
     });
     expect(forward.roots).toEqual({ tasks: crossRef('Task', UNBOUND_NAMESPACE_ID) });
     expect((mongoCollectionsOf(forward)['tasks'] as { indexes: unknown }).indexes).toEqual([
       new MongoIndex({
+        name: 'level_1',
         keys: [{ field: 'level', direction: 1 }],
         partialFilterExpression: { task_kind: 'bug' },
       }),
@@ -430,7 +438,7 @@ namespace scoped {
         expect.arrayContaining([
           expect.objectContaining({
             code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
-            message: expect.stringContaining('must be of type String'),
+            message: expect.stringContaining('must be text, such as String'),
           }),
         ]),
       );
@@ -462,20 +470,11 @@ namespace scoped {
         {
           code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
           message:
-            'Discriminator field "type" on model "Task" must be of type String, but is "String"',
+            'Discriminator field "type" on model "Task" must be text, such as String, but is "String"',
           sourceId: 'test.prisma',
           span: {
             start: { line: 10, column: 11, offset: 150 },
             end: { line: 10, column: 32, offset: 171 },
-          },
-        },
-        {
-          code: 'PSL_ORPHANED_BASE',
-          message: 'Model "Bug" declares @@base(Task, ...) but "Task" has no @@discriminator',
-          sourceId: 'test.prisma',
-          span: {
-            start: { line: 16, column: 11, offset: 239 },
-            end: { line: 16, column: 30, offset: 258 },
           },
         },
       ]);

@@ -10,7 +10,7 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import { TestSqlContractSerializer as SqlContractSerializer } from '../../../2-sql/9-family/test/test-sql-contract-serializer';
+import { TestSqlContractSerializer as SqlContractSerializer } from '../../../2-sql-family/9-family/test/test-sql-contract-serializer';
 import { createComposedPostgresAdapter } from './helpers/composed-adapter';
 
 describe('pgvector cast policy', () => {

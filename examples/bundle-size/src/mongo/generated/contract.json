@@ -25,7 +25,12 @@
             },
             "relations": {},
             "storage": {
-              "collection": "notes"
+              "collection": "notes",
+              "fields": {
+                "_id": {
+                  "field": "_id"
+                }
+              }
             }
           }
         }
@@ -38,7 +43,24 @@
         "entries": {
           "collection": {
             "notes": {
-              "kind": "mongo-collection"
+              "kind": "mongo-collection",
+              "validator": {
+                "jsonSchema": {
+                  "additionalProperties": false,
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    }
+                  },
+                  "required": [
+                    "_id"
+                  ]
+                },
+                "kind": "mongo-validator",
+                "validationAction": "error",
+                "validationLevel": "strict"
+              }
             }
           }
         },
@@ -46,7 +68,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "74fff8e95f646420795281e934862515bddddc940e545b9d725bf4b780bb7fd3"
+    "storageHash": "ceac2dfc4647f935db6a05cf4fdbcc7e699e715b5551b40ad9d33a5e8032acc4"
   },
   "capabilities": {},
   "extensions": {},

@@ -145,6 +145,8 @@ const MONOREPO_ROOT = findMonorepoRoot(CLI_ROOT);
  */
 const FIXTURE_APP_DIR = join(MONOREPO_ROOT, 'test/integration/test/fixtures/cli/cli-e2e-test-app');
 
+const CONFIG_TEMPLATE_DIR = join(FIXTURE_APP_DIR, 'fixtures/recordings');
+
 // --- Test utils (loaded dynamically to avoid adding deps to CLI package) ---
 
 interface DbClient {
@@ -374,7 +376,7 @@ function setupWorkspace(workspaceDir: string, contractFile: string, connStr: str
 
   copyFileSync(join(FIXTURES_DIR, contractFile), join(workspaceDir, 'contract.ts'));
 
-  const configTemplate = readFileSync(join(FIXTURES_DIR, 'prisma.config.ts'), 'utf-8');
+  const configTemplate = readFileSync(join(CONFIG_TEMPLATE_DIR, 'prisma.config.ts'), 'utf-8');
   writeFileSync(
     join(workspaceDir, 'prisma.config.ts'),
     configTemplate.replace('{{DB_URL}}', connStr),

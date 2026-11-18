@@ -62,9 +62,11 @@
         "postcheck": [
           {
             "description": "verify table \"alias\" exists",
-            "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+            "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3))) AS \"result\"",
             "params": [
-              "\"public\".\"alias\""
+              "\"public\".\"alias\"",
+              "r",
+              "p"
             ]
           }
         ]
@@ -101,9 +103,11 @@
         "postcheck": [
           {
             "description": "verify table \"list\" exists",
-            "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+            "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3))) AS \"result\"",
             "params": [
-              "\"public\".\"list\""
+              "\"public\".\"list\"",
+              "r",
+              "p"
             ]
           }
         ]
@@ -140,9 +144,11 @@
         "postcheck": [
           {
             "description": "verify table \"other_codec\" exists",
-            "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+            "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3))) AS \"result\"",
             "params": [
-              "\"public\".\"other_codec\""
+              "\"public\".\"other_codec\"",
+              "r",
+              "p"
             ]
           }
         ]
@@ -179,9 +185,11 @@
         "postcheck": [
           {
             "description": "verify table \"scalar\" exists",
-            "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+            "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3))) AS \"result\"",
             "params": [
-              "\"public\".\"scalar\""
+              "\"public\".\"scalar\"",
+              "r",
+              "p"
             ]
           }
         ]

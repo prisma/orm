@@ -10,6 +10,7 @@ import { Collection } from '../src/collection';
 import { createPreparedRowQuery } from '../src/prepared-row-query';
 import { createCollectionFor } from './collection-fixtures';
 import { buildStiPolyContract, createMockRuntime, getTestContext, isSelectAst } from './helpers';
+import { createActivityCollectionFor, fakePlanHash, ormCallHash } from './orm-call-fixtures';
 
 function source<Row>(rows: Row[]) {
   return new AsyncIterableResult(
@@ -17,6 +18,22 @@ function source<Row>(rows: Row[]) {
       yield* rows;
     })(),
   );
+}
+
+function preparedStatementOf(
+  description: Preparable<Record<string, unknown>, unknown>,
+  targets: unknown[],
+): PreparedStatement<{ id: number }, Record<string, unknown>> {
+  return {
+    sql: 'select rows',
+    ast: description.plan.ast,
+    meta: description.plan.meta,
+    slots: [],
+    query: (target, params) => {
+      targets.push(target);
+      return source([{ user_id: params.id }]);
+    },
+  };
 }
 
 function prepareRows<Result>(
@@ -39,27 +56,56 @@ const annotation = defineAnnotation<{ label: string }>()({
 });
 
 describe('prepared collection', () => {
-  it('preserves all and first annotations without changing the source or ordinary terminals', async () => {
-    const { collection, runtime } = createCollectionFor('Post');
+  it('puts all and first annotations on the call of each execution, not on the plan or the source', async () => {
+    const { collection, runtime, calls, hashed } = createActivityCollectionFor('Post');
     const selected = collection.where({ id: 7 }).select('userId').limit(99);
     const configure = (meta: MetaBuilder<'read'>) =>
       meta.annotate(annotation({ label: 'prepared' }));
     const all = selected.prepared.all(configure);
     const first = selected.prepared.first(undefined, configure);
-    expect(annotation.read(all.plan)).toEqual({ label: 'prepared' });
-    expect(annotation.read(first.plan)).toEqual({ label: 'prepared' });
-    expect(annotation.read(selected.prepared.all().plan)).toBeUndefined();
-    runtime.setNextResults([[{ user_id: 2 }], [{ user_id: 3 }]]);
-    expect(await selected.all(configure)).toEqual([{ userId: 2 }]);
-    expect(await selected.first(undefined, configure)).toEqual({ userId: 3 });
-    expect(runtime.executions.map(({ plan }) => annotation.read(plan))).toEqual([
-      { label: 'prepared' },
-      { label: 'prepared' },
+    const targets: unknown[] = [];
+    const statements = {
+      all: preparedStatementOf(all, targets),
+      first: preparedStatementOf(first, targets),
+    };
+    const preparedAll = createPreparedRowQuery(all, statements.all);
+    const preparedFirst = createPreparedRowQuery(first, statements.first);
+
+    expect(await preparedAll.query(runtime, { id: 1 })).toEqual([{ userId: 1 }]);
+    expect(await preparedFirst.query(runtime, { id: 2 })).toEqual({ userId: 2 });
+
+    expect(await Promise.all(calls.map(({ activity }) => activity.contentHash()))).toEqual([
+      await ormCallHash('all', fakePlanHash),
+      await ormCallHash('first', fakePlanHash),
     ]);
-    expect(runtime.executions.map(({ plan }) => plan.params)).toEqual([
-      all.plan.params,
-      first.plan.params,
-    ]);
+    expect({
+      plans: [annotation.read(all.plan), annotation.read(first.plan)],
+      calls: calls.map(({ activity, ended }) => ({
+        kind: activity.kind,
+        annotation: annotation.read(activity),
+        ended,
+      })),
+      hashed,
+    }).toEqual({
+      plans: [undefined, undefined],
+      calls: [
+        {
+          kind: 'orm-call',
+          annotation: { label: 'prepared' },
+          ended: { outcome: 'succeeded', result: [{ userId: 1 }] },
+        },
+        {
+          kind: 'orm-call',
+          annotation: { label: 'prepared' },
+          ended: { outcome: 'succeeded', result: { userId: 2 } },
+        },
+      ],
+      hashed: [
+        { statement: statements.all, params: { id: 1 } },
+        { statement: statements.first, params: { id: 2 } },
+      ],
+    });
+    expect(targets.map((target) => target === runtime)).toEqual([false, false]);
     expect(selected.state.limit).toBe(99);
   });
 
@@ -143,9 +189,9 @@ describe('prepared collection', () => {
       selected.prepared.first({ id: 7 }).plan,
     );
     expect(selected.prepared.firstOrThrow((post) => post.id.eq(7)).plan.params).toEqual([7]);
-    expect(annotation.read(selected.prepared.firstOrThrow(undefined, configure).plan)).toEqual({
-      label: 'prepared',
-    });
+    expect(
+      annotation.read(selected.prepared.firstOrThrow(undefined, configure).plan),
+    ).toBeUndefined();
     expect(await described.consume(source([{ user_id: 2 }, { user_id: 3 }]))).toEqual({
       userId: 2,
     });
@@ -232,7 +278,11 @@ describe('prepared collection', () => {
       break;
     }
     expect(events).toEqual(['row', 'closed']);
-    expect(query).toHaveBeenCalledWith(runtime, { id: 1 }, options);
+    expect(query).toHaveBeenCalledWith(
+      expect.objectContaining({ activity: expect.objectContaining({ kind: 'orm-call' }) }),
+      { id: 1 },
+      options,
+    );
     expect(await prepared.query(runtime, { id: 10 })).toEqual([{ userId: 10 }, { userId: 11 }]);
     const preparedFirst = createPreparedRowQuery(
       collection.select('userId').prepared.first(),

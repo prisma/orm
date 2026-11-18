@@ -1,10 +1,10 @@
 import type {
+  Activity,
   ActivityContext,
   ActivityEndedResult,
   ActivityFinalizedResult,
   ExecuteInterceptResult,
   QueryInterceptResult,
-  RuntimeActivity,
   RuntimeMiddleware,
 } from '@internal/framework-components/runtime';
 import type { MongoExecutionPlan } from './mongo-execution-plan';
@@ -28,14 +28,14 @@ export interface MongoMiddlewareContext extends ActivityContext {
 export interface MongoMiddleware
   extends RuntimeMiddleware<MongoExecutionPlan, MongoParamRefMutator> {
   readonly familyId?: 'mongo';
-  activityStarted?(activity: RuntimeActivity, ctx: MongoMiddlewareContext): Promise<void>;
+  activityStarted?(activity: Activity, ctx: MongoMiddlewareContext): Promise<void>;
   activityEnded?(
-    activity: RuntimeActivity,
+    activity: Activity,
     result: ActivityEndedResult,
     ctx: MongoMiddlewareContext,
   ): Promise<void>;
   activityFinalized?(
-    activity: RuntimeActivity,
+    activity: Activity,
     result: ActivityFinalizedResult,
     ctx: MongoMiddlewareContext,
   ): Promise<void>;

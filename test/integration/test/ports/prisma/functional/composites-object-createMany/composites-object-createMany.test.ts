@@ -46,46 +46,11 @@ describe('ports/prisma/functional/composites/object/createMany', () => {
       timeouts.spinUpMongoMemoryServer,
     );
 
-    it(
-      'set shorthand (same as set for ORM — no prisma set wrapper)',
-      () =>
-        withComposites(async ({ db }) => {
-          const count = await db.comments_required.createAndCount([
-            {
-              country: 'France',
-              content: {
-                text: 'Hello World',
-                upvotes: [{ vote: true, userId: '10' }],
-              },
-            },
-          ]);
-
-          expect(count).toEqual(1);
-        }),
-      timeouts.spinUpMongoMemoryServer,
-    );
-
     // Upstream asserts null on required `content` is BOTH a type error and a
     // runtime throw. Prisma 8 rejects it at the type level (@ts-expect-error
     // holds), and MongoDB rejects it through the provisioned collection validator.
     it(
       'set null',
-      () =>
-        withComposites(async ({ db }) => {
-          const result = db.comments_required.createAndCount([
-            {
-              country: 'France',
-              // @ts-expect-error required `content` cannot be null
-              content: null,
-            },
-          ]);
-          await expect(result).rejects.toThrow();
-        }),
-      timeouts.spinUpMongoMemoryServer,
-    );
-
-    it(
-      'set null shorthand',
       () =>
         withComposites(async ({ db }) => {
           const result = db.comments_required.createAndCount([
@@ -126,22 +91,6 @@ describe('ports/prisma/functional/composites/object/createMany', () => {
   describe('optional content', () => {
     it(
       'set null',
-      () =>
-        withComposites(async ({ db }) => {
-          const count = await db.comments_optional.createAndCount([
-            {
-              country: 'France',
-              content: null,
-            },
-          ]);
-
-          expect(count).toEqual(1);
-        }),
-      timeouts.spinUpMongoMemoryServer,
-    );
-
-    it(
-      'set null shorthand (content omitted)',
       () =>
         withComposites(async ({ db }) => {
           const count = await db.comments_optional.createAndCount([

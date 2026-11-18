@@ -337,46 +337,4 @@ describe('generic extension-block printer', () => {
       expect(output).toContain('shape_square Boxy {');
     });
   });
-
-  describe('built-in print round-trip', () => {
-    it('prints a model with @id field unchanged', () => {
-      const models: PslModel[] = [
-        {
-          kind: 'model',
-          name: 'Post',
-          fields: [
-            {
-              kind: 'field',
-              name: 'id',
-              typeName: 'Int',
-              optional: false,
-              list: false,
-              attributes: [
-                {
-                  kind: 'attribute',
-                  target: 'field',
-                  name: 'id',
-                  args: [],
-                  span: STUB_SPAN,
-                },
-              ],
-              span: STUB_SPAN,
-            },
-          ],
-          attributes: [],
-          span: STUB_SPAN,
-        },
-      ];
-      const ast = {
-        kind: 'document' as const,
-        sourceId: 'test',
-        namespaces: [makeNs(models, [])],
-        span: STUB_SPAN,
-      };
-
-      const output = printPslFromAst(ast);
-      expect(output).toContain('model Post {');
-      expect(output).toContain('id Int @id');
-    });
-  });
 });

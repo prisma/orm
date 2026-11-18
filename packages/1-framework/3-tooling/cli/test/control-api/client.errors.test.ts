@@ -11,6 +11,8 @@ import { isStructuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
 import { createControlClient } from '../../src/control-api/client';
 
+const TEST_INVOCATION = { cwd: '/work/app', configPath: undefined, dbGiven: false };
+
 function createMockComponents(overrides?: { deserializeContract?: (json: unknown) => Contract }) {
   const mockDriver = {
     close: async () => {},
@@ -128,6 +130,7 @@ describe('ControlClient structured error codes', () => {
     });
     const error = await capture(() =>
       client.dbInit({
+        invocation: TEST_INVOCATION,
         contract: {},
         mode: 'plan',
         migrationsDir: '/tmp/does-not-matter',

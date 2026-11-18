@@ -8,11 +8,12 @@ import type {
   AuthoringTypeConstructorDescriptor,
   DataTypeSupport,
 } from '@internal/framework-components/authoring';
+import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import {
-  type CodecLookupWithDescriptors,
-  emptyCodecLookup,
-} from '@internal/framework-components/codec';
-import { EMPTY_DATA_TYPES } from '@internal/psl-parser';
+  EMPTY_GENERATOR_FUNCTIONS,
+  type GeneratorFunctionRegistry,
+} from '@internal/framework-components/components';
+import { mongoCodecLookup } from '@internal/mongo-contract/test';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema } from '@internal/psl-parser/test';
 import type { Result } from '@internal/utils/result';
@@ -25,13 +26,24 @@ import {
   mongoAttributeSpecs,
 } from '../src/mongo-attribute-specs';
 import { mongoContextInput } from '../src/test';
+import { mongoDataTypeSupport } from './mongo-type-lookups';
 
 type InterpretOptionsWithDefaultLookups = Omit<
   InterpretPslDocumentToMongoContractInput,
-  'documents' | 'sources' | 'symbolTable' | 'binder' | 'codecLookup' | 'dataTypes'
+  | 'documents'
+  | 'sources'
+  | 'symbolTable'
+  | 'binder'
+  | 'codecLookup'
+  | 'dataTypes'
+  | 'generatorFunctions'
+  | 'target'
 > & {
+  /** Scalar type names and the codec each stores, contributed as type constructors. */
+  readonly scalarTypes?: ReadonlyMap<string, string>;
   readonly codecLookup?: CodecLookupWithDescriptors;
   readonly dataTypes?: DataTypeSupport;
+  readonly generatorFunctions?: GeneratorFunctionRegistry;
 };
 
 function contextForInterpretOptions(
@@ -39,7 +51,7 @@ function contextForInterpretOptions(
 ): ContractSourceContext {
   const authoring = options.authoringContributions;
   const scalarsFromCodecIds: Record<string, AuthoringTypeConstructorDescriptor> = {};
-  for (const [name, codecId] of options.scalarTypeCodecIds ?? []) {
+  for (const [name, codecId] of options.scalarTypes ?? []) {
     scalarsFromCodecIds[name] = {
       kind: 'typeConstructor',
       output: { codecId },
@@ -51,7 +63,6 @@ function contextForInterpretOptions(
     composedExtensionContracts: new Map(),
     authoringContributions: {
       type: { ...scalarsFromCodecIds, ...authoring?.type },
-      field: authoring?.field ?? {},
       entityTypes: authoring?.entityTypes ?? {},
       pslBlockDescriptors: authoring?.pslBlockDescriptors ?? {},
       modelAttributes: authoring?.modelAttributes ?? {},
@@ -62,12 +73,13 @@ function contextForInterpretOptions(
       describeUnsupportedAttribute: describeUnsupportedMongoAttribute,
       describeUnresolvedType: describeUnresolvedMongoType,
     },
-    codecLookup: options.codecLookup ?? { ...emptyCodecLookup, descriptorFor: () => undefined },
-    dataTypes: options.dataTypes ?? EMPTY_DATA_TYPES,
+    codecLookup: options.codecLookup ?? mongoCodecLookup,
+    dataTypes: options.dataTypes ?? mongoDataTypeSupport,
     controlMutationDefaults: {
       defaultFunctionRegistry: options.defaultFunctionRegistry,
       generatorDescriptors: [],
     },
+    generatorFunctions: options.generatorFunctions ?? EMPTY_GENERATOR_FUNCTIONS,
     resolvedInputs: [],
     capabilities: {},
     ...(options.reportWarning ? { reportWarning: options.reportWarning } : {}),
@@ -88,6 +100,7 @@ export function interpretMongoContract(
       binder: bound.binder,
       ...mongoContextInput(bound.context),
       ...(options.enumInferenceCodecs ? { enumInferenceCodecs: options.enumInferenceCodecs } : {}),
+      ...(options.extensionPacks ? { extensionPacks: options.extensionPacks } : {}),
     }),
     bound.seedDiagnostics,
   );

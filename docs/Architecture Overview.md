@@ -175,7 +175,7 @@ sequenceDiagram
 
 Notes
 - Family vs Target: “Target‑family” (SQL) applies to any SQL dialect; “target” is a concrete dialect (Postgres, MySQL). Family code lives in the SQL domain; dialect code lives in Extensions.
-- Repository layout: concrete targets (dialects), adapters, and drivers live under `packages/3-targets/**`. Adapters commonly expose multiple entrypoints from a single package — `./adapter` (shared core), `./control` (migration), `./runtime` (runtime) — mapped to planes via subpath globs in `architecture.config.json`.
+- Repository layout: each database's target, adapter, driver and facade live together in `packages/3-targets/<db>/` (ADR 278). Adapters commonly expose multiple entrypoints from a single package — `./adapter` (shared core), `./control` (migration), `./runtime` (runtime) — mapped to planes via subpath globs in `architecture.config.json`.
 - Plane boundaries: Shared plane hosts type‑only code and validators safe for both planes. Migration and Runtime must not import code across planes; runtime consumes artifacts and shared‑plane types only.
 ## Execution Plane — Runtime Assertions
 
@@ -284,22 +284,22 @@ packages/
     3-tooling/
       cli/               # framework CLI (config-only, family-agnostic)
       emitter/           # contract emitter with family hooks
-  2-sql/                 # Domain 2: SQL family
+  2-sql-family/          # Domain 2: SQL family
     1-core/
       contract/          # SQL contract types (shared plane)
       operations/        # SQL operation types (shared plane)
       schema-ir/         # SQL schema IR types
     2-authoring/
+      contract-psl/      # SQL PSL interpretation
       contract-ts/       # SQL TS authoring surface
+      contract-prisma7/  # reads a Prisma 7 schema as a contract source
     3-tooling/
       emitter/           # SQL emitter hook
-      family/            # SQL family descriptor and helpers
     4-lanes/
-      relational-core/   # schema + column builders, operation attachment
-      sql-lane/          # relational DSL + raw lane
-      orm-lane/          # ORM builder, includes, relation filters
-      query-builder/     # query builder lane
+      relational-core/   # AST, column builders, operation attachment
+      sql-builder/       # SQL query builder + raw lane
     5-runtime/           # SQL runtime extending RuntimeCore from framework-components
+    9-family/            # SQL family descriptor and helpers
   2-mongo-family/        # Domain 2: Mongo family
     1-foundation/
       mongo-contract/    # Mongo contract types + validation
@@ -318,22 +318,20 @@ packages/
       mongo-wire/        # wire commands and result types
     7-runtime/           # Mongo runtime extending RuntimeCore from framework-components
     9-family/            # Mongo family descriptor and family pack
-  3-mongo-target/        # Domain 3: Mongo target packages
-    1-mongo-target/      # Mongo target pack
-    2-mongo-adapter/     # Mongo adapter
-    3-mongo-driver/      # Mongo driver
-  3-targets/             # Domain 3: Targets
-    3-targets/
-      postgres/          # Postgres target descriptor
-    6-adapters/
-      postgres/          # Postgres adapter (multi-plane: shared, migration, runtime)
-    7-drivers/
-      postgres/          # Postgres driver
+  3-targets/             # Domain 3: Targets, one folder per database
+    postgres/
+      1-target/          # Postgres target pack
+      2-adapter/         # Postgres adapter (multi-plane: shared, migration, runtime)
+      3-driver/          # Postgres driver
+      4-codec-testkit/   # Postgres codec test harness
+      9-facade/          # Postgres facade, the source of @prisma/orm-postgres
+    sqlite/              # the same shape
+    mongo/               # 1-target, 2-adapter, 3-driver, 9-facade
   3-extensions/          # Domain 3: Extensions
     pgvector/            # pgvector extension pack
 ```
 
-`packages/3-targets/**` remains the canonical generic target domain for dialect-scoped target, adapter, and driver packages such as Postgres. `packages/3-mongo-target/**` is the Mongo-specific counterpart under the same broader target concept, and contributors should keep following the repo's `{domain}/{subdomain}` naming pattern when adding new package groups.
+Every database, whatever its family, gets one folder under `packages/3-targets/`, numbered by dependency order inside: the adapter imports the target, the facade imports the target, adapter and driver, and the driver imports none of them. A new database adds one folder. Extension packs stay in `packages/3-extensions/`. See [ADR 278](architecture%20docs/adrs/ADR%20278%20-%20Each%20database's%20packages%20live%20in%20one%20folder.md).
 
 Dependency direction is strictly one-way: `core → authoring → tooling → lanes → runtime → adapters`. Numbered prefixes reinforce the hierarchy: lower numbers can be imported by higher numbers, never the reverse. Enforce with Dependency Cruiser using data-driven configuration from `architecture.config.json`.
 

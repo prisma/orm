@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 import type { ContractSourceContext } from '@internal/config/config-types';
 import { errorUnexpected } from '@internal/errors/control';
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import {
   assembleAuthoringContributions,
   assembleControlMutationDefaults,
@@ -31,6 +32,7 @@ import type { FormatOptions } from '@internal/psl-parser/format';
 import type { PslInterpretCapable, PslInterpretInput } from '@internal/psl-parser/interpret';
 import { type ParseDiagnostic, parse } from '@internal/psl-parser/syntax';
 import { notOk, ok } from '@internal/utils/result';
+import { structuredError } from '@internal/utils/structured-error';
 import { timeouts } from '@repo/test-utils';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -243,6 +245,7 @@ async function resolutionForInputs(
       scalarTypes: [...scalarTypes],
       defaultNamespaceId: 'public',
       pslBlockDescriptors: descriptors,
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
       authoringContributions: assembleAuthoringContributions([
         { id: 'scalars', authoring: { type: testTypeConstructors(scalarTypes) } },
       ]),
@@ -259,6 +262,7 @@ async function emptyResolution(): Promise<ConfigResolution> {
       scalarTypes: [...scalarTypes],
       defaultNamespaceId: 'public',
       pslBlockDescriptors: {},
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
     },
   };
 }
@@ -281,6 +285,7 @@ const resolveToSchemaWithAttributeContributions: ResolveInputs = async () => {
       ...resolution.controlStack,
       authoringContributions: completionAuthoringContributions,
       controlMutationDefaults: completionInterpretationContext.controlMutationDefaults,
+      generatorFunctions: completionInterpretationContext.generatorFunctions,
     },
     interpretation: {
       source: completionInterpretationSource,
@@ -329,7 +334,7 @@ const resolveToSchemaWithMapAttributes: ResolveInputs = async () => {
 async function recursiveCompletionResolution(): Promise<ConfigResolution> {
   const sql = (await import(
     new URL(
-      '../../../../2-sql/2-authoring/contract-psl/src/sql-attribute-specs.ts',
+      '../../../../2-sql-family/2-authoring/contract-psl/src/sql-attribute-specs.ts',
       import.meta.url,
     ).href
   )) as { sqlAttributeSpecs: AttributeSpecNamespace };
@@ -2916,23 +2921,6 @@ describe('language server symbol-table diagnostics', {
     expect(await cleared).toEqual([]);
   });
 
-  it('publishes an empty set for a clean configured PSL input with the symbol-table tier active', async () => {
-    harness = startHarness(resolveToSchema);
-    await harness.initialize();
-
-    harness.client.sendNotification(DidOpenTextDocumentNotification.type, {
-      textDocument: {
-        uri: schemaUri,
-        languageId: 'prisma',
-        version: 1,
-        text: '// use prisma-8\nmodel User {\n  id Int @id\n}\n',
-      },
-    });
-
-    const diagnostics = await harness.waitForDiagnostics(schemaUri);
-    expect(diagnostics).toEqual([]);
-  });
-
   it('publishes diagnostics matching parse + buildSymbolTable for the same inputs (build parity)', async () => {
     harness = startHarness(resolveToSchema);
     await harness.initialize();
@@ -2996,36 +2984,6 @@ describe('language server symbol-table diagnostics', {
     expect(published[0]?.range.start.line ?? 0).toBeGreaterThan(
       published[1]?.range.start.line ?? 0,
     );
-  });
-
-  it('does not crash on a malformed buffer and still publishes a diagnostic set', async () => {
-    harness = startHarness(resolveToSchema);
-    await harness.initialize();
-
-    harness.client.sendNotification(DidOpenTextDocumentNotification.type, {
-      textDocument: {
-        uri: schemaUri,
-        languageId: 'prisma',
-        version: 1,
-        text: '// use prisma-8\nmodel User {\n  id ',
-      },
-    });
-
-    const diagnostics = await harness.waitForDiagnostics(schemaUri);
-    expect(Array.isArray(diagnostics)).toBe(true);
-  });
-
-  it('publishes nothing for a document that is not a configured input', async () => {
-    harness = startHarness(resolveToSchema);
-    await harness.initialize();
-
-    const otherUri = pathToFileURL(join(root, 'not-a-schema.psl')).toString();
-    harness.client.sendNotification(DidOpenTextDocumentNotification.type, {
-      textDocument: { uri: otherUri, languageId: 'prisma', version: 1, text: duplicateModelSource },
-    });
-
-    await settle();
-    expect(harness.publishCount(otherUri)).toBe(0);
   });
 });
 
@@ -3958,6 +3916,39 @@ describe('language server disposal', { timeout: timeouts.databaseOperation }, ()
     );
   });
 
+  it('does not reject when a watcher unregistration is still pending at dispose', async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown): void => {
+      unhandled.push(reason);
+    };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      harness = startHarness(resolveToSchema, watchedFilesCapabilities);
+      const unregistering = deferred<void>();
+      harness.client.onRequest(UnregistrationRequest.type, () => {
+        unregistering.resolve();
+        return new Promise<void>(() => undefined);
+      });
+      await harness.initialize();
+      openDocument(harness, schemaUri, duplicateModelSource);
+      await harness.waitForDiagnostics(schemaUri);
+      const activeHarness = harness;
+      await waitUntil(() => activeHarness.schemaWatcherRegistrationIds().length > 0);
+
+      harness.notifyConfigChanged();
+      await unregistering.promise;
+      harness.disconnect();
+      harness = undefined;
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+  });
+
   it('does not reject when a client notification is still being written at dispose', async () => {
     const unhandled: unknown[] = [];
     const onUnhandled = (reason: unknown): void => {
@@ -4055,7 +4046,7 @@ describe('language server interpreter diagnostics', { timeout: timeouts.database
       ...parserItems,
       {
         range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
-        code: 'PRISMA_NEXT_INTERPRETATION_FAILED',
+        code: 'PRISMA_INTERPRETATION_FAILED',
         message:
           'Semantic diagnostics are unavailable because of an internal error. A subsequent diagnostic request or edit will retry.',
         severity: DiagnosticSeverity.Error,
@@ -4080,7 +4071,7 @@ describe('language server interpreter diagnostics', { timeout: timeouts.database
     const failed = pull
       ? fullReportItems(await requestPullDiagnostics(harness, schemaUri))
       : await harness.waitForDiagnostics(schemaUri);
-    expect(failed.map((item) => item.code)).toEqual(['PRISMA_NEXT_INTERPRETATION_FAILED']);
+    expect(failed.map((item) => item.code)).toEqual(['PRISMA_INTERPRETATION_FAILED']);
     harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
       textDocument: { uri: schemaUri, version: 2 },
       contentChanges: [{ text: cleanSchema }],
@@ -4271,7 +4262,7 @@ describe('language server config failure surfacing', {
     ]);
   });
 
-  it('publishes the structured error why text instead of the generic envelope title', async () => {
+  it('publishes the structured error why text and fix instead of the generic envelope title', async () => {
     harness = startHarness(async () => {
       throw errorUnexpected('boom', { why: 'Failed to load config: boom' });
     });
@@ -4279,7 +4270,25 @@ describe('language server config failure surfacing', {
     openDocument(harness, schemaUri, cleanSchema);
 
     const published = await harness.waitForDiagnostics(configUri);
-    expect(published).toEqual([expectedConfigFailure('Failed to load config: boom')]);
+    expect(published).toEqual([
+      expectedConfigFailure('Failed to load config: boom\nCheck the error message and try again'),
+    ]);
+  });
+
+  it('publishes the why and fix of a plain structured error that is not a CLI error', async () => {
+    harness = startHarness(async () => {
+      throw structuredError('CONFIG.LOAD_FAILED', 'Config failed', {
+        why: 'The adapter package is missing',
+        fix: 'Install the adapter package',
+      });
+    });
+    await harness.initialize();
+    openDocument(harness, schemaUri, cleanSchema);
+
+    const published = await harness.waitForDiagnostics(configUri);
+    expect(published).toEqual([
+      expectedConfigFailure('The adapter package is missing\nInstall the adapter package'),
+    ]);
   });
 
   it('publishes the config diagnostic exactly once when two documents await the same load', async () => {

@@ -634,7 +634,7 @@ describe('createModelAccessor', () => {
     ).toThrow(unmappedColumnPassed('User', 'users', 'name'));
   });
 
-  it('combines relation shorthand fields with and() and rejects missing join arrays', () => {
+  it('combines relation shorthand fields with and()', () => {
     const accessor = createModelAccessor(
       context,
       'public',
@@ -652,32 +652,6 @@ describe('createModelAccessor', () => {
         ]),
       ]),
     );
-
-    const base = getTestContract();
-    const contractWithoutJoinArrays = withPatchedDomainModels(base, (models) => ({
-      ...models,
-      User: {
-        ...(models['User'] as Record<string, unknown>),
-        relations: {
-          posts: {
-            to: { model: 'Post', namespace: 'public' },
-            cardinality: '1:N',
-            on: { localFields: [], targetFields: [] },
-          },
-        },
-      },
-    }));
-
-    expect(() =>
-      (
-        createModelAccessor(
-          { ...context, contract: contractWithoutJoinArrays } as never,
-          'public',
-          'User',
-          createCollectionTables(contractWithoutJoinArrays, 'public', 'User'),
-        ) as unknown as Record<string, { some: () => unknown }>
-      )['posts']!.some(),
-    ).toThrow(/missing join columns/);
   });
 
   describe('runtime trait-gating', () => {

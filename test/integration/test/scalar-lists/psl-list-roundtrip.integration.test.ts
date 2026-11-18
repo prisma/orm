@@ -147,7 +147,7 @@ describe('PSL scalar-list end-to-end', { concurrent: false }, () => {
       const driver = await postgresControlDriver.create(database.connectionString);
       try {
         const schemaIR = await familyInstance.introspect({ driver });
-        const inferredAst = familyInstance.inferPslContract(schemaIR);
+        const inferredAst = await familyInstance.inferPslContract(schemaIR);
         const models = flatPslModels(inferredAst);
         const postModel = models.find((model) =>
           model.fields.some((field) => field.name === 'tags'),
@@ -173,12 +173,12 @@ describe('PSL scalar-list end-to-end', { concurrent: false }, () => {
       if (!database) throw new Error('database not initialised');
 
       const authored = await authorSqlContractFromPsl(`types {
-  Amount = Numeric(30, 10)
+  Amount = NumericString(30, 10)
 }
 
 model Reading {
   id       Int        @id
-  dates    DateTime[]
+  dates    TimestamptzTemporal[]
   payloads Bytes[]
   amounts  Amount[]
 }`);

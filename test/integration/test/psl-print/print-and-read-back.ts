@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import postgresAdapter from '@internal/adapter-postgres/control';
 import type { ContractSourceContext } from '@internal/config/config-types';
+import { canonicalizeContractToObject } from '@internal/contract/hashing';
 import type { Contract } from '@internal/contract/types';
 import postgresDriver from '@internal/driver-postgres/control';
 import sql from '@internal/family-sql/control';
@@ -13,6 +14,7 @@ import {
   type PslSourceSettings,
 } from '@internal/framework-components/control';
 import { printPsl } from '@internal/psl-printer';
+import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import { PG_INT_CODEC_ID, PG_TEXT_CODEC_ID } from '@internal/target-postgres/codec-ids';
@@ -71,6 +73,7 @@ export function sourceContext(
     codecLookup: stack.codecLookup,
     dataTypes: stack.dataTypes,
     controlMutationDefaults: stack.controlMutationDefaults,
+    generatorFunctions: stack.generatorFunctions,
     resolvedInputs,
     capabilities: stack.capabilities,
   };
@@ -125,10 +128,16 @@ export function printAndReadBack(
   return readPsl(text, { ...options, sourceSettings });
 }
 
-/** The serialized contract without `capabilities`, which the composed stack reports rather than the source. */
+/** The contract in the canonical form `contract emit` writes, without `capabilities`, which the composed stack reports rather than the source. */
 export function serializedWithoutCapabilities(contract: Contract<SqlStorage>): unknown {
+  const serializer = new PostgresContractSerializer();
   const { capabilities: _, ...authored } = JSON.parse(
-    JSON.stringify(new PostgresContractSerializer().serializeContract(contract)),
+    JSON.stringify(
+      canonicalizeContractToObject(contract, {
+        serializeContract: () => serializer.serializeContract(contract),
+        ...sqlContractCanonicalizationHooks,
+      }),
+    ),
   );
   return authored;
 }

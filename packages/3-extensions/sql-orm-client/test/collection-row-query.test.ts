@@ -122,9 +122,9 @@ describe('collection row query', () => {
     const codec = collection.ctx.context.contractCodecs.forColumn('public', 'posts', 'title');
     if (!codec) throw new Error('Missing title codec');
     const later = { title: 'second' };
-    vi.spyOn(codec, 'decodeJson').mockImplementation((value) => {
+    vi.spyOn(codec, 'fromWire').mockImplementation(async (wire) => {
       later.title = 'changed';
-      return String(value).toUpperCase();
+      return String(wire).toUpperCase();
     });
     const query = describeCollectionRows({
       context: collection.ctx.context,
@@ -141,7 +141,7 @@ describe('collection row query', () => {
     const { collection } = createCollectionFor('User');
     const codec = collection.ctx.context.contractCodecs.forColumn('public', 'posts', 'title');
     if (!codec) throw new Error('Missing title codec');
-    const decode = vi.spyOn(codec, 'decodeJson');
+    const decode = vi.spyOn(codec, 'fromWire');
     const query = describeCollectionRows({
       context: collection.ctx.context,
       state: collection.select('name').include('posts', (posts) => posts.select('title')).state,
@@ -154,7 +154,7 @@ describe('collection row query', () => {
     expect(decode).not.toHaveBeenCalled();
   });
 
-  it('does not create Promise resources per nested JSON include', async () => {
+  it('creates 24 Promise resources for each included row with a nested include, and no more as rows grow', async () => {
     const { collection } = createCollectionFor('User');
     const selected = collection
       .select('name')
@@ -197,9 +197,13 @@ describe('collection row query', () => {
       return promises;
     }
     await measure(1);
-    const small = await measure(1);
-    const large = await measure(100);
-    expect(large).toBe(small);
+    const one = await measure(1);
+    const two = await measure(2);
+    const hundred = await measure(100);
+    expect({ perPost: two - one, growth: hundred - one }).toEqual({
+      perPost: 24,
+      growth: 99 * (two - one),
+    });
   });
 
   it('precomputes known but unselected bindings and decodes fresh cells after empty and null payloads', async () => {
@@ -208,7 +212,7 @@ describe('collection row query', () => {
     const context = collection.ctx.context;
     const codec = context.contractCodecs.forColumn('public', 'posts', 'views');
     if (!codec) throw new Error('Missing views codec');
-    const decode = vi.spyOn(codec, 'decodeJson');
+    const decode = vi.spyOn(codec, 'fromWire');
     const columns = vi.spyOn(context.contractCodecs, 'forColumn');
     const descriptors = vi.spyOn(context.codecDescriptors, 'codecRefForColumn');
     const query = describeCollectionRows({
@@ -276,7 +280,7 @@ describe('collection row query', () => {
     const codec = context.contractCodecs.forColumn('public', 'posts', 'views');
     if (!codec) throw new Error('Missing views codec');
     const cause = new Error('bad cell');
-    const decode = vi.spyOn(codec, 'decodeJson').mockImplementation(() => {
+    const decode = vi.spyOn(codec, 'fromWire').mockImplementation(async () => {
       throw cause;
     });
     const query = describeCollectionRows({

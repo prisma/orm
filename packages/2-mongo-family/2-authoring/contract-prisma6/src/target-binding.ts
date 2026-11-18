@@ -15,6 +15,4 @@ export interface Prisma6TargetBinding {
   readonly nativeTypeCodecIds: Readonly<Record<string, Readonly<Record<string, string>>>>;
   /** The ObjectId codec, which a model's `@id` must have. */
   readonly objectIdCodecId: string;
-  /** The generator `@default(now())` and `@updatedAt` lower to on a `DateTime` field. */
-  readonly timestampGeneratorId: string;
 }

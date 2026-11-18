@@ -150,7 +150,7 @@ describe('the Prisma 7 check before init changes the project', () => {
       copyFixture();
       loadTargetConfig = await targetConfigWith(refusingSource);
 
-      const run = await harness().run(prisma7Argv(), { cwd: projectDir });
+      const run = await harness().run([...prisma7Argv(), '--json'], { cwd: projectDir });
 
       expect(run.exitCode).toBe(2);
       expect(envelopeOf(run)).toMatchObject({
@@ -190,7 +190,7 @@ describe('the Prisma 7 check before init changes the project', () => {
       writeFileSync(join(projectDir, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
       loadTargetConfig = await targetConfigWith(refusingSource);
 
-      const run = await harness().run(prisma7Argv(), { cwd: projectDir });
+      const run = await harness().run([...prisma7Argv(), '--json'], { cwd: projectDir });
 
       expect(envelopeOf(run)).toMatchObject({
         error: {
@@ -216,7 +216,7 @@ describe('the Prisma 7 check before init changes the project', () => {
       copyFixture();
       loadTargetConfig = await targetConfigWith(undefined);
 
-      const run = await harness().run(prisma7Argv(), { cwd: projectDir });
+      const run = await harness().run([...prisma7Argv(), '--json'], { cwd: projectDir });
 
       expect(run.exitCode).toBe(2);
       expect(envelopeOf(run)).toMatchObject({
@@ -272,7 +272,7 @@ describe('the Prisma 7 check before init changes the project', () => {
       copyFixture();
 
       const run = await harness().run(
-        ['orm', 'init', '--from-prisma7-schema', 'prisma/schema.prisma'],
+        ['orm', 'init', '--from-prisma7-schema', 'prisma/schema.prisma', '--json'],
         { cwd: projectDir },
       );
 
@@ -323,7 +323,7 @@ describe('the Prisma 7 check before init changes the project', () => {
       copyFixture();
       loadTargetConfig = await loader();
 
-      const run = await harness().run(prisma7Argv(), { cwd: projectDir });
+      const run = await harness().run([...prisma7Argv(), '--json'], { cwd: projectDir });
 
       expect(envelopeOf(run)).toMatchObject({
         error: {
@@ -344,42 +344,38 @@ describe('the Prisma 7 check before init changes the project', () => {
   );
 
   it(
-    'keeps the install warnings when the install before the check fails',
+    'runs a failed pnpm install once before the check and reports it, whatever pnpm said',
     async () => {
       copyFixture();
-      script = [
-        { exitCode: 1, stderr: PNPM_WORKSPACE_LEAK },
-        { exitCode: 1, stderr: 'npm ERR! 404 Not Found' },
-      ];
+      script = [{ exitCode: 1, stderr: PNPM_WORKSPACE_LEAK }];
 
-      const run = await harness('pnpm').run(prisma7Argv(), { cwd: projectDir });
+      const run = await harness('pnpm').run([...prisma7Argv(), '--json'], { cwd: projectDir });
 
       expect(run.exitCode).toBe(4);
-      expect(run.presented?.data).toMatchObject({
-        filesWritten: [],
-        warnings: expect.arrayContaining([
-          expect.stringContaining('ERR_PNPM_WORKSPACE_PKG_NOT_FOUND'),
-        ]),
+      expect(envelopeOf(run)).toMatchObject({
+        diagnostics: [{ code: 'CLI.INIT_INSTALL_FAILED' }],
       });
+      expect(run.presented?.data).toMatchObject({ filesWritten: [] });
+      expect(installs).toEqual([['add', '@prisma/orm-postgres', 'dotenv']]);
     },
     timeouts.coldTransformImport,
   );
 
   it(
-    'names the package manager that finished the install in the remove command',
+    'names the project package manager in the remove command',
     async () => {
       copyFixture();
-      script = [{ exitCode: 1, stderr: PNPM_WORKSPACE_LEAK }];
+      writeFileSync(join(projectDir, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n");
       loadTargetConfig = await targetConfigWith(refusingSource);
 
-      const run = await harness('pnpm').run(prisma7Argv(), { cwd: projectDir });
+      const run = await harness('pnpm').run([...prisma7Argv(), '--json'], { cwd: projectDir });
 
       expect(envelopeOf(run)).toMatchObject({
         error: {
           code: 'CLI.INIT_PRISMA7_SCHEMA_REFUSED',
           nextActions: expect.arrayContaining([
             expect.objectContaining({
-              label: expect.stringContaining('`npm uninstall @prisma/orm-postgres dotenv`'),
+              label: expect.stringContaining('`pnpm remove @prisma/orm-postgres dotenv`'),
             }),
           ]),
         },
@@ -394,7 +390,7 @@ describe('the Prisma 7 check before init changes the project', () => {
       copyFixture();
       loadTargetConfig = async () => undefined;
 
-      const run = await harness().run(prisma7Argv(), { cwd: projectDir });
+      const run = await harness().run([...prisma7Argv(), '--json'], { cwd: projectDir });
 
       expect(envelopeOf(run)).toMatchObject({
         error: {
@@ -453,7 +449,7 @@ describe('the Prisma 7 check before init changes the project', () => {
       expect(run.presented?.data).toMatchObject({
         packagesInstalled: {
           status: 'installed',
-          deps: ['@prisma/orm-postgres', 'dotenv'],
+          deps: ['@prisma/orm-postgres', 'dotenv', 'pg'],
         },
       });
       expect(installs[0]).toEqual(['add', '@prisma/orm-postgres', 'dotenv']);

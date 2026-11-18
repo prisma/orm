@@ -1,6 +1,6 @@
 {
   "name": "@prisma/orm-mongo",
-  "version": "8.0.0-rc.18",
+  "version": "8.0.0-rc.24",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -16,23 +16,25 @@
     "clean": "rm -rf dist src-gen skills"
   },
   "dependencies": {
-    "@prisma/orm-family-mongo": "workspace:8.0.0-rc.18",
-    "@prisma/orm-framework": "workspace:8.0.0-rc.18",
-    "@prisma/orm-target-mongo": "workspace:8.0.0-rc.18",
-    "@prisma/orm-toolchain": "workspace:8.0.0-rc.18",
+    "@prisma/orm-family-mongo": "workspace:8.0.0-rc.24",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.24",
+    "@prisma/orm-target-mongo": "workspace:8.0.0-rc.24",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.24",
     "mongodb-connection-string-url": "catalog:",
     "pathe": "^2.0.3",
-    "tinyglobby": "catalog:"
+    "tinyglobby": "catalog:",
+    "temporal-spec": "1.0.1"
   },
   "devDependencies": {
-    "@internal/mongo": "workspace:8.0.0-rc.18",
-    "@repo/tsconfig": "workspace:8.0.0-rc.18",
-    "@repo/tsdown": "workspace:8.0.0-rc.18",
+    "@internal/mongo": "workspace:8.0.0-rc.24",
+    "@repo/tsconfig": "workspace:8.0.0-rc.24",
+    "@repo/tsdown": "workspace:8.0.0-rc.24",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },
   "peerDependencies": {
     "mongodb": "^7.0.0",
+    "temporal-polyfill": "^1.0.4",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {
@@ -68,10 +70,14 @@
     "./contract/resolve-domain-model": "./dist/contract__resolve-domain-model.mjs",
     "./contract/types": "./dist/contract__types.mjs",
     "./contract/validate-domain": "./dist/contract__validate-domain.mjs",
+    "./contract/validate-once": "./dist/contract__validate-once.mjs",
+    "./contract/validate-storage": "./dist/contract__validate-storage.mjs",
     "./contract-builder": "./dist/contract-builder.mjs",
+    "./contract-types": "./dist/contract-types.mjs",
     "./control": "./dist/control.mjs",
     "./driver": "./dist/driver.mjs",
     "./driver/control": "./dist/driver__control.mjs",
+    "./driver/runtime": "./dist/driver__runtime.mjs",
     "./family": "./dist/family.mjs",
     "./family/control": "./dist/family__control.mjs",
     "./family/control-adapter": "./dist/family__control-adapter.mjs",
@@ -85,6 +91,7 @@
     "./family-contract/data-type": "./dist/family-contract__data-type.mjs",
     "./family-contract/entity-kinds": "./dist/family-contract__entity-kinds.mjs",
     "./family-runtime": "./dist/family-runtime.mjs",
+    "./migration": "./dist/migration.mjs",
     "./migration-tools/aggregate": "./dist/migration-tools__aggregate.mjs",
     "./migration-tools/contract-snapshot-store": "./dist/migration-tools__contract-snapshot-store.mjs",
     "./migration-tools/hash": "./dist/migration-tools__hash.mjs",
@@ -107,6 +114,7 @@
     "./target/migration": "./dist/target__migration.mjs",
     "./target/pack": "./dist/target__pack.mjs",
     "./target/runtime": "./dist/target__runtime.mjs",
+    "./target/server-version": "./dist/target__server-version.mjs",
     "./utils": "./dist/utils.mjs",
     "./utils/abortable": "./dist/utils__abortable.mjs",
     "./utils/array-equal": "./dist/utils__array-equal.mjs",

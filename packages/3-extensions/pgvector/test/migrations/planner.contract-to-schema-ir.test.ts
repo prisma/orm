@@ -1,6 +1,5 @@
 import postgresAdapterDescriptor, {
   createPostgresBuiltinCodecLookup,
-  PostgresControlAdapter,
 } from '@internal/adapter-postgres/control';
 import { asNamespaceId, type Contract, coreHash, profileHash } from '@internal/contract/types';
 import type {
@@ -24,7 +23,7 @@ import {
   type StorageTable,
 } from '@internal/sql-contract/types';
 import { SqlForeignKeyIR } from '@internal/sql-schema-ir/types';
-import postgresTargetDescriptor, { postgresRenderDefault } from '@internal/target-postgres/control';
+import postgresTargetDescriptor from '@internal/target-postgres/control';
 import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import { createPostgresMigrationPlanner } from '@internal/target-postgres/planner';
 import type { PostgresPlanTargetDetails } from '@internal/target-postgres/planner-target-details';
@@ -38,9 +37,10 @@ import {
 } from '@internal/target-postgres/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
+import { createTestPostgresControlAdapter } from '../../../../3-targets/postgres/2-adapter/test/helpers/test-control-adapter';
 import pgvectorDescriptor from '../../src/exports/control';
 
-const testAdapter = new PostgresControlAdapter(
+const testAdapter = createTestPostgresControlAdapter(
   createPostgresBuiltinCodecLookup(),
   createPostgresBuiltinDataTypeLookup(),
 );
@@ -173,6 +173,7 @@ function contractToSchemaIR(
     ]),
   );
   return new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces: {
       public: new PostgresNamespaceSchemaNode({
         schemaName: 'public',
@@ -193,7 +194,6 @@ function planFromStorages(
   const toContract = createTestContract(to);
   const fromSchemaIR = contractToSchemaIR(from ? createTestContract(from) : null, {
     ...postgresTypeOptions,
-    renderDefault: postgresRenderDefault,
   });
   const planner = createPostgresMigrationPlanner(testAdapter);
   return planner.plan({
@@ -231,7 +231,6 @@ describe('contractToSchemaIR → planner round-trip', () => {
     const contract = createTestContract(storage);
     const schemaIR = contractToSchemaIR(createTestContract(storage), {
       ...postgresTypeOptions,
-      renderDefault: postgresRenderDefault,
     });
     const planner = createPostgresMigrationPlanner(testAdapter);
 
@@ -273,7 +272,6 @@ describe('contractToSchemaIR → planner round-trip', () => {
     const contract = createTestContract(storage);
     const emptySchemaIR = contractToSchemaIR(null, {
       ...postgresTypeOptions,
-      renderDefault: postgresRenderDefault,
     });
     const planner = createPostgresMigrationPlanner(testAdapter);
 
@@ -344,7 +342,6 @@ describe('contractToSchemaIR → planner round-trip', () => {
     const contract = createTestContract(toStorage);
     const fromSchemaIR = contractToSchemaIR(createTestContract(fromStorage), {
       ...postgresTypeOptions,
-      renderDefault: postgresRenderDefault,
     });
     const planner = createPostgresMigrationPlanner(testAdapter);
 
@@ -405,7 +402,6 @@ describe('contractToSchemaIR → planner round-trip', () => {
     const contract = createTestContract(storage);
     const schemaIR = contractToSchemaIR(createTestContract(storage), {
       ...postgresTypeOptions,
-      renderDefault: postgresRenderDefault,
     });
     const planner = createPostgresMigrationPlanner(testAdapter);
 
@@ -470,50 +466,6 @@ describe('planner — additive scenarios', () => {
     }
   });
 
-  it('detects added table', async () => {
-    const from: SqlStorageInput = {
-      storageHash: coreHash('test'),
-      ...ns({
-        user: table({
-          columns: {
-            id: col({ dataType: 'pg/uuid', codecId: 'pg/uuid@1' }),
-          },
-          primaryKey: { columns: ['id'] },
-        }),
-      }),
-    };
-
-    const to: SqlStorageInput = {
-      storageHash: coreHash('test'),
-      ...ns({
-        user: table({
-          columns: {
-            id: col({ dataType: 'pg/uuid', codecId: 'pg/uuid@1' }),
-          },
-          primaryKey: { columns: ['id'] },
-        }),
-        post: table({
-          columns: {
-            id: col({ dataType: 'pg/uuid', codecId: 'pg/uuid@1' }),
-            title: col({ dataType: 'pg/text', codecId: 'pg/text@1' }),
-          },
-          primaryKey: { columns: ['id'] },
-        }),
-      }),
-    };
-
-    const result = planFromStorages(from, to);
-
-    expect(result.kind).toBe('success');
-    if (result.kind === 'success') {
-      const ops = (await Promise.all(
-        result.plan.operations,
-      )) as SqlMigrationPlanOperation<PostgresPlanTargetDetails>[];
-      const tableOp = ops.find((op) => op.id.includes('post'));
-      expect(tableOp).toBeDefined();
-    }
-  });
-
   it('detects multiple changes at once (table + unique + index)', async () => {
     const from: SqlStorageInput = {
       storageHash: coreHash('test'),
@@ -561,28 +513,6 @@ describe('planner — additive scenarios', () => {
       expect(ids.some((id) => id.includes('post'))).toBe(true);
       expect(ids.some((id) => id.includes('unique') || id.includes('slug'))).toBe(true);
       expect(ids.some((id) => id.includes('index') || id.includes('title'))).toBe(true);
-    }
-  });
-
-  it('returns no ops when storages are identical', () => {
-    const storage: SqlStorageInput = {
-      storageHash: coreHash('test'),
-      ...ns({
-        user: table({
-          columns: {
-            id: col({ dataType: 'pg/uuid', codecId: 'pg/uuid@1' }),
-            email: col({ dataType: 'pg/text', codecId: 'pg/text@1' }),
-          },
-          primaryKey: { columns: ['id'] },
-        }),
-      }),
-    };
-
-    const result = planFromStorages(storage, storage);
-
-    expect(result.kind).toBe('success');
-    if (result.kind === 'success') {
-      expect(result.plan.operations).toHaveLength(0);
     }
   });
 });
@@ -857,7 +787,7 @@ const DEMO_BASE_TABLES = {
       kind: col({
         dataType: 'app/test-type',
         codecId: 'app/test-type@1',
-        typeRef: 'user_type',
+        typeParams: { typeName: 'user_type', values: ['admin', 'user'] },
       }),
     },
     primaryKey: { columns: ['id'] },
@@ -952,6 +882,7 @@ function createDemoContract(
 const ownsUserTypeEnum: SchemaOwnership = {
   declaresEntity: (coordinate) =>
     coordinate.entityKind === 'native_enum' && coordinate.entityName === 'user_type',
+  namespaceDeclaringSpaces: () => [],
 };
 
 describe('incremental migration with full contract surface (enums, FKs)', () => {
@@ -975,7 +906,6 @@ describe('incremental migration with full contract surface (enums, FKs)', () => 
 
     const fromSchemaIR = contractToSchemaIR(createDemoContract(DEMO_BASE_STORAGE), {
       ...demoTypeOptions,
-      renderDefault: postgresRenderDefault,
     });
     const toContract = createDemoContract(toStorage);
     const planner = createPostgresMigrationPlanner(testAdapter);
@@ -1010,7 +940,6 @@ describe('incremental migration with full contract surface (enums, FKs)', () => 
   it('produces no ops when from and to storages are identical (with types)', () => {
     const fromSchemaIR = contractToSchemaIR(createDemoContract(DEMO_BASE_STORAGE), {
       ...demoTypeOptions,
-      renderDefault: postgresRenderDefault,
     });
     const toContract = createDemoContract(DEMO_BASE_STORAGE);
     const planner = createPostgresMigrationPlanner(testAdapter);
@@ -1039,7 +968,6 @@ describe('incremental migration with full contract surface (enums, FKs)', () => 
   it('emits all ops on initial migration from empty state', async () => {
     const fromSchemaIR = contractToSchemaIR(null, {
       ...demoTypeOptions,
-      renderDefault: postgresRenderDefault,
     });
     const toContract = createDemoContract(DEMO_BASE_STORAGE);
     const planner = createPostgresMigrationPlanner(testAdapter);

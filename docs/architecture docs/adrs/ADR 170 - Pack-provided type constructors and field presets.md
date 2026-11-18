@@ -1,6 +1,10 @@
 # ADR 170 — Pack-provided type constructors and field presets
 
+**Status:** Superseded in part by [ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md): the field-preset half. Prisma 8 removed field presets on 2026-10-22. The type constructor sections, names, namespaces and short names stand.
+
 ## What this looks like
+
+> **Superseded 2026-10-22** by [ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md): field presets were removed. Each one is written as a type constructor or a contributed type alias plus `@id`, `@onCreate(...)` and `@onUpdate(...)`.
 
 Today, the TS authoring surface can already express “id column with UUID generation” as a single helper call:
 
@@ -99,7 +103,7 @@ Helpers use dot-separated names when they need a namespace.
 
 Examples:
 
-- `sql.String(length: 35)`
+- `sql.Varchar(length: 35)`
 - `ids.Uuid(4)`
 - `pgvector.Vector(1536)`
 
@@ -108,6 +112,8 @@ If two contributors try to register the same helper name, that is a hard error. 
 That rule matters because we want the available vocabulary to be obvious and predictable. If there is a naming conflict, we fix it by adding or widening a namespace, not by relying on load order.
 
 ## What can a preset do?
+
+> **Superseded 2026-10-22** by [ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md): field presets were removed. Each one is written as a type constructor or a contributed type alias plus `@id`, `@onCreate(...)` and `@onUpdate(...)`.
 
 A field preset is allowed to imply constraints.
 
@@ -124,6 +130,8 @@ Because of that, only **family** and **target** contributors may register non-na
 This gives us a small, deliberate baseline vocabulary while making extension-owned behavior explicit.
 
 ## How this fits TS and PSL together
+
+> **Superseded 2026-10-22** by [ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md): field presets were removed. Each one is written as a type constructor or a contributed type alias plus `@id`, `@onCreate(...)` and `@onUpdate(...)`.
 
 TS and PSL should not solve this problem in two completely different ways.
 

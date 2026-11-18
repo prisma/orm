@@ -56,3 +56,10 @@ export class TaskCollection extends Collection<Contract, 'Task'> {
     return this.where({ userId });
   }
 }
+
+export const collections = {
+  User: UserCollection,
+  Post: PostCollection,
+  Tag: TagCollection,
+  Task: TaskCollection,
+};

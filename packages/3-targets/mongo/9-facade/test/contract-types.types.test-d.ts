@@ -1,0 +1,33 @@
+import type {
+  CodecTypes,
+  Contract,
+  ExecutionHashBase,
+  FieldTypesFromDomain,
+  MongoCollection,
+  MongoContract,
+  MongoContractWithTypeMaps,
+  MongoTypeMaps,
+  NamespaceId,
+  ParameterizedOutputTypesForTypeParams,
+  ProfileHashBase,
+  RelationKeys,
+  StorageHashBase,
+  ValueObjectTypesFromStorage,
+} from '../src/exports/contract-types';
+
+export type {
+  CodecTypes,
+  Contract,
+  ExecutionHashBase,
+  FieldTypesFromDomain,
+  MongoCollection,
+  MongoContract,
+  MongoContractWithTypeMaps,
+  MongoTypeMaps,
+  NamespaceId,
+  ParameterizedOutputTypesForTypeParams,
+  ProfileHashBase,
+  RelationKeys,
+  StorageHashBase,
+  ValueObjectTypesFromStorage,
+};

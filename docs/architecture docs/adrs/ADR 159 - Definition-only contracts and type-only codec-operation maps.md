@@ -63,7 +63,7 @@ Some “maps” are runtime-real:
 
 Other “maps” are **compile-time-only typing channels**:
 
-- codecId → TypeScript output type (including parameterized codecs where output depends on per-column `typeParams` / `typeRef`)
+- codecId → TypeScript output type (including parameterized codecs where output depends on per-column `typeParams`)
 - operation method → argument/return TypeScript types
 
 These typing channels are essential for lane inference, but they are not derivable from JSON at runtime and cannot be inferred from runtime registries without losing precision (especially for parameterized codecs).
@@ -150,7 +150,7 @@ Lanes already operate with an `ExecutionContext`:
 - Runtime behavior reads:
   - `context.codecs` (codec implementations)
   - `context.operations` (operation signatures + lowering, assembled from descriptors)
-  - `context.types` (parameterized type helpers)
+  - `context.types` (parameterized type helpers; amended by [ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md) on 2026-10-21: removed, because contracts no longer store the type aliases it was keyed by and only tests read it)
 
 But compile-time inference for columns and operation expressions continues to flow from **TypeMaps** (from `contract.d.ts` or TS authoring inference), because:
 
@@ -194,7 +194,7 @@ Rationale: we want an explicit signal that these maps are for TypeScript inferen
 - Lane typing remains deterministic and precise, including parameterized codecs.
 - Runtime composition remains where it belongs: `ExecutionContext` derived from descriptors.
 - Higher-level runtime clients (e.g. `@internal/postgres/runtime`) can stay ergonomic:
-  - emitted workflow: `postgres<Contract, TypeMaps>({ contractJson, ... })`
+  - emitted workflow: `postgres({ contract, ... })` where `contract` is `contractFromJson<Contract>(contractJson)` ([ADR 274](ADR%20274%20-%20A%20client%20takes%20a%20typed%20contract%20value%2C%20so%20every%20other%20option%20is%20inferred.md))
   - no-emit workflow: `postgres({ contract })` where `contract` is `ContractWithTypeMaps<Contract, TypeMaps>`
 
 ### Trade-offs
@@ -226,4 +226,4 @@ Rationale: we want an explicit signal that these maps are for TypeScript inferen
 ## Implementation complete (2026-02-15)
 
 - Demo visualization (`examples/prisma-8-demo/src/app/`) renders directly from `validateContract<Contract>(contractJson)` output using React. Uses the `Contract` type directly for rendering and HMR (no separate IR-only alias).
-- Demo emitted workflow (`examples/prisma-8-demo/src/prisma/db.ts`) uses `postgres<Contract, TypeMaps>({ contractJson, ... })` with explicit `TypeMaps` from `contract.d.ts`.
+- Demo emitted workflow (`examples/prisma-8-demo/src/prisma/db.ts`) uses `contractFromJson<Contract>(contractJson)` and `postgres({ contract, ... })`; the type maps come with `Contract` from `contract.d.ts` (ADR 274).

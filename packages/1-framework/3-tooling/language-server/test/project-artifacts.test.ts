@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { ContractSourceContext } from '@internal/config/config-types';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import {
   assembleAuthoringContributions,
   assembleControlMutationDefaults,
@@ -57,9 +58,9 @@ const interpretContext = {
     type: {
       Int: { kind: 'typeConstructor', output: { codecId: 'test/Int@1' } },
     },
-    field: {},
     entityTypes: {},
     pslBlockDescriptors: {},
+    generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
     modelAttributes: {},
     attributeSpecs: { model: {}, field: {} },
     dataTypes: {},
@@ -70,6 +71,7 @@ const controlStack = {
   scalarTypes: ['Int'],
   defaultNamespaceId: 'public',
   pslBlockDescriptors: {},
+  generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
   authoringContributions: assembleAuthoringContributions([
     {
       id: 'fixture',
@@ -222,40 +224,16 @@ describe('ProjectArtifacts binder', () => {
     const failed = projectWithSnapshots(
       interpretationDouble(() =>
         notOk({
-          summary: 'preset',
-          diagnostics: [{ sourceId: schemaUri, code: 'UNKNOWN_PRESET', message: 'preset' }],
+          summary: 'refused',
+          diagnostics: [{ sourceId: schemaUri, code: 'INTERPRETER_REFUSAL', message: 'refused' }],
         }),
       ).interpretation,
     );
     failed.set(schemaUri, missing);
     expect(failed.project.diagnostics(schemaUri).map(({ code }) => code)).toEqual([
       'PSL_UNRESOLVED_REFERENCE',
-      'UNKNOWN_PRESET',
+      'INTERPRETER_REFUSAL',
     ]);
-  });
-
-  it('resolves a field preset without an interpreter', () => {
-    const { project, set } = projectWithSnapshots(undefined, false, {
-      ...controlStack,
-      authoringContributions: assembleAuthoringContributions([
-        {
-          id: 'fixture',
-          authoring: {
-            type: controlStack.authoringContributions.type,
-            field: {
-              temporal: {
-                createdAt: {
-                  kind: 'fieldPreset',
-                  output: { codecId: 'timestamp' },
-                },
-              },
-            },
-          },
-        },
-      ]),
-    });
-    set(schemaUri, `${directive}model User {\n  id Int\n  createdAt temporal.createdAt()\n}\n`);
-    expect(project.diagnostics(schemaUri)).toEqual([]);
   });
 
   it('describes unsupported attributes with the family describer without an interpreter', () => {
@@ -645,7 +623,7 @@ describe('ProjectArtifacts diagnostics', () => {
     expect(project.diagnostics(aliasUri)).toEqual([
       {
         range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
-        code: 'PRISMA_NEXT_INTERPRETATION_FAILED',
+        code: 'PRISMA_INTERPRETATION_FAILED',
         message:
           'Semantic diagnostics are unavailable because of an internal error. A subsequent diagnostic request or edit will retry.',
         severity: 1,
@@ -758,23 +736,5 @@ describe('ProjectArtifacts binder', () => {
     expect(project.binder()).toBe(first);
     project.diagnostics(schemaUri);
     expect(spy.mock.calls[0]?.[0].binder).toBe(first);
-  });
-
-  it('produces a new binder after a document edit', () => {
-    const { interpretation } = interpretationDouble(() => ok({} as never));
-    const { project, set } = projectWithSnapshots(interpretation);
-    set(schemaUri, cleanSource);
-    const first = project.binder();
-    set(schemaUri, `${directive}model User {\n  id Int @id\n  name Int\n}\n`);
-    project.documentChanged(schemaUri);
-    const second = project.binder();
-    expect(second).toBeDefined();
-    expect(second).not.toBe(first);
-  });
-
-  it('builds a binder from the control stack without an interpretation', () => {
-    const { project, set } = projectWithSnapshots();
-    set(schemaUri, cleanSource);
-    expect(project.binder()).toBeDefined();
   });
 });

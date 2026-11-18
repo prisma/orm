@@ -5,7 +5,8 @@ import type {
   ContractSourceDiagnostic,
 } from '@internal/config/config-types';
 import type { AuthoringEntityContext } from '@internal/framework-components/authoring';
-import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
+import { mongoCodecLookup } from '@internal/mongo-contract/test';
 import {
   buildSymbolTable,
   createBinder,
@@ -28,6 +29,8 @@ import {
   describeUnsupportedMongoAttribute,
   mongoAttributeSpecs,
 } from '../src/mongo-attribute-specs';
+import { mongoTestStack } from '../src/test';
+import { mongoDataTypeSupport } from './mongo-type-lookups';
 
 const SOURCE_ID = './schema.prisma';
 
@@ -46,7 +49,6 @@ function createMongoTestContext(overrides?: Partial<ContractSourceContext>): Con
     composedExtensionContracts: new Map(),
     authoringContributions: {
       dataTypes: {},
-      field: {},
       type: mongoScalarAuthoringTypes,
       entityTypes: {},
       pslBlockDescriptors: {},
@@ -57,12 +59,13 @@ function createMongoTestContext(overrides?: Partial<ContractSourceContext>): Con
       describeUnsupportedAttribute: describeUnsupportedMongoAttribute,
       describeUnresolvedType: describeUnresolvedMongoType,
     },
-    dataTypes: { entries: {}, lookup: createDataTypeLookup([]) },
-    codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
+    dataTypes: mongoDataTypeSupport,
+    codecLookup: mongoCodecLookup,
     controlMutationDefaults: {
       defaultFunctionRegistry: new Map(),
       generatorDescriptors: [],
     },
+    generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
     resolvedInputs: [],
     capabilities: {},
     ...overrides,
@@ -99,7 +102,7 @@ function interpretViaSource(
 }
 
 function interpretCapableSource(schemaPath: string) {
-  const contract = mongoContract(schemaPath);
+  const contract = mongoContract(schemaPath, mongoTestStack);
   if (!hasPslInterpreter(contract.source)) {
     throw new Error('expected mongoContract source to carry the interpret capability');
   }
@@ -119,7 +122,7 @@ describe('mongoContract interpret capability', () => {
   });
 
   it('narrows a real mongoContract source via hasPslInterpreter', () => {
-    const contract = mongoContract(SOURCE_ID);
+    const contract = mongoContract(SOURCE_ID, mongoTestStack);
 
     expect(hasPslInterpreter(contract.source)).toBe(true);
     if (!hasPslInterpreter(contract.source)) return;

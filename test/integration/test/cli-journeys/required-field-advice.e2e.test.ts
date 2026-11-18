@@ -236,7 +236,7 @@ withTempDir(({ createTempDir }) => {
         const failed = await runDbInit(ctx, ['--json']);
         expect(failed.exitCode).not.toBe(0);
         expect(adviceOf(failed)).toContain(
-          'with field "User.role" optional. Then make it required with',
+          'Make field "User.role" optional in the contract source, run `prisma-test db init`, then make it required with',
         );
 
         await emit(ctx, contractWith('  role  Role?\n', ENUMS));
@@ -280,7 +280,7 @@ withTempDir(({ createTempDir }) => {
         expect(failed.exitCode).not.toBe(0);
         const advice = adviceOf(failed);
         expect(advice).not.toContain('default');
-        expect(advice).toContain('make the field optional');
+        expect(advice).toContain('Make the field optional in the contract source');
 
         const replanned = await runMigrationPlan(ctx, printedPlan(advice));
         expect(replanned.exitCode, `plan as printed: ${replanned.stderr}`).toBe(0);

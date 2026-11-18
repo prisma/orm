@@ -5,7 +5,7 @@ model User {
   first_name String
   last_name  String
   email      String   @unique
-  birthday   DateTime?
+  birthday   TimestamptzTemporal?
   posts      Post[]
   @@map("user")
 }

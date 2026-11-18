@@ -13,7 +13,7 @@
         "models": {
           "Post": {
             "fields": {
-              "_id": {
+              "id": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
@@ -112,7 +112,45 @@
             },
             "relations": {},
             "storage": {
-              "collection": "Post"
+              "collection": "Post",
+              "fields": {
+                "id": {
+                  "field": "_id"
+                },
+                "title": {
+                  "field": "title"
+                },
+                "count": {
+                  "field": "count"
+                },
+                "ratio": {
+                  "field": "ratio"
+                },
+                "published": {
+                  "field": "published"
+                },
+                "postedAt": {
+                  "field": "postedAt"
+                },
+                "views": {
+                  "field": "views"
+                },
+                "price": {
+                  "field": "price"
+                },
+                "thumbnail": {
+                  "field": "thumbnail"
+                },
+                "meta": {
+                  "field": "meta"
+                },
+                "authorId": {
+                  "field": "authorId"
+                },
+                "note": {
+                  "field": "note"
+                }
+              }
             }
           }
         }

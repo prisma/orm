@@ -11,9 +11,10 @@ import { executeMigrationNewCommand } from '../../control-api/operations/migrati
 import type { CreateControlClient } from '../../control-api/types';
 import { runCommandAction } from '../../utils/next-actions';
 import { type CliInvocation, cliInvocation, selfEmitCommand } from '../../utils/printed-command';
+import { valueLines } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
-import { appMigrationsDirFor, baseDirFor, contractPathFor, displayPath } from './paths';
+import { appMigrationsDirFor, contractPathFor, displayPath } from './paths';
 
 function newPresentations(inputs: {
   readonly document: MigrationNewResult;
@@ -24,7 +25,7 @@ function newPresentations(inputs: {
   const { document } = inputs;
   const migrationTs = join(document.dir, 'migration.ts');
   return {
-    stdout: () => [],
+    stdout: () => valueLines([document.dir]),
     human: (): readonly Block[] => [
       {
         kind: 'fields',
@@ -92,7 +93,6 @@ export function createMigrationNewCommand(createClient: CreateControlClient) {
       const scaffolded = await executeMigrationNewCommand({
         config: ctx.config,
         cwd: ctx.cwd,
-        projectDir: baseDirFor(ctx.config),
         ...ifDefined('name', args.flags.name),
         ...ifDefined('from', args.flags.from),
         client: createClient({

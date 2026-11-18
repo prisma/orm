@@ -3,6 +3,7 @@ import { emit as emitImpl } from '@internal/emitter';
 import type { ControlStack } from '@internal/framework-components/control';
 import type { EmissionSpi } from '@internal/framework-components/emission';
 import type { JsonObject } from '@internal/utils/json';
+import { workspaceTypesModuleFor } from '@repo/test-utils';
 
 /**
  * Emits as the CLI does: the declarations come from the canonical JSON read
@@ -19,6 +20,7 @@ export function emit(
   const familyInstance = stack.family.create(stack);
   return emitImpl(contract, stack, family, {
     serializeContract: (c) => c as unknown as JsonObject,
+    typesModule: workspaceTypesModuleFor(stack.target.targetId),
     ...options,
     deserializeContract: (json) => familyInstance.deserializeContract(json),
   });

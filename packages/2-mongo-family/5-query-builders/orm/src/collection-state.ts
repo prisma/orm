@@ -1,9 +1,12 @@
-import type { MongoModelDefinition } from '@internal/mongo-contract';
+import type { ContractModel } from '@internal/contract/types';
+import type { MongoModelStorage } from '@internal/mongo-contract';
 import type { MongoFilterExpr } from '@internal/mongo-query-ast/execution';
+import type { MongoPreparedParamRef } from '@internal/mongo-value';
 
 export interface MongoIncludeExpr {
   readonly relationName: string;
-  readonly targetModel: MongoModelDefinition;
+  readonly targetModelName: string;
+  readonly targetModel: ContractModel<MongoModelStorage>;
   readonly from: string;
   readonly localField: string;
   readonly foreignField: string;
@@ -15,8 +18,8 @@ export interface MongoCollectionState {
   readonly includes: readonly MongoIncludeExpr[];
   readonly orderBy: Readonly<Record<string, 1 | -1>> | undefined;
   readonly selectedFields: readonly string[] | undefined;
-  readonly limit: number | undefined;
-  readonly offset: number | undefined;
+  readonly limit: number | MongoPreparedParamRef | undefined;
+  readonly offset: number | MongoPreparedParamRef | undefined;
 }
 
 export function emptyCollectionState(): MongoCollectionState {

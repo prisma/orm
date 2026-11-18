@@ -3,8 +3,10 @@ import type {
   ControlAdapterDescriptor,
   ControlAdapterInstance,
   ControlDriverInstance,
+  DatabasePolicies,
+  MarkerDestination,
 } from '@internal/framework-components/control';
-import type { MongoAdapter, MongoDriver } from '@internal/mongo-lowering';
+import type { MongoAdapter, MongoQueryable } from '@internal/mongo-lowering';
 import type {
   AnyMongoDdlCommand,
   MongoInspectionCommandVisitor,
@@ -18,23 +20,15 @@ import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
  * mechanism.
  */
 export interface MarkerOperations {
+  /** Where the database keeps the contract markers, as messages name it to the user. */
+  readonly markerLocation: string;
   readMarker(space: string): Promise<ContractMarkerRecord | null>;
-  initMarker(
-    space: string,
-    destination: {
-      readonly storageHash: string;
-      readonly profileHash: string;
-      readonly invariants?: readonly string[];
-    },
-  ): Promise<void>;
+  initMarker(space: string, destination: MarkerDestination): Promise<void>;
   updateMarker(
     space: string,
     expectedFrom: string,
-    destination: {
-      readonly storageHash: string;
-      readonly profileHash: string;
-      readonly invariants?: readonly string[];
-    },
+    destination: MarkerDestination,
+    checkedPolicies?: DatabasePolicies,
   ): Promise<boolean>;
   writeLedgerEntry(
     space: string,
@@ -55,7 +49,7 @@ export interface MarkerOperations {
 export interface MongoRunnerDependencies {
   readonly inspectionExecutor: MongoInspectionCommandVisitor<Promise<Record<string, unknown>[]>>;
   readonly adapter: MongoAdapter;
-  readonly driver: MongoDriver;
+  readonly driver: MongoQueryable;
   readonly executeDdl: (command: AnyMongoDdlCommand) => Promise<void>;
   readonly markerOps: MarkerOperations;
   readonly introspectSchema: () => Promise<MongoSchemaIR>;
@@ -76,6 +70,9 @@ export interface MongoRunnerDependencies {
  */
 export interface MongoControlAdapter<TTarget extends string = string>
   extends ControlAdapterInstance<'mongo', TTarget> {
+  /** Where the database keeps the contract markers, as messages name it to the user. */
+  readonly markerLocation: string;
+
   /**
    * Reads the contract marker document for `space`, or returns `null`
    * if no marker document has been written for that space yet. Each
@@ -103,27 +100,18 @@ export interface MongoControlAdapter<TTarget extends string = string>
   initMarker(
     driver: ControlDriverInstance<'mongo', TTarget>,
     space: string,
-    destination: {
-      readonly storageHash: string;
-      readonly profileHash: string;
-      readonly invariants?: readonly string[];
-    },
+    destination: MarkerDestination,
   ): Promise<void>;
 
   /**
-   * Atomically updates the marker document for `space` (CAS on
-   * `expectedFrom`). Returns `true` when the CAS succeeded, `false`
-   * when another process advanced the marker first.
+   * Atomically updates the marker document for `space` while it holds `expectedFrom` and, when `checkedPolicies` is given, while its `meta.policies` reads as them, however it is stored. Returns `true` when the swap succeeded, `false` when another process changed the marker first.
    */
   updateMarker(
     driver: ControlDriverInstance<'mongo', TTarget>,
     space: string,
     expectedFrom: string,
-    destination: {
-      readonly storageHash: string;
-      readonly profileHash: string;
-      readonly invariants?: readonly string[];
-    },
+    destination: MarkerDestination,
+    checkedPolicies?: DatabasePolicies,
   ): Promise<boolean>;
 
   /**

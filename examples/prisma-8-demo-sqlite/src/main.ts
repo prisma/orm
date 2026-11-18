@@ -95,7 +95,7 @@ async function main() {
         process.exitCode = 1;
         return;
       }
-      const user = await ormClientFindUserById(id, runtime);
+      const user = await ormClientFindUserById(id);
       console.log(JSON.stringify(user, null, 2));
     } else if (cmd === 'repo-user-posts') {
       const [id, limitStr] = args;
@@ -105,7 +105,7 @@ async function main() {
         return;
       }
       const limit = limitStr ? Number.parseInt(limitStr, 10) : 10;
-      const result = await ormClientGetUserPosts(id, limit, runtime);
+      const result = await ormClientGetUserPosts(id, limit);
       console.log(JSON.stringify(result, null, 2));
     } else if (cmd === 'repo-create-user') {
       const [id, email, displayName] = args;
@@ -114,10 +114,7 @@ async function main() {
         process.exitCode = 1;
         return;
       }
-      const user = await ormClientCreateUser(
-        { id, email, displayName, createdAt: new Date() },
-        runtime,
-      );
+      const user = await ormClientCreateUser({ id, email, displayName, createdAt: new Date() });
       console.log(JSON.stringify(user, null, 2));
     } else if (cmd === 'insert-user') {
       const [email, displayName] = args;
@@ -168,7 +165,7 @@ async function main() {
         process.exitCode = 1;
         return;
       }
-      const result = await ormClientGetPostTags(postId, runtime);
+      const result = await ormClientGetPostTags(postId);
       console.log(JSON.stringify(result, null, 2));
     } else if (cmd === 'tag-posts') {
       const [tagId] = args;
@@ -177,7 +174,7 @@ async function main() {
         process.exitCode = 1;
         return;
       }
-      const result = await ormClientGetTagPosts(tagId, runtime);
+      const result = await ormClientGetTagPosts(tagId);
       console.log(JSON.stringify(result, null, 2));
     } else if (
       cmd === 'posts-with-tag-some' ||
@@ -192,7 +189,7 @@ async function main() {
       }
       const mode =
         cmd === 'posts-with-tag-some' ? 'some' : cmd === 'posts-with-tag-none' ? 'none' : 'every';
-      const results = await ormClientGetPostsByTagFilter(mode, label, runtime);
+      const results = await ormClientGetPostsByTagFilter(mode, label);
       console.log(JSON.stringify(results, null, 2));
     } else if (cmd === 'connect-post-tags') {
       const [postId, ...tagIds] = args;
@@ -201,7 +198,7 @@ async function main() {
         process.exitCode = 1;
         return;
       }
-      const result = await ormClientConnectPostTags(postId, tagIds, runtime);
+      const result = await ormClientConnectPostTags(postId, tagIds);
       console.log(JSON.stringify(result, null, 2));
     } else if (cmd === 'disconnect-post-tags') {
       const [postId, ...tagIds] = args;
@@ -210,7 +207,7 @@ async function main() {
         process.exitCode = 1;
         return;
       }
-      const result = await ormClientDisconnectPostTags(postId, tagIds, runtime);
+      const result = await ormClientDisconnectPostTags(postId, tagIds);
       console.log(JSON.stringify(result, null, 2));
     } else if (cmd === 'create-post-with-tags') {
       const [id, userId, title, ...labels] = args;
@@ -221,10 +218,12 @@ async function main() {
         process.exitCode = 1;
         return;
       }
-      const result = await ormClientCreatePostWithTags(
-        { id, userId, title, tags: labels.map((label) => ({ label })) },
-        runtime,
-      );
+      const result = await ormClientCreatePostWithTags({
+        id,
+        userId,
+        title,
+        tags: labels.map((label) => ({ label })),
+      });
       console.log(JSON.stringify(result, null, 2));
     } else if (cmd === 'create-post-connect-tags') {
       const [id, userId, title, ...tagIds] = args;
@@ -235,11 +234,11 @@ async function main() {
         process.exitCode = 1;
         return;
       }
-      const result = await ormClientCreatePostConnectTags({ id, userId, title, tagIds }, runtime);
+      const result = await ormClientCreatePostConnectTags({ id, userId, title, tagIds });
       console.log(JSON.stringify(result, null, 2));
     } else if (cmd === 'integer-representations') {
       const limit = args[0] ? Number.parseInt(args[0], 10) : 10;
-      const posts = await ormClientGetPostEngagement(limit, runtime);
+      const posts = await ormClientGetPostEngagement(limit);
 
       console.log('Post engagement counters, one column per integer representation:\n');
       console.log('  viewCount        BigIntNumber   sqlite/bigintnumber@1   read as a number');
@@ -254,7 +253,7 @@ async function main() {
       );
       console.log('so the type is simply not on offer. See examples/prisma-8-demo for all three.');
     } else if (cmd === 'aggregate-precision') {
-      const report = await ormClientGetEngagementPrecision(runtime);
+      const report = await ormClientGetEngagementPrecision();
 
       console.log('Counting posts:');
       console.log(`  count()                       ${describe(report.posts.count)}`);

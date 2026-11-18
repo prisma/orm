@@ -1,0 +1,6 @@
+// use prisma-8
+
+model Person {
+  id       Int  @id
+  birthday Date
+}

@@ -229,7 +229,9 @@ export function defineAnnotation<Payload>(): <const Kinds extends OperationKind>
  * db.users.select('id').annotate(cacheAnnotation({ ttl: 60 }));
  * // ✓ cacheAnnotation declares 'read'; SelectQuery.annotate requires 'read'.
  *
- * db.users.insert([{ name: 'Alice' }]).annotate(cacheAnnotation({ ttl: 60 }));
+ * db.users
+ *   .insert([{ id: 1, name: 'Alice', email: 'alice@example.com' }])
+ *   .annotate(cacheAnnotation({ ttl: 60 }));
  * // ✗ cacheAnnotation declares 'read'; InsertQuery.annotate requires 'write'.
  * //   Element resolves to `never` → tuple unassignable → type error.
  * ```
@@ -289,19 +291,12 @@ export function assertAnnotationsApplicable(
 ): void {
   for (const annotation of annotations) {
     if (!annotation.applicableTo.has(kind)) {
+      const applicableTo = Array.from(annotation.applicableTo);
+      const kinds = applicableTo.join(' and ');
       throw runtimeError(
         'RUNTIME.ANNOTATION_INAPPLICABLE',
-        `Annotation '${annotation.namespace}' is not applicable to '${kind}' operations (terminal: '${terminalName}'). The annotation declares applicableTo = [${Array.from(
-          annotation.applicableTo,
-        )
-          .map((k) => `'${k}'`)
-          .join(', ')}].`,
-        {
-          namespace: annotation.namespace,
-          terminalName,
-          kind,
-          applicableTo: Array.from(annotation.applicableTo),
-        },
+        `An annotation that applies only to ${kinds} operations was given to a ${kind} operation. Remove it from the ${kind} and put it on a ${kinds} operation instead.`,
+        { namespace: annotation.namespace, terminalName, kind, applicableTo },
       );
     }
   }

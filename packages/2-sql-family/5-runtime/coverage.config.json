@@ -1,0 +1,19 @@
+{
+  "include": ["src/**/*.ts"],
+  "exclude": [
+    "dist/**",
+    "test/**",
+    "**/*.test.ts",
+    "**/*.test-d.ts",
+    "**/*.config.ts",
+    "**/exports/**",
+    "src/runtime-spi.ts",
+    "src/middleware/sql-middleware.ts"
+  ],
+  "thresholds": {
+    "lines": 95,
+    "branches": 92,
+    "functions": 92,
+    "statements": 95
+  }
+}
