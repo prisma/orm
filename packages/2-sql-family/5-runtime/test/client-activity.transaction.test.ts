@@ -1,5 +1,5 @@
 import { startClientActivity } from '@internal/framework-components/runtime';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { startActivityOn } from '../src/activity-handle';
 import { withTransaction } from '../src/sql-runtime';
 import { testCall } from './client-activity-kinds';
@@ -75,7 +75,7 @@ describe('the transaction of an activity handle', () => {
   describe('opened on a connection', () => {
     it('never releases the connection, after a commit, a rollback or a refused start', async () => {
       let transactionStarts = 0;
-      const { runtime } = createSetup({
+      const { runtime, events } = createSetup({
         middleware: [
           {
             name: 'refuse-third',
@@ -89,17 +89,16 @@ describe('the transaction of an activity handle', () => {
         ],
       });
       const connection = await runtime.connection();
-      const release = vi.spyOn(connection, 'release');
       const call = await startActivityOn(connection, testCall);
 
       await call.transaction?.(async () => undefined);
       await call.transaction?.(async () => Promise.reject(new Error('failed'))).catch(() => {});
       await call.transaction?.(async () => undefined).catch(() => {});
       await call.end({ outcome: 'succeeded' });
-
-      expect(release).not.toHaveBeenCalled();
-      release.mockRestore();
+      const beforeRelease = driverCalls(events);
       await connection.release();
+
+      expect(beforeRelease).toEqual(['begin', 'commit', 'begin', 'rollback']);
     });
 
     it('begins on that connection and leaves it held after commit and after rollback', async () => {
