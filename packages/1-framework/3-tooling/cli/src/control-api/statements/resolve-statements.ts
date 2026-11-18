@@ -1209,7 +1209,7 @@ function swapRefusal(
       : `${statement.to.slice(0, -1).join('.')}.<temporary name>`;
   const keptNames =
     entity === 'enumValue'
-      ? ' If the members keep their names and only their stored values trade places, leave out the statement and plan again: a member that keeps its name needs no statement.'
+      ? ' If the members keep their names and only their stored values trade places, leave out the statement: a member that keeps its name needs no statement. Stored values that trade places take two plans, through a stored value no member stores.'
       : '';
   return errorStatementInvalid(
     statement,
