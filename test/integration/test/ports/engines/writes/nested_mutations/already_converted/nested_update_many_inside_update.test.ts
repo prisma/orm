@@ -81,7 +81,7 @@ describe('ports/engines/writes/nested_mutations/already_converted/nested_update_
             childOpt: (child) => child.where({ c: 'c' }).updateAll({ c: 'newC' }),
           }),
         ).rejects.toMatchObject({
-          code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+          code: 'ORM.OPERATION_UNSUPPORTED',
           meta: { kind: 'updateAll', relation: 'childOpt', reason: 'to-one-relation' },
         });
         expect(await db.public.Parent.select('p').all()).toEqual([{ p: 'p1' }]);

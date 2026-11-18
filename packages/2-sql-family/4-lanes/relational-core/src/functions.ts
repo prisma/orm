@@ -18,6 +18,7 @@ import {
 import {
   type CodecExpression,
   type CodecTypesBase,
+  type ComparisonOperand,
   codecOf,
   createRawSql,
   type Expression,
@@ -49,58 +50,55 @@ type DeriveExtFunctions<OT extends QueryOperationTypesBase> = {
   [K in keyof OT]: OT[K]['impl'];
 };
 
+/** The codec's raw `input` type, which a comparison falls back to when no operand is a column. */
+type CodecInput<
+  CodecId extends string,
+  CT extends Record<string, { readonly input: unknown }>,
+> = CodecId extends keyof CT ? CT[CodecId]['input'] : never;
+
+type Comparison<CT extends Record<string, { readonly input: unknown }>> = <
+  CodecId extends string,
+  N extends boolean,
+  Input = CodecInput<CodecId, CT>,
+>(
+  a: ComparisonOperand<CodecId, N, Input>,
+  b: ComparisonOperand<CodecId, N, Input>,
+) => Expression<BooleanCodecType>;
+
+type MembershipTest<CT extends Record<string, { readonly input: unknown }>> = {
+  <CodecId extends string>(
+    expr: Expression<{ codecId: CodecId; nullable: boolean }>,
+    subquery: Subquery<Record<string, { codecId: CodecId; nullable: boolean }>>,
+  ): Expression<BooleanCodecType>;
+  <CodecId extends string, Input = CodecInput<CodecId, CT>>(
+    expr: Expression<{ codecId: CodecId; nullable: boolean; input?: Input }>,
+    values: Array<
+      Expression<{ codecId: CodecId; nullable: boolean; many?: never }> | NoInfer<Input> | null
+    >,
+  ): Expression<BooleanCodecType>;
+};
+
 export type BuiltinFunctions<CT extends Record<string, { readonly input: unknown }>> = {
-  eq: <CodecId extends string>(
-    a: CodecExpression<CodecId, boolean, CT> | null,
-    b: CodecExpression<CodecId, boolean, CT> | null,
+  eq: <CodecId extends string, Input = CodecInput<CodecId, CT>>(
+    a: ComparisonOperand<CodecId, boolean, Input> | null,
+    b: ComparisonOperand<CodecId, boolean, Input> | null,
   ) => Expression<BooleanCodecType>;
-  ne: <CodecId extends string, N extends boolean>(
-    a: CodecExpression<CodecId, N, CT> | null,
-    b: CodecExpression<CodecId, N, CT> | null,
+  ne: <CodecId extends string, N extends boolean, Input = CodecInput<CodecId, CT>>(
+    a: ComparisonOperand<CodecId, N, Input> | null,
+    b: ComparisonOperand<CodecId, N, Input> | null,
   ) => Expression<BooleanCodecType>;
-  gt: <CodecId extends string, N extends boolean>(
-    a: CodecExpression<CodecId, N, CT>,
-    b: CodecExpression<CodecId, N, CT>,
-  ) => Expression<BooleanCodecType>;
-  gte: <CodecId extends string, N extends boolean>(
-    a: CodecExpression<CodecId, N, CT>,
-    b: CodecExpression<CodecId, N, CT>,
-  ) => Expression<BooleanCodecType>;
-  lt: <CodecId extends string, N extends boolean>(
-    a: CodecExpression<CodecId, N, CT>,
-    b: CodecExpression<CodecId, N, CT>,
-  ) => Expression<BooleanCodecType>;
-  lte: <CodecId extends string, N extends boolean>(
-    a: CodecExpression<CodecId, N, CT>,
-    b: CodecExpression<CodecId, N, CT>,
-  ) => Expression<BooleanCodecType>;
+  gt: Comparison<CT>;
+  gte: Comparison<CT>;
+  lt: Comparison<CT>;
+  lte: Comparison<CT>;
   and: (...ands: CodecExpression<'pg/bool@1', boolean, CT>[]) => Expression<BooleanCodecType>;
   or: (...ors: CodecExpression<'pg/bool@1', boolean, CT>[]) => Expression<BooleanCodecType>;
 
   exists: (subquery: Subquery<Record<string, ScopeField>>) => Expression<BooleanCodecType>;
   notExists: (subquery: Subquery<Record<string, ScopeField>>) => Expression<BooleanCodecType>;
 
-  in: {
-    <CodecId extends string>(
-      expr: Expression<{ codecId: CodecId; nullable: boolean }>,
-      subquery: Subquery<Record<string, { codecId: CodecId; nullable: boolean }>>,
-    ): Expression<BooleanCodecType>;
-    <CodecId extends string>(
-      expr: Expression<{ codecId: CodecId; nullable: boolean }>,
-      values: Array<CodecExpression<CodecId, boolean, CT>>,
-    ): Expression<BooleanCodecType>;
-  };
-
-  notIn: {
-    <CodecId extends string>(
-      expr: Expression<{ codecId: CodecId; nullable: boolean }>,
-      subquery: Subquery<Record<string, { codecId: CodecId; nullable: boolean }>>,
-    ): Expression<BooleanCodecType>;
-    <CodecId extends string>(
-      expr: Expression<{ codecId: CodecId; nullable: boolean }>,
-      values: Array<CodecExpression<CodecId, boolean, CT>>,
-    ): Expression<BooleanCodecType>;
-  };
+  in: MembershipTest<CT>;
+  notIn: MembershipTest<CT>;
 
   readonly raw: RawSqlTag;
 };

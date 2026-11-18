@@ -19,7 +19,7 @@ const COLUMN_TYPES = [
   ['numeric(10,2)', 'Decimal(precision: 10, scale: 2)'],
   ['numeric(10,-2)', 'Decimal(precision: 10, scale: -2)'],
   ['json', 'Json'],
-  ['jsonb', 'Jsonb'],
+  ['jsonb', 'Json(storage: jsonb)'],
   ['bytea', 'Bytes'],
   ['smallint', 'Int(storage: int2)'],
   ['real', 'Float(storage: float4)'],

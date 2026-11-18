@@ -17,6 +17,7 @@ export default definePrismaConfig({
         load: async () => ok(contract),
       },
       output: 'generated-no-pgvector/contract.json',
+      typesModule: '#fixture-contract-types',
     },
   }),
 });

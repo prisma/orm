@@ -21,7 +21,7 @@ Prisma Next supports multiple SQL dialects via adapters. Lanes (DSL, ORM, TypedS
 
 ## Non-goals
 
-- Implement automatic multi-statement fallbacks that violate the one-call → one-statement rule
+- Implement automatic multi-statement fallbacks that violate the one-call → one-statement rule. This rule binds the lanes. The ORM client is the layer permitted to orchestrate several statements for one call ([ADR 164](ADR%20164%20-%20Repository%20Layer.md))
 - Auto-enable database extensions or mutate server config during discovery
 - Encode business policies in the capability layer
 
@@ -104,7 +104,7 @@ The adapter may use `prefer` to choose among multiple legal lowerings.
 Lanes declare capability intent on a per-lowering basis:
 
 - **required**: lowering fails with `ERR_CAPABILITY_MISSING` and a precise hint
-  - Example: ORM nested 1:N requires `lateral` + `jsonAgg` for the chosen strategy
+  - Example: a lowering that aggregates related rows into JSON requires `jsonAgg`. The ORM client's includes choose between the one-query include and one query per relation from capabilities instead ([ADR 164](ADR%20164%20-%20Repository%20Layer.md))
 - **optional**: adapter attempts a deterministic fallback strategy, else fails with a clear message
   - Example: if `jsonAgg` absent, flatten projection and document shape change
 - **discouraged**: allowed but gated by lint or budget policy
@@ -156,7 +156,7 @@ Adapters must produce the same SQL for the same Plan + effective capabilities se
 
 - **Centralize all capability handling in lanes**: Rejected to keep lanes portable and avoid dialect leakage
 - **Omit discovery entirely**: Rejected because extensions and server versions materially affect available features; we still probe to verify satisfaction, but we do not compute a new profile hash at runtime in pinned mode
-- **Auto multi-statement fallback when caps are missing**: Rejected due to ADR 015 one-call → one-statement rule and policy guardrails
+- **Auto multi-statement fallback when caps are missing**: Rejected for the lanes due to ADR 015 one-call → one-statement rule and policy guardrails. The ORM client, above the lanes, does choose a multi-statement strategy from capabilities ([ADR 164](ADR%20164%20-%20Repository%20Layer.md))
 
 ## Implementation notes
 

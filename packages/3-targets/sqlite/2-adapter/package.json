@@ -30,6 +30,7 @@
     "@internal/sql-runtime": "workspace:8.0.0-rc.24",
     "@internal/sql-schema-ir": "workspace:8.0.0-rc.24",
     "@internal/target-sqlite": "workspace:8.0.0-rc.24",
+    "@internal/type-implementations": "workspace:8.0.0-rc.24",
     "@internal/utils": "workspace:8.0.0-rc.24",
     "arktype": "^2.2.2"
   },

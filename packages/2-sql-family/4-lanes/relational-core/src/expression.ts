@@ -4,6 +4,7 @@ import type { ParamSpec } from '@internal/operations';
 import type { QueryOperationReturn, SqlStorage } from '@internal/sql-contract/types';
 import type { SqlLoweringSpec } from '@internal/sql-operations';
 import { invariant } from '@internal/utils/assertions';
+import { ifDefined } from '@internal/utils/defined';
 import type { CodecRef } from './ast/codec-types';
 import type { SqlStatementStats } from './ast/driver-types';
 import type {
@@ -34,15 +35,21 @@ export type ScopeField = {
    * Optional {@link CodecRef} derived from contract storage at scope construction time. Builder paths that mint column-bound `ParamRef` / `ProjectionItem` nodes stamp this slot onto the AST so encode/decode dispatch resolves through `contractCodecs.forCodecRef`. Leave `undefined` when the scope was built without contract storage (rare — tests, ad-hoc scopes).
    */
   codec?: CodecRef;
+  /**
+   * Type-only: the value type the contract resolves for the column this field reads, such as an enum's member union. Comparisons type a raw operand against it instead of the codec's broader `input` type. Never set at runtime.
+   */
+  input?: unknown;
 };
 
-/** A storage column as a scope field: its codec id, its nullability, and `many` for a list column. */
+/** A storage column as a scope field: its codec id, its nullability, `many` for a list column, and the column's resolved `input` type when the contract provides one. */
 export type StorageColumnScopeField<
   Column extends { readonly codecId: string; readonly nullable: boolean },
+  Input = never,
 > = {
   codecId: Column['codecId'];
   nullable: Column['nullable'];
-} & (Column extends { many: true } ? { many: true } : Record<never, never>);
+} & (Column extends { many: true } ? { many: true } : Record<never, never>) &
+  ([Input] extends [never] ? Record<never, never> : { input?: Input });
 
 export type CodecTypesBase = Record<string, { readonly input: unknown; readonly output: unknown }>;
 
@@ -98,6 +105,16 @@ export type CodecExpression<
 > =
   | Expression<{ codecId: CodecId; nullable: Nullable; many?: never }>
   | CodecValue<CodecId, Nullable, CT>;
+
+/**
+ * An operand of a comparison against `CodecId`: an expression of that codec, or a raw value.
+ *
+ * A raw value is typed as `Input`, which a comparison infers from the `input` of a column operand and otherwise defaults to the codec's `input` type. `NoInfer` keeps the raw value itself from widening `Input`, so a literal that is not one of an enum column's members is rejected.
+ */
+export type ComparisonOperand<CodecId extends string, Nullable extends boolean, Input> =
+  | Expression<{ codecId: CodecId; nullable: Nullable; many?: never; input?: Input }>
+  | NoInfer<Input>
+  | NullSuffix<Nullable>;
 
 /**
  * A list-typed expression: an {@link Expression} whose element codec is
@@ -231,11 +248,17 @@ export interface RawSqlBuilder {
 
 /**
  * One column of a raw query's declared result row, as authored: a codec id, or
- * a codec id plus nullability. Mirrors the contract-free lane's
- * `ColumnDescriptor`; contract-column references are sugar layered on top of
- * this form by the contract-typed builder.
+ * a codec id plus nullability and an optional complete codec binding.
+ * Contract-column references carry that binding from storage, including
+ * parameterized codecs and native arrays.
  */
-export type RawRowSpecEntry = string | { readonly codecId: string; readonly nullable?: boolean };
+export type RawRowSpecEntry =
+  | string
+  | {
+      readonly codecId: string;
+      readonly nullable?: boolean;
+      readonly codec?: CodecRef;
+    };
 
 /**
  * Declares the one column name a row spec cannot use. TypeScript types
@@ -434,7 +457,11 @@ function resolveRowSpec(spec: RawRowSpec): Record<string, RawQueryColumn> {
       name,
       typeof entry === 'string'
         ? { codecId: entry, nullable: false }
-        : { codecId: entry.codecId, nullable: entry.nullable ?? false },
+        : {
+            codecId: entry.codecId,
+            nullable: entry.nullable ?? false,
+            ...ifDefined('codec', entry.codec),
+          },
     ]),
   );
 }

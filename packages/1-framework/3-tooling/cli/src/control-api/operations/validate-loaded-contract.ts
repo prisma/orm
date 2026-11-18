@@ -1,4 +1,4 @@
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
 import type { ControlFamilyInstance } from '@internal/framework-components/control';
 import { assertFrameworkComponentsCompatible } from '../../utils/framework-components';
@@ -14,7 +14,7 @@ import { enrichContract } from '../contract-enrichment';
  * @throws the family instance's error for a contract whose structure it rejects
  */
 export function validateLoadedContract(input: {
-  readonly config: PrismaNextConfig;
+  readonly config: PrismaConfig;
   readonly familyInstance: Pick<ControlFamilyInstance<string, unknown>, 'deserializeContract'>;
   readonly contract: Contract;
 }): Contract {

@@ -6,7 +6,6 @@ import type { DdlNode } from '@internal/sql-relational-core/ast';
 import { applicationDomainOf } from '@repo/test-utils';
 import { mysqlTargetDescriptorMeta } from '../../src/core/descriptor-meta';
 import mysqlControlTarget from '../../src/core/migrations/control-target';
-import { MYSQL_MIGRATION_MODULE } from '../../src/core/migrations/op-factory-call';
 import { createMysqlMigrationPlanner } from '../../src/core/migrations/planner';
 import { mysqlCreateNamespace } from '../../src/core/mysql-database';
 import { mysqlCodecRegistry } from '../../src/core/registry';
@@ -92,6 +91,5 @@ export const stubLowerer: ExecuteRequestLowerer = {
 export function createMysqlPlanner(lowerer: ExecuteRequestLowerer = stubLowerer) {
   return createMysqlMigrationPlanner(lowerer, {
     targetId: mysqlTargetDescriptorMeta.targetId,
-    migrationModule: MYSQL_MIGRATION_MODULE,
   });
 }

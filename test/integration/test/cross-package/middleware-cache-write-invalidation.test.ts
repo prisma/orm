@@ -415,6 +415,7 @@ describe('integration: a create on a multi-table-inheritance model invalidates',
         severity text,
         project_id integer,
         reporter_id integer,
+        pinned_by_id integer unique,
         bug_assignee_person_id integer
       )
     `);

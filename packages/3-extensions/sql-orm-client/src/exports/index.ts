@@ -74,6 +74,7 @@ export type {
   ModelAccessor,
   ModelCallbackTools,
   ModelIndexReferences,
+  MutationUpdateInput,
   NumericFieldNames,
   Orderable,
   OrderableFieldNames,
@@ -95,6 +96,7 @@ export type {
   ToManyRelationAccessor,
   ToOneRelationAccessor,
   UniqueConstraintCriterion,
+  VariantRelationMutator,
   WhereCallbackResult,
 } from '../types';
 export { emptyState } from '../types';

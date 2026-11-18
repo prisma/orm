@@ -19,7 +19,6 @@
 //   1. Whole-row toEqual assertions on every test.
 //   2. Explicit .select() in most tests; one implicit-selection readback.
 
-import postgresAdapter from '@internal/adapter-postgres/runtime';
 import pgvectorRuntime from '@internal/extension-pgvector/runtime';
 import { Collection } from '@internal/sql-orm-client';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
@@ -28,7 +27,12 @@ import postgresTarget, { PostgresContractSerializer } from '@internal/target-pos
 import { describe, expect, it } from 'vitest';
 import type { Contract as MnPslContract } from './fixtures/mn-psl/generated/contract';
 import mnPslContractJson from './fixtures/mn-psl/generated/contract.json' with { type: 'json' };
-import { timeouts, withCollectionRuntime } from './integration-helpers';
+import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
+import {
+  expectPerRelationStatements,
+  timeouts,
+  withCollectionRuntime,
+} from './integration-helpers';
 import type { PgIntegrationRuntime } from './runtime-helpers';
 import { seedTags, seedUsers, seedUserTags } from './runtime-helpers';
 
@@ -42,22 +46,26 @@ const mnPslContract = new PostgresContractSerializer().deserializeContract(
   mnPslContractJson,
 ) as MnPslContract;
 
-const mnPslContext: ExecutionContext<MnPslContract> = createExecutionContext({
-  contract: mnPslContract,
-  stack: createSqlExecutionStack({
-    target: postgresTarget,
-    adapter: postgresAdapter,
-    extensions: [pgvectorRuntime],
-  }),
-});
+function mnPslContext(strategy: IncludeStrategy): ExecutionContext<MnPslContract> {
+  return createExecutionContext({
+    contract: mnPslContract,
+    stack: createSqlExecutionStack({
+      target: postgresTarget,
+      adapter: postgresAdapterFor(strategy),
+      extensions: [pgvectorRuntime],
+    }),
+  });
+}
 
 // The emitted PSL contract carries `sql.returning` / `postgres.returning`,
 // so mutation readback works without any capability patching.
-function createUsersCollection(runtime: PgIntegrationRuntime) {
-  return new Collection({ runtime, context: mnPslContext }, 'User', { namespaceId: 'public' });
+function createUsersCollection(runtime: PgIntegrationRuntime, strategy: IncludeStrategy) {
+  return new Collection({ runtime, context: mnPslContext(strategy) }, 'User', {
+    namespaceId: 'public',
+  });
 }
 
-describe('integration/mn-psl-parity', () => {
+describe.each(includeStrategies)('integration/mn-psl-parity (%s)', (strategy) => {
   // ===========================================================================
   // include — read through the junction.
   // ===========================================================================
@@ -66,7 +74,7 @@ describe('integration/mn-psl-parity', () => {
     'include("tags") with explicit select returns selected fields on user and tags (whole-row toEqual)',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollection(runtime);
+        const users = createUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [
           { id: 1, name: 'Alice', email: 'alice@example.com' },
@@ -82,11 +90,13 @@ describe('integration/mn-psl-parity', () => {
           { userId: 2, tagId: TAG_TS },
         ]);
 
+        runtime.resetExecutions();
         const rows = await users
           .select('id', 'name')
           .orderBy((u) => u.id.asc())
           .include('tags', (tags) => tags.select('id', 'name').orderBy((t) => t.name.asc()))
           .all();
+        expectPerRelationStatements(runtime, strategy, 2);
 
         expect(rows).toEqual([
           {
@@ -103,7 +113,7 @@ describe('integration/mn-psl-parity', () => {
             tags: [{ id: TAG_TS, name: 'TypeScript' }],
           },
         ]);
-      }, mnPslContext.contract);
+      }, mnPslContract);
     },
     timeouts.spinUpPpgDev,
   );
@@ -114,7 +124,7 @@ describe('integration/mn-psl-parity', () => {
       // The PSL fixture's User carries exactly id/name/email, so the default
       // projection is narrower than the TS fixture's (no invitedById/address).
       await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollection(runtime);
+        const users = createUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
         await seedTags(runtime, [
@@ -126,10 +136,12 @@ describe('integration/mn-psl-parity', () => {
           { userId: 1, tagId: TAG_TS },
         ]);
 
+        runtime.resetExecutions();
         const rows = await users
           .orderBy((u) => u.id.asc())
           .include('tags', (tags) => tags.orderBy((t) => t.name.asc()))
           .all();
+        expectPerRelationStatements(runtime, strategy, 2);
 
         expect(rows).toEqual([
           {
@@ -142,7 +154,7 @@ describe('integration/mn-psl-parity', () => {
             ],
           },
         ]);
-      }, mnPslContext.contract);
+      }, mnPslContract);
     },
     timeouts.spinUpPpgDev,
   );
@@ -155,7 +167,7 @@ describe('integration/mn-psl-parity', () => {
     'some: returns only users that have at least one matching tag (explicit select, whole-row toEqual)',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollection(runtime);
+        const users = createUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [
           { id: 1, name: 'Alice', email: 'alice@example.com' },
@@ -181,7 +193,7 @@ describe('integration/mn-psl-parity', () => {
 
         // Only Alice has Rust.
         expect(rows).toEqual([{ id: 1, name: 'Alice' }]);
-      }, mnPslContext.contract);
+      }, mnPslContract);
     },
     timeouts.spinUpPpgDev,
   );
@@ -190,7 +202,7 @@ describe('integration/mn-psl-parity', () => {
     'none: returns only users with no tag matching the predicate (explicit select, whole-row toEqual)',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollection(runtime);
+        const users = createUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [
           { id: 1, name: 'Alice', email: 'alice@example.com' },
@@ -218,7 +230,7 @@ describe('integration/mn-psl-parity', () => {
           { id: 2, name: 'Bob' },
           { id: 3, name: 'Cara' },
         ]);
-      }, mnPslContext.contract);
+      }, mnPslContract);
     },
     timeouts.spinUpPpgDev,
   );
@@ -227,7 +239,7 @@ describe('integration/mn-psl-parity', () => {
     'every: returns users whose tags all match the predicate, includes the vacuous case (explicit select)',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollection(runtime);
+        const users = createUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [
           { id: 1, name: 'Alice', email: 'alice@example.com' },
@@ -257,7 +269,7 @@ describe('integration/mn-psl-parity', () => {
           { id: 1, name: 'Alice' },
           { id: 3, name: 'Cara' },
         ]);
-      }, mnPslContext.contract);
+      }, mnPslContract);
     },
     timeouts.spinUpPpgDev,
   );
@@ -270,7 +282,7 @@ describe('integration/mn-psl-parity', () => {
     'update(): connect links an existing tag via the junction; include("tags") readback reflects the link (explicit select)',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollection(runtime);
+        const users = createUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
         await seedTags(runtime, [{ id: TAG_RUST, name: 'Rust' }]);
@@ -293,7 +305,7 @@ describe('integration/mn-psl-parity', () => {
           'select user_id, tag_id from user_tags',
         );
         expect(junctionRows).toEqual([{ user_id: 1, tag_id: TAG_RUST }]);
-      }, mnPslContext.contract);
+      }, mnPslContract);
     },
     timeouts.spinUpPpgDev,
   );
@@ -302,7 +314,7 @@ describe('integration/mn-psl-parity', () => {
     'update(): disconnect removes the junction link; include("tags") readback no longer contains the tag (explicit select)',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollection(runtime);
+        const users = createUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
         await seedTags(runtime, [
@@ -332,7 +344,7 @@ describe('integration/mn-psl-parity', () => {
           'select user_id, tag_id from user_tags',
         );
         expect(junctionRows).toEqual([{ user_id: 1, tag_id: TAG_TS }]);
-      }, mnPslContext.contract);
+      }, mnPslContract);
     },
     timeouts.spinUpPpgDev,
   );
@@ -341,7 +353,7 @@ describe('integration/mn-psl-parity', () => {
     'create(): nested create inserts the Tag row and the junction link; include("tags") readback reflects both (explicit select)',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollection(runtime);
+        const users = createUsersCollection(runtime, strategy);
 
         const created = await users
           .select('id', 'name')
@@ -368,7 +380,7 @@ describe('integration/mn-psl-parity', () => {
           'select user_id, tag_id from user_tags',
         );
         expect(junctionRows).toEqual([{ user_id: 1, tag_id: TAG_RUST }]);
-      }, mnPslContext.contract);
+      }, mnPslContract);
     },
     timeouts.spinUpPpgDev,
   );

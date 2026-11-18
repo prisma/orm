@@ -71,7 +71,7 @@ export function storedTextFromWire(codecId: string, wire: unknown, stored: Store
     throw errorDateTimeUnreadable({
       codecId,
       value: String(wire),
-      detail: `MySQL returned ${describeValue(wire)}, not text.`,
+      detail: `The database returned ${describeValue(wire)}, not text.`,
     });
   }
   try {
@@ -130,7 +130,7 @@ export function storedTextOfTemporal(
           codecId: identity.codecId,
           received: `the ${identity.temporalTag} ${encoded.text}`,
           detail:
-            "It has digits below a microsecond, and MySQL holds microseconds at most. Round it first, as in value.round({ smallestUnit: 'microsecond', roundingMode: 'trunc' }).",
+            "It has digits below a microsecond, and MySQL and MariaDB hold microseconds at most. Round it first, as in value.round({ smallestUnit: 'microsecond', roundingMode: 'trunc' }).",
         });
       }
       return storedTextForWrite(identity.codecId, encoded.text, stored);
@@ -146,7 +146,7 @@ export function dateOfWireText(codecId: string, wire: string): Date {
   if (date === undefined || !isValidDate(date)) {
     throw mysqlError(
       'RUNTIME.DECODE_FAILED',
-      `${codecId} wire value must be a date and time as MySQL prints it`,
+      `${codecId} wire value must be a date and time as MySQL and MariaDB print it`,
       {
         meta: { codecId, received: String(wire) },
       },

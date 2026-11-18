@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { RuntimeQueryable, RuntimeTransaction } from '../src/sql-runtime';
+import type { RuntimeTransaction } from '../src/sql-runtime';
 import {
   afterHookNames,
   createSetup,
@@ -93,26 +93,26 @@ describe('a statement sent while commit or rollback is pending', () => {
     { end: 'commit', outcome: 'committed' },
     { end: 'rollback', outcome: 'rolled-back' },
   ] as const;
-  const cases = pendingEnds.flatMap((pending) =>
-    (['connection', 'transaction'] as const).map((sentOn) => ({ ...pending, sentOn })),
-  );
 
-  it.each(cases)(
-    'is finalized committed right after it ends when sent on the $sentOn while $end is pending, and the earlier statement gets $outcome',
-    async ({ end, outcome, sentOn }) => {
-      const endHeld = held();
-      const failures: DriverFailures =
-        end === 'commit'
-          ? { commitHeldUntil: endHeld.promise }
-          : { rollbackHeldUntil: endHeld.promise };
-      const setup = createSetup({ failures });
+  function holdEnd(end: 'commit' | 'rollback') {
+    const endHeld = held();
+    const failures: DriverFailures =
+      end === 'commit'
+        ? { commitHeldUntil: endHeld.promise }
+        : { rollbackHeldUntil: endHeld.promise };
+    return { endHeld, setup: createSetup({ failures }) };
+  }
+
+  it.each(pendingEnds)(
+    'is finalized committed right after it ends when sent on the connection while $end is pending, and the earlier statement gets $outcome',
+    async ({ end, outcome }) => {
+      const { endHeld, setup } = holdEnd(end);
       const connection = await setup.runtime.connection();
       const transaction = await connection.transaction();
       await transaction.execute(rawPlan('update t set x = 1'));
 
       const ending = transaction[end]();
-      const target: RuntimeQueryable = sentOn === 'connection' ? connection : transaction;
-      await target.execute(rawPlan('update t set x = 2'));
+      await connection.execute(rawPlan('update t set x = 2'));
       endHeld.release();
       await ending;
 
@@ -131,6 +131,24 @@ describe('a statement sent while commit or rollback is pending', () => {
         [`finalized:statement:${outcome}`, 'update t set x = 1'],
         [`finalized:transaction:${outcome}`, undefined],
       ]);
+    },
+  );
+
+  it.each(pendingEnds)(
+    'is refused when sent on the transaction while $end is pending',
+    async ({ end }) => {
+      const { endHeld, setup } = holdEnd(end);
+      const connection = await setup.runtime.connection();
+      const transaction = await connection.transaction();
+
+      const ending = transaction[end]();
+      await expect(transaction.execute(rawPlan('update t set x = 2'))).rejects.toMatchObject({
+        code: 'RUNTIME.ACTIVITY_NOT_ACCEPTING_CHILDREN',
+      });
+      endHeld.release();
+      await ending;
+
+      expect(setup.events.filter((event) => event.sql === 'update t set x = 2')).toEqual([]);
     },
   );
 });

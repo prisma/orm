@@ -59,7 +59,7 @@ describe('ports/engines/writes/nested_mutations/already_converted/nested_delete_
             childOpt: (child) => child.where({ c: 'c' }).deleteAll(),
           }),
         ).rejects.toMatchObject({
-          code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+          code: 'ORM.OPERATION_UNSUPPORTED',
           meta: { kind: 'deleteAll', relation: 'childOpt', reason: 'to-one-relation' },
         });
         expect(await db.public.Parent.select('p').all()).toEqual([{ p: 'p1' }]);

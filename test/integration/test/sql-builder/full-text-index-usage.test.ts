@@ -113,10 +113,9 @@ describe('full-text index usage', { timeout: timeouts.databaseOperation }, () =>
         .build(),
     );
 
-    // Byte-identical to the index expression in the builder's case. The ORM
-    // qualifies the column instead, and still matches: Postgres compares parsed
-    // expression trees, not text.
-    expect(lowered.sql).toContain(`to_tsvector('english', "body")`);
+    // The query qualifies the column and the index does not; it still matches,
+    // because Postgres compares parsed expression trees, not text.
+    expect(lowered.sql).toContain(`to_tsvector('english', "comments"."body")`);
     expect(lowered.sql).toContain(`websearch_to_tsquery('english', $1)`);
     expect(lowered.params).toEqual([QUERY]);
   });
@@ -142,7 +141,7 @@ describe('full-text index usage', { timeout: timeouts.databaseOperation }, () =>
         .build(),
     );
 
-    expect(lowered.sql).toContain(`to_tsvector('english', "body") @@ $1`);
+    expect(lowered.sql).toContain(`to_tsvector('english', "comments"."body") @@ $1`);
     expect(lowered.sql).not.toContain('to_tsquery');
     expect(lowered.params).toEqual(["'zeb':*"]);
   });
@@ -188,7 +187,9 @@ describe('full-text index usage', { timeout: timeouts.databaseOperation }, () =>
         .build(),
     );
 
-    expect(lowered.sql).toContain(`to_tsvector('english', "body") @@ to_tsquery('english', $1)`);
+    expect(lowered.sql).toContain(
+      `to_tsvector('english', "comments"."body") @@ to_tsquery('english', $1)`,
+    );
     expect(lowered.params).toEqual(["'Zeb':*"]);
     const plan = await explain(lowered.sql, lowered.params);
     expect(indexNames(plan)).toContain(indexNamed('comments_body_search'));

@@ -4,14 +4,13 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { APP_SPACE_ID } from '@internal/framework-components/control';
-import { keepInternalSpecifiers } from '@internal/framework-components/emission';
 import { StorageTable } from '@internal/sql-contract/types';
 import { col, lit } from '@internal/sql-relational-core/contract-free';
 import { SetDefaultCall } from '@internal/target-postgres/op-factory-call';
 import { TypeScriptRenderablePostgresMigration } from '@internal/target-postgres/planner-produced-postgres-migration';
 import { renderOps } from '@internal/target-postgres/render-ops';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
-import { timeouts } from '@repo/test-utils';
+import { timeouts, workspaceMigrationModule } from '@repo/test-utils';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -79,7 +78,9 @@ describe('a rendered this.setDefault, executed', () => {
         testAdapter,
       );
 
-      const tsSource = rewriteImports(migration.renderTypeScript(keepInternalSpecifiers));
+      const tsSource = rewriteImports(
+        migration.renderTypeScript(workspaceMigrationModule.postgres),
+      );
       await writeFile(join(tmpDir, 'migration.ts'), tsSource);
       const { stderr } = await execFileAsync(tsxPath, [join(tmpDir, 'migration.ts')], {
         cwd: tmpDir,

@@ -7,6 +7,7 @@ import sqlite from '@internal/target-sqlite/control';
 import sqlitePackRef from '@internal/target-sqlite/pack';
 import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { definePrismaConfig } from '@prisma/cli-engine';
+import { workspaceTypesModule } from '@repo/test-utils';
 import { extensions } from './packs';
 
 export default definePrismaConfig({
@@ -16,10 +17,13 @@ export default definePrismaConfig({
     adapter: sqliteAdapter,
     driver: sqliteDriver,
     extensions,
-    contract: prismaContract('./schema.prisma', {
-      output: 'output/contract.json',
-      target: sqlitePackRef,
-      createNamespace: sqliteCreateNamespace,
-    }),
+    contract: {
+      ...prismaContract('./schema.prisma', {
+        output: 'output/contract.json',
+        target: sqlitePackRef,
+        createNamespace: sqliteCreateNamespace,
+      }),
+      typesModule: workspaceTypesModule.sqlite,
+    },
   }),
 });

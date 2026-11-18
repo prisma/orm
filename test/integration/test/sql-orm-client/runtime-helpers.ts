@@ -20,6 +20,7 @@ import {
   findActivitySource,
   type PreparedStatement,
   type RuntimeConnection,
+  type RuntimeTransactionOptions,
   type SqlMiddleware,
   type SqlRuntimeExtensionDescriptor,
   type RuntimeQueryable as SqlRuntimeQueryable,
@@ -301,8 +302,8 @@ export function withPlanRecording<T extends SqlRuntimeQueryable>(
   const transaction: unknown = Reflect.get(target, 'transaction');
   const preparedQuery: unknown = Reflect.get(target, preparedStatementQuery);
   const preparedExecute: unknown = Reflect.get(target, preparedStatementExecute);
-  return {
-    ...target,
+  const commit: unknown = Reflect.get(target, 'commit');
+  const recording = {
     query<Row>(
       plan: (SqlExecutionPlan | SqlQueryPlan) & { readonly _row?: Row },
       options?: RuntimeExecuteOptions,
@@ -317,12 +318,24 @@ export function withPlanRecording<T extends SqlRuntimeQueryable>(
       record(plan);
       return await target.execute(plan, options);
     },
-    ...(typeof transaction === 'function'
-      ? {
-          transaction: async () =>
-            withPlanRecording((await transaction.call(target)) as SqlRuntimeQueryable, record),
-        }
-      : {}),
+    ...(typeof transaction !== 'function'
+      ? {}
+      : typeof commit === 'function'
+        ? {
+            transaction: async () =>
+              withPlanRecording((await transaction.call(target)) as SqlRuntimeQueryable, record),
+          }
+        : {
+            transaction: (
+              fn: (tx: SqlRuntimeQueryable) => PromiseLike<unknown>,
+              options?: RuntimeTransactionOptions,
+            ) =>
+              transaction.call(
+                target,
+                (tx: SqlRuntimeQueryable) => fn(withPlanRecording(tx, record)),
+                options,
+              ),
+          }),
     ...(typeof preparedQuery === 'function'
       ? {
           [preparedStatementQuery]: (
@@ -349,6 +362,32 @@ export function withPlanRecording<T extends SqlRuntimeQueryable>(
       : {}),
     ...(source === undefined ? {} : { [activitySource]: recordingActivitySource(source, record) }),
   };
+  return blindCast<T, 'the copy forwards every member of target and overrides the recorded ones'>(
+    Object.assign(forwardingCopy(target, recording), recording),
+  );
+}
+
+function forwardingCopy(target: object, overrides: object): object {
+  const copy = {};
+  for (
+    let source: object | null = target;
+    source !== null && source !== Object.prototype;
+    source = Reflect.getPrototypeOf(source)
+  ) {
+    for (const key of Reflect.ownKeys(source)) {
+      if (key === 'constructor' || Object.hasOwn(overrides, key) || Object.hasOwn(copy, key)) {
+        continue;
+      }
+      Object.defineProperty(copy, key, {
+        enumerable: true,
+        get() {
+          const value: unknown = Reflect.get(target, key);
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      });
+    }
+  }
+  return copy;
 }
 
 function preparedExecution(

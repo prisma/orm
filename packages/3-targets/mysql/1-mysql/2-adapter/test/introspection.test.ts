@@ -357,6 +357,6 @@ describe('buildMysqlSchemaIR', () => {
         mysqlDataTypes,
         readLiteral,
       ),
-    ).rejects.toThrow(/Unknown MySQL referential action rule: "EXPLODE"/);
+    ).rejects.toThrow(/Unknown referential action rule in the MySQL or MariaDB catalog: "EXPLODE"/);
   });
 });

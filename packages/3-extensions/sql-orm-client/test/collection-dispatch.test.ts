@@ -39,6 +39,8 @@ function withSingleQueryCapabilities(contract: TestContract) {
     [contract.targetFamily]: {
       ...(contract.capabilities[contract.targetFamily] ?? {}),
       jsonAgg: true,
+      outerReferencesInDerivedTables: true,
+      jsonAggWithoutTruncation: true,
     },
     [contract.target]: {
       ...(contract.capabilities[contract.target] ?? {}),

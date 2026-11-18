@@ -13,7 +13,7 @@ const INT_MAX = 2 ** 31 - 1;
 function refuse(value: RawSqlLiteral): never {
   throw structuredError(
     'RUNTIME.RAW_SQL_UNSUPPORTED_INTERPOLATION',
-    'MySQL has no codec for this JS value in raw SQL: wrap it in `param(...)` with an explicit codec',
+    'MySQL and MariaDB have no codec for this JS value in raw SQL: wrap it in `param(...)` with an explicit codec',
     { meta: { valueType: typeof value } },
   );
 }

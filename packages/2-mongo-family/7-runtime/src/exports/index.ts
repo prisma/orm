@@ -40,5 +40,4 @@ export type {
   MongoPreparedExecution,
   MongoPreparedFor,
   MongoPreparedStatement,
-  MongoPrepareMember,
 } from '../prepared/types';

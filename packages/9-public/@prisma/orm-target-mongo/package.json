@@ -60,6 +60,7 @@
     "./target/pack": "./dist/target__pack.mjs",
     "./target/prisma6-binding": "./dist/target__prisma6-binding.mjs",
     "./target/runtime": "./dist/target__runtime.mjs",
+    "./target/server-version": "./dist/target__server-version.mjs",
     "./package.json": "./package.json"
   },
   "repository": {

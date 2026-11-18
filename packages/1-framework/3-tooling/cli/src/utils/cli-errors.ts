@@ -36,6 +36,7 @@ import { chooseAction, editFileAction, runCommandAction } from './next-actions';
 import {
   type CliInvocation,
   cliCommand,
+  dbMigrateRerun,
   printedPath,
   printedPlanCommand,
   selfEmitCommand,
@@ -401,6 +402,34 @@ export function errorSpaceNotFound(
       availableSpaces: [...availableSpaces],
     },
   });
+}
+
+export function errorContractTypesModuleMissing(): ActionableCliError {
+  const fix =
+    "A config assembled by hand sets `contract.typesModule` to a module that exports the framework's and family's contract types. If the config comes from a target package's `defineConfig`, that package is older than this requirement: upgrade it to a release that sets the member.";
+  return new ActionableCliError(
+    'CONFIG.CONTRACT_TYPES_MODULE_MISSING',
+    'Config names no contract types module',
+    {
+      why: 'Config.contract.typesModule is not set, so a generated contract.d.ts has no module to import the framework and family contract types from.',
+      fix,
+      nextActions: [editFileAction(fix)],
+    },
+  );
+}
+
+export function errorMigrationModuleMissing(): ActionableCliError {
+  const fix =
+    "A config assembled by hand sets `migrations.module` to the module that exports the target's migration helpers. If the config comes from a target package's `defineConfig`, that package is older than this requirement: upgrade it to a release that sets the member.";
+  return new ActionableCliError(
+    'CONFIG.MIGRATION_MODULE_MISSING',
+    'Config names no migration module',
+    {
+      why: 'Config.migrations.module is not set, so a rendered migration.ts has no module to import Migration, MigrationCLI and the operation helpers from.',
+      fix,
+      nextActions: [editFileAction(fix)],
+    },
+  );
 }
 
 /**
@@ -1004,7 +1033,7 @@ export function errorMigrationHasUnfilledPlaceholders(
   const migrationTs = join(directory, 'migration.ts');
   const edit = `Replace each placeholder(...) call in ${printedPath(invocation, migrationTs)} with the value or query it stands for.`;
   const emit = selfEmitCommand(invocation, migrationTs);
-  const migrate = cliCommand(invocation, 'db migrate');
+  const migrate = dbMigrateRerun(invocation);
   return new ActionableCliError(
     'MIGRATION.UNFILLED_PLACEHOLDER',
     'Migration has unfilled placeholders',

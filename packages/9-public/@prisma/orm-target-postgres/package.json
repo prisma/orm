@@ -20,10 +20,8 @@
     "@prisma/orm-toolchain": "workspace:8.0.0-rc.24",
     "@standard-schema/spec": "^1.1.0",
     "@types/node": "catalog:",
-    "@types/pg": "catalog:",
     "arktype": "^2.2.2",
     "pathe": "^2.0.3",
-    "pg": "catalog:",
     "pg-connection-string": "^2.14.0",
     "pg-cursor": "^2.21.0",
     "postgres-array": "2.0.0",
@@ -41,6 +39,8 @@
     "vitest": "catalog:"
   },
   "peerDependencies": {
+    "@types/pg": "^8.20.0",
+    "pg": "^8.22.0",
     "temporal-polyfill": "^1.0.4",
     "typescript": ">=5.9"
   },
@@ -96,6 +96,7 @@
     "./target/rls-canonicalize": "./dist/target__rls-canonicalize.mjs",
     "./target/runtime": "./dist/target__runtime.mjs",
     "./target/schema-ir-annotations": "./dist/target__schema-ir-annotations.mjs",
+    "./target/server-version": "./dist/target__server-version.mjs",
     "./target/sql-utils": "./dist/target__sql-utils.mjs",
     "./target/types": "./dist/target__types.mjs",
     "./package.json": "./package.json"

@@ -2,16 +2,17 @@ import type { TargetId } from './code-templates';
 
 /**
  * The minimum supported server version for each target. The
- * authoritative source of truth is each target package's
- * `package.json#prismaNext.minServerVersion` field — this module
- * mirrors those values and a workspace-level test asserts the two
- * never drift (`templates/tsconfig-env.test.ts`).
+ * authoritative source of truth is the constant each target package
+ * exports from its `server-version` entry point (for example
+ * `POSTGRES_MIN_SERVER_VERSION`) —
+ * this module mirrors those values and an integration test asserts the
+ * two never drift (`test/integration/test/cli.init-min-server-version.test.ts`).
  *
  * Bumping a value here in isolation is **not** safe: edit the
- * corresponding target package's `package.json` first, then mirror
- * here. The scaffold's `.env.example` and the "Requirements" section
- * of `prisma-8.md` both read from this constant, so a stale value
- * lies to every freshly initialised user.
+ * corresponding target package's constant first, then mirror here.
+ * The scaffold's `.env.example` and the "Requirements" section of
+ * `prisma-8.md` both read from this constant, so a stale value lies to
+ * every freshly initialised user.
  */
 export const MIN_SERVER_VERSION: Record<TargetId, string> = {
   postgres: '15',

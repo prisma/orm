@@ -43,6 +43,41 @@ describe('ref set', () => {
     });
   });
 
+  it('keeps the invariants and policies of an existing ref and reports them', async () => {
+    const { dir } = await seedRefProject();
+    const policies = {
+      change: ['migrate'],
+      dataProtection: { dataLoss: 'data-loss-forbidden' },
+    } as const;
+    await writeRef(refsDirIn(dir), 'production', {
+      hash: HASH_B,
+      invariants: ['split-user-name'],
+      policies,
+    });
+
+    const run = await harness().run(['migration', 'ref', 'set', 'production', HASH_A, '--json'], {
+      cwd: dir,
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.json.at(-1)).toMatchObject({
+      envelope: {
+        result: {
+          ok: true,
+          ref: 'production',
+          hash: HASH_A,
+          invariants: ['split-user-name'],
+          policies,
+        },
+      },
+    });
+    expect(JSON.parse(await readFile(refPointerPath(dir, 'production'), 'utf-8'))).toEqual({
+      hash: HASH_A,
+      invariants: ['split-user-name'],
+      policies,
+    });
+  });
+
   it('renders one summary block naming the ref and the contract it points at', async () => {
     const { dir } = await seedRefProject();
 

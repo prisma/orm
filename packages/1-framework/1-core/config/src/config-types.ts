@@ -6,6 +6,7 @@ import type {
   ControlFamilyDescriptor,
   ControlTargetDescriptor,
 } from '@internal/framework-components/control';
+import { ifDefined } from '@internal/utils/defined';
 import type { ContractSourceProvider } from './contract-source-types';
 
 /**
@@ -30,6 +31,8 @@ export interface ContractConfig {
    * always emitted next to the JSON (e.g., `contract.json` → `contract.d.ts`).
    */
   readonly output?: string;
+  /** The module the generated contract types import from. */
+  readonly typesModule?: string;
 }
 
 export interface FormatterConfig {
@@ -54,6 +57,7 @@ export function normalizeContractConfig(
   return {
     source: contract.source,
     output: contract.output ?? inMemoryFallbackOutput,
+    ...ifDefined('typesModule', contract.typesModule),
   };
 }
 
@@ -65,7 +69,7 @@ export function normalizeContractConfig(
  * @template TTargetId - The target ID (e.g., 'postgres', 'mysql')
  * @template TConnection - The driver connection input type (defaults to `unknown` for config flexibility)
  */
-export interface PrismaNextConfig<
+export interface PrismaConfig<
   TFamilyId extends string = string,
   TTargetId extends string = string,
   TConnection = unknown,
@@ -109,6 +113,8 @@ export interface PrismaNextConfig<
   readonly migrations?: {
     /** Directory for migration packages, relative to the config file. Defaults to 'migrations'. */
     readonly dir?: string;
+    /** The module rendered migration files import from. */
+    readonly module?: string;
   };
   readonly formatter?: FormatterConfig;
   /**
@@ -134,8 +140,8 @@ export interface PrismaNextConfig<
  * @returns Normalized config IR with defaults applied
  */
 export function defineConfig<TFamilyId extends string = string, TTargetId extends string = string>(
-  config: PrismaNextConfig<TFamilyId, TTargetId>,
-): PrismaNextConfig<TFamilyId, TTargetId> {
+  config: PrismaConfig<TFamilyId, TTargetId>,
+): PrismaConfig<TFamilyId, TTargetId> {
   if (config.contract) {
     return {
       ...config,
