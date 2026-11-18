@@ -15,28 +15,6 @@ export function mysqlClientError(
   return structuredError(code, message, options);
 }
 
-/** A TypeScript contract whose `defineContract` came from another target's facade than the config's. */
-export function typescriptContractForOtherTarget(options: {
-  readonly contract: string;
-  readonly builtFor: string;
-  readonly configuredFor: string;
-  readonly contractBuilderModule: string;
-}): StructuredError {
-  return structuredError(
-    'CONFIG.VALIDATION_FAILED',
-    `The TypeScript contract "${options.contract}" was built for target "${options.builtFor}", but this defineConfig is for target "${options.configuredFor}". Import defineContract from ${options.contractBuilderModule}.`,
-    {
-      why: "Its defineContract came from another target's contract-builder entry, so the contract carries that target's id and capabilities.",
-      fix: `Import defineContract from ${options.contractBuilderModule}.`,
-      meta: {
-        contract: options.contract,
-        builtFor: options.builtFor,
-        configuredFor: options.configuredFor,
-      },
-    },
-  );
-}
-
 /** A TypeScript contract path given to `defineConfig` in a file other than `.ts`, such as `.mts`. */
 export function typescriptContractNotTs(targetId: string, contract: string): StructuredError {
   return structuredError(

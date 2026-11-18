@@ -37,7 +37,8 @@ type ContractSubcode =
   | 'TABLE_MISMATCH'
   | 'SQL_EXPRESSION_INVALID'
   | 'TABLE_OWNED_BY_MODEL'
-  | 'TABLE_UNKNOWN';
+  | 'TABLE_UNKNOWN'
+  | 'TARGET_MISMATCH';
 
 export function contractError(
   code: ContractCode,

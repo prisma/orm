@@ -11,7 +11,7 @@ import postgresPackRef from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
-import { contractTypesModule, controlComponents } from './components';
+import { contractBuilderModule, contractTypesModule, controlComponents } from './components';
 import { moduleBase } from './module-base';
 
 export interface PostgresConfigOptions {
@@ -30,7 +30,10 @@ export interface PostgresConfigOptions {
 
 function contractConfigFromPath(contractPath: string, output: string): ContractConfig {
   return extname(contractPath) === '.ts'
-    ? typescriptContractFromPath(contractPath, output)
+    ? typescriptContractFromPath(contractPath, output, {
+        target: postgresPackRef,
+        contractBuilderModule,
+      })
     : prismaContract(contractPath, {
         output,
         target: postgresPackRef,

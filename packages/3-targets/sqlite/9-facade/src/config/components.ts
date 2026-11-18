@@ -7,6 +7,8 @@ import { moduleBase } from './module-base';
 
 export const contractTypesModule = `${moduleBase}/contract-types`;
 
+export const contractBuilderModule = `${moduleBase}/contract-builder`;
+
 export const sqliteTarget: typeof sqlite = restateTypeDeclarations(sqlite, contractTypesModule);
 export const sqliteControlAdapter: typeof sqliteAdapter = restateTypeDeclarations(
   sqliteAdapter,

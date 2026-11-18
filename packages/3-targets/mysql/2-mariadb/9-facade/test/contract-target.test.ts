@@ -35,10 +35,10 @@ describe('a TypeScript contract built for another target', () => {
       await emitFailure(createMariadbControlClient(), defineConfig({ contract }).contract),
     ).toMatchObject({
       code: 'CONTRACT_SOURCE_INVALID',
-      summary: `The TypeScript contract "${contract}" was built for target "mysql", but this defineConfig is for target "mariadb". Import defineContract from @prisma/orm-mariadb/contract-builder.`,
+      summary: `The TypeScript contract "${contract}" was built for target "mysql", but this defineConfig is for target "mariadb". Import defineContract from @internal/mariadb/contract-builder.`,
       why: "Its defineContract came from another target's contract-builder entry, so the contract carries that target's id and capabilities.",
       meta: {
-        code: 'CONFIG.VALIDATION_FAILED',
+        code: 'CONTRACT.TARGET_MISMATCH',
         contract,
         builtFor: 'mysql',
         configuredFor: 'mariadb',
@@ -52,10 +52,10 @@ describe('a TypeScript contract built for another target', () => {
       await emitFailure(createMysqlControlClient(), mysqlDefineConfig({ contract }).contract),
     ).toMatchObject({
       code: 'CONTRACT_SOURCE_INVALID',
-      summary: `The TypeScript contract "${contract}" was built for target "mariadb", but this defineConfig is for target "mysql". Import defineContract from @prisma/orm-mysql/contract-builder.`,
+      summary: `The TypeScript contract "${contract}" was built for target "mariadb", but this defineConfig is for target "mysql". Import defineContract from @internal/mysql/contract-builder.`,
       why: "Its defineContract came from another target's contract-builder entry, so the contract carries that target's id and capabilities.",
       meta: {
-        code: 'CONFIG.VALIDATION_FAILED',
+        code: 'CONTRACT.TARGET_MISMATCH',
         contract,
         builtFor: 'mariadb',
         configuredFor: 'mysql',

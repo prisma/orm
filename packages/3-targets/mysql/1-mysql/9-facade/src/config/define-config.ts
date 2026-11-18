@@ -12,8 +12,13 @@ import mysqlPackRef from '@internal/target-mysql/pack';
 import { mysqlCreateNamespace } from '@internal/target-mysql/types';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
-import { typescriptContractForOtherTarget, typescriptContractNotTs } from '../errors';
-import { contractTypesModule, controlComponents, migrationModule } from './components';
+import { typescriptContractNotTs } from '../errors';
+import {
+  contractBuilderModule,
+  contractTypesModule,
+  controlComponents,
+  migrationModule,
+} from './components';
 
 export interface MysqlConfigOptions<TargetId extends string = 'mysql'> {
   readonly contract: string;
@@ -51,34 +56,6 @@ function contractOutput(options: Pick<MysqlConfigOptions, 'contract' | 'output'>
     : defaultContractOutputPath(options.contract);
 }
 
-/** The TypeScript contract at `contractPath`, refused once loaded when it was built for another target than the config's. */
-function typescriptContractFor<TargetId extends string>(
-  components: MysqlConfigComponents<TargetId>,
-  contractPath: string,
-  output: string,
-): ContractConfig {
-  const contract = typescriptContractFromPath(contractPath, output);
-  const { load } = contract.source;
-  return {
-    ...contract,
-    source: {
-      ...contract.source,
-      load: async (context) => {
-        const loaded = await load(context);
-        if (loaded.ok && loaded.value.target !== components.pack.targetId) {
-          throw typescriptContractForOtherTarget({
-            contract: contractPath,
-            builtFor: loaded.value.target,
-            configuredFor: components.pack.targetId,
-            contractBuilderModule: components.contractBuilderModule,
-          });
-        }
-        return loaded;
-      },
-    },
-  };
-}
-
 function buildConfig<TargetId extends string>(
   components: MysqlConfigComponents<TargetId>,
   options: MysqlConfigOptions<TargetId>,
@@ -109,7 +86,10 @@ export function createMysqlDefineConfig<TargetId extends string>(
       return buildConfig(
         components,
         options,
-        typescriptContractFor(components, options.contract, contractOutput(options)),
+        typescriptContractFromPath(options.contract, contractOutput(options), {
+          target: components.pack,
+          contractBuilderModule: components.contractBuilderModule,
+        }),
       );
     }
     if (otherTypescriptExtensions.has(extension)) {
@@ -133,7 +113,7 @@ const mysqlComponents: MysqlConfigComponents<'mysql'> = {
   pack: mysqlPackRef,
   typesModule: contractTypesModule,
   migrationModule,
-  contractBuilderModule: '@prisma/orm-mysql/contract-builder',
+  contractBuilderModule,
 };
 
 /** The `prisma.config.ts` of a MySQL project, whose contract is a Prisma schema or a TypeScript contract. */

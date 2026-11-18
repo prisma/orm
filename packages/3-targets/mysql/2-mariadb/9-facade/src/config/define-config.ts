@@ -1,7 +1,12 @@
 import type { PrismaConfig } from '@internal/config/config-types';
 import { createMysqlDefineConfig, type MysqlConfigOptions } from '@internal/mysql/config';
 import mariadbPackRef from '@internal/target-mariadb/pack';
-import { contractTypesModule, controlComponents, migrationModule } from './components';
+import {
+  contractBuilderModule,
+  contractTypesModule,
+  controlComponents,
+  migrationModule,
+} from './components';
 
 export type MariadbConfigOptions = MysqlConfigOptions<'mariadb'>;
 
@@ -12,5 +17,5 @@ export const defineConfig: (options: MariadbConfigOptions) => PrismaConfig<'sql'
     pack: mariadbPackRef,
     typesModule: contractTypesModule,
     migrationModule,
-    contractBuilderModule: '@prisma/orm-mariadb/contract-builder',
+    contractBuilderModule,
   });

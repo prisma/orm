@@ -173,6 +173,77 @@ describe('typescriptContract', () => {
   );
 });
 
+describe('typescriptContractFromPath with the target the config is for', () => {
+  const forPostgres = {
+    target: postgresTargetPack,
+    contractBuilderModule: '@prisma/orm-postgres/contract-builder',
+  };
+  const loadModule = async (source: string) => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'sql-contract-ts-target-'));
+    const contractPath = join(tempDir, 'contract.ts');
+    try {
+      await writeFile(contractPath, source, 'utf-8');
+      return await typescriptContractFromPath('./contract.ts', undefined, forPostgres)
+        .source.load({ ...stubContext, resolvedInputs: [contractPath] })
+        .then(
+          (result) => ({ loaded: result.ok ? result.value : result.failure }),
+          (error) => ({
+            refused: {
+              code: Object(error).code,
+              message: Object(error).message,
+              fix: Object(error).fix,
+              meta: Object(error).meta,
+            },
+          }),
+        );
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  };
+
+  it(
+    'refuses a contract built for another target, naming both targets and the module to import defineContract from',
+    async () => {
+      expect(
+        await loadModule(`export default { targetFamily: 'sql', target: 'mysql' };\n`),
+      ).toEqual({
+        refused: {
+          code: 'CONTRACT.TARGET_MISMATCH',
+          message:
+            'The TypeScript contract "./contract.ts" was built for target "mysql", but this defineConfig is for target "postgres". Import defineContract from @prisma/orm-postgres/contract-builder.',
+          fix: 'Import defineContract from @prisma/orm-postgres/contract-builder.',
+          meta: { contract: './contract.ts', builtFor: 'mysql', configuredFor: 'postgres' },
+        },
+      });
+    },
+    timeouts.typeScriptCompilation,
+  );
+
+  it(
+    'loads a contract built for the target, and leaves a value with no target to contract validation',
+    async () => {
+      expect({
+        same: await loadModule(`export default { targetFamily: 'sql', target: 'postgres' };\n`),
+        noTarget: await loadModule('export default { models: {} };\n'),
+      }).toEqual({
+        same: { loaded: { targetFamily: 'sql', target: 'postgres' } },
+        noTarget: { loaded: { models: {} } },
+      });
+    },
+    timeouts.typeScriptCompilation,
+  );
+
+  it(
+    'still reports a module with no contract export as such',
+    async () => {
+      expect(await loadModule('export const notContract = {};\n')).toMatchObject({
+        refused: { code: 'CONTRACT.MODULE_EXPORT_MISSING' },
+      });
+    },
+    timeouts.typeScriptCompilation,
+  );
+});
+
 function minimalSqlContract(overrides?: {
   readonly defaultControlPolicy?: ControlPolicy;
 }): Contract {

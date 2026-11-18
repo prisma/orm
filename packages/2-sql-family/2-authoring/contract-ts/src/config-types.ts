@@ -34,6 +34,37 @@ export interface TypeScriptContractSpecifierOptions {
   readonly createNamespace: SqlNamespaceFactory;
 }
 
+/** The target a config is for, which a contract loaded from a TypeScript module must be built for, and the module that target's `defineContract` comes from. */
+export interface TypeScriptContractTarget {
+  readonly target: TargetPackRef<'sql', string>;
+  readonly contractBuilderModule: string;
+}
+
+export type TypeScriptContractFromPathOptions =
+  | TypeScriptContractSpecifierOptions
+  | TypeScriptContractTarget
+  | (TypeScriptContractSpecifierOptions & TypeScriptContractTarget);
+
+function refuseOtherTarget(
+  contractPath: string,
+  loaded: { readonly target?: unknown },
+  expected: TypeScriptContractTarget,
+): void {
+  const builtFor = loaded.target;
+  const configuredFor = expected.target.targetId;
+  if (typeof builtFor !== 'string' || builtFor === configuredFor) return;
+  const fix = `Import defineContract from ${expected.contractBuilderModule}.`;
+  throw contractError(
+    'CONTRACT.TARGET_MISMATCH',
+    `The TypeScript contract "${contractPath}" was built for target "${builtFor}", but this defineConfig is for target "${configuredFor}". ${fix}`,
+    {
+      why: "Its defineContract came from another target's contract-builder entry, so the contract carries that target's id and capabilities.",
+      fix,
+      meta: { contract: contractPath, builtFor, configuredFor },
+    },
+  );
+}
+
 export function emptyContract(options: {
   readonly output?: string;
   readonly target: TargetPackRef<'sql', string>;
@@ -92,11 +123,14 @@ export function typescriptContract(
   };
 }
 
+/** A contract loaded from the TypeScript module at `contractPath`. Given the config's target, it refuses a contract built for another target. */
 export function typescriptContractFromPath(
   contractPath: string,
   output?: string,
-  options?: TypeScriptContractSpecifierOptions,
+  options?: TypeScriptContractFromPathOptions,
 ): ContractConfig {
+  const expected = options !== undefined && 'target' in options ? options : undefined;
+  const policy = options !== undefined && 'defaultControlPolicy' in options ? options : undefined;
   return {
     source: {
       format: 'typescript',
@@ -117,13 +151,14 @@ export function typescriptContractFromPath(
             { meta: { path: absolutePath } },
           );
         }
+        if (expected !== undefined) refuseOtherTarget(contractPath, contract, expected);
         return ok(
-          options === undefined
+          policy === undefined
             ? contract
             : applySqlSpecifierControlPolicy(
                 contract,
-                options.defaultControlPolicy,
-                options.createNamespace,
+                policy.defaultControlPolicy,
+                policy.createNamespace,
               ),
         );
       },
