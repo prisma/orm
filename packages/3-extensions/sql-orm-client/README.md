@@ -383,7 +383,7 @@ await db.User.where({ id: 1 }).update({
 | `r.where(w).update(data)`, `r.where(w).delete()` | `update()` | all |
 | `r.update(data)`, `r.delete()` | `update()` | to-one |
 
-An operation used where the table does not list it is refused with `ORM.OPERATION_UNSUPPORTED`; with an emitted `contract.d.ts` it is also a type error.
+An operation used where the table does not list it is refused with `ORM.OPERATION_UNSUPPORTED`; with an emitted `contract.d.ts` it is also a type error. The exception is `update` and `delete` on a to-many relation without a `where` that filters, which is refused with `ORM.ARGUMENT_INVALID` (`problem: 'missing-where'`).
 
 `r.disconnect()` sets the foreign key of the relation to null: on a relation the record holds the key for, the record's key; on a relation the related rows hold the key for, theirs. When that key is required, `disconnect` is refused with `ORM.OPERATION_UNSUPPORTED` (`reason: 'required-foreign-key'`, with the model and fields of the key in `model` and `fields`) before any statement runs, and is a type error, also when it would have changed no row. When `model` is the model being updated, the record holds the key (a many-to-one relation, such as `Post.author`): link it to another row with `connect`, or delete the record. Otherwise the related rows hold the key (one-to-many, or one-to-one from the side without the key): connect them to another record, or delete them. Or make the key optional.
 
@@ -498,7 +498,7 @@ await db.User.where({ id: 1 }).update({
 ```
 
 - When no related row matches, or a to-one relation links no row, nothing changes and no error is raised.
-- On a to-many relation, `update` and `delete` need a `where` that filters: without one, or with an empty filter such as `where({})`, they are a type error and are refused with `ORM.ARGUMENT_INVALID` (`problem: 'missing-where'`). A collection's own `where({}).update()` is not refused.
+- On a to-many relation, `update` and `delete` need a `where` that filters. Without `where()` they are a type error. An empty filter, such as `where({})` or a filter whose fields are all `undefined`, type-checks but is refused at run time. Both are refused with `ORM.ARGUMENT_INVALID` (`problem: 'missing-where'`). A collection's own `where({}).update()` is not refused.
 - `update` data is the related model's own fields, with its update defaults, and on a one-to-many and one-to-one relation the same `parent-link-column` refusal as `updateAll`.
 - On a relation the record holds the key for, `delete` sets the record's foreign key to null and then deletes the row it pointed at; when that key is required, `delete` is a type error and is refused with `ORM.OPERATION_UNSUPPORTED` (`reason: 'required-foreign-key'`).
 - On a many-to-many relation, `delete` deletes the related row and leaves the junction rows that link it to the database's foreign-key action, as `deleteAll` does.
