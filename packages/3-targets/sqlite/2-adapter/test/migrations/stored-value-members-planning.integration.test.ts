@@ -254,6 +254,7 @@ describe('SQLite planner, enum values inside value objects', {
 
     const result = await plan(from, to);
 
+    expect(await operationKinds(result)).toEqual(Array<string>(6).fill('replaceStoredValue'));
     expect(result.kind === 'success' && result.dataLoss).toEqual([]);
     await apply(result, to);
     expect(await tickets()).toEqual([

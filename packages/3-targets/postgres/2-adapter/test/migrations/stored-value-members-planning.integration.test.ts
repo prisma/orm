@@ -261,6 +261,13 @@ describe('Postgres planner, enum values inside value objects', { concurrent: fal
 
     const result = await plan(from, to);
 
+    expect(await operationKinds(result)).toEqual([
+      'dropCheckConstraint',
+      'dropCheckConstraint',
+      ...Array<string>(6).fill('replaceStoredValue'),
+      'checkConstraint',
+      'checkConstraint',
+    ]);
     expect(result.kind === 'success' && result.dataLoss).toEqual([]);
     await apply(result, to);
     expect(await tickets()).toEqual([
