@@ -22,6 +22,7 @@ describe('the authoring entries this target contributes', () => {
   it('keys every entry by the data type it reads', () => {
     expect(Object.keys(entries).sort()).toEqual([
       'sqlite/blob',
+      'sqlite/boolean',
       'sqlite/date',
       'sqlite/datetime',
       'sqlite/duration',
@@ -36,6 +37,24 @@ describe('the authoring entries this target contributes', () => {
     expect(
       written.kind === 'plain' && written.syntax === 'number' ? [...written.types].sort() : [],
     ).toEqual(['sqlite/integer', 'sqlite/real']);
+  });
+});
+
+describe('the boolean this target reads', () => {
+  const written = entry('sqlite/boolean').written;
+  const parse = (text: string) => {
+    if (written.kind !== 'plain' || written.syntax !== 'boolean') {
+      throw new Error('the boolean entry is the plain boolean entry');
+    }
+    return written.parse(text);
+  };
+
+  it('reads true and false', () => {
+    expect({ true: parse('true'), false: parse('false') }).toEqual({ true: true, false: false });
+  });
+
+  it('refuses any other text', () => {
+    expect(() => parse('1')).toThrow(expect.objectContaining({ code: 'CONTRACT.CAST_REFUSED' }));
   });
 });
 

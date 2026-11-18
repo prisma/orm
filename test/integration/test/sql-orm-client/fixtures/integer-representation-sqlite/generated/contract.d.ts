@@ -16,7 +16,7 @@ import type {
 } from '@internal/sqlite/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'a26473e09e8572c35fc4fe554bc5a25dca7841d21700b511026286c5fd53334b'>;
+  StorageHashBase<'d76e5ce464ac6a431bf83515d7da1eb4cbd1f9157ee5bbee598b181952b1cf3e'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53'>;
@@ -221,6 +221,7 @@ export namespace Models {
   export type Sample = {
     id: FieldOutputTypes['__unbound__']['Sample']['id'];
     meterId: FieldOutputTypes['__unbound__']['Sample']['meterId'];
+    rank: FieldOutputTypes['__unbound__']['Sample']['rank'];
     reading: FieldOutputTypes['__unbound__']['Sample']['reading'];
     meter: Meter;
     readonly [RelationKeys]?: 'meter';
@@ -260,7 +261,7 @@ type ContractBase = Omit<
                 };
                 readonly peak: {
                   readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/bigintnumber@1';
+                  readonly codecId: 'sqlite/integer@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
@@ -284,9 +285,15 @@ type ContractBase = Omit<
                   readonly nullable: false;
                   readonly many: false;
                 };
+                readonly rank: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
                 readonly reading: {
                   readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/bigintnumber@1';
+                  readonly codecId: 'sqlite/integer@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
@@ -348,10 +355,7 @@ type ContractBase = Omit<
               };
               readonly peak: {
                 readonly nullable: false;
-                readonly type: {
-                  readonly kind: 'scalar';
-                  readonly codecId: 'sqlite/bigintnumber@1';
-                };
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
               };
             };
             readonly relations: {
@@ -386,12 +390,13 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
               };
+              readonly rank: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
               readonly reading: {
                 readonly nullable: false;
-                readonly type: {
-                  readonly kind: 'scalar';
-                  readonly codecId: 'sqlite/bigintnumber@1';
-                };
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
               };
             };
             readonly relations: {
@@ -414,6 +419,7 @@ type ContractBase = Omit<
               readonly fields: {
                 readonly id: { readonly column: 'id' };
                 readonly meterId: { readonly column: 'meter_id' };
+                readonly rank: { readonly column: 'rank' };
                 readonly reading: { readonly column: 'reading' };
               };
             };

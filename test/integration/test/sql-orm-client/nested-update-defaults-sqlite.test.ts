@@ -1,7 +1,11 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
-import { datetimeColumn, integerColumn, textColumn } from '@internal/adapter-sqlite/column-types';
+import {
+  datetimeColumn,
+  integerNumberColumn,
+  textColumn,
+} from '@internal/adapter-sqlite/column-types';
 import sqliteAdapter from '@internal/adapter-sqlite/runtime';
 import { soleDomainNamespaceId } from '@internal/contract/types';
 import sqliteDriver from '@internal/driver-sqlite/runtime';
@@ -17,13 +21,13 @@ import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 
 const Author = model('Author', {
-  fields: { id: field.column(integerColumn).id(), name: field.column(textColumn) },
+  fields: { id: field.column(integerNumberColumn).id(), name: field.column(textColumn) },
 }).sql({ table: 'authors' });
 
 const Article = model('Article', {
   fields: {
-    id: field.column(integerColumn).id(),
-    authorId: field.column(integerColumn).column('author_id').optional(),
+    id: field.column(integerNumberColumn).id(),
+    authorId: field.column(integerNumberColumn).column('author_id').optional(),
     updatedAt: field.column(datetimeColumn).column('updated_at').onUpdate(gen.now()),
   },
   relations: { author: rel.belongsTo(Author, { from: 'authorId', to: 'id' }).sql({ fk: {} }) },

@@ -1,3 +1,5 @@
+export type { SqliteBooleanDescriptor } from '../core/boolean-codec';
+export { sqliteBooleanColumn } from '../core/boolean-codec';
 export type { JsonValue } from '../core/codec-helpers';
 export {
   assembleSqliteCodecRegistry,
@@ -45,4 +47,6 @@ export {
   sqliteTimeTemporalColumn,
 } from '../core/date-time-codecs';
 export { SQLITE_NOW_EXPRESSION, sqliteNowExpressionFor } from '../core/datetime-text';
+export type { SqliteDecimalDescriptor } from '../core/decimal-codec';
+export { sqliteDecimalColumn } from '../core/decimal-codec';
 export { sqliteCodecDescriptorRegistry, sqliteCodecRegistry } from '../core/registry';

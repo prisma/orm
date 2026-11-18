@@ -29,7 +29,7 @@
               "peak": {
                 "nullable": false,
                 "type": {
-                  "codecId": "sqlite/bigintnumber@1",
+                  "codecId": "sqlite/integer@1",
                   "kind": "scalar"
                 }
               }
@@ -80,10 +80,17 @@
                   "kind": "scalar"
                 }
               },
+              "rank": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
               "reading": {
                 "nullable": false,
                 "type": {
-                  "codecId": "sqlite/bigintnumber@1",
+                  "codecId": "sqlite/integer@1",
                   "kind": "scalar"
                 }
               }
@@ -114,6 +121,9 @@
                 "meterId": {
                   "column": "meter_id"
                 },
+                "rank": {
+                  "column": "rank"
+                },
                 "reading": {
                   "column": "reading"
                 }
@@ -139,7 +149,7 @@
                   "nullable": false
                 },
                 "peak": {
-                  "codecId": "sqlite/bigintnumber@1",
+                  "codecId": "sqlite/integer@1",
                   "dataType": "sqlite/integer",
                   "nullable": false
                 }
@@ -165,8 +175,13 @@
                   "dataType": "sqlite/integer",
                   "nullable": false
                 },
+                "rank": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "nullable": false
+                },
                 "reading": {
-                  "codecId": "sqlite/bigintnumber@1",
+                  "codecId": "sqlite/integer@1",
                   "dataType": "sqlite/integer",
                   "nullable": false
                 }
@@ -214,7 +229,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "a26473e09e8572c35fc4fe554bc5a25dca7841d21700b511026286c5fd53334b"
+    "storageHash": "d76e5ce464ac6a431bf83515d7da1eb4cbd1f9157ee5bbee598b181952b1cf3e"
   },
   "capabilities": {
     "sql": {

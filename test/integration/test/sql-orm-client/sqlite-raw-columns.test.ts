@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
-import { integerColumn, rawColumn } from '@internal/adapter-sqlite/column-types';
+import { integerNumberColumn, rawColumn } from '@internal/adapter-sqlite/column-types';
 import sqliteAdapter from '@internal/adapter-sqlite/runtime';
 import { soleDomainNamespaceId } from '@internal/contract/types';
 import sqliteDriver from '@internal/driver-sqlite/runtime';
@@ -17,15 +17,15 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const OwnerBase = model('Owner', {
   fields: {
-    id: field.column(integerColumn).id(),
+    id: field.column(integerNumberColumn).id(),
     shape: field.column(rawColumn(sql`geometry`)).optional(),
   },
 }).sql({ table: 'raw_owners' });
 
 const Place = model('Place', {
   fields: {
-    id: field.column(integerColumn).id(),
-    ownerId: field.column(integerColumn).column('owner_id'),
+    id: field.column(integerNumberColumn).id(),
+    ownerId: field.column(integerNumberColumn).column('owner_id'),
     shape: field.column(rawColumn(sql`geometry`)).optional(),
   },
   relations: { owner: rel.belongsTo(OwnerBase, { from: 'ownerId', to: 'id' }) },

@@ -325,7 +325,7 @@ describe('e2e: sql-builder on SQLite', { timeout: timeouts.databaseOperation }, 
         ).rejects.toMatchObject({
           code: 'RUNTIME.DECODE_FAILED',
           message:
-            'sqlite/bigintnumber@1 value must be an integer within the safe integer range, got 9007199254740995',
+            'A sqlite/bigintnumber@1 value is "9007199254740995", which is not an integer within the safe integer range. sqlite/bigintnumber@1 reads integers from -9007199254740991 to 9007199254740991.',
         });
       });
     });

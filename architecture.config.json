@@ -1135,6 +1135,12 @@
       "plane": "shared"
     },
     {
+      "glob": "packages/3-targets/sqlite/3-driver/src/exact-integers.ts",
+      "domain": "targets",
+      "layer": "drivers",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-targets/sqlite/3-driver/src/normalize-error.ts",
       "domain": "targets",
       "layer": "drivers",

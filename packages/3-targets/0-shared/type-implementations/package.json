@@ -39,7 +39,9 @@
     "src"
   ],
   "exports": {
+    "./boolean": "./dist/boolean.mjs",
     "./date": "./dist/date.mjs",
+    "./decimal": "./dist/decimal.mjs",
     "./duration": "./dist/duration.mjs",
     "./now": "./dist/now.mjs",
     "./temporal": "./dist/temporal.mjs",
