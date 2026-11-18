@@ -43,6 +43,12 @@ const convenienceRows = [
     { codecId: 'sql/varchar@1', typeParams: { length: 40 } },
   ],
   ['String', ['text'], 'Text', [], { codecId: 'mysql/text@1' }],
+  ['Boolean', [], 'Bool', [], { codecId: 'mysql/boolean@1' }],
+  ['Boolean', ['tinyint'], 'Bool', [], { codecId: 'mysql/boolean@1' }],
+  ['Bytes', [], 'Longblob', [], { codecId: 'mysql/longblob@1' }],
+  ['Bytes', ['longblob'], 'Longblob', [], { codecId: 'mysql/longblob@1' }],
+  ['Json', [], 'PlainJson', [], { codecId: 'mysql/json@1' }],
+  ['Json', ['json'], 'PlainJson', [], { codecId: 'mysql/json@1' }],
 ] as const;
 
 describe('the MySQL scalar convenience types', () => {
@@ -64,6 +70,9 @@ describe('the MySQL scalar convenience types', () => {
       Float: ['typeChoice', false, ['storage']],
       Decimal: ['typeChoice', false, ['storage', 'precision', 'scale']],
       String: ['typeChoice', false, ['storage', 'length']],
+      Boolean: ['typeChoice', false, ['storage']],
+      Bytes: ['typeChoice', false, ['storage']],
+      Json: ['typeChoice', false, ['storage']],
     });
   });
 
@@ -94,8 +103,24 @@ describe('the MySQL scalar convenience types', () => {
     ['Decimal', ['numeric']],
     ['String', ['char']],
     ['String', ['text', 40]],
+    ['Boolean', ['bit']],
+    ['Bytes', ['blob']],
+    ['Json', ['jsonb']],
   ])('refuse %s(%j), which no row lists', (name, args) => {
     expect(() => instantiateAuthoringTypeCall(namespace, name, args)).toThrow();
+  });
+
+  it('are the eight convenience names every target declares', () => {
+    expect(Object.keys(mysqlConvenienceScalarTypes)).toEqual([
+      'Int',
+      'BigInt',
+      'Float',
+      'Decimal',
+      'String',
+      'Boolean',
+      'Bytes',
+      'Json',
+    ]);
   });
 
   it('declares Int before BigInt, as on every target', () => {
@@ -110,7 +135,17 @@ describe('the MySQL explicit scalar types', () => {
       Object.entries(mysqlExplicitScalarTypes)
         .filter(([, descriptor]) => 'inferred' in descriptor)
         .map(([name]) => name),
-    ).toEqual(['Int4', 'Int8BigInt', 'Float8', 'NumericString', 'Varchar', 'Text']);
+    ).toEqual([
+      'Int4',
+      'Int8BigInt',
+      'Float8',
+      'NumericString',
+      'Varchar',
+      'Text',
+      'Bool',
+      'Longblob',
+      'PlainJson',
+    ]);
   });
 
   it.each([
@@ -131,6 +166,9 @@ describe('the MySQL explicit scalar types', () => {
     ['Varchar', [191], 'String', []],
     ['Varchar', [40], 'String', [{ name: 'length', value: 40 }]],
     ['Text', [], 'String', [{ name: 'storage', value: 'text' }]],
+    ['Bool', [], 'Boolean', []],
+    ['Longblob', [], 'Bytes', []],
+    ['PlainJson', [], 'Json', []],
   ])('%s(%j) is written as the convenience call %s(%j)', (explicit, args, convenience, named) => {
     expect(
       findAuthoringTypeChoiceCall({ namespace, call: { path: [explicit], args } }),

@@ -79,11 +79,12 @@ const NOTHING_DECLARED: DeclaredIndexes = {
   declaresUniqueIndex: () => false,
 };
 
-/** What a column's reported literal default reads as, through the codec of the column the contract declares. */
+/** What a column's reported literal default reads as, through the codec of the column the contract declares: `body` is the literal's value, text or bytes, and `rawDefault` its text, which a refusal quotes: the body itself, or the hexadecimal literal the catalog reports for bytes. */
 export type ReadLiteralDefault = (
   tableName: string,
   columnName: string,
   rawDefault: string,
+  body: string | Uint8Array,
 ) => Promise<Pick<SqlColumnIRInput, 'resolvedDefault' | 'defaultValue' | 'defaultUnreadable'>>;
 
 const PRIMARY_INDEX = 'PRIMARY';
@@ -152,7 +153,14 @@ async function columnOf(
       ? {}
       : reported.kind === 'function'
         ? { resolvedDefault: reported satisfies ColumnDefault }
-        : await readLiteralDefault(row.table_name, row.column_name, reported.literal.body);
+        : await readLiteralDefault(
+            row.table_name,
+            row.column_name,
+            typeof reported.literal.body === 'string'
+              ? reported.literal.body
+              : (row.column_default ?? ''),
+            reported.literal.body,
+          );
   const reportedType = {
     text: row.column_type,
     kind: undefined,

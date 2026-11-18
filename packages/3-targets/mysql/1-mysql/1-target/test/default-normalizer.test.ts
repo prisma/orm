@@ -48,6 +48,18 @@ describe('readMysqlDefault', () => {
     ['CURRENT_DATE', 'DEFAULT_GENERATED', { kind: 'function', expression: 'CURRENT_DATE' }],
     ['curtime(6)', 'DEFAULT_GENERATED', { kind: 'function', expression: 'CURRENT_TIME' }],
     ['curtime()', 'DEFAULT_GENERATED', { kind: 'function', expression: 'CURRENT_TIME' }],
+    [
+      '0x00ff',
+      'DEFAULT_GENERATED',
+      { kind: 'literal', literal: { kind: 'value', body: new Uint8Array([0, 255]) } },
+    ],
+    [
+      '0xC328',
+      'DEFAULT_GENERATED',
+      { kind: 'literal', literal: { kind: 'value', body: new Uint8Array([0xc3, 0x28]) } },
+    ],
+    ['0x0g', 'DEFAULT_GENERATED', { kind: 'function', expression: '0x0g' }],
+    ['0x0', 'DEFAULT_GENERATED', { kind: 'function', expression: '0x0' }],
     ['hello', '', { kind: 'literal', literal: { kind: 'value', body: 'hello' } }],
     ['42', '', { kind: 'literal', literal: { kind: 'value', body: '42' } }],
   ])('reads COLUMN_DEFAULT %j with EXTRA %j', (columnDefault, extra, expected) => {

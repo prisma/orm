@@ -23,6 +23,15 @@ test('each scalar convenience call has the type of the explicit type helper it c
     expectTypeOf(type.String().codecId).toEqualTypeOf<'sql/varchar@1'>();
     expectTypeOf(type.String({ length: 40 }).codecId).toEqualTypeOf<'sql/varchar@1'>();
     expectTypeOf(type.Text().codecId).toEqualTypeOf<'mysql/text@1'>();
+    expectTypeOf(type.Boolean()).toEqualTypeOf(type.Bool());
+    expectTypeOf(type.Boolean({ storage: 'tinyint' })).toEqualTypeOf(type.Bool());
+    expectTypeOf(type.Bytes()).toEqualTypeOf(type.Longblob());
+    expectTypeOf(type.Bytes({ storage: 'longblob' })).toEqualTypeOf(type.Longblob());
+    expectTypeOf(type.Json()).toEqualTypeOf(type.PlainJson());
+    expectTypeOf(type.Json({ storage: 'json' })).toEqualTypeOf(type.PlainJson());
+    expectTypeOf(type.Bool().codecId).toEqualTypeOf<'mysql/boolean@1'>();
+    expectTypeOf(type.Longblob().codecId).toEqualTypeOf<'mysql/longblob@1'>();
+    expectTypeOf(type.PlainJson().codecId).toEqualTypeOf<'mysql/json@1'>();
     return { models: {} };
   });
 });
@@ -41,6 +50,14 @@ test('a scalar convenience call with no row does not compile', () => {
     type.String({ storage: 'char' });
     // @ts-expect-error Float has no as option
     type.Float({ as: 'number' });
+    // @ts-expect-error Boolean stores only tinyint
+    type.Boolean({ storage: 'bit' });
+    // @ts-expect-error Bytes stores only longblob
+    type.Bytes({ storage: 'blob' });
+    // @ts-expect-error Json stores only json
+    type.Json({ storage: 'jsonb' });
+    // @ts-expect-error Json has no as option
+    type.Json({ as: 'string' });
     return { models: {} };
   });
 });

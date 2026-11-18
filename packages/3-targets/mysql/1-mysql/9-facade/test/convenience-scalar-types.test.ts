@@ -84,6 +84,13 @@ const rows: readonly (readonly [
   ['String(length: 40)', 'Varchar(40)', 'sql/varchar@1', { length: 40 }],
   ['String(storage: text)', 'Text', 'mysql/text@1', undefined],
   ['Decimal?', 'NumericString(65, 30)?', 'mysql/decimal@1', { precision: 65, scale: 30 }],
+  ['Boolean', 'Bool', 'mysql/boolean@1', undefined],
+  ['Boolean(storage: tinyint)', 'Bool', 'mysql/boolean@1', undefined],
+  ['Bytes', 'Longblob', 'mysql/longblob@1', undefined],
+  ['Bytes(storage: longblob)', 'Longblob', 'mysql/longblob@1', undefined],
+  ['Json', 'PlainJson', 'mysql/json@1', undefined],
+  ['Json(storage: json)', 'PlainJson', 'mysql/json@1', undefined],
+  ['Json?', 'PlainJson?', 'mysql/json@1', undefined],
 ];
 
 describe('a MySQL scalar convenience type', () => {
@@ -142,7 +149,51 @@ describe('a MySQL scalar convenience type', () => {
     );
   });
 
+  it('reads a boolean, bytes and JSON default as the value its column stores', () => {
+    const result = emit(
+      model(
+        'on    Boolean @default(true)',
+        'off   Boolean @default(false)',
+        'data  Bytes @default(longblob`00ff`)',
+        'empty Bytes @default(longblob``)',
+        'doc   Json @default(json`{"b": [1, null], "a": "x"}`)',
+        'nul   Json @default(json`null`)',
+      ),
+    );
+    expect(result.ok && result.value.storage.namespaces['__unbound__']).toMatchObject({
+      entries: {
+        table: {
+          event: {
+            columns: {
+              on: { default: { kind: 'literal', value: true } },
+              off: { default: { kind: 'literal', value: false } },
+              data: { default: { kind: 'literal', value: '00FF' } },
+              empty: { default: { kind: 'literal', value: '' } },
+              doc: { default: { kind: 'literal', value: { b: [1, null], a: 'x' } } },
+              nul: { default: { kind: 'literal', value: null } },
+            },
+          },
+        },
+      },
+    });
+  });
+
+  it('says what to write for a Decimal with a precision of fewer than 30 digits and no scale', () => {
+    expect(JSON.parse(failure(model('v Decimal(precision: 10)')))).toMatchObject({
+      diagnostics: [
+        {
+          message: expect.stringContaining(
+            'Decimal holds 30 digits after the point unless `scale` is written, which a precision of 10 cannot hold. Write `scale` too, at most the precision, as in Decimal(precision: 10, scale: 2).',
+          ),
+        },
+      ],
+    });
+  });
+
   it.each([
+    ['Boolean @default(1)', 'PSL_VALUE_TYPE_INCOMPATIBLE'],
+    ['Bytes @default(longblob`0g`)', 'is not hex text'],
+    ['Json @default(json`{oops`)', 'PSL_INVALID_LITERAL'],
     ['Decimal(precision: 10, scale: 2) @default("ten")', 'not a decimal number'],
     ['Decimal(precision: 66)', 'precision'],
     ['Decimal(precision: 10, scale: 11)', 'scale must be at most the precision'],
@@ -155,6 +206,9 @@ describe('a MySQL scalar convenience type', () => {
   it.each([
     ['Int(storage: bigint)', 'Argument \\"storage\\" of Int is bigint; write one of: int.'],
     ['Float(storage: float)', 'Argument \\"storage\\" of Float is float; write one of: double.'],
+    ['Boolean(storage: bit)', 'Argument \\"storage\\" of Boolean is bit; write one of: tinyint.'],
+    ['Bytes(storage: blob)', 'Argument \\"storage\\" of Bytes is blob; write one of: longblob.'],
+    ['Json(storage: jsonb)', 'Argument \\"storage\\" of Json is jsonb; write one of: json.'],
     [
       'String(storage: char)',
       'Argument \\"storage\\" of String is char; write one of: varchar, text.',
@@ -178,6 +232,12 @@ describe('a MySQL scalar convenience type in the TypeScript builder', () => {
             cents: field.column(type.Decimal({ precision: 10, scale: 2 })),
             name: field.column(type.String()),
             note: field.column(type.String({ storage: 'text' })),
+            on: field.column(type.Boolean()),
+            data: field.column(type.Bytes()),
+            doc: field.column(type.Json()),
+            explicitOn: field.column(type.Bool()),
+            explicitData: field.column(type.Longblob()),
+            explicitDoc: field.column(type.PlainJson()),
           },
         }).sql({ table: 'event' }),
       },
@@ -194,6 +254,12 @@ describe('a MySQL scalar convenience type in the TypeScript builder', () => {
       cents: shape('cents'),
       name: shape('name'),
       note: shape('note'),
+      on: shape('on'),
+      data: shape('data'),
+      doc: shape('doc'),
+      explicitOn: shape('explicitOn'),
+      explicitData: shape('explicitData'),
+      explicitDoc: shape('explicitDoc'),
     }).toEqual({
       id: ['mysql/int@1', undefined],
       count: ['mysql/bigintnumber@1', undefined],
@@ -202,6 +268,12 @@ describe('a MySQL scalar convenience type in the TypeScript builder', () => {
       cents: ['mysql/decimal@1', { precision: 10, scale: 2 }],
       name: ['sql/varchar@1', { length: 191 }],
       note: ['mysql/text@1', undefined],
+      on: ['mysql/boolean@1', undefined],
+      data: ['mysql/longblob@1', undefined],
+      doc: ['mysql/json@1', undefined],
+      explicitOn: ['mysql/boolean@1', undefined],
+      explicitData: ['mysql/longblob@1', undefined],
+      explicitDoc: ['mysql/json@1', undefined],
     });
   });
 });

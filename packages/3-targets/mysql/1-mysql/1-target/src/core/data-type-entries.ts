@@ -1,5 +1,5 @@
 /**
- * How PSL writes a value of each of this target's data types. A quoted string is `mysql/text`; a whole number is the narrowest of `mysql/int` and `mysql/bigint` that holds it, and any other number, a larger whole number or one with digits after the point, is `mysql/decimal`. The `datetime`, `timestamp`, `date`, `time` and `duration` tags yield the data types of those names, each read into the value its type stores. ADR 254.
+ * How PSL writes a value of each of this target's data types. A quoted string is `mysql/text`; `true` and `false` are `mysql/boolean`; a whole number is the narrowest of `mysql/int` and `mysql/bigint` that holds it, and any other number, a larger whole number or one with digits after the point, is `mysql/decimal`. The `longblob` tag yields bytes from hex text and the `json` tag a JSON document. The `datetime`, `timestamp`, `date`, `time` and `duration` tags yield the data types of those names, each read into the value its type stores. ADR 254.
  */
 
 import type { JsonValue } from '@internal/contract/types';
@@ -7,10 +7,14 @@ import type { DataTypeAuthoringEntry } from '@internal/framework-components/auth
 import {
   createNumberClassifier,
   numeralText,
+  parseJsonText,
+  printJsonText,
   signedRange,
 } from '@internal/framework-components/codec';
+import { structuredError } from '@internal/utils/structured-error';
 import {
   mysqlBigint,
+  mysqlBoolean,
   mysqlDate,
   mysqlDateText,
   mysqlDatetime,
@@ -19,6 +23,9 @@ import {
   mysqlDuration,
   mysqlDurationText,
   mysqlInt,
+  mysqlJson,
+  mysqlLongblob,
+  mysqlLongblobFromHexText,
   mysqlText,
   mysqlTime,
   mysqlTimestamp,
@@ -48,6 +55,14 @@ function storedTextTag(
   };
 }
 
+function readBoolean(text: string): JsonValue {
+  if (text === 'true' || text === 'false') return text === 'true';
+  throw structuredError('CONTRACT.CAST_REFUSED', `"${text}" is not a boolean.`, {
+    why: 'The only text a boolean reads is true or false.',
+    fix: 'Use true or false.',
+  });
+}
+
 function printNumber(value: JsonValue): string {
   return typeof value === 'number' ? numeralText(value) : String(value);
 }
@@ -69,6 +84,22 @@ export function mysqlDataTypeEntries(): Readonly<Record<string, DataTypeAuthorin
       print: printNumber,
       documentation:
         'A number. A whole number is of the narrowest MySQL integer type that holds it, and any other number is a decimal.',
+    },
+    [mysqlBoolean.id]: {
+      written: { kind: 'plain', syntax: 'boolean', parse: readBoolean },
+      print: (value) => String(value),
+      documentation: 'A boolean, written true or false.',
+    },
+    [mysqlLongblob.id]: {
+      written: { kind: 'tag', tag: 'longblob', parse: mysqlLongblobFromHexText },
+      print: (value) => String(value),
+      documentation:
+        'Bytes, written as hex text, two digits for each byte, as in longblob`68656c6c6f`.',
+    },
+    [mysqlJson.id]: {
+      written: { kind: 'tag', tag: 'json', parse: parseJsonText },
+      print: printJsonText,
+      documentation: 'Reads the text as a JSON document and stores it as the default value.',
     },
     [mysqlDatetime.id]: storedTextTag(
       'datetime',

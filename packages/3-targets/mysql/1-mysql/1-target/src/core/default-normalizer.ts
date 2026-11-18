@@ -31,7 +31,7 @@ export type MysqlReportedDefault =
   | {
       readonly kind: 'literal';
       readonly literal: Extract<ReportedLiteralDefault, { readonly kind: 'value' }> & {
-        readonly body: string;
+        readonly body: string | Uint8Array;
       };
     };
 
@@ -45,6 +45,7 @@ const SQL_ESCAPES: Readonly<Record<string, string>> = {
 };
 
 const INTRODUCED_STRING = /^_[A-Za-z0-9]+'/;
+const HEX_LITERAL = /^0x((?:[0-9A-Fa-f]{2})*)$/;
 
 function withoutBackslashEscapes(text: string): string {
   return text.replace(/\\(.)/gs, '$1');
@@ -81,12 +82,16 @@ function introducedStringValue(reported: string): string | undefined {
   return opening === null ? undefined : stringLiteralBody(expression, opening[0].length);
 }
 
+function bytesOfHex(hex: string): Uint8Array {
+  return new Uint8Array(Buffer.from(hex, 'hex'));
+}
+
 function extraFlags(extra: string): readonly string[] {
   return extra.toLowerCase().split(/\s+/);
 }
 
 /**
- * Reads a column's reported default from `COLUMN_DEFAULT` and `EXTRA`. `auto_increment` is `autoincrement()`; a string with a character set introducer, the form MySQL reports for a literal default on a text, blob or JSON column, is that literal; an expression default that writes the current instant, such as `CURRENT_TIMESTAMP(3)`, is `now()`, and one that writes the current date or time of day, `curdate()` or `curtime(6)`, is `CURRENT_DATE` or `CURRENT_TIME`; any other expression default is a function default kept as reported; and anything else is a literal. `undefined` when the column has no default.
+ * Reads a column's reported default from `COLUMN_DEFAULT` and `EXTRA`. `auto_increment` is `autoincrement()`; a string with a character set introducer, the form MySQL reports for a literal default on a text, blob or JSON column, is that literal, and a hexadecimal literal such as `0x00ff`, the form it reports for a blob default written as bytes, is those bytes; an expression default that writes the current instant, such as `CURRENT_TIMESTAMP(3)`, is `now()`, and one that writes the current date or time of day, `curdate()` or `curtime(6)`, is `CURRENT_DATE` or `CURRENT_TIME`; any other expression default is a function default kept as reported; and anything else is a literal. `undefined` when the column has no default.
  */
 export function readMysqlDefault(
   columnDefault: string | null,
@@ -101,6 +106,10 @@ export function readMysqlDefault(
       return { kind: 'literal', literal: { kind: 'value', body: introduced } };
     }
     const expression = columnDefault.trim();
+    const hex = HEX_LITERAL.exec(expression)?.[1];
+    if (hex !== undefined) {
+      return { kind: 'literal', literal: { kind: 'value', body: bytesOfHex(hex) } };
+    }
     return { kind: 'function', expression: currentValueNamed(expression) ?? expression };
   }
   return { kind: 'literal', literal: { kind: 'value', body: columnDefault } };

@@ -801,7 +801,7 @@ describe('MySQL lowering of a statement embedded in raw SQL', () => {
   it('renders a select part inside a RawExpr in expression position', () => {
     const exists = new RawExpr({
       parts: ['EXISTS (', selectUsers(ParamRef.of(2)), ')'],
-      returns: { codecId: 'mysql/bool@1', nullable: false },
+      returns: { codecId: 'mysql/boolean@1', nullable: false },
     });
     expect(
       lower(selectId.withWhere(AndExpr.of([BinaryExpr.eq(email, ParamRef.of('a@b.c')), exists]))),

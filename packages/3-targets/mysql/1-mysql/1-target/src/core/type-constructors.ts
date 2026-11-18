@@ -3,6 +3,7 @@ import { SQL_VARCHAR_CODEC_ID } from '@internal/sql-relational-core/ast';
 import {
   MYSQL_BIGINT_CODEC_ID,
   MYSQL_BIGINT_NUMBER_CODEC_ID,
+  MYSQL_BOOLEAN_CODEC_ID,
   MYSQL_DATE_STRING_CODEC_ID,
   MYSQL_DATE_TEMPORAL_CODEC_ID,
   MYSQL_DATETIME_CODEC_ID,
@@ -12,6 +13,8 @@ import {
   MYSQL_DOUBLE_CODEC_ID,
   MYSQL_DURATION_STRING_CODEC_ID,
   MYSQL_INT_CODEC_ID,
+  MYSQL_JSON_CODEC_ID,
+  MYSQL_LONGBLOB_CODEC_ID,
   MYSQL_TEXT_CODEC_ID,
   MYSQL_TIME_STRING_CODEC_ID,
   MYSQL_TIME_TEMPORAL_CODEC_ID,
@@ -43,10 +46,10 @@ const scale = {
 const length = { kind: 'value', dataType: MYSQL_SIZE_TYPE, name: 'length' } as const;
 
 /** The precision and scale of a bare `Decimal`: the column Prisma ORM 7 created. MySQL's own bare `decimal` is `decimal(10,0)`, which holds no digits after the point. */
-const MYSQL_DECIMAL_DEFAULTS = { precision: 65, scale: 30 } as const;
+export const MYSQL_DECIMAL_DEFAULTS = { precision: 65, scale: 30 } as const;
 
 /**
- * MySQL's explicit scalar types other than the date and time types. Each is named after the MySQL column type that stores it, plus the application value where that column type is read by more than one codec (`Int8BigInt` and `Int8Number`). Where that name would be a convenience name, the explicit type takes MySQL's own second name for the column type, as PostgreSQL's explicit types do: `Int4`, `Int8…`, `Float8` and `NumericString`. ADR 322.
+ * MySQL's explicit scalar types other than the date and time types. Each is named after the MySQL column type that stores it, plus the application value where that column type is read by more than one codec (`Int8BigInt` and `Int8Number`). Where that name would be a convenience name, the explicit type takes MySQL's own second name for the column type, as PostgreSQL's explicit types do: `Int4`, `Int8…`, `Float8`, `NumericString` and `Bool`. A JSON column's explicit type is `PlainJson`, as on every target. ADR 322.
  */
 export const mysqlExplicitScalarTypes = {
   Int4: {
@@ -101,6 +104,27 @@ export const mysqlExplicitScalarTypes = {
     documentation:
       'Text of up to 65,535 bytes, stored as MySQL text. MySQL cannot index a text column without a prefix length.',
     output: { codecId: MYSQL_TEXT_CODEC_ID },
+  },
+  Bool: {
+    kind: 'typeConstructor',
+    inferred: true,
+    documentation:
+      'A boolean stored as MySQL tinyint(1) holding 0 or 1 and represented as a JavaScript boolean. A stored value other than 0 or 1 fails to read.',
+    output: { codecId: MYSQL_BOOLEAN_CODEC_ID },
+  },
+  Longblob: {
+    kind: 'typeConstructor',
+    inferred: true,
+    documentation:
+      'Bytes stored as MySQL longblob and represented as a Uint8Array. MySQL cannot index a longblob column without a prefix length.',
+    output: { codecId: MYSQL_LONGBLOB_CODEC_ID },
+  },
+  PlainJson: {
+    kind: 'typeConstructor',
+    inferred: true,
+    documentation:
+      'A JSON document stored as MySQL json, which MariaDB stores as longtext with a json_valid check, and represented as the JSON value. A json column has no equality filter and no ordering.',
+    output: { codecId: MYSQL_JSON_CODEC_ID },
   },
 } as const satisfies AuthoringTypeNamespace;
 
@@ -176,6 +200,27 @@ export const mysqlConvenienceScalarTypes = {
       { when: { storage: 'varchar' }, type: 'Varchar', defaults: { length: MYSQL_STRING_LENGTH } },
       { when: { storage: 'text' }, type: 'Text' },
     ],
+  },
+  Boolean: {
+    kind: 'typeChoice',
+    documentation:
+      'A boolean, stored as MySQL tinyint(1) holding 0 or 1, which is what MySQL writes for TRUE and FALSE.',
+    args: [storageOption('tinyint')],
+    choices: [{ when: { storage: 'tinyint' }, type: 'Bool' }],
+  },
+  Bytes: {
+    kind: 'typeChoice',
+    documentation:
+      'Bytes, read as a Uint8Array, stored as MySQL longblob, which holds up to 4 GB and cannot be indexed without a prefix length.',
+    args: [storageOption('longblob')],
+    choices: [{ when: { storage: 'longblob' }, type: 'Longblob' }],
+  },
+  Json: {
+    kind: 'typeChoice',
+    documentation:
+      'A JSON document, read as the JSON value it holds, stored as MySQL json. It has no equality filter and no ordering. MySQL sorts the keys of a stored object; MariaDB keeps the text as written.',
+    args: [storageOption('json')],
+    choices: [{ when: { storage: 'json' }, type: 'PlainJson' }],
   },
 } as const satisfies AuthoringTypeNamespace;
 

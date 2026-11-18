@@ -19,8 +19,10 @@ import {
   decimalTextEqualityKey,
   INT32_RANGE,
   INT64_RANGE,
+  readJsonBoolean,
   readJsonInteger,
   readJsonIntegerText,
+  readJsonMatching,
   readJsonString,
   refuseJsonValue,
   refuseWrongShape,
@@ -33,6 +35,7 @@ import { structuredError } from '@internal/utils/structured-error';
 import { type as arktype } from 'arktype';
 import { mysqlError } from './errors';
 import { quoteLiteral } from './sql-utils';
+import { MYSQL_DECIMAL_DEFAULTS } from './type-constructors';
 
 function integerParam(params: DataTypeParams, name: string): number | undefined {
   const value = params[name];
@@ -86,10 +89,15 @@ export const mysqlDecimalParams = arktype({
   if (params.precision === undefined) {
     return ctx.reject({ path: ['scale'], message: 'scale requires a precision' });
   }
-  return (
-    params.scale <= params.precision ||
-    ctx.reject({ path: ['scale'], message: 'scale must be at most the precision' })
-  );
+  if (params.scale <= params.precision) return true;
+  const unwrittenScale =
+    params.scale === MYSQL_DECIMAL_DEFAULTS.scale
+      ? ` Decimal holds ${MYSQL_DECIMAL_DEFAULTS.scale} digits after the point unless \`scale\` is written, which a precision of ${params.precision} cannot hold. Write \`scale\` too, at most the precision, as in Decimal(precision: ${params.precision}, scale: 2).`
+      : '';
+  return ctx.reject({
+    path: ['scale'],
+    message: `scale must be at most the precision: a scale of ${params.scale} is more than a precision of ${params.precision}.${unwrittenScale}`,
+  });
 });
 
 type DecimalParams = typeof mysqlDecimalParams.infer;
@@ -192,6 +200,44 @@ export const mysqlDouble = sqlDataType('mysql/double', {
     [mysqlBigint.id]: asFloat,
     [mysqlDecimal.id]: asFloat,
   },
+});
+
+/** A boolean, stored as `tinyint(1)` holding 0 or 1, which is what MySQL's own `BOOL`, `TRUE` and `FALSE` are. It claims `tinyint(1)` only, so other `tinyint` widths stay free for an integer type. */
+export const mysqlBoolean = sqlDataType('mysql/boolean', {
+  texts: [{ text: 'tinyint(1)', written: true, catalog: true }],
+  read: (json) => readJsonBoolean('mysql/boolean', json),
+  casts: {},
+});
+
+const UPPERCASE_HEX = /^(?:[0-9A-F]{2})*$/;
+const HEX_TEXT = /^(?:[0-9A-Fa-f]{2})*$/;
+
+/** Bytes, stored as their upper-case hexadecimal text. */
+export const mysqlLongblob = sqlDataType('mysql/longblob', {
+  texts: [{ text: 'longblob', written: true, catalog: true }],
+  read: (json) =>
+    readJsonMatching('mysql/longblob', json, UPPERCASE_HEX, 'upper-case hexadecimal text'),
+  casts: {},
+});
+
+/** The upper-case hex `mysql/longblob` stores for the hex text a `longblob` tag holds, `68656c6c6f`. Throws `CONTRACT.CAST_REFUSED` for text that is not hex. */
+export function mysqlLongblobFromHexText(text: string): string {
+  if (HEX_TEXT.test(text)) return text.toUpperCase();
+  throw structuredError(
+    'CONTRACT.CAST_REFUSED',
+    `"${text}" is not hex text: write two hexadecimal digits for each byte, as in longblob\`68656c6c6f\`.`,
+    {
+      why: 'A Bytes value is written as hex text, two hexadecimal digits for each byte.',
+      fix: 'Write the bytes as hex text, as in longblob`68656c6c6f`.',
+    },
+  );
+}
+
+/** A JSON document, stored as the document itself. MariaDB names the column `longtext` with a `json_valid` check; its catalog reader reports that column as `json`. */
+export const mysqlJson = sqlDataType('mysql/json', {
+  texts: [{ text: 'json', written: true, catalog: true }],
+  read: (json) => json,
+  casts: {},
 });
 
 /** The length of `varchar`, which MySQL requires, up to the largest it accepts. */
@@ -437,6 +483,9 @@ export const mysqlDataTypes: readonly DataType[] = [
   mysqlBigint,
   mysqlDecimal,
   mysqlDouble,
+  mysqlBoolean,
+  mysqlLongblob,
+  mysqlJson,
   mysqlVarchar,
   mysqlChar,
   mysqlDatetime,

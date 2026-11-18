@@ -29,6 +29,7 @@ import {
   sqlVarcharDescriptor,
 } from '@internal/sql-relational-core/ast';
 import { hasDigitsBelowAMillisecond } from '@internal/type-implementations/date';
+import { mysqlBooleanDescriptor } from './boolean-codec';
 import { identityJsonProjection, MysqlCodecDescriptor, mysqlCodec } from './codec-descriptor';
 import {
   MYSQL_BIGINT_CODEC_ID,
@@ -72,6 +73,8 @@ import {
 } from './date-time-values';
 import { mysqlDecimalDescriptor } from './decimal-codec';
 import { errorColumnUnreadable, errorColumnUnwritable, mysqlError } from './errors';
+import { mysqlJsonDescriptor } from './json-codec';
+import { mysqlLongblobDescriptor } from './longblob-codec';
 
 const DECIMAL_INTEGER = /^-?\d+$/;
 /** A double as MySQL and MariaDB print it: `1.5`, `-2`, `9.007199254740992e15`. */
@@ -505,6 +508,9 @@ export const codecDescriptors = [
   mysqlBigintNumberDescriptor,
   mysqlDoubleDescriptor,
   mysqlDecimalDescriptor,
+  mysqlBooleanDescriptor,
+  mysqlLongblobDescriptor,
+  mysqlJsonDescriptor,
   mysqlDatetimeDescriptor,
   mysqlDatetimeTemporalDescriptor,
   mysqlDatetimeStringDescriptor,

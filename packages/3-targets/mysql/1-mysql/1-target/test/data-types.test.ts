@@ -6,6 +6,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import {
   mysqlBigint,
+  mysqlBoolean,
   mysqlChar,
   mysqlDataTypes,
   mysqlDatetime,
@@ -14,6 +15,9 @@ import {
   mysqlDouble,
   mysqlEnum,
   mysqlInt,
+  mysqlJson,
+  mysqlLongblob,
+  mysqlLongblobFromHexText,
   mysqlText,
   mysqlVarchar,
   renderMysqlEnumType,
@@ -25,6 +29,7 @@ describe('MySQL data types', () => {
   it('registers the types this target writes', () => {
     expect(mysqlDataTypes.map((type) => type.id).sort()).toEqual([
       'mysql/bigint',
+      'mysql/boolean',
       'mysql/char',
       'mysql/date',
       'mysql/datetime',
@@ -33,6 +38,8 @@ describe('MySQL data types', () => {
       'mysql/duration',
       'mysql/enum',
       'mysql/int',
+      'mysql/json',
+      'mysql/longblob',
       'mysql/text',
       'mysql/time',
       'mysql/timestamp',
@@ -52,6 +59,9 @@ describe('MySQL data types', () => {
     [mysqlDatetime, {}, 'datetime'],
     [mysqlDatetime, { precision: 3 }, 'datetime(3)'],
     [mysqlEnum, { values: ['USER', 'ADMIN'] }, "enum('USER','ADMIN')"],
+    [mysqlBoolean, {}, 'tinyint(1)'],
+    [mysqlLongblob, {}, 'longblob'],
+    [mysqlJson, {}, 'json'],
   ])('writes %s with %j as %s', (type, params, text) => {
     expect(renderSqlTypeName(type as SqlDataType, params)).toBe(text);
   });
@@ -67,6 +77,9 @@ describe('MySQL data types', () => {
     ['text', 'mysql/text', {}],
     ['datetime', 'mysql/datetime', {}],
     ['datetime(3)', 'mysql/datetime', { precision: 3 }],
+    ['tinyint(1)', 'mysql/boolean', {}],
+    ['longblob', 'mysql/longblob', {}],
+    ['json', 'mysql/json', {}],
   ])('reads the reported type %s as %s', (text, id, typeParams) => {
     const resolved = resolveReportedSqlType(reported(text), mysqlDataTypes);
     expect({ id: resolved?.dataType.id, typeParams: resolved?.typeParams }).toEqual({
@@ -82,6 +95,25 @@ describe('MySQL data types', () => {
       mysqlDouble.casts[mysqlDecimal.id]?.('1.5'),
     ]).toEqual([7, 9007199254740992, 1.5]);
     expect(() => mysqlDouble.valueFrom(Number.NaN, {})).toThrow(/a finite number/);
+  });
+
+  it.each(['tinyint', 'tinyint(4)', 'tinyint unsigned', 'longtext', 'blob'])(
+    'claims no reported %s, which no type this target writes stores',
+    (text) => {
+      expect(resolveReportedSqlType(reported(text), mysqlDataTypes)).toBeUndefined();
+    },
+  );
+
+  it('stores a boolean as true or false, bytes as upper-case hex and a JSON document as itself', () => {
+    expect({
+      boolean: mysqlBoolean.valueFrom(true, {}).value,
+      bytes: mysqlLongblob.valueFrom('00FF', {}).value,
+      json: mysqlJson.valueFrom({ a: [1, null] }, {}).value,
+      hexText: mysqlLongblobFromHexText('00ff'),
+    }).toEqual({ boolean: true, bytes: '00FF', json: { a: [1, null] }, hexText: '00FF' });
+    expect(() => mysqlBoolean.valueFrom(1, {})).toThrow(/a boolean/);
+    expect(() => mysqlLongblob.valueFrom('00ff', {})).toThrow(/upper-case hexadecimal/);
+    expect(() => mysqlLongblobFromHexText('0g')).toThrow(/is not hex text/);
   });
 
   it('claims no reported enum type, which is compared by its catalog text', () => {

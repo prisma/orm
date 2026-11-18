@@ -93,8 +93,11 @@ const rows: MysqlCatalogRows = {
   ],
 };
 
-const readLiteral: ReadLiteralDefault = async (_table, _column, raw) => ({
-  resolvedDefault: { kind: 'literal', value: raw },
+const readLiteral: ReadLiteralDefault = async (_table, _column, raw, body) => ({
+  resolvedDefault: {
+    kind: 'literal',
+    value: typeof body === 'string' ? body : `${raw} as ${body.length} bytes`,
+  },
 });
 
 describe('buildMysqlSchemaIR', () => {
@@ -181,6 +184,53 @@ describe('buildMysqlSchemaIR', () => {
         },
       }),
     );
+  });
+
+  it('reads a boolean, bytes and JSON column and their defaults, the bytes as the hex literal MySQL reports', async () => {
+    const column = (
+      column_name: string,
+      column_type: string,
+      column_default: string | null,
+      extra: string,
+    ) => ({
+      table_name: 'Flags',
+      column_name,
+      ordinal_position: String(column_name.length),
+      column_default,
+      is_nullable: 'NO',
+      column_type,
+      extra,
+    });
+    const schema = await buildMysqlSchemaIR(
+      {
+        tables: ['Flags'],
+        columns: [
+          column('on', 'tinyint(1)', '1', ''),
+          column('data', 'longblob', '0x00ff', 'DEFAULT_GENERATED'),
+          column('doc', 'json', '_utf8mb4\\\'{"a": 1}\\\'', 'DEFAULT_GENERATED'),
+          column('small', 'tinyint', null, ''),
+        ],
+        indexes: [],
+        constraints: [],
+        foreignKeys: [],
+      },
+      mysqlDataTypes,
+      readLiteral,
+    );
+    const columns = schema.tables['Flags']?.columns ?? {};
+    expect(
+      Object.fromEntries(
+        Object.entries(columns).map(([name, read]) => [
+          name,
+          [read.storedType?.id, read.resolvedDefault],
+        ]),
+      ),
+    ).toEqual({
+      on: ['mysql/boolean', { kind: 'literal', value: '1' }],
+      data: ['mysql/longblob', { kind: 'literal', value: '0x00ff as 2 bytes' }],
+      doc: ['mysql/json', { kind: 'literal', value: '{"a": 1}' }],
+      small: [undefined, undefined],
+    });
   });
 
   it('resolves each column’s reported type to the data type that claims it', async () => {
