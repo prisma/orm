@@ -78,8 +78,12 @@ function otherTargetGuidance(
   };
 }
 
-function refuseOtherTarget(origin: ContractOrigin, loaded: object, expected: ConfigTarget): void {
-  const actual: unknown = Object(loaded).target;
+function refuseOtherTarget(
+  origin: ContractOrigin,
+  loaded: Record<string, unknown>,
+  expected: ConfigTarget,
+): void {
+  const actual = loaded['target'];
   const configured = expected.target.targetId;
   if (typeof actual !== 'string' || actual === configured) return;
   throw contractError(
@@ -104,8 +108,7 @@ export function refuseOtherTargetOnLoad(
       ...source,
       load: async (context) => {
         const result = await source.load(context);
-        const loaded: unknown =
-          isRecord(result) && result.ok === true ? Object(result).value : undefined;
+        const loaded: unknown = isRecord(result) && result.ok === true ? result.value : undefined;
         if (isRecord(loaded)) refuseOtherTarget(source, loaded, expected);
         return result;
       },
@@ -113,26 +116,26 @@ export function refuseOtherTargetOnLoad(
   };
 }
 
-function isRecord(value: unknown): value is object {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === 'string' && value.length > 0;
 
-function isContractOfAnyFamily(value: unknown): value is object {
+function isContractOfAnyFamily(value: unknown): value is Record<string, unknown> {
   if (!isRecord(value)) return false;
-  const { targetFamily, target, storage } = Object(value);
+  const storage = value['storage'];
   return (
-    isNonEmptyString(targetFamily) &&
-    isNonEmptyString(target) &&
+    isNonEmptyString(value['targetFamily']) &&
+    isNonEmptyString(value['target']) &&
     isRecord(storage) &&
-    isRecord(Object(storage).namespaces)
+    isRecord(storage['namespaces'])
   );
 }
 
 function isSqlContract(value: unknown): value is Contract {
-  return isContractOfAnyFamily(value) && Object(value).targetFamily === 'sql';
+  return isContractOfAnyFamily(value) && value['targetFamily'] === 'sql';
 }
 
 export function emptyContract(options: {
