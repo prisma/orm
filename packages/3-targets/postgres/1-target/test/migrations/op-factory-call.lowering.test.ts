@@ -44,6 +44,7 @@ import {
   DropPostgresRlsPolicyCall,
   DropTableCall,
   EnableRowLevelSecurityCall,
+  MIGRATION_MODULE,
   RawSqlCall,
   RenameIndexCall,
   RenamePostgresRlsPolicyCall,
@@ -175,8 +176,8 @@ describe('AddColumnCall', () => {
       'this.addColumn({ schema: "public", table: "user", column: col("bio", "text", { notNull: true, default: lit("active") }) })',
     );
     expect(call.importRequirements()).toEqual([
-      { moduleSpecifier: '@internal/postgres/migration', symbol: 'col' },
-      { moduleSpecifier: '@internal/postgres/migration', symbol: 'lit' },
+      { moduleSpecifier: MIGRATION_MODULE, symbol: 'col' },
+      { moduleSpecifier: MIGRATION_MODULE, symbol: 'lit' },
     ]);
   });
 
@@ -191,7 +192,7 @@ describe('AddColumnCall', () => {
       'this.addColumn({ schema: "public", table: "user", column: col("label", "text", { default: fn(sql`concat("prefix", \'user\')`) }) })',
     );
     expect(call.importRequirements()).toContainEqual({
-      moduleSpecifier: '@internal/postgres/migration',
+      moduleSpecifier: MIGRATION_MODULE,
       symbol: 'sql',
     });
   });
@@ -972,7 +973,7 @@ describe('CreateIndexCall', () => {
       'this.createIndex({ schema: "public", table: "user", index: "user_email_eq", expression: sql`lower(email)`, extras: { where: sql`deleted_at IS NULL`, unique: true } })',
     );
     expect(call.importRequirements()).toEqual([
-      { moduleSpecifier: '@internal/postgres/migration', symbol: 'sql' },
+      { moduleSpecifier: MIGRATION_MODULE, symbol: 'sql' },
     ]);
   });
 
@@ -1288,7 +1289,7 @@ describe('DataTransformCall', () => {
   it('importRequirements() references only the placeholder facade import (endContract comes from the scaffold)', () => {
     const call = new DataTransformCall('Backfill status', 'check', 'run');
     expect(call.importRequirements()).toEqual([
-      { moduleSpecifier: '@internal/postgres/migration', symbol: 'placeholder' },
+      { moduleSpecifier: MIGRATION_MODULE, symbol: 'placeholder' },
     ]);
   });
 });
@@ -1424,7 +1425,7 @@ describe('CreatePostgresRlsPolicyCall', () => {
       ].join('\n'),
     );
     expect(call.importRequirements()).toEqual([
-      { moduleSpecifier: '@internal/postgres/migration', symbol: 'sql' },
+      { moduleSpecifier: MIGRATION_MODULE, symbol: 'sql' },
     ]);
   });
 

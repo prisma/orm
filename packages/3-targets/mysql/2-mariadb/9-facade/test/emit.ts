@@ -16,11 +16,17 @@ export async function emitFixture(name: string): Promise<EmittedContract> {
   const { contract } = defineConfig({
     contract: resolve(import.meta.dirname, 'fixtures', `${name}.prisma`),
   });
-  if (contract === undefined) throw new Error('defineConfig set no contract');
+  if (contract?.typesModule === undefined) {
+    throw new Error('defineConfig set no contract types module');
+  }
   const client = createMariadbControlClient();
   try {
     const result = await client.emit({
-      contractConfig: { source: contract.source, output: contract.output ?? 'contract.json' },
+      contractConfig: {
+        source: contract.source,
+        output: contract.output ?? 'contract.json',
+        typesModule: contract.typesModule,
+      },
     });
     if (!result.ok) throw new Error(JSON.stringify(result.failure));
     const contractJson: unknown = JSON.parse(result.value.contractJson);

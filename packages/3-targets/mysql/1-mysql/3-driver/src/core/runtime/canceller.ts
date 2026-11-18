@@ -29,9 +29,12 @@ export class Canceller {
   #closed = false;
   #idleTimer: NodeJS.Timeout | undefined;
 
-  constructor(url: string, idleTimeoutMillis: number) {
+  readonly #displayName: string;
+
+  constructor(url: string, idleTimeoutMillis: number, displayName: string) {
     this.#url = url;
     this.#idleTimeoutMillis = idleTimeoutMillis;
+    this.#displayName = displayName;
   }
 
   /** Sends `KILL QUERY` for `threadId`. Never rejects. A kept connection that is no longer valid is replaced once. */
@@ -105,7 +108,10 @@ export class Canceller {
   async #open(): Promise<Connection | undefined> {
     try {
       const connection = await createConnection(
-        mysqlConnectionOptions(this.#url, { connectTimeoutMs: CANCEL_TIMEOUT_MILLIS }),
+        mysqlConnectionOptions(this.#url, {
+          connectTimeoutMs: CANCEL_TIMEOUT_MILLIS,
+          displayName: this.#displayName,
+        }),
       );
       connection.on('error', () => undefined);
       if (this.#closed) {

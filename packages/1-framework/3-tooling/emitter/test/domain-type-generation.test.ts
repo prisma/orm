@@ -2,6 +2,7 @@ import type { ContractField, ContractModel, ContractValueObject } from '@interna
 import { crossRef } from '@internal/contract/types';
 import type { CodecLookup } from '@internal/framework-components/codec';
 import type { TypesImportSpec } from '@internal/framework-components/emission';
+import { renderImports } from '@internal/ts-render';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -9,7 +10,6 @@ import {
   generateCodecTypeIntersection,
   generateContractFieldDescriptor,
   generateHashTypeAliases,
-  generateImportLines,
   generateModelFieldsType,
   generateModelRelationsType,
   generateModelsType,
@@ -21,6 +21,7 @@ import {
   serializeExecutionType,
   serializeObjectKey,
   serializeValue,
+  typesImportRequirements,
 } from '../src/domain-type-generation';
 
 /**
@@ -194,6 +195,11 @@ describe('generateModelsType', () => {
 
   it('returns Record<string, never> for empty models', () => {
     expect(generateModelsType({}, noopStorage)).toBe('Record<string, never>');
+  });
+
+  it('orders models by code unit, whatever the locale', () => {
+    const result = generateModelsType({ alpha: makeModel(), Beta: makeModel() }, noopStorage);
+    expect(result.indexOf('readonly Beta:')).toBeLessThan(result.indexOf('readonly alpha:'));
   });
 
   it('generates model with fields, relations, and storage', () => {
@@ -517,12 +523,17 @@ describe('deduplicateImports', () => {
   });
 });
 
-describe('generateImportLines', () => {
+function renderedImportLines(imports: TypesImportSpec[]): string[] {
+  const rendered = renderImports(typesImportRequirements(imports));
+  return rendered === '' ? [] : rendered.split('\n');
+}
+
+describe('typesImportRequirements', () => {
   it('generates import with alias', () => {
     const imports: TypesImportSpec[] = [
       { package: '@internal/adapter', named: 'CodecTypes', alias: 'PgCodecTypes' },
     ];
-    const lines = generateImportLines(imports);
+    const lines = renderedImportLines(imports);
     expect(lines).toEqual(["import type { CodecTypes as PgCodecTypes } from '@internal/adapter';"]);
   });
 
@@ -530,7 +541,7 @@ describe('generateImportLines', () => {
     const imports: TypesImportSpec[] = [
       { package: '@internal/adapter', named: 'Vector', alias: 'Vector' },
     ];
-    const lines = generateImportLines(imports);
+    const lines = renderedImportLines(imports);
     expect(lines).toEqual(["import type { Vector } from '@internal/adapter';"]);
   });
 
@@ -543,7 +554,7 @@ describe('generateImportLines', () => {
       },
       { package: '@test/mongo/codec-types', named: 'Vector', alias: 'Vector' },
     ];
-    const lines = generateImportLines(imports);
+    const lines = renderedImportLines(imports);
     expect(lines).toEqual([
       "import type { CodecTypes as MongoCodecTypes, Vector } from '@test/mongo/codec-types';",
     ]);
@@ -555,7 +566,7 @@ describe('generateImportLines', () => {
       { package: '@scope/zeta/codec-types', named: 'CodecTypes', alias: 'ZetaTypes' },
       { package: '@scope/alpha/operation-types', named: 'QueryOperationTypes', alias: 'AlphaOps' },
     ];
-    const lines = generateImportLines(imports);
+    const lines = renderedImportLines(imports);
     expect(lines).toEqual([
       "import type { QueryOperationTypes as AlphaOps } from '@scope/alpha/operation-types';",
       "import type { CodecTypes as ZetaTypes, Numeric } from '@scope/zeta/codec-types';",

@@ -1,5 +1,6 @@
 import { col, fn, lit } from '@internal/sql-relational-core/contract-free';
 import { TsExpression } from '@internal/ts-render';
+import { workspaceMigrationModule } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import * as opFactoryCalls from '../../src/core/migrations/op-factory-call';
 import {
@@ -41,6 +42,7 @@ describe('renderCallsToTypeScript (sqlite)', () => {
       from: FROM_HASH,
       to: TO_HASH,
       snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+      migrationModule: workspaceMigrationModule.sqlite,
     });
 
     expect(output).toContain(
@@ -70,6 +72,7 @@ describe('renderCallsToTypeScript (sqlite)', () => {
       from: FROM_HASH,
       to: TO_HASH,
       snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+      migrationModule: workspaceMigrationModule.sqlite,
     });
 
     expect(output).not.toContain('describe()');
@@ -84,6 +87,7 @@ describe('renderCallsToTypeScript (sqlite)', () => {
       from: null,
       to: TO_HASH,
       snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+      migrationModule: workspaceMigrationModule.sqlite,
     });
 
     expect(output).toContain('export default class M extends Migration<never, End> {');
@@ -104,6 +108,7 @@ describe('renderCallsToTypeScript (sqlite)', () => {
       from: null,
       to: TO_HASH,
       snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+      migrationModule: workspaceMigrationModule.sqlite,
     });
     expect(output).toContain('this.dropTable({ table: "stale" })');
   });
@@ -113,6 +118,7 @@ describe('renderCallsToTypeScript (sqlite)', () => {
       from: TO_HASH,
       to: TO_HASH,
       snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+      migrationModule: workspaceMigrationModule.sqlite,
     });
 
     expect(output).toContain(
@@ -134,7 +140,12 @@ describe('renderCallsToTypeScript (sqlite)', () => {
           col('created', 'TEXT', { notNull: true, default: fn("datetime('now')") }),
         ]),
       ],
-      { from: null, to: TO_HASH, snapshotsImportPath: SNAPSHOTS_IMPORT_PATH },
+      {
+        from: null,
+        to: TO_HASH,
+        snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+        migrationModule: workspaceMigrationModule.sqlite,
+      },
     );
 
     expect(output).toContain(
@@ -148,7 +159,12 @@ describe('renderCallsToTypeScript (sqlite)', () => {
   it('renders a function default holding both quote kinds as a sql template', () => {
     const output = renderTypeScript(
       [new CreateTableCall('t', [col('label', 'TEXT', { default: fn(`printf("%s", 'x')`) })])],
-      { from: null, to: TO_HASH, snapshotsImportPath: SNAPSHOTS_IMPORT_PATH },
+      {
+        from: null,
+        to: TO_HASH,
+        snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+        migrationModule: workspaceMigrationModule.sqlite,
+      },
     );
 
     expect(output).toContain(
@@ -246,6 +262,7 @@ describe('renderCallsToTypeScript (sqlite) — the sql import', () => {
       from: null,
       to: TO_HASH,
       snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+      migrationModule: workspaceMigrationModule.sqlite,
     });
 
   it('the fixture list covers every op-factory-call class (a new class must be added here)', () => {
@@ -256,6 +273,20 @@ describe('renderCallsToTypeScript (sqlite) — the sql import', () => {
     );
     const covered = new Set(oneCallPerClass.map((call) => call.constructor));
     expect(allCallClasses.filter((cls) => !covered.has(cls)).map((cls) => cls.name)).toEqual([]);
+  });
+
+  it('imports every package name from the module the config names, for every op-factory-call class', () => {
+    const output = renderTypeScript([...oneCallPerClass, ...templateCalls, ...fallbackOnlyCalls], {
+      from: FROM_HASH,
+      to: TO_HASH,
+      snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+      migrationModule: '@acme/orm-db/migration',
+    });
+    const packageImports = [...output.matchAll(/from '([^']+)'/g)]
+      .map(([, module]) => module ?? '')
+      .filter((module) => !module.startsWith('.'));
+
+    expect(packageImports).toEqual(['@acme/orm-db/migration']);
   });
 
   it.each(

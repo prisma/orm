@@ -44,9 +44,9 @@ export abstract class MysqlCodecDescriptor<P = void>
     if (ref.many === true) {
       throw structuredError(
         'RUNTIME.CODEC_DESCRIPTOR_ARRAY_UNSUPPORTED',
-        `Codec '${ref.codecId}' uses CodecRef.many, but MySQL has no stored scalar arrays.`,
+        `Codec '${ref.codecId}' uses CodecRef.many, but MySQL and MariaDB have no stored scalar arrays.`,
         {
-          why: 'MySQL codec descriptors project scalar values only.',
+          why: 'The codec descriptors MySQL and MariaDB share project scalar values only.',
           fix: 'Use a scalar CodecRef.',
           meta: { codecId: ref.codecId },
         },
@@ -201,9 +201,9 @@ export function buildMysqlCodecDescriptorRegistry(
       const codecId = candidateCodecId(descriptor);
       throw structuredError(
         'RUNTIME.CODEC_DESCRIPTOR_INVALID',
-        `Codec descriptor '${codecId}' is not a valid MySQL codec descriptor.`,
+        `Codec descriptor '${codecId}' is not a codec descriptor of the MySQL and MariaDB targets.`,
         {
-          why: 'MySQL codec registries require the mysql-codec discriminant and the MySQL descriptor methods.',
+          why: 'The codec registries of MySQL and MariaDB require the mysql-codec discriminant and the methods of MysqlCodecDescriptor.',
           fix: 'Extend MysqlCodecDescriptor or adapt a family descriptor with mysqlCodec().',
           meta: { codecId },
         },
@@ -212,11 +212,11 @@ export function buildMysqlCodecDescriptorRegistry(
     if (byId.has(descriptor.codecId)) {
       throw structuredError(
         'RUNTIME.DUPLICATE_CODEC',
-        `Duplicate MySQL codec descriptor id '${descriptor.codecId}'.`,
+        `Duplicate codec descriptor id '${descriptor.codecId}' in a MySQL or MariaDB codec registry.`,
         {
-          why: 'Each codecId must resolve to exactly one MySQL descriptor during registry composition.',
+          why: 'Each codecId must resolve to exactly one descriptor during registry composition.',
           fix: 'Remove the duplicate target, adapter, or extension contribution.',
-          meta: { codecId: descriptor.codecId, target: 'mysql' },
+          meta: { codecId: descriptor.codecId },
         },
       );
     }

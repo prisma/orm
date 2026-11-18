@@ -40,7 +40,7 @@ import { type CliInvocation, cliCommand, cliInvocation } from '../../utils/print
 import { dataLine } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
-import { appRefsDirFor, baseDirFor, migrationsDirFor } from '../migration/paths';
+import { appRefsDirFor, migrationsDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 import { controlProgressReporter } from '../progress';
 import {
@@ -575,7 +575,7 @@ export function createDbSignCommand(
           name: refName,
           contractJson: signedSource.json,
           contractJsonPath: signedSource.jsonPath,
-          projectDir: baseDirFor(ctx.config),
+          config: ctx.config,
           client,
         });
         if (!preflight.ok) {

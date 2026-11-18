@@ -1,5 +1,6 @@
 import { sqliteCodecRegistry } from '@internal/target-sqlite/codecs';
 import { sqliteAdapterContractContributions } from './contract-contributions';
+import { moduleBase } from './module-base';
 
 export const sqliteAdapterDescriptorMeta = {
   kind: 'adapter',
@@ -13,7 +14,7 @@ export const sqliteAdapterDescriptorMeta = {
     codecTypes: {
       codecDescriptors: Array.from(sqliteCodecRegistry.values()),
       import: {
-        package: '@internal/adapter-sqlite/codec-types',
+        package: `${moduleBase}/codec-types`,
         named: 'CodecTypes',
         alias: 'SqliteTypes',
       },

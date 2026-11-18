@@ -11,3 +11,16 @@
 | 5 | Docs | The docs, ADRs, `coupling.md` row 17, release note and upgrade instructions the design lists. | 4 | `pnpm lint:docs`-style checks the repo has pass; links resolve |
 
 After dispatch 5: `/drive-code-review` without the walkthrough, fixes, a second review if the fixes are substantial, manual QA with the two MariaDB probes, then the PR.
+
+# Slice 6b-2 plan — MariaDB runtime
+
+**Spec:** [`spec.md`](./spec.md), sections 2 to 6. One pull request, branch `tml-3697-mariadb-runtime` from `main` after 6b-1 merged (prisma/orm#31058). One implementer (Opus) carries every dispatch; reviewers run on Fable.
+
+| # | Dispatch | Outcome | Builds on | Done when |
+| --- | --- | --- | --- | --- |
+| 1 | MySQL ORM aggregates | The MySQL target supplies the ORM client's aggregates the way the Postgres target does, so `include('posts', (p) => p.count())` and `combine()` with an aggregate branch run on MySQL. | — | MySQL's live include tests cover scalar includes and `combine()` and pass on MySQL 8.4 |
+| 2 | Renderer class | The SQL of every MySQL renderer test input and live-test query is captured as snapshots, rendered without a database. Then, in its own commit, the renderer becomes `MysqlSqlRenderer` with every snapshot unchanged. `MariadbSqlRenderer` overrides the upsert to write `VALUES(c)` and no row alias. | 1 | Snapshots unchanged across the conversion commit; MariaDB upsert rendering tested |
+| 3 | Runtime and `mariadb()` | Runtime target and adapter factories; `createMysqlClient`; `@prisma/orm-mariadb/runtime` and `/static`; error messages true of MariaDB (spec section 5). | 2 | Package tests pass; `mariadb()` refuses a contract of another target |
+| 4 | Live tests and the example | MySQL's ORM live test files run against MySQL 8.4 and MariaDB 10.11, each difference stated in a test. `examples/prisma-8-demo-mariadb` reads and writes, and runs in the Test Examples CI job. Docs, `coupling.md`, upgrade instructions if any public surface changed. | 3 | Live tests pass on both servers locally; the example's tests pass against MariaDB 10.11 |
+
+After dispatch 4: `/drive-code-review` without the walkthrough, fixes, a second review if the fixes are substantial, manual QA on both servers, then the PR.

@@ -3,6 +3,7 @@ import type { CodecTypes } from '../types/codec-types';
 import type { QueryOperationTypes, QueryOperationTypesForCodecs } from '../types/operation-types';
 import { postgisAuthoringTypes } from './authoring';
 import { postgisDataTypes } from './data-types';
+import { moduleBase } from './module-base';
 import { postgisCodecRegistry } from './registry';
 
 const postgisTypeId = 'pg/geometry@1' as const;
@@ -151,14 +152,14 @@ const postgisPackMetaBase = {
     codecTypes: {
       codecDescriptors: Array.from(postgisCodecRegistry.values()),
       import: {
-        package: '@internal/extension-postgis/codec-types',
+        package: `${moduleBase}/codec-types`,
         named: 'CodecTypes',
         alias: 'PostgisTypes',
       },
     },
     queryOperationTypes: {
       import: {
-        package: '@internal/extension-postgis/operation-types',
+        package: `${moduleBase}/operation-types`,
         named: 'QueryOperationTypes',
         alias: 'PostgisQueryOperationTypes',
       },

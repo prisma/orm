@@ -28,13 +28,17 @@ export function mysqlError(
   return structuredError(code, message, options);
 }
 
-/** The refusal of a query a later slice of the MySQL target can render: `what` names the feature, as in `Lowering queries`. */
+/** The refusal of a query the MySQL target's codecs cannot render yet: `what` names the feature, as in `Reading a raw column inside an include`. */
 export function mysqlQueryNotYetSupported(what: string): StructuredError {
-  return mysqlError('RUNTIME.AST_UNSUPPORTED', `${what} is not yet supported on MySQL.`, {
-    why: 'The MySQL target renders reads; writes and some query forms are not built yet.',
-    fix: 'Use a Postgres or SQLite target for this query until the MySQL target supports it.',
-    meta: { target: 'mysql', feature: what },
-  });
+  return mysqlError(
+    'RUNTIME.AST_UNSUPPORTED',
+    `${what} is not yet supported on MySQL and MariaDB.`,
+    {
+      why: 'The codecs MySQL and MariaDB share do not render this query form yet.',
+      fix: 'Write the query another way, or use a Postgres or SQLite target for it.',
+      meta: { feature: what },
+    },
+  );
 }
 
 const TEMPORAL_UNAVAILABLE_FIX =
@@ -86,14 +90,14 @@ export function errorTemporalNonIsoCalendar(codecId: string, calendarId: string)
     'RUNTIME.ENCODE_FAILED',
     `Codec '${codecId}' accepts only the iso8601 calendar, but the value carries '${calendarId}'.`,
     {
-      why: 'MySQL stores no calendar alongside a date, so a non-ISO calendar would be discarded on write and the value would read back as a different date than the one authored.',
+      why: 'MySQL and MariaDB store no calendar alongside a date, so a non-ISO calendar would be discarded on write and the value would read back as a different date than the one authored.',
       fix: 'Convert the value with .withCalendar("iso8601") before writing if the ISO projection is what you mean to store.',
       meta: { codecId, calendarId },
     },
   );
 }
 
-/** A date or time codec read a value from MySQL that is not a value of its type, such as a zero date or a `time` that is no time of day, or that `Temporal` cannot hold. */
+/** A date or time codec read a value from the database that is not a value of its type, such as a zero date or a `time` that is no time of day, or that `Temporal` cannot hold. */
 export function errorDateTimeUnreadable(options: {
   readonly codecId: string;
   readonly value: string;
@@ -103,9 +107,9 @@ export function errorDateTimeUnreadable(options: {
   const { codecId, value, detail } = options;
   return mysqlError(
     'RUNTIME.DECODE_FAILED',
-    `Codec '${codecId}' cannot read the value MySQL returned: ${JSON.stringify(value)}. ${detail}`,
+    `Codec '${codecId}' cannot read the value the database returned: ${JSON.stringify(value)}. ${detail}`,
     {
-      why: "MySQL can hold values the column's type does not, such as the zero date 0000-00-00 or a time of 838:59:59, when a row is written outside Prisma.",
+      why: "MySQL and MariaDB can hold values the column's type does not, such as the zero date 0000-00-00 or a time of 838:59:59, when a row is written outside Prisma.",
       fix: 'Rewrite the row with a value the column type holds, or read the column with a type that holds its text, such as String.',
       meta: { codecId, value: value.slice(0, 100) },
       ...ifDefined('cause', options.cause),
@@ -125,7 +129,7 @@ export function errorDateTimeUnwritable(options: {
     'RUNTIME.ENCODE_FAILED',
     `Codec '${codecId}' cannot write ${received}. ${detail}`,
     {
-      why: 'The codec refuses a value its column does not hold before it reaches MySQL.',
+      why: 'The codec refuses a value its column does not hold before it reaches the database.',
       fix: 'Write a value the column holds, as the message shows.',
       meta: { codecId, received: received.slice(0, 100) },
       ...ifDefined('cause', options.cause),

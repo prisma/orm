@@ -5,6 +5,7 @@ import { mongoFamilyDescriptor } from '@internal/family-mongo/control';
 import { mongoContract } from '@internal/mongo-contract-psl/provider';
 import { mongoTargetDescriptor } from '@internal/target-mongo/control';
 import mongoTargetPack from '@internal/target-mongo/pack';
+import { restateTypeDeclarations } from '@internal/target-package-config/type-declarations';
 import { describe, expect, it } from 'vitest';
 import { defineConfig } from '../../src/config/define-config';
 
@@ -27,7 +28,9 @@ describe('defineConfig facade', () => {
 
     expect(facadeConfig.family).toBe(manualConfig.family);
     expect(facadeConfig.target).toBe(manualConfig.target);
-    expect(facadeConfig.adapter).toBe(manualConfig.adapter);
+    expect(facadeConfig.adapter).toEqual(
+      restateTypeDeclarations(mongoAdapter, '@internal/mongo/contract-types'),
+    );
     expect(facadeConfig.driver).toBe(manualConfig.driver);
     expect(facadeConfig.contract?.output).toBe(manualConfig.contract?.output);
     expect(facadeConfig.contract?.source.inputs).toEqual(manualConfig.contract?.source.inputs);
@@ -126,13 +129,12 @@ describe('defineConfig facade', () => {
     expect(config.migrations?.dir).toBe('custom-migrations');
   });
 
-  it('omits db and migrations when they are not provided', () => {
+  it('omits db when it is not provided', () => {
     const config = defineConfig({
       contract: './prisma/contract.prisma',
     });
 
     expect(Object.hasOwn(config, 'db')).toBe(false);
-    expect(Object.hasOwn(config, 'migrations')).toBe(false);
   });
 
   it('passes extensions through to config', () => {
@@ -169,5 +171,16 @@ describe('defineConfig facade', () => {
     const config = defineConfig({ contract: './prisma/contract.prisma' });
 
     expect(Object.hasOwn(config, 'formatter')).toBe(false);
+  });
+});
+
+describe('the modules generated files import from', () => {
+  it('names its own contract-types and migration modules', () => {
+    const config = defineConfig({ contract: './prisma/contract.prisma' });
+
+    expect([config.contract?.typesModule, config.migrations]).toEqual([
+      '@internal/mongo/contract-types',
+      { module: '@internal/mongo/migration' },
+    ]);
   });
 });

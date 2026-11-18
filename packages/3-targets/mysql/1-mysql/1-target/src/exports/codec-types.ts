@@ -5,7 +5,9 @@
 import type { ExtractCodecTypes } from '@internal/sql-relational-core/ast';
 import {
   mysqlBigintDescriptor,
+  mysqlBigintNumberDescriptor,
   mysqlDatetimeDescriptor,
+  mysqlDoubleDescriptor,
   mysqlEnumDescriptor,
   mysqlIntDescriptor,
   mysqlSqlCharDescriptor,
@@ -33,6 +35,8 @@ const codecDescriptorMap = {
   text: mysqlTextDescriptor,
   int: mysqlIntDescriptor,
   bigint: mysqlBigintDescriptor,
+  bigintnumber: mysqlBigintNumberDescriptor,
+  double: mysqlDoubleDescriptor,
   datetime: mysqlDatetimeDescriptor,
   'datetime-temporal': mysqlDatetimeTemporalDescriptor,
   'datetime-string': mysqlDatetimeStringDescriptor,

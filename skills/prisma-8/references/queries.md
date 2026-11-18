@@ -147,7 +147,7 @@ Every read terminal (`.all()`, and `db.query(plan)` for a SQL-builder plan) retu
 
 There is no `.stream()` method on a client or on a connection.
 
-## Prepared statements (Postgres, SQLite, MySQL, MongoDB)
+## Prepared statements (Postgres, SQLite, MySQL, MariaDB, MongoDB)
 
 This section covers the SQL clients. MongoDB's `db.prepare` has the same shape, takes query-builder plans and ORM `.prepared` reads, and runs against `await db.runtime()`; see *Workflow — Prepared statements* in [`queries-mongo.md`](queries-mongo.md).
 

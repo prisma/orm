@@ -31,7 +31,7 @@ function writeProject(dir: string, migrationsDir: string, configName = 'prisma.c
   const configPath = join(dir, configName);
   const config = readFileSync(sqlitePslConfigFixture, 'utf-8')
     .replace('{{DB_PATH}}', () => join(dir, 'journey.db'))
-    .replace("migrations: { dir: 'migrations' }", () => `migrations: { dir: '${migrationsDir}' }`);
+    .replace("migrations: { dir: 'migrations',", () => `migrations: { dir: '${migrationsDir}',`);
   writeFileSync(configPath, config, 'utf-8');
   writeFileSync(join(dir, 'contract.prisma'), PSL, 'utf-8');
   writeProjectManifest(dir);

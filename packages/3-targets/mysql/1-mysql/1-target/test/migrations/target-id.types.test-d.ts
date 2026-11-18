@@ -18,7 +18,6 @@ declare const lowerer: ExecuteRequestLowerer;
 test('the control target factory keeps the target id of the meta it is given', () => {
   const mariadb = createMysqlControlTargetDescriptor({
     descriptorMeta: { ...mysqlTargetDescriptorMeta, targetId: 'mariadb', id: 'mariadb' },
-    migrationModule: '@internal/mariadb/migration',
   });
   expectTypeOf(mariadb).toEqualTypeOf<
     SqlControlTargetDescriptor<'mariadb', MysqlPlanTargetDetails>
@@ -31,7 +30,6 @@ test('the control target factory keeps the target id of the meta it is given', (
 test('the planner and its plans carry the target id they are given, which is required', () => {
   const mariadb = createMysqlMigrationPlanner(lowerer, {
     targetId: 'mariadb',
-    migrationModule: '@internal/mariadb/migration',
   });
   expectTypeOf(mariadb).toEqualTypeOf<MysqlMigrationPlanner<'mariadb'>>();
   // @ts-expect-error the planner has no default target

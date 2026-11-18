@@ -7,6 +7,7 @@
  */
 
 import type { CodecTypes } from '../types/codec-types';
+import { moduleBase } from './module-base';
 import { arktypeJsonCodecRegistry } from './registry';
 
 const arktypeJsonPackMetaBase = {
@@ -20,7 +21,7 @@ const arktypeJsonPackMetaBase = {
     codecTypes: {
       codecDescriptors: Array.from(arktypeJsonCodecRegistry.values()),
       import: {
-        package: '@internal/extension-arktype-json/codec-types',
+        package: `${moduleBase}/codec-types`,
         named: 'CodecTypes',
         alias: 'ArktypeJsonTypes',
       },

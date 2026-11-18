@@ -1,13 +1,13 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { platformEntrypointOf } from '@internal/publish-surface/import-roots';
+import { platformEntrypointOf } from '@internal/publish-surface/platform-entrypoints';
 import {
   excludedSubpaths,
   publicShells,
   type ShellDefinition,
   type ShellName,
 } from '@internal/publish-surface/shells';
-import { init as initLexer, parse as parseModule } from 'es-module-lexer';
+import { init as initLexer, parse as parseModule } from 'es-module-lexer/minimal';
 import type { UserConfig } from 'tsdown';
 import { defineConfig } from './base.ts';
 
@@ -212,6 +212,7 @@ export async function defineShellConfig(shellName: ShellName): Promise<UserConfi
     entry,
     copy: (shell.copy ?? []).map((pattern) => ({ from: resolve(repoRoot, pattern) })),
     skipNodeModulesBundle: false,
+    define: publishedModuleBaseDefine(shellName, internals),
     external: (id: string) => /^[@a-zA-Z]/.test(id) && !id.startsWith('@internal/'),
     dts: { enabled: true, sourcemap: true },
     exports: {
@@ -224,6 +225,32 @@ export async function defineShellConfig(shellName: ShellName): Promise<UserConfi
       'build:done': () => assertAggregatesComplete(shellName, shellDir, aggregates),
     },
   });
+}
+
+export const PUBLISHED_MODULE_BASE_PREFIX = '__PRISMA_PUBLISHED_MODULE_BASE__';
+
+export function publishedModuleBaseIdentifier(name: string): string {
+  return `${PUBLISHED_MODULE_BASE_PREFIX}${name
+    .replace(/^@internal\//, '')
+    .toUpperCase()
+    .replaceAll(/[^A-Z0-9]/g, '_')}`;
+}
+
+function publishedModuleBaseDefine(
+  shellName: ShellName,
+  internals: readonly InternalPackage[],
+): Record<string, string> {
+  const define: Record<string, string> = {};
+  for (const pkg of internals) {
+    const identifier = publishedModuleBaseIdentifier(pkg.name);
+    if (define[identifier] !== undefined) {
+      throw new ShellConfigError(
+        `${shellName} bundles two packages whose module base identifier is ${identifier}`,
+      );
+    }
+    define[identifier] = JSON.stringify(pkg.entry === '' ? shellName : `${shellName}/${pkg.entry}`);
+  }
+  return define;
 }
 
 /**
