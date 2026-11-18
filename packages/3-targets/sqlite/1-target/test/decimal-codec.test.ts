@@ -6,14 +6,11 @@ import {
   sqliteInteger,
   sqliteText,
 } from '../src/core/data-types';
-import {
-  sqliteDecimalStringColumn,
-  sqliteDecimalStringDescriptor,
-} from '../src/core/decimal-codec';
+import { sqliteDecimalColumn, sqliteDecimalDescriptor } from '../src/core/decimal-codec';
 import { fromContractJson, toContractJson } from './contract-json';
 
 const instanceCtx: CodecInstanceContext = { name: 'test' };
-const codec = sqliteDecimalStringDescriptor.factory()(instanceCtx);
+const codec = sqliteDecimalDescriptor.factory()(instanceCtx);
 
 const notString = (value: unknown): never => value as never;
 
@@ -63,9 +60,9 @@ describe('sqlite/decimal', () => {
 describe('sqlite/decimal@1', () => {
   it('compares by equality only: text sorts by its characters, so it offers no order and no arithmetic', () => {
     expect({
-      dataType: sqliteDecimalStringDescriptor.dataType,
-      traits: sqliteDecimalStringDescriptor.traits,
-      jsonType: sqliteDecimalStringDescriptor.jsonType,
+      dataType: sqliteDecimalDescriptor.dataType,
+      traits: sqliteDecimalDescriptor.traits,
+      jsonType: sqliteDecimalDescriptor.jsonType,
     }).toEqual({ dataType: 'sqlite/decimal', traits: ['equality'], jsonType: 'string' });
   });
 
@@ -125,10 +122,10 @@ describe('sqlite/decimal@1', () => {
   });
 
   it('renders a value literal as a string', () => {
-    expect(sqliteDecimalStringDescriptor.renderValueLiteral('12.50')).toBe('"12.50"');
+    expect(sqliteDecimalDescriptor.renderValueLiteral('12.50')).toBe('"12.50"');
   });
 
   it('has a column helper on its codec', () => {
-    expect(sqliteDecimalStringColumn()).toMatchObject({ codecId: 'sqlite/decimal@1' });
+    expect(sqliteDecimalColumn()).toMatchObject({ codecId: 'sqlite/decimal@1' });
   });
 });

@@ -50,7 +50,7 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { isValidDate } from '@internal/type-implementations/date';
 import { blindCast } from '@internal/utils/casts';
-import { sqliteIntegerBooleanDescriptor } from './boolean-codec';
+import { sqliteBooleanDescriptor } from './boolean-codec';
 import { defineSqliteCodecs, SqliteCodecDescriptor, sqliteCodec } from './codec-descriptor';
 import {
   SQLITE_BIGINT_CODEC_ID,
@@ -82,7 +82,7 @@ import {
   sqliteTimeTemporalDescriptor,
 } from './date-time-codecs';
 import { sqliteInstantMilliseconds } from './date-time-values';
-import { sqliteDecimalStringDescriptor } from './decimal-codec';
+import { sqliteDecimalDescriptor } from './decimal-codec';
 import { errorDateTimeUnwritable, sqliteError } from './errors';
 
 /**
@@ -893,6 +893,6 @@ export const codecDescriptors = defineSqliteCodecs([
   sqliteJsonDescriptor,
   sqliteBigintDescriptor,
   sqliteBigintNumberDescriptor,
-  sqliteDecimalStringDescriptor,
-  sqliteIntegerBooleanDescriptor,
+  sqliteDecimalDescriptor,
+  sqliteBooleanDescriptor,
 ]);

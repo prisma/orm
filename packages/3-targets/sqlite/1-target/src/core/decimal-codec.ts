@@ -55,7 +55,7 @@ function errorDecimalUnreadable(wire: unknown, ctx: SqlCodecCallContext): never 
   );
 }
 
-export class SqliteDecimalStringCodec extends CodecImpl<
+export class SqliteDecimalCodec extends CodecImpl<
   typeof SQLITE_DECIMAL_CODEC_ID,
   readonly ['equality'],
   string,
@@ -76,7 +76,7 @@ export class SqliteDecimalStringCodec extends CodecImpl<
   }
 }
 
-export class SqliteDecimalStringDescriptor extends SqliteCodecDescriptor<void> {
+export class SqliteDecimalDescriptor extends SqliteCodecDescriptor<void> {
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
@@ -88,15 +88,15 @@ export class SqliteDecimalStringDescriptor extends SqliteCodecDescriptor<void> {
   override renderValueLiteral(value: JsonValue): string | undefined {
     return renderTsLiteral(value);
   }
-  override factory(): (ctx: CodecInstanceContext) => SqliteDecimalStringCodec {
-    return () => new SqliteDecimalStringCodec(this, sqliteDecimal);
+  override factory(): (ctx: CodecInstanceContext) => SqliteDecimalCodec {
+    return () => new SqliteDecimalCodec(this, sqliteDecimal);
   }
 }
 
-export const sqliteDecimalStringDescriptor = new SqliteDecimalStringDescriptor();
+export const sqliteDecimalDescriptor = new SqliteDecimalDescriptor();
 
-export const sqliteDecimalStringColumn = () =>
-  column(sqliteDecimalStringDescriptor.factory(), sqliteDecimalStringDescriptor.codecId, undefined);
+export const sqliteDecimalColumn = () =>
+  column(sqliteDecimalDescriptor.factory(), sqliteDecimalDescriptor.codecId, undefined);
 
-sqliteDecimalStringColumn satisfies ColumnHelperFor<SqliteDecimalStringDescriptor>;
-sqliteDecimalStringColumn satisfies ColumnHelperForStrict<SqliteDecimalStringDescriptor>;
+sqliteDecimalColumn satisfies ColumnHelperFor<SqliteDecimalDescriptor>;
+sqliteDecimalColumn satisfies ColumnHelperForStrict<SqliteDecimalDescriptor>;

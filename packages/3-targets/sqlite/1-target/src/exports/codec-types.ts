@@ -5,7 +5,7 @@
  */
 
 import type { ExtractCodecTypes } from '@internal/sql-relational-core/ast';
-import { sqliteIntegerBooleanDescriptor } from '../core/boolean-codec';
+import { sqliteBooleanDescriptor } from '../core/boolean-codec';
 import type { JsonValue } from '../core/codec-helpers';
 import {
   sqliteBigintDescriptor,
@@ -31,7 +31,7 @@ import {
   sqliteTimeStringDescriptor,
   sqliteTimeTemporalDescriptor,
 } from '../core/date-time-codecs';
-import { sqliteDecimalStringDescriptor } from '../core/decimal-codec';
+import { sqliteDecimalDescriptor } from '../core/decimal-codec';
 
 const codecDescriptorMap = {
   char: sqliteSqlCharDescriptor,
@@ -54,8 +54,8 @@ const codecDescriptorMap = {
   bigint: sqliteBigintDescriptor,
   bigintnumber: sqliteBigintNumberDescriptor,
   raw: sqliteSqlRawDescriptor,
-  decimal: sqliteDecimalStringDescriptor,
-  boolean: sqliteIntegerBooleanDescriptor,
+  decimal: sqliteDecimalDescriptor,
+  boolean: sqliteBooleanDescriptor,
 } as const;
 
 type Resolve<T> = { readonly [K in keyof T]: { readonly [P in keyof T[K]]: T[K][P] } };

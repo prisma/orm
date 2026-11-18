@@ -1,14 +1,11 @@
 import type { CodecInstanceContext } from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
-import {
-  sqliteIntegerBooleanColumn,
-  sqliteIntegerBooleanDescriptor,
-} from '../src/core/boolean-codec';
+import { sqliteBooleanColumn, sqliteBooleanDescriptor } from '../src/core/boolean-codec';
 import { sqliteBoolean, sqliteInteger } from '../src/core/data-types';
 import { fromContractJson, toContractJson } from './contract-json';
 
 const instanceCtx: CodecInstanceContext = { name: 'test' };
-const codec = sqliteIntegerBooleanDescriptor.factory()(instanceCtx);
+const codec = sqliteBooleanDescriptor.factory()(instanceCtx);
 
 const notBoolean = (value: unknown): never => value as never;
 
@@ -35,9 +32,9 @@ describe('sqlite/boolean', () => {
 describe('sqlite/boolean@1', () => {
   it('compares by equality, on an integer column read as a boolean', () => {
     expect({
-      dataType: sqliteIntegerBooleanDescriptor.dataType,
-      traits: sqliteIntegerBooleanDescriptor.traits,
-      jsonType: sqliteIntegerBooleanDescriptor.jsonType,
+      dataType: sqliteBooleanDescriptor.dataType,
+      traits: sqliteBooleanDescriptor.traits,
+      jsonType: sqliteBooleanDescriptor.jsonType,
     }).toEqual({
       dataType: 'sqlite/boolean',
       traits: ['equality', 'boolean'],
@@ -113,10 +110,10 @@ describe('sqlite/boolean@1', () => {
   });
 
   it('renders a value literal as a boolean', () => {
-    expect(sqliteIntegerBooleanDescriptor.renderValueLiteral(true)).toBe('true');
+    expect(sqliteBooleanDescriptor.renderValueLiteral(true)).toBe('true');
   });
 
   it('has a column helper on its codec', () => {
-    expect(sqliteIntegerBooleanColumn()).toMatchObject({ codecId: 'sqlite/boolean@1' });
+    expect(sqliteBooleanColumn()).toMatchObject({ codecId: 'sqlite/boolean@1' });
   });
 });

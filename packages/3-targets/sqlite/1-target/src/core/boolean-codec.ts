@@ -52,7 +52,7 @@ function errorBooleanUnreadable(wire: unknown, ctx: SqlCodecCallContext): never 
   );
 }
 
-export class SqliteIntegerBooleanCodec extends CodecImpl<
+export class SqliteBooleanCodec extends CodecImpl<
   typeof SQLITE_BOOLEAN_CODEC_ID,
   readonly ['equality', 'boolean'],
   number | bigint | string,
@@ -72,7 +72,7 @@ export class SqliteIntegerBooleanCodec extends CodecImpl<
   }
 }
 
-export class SqliteIntegerBooleanDescriptor extends SqliteCodecDescriptor<void> {
+export class SqliteBooleanDescriptor extends SqliteCodecDescriptor<void> {
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
@@ -84,19 +84,15 @@ export class SqliteIntegerBooleanDescriptor extends SqliteCodecDescriptor<void> 
   override renderValueLiteral(value: JsonValue): string | undefined {
     return renderTsLiteral(value);
   }
-  override factory(): (ctx: CodecInstanceContext) => SqliteIntegerBooleanCodec {
-    return () => new SqliteIntegerBooleanCodec(this, sqliteBoolean);
+  override factory(): (ctx: CodecInstanceContext) => SqliteBooleanCodec {
+    return () => new SqliteBooleanCodec(this, sqliteBoolean);
   }
 }
 
-export const sqliteIntegerBooleanDescriptor = new SqliteIntegerBooleanDescriptor();
+export const sqliteBooleanDescriptor = new SqliteBooleanDescriptor();
 
-export const sqliteIntegerBooleanColumn = () =>
-  column(
-    sqliteIntegerBooleanDescriptor.factory(),
-    sqliteIntegerBooleanDescriptor.codecId,
-    undefined,
-  );
+export const sqliteBooleanColumn = () =>
+  column(sqliteBooleanDescriptor.factory(), sqliteBooleanDescriptor.codecId, undefined);
 
-sqliteIntegerBooleanColumn satisfies ColumnHelperFor<SqliteIntegerBooleanDescriptor>;
-sqliteIntegerBooleanColumn satisfies ColumnHelperForStrict<SqliteIntegerBooleanDescriptor>;
+sqliteBooleanColumn satisfies ColumnHelperFor<SqliteBooleanDescriptor>;
+sqliteBooleanColumn satisfies ColumnHelperForStrict<SqliteBooleanDescriptor>;
