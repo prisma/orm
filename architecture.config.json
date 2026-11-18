@@ -1579,6 +1579,12 @@
       "plane": "runtime"
     },
     {
+      "glob": "packages/3-targets/mysql/2-mariadb/3-driver/src/core/*.ts",
+      "domain": "targets",
+      "layer": "drivers",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-targets/mysql/2-mariadb/3-driver/src/core/migrations/**",
       "domain": "targets",
       "layer": "drivers",
