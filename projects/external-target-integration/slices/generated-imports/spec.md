@@ -1,7 +1,7 @@
 # Generated files import from the module the target package names
 
 Linear: [TML-3830](https://linear.app/prisma-company/issue/TML-3830). Also closes [TML-3143](https://linear.app/prisma-company/issue/TML-3143).
-Design record: [Generated files import from the module the target package names](../../../../docs/architecture%20docs/adrs/ADR%20323%20-%20Generated%20files%20import%20from%20the%20module%20the%20target%20package%20names.md). It is approved; this spec does not restate its reasoning.
+Design record: [Generated files import from the module the target package names](../../../../docs/architecture%20docs/adrs/ADR%20324%20-%20Generated%20files%20import%20from%20the%20module%20the%20target%20package%20names.md). It is approved; this spec does not restate its reasoning.
 
 ## At a glance
 

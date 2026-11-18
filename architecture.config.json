@@ -859,6 +859,18 @@
       "plane": "shared"
     },
     {
+      "glob": "packages/3-targets/postgres/9-facade/src/exports/init.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/postgres/9-facade/src/init/**",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "migration"
+    },
+    {
       "glob": "packages/3-targets/postgres/9-facade/src/config/**",
       "domain": "extensions",
       "layer": "adapters",
@@ -1130,6 +1142,12 @@
     },
     {
       "glob": "packages/3-targets/sqlite/3-driver/src/database-state.ts",
+      "domain": "targets",
+      "layer": "drivers",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/sqlite/3-driver/src/exact-integers.ts",
       "domain": "targets",
       "layer": "drivers",
       "plane": "shared"
@@ -1955,6 +1973,18 @@
       "domain": "extensions",
       "layer": "adapters",
       "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/mongo/9-facade/src/exports/init.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/mongo/9-facade/src/init/**",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "migration"
     },
     {
       "glob": "packages/3-targets/mongo/9-facade/src/config/**",

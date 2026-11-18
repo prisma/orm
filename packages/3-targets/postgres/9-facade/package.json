@@ -80,6 +80,7 @@
     "./contract-types": "./dist/contract-types.mjs",
     "./control": "./dist/control.mjs",
     "./family": "./dist/family.mjs",
+    "./init": "./dist/init.mjs",
     "./internal/options": "./dist/internal/options.mjs",
     "./internal/static-context": "./dist/internal/static-context.mjs",
     "./internal/transaction-members": "./dist/internal/transaction-members.mjs",

@@ -212,7 +212,7 @@ export const contract = defineContract(
 
 ### Integer Representation Types
 
-PostgreSQL writes them `type.BigInt({ as: 'number' })` and `type.BigInt({ storage: 'numeric' })`, which choose `type.Int8Number()` and `type.NumericBigInt()`; SQLite contributes `type.BigIntNumber()`. Pass the result to `field.column(...)`, or keep it in a constant when several fields share it.
+PostgreSQL writes them `type.BigInt({ as: 'number' })` and `type.BigInt({ storage: 'numeric' })`, which choose `type.Int8Number()` and `type.NumericBigInt()`; SQLite writes `type.BigInt({ as: 'number' })` too, which chooses `type.IntegerNumber()`. Pass the result to `field.column(...)`, or keep it in a constant when several fields share it.
 
 ```typescript
 import sqlFamily from '@internal/family-sql/pack';
@@ -241,7 +241,7 @@ export const contract = defineContract(
 );
 ```
 
-The direct form imports the column helper: `field.column(pgInt8NumberColumn())` or `field.column(pgUnboundedIntColumn())` on PostgreSQL, and `field.column(sqliteBigintNumberColumn())` imported from `@internal/target-sqlite/codecs` on SQLite. Both forms select the same codecs and application types and store the same column.
+The direct form imports the column helper: `field.column(pgInt8NumberColumn())` or `field.column(pgUnboundedIntColumn())` on PostgreSQL, and `field.column(sqliteIntegerColumn())` imported from `@internal/target-sqlite/codecs` on SQLite. Both forms select the same codecs and application types and store the same column.
 
 ### Constraint Placement
 
@@ -288,7 +288,7 @@ constraints.index({ expression: sql`eql_v3.eq_term(email)`, name: 'users_email_e
 
 - Structural helpers: `field.column(...)`, `field.namedType(...)` (an enum handle only), plus `model(...)` and `rel.*`
 - Callback helpers: `type.*` and `gen.*`, as in `field.column(type.UuidString()).id().onCreate(gen.uuid())` or, on Postgres, `field.column(type.Uuid()).id().onCreate(gen.uuid(7))`, which emits `pg/uuid@1`
-- Integer representation types: `field.column(type.BigInt({ as: 'number' }))` / `field.column(type.BigInt({ storage: 'numeric' }))` on PostgreSQL and `field.column(type.BigIntNumber())` on SQLite, or the direct per-codec column helpers with `field.column(...)`. A safe-integer `number` emits `pg/int8number@1` on PostgreSQL or `sqlite/bigintnumber@1` on SQLite and throws outside ±(2^53 − 1); PostgreSQL-only `BigInt({ storage: 'numeric' })` emits `pg/unboundedint@1` and reads and writes exact `bigint` values. `type.BigInt()` keeps the lossless `pg/int8@1`. See [Integer Representation Types](#integer-representation-types) for the TypeScript forms and [Integer representation types](../../../../docs/reference/integer-representation-types.md) for the canonical selection, runtime, JSON, and aggregate behavior reference.
+- Integer representation types: `field.column(type.BigInt({ as: 'number' }))` on PostgreSQL and SQLite and `field.column(type.BigInt({ storage: 'numeric' }))` on PostgreSQL, or the direct per-codec column helpers with `field.column(...)`. A safe-integer `number` emits `pg/int8number@1` on PostgreSQL or `sqlite/integer@1` on SQLite and throws outside ±(2^53 − 1); PostgreSQL-only `BigInt({ storage: 'numeric' })` emits `pg/unboundedint@1` and reads and writes exact `bigint` values. `type.BigInt()` keeps the lossless `pg/int8@1`. See [Integer Representation Types](#integer-representation-types) for the TypeScript forms and [Integer representation types](../../../../docs/reference/integer-representation-types.md) for the canonical selection, runtime, JSON, and aggregate behavior reference.
 - Timestamp aliases mirror PSL: `field.column(type.temporal.CreatedAt())` generates a client-side timestamp on create, while `field.column(type.temporal.UpdatedAt())` uses the same execution generator on create and non-empty update mutations. Neither creates a database default; matching representations share one generated value per operation.
 - Keep field-local and FK-local storage overrides next to the authoring site with `field.sql(...)` and `rel.belongsTo(...).sql({ fk })`
 - Prefer typed local refs such as `field.namedType(Role)`, `User.refs.id`, and `User.ref('id')` when those tokens are available
