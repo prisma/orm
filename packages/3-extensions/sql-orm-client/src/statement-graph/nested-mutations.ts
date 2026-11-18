@@ -462,7 +462,12 @@ function isSingleRowWrite(mutation: Mutation): mutation is SingleRowWrite {
   return mutation.kind === 'update' || mutation.kind === 'delete';
 }
 
-function rejectSingleRowWrite({ name, relation, mutations }: ParsedRelationMutation): void {
+function rejectSingleRowWrite({
+  name,
+  relation,
+  relatedCollection,
+  mutations,
+}: ParsedRelationMutation): void {
   for (const mutation of mutations.filter(isSingleRowWrite)) {
     const { kind } = mutation;
     if (relation.cardinality === 'N:1' || relation.through !== undefined) {
@@ -472,7 +477,10 @@ function rejectSingleRowWrite({ name, relation, mutations }: ParsedRelationMutat
         { meta: { kind, relation: name, reason: 'single-row-layout' } },
       );
     }
-    if (relation.cardinality !== '1:1' && mutation.state.filters.length === 0) {
+    const { filters, variantValue } = mutation.state;
+    const related = relatedCollection(relation);
+    const unfiltered = variantValue === undefined ? related : related.variant(variantValue);
+    if (relation.cardinality !== '1:1' && filters.length <= unfiltered.state.filters.length) {
       throw ormError(
         'ORM.ARGUMENT_INVALID',
         `${kind}() nested mutation for relation "${name}" requires where() on a to-many relation`,

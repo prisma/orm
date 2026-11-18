@@ -170,7 +170,7 @@ export function addUpdateFirst(
 ): void {
   const find = addFindOfFirstRelated(b, collection, 'update()', filters);
   updateRows(b, modelOf(collection), set, {
-    where: undefined,
+    where: whereOf(collection),
     filters: [{ from: find, columns: sameRowColumns(collection) }],
     links: [],
     payloads: [],
@@ -188,7 +188,7 @@ export function addDeleteFirst(
 ): void {
   const find = addFindOfFirstRelated(b, collection, 'delete()', filters);
   deleteRows(b, collection.state.tables, {
-    where: undefined,
+    where: whereOf(collection),
     filters: [{ from: find, columns: sameRowColumns(collection) }],
     links: [],
   });

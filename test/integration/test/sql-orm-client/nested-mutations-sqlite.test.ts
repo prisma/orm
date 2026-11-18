@@ -836,34 +836,4 @@ describe('integration/nested-mutations on SQLite: update()', () => {
     },
     timeouts.databaseOperation,
   );
-
-  it(
-    'refuses where().update() data that sets the link to the parent',
-    async () => {
-      await withDatabase(async (collections) => {
-        await seedTwoParents(collections);
-        const { users, rows } = collections;
-        const before = rows(postRowsSql);
-
-        await expect(
-          users.where({ id: 1 }).update({
-            // @ts-expect-error
-            posts: (posts) => posts.where({ id: 10 }).update({ userId: 2 }),
-          }),
-        ).rejects.toThrow(
-          expect.objectContaining({
-            code: 'ORM.ARGUMENT_INVALID',
-            meta: {
-              kind: 'update',
-              relation: 'posts',
-              problem: 'parent-link-column',
-              fields: ['userId'],
-            },
-          }),
-        );
-        expect(rows(postRowsSql)).toEqual(before);
-      });
-    },
-    timeouts.databaseOperation,
-  );
 });

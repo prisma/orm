@@ -722,12 +722,27 @@ describe('update and delete on a variant', () => {
       [
         'n1 Find projects_tbl where id = 1',
         "n2 Find tasks where type = 'bug' and title = 'Crash' limit 1 <- FilterData n1 (id->project_id)",
-        "n3 Update tasks set title = 'Seen' <- FilterData n2 (id->id)",
+        "n3 Update tasks set title = 'Seen' where type = 'bug' and title = 'Crash' <- FilterData n2 (id->id)",
         "n4 Find tasks where type = 'feature' and title = 'Search' limit 1 <- FilterData n1 (id->project_id)",
-        'n5 Delete tasks <- FilterData n4 (id->id)',
+        `n5 Delete tasks where ${featureExists(" and tasks.title = 'Search'")} <- FilterData n4 (id->id)`,
         'result: n1',
       ].join('\n'),
     );
+  });
+
+  it('refuses update() without where() on a to-many relation', () => {
+    expect(
+      thrownBy(() =>
+        updateOf('Project', {
+          tasks: (tasks: VariantMutator) => tasks.variant('bug').update({ title: 'Seen' }),
+        }),
+      ),
+    ).toMatchObject({
+      code: 'ORM.ARGUMENT_INVALID',
+      message:
+        'update() nested mutation for relation "tasks" requires where() on a to-many relation',
+      meta: { kind: 'update', relation: 'tasks', problem: 'missing-where' },
+    });
   });
 });
 

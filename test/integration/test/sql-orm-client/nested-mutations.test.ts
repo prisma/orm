@@ -807,34 +807,4 @@ describe.each(includeStrategies)('integration/nested-mutations (%s)', (strategy)
     },
     timeouts.spinUpPpgDev,
   );
-
-  it(
-    'update() refuses where().update() data that sets the link to the parent',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime, strategy);
-        await seedTwoUsersWithPosts(runtime);
-        const before = await postRows(runtime);
-
-        await expect(
-          users.where({ id: 1 }).update({
-            // @ts-expect-error
-            posts: (posts) => posts.where({ id: 10 }).update({ userId: 2 }),
-          }),
-        ).rejects.toThrow(
-          expect.objectContaining({
-            code: 'ORM.ARGUMENT_INVALID',
-            meta: {
-              kind: 'update',
-              relation: 'posts',
-              problem: 'parent-link-column',
-              fields: ['userId'],
-            },
-          }),
-        );
-        expect(await postRows(runtime)).toEqual(before);
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
 });

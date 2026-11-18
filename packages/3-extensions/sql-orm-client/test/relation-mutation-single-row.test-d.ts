@@ -26,7 +26,6 @@ test('a to-many relation updates or deletes one row after where()', () => {
           .delete(),
       ];
     },
-    tags: (tags) => tags.where({ name: 'SQL' }).update({ name: 'Postgres' }),
   };
 
   expectTypeOf(update).toExtend<UserUpdate>();
@@ -56,14 +55,25 @@ test('a to-one relation updates or deletes the linked row, bare or after where()
   const narrowed: UserUpdate = {
     profile: (profile) => profile.where({ bio: 'Old' }).where({ id: 1 }).delete(),
   };
+
+  expectTypeOf([update, narrowed]).toExtend<readonly unknown[]>();
+});
+
+test('update() and delete() are type errors on a relation the parent holds the key for and through a junction', () => {
   const parentHolds: PostUpdate = {
-    author: (author) => author.where({ name: 'Ada' }).update({ name: 'Ada L.' }),
+    // @ts-expect-error
+    author: (author) => author.update({ name: 'Ada L.' }),
   };
   const deleted: PostUpdate = {
+    // @ts-expect-error
     author: (author) => author.delete(),
   };
+  const junction: UserUpdate = {
+    // @ts-expect-error
+    tags: (tags) => tags.where({ name: 'SQL' }).delete(),
+  };
 
-  expectTypeOf([update, narrowed, parentHolds, deleted]).toExtend<readonly unknown[]>();
+  expectTypeOf([parentHolds, deleted, junction]).toExtend<readonly unknown[]>();
 });
 
 test('a to-one relation has no updateAll() or deleteAll(), bare or after where()', () => {
