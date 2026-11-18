@@ -13,7 +13,6 @@ import { withTempDir } from '../utils/cli-test-helpers';
 import { timeouts } from '../utils/journey-test-helpers';
 import {
   COMMANDS,
-  dump,
   type ExpectedConflict,
   emit,
   expectSettled,
@@ -357,14 +356,15 @@ withTempDir(({ createTempDir }) => {
         await emit(journey, scenario.to, '02');
 
         const refused = await refusal(journey, scenario.args, '03');
-        dump(`sq ${scenario.name} ${command} refused`, refused);
         expect(refused, '03: the refusal').toEqual(planningFailure(scenario.conflict));
+        expect(JSON.stringify(refused), '03: the JSON error names no statement').not.toMatch(
+          /refusedStatement|this statement/,
+        );
 
         for (const [index, step] of scenario.steps.entries()) {
           const label = `0${4 + index}`;
           await emit(journey, step.psl, label);
           const planned = await planAndApply(journey, step.args, label);
-          dump(`sq ${scenario.name} ${command} step ${index}`, planned);
           expect
             .soft(planned, `${label}: plan ${index + 1} of the advice`)
             .toEqual(step.operations);
