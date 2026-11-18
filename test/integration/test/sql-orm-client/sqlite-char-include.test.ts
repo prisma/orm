@@ -98,4 +98,22 @@ describe('a SQLite sql/char@1 value, which SQLite stores unpadded, read through 
       included: [{ id: 1, points: flat }],
     });
   });
+
+  it('is stored without the spaces it is written with, so a filter on the value read finds it', async () => {
+    const namespace = { namespaceId: soleDomainNamespaceId(contract.domain) };
+    const points = () => new Collection({ runtime: runtime!, context }, 'Point', namespace);
+    await points().createAndCount([{ id: 10, seriesId: 1, code: 'b ' }]);
+
+    expect({
+      stored: { ...database!.prepare('select code from char_points where id = 10').get() },
+      read: await points().where({ id: 10 }).select('code').all(),
+      foundByValueRead: await points().where({ code: 'b' }).select('id').all(),
+      foundByValueWritten: await points().where({ code: 'b ' }).select('id').all(),
+    }).toEqual({
+      stored: { code: 'b' },
+      read: [{ code: 'b' }],
+      foundByValueRead: [{ id: 10 }],
+      foundByValueWritten: [{ id: 10 }],
+    });
+  });
 });

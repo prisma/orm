@@ -94,4 +94,41 @@ describe('sql/char@1 and sql/varchar@1 on SQLite contract values', () => {
       fromContractJson(char, 'toolong', { length: 3 }),
     ]).toEqual(['toolong', 'toolong']);
   });
+
+  it('stores a char value without the spaces it ends with', () => {
+    const char = sqliteSqlCharDescriptor.factory({ length: 3 })(ctx);
+    expect(
+      ['a ', 'a  b  ', 'a\t', '  ', 'abc'].map((value) => toContractJson(char, value)),
+    ).toEqual(['a', 'a  b', 'a\t', '', 'abc']);
+  });
+
+  it('refuses a stored char value that ends with a space', () => {
+    const char = sqliteSqlCharDescriptor.factory({ length: 3 })(ctx);
+    expect(() => fromContractJson(char, 'a ', { length: 3 })).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.DECODE_FAILED',
+        message: 'sqlite/character JSON value must be "a", as sqlite/character stores this value',
+      }),
+    );
+  });
+
+  it('keeps the spaces a varchar value ends with', () => {
+    const varchar = sqliteSqlVarcharDescriptor.factory({ length: 3 })(ctx);
+    expect(toContractJson(varchar, 'a ')).toBe('a ');
+  });
+});
+
+describe('sql/char@1 on SQLite wire values', () => {
+  const char = sqliteSqlCharDescriptor.factory({ length: 3 })(ctx);
+
+  it('writes a value without the spaces it ends with, as it reads it', async () => {
+    const values = ['a ', 'a  b  ', 'a\t', '  ', 'abc'];
+    expect({
+      written: await Promise.all(values.map((value) => char.toWire(value, {}))),
+      read: await Promise.all(values.map((value) => char.fromWire(value, {}))),
+    }).toEqual({
+      written: ['a', 'a  b', 'a\t', '', 'abc'],
+      read: ['a', 'a  b', 'a\t', '', 'abc'],
+    });
+  });
 });

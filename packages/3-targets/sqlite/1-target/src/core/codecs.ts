@@ -50,6 +50,7 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { isValidDate } from '@internal/type-implementations/date';
 import { blindCast } from '@internal/utils/casts';
+import { withoutTrailing } from '@internal/utils/text';
 import { defineSqliteCodecs, SqliteCodecDescriptor, sqliteCodec } from './codec-descriptor';
 import {
   SQLITE_BIGINT_CODEC_ID,
@@ -367,11 +368,18 @@ const BLOB_HEX_TEXT = /^(?:[0-9A-F]{2})*$/;
 const unpaddedCharJsonProjection = (expression: ProjectionExpr): ProjectionExpr =>
   FunctionCallExpr.of('rtrim', [expression, LiteralExpr.of(' ')]);
 
+export class SqliteSqlCharCodec extends SqlCharCodec {
+  override async toWire(value: string, _ctx: CodecCallContext): Promise<string> {
+    return withoutTrailing(value, ' ');
+  }
+}
+
 export const sqliteSqlCharDescriptor = sqliteCodec(sqlCharDescriptor, {
   dataType: sqliteCharacter,
   renderValueLiteral: renderTsLiteral,
   jsonProjection: unpaddedCharJsonProjection,
-  factory: (descriptor, dataType, params) => () => new SqlCharCodec(descriptor, dataType, params),
+  factory: (descriptor, dataType, params) => () =>
+    new SqliteSqlCharCodec(descriptor, dataType, params),
 });
 
 export const sqliteSqlVarcharDescriptor = sqliteCodec(sqlVarcharDescriptor, {

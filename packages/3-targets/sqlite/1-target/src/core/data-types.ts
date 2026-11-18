@@ -32,6 +32,7 @@ import {
 } from '@internal/type-implementations/date';
 import { ISO_DURATION_AS_WRITTEN } from '@internal/type-implementations/duration';
 import { structuredError } from '@internal/utils/structured-error';
+import { withoutTrailing } from '@internal/utils/text';
 import { type as arktype } from 'arktype';
 
 /** Digit text as `real` stores it: the nearest double, as SQLite converts an integer to a real. */
@@ -112,6 +113,7 @@ export const sqliteCharacter = sqlDataType('sqlite/character', {
   params: sqliteCharacterLengthParams,
   texts: [{ text: 'character', written: true, catalog: true }],
   read: (json) => readJsonString('sqlite/character', json),
+  spell: (json) => (typeof json === 'string' ? withoutTrailing(json, ' ') : json),
   normalize: withoutLength,
   casts: { [sqliteText.id]: castUnchanged },
 });
