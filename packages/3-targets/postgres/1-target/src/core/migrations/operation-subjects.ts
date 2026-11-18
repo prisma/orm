@@ -19,6 +19,7 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { ifDefined } from '@internal/utils/defined';
 import { DEFAULT_NAMESPACE_ID } from '../namespace-ids';
+import { accessChangesOfIdentities } from './access-changes';
 import { resolveNamespaceIdForDdlSchema } from './control-policy';
 import {
   AddColumnWithTemporaryDefaultCall,
@@ -32,7 +33,6 @@ import {
   RemoveStoredKeyCall,
   RemoveStoredValueCall,
 } from './op-factory-call';
-import { accessChangesOfIdentities } from './recorded-access-changes';
 
 interface Locator {
   /** The contract that names the namespaces: the origin contract when the plan has one. */
@@ -153,7 +153,7 @@ export function postgresCallSubjects(
   const accessChanges = new Map(
     accessChangesOfIdentities(
       calls.map((call) => (isPostgresOpFactoryCall(call) ? call.rlsIdentity() : undefined)),
-    ).map((change) => [change.operationIndex, change]),
+    ).map((change) => [change.index, change]),
   );
   const destructive = calls.filter((call) => call.operationClass === 'destructive');
   const known = new Map(destructive.map((call) => [call, knownTarget(locator, call)]));

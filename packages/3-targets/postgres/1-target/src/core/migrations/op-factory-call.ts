@@ -4,7 +4,7 @@
  *
  * Every call class carries the literal arguments its backing factory would
  * receive, computes a human-readable `label` in its constructor, and
- * implements two polymorphic hooks:
+ * implements these polymorphic hooks:
  *
  * - `toOp()` — converts the IR node to a runtime
  *   `SqlMigrationPlanOperation` by delegating to the matching pure factory
@@ -14,6 +14,12 @@
  * - `renderTypeScript()` / `importRequirements()` — inherited from
  *   `TsExpression`. Used by `renderCallsToTypeScript` to emit the call as
  *   a TypeScript expression inside the scaffolded `migration.ts`.
+ * - `rlsIdentity()` — the id and target of the row-level-security operation
+ *   the call lowers to, which `access-changes.ts` reads to decide whether the
+ *   call changes who can read or write rows. The base returns `undefined`.
+ *   A call whose operation enables or disables row-level security, or
+ *   creates, drops or renames a policy, must override it, or the data
+ *   protection policy cannot see the change.
  *
  * The abstract base and all concrete classes are package-private. External
  * consumers see only the framework-level `OpFactoryCall` interface and the

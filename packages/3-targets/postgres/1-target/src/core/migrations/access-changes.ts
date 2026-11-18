@@ -9,17 +9,12 @@ import {
   createRlsPolicyIdentity,
   disableRowLevelSecurityIdentity,
   dropRlsPolicyIdentity,
+  type RlsOperationIdentity,
 } from './operations/rls';
 
-/** What an operation is about: its id and its target, as `ops.json` records them. */
-export interface OperationIdentity {
-  readonly id: string;
-  readonly target: unknown;
-}
-
-/** An operation, by its position, that changes who can read or write the rows of `schema.table`. */
+/** An entry of the given list, by its position, that changes who can read or write the rows of `schema.table`. */
 export interface TableAccessChange {
-  readonly operationIndex: number;
+  readonly index: number;
   readonly schema: string;
   readonly table: string;
   readonly widens: boolean;
@@ -33,24 +28,30 @@ const RlsPolicyTarget = type({
   details: { schema: 'string', objectType: "'rlsPolicy'", name: 'string', table: 'string' },
 });
 
-interface Policy {
+/** An operation's id and target, read before the target is checked: an `RlsOperationIdentity` once it is. */
+type UncheckedIdentity = Pick<RlsOperationIdentity, 'id'> & { readonly target: unknown };
+
+interface Table {
   readonly schema: string;
   readonly table: string;
+}
+
+interface Policy extends Table {
   readonly name: string;
 }
 
 /** The table whose row-level security `identity` disables, when it is the operation `disableRowLevelSecurity` builds. */
-function disabledTable(identity: OperationIdentity): Policy | undefined {
+function disabledTable(identity: UncheckedIdentity): Table | undefined {
   const target = RowLevelSecurityTarget(identity.target);
   if (target instanceof type.errors) return undefined;
   const { schema, name } = target.details;
   return identity.id === disableRowLevelSecurityIdentity(schema, name).id
-    ? { schema, table: name, name }
+    ? { schema, table: name }
     : undefined;
 }
 
 function policyOf(
-  identity: OperationIdentity,
+  identity: UncheckedIdentity,
   identityOf: (schema: string, table: string, name: string) => { readonly id: string },
 ): Policy | undefined {
   const target = RlsPolicyTarget(identity.target);
@@ -76,7 +77,7 @@ function policyKey({ schema, table, name }: Policy): string {
  * factory builds; an operation with neither, such as raw SQL, is not read.
  */
 export function accessChangesOfIdentities(
-  identities: readonly (OperationIdentity | undefined)[],
+  identities: readonly (UncheckedIdentity | undefined)[],
 ): readonly TableAccessChange[] {
   const created = new Set(
     identities.flatMap((identity) => {
@@ -85,15 +86,15 @@ export function accessChangesOfIdentities(
       return policy === undefined ? [] : [policyKey(policy)];
     }),
   );
-  return identities.flatMap((identity, operationIndex): TableAccessChange[] => {
+  return identities.flatMap((identity, index): TableAccessChange[] => {
     if (identity === undefined) return [];
     const disabled = disabledTable(identity);
     if (disabled !== undefined) {
-      return [{ operationIndex, schema: disabled.schema, table: disabled.table, widens: true }];
+      return [{ index, schema: disabled.schema, table: disabled.table, widens: true }];
     }
     const dropped = policyOf(identity, dropRlsPolicyIdentity);
     if (dropped !== undefined && !created.has(policyKey(dropped))) {
-      return [{ operationIndex, schema: dropped.schema, table: dropped.table, widens: false }];
+      return [{ index, schema: dropped.schema, table: dropped.table, widens: false }];
     }
     return [];
   });
@@ -105,8 +106,8 @@ export function recordedAccessChangesOf(
 ): readonly MigrationAccessChange[] {
   return accessChangesOfIdentities(
     operations.map((operation) => ({ id: operation.id, target: Reflect.get(operation, 'target') })),
-  ).map(({ operationIndex, schema, table, widens }) => ({
-    operationIndex,
+  ).map(({ index, schema, table, widens }) => ({
+    operationIndex: index,
     subject: {
       kind: 'storage',
       name: schema === UNBOUND_NAMESPACE_ID ? table : `${schema}.${table}`,

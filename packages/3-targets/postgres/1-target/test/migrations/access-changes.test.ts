@@ -2,6 +2,14 @@ import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter
 import type { MigrationPlanOperation } from '@internal/framework-components/control';
 import { parseNaming } from '@internal/sql-schema-ir/naming';
 import { describe, expect, it } from 'vitest';
+import { recordedAccessChangesOf } from '../../src/core/migrations/access-changes';
+import {
+  CreatePostgresRlsPolicyCall,
+  DisableRowLevelSecurityCall,
+  DropPostgresRlsPolicyCall,
+  EnableRowLevelSecurityCall,
+  RenamePostgresRlsPolicyCall,
+} from '../../src/core/migrations/op-factory-call';
 import {
   createRlsPolicy,
   disableRowLevelSecurity,
@@ -9,7 +17,6 @@ import {
   enableRowLevelSecurity,
   renameRlsPolicy,
 } from '../../src/core/migrations/operations/rls';
-import { recordedAccessChangesOf } from '../../src/core/migrations/recorded-access-changes';
 import { PostgresRlsPolicy } from '../../src/core/postgres-rls-policy';
 
 const lowerer: ExecuteRequestLowerer = {
@@ -137,5 +144,28 @@ describe('recordedAccessChangesOf', () => {
       { operationIndex: 0, subject: PROFILES, widens: true },
       { operationIndex: 1, subject: PROFILES, widens: false },
     ]);
+  });
+});
+
+describe('rlsIdentity', () => {
+  it.each([
+    [
+      'CreatePostgresRlsPolicyCall',
+      new CreatePostgresRlsPolicyCall('public', 'profiles', policy('read_own', 'ab12cd34')),
+    ],
+    [
+      'DropPostgresRlsPolicyCall',
+      new DropPostgresRlsPolicyCall('public', 'profiles', 'read_own_ab12cd34'),
+    ],
+    ['EnableRowLevelSecurityCall', new EnableRowLevelSecurityCall('public', 'profiles')],
+    ['DisableRowLevelSecurityCall', new DisableRowLevelSecurityCall('public', 'profiles')],
+    [
+      'RenamePostgresRlsPolicyCall',
+      new RenamePostgresRlsPolicyCall('public', 'profiles', 'read_own_ab12cd34', 'owner_ab12cd34'),
+    ],
+  ] as const)('of %s is the id and target of the operation it lowers to', async (_name, call) => {
+    const { id, target } = await call.toOp(lowerer);
+
+    expect(call.rlsIdentity()).toEqual({ id, target });
   });
 });
