@@ -14,7 +14,7 @@
  * - `renderTypeScript()` / `importRequirements()` — inherited from
  *   `TsExpression`. Used by `renderCallsToTypeScript` to emit the call as
  *   a TypeScript expression inside the scaffolded `migration.ts`.
- * - `rlsIdentity()` — the id and target of the row-level-security operation
+ * - `rlsIdentity()` — the id, class and target of the row-level-security operation
  *   the call lowers to, which `access-changes.ts` reads to decide whether the
  *   call changes who can read or write rows. The base returns `undefined`.
  *   A call whose operation enables or disables row-level security, or
@@ -189,7 +189,7 @@ abstract class PostgresOpFactoryCallNode extends TsExpression implements Framewo
     return [{ moduleSpecifier: MIGRATION_MODULE, symbol: this.factoryName }];
   }
 
-  /** The id and target of a row-level-security operation this call lowers to; `undefined` for any other call. */
+  /** The id, class and target of a row-level-security operation this call lowers to; `undefined` for any other call. */
   rlsIdentity(): RlsOperationIdentity | undefined {
     return undefined;
   }
