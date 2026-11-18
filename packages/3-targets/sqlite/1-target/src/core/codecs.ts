@@ -38,6 +38,7 @@ import {
   LiteralExpr,
   type ProjectionExpr,
   SqlCharCodec,
+  type SqlCodecCallContext,
   SqlFloatCodec,
   SqlIntCodec,
   SqlRawCodec,
@@ -326,19 +327,67 @@ const safeIntegerFromDigitText = (codecId: string, json: JsonValue): number =>
 const digitTextOfSafeInteger = (codecId: string, value: number): string =>
   String(encodableSafeInteger(codecId, value));
 
-/**
- * Reads an INTEGER's wire value into a `number`: the number the driver returns for a row, or the decimal text an include carries, because its projection casts the integer to text so that no digit is lost in JSON.
- */
-function safeIntegerWire(codecId: string, wire: number | string): number {
-  if (typeof wire === 'number') return wire;
+/** A stored value an integer codec cannot read into a `number`, named by its column where the read knows it. */
+function errorIntegerUnreadable(
+  codecId: string,
+  received: number | string,
+  ctx: SqlCodecCallContext,
+  messageWithoutColumn: string,
+): never {
+  const column = ctx.column;
+  const shown = typeof received === 'string' ? JSON.stringify(received) : String(received);
+  throw sqliteError(
+    'RUNTIME.DECODE_FAILED',
+    column === undefined
+      ? messageWithoutColumn
+      : `Column "${column.table}"."${column.name}" holds ${shown}, which is not an integer within the safe integer range. ${codecId} reads integers from ${SAFE_INTEGER_BIGINT_RANGE.min} to ${SAFE_INTEGER_BIGINT_RANGE.max}.`,
+    {
+      meta: {
+        codecId,
+        ...(column === undefined ? {} : { table: column.table, column: column.name }),
+        received: String(received),
+      },
+    },
+  );
+}
+
+/** The decimal text an include carries for an INTEGER, because its projection casts the integer to text so that no digit is lost in JSON, read into a safe-range `number`. */
+function safeIntegerFromText(codecId: string, wire: string, ctx: SqlCodecCallContext): number {
   if (!DECIMAL_INTEGER.test(wire)) {
-    throw sqliteError(
-      'RUNTIME.DECODE_FAILED',
+    return errorIntegerUnreadable(
+      codecId,
+      wire,
+      ctx,
       `${codecId} wire value must be an integer or its decimal text`,
-      { meta: { codecId, received: wire } },
     );
   }
-  return safeIntegerFromBigint(codecId, BigInt(wire));
+  const value = BigInt(wire);
+  if (value < SAFE_INTEGER_BIGINT_RANGE.min || value > SAFE_INTEGER_BIGINT_RANGE.max) {
+    return errorIntegerUnreadable(
+      codecId,
+      wire,
+      ctx,
+      `${codecId} value must be an integer within the safe integer range, got ${wire}`,
+    );
+  }
+  return Number(value);
+}
+
+/** Reads an INTEGER's wire value: the number the driver returns for a row as it is, or the decimal text an include carries. */
+function integerWire(codecId: string, wire: number | string, ctx: SqlCodecCallContext): number {
+  return typeof wire === 'number' ? wire : safeIntegerFromText(codecId, wire, ctx);
+}
+
+/** Reads an INTEGER's wire value into a `number` within the safe integer range. A stored REAL, such as 1.5, is refused too. */
+function safeIntegerWire(codecId: string, wire: number | string, ctx: SqlCodecCallContext): number {
+  if (typeof wire !== 'number') return safeIntegerFromText(codecId, wire, ctx);
+  if (Number.isSafeInteger(wire)) return Object.is(wire, -0) ? 0 : wire;
+  return errorIntegerUnreadable(
+    codecId,
+    wire,
+    ctx,
+    `${codecId} value must be an integer within the safe integer range, got ${String(wire)}`,
+  );
 }
 
 /**
@@ -406,8 +455,8 @@ export const sqliteSqlRawDescriptor = sqliteCodec(sqlRawDescriptor, {
 
 /** `sql/int@1` as SQLite stores it: its stored form is `sqlite/integer`'s digit text. */
 export class SqliteSqlIntCodec extends SqlIntCodec {
-  override async fromWire(wire: number | string, _ctx: CodecCallContext): Promise<number> {
-    return safeIntegerWire(this.id, wire);
+  override async fromWire(wire: number | string, ctx: SqlCodecCallContext): Promise<number> {
+    return integerWire(this.id, wire, ctx);
   }
   override fromDataTypeValue(value: DataTypeValue): number {
     return safeIntegerFromDigitText(this.id, value.value);
@@ -485,10 +534,8 @@ export class SqliteIntegerCodec extends CodecImpl<
   async toWire(value: number, _ctx: CodecCallContext): Promise<number> {
     return encodableSafeInteger(SQLITE_INTEGER_CODEC_ID, value);
   }
-  async fromWire(wire: number | string, _ctx: CodecCallContext): Promise<number> {
-    return typeof wire === 'number'
-      ? safeIntegerNumber(SQLITE_INTEGER_CODEC_ID, wire, 'RUNTIME.DECODE_FAILED')
-      : safeIntegerWire(SQLITE_INTEGER_CODEC_ID, wire);
+  async fromWire(wire: number | string, ctx: SqlCodecCallContext): Promise<number> {
+    return safeIntegerWire(SQLITE_INTEGER_CODEC_ID, wire, ctx);
   }
   fromDataTypeValue(value: DataTypeValue<string>): number {
     return safeIntegerFromDigitText(SQLITE_INTEGER_CODEC_ID, value.value);

@@ -80,6 +80,13 @@
                   "kind": "scalar"
                 }
               },
+              "rank": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
               "reading": {
                 "nullable": false,
                 "type": {
@@ -113,6 +120,9 @@
                 },
                 "meterId": {
                   "column": "meter_id"
+                },
+                "rank": {
+                  "column": "rank"
                 },
                 "reading": {
                   "column": "reading"
@@ -161,6 +171,11 @@
                   "nullable": false
                 },
                 "meter_id": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "nullable": false
+                },
+                "rank": {
                   "codecId": "sqlite/integer@1",
                   "dataType": "sqlite/integer",
                   "nullable": false
@@ -214,7 +229,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "27a6c4b04f098e2aabf355368d163edb74666747336b66917d227a2fc5c050bb"
+    "storageHash": "d76e5ce464ac6a431bf83515d7da1eb4cbd1f9157ee5bbee598b181952b1cf3e"
   },
   "capabilities": {
     "sql": {

@@ -8,7 +8,7 @@ import type { SqliteClient } from '@internal/sqlite/runtime';
 import sqlite from '@internal/sqlite/runtime';
 import { contractFromJson } from '@internal/sqlite/static';
 import { join } from 'pathe';
-import { afterAll, beforeAll, describe, expect, expectTypeOf, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, expectTypeOf, it } from 'vitest';
 import { rejectionShape } from './error-shape';
 import type { Contract } from './fixtures/integer-representation-sqlite/generated/contract';
 import contractJson from './fixtures/integer-representation-sqlite/generated/contract.json' with {
@@ -51,7 +51,8 @@ describe('integration/integer representation type on sqlite', () => {
       create table int_repr_samples (
         id integer primary key,
         meter_id integer not null references int_repr_meters(id),
-        reading integer not null
+        reading integer not null,
+        rank integer not null
       );
     `);
 
@@ -105,8 +106,8 @@ describe('integration/integer representation type on sqlite', () => {
 
   it('carries a BigInt(as: number) column through an include at the safe-range boundary', async () => {
     const samples = db![UNBOUND_NAMESPACE_ID].Sample;
-    await samples.create({ id: 1, meterId: 1, reading: MAX_SAFE });
-    await samples.create({ id: 2, meterId: 1, reading: -MAX_SAFE });
+    await samples.create({ id: 1, meterId: 1, reading: MAX_SAFE, rank: 1 });
+    await samples.create({ id: 2, meterId: 1, reading: -MAX_SAFE, rank: 2 });
 
     const rows = await db![UNBOUND_NAMESPACE_ID].Meter.select('id')
       .where((meter) => meter.id.eq(1))
@@ -129,7 +130,7 @@ describe('integration/integer representation type on sqlite', () => {
     // so only raw SQL can arrange the stored state the decode guard exists
     // for.
     database!.exec(
-      `insert into int_repr_samples (id, meter_id, reading) values (10, 1, ${FIRST_UNSAFE})`,
+      `insert into int_repr_samples (id, meter_id, reading, rank) values (10, 1, ${FIRST_UNSAFE}, 0)`,
     );
 
     const shape = await rejectionShape(
@@ -142,7 +143,7 @@ describe('integration/integer representation type on sqlite', () => {
     // runtime's column-context envelope, with the codec error on `cause`.
     expect(shape).toEqual({
       name: 'RuntimeError',
-      message: `Failed to decode column int_repr_samples.reading with codec 'sqlite/integer@1': sqlite/integer@1 value must be an integer within the safe integer range, got ${FIRST_UNSAFE}`,
+      message: `Failed to decode column int_repr_samples.reading with codec 'sqlite/integer@1': Column "int_repr_samples"."reading" holds "${FIRST_UNSAFE}", which is not an integer within the safe integer range. sqlite/integer@1 reads integers from -9007199254740991 to 9007199254740991.`,
       code: 'RUNTIME.DECODE_FAILED',
       category: 'RUNTIME',
       severity: 'error',
@@ -153,9 +154,14 @@ describe('integration/integer representation type on sqlite', () => {
       },
       cause: {
         name: 'StructuredError',
-        message: `sqlite/integer@1 value must be an integer within the safe integer range, got ${FIRST_UNSAFE}`,
+        message: `Column "int_repr_samples"."reading" holds "${FIRST_UNSAFE}", which is not an integer within the safe integer range. sqlite/integer@1 reads integers from -9007199254740991 to 9007199254740991.`,
         code: 'RUNTIME.DECODE_FAILED',
-        meta: { codecId: 'sqlite/integer@1', received: String(FIRST_UNSAFE) },
+        meta: {
+          codecId: 'sqlite/integer@1',
+          table: 'int_repr_samples',
+          column: 'reading',
+          received: String(FIRST_UNSAFE),
+        },
       },
     });
 
@@ -183,6 +189,111 @@ describe('integration/integer representation type on sqlite', () => {
       message: 'sqlite/integer@1 value must be an integer within the safe integer range, got 1.5',
       code: 'RUNTIME.ENCODE_FAILED',
       meta: { codecId: 'sqlite/integer@1', received: '1.5' },
+    });
+  });
+
+  describe('a stored value an Int column cannot read', () => {
+    const PAST_SAFE = '9007199254740993';
+    const sampleRank = (id: number) =>
+      db![UNBOUND_NAMESPACE_ID].Sample.select('id', 'rank')
+        .where((sample) => sample.id.eq(id))
+        .all();
+    const includedRank = () =>
+      db![UNBOUND_NAMESPACE_ID].Meter.select('id')
+        .where((meter) => meter.id.eq(30))
+        .include('samples', (sample) => sample.select('id', 'rank'))
+        .all();
+
+    beforeAll(() => {
+      database!.exec('insert into int_repr_meters (id, peak) values (30, 0)');
+    });
+
+    afterEach(async () => {
+      await db![UNBOUND_NAMESPACE_ID].Sample.where((sample) =>
+        sample.meterId.eq(30),
+      ).deleteAndCount();
+    });
+
+    it.each([
+      ['a real', '1.5', '1.5'],
+      ['a text', `'abc'`, '"abc"'],
+    ])('names the table and column when the row holds %s', async (_kind, stored, shown) => {
+      database!.exec(
+        `insert into int_repr_samples (id, meter_id, reading, rank) values (31, 30, 0, ${stored})`,
+      );
+      const received = shown.replaceAll('"', '');
+
+      expect({
+        topLevel: await rejectionShape(sampleRank(31)),
+        include: await rejectionShape(includedRank()),
+      }).toEqual({
+        topLevel: {
+          name: 'StructuredError',
+          message: `Column "int_repr_samples"."rank" holds ${shown}, which is not an integer within the safe integer range. sqlite/integer@1 reads integers from -9007199254740991 to 9007199254740991.`,
+          code: 'RUNTIME.DECODE_FAILED',
+          meta: {
+            codecId: 'sqlite/integer@1',
+            table: 'int_repr_samples',
+            column: 'rank',
+            received,
+          },
+        },
+        include: {
+          name: 'RuntimeError',
+          message: `Failed to decode column int_repr_samples.rank with codec 'sqlite/integer@1': Column "int_repr_samples"."rank" holds "${received}", which is not an integer within the safe integer range. sqlite/integer@1 reads integers from -9007199254740991 to 9007199254740991.`,
+          code: 'RUNTIME.DECODE_FAILED',
+          category: 'RUNTIME',
+          severity: 'error',
+          details: { table: 'int_repr_samples', column: 'rank', codec: 'sqlite/integer@1' },
+          cause: {
+            name: 'StructuredError',
+            message: `Column "int_repr_samples"."rank" holds "${received}", which is not an integer within the safe integer range. sqlite/integer@1 reads integers from -9007199254740991 to 9007199254740991.`,
+            code: 'RUNTIME.DECODE_FAILED',
+            meta: {
+              codecId: 'sqlite/integer@1',
+              table: 'int_repr_samples',
+              column: 'rank',
+              received,
+            },
+          },
+        },
+      });
+    });
+
+    it('an integer past the safe range fails in node:sqlite, naming no column, at the top level, and in the codec through an include', async () => {
+      database!.exec(
+        `insert into int_repr_samples (id, meter_id, reading, rank) values (32, 30, 0, ${PAST_SAFE})`,
+      );
+
+      expect({
+        topLevel: await rejectionShape(sampleRank(32)),
+        include: await rejectionShape(includedRank()),
+      }).toEqual({
+        topLevel: {
+          name: 'RangeError',
+          message: `Value is too large to be represented as a JavaScript number: ${PAST_SAFE}`,
+          code: 'ERR_OUT_OF_RANGE',
+        },
+        include: {
+          name: 'RuntimeError',
+          message: `Failed to decode column int_repr_samples.rank with codec 'sqlite/integer@1': Column "int_repr_samples"."rank" holds "${PAST_SAFE}", which is not an integer within the safe integer range. sqlite/integer@1 reads integers from -9007199254740991 to 9007199254740991.`,
+          code: 'RUNTIME.DECODE_FAILED',
+          category: 'RUNTIME',
+          severity: 'error',
+          details: { table: 'int_repr_samples', column: 'rank', codec: 'sqlite/integer@1' },
+          cause: {
+            name: 'StructuredError',
+            message: `Column "int_repr_samples"."rank" holds "${PAST_SAFE}", which is not an integer within the safe integer range. sqlite/integer@1 reads integers from -9007199254740991 to 9007199254740991.`,
+            code: 'RUNTIME.DECODE_FAILED',
+            meta: {
+              codecId: 'sqlite/integer@1',
+              table: 'int_repr_samples',
+              column: 'rank',
+              received: PAST_SAFE,
+            },
+          },
+        },
+      });
     });
   });
 });

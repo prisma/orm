@@ -19,7 +19,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'27a6c4b04f098e2aabf355368d163edb74666747336b66917d227a2fc5c050bb'>;
+  StorageHashBase<'d76e5ce464ac6a431bf83515d7da1eb4cbd1f9157ee5bbee598b181952b1cf3e'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53'>;
@@ -224,6 +224,7 @@ export namespace Models {
   export type Sample = {
     id: FieldOutputTypes['__unbound__']['Sample']['id'];
     meterId: FieldOutputTypes['__unbound__']['Sample']['meterId'];
+    rank: FieldOutputTypes['__unbound__']['Sample']['rank'];
     reading: FieldOutputTypes['__unbound__']['Sample']['reading'];
     meter: Meter;
     readonly [RelationKeys]?: 'meter';
@@ -282,6 +283,12 @@ type ContractBase = Omit<
                   readonly many: false;
                 };
                 readonly meter_id: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly rank: {
                   readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/integer@1';
                   readonly nullable: false;
@@ -386,6 +393,10 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
               };
+              readonly rank: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
               readonly reading: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
@@ -411,6 +422,7 @@ type ContractBase = Omit<
               readonly fields: {
                 readonly id: { readonly column: 'id' };
                 readonly meterId: { readonly column: 'meter_id' };
+                readonly rank: { readonly column: 'rank' };
                 readonly reading: { readonly column: 'reading' };
               };
             };

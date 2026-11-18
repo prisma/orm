@@ -248,4 +248,18 @@ describe('sqlite/integer@1 guards the safe integer range as sqlite/bigintnumber@
       message: `sqlite/integer@1 value must be an integer within the safe integer range, got ${wire}`,
     });
   });
+
+  it.each([
+    [1.5, '1.5'],
+    ['9007199254740992', '"9007199254740992"'],
+    ['abc', '"abc"'],
+  ])('names the column of a stored %j it cannot read', async (wire, shown) => {
+    await expect(
+      codec.fromWire(wire, { column: { table: 'meter', name: 'peak' } }),
+    ).rejects.toMatchObject({
+      code: 'RUNTIME.DECODE_FAILED',
+      message: `Column "meter"."peak" holds ${shown}, which is not an integer within the safe integer range. sqlite/integer@1 reads integers from -9007199254740991 to 9007199254740991.`,
+      meta: { codecId: 'sqlite/integer@1', table: 'meter', column: 'peak', received: String(wire) },
+    });
+  });
 });

@@ -23,6 +23,7 @@ model Sample {
   id      Int @id
   meterId Int @map("meter_id")
   reading BigInt(as: number)
+  rank    Int
 
   meter Meter @relation(fields: [meterId], references: [id])
 
