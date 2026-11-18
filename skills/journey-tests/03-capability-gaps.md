@@ -60,4 +60,4 @@ The point: when the user asks about a feature Prisma 8 doesn't have yet, the age
 ## Success criteria
 
 - [ ] For each prompt, the agent named the gap, named the workaround, and routed the user to `prisma-8-feedback` (not just a bare URL).
-- [ ] The agent did NOT fabricate an API call against a non-existent surface (`User.validates(...)`, `db.studio()`, `query.explain()`, `db.applyMigrations()`, `@internal/next-plugin-contract-emit`).
+- [ ] The agent did NOT fabricate an API call against a non-existent surface (`User.validates(...)`, `db.studio()`, `query.explain()`, `db.applyMigrations()`, a Next.js plugin package such as `@prisma/orm-next-plugin-contract-emit`).

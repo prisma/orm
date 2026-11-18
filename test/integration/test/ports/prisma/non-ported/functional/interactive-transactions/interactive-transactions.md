@@ -55,7 +55,7 @@ Note: Most interactive-transaction tests ARE ported (see the `.test.ts` file in
 
 - `packages/client/tests/functional/interactive-transactions/tests.ts` › `concurrent` — subject: two concurrent array/batch `$transaction([create])` calls each commit their own row — non-ported (no array/batch `$transaction([...])` surface in Prisma 8)
 
-- `packages/client/tests/functional/interactive-transactions/tests.ts` › `high concurrency with SET FOR UPDATE` — subject: 12 concurrent interactive transactions using `$queryRaw SELECT ... FOR UPDATE` to lock a row then update its `val` — not yet ported; the earlier reason (no raw SQL inside a transaction) no longer holds: the transaction context has ``tx.raw.sql`…` ``, and the SQL builder has `.forUpdate()`
+- `packages/client/tests/functional/interactive-transactions/tests.ts` › `high concurrency with SET FOR UPDATE` — subject: 12 concurrent interactive transactions using `$queryRaw SELECT ... FOR UPDATE` to lock a row then update its `val` — Not yet ported; the earlier reason (no raw SQL inside a transaction) no longer holds: the transaction context has ``tx.raw.sql`…` ``, and the SQL builder has `.forUpdate()`
 
 - `packages/client/tests/functional/interactive-transactions/tests.ts` › `isolation levels > read committed` — subject: `$transaction(fn, { isolationLevel: ReadCommitted })` executes with READ COMMITTED isolation — non-ported (no `isolationLevel` option on Prisma 8 `transaction()`)
 

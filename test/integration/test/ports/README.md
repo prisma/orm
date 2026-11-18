@@ -11,6 +11,13 @@ Every in-scope upstream test lands in exactly one bucket (the accounting invaria
 2. **Ported & failing** — a faithful port that hits a real Prisma 8 gap: `test.fails` + an entry in the corpus `failing.md`.
 3. **Non-portable** — an individual line in the suite's `non-ported/functional/<suite>/<suite>.md` (source location + what it tests + the specific reason it cannot be expressed).
 
+A non-portable entry can go stale when Prisma 8 gains what it said was missing. Such an entry stays in its `non-ported/` file, so the test is still accounted for exactly once, and carries one of two statuses at the start of its reason:
+
+- **Not yet ported** — the test can now be expressed; the entry names the API that expresses it. It waits to be ported into bucket 1 or 2, and its line is then deleted.
+- **Needs re-examination** — the reason first given no longer holds, and whether the test can be expressed has not been settled. It waits for someone to port it or to write the reason that still holds.
+
+Both count as non-portable until they are moved, and the roll-up lists them separately.
+
 The per-test ledger is the checklist corpus at [`projects/port-all-tests/checklists/`](../../../../projects/port-all-tests/checklists/README.md); the reviewer checks a box only once its disposition is verified.
 
 ## Layout
@@ -54,7 +61,7 @@ Notes: Prisma 8 PSL lowercases table names (model `User` → table `user`) but k
 
 _Totals are finalised at project close-out. Live progress is tracked in the checklist corpus._
 
-| Corpus | Ported & passing | Ported & failing (`test.fails`) | Non-portable |
-| --- | --- | --- | --- |
-| prisma/prisma | in progress | in progress | in progress |
-| prisma-engines | in progress | in progress | in progress |
+| Corpus | Ported & passing | Ported & failing (`test.fails`) | Non-portable | of which: not yet ported | of which: needs re-examination |
+| --- | --- | --- | --- | --- | --- |
+| prisma/prisma | in progress | in progress | in progress | 27 | 6 |
+| prisma-engines | in progress | in progress | in progress | 0 | 0 |
