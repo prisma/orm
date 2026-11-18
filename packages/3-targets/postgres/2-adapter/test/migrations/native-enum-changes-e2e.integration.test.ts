@@ -120,6 +120,10 @@ describe('managed native-enum suffix-append (R8)', { concurrent: false }, () => 
     if (database) await database.close();
   }, testTimeout);
 
+  beforeEach(async () => {
+    await resetDatabase(driver);
+  }, testTimeout);
+
   it(
     'single append: plans one addNativeEnumValue op (caveat in its description), applies, re-verifies clean',
     async () => {
@@ -171,6 +175,7 @@ describe('managed native-enum suffix-append (R8)', { concurrent: false }, () => 
   it(
     'multi append: three appended members apply in declaration order, verify green',
     async () => {
+      await applyBaseEnumContract(driver);
       const currentContract = buildContractFromPsl(PSL_WITH_ENUM, 'managed');
       const introspectedBefore = await familyInstance.introspect({
         driver,
