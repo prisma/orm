@@ -539,11 +539,6 @@ function hasStatement(change: TableChange | ColumnChange): boolean {
   return change.renames.some((rename) => rename.statement !== undefined);
 }
 
-/**
- * Refuses a table rename that no statement asks for when it swaps, chains or merges with another
- * rename, or moves onto a name the schema being planned from already has. Names compare the way
- * the target compares them, through `tables`.
- */
 /** How the first of two plans frees a name: it removes what the origin stores there, or the table or column itself when nothing is. */
 function freeName(
   kind: 'table' | 'column',
@@ -558,6 +553,11 @@ function freeName(
   return `remove ${holders.text}, or keep ${them} and change ${their} ${kind} to a name nothing uses, such as "${unused}"`;
 }
 
+/**
+ * Refuses a table rename that no statement asks for when it swaps, chains or merges with another
+ * rename, or moves onto a name the schema being planned from already has. Names compare the way
+ * the target compares them, through `tables`.
+ */
 function tableRenameConflict(
   change: TableChange,
   current: string | undefined,

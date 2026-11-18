@@ -85,6 +85,26 @@ describe('planStatements refuses a table rename no statement asks for', () => {
     });
   });
 
+  it('when it takes the table of a removed base and its variant, naming both', () => {
+    expect(
+      refusal(
+        {
+          User: table('users'),
+          Account: table('accounts'),
+          Admin: { table: 'accounts', base: 'Account', fields: {} },
+        },
+        { User: table('accounts') },
+        usersAndAccounts,
+      ),
+    ).toEqual({
+      kind: 'unsupportedOperation',
+      summary:
+        'Cannot rename table "users" to "accounts": the schema being planned from already has a table "accounts"',
+      why: 'The table of model "app.User" changes from "users" to "accounts", and the schema being planned from already has table "accounts", the table of models "app.Account" and "app.Admin". Without the rename the plan would read the rows of table "accounts" as rows of model "app.User". Make the change in two plans: first remove models "app.Account" and "app.Admin", or keep them and change their table to a name nothing uses, such as "prisma_swap_accounts", and plan and apply that; then make this change and plan again.',
+      location: usersLocation,
+    });
+  });
+
   it('when it takes a name the schema has in another case where the target ignores case', () => {
     expect(
       refusal(
