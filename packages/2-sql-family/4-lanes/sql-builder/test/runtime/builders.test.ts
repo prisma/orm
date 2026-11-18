@@ -8,7 +8,7 @@ import { validateSqlContractFully } from '@internal/sql-contract/validators';
 import {
   AndExpr,
   BinaryExpr,
-  type ColumnRef,
+  ColumnRef,
   DerivedTableSource,
   ExistsExpr,
   IdentifierRef,
@@ -141,7 +141,8 @@ describe('select', () => {
     const ast = getAst(db().public.users.select('upper_name', (f, _fns) => f.name));
     expect(ast.projection).toHaveLength(1);
     expect(ast.projection[0]!.alias).toBe('upper_name');
-    expect(ast.projection[0]!.expr).toBeInstanceOf(IdentifierRef);
+    expect(ast.projection[0]!.expr).toBeInstanceOf(ColumnRef);
+    expect((ast.projection[0]!.expr as ColumnRef).column).toBe('name');
   });
 
   it('select with callback record', () => {
@@ -297,6 +298,42 @@ describe('joins', () => {
     expect(ast.joins![0]!.joinType).toBe('full');
   });
 
+  it('top-level fields of joined tables are qualified with their own table', () => {
+    const d = db();
+    const ast = getAst(
+      d.public.users
+        .innerJoin(d.public.posts, (f, fns) => fns.eq(f.users.id, f.posts.user_id))
+        .select((f) => ({ email: f.email, title: f.title })),
+    );
+    expect(ast.projection.map((item) => item.expr)).toEqual([
+      ColumnRef.of('users', 'email'),
+      ColumnRef.of('posts', 'title'),
+    ]);
+  });
+
+  it('a column name both joined tables have is not a top-level field', () => {
+    const d = db();
+    const joined = d.public.users.innerJoin(d.public.posts, (f, fns) =>
+      fns.eq(f.users.id, f.posts.user_id),
+    );
+    expect(() => joined.select('id' as never)).toThrow(
+      expect.objectContaining({ code: 'ORM.COLUMN_UNKNOWN' }),
+    );
+  });
+
+  it('top-level fields from the nullable side of an outer join stay qualified', () => {
+    const d = db();
+    const ast = getAst(
+      d.public.users
+        .outerLeftJoin(d.public.posts, (f, fns) => fns.eq(f.users.id, f.posts.user_id))
+        .select((f) => ({ email: f.email, title: f.title })),
+    );
+    expect(ast.projection.map((item) => item.expr)).toEqual([
+      ColumnRef.of('users', 'email'),
+      ColumnRef.of('posts', 'title'),
+    ]);
+  });
+
   it('join on expression references columns from both sides', () => {
     const ast = getAst(
       db()
@@ -383,6 +420,33 @@ describe('orderBy', () => {
     );
     expect(ast.orderBy).toHaveLength(1);
     expect(ast.orderBy![0]!.expr).toBeInstanceOf(IdentifierRef);
+  });
+
+  it('orderBy callback qualifies a column the select does not name', () => {
+    const ast = getAst(
+      db()
+        .public.users.select('id')
+        .orderBy((f) => f.name),
+    );
+    expect(ast.orderBy).toEqual([OrderByItem.asc(ColumnRef.of('users', 'name'))]);
+  });
+
+  it('orderBy callback reads a select alias that passes its own column through', () => {
+    const ast = getAst(
+      db()
+        .public.users.select('name', (f) => f.name)
+        .orderBy((f) => f.name),
+    );
+    expect(ast.orderBy).toEqual([OrderByItem.asc(IdentifierRef.of('name'))]);
+  });
+
+  it('orderBy callback reads a select alias, not the column it shadows', () => {
+    const ast = getAst(
+      db()
+        .public.users.select('name', (f) => f.email)
+        .orderBy((f) => f.name),
+    );
+    expect(ast.orderBy).toEqual([OrderByItem.asc(IdentifierRef.of('name'))]);
   });
 
   it('multiple orderBy calls accumulate', () => {
@@ -534,6 +598,22 @@ describe('subquery in exists/in', () => {
         ),
     );
     expect(ast.where).toBeInstanceOf(ExistsExpr);
+  });
+
+  it('outer top-level field used inside correlated subquery emits a qualified ColumnRef', () => {
+    const d = db();
+    const ast = getAst(
+      d.public.users
+        .select('id')
+        .where((f, fns) =>
+          fns.exists(d.public.posts.select('id').where((pf, pfns) => pfns.eq(pf.user_id, f.id))),
+        ),
+    );
+    const subAst = (ast.where as ExistsExpr).subquery;
+    const subWhere = subAst.where as BinaryExpr;
+    expect(subWhere.right).toBeInstanceOf(ColumnRef);
+    expect((subWhere.right as ColumnRef).table).toBe('users');
+    expect((subWhere.right as ColumnRef).column).toBe('id');
   });
 });
 
@@ -763,7 +843,7 @@ describe('UPDATE callback overload', () => {
     const nameValue = ast.set['name'];
     expect(nameValue).toBeDefined();
     expect(nameValue).not.toBeInstanceOf(ParamRef);
-    expect(nameValue!.kind).toBe('identifier-ref');
+    expect(nameValue!.kind).toBe('column-ref');
   });
 
   it('mutation defaults hook fires once with op update for callback overload', () => {

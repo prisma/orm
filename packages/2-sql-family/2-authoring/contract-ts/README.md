@@ -364,7 +364,7 @@ export default defineConfig({
 });
 ```
 
-Optional third argument (options bag) for `typescriptContract` / `typescriptContractFromPath`, and `defaultControlPolicy` on `emptyContract`. Stamping a specifier default strips derived checks from tables the policy leaves non-managed, and the strip rebuilds namespaces through the target's factory, so the bag requires `createNamespace` alongside `defaultControlPolicy` — the same factory the PSL specifier takes:
+Optional third argument (options bag) for `typescriptContract`, also accepted beside the target by `typescriptContractFromPath`, and `defaultControlPolicy` on `emptyContract`. Stamping a specifier default strips derived checks from tables the policy leaves non-managed, and the strip rebuilds namespaces through the target's factory, so the bag requires `createNamespace` alongside `defaultControlPolicy` — the same factory the PSL specifier takes:
 
 ```typescript
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
@@ -376,6 +376,15 @@ typescriptContract(contract, 'src/prisma/contract.json', {
 ```
 
 The specifier value applies only when the loaded contract omits `defaultControlPolicy` (a value authored on the contract module wins).
+
+`typescriptContractFromPath` requires the target the config is for, and the module that target's `defineContract` comes from, so no `defineConfig` can leave the check out. It refuses a loaded contract whose `target` is another target's id with `CONTRACT.TARGET_MISMATCH`, naming both targets and that module, with `expected`, `actual` and `contract` in its `meta`. A contract of another family, such as a MongoDB contract, is refused the same way; a contract here is a value with a target family, a target and a storage namespaces record, the fields every family's contract has. Any other export, a SQL one without a target included, is refused with `CONTRACT.EXPORT_INVALID`. Every SQL target's `defineConfig` passes them. `refuseOtherTargetOnLoad(config, { target, contractBuilderModule })` runs the same check on the contract a ready `ContractConfig` loads, and passes any result that is not a successful load of an object through unchanged. Its message names the config's first input, or says the contract is in the config when it has none, and the `fix` names the contract-builder module only for a TypeScript source:
+
+```typescript
+typescriptContractFromPath('prisma/contract.ts', 'prisma/contract.json', {
+  target: postgresPackRef,
+  contractBuilderModule: '@prisma/orm-postgres/contract-builder',
+});
+```
 
 ## Editor JSON schema
 

@@ -3,7 +3,6 @@ import { AsyncIterableResult } from '@internal/framework-components/runtime';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { SqlStatementStats } from '@internal/sql-relational-core/ast';
 import type { RuntimeScope } from '@internal/sql-relational-core/types';
-import { settlementOf } from '@internal/sql-runtime/internal/prepared-query';
 import { blindCast } from '@internal/utils/casts';
 import { getColumnsReadOnTable } from '../collection-contract';
 import {
@@ -16,14 +15,14 @@ import { loadsIncludesPerRelation } from '../include-strategy';
 import { returningProjection } from '../mutation-statements';
 import { buildOrmQueryPlan, deriveParamsFromAst } from '../query-plan-meta';
 import { queryPlanRows } from '../query-plan-rows';
-import type { CollectionContext, RuntimeTransaction } from '../types';
+import type { CallContext } from '../types';
 import type { Edge, NodeId, StorageRow } from './edge';
 import type { Graph } from './graph';
 import { hiddenColumnsOf } from './include-nodes';
 import type { Executed, Node, OutputsOf, Run, Slots, StatementAst } from './node';
 import { StatementNode } from './statement-node';
 
-type Context = CollectionContext<Contract<SqlStorage>>;
+type Context = CallContext<Contract<SqlStorage>>;
 type Collected = readonly (readonly StorageRow[] | SqlStatementStats)[];
 
 interface Outcome<Row> {
@@ -83,32 +82,12 @@ async function runAllNodes<Row>(
   checkNodes(graph, ctx);
   const { runtime } = ctx;
   if (statementCount(graph) > 1 && graph.writesAnyTable && runtime.transaction !== undefined) {
-    return runInTransaction(await runtime.transaction(ctx.implicitTransactionOptions), (scope) =>
-      runNodesInOrder<Row>(graph, ctx, scope, callerRows),
+    return runtime.transaction(
+      (tx) => runNodesInOrder<Row>(graph, ctx, tx, callerRows),
+      ctx.implicitTransactionOptions,
     );
   }
   return runNodesInOrder<Row>(graph, ctx, runtime, callerRows);
-}
-
-async function runInTransaction<T>(
-  transaction: RuntimeTransaction,
-  run: (scope: RuntimeScope) => Promise<T>,
-): Promise<T> {
-  try {
-    const result = await run(transaction);
-    await transaction.commit();
-    return result;
-  } catch (error) {
-    try {
-      await transaction.rollback();
-    } catch (rollbackError) {
-      // A hook that threw after the ROLLBACK landed must not replace the error that caused it.
-      const settlement = settlementOf(transaction);
-      if (settlement?.rolledBack !== true) throw rollbackError;
-      settlement.logDroppedError(rollbackError);
-    }
-    throw error;
-  }
 }
 
 async function runNodesInOrder<Row>(

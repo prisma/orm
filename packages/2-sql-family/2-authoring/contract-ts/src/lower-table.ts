@@ -117,7 +117,8 @@ export function inCanonicalOrder(checks: readonly CheckConstraint[]): readonly C
   return [...checks].sort((a, b) => compareCodeUnits(a.name, b.name));
 }
 
-function authoredIndexInput(index: IndexNode): AuthoredIndexInput {
+/** The index as the index lowering takes it. */
+export function authoredIndexInput(index: IndexNode): AuthoredIndexInput {
   return blindCast<
     AuthoredIndexInput,
     'the definition tree already carries both unions; the spread loses the correlation, and lowerAuthoredIndex re-checks at runtime'

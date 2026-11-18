@@ -10,5 +10,8 @@ export {
 export type { IndexCandidate } from '../index-deduplication';
 export {
   derivedBackingIndexIsRedundant,
+  derivedBackingIndexNode,
+  identicalIndexes,
+  indexNodeOf,
   leadingBackingObjectName,
 } from '../index-equivalence';

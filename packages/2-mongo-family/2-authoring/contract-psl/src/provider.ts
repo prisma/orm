@@ -30,6 +30,8 @@ function hasTarget(options: MongoContractOptions | undefined): boolean {
   return options?.target !== undefined;
 }
 
+const strictUtf8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+
 export function mongoContract(schemaPath: string, options: MongoContractOptions): ContractConfig {
   if (!hasTarget(options)) {
     throw structuredError(
@@ -80,24 +82,28 @@ export function mongoContract(schemaPath: string, options: MongoContractOptions)
       const readDiagnostics: ContractSourceDiagnostic[] = [];
       const members: { readonly path: string; readonly text: string }[] = [];
       const undirected: string[] = [];
+      let anyFileOptedIn = false;
       for (const path of candidates) {
-        let text: string;
         try {
-          text = await readFile(path, 'utf-8');
+          const bytes = await readFile(path);
+          if (isPrisma8Schema(bytes.toString('utf-8'))) {
+            anyFileOptedIn = true;
+            members.push({ path, text: strictUtf8.decode(bytes) });
+          } else {
+            undirected.push(path);
+          }
         } catch (error) {
-          const message = String(error);
-          readDiagnostics.push({ code: 'PSL_SCHEMA_READ_FAILED', message, sourceId: path });
-          continue;
-        }
-        if (isPrisma8Schema(text)) {
-          members.push({ path, text });
-        } else {
-          undirected.push(path);
+          const reason = error instanceof Error ? error.message : String(error);
+          readDiagnostics.push({
+            code: 'PSL_SCHEMA_READ_FAILED',
+            message: `Could not read ${path}: ${reason}`,
+            sourceId: path,
+          });
         }
       }
 
       if (members.length === 0) {
-        if (undirected.length === 0) {
+        if (anyFileOptedIn || undirected.length === 0) {
           return notOk({
             summary: 'Failed to read Prisma schema files',
             diagnostics: readDiagnostics,

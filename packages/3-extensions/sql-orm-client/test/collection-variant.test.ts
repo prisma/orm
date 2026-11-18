@@ -644,7 +644,7 @@ describe('MTI variant mutation guards', () => {
       expect.objectContaining({
         code: 'ORM.OPERATION_UNSUPPORTED',
         message:
-          'The onConflict option is not supported on variant "Feature" of model "Task" because the variant is stored in its own table. Call createAll(rows) without the option; a duplicate row then makes the call fail.',
+          'The onConflict option is not supported on variant "Feature" of model "Task" because the variant is stored in its own table. Leave the option out; a duplicate row then makes the call fail.',
       }),
     );
   });
@@ -791,16 +791,14 @@ describe('MTI variant create (two-INSERT orchestration)', () => {
       [{ id: 10, priority: 1 }],
     ]);
 
-    const commit = vi.fn().mockResolvedValue(undefined);
-    const rollback = vi.fn().mockResolvedValue(undefined);
+    const settled: string[] = [];
     const withTransaction = {
       ...baseRuntime,
-      transaction: vi.fn().mockResolvedValue({
-        query: baseRuntime.query.bind(baseRuntime),
-        execute: baseRuntime.execute.bind(baseRuntime),
-        commit,
-        rollback,
-      }),
+      async transaction<R>(fn: (tx: typeof baseRuntime) => PromiseLike<R>): Promise<R> {
+        const result = await fn(baseRuntime);
+        settled.push('committed');
+        return result;
+      },
     };
     const txRuntime = { ...withTransaction, [activitySource]: stubActivitySource(withTransaction) };
 
@@ -810,9 +808,7 @@ describe('MTI variant create (two-INSERT orchestration)', () => {
     const narrowed = collection.variant('feature' as never) as typeof collection;
     await narrowed.createAll([{ title: 'Dark mode', priority: 1 } as never]).toArray();
 
-    expect(txRuntime.transaction).toHaveBeenCalledOnce();
-    expect(commit).toHaveBeenCalledOnce();
-    expect(rollback).not.toHaveBeenCalled();
+    expect(settled).toEqual(['committed']);
     expect(baseRuntime.executions).toHaveLength(2);
   });
 });

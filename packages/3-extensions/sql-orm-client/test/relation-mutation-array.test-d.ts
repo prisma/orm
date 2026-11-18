@@ -8,9 +8,9 @@ type PostUpdate = MutationUpdateInput<Contract, 'Post'>;
 
 test('a relation callback accepts an array of operations, readonly or empty, and at most one on a to-one relation', () => {
   const update: UserUpdate = {
-    posts: (posts) => [posts.create({ id: 1, title: 'New', views: 0 }), posts.disconnect()],
+    posts: (posts) => [posts.create({ id: 1, title: 'New', views: 0 }), posts.connect({ id: 3 })],
     tags: () => [],
-    profile: (profile) => [profile.disconnect()] as const,
+    profile: (profile) => [profile.connect({ id: 1 })] as const,
   };
   const create: UserCreate = {
     name: 'Alice',
@@ -25,7 +25,7 @@ test('a relation callback accepts an array of operations, readonly or empty, and
 test('a nested array, an element that is not an operation, a disconnect in create and two operations on a to-one relation are type errors', () => {
   const nested: UserUpdate = {
     // @ts-expect-error
-    posts: (posts) => [posts.connect({ id: 2 }), [posts.disconnect()]],
+    posts: (posts) => [posts.connect({ id: 2 }), [posts.connect({ id: 3 })]],
   };
   const notAnOperation: UserUpdate = {
     // @ts-expect-error

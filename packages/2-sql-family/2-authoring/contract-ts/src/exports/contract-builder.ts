@@ -24,6 +24,7 @@ export type {
   AttachedEntities,
   AuthoredColumnDefault,
   AuthoredColumnDefaultLiteralValue,
+  CapabilityContributor,
   CheckNode,
   ColumnNode,
   ContractDefinition,
@@ -68,4 +69,13 @@ export type {
   EnumTypeHandle,
 } from '../enum-type';
 export { bindEnumType, enumType, member } from '../enum-type';
+export {
+  columnsPhrase,
+  mergeSharedTable,
+  type SharedForeignKeyView,
+  type SharedTableMerge,
+  type SharedTableRefusal,
+  type TableSharer,
+  type VariantTableSharer,
+} from '../shared-table-constraints';
 export { unbound } from '../unbound';

@@ -23,6 +23,8 @@ export interface LiveExpectations {
   readonly oversizedOrderedInclude: 'fails' | 'returns every row';
   /** Whether `having` keeps a group whose mean of integers is 5/3 when it asks for a mean greater than 5/3. `having` compares the server's own `AVG`, a decimal each server rounds its own way, not the exact mean a projection reads. */
   readonly havingAboveExactMean: 'drops the group' | 'keeps the group';
+  /** What an update or delete whose filter reads the table it writes does: the renderer refuses it, or the server runs it. */
+  readonly writeReadingWrittenTable: 'refused' | 'runs';
 }
 
 /**

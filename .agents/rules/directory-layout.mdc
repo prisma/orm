@@ -27,7 +27,8 @@ packages/
     sqlite/  mongo/      # the same shape
     mysql/
       1-mysql/           # MySQL: 1-target, 2-adapter, 3-driver, 9-facade
-      2-mariadb/         # MariaDB: 1-target, 2-adapter, 3-driver, 9-facade
+      2-mariadb/         # MariaDB: 1-target, 2-adapter, 3-driver, 9-facade (ADR 325)
+      3-live-tests/      # @internal/mysql-live-tests: ORM suites run against both servers
   3-extensions/          # Domain 3: Extension packs
     pgvector/
 ```

@@ -14,7 +14,8 @@ Wires the MariaDB target, adapter and driver together for a project's `prisma.co
 
 ## Responsibilities
 
-- **`defineConfig`** (`./config`): a MariaDB project's configuration, built with MySQL's `createMysqlDefineConfig`. The contract is a Prisma schema: a `.prisma` file, a folder of them, or a glob. `createMysqlDefineConfig` refuses a TypeScript contract (`.ts`, `.mts`, `.cts`, `.tsx`) with `CONFIG.VALIDATION_FAILED`.
+- **`defineConfig`** (`./config`): a MariaDB project's configuration, built with MySQL's `createMysqlDefineConfig`. The contract is a TypeScript contract in a `.ts` file, or a Prisma schema: a `.prisma` file, a folder of them, or a glob. A TypeScript contract in a `.mts`, `.cts` or `.tsx` file is refused with `CONFIG.VALIDATION_FAILED`.
+- **`defineContract`** (`./contract-builder`): MySQL's `createMysqlDefineContract` applied to MariaDB's pack and its adapter's contract contributions, so a contract written in TypeScript carries target `mariadb` and MariaDB's capabilities, and emits the same `contract.json` as the same models written in PSL. The entry's other helpers (`field`, `model`, `rel`, `enumType`, `gen` and the rest) are MySQL's, which name no target.
 - **`createMariadbControlClient`** (`./control`): a control client for `migration plan`, `db migrate`, `db verify`, `db sign` and introspection.
 - **`./migration`**: what a MariaDB `migration.ts` imports: `Migration`, which is `MariadbMigration`, `MigrationCLI` and the rest of MySQL's migration module. `defineConfig` names it in `migrations.module`.
 - **`./contract-types`**: re-exports, as types only, the framework contract types, the SQL family contract types and the MariaDB codec types: everything a generated `contract.d.ts` imports. `defineConfig` names it in `contract.typesModule`.

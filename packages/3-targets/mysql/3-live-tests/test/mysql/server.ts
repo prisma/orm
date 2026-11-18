@@ -33,5 +33,6 @@ export const mysqlLiveServer: LiveServer = {
       'INSERT INTO `User` (`email`, `role`) VALUES (?1, ?2) AS `new` ON DUPLICATE KEY UPDATE `role` = ?3',
     oversizedOrderedInclude: 'fails',
     havingAboveExactMean: 'drops the group',
+    writeReadingWrittenTable: 'refused',
   },
 };

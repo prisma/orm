@@ -18,7 +18,7 @@ test('a to-many relation in update input accepts where, updateAll and deleteAll 
   const input: UserUpdate = {
     posts: (posts) => {
       expectTypeOf(posts.where({ views: 1 }).updateAll({ views: 2 })).toEqualTypeOf<
-        RelationMutationUpdateAll<Contract, 'Post'>
+        RelationMutationUpdateAll<Contract, 'Post', 'public'>
       >();
       expectTypeOf(posts.deleteAll()).toEqualTypeOf<RelationMutationDeleteAll>();
       return [

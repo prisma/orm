@@ -441,7 +441,7 @@ A Mongo field references an enum that is not declared in `defineContract({ enums
 
 ### CONTRACT.EXPORT_INVALID
 
-The TS contract module's export is not a plain JSON-serializable contract object: a non-object export, circular references, getters, or function-valued properties. Raised by the CLI while loading a TypeScript contract source. Payload: `path`, `reason`, `key`.
+The TS contract module's export is not a plain JSON-serializable contract object: a non-object export, circular references, getters, or function-valued properties. Raised by the CLI while loading a TypeScript contract source. Payload: `path`, `reason`, `key`. `contract emit` also raises it when a SQL config's TypeScript contract file exports, as its `default` or `contract` export, something other than the contract `defineContract` returns: `The TypeScript contract "<path>" exports a value that is not a SQL contract.`, with `reason: 'not-a-contract'`; its fix names the module to import `defineContract` from.
 
 ### CONTRACT.FIELD_HELPER_UNKNOWN
 
@@ -450,6 +450,10 @@ A TypeScript contract read a field preset Prisma 8 removed from the SQL or Mongo
 ### CONTRACT.FIELD_UNKNOWN
 
 An index or column mapping references a field the model does not declare (unknown field in the contract definition, or a Mongo model index over an undeclared field). Raised while lowering/building the contract. Payload: `modelName`, `fieldName`, `indexSignature`. The Mongo contract builder also raises it for a discriminator that names a field its model does not declare (`reason: 'discriminator-field-unknown'`).
+
+### CONTRACT.FOREIGN_KEY_CONFLICT_ON_STI_VARIANT
+
+A single-table-inheritance variant declares a foreign key on columns that another model of the same table, its base or another variant, also maps without the same foreign key: either a different foreign key on those columns, or none. Every row of the other model would then have to satisfy it. A variant's foreign keys go on its base's table; the same foreign key declared by every model that maps its columns is kept once. Two foreign keys are the same when they pair the same source columns with the same target columns, in any order, and agree on the rest. It is also raised when one of the foreign key's columns has a stored default, since every row of the table gets that default. A foreign key that creates no constraint is not checked. Raised while building a SQL contract from a `ContractDefinition` built by hand: the TypeScript authoring functions cannot declare a single-table variant, so this only guards such a definition. The PSL source reports it at the variant's relation as `PSL_FOREIGN_KEY_CONFLICT_ON_STI_VARIANT`. The fix is to give the variant's field a column of its own, or, when the other foreign key is the base model's, to keep only one of the two relations. Payload: `modelName`, `otherModelName`, `namespaceId`, `tableName`, `columns`.
 
 ### CONTRACT.FOREIGN_KEY_INVALID
 
@@ -539,7 +543,7 @@ A polymorphic base names a variant that is not a model in the contract, so the `
 
 ### CONTRACT.MODULE_EXPORT_MISSING
 
-The contract module at the configured path loads but exposes neither a `default` nor a `contract` export, so the CLI cannot obtain the contract from it. Raised when resolving a TS contract from config (SQL and Mongo). Payload: `path`.
+The contract module at the configured path loads but exposes neither a `default` nor a `contract` export, so the CLI cannot obtain the contract from it. Raised when resolving a TS contract from config (SQL and Mongo). Payload: `path`. For a SQL config the message names the file as the config writes it: `The contract file "<path>" has no default export or named export \`contract\`.`, with the fix to export the contract `defineContract` returns either way.
 
 ### CONTRACT.NAME_DUPLICATE
 
@@ -547,7 +551,7 @@ Two declarations claim the same name: duplicate namespace entries, model names, 
 
 ### CONTRACT.NAMESPACE_INVALID
 
-A namespace name is empty, whitespace-only, or a reserved sentinel (`__unbound__`, `__unspecified__`, or Postgres's reserved `unbound`), either in the declared `namespaces` list or on a model. Raised by the SQL contract builder. Payload: `namespace`, `reason`, `modelKey`.
+A namespace name is empty, whitespace-only, or a reserved sentinel (`__unbound__`, `__unspecified__`, or Postgres's reserved `unbound`), either in the declared `namespaces` list or on a model. Raised by the SQL contract builder. Payload: `namespace`, `reason`, `modelKey`. MySQL and MariaDB also raise it when a TypeScript contract puts a model in a namespace, which they do not support: `MySQL and MariaDB do not support namespaces, but the contract puts a model in namespace "<name>".`, with the fix to remove `namespace` from the model. Payload: `received`.
 
 ### CONTRACT.NAMESPACE_UNKNOWN
 
@@ -647,7 +651,9 @@ A foreign key names its target by table, and no model or table node of the contr
 
 ### CONTRACT.TARGET_MISMATCH
 
-The contract's target does not match the target configured in `prisma.config.ts` (e.g. a Postgres contract with a SQLite config). `db verify` reports it as an `error` diagnostic on a completed run that exits `4`. Payload: `expected`, `actual`.
+The contract's target does not match the target configured in `prisma.config.ts` (e.g. a Postgres contract with a SQLite config). `db verify` reports it as an `error` diagnostic on a completed run that exits `4`. Payload: `expected` (the configured target), `actual` (the contract's target), and `contract` (the contract's path) when a `defineConfig` raises it.
+
+`contract emit` also raises it when a SQL config's TypeScript contract imports `defineContract` from another target's package: `The TypeScript contract "<path>" was built for target "<actual>", but the config is for target "<expected>".`, with the fix `Import defineContract from <module>.`, where the module is the configured target package's `contract-builder` entry. `contract emit` reports it under this code, in the terminal and with `--json`; the programmatic control client's `emit` returns it as `CONTRACT_SOURCE_INVALID` with this code in `meta.code`. A module that exports a contract of another family, such as a MongoDB contract, gets this code too; a contract here is a value with a target family, a target and storage namespaces, the fields every family's contract has. A module whose export is not a contract at all is refused with `CONTRACT.EXPORT_INVALID` instead. It is also raised when a PostgreSQL config's `contract` is a ready `ContractConfig`, such as `typescriptContract(contract)`, loads a contract built for another target. The message then names the config's first input (`The contract "<path>" was built for target ...`, with `TypeScript contract` for a TypeScript source), or says `in the config` when the config has no input, in which case `meta` has no `contract`.
 
 ### CONTRACT.TYPE_PARAMS_INVALID
 
@@ -666,6 +672,10 @@ A SQL TypeScript contract has a `types` key, on the `defineContract` definition 
 ### CONTRACT.UNREADABLE
 
 The emitted contract file could not be read or parsed while computing `migration status`; reported as a warn-severity diagnostic on the status result rather than a thrown error, with the hint to re-run `prisma contract emit`. Payload: none (diagnostic carries `message` and `hints`).
+
+### CONTRACT.UNSCOPED_INDEX_ON_STI_VARIANT
+
+A single-table-inheritance variant declares a unique constraint, or an index without a `where` condition. The variant shares its base's table, so either would also cover the rows of the base and the other variants. Raised while building a SQL contract from a `ContractDefinition` built by hand: the TypeScript authoring functions cannot declare a single-table variant, so this only guards such a definition. The PSL source refuses each `@unique`, `@@unique` and `@@index` without `where:` at the attribute, as `PSL_UNSCOPED_INDEX_ON_STI_VARIANT`, and writes out the partial index scoped to the variant. Without a condition, only an index that backs one of the variant's own foreign keys is accepted: the one identical to the backing index the foreign key derives, or the plain index its relation names with `index:`, and not over a column with a stored default. A unique is always refused. The same backing index already on the table under the same name is kept once; under another name, whether the base or another variant declares it, it is refused. When a refused unique is one a one-to-one relation needs, the PSL message says that a one-to-one relation from a single-table variant is not supported yet, and offers no partial index, which would not satisfy the relation. An index with a `where` condition on a variant becomes a partial index on the base table; before, the PSL source dropped it from the contract. The fix is an index whose `where` condition selects the variant's discriminator value, with `unique: true` for a unique one. Payload: `modelName`, `namespaceId`, `tableName`, `unscoped` (the columns of each refused unique or index).
 
 ### CONTRACT.TYPES_RENDER_FAILED
 
@@ -1079,7 +1089,7 @@ An aggregate was invoked for an operation/input pair the composed target declare
 
 ### ORM.ARGUMENT_INVALID
 
-A method argument on the ORM client, or on the `sql()` / Mongo query-builder DSLs, is malformed or missing a required part: a `null` where-arg, `upsert()` without conflict columns or without a create value for a conflict column, a custom collection given as an instance / for a nonexistent model in a client's `collections` option or `orm({ collections })`, invalid builder argument shapes, `$and`/`$or` with no expressions, a limit, offset or skip that is negative or not an integer (on MongoDB, a limit of zero too, which MongoDB refuses; a refused prepared `limit` or `skip` carries `meta: { stage, name }`), malformed lookup/group/update specs, a row-locking method (`forUpdate()`, `forNoKeyUpdate()`, `forShare()`, `forKeyShare()`) given both `nowait` and `skipLocked`, or a `variant()` call whose value is not a declared discriminator value of the receiver model, or on a model with no discriminator (SQL and Mongo ORMs; the payload adds `value` and `declaredValues`). The MongoDB ORM also raises it for a prepared placeholder it cannot take: in a write value, in a value-object literal, or in a `where` position other than a scalar field's value in the object form or a comparison or `$in`/`$nin` operand on a scalar field in a filter expression, including a list that holds a placeholder, a whole value object, and a path below a value object that the contract does not know, raised when the `where` is built or the write is called (meta: `name`, `field`; for a placeholder inside `$expr`, `name` and `operator: '$expr'`); for a write (`update`, `updateAll`, `updateAndCount`, `delete`, `deleteAll`, `deleteAndCount`, `upsert`) on a collection whose `where` holds a placeholder, raised when the write is called (meta: `name`, `method`); and for a placeholder in a `where` whose codec is not the field's (meta: `name`, `field`, `codecId`, `fieldCodecId`) or that is nullable where the field cannot be null or is a list (meta: `name`, `field`, `nullable`, `list`), raised when the `where` is built. For SQL, the limit/offset check runs in relational-core when the `SelectAst` is constructed, so every SQL lane and target raises it before any SQL is rendered. That check also refuses integers above `Number.MAX_SAFE_INTEGER`, and does not check a limit or offset bound as a parameter. Payload: `method`, `argument` (`limit` or `offset` for the SQL limit/offset check), `model`, `column`, `key`. The `sql()` builder also raises it when a table's `indexes` is read by a name that more than one of its indexes shares (payload: `namespaceId`, `tableName`, `index`). It also raises it when a query is built with a column of an alias that is not one of the query's sources, such as one from an index read from `table.as('other').indexes` (payload: `alias`, `column`, `sources`).
+An argument to an ORM client or query-builder method, including the input of a nested relation mutation, is malformed or missing a required part.
 
 ### ORM.CAPABILITY_MISSING
 
@@ -1095,7 +1105,7 @@ Cursor pagination was requested but the cursor object lacks a value for one of t
 
 ### ORM.FIELD_IMMUTABLE
 
-A Mongo mutation payload attempts to write `_id`, which is immutable. Thrown by the Mongo ORM client for create/update/upsert payloads. Payload: `field`.
+A Mongo mutation payload attempts to write `_id`, which is immutable. Thrown by the Mongo ORM client for create/update/upsert payloads. Payload: `field`. The SQL ORM client raises it, before any statement runs, for update data that sets the discriminator of a polymorphic model, with `model` and `field` in the payload.
 
 ### ORM.FIELD_UNKNOWN
 
@@ -1143,15 +1153,7 @@ A mutation that expected the database to return a row got none: `create()`/`upse
 
 ### ORM.OPERATION_UNSUPPORTED
 
-A valid ORM method was called in a configuration that does not support it: mutating an MTI variant collection with a method that requires `createAll()`, passing `onConflict: 'skip'` to `createAll()` on an MTI variant collection, Mongo `upsert()` with dot-path field operations, a Mongo `upsert()` whose `create` sets a field that has an update default and whose update pulls by a match document (that upsert runs as one update pipeline, which can pull only a single value), a Mongo mutation carrying windowing (`orderBy`/`offset`/`limit`) or includes, or `variant()` called on a collection that already has a variant selected (SQL and Mongo ORMs; call it on the base collection instead; `reason: 'variant-already-selected'`, with `variant` and `selectedValue` naming the selected variant model and its discriminator value). Payload: `method`, `model`, `reason`, `field`.
-
-### ORM.RELATION_MUTATION_INVALID
-
-A nested relation mutation's input is malformed: a relation field without a mutator callback or returning an invalid descriptor, an array of operations that holds another array or a value that is not an operation (`index` gives its position), `create` without data, `connect`/`disconnect` with a missing or empty criterion, a many-to-many `create`/`connect` whose parent and target give a shared junction column conflicting values, or a one-to-many `updateAll` whose data or update defaults set a field linking the related rows to their parent (`problem: 'parent-link-column'`, with the fields in `fields`). Payload: `kind`, `relation`, `model`, `problem`, `junction`, `column`, `index`, `fields`.
-
-### ORM.RELATION_MUTATION_UNSUPPORTED
-
-A nested relation operation is not supported where it is used; `reason`, when set, says why. Payload: `kind`, `relation`, `model`, `reason`, `operations`, `junction`.
+A valid ORM operation, including a nested relation mutation, is used where it is not supported; `reason`, when set, says why. `reason: 'required-foreign-key'` means the operation would set a foreign key that is not nullable to null, such as `disconnect()` on a required relation; `model` and `fields` name that key.
 
 ### ORM.RELATION_ROW_MISSING
 
@@ -1406,7 +1408,7 @@ The SQLite SQL renderer wrote a statement whose placeholders do not match its pa
 
 MySQL raises it in three places, each refusing the statement before it runs:
 
-- The MySQL adapter, after lowering, when a placeholder is not a numbered `?N` naming one of the statement's parameters, or a parameter has no placeholder, usually because of a `?` written into raw SQL text. Payload: `placeholders`, `params`.
+- The MySQL adapter, when a placeholder is not a numbered `?N` naming one of the statement's parameters, or a parameter has no placeholder, usually because of a `?` written into raw SQL text. Payload: `placeholders`, `params`.
 - The MySQL adapter, when raw SQL puts a digit right after an interpolated value, which would read as part of the value's `?N` (`?1` followed by `0` reads as `?10`). Payload: `reason: 'digit-after-value'`, `part`.
 - The MySQL drivers, when a statement mixes numbered `?N` and bare `?` placeholders, or its placeholders and values do not match. Payload: `placeholders`, `params`.
 
@@ -1471,13 +1473,13 @@ The SQL runtime callback helper received a timeout outside integer milliseconds 
 
 ### RUNTIME.TRANSACTION_ALREADY_OPEN
 
-`transaction()` was called on an activity handle opened on a connection while a transaction it began on that connection is still open. A connection runs one transaction at a time, and transactions do not nest. Commit or roll back the open transaction first, or send the work on it. Payload: `kind`, `id`, `transactionId`.
+`transaction()` was called on an activity handle opened on a connection while a transaction it began on that connection is still starting or open. A connection runs one transaction at a time, and transactions do not nest. Commit or roll back the open transaction first, or send the work on it. Payload: `kind`, `id`, `transactionId`; `transactionId` is `undefined` while the open transaction's `activityStarted` hooks run.
 
 ### RUNTIME.TRANSACTION_CLOSED
 
 Transaction work or a lazy result was used after callback completion or deadline invalidation, or a statement started beneath a transaction or savepoint had not reached the driver when its `commit()` or `rollback()` was called, or when the transaction it is in closed. This includes a statement sent on the transaction's connection while the transaction was open. The statement is not sent. Await every statement before the callback returns, or before calling `commit()` or `rollback()`. Consume results inside the callback and do not retain its transaction for later work.
 
-A savepoint refuses work with this code once it has been committed or rolled back, or once the transaction or a savepoint below it has settled, timed out or been invalidated. A failed `ROLLBACK TO SAVEPOINT` closes the transaction and every savepoint: their statements, `transaction()` and `commit()` are refused with this code, and the outer `rollback()` rejects with it without sending `ROLLBACK`, so the connection is destroyed.
+A savepoint refuses work with this code once it has been committed or rolled back, or once the transaction or a savepoint below it has settled, timed out or been invalidated. A failed `ROLLBACK TO SAVEPOINT` closes the transaction and every savepoint: their statements, `transaction()` and `commit()` are refused with this code, and the outer `rollback()` rejects with it without sending `ROLLBACK`, so the connection is destroyed. `rollback()` on a transaction or savepoint whose `commit()` the database applied rejects with this code and sends nothing.
 
 ### RUNTIME.TRANSACTION_COMMIT_FAILED
 
