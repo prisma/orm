@@ -36,7 +36,7 @@ const contract = defineContract({ models: { Series, Point: PointBase } });
 const REAL_REFUSAL = {
   code: 'RUNTIME.DECODE_FAILED',
   message: expect.stringContaining(
-    'sqlite/real@1 wire value must be a number, or the text Infinity or -Infinity',
+    'holds "abc", which is not a number. sqlite/real@1 reads a number, or the text Infinity or -Infinity.',
   ),
 };
 const stack = createSqlExecutionStack({

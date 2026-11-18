@@ -262,14 +262,14 @@ describe('integration/integer representation type on sqlite', () => {
         },
         include: {
           name: 'RuntimeError',
-          message: `Failed to decode column int_repr_samples.rank with codec 'sqlite/integer@1': Column "int_repr_samples"."rank" holds "${received}", which is not an integer within the safe integer range. sqlite/integer@1 reads integers from -9007199254740991 to 9007199254740991.`,
+          message: `Failed to decode column int_repr_samples.rank with codec 'sqlite/integer@1': Column "int_repr_samples"."rank" holds ${shown}, which is not an integer within the safe integer range. sqlite/integer@1 reads integers from -9007199254740991 to 9007199254740991.`,
           code: 'RUNTIME.DECODE_FAILED',
           category: 'RUNTIME',
           severity: 'error',
           details: { table: 'int_repr_samples', column: 'rank', codec: 'sqlite/integer@1' },
           cause: {
             name: 'StructuredError',
-            message: `Column "int_repr_samples"."rank" holds "${received}", which is not an integer within the safe integer range. sqlite/integer@1 reads integers from -9007199254740991 to 9007199254740991.`,
+            message: `Column "int_repr_samples"."rank" holds ${shown}, which is not an integer within the safe integer range. sqlite/integer@1 reads integers from -9007199254740991 to 9007199254740991.`,
             code: 'RUNTIME.DECODE_FAILED',
             meta: {
               codecId: 'sqlite/integer@1',

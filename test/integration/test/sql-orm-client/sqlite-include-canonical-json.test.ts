@@ -279,14 +279,14 @@ describe('integration/sqlite include canonical JSON', () => {
     const exactTotal = (WIDE_BIGINT + 2n).toString();
     expect(shape).toEqual({
       name: 'RuntimeError',
-      message: `Failed to decode column canon_stations.stations with codec 'sqlite/bigintnumber@1': sqlite/bigintnumber@1 value must be an integer within the safe integer range, got ${exactTotal}`,
+      message: `Failed to decode column canon_stations.stations with codec 'sqlite/bigintnumber@1': A sqlite/bigintnumber@1 value is "${exactTotal}", which is not an integer within the safe integer range. sqlite/bigintnumber@1 reads integers from -9007199254740991 to 9007199254740991.`,
       code: 'RUNTIME.DECODE_FAILED',
       category: 'RUNTIME',
       severity: 'error',
       details: { table: 'canon_stations', column: 'stations', codec: 'sqlite/bigintnumber@1' },
       cause: {
         name: 'StructuredError',
-        message: `sqlite/bigintnumber@1 value must be an integer within the safe integer range, got ${exactTotal}`,
+        message: `A sqlite/bigintnumber@1 value is "${exactTotal}", which is not an integer within the safe integer range. sqlite/bigintnumber@1 reads integers from -9007199254740991 to 9007199254740991.`,
         code: 'RUNTIME.DECODE_FAILED',
         meta: { codecId: 'sqlite/bigintnumber@1', received: exactTotal },
       },
@@ -315,7 +315,7 @@ describe('integration/sqlite include canonical JSON', () => {
 
     expect(shape).toEqual({
       name: 'StructuredError',
-      message: `sqlite/bigintnumber@1 value must be an integer within the safe integer range, got ${WIDE_BIGINT}`,
+      message: `A sqlite/bigintnumber@1 value is "${WIDE_BIGINT}", which is not an integer within the safe integer range. sqlite/bigintnumber@1 reads integers from -9007199254740991 to 9007199254740991.`,
       code: 'RUNTIME.DECODE_FAILED',
       meta: { codecId: 'sqlite/bigintnumber@1', received: WIDE_BIGINT.toString() },
     });
