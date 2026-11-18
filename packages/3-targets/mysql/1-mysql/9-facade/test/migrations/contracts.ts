@@ -134,3 +134,22 @@ export function contractRepointedToAdmin() {
     };
   });
 }
+
+/** A table with a column of each scalar convenience type and a literal default on each. */
+export function contractWithScalarTypes() {
+  return defineContract({}, ({ field, model, type }) => ({
+    models: {
+      Measure: model('Measure', {
+        fields: {
+          id: field.column(type.Int()).id(),
+          count: field.column(type.BigInt({ as: 'number' })).default(7),
+          ratio: field.column(type.Float()).default(0.25),
+          amount: field.column(type.Decimal()).default('1.5'),
+          price: field.column(type.Decimal({ precision: 10, scale: 2 })).default('-0.5'),
+          label: field.column(type.String({ storage: 'text' })).optional(),
+          name: field.column(type.String({ length: 40 })).default("it's"),
+        },
+      }),
+    },
+  }));
+}

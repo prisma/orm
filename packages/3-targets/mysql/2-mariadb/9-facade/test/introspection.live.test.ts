@@ -169,6 +169,40 @@ describe('introspecting a MariaDB database made by hand', {
     );
   });
 
+  it('verifies a table made by hand with a column of each scalar convenience type and its default', async (test) => {
+    const { contract } = await emitFixture('scalar-types');
+    const measureDdl = `CREATE TABLE \`Measure\` (
+      \`id\` int(11) NOT NULL,
+      \`count\` bigint(20) NOT NULL DEFAULT 7,
+      \`ratio\` double NOT NULL DEFAULT 0.25,
+      \`amount\` decimal(65,30) NOT NULL DEFAULT 1.5,
+      \`price\` decimal(10,2) NOT NULL DEFAULT '-0.5',
+      \`label\` text DEFAULT NULL,
+      \`name\` varchar(40) NOT NULL DEFAULT 'it''s',
+      PRIMARY KEY (\`id\`)
+    )`;
+    await withMysqlDatabase(
+      test,
+      ({ url }) =>
+        withTables(url, [measureDdl], async (driver) => {
+          const actual = await introspect(driver, contract);
+          const measure = actual.tables['Measure']?.columns ?? {};
+          expect({
+            amount: measure['amount']?.resolvedDefault,
+            price: measure['price']?.resolvedDefault,
+            ratio: measure['ratio']?.resolvedDefault,
+            issues: mariadb.diffSchema({ contract, schema: actual, frameworkComponents }).issues,
+          }).toEqual({
+            amount: { kind: 'literal', value: `1.5${'0'.repeat(29)}` },
+            price: { kind: 'literal', value: '-0.50' },
+            ratio: { kind: 'literal', value: 0.25 },
+            issues: [],
+          });
+        }),
+      SERVER,
+    );
+  });
+
   it('reads literal defaults through the codecs of the columns a contract declares', async (test) => {
     const { contract } = await emitFixture('defaults');
     const itemDdl = `CREATE TABLE \`Item\` (

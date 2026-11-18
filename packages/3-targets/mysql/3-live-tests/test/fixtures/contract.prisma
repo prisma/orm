@@ -78,3 +78,19 @@ model Feature {
   @@base(Task, "feature")
   @@map("Feature")
 }
+
+model Shelf {
+  id       Int       @id
+  measures Measure[]
+}
+
+model Measure {
+  id      Int                @id
+  count   BigInt(as: number)
+  ratio   Float
+  amount  Decimal
+  price   Decimal(precision: 10, scale: 2)
+  label   String(storage: text)
+  shelf   Shelf              @relation(fields: [shelfId], references: [id])
+  shelfId Int
+}

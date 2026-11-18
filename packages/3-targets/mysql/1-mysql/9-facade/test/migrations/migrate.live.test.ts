@@ -19,6 +19,7 @@ import {
   contractRepointedToAdmin,
   contractWithNickname,
   contractWithoutForeignKey,
+  contractWithScalarTypes,
   contractWithUnindexedForeignKey,
 } from './contracts';
 import { controlStack, createAdapter, EVERY_CLASS, operationSql } from './planner-harness';
@@ -77,7 +78,7 @@ async function planResult(
 ) {
   return mysql.migrations.createPlanner(createAdapter()).plan({
     contract,
-    schema: await family.introspect({ driver }),
+    schema: await family.introspect({ driver, contract }),
     policy: EVERY_CLASS,
     fromContract: null,
     origin: null,
@@ -201,6 +202,45 @@ describe('migrating a MySQL database', { timeout: timeouts.databaseOperation }, 
           markers: { app: contract.storage.storageHash },
           signed: ['unchanged'],
           lockFree: true,
+        });
+      }),
+    );
+  });
+
+  it('applies a column of each scalar convenience type with its default, which then verifies strictly and plans nothing more', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withDriver(url, async (driver, family) => {
+        const contract = contractWithScalarTypes();
+        const plan = await planAgainst(driver, family, 'app', contract);
+        const applied = await apply(family, driver, [['app', plan, contract]]);
+        const { rows } = await driver.query<{ COLUMN_NAME: string; COLUMN_TYPE: string }>(
+          "SELECT COLUMN_NAME, COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Measure' ORDER BY ORDINAL_POSITION",
+        );
+        const verified = family.verifySchema({
+          contract,
+          schema: await family.introspect({ driver, contract }),
+          strict: true,
+          frameworkComponents,
+        });
+        const again = await planAgainst(driver, family, 'app', contract);
+        expect({
+          applied: applied.ok,
+          columns: rows.map((row) => `${row.COLUMN_NAME} ${row.COLUMN_TYPE}`),
+          verified: verified.ok ? true : verified,
+          planAgain: again.operations.length,
+        }).toEqual({
+          applied: true,
+          columns: [
+            'id int',
+            'count bigint',
+            'ratio double',
+            'amount decimal(65,30)',
+            'price decimal(10,2)',
+            'label text',
+            'name varchar(40)',
+          ],
+          verified: true,
+          planAgain: 0,
         });
       }),
     );

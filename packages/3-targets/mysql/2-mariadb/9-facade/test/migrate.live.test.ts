@@ -103,6 +103,7 @@ describe('migrating a MariaDB database', { timeout: timeouts.databaseOperation }
   it.for([
     ['the example contract', 'example'],
     ['a contract with literal and function defaults', 'defaults'],
+    ['a column of each scalar convenience type with its default', 'scalar-types'],
   ] as const)(
     'applies %s, which then verifies strictly, plans nothing more and signs as unchanged',
     async ([, fixture], test) => {

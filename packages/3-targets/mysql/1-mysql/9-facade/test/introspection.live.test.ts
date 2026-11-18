@@ -15,6 +15,7 @@ import {
   frameworkComponents,
   loadExampleContract,
 } from './example-contract';
+import { contractWithScalarTypes } from './migrations/contracts';
 
 const autoincrement = { kind: 'function', expression: 'autoincrement()' } as const;
 
@@ -172,6 +173,37 @@ describe('introspecting a MySQL database made by hand', {
             },
           }),
         );
+      }),
+    );
+  });
+
+  it('verifies a table made by hand with a column of each scalar convenience type and its default', async (test) => {
+    const contract = contractWithScalarTypes();
+    const measureDdl = `CREATE TABLE \`Measure\` (
+      \`id\` int NOT NULL,
+      \`count\` bigint NOT NULL DEFAULT 7,
+      \`ratio\` double NOT NULL DEFAULT 0.25,
+      \`amount\` decimal(65,30) NOT NULL DEFAULT 1.5,
+      \`price\` decimal(10,2) NOT NULL DEFAULT '-0.5',
+      \`label\` text NULL,
+      \`name\` varchar(40) NOT NULL DEFAULT 'it''s',
+      PRIMARY KEY (\`id\`)
+    )`;
+    await withMysqlDatabase(test, ({ url }) =>
+      withExampleTables(url, [measureDdl], async (driver) => {
+        const actual = await introspect(driver, contract);
+        const measure = actual.tables['Measure']?.columns ?? {};
+        expect({
+          amount: measure['amount']?.resolvedDefault,
+          price: measure['price']?.resolvedDefault,
+          ratio: measure['ratio']?.resolvedDefault,
+          issues: mysql.diffSchema({ contract, schema: actual, frameworkComponents }).issues,
+        }).toEqual({
+          amount: { kind: 'literal', value: `1.5${'0'.repeat(29)}` },
+          price: { kind: 'literal', value: '-0.50' },
+          ratio: { kind: 'literal', value: 0.25 },
+          issues: [],
+        });
       }),
     );
   });
