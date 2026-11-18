@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createRequire, findPackageJSON } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { dirname, join } from 'pathe';
+import { exports as resolveExportsField } from 'resolve.exports';
 
 /** What the project resolves a module specifier to, and what importing it gave. */
 export type ProjectImport =
@@ -13,13 +14,8 @@ export type ProjectImport =
 /** Imports a module as the project at `cwd` resolves it, not as the CLI's own location would. */
 export type ImportFromProject = (cwd: string, specifier: string) => Promise<ProjectImport>;
 
-/** The conditions Node's ESM loader resolves `import` with. */
-const IMPORT_CONDITIONS: ReadonlySet<string> = new Set([
-  'node',
-  'import',
-  'module-sync',
-  'default',
-]);
+/** Node's ESM loader adds `module-sync` to the conditions `resolve.exports` applies for `import`. */
+const IMPORT_CONDITIONS = ['module-sync'];
 
 function errorCode(error: unknown): unknown {
   return error instanceof Error ? Reflect.get(error, 'code') : undefined;
@@ -35,59 +31,19 @@ function splitSpecifier(specifier: string): { readonly name: string; readonly su
   };
 }
 
-function resolveTarget(target: unknown, patternMatch: string | undefined): string | undefined {
-  if (typeof target === 'string') {
-    return patternMatch === undefined ? target : target.replaceAll('*', patternMatch);
-  }
-  if (Array.isArray(target)) {
-    for (const candidate of target) {
-      const resolved = resolveTarget(candidate, patternMatch);
-      if (resolved !== undefined) return resolved;
-    }
-    return undefined;
-  }
-  if (typeof target === 'object' && target !== null) {
-    for (const [condition, value] of Object.entries(target)) {
-      if (!IMPORT_CONDITIONS.has(condition)) continue;
-      const resolved = resolveTarget(value, patternMatch);
-      if (resolved !== undefined) return resolved;
-    }
-  }
-  return undefined;
-}
-
-function isSubpathMap(exports: unknown): exports is Record<string, unknown> {
-  return (
-    typeof exports === 'object' &&
-    exports !== null &&
-    !Array.isArray(exports) &&
-    Object.keys(exports).some((key) => key.startsWith('.'))
-  );
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 /** The file a package's `exports` field maps `subpath` to under the import conditions. */
-function resolveExports(exports: unknown, subpath: string): string | undefined {
-  if (!isSubpathMap(exports)) {
-    return subpath === '.' ? resolveTarget(exports, undefined) : undefined;
+function resolveExports(manifest: Record<string, unknown>, subpath: string): string | undefined {
+  try {
+    const [target] =
+      resolveExportsField(manifest, subpath, { conditions: IMPORT_CONDITIONS }) ?? [];
+    return target;
+  } catch {
+    return undefined;
   }
-  if (Object.hasOwn(exports, subpath)) {
-    return resolveTarget(exports[subpath], undefined);
-  }
-  const patterns = Object.keys(exports)
-    .filter((key) => key.includes('*'))
-    .sort((a, b) => b.indexOf('*') - a.indexOf('*'));
-  for (const pattern of patterns) {
-    const [prefix = '', suffix = ''] = pattern.split('*');
-    if (
-      subpath.startsWith(prefix) &&
-      subpath.endsWith(suffix) &&
-      subpath.length >= pattern.length - 1
-    ) {
-      const match = subpath.slice(prefix.length, subpath.length - suffix.length);
-      return resolveTarget(exports[pattern], match);
-    }
-  }
-  return undefined;
 }
 
 type Resolution =
@@ -110,11 +66,7 @@ function resolveFromProject(cwd: string, specifier: string): Resolution {
     return { kind: 'not-installed' };
   }
   const manifest: unknown = JSON.parse(readFileSync(manifestPath, 'utf-8'));
-  const exports =
-    typeof manifest === 'object' && manifest !== null
-      ? Reflect.get(manifest, 'exports')
-      : undefined;
-  if (exports === undefined) {
+  if (!isRecord(manifest) || manifest['exports'] === undefined) {
     try {
       return { kind: 'resolved', path: createRequire(manifestPath).resolve(specifier) };
     } catch (error) {
@@ -124,7 +76,7 @@ function resolveFromProject(cwd: string, specifier: string): Resolution {
       throw error;
     }
   }
-  const target = resolveExports(exports, subpath);
+  const target = resolveExports(manifest, subpath);
   return target === undefined
     ? { kind: 'not-exported' }
     : { kind: 'resolved', path: join(dirname(manifestPath), target) };

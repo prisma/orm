@@ -1500,6 +1500,9 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      resolve.exports:
+        specifier: ^2.0.3
+        version: 2.0.4
       string-width:
         specifier: ^8.2.2
         version: 8.2.2
@@ -6538,6 +6541,9 @@ importers:
       prettier:
         specifier: ^3.9.6
         version: 3.9.6
+      resolve.exports:
+        specifier: ^2.0.3
+        version: 2.0.4
       string-width:
         specifier: ^8.2.2
         version: 8.2.2
@@ -12311,6 +12317,10 @@ packages:
   resolve-pkg-maps@1.0.0:
     resolution: {integrity: sha512-seS2Tj26TBVOC2NIc2rOe2y2ZO7efxITtLZcGSOnHHNOQ7CkiUBfw0Iw2ck6xkIhPwLhKNLS8BO+hEpngQlqzw==}
 
+  resolve.exports@2.0.4:
+    resolution: {integrity: sha512-zepuGL0ulf+nt+XaFrlKeaiTJeyPFPLLY62+ncq1/VTHBdt3HsfXOH60priZ6tnXQozdGcDeIF5JVTanvIcYWQ==}
+    engines: {node: '>=10'}
+
   resolve@1.22.12:
     resolution: {integrity: sha512-TyeJ1zif53BPfHootBGwPRYT1RUt6oGWsaQr8UyZW/eAm9bKoijtvruSDEmZHm92CwS9nj7/fWttqPCgzep8CA==}
     engines: {node: '>= 0.4'}
@@ -17820,6 +17830,8 @@ snapshots:
   resolve-from@5.0.0: {}
 
   resolve-pkg-maps@1.0.0: {}
+
+  resolve.exports@2.0.4: {}
 
   resolve@1.22.12:
     dependencies:
