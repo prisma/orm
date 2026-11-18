@@ -135,6 +135,41 @@ describe('recordedAccessChangesOf', () => {
     ]);
   });
 
+  it('does not list the drop of a policy named like a rename that the migration creates again', async () => {
+    const operations = recorded([
+      await dropRlsPolicy('public', 'profiles', 'readers.rename', lowerer),
+      await createRlsPolicy(
+        'public',
+        'profiles',
+        new PostgresRlsPolicy({
+          naming: { kind: 'exact', name: 'readers.rename' },
+          tableName: 'profiles',
+          namespaceId: 'public',
+          operation: 'select',
+          roles: [],
+          using: '(false)',
+          permissive: true,
+          withCheck: undefined,
+        }),
+        lowerer,
+      ),
+    ]);
+
+    expect(recordedAccessChangesOf(operations)).toEqual([]);
+  });
+
+  it('lists the changes in operation order', async () => {
+    const operations = recorded([
+      await dropRlsPolicy('public', 'profiles', 'read_own_ab12cd34', lowerer),
+      await disableRowLevelSecurity('public', 'posts', lowerer),
+    ]);
+
+    expect(recordedAccessChangesOf(operations)).toEqual([
+      { operationIndex: 0, subject: PROFILES, widens: false },
+      { operationIndex: 1, subject: { kind: 'storage', name: 'public.posts' }, widens: true },
+    ]);
+  });
+
   it('does not list a policy the migration both creates and drops', async () => {
     const operations = recorded([
       await createRlsPolicy('public', 'profiles', policy('read_own', 'ef56ab78'), lowerer),
@@ -233,9 +268,12 @@ describe('rlsIdentity', () => {
       'RenamePostgresRlsPolicyCall',
       new RenamePostgresRlsPolicyCall('public', 'profiles', 'read_own_ab12cd34', 'owner_ab12cd34'),
     ],
-  ] as const)('of %s is the id and target of the operation it lowers to', async (_name, call) => {
-    const { id, target } = await call.toOp(lowerer);
+  ] as const)(
+    'of %s is the id, class and target of the operation it lowers to',
+    async (_name, call) => {
+      const { id, operationClass, target } = await call.toOp(lowerer);
 
-    expect(call.rlsIdentity()).toEqual({ id, target });
-  });
+      expect(call.rlsIdentity()).toEqual({ id, operationClass, target });
+    },
+  );
 });

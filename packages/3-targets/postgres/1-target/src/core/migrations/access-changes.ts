@@ -29,8 +29,17 @@ const RlsPolicyTarget = type({
   details: { schema: 'string', objectType: "'rlsPolicy'", name: 'string', table: 'string' },
 });
 
-/** An operation's id and target, read before the target is checked: an `RlsOperationIdentity` once it is. */
-type UncheckedIdentity = Pick<RlsOperationIdentity, 'id'> & { readonly target: unknown };
+/** An operation's id, class and target, read before the target is checked: an `RlsOperationIdentity` once it is. */
+type UncheckedIdentity = Pick<RlsOperationIdentity, 'id' | 'operationClass'> & {
+  readonly target: unknown;
+};
+
+type SameOperation = (identity: UncheckedIdentity, expected: RlsOperationIdentity) => boolean;
+
+const sameId: SameOperation = (identity, expected) => identity.id === expected.id;
+
+const sameIdAndClass: SameOperation = (identity, expected) =>
+  sameId(identity, expected) && identity.operationClass === expected.operationClass;
 
 interface Table {
   readonly schema: string;
@@ -46,19 +55,20 @@ function disabledTable(identity: UncheckedIdentity): Table | undefined {
   const target = RowLevelSecurityTarget(identity.target);
   if (target instanceof type.errors) return undefined;
   const { schema, name } = target.details;
-  return identity.id === disableRowLevelSecurityIdentity(schema, name).id
+  return sameId(identity, disableRowLevelSecurityIdentity(schema, name))
     ? { schema, table: name }
     : undefined;
 }
 
 function policyOf(
   identity: UncheckedIdentity,
-  identityOf: (schema: string, table: string, name: string) => { readonly id: string },
+  identityOf: (schema: string, table: string, name: string) => RlsOperationIdentity,
+  same: SameOperation,
 ): Policy | undefined {
   const target = RlsPolicyTarget(identity.target);
   if (target instanceof type.errors) return undefined;
   const { schema, table, name } = target.details;
-  return identity.id === identityOf(schema, table, name).id ? { schema, table, name } : undefined;
+  return same(identity, identityOf(schema, table, name)) ? { schema, table, name } : undefined;
 }
 
 /** The policy `identity` renames and what it becomes, when it is the operation `renameRlsPolicy` builds. */
@@ -72,7 +82,7 @@ function renamedPolicy(
   const suffix = '.rename';
   if (!identity.id.startsWith(prefix) || !identity.id.endsWith(suffix)) return undefined;
   const from = identity.id.slice(prefix.length, -suffix.length);
-  return identity.id === renameRlsPolicyIdentity(schema, table, from, name).id
+  return sameIdAndClass(identity, renameRlsPolicyIdentity(schema, table, from, name))
     ? { from: { schema, table, name: from }, to: { schema, table, name } }
     : undefined;
 }
@@ -92,8 +102,8 @@ function policyKey({ schema, table, name }: Policy): string {
  * restrictive one limits it, unless a policy the same migration creates, under the same name or
  * generated-name prefix, is still there when the migration ends. Each operation is recognised from
  * its target and the id its operation factory builds; an operation with neither, such as raw SQL,
- * is not read. A rename to the old name followed by `.rename` is recorded exactly as creating a
- * policy of that name is, and is read as the rename, so a later drop of it is listed.
+ * is not read. A rename to the old name followed by `.rename` has the id and target of creating a
+ * policy of that name, so a create and a rename are also recognised by their operation class.
  */
 export function accessChangesOfIdentities(
   identities: readonly (UncheckedIdentity | undefined)[],
@@ -117,13 +127,13 @@ export function accessChangesOfIdentities(
       }
       return;
     }
-    const created = policyOf(identity, createRlsPolicyIdentity);
+    const created = policyOf(identity, createRlsPolicyIdentity, sameIdAndClass);
     if (created !== undefined) {
       const key = policyKey(created);
       createdAndKept.set(key, (createdAndKept.get(key) ?? new Set()).add(created.name));
       return;
     }
-    const dropped = policyOf(identity, dropRlsPolicyIdentity);
+    const dropped = policyOf(identity, dropRlsPolicyIdentity, sameId);
     if (dropped === undefined) return;
     const key = policyKey(dropped);
     if (createdAndKept.get(key)?.delete(dropped.name)) return;
@@ -149,7 +159,11 @@ export function recordedAccessChangesOf(
   operations: readonly MigrationPlanOperation[],
 ): readonly MigrationAccessChange[] {
   return accessChangesOfIdentities(
-    operations.map((operation) => ({ id: operation.id, target: Reflect.get(operation, 'target') })),
+    operations.map((operation) => ({
+      id: operation.id,
+      operationClass: operation.operationClass,
+      target: Reflect.get(operation, 'target'),
+    })),
   ).map(({ index, schema, table, widens }) => ({
     operationIndex: index,
     subject: {
