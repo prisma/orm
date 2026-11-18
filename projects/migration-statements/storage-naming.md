@@ -36,17 +36,17 @@ The same gap exists in two more places. In each, the contract name stays the sam
 - **The contract is where the user says what they want.** The user wrote the same name on both sides. Reading that as one object is not a guess. Every other part of planning already pairs models and fields by name; only a stored-name change is treated as a new object today.
 - **The contracts hold the whole answer.** The old and new stored names are both there. A statement would make the user type a fact the planner can read.
 - **It is the safe direction.** A rename keeps the data, and a user who wanted an empty table can empty it. A drop cannot be undone.
-- **It completes the pairing prisma/orm#31061 began.** That change pairs MongoDB variants whose names differ and whose storage matches. This rule pairs objects whose names match and whose storage differs.
-- **It removes the by-hand advice.** `keepTableAdvice` (SQL), `keepCollectionByHandAdvice` (MongoDB) and the `STORED_NAME_ONLY` text in `resolve-statements.ts` exist only for this gap.
+- **It is the converse of the pairing prisma/orm#31061 added, not a continuation of it.** That change pairs MongoDB variants whose names differ and whose storage matches, and it is tried only after every other rule. This rule pairs models, fields and enum members whose names match and whose storage differs, in both families.
+- **It removes most of the by-hand advice.** `keepCollectionByHandAdvice` (MongoDB) and the old `STORED_NAME_ONLY` text in `resolve-statements.ts` exist only for this gap. `keepTableAdvice` (SQL) stays for the cases where no rename is planned: storage whose control policy is not `managed` on both sides, a table being split or merged, and MySQL.
 
 A changed column type on a renamed column needs nothing new: the plan renames, then alters, and the alteration asks its usual question.
 
 ## Cases refused in the first slice
 
-The meaning of both is settled by the decision. Only the order of operations is work, so they are refused at first, with a message that says why, and planned later. Today neither is a drop and a create: both plan with no question and leave each table holding the other model's rows, so the refusal also fixes silent damage. The slice spec lists the same cases for fields and enum members.
+The meaning of both is settled by the decision. Only the order of operations is work, so they are refused at first, with a message that says why, and planned later. Before this decision both damaged data without a clear question: a swap altered each table in place, leaving it with the other model's rows, and a takeover dropped `users` and read the rows of `accounts` as `User`'s. So the refusal also fixes silent damage. The swap, chain and takeover refusals are built for tables, columns and enum values on PostgreSQL and SQLite; enum value chains are planned there, last value first. The slice spec lists the same cases for fields and enum members.
 
 - **A swap.** `User` moves to `accounts` and `Account` moves to `users`. This is two renames that need a temporary name. MongoDB is the harder family, because nothing there runs in a transaction.
-- **Taking the storage of a removed model.** `Account` is removed and `User` now maps to `accounts`. This is a drop of `accounts`, which still asks for `--delete Account`, and then a rename.
+- **Taking the storage of a removed model.** `Account` is removed and `User` now maps to `accounts`. The route is two plans: remove `Account` first, which asks for `--delete Account`, then move `User`.
 
 A name and its stored name both changing is already a statement today: `--rename User:Account` plans the table rename from the two contracts.
 

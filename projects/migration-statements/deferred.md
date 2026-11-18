@@ -2,7 +2,9 @@
 
 Items found during delivery that are out of the current slice's scope. Each names where it came from and what would resolve it. Transient; migrated or dropped at close-out.
 
-## A model that keeps its name but changes its table (`@@map`) has no statement
+## ~~A model that keeps its name but changes its table (`@@map`) has no statement~~
+
+**Resolved 2026-11-18 by Will:** a model, field or enum member with the same name in both contracts is the same object, and the planner renames its storage with no statement ([`storage-naming.md`](./storage-naming.md), ADR 324). Built on PostgreSQL and SQLite on branch `tml-3839-stored-name-renames`; MongoDB follows. The field refusal on such a model is gone on SQL. `keepTableAdvice` stays for the cases where no rename is planned (storage not `managed` on both sides, a split or merge, MySQL). The text below is the record of the earlier decision.
 
 **Found:** slice 1, dispatch 4 review (2026-10-06).
 
@@ -203,7 +205,7 @@ In `enum-value-planning.ts`, `namespaceId` is the table's namespace while `enumV
 
 **Found:** slice 3b PR 2 system-design review (2026-10-22), S08.
 
-- `keepTableAdvice` (`packages/2-sql-family/9-family/src/core/migrations/operation-subjects.ts`) builds a `keepDataAdvice` string with `prisma migration plan` and `prisma db migrate` written in, so it ignores how the CLI was invoked. Enum values now pass a typed `keepDataEdit` that the CLI words; the table advice could move to the same shape.
+- `keepTableAdvice` (`packages/2-sql-family/9-family/src/core/migrations/operation-subjects.ts`) builds a `keepDataAdvice` string with `prisma migration plan` and `prisma db migrate` written in, so it ignores how the CLI was invoked. MongoDB enum values pass a typed `keepDataEdit` that the CLI words (the SQL family no longer produces one); the table advice could move to the same shape. It is now reached only where no rename is planned for a model that keeps its name: storage not `managed` on both sides, a split or merge, and MySQL.
 - `RowsWithoutValue` and `RowsHoldingValue` are framework types named after rows, with a `rows` count, and the older `rowsWithoutValue` advice in `packages/1-framework/3-tooling/cli/src/utils/runner-failure-advice.ts` says "rows". Rename both to family-neutral names in one pass, for example `MissingValues` and `HeldValues` with `count`.
 - `ENTITY_WORDS` (`packages/1-framework/3-tooling/cli/src/control-api/statements/statement-text.ts`) is keyed by a hand-written union; key it by `MigrationSubject['kind']` so a new subject kind must add its word. Its doc says it covers what a statement can name, but it has no `namespace`.
 
@@ -211,7 +213,7 @@ In `enum-value-planning.ts`, `namespaceId` is the table's namespace while `enumV
 
 **Found:** fixing PR 2's manual QA (enum values), 2026-10-23; corrected after the verification review the same day.
 
-An enum `A = "a", B = "b"` becomes `B = "a", A = "b"`: each member keeps its name and takes the other's stored value, and the list of stored values in storage is still `a, b`. The storage hash does not change, so `migration plan` prints "No changes detected" and `db update` plans nothing, on Postgres and SQLite. The rows still hold `a`, which now reads as member `B`. This is a change to the domain part only (which member names which stored value), so it is the same class as TML-3720 (the snapshot and the planner see nothing when only the domain changes). When the same plan also changes something else, the planner does ask, and on Postgres the printed edit, which swaps through a temporary value, can fail against the kept check without changing anything. A single `UPDATE … SET c = CASE c WHEN 'a' THEN 'b' WHEN 'b' THEN 'a' END` would need no temporary value. Resolve together with TML-3720, and consider it in PR 3, which makes more domain facts part of storage.
+An enum `A = "a", B = "b"` becomes `B = "a", A = "b"`: each member keeps its name and takes the other's stored value, and the list of stored values in storage is still `a, b`. The storage hash does not change, so `migration plan` prints "No changes detected" and `db update` plans nothing, on Postgres and SQLite. The rows still hold `a`, which now reads as member `B`. This is a change to the domain part only (which member names which stored value), so it is the same class as TML-3720 (the snapshot and the planner see nothing when only the domain changes). When the same plan also changes something else, the planner now refuses the swap as a cycle and gives two plans through a value no member stores (updated 2026-11-18, stored-name renames). A single `UPDATE … SET c = CASE c WHEN 'a' THEN 'b' WHEN 'b' THEN 'a' END` would need no temporary value, and would let the planner make the swap in one plan. Resolve together with TML-3720, and consider it in PR 3, which makes more domain facts part of storage.
 
 ## Column value-set references are not checked against storage
 
@@ -396,3 +398,52 @@ This is a rename with no statement, paired by storage, which the design note and
 ## A rename statement for an enum value is refused where the same change without a statement is planned
 
 `stillStoredRefusal` (`packages/2-sql-family/9-family/src/core/migrations/enum-value-planning.ts`, line 278, called at lines 590–593) refuses `--rename Role.A:Role.V` when the destination enum still stores the old value of `A` under another member. When that member is new, the rows that hold the old value belong to `A`, which the statement renames, so the refusal is not needed: origin `A = "a"`, destination `V = "v"` and a new `N = "a"` is refused, while origin `A = "a"`, destination `A = "v"` and a new `N = "a"` (the member keeps its name, no statement) is planned, with the rows rewritten to `"v"` and `N` starting with no rows. Statements are stricter than the contract change they describe. The check should skip a holder the origin enum does not have, as the freed-and-reused case of the stored-name spec does.
+
+## Planning swaps, chains, takeovers and merges of tables and columns
+
+**Found:** stored-name renames spec, 2026-11-18.
+
+A table or column rename that no statement asks for is refused when it swaps or chains with another rename, takes a name the start schema has, or meets a statement that moves something into its old name (`storageRenameConflict` in `packages/2-sql-family/9-family/src/core/migrations/storage-renames.ts`). The meaning is settled; only the order is missing. SQL applies a migration in one transaction, so a chain could be ordered last name first and a swap could go through a temporary name, as enum value chains already are. Two models that move into one new table are planned as a drop and a create with questions. This is a gap, not a principle.
+
+## A swap of identically shaped tables or columns plans nothing on `migration plan`
+
+**Found:** stored-name renames, dispatch 5 (2026-11-18).
+
+`migration plan` returns `noOp` when the origin and destination storage hashes are equal (`packages/1-framework/3-tooling/cli/src/control-api/operations/migration-plan.ts`, around line 754). Two models that swap tables of the same shape, or two fields that swap columns of the same type, leave the storage section unchanged, so `migration plan` writes nothing and the rows read as the other model's. `db update` refuses the same swap. The same class as the enum entry above ("Members that trade stored values while the list of stored values stays the same"): a change to the domain part only. Fixing it is a framework CLI change.
+
+## After `--rename Bug:Defect` is refused for shared storage, the next question offers it again
+
+**Found:** stored-name renames, dispatch 5 (2026-11-18).
+
+A variant stored in its base's table that gets a table of its own under a new name: `--rename Bug:Defect` is refused, since it would move the whole table, and the advice says to leave it out. The plan without it asks about `Bug` and offers `--rename Bug:Defect` first again, which is refused again. The question should not offer a rename the planner refuses. Files: the question offers in `packages/1-framework/3-tooling/cli/src/control-api/statements/plan-questions.ts`.
+
+## A statement that names storage
+
+**Found:** stored-name renames decision, 2026-11-18. Recorded in [`storage-naming.md`](./storage-naming.md).
+
+Still needed for a plan with no origin contract and for storage the contract does not model. If built, use a `storage/` prefix, as in `--rename storage/users.name:users.full_name`.
+
+## MySQL rename operations
+
+**Found:** stored-name renames spec, 2026-11-18.
+
+The MySQL target has no rename operation and refuses every statement, so a changed `@@map` or `@map` there is a drop and a create with by-hand advice. It belongs to the MySQL proof of concept. When MySQL calls the family's rename planning, it gets the rule with no further work.
+
+## Renaming a PostgreSQL native enum type and a sequence owned by a renamed table
+
+**Found:** stored-name renames spec, 2026-11-18.
+
+No operation renames a native enum type, so a native enum type whose `@@map` changes is planned as before (ADR 286). A sequence owned by a renamed table keeps its old name.
+
+## A stored-name change on storage that is not `managed`
+
+**Found:** stored-name renames design review, 2026-11-18.
+
+No pair is made when the control policy is not `managed` on both sides, so the plan is what the storage diff makes of the change under that policy, with `keepTableAdvice` on a drop. What it should plan for each policy (`external`, `observed`, a change of policy between the contracts) is not decided.
+
+## `KeepDataEdit.swapsValues` and the transitional case check
+
+**Found:** stored-name renames spec, 2026-11-18.
+
+- `KeepDataEdit.swapsValues` (`packages/1-framework/1-core/framework-components/src/control/migration-statements.ts`, line 196) is a framework type. After the MongoDB pull request no target produces a `KeepDataEdit` for a member that keeps its name. Remove the field, and the CLI code that only serves it (`twoRuns`, `keepsDataByCommand`, `sharesValueWithKeptMember`), when nothing reaches them. It is a framework interface change.
+- `MIGRATION.TABLE_NAME_CASE_CHANGED` (`packages/2-sql-family/9-family/src/core/migrations/table-name-case-guard.ts`) is in practice reached only without an origin contract now. Remove it once no supported upgrade path reaches the lowering rule.

@@ -13,6 +13,8 @@
 | 4p | MongoDB contracts written in TypeScript get the same validator as PSL; removes 4a's temporary refusal | 4a | Next after 4a |
 | 3b | The remaining SQL renames and deletes | 3a | Not started |
 | 4b | `--convert`, `--backfill` and value object renames on MongoDB | 3b, 4a | Not started |
+| Stored-name renames, PR 1 | A model, field or enum member that keeps its name while its stored name or value changes is renamed with no question, on PostgreSQL and SQLite; the refusals of swaps, chains and takeovers; ADR 324 | — | Built on `tml-3839-stored-name-renames`, in review. Spec: [`slices/stored-name-renames/`](./slices/stored-name-renames/spec.md) |
+| Stored-name renames, PR 2 | The same on MongoDB | PR 1 | Not started |
 
 ```text
 1 → 2 ─┬─ 3a ── 3b ─┐
@@ -86,13 +88,13 @@ Decided by Will on 2026-10-12: contracts written in either form must behave the 
 
 **Hands to:** close-out for MongoDB.
 
-### Alongside — a syntax for naming storage objects
+### Alongside — a changed stored name is a rename
 
-There is no statement for a model that keeps its name but changes its table (`@@map`). Will asked on 2026-10-07 for a critical discussion and a look at how established tools name tables on the command line before any syntax is chosen. `--rename table/users:app_users` was an off-the-cuff example, not a decision.
+Will asked on 2026-10-07 for a critical discussion, with prior art, before any syntax for naming storage objects was chosen. He decided on 2026-11-18 that no such statement is needed now: a model, field or enum member with the same name in both contracts is the same object, and the planner renames its storage with no statement. The discussion and the decision are in [`storage-naming.md`](./storage-naming.md); the design is in [`slices/stored-name-renames/spec.md`](./slices/stored-name-renames/spec.md).
 
-- The write-up goes to Will for a decision.
-- It does not block close-out.
-- Building the chosen syntax is not in this project unless Will adds it.
+- **Linear:** [TML-3839](https://linear.app/prisma-company/issue/TML-3839) (PostgreSQL and SQLite), [TML-3840](https://linear.app/prisma-company/issue/TML-3840) (MongoDB).
+- Two pull requests, the SQL family first, then MongoDB.
+- A statement that names storage stays deferred (see [`deferred.md`](./deferred.md)).
 
 ## Delivered: the interactive prompt
 
