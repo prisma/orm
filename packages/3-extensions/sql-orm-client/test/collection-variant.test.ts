@@ -678,7 +678,10 @@ describe('MTI variant mutation guards', () => {
 describe('STI variant upsert (discriminator auto-injection)', () => {
   it('injects discriminator into upsert create values for STI variant', async () => {
     const { collection, runtime } = createReturningMixedPolyCollection();
-    runtime.setNextResults([[{ id: 1, title: 'Crash', type: 'bug', severity: 'critical' }]]);
+    runtime.setNextResults([
+      [{ id: 1 }],
+      [{ id: 1, title: 'Crash', type: 'bug', severity: 'critical' }],
+    ]);
 
     const narrowed = collection.variant('bug' as never) as typeof collection;
     await narrowed.upsert({
@@ -696,6 +699,54 @@ describe('STI variant upsert (discriminator auto-injection)', () => {
     expect((typeParam as { value: unknown }).value).toBe('bug');
 
     expect(insertRow['severity']).toBeDefined();
+  });
+
+  it('reads the upserted row back by its key as a row of the variant', async () => {
+    const { collection, runtime } = createReturningMixedPolyCollection();
+    runtime.setNextResults([
+      [{ id: 1 }],
+      [{ id: 1, title: 'Crash', type: 'bug', severity: 'critical' }],
+    ]);
+
+    const narrowed = collection.variant('bug' as never) as typeof collection;
+    const row = await narrowed.upsert({
+      create: { title: 'Crash', severity: 'critical' } as never,
+      update: {} as never,
+    });
+
+    const readBack = runtime.executions[1]?.plan.ast as SelectAst;
+    expect({
+      statements: runtime.executions.map(({ plan }) => plan.ast.kind),
+      conditions: collectColumnRefs(readBack.where).map((ref) => `${ref.table}.${ref.column}`),
+      row,
+    }).toEqual({
+      statements: ['insert', 'select'],
+      conditions: ['tasks.type', 'tasks.id'],
+      row: {
+        id: 1,
+        title: 'Crash',
+        type: 'bug',
+        severity: 'critical',
+      },
+    });
+  });
+
+  it('rejects when the row that holds the conflict values is of another variant', async () => {
+    const { collection, runtime } = createReturningMixedPolyCollection();
+    runtime.setNextResults([[{ id: 1 }], []]);
+
+    const narrowed = collection.variant('bug' as never) as typeof collection;
+    await expect(
+      narrowed.upsert({
+        create: { id: 1, title: 'Crash', severity: 'critical' } as never,
+        update: { title: 'Updated' } as never,
+      }),
+    ).rejects.toMatchObject({
+      code: 'ORM.MUTATION_ROW_MISSING',
+      message:
+        'upsert() on variant "Bug" of model "Task" found the conflict values (id) on a row of another variant, which it leaves unchanged',
+      meta: { operation: 'upsert', model: 'Task', variant: 'Bug', phase: 'read-back' },
+    });
   });
 });
 

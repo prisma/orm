@@ -416,6 +416,10 @@ await db.Task.variant('feature').create({
 
 A variant stored in its own table is written with two inserts for each row, the base row and then the variant row with the base row's key, and the nested operations are applied around the base row as for any other model. `create()` and `createAll()` on such a variant return the two inserted rows joined; after `select` or `include` they read the rows back by key with one `SELECT` instead, and `createAll()` then returns them in no particular order.
 
+#### Upserting a row of a variant
+
+`upsert()` on a collection narrowed with `variant(value)` acts on rows of that variant. The key of a polymorphic model is shared by all its variants, so the conflict values can be held by a row of another variant. That row is not in the collection, and the call does not return or change it: the upsert runs in a transaction, reads its row back as a row of the variant, and when it finds none rejects with `ORM.MUTATION_ROW_MISSING` (`phase: 'read-back'`, with `variant`) and rolls back. Because of that read, an upsert on a variant is two statements also where the contract reports `returning`. `upsert()` is not available on a variant stored in its own table.
+
 #### Connecting and disconnecting rows
 
 `r.variant(value).connect(criteria)` and `r.variant(value).disconnect(criteria?)` find only rows of the variant. A row of another variant is treated as a row that does not exist: `connect` on a relation the record holds the key for, and `connect` and `disconnect` on a many-to-many relation, refuse it with `ORM.RELATION_ROW_MISSING`; on a relation the related rows hold the key for, `connect` links nothing and `disconnect` unlinks nothing, with no error.

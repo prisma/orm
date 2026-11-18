@@ -1,5 +1,6 @@
 import {
   type AnyExpression,
+  BinaryExpr,
   ColumnRef,
   checkLimitOffset,
   type ProjectionItem,
@@ -8,6 +9,7 @@ import {
 import {
   hasContractCapability,
   isAutoIncrementColumn,
+  resolvePolymorphismInfo,
   resolvePrimaryKeyColumns,
   resolveRowIdentityColumns,
   resolveUniqueKeyColumnSets,
@@ -27,6 +29,7 @@ import { ormError } from '../orm-errors';
 import { variantReturning } from '../query-plan-source';
 import type { ParsedMutationInput, ParsedRelationMutation } from '../relation-mutations';
 import type { CollectionState } from '../types';
+import { paramRefForStorageColumn } from '../where-binding';
 import { rowIdentity } from '../written-keys';
 import { CrossJoin } from './cross-join';
 import type { ColumnMapping, NodeId } from './edge';
@@ -38,6 +41,7 @@ import {
   deleteRows,
   findRows,
   insertRows,
+  type OnlyRows,
   type Returns,
   readBack,
   type Shape,
@@ -389,13 +393,49 @@ export function upsertGraph(
   );
   const upserted = b.graph.add(upsert, { state: b.graph.stateEdgesFor(upsert) });
   b.graph.setResult(
-    readBack(b, modelOf(collection), upserted, conflictColumns, {
-      shape: shapeOf(collection),
-      by: 'keys',
-      owner,
-    }),
+    readBack(
+      b,
+      modelOf(collection),
+      upserted,
+      conflictColumns,
+      { shape: shapeOf(collection), by: 'keys', owner },
+      rowsOfVariantOnly(collection, conflictColumns),
+    ),
   );
   return b.graph;
+}
+
+function rowsOfVariantOnly(
+  collection: DescribeCollectionRowsOptions,
+  conflictColumns: readonly string[],
+): OnlyRows | undefined {
+  const { context, modelName, namespaceId, state } = collection;
+  const { contract } = context;
+  const { root } = state.tables;
+  const polyInfo = resolvePolymorphismInfo(contract, namespaceId, modelName);
+  const variant =
+    state.variantValue === undefined ? undefined : polyInfo?.variants.get(state.variantValue);
+  if (polyInfo === undefined || variant === undefined) {
+    return undefined;
+  }
+  return {
+    where: BinaryExpr.eq(
+      root.column(polyInfo.discriminatorColumn),
+      paramRefForStorageColumn(contract, root.storage, polyInfo.discriminatorColumn, variant.value),
+    ),
+    missing: ormError(
+      'ORM.MUTATION_ROW_MISSING',
+      `upsert() on variant "${variant.modelName}" of model "${modelName}" found the conflict values (${conflictColumns.join(', ')}) on a row of another variant, which it leaves unchanged`,
+      {
+        meta: {
+          operation: 'upsert',
+          model: modelName,
+          variant: variant.modelName,
+          phase: 'read-back',
+        },
+      },
+    ),
+  };
 }
 
 const noInputs = { filter: [], requires: [] };
