@@ -57,12 +57,7 @@ const text = fc.oneof(
 );
 
 function textUpTo(length: number | undefined): fc.Arbitrary<string> {
-  return length === undefined
-    ? text
-    : fc.oneof(
-        { weight: 40, arbitrary: fc.string({ maxLength: length }) },
-        { weight: 1, arbitrary: fc.string({ minLength: length + 1, maxLength: length + 3 }) },
-      );
+  return length === undefined ? text : fc.string({ maxLength: length });
 }
 
 const digits = (most: number) =>

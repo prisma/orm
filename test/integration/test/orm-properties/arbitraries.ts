@@ -131,6 +131,13 @@ function fullRowOf(model: ModelShape): fc.Arbitrary<Scalars> {
   return recordOf(model.fields, (field) => valuesOfNewRow(model, field));
 }
 
+function crossesRelation(filter: Filter | undefined): boolean {
+  if (filter === undefined) return false;
+  if (filter.kind === 'related') return true;
+  if (filter.kind === 'not') return crossesRelation(filter.filter);
+  return filter.kind === 'and' && filter.filters.some(crossesRelation);
+}
+
 function scopesOf(model: ModelShape): (string | undefined)[] {
   return [undefined, ...model.variants.map((variant) => variant.value)];
 }
@@ -456,8 +463,9 @@ export function commands({ schema, generatedKeys }: CommandOptions): fc.Arbitrar
         }),
       },
     ];
+    const allowed = variant === undefined ? writes : writes.slice(0, 2);
     return fc.oneof(
-      ...(writable ? writes : []),
+      ...(writable ? allowed : []),
       {
         weight: 6,
         arbitrary: fc
@@ -493,7 +501,11 @@ export function commands({ schema, generatedKeys }: CommandOptions): fc.Arbitrar
             const changes = Object.fromEntries(
               Object.entries(update.changes).filter(([name]) => !linked.includes(name)),
             );
-            return { ...update, changes, related };
+            const also =
+              Object.keys(related).length > 0 && crossesRelation(update.also)
+                ? undefined
+                : update.also;
+            return { ...update, also, changes, related };
           }),
       },
       {
@@ -697,6 +709,45 @@ export function commands({ schema, generatedKeys }: CommandOptions): fc.Arbitrar
     });
   }
 
+  function linkingEachRowOnce(nested: Command): Command {
+    const linked = new Set<string>();
+    function once<Change extends RelatedChange>(model: ModelShape, name: string, change: Change) {
+      const target = modelOf(schema, relationOf(model, name).to);
+      if (change.kind === 'create') {
+        return { ...change, rows: change.rows.map((row) => inRow(target, row)) };
+      }
+      if (change.kind !== 'connect' && change.kind !== 'disconnect') return change;
+      const keys = change.keys?.filter((key) => {
+        const identity = `${target.name}/${fc.stringify(key)}`;
+        if (linked.has(identity)) return false;
+        linked.add(identity);
+        return true;
+      });
+      return { ...change, keys };
+    }
+    function kept(change: RelatedChange): boolean {
+      return !('keys' in change) || change.keys === undefined || change.keys.length > 0;
+    }
+    function inRow(model: ModelShape, row: NewRow): NewRow {
+      const related = Object.entries(row.related)
+        .map(([name, change]) => [name, once(model, name, change)] as const)
+        .filter(([, change]) => kept(change))
+        .slice(0, 1);
+      return { ...row, related: Object.fromEntries(related) };
+    }
+    const model = modelOf(schema, nested.model);
+    const shape: Shape = { select: undefined, include: {} };
+    if (nested.kind === 'create') return { ...nested, shape, row: inRow(model, nested.row) };
+    if (nested.kind !== 'update') return nested;
+    const related = Object.entries(nested.related)
+      .map(
+        ([name, changes]) => [name, changes.map((c) => once(model, name, c)).filter(kept)] as const,
+      )
+      .filter(([, changes]) => changes.length > 0)
+      .slice(0, 1);
+    return { ...nested, shape, related: Object.fromEntries(related) };
+  }
+
   const { command } = fc.letrec<Record<string, unknown>>((tie) => {
     const scopes = schema.models.flatMap((model) =>
       scopesOf(model).map((variant) => ({ model, variant })),
@@ -772,6 +823,10 @@ export function commands({ schema, generatedKeys }: CommandOptions): fc.Arbitrar
         [nested, ...following],
         picks,
       );
-      return { existing, following: aimedFollowing, nested: aimedNested ?? nested };
+      return {
+        existing,
+        following: aimedFollowing,
+        nested: linkingEachRowOnce(aimedNested ?? nested),
+      };
     });
 }

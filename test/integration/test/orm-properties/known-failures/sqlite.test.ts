@@ -93,6 +93,48 @@ describe('SQLite ORM calls known to fail', () => {
     });
   });
 
+  describe('upsert on a variant whose key a row of another variant holds', () => {
+    it.fails('returns a row the variant holds', async () => {
+      await withDatabase(async (db) => {
+        await db.orm.Task.variant('bug').create({ id: 1, title: 'Crash', severity: 'high' });
+        const chores = db.orm.Task.variant('chore');
+        const upserted = await chores.upsert({
+          create: { id: 1, title: 'Dishes', effort: 2 },
+          update: {},
+          conflictOn: { id: 1 },
+        });
+        expect(await chores.whereUnique({ id: 1 }).first()).toEqual(upserted);
+      });
+    });
+  });
+
+  describe('update whose filter its own nested write stops matching', () => {
+    it.fails('updates the record it found', async () => {
+      await withDatabase(async (db) => {
+        await db.orm.Person.createAndCount([{ id: 41, managerId: null }]);
+        const updated = await db.orm.Person.whereUnique({ id: 41 })
+          .where((person) => person.reports.every((report) => report.id.lt(100)))
+          .select('id', 'managerId')
+          .update({
+            manager: (manager) =>
+              manager.create({ id: 200, manager: (above) => above.connect({ id: 41 }) }),
+          });
+        expect({
+          updated,
+          people: await db.orm.Person.select('id', 'managerId')
+            .orderBy((person) => person.id.asc())
+            .all(),
+        }).toEqual({
+          updated: { id: 41, managerId: 200 },
+          people: [
+            { id: 41, managerId: 200 },
+            { id: 200, managerId: 41 },
+          ],
+        });
+      });
+    });
+  });
+
   describe('a row another row of the same call changes', () => {
     it.fails('is returned by deleteAll the same with and without RETURNING', async () => {
       const deleted: unknown[] = [];

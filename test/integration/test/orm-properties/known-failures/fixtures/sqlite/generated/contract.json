@@ -29,6 +29,56 @@
     "namespaces": {
       "__unbound__": {
         "models": {
+          "Bug": {
+            "base": {
+              "model": "Task",
+              "namespace": "__unbound__"
+            },
+            "fields": {
+              "severity": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "severity": {
+                  "column": "severity"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Task"
+            }
+          },
+          "Chore": {
+            "base": {
+              "model": "Task",
+              "namespace": "__unbound__"
+            },
+            "fields": {
+              "effort": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "effort": {
+                  "column": "effort"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Task"
+            }
+          },
           "Counter": {
             "fields": {
               "big": {
@@ -290,6 +340,14 @@
               "table": "Task"
             },
             "variants": {
+              "bug": {
+                "model": "Bug",
+                "namespace": "__unbound__"
+              },
+              "chore": {
+                "model": "Chore",
+                "namespace": "__unbound__"
+              },
               "feature": {
                 "model": "Feature",
                 "namespace": "__unbound__"
@@ -424,6 +482,11 @@
             },
             "Task": {
               "columns": {
+                "effort": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "nullable": true
+                },
                 "id": {
                   "codecId": "sqlite/integer@1",
                   "dataType": "sqlite/integer",
@@ -443,6 +506,11 @@
                 "projectId": {
                   "codecId": "sqlite/integer@1",
                   "dataType": "sqlite/integer",
+                  "nullable": true
+                },
+                "severity": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
                   "nullable": true
                 },
                 "title": {
@@ -537,6 +605,8 @@
             "Task.kind": {
               "kind": "valueSet",
               "values": [
+                "bug",
+                "chore",
                 "feature"
               ]
             }
@@ -545,7 +615,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "d3ae220a4af9e2b1f4e3e82be63bede2c824dada6cff6e96fa9e98362f53a25d"
+    "storageHash": "5f44650c7458357a8674c59f3115a518c6cf45cc731ea6139b180eb8c322eba8"
   },
   "capabilities": {
     "sql": {

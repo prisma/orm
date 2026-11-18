@@ -28,6 +28,18 @@ model Task {
   @@discriminator(kind)
 }
 
+model Bug {
+  severity String?
+
+  @@base(Task, "bug")
+}
+
+model Chore {
+  effort Int?
+
+  @@base(Task, "chore")
+}
+
 model Feature {
   priority Int?
 

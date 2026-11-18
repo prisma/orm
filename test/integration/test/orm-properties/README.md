@@ -42,6 +42,8 @@ After a generated sequence of writes, `reads.ts` checks, on the client's own ORM
 
 `nested.ts` takes one generated `create` or `update` with relation callbacks and runs it twice from the same rows: once as written, and once as separate calls (`SeparateWrites`). The separate calls create or look up a row the record holds the key for first, then write the record, then apply each operation on the other relations in order: a `create` or `update` of the related rows' foreign key, a write of a junction row for a many-to-many relation, or `updateAll` and `deleteAll` with a filter on the relation. When both succeed, every table must hold the same rows; when one is rejected, the other must be rejected too.
 
+The generated call has operations on one relation of each record, and links each related row at most once. With operations on two relations of one record, the ORM does not apply them in the order they are written, so an operation that depends on another relation's (a filter across it, or the same row linked twice) ends differently from the separate calls. The README of the ORM client states an order only within one relation.
+
 ## Values
 
 `values.ts` puts one nullable field of every scalar type on a model, with generated type parameters, and for each generated value requires:
@@ -97,8 +99,12 @@ ORM_PROPERTIES_SEED=<seed> ORM_PROPERTIES_SCHEMA=<index> ORM_PROPERTIES_PATH=<pa
 | `create` and `createAll` on a variant stored in its own table ignore `select` and return every field | `select` on those creates |
 | SQLite: a `sql.Char(n)` value is read without its trailing spaces, and a filter on the value read does not find the row | trailing spaces in `sql.Char` values |
 | `create` on a variant stored in its own table with a relation callback is refused with `ORM.FIELD_UNKNOWN` | relation callbacks on those creates |
+| `upsert` on a variant whose key a row of another variant holds returns that row, which the variant does not contain | `upsert` on a variant |
+| `update` whose `where` goes across a relation, and whose nested write stops it matching, keeps the nested write and does not update the record; it returns `null` with `RETURNING` and the unchanged record without | filters across relations on updates with relation callbacks |
 
 **Calls the types reject.** The calls are made through loosely typed interfaces, so a generated call can be one TypeScript refuses. The generators avoid the ones found so far, all about a field a variant declares: it is not accepted in `update`, `updateAll` or `upsert` data, in the object form of `where`, or in `select` on a variant. The types also reject `include` on a variant collection, so calls on a variant are generated without one; before `create` or `createAll` of a variant stored in its own table it is ignored. The first two are refused with `ORM.FIELD_UNKNOWN`; a `select` of such a field on `update`, `updateAll`, `delete` or `deleteAll` of a variant stored in its own table reaches the database and fails with `no such column` when the statement has `RETURNING`.
+
+**Seen once, not reproduced in a small test.** On Postgres, an `update` by a unique field with a filter across a relation that matched no row, setting a string longer than its column, was rejected with SQLSTATE 22001 with `RETURNING` and returned `null` without. Strings longer than a column's length are no longer generated.
 
 **Refused by a codec.** Postgres `IntervalString` refuses a negative duration such as `-PT5S`.
 
