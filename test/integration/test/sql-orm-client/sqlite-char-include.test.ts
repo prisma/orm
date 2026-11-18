@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
-import { integerColumn } from '@internal/adapter-sqlite/column-types';
+import { integerNumberColumn } from '@internal/adapter-sqlite/column-types';
 import sqliteAdapter from '@internal/adapter-sqlite/runtime';
 import { soleDomainNamespaceId } from '@internal/contract/types';
 import sqliteDriver from '@internal/driver-sqlite/runtime';
@@ -19,14 +19,14 @@ const char3 = { codecId: 'sql/char@1', typeParams: { length: 3 } } as const;
 
 const PointBase = model('Point', {
   fields: {
-    id: field.column(integerColumn).id(),
-    seriesId: field.column(integerColumn).column('series_id'),
+    id: field.column(integerNumberColumn).id(),
+    seriesId: field.column(integerNumberColumn).column('series_id'),
     code: field.column(char3),
   },
 }).sql({ table: 'char_points' });
 
 const Series = model('Series', {
-  fields: { id: field.column(integerColumn).id() },
+  fields: { id: field.column(integerNumberColumn).id() },
   relations: { points: rel.hasMany(() => PointBase, { by: 'seriesId' }) },
 }).sql({ table: 'char_series' });
 

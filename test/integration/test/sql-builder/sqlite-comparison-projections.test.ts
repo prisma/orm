@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import { sqliteRawCodecInferer } from '@internal/adapter-sqlite/adapter';
-import { integerColumn, textColumn } from '@internal/adapter-sqlite/column-types';
+import { integerNumberColumn, textColumn } from '@internal/adapter-sqlite/column-types';
 import sqliteAdapter from '@internal/adapter-sqlite/runtime';
 import sqliteDriver from '@internal/driver-sqlite/runtime';
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
@@ -19,15 +19,15 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const User = model('User', {
   fields: {
-    id: field.column(integerColumn).id(),
+    id: field.column(integerNumberColumn).id(),
     name: field.column(textColumn),
   },
 }).sql({ table: 'users' });
 
 const Post = model('Post', {
   fields: {
-    id: field.column(integerColumn).id(),
-    userId: field.column(integerColumn).column('user_id'),
+    id: field.column(integerNumberColumn).id(),
+    userId: field.column(integerNumberColumn).column('user_id'),
   },
 }).sql({ table: 'posts' });
 

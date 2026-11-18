@@ -6,8 +6,10 @@ import type {
   ControlDriverDescriptor,
 } from '@internal/framework-components/control';
 import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
+import { blindCast } from '@internal/utils/casts';
 import { basename } from 'pathe';
 import { closeDatabase, wasClosedByDriver } from '../../database-state';
+import { prepareExact, safeIntegersAsNumbers } from '../../exact-integers';
 import { normalizeSqliteError } from '../../normalize-error';
 import { sqliteParams } from '../../sqlite-params';
 import { sqliteDriverDescriptorMeta } from '../descriptor-meta';
@@ -26,9 +28,10 @@ export class SqliteControlDriver implements SqlControlDriverInstance<'sqlite'> {
     params?: readonly unknown[],
   ): Promise<{ readonly rows: Row[] }> {
     try {
-      const stmt = this.db.prepare(sql);
-      const rows = stmt.all(...sqliteParams(params)) as Row[];
-      return { rows };
+      const rows = prepareExact(this.db, sql)
+        .all(...sqliteParams(params))
+        .map(safeIntegersAsNumbers);
+      return { rows: blindCast<Row[], 'SQLite rows follow the caller query shape'>(rows) };
     } catch (error) {
       throw normalizeSqliteError(error, wasClosedByDriver(this.db));
     }

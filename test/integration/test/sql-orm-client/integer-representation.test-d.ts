@@ -34,7 +34,7 @@ describe('column output types', () => {
     expectTypeOf<PgFieldOutputTypes['public']['Sample']['reading']>().toEqualTypeOf<number>();
   });
 
-  test('BigIntNumber reads as number on SQLite', () => {
+  test('BigInt(as: number) reads as number on SQLite', () => {
     const rows = sqliteMeters.select('id', 'peak').all();
     type Row = Awaited<typeof rows>[number];
     expectTypeOf<Row['peak']>().toEqualTypeOf<number>();

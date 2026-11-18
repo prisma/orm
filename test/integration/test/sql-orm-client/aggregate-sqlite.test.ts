@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
-import { integerColumn, textColumn } from '@internal/adapter-sqlite/column-types';
+import { integerNumberColumn, textColumn } from '@internal/adapter-sqlite/column-types';
 import sqliteAdapter from '@internal/adapter-sqlite/runtime';
 import sqliteDriver from '@internal/driver-sqlite/runtime';
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
@@ -18,10 +18,10 @@ import { describe, expect, it } from 'vitest';
 
 const Post = model('Post', {
   fields: {
-    id: field.column(integerColumn).id(),
+    id: field.column(integerNumberColumn).id(),
     title: field.column(textColumn),
-    userId: field.column(integerColumn).column('user_id'),
-    views: field.column(integerColumn),
+    userId: field.column(integerNumberColumn).column('user_id'),
+    views: field.column(integerNumberColumn),
   },
 }).sql({ table: 'agg_posts' });
 

@@ -206,7 +206,22 @@ PostgreSQL prints a `money` value in the connection's `lc_monetary` locale, with
 
 ## SQLite
 
-These are the current names; SQLite gets convenience types over its own explicit types later, and this table will change then. Write a TypeScript field as `field.column(type.X())` with the type of the PSL name, such as `field.column(type.DateTime())`, or `field.column(...)` with a column type from `adapter/column-types`. `sql.Varchar(n)` and `sql.Char(n)` exist on every SQL target; SQLite accepts their length and does not enforce it. `sql.String(n)` is a deprecated alias of `sql.Varchar(n)`; it reports `PSL_DEPRECATED_SCALAR_NAME` as a warning and will be removed.
+An explicit type is named after the SQLite column type that stores it: `Text`, `Real` and `Blob`. `integer` is read by more than one codec of its data type, so those types carry the value too: `IntegerNumber` and `IntegerBigInt`. A type with a data type of its own, which a `text` column stores, is named after that data type, as ADR 315 and rule 7 of ADR 322 give it: `DecimalString`, `PlainJson` and the date and time types. `IntegerBoolean` is an exception that rule 7 records: `sqlite/boolean` is a data type of its own, which an `integer` column stores, and its name takes the form of the other `integer` types. Write a TypeScript field as `field.column(type.X())` with the type of the PSL name, such as `field.column(type.DateTime())`, or `field.column(...)` with a column type from `adapter/column-types`, which is named after the explicit type it gives: `integerNumberColumn`, `integerBigIntColumn`, `realColumn`, `decimalStringColumn`, `textColumn`, `integerBooleanColumn`, `blobColumn` and `plainJsonColumn`.
+
+SQLite has convenience types for its scalars. Each is a type choice ([ADR 279](../architecture%20docs/adrs/ADR%20279%20-%20Convenience%20types%20choose%20an%20explicit%20type%20from%20their%20arguments.md)): its `storage` and `as` arguments choose one explicit type below, and the contract stores only that type. `storage` names the SQLite column type, and each convenience type has one ([ADR 322](../architecture%20docs/adrs/ADR%20322%20-%20Each%20target%20declares%20the%20scalar%20convenience%20types%20over%20its%20own%20explicit%20types.md)). A bare convenience type gives the codec its name gave before, except `Decimal`, which has its own codec `sqlite/decimal@1` where it used `sqlite/text@1`. `Boolean` is new on SQLite.
+
+| Convenience type | `as` | `storage` | Becomes |
+| --- | --- | --- | --- |
+| `Int(storage?)` | | `integer` | `IntegerNumber` |
+| `BigInt(as?, storage?)` | `bigint` (default), `number` | `integer` | `IntegerBigInt`, `IntegerNumber` |
+| `Float(storage?)` | | `real` | `Real` |
+| `Decimal(storage?)` | | `text` | `DecimalString` |
+| `String(storage?)` | | `text` | `Text` |
+| `Boolean(storage?)` | | `integer` | `IntegerBoolean` |
+| `Bytes(storage?)` | | `blob` | `Blob` |
+| `Json(storage?)` | | `text` | `PlainJson` |
+
+In TypeScript the same calls are `type.Int()`, `type.BigInt({ as: 'number' })`, `type.Json()` and so on. `Int` and `BigInt(as: number)` are the same explicit type, `IntegerNumber`: a SQLite `integer` holds 64 bits either way, and both read a JavaScript `number` within its safe integer range. Its codec refuses a write that is not an integer within that range, such as `1.5`. A read of a stored number that is not an integer, such as a `real`, or of a stored blob raises `RUNTIME.DECODE_FAILED` naming the table and column. A stored integer outside the range raises `RUNTIME.DECODE_FAILED` naming the table and column too, in a row and through an `include()`. `BigInt` reads every 64-bit integer SQLite stores, in a row and through an `include()`, and refuses to write a `bigint` outside that range. A value read without an integer codec, such as a column of a raw SQL query, is a `number` within the safe integer range and an exact `bigint` outside it; reading an integer outside the range used to throw. `JSON.stringify` throws on a `bigint`, so print one with `String(value)`. `BigIntNumber` is a deprecated alias of `IntegerNumber`: it reports `PSL_DEPRECATED_SCALAR_NAME` as a warning, gives `sqlite/integer@1`, and will be removed. Write `BigInt(as: number)` or `IntegerNumber` instead, which the warning names; both give the same contract. `sql.Varchar(n)` and `sql.Char(n)` exist on every SQL target; SQLite accepts their length and does not enforce it. `sql.String(n)` is a deprecated alias of `sql.Varchar(n)`; it reports `PSL_DEPRECATED_SCALAR_NAME` as a warning and will be removed.
 
 SQLite has the convenience date and time types too ([ADR 315](../architecture%20docs/adrs/ADR%20315%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md)). SQLite has no date or time column types, so every one is stored as `text`, `storage` takes only `text`, and none takes a precision. The defaults need no `Temporal`. A bare `DateTime` is `DatetimeJsDate`, the type `DateTime` named before, so its contract is unchanged.
 
@@ -225,12 +240,12 @@ A write stores the stored text: a value in another ISO 8601 form is converted, a
 
 | PSL name | TS helper | Codec id | Storage type | Application type |
 | --- | --- | --- | --- | --- |
-| `String` | — | `sqlite/text@1` | `text` | `string` |
-| `Int` | — | `sqlite/integer@1` | `integer` | `number` |
-| `BigInt` | — | `sqlite/bigint@1` | `integer` | `bigint` |
-| `BigIntNumber` | — | `sqlite/bigintnumber@1` | `integer` | `number` (safe-integer range) |
-| `Float` | — | `sqlite/real@1` | `real` | `number` |
-| `Decimal` | — | `sqlite/text@1` | `text` | `string` |
+| `Text` | `field.column(type.Text())` | `sqlite/text@1` | `text` | `string` |
+| `IntegerNumber` | `field.column(type.IntegerNumber())` | `sqlite/integer@1` | `integer` | `number` (safe-integer range) |
+| `IntegerBigInt` | `field.column(type.IntegerBigInt())` | `sqlite/bigint@1` | `integer` | `bigint` |
+| `Real` | `field.column(type.Real())` | `sqlite/real@1` | `real` | `number` |
+| `DecimalString` | `field.column(type.DecimalString())` | `sqlite/decimal@1` | `text` | `string`, decimal text such as `"12.50"` |
+| `IntegerBoolean` | `field.column(type.IntegerBoolean())` | `sqlite/boolean@1` | `integer` | `boolean` |
 | `DatetimeJsDate` | — | `sqlite/datetime@1` | `text` | `Date` |
 | `DatetimeTemporal` | — | `sqlite/datetime-temporal@1` | `text` | `Temporal.Instant` |
 | `DatetimeString` | — | `sqlite/datetime-string@1` | `text` | `string`, the stored text |
@@ -239,10 +254,14 @@ A write stores the stored text: a value in another ISO 8601 form is converted, a
 | `TimeString` | — | `sqlite/time-string@1` | `text` | `string` (ISO 8601) |
 | `TimeTemporal` | — | `sqlite/time-temporal@1` | `text` | `Temporal.PlainTime` |
 | `DurationString` | — | `sqlite/duration-string@1` | `text` | `string`, an ISO 8601 duration |
-| `Json` | — | `sqlite/json@1` | `text` | `JsonValue` |
-| `Bytes` | — | `sqlite/blob@1` | `blob` | `Uint8Array` |
+| `PlainJson` | `field.column(type.PlainJson())` | `sqlite/json@1` | `text` | `JsonValue` |
+| `Blob` | `field.column(type.Blob())` | `sqlite/blob@1` | `blob` | `Uint8Array` |
 | `sql.Varchar(n)` | `field.column(type.sql.Varchar(n))` | `sql/varchar@1` | `character varying` | `string` |
 | `sql.Char(n)` | `field.column(type.sql.Char(n))` | `sql/char@1` | `character` | `string` |
+
+A `Decimal` column has the data type `sqlite/decimal`, stored as `text`. A write refuses text that is not a decimal, such as `"1e5"` or `""`, with `RUNTIME.ENCODE_FAILED`, and stores the text without leading zeros or a minus sign on zero; trailing zeros stay. Reading stored text that is not a decimal raises `RUNTIME.DECODE_FAILED`, naming the column. Text compares by its characters, so a `Decimal` field takes equality filters only: `"1.5"` and `"1.50"` are different values, and the field cannot be ordered, summed or averaged, has no `min` or `max` and takes no `like` filter. A default is written as text, `@default("12.50")`, or as a whole number, `@default(3)`; a number with a fraction, such as `@default(1.5)`, is refused, so write it as text. A new required `Decimal` column is filled with `'0'` in the rows a table already has.
+
+A `Boolean` column has the data type `sqlite/boolean`, stored as `integer`: 1 for `true` and 0 for `false`, which is what SQLite's own `TRUE` and `FALSE` are. A write stores 1 or 0 and refuses a value that is not a boolean with `RUNTIME.ENCODE_FAILED`. A read gives `false` for 0 and `true` for 1, and raises `RUNTIME.DECODE_FAILED`, naming the column, for any other stored value, such as `2` or the text `'yes'`. A `Boolean` field takes equality filters; it cannot be ordered, summed or averaged and has no `min` or `max`. A default is written `@default(true)` or `@default(false)`, which a migration writes as `DEFAULT 1` or `DEFAULT 0`, and a new required `Boolean` column is filled with 0, `false`, in the rows a table already has.
 
 A `DateTime` default is written with the `datetime` tag, as in ``@default(datetime`2024-01-01T00:00:00Z`)``, a `Date`, `Time` or `Duration` default with the `date`, `time` or `duration` tag, and a `Json` default with the `json` tag. A `DateTime` column has the data type `sqlite/datetime`, a `Date` column `sqlite/date`, a `Time` column `sqlite/time`, a `Duration` column `sqlite/duration` and a `Json` column `sqlite/json`, all stored as `text`. A `DateTime` default is stored as the instant in UTC with three fraction digits, the text every row holds, however it was written; [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md#date-and-time-types) states the form and the text it takes.
 
@@ -289,18 +308,18 @@ The PSL name on each target for a concept, and the Prisma 6/7 name a migrating s
 | Concept | Prisma 6/7 name | PostgreSQL | SQLite | MySQL | MongoDB |
 | --- | --- | --- | --- | --- | --- |
 | 32-bit integer | `Int` (on MongoDB, `Int @db.Int`) | `Int` (an `Int4`) | — (`Int` stores a 64-bit `integer`) | `Int` | `Int` (an `Int32`) |
-| 64-bit integer | `BigInt` | `BigInt` (an `Int8BigInt`) | `BigInt` | `BigInt` | `BigInt` (an `Int64BigInt`) |
-| 64-bit integer read as a `number` | `Int` on MongoDB, which Prisma 6 stores as a BSON long | `BigInt(as: number)` | `BigIntNumber` | — | `BigInt(as: number)` (an `Int64Number`) |
-| double | `Float` | `Float` | `Float` | — | `Float` (a `Double`) |
-| decimal | `Decimal` | `Decimal` (a `NumericString`) | `Decimal` (stored as text) | — | `Decimal` (a `Decimal128`) |
-| boolean | `Boolean` | `Boolean` | — | — | `Boolean` (a `Bool`) |
+| 64-bit integer | `BigInt` | `BigInt` (an `Int8BigInt`) | `BigInt` (an `IntegerBigInt`) | `BigInt` | `BigInt` (an `Int64BigInt`) |
+| 64-bit integer read as a `number` | `Int` on MongoDB, which Prisma 6 stores as a BSON long | `BigInt(as: number)` | `BigInt(as: number)` (an `IntegerNumber`) | — | `BigInt(as: number)` (an `Int64Number`) |
+| double | `Float` | `Float` | `Float` (a `Real`) | — | `Float` (a `Double`) |
+| decimal | `Decimal` | `Decimal` (a `NumericString`) | `Decimal` (a `DecimalString`) | — | `Decimal` (a `Decimal128`) |
+| boolean | `Boolean` | `Boolean` | `Boolean` (an `IntegerBoolean`) | — | `Boolean` (a `Bool`) |
 | timestamp | `DateTime` | `DateTime` (a `TimestamptzJsDate(3)`) | `DateTime` (a `DatetimeJsDate`) | `DateTime` (a `DatetimeJsDate(3)`) | `DateTime` (a `DateJsDate`) |
 | calendar date | `DateTime @db.Date` (on MongoDB an instant; see below) | `Date` (a `DateString`) | `Date` (a `DateString`) | `Date` (a `DateString`) | `Date` (a `DateString`) |
 | time of day | `DateTime @db.Time` | `Time` (a `TimeString`) | `Time` (a `TimeString`) | `Time` (a `TimeString(6)`) | `Time` (a `TimeString`) |
 | duration | — | `Duration` (an `IntervalString`) | `Duration` (a `DurationString`) | `Duration` (a `DurationString`) | `Duration` (a `DurationString`) |
-| text | `String` | `String` | `String` | `String` | `String` (a `BsonString`) |
-| bytes | `Bytes` | `Bytes` | `Bytes` | — | `Bytes` (a `Binary`) |
-| JSON | `Json` (a `jsonb` column on PostgreSQL) | `Json` (a `PlainJson`), `Json(storage: jsonb)` (a `Jsonb`) | `Json` | — | `Json` (a `PlainJson`) |
+| text | `String` | `String` | `String` (a `Text`) | `String` | `String` (a `BsonString`) |
+| bytes | `Bytes` | `Bytes` | `Bytes` (a `Blob`) | — | `Bytes` (a `Binary`) |
+| JSON | `Json` (a `jsonb` column on PostgreSQL) | `Json` (a `PlainJson`), `Json(storage: jsonb)` (a `Jsonb`) | `Json` (a `PlainJson`) | — | `Json` (a `PlainJson`) |
 | any value | — | — | — | — | `Bson` |
 | ObjectId | `String @db.ObjectId` (MongoDB) | — | — | — | `ObjectId` |
 

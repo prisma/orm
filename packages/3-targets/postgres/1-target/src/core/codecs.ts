@@ -27,7 +27,6 @@ import {
   readJsonFloat,
   readJsonIntegerText,
   renderTsLiteral,
-  storedNumeralText,
 } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { sqlRawDataType } from '@internal/sql-contract/data-type';
@@ -51,6 +50,7 @@ import {
   sqlTextDescriptor,
   sqlVarcharDescriptor,
 } from '@internal/sql-relational-core/ast';
+import { isDecimalText, printedDecimalText } from '@internal/type-implementations/decimal';
 import { blindCast } from '@internal/utils/casts';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { definePostgresCodecs, PostgresCodecDescriptor, postgresCodec } from './codec-descriptor';
@@ -167,13 +167,10 @@ import {
 type LengthParams = { readonly length?: number };
 type NumericParams = { readonly precision?: number; readonly scale?: number };
 
-/** A decimal numeral: an optional minus sign, digits, and an optional fraction. */
-const DECIMAL_NUMERAL_TEXT = /^-?\d+(?:\.\d+)?$/;
-
 /** A decimal numeral is written as PostgreSQL prints it, without leading zeros or a minus sign on zero; other spellings PostgreSQL reads, such as `1e5`, are refused. */
 function numericJson(value: string): string {
   if (typeof value !== 'string' || isNonFiniteText(value)) return value;
-  if (DECIMAL_NUMERAL_TEXT.test(value)) return storedNumeralText(value);
+  if (isDecimalText(value)) return printedDecimalText(value);
   throw postgresError(
     'RUNTIME.ENCODE_FAILED',
     'pg/numeric@1 application value must be numeric text: an optionally negated decimal numeral, or NaN, Infinity or -Infinity',
@@ -1198,7 +1195,7 @@ function pgMoneyDecode(wire: string): string {
     const stored = pgMoneyStoredText(`${sign}${whole.replaceAll(',', '')}.${fraction}`);
     if (stored !== undefined) return stored;
   }
-  if (DECIMAL_NUMERAL_TEXT.test(wire)) {
+  if (isDecimalText(wire)) {
     const stored = pgMoneyStoredText(wire);
     if (stored !== undefined) return stored;
     throw postgresError(
