@@ -2,7 +2,7 @@
 changes:
   - id: relation-mutator-writes-parameter
     summary: |
-      The sixth type parameter of `RelationMutator` and `VariantRelationMutator` (exported from `@prisma/orm-family-sql`), the boolean `FilteredWritesDisabled`, is replaced by `Writes extends 'many' | 'manyRows' | 'one' | 'none'`, which also decides whether the mutator offers the new `update(data)` and `delete()` members. Code that names the types with two or three type arguments is unaffected; code that passes the sixth argument replaces `false` with `'many'` (or `'manyRows'` through a junction) and `true` with `'one'` on a to-one relation in `update()`, or `'none'` in `create()`.
+      The boolean type parameter `FilteredWritesDisabled` of `RelationMutator` (its sixth) and `VariantRelationMutator` (its seventh), exported from `@prisma/orm-family-sql`, is replaced by `Writes extends 'many' | 'manyRows' | 'one' | 'none'`, which also decides whether the mutator offers the new `update(data)` and `delete()` members. Code that passes fewer type arguments than that position is unaffected; code that passes it replaces `false` with `'many'` (or `'manyRows'` through a junction) and `true` with `'one'` on a to-one relation in `update()`, or `'none'` in `create()`.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
