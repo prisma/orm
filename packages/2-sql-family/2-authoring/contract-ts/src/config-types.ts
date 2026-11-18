@@ -41,26 +41,25 @@ export interface TypeScriptContractTarget {
 }
 
 export type TypeScriptContractFromPathOptions =
-  | TypeScriptContractSpecifierOptions
   | TypeScriptContractTarget
-  | (TypeScriptContractSpecifierOptions & TypeScriptContractTarget);
+  | (TypeScriptContractTarget & TypeScriptContractSpecifierOptions);
 
 function refuseOtherTarget(
   contractPath: string,
   loaded: { readonly target?: unknown },
   expected: TypeScriptContractTarget,
 ): void {
-  const builtFor = loaded.target;
-  const configuredFor = expected.target.targetId;
-  if (typeof builtFor !== 'string' || builtFor === configuredFor) return;
+  const actual = loaded.target;
+  const configured = expected.target.targetId;
+  if (typeof actual !== 'string' || actual === configured) return;
   const fix = `Import defineContract from ${expected.contractBuilderModule}.`;
   throw contractError(
     'CONTRACT.TARGET_MISMATCH',
-    `The TypeScript contract "${contractPath}" was built for target "${builtFor}", but this defineConfig is for target "${configuredFor}". ${fix}`,
+    `The TypeScript contract "${contractPath}" was built for target "${actual}", but this defineConfig is for target "${configured}". ${fix}`,
     {
       why: "Its defineContract came from another target's contract-builder entry, so the contract carries that target's id and capabilities.",
       fix,
-      meta: { contract: contractPath, builtFor, configuredFor },
+      meta: { contract: contractPath, expected: configured, actual },
     },
   );
 }
@@ -123,14 +122,13 @@ export function typescriptContract(
   };
 }
 
-/** A contract loaded from the TypeScript module at `contractPath`. Given the config's target, it refuses a contract built for another target. */
+/** A contract loaded from the TypeScript module at `contractPath`, refused when it was built for another target than the config's. */
 export function typescriptContractFromPath(
   contractPath: string,
-  output?: string,
-  options?: TypeScriptContractFromPathOptions,
+  output: string | undefined,
+  options: TypeScriptContractFromPathOptions,
 ): ContractConfig {
-  const expected = options !== undefined && 'target' in options ? options : undefined;
-  const policy = options !== undefined && 'defaultControlPolicy' in options ? options : undefined;
+  const policy = 'defaultControlPolicy' in options ? options : undefined;
   return {
     source: {
       format: 'typescript',
@@ -151,7 +149,7 @@ export function typescriptContractFromPath(
             { meta: { path: absolutePath } },
           );
         }
-        if (expected !== undefined) refuseOtherTarget(contractPath, contract, expected);
+        refuseOtherTarget(contractPath, contract, options);
         return ok(
           policy === undefined
             ? contract

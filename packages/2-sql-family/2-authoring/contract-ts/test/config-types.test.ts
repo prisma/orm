@@ -24,6 +24,11 @@ const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
   defaultNamespaceId: 'public',
 };
 
+const forPostgres = {
+  target: postgresTargetPack,
+  contractBuilderModule: '@prisma/orm-postgres/contract-builder',
+};
+
 const stubContext: ContractSourceContext = {
   composedExtensions: [],
   defaultNamespaceId: 'public',
@@ -58,7 +63,7 @@ describe('source format discriminator', () => {
   });
 
   it('typescriptContractFromPath tags the source as TypeScript', () => {
-    const config = typescriptContractFromPath('./contract.ts');
+    const config = typescriptContractFromPath('./contract.ts', undefined, forPostgres);
     expect(config.source.format).toBe('typescript');
   });
 
@@ -94,17 +99,21 @@ describe('typescriptContract', () => {
   });
 
   it('derives output colocated with input path when output is not provided (TML-2461)', () => {
-    const config = typescriptContractFromPath('./prisma/contract.ts');
+    const config = typescriptContractFromPath('./prisma/contract.ts', undefined, forPostgres);
     expect(config.output).toBe('./prisma/contract.json');
   });
 
   it('honours an explicit output over the derived default', () => {
-    const config = typescriptContractFromPath('./prisma/contract.ts', 'custom/out.json');
+    const config = typescriptContractFromPath(
+      './prisma/contract.ts',
+      'custom/out.json',
+      forPostgres,
+    );
     expect(config.output).toBe('custom/out.json');
   });
 
   it('derives output for an extensionless input path', () => {
-    const config = typescriptContractFromPath('./prisma/contract');
+    const config = typescriptContractFromPath('./prisma/contract', undefined, forPostgres);
     expect(config.output).toBe('./prisma/contract.json');
   });
 
@@ -121,7 +130,7 @@ describe('typescriptContract', () => {
           'utf-8',
         );
 
-        const config = typescriptContractFromPath('./contract.ts');
+        const config = typescriptContractFromPath('./contract.ts', undefined, forPostgres);
         const result = await config.source.load({
           ...stubContext,
           resolvedInputs: [contractPath],
@@ -150,7 +159,7 @@ describe('typescriptContract', () => {
       try {
         await writeFile(contractPath, 'export const notContract = {};\n', 'utf-8');
 
-        const config = typescriptContractFromPath('./contract.ts');
+        const config = typescriptContractFromPath('./contract.ts', undefined, forPostgres);
 
         await expect(
           config.source.load({
@@ -174,10 +183,6 @@ describe('typescriptContract', () => {
 });
 
 describe('typescriptContractFromPath with the target the config is for', () => {
-  const forPostgres = {
-    target: postgresTargetPack,
-    contractBuilderModule: '@prisma/orm-postgres/contract-builder',
-  };
   const loadModule = async (source: string) => {
     const tempDir = await mkdtemp(join(tmpdir(), 'sql-contract-ts-target-'));
     const contractPath = join(tempDir, 'contract.ts');
@@ -212,7 +217,7 @@ describe('typescriptContractFromPath with the target the config is for', () => {
           message:
             'The TypeScript contract "./contract.ts" was built for target "mysql", but this defineConfig is for target "postgres". Import defineContract from @prisma/orm-postgres/contract-builder.',
           fix: 'Import defineContract from @prisma/orm-postgres/contract-builder.',
-          meta: { contract: './contract.ts', builtFor: 'mysql', configuredFor: 'postgres' },
+          meta: { contract: './contract.ts', expected: 'postgres', actual: 'mysql' },
         },
       });
     },
@@ -305,6 +310,7 @@ describe('defaultControlPolicy specifier precedence', () => {
         );
 
         const config = typescriptContractFromPath('./contract.ts', undefined, {
+          ...forPostgres,
           defaultControlPolicy: 'external',
           createNamespace: createTestSqlNamespace,
         });
@@ -337,6 +343,7 @@ describe('defaultControlPolicy specifier precedence', () => {
         );
 
         const config = typescriptContractFromPath('./contract.ts', undefined, {
+          ...forPostgres,
           defaultControlPolicy: 'tolerated',
           createNamespace: createTestSqlNamespace,
         });
@@ -368,7 +375,7 @@ describe('defaultControlPolicy specifier precedence', () => {
           'utf-8',
         );
 
-        const config = typescriptContractFromPath('./contract.ts');
+        const config = typescriptContractFromPath('./contract.ts', undefined, forPostgres);
         const result = await config.source.load({
           ...stubContext,
           resolvedInputs: [contractPath],

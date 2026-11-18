@@ -25,8 +25,8 @@ describe('a TypeScript contract built for another target', () => {
         meta: {
           code: 'CONTRACT.TARGET_MISMATCH',
           contract: contractPath,
-          builtFor: 'postgres',
-          configuredFor: 'sqlite',
+          expected: 'sqlite',
+          actual: 'postgres',
         },
       });
     } finally {

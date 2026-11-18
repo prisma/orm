@@ -40,8 +40,8 @@ describe('a TypeScript contract built for another target', () => {
       meta: {
         code: 'CONTRACT.TARGET_MISMATCH',
         contract,
-        builtFor: 'mysql',
-        configuredFor: 'mariadb',
+        expected: 'mariadb',
+        actual: 'mysql',
       },
     });
   });
@@ -57,8 +57,8 @@ describe('a TypeScript contract built for another target', () => {
       meta: {
         code: 'CONTRACT.TARGET_MISMATCH',
         contract,
-        builtFor: 'mariadb',
-        configuredFor: 'mysql',
+        expected: 'mysql',
+        actual: 'mariadb',
       },
     });
   });

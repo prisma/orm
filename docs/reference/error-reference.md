@@ -647,9 +647,9 @@ A foreign key names its target by table, and no model or table node of the contr
 
 ### CONTRACT.TARGET_MISMATCH
 
-The contract's target does not match the target configured in `prisma.config.ts` (e.g. a Postgres contract with a SQLite config). `db verify` reports it as an `error` diagnostic on a completed run that exits `4`. Payload: `expected`, `actual`.
+The contract's target does not match the target configured in `prisma.config.ts` (e.g. a Postgres contract with a SQLite config). `db verify` reports it as an `error` diagnostic on a completed run that exits `4`. Payload: `expected` (the configured target), `actual` (the contract's target), and `contract` (the contract's path) when a `defineConfig` raises it.
 
-A SQL target's `defineConfig` also raises it when it loads a TypeScript contract whose `target` is another target's id, because the contract was built with another target's `defineContract`: `The TypeScript contract "<path>" was built for target "<built for>", but this defineConfig is for target "<configured for>". Import defineContract from <module>.`, where the module is the configured target package's `contract-builder` entry. `contract emit` reports it as `CONTRACT_SOURCE_INVALID`, carrying this code in its `meta`. A module whose export carries no target is not refused here; contract validation reports it. Payload: `contract`, `builtFor`, `configuredFor`.
+A SQL target's `defineConfig` also raises it when it loads a TypeScript contract whose `target` is another target's id, because the contract was built with another target's `defineContract`: `The TypeScript contract "<path>" was built for target "<built for>", but this defineConfig is for target "<configured for>". Import defineContract from <module>.`, where the module is the configured target package's `contract-builder` entry. `contract emit` reports it as `CONTRACT_SOURCE_INVALID`, carrying this code in its `meta`. A module whose export carries no target is not refused here; contract validation reports it.
 
 ### CONTRACT.TYPE_PARAMS_INVALID
 

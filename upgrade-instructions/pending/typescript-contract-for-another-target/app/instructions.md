@@ -2,7 +2,7 @@
 changes:
   - id: typescript-contract-for-another-target-refused
     summary: |
-      The `defineConfig` of every SQL target now refuses, at `prisma contract emit`, a TypeScript contract built with another target's `defineContract`, such as a contract that imports `defineContract` from `@prisma/orm-sqlite/contract-builder` in a project whose config comes from `@prisma/orm-postgres/config`. Such a contract used to emit and then fail when the client loaded it. The error is `CONTRACT.TARGET_MISMATCH`, reported as `CONTRACT_SOURCE_INVALID`, and names the module to import `defineContract` from. The detection matches TypeScript files that import `defineContract` from a SQL target package.
+      The `defineConfig` of every SQL target now refuses, at `prisma contract emit`, a TypeScript contract built with another target's `defineContract`, such as a contract that imports `defineContract` from `@prisma/orm-sqlite/contract-builder` in a project whose config comes from `@prisma/orm-postgres/config`. Such a contract used to emit and then fail when the client loaded it. The error is `CONTRACT.TARGET_MISMATCH`, reported as `CONTRACT_SOURCE_INVALID`, with `expected`, `actual` and `contract` in its `meta`, and names the module to import `defineContract` from. The detection matches TypeScript files that import `defineContract` from a SQL target package.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:

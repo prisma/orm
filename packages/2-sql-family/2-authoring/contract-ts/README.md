@@ -364,7 +364,7 @@ export default defineConfig({
 });
 ```
 
-Optional third argument (options bag) for `typescriptContract` / `typescriptContractFromPath`, and `defaultControlPolicy` on `emptyContract`. Stamping a specifier default strips derived checks from tables the policy leaves non-managed, and the strip rebuilds namespaces through the target's factory, so the bag requires `createNamespace` alongside `defaultControlPolicy` — the same factory the PSL specifier takes:
+Optional third argument (options bag) for `typescriptContract`, also accepted beside the target by `typescriptContractFromPath`, and `defaultControlPolicy` on `emptyContract`. Stamping a specifier default strips derived checks from tables the policy leaves non-managed, and the strip rebuilds namespaces through the target's factory, so the bag requires `createNamespace` alongside `defaultControlPolicy` — the same factory the PSL specifier takes:
 
 ```typescript
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
@@ -377,7 +377,7 @@ typescriptContract(contract, 'src/prisma/contract.json', {
 
 The specifier value applies only when the loaded contract omits `defaultControlPolicy` (a value authored on the contract module wins).
 
-`typescriptContractFromPath` also takes the target the config is for, and the module that target's `defineContract` comes from. It then refuses a loaded contract whose `target` is another target's id with `CONTRACT.TARGET_MISMATCH`, naming both targets and that module. A value whose `target` is not a string is left to contract validation. Every SQL target's `defineConfig` passes them:
+`typescriptContractFromPath` requires the target the config is for, and the module that target's `defineContract` comes from, so no `defineConfig` can leave the check out. It refuses a loaded contract whose `target` is another target's id with `CONTRACT.TARGET_MISMATCH`, naming both targets and that module, with `expected`, `actual` and `contract` in its `meta`. A value whose `target` is not a string is left to contract validation. Every SQL target's `defineConfig` passes them:
 
 ```typescript
 typescriptContractFromPath('prisma/contract.ts', 'prisma/contract.json', {
