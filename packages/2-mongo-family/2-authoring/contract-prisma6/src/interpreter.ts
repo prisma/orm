@@ -72,7 +72,14 @@ import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { basename } from 'pathe';
 import { prisma6Diagnostic } from './diagnostics';
-import { type IndexAttribute, parseFieldUnique, parseIndexAttribute } from './indexes';
+import {
+  type IndexAttribute,
+  type IndexDirection,
+  parseFieldUnique,
+  parseIndexAttribute,
+  prisma6IndexName,
+  prisma6IndexNameProblem,
+} from './indexes';
 import {
   fieldSiteKey,
   type IndexSite,
@@ -1487,6 +1494,24 @@ function readRelationFields(
   }
 }
 
+/**
+ * The indexes of one model that Prisma 6 refuses with "Index already exists in the model.": each index whose fields, in order, have the same names and the same written sort as another index of the model, whatever the kind of either index. An unwritten sort differs from `sort: Asc`.
+ */
+function clashingIndexes(
+  attributes: readonly IndexAttribute[],
+): ReadonlyMap<IndexAttribute, readonly IndexAttribute[]> {
+  const writtenKey = (attribute: IndexAttribute) =>
+    JSON.stringify(attribute.fields.map((field) => [field.name, field.direction ?? null]));
+  const clashes = new Map<IndexAttribute, readonly IndexAttribute[]>();
+  for (const attribute of attributes) {
+    const others = attributes.filter(
+      (other) => other !== attribute && writtenKey(other) === writtenKey(attribute),
+    );
+    if (others.length > 0) clashes.set(attribute, others);
+  }
+  return clashes;
+}
+
 /** A model's indexes as the builder takes them, with where each is written. */
 function buildIndexes(
   build: ModelBuild,
@@ -1495,7 +1520,16 @@ function buildIndexes(
   const { symbol, sourceId } = build.located;
   const indexes: (IndexSite & { readonly index: IndexNode })[] = [];
   let textIndexes = 0;
-  for (const attribute of [...build.uniqueFields, ...build.modelIndexes]) {
+  const attributes = [...build.uniqueFields, ...build.modelIndexes];
+  const clashing = clashingIndexes(attributes);
+  const nameOf = (attribute: IndexAttribute) =>
+    attribute.map ??
+    prisma6IndexName(
+      build.collection,
+      attribute.fields.map((field) => build.storedNames.get(field.name) ?? field.name),
+      attribute.kind === 'unique',
+    );
+  for (const attribute of attributes) {
     const names = attribute.fields.map((field) => field.name);
     const usedBy: IgnoredFieldUse = {
       kind: 'index',
@@ -1521,6 +1555,45 @@ function buildIndexes(
       });
       continue;
     }
+    const clashesWith = clashing.get(attribute);
+    if (clashesWith !== undefined) {
+      const others = clashesWith.map((other) => indexLabel(build, other)).join(' and ');
+      diagnostics.push(
+        prisma6Diagnostic(
+          'PSL.PRISMA6_MONGO_INDEX_ALREADY_EXISTS',
+          `${indexLabel(build, attribute)} has the same fields, with the same sort, as ${others}. Prisma 6 refuses this: "Index already exists in the model." Remove one of them.`,
+          sourceId,
+          attribute.span,
+        ),
+      );
+      continue;
+    }
+    const name = nameOf(attribute);
+    const nameProblem = attribute.map === undefined ? undefined : prisma6IndexNameProblem(name);
+    if (nameProblem !== undefined) {
+      diagnostics.push(
+        prisma6Diagnostic(
+          'PSL.PRISMA6_MONGO_INDEX_NAME_INVALID',
+          `${indexLabel(build, attribute)}: Prisma 6 refuses this name: "${nameProblem}" Give the index another name with \`map\`.`,
+          sourceId,
+          attribute.span,
+        ),
+      );
+      continue;
+    }
+    const sameName = attributes.filter((other) => other !== attribute && nameOf(other) === name);
+    if (sameName.length > 0) {
+      const others = sameName.map((other) => indexLabel(build, other)).join(' and ');
+      diagnostics.push(
+        prisma6Diagnostic(
+          'PSL.PRISMA6_MONGO_INDEX_NAME_DUPLICATE',
+          `${indexLabel(build, attribute)} is named "${name}", as is ${others}. Prisma 6 refuses this: "The given constraint name \`${name}\` has to be unique in the following namespace: on model \`${symbol.name}\` for indexes and unique constraints. Please provide a different name using the \`map\` argument."`,
+          sourceId,
+          attribute.span,
+        ),
+      );
+      continue;
+    }
     const text = attribute.kind === 'fulltext';
     if (text) {
       textIndexes++;
@@ -1529,15 +1602,34 @@ function buildIndexes(
         continue;
       }
     }
+    const keys = attribute.fields.map((field) => [
+      field.name,
+      field.direction ?? (text ? 'text' : 1),
+    ]);
     const index: IndexNode = {
-      fields: Object.fromEntries(
-        attribute.fields.map((field) => [field.name, field.direction ?? (text ? 'text' : 1)]),
-      ),
-      ...(attribute.kind === 'unique' ? { options: { unique: true } } : {}),
+      fields: Object.fromEntries(keys),
+      options: { name, ...(attribute.kind === 'unique' ? { unique: true } : {}) },
     };
-    indexes.push({ index, sourceId, span: attribute.span });
+    indexes.push({ index, sourceId, span: attribute.span, label: indexLabel(build, attribute) });
   }
   return indexes;
+}
+
+function sortOf(direction: IndexDirection | undefined): string {
+  if (direction === undefined) {
+    return '';
+  }
+  return `(sort: ${direction === 1 ? 'Asc' : 'Desc'})`;
+}
+
+function indexLabel(build: ModelBuild, attribute: IndexAttribute): string {
+  const model = build.located.symbol.name;
+  if (build.uniqueFields.includes(attribute)) {
+    const [field] = attribute.fields;
+    return `@unique${sortOf(field?.direction)} on field "${model}.${field?.name ?? ''}"`;
+  }
+  const fields = attribute.fields.map(({ name, direction }) => `${name}${sortOf(direction)}`);
+  return `@@${attribute.kind}([${fields.join(', ')}]) on model "${model}"`;
 }
 
 function textIndexLimitDiagnostic(

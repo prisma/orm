@@ -23,10 +23,14 @@ import {
   AddColumnCall,
   CreateIndexCall,
   CreateTableCall,
+  DeleteRowsCall,
   DropTableCall,
+  FillStoredKeyCall,
   RawSqlCall,
   RecreateTableCall,
+  RemoveStoredKeyCall,
   RemoveStoredValueCall,
+  RenameStoredKeyCall,
   ReplaceStoredValueCall,
 } from '@internal/target-sqlite/op-factory-call';
 import { TypeScriptRenderableSqliteMigration } from '@internal/target-sqlite/planner-produced-sqlite-migration';
@@ -184,6 +188,12 @@ describe('TypeScriptRenderableSqliteMigration round-trip', () => {
       new DropTableCall('stale'),
       new ReplaceStoredValueCall('user', 'email', "it's", 'it"s'),
       new RemoveStoredValueCall('user', 'rank', 3),
+      new RenameStoredKeyCall('user', 'profile', "$['a b'][*].lat", 'latitude'),
+      new RemoveStoredKeyCall('user', 'profile', '$.trace'),
+      new FillStoredKeyCall('user', 'profile', '$.country', { code: "it's", n: [1, null] }),
+      new DeleteRowsCall('user', 'email', 'gone'),
+      new ReplaceStoredValueCall('user', 'profile', 'a', 'b', undefined, "$['it\\'s'][*]"),
+      new RemoveStoredValueCall('user', 'profile', 1, undefined, undefined, '$.rank', true),
       new ReplaceStoredValueCall('user', 'rank', '7', '8', {
         codecRef: { codecId: 'sqlite/integer@1' },
         codecs: createSqliteBuiltinCodecLookup(),

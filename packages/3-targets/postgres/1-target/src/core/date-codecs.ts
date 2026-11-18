@@ -9,6 +9,7 @@ import {
   refuseJsonValue,
 } from '@internal/framework-components/codec';
 import { CastExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
+import { hasDigitsBelowAMillisecond, isValidDate } from '@internal/type-implementations/date';
 import { isStructuredError } from '@internal/utils/structured-error';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { PostgresCodecDescriptor } from './codec-descriptor';
@@ -70,11 +71,7 @@ function invalidDate(identity: DateCodecIdentity): RangeError {
 }
 
 function isRepresentable(value: Date): boolean {
-  return (
-    value instanceof Date &&
-    Number.isFinite(value.getTime()) &&
-    value.getTime() >= EARLIEST_POSTGRES_TIMESTAMP_MILLISECONDS
-  );
+  return isValidDate(value) && value.getTime() >= EARLIEST_POSTGRES_TIMESTAMP_MILLISECONDS;
 }
 
 function validateDate(identity: DateCodecIdentity, value: Date): Date {
@@ -101,11 +98,6 @@ function decodeDate(identity: DateCodecIdentity, wire: unknown): Date {
   const date = instant === undefined ? undefined : new Date(instant);
   if (date === undefined || !isRepresentable(date)) throw invalidDate(identity);
   return date;
-}
-
-/** Whether stored text has nonzero digits below a millisecond, which a `Date` drops. */
-function hasDigitsBelowAMillisecond(text: string): boolean {
-  return /[1-9]/.test(/\.(\d+)/.exec(text)?.[1]?.slice(3) ?? '');
 }
 
 /** The `Date` a stored value names. A `Date` holds neither `infinity`, nor an instant before 4714-11-24 BC or after +275760-09-13, nor digits below a millisecond, so those are refused. */

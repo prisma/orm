@@ -36,7 +36,7 @@
  */
 
 import { assembleDataTypes } from '@internal/framework-components/codec';
-import { defineContract, extension } from '@internal/postgres/contract-builder';
+import { defineContract, extension, unbound } from '@internal/postgres/contract-builder';
 import { assemblePostgresCodecRegistryWithBuiltins } from '@internal/target-postgres/codecs';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { POSTGIS_GEOMETRY_CODEC_ID } from './core/constants';
@@ -62,7 +62,7 @@ export const contract = defineContract({ codecLookup, dataTypeLookup }, () => ({
     },
   },
   models: {},
-  entities: [extension(POSTGIS_EXTENSION_NAME)],
+  entities: [extension(POSTGIS_EXTENSION_NAME, { namespace: unbound })],
 }));
 
 export default contract;

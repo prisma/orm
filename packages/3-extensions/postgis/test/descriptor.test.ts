@@ -4,12 +4,17 @@ import { findPathWithDecision, reconstructGraph } from '@internal/migration-tool
 import { assertDescriptorSelfConsistency } from '@internal/migration-tools/spaces';
 import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
 import { describe, expect, it } from 'vitest';
+import searchPathInstallOps from '../migrations/20261106T1401_install_postgis_on_search_path/ops.json' with {
+  type: 'json',
+};
 import { POSTGIS_GEOMETRY_CODEC_ID } from '../src/core/constants';
 import {
   POSTGIS_BASELINE_MIGRATION_NAME,
   POSTGIS_INSTALL_MIGRATION_NAME,
   POSTGIS_INVARIANTS,
   POSTGIS_NATIVE_TYPE,
+  POSTGIS_SEARCH_PATH_INSTALL_MIGRATION_NAME,
+  POSTGIS_SEARCH_PATH_MIGRATION_NAME,
   POSTGIS_SPACE_ID,
   POSTGIS_UPGRADE_MIGRATION_NAME,
 } from '../src/core/contract-space-constants';
@@ -17,6 +22,7 @@ import { postgisExtensionDescriptor } from '../src/exports/control';
 
 const space = postgisExtensionDescriptor.contractSpace!;
 const headHash = space.contractJson.storage.storageHash;
+const publicHeadHash = migration(POSTGIS_SEARCH_PATH_MIGRATION_NAME).metadata.from;
 
 function migration(dirName: string) {
   const found = space.migrations.find((m) => m.dirName === dirName);
@@ -26,10 +32,10 @@ function migration(dirName: string) {
 
 describe('postgis extension descriptor', () => {
   it('declares the postgis extension and the parameterised geometry type', () => {
-    const publicNamespace = space.contractJson.storage.namespaces['public'] as {
+    const unboundNamespace = space.contractJson.storage.namespaces['__unbound__'] as {
       readonly entries: Record<string, Record<string, unknown>>;
     };
-    expect(publicNamespace.entries).toEqual({
+    expect(unboundNamespace.entries).toEqual({
       extension: { postgis: { kind: 'extension', name: 'postgis' } },
       table: {},
     });
@@ -45,11 +51,11 @@ describe('postgis extension descriptor', () => {
     expect(baseline.metadata.providedInvariants).toEqual([POSTGIS_INVARIANTS.installPostgis]);
   });
 
-  it('moves the old head to the new head by creating the extension if missing', () => {
+  it('moves the first head to the public head by creating the extension if missing', () => {
     const upgrade = migration(POSTGIS_UPGRADE_MIGRATION_NAME);
     expect(upgrade.metadata).toMatchObject({
       from: migration(POSTGIS_BASELINE_MIGRATION_NAME).metadata.to,
-      to: headHash,
+      to: publicHeadHash,
       providedInvariants: [],
     });
     expect(upgrade.ops.map((op) => [op.id, op.invariantId])).toEqual([
@@ -59,8 +65,28 @@ describe('postgis extension descriptor', () => {
 
   it('builds a new database in one migration that records no invariant', () => {
     const install = migration(POSTGIS_INSTALL_MIGRATION_NAME);
+    expect(install.metadata).toMatchObject({
+      from: null,
+      to: publicHeadHash,
+      providedInvariants: [],
+    });
+    expect(install.ops.map((op) => op.id)).toEqual(['schema.public', 'extension.postgis']);
+  });
+
+  it('moves the public head to the head with no operation, since the search path finds the extension', () => {
+    const searchPath = migration(POSTGIS_SEARCH_PATH_MIGRATION_NAME);
+    expect(searchPath.metadata).toMatchObject({ to: headHash, providedInvariants: [] });
+    expect(searchPath.ops).toEqual([]);
+  });
+
+  it('builds a new database at the head in one migration that names no schema for the extension', () => {
+    const install = migration(POSTGIS_SEARCH_PATH_INSTALL_MIGRATION_NAME);
     expect(install.metadata).toMatchObject({ from: null, to: headHash, providedInvariants: [] });
     expect(install.ops.map((op) => op.id)).toEqual(['schema.public', 'extension.postgis']);
+    expect(searchPathInstallOps.map((op) => [op.id, op.execute.map((step) => step.sql)])).toEqual([
+      ['schema.public', ['CREATE SCHEMA IF NOT EXISTS "public"']],
+      ['extension.postgis', ['CREATE EXTENSION IF NOT EXISTS "postgis"']],
+    ]);
   });
 
   it('takes an empty database to the head through the one-step migration', () => {
@@ -70,7 +96,7 @@ describe('postgis extension descriptor', () => {
     });
     expect(
       outcome.kind === 'ok' ? outcome.decision.selectedPath.map((edge) => edge.dirName) : outcome,
-    ).toEqual([POSTGIS_INSTALL_MIGRATION_NAME]);
+    ).toEqual([POSTGIS_SEARCH_PATH_INSTALL_MIGRATION_NAME]);
   });
 
   it('points the head ref at the contract and requires no invariant', () => {
@@ -80,7 +106,7 @@ describe('postgis extension descriptor', () => {
   it("records each migration's hash of its contents", () => {
     const hashes = (hash: (m: (typeof space.migrations)[number]) => string) =>
       Object.fromEntries(space.migrations.map((m) => [m.dirName, hash(m)]));
-    expect(space.migrations).toHaveLength(3);
+    expect(space.migrations).toHaveLength(5);
     expect(hashes((m) => computeMigrationHash(m.metadata, m.ops))).toEqual(
       hashes((m) => m.metadata.migrationHash),
     );

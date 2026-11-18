@@ -27,10 +27,10 @@ pnpm add @internal/extension-pgvector
 The pack's contract declares the `vector` extension. When the pack is composed into an application via `extensions`, `prisma contract emit` writes the pack's files under `migrations/pgvector/`, and `prisma db init`, `prisma db update` and `prisma db migrate` create the extension if it is missing:
 
 ```sql
-CREATE EXTENSION IF NOT EXISTS "vector" WITH SCHEMA "public";
+CREATE EXTENSION IF NOT EXISTS "vector";
 ```
 
-A database that already has the extension needs no migration: `prisma db sign` checks that the extension is installed and records the pack's marker. A database whose pgvector marker records the old `pgvector:install-vector-v1` invariant moves to the current head with `prisma db migrate`.
+The pack declares the extension in the unbound namespace, so it is found through the connection's search path: `prisma db sign` and `prisma db verify` accept `vector` in any schema on that path, such as the `extensions` schema of a Supabase project, and fail naming the schema and the search path when it is elsewhere. A database that already has the extension needs no migration: `prisma db sign` checks that the extension is installed and records the pack's marker. A database whose pgvector marker records the old `pgvector:install-vector-v1` invariant moves to the current head with `prisma db migrate`.
 
 ## Configuration
 

@@ -38,6 +38,7 @@ const mocks = {
   close: vi.fn(),
 };
 const RENDERED_CONTRACT_DTS = '// rendered\nexport type Contract = { rendered: true };\n';
+const SNAPSHOT_CONTRACT_DTS = '/* rendered */ export type Contract = { rendered: true };\n';
 
 /** The command tree mounted over a control-client double instead of the real client. */
 const commands = createBinCommands(
@@ -244,7 +245,7 @@ describe('migrate', () => {
         mocks.migrate.mock.invocationCallOrder[0]!,
       );
       const storeDir = contractSnapshotDir(join(cwd, 'migrations'), C2);
-      expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(RENDERED_CONTRACT_DTS);
+      expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(SNAPSHOT_CONTRACT_DTS);
     });
 
     it('refuses before applying when the contract types cannot be rendered', async () => {

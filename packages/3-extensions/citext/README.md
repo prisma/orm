@@ -12,7 +12,7 @@ PostgreSQL `citext` extension pack for Prisma 8. Published as the `/citext` entr
 - **Codec**: `pg/citext@1`, a `string` at runtime, with the traits of a text codec (equality, order, text matching). It refuses enums: a `CHECK` on a citext column admits a member in another case.
 - **PSL**: the type constructor `citext.Citext`, which `contract infer` prints for a `citext` column.
 - **TypeScript**: the `citext()` column type from `/column-types`.
-- **Extension**: the pack's contract declares `extension citext {}` in `public`. `db sign` checks that a database already has it, so a database Prisma 7 built is adopted without running a migration, and `db verify` fails when it is missing. The contract space's one migration, planned from the empty contract, creates it, so `db init`, `db update` and `db migrate` install the module before any table that uses it. The pack records no invariant.
+- **Extension**: the pack's contract declares `extension citext {}` in the unbound namespace, so it is found through the connection's search path. `db sign` checks that a database already has it in a schema on that path, so a database Prisma 7 built is adopted without running a migration, and `db verify` fails when it is missing. A new database reaches the head through one migration from the empty contract, which creates the extension with no schema named, so `db init`, `db update` and `db migrate` install the module before any table that uses it. A database built from the pack's first migration, which created the extension in `public`, reaches the head through a migration that moves the contract to the unbound namespace and has no operations. The pack records no invariant.
 
 ## Configuration
 

@@ -1,7 +1,7 @@
 // use prisma-8
 
 types {
-  TouchedAt = Date @onUpdate(now())
+  TouchedAt = DateTime @onUpdate(now())
 }
 
 model Post {

@@ -89,7 +89,7 @@ describe('emitContractSpaceArtifacts', () => {
     expect(raw).toBe(`${canonicalizeJson(contract)}\n`);
   });
 
-  it('writes the snapshot contract.d.ts verbatim from the caller-supplied string', async () => {
+  it('writes the caller-supplied snapshot contract.d.ts on one line', async () => {
     const dts = `// rendered by the caller\nexport type Contract = { kind: 'cipherstash' };\n`;
     await emitContractSpaceArtifacts(migrationsDir, 'cipherstash', {
       contract: makeContract(HASH_V1),
@@ -101,7 +101,9 @@ describe('emitContractSpaceArtifacts', () => {
       join(contractSnapshotDir(migrationsDir, HASH_V1), 'contract.d.ts'),
       'utf-8',
     );
-    expect(raw).toBe(dts);
+    expect(raw).toBe(
+      `/* rendered by the caller */ export type Contract = { kind: 'cipherstash' };\n`,
+    );
   });
 
   it('serialises refs/head.json with sorted invariants and trailing newline', async () => {

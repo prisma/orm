@@ -152,6 +152,7 @@ describe('MongoTargetContractSerializer', () => {
                   items: {
                     indexes: [
                       {
+                        name: 'email_1',
                         keys: [{ field: 'email', direction: 1 as const }],
                         unique: true,
                         collation: { locale: 'en', strength: 2 },

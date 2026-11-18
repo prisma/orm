@@ -1,11 +1,5 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
-import {
-  envExampleContent,
-  envFileContent,
-  MIN_SERVER_VERSION,
-} from '../../../../src/commands/init/templates/env';
+import { envExampleContent, envFileContent } from '../../../../src/commands/init/templates/env';
 import {
   defaultTsConfig,
   mergeTsConfig,
@@ -41,7 +35,7 @@ describe('defaultTsConfig', () => {
 describe('mergeTsConfig', () => {
   it('adds the required compiler options to a minimal user config', () => {
     const existing = JSON.stringify({ compilerOptions: { strict: true } });
-    const merged = JSON.parse(mergeTsConfig(existing)) as {
+    const merged = JSON.parse(mergeTsConfig(existing, 'module')) as {
       compilerOptions: Record<string, unknown>;
     };
     expect(merged.compilerOptions['strict']).toBe(true);
@@ -55,7 +49,7 @@ describe('mergeTsConfig', () => {
     const existing = JSON.stringify({
       compilerOptions: { types: ['vite/client', 'node'] },
     });
-    const merged = JSON.parse(mergeTsConfig(existing)) as {
+    const merged = JSON.parse(mergeTsConfig(existing, 'module')) as {
       compilerOptions: { types: string[] };
     };
     expect(merged.compilerOptions.types).toEqual(['vite/client', 'node']);
@@ -65,7 +59,7 @@ describe('mergeTsConfig', () => {
     const existing = JSON.stringify({
       compilerOptions: { types: ['vitest/globals'] },
     });
-    const merged = JSON.parse(mergeTsConfig(existing)) as {
+    const merged = JSON.parse(mergeTsConfig(existing, 'module')) as {
       compilerOptions: { types: string[] };
     };
     expect(merged.compilerOptions.types).toContain('vitest/globals');
@@ -76,15 +70,74 @@ describe('mergeTsConfig', () => {
     // `types` must be an array per the TS config schema; anything else
     // is invalid and the safest fix is to overwrite with what we need.
     const existing = JSON.stringify({ compilerOptions: { types: 'node' } });
-    const merged = JSON.parse(mergeTsConfig(existing)) as {
+    const merged = JSON.parse(mergeTsConfig(existing, 'module')) as {
       compilerOptions: { types: string[] };
     };
     expect(merged.compilerOptions.types).toEqual(['node']);
   });
 
+  it.each([
+    { module: 'nodenext', moduleResolution: 'nodenext' },
+    { module: 'NodeNext', moduleResolution: 'NodeNext' },
+    { module: 'node18', moduleResolution: 'node16' },
+    { module: 'node20', moduleResolution: 'node16' },
+    { module: 'node18', moduleResolution: 'nodenext' },
+    { module: 'node20', moduleResolution: 'nodenext' },
+  ])('keeps a pair the scaffold already typechecks under: %j', (compilerOptions) => {
+    const merged = JSON.parse(mergeTsConfig(JSON.stringify({ compilerOptions }), 'module')) as {
+      compilerOptions: Record<string, unknown>;
+    };
+    expect(merged.compilerOptions).toMatchObject({
+      ...compilerOptions,
+      resolveJsonModule: true,
+    });
+  });
+
+  it.each([
+    { module: 'commonjs', moduleResolution: 'node' },
+    { moduleResolution: 'nodenext' },
+    { module: 'esnext', moduleResolution: 'nodenext' },
+    { module: 'commonjs', moduleResolution: 'bundler' },
+    { module: 'node16', moduleResolution: 'node16' },
+  ])('replaces a pair the scaffold cannot typecheck under: %j', (compilerOptions) => {
+    const merged = JSON.parse(mergeTsConfig(JSON.stringify({ compilerOptions }), 'module')) as {
+      compilerOptions: Record<string, unknown>;
+    };
+    expect(merged.compilerOptions).toMatchObject({
+      module: 'preserve',
+      moduleResolution: 'bundler',
+    });
+  });
+
+  it.each([undefined, 'commonjs'])(
+    'replaces a nodenext pair when package.json type is %s, since db.ts then compiles as CommonJS',
+    (packageType) => {
+      const existing = JSON.stringify({
+        compilerOptions: { module: 'nodenext', moduleResolution: 'nodenext' },
+      });
+      const merged = JSON.parse(mergeTsConfig(existing, packageType)) as {
+        compilerOptions: Record<string, unknown>;
+      };
+      expect(merged.compilerOptions).toMatchObject({
+        module: 'preserve',
+        moduleResolution: 'bundler',
+      });
+    },
+  );
+
+  it('keeps a bundler pair when package.json declares no type', () => {
+    const existing = JSON.stringify({
+      compilerOptions: { module: 'esnext', moduleResolution: 'bundler' },
+    });
+    const merged = JSON.parse(mergeTsConfig(existing, undefined)) as {
+      compilerOptions: Record<string, unknown>;
+    };
+    expect(merged.compilerOptions).toMatchObject({ module: 'esnext', moduleResolution: 'bundler' });
+  });
+
   it('is idempotent on a previously-merged config', () => {
-    const first = mergeTsConfig(JSON.stringify({ compilerOptions: { strict: true } }));
-    const second = mergeTsConfig(first);
+    const first = mergeTsConfig(JSON.stringify({ compilerOptions: { strict: true } }), 'module');
+    const second = mergeTsConfig(first, 'module');
     expect(JSON.parse(second)).toEqual(JSON.parse(first));
   });
 });
@@ -99,7 +152,7 @@ describe('mergeTsConfig JSONC support', () => {
       '  },',
       '}',
     ].join('\n');
-    const merged = mergeTsConfig(jsonc);
+    const merged = mergeTsConfig(jsonc, 'module');
     // Merged file is itself valid JSONC and re-parses cleanly.
     const reparsed = parseTsConfigText(merged).config as {
       compilerOptions: Record<string, unknown>;
@@ -118,17 +171,17 @@ describe('mergeTsConfig JSONC support', () => {
       '  }',
       '}',
     ].join('\n');
-    const merged = mergeTsConfig(jsonc);
+    const merged = mergeTsConfig(jsonc, 'module');
     expect(merged).toContain('// important: do not delete this comment');
   });
 
   it('throws TsConfigParseError on bare unparseable input', () => {
-    expect(() => mergeTsConfig('{ "compilerOptions": ')).toThrow(TsConfigParseError);
+    expect(() => mergeTsConfig('{ "compilerOptions": ', 'module')).toThrow(TsConfigParseError);
   });
 
   it('throws TsConfigParseError when the input does not parse to an object', () => {
-    expect(() => mergeTsConfig('"a string at the root"')).toThrow(TsConfigParseError);
-    expect(() => mergeTsConfig('[1, 2, 3]')).toThrow(TsConfigParseError);
+    expect(() => mergeTsConfig('"a string at the root"', 'module')).toThrow(TsConfigParseError);
+    expect(() => mergeTsConfig('[1, 2, 3]', 'module')).toThrow(TsConfigParseError);
   });
 });
 
@@ -201,45 +254,4 @@ describe('envFileContent', () => {
     expect(envFileContent('postgres')).toContain('postgresql://');
     expect(envFileContent('mongo')).toContain('mongodb://user:password@localhost:27017/mydb');
   });
-});
-
-// ---------------------------------------------------------------------------
-// The CLI's MIN_SERVER_VERSION constant mirrors the target packages'
-// package.json#prismaNext.minServerVersion fields. The constant is
-// checked into source so we don't pay a workspace-fs read at every CLI
-// startup, but drift between the two values would silently mislead every
-// freshly-initialised user about which server versions Prisma 8
-// actually supports. This test fails loudly when the two diverge,
-// requiring the bump to be a coordinated change.
-// ---------------------------------------------------------------------------
-
-describe('MIN_SERVER_VERSION mirrors target packages', () => {
-  // Resolved relative to this test file so the assertion does not
-  // depend on the test runner's `cwd`.
-  const REPO_ROOT = join(import.meta.dirname, '../../../../../../../..');
-  const TARGET_PACKAGE_JSONS = {
-    postgres: join(REPO_ROOT, 'packages/3-targets/postgres/1-target/package.json'),
-    mongo: join(REPO_ROOT, 'packages/3-targets/mongo/1-target/package.json'),
-  } as const;
-
-  function readMinServerVersion(packageJsonPath: string): string {
-    const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf-8')) as {
-      prismaNext?: { minServerVersion?: unknown };
-    };
-    const value = pkg.prismaNext?.minServerVersion;
-    if (typeof value !== 'string') {
-      throw new Error(
-        `${packageJsonPath} is missing a string "prismaNext.minServerVersion" field. ` +
-          'Every target package must declare its minimum server version.',
-      );
-    }
-    return value;
-  }
-
-  for (const [target, packageJsonPath] of Object.entries(TARGET_PACKAGE_JSONS)) {
-    it(`${target}: matches package.json#prismaNext.minServerVersion`, () => {
-      const declared = readMinServerVersion(packageJsonPath);
-      expect(MIN_SERVER_VERSION[target as keyof typeof MIN_SERVER_VERSION]).toBe(declared);
-    });
-  }
 });

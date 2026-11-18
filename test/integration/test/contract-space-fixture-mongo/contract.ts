@@ -19,6 +19,7 @@ const storageBody = {
             indexes: [
               {
                 kind: 'mongo-index' as const,
+                name: 'tenantId_1',
                 keys: [{ field: 'tenantId', direction: 1 as const }],
                 unique: true,
               },

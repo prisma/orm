@@ -143,7 +143,7 @@ Anything else inside `${…}` is a type error, and `CONTRACT.SQL_EXPRESSION_INTE
 
 Pack-provided helpers are available through the callback overload. This is the surface that exposes the `type.*` helpers, the `gen.*` calls, and extension helpers such as `type.pgvector.Vector(...)`. There are no field presets: `field.text()`, `field.id.*`, `field.temporal.*` and `field.generated(...)` were removed, and a field is written `field.column(type.String())`, with `.id()` and `.onCreate(gen.uuid())` where the preset set them. A read of a removed preset from the callback's `field`, such as `field.text` from a contract that was not type-checked, throws `CONTRACT.FIELD_HELPER_UNKNOWN`, with the preset's rewrite where the target has the type it writes.
 
-`type.*` has a helper for every PSL type constructor of the stack, such as `type.VarChar(64)`, `type.TimestampString(3)` and `type.String()`, plus the type aliases the packs contribute, such as `type.temporal.CreatedAt()` and `type.temporal.UpdatedAt()`, which on Postgres are `type.DateTime()` with the `now` generators. A type choice, such as PostgreSQL's `DateTime`, takes its arguments as one object, `type.DateTime({ as: 'string', precision: 6 })`, and is typed as the explicit type its arguments choose. Because the type depends on the option values, each must be a literal: write the object inline, or build it in a variable with `as const`, such as `const options = { as: 'string' } as const`. An object whose option is typed `string`, or a union of values, does not compile, since no single explicit type fits it. Pass the result to `field.column(...)`. A type alias is a constant: field builders are immutable, so one constant serves every field and model that uses it, and each column stores the alias's codec and params inline. A constant may carry a default and generators, and a field may add what the constant does not set:
+`type.*` has a helper for every PSL type constructor of the stack, such as `type.Varchar(64)`, `type.TimestampString(3)` and `type.Text()`, plus the type aliases the packs contribute, such as `type.temporal.CreatedAt()` and `type.temporal.UpdatedAt()`, which on Postgres are `type.DateTime()` with the `now` generators. A type choice, such as PostgreSQL's `DateTime` or `String`, takes its arguments as one object, `type.DateTime({ as: 'string', precision: 6 })`, and is typed as the explicit type its arguments choose. Because the type depends on the option values, each must be a literal: write the object inline, or build it in a variable with `as const`, such as `const options = { as: 'string' } as const`. An object whose option is typed `string`, or a union of values, does not compile, since no single explicit type fits it. Pass the result to `field.column(...)`. A type alias is a constant: field builders are immutable, so one constant serves every field and model that uses it, and each column stores the alias's codec and params inline. A constant may carry a default and generators, and a field may add what the constant does not set:
 
 ```typescript
 const UpdatedAt = field.column(type.TimestampString(3)).onCreate(gen.now()).onUpdate(gen.now());
@@ -169,7 +169,7 @@ export const contract = defineContract(
     extensions: { pgvector },
   },
   ({ type, field, model, rel, gen }) => {
-    const ShortName = field.column(type.VarChar(35));
+    const ShortName = field.column(type.Varchar(35));
     const Embedding1536 = field.column(type.pgvector.Vector(1536));
 
     const User = model('User', {
@@ -212,7 +212,7 @@ export const contract = defineContract(
 
 ### Integer Representation Types
 
-PostgreSQL and SQLite contribute `type.BigIntNumber()`, while PostgreSQL also contributes `type.UnboundedInt()`. Pass the result to `field.column(...)`, or keep it in a constant when several fields share it.
+PostgreSQL writes them `type.BigInt({ as: 'number' })` and `type.BigInt({ storage: 'numeric' })`, which choose `type.Int8Number()` and `type.NumericBigInt()`; SQLite contributes `type.BigIntNumber()`. Pass the result to `field.column(...)`, or keep it in a constant when several fields share it.
 
 ```typescript
 import sqlFamily from '@internal/family-sql/pack';
@@ -223,14 +223,14 @@ import postgresPack from '@internal/target-postgres/pack';
 export const contract = defineContract(
   { family: sqlFamily, target: postgresPack },
   ({ field, model, type }) => {
-    const BigIntNumber = field.column(type.BigIntNumber());
+    const SafeCount = field.column(type.BigInt({ as: 'number' }));
 
     return {
       models: {
         Meter: model('Meter', {
           fields: {
-            peak: BigIntNumber,
-            lifetime: field.column(type.UnboundedInt()),
+            peak: SafeCount,
+            lifetime: field.column(type.BigInt({ storage: 'numeric' })),
             directPeak: field.column(pgInt8NumberColumn()),
             directLifetime: field.column(pgUnboundedIntColumn()),
           },
@@ -288,7 +288,7 @@ constraints.index({ expression: sql`eql_v3.eq_term(email)`, name: 'users_email_e
 
 - Structural helpers: `field.column(...)`, `field.namedType(...)` (an enum handle only), plus `model(...)` and `rel.*`
 - Callback helpers: `type.*` and `gen.*`, as in `field.column(type.UuidString()).id().onCreate(gen.uuid())` or, on Postgres, `field.column(type.Uuid()).id().onCreate(gen.uuid(7))`, which emits `pg/uuid@1`
-- Integer representation types: `field.column(type.BigIntNumber())` / `field.column(type.UnboundedInt())`, or the direct per-codec column helpers with `field.column(...)`. `BigIntNumber` emits `pg/int8number@1` on PostgreSQL or `sqlite/bigintnumber@1` on SQLite and throws outside ±(2^53 − 1); PostgreSQL-only `UnboundedInt` emits `pg/unboundedint@1` and reads and writes exact `bigint` values. `type.BigInt()` keeps the lossless `pg/int8@1`. See [Integer Representation Types](#integer-representation-types) for the TypeScript forms and [Integer representation types](../../../../docs/reference/integer-representation-types.md) for the canonical selection, runtime, JSON, and aggregate behavior reference.
+- Integer representation types: `field.column(type.BigInt({ as: 'number' }))` / `field.column(type.BigInt({ storage: 'numeric' }))` on PostgreSQL and `field.column(type.BigIntNumber())` on SQLite, or the direct per-codec column helpers with `field.column(...)`. A safe-integer `number` emits `pg/int8number@1` on PostgreSQL or `sqlite/bigintnumber@1` on SQLite and throws outside ±(2^53 − 1); PostgreSQL-only `BigInt({ storage: 'numeric' })` emits `pg/unboundedint@1` and reads and writes exact `bigint` values. `type.BigInt()` keeps the lossless `pg/int8@1`. See [Integer Representation Types](#integer-representation-types) for the TypeScript forms and [Integer representation types](../../../../docs/reference/integer-representation-types.md) for the canonical selection, runtime, JSON, and aggregate behavior reference.
 - Timestamp aliases mirror PSL: `field.column(type.temporal.CreatedAt())` generates a client-side timestamp on create, while `field.column(type.temporal.UpdatedAt())` uses the same execution generator on create and non-empty update mutations. Neither creates a database default; matching representations share one generated value per operation.
 - Keep field-local and FK-local storage overrides next to the authoring site with `field.sql(...)` and `rel.belongsTo(...).sql({ fk })`
 - Prefer typed local refs such as `field.namedType(Role)`, `User.refs.id`, and `User.ref('id')` when those tokens are available

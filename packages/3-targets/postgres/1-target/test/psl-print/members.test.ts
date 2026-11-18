@@ -77,7 +77,10 @@ describe('value-object members are written as the type their domain type reads b
       document.namespaces.flatMap((namespace) =>
         namespace.compositeTypes.flatMap((compositeType) => compositeType.fields.map(fieldText)),
       ),
-    ).toEqual(['amount Numeric(65, 30)', 'history Numeric(65, 30)[]']);
+    ).toEqual([
+      'amount Decimal(precision: 65, scale: 30)',
+      'history Decimal(precision: 65, scale: 30)[]',
+    ]);
   });
 
   it('writes a value-object member typed by a domain enum as the enum name, single and list', () => {

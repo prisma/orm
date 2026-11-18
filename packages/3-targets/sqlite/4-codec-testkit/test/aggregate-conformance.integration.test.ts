@@ -121,6 +121,48 @@ const FIXTURES: readonly AggregateFixture[] = [
     samples: ["'2024-01-01T10:00:00.000Z'", "'2024-02-01T10:00:00.000Z'"],
   },
   {
+    codecId: 'sqlite/datetime-temporal@1',
+    storageType: 'TEXT',
+    storageClass: 'text',
+    samples: ["'2024-01-01T10:00:00.000Z'", "'2024-02-01T10:00:00.000Z'"],
+  },
+  {
+    codecId: 'sqlite/datetime-string@1',
+    storageType: 'TEXT',
+    storageClass: 'text',
+    samples: ["'2024-01-01T10:00:00.000Z'", "'2024-02-01T10:00:00.000Z'"],
+  },
+  {
+    codecId: 'sqlite/date-string@1',
+    storageType: 'TEXT',
+    storageClass: 'text',
+    samples: ["'2024-01-01'", "'2024-02-29'"],
+  },
+  {
+    codecId: 'sqlite/date-temporal@1',
+    storageType: 'TEXT',
+    storageClass: 'text',
+    samples: ["'2024-01-01'", "'2024-02-29'"],
+  },
+  {
+    codecId: 'sqlite/time-string@1',
+    storageType: 'TEXT',
+    storageClass: 'text',
+    samples: ["'09:30:00.000'", "'17:45:00.500'"],
+  },
+  {
+    codecId: 'sqlite/time-temporal@1',
+    storageType: 'TEXT',
+    storageClass: 'text',
+    samples: ["'09:30:00.000'", "'17:45:00.500'"],
+  },
+  {
+    codecId: 'sqlite/duration-string@1',
+    storageType: 'TEXT',
+    storageClass: 'text',
+    samples: ["'PT1H30M'", "'P1D'"],
+  },
+  {
     codecId: 'sqlite/json@1',
     storageType: 'TEXT',
     storageClass: 'text',
@@ -156,24 +198,43 @@ const COERCED_RATHER_THAN_TYPED = [
   'avg(sql/raw@1)',
   'avg(sql/varchar@1)',
   'avg(sqlite/blob@1)',
+  'avg(sqlite/date-string@1)',
+  'avg(sqlite/date-temporal@1)',
+  'avg(sqlite/datetime-string@1)',
+  'avg(sqlite/datetime-temporal@1)',
   'avg(sqlite/datetime@1)',
+  'avg(sqlite/duration-string@1)',
   'avg(sqlite/json@1)',
   'avg(sqlite/text@1)',
+  'avg(sqlite/time-string@1)',
+  'avg(sqlite/time-temporal@1)',
   'sum(sql/char@1)',
   'sum(sql/raw@1)',
   'sum(sql/varchar@1)',
   'sum(sqlite/blob@1)',
+  'sum(sqlite/date-string@1)',
+  'sum(sqlite/date-temporal@1)',
+  'sum(sqlite/datetime-string@1)',
+  'sum(sqlite/datetime-temporal@1)',
   'sum(sqlite/datetime@1)',
+  'sum(sqlite/duration-string@1)',
   'sum(sqlite/json@1)',
   'sum(sqlite/text@1)',
+  'sum(sqlite/time-string@1)',
+  'sum(sqlite/time-temporal@1)',
 ];
 
 /**
  * The pairs SQLite computes and this target declines to offer because the codec declares no
  * `order` trait: a raw column's values are not interpreted, so the ORM offers no extremum of them
- * (ADR 273).
+ * (ADR 273), and a duration's text does not sort in the order of the durations.
  */
-const UNORDERED = ['max(sql/raw@1)', 'min(sql/raw@1)'];
+const UNORDERED = [
+  'max(sql/raw@1)',
+  'max(sqlite/duration-string@1)',
+  'min(sql/raw@1)',
+  'min(sqlite/duration-string@1)',
+];
 
 const TABLE = 'aggregate_conformance';
 const COLUMN = 'value';

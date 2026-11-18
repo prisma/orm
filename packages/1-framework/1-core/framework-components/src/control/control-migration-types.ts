@@ -22,6 +22,7 @@ import type {
   ControlFamilyInstance,
 } from './control-instances';
 import type { OperationContext } from './control-operation-results';
+import type { DatabasePolicies } from './database-policies';
 import type {
   AppliedMigrationStatement,
   EnumValueCoordinateJson,
@@ -420,8 +421,11 @@ export interface MigrationRunnerFailureMeta {
    * step fail: first the field of the failed step, then the others of the same migration.
    */
   readonly rowsWithoutValue?: readonly RowsWithoutValue[];
-  /** The data that still holds a stored enum value whose removal its storage cannot take, when that made a check fail. */
-  readonly rowsHoldingValue?: RowsHoldingValue;
+  /**
+   * The data that still holds stored enum values whose removal its storage cannot take, when that
+   * made a check fail: first the data of the failed check, then the others of the same migration.
+   */
+  readonly rowsHoldingValue?: readonly RowsHoldingValue[];
   /** The existing rows that a check the failed operation adds refuses, when that made the operation fail. */
   readonly rowsFailingCheck?: RowsFailingCheck;
   /** The objects in the database that kept the failed operation from running, such as a view on a table to drop. */
@@ -768,6 +772,8 @@ export interface MigrationRunnerPerSpaceOptions<
   readonly driver: ControlDriverInstance<TFamilyId, TTargetId>;
   readonly destinationContract: unknown;
   readonly policy: MigrationOperationPolicy;
+  /** When set, the marker update at the end of the run records these as the database's policies. */
+  readonly databasePolicies?: DatabasePolicies;
   readonly executionChecks?: MigrationRunnerExecutionChecks;
   readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<TFamilyId, TTargetId>>;
   /**
@@ -816,6 +822,12 @@ export interface MigrationRunner<
   execute(options: {
     readonly driver: ControlDriverInstance<TFamilyId, TTargetId>;
     readonly perSpaceOptions: ReadonlyArray<MigrationRunnerPerSpaceOptions<TFamilyId, TTargetId>>;
+    /**
+     * The database's policies as the caller saw them when it checked the run. Once it holds its
+     * lock, and before it applies the first space, the runner compares them with the application
+     * space's marker and fails the run as a concurrent change when they differ.
+     */
+    readonly expectedDatabasePolicies?: DatabasePolicies;
   }): Promise<MigrationRunnerResult>;
 }
 

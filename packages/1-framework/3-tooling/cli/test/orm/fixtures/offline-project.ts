@@ -222,6 +222,12 @@ export interface FakePlannerScript {
   readonly operations?: readonly MigrationPlanOperation[];
   readonly operationsByPlan?: ReadonlyArray<readonly MigrationPlanOperation[]>;
   readonly conflicts?: ReadonlyArray<{ readonly kind: string; readonly summary: string }>;
+  /** What every successful `plan` call flags without refusing it. */
+  readonly warnings?: ReadonlyArray<{
+    readonly kind: string;
+    readonly summary: string;
+    readonly why?: string;
+  }>;
   readonly throwOnOperations?: unknown;
   readonly throwOnPlan?: unknown;
   /** Receives the statements of every `plan` call, in call order. */
@@ -242,6 +248,8 @@ export interface FakePlannerScript {
   readonly throwOnOperationsFromPlan?: number;
   /** Where in the operations the placeholder that `throwOnOperations` rejects sits; last by default. */
   readonly placeholderAt?: number;
+  /** Another operation, after the one `throwOnOperations` rejects, rejects with this. */
+  readonly alsoThrowOnOperations?: unknown;
   /** Makes the plan's `operations` accessor throw this synchronously. */
   readonly operationsAccessorThrows?: unknown;
   /** The new required fields every `plan` call reports it gives a temporary value. */
@@ -310,6 +318,7 @@ function fakePlanner(script: FakePlannerScript): Record<string, unknown> {
             })),
             accessChanges: [],
             temporaryValues: script.temporaryValues ?? [],
+            ...(script.warnings === undefined ? {} : { warnings: script.warnings }),
             appliedStatements: options.statements.map((statement) => ({
               statement,
               operationIndexes: (operations ?? [ADDITIVE_OP]).map((_, index) => index),
@@ -326,7 +335,12 @@ function fakePlanner(script: FakePlannerScript): Record<string, unknown> {
                 const placeholder = Promise.reject(throwOnOperations);
                 placeholder.catch(() => undefined);
                 const at = script.placeholderAt ?? resolved.length;
-                return [...resolved.slice(0, at), placeholder, ...resolved.slice(at)];
+                const others =
+                  script.alsoThrowOnOperations === undefined
+                    ? []
+                    : [Promise.reject(script.alsoThrowOnOperations)];
+                for (const other of others) other.catch(() => undefined);
+                return [...resolved.slice(0, at), placeholder, ...others, ...resolved.slice(at)];
               },
               renderTypeScript: () => '// planned migration\n',
             },
@@ -393,6 +407,7 @@ export function offlineConfig(options: {
 }
 
 export const RENDERED_CONTRACT_DTS = '// rendered\nexport type Contract = { rendered: true };\n';
+export const SNAPSHOT_CONTRACT_DTS = '/* rendered */ export type Contract = { rendered: true };\n';
 
 /**
  * The control client the offline commands render snapshot declarations

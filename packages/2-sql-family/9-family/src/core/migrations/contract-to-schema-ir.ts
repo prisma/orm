@@ -54,9 +54,10 @@ import { sqlFamilyError } from '../errors';
  */
 export type DefaultResolver = (def: ColumnDefault, column: DefaultResolverColumn) => ColumnDefault;
 
-/** The column a {@link DefaultResolver} names a default for: its type as written, and whether it is a list. */
+/** The column a {@link DefaultResolver} names a default for: its type as written, the data type its codec represents, and whether it is a list. */
 export interface DefaultResolverColumn {
   readonly typeText: string;
+  readonly dataTypeId: string;
   readonly many: boolean;
 }
 
@@ -75,7 +76,7 @@ function convertColumn(
   const rawColumnDefault = column.default ?? undefined;
   const resolvedColumnDefault =
     rawColumnDefault !== undefined && hooks.resolveDefault
-      ? hooks.resolveDefault(rawColumnDefault, { typeText, many })
+      ? hooks.resolveDefault(rawColumnDefault, { typeText, dataTypeId: dataType.id, many })
       : rawColumnDefault;
   return {
     name,

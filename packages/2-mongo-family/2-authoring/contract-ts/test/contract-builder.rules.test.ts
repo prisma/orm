@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { defineContract, field, index, model, valueObject } from '../src/contract-builder';
 import type { AnyFieldBuilder, AnyModelBuilder, AnyValueObjectBuilder } from '../src/contract-dsl';
 import { enumType, member } from '../src/enum-type';
-import { mongoFamilyPack, mongoTargetPack } from './mongo-test-packs';
+import { mongoFamilyPack, mongoTargetPack, type } from './mongo-test-packs';
 
 const Role = enumType('Role', { codecId: 'mongo/string@1' }, member('Admin', 'admin'));
 
@@ -12,13 +12,13 @@ function taskModels(
 ) {
   const Task = model('Task', {
     collection: 'tasks',
-    fields: { _id: field.objectId(), type: base.type ?? field.string() },
+    fields: { _id: field.scalar(type.ObjectId()), type: base.type ?? field.scalar(type.String()) },
     discriminator: { field: 'type', variants: { Bug: { value: 'bug' } } },
   });
   const Bug = model('Bug', {
     ...(bugCollection === null ? {} : { collection: bugCollection }),
     base: Task,
-    fields: { severity: field.string() },
+    fields: { severity: field.scalar(type.String()) },
   });
   return { Task, Bug };
 }
@@ -67,14 +67,18 @@ describe('defineContract — variant collections', () => {
 
 describe('defineContract — discriminators', () => {
   it('refuses an optional discriminator', () => {
-    expect(refusalOf(build({ models: taskModels({ type: field.string().optional() }) }))).toEqual({
+    expect(
+      refusalOf(build({ models: taskModels({ type: field.scalar(type.String()).optional() }) })),
+    ).toEqual({
       code: 'CONTRACT.ARGUMENT_INVALID',
       meta: { modelName: 'Task', fieldName: 'type', reason: 'discriminator-optional' },
     });
   });
 
   it('refuses a discriminator that is not text', () => {
-    expect(refusalOf(build({ models: taskModels({ type: field.int32() }) }))).toMatchObject({
+    expect(
+      refusalOf(build({ models: taskModels({ type: field.scalar(type.Int32()) }) })),
+    ).toMatchObject({
       code: 'CONTRACT.ARGUMENT_INVALID',
       meta: { modelName: 'Task', fieldName: 'type', reason: 'discriminator-not-text' },
     });
@@ -83,7 +87,7 @@ describe('defineContract — discriminators', () => {
   it('refuses a discriminator field the model does not declare', () => {
     const Task = model('Task', {
       collection: 'tasks',
-      fields: { _id: field.objectId() },
+      fields: { _id: field.scalar(type.ObjectId()) },
       discriminator: { field: 'kind', variants: { Bug: { value: 'bug' } } },
     });
     const Bug = model('Bug', { collection: 'tasks', base: Task, fields: {} });
@@ -97,7 +101,7 @@ describe('defineContract — discriminators', () => {
   it('refuses a discriminator no variant names as its base', () => {
     const Task = model('Task', {
       collection: 'tasks',
-      fields: { _id: field.objectId(), type: field.string() },
+      fields: { _id: field.scalar(type.ObjectId()), type: field.scalar(type.String()) },
       discriminator: { field: 'type', variants: {} },
     });
 
@@ -110,7 +114,7 @@ describe('defineContract — discriminators', () => {
   it('refuses a listed variant that no model declares', () => {
     const Task = model('Task', {
       collection: 'tasks',
-      fields: { _id: field.objectId(), type: field.string() },
+      fields: { _id: field.scalar(type.ObjectId()), type: field.scalar(type.String()) },
       discriminator: { field: 'type', variants: { Bug: { value: 'bug' }, Ghost: { value: 'g' } } },
     });
     const Bug = model('Bug', { base: Task, fields: {} });
@@ -122,7 +126,10 @@ describe('defineContract — discriminators', () => {
   });
 
   it('refuses a base that has no discriminator', () => {
-    const Task = model('Task', { collection: 'tasks', fields: { _id: field.objectId() } });
+    const Task = model('Task', {
+      collection: 'tasks',
+      fields: { _id: field.scalar(type.ObjectId()) },
+    });
     const Bug = model('Bug', { collection: 'tasks', base: Task, fields: {} });
 
     expect(refusalOf(build({ models: { Task, Bug } }))).toEqual({
@@ -158,7 +165,11 @@ describe('defineContract — index shapes', () => {
       models: {
         Doc: model('Doc', {
           collection: 'docs',
-          fields: { _id: field.objectId(), a: field.string(), b: field.string() },
+          fields: {
+            _id: field.scalar(type.ObjectId()),
+            a: field.scalar(type.String()),
+            b: field.scalar(type.String()),
+          },
           indexes,
         }),
       },
@@ -203,7 +214,12 @@ describe('defineContract — namespaces', () => {
     const contract = defineContract({
       family: mongoFamilyPack,
       target: { ...mongoTargetPack, defaultNamespaceId: 'main' },
-      models: { User: model('User', { collection: 'users', fields: { _id: field.objectId() } }) },
+      models: {
+        User: model('User', {
+          collection: 'users',
+          fields: { _id: field.scalar(type.ObjectId()) },
+        }),
+      },
     });
 
     expect(Object.keys(contract.domain.namespaces)).toEqual(['main']);

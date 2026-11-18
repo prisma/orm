@@ -3,9 +3,9 @@ import { createTestSqlNamespace } from '../../../1-core/contract/test/test-suppo
 import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import {
   createBuiltinLikeControlMutationDefaults,
+  fixturePostgresTypeNamespace,
   interpretSqlContract,
   postgresNativeScalarTypeDescriptors,
-  postgresScalarAuthoringTypes,
   postgresTarget,
 } from './fixtures';
 
@@ -13,7 +13,7 @@ const baseInput = {
   ...fixtureInterpreterTypes,
   target: postgresTarget,
   scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
-  authoringContributions: { type: postgresScalarAuthoringTypes },
+  authoringContributions: { type: fixturePostgresTypeNamespace },
   composedExtensionContracts: new Map(),
   createNamespace: createTestSqlNamespace,
   capabilities: { sql: { scalarList: true } },
@@ -112,7 +112,7 @@ model Event {
 
   it('recommends the constructor a target renamed a native type to', () => {
     const authoring = {
-      type: postgresScalarAuthoringTypes,
+      type: fixturePostgresTypeNamespace,
       renamedTypeConstructors: { Text: 'String', Decimal: 'Numeric' },
     };
     const result = interpretSqlContract(

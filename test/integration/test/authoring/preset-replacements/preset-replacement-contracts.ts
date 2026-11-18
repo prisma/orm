@@ -23,8 +23,9 @@ import { type MongoTargetContract, mongoTargetDescriptor } from '@internal/targe
 import postgresControl from '@internal/target-postgres/control';
 import postgresPack from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
-import sqliteControl, { sqliteCreateNamespace } from '@internal/target-sqlite/control';
+import sqliteControl from '@internal/target-sqlite/control';
 import sqlitePack from '@internal/target-sqlite/pack';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { emit } from '../../../utils/emit';
 import type {
   MongoHelpers,
@@ -177,7 +178,7 @@ export function mongoTs(rows: readonly MongoRow[]): Contract {
         helpers.model(row.model, {
           collection: row.model,
           fields: {
-            id: helpers.field.objectId().mongo({ field: '_id' }),
+            id: helpers.field.scalar(helpers.type.ObjectId()).mongo({ field: '_id' }),
             value: row.ts(helpers),
           },
         }),

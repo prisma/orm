@@ -111,7 +111,8 @@
                       "field": "name"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "name_1"
                 },
                 {
                   "keys": [
@@ -121,6 +122,7 @@
                     }
                   ],
                   "kind": "mongo-index",
+                  "name": "email_1",
                   "unique": true
                 }
               ],
@@ -174,7 +176,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "5ce8cf83d8a798232fc04f65e6676f441bba92e26eee1888fd7bbf500fe2ab97"
+    "storageHash": "18a7778e944647e6a3ee41170376d7d55034b791da3ded3b8199ff22a0dedd75"
   },
   "capabilities": {},
   "extensions": {},

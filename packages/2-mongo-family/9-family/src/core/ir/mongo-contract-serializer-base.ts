@@ -110,6 +110,9 @@ export abstract class MongoContractSerializerBase<TContract>
   // `{ id, entries: { collection } }` shape, so the published hash cannot be
   // recomputed from a snapshot's content. Mongo snapshots therefore read
   // without content verification until the hash covers the persisted shape.
+  // Snapshots written before ADR 317 were rewritten in place with index names
+  // and keep their old hash, which markers, the ledger and migration from/to
+  // name, so a future content check must accept them.
 
   /**
    * Family-shared structural validation: parse against the Mongo

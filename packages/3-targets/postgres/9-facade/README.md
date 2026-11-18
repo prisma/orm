@@ -2,6 +2,12 @@
 
 One-package Postgres setup for Prisma 8. Install this single package to get config, runtime, and all transitive type dependencies.
 
+Callback isolation is configured with factory `transactionOptions` and `transaction(fn, options?)`, using `PostgresTransactionOptions`. Import `{ IsolationLevel }` from `@prisma/orm-postgres/runtime` or `@prisma/orm-postgres/serverless` and use `IsolationLevel.Serializable` in either option position. Both entries share the same const object; string literals remain accepted. Pooled and serverless clients share all four isolation literals; PostgreSQL treats ReadUncommitted as ReadCommitted. See [transaction isolation](../../../../docs/reference/transaction-options.md) for precedence, validation and explicit-only defaults.
+
+Native callback timeout integration cases run with `POSTGRES_TIMEOUT_TEST_URL` through this package's normal test script; without it they skip.
+
+Both entries also accept callback `timeout` defaults and overrides. Local `undefined` inherits; `null` disables an inherited deadline independently of isolation. See [callback timeouts](../../../../docs/reference/transaction-options.md#timeout) for bounds, cleanup and timing limitations.
+
 Two runtime entry points create three kinds of object:
 
 - `@internal/postgres/runtime` — `postgres()` returns a **client** for a long-lived Node process, with closure-cached `runtime()`, `orm`, `query()`, `execute()`, `toSql()` and `transaction()`.
@@ -73,7 +79,7 @@ Inside a request, `db` does everything the `db` from `postgres()` does: `db.orm`
 
 ### `@internal/postgres/config`
 
-Simplified `defineConfig` that pre-wires all Postgres internals (family, target, adapter, driver, contract providers). Pass a contract path (`.prisma` or `.ts`) or a ready `ContractConfig`, and optional db/migrations/extensions config.
+Simplified `defineConfig` that pre-wires all Postgres internals (family, target, adapter, driver, contract providers). Pass a contract path (`.prisma` or `.ts`) or a ready `ContractConfig`, and optional `db`, `extensions`, `migrations.dir`, and `formatter` (the indent and line endings `contract format` and the language server use for PSL files).
 
 #### A PSL source with a default control policy
 
@@ -155,7 +161,6 @@ An `Unsupported("X")` field becomes a raw column (ADR 273): its type is the text
 | `PSL.PRISMA7_EXTENSIONS_PREVIEW_FEATURE_MISSING` | The datasource lists `extensions` without the `postgresqlExtensions` preview feature; Prisma 7 refuses the schema too. | Add `"postgresqlExtensions"` to `previewFeatures` in the generator block. |
 | `PSL.PRISMA7_EXTENSION_PACK_MISSING` | A listed extension (`vector`, `postgis`, `pg_search` or `citext`), or `@db.Citext`, belongs to an extension pack the config does not compose. | Add the pack to `extensions` in `prisma.config.ts`, as the message says: `import pgvector from '@prisma/orm-extension-pgvector/control'`, then `extensions: [pgvector]`, or `import citext from '@prisma/orm-postgres-contrib/citext/control'`, then `extensions: [citext]`. Nothing changes in the Prisma 7 schema. For `@db.Citext`, `@ignore` and `@@ignore` do not help, because Prisma 8 keeps the columns of ignored fields and models in the contract. |
 | `PSL.PRISMA7_EXTENSION_ARGUMENT_UNSUPPORTED` | A `version:` or `map:` argument on a listed extension, which the contract cannot describe, or an argument Prisma 7 refuses too. | Remove `version:`; Prisma 7's next migration is empty. Replace `name(map: "db_name")` with `db_name`; Prisma 7's next migration is empty. |
-| `PSL.PRISMA7_EXTENSION_SCHEMA_MISMATCH` | A listed extension a composed pack declares is in another schema than the one the pack's contract declares it in. | Move the extension with `ALTER EXTENSION "<name>" SET SCHEMA "<schema>"`, a database change the pack does not make, then change the entry's `schema:` to match, as the message says. |
 | `PSL.PRISMA7_ENUM_NAMESPACE_MISMATCH` | A field uses an enum declared under a different `@@schema`. | Declare the enum in the model's schema, or move the model. |
 | `PSL.PRISMA7_RELATION_UNRESOLVED` | A relation field that cannot be paired, is ambiguous, or is required over an optional foreign key field. | Name both sides with `@relation("name")`, add the missing `fields`/`references`, or add `?` to a relation field one of whose fields is optional. |
 | `PSL.PRISMA7_REFERENTIAL_ACTION_UNSUPPORTED` | `SetNull` over a required foreign key field, or `SetDefault` over a required field with no column default (a client-side generator such as `uuid()` gives none). | Make the fields optional, which drops `NOT NULL` on Prisma 7's next migration and makes them nullable in the Prisma 7 client. Or give them a column default such as a literal or `dbgenerated("<expression>")` (in Prisma 7; in Prisma 8 the same default is written `` sql`<expression>` ``), which Prisma 7's next migration sets: a field without a `@default` then becomes optional when creating records with the Prisma 7 client, and a field with a client-side generator such as `@default(uuid())` must have that `@default` replaced, because a field takes only one, after which the Prisma 7 client stops generating its value. Or choose another action, which replaces the foreign key on Prisma 7's next migration and leaves the Prisma 7 client unchanged. |
@@ -193,6 +198,7 @@ These changes are not specific to a Prisma 7 schema. They apply to any Postgres 
 
 Creating a client has no side effects. The pool is created on the first query, `db.runtime()` or `db.connect(...)`.
 Connection binding can be provided up front (`url`, `pg`, `binding`) or deferred via `db.connect(...)`.
+`postgres()` checks the database input when it is called and fails with `RUNTIME.BINDING_INVALID` if it is wrong: `null` or a value of the wrong type as `url`, `pg` or `binding`; more than one of them; a `url` that is empty, cannot be parsed or is not `postgres://` or `postgresql://`; a `binding` whose `kind` is not `'url'`, `'pgPool'` or `'pgClient'`; and a `binding` whose `url` is not such a string, or whose `pool` or `client` is not an object. The error never contains the value, so a connection string passed by mistake never puts its password in an error.
 
 Pass `collections` to give models custom collection classes: `postgres({ contract, url, collections: { Post: PostCollection } })`, where `PostCollection` extends `Collection<Contract, 'Post'>` from `@prisma/orm-postgres/orm-client`. `db.orm.public.Post` and `tx.orm.public.Post` inside `db.transaction(...)` are then a `PostCollection`. The client's type carries the classes as its second type parameter, `PostgresClient<Contract, { Post: typeof PostCollection }>`, which defaults to no classes; a parameter typed `PostgresClient<Contract>` accepts a client with classes. `postgresServerless()` accepts the same option, and every connection it opens uses the classes.
 
@@ -204,6 +210,8 @@ When URL binding is used, pool timeouts are configurable via `poolOptions`:
 - `poolOptions.idleTimeoutMillis` (default `30_000`)
 
 Reads are buffered by default. Pass `cursor` (typed `PostgresCursorOptions`, `{ batchSize?: number | undefined }`) to read through a server-side cursor (`pg-cursor`): `{ batchSize: 50 }` streams in batches of 50; `{}` or `{ batchSize: undefined }` in batches of 100; a `batchSize` that is not a positive integer fails the factory call. There is no flag that turns cursors off; leaving the option out does that. A `cursor` value with any other key, or a `batchSize` that is not a positive integer, fails the factory call with `RUNTIME.ARGUMENT_INVALID`. `postgresServerless()` accepts the same option.
+
+`supabase()` from `@internal/extension-supabase/runtime` takes the same options, `cursor` and `poolOptions` included, and the `url`, `pg` and `binding` inputs except a `pg.Client`.
 
 Pass `log` (an object with `info`, `warn`, `error` and an optional `debug` method, each taking one event object; `console` works, and the type is `Log` from `@prisma/orm-postgres/family-runtime`) to receive what the runtime logs: the marker-verification warnings `CONTRACT.MARKER_MISSING` and `CONTRACT.MARKER_MISMATCH` from the first query, the warnings `lints()` emits for rules whose severity is `warn`, and the errors a middleware's `activityEnded` or `activityFinalized` hook throws, which the runtime logs and swallows. It also receives the warning `runtime.close.waiting-for-activities` when `close()` is waiting only for activities whose handles were never ended or for transactions still open, with the counts `openActivities` and `openTransactions`; `close()` waits for each such transaction until it commits or rolls back, and the error `runtime.connection.release.error` when the connection taken for an activity's own transaction fails to release after the transaction settles. If `log` has a `debug` method, it also receives debug events, for example when a middleware intercepts a statement. `budgets()` violations reach `log` only in `mode: 'permissive'` (see *Running plans and rendering SQL*). Without `log`, the runtime drops these events. `postgresServerless()` accepts the same option.
 

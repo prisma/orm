@@ -72,6 +72,7 @@ describe('a supabase client with custom collection classes', () => {
       'SELECT set_config($1, $2, false)',
       'SELECT "profile"."id" AS "id", "profile"."userId" AS "userId", "profile"."username" AS "username" FROM "public"."profile" WHERE "profile"."username" = $1',
       'RESET ALL',
+      'RESET ROLE',
     ]);
   });
 });

@@ -138,12 +138,12 @@ describe('every generated value the stack reads prints as PSL that reads back', 
   );
 
   it(
-    'the generated columns of the slice example, on VarChar(32) and Time(3) among them',
+    'the generated columns of the slice example, on Varchar(32) and Time(3) among them',
     async () => {
       const authored = await readPsl(`// use prisma-8
 model Event {
   id        String      @id @onCreate(uuid(7))
-  code      VarChar(32) @onCreate(nanoid())
+  code      Varchar(32) @onCreate(nanoid())
   seenAt    TimeTemporal(3)     @onUpdate(now())
   createdAt TimestamptzTemporal    @default(now()) @onCreate(now())
 }
@@ -179,7 +179,7 @@ model Event {
         ],
         fieldLines: [
           'id String @id @onCreate(uuid(7))',
-          'code VarChar(32) @onCreate(nanoid())',
+          'code String(storage: varchar, length: 32) @onCreate(nanoid())',
           'seenAt Time(as: temporal, precision: 3) @onUpdate(now())',
           'createdAt DateTime(as: temporal) @default(now()) @onCreate(now())',
         ],

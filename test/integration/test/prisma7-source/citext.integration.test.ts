@@ -100,17 +100,11 @@ describe('Prisma 7 @db.Citext columns against the database Prisma 7 built', () =
     timeouts.spinUpPpgDev,
   );
 
-  it('reports the datasource entry once when it puts citext in another schema than the pack does', async () => {
+  it('reads a datasource entry that puts citext in another schema without a finding, since verification checks where it is', async () => {
     const loaded = await loadWithCitext(join(fixtureDir, 'extension-in-another-schema.prisma'));
     expect(
       loaded.ok ? [] : loaded.failure.diagnostics.map(({ code, message }) => ({ code, message })),
-    ).toEqual([
-      {
-        code: 'PSL.PRISMA7_EXTENSION_SCHEMA_MISMATCH',
-        message:
-          'Extension "citext": the "citext" extension pack declares it in schema "public", so Prisma 8 expects it there, but this entry puts it in schema "extensions". Moving it is a database change the pack does not make: move it with ALTER EXTENSION "citext" SET SCHEMA "public", then remove schema: "extensions".',
-      },
-    ]);
+    ).toEqual([]);
   });
 
   it('refuses a generator default, which no generator function binds to the citext codec', async () => {

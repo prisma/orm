@@ -85,6 +85,7 @@ import { InternalError, isInternalError } from '@internal/utils/internal-error';
 import { contractError } from './contract-errors';
 import { type DefaultSpans, lowerDataTypeDefault } from './data-type-default';
 import { lowerDefaultFunctionWithRegistry } from './default-function-registry';
+import type { DeprecatedTypeNameWarner } from './deprecated-type-names';
 
 import { getAttribute } from './psl-attribute-parsing';
 import {
@@ -463,6 +464,7 @@ export function resolveFieldTypeDescriptor(
       get(symbol: NamedTypeSymbol): { readonly descriptor: ColumnDescriptor } | undefined;
     };
     readonly sources: PslSources;
+    readonly warnDeprecated: DeprecatedTypeNameWarner;
   },
 ): ResolveFieldTypeResult {
   const { field, resolution, entityLabel, diagnostics } = input;
@@ -509,6 +511,7 @@ export function resolveFieldTypeDescriptor(
         }
         return { ok: true, descriptor: instantiateAuthoringTypeAlias(descriptor).type };
       }
+      input.warnDeprecated(field, written, descriptor);
       if (call !== undefined) {
         return instantiateFieldTypeConstructor({ ...input, call, descriptor, source });
       }

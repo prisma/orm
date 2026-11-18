@@ -1,3 +1,9 @@
+# The whole tree is stored with LF and Biome formats to LF (`lineEnding: "lf"`),
+# so a checkout has to produce LF whatever a contributor's `core.autocrlf` says.
+# Without this, Windows checkouts land CRLF on disk and `pnpm lint` fails on
+# files nobody edited. Content detection still leaves binaries alone.
+* text=auto eol=lf
+
 # Mark ASCII recordings as generated so they don't inflate PR diff stats
 packages/1-framework/3-tooling/cli/recordings/ascii/** linguist-generated
 **/contract.d.ts linguist-generated

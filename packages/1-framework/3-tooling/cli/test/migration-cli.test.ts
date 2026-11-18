@@ -92,6 +92,15 @@ class RefusedDefaultMigration extends FakeMigration {
   }
 }
 
+class RefusedArgumentMigration extends FakeMigration {
+  override get operations(): never {
+    throw structuredError(
+      'CONTRACT.ARGUMENT_INVALID',
+      'fillStoredKey({ table: "user", column: "address" }): value 12 for field "Address.country" is not a String',
+    );
+  }
+}
+
 class WrongTargetMigration extends Migration {
   readonly targetId = 'mongo' as const;
   constructor(stack: unknown) {
@@ -462,6 +471,25 @@ describe('MigrationCLI.run', () => {
       stderr:
         'CONTRACT.DEFAULT_INVALID: Column "Note"."at" has a default its codec sqlite/datetime@1 refuses\n' +
         "A migration.ts can hold a default this version's codec refuses.\n",
+    });
+  });
+
+  it('writes the message of an error with no why once', async () => {
+    loadConfigMock.mockResolvedValue(ok(okConfig));
+    createControlStackMock.mockReturnValue({ adapter: { create: () => ({}) } });
+    const stdout = new BufferStream();
+    const stderr = new BufferStream();
+
+    const exitCode = await MigrationCLI.run(
+      pathToFileURL(migrationFile).href,
+      RefusedArgumentMigration,
+      { argv: entrypointArgv(), stdout, stderr },
+    );
+
+    expect({ exitCode, stderr: stderr.text }).toEqual({
+      exitCode: 1,
+      stderr:
+        'CONTRACT.ARGUMENT_INVALID: fillStoredKey({ table: "user", column: "address" }): value 12 for field "Address.country" is not a String\n',
     });
   });
 

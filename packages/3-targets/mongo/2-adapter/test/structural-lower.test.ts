@@ -11,13 +11,15 @@ import {
   MongoAggFieldRef,
   MongoAndExpr,
   MongoFieldFilter,
+  MongoLimitStage,
   MongoMatchStage,
+  MongoSkipStage,
   RawAggregateCommand,
   RawInsertOneCommand,
   UpdateManyCommand,
   UpdateOneCommand,
 } from '@internal/mongo-query-ast/execution';
-import { MongoParamRef } from '@internal/mongo-value';
+import { MongoParamRef, MongoPreparedParamRef } from '@internal/mongo-value';
 import { describe, expect, it } from 'vitest';
 import { createMongoAdapter } from '../src/mongo-adapter';
 
@@ -29,6 +31,22 @@ function plan(collection: string, command: AnyMongoCommand) {
 
 describe('MongoAdapter.structuralLower', () => {
   const adapter = createMongoAdapter();
+
+  it('keeps a placeholder in $limit and $skip', () => {
+    const take = new MongoPreparedParamRef('take', 'mongo/int32@1', false);
+    const skip = new MongoPreparedParamRef('skip', 'mongo/int32@1', false);
+    const draft = adapter.structuralLower(
+      plan(
+        'users',
+        new AggregateCommand('users', [new MongoSkipStage(skip), new MongoLimitStage(take)]),
+      ),
+    );
+    expect(draft).toEqual({
+      kind: 'aggregate',
+      collection: 'users',
+      pipeline: [{ $skip: skip }, { $limit: take }],
+    });
+  });
 
   describe('insertOne — document retains MongoParamRef leaves', () => {
     it('keeps MongoParamRef nodes in document fields', () => {

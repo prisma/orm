@@ -21,16 +21,12 @@ import { bindPslSchema, contractSourceContextFromControlStack } from '@internal/
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import { sqlContextInput } from '@internal/sql-contract-psl/test';
 import { defineContract as defineSqliteContract } from '@internal/sqlite/contract-builder';
-import postgresControl, {
-  postgresScalarAndNativeTypeConstructors,
-} from '@internal/target-postgres/control';
+import postgresControl, { postgresScalarTypes } from '@internal/target-postgres/control';
 import postgresPack from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
-import sqliteControl, {
-  sqliteCreateNamespace,
-  sqliteScalarTypeConstructors,
-} from '@internal/target-sqlite/control';
+import sqliteControl, { sqliteScalarTypeConstructors } from '@internal/target-sqlite/control';
 import sqlitePack from '@internal/target-sqlite/pack';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { describe, expect, it } from 'vitest';
 
 const int4Column = {
@@ -76,7 +72,7 @@ function constructorCalls(
   constructors: AuthoringTypeNamespace,
 ): readonly { readonly column: string; readonly name: string; readonly args: readonly number[] }[] {
   return Object.entries(constructors).flatMap(([name, descriptor]) => {
-    if (!isAuthoringTypeConstructorDescriptor(descriptor)) return [];
+    if (!isAuthoringTypeConstructorDescriptor(descriptor) || descriptor.deprecated) return [];
     const declared = descriptor.args ?? [];
     const sampled = declared.map((arg) => {
       const value = arg.name === undefined ? undefined : SAMPLE_ARGUMENTS[arg.name];
@@ -131,7 +127,7 @@ describe('TS and PSL authoring parity with real packs', () => {
         extensions: { pgvector: pgvectorPack },
       },
       ({ type, field, model }) => {
-        const ShortName = field.column(type.sql.String(35));
+        const ShortName = field.column(type.sql.Varchar(35));
         const Embedding1536 = field.column(type.pgvector.Vector(1536));
 
         return {
@@ -151,7 +147,7 @@ describe('TS and PSL authoring parity with real packs', () => {
     );
 
     const interpreted = interpretWithRealPacks(`types {
-  ShortName = sql.String(length: 35)
+  ShortName = sql.Varchar(length: 35)
   Embedding1536 = pgvector.Vector(1536)
 }
 
@@ -182,7 +178,7 @@ model Document {
             Post: model('Post', {
               fields: {
                 id: field.column(type.String()).id().onCreate(gen.uuid()),
-                slug: field.column(type.VarChar(64)),
+                slug: field.column(type.Varchar(64)),
                 updatedAt: UpdatedAt.default(now()),
               },
             }).sql({ table: 'Post' }),
@@ -192,7 +188,7 @@ model Document {
     );
 
     const interpreted = interpretWithRealPacks(`types {
-  Slug      = VarChar(64)
+  Slug      = Varchar(64)
   UpdatedAt = TimestampString(3) @onCreate(now()) @onUpdate(now())
 }
 
@@ -219,7 +215,7 @@ model Post {
           Document: model('Document', {
             fields: {
               id: field.column(int4Column).id({ name: 'document_pkey' }),
-              shortName: field.column(type.sql.String(35)).unique({
+              shortName: field.column(type.sql.Varchar(35)).unique({
                 name: 'document_short_name_key',
               }),
               embedding: field.column(type.pgvector.Vector(1536)).optional(),
@@ -233,7 +229,7 @@ model Post {
 
     const interpreted = interpretWithRealPacks(`model Document {
   id Int @id(map: "document_pkey")
-  shortName sql.String(length: 35) @unique(map: "document_short_name_key")
+  shortName sql.Varchar(length: 35) @unique(map: "document_short_name_key")
   embedding pgvector.Vector(length: 1536)?
 }
 `);
@@ -321,7 +317,7 @@ model Post {
 
 describe('type.* helpers and PSL type constructors', () => {
   it('give the same column for every Postgres constructor and the same arguments', () => {
-    const calls = constructorCalls(postgresScalarAndNativeTypeConstructors);
+    const calls = constructorCalls(postgresScalarTypes);
     const tsContract = defineContract(
       { extensions: { pgvector: pgvectorPack } },
       ({ type, field, model }) => ({

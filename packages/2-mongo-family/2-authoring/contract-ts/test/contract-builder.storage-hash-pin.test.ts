@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defineContract, field, index, model } from '../src/contract-builder';
-import { mongoFamilyPack, mongoTargetPack } from './mongo-test-packs';
+import { mongoFamilyPack, mongoTargetPack, type } from './mongo-test-packs';
 
 // Pins the storageHash computed for a representative authored contract.
 // The hash fingerprints the constructed storage body the builder feeds
@@ -12,8 +12,8 @@ describe('mongo builder storageHash pin', () => {
     const User = model('User', {
       collection: 'users',
       fields: {
-        _id: field.objectId(),
-        email: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        email: field.scalar(type.String()),
       },
       indexes: [index({ email: 1 }, { unique: true })],
     });
@@ -21,9 +21,9 @@ describe('mongo builder storageHash pin', () => {
     const Post = model('Post', {
       collection: 'posts',
       fields: {
-        _id: field.objectId(),
-        authorId: field.objectId(),
-        title: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        authorId: field.scalar(type.ObjectId()),
+        title: field.scalar(type.String()),
       },
     });
 
@@ -34,7 +34,7 @@ describe('mongo builder storageHash pin', () => {
     });
 
     expect(String(contract.storage.storageHash)).toBe(
-      '5d42e6d82387b059ecc9ffc13e1bf085b978380e0668fe85433f1c72df20df3d',
+      'fa0d1f7630ce87eb9bd3f7250d2ed8fd2322ef400c0b8727cb56ec046fd26e54',
     );
   });
 });

@@ -437,6 +437,7 @@ describe('providePslCompletionItems', () => {
         stack,
       ).items.map((item) => item.label),
     ).toEqual([
+      'map',
       'type',
       'sparse',
       'expireAfterSeconds',

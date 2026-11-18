@@ -6,18 +6,20 @@ import { extractCodecLookup } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { MongoContract } from '@internal/mongo-contract';
 import { mongoDataType } from '@internal/mongo-contract/data-type';
-import { type } from 'arktype';
+import { type as arktype } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import { buildMongoContractFromDefinition } from '../src/build-contract';
 import type { RestatedFieldDifference } from '../src/build-refusals';
 import { defineContract, field, index, model } from '../src/contract-builder';
 import type { ContractDefinition, FieldNode, ModelNode } from '../src/contract-definition';
 import { enumType, member } from '../src/enum-type';
+import { nameIndexes } from '../src/name-indexes';
 import {
   identityCodec,
   identityCodecDescriptor,
   mongoFamilyPack,
   mongoTargetPack,
+  type,
 } from './mongo-test-packs';
 
 const codecLookup = extractCodecLookup([mongoFamilyPack, mongoTargetPack]);
@@ -25,10 +27,10 @@ const { support: dataTypes } = assembleDataTypeSupport(
   [mongoFamilyPack, mongoTargetPack],
   (codecId) => codecLookup.descriptorFor(codecId)?.dataType,
 );
-const objectIdType = field.objectId().__type;
-const stringType = field.string().__type;
-const int32Type = field.int32().__type;
-const vectorType = field.vector().__type;
+const objectIdType = field.scalar(type.ObjectId()).__type;
+const stringType = field.scalar(type.String()).__type;
+const int32Type = field.scalar(type.Int32()).__type;
+const vectorType = field.scalar(type.Vector()).__type;
 const now = { kind: 'generator', id: TIMESTAMP_NOW_GENERATOR_ID } as const;
 
 function scalar(fieldName: string, overrides: Partial<FieldNode> = {}): FieldNode {
@@ -68,7 +70,11 @@ function definitionOf(overrides: Partial<ContractDefinition>): ContractDefinitio
 }
 
 function build(overrides: Partial<ContractDefinition>) {
-  return buildMongoContractFromDefinition(definitionOf(overrides), codecLookup, dataTypes);
+  return buildMongoContractFromDefinition(
+    nameIndexes(definitionOf(overrides)),
+    codecLookup,
+    dataTypes,
+  );
 }
 
 function contractOf(overrides: Partial<ContractDefinition>): MongoContract {
@@ -107,9 +113,9 @@ describe('buildMongoContractFromDefinition', () => {
     const Task = model('Task', {
       collection: 'tasks',
       fields: {
-        _id: field.objectId(),
-        type: field.string(),
-        title: field.string().mongo({ field: 't' }),
+        _id: field.scalar(type.ObjectId()),
+        type: field.scalar(type.String()),
+        title: field.scalar(type.String()).mongo({ field: 't' }),
       },
       indexes: [index({ title: 1 })],
       discriminator: { field: 'type', variants: { Bug: { value: 'bug' } } },
@@ -117,7 +123,7 @@ describe('buildMongoContractFromDefinition', () => {
     const Bug = model('Bug', {
       collection: 'tasks',
       base: Task,
-      fields: { severity: field.string() },
+      fields: { severity: field.scalar(type.String()) },
       indexes: [index({ severity: 1 })],
     });
 
@@ -236,6 +242,63 @@ describe('buildMongoContractFromDefinition', () => {
       collection: 'tasks',
       fields: { severity: { field: 'severity' } },
     });
+  });
+
+  it('keeps both a unique and a plain index on the same keys, in the order they are written', () => {
+    const contract = contractOf({
+      models: [
+        user([scalar('a')], {
+          indexes: [
+            { fields: { a: 1 } },
+            { fields: { a: 1 }, options: { unique: true, name: 'User_a_key' } },
+          ],
+        }),
+      ],
+    });
+    const users =
+      contract.storage.namespaces[UNBOUND_NAMESPACE_ID]?.entries['collection']?.['users'];
+
+    expect(JSON.parse(JSON.stringify(users))['indexes']).toEqual([
+      { kind: 'mongo-index', name: 'a_1', keys: [{ field: 'a', direction: 1 }] },
+      {
+        kind: 'mongo-index',
+        name: 'User_a_key',
+        keys: [{ field: 'a', direction: 1 }],
+        unique: true,
+      },
+    ]);
+  });
+
+  it('throws for an index that reaches it without a name', () => {
+    expect(() =>
+      buildMongoContractFromDefinition(
+        definitionOf({ models: [user([scalar('a')], { indexes: [{ fields: { a: 1 } }] })] }),
+        codecLookup,
+        dataTypes,
+      ),
+    ).toThrow('Call nameIndexes on the definition before building it.');
+  });
+
+  it('names each index as written, and an unnamed one after its stored keys', () => {
+    const contract = contractOf({
+      models: [
+        user([scalar('title', { storedName: 't' }), scalar('body')], {
+          indexes: [
+            { fields: { title: 1, body: -1 } },
+            { fields: { body: 'text' } },
+            { fields: { title: -1 }, options: { name: 'by_title' } },
+          ],
+        }),
+      ],
+    });
+    const users =
+      contract.storage.namespaces[UNBOUND_NAMESPACE_ID]?.entries['collection']?.['users'];
+
+    expect(users?.indexes?.map((index) => index.name)).toEqual([
+      't_1_body_-1',
+      'body_text',
+      'by_title',
+    ]);
   });
 });
 
@@ -374,6 +437,43 @@ describe('buildMongoContractFromDefinition refusals', () => {
         ],
       },
       [{ kind: 'indexScopeConflict', key: { kind: 'index', model: 'Bug', position: 0 } }],
+    ],
+    [
+      'only the scope conflict of a variant text index whose filter contradicts its discriminator value',
+      {
+        models: [
+          task,
+          {
+            ...bug,
+            fields: [scalar('severity'), scalar('notes')],
+            indexes: [
+              { fields: { severity: 'text' }, options: { partialFilterExpression: { type: 'x' } } },
+              { fields: { notes: 'text' } },
+            ],
+          },
+        ],
+      },
+      [{ kind: 'indexScopeConflict', key: { kind: 'index', model: 'Bug', position: 0 } }],
+    ],
+    [
+      'an index its model writes twice',
+      { models: [user([scalar('a')], { indexes: [{ fields: { a: 1 } }, { fields: { a: 1 } }] })] },
+      [{ kind: 'indexDuplicate', key: { kind: 'index', model: 'User', position: 1 } }],
+    ],
+    [
+      'an index another model in the same collection writes too',
+      {
+        models: [
+          user([scalar('a')], { indexes: [{ fields: { a: 1 } }] }),
+          {
+            modelName: 'Admin',
+            collection: 'users',
+            fields: [scalar('a')],
+            indexes: [{ fields: { a: 1 } }],
+          },
+        ],
+      },
+      [{ kind: 'indexDuplicate', key: { kind: 'index', model: 'Admin', position: 0 } }],
     ],
     [
       'a generated value on a value object field',
@@ -575,7 +675,7 @@ describe('buildMongoContractFromDefinition refusals with their whole data', () =
   const sized = mongoDataType('test/sized', {
     read: (json) => json,
     bsonTypes: ['string'],
-    params: type({ 'length?': 'number.integer >= 1' }),
+    params: arktype({ 'length?': 'number.integer >= 1' }),
   });
   const choosy = mongoDataType('test/choosy', { read: (json) => json, bsonTypes: ['string'] });
   const target = {
@@ -607,12 +707,85 @@ describe('buildMongoContractFromDefinition refusals with their whole data', () =
   );
   const refusalsWith = (overrides: Partial<ContractDefinition>) => {
     const built = buildMongoContractFromDefinition(
-      definitionOf({ target, ...overrides }),
+      nameIndexes(definitionOf({ target, ...overrides })),
       stackCodecs,
       stackDataTypes,
     );
     return built.ok ? [] : built.failure.refusals;
   };
+
+  it('refuses an index another model in the same collection writes, naming the first model', () => {
+    expect(
+      refusalsWith({
+        models: [
+          user([scalar('a')], { indexes: [{ fields: { a: 1 } }] }),
+          {
+            modelName: 'Admin',
+            collection: 'users',
+            fields: [scalar('a')],
+            indexes: [{ fields: { a: 1 } }],
+          },
+        ],
+      }),
+    ).toEqual([
+      {
+        kind: 'indexDuplicate',
+        key: { kind: 'index', model: 'Admin', position: 0 },
+        collection: 'users',
+        firstModel: 'User',
+        firstPosition: 0,
+        signature: '{"fields":{"a":1}}',
+      },
+    ]);
+  });
+
+  it('refuses two indexes of one collection with one name, naming the first', () => {
+    expect(
+      refusalsWith({
+        models: [
+          user([scalar('a'), scalar('b')], {
+            indexes: [{ fields: { a: 1 }, options: { name: 'by_a' } }],
+          }),
+          {
+            modelName: 'Admin',
+            collection: 'users',
+            fields: [scalar('a'), scalar('b')],
+            indexes: [{ fields: { b: 1 }, options: { name: 'by_a' } }],
+          },
+        ],
+      }),
+    ).toEqual([
+      {
+        kind: 'indexNameDuplicate',
+        key: { kind: 'index', model: 'Admin', position: 0 },
+        collection: 'users',
+        name: 'by_a',
+        firstModel: 'User',
+        firstPosition: 0,
+      },
+    ]);
+  });
+
+  it('refuses a unique and a plain index on the same keys that both go unnamed', () => {
+    expect(
+      refusalsWith({
+        models: [
+          user([scalar('a')], {
+            indexes: [{ fields: { a: 1 } }, { fields: { a: 1 }, options: { unique: true } }],
+          }),
+        ],
+      }),
+    ).toEqual([
+      {
+        kind: 'indexNameDuplicate',
+        key: { kind: 'index', model: 'User', position: 1 },
+        collection: 'users',
+        name: 'a_1',
+        firstModel: 'User',
+        firstPosition: 0,
+      },
+    ]);
+  });
 
   it("refuses type parameters the field's data type does not accept", () => {
     expect(

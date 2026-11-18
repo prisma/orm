@@ -13,12 +13,12 @@ import {
   MigrationCLI,
   setValidation,
 } from '@prisma/orm-mongo/target/migration';
-import type { Contract as Start } from '../../snapshots/32b49a010a6bec06827848a71ade1588d7863e429644edc402becee50580be78/contract';
-import startContract from '../../snapshots/32b49a010a6bec06827848a71ade1588d7863e429644edc402becee50580be78/contract.json' with {
+import type { Contract as End } from '../../snapshots/5b423686089e2ada5ece2b224849ac73ce6b998fb062e88217d2f30a1a567748/contract';
+import endContract from '../../snapshots/5b423686089e2ada5ece2b224849ac73ce6b998fb062e88217d2f30a1a567748/contract.json' with {
   type: 'json',
 };
-import type { Contract as End } from '../../snapshots/c529f34639ba48ec978d133093cd95ac2a5a76196ea39b3fa71179a9ef2c3467/contract';
-import endContract from '../../snapshots/c529f34639ba48ec978d133093cd95ac2a5a76196ea39b3fa71179a9ef2c3467/contract.json' with {
+import type { Contract as Start } from '../../snapshots/315ba05dd789203ec66ae19c9e637054e1b70d1c1151341f551040cb908c82e4/contract';
+import startContract from '../../snapshots/315ba05dd789203ec66ae19c9e637054e1b70d1c1151341f551040cb908c82e4/contract.json' with {
   type: 'json',
 };
 

@@ -25,6 +25,7 @@ export {
   now,
   rel,
   sql,
+  unbound,
 } from '@internal/sql-contract-ts/contract-builder';
 // The output types a contract's inferred type names for columns with type parameters, so an application's declaration output can name them through this entry.
 export type {

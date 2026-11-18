@@ -3,8 +3,9 @@ import { defineConfig as coreDefineConfig } from '@internal/config/config-types'
 import sqliteDriver from '@internal/driver-sqlite/control';
 import sql from '@internal/family-sql/control';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
-import sqlite, { sqliteCreateNamespace } from '@internal/target-sqlite/control';
+import sqlite from '@internal/target-sqlite/control';
 import sqlitePackRef from '@internal/target-sqlite/pack';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { describe, expect, it } from 'vitest';
 import { defineConfig } from '../../src/config/define-config';
 
@@ -159,5 +160,20 @@ describe('defineConfig facade', () => {
     });
 
     expect(config.extensions).toContain(mockExtension);
+  });
+
+  it('passes formatter config through', () => {
+    const config = defineConfig({
+      contract: './prisma/contract.prisma',
+      formatter: { indent: 'tab', newline: 'CRLF' },
+    });
+
+    expect(config.formatter).toEqual({ indent: 'tab', newline: 'CRLF' });
+  });
+
+  it('leaves formatter out when it is not given', () => {
+    const config = defineConfig({ contract: './prisma/contract.prisma' });
+
+    expect(Object.hasOwn(config, 'formatter')).toBe(false);
   });
 });

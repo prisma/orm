@@ -23,15 +23,17 @@ describe('sql family pack authoring contributions', () => {
     }).toEqual({ dataTypes: ['sql/expression'], entries: ['sql/expression'] });
   });
 
-  it('builds sql.String and sql.Char for a target, whose length is a value of the target’s size type', () => {
+  it('builds sql.Varchar and sql.Char for a target, whose length is a value of the target’s size type', () => {
+    const varchar = {
+      kind: 'typeConstructor',
+      documentation: 'Variable-length text with a required maximum character length.',
+      args: [{ kind: 'value', dataType: 'pg/int4', name: 'length' }],
+      output: { codecId: 'sql/varchar@1', typeParams: { length: { kind: 'arg', index: 0 } } },
+    };
     expect(sqlTargetTypeConstructors({ sizeType: 'pg/int4' })).toEqual({
       sql: {
-        String: {
-          kind: 'typeConstructor',
-          documentation: 'Variable-length text with a required maximum character length.',
-          args: [{ kind: 'value', dataType: 'pg/int4', name: 'length' }],
-          output: { codecId: 'sql/varchar@1', typeParams: { length: { kind: 'arg', index: 0 } } },
-        },
+        Varchar: varchar,
+        String: { ...varchar, deprecated: { replacement: 'sql.Varchar' } },
         Char: {
           kind: 'typeConstructor',
           documentation: 'Fixed-length text with a required character length.',

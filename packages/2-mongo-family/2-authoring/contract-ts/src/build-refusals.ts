@@ -121,6 +121,23 @@ export type BuildRefusal =
       readonly reason: string;
       readonly signature: string;
     }
+  | {
+      readonly kind: 'indexDuplicate';
+      readonly key: IndexKey;
+      readonly collection: string;
+      readonly firstModel: string;
+      readonly firstPosition: number;
+      readonly signature: string;
+    }
+  /** Two indexes of one collection with one name, written or given by `nameIndexes`. */
+  | {
+      readonly kind: 'indexNameDuplicate';
+      readonly key: IndexKey;
+      readonly collection: string;
+      readonly name: string;
+      readonly firstModel: string;
+      readonly firstPosition: number;
+    }
   | { readonly kind: 'generatedOnValueObject'; readonly key: FieldKey }
   | {
       readonly kind: 'generatorUnknown';

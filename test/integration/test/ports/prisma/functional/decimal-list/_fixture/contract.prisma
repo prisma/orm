@@ -13,7 +13,7 @@
 // `Decimal[]` maps to `numeric[]` in Postgres (no precision/scale override needed).
 
 types {
-  D = Numeric(65, 30)
+  D = NumericString(65, 30)
 }
 
 model User {

@@ -281,6 +281,7 @@ const MongoIndexKeySchema = type({
 const MongoStorageIndexSchema = type({
   '+': 'reject',
   'kind?': "'mongo-index'",
+  name: 'string > 0',
   keys: MongoIndexKeySchema.array().atLeastLength(1),
   'unique?': 'boolean',
   'sparse?': 'boolean',
@@ -429,7 +430,7 @@ export function createMongoContractSchema(
     '+': 'reject',
     targetFamily: "'mongo'",
     'schemaVersion?': 'string',
-    'target?': 'string',
+    target: 'string',
     'storageHash?': 'string',
     'profileHash?': 'string',
     roots: type({ '[string]': CrossReferenceSchema }),

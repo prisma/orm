@@ -1,7 +1,10 @@
 import { MongoControlAdapterImpl } from '@internal/adapter-mongo/control';
 import { MongoControlDriver } from '@internal/driver-mongo/control';
 import type { MongoIndexKey } from '@internal/mongo-contract';
-import type { MongoMigrationPlanOperation } from '@internal/mongo-query-ast/control';
+import {
+  isInspectionCheckSource,
+  type MongoMigrationPlanOperation,
+} from '@internal/mongo-query-ast/control';
 import { FilterEvaluator } from '@internal/target-mongo/control';
 import { collMod, createIndex } from '@internal/target-mongo/migration';
 import { timeouts } from '@repo/test-utils';
@@ -44,6 +47,7 @@ async function postchecksHold(op: MongoMigrationPlanOperation): Promise<boolean>
   const { inspectionExecutor } = deps();
   const evaluator = new FilterEvaluator();
   for (const check of op.postcheck) {
+    if (!isInspectionCheckSource(check.source)) throw new Error('Expected a catalog check');
     const documents = await check.source.accept(inspectionExecutor);
     const found = documents.some((doc) => evaluator.evaluate(check.filter, doc));
     if (found !== (check.expect === 'exists')) return false;

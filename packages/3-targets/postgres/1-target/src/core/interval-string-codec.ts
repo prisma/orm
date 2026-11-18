@@ -8,11 +8,12 @@ import {
   type DataTypeValue,
 } from '@internal/framework-components/codec';
 import { CastExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
+import { ISO_DURATION } from '@internal/type-implementations/duration';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { PostgresCodecDescriptor } from './codec-descriptor';
 import { type PrecisionParams, pgIntervalDecode } from './codec-helpers';
 import { PG_INTERVAL_STRING_CODEC_ID } from './codec-ids';
-import { formatIsoDuration, ISO_DURATION, pgIntervalStoredText } from './data-type-values';
+import { formatIsoDuration, pgIntervalStoredText } from './data-type-values';
 import { pgInterval, pgPrecisionParams } from './data-types';
 import { postgresError } from './errors';
 

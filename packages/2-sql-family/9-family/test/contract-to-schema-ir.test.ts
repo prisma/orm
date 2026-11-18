@@ -1410,6 +1410,30 @@ describe('contractToSchemaIR — resolved leaf values', () => {
     });
   });
 
+  it("runs resolveDefault with the data type the column's codec represents, not only the type it is stored as", () => {
+    const storage = unboundStorage('test' as StorageHashBase<string>, {
+      T: table({
+        columns: {
+          code: col({
+            codecId: 'test/code@1',
+            default: { kind: 'function', expression: 'now()' },
+          }),
+        },
+      }),
+    });
+
+    const result = contractToSchemaIR(wrap(storage), {
+      resolveDefault: (_def, column) => ({
+        kind: 'function',
+        expression: `${column.dataTypeId} stored as ${column.typeText}`,
+      }),
+    });
+    expect(result.tables['T']!.columns['code']!.resolvedDefault).toEqual({
+      kind: 'function',
+      expression: 'test/code stored as character(1)',
+    });
+  });
+
   it('check nodes pass naming and expression through unchanged', () => {
     const expression = `"status" IN ('draft', 'published')`;
     const hash = computeCheckContentHash(expression);

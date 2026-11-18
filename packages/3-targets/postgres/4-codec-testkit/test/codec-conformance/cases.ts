@@ -39,6 +39,16 @@ const plainDateTimesEqual = (roundTripped: unknown, value: unknown): boolean =>
   value instanceof Temporal.PlainDateTime &&
   roundTripped.equals(value);
 
+const plainDatesEqual = (roundTripped: unknown, value: unknown): boolean =>
+  roundTripped instanceof Temporal.PlainDate &&
+  value instanceof Temporal.PlainDate &&
+  roundTripped.equals(value);
+
+const plainTimesEqual = (roundTripped: unknown, value: unknown): boolean =>
+  roundTripped instanceof Temporal.PlainTime &&
+  value instanceof Temporal.PlainTime &&
+  roundTripped.equals(value);
+
 const ENUM_TYPE = 'codec_conformance_mood';
 
 /**
@@ -248,6 +258,8 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     codecId: 'pg/date-temporal@1',
     label: 'calendar date',
     value: Temporal.PlainDate.from('2026-01-02'),
+    valueEquality: plainDatesEqual,
+    projectionEquality: plainDatesEqual,
   },
   {
     codecId: 'pg/timestamp-temporal@1',
@@ -270,6 +282,8 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     label: 'microsecond precision',
     value: Temporal.PlainTime.from('03:04:05.123456'),
     typeParams: { precision: 6 },
+    valueEquality: plainTimesEqual,
+    projectionEquality: plainTimesEqual,
   },
   {
     codecId: 'pg/timestamptz-date@1',

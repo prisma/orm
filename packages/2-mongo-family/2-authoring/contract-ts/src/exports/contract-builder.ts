@@ -18,6 +18,7 @@ export type {
 } from '../contract-builder';
 export {
   buildBoundContract,
+  createContractAuthoringHelpers,
   defineContract,
   field,
   index,
@@ -46,3 +47,6 @@ export type {
 } from '../contract-dsl';
 export type { BoundEnumType, CodecTypeMap, EnumMember, EnumTypeHandle } from '../enum-type';
 export { bindEnumType, enumType, isEnumTypeHandle, member } from '../enum-type';
+export type { MergedIndexes, RemovedIndex } from '../merge-redundant-indexes';
+export { mergeRedundantIndexes } from '../merge-redundant-indexes';
+export { nameIndexes } from '../name-indexes';

@@ -519,13 +519,36 @@ withTempDir(({ createTempDir }) => {
         const dirName = latestMigrationDirName(ctx);
         const byHand = nextActionLabels(failed)[1] ?? '';
         expect(byHand).toBe(
-          `To keep that data by hand, replace this.removeStoredValue({ schema: "public", table: "task", column: "status", value: "archived", codecRef: { codecId: "pg/text@1" }, enumValue: { namespaceId: "public", enum: "Status", member: "ARCHIVED" } }) with this.replaceStoredValue({ schema: "public", table: "task", column: "status", from: "archived", to: "<stored value>", codecRef: { codecId: "pg/text@1" } }) in \`migrations/app/${dirName}/migration.ts\`, where "<stored value>" is a stored value the enum keeps, run \`node migrations/app/${dirName}/migration.ts\`, and re-run \`prisma-test db migrate\``,
+          [
+            `To keep that data by hand, make the edits below in \`migrations/app/${dirName}/migration.ts\`, where <stored value> is a stored value the enum keeps, run \`node migrations/app/${dirName}/migration.ts\`, and re-run \`prisma-test db migrate\`.`,
+            'Replace:',
+            'this.removeStoredValue({',
+            "        schema: 'public',",
+            "        table: 'task',",
+            "        column: 'status',",
+            "        value: 'archived',",
+            "        codecRef: { codecId: 'pg/text@1' },",
+            "        enumValue: { namespaceId: 'public', enum: 'Status', member: 'ARCHIVED' },",
+            '      })',
+            'with:',
+            'this.replaceStoredValue({',
+            "        schema: 'public',",
+            "        table: 'task',",
+            "        column: 'status',",
+            "        from: 'archived',",
+            "        to: '<stored value>',",
+            "        codecRef: { codecId: 'pg/text@1' },",
+            '      })',
+          ].join('\n'),
         );
 
         const file = join(ctx.testDir, 'migrations', 'app', dirName, 'migration.ts');
         writeFileSync(
           file,
-          followEdits(readFileSync(file, 'utf-8'), byHand.replace('"<stored value>"', '"active"')),
+          followEdits(
+            readFileSync(file, 'utf-8'),
+            byHand.replaceAll("'<stored value>'", "'active'"),
+          ),
         );
         const reEmit = await selfEmitMigration(ctx, ['--dir', `migrations/app/${dirName}`]);
         expect(reEmit.exitCode, `E7.07: node migration.ts: ${reEmit.stderr}`).toBe(0);
@@ -605,8 +628,11 @@ withTempDir(({ createTempDir }) => {
 
         const asked = await runMigrationPlan(ctx, ['--from', origin, '--json']);
         expect(engineError(asked)?.code, 'E9.04: nobody to answer').toBe('CLI.CONSENT_REQUIRED');
-        expect(String(engineError(asked)?.why), 'E9.04: the question names every column').toBe(
-          'Remove value "archived" from column "state" of "note", remove value "archived" from column "status" of "task" and remove value "archived" from column "tags" of "task" would lose enum value "Status.ARCHIVED" from the data that holds it.',
+        expect(
+          String(engineError(asked)?.why),
+          'E9.04: the question lists every column, one per line',
+        ).toBe(
+          'These operations would lose enum value "Status.ARCHIVED" from the data that holds it:\n- Remove value "archived" from column "state" of "note"\n- Remove value "archived" from column "status" of "task"\n- Remove value "archived" from column "tags" of "task"',
         );
         const question = nextActionLabels(asked)[0] ?? '';
         expect(question, 'E9.04: the way that keeps the data comes first').toContain(

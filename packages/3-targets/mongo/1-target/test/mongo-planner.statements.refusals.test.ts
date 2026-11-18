@@ -40,33 +40,6 @@ describe('MongoMigrationPlanner, statements it refuses', () => {
     ]);
   });
 
-  it('refuses renaming an enum value', () => {
-    expect(
-      refusal(
-        plan({
-          from: profiles,
-          to: profiles,
-          schema: profilesSchema,
-          statements: [
-            {
-              kind: 'rename',
-              entity: 'enumValue',
-              from: { namespaceId: asNamespaceId('app'), enum: 'Status', member: 'ARCHIVED' },
-              to: { namespaceId: asNamespaceId('app'), enum: 'Status', member: 'RETIRED' },
-            },
-          ],
-        }),
-      ),
-    ).toEqual([
-      {
-        kind: 'statementRefused',
-        summary:
-          'Cannot rename enum value "Status.ARCHIVED" to "Status.RETIRED": MongoDB does not rename enum values in this release',
-        why: 'Leave out this statement.',
-      },
-    ]);
-  });
-
   it('refuses renaming _id', () => {
     const to = contract(
       'to',
@@ -259,7 +232,7 @@ describe('MongoMigrationPlanner, statements it refuses', () => {
   });
 });
 
-describe('MongoMigrationPlanner, a variant rename whose discriminator value changes', () => {
+describe('MongoMigrationPlanner, a variant rename that keeps its discriminator value', () => {
   const tasks = (seed: string, variant: string, value: string) =>
     contract(
       seed,
@@ -275,26 +248,6 @@ describe('MongoMigrationPlanner, a variant rename whose discriminator value chan
       },
       { tasks: {} },
     );
-
-  it('is refused, and says to keep the value', () => {
-    expect(
-      refusal(
-        plan({
-          from: tasks('from', 'Bug', 'bug'),
-          to: tasks('to', 'Defect', 'defect'),
-          schema: [schemaCollection('tasks')],
-          statements: [renameModel('Bug', 'Defect')],
-        }),
-      ),
-    ).toEqual([
-      {
-        kind: 'statementRefused',
-        summary:
-          'Cannot rename model "Bug" to "Defect": its discriminator value changes from "bug" to "defect"',
-        why: 'The documents of "Bug" hold type "bug", and this release does not rewrite a discriminator value, so they would no longer match "Defect" and would fail validation. Keep the value: declare "Defect" with @@base(Task, "bug"). A later release changes a stored value with --convert.',
-      },
-    ]);
-  });
 
   it('plans nothing when the value is kept', () => {
     const keep = tasks('to', 'Defect', 'bug');
@@ -355,6 +308,26 @@ describe('MongoMigrationPlanner, a field of a time-series collection', () => {
           'Cannot remove field "value" from collection "readings": it is a time-series collection',
         why: 'MongoDB updates the documents of a time-series collection only through its metaField, so the field cannot be removed from the documents that hold it. Keep the field in the contract, as an optional field if new documents leave it out, then run this command again.',
       },
+    ]);
+  });
+});
+
+describe('MongoMigrationPlanner, a model with no collection', () => {
+  it('refuses a rename of a model whose documents no collection holds, naming the model', () => {
+    const orphan = (seed: string, model: string) =>
+      contract(seed, { [model]: { fields: ['_id', 'name'] } }, {});
+
+    expect(
+      refusal(
+        plan({
+          from: orphan('from', 'Orphan'),
+          to: orphan('to', 'Lonely'),
+          schema: [],
+          statements: [renameModel('Orphan', 'Lonely')],
+        }),
+      ).map(({ summary }) => summary),
+    ).toEqual([
+      'Cannot rename model "Orphan" to "Lonely": model "Orphan" names no collection, and neither does a base or an owner',
     ]);
   });
 });

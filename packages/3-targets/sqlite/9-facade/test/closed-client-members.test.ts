@@ -5,7 +5,7 @@ import type { RuntimeQueryable } from '@internal/sql-orm-client';
 import { RawQueryAst } from '@internal/sql-relational-core/ast';
 import { planFromAst } from '@internal/sql-relational-core/plan';
 import { startActivityOn } from '@internal/sql-runtime';
-import { sqliteCreateNamespace } from '@internal/target-sqlite/control';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { createContract } from '@repo/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 

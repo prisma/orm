@@ -570,11 +570,11 @@ export function addressedModel(
     : [variant.namespaceId, variant.modelName];
 }
 
-interface ResolvedThrough extends ContractRelationThrough {
+export interface ResolvedThrough extends ContractRelationThrough {
   readonly requiredPayloadColumns: readonly string[];
 }
 
-interface ResolvedRelation {
+export interface ResolvedRelation {
   readonly to: string;
   readonly toNamespace: string;
   readonly cardinality: RelationCardinalityTag | undefined;
@@ -873,12 +873,12 @@ export function resolveRowIdentityColumns(
   if (table.primaryKey && table.primaryKey.columns.length > 0) {
     return table.primaryKey.columns;
   }
-  for (const unique of table.uniques) {
-    if (unique.columns.length > 0) {
-      return unique.columns;
-    }
-  }
-  return [];
+  const identity = table.uniques.find(
+    (unique) =>
+      unique.columns.length > 0 &&
+      unique.columns.every((column) => table.columns?.[column]?.nullable !== true),
+  );
+  return identity?.columns ?? [];
 }
 
 export function resolveUniqueKeyColumnSets(
@@ -925,6 +925,18 @@ export function hasCompleteUniqueKey(
   );
 }
 
+/** Whether the contract gives the column an `autoincrement()` default, so the database numbers its value itself. */
+export function isAutoIncrementColumn(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  tableName: string,
+  column: string,
+): boolean {
+  const columnDefault = storageTableForContract(contract, namespaceId, tableName).columns[column]
+    ?.default;
+  return columnDefault?.kind === 'function' && columnDefault.expression === 'autoincrement()';
+}
+
 export function assertReturningCapability(contract: Contract<SqlStorage>, action: string): void {
   if (hasContractCapability(contract, 'returning')) {
     return;
@@ -941,9 +953,11 @@ export function assertInsertConflictSkipCapability(
   targeted: boolean,
 ): void {
   requireCapability(contract, action, 'insertOnConflictSkip');
-  if (!targeted) {
-    requireCapability(contract, action, 'insertOnConflictWithoutTarget');
-  }
+  requireCapability(
+    contract,
+    action,
+    targeted ? 'insertOnConflictTarget' : 'insertOnConflictWithoutTarget',
+  );
 }
 
 function requireCapability(
@@ -1002,6 +1016,10 @@ export function assertLockCapability(
   throw ormError('ORM.CAPABILITY_MISSING', `${methodName}() requires capability ${capability}`, {
     meta: { capability, method: methodName },
   });
+}
+
+export function supportsDefaultInInsert(contract: Contract<SqlStorage>): boolean {
+  return contract.capabilities['sql']?.['defaultInInsert'] === true;
 }
 
 export function hasContractCapability(contract: Contract<SqlStorage>, capability: string): boolean {

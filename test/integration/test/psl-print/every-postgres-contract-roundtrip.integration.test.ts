@@ -89,15 +89,19 @@ interface Composition {
 
 /**
  * The stack a contract needs: every pack it names, and the pack whose own
- * contract space it is, which names no pack.
+ * contract space it is, which names no pack. That pack is composed for its
+ * authoring contributions only: a contract space is never composed beside
+ * itself, so its own contract is not one the PSL source compares against.
  */
 function compositionFor(contract: Contract<SqlStorage>): Composition {
   const ids = new Set(Object.keys(contract.extensions));
+  const ownSpaceIds = new Set<string>();
   for (const [id, pack] of extensionPacks) {
     if (
       pack.control.contractSpace?.contractJson.storage.storageHash === contract.storage.storageHash
     ) {
       ids.add(id);
+      ownSpaceIds.add(id);
     }
   }
   const packs = [...ids].flatMap((id) => {
@@ -106,8 +110,14 @@ function compositionFor(contract: Contract<SqlStorage>): Composition {
     if (packsOutsideThisPackage.has(id)) return [];
     throw new Error(`the contract names pack "${id}", which this test does not compose; add it`);
   });
+  const stack = composePostgresStack(packs.map((pack) => pack.control));
   return {
-    stack: composePostgresStack(packs.map((pack) => pack.control)),
+    stack: {
+      ...stack,
+      extensionContracts: new Map(
+        [...stack.extensionContracts].filter(([id]) => !ownSpaceIds.has(id)),
+      ),
+    },
     packRefs: packs.flatMap((pack) => (pack.packRef === undefined ? [] : [pack.packRef])),
   };
 }

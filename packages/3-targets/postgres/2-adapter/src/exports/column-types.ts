@@ -89,7 +89,7 @@ export const int2Column = {
   codecId: PG_INT2_CODEC_ID,
 } as const satisfies ColumnTypeDescriptor;
 
-export const int8Column = {
+export const int8BigIntColumn = {
   codecId: PG_INT8_CODEC_ID,
 } as const satisfies ColumnTypeDescriptor;
 
@@ -101,24 +101,24 @@ export const float8Column = {
   codecId: PG_FLOAT8_CODEC_ID,
 } as const satisfies ColumnTypeDescriptor;
 
-export function numericColumn<const Precision extends number>(
+export function numericStringColumn<const Precision extends number>(
   precision: Precision,
 ): ColumnTypeDescriptor<typeof PG_NUMERIC_CODEC_ID> & {
   readonly typeParams: { readonly precision: Precision };
 };
-export function numericColumn<const Precision extends number, const Scale extends number>(
+export function numericStringColumn<const Precision extends number, const Scale extends number>(
   precision: Precision,
   scale: Scale,
 ): ColumnTypeDescriptor<typeof PG_NUMERIC_CODEC_ID> & {
   readonly typeParams: { readonly precision: Precision; readonly scale: Scale };
 };
-export function numericColumn(
+export function numericStringColumn(
   precision: number,
   scale?: number,
 ): ColumnTypeDescriptor<typeof PG_NUMERIC_CODEC_ID> & {
   readonly typeParams: { readonly precision: number; readonly scale?: number };
 };
-export function numericColumn(
+export function numericStringColumn(
   precision: number,
   scale?: number,
 ): ColumnTypeDescriptor<typeof PG_NUMERIC_CODEC_ID> & {
@@ -322,16 +322,14 @@ export function intervalStringColumn(precision?: number): ColumnTypeDescriptor<
 }
 
 /**
- * Postgres `json` column descriptor — untyped raw JSON.
- *
- * For schema-typed JSON columns, use the per-library extension package (`@internal/extension-arktype-json` ships `arktypeJson(schema)` for arktype). The schema-accepting `json(schema)` / `jsonb(schema)` overloads previously shipped from this module retired in Phase C of the codec-registry-unification project — see spec § AC-7.
+ * Postgres `json` column descriptor, the explicit type `PlainJson`: untyped raw JSON. For schema-typed JSON, use an extension package such as `@internal/extension-arktype-json`.
  */
-export const jsonColumn = {
+export const plainJsonColumn = {
   codecId: PG_JSON_CODEC_ID,
 } as const satisfies ColumnTypeDescriptor;
 
 /**
- * Postgres `jsonb` column descriptor — untyped raw JSONB. Same retirement note as {@link jsonColumn}.
+ * Postgres `jsonb` column descriptor, the explicit type `Jsonb`: untyped raw JSON. For schema-typed JSON, use an extension package such as `@internal/extension-arktype-json`.
  */
 export const jsonbColumn = {
   codecId: PG_JSONB_CODEC_ID,

@@ -1,5 +1,5 @@
 import {
-  int8Column,
+  int8BigIntColumn,
   textColumn,
   timeTemporalColumn,
   varcharColumn,
@@ -63,7 +63,7 @@ test('.default() takes the input type of the field codec', () => {
             levels: field.namedType(Level).many().default([Level.members.Low, Level.members.High]),
             varchar: field.column(varcharColumn(3)).default('abc'),
             time: field.column(timeTemporalColumn()).default(Temporal.PlainTime.from('12:00')),
-            column: field.column(int8Column).default(1n),
+            column: field.column(int8BigIntColumn).default(1n),
             aliasConstant: Counter.default(1n),
             handWritten: field.column(handWritten).default('anything JSON'),
           },
@@ -107,13 +107,13 @@ test('.default() takes the input type of the field codec', () => {
 });
 
 test('the directly imported field checks values against the column type, like the callback field', () => {
-  importedField.column(int8Column).default(1n);
+  importedField.column(int8BigIntColumn).default(1n);
   // @ts-expect-error pg/int8@1 takes a bigint, not bytes
-  importedField.column(int8Column).default(new Uint8Array([120]));
+  importedField.column(int8BigIntColumn).default(new Uint8Array([120]));
 });
 
 test('a builder held as the bare ScalarFieldBuilder type accepts any value', () => {
-  const builder: ScalarFieldBuilder = importedField.column(int8Column);
+  const builder: ScalarFieldBuilder = importedField.column(int8BigIntColumn);
   builder.default(1n);
   builder.default({ kind: 'function', expression: 'now()' });
 });

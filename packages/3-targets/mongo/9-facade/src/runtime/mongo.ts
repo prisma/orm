@@ -14,6 +14,7 @@ import {
   createMongoRuntime,
   type MongoExecutionContext,
   type MongoRuntimeDriverInstance,
+  type MongoRuntimeExtensionDescriptor,
 } from '@internal/mongo-runtime';
 import mongoRuntimeTarget from '@internal/target-mongo/runtime';
 import { ifDefined } from '@internal/utils/defined';
@@ -25,15 +26,18 @@ import {
   resolveOptionalMongoBinding,
 } from './binding';
 import { mongoError } from './mongo-errors';
-
-export type MongoTargetId = 'mongo';
+import type { MongoTargetId } from './mongo-target-id';
+import { type MongoPrepareMember, prepareMongoQuery } from './prepared-row-query';
 
 type UnboundEnums<TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>> =
   MongoStaticContext<TContract>['enums'];
 
+/**
+ * A MongoDB client. `prepare` opens no connection, so a client with no binding can prepare; run the handle against `await db.runtime()`. Declarations are checked against the contract's codec types.
+ */
 export interface MongoClient<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
-> {
+> extends MongoPrepareMember<TContract> {
   readonly orm: MongoOrmClient<TContract>;
   readonly query: MongoStaticContext<TContract>['query'];
   readonly raw: MongoRawClient<TContract>;
@@ -47,6 +51,7 @@ export interface MongoClient<
 }
 
 export interface MongoOptionsBase {
+  readonly extensions?: readonly MongoRuntimeExtensionDescriptor<MongoTargetId>[];
   readonly mode?: RuntimeMode;
   /**
    * Optional middleware chain applied to every Mongo execution.
@@ -96,6 +101,7 @@ export default function mongo<
     target: mongoRuntimeTarget,
     adapter: mongoRuntimeAdapter,
     driver: mongoRuntimeDriver,
+    extensions: options.extensions ?? [],
   });
   const { context, query, enums, raw } = buildMongoStaticContext<TContract>(contract, stack);
 
@@ -212,6 +218,13 @@ export default function mongo<
 
     runtime(): Promise<MongoRuntime> {
       return getRuntime();
+    },
+
+    async prepare(declaration, callback) {
+      if (closed) {
+        throw closedError();
+      }
+      return prepareMongoQuery(createRuntime().runtime, declaration, callback);
     },
 
     async close(): Promise<void> {

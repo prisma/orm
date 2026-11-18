@@ -10,14 +10,20 @@ const keys = [{ field: 'email', direction: 1 as const }];
 
 describe('MONGO_INDEX_OPTION_KEYS', () => {
   it('lists every index option', () => {
-    expectTypeOf<MongoIndexOptionKey>().toEqualTypeOf<Exclude<keyof MongoIndexInput, 'keys'>>();
+    expectTypeOf<MongoIndexOptionKey>().toEqualTypeOf<
+      Exclude<keyof MongoIndexInput, 'keys' | 'name'>
+    >();
     expect(MONGO_INDEX_OPTION_KEYS).toHaveLength(9);
   });
 });
 
 describe('indexLookupKey', () => {
-  const lookupKey = (options: Omit<MongoIndexInput, 'keys'>) =>
-    indexLookupKey(new MongoIndex({ keys, ...options }));
+  const lookupKey = (options: Omit<MongoIndexInput, 'keys' | 'name'>) =>
+    indexLookupKey(new MongoIndex({ name: 'email_1', keys, ...options }));
+
+  it('ignores the name', () => {
+    expect(indexLookupKey(new MongoIndex({ name: 'User_email_idx', keys }))).toBe(lookupKey({}));
+  });
 
   it('tells apart indexes that differ in any option, and ignores options set to false', () => {
     expect({
@@ -60,10 +66,10 @@ describe('indexLookupKey', () => {
   ])('tells apart a stored field name with %s from the indexes its text spells', (_, oddKeys) => {
     const a = [{ field: 'a', direction: 1 as const }];
     const spelled = [
-      indexLookupKey(new MongoIndex({ keys: [...a, { field: 'b', direction: 1 }] })),
-      indexLookupKey(new MongoIndex({ keys: a, expireAfterSeconds: 1 })),
-      indexLookupKey(new MongoIndex({ keys: a, sparse: true, expireAfterSeconds: 1 })),
+      indexLookupKey(new MongoIndex({ name: 'a', keys: [...a, { field: 'b', direction: 1 }] })),
+      indexLookupKey(new MongoIndex({ name: 'a', keys: a, expireAfterSeconds: 1 })),
+      indexLookupKey(new MongoIndex({ name: 'a', keys: a, sparse: true, expireAfterSeconds: 1 })),
     ];
-    expect(spelled).not.toContain(indexLookupKey(new MongoIndex({ keys: oddKeys })));
+    expect(spelled).not.toContain(indexLookupKey(new MongoIndex({ name: 'a', keys: oddKeys })));
   });
 });

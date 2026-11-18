@@ -20,8 +20,8 @@ import type {
 } from '@internal/sql-contract-ts/contract-builder';
 import { buildBoundContract } from '@internal/sql-contract-ts/contract-builder';
 import { assembleSqliteCodecRegistry } from '@internal/target-sqlite/codecs';
-import { sqliteCreateNamespace } from '@internal/target-sqlite/control';
 import sqlitePack from '@internal/target-sqlite/pack';
+import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 
 type SqlFamily = typeof sqlFamilyPack;
 type SqlitePack = typeof sqlitePack;

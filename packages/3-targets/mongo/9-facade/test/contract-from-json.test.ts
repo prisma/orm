@@ -11,6 +11,7 @@ import {
   field,
   member,
   model,
+  type,
   valueObject,
 } from '../src/exports/contract-builder';
 import mongo from '../src/exports/runtime';
@@ -27,7 +28,7 @@ function authoredContract() {
     models: {
       Account: model('Account', {
         collection: 'accounts',
-        fields: { _id: field.objectId(), role: field.namedType(Role) },
+        fields: { _id: field.scalar(type.ObjectId()), role: field.namedType(Role) },
       }),
     },
   });
@@ -43,6 +44,13 @@ describe('contractFromJson', () => {
 
     expect(contractFromJson<Contract>(json)).toEqual(
       new MongoContractSerializer().deserializeContract(json),
+    );
+  });
+
+  it('refuses a contract without a target, as SQL contract validation does', () => {
+    const { target: _target, ...withoutTarget } = fixtureContractJson;
+    expect(() => contractFromJson(withoutTarget)).toThrow(
+      expect.objectContaining({ code: 'CONTRACT.VALIDATION_FAILED' }),
     );
   });
 
@@ -126,14 +134,14 @@ describe('validating a contract once', () => {
 
   it('takes a TypeScript-authored contract with a value object', () => {
     const Address = valueObject('Address', {
-      fields: { street: field.string(), zip: field.string().optional() },
+      fields: { street: field.scalar(type.String()), zip: field.scalar(type.String()).optional() },
     });
     const authored = defineContract({
       valueObjects: { Address },
       models: {
         Shop: model('Shop', {
           collection: 'shops',
-          fields: { _id: field.objectId(), address: field.valueObject(Address) },
+          fields: { _id: field.scalar(type.ObjectId()), address: field.valueObject(Address) },
         }),
       },
     });

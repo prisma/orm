@@ -206,6 +206,7 @@
                     }
                   ],
                   "kind": "mongo-index",
+                  "name": "otherId_1",
                   "unique": true
                 }
               ],
@@ -323,7 +324,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "b3aa4824e50739d258a1bae8ba11729a450c18c6276f6008bdf5276d6f5ed8f5"
+    "storageHash": "13f511b3546f6aed2860b7b49d3b140f649a3574f3602a0b1a483445e5c74419"
   },
   "capabilities": {},
   "extensions": {},

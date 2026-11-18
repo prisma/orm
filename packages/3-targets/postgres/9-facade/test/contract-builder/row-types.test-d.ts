@@ -11,8 +11,8 @@ const contract = defineContract({ enums: { Level } }, ({ field, model, type, gen
     Reading: model('Reading', {
       fields: {
         id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
-        label: field.column(type.sql.String(50)),
-        note: field.column(type.sql.String(50)).optional(),
+        label: field.column(type.sql.Varchar(50)),
+        note: field.column(type.sql.Varchar(50)).optional(),
         level: field.namedType(Level),
         area: field.column(type.Raw(sql`circle`)),
         search: field.column(type.Raw(sql`tsvector`)).optional(),

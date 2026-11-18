@@ -287,25 +287,20 @@ jobs:
               -f "sha=$GITHUB_SHA"
           fi
 
-      # Tell prisma-cli a family package shipped, so its auto-repin
-      # workflow can open the repin PR that deploys a dev CLI carrying
-      # this publish (prisma-cli docs/oss/versioning.md, operator ruling
-      # 2026-08-13). Guarded on the PAT and never fails the publish: the
-      # repin has a daily scheduled backstop in prisma-cli, so a missed
-      # dispatch delays it by at most a day.
+      # Starts prisma-cli's version-follow workflow, which releases a CLI on this
+      # toolchain (prisma-cli docs/oss/release-automation.md).
       - name: Notify prisma-cli
-        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.dry-run != 'true' }}
-        continue-on-error: true
+        if: ${{ steps.version.outputs.tag == 'latest' && (github.event_name != 'workflow_dispatch' || github.event.inputs.dry-run != 'true') }}
+        timeout-minutes: 2
         env:
-          DISPATCH_PAT: ${{ secrets.PRISMA_CLI_DISPATCH_PAT }}
+          GH_TOKEN: ${{ secrets.DEPLOY_GITHUB_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          if [ -z "$DISPATCH_PAT" ]; then
-            echo "PRISMA_CLI_DISPATCH_PAT is not configured; skipping (the daily backstop covers this)."
-            exit 0
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::$VERSION is published, but DEPLOY_GITHUB_TOKEN is not configured, so prisma-cli is not told about it. See prisma-cli docs/oss/release-automation.md."
+            exit 1
           fi
-          curl -sSf --connect-timeout 10 --max-time 30 -X POST \
-            -H "Authorization: Bearer $DISPATCH_PAT" \
-            -H "Accept: application/vnd.github+json" \
-            https://api.github.com/repos/prisma/prisma-cli/dispatches \
-            -d "{\"event_type\":\"product-published\",\"client_payload\":{\"repo\":\"prisma/orm\",\"version\":\"$VERSION\"}}"
+          gh api repos/prisma/prisma-cli/dispatches \
+            -f event_type=product-published \
+            -f 'client_payload[package]=@prisma/orm-toolchain' \
+            -f "client_payload[version]=$VERSION"

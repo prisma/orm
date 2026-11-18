@@ -68,7 +68,10 @@ function buildOwnershipRelationContract(ownershipCase: OwnershipRelationCase) {
   const Target = model(ownershipCase.targetModelName, {
     fields: {
       id: field.column(textColumn).id(),
-      userId: field.column(textColumn).column('user_id'),
+      userId:
+        ownershipCase.label === 'hasOne'
+          ? field.column(textColumn).column('user_id').unique()
+          : field.column(textColumn).column('user_id'),
       ...(ownershipCase.label === 'hasMany' ? { title: field.column(textColumn) } : {}),
     },
   });

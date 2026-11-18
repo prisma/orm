@@ -112,6 +112,7 @@ describe('interpretPslDocumentToMongoContract — polymorphism', () => {
     expect(forward.roots).toEqual({ tasks: crossRef('Task', UNBOUND_NAMESPACE_ID) });
     expect((mongoCollectionsOf(forward)['tasks'] as { indexes: unknown }).indexes).toEqual([
       new MongoIndex({
+        name: 'level_1',
         keys: [{ field: 'level', direction: 1 }],
         partialFilterExpression: { task_kind: 'bug' },
       }),

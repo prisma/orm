@@ -99,9 +99,9 @@ describe('generated values', () => {
       text16: withGenerator(TEXT_COLUMN, { onCreate: generator('nanoid', { size: 16 }) }),
       char36: withGenerator(char(36), { onCreate: generator('nanoid') }),
     }).toEqual({
-      char16: 'value Char(16) @onCreate(nanoid(16))',
+      char16: 'value String(storage: char, length: 16) @onCreate(nanoid(16))',
       text16: 'value String @onCreate(nanoid(16))',
-      char36: 'value Char(36) @onCreate(nanoid())',
+      char36: 'value String(storage: char, length: 36) @onCreate(nanoid())',
     });
   });
 

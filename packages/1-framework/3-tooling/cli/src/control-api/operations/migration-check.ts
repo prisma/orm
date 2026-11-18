@@ -4,7 +4,7 @@
 
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import type { PrismaNextConfig } from '@internal/config-loader';
+import type { PrismaConfig } from '@internal/config-loader';
 import { createControlStack } from '@internal/framework-components/control';
 import type {
   ContractSpaceAggregate,
@@ -381,7 +381,7 @@ export async function runMigrationCheck(
  * The integrity violations of the project's contract spaces. A contract the family refuses to load, the app's or a snapshot's, such as one holding a default its column type does not hold, is the error, with the refusal's meta; any other failure to load the aggregate leaves the violations to the other checks.
  */
 export async function loadAggregateIntegrityViolations(
-  config: PrismaNextConfig,
+  config: PrismaConfig,
   migrationsDir: string,
   verifySnapshotContent?: SnapshotContentVerifier,
 ): Promise<Result<readonly IntegrityViolation[], CliStructuredError>> {
