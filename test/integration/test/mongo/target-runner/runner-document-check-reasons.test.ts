@@ -52,7 +52,7 @@ describe('MongoMigrationRunner, what a failed document check names', () => {
 
       if (result.ok) throw new Error('Expected the validator change to stop at its document check');
       expect(result.failure.why).toContain(
-        `To give "plan" values you choose, plan the change with migration plan --backfill User.plan. ${BY_HAND}`,
+        `To give "plan" values you choose, plan the change with --backfill User.plan, as the steps to take describe. ${BY_HAND}`,
       );
     },
     timeouts.spinUpMongoMemoryServer,
@@ -90,7 +90,7 @@ describe('MongoMigrationRunner, what a failed document check names', () => {
 
       if (result.ok) throw new Error('Expected the validator change to stop at its document check');
       expect(result.failure.why).toContain(
-        `To give "born" values you choose, plan the change with migration plan --backfill User.born. ${BY_HAND}`,
+        `To give "born" values you choose, plan the change with --backfill User.born, as the steps to take describe. ${BY_HAND}`,
       );
     },
     timeouts.spinUpMongoMemoryServer,

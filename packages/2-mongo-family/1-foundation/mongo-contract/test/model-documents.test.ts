@@ -1,6 +1,6 @@
 import type { ApplicationDomain } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
-import { otherModelsReached, variantFilterOf } from '../src/model-documents';
+import { otherModelsReached, selectedVariantOf, variantFilter } from '../src/model-documents';
 
 const field = (stored: string) => ({ field: stored });
 
@@ -31,12 +31,18 @@ const domain = {
   },
 } as unknown as ApplicationDomain;
 
-describe('variantFilterOf', () => {
-  it("selects a variant's documents by the base's stored discriminator, and none for a root model", () => {
+describe('variantFilter', () => {
+  it("selects a variant's documents by its discriminator's stored name and value", () => {
+    expect(variantFilter({ field: 'kind', value: 'bug' })).toEqual({ kind: 'bug' });
+  });
+});
+
+describe('selectedVariantOf', () => {
+  it("names a variant's stored discriminator field and its value, and nothing for a root model", () => {
     expect([
-      variantFilterOf(domain, { namespaceId: 'app', model: 'Bug' }),
-      variantFilterOf(domain, { namespaceId: 'app', model: 'Task' }),
-    ]).toEqual([{ kind: 'bug' }, undefined]);
+      selectedVariantOf(domain, { namespaceId: 'app', model: 'Bug' }),
+      selectedVariantOf(domain, { namespaceId: 'app', model: 'Task' }),
+    ]).toEqual([{ field: 'kind', value: 'bug' }, undefined]);
   });
 });
 
@@ -54,7 +60,7 @@ describe('otherModelsReached', () => {
         domain,
         { namespaceId: 'app', model: 'Bug' },
         'items',
-        { kind: 'bug' },
+        { field: 'kind', value: 'bug' },
         undefined,
       ),
     ]).toEqual([['Note'], []]);

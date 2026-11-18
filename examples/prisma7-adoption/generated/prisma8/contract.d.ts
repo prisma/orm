@@ -4,24 +4,19 @@
 import type { CodecTypes as CitextTypes } from '@prisma/orm-postgres-contrib/citext/codec-types';
 import type {
   CodecTypes as PgTypes,
-  ParameterizedOutputTypesForTypeParams as PgParameterizedOutputTypes,
-} from '@prisma/orm-postgres/target/codec-types';
-import type { QueryOperationTypes as PgTargetQueryOps } from '@prisma/orm-postgres/target/operation-types';
-
-import type {
   ColumnTypesFromStorage,
-  ContractWithTypeMaps,
-  RelationKeys,
-  TypeMaps as TypeMapsType,
-} from '@prisma/orm-postgres/family-contract/types';
-import type {
   Contract as ContractType,
+  ContractWithTypeMaps,
   ExecutionHashBase,
   FieldTypesFromDomain,
   NamespaceId,
+  ParameterizedOutputTypesForTypeParams as PgParameterizedOutputTypes,
   ProfileHashBase,
+  QueryOperationTypes as PgTargetQueryOps,
+  RelationKeys,
   StorageHashBase,
-} from '@prisma/orm-postgres/contract/types';
+  TypeMaps as TypeMapsType,
+} from '@prisma/orm-postgres/contract-types';
 
 export type StorageHash =
   StorageHashBase<'504f70472e4d50e1f0c634058f6e4ef9966d34c019e7778b58c0f35d2091b1cb'>;
@@ -36,14 +31,14 @@ export type QueryOperationTypes = PgTargetQueryOps<CodecTypes>;
 export type AggregateTypes = {
   readonly avg: {
     readonly byCodec: {
-      readonly 'pg/float@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
       readonly 'pg/float4@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
       readonly 'pg/float8@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
-      readonly 'pg/int@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
+      readonly 'pg/float@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
       readonly 'pg/int2@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
       readonly 'pg/int4@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
       readonly 'pg/int8@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
       readonly 'pg/int8number@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
+      readonly 'pg/int@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
       readonly 'pg/interval-string@1': {
         readonly output: 'pg/interval-string@1';
         readonly nullable: true;
@@ -59,11 +54,11 @@ export type AggregateTypes = {
   };
   readonly avgDecimal: {
     readonly byCodec: {
-      readonly 'pg/int@1': { readonly output: 'pg/numeric@1'; readonly nullable: true };
       readonly 'pg/int2@1': { readonly output: 'pg/numeric@1'; readonly nullable: true };
       readonly 'pg/int4@1': { readonly output: 'pg/numeric@1'; readonly nullable: true };
       readonly 'pg/int8@1': { readonly output: 'pg/numeric@1'; readonly nullable: true };
       readonly 'pg/int8number@1': { readonly output: 'pg/numeric@1'; readonly nullable: true };
+      readonly 'pg/int@1': { readonly output: 'pg/numeric@1'; readonly nullable: true };
       readonly 'pg/numeric@1': { readonly output: 'pg/numeric@1'; readonly nullable: true };
       readonly 'pg/unboundedint@1': { readonly output: 'pg/numeric@1'; readonly nullable: true };
       readonly 'sql/int@1': { readonly output: 'pg/numeric@1'; readonly nullable: true };
@@ -89,15 +84,15 @@ export type AggregateTypes = {
         readonly nullable: true;
       };
       readonly 'pg/enum@1': { readonly output: 'pg/enum@1'; readonly nullable: true };
-      readonly 'pg/float@1': { readonly output: 'pg/float@1'; readonly nullable: true };
       readonly 'pg/float4@1': { readonly output: 'pg/float4@1'; readonly nullable: true };
       readonly 'pg/float8@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
+      readonly 'pg/float@1': { readonly output: 'pg/float@1'; readonly nullable: true };
       readonly 'pg/inet@1': { readonly output: 'pg/inet@1'; readonly nullable: true };
-      readonly 'pg/int@1': { readonly output: 'pg/int@1'; readonly nullable: true };
       readonly 'pg/int2@1': { readonly output: 'pg/int2@1'; readonly nullable: true };
       readonly 'pg/int4@1': { readonly output: 'pg/int4@1'; readonly nullable: true };
       readonly 'pg/int8@1': { readonly output: 'pg/int8@1'; readonly nullable: true };
       readonly 'pg/int8number@1': { readonly output: 'pg/int8number@1'; readonly nullable: true };
+      readonly 'pg/int@1': { readonly output: 'pg/int@1'; readonly nullable: true };
       readonly 'pg/interval-string@1': {
         readonly output: 'pg/interval-string@1';
         readonly nullable: true;
@@ -164,15 +159,15 @@ export type AggregateTypes = {
         readonly nullable: true;
       };
       readonly 'pg/enum@1': { readonly output: 'pg/enum@1'; readonly nullable: true };
-      readonly 'pg/float@1': { readonly output: 'pg/float@1'; readonly nullable: true };
       readonly 'pg/float4@1': { readonly output: 'pg/float4@1'; readonly nullable: true };
       readonly 'pg/float8@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
+      readonly 'pg/float@1': { readonly output: 'pg/float@1'; readonly nullable: true };
       readonly 'pg/inet@1': { readonly output: 'pg/inet@1'; readonly nullable: true };
-      readonly 'pg/int@1': { readonly output: 'pg/int@1'; readonly nullable: true };
       readonly 'pg/int2@1': { readonly output: 'pg/int2@1'; readonly nullable: true };
       readonly 'pg/int4@1': { readonly output: 'pg/int4@1'; readonly nullable: true };
       readonly 'pg/int8@1': { readonly output: 'pg/int8@1'; readonly nullable: true };
       readonly 'pg/int8number@1': { readonly output: 'pg/int8number@1'; readonly nullable: true };
+      readonly 'pg/int@1': { readonly output: 'pg/int@1'; readonly nullable: true };
       readonly 'pg/interval-string@1': {
         readonly output: 'pg/interval-string@1';
         readonly nullable: true;
@@ -231,14 +226,14 @@ export type AggregateTypes = {
   };
   readonly sum: {
     readonly byCodec: {
-      readonly 'pg/float@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
       readonly 'pg/float4@1': { readonly output: 'pg/float4@1'; readonly nullable: true };
       readonly 'pg/float8@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
-      readonly 'pg/int@1': { readonly output: 'pg/int8number@1'; readonly nullable: true };
+      readonly 'pg/float@1': { readonly output: 'pg/float8@1'; readonly nullable: true };
       readonly 'pg/int2@1': { readonly output: 'pg/int8number@1'; readonly nullable: true };
       readonly 'pg/int4@1': { readonly output: 'pg/int8number@1'; readonly nullable: true };
       readonly 'pg/int8@1': { readonly output: 'pg/int8number@1'; readonly nullable: true };
       readonly 'pg/int8number@1': { readonly output: 'pg/int8number@1'; readonly nullable: true };
+      readonly 'pg/int@1': { readonly output: 'pg/int8number@1'; readonly nullable: true };
       readonly 'pg/interval-string@1': {
         readonly output: 'pg/interval-string@1';
         readonly nullable: true;
@@ -258,11 +253,11 @@ export type AggregateTypes = {
   };
   readonly sumBigInt: {
     readonly byCodec: {
-      readonly 'pg/int@1': { readonly output: 'pg/int8@1'; readonly nullable: true };
       readonly 'pg/int2@1': { readonly output: 'pg/int8@1'; readonly nullable: true };
       readonly 'pg/int4@1': { readonly output: 'pg/int8@1'; readonly nullable: true };
       readonly 'pg/int8@1': { readonly output: 'pg/unboundedint@1'; readonly nullable: true };
       readonly 'pg/int8number@1': { readonly output: 'pg/unboundedint@1'; readonly nullable: true };
+      readonly 'pg/int@1': { readonly output: 'pg/int8@1'; readonly nullable: true };
       readonly 'pg/unboundedint@1': {
         readonly output: 'pg/unboundedint@1';
         readonly nullable: true;
@@ -389,60 +384,6 @@ type ContractBase = Omit<
         readonly kind: 'postgres-schema';
         readonly entries: {
           readonly table: {
-            readonly _PostToTag: {
-              columns: {
-                readonly A: {
-                  readonly dataType: 'pg/int4';
-                  readonly codecId: 'pg/int4@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly B: {
-                  readonly dataType: 'pg/int4';
-                  readonly codecId: 'pg/int4@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-              };
-              primaryKey: {
-                readonly columns: readonly ['A', 'B'];
-                readonly name: '_PostToTag_AB_pkey';
-              };
-              uniques: readonly [];
-              indexes: readonly [
-                {
-                  readonly name: '_PostToTag_B_index';
-                  readonly columns: readonly ['B'];
-                  readonly unique: false;
-                },
-              ];
-              foreignKeys: readonly [
-                {
-                  readonly source: {
-                    readonly namespaceId: 'public' & NamespaceId;
-                    readonly tableName: '_PostToTag';
-                    readonly columns: readonly ['A'];
-                  };
-                  readonly target: {
-                    readonly namespaceId: 'public' & NamespaceId;
-                    readonly tableName: 'Post';
-                    readonly columns: readonly ['id'];
-                  };
-                },
-                {
-                  readonly source: {
-                    readonly namespaceId: 'public' & NamespaceId;
-                    readonly tableName: '_PostToTag';
-                    readonly columns: readonly ['B'];
-                  };
-                  readonly target: {
-                    readonly namespaceId: 'public' & NamespaceId;
-                    readonly tableName: 'Tag';
-                    readonly columns: readonly ['id'];
-                  };
-                },
-              ];
-            };
             readonly Post: {
               columns: {
                 readonly authorId: {
@@ -603,6 +544,60 @@ type ContractBase = Omit<
                 },
               ];
               foreignKeys: readonly [];
+            };
+            readonly _PostToTag: {
+              columns: {
+                readonly A: {
+                  readonly dataType: 'pg/int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly B: {
+                  readonly dataType: 'pg/int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: {
+                readonly columns: readonly ['A', 'B'];
+                readonly name: '_PostToTag_AB_pkey';
+              };
+              uniques: readonly [];
+              indexes: readonly [
+                {
+                  readonly name: '_PostToTag_B_index';
+                  readonly columns: readonly ['B'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: '_PostToTag';
+                    readonly columns: readonly ['A'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'Post';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+                {
+                  readonly source: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: '_PostToTag';
+                    readonly columns: readonly ['B'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'Tag';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+              ];
             };
           };
           readonly valueSet: {
@@ -862,10 +857,13 @@ type ContractBase = Omit<
       readonly insertOnConflictSkip: true;
       readonly insertOnConflictTarget: true;
       readonly insertOnConflictWithoutTarget: true;
+      readonly jsonAgg: true;
+      readonly jsonAggWithoutTruncation: true;
       readonly lateral: true;
       readonly lockNowait: true;
       readonly lockOf: true;
       readonly lockSkipLocked: true;
+      readonly outerReferencesInDerivedTables: true;
       readonly returning: true;
       readonly scalarList: true;
     };
@@ -876,15 +874,6 @@ type ContractBase = Omit<
       readonly id: 'citext';
       readonly kind: 'extension';
       readonly targetId: 'postgres';
-      readonly types: {
-        readonly codecTypes: {
-          readonly import: {
-            readonly alias: 'CitextTypes';
-            readonly named: 'CodecTypes';
-            readonly package: '@internal/extension-citext/codec-types';
-          };
-        };
-      };
       readonly version: '0.0.1';
     };
   };

@@ -2414,10 +2414,13 @@
       "insertOnConflictSkip": true,
       "insertOnConflictTarget": true,
       "insertOnConflictWithoutTarget": true,
+      "jsonAgg": true,
+      "jsonAggWithoutTruncation": true,
       "lateral": true,
       "lockNowait": true,
       "lockOf": true,
       "lockSkipLocked": true,
+      "outerReferencesInDerivedTables": true,
       "returning": true,
       "scalarList": true
     }
@@ -2428,15 +2431,6 @@
       "id": "arktype-json",
       "kind": "extension",
       "targetId": "postgres",
-      "types": {
-        "codecTypes": {
-          "import": {
-            "alias": "ArktypeJsonTypes",
-            "named": "CodecTypes",
-            "package": "@internal/extension-arktype-json/codec-types"
-          }
-        }
-      },
       "version": "0.0.1"
     }
   },

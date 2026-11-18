@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm';
 import {
   AggregateExpr,
   AndExpr,
@@ -565,6 +566,19 @@ describe('Postgres adapter', () => {
     );
   });
 
+  it('renders a Date literal created in another realm as its ISO text', () => {
+    const ast = SelectAst.from(TableSource.named('user')).withProjection([
+      ProjectionItem.of(
+        'at',
+        LiteralExpr.of(runInNewContext('new Date("2024-01-01T00:00:00.000Z")')),
+      ),
+    ]);
+
+    expect(adapter.lower(ast, { contract, params: [] }).sql).toBe(
+      `SELECT '2024-01-01T00:00:00.000Z' AS "at" FROM "user"`,
+    );
+  });
+
   it('renders ROW_NUMBER() OVER (PARTITION BY … ORDER BY …)', () => {
     const ast = SelectAst.from(TableSource.named('post')).withProjection([
       ProjectionItem.of('title', ColumnRef.of('post', 'title')),
@@ -692,6 +706,9 @@ describe('Postgres adapter', () => {
     expect(adapter.profile.capabilities['sql']).toMatchObject({
       returning: true,
       insertOnConflictTarget: true,
+      jsonAgg: true,
+      outerReferencesInDerivedTables: true,
+      jsonAggWithoutTruncation: true,
     });
     expect(typeof adapter.profile.readMarker).toBe('function');
   });

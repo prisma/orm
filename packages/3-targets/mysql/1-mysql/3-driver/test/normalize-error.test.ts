@@ -1,6 +1,16 @@
 import { isUniqueConstraintViolation } from '@internal/sql-errors';
 import { describe, expect, it } from 'vitest';
-import { normalizeMysqlError } from '../src/core/normalize-error';
+import {
+  MYSQL_CHECK_VIOLATION_ERRORS,
+  type MysqlServer,
+  normalizeMysqlError,
+} from '../src/core/normalize-error';
+
+const mysql: MysqlServer = {
+  displayName: 'MySQL',
+  checkViolationErrors: MYSQL_CHECK_VIOLATION_ERRORS,
+};
+const mariadb: MysqlServer = { displayName: 'MariaDB', checkViolationErrors: [4025] };
 
 function sqlError(fields: {
   errno: number;
@@ -25,7 +35,7 @@ describe('normalizeMysqlError', () => {
       fatal: false,
       sqlMessage: "Table 'x' doesn't exist",
     });
-    expect(normalizeMysqlError(error)).toEqual(
+    expect(normalizeMysqlError(error, mysql)).toEqual(
       expect.objectContaining({
         kind: 'sql_query',
         sqlState: '42S02',
@@ -43,7 +53,7 @@ describe('normalizeMysqlError', () => {
         fatal: true,
         sqlMessage: 'socket has unexpectedly been closed',
       });
-      expect(normalizeMysqlError(error)).toEqual(
+      expect(normalizeMysqlError(error, mysql)).toEqual(
         expect.objectContaining({
           kind: 'sql_connection',
           transient: true,
@@ -71,7 +81,7 @@ describe('normalizeMysqlError', () => {
       }),
       { cause },
     );
-    expect(normalizeMysqlError(error)).toEqual(
+    expect(normalizeMysqlError(error, mysql)).toEqual(
       expect.objectContaining({
         kind: 'sql_connection',
         transient: true,
@@ -111,8 +121,8 @@ describe('normalizeMysqlError', () => {
     ];
     expect(
       cases.map((error) => {
-        const direct = Object(normalizeMysqlError(error));
-        const pooled = Object(normalizeMysqlError(timedOut(error)));
+        const direct = Object(normalizeMysqlError(error, mysql));
+        const pooled = Object(normalizeMysqlError(timedOut(error), mysql));
         return {
           direct: {
             kind: direct.kind,
@@ -168,8 +178,8 @@ describe('normalizeMysqlError', () => {
         cause: refused,
       });
       expect({
-        direct: normalizeMysqlError(refused),
-        pooled: normalizeMysqlError(timedOut),
+        direct: normalizeMysqlError(refused, mysql),
+        pooled: normalizeMysqlError(timedOut, mysql),
       }).toEqual({ direct: expected, pooled: expected });
     }
   });
@@ -181,7 +191,7 @@ describe('normalizeMysqlError', () => {
       fatal: true,
       sqlMessage: 'Error executing initial sql command: Unknown system variable',
     });
-    expect(normalizeMysqlError(error)).toEqual(
+    expect(normalizeMysqlError(error, mysql)).toEqual(
       expect.objectContaining({
         kind: 'sql_connection',
         transient: false,
@@ -193,7 +203,7 @@ describe('normalizeMysqlError', () => {
 
   it('leaves any other error as it is', () => {
     const error = new Error('socket hang up');
-    expect(normalizeMysqlError(error)).toBe(error);
+    expect(normalizeMysqlError(error, mysql)).toBe(error);
   });
 });
 
@@ -210,7 +220,7 @@ describe('normalizeMysqlError for errors MySQL reports about a statement', () =>
     ];
     for (const fields of cases) {
       const error = sqlError({ ...fields, fatal: false });
-      const normalized = normalizeMysqlError(error);
+      const normalized = normalizeMysqlError(error, mysql);
       expect({ normalized, hasDetail: Object(normalized).detail !== undefined }).toEqual({
         normalized: expect.objectContaining({
           kind: 'sql_query',
@@ -239,6 +249,7 @@ describe('normalizeMysqlError for errors MySQL reports about a statement', () =>
       cases.map(([errno, sqlState]) => {
         const normalized = normalizeMysqlError(
           sqlError({ errno, sqlState, fatal: false, sqlMessage: 'violated' }),
+          mysql,
         );
         return {
           sqlState: Object(normalized).sqlState,
@@ -246,6 +257,33 @@ describe('normalizeMysqlError for errors MySQL reports about a statement', () =>
         };
       }),
     ).toEqual(cases.map(([, , sqlState]) => ({ sqlState, unique: sqlState === '23505' })));
+  });
+
+  it('reports a CHECK violation only by the error numbers of the server it runs on, which number their own errors differently', () => {
+    const cases = [
+      { server: mysql, errno: 3819, sqlState: 'HY000', reported: '23514' },
+      { server: mysql, errno: 4025, sqlState: 'HY000', reported: 'HY000' },
+      { server: mariadb, errno: 4025, sqlState: '23000', reported: '23514' },
+      { server: mariadb, errno: 3819, sqlState: 'HY000', reported: 'HY000' },
+    ] as const;
+    expect(
+      cases.map(({ server, errno, sqlState }) => ({
+        server: server.displayName,
+        errno,
+        sqlState: Object(
+          normalizeMysqlError(
+            sqlError({ errno, sqlState, fatal: false, sqlMessage: 'violated' }),
+            server,
+          ),
+        ).sqlState,
+      })),
+    ).toEqual(
+      cases.map(({ server, errno, reported }) => ({
+        server: server.displayName,
+        errno,
+        sqlState: reported,
+      })),
+    );
   });
 
   it('reports a sign-in that needs the server public key as a SqlConnectionError that will not pass on retry, naming allowPublicKeyRetrieval and TLS', () => {
@@ -265,7 +303,10 @@ describe('normalizeMysqlError for errors MySQL reports about a statement', () =>
       }),
       { cause: error },
     );
-    expect({ direct: normalizeMysqlError(error), pooled: normalizeMysqlError(timedOut) }).toEqual({
+    expect({
+      direct: normalizeMysqlError(error, mysql),
+      pooled: normalizeMysqlError(timedOut, mysql),
+    }).toEqual({
       direct: expect.objectContaining({
         kind: 'sql_connection',
         transient: false,

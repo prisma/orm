@@ -1,0 +1,48 @@
+{
+  "name": "@internal/mysql-live-tests",
+  "private": true,
+  "version": "8.0.0-rc.24",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "description": "MySQL's ORM live test suites, run against MySQL 8.4 and MariaDB 10.11",
+  "scripts": {
+    "emit": "node ../../../1-framework/3-tooling/cli/dist/bin.mjs contract emit --config test/fixtures/mysql/prisma.config.ts && node ../../../1-framework/3-tooling/cli/dist/bin.mjs contract emit --config test/fixtures/mariadb/prisma.config.ts",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --project tsconfig.json --noEmit && tsc --project tsconfig.mariadb.json --noEmit",
+    "lint": "biome check . --error-on-warnings",
+    "lint:fix": "biome check --write .",
+    "lint:fix:unsafe": "biome check --write --unsafe ."
+  },
+  "devDependencies": {
+    "@internal/adapter-mariadb": "workspace:8.0.0-rc.24",
+    "@internal/adapter-mysql": "workspace:8.0.0-rc.24",
+    "@internal/contract": "workspace:8.0.0-rc.24",
+    "@internal/driver-mariadb": "workspace:8.0.0-rc.24",
+    "@internal/driver-mysql": "workspace:8.0.0-rc.24",
+    "@internal/family-sql": "workspace:8.0.0-rc.24",
+    "@internal/framework-components": "workspace:8.0.0-rc.24",
+    "@internal/mariadb": "workspace:8.0.0-rc.24",
+    "@internal/mysql": "workspace:8.0.0-rc.24",
+    "@internal/sql-contract": "workspace:8.0.0-rc.24",
+    "@internal/sql-orm-client": "workspace:8.0.0-rc.24",
+    "@internal/sql-relational-core": "workspace:8.0.0-rc.24",
+    "@internal/sql-runtime": "workspace:8.0.0-rc.24",
+    "@internal/target-mariadb": "workspace:8.0.0-rc.24",
+    "@internal/target-mysql": "workspace:8.0.0-rc.24",
+    "@prisma/cli-engine": "0.10.0",
+    "@repo/test-utils": "workspace:8.0.0-rc.24",
+    "@repo/tsconfig": "workspace:8.0.0-rc.24",
+    "temporal-polyfill": "^1.0.4",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prisma/orm.git",
+    "directory": "packages/3-targets/mysql/3-live-tests"
+  }
+}

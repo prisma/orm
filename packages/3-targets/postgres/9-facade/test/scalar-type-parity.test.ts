@@ -30,6 +30,9 @@ const REPRESENTATIVE_SCHEMA = `model sample {
   price     Decimal
   createdAt TimestamptzTemporal
   payload   Json
+  stored    Json(storage: json)
+  plain     PlainJson
+  binary    Json(storage: jsonb)
   document  Jsonb
   raw       Bytes
 }
@@ -93,7 +96,7 @@ describe('postgres scalar types derived from the unified namespace', () => {
       IntervalString: { codecId: 'pg/interval-string@1' },
       TimestampJsDate: { codecId: 'pg/timestamp-date@1' },
       TimestampInstant: { codecId: 'pg/timestamp-instant@1' },
-      Json: { codecId: 'pg/json@1' },
+      PlainJson: { codecId: 'pg/json@1' },
       Jsonb: { codecId: 'pg/jsonb@1' },
       DateTime: { codecId: 'pg/timestamptz-date@1', typeParams: { precision: 3 } },
       Date: { codecId: 'pg/date-string@1' },
@@ -106,6 +109,7 @@ describe('postgres scalar types derived from the unified namespace', () => {
       String: { codecId: 'pg/text@1' },
       Boolean: { codecId: 'pg/bool@1' },
       Bytes: { codecId: 'pg/bytea@1' },
+      Json: { codecId: 'pg/json@1' },
       SmallInt: { codecId: 'pg/int2@1' },
       BigIntNumber: { codecId: 'pg/int8number@1' },
       Numeric: { codecId: 'pg/numeric@1' },
@@ -150,6 +154,7 @@ describe('postgres scalar types derived from the unified namespace', () => {
       'NumericBigInt',
       'NumericString',
       'Oid',
+      'PlainJson',
       'Real',
       'SmallInt',
       'String',
@@ -198,6 +203,9 @@ describe('postgres scalar types derived from the unified namespace', () => {
                     price: { codecId: 'pg/numeric@1' },
                     createdAt: { codecId: 'pg/timestamptz-temporal@1' },
                     payload: { codecId: 'pg/json@1' },
+                    stored: { codecId: 'pg/json@1' },
+                    plain: { codecId: 'pg/json@1' },
+                    binary: { codecId: 'pg/jsonb@1' },
                     document: { codecId: 'pg/jsonb@1' },
                     raw: { codecId: 'pg/bytea@1' },
                   },

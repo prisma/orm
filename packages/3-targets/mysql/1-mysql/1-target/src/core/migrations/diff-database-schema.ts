@@ -53,7 +53,7 @@ export function diffMysqlSchema(input: {
   if (!(input.schema instanceof SqlSchemaIR)) {
     throw mysqlError(
       'CONTRACT.TARGET_MISMATCH',
-      'The MySQL schema diff received a schema tree that MySQL introspection did not build.',
+      'The MySQL and MariaDB schema diff received a schema tree that their introspection did not build.',
     );
   }
   const expected = mysqlContractToSchema(

@@ -1,13 +1,14 @@
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import { ormConfigSection } from '@internal/config-loader';
 import type { Contract } from '@internal/contract/types';
 import {
   APP_SPACE_ID,
   createControlStack,
+  sameMarkerHashes,
   type VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
 import { MigrationToolsError } from '@internal/migration-tools/errors';
-import { readRef, writeRef } from '@internal/migration-tools/refs';
+import { advanceRef, readRef } from '@internal/migration-tools/refs';
 import { spaceMigrationDirectory, spaceRefsDirectory } from '@internal/migration-tools/spaces';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk as notOkResult, ok as okResult, type Result } from '@internal/utils/result';
@@ -39,7 +40,7 @@ import { type CliInvocation, cliCommand, cliInvocation } from '../../utils/print
 import { dataLine } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
-import { appRefsDirFor, baseDirFor, migrationsDirFor } from '../migration/paths';
+import { appRefsDirFor, migrationsDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 import { controlProgressReporter } from '../progress';
 import {
@@ -242,20 +243,22 @@ function signSummary(spaces: readonly DbSignSpaceOutcome[]): string {
   return `${problems.charAt(0).toUpperCase()}${problems.slice(1)}; ${signedText}`;
 }
 
-/** The `db sign` command that runs this one again, with the arguments that change what it signs or where. */
-function rerunCommand(
-  invocation: CliInvocation,
-  args: {
-    readonly contractRef: string | undefined;
-    readonly advanceRef: string | undefined;
-    readonly noAdvanceRef: boolean;
-  },
-): string {
-  return cliCommand(invocation, 'db sign', [
+/** The arguments of `db sign` that change what it signs or where, which a re-run repeats. */
+function signRerunArgs(args: {
+  readonly contractRef: string | undefined;
+  readonly advanceRef: string | undefined;
+  readonly noAdvanceRef: boolean;
+}): readonly string[] {
+  return [
     ...(args.contractRef === undefined ? [] : ['--contract', shellQuoted(args.contractRef)]),
     ...(args.advanceRef === undefined ? [] : ['--advance-ref', shellQuoted(args.advanceRef)]),
     ...(args.noAdvanceRef ? ['--no-advance-ref'] : []),
-  ]);
+  ];
+}
+
+/** The `db sign` command that runs this one again, with the arguments the user gave. */
+function rerunCommand(invocation: CliInvocation): string {
+  return cliCommand(invocation, 'db sign', invocation.rerunArgs ?? []);
 }
 
 function markerConflictDiagnostic(
@@ -263,11 +266,14 @@ function markerConflictDiagnostic(
   rerun: string,
 ): Diagnostic {
   const { expected, found } = outcome;
+  const changedBack = expected !== null && sameMarkerHashes(found, expected);
   return {
     code: 'MIGRATION.MARKER_CAS_FAILURE',
     severity: 'error',
     summary: `Marker of space "${outcome.space}" changed while db sign ran`,
-    why: `Another process, such as migrate, changed the marker from ${expected?.storageHash ?? 'no marker'} to ${found?.storageHash ?? 'no marker'} after db sign read it, so db sign did not sign the space.`,
+    why: changedBack
+      ? 'Another process changed the marker and changed it back while db sign was writing it, so db sign did not sign the space.'
+      : `Another process, such as migrate, changed the marker from ${expected?.storageHash ?? 'no marker'} to ${found?.storageHash ?? 'no marker'} after db sign read it, so db sign did not sign the space.`,
     nextActions: [
       {
         kind: 'run-command',
@@ -276,6 +282,7 @@ function markerConflictDiagnostic(
       },
     ],
     meta: {
+      reason: changedBack ? 'markerChanged' : 'storageHash',
       space: outcome.space,
       expectedStorageHash: expected?.storageHash ?? null,
       foundStorageHash: found?.storageHash ?? null,
@@ -357,7 +364,7 @@ function signPresentations(inputs: {
 }
 
 function hydrateContract(
-  config: PrismaNextConfig,
+  config: PrismaConfig,
   json: unknown,
   path: string,
 ): Result<Contract, CliStructuredError> {
@@ -384,7 +391,7 @@ async function advanceExtensionRef(args: {
 }): Promise<Result<void, CliStructuredError>> {
   const refsDir = spaceRefsDirectory(spaceMigrationDirectory(args.migrationsDir, args.space));
   try {
-    await writeRef(refsDir, args.name, { hash: args.hash, invariants: [] });
+    await advanceRef(refsDir, args.name, args.hash);
     return okResult(undefined);
   } catch (error) {
     if (MigrationToolsError.is(error)) {
@@ -568,7 +575,7 @@ export function createDbSignCommand(
           name: refName,
           contractJson: signedSource.json,
           contractJsonPath: signedSource.jsonPath,
-          projectDir: baseDirFor(ctx.config),
+          config: ctx.config,
           client,
         });
         if (!preflight.ok) {
@@ -586,11 +593,15 @@ export function createDbSignCommand(
         return notOk(connection.failure);
       }
       const dbConnection = connection.value;
-      const rerun = rerunCommand(cliInvocation(ctx, args.flags.db), {
-        contractRef,
-        advanceRef: args.flags.advanceRef,
-        noAdvanceRef: args.flags.noAdvanceRef,
-      });
+      const invocation: CliInvocation = {
+        ...cliInvocation(ctx, args.flags.db),
+        rerunArgs: signRerunArgs({
+          contractRef,
+          advanceRef: args.flags.advanceRef,
+          noAdvanceRef: args.flags.noAdvanceRef,
+        }),
+      };
+      const rerun = rerunCommand(invocation);
 
       const header = headerBlock({
         contract: contractRef ?? emitted.value.displayPath,
@@ -601,6 +612,7 @@ export function createDbSignCommand(
         const signed = await client.dbSign({
           contract,
           migrationsDir,
+          invocation,
           connection: dbConnection,
           onProgress: controlProgressReporter(ctx.report),
         });

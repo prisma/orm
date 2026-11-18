@@ -25,12 +25,13 @@ pnpm add @prisma/orm-mongo mongodb
 | `/runtime` | `mongo(url)` — the lazy query client |
 | `/static` | statically composed runtime for pre-wired deployments |
 | `/config` | `defineConfig` for `prisma.config.ts`, and `prisma6Schema` to read a Prisma 6 MongoDB schema as the contract source |
+| `/contract-types` | the types a generated `contract.d.ts` imports |
 | `/contract-builder` | `defineContract` and Mongo contract authoring |
 | `/bson` | BSON value helpers (`ObjectId`, `Decimal128`, …) |
 | `/target`, `/family` | the Mongo target pack and the Mongo family pack |
-| `/control` | the control client |
+| `/migration`, `/control` | migration planning and the control client |
 
-Generated contract files import their types from the facade, so an application never has to depend on a package it did not install:
+A generated `contract.d.ts` imports every framework, family and target type it names from `/contract-types`, and a generated `migration.ts` imports from `/migration`: the modules this package's `defineConfig` sets as `contract.typesModule` and `migrations.module`. The facade also forwards the namespaces of the packages it is built from, so an application never has to depend on a package it did not install:
 
 | Namespace | Forwards |
 | --- | --- |
@@ -56,7 +57,16 @@ const byEmail = await db.prepare({ email: 'mongo/string@1' }, (p) =>
 const users = await byEmail.query(await db.runtime(), { email: 'alice@example.com' }).toArray();
 ```
 
-The handle and declaration types (`MongoPreparedStatement`, `MongoPreparedExecution`, `MongoDeclaration`, `MongoParamsFromDeclaration`) are exported from `@prisma/orm-mongo/family-runtime`.
+ORM reads are prepared through `.prepared.all()`, `.prepared.first()` and `.prepared.firstOrThrow()`, and the handle's `query` returns what the ad-hoc read returns:
+
+```ts
+const userByEmail = await db.prepare({ email: 'mongo/string@1' }, (p) =>
+  db.orm.users.where({ email: p.email }).prepared.first(),
+);
+const user = await userByEmail.query(await db.runtime(), { email: 'alice@example.com' });
+```
+
+The handle and declaration types (`MongoPreparedStatement`, `MongoPreparedExecution`, `MongoDeclaration`, `MongoParamsFromDeclaration`) are exported from `@prisma/orm-mongo/family-runtime`. The ORM read handle types (`MongoPreparedRowQuery`, `MongoPreparedFrom`) and `MongoPrepareMember`, the type that has the client's `prepare` method, are exported from `@prisma/orm-mongo/runtime`.
 
 ## The CLI
 

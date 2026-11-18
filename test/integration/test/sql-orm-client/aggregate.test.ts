@@ -1,18 +1,20 @@
 import { describe, expect, it } from 'vitest';
+import { includeStrategies } from './helpers';
 import {
   createPostsCollection,
   createUsersCollection,
+  expectPerRelationStatements,
   timeouts,
   withCollectionRuntime,
 } from './integration-helpers';
 import { seedPosts, seedUsers } from './runtime-helpers';
 
-describe('integration/aggregate', () => {
+describe.each(includeStrategies)('integration/aggregate (%s)', (strategy) => {
   it(
     'aggregate() computes count() with where() in one query',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createUsersCollection(runtime);
+        const users = createUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [
           { id: 1, name: 'Alice', email: 'alice@example.com' },
@@ -37,7 +39,7 @@ describe('integration/aggregate', () => {
     'aggregate() supports multiple numeric aggregations with filters',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const posts = createPostsCollection(runtime);
+        const posts = createPostsCollection(runtime, strategy);
 
         await seedPosts(runtime, [
           { id: 10, title: 'Low', userId: 1, views: 10 },
@@ -75,7 +77,7 @@ describe('integration/aggregate', () => {
     'aggregate() returns null for sum/avg/min/max on empty result sets',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const posts = createPostsCollection(runtime);
+        const posts = createPostsCollection(runtime, strategy);
 
         await seedPosts(runtime, [{ id: 10, title: 'Only', userId: 1, views: 10 }]);
 
@@ -110,8 +112,8 @@ describe('integration/aggregate', () => {
     'reads a widened sum and an include count as the numbers they now are',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const posts = createPostsCollection(runtime);
-        const users = createUsersCollection(runtime);
+        const posts = createPostsCollection(runtime, strategy);
+        const users = createUsersCollection(runtime, strategy);
 
         await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
         await seedPosts(runtime, [
@@ -129,10 +131,12 @@ describe('integration/aggregate', () => {
         // carries it exactly — the guard is what makes that safe to rely on.
         expect(stats).toEqual({ count: 2, total: 4000000000 });
 
+        runtime.resetExecutions();
         const rows = await users
           .select('id')
           .include('posts', (related) => related.count())
           .all();
+        expectPerRelationStatements(runtime, strategy, 2);
 
         // An include count reads through the same codec: a JSON number again,
         // and safely, since the guard runs after the parse.
@@ -151,7 +155,7 @@ describe('integration/aggregate', () => {
       'limit() after orderBy() sums only the top n rows',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const posts = createPostsCollection(runtime);
+          const posts = createPostsCollection(runtime, strategy);
           await seedPosts(runtime, [
             { id: 10, title: 'a', userId: 1, views: 10 },
             { id: 11, title: 'b', userId: 1, views: 20 },
@@ -178,7 +182,7 @@ describe('integration/aggregate', () => {
       'offset() without limit() sums all-but-the-first-n rows',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const posts = createPostsCollection(runtime);
+          const posts = createPostsCollection(runtime, strategy);
           await seedPosts(runtime, [
             { id: 10, title: 'a', userId: 1, views: 10 },
             { id: 11, title: 'b', userId: 1, views: 20 },
@@ -204,7 +208,7 @@ describe('integration/aggregate', () => {
       'where() filters inside the row scope pagination reduces over',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const posts = createPostsCollection(runtime);
+          const posts = createPostsCollection(runtime, strategy);
           await seedPosts(runtime, [
             { id: 10, title: 'a', userId: 1, views: 10 },
             { id: 11, title: 'b', userId: 1, views: 20 },
@@ -233,7 +237,7 @@ describe('integration/aggregate', () => {
       'distinct() reduces the aggregate to one row per distinct key',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const posts = createPostsCollection(runtime);
+          const posts = createPostsCollection(runtime, strategy);
           await seedPosts(runtime, [
             { id: 10, title: 'a', userId: 1, views: 10 },
             { id: 11, title: 'a2', userId: 1, views: 15 },
@@ -259,7 +263,7 @@ describe('integration/aggregate', () => {
       'distinctOn() sums the first row per key by orderBy precedence',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const posts = createPostsCollection(runtime);
+          const posts = createPostsCollection(runtime, strategy);
           await seedPosts(runtime, [
             { id: 10, title: 'a', userId: 1, views: 10 },
             { id: 11, title: 'a2', userId: 1, views: 15 },
@@ -287,7 +291,7 @@ describe('integration/aggregate', () => {
       'binds two distinct WHERE parameters correctly across the derived-table boundary',
       async () => {
         await withCollectionRuntime(async (runtime) => {
-          const posts = createPostsCollection(runtime);
+          const posts = createPostsCollection(runtime, strategy);
           await seedPosts(runtime, [
             { id: 10, title: 'a', userId: 1, views: 10 },
             { id: 11, title: 'b', userId: 1, views: 20 },

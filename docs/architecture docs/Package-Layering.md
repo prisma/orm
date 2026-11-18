@@ -39,6 +39,7 @@ packages/
     mysql/
       1-mysql/           # 1-target, 2-adapter, 3-driver, 9-facade
       2-mariadb/         # 1-target, 2-adapter, 3-driver, 9-facade
+      3-live-tests/      # one test-only package that depends on both facades
 ```
 
 The numbered prefixes serve two purposes:
@@ -130,11 +131,12 @@ The Mongo family domain (`packages/2-mongo-family/`) contains Mongo-specific pac
 
 The targets domain (`packages/3-targets/`) holds one folder per database, for every family ([ADR 278](../adrs/ADR%20278%20-%20Each%20database's%20packages%20live%20in%20one%20folder.md)). Target, adapter, driver and facade stay separate packages, so an application can replace one of them; the folder keeps them together. Inside a database folder the numbers give dependency order: the adapter imports the target, the facade imports all three, the driver imports none of them. A package imports only from lower-numbered folders. Numbers compare only between folders in the same parent.
 
-`0-shared/` beside the database folders holds packages that several databases' packages share ([ADR 314](adrs/ADR%20314%20-%20Code%20shared%20by%20several%20targets'%20type%20implementations%20lives%20in%20one%20package.md)). Today that is `@internal/type-implementations`: value logic that more than one target's codecs, data types and `now()` generators use, depending on no database and no family. It is registered in the `targets` domain, plane `shared`, so both the target packs and the adapters can import it. The top-level `packages/0-shared/` is a different folder: it holds repository tooling, such as the map of published packages, registered in the framework domain.
+`0-shared/` beside the database folders holds packages that several databases' packages share ([ADR 314](adrs/ADR%20314%20-%20Code%20shared%20by%20several%20targets'%20type%20implementations%20lives%20in%20one%20package.md)). Today that is `@internal/type-implementations`: value logic that more than one target's codecs, data types and `now()` generators use, depending on no database and no family; and `@internal/target-package-config`: what every target package's `defineConfig` shares, such as restating its target's and adapter's type declarations with its own module. Both are registered in the `targets` domain, plane `shared`, so the target packs, the adapters and the target packages can import them. The top-level `packages/0-shared/` is a different folder: it holds repository tooling, such as the map of published packages, registered in the framework domain.
 
 ```text
 * 3-targets
 |-- 0-shared
+|   |-- target-package-config → @internal/target-package-config (what every target package's defineConfig shares)
 |   |-- type-implementations → @internal/type-implementations (value logic several targets' type implementations share)
 |-- postgres
 |   |-- 1-target          → @internal/target-postgres (target pack: descriptor, codecs, data types, migrations)
@@ -151,6 +153,7 @@ The targets domain (`packages/3-targets/`) holds one folder per database, for ev
 |-- mysql
     |-- 1-mysql           (1-target, 2-adapter, 3-driver, 9-facade; @internal/mysql is the source of @prisma/orm-mysql)
     |-- 2-mariadb         (1-target, 2-adapter, 3-driver, 9-facade; @internal/mariadb is the source of @prisma/orm-mariadb)
+    |-- 3-live-tests      → @internal/mysql-live-tests (private, tests only: the ORM live suites run against MySQL and MariaDB, so it depends on both facades)
 ```
 
 ### Extensions Domain
@@ -346,6 +349,7 @@ In `architecture.config.json` the target pack and facade are registered in the `
 | `packages/2-sql-family/4-lanes/relational-core/` | `@internal/sql-relational-core` |
 | `packages/2-sql-family/4-lanes/sql-builder/` | `@internal/sql-builder` |
 | `packages/2-sql-family/5-runtime/` | `@internal/sql-runtime` |
+| `packages/3-targets/0-shared/target-package-config/` | `@internal/target-package-config` |
 | `packages/3-targets/0-shared/type-implementations/` | `@internal/type-implementations` |
 | `packages/3-targets/mongo/1-target/` | `@internal/target-mongo` |
 | `packages/3-targets/mongo/2-adapter/` | `@internal/adapter-mongo` |

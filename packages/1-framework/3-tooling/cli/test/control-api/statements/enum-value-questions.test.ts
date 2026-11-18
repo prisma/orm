@@ -31,6 +31,7 @@ const plan: PlannedQuestions = {
     },
   ],
   accessChanges: [],
+  temporaryValues: [],
 };
 
 async function questionsOf(statements: readonly { verb: 'rename'; text: string }[] = []) {
@@ -49,7 +50,7 @@ async function questionsOf(statements: readonly { verb: 'rename'; text: string }
       asked.push(...batch);
       return batch.map(({ subject }) => ({ verb: 'delete', text: subject }));
     },
-    replan: async () => ok({ dataLoss: [], accessChanges: [] }),
+    replan: async () => ok({ dataLoss: [], accessChanges: [], temporaryValues: [] }),
   });
   return asked;
 }
@@ -95,6 +96,7 @@ describe('a question about an enum value', () => {
           },
         ],
         accessChanges: [],
+        temporaryValues: [],
       },
       askAccess: false,
       canConvert: false,
@@ -108,7 +110,7 @@ describe('a question about an enum value', () => {
         asked.push(...batch);
         return batch.map(({ subject }) => ({ verb: 'delete', text: subject }));
       },
-      replan: async () => ok({ dataLoss: [], accessChanges: [] }),
+      replan: async () => ok({ dataLoss: [], accessChanges: [], temporaryValues: [] }),
     });
 
     expect(asked.map(({ subject, question }) => ({ subject, question }))).toEqual([
@@ -148,6 +150,7 @@ describe('a question about an enum value', () => {
           },
         ],
         accessChanges: [],
+        temporaryValues: [],
       },
       askAccess: false,
       canConvert: false,
@@ -157,7 +160,7 @@ describe('a question about an enum value', () => {
       origin,
       originKnown: true,
       destination: changed,
-      keepDataEditAdvice: (subject, edits) => ({
+      keepDataEditAdvice: ({ text: subject, edits }) => ({
         lead: 'Delete loses it.',
         ways: [
           `Keep ${subject}: ${edits.map(({ remove, replaceWith }) => `${remove} -> ${replaceWith}`).join('; ')}.`,
@@ -167,7 +170,7 @@ describe('a question about an enum value', () => {
         asked.push(...batch);
         return batch.map(({ subject }) => ({ verb: 'delete', text: subject }));
       },
-      replan: async () => ok({ dataLoss: [], accessChanges: [] }),
+      replan: async () => ok({ dataLoss: [], accessChanges: [], temporaryValues: [] }),
     });
 
     expect(asked).toMatchObject([
@@ -179,6 +182,71 @@ describe('a question about an enum value', () => {
           'Keep Status.ARCHIVED: this.removeStoredValue({ column: "status" }) -> this.replaceStoredValue({ column: "status" }); this.removeStoredValue({ column: "tags" }) -> this.replaceStoredValue({ column: "tags" }).',
         ],
       },
+    ]);
+  });
+
+  it('asks the command how to keep the data of every member that keeps its name, with or without an edit, naming them in question order', async () => {
+    const withOld = contractOf({
+      app: {
+        models: { Task: { fields: ['status'] } },
+        enums: { Status: ['OPEN', 'ARCHIVED', 'OLD'] },
+      },
+    });
+    const kept = contractOf({
+      app: {
+        models: { Task: { fields: ['status'] } },
+        enums: { Status: ['OPEN', 'ARCHIVED', 'RETIRED'] },
+      },
+    });
+    const member = (name: string) => ({ ...archived, member: name });
+    const asked: PlanQuestion[] = [];
+    await askPlanQuestions({
+      plan: {
+        dataLoss: [
+          { operationIndex: 0, label: 'Remove value "archived"', loss: 'drop', subject: archived },
+          {
+            operationIndex: 1,
+            label: 'Remove value "open"',
+            loss: 'drop',
+            subject: member('OPEN'),
+            keepDataEdit: { remove: 'remove open', replaceWith: 'replace open' },
+          },
+          { operationIndex: 2, label: 'Remove value "old"', loss: 'drop', subject: member('OLD') },
+        ],
+        accessChanges: [],
+        temporaryValues: [],
+      },
+      askAccess: false,
+      canConvert: false,
+      statements: [],
+      preAnswers: [],
+      consentAll: { delete: false, allow: false },
+      origin: withOld,
+      originKnown: true,
+      destination: kept,
+      keepDataEditAdvice: ({ text: subject, edits }, subjects) => ({
+        lead: undefined,
+        ways: [
+          `Keep ${subject} with ${edits.length} edits among ${subjects.map(({ text }) => text).join(', ')}.`,
+        ],
+      }),
+      answer: async (batch) => {
+        asked.push(...batch);
+        return batch.map(({ subject }) => ({ verb: 'delete', text: subject }));
+      },
+      replan: async () => ok({ dataLoss: [], accessChanges: [], temporaryValues: [] }),
+    });
+
+    expect(asked.map(({ subject, keepDataWays }) => ({ subject, keepDataWays }))).toEqual([
+      {
+        subject: 'Status.ARCHIVED',
+        keepDataWays: ['Keep Status.ARCHIVED with 0 edits among Status.ARCHIVED, Status.OPEN.'],
+      },
+      {
+        subject: 'Status.OPEN',
+        keepDataWays: ['Keep Status.OPEN with 1 edits among Status.ARCHIVED, Status.OPEN.'],
+      },
+      { subject: 'Status.OLD', keepDataWays: undefined },
     ]);
   });
 
@@ -204,6 +272,7 @@ describe('a question about an enum value', () => {
       plan: {
         dataLoss: [{ operationIndex: 0, label: 'Change values', loss: 'drop', subject }],
         accessChanges: [],
+        temporaryValues: [],
       },
       askAccess: false,
       canConvert: false,
@@ -217,7 +286,7 @@ describe('a question about an enum value', () => {
         asked.push(...batch);
         return batch.map(({ subject: text }) => ({ verb: 'delete', text }));
       },
-      replan: async () => ok({ dataLoss: [], accessChanges: [] }),
+      replan: async () => ok({ dataLoss: [], accessChanges: [], temporaryValues: [] }),
     });
 
     expect(asked[0]).toMatchObject({
@@ -227,5 +296,141 @@ describe('a question about an enum value', () => {
     expect(
       asked[0]?.validate('rename', 'finance.Status.ARCHIVED:finance.Status.RETIRED'),
     ).toBeUndefined();
+  });
+});
+
+describe("an enum member's planner advice beside the command's own route", () => {
+  const withValues = (members: Readonly<Record<string, string | boolean>>) => {
+    const contract = contractOf({
+      app: { models: { Task: { fields: ['status'] } }, enums: { Status: Object.keys(members) } },
+    });
+    const app = contract.domain.namespaces['app'];
+    const status = app?.enum?.['Status'];
+    if (app === undefined || status === undefined) throw new Error('Expected enum Status');
+    return {
+      ...contract,
+      domain: {
+        ...contract.domain,
+        namespaces: {
+          app: {
+            ...app,
+            enum: {
+              Status: {
+                ...status,
+                members: Object.entries(members).map(([name, value]) => ({ name, value })),
+              },
+            },
+          },
+        },
+      },
+    };
+  };
+  const member = (name: string) => ({ ...archived, member: name });
+  const BEFORE = withValues({ ACTIVE: 'active', ARCHIVED: 'archived' });
+
+  async function askedOf(
+    origin: ReturnType<typeof withValues>,
+    destination: ReturnType<typeof withValues>,
+    members: readonly string[],
+    commandWays: readonly string[],
+  ) {
+    const asked: PlanQuestion[] = [];
+    await askPlanQuestions({
+      plan: {
+        dataLoss: members.map((name, index) => ({
+          operationIndex: index,
+          label: `Remove value of ${name}`,
+          loss: 'drop' as const,
+          subject: member(name),
+          keepDataAdvice: `Planner advice for ${name}.`,
+        })),
+        accessChanges: [],
+        temporaryValues: [],
+      },
+      askAccess: false,
+      canConvert: false,
+      statements: [],
+      preAnswers: [],
+      consentAll: { delete: false, allow: false },
+      origin,
+      originKnown: true,
+      destination,
+      keepDataEditAdvice: () => ({ lead: undefined, ways: commandWays }),
+      answer: async (batch) => {
+        asked.push(...batch);
+        return batch.map(({ subject }) => ({ verb: 'delete', text: subject }));
+      },
+      replan: async () => ok({ dataLoss: [], accessChanges: [], temporaryValues: [] }),
+    });
+    return asked;
+  }
+
+  async function waysOf(
+    destination: ReturnType<typeof withValues>,
+    members: readonly string[],
+    commandWays: readonly string[],
+  ) {
+    return (await askedOf(BEFORE, destination, members, commandWays)).map(
+      ({ subject, question }) => ({ subject, planner: question.includes('Planner advice') }),
+    );
+  }
+
+  it('leaves out the planner advice for members that swap stored values when the command gives its own route', async () => {
+    const swapped = withValues({ ACTIVE: 'archived', ARCHIVED: 'active' });
+    expect({
+      commandRoute: await waysOf(swapped, ['ACTIVE', 'ARCHIVED'], ['Two runs.']),
+      noCommandRoute: await waysOf(swapped, ['ACTIVE', 'ARCHIVED'], []),
+    }).toEqual({
+      commandRoute: [
+        { subject: 'Status.ACTIVE', planner: false },
+        { subject: 'Status.ARCHIVED', planner: false },
+      ],
+      noCommandRoute: [
+        { subject: 'Status.ACTIVE', planner: true },
+        { subject: 'Status.ARCHIVED', planner: true },
+      ],
+    });
+  });
+
+  it('leaves out the planner advice for every member of a chain when the command gives its own route', async () => {
+    expect(
+      await waysOf(
+        withValues({ ACTIVE: 'archived', ARCHIVED: 'gone' }),
+        ['ACTIVE', 'ARCHIVED'],
+        ['Two runs.'],
+      ),
+    ).toEqual([
+      { subject: 'Status.ACTIVE', planner: false },
+      { subject: 'Status.ARCHIVED', planner: false },
+    ]);
+  });
+
+  it('gives no command route for a boolean enum, which has no unused stored value, and keeps the planner advice', async () => {
+    const asked = await askedOf(
+      withValues({ ACTIVE: true, ARCHIVED: false }),
+      withValues({ ACTIVE: false, ARCHIVED: true }),
+      ['ACTIVE', 'ARCHIVED'],
+      ['Two runs.'],
+    );
+    expect(
+      asked.map(({ subject, question }) => ({
+        subject,
+        planner: question.includes('Planner advice'),
+        command: question.includes('Two runs.'),
+      })),
+    ).toEqual([
+      { subject: 'Status.ACTIVE', planner: true, command: false },
+      { subject: 'Status.ARCHIVED', planner: true, command: false },
+    ]);
+  });
+
+  it('keeps the planner advice for a member that takes the stored value of a member the destination no longer has', async () => {
+    expect(
+      await waysOf(
+        withValues({ ACTIVE: 'archived', RETIRED: 'retired' }),
+        ['ACTIVE'],
+        ['Two runs.'],
+      ),
+    ).toEqual([{ subject: 'Status.ACTIVE', planner: true }]);
   });
 });

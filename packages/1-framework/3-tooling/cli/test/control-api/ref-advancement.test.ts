@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { readFile, rm } from 'node:fs/promises';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { errorInvalidRefName, MigrationToolsError } from '@internal/migration-tools/errors';
+import { readRef, writeRef } from '@internal/migration-tools/refs';
 import { notOk, ok } from '@internal/utils/result';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -14,7 +15,7 @@ import {
   preflightRefAdvancement,
 } from '../../src/control-api/operations/ref-advancement';
 import type { RenderContractDtsResult } from '../../src/control-api/render-contract-dts';
-import { createTestProjectDir, writeProjectManifest } from '../utils/test-project-dir';
+import { createTestProjectDir } from '../utils/test-project-dir';
 
 const HASH_A = `${'a'.repeat(64)}`;
 const PROFILE_HASH = `${'c'.repeat(64)}`;
@@ -103,6 +104,19 @@ describe('executeRefAdvancement', () => {
     );
   });
 
+  it('keeps the invariants and policies the ref declares', async () => {
+    const declared = {
+      hash: 'b'.repeat(64),
+      invariants: ['split-user-name'],
+      policies: { change: ['migrate'] as const },
+    };
+    await writeRef(refsDir, 'production', declared);
+
+    await executeRefAdvancement(refsDir, migrationsDir, 'production', HASH_A, sampleContractIR());
+
+    expect(await readRef(refsDir, 'production')).toEqual({ ...declared, hash: HASH_A });
+  });
+
   it('is a write-if-absent no-op on the store when advancing to the same hash again', async () => {
     await executeRefAdvancement(refsDir, migrationsDir, 'db', HASH_A, sampleContractIR());
     const storeJsonPath = join(contractSnapshotDir(migrationsDir, HASH_A), 'contract.json');
@@ -145,13 +159,14 @@ describe('preflightRefAdvancement', () => {
 
   beforeEach(() => {
     projectDir = createTestProjectDir('preflight-ref-advancement');
-    writeProjectManifest(projectDir);
     contractJsonPath = join(projectDir, 'output', 'contract.json');
   });
 
   afterEach(async () => {
     await rm(projectDir, { recursive: true, force: true });
   });
+  const TYPES_MODULE = '@acme/orm-db/contract-types';
+  const config = { contract: { typesModule: TYPES_MODULE } };
   const RENDERED = '// rendered\nexport type Contract = { rendered: true };\n';
 
   function fakeClient(result: RenderContractDtsResult) {
@@ -165,15 +180,36 @@ describe('preflightRefAdvancement', () => {
       name: 'db',
       contractJson,
       contractJsonPath,
-      projectDir,
+      config,
       client,
     });
 
     expect(result).toEqual(ok({ contract: contractJson, contractDts: RENDERED }));
     expect(client.renderContractDts).toHaveBeenCalledWith({
       contract: contractJson,
-      resolveImportSpecifier: expect.any(Function),
+      typesModule: TYPES_MODULE,
     });
+  });
+
+  it('refuses a config that names no contract types module without rendering', async () => {
+    const client = fakeClient(ok({ contractDts: RENDERED }));
+
+    const result = await preflightRefAdvancement({
+      name: 'db',
+      contractJson,
+      contractJsonPath,
+      config: { contract: {} },
+      client,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure.toEnvelope()).toMatchObject({
+        code: 'CONFIG.CONTRACT_TYPES_MODULE_MISSING',
+        why: expect.stringContaining('Config.contract.typesModule is not set'),
+      });
+    }
+    expect(client.renderContractDts).not.toHaveBeenCalled();
   });
 
   it('refuses an invalid ref name without rendering', async () => {
@@ -183,7 +219,7 @@ describe('preflightRefAdvancement', () => {
       name: 'Invalid Name',
       contractJson,
       contractJsonPath,
-      projectDir,
+      config,
       client,
     });
 
@@ -207,7 +243,7 @@ describe('preflightRefAdvancement', () => {
       name: 'db',
       contractJson,
       contractJsonPath,
-      projectDir,
+      config,
       client,
     });
 
@@ -234,7 +270,7 @@ describe('preflightRefAdvancement', () => {
       name: 'db',
       contractJson,
       contractJsonPath,
-      projectDir,
+      config,
       client,
     });
 

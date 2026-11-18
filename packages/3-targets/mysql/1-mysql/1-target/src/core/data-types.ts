@@ -90,6 +90,18 @@ export const mysqlBigint = sqlDataType('mysql/bigint', {
   casts: { [mysqlInt.id]: asNumeralText },
 });
 
+/**
+ * A finite IEEE 754 double, stored as a JSON number: MySQL holds no NaN or infinity. It types the mean of integers; no authoring name writes a column of it yet (ADR 322), so it claims no `double` column the catalog reports, which introspection and `db verify` read as they did before it existed.
+ */
+export const mysqlDouble = sqlDataType('mysql/double', {
+  texts: [{ text: 'double', written: true }],
+  read: (json) =>
+    typeof json === 'number' && Number.isFinite(json)
+      ? json
+      : refuseJsonValue('mysql/double', 'a finite number', json),
+  casts: {},
+});
+
 /** The length of `varchar`, which MySQL requires, up to the largest it accepts. */
 export const mysqlVarcharParams = arktype({
   length: 'number.integer >= 1 & number.integer <= 65535',
@@ -295,7 +307,7 @@ export function renderMysqlEnumType(values: readonly string[] | undefined): stri
   if (values === undefined || values.length === 0) {
     throw mysqlError(
       'CONTRACT.TYPE_PARAMS_INVALID',
-      'A MySQL enum column type needs at least one member.',
+      'An enum column type on MySQL or MariaDB needs at least one member.',
       {
         why: 'A native enum column is written with its members, and this column has none.',
         fix: 'Type the column with a PSL enum or an enumType() that declares its members.',
@@ -331,6 +343,7 @@ export const mysqlDataTypes: readonly DataType[] = [
   mysqlText,
   mysqlInt,
   mysqlBigint,
+  mysqlDouble,
   mysqlVarchar,
   mysqlChar,
   mysqlDatetime,

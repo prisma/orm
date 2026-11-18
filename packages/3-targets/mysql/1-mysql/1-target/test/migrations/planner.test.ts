@@ -5,6 +5,7 @@ import type {
 } from '@internal/framework-components/control';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { SqlSchemaIR } from '@internal/sql-schema-ir/types';
+import { workspaceMigrationModule } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import mysqlControlTarget from '../../src/core/migrations/control-target';
 import { contractOf, createMysqlPlanner, frameworkComponents, int, text } from './fixtures';
@@ -375,7 +376,7 @@ describe('MysqlMigrationPlanner', () => {
       spaceId: empty.spaceId,
       operations: empty.operations,
       describe: empty.describe(),
-      source: empty.renderTypeScript((specifier) => specifier).includes('return [\n\n    ];'),
+      source: empty.renderTypeScript(workspaceMigrationModule.mysql).includes('return [\n\n    ];'),
     }).toEqual({
       spaceId: 'app',
       operations: [],

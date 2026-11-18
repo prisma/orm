@@ -14,6 +14,9 @@ export default definePrismaConfig({
     adapter: postgresAdapter,
     driver: postgresDriver,
     extensions: [],
-    contract: typescriptContract(contract),
+    contract: {
+      ...typescriptContract(contract),
+      typesModule: '@internal/postgres/contract-types',
+    },
   }),
 });

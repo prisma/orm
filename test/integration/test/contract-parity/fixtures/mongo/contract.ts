@@ -40,7 +40,7 @@ const User = model('User', {
     age: field.scalar(type.Int32()),
     score: field.scalar(type.Double()),
     scores: field.scalar(type.Double()).many(),
-    visits: field.scalar(type.Int64()),
+    visits: field.scalar(type.BigInt()),
     balance: field.scalar(type.Decimal128()),
     active: field.scalar(type.Bool()),
     joinedAt: field.scalar(type.DateTime()),

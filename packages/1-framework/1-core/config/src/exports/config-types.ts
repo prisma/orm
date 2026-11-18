@@ -1,4 +1,4 @@
-export type { ContractConfig, FormatterConfig, PrismaNextConfig } from '../config-types';
+export type { ContractConfig, FormatterConfig, PrismaConfig } from '../config-types';
 export {
   DEFAULT_CONTRACT_SOURCE_DIR,
   defineConfig,

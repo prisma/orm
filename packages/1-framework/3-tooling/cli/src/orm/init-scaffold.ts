@@ -1,6 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { DEFAULT_CONTRACT_SOURCE_DIR } from '@internal/config/config-types';
-import type { ImportSpecifierResolver } from '@internal/framework-components/emission';
 import { detect } from 'package-manager-detector/detect';
 import { basename, dirname, isAbsolute, join, relative } from 'pathe';
 import type { PackageManager } from '../commands/init/detect-package-manager';
@@ -31,8 +30,8 @@ import {
   configFile,
   dbFile,
   prisma7ConfigFile,
-  scaffoldSpecifierResolverFor,
   starterSchema,
+  targetPackageName,
 } from '../commands/init/templates/code-templates';
 import { envExampleContent, envFileContent } from '../commands/init/templates/env';
 import {
@@ -132,8 +131,7 @@ export interface ScaffoldOutcome {
   readonly notes: readonly string[];
   /** The project already pins `@types/node` itself, so the install leaves it alone. */
   readonly hasTypesNode: boolean;
-  /** Resolves the package names the scaffolded files import — and install. */
-  readonly resolveImportSpecifier: ImportSpecifierResolver;
+  readonly targetPackage: string;
 }
 
 /**
@@ -211,9 +209,9 @@ function planScaffold(ctx: {
   readonly cwd: string;
   readonly inputs: ResolvedInitInputs;
   readonly packageManager: PackageManager;
-  readonly resolveImportSpecifier: ImportSpecifierResolver;
+  readonly targetPackage: string;
 }): ScaffoldPlan {
-  const { cwd, inputs, packageManager, resolveImportSpecifier } = ctx;
+  const { cwd, inputs, packageManager, targetPackage } = ctx;
   const warnings: string[] = [];
   const source = inputs.contractSource;
   // Prisma 8's files never go under the Prisma 7 schema's directory: that
@@ -232,15 +230,15 @@ function planScaffold(ctx: {
       ? [
           {
             path: inputs.schemaPath,
-            content: starterSchema(inputs.target, source.authoring, resolveImportSpecifier),
+            content: starterSchema(inputs.target, source.authoring, targetPackage),
           },
           {
             path: CONFIG_FILE,
-            content: configFile(inputs.target, configContractPath, resolveImportSpecifier),
+            content: configFile(configContractPath, targetPackage),
           },
           {
             path: join(outputDir, 'db.ts'),
-            content: dbFile(inputs.target, resolveImportSpecifier),
+            content: dbFile(inputs.target, targetPackage),
           },
           {
             path: QUICK_REFERENCE_FILE,
@@ -249,23 +247,18 @@ function planScaffold(ctx: {
               source.authoring,
               inputs.schemaPath,
               runPrefix,
-              resolveImportSpecifier,
+              targetPackage,
             ),
           },
         ]
       : [
           {
             path: CONFIG_FILE,
-            content: prisma7ConfigFile(
-              inputs.target,
-              source.schemaPath,
-              outputDir,
-              resolveImportSpecifier,
-            ),
+            content: prisma7ConfigFile(source.schemaPath, outputDir, targetPackage),
           },
           {
             path: join(outputDir, 'db.ts'),
-            content: dbFile(inputs.target, resolveImportSpecifier),
+            content: dbFile(inputs.target, targetPackage),
           },
           {
             path: QUICK_REFERENCE_FILE,
@@ -275,7 +268,7 @@ function planScaffold(ctx: {
               outputDir,
               runPrefix,
               source.prisma7Config,
-              resolveImportSpecifier,
+              targetPackage,
             ),
           },
         ];
@@ -480,8 +473,8 @@ export function scaffoldProject(ctx: {
   readonly inputs: ResolvedInitInputs;
   readonly packageManager: PackageManager;
 }): ScaffoldOutcome {
-  const resolveImportSpecifier = scaffoldSpecifierResolverFor(ctx.inputs.target);
-  const plan = planScaffold({ ...ctx, resolveImportSpecifier });
+  const targetPackage = targetPackageName(ctx.inputs.target);
+  const plan = planScaffold({ ...ctx, targetPackage });
 
   const filesWritten: string[] = [];
   const filesDeleted: string[] = [];
@@ -554,6 +547,6 @@ export function scaffoldProject(ctx: {
     warnings: plan.warnings,
     notes,
     hasTypesNode: plan.hasTypesNode,
-    resolveImportSpecifier,
+    targetPackage,
   };
 }

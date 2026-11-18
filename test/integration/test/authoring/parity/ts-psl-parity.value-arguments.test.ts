@@ -115,7 +115,7 @@ function thrownMessage(build: () => unknown): string | undefined {
 }
 
 describe('type-constructor value arguments give the same contract from PSL and TypeScript', () => {
-  it('on Postgres: sql.String and Raw through TypeScript helpers that read value arguments, and Varchar and Numeric, which TypeScript writes with fixed column helpers', () => {
+  it('on Postgres: sql.Varchar and Raw through TypeScript helpers that read value arguments, and Varchar and Numeric, which TypeScript writes with fixed column helpers', () => {
     const tsContract = definePostgresContract({}, ({ field, model, type }) => ({
       models: {
         Account: model('Account', {
@@ -123,7 +123,7 @@ describe('type-constructor value arguments give the same contract from PSL and T
             id: field.column(int4Column).id(),
             name: field.column(varcharColumn(255)),
             price: field.column(numericStringColumn(10, 2)),
-            label: field.column(type.sql.String(50)),
+            label: field.column(type.sql.Varchar(50)),
             kind: field.column(type.Raw(sql`"MyType"[]`)).optional(),
             shape: field.column(postgresRawColumn(sql`"MyType"[]`)).optional(),
           },
@@ -135,7 +135,7 @@ describe('type-constructor value arguments give the same contract from PSL and T
   id    Int @id
   name  Varchar(255)
   price NumericString(10, 2)
-  label sql.String(50)
+  label sql.Varchar(50)
   kind  Raw(sql\`"MyType"[]\`)?
   shape Raw(sql\`"MyType"[]\`)?
 }
@@ -172,13 +172,13 @@ describe('type-constructor value arguments give the same contract from PSL and T
     expect(interpreted.value).toEqual(tsContract);
   });
 
-  it('on SQLite: sql.String and Raw', () => {
+  it('on SQLite: sql.Varchar and Raw', () => {
     const tsContract = defineSqliteContract({}, ({ field, model, type }) => ({
       models: {
         Account: model('Account', {
           fields: {
             id: field.column({ codecId: 'sqlite/integer@1' }).id(),
-            label: field.column(type.sql.String(50)),
+            label: field.column(type.sql.Varchar(50)),
             kind: field.column(type.Raw(sql`"MyType"[]`)).optional(),
             shape: field.column(sqliteRawColumn(sql`"MyType"[]`)).optional(),
           },
@@ -188,7 +188,7 @@ describe('type-constructor value arguments give the same contract from PSL and T
 
     const interpreted = interpretSqlite(`model Account {
   id    Int @id
-  label sql.String(50)
+  label sql.Varchar(50)
   kind  Raw(sql\`"MyType"[]\`)?
   shape Raw(sql\`"MyType"[]\`)?
 }
@@ -200,7 +200,7 @@ describe('type-constructor value arguments give the same contract from PSL and T
 });
 
 describe('a value its argument’s data type cannot hold is refused with the same message', () => {
-  it('on Postgres, from PSL Varchar(3000000000) and TypeScript type.sql.String(3000000000)', () => {
+  it('on Postgres, from PSL Varchar(3000000000) and TypeScript type.sql.Varchar(3000000000)', () => {
     const interpreted = interpretPostgres(`model Account {
   id   Int @id
   name Varchar(3000000000)
@@ -215,7 +215,7 @@ describe('a value its argument’s data type cannot hold is refused with the sam
           Account: model('Account', {
             fields: {
               id: field.column(int4Column).id(),
-              name: field.column(type.sql.String(3000000000)),
+              name: field.column(type.sql.Varchar(3000000000)),
             },
           }),
         },
@@ -223,6 +223,6 @@ describe('a value its argument’s data type cannot hold is refused with the sam
     );
 
     expect(pslMessages).toHaveLength(1);
-    expect(tsMessage).toBe(`Argument "length" of sql.String: ${pslMessages[0]}`);
+    expect(tsMessage).toBe(`Argument "length" of sql.Varchar: ${pslMessages[0]}`);
   });
 });

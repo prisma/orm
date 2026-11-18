@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
-import { readdir, readFile, rm } from 'node:fs/promises';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import { readFile, rm } from 'node:fs/promises';
+import type { PrismaConfig } from '@internal/config/config-types';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { writeRef } from '@internal/migration-tools/refs';
@@ -14,7 +14,14 @@ import type { AnswerPlanQuestions } from '../../src/control-api/statements/plan-
 import type { StatementText } from '../../src/control-api/statements/statement-text';
 import { BIN_GROUPS } from '../../src/orm/cli';
 import { errorUnfilledPlaceholder } from '../../src/utils/cli-errors';
-import { createOrmTestCli } from '../helpers/orm-test-cli';
+import {
+  HASH_FROM,
+  HASH_TO,
+  harness,
+  plannableProject,
+  plannedDirs,
+  upToDateProject,
+} from './fixtures/migration-plan-project';
 import {
   ADDITIVE_OP,
   contractJson,
@@ -22,6 +29,7 @@ import {
   DESTRUCTIVE_OP,
   type FakePlannerScript,
   OFFLINE_COMMANDS,
+  OFFLINE_MIGRATION_MODULE,
   type OfflineProject,
   offlineConfig,
   removeOfflineProjects,
@@ -33,60 +41,8 @@ import {
   seedMigrationPackage,
 } from './fixtures/offline-project';
 
-const HASH_TO = `c0ffee${'0'.repeat(58)}`;
-const HASH_FROM = `beef${'1'.repeat(60)}`;
-
 beforeEach(resetRenderContractDtsMock);
 afterEach(removeOfflineProjects);
-
-function harness(
-  project: OfflineProject,
-  options: {
-    readonly script?: FakePlannerScript;
-    readonly overrides?: Record<string, unknown>;
-  } = {},
-) {
-  return createOrmTestCli({
-    commands: OFFLINE_COMMANDS,
-    groups: BIN_GROUPS,
-    orm: {
-      ...offlineConfig({ project, ...(options.script ? { script: options.script } : {}) }),
-      ...options.overrides,
-    },
-  });
-}
-
-async function plannedDirs(project: OfflineProject): Promise<readonly string[]> {
-  return (await readdir(project.appMigrationsDir)).filter((entry) => entry !== 'refs').sort();
-}
-
-/** A project whose database sits at HASH_FROM and whose contract is HASH_TO. */
-async function plannableProject(): Promise<OfflineProject> {
-  const project = await createOfflineProject({ storageHash: HASH_TO });
-  await seedMigrationPackage({
-    appMigrationsDir: project.appMigrationsDir,
-    dirName: '20260101T0000_initial',
-    from: null,
-    to: HASH_FROM,
-  });
-  await seedContractSnapshot({ migrationsDir: project.migrationsDir, storageHash: HASH_FROM });
-  await seedDbRef({ appMigrationsDir: project.appMigrationsDir, storageHash: HASH_FROM });
-  return project;
-}
-
-/** A project whose database already sits at the emitted contract. */
-async function upToDateProject(): Promise<OfflineProject> {
-  const project = await createOfflineProject({ storageHash: HASH_TO });
-  await seedMigrationPackage({
-    appMigrationsDir: project.appMigrationsDir,
-    dirName: '20260101T0000_initial',
-    from: null,
-    to: HASH_TO,
-  });
-  await seedContractSnapshot({ migrationsDir: project.migrationsDir, storageHash: HASH_TO });
-  await seedDbRef({ appMigrationsDir: project.appMigrationsDir, storageHash: HASH_TO });
-  return project;
-}
 
 describe('migration plan --config naming a file in a subdirectory', () => {
   it('reads the contract from and plans into the config file directory', async () => {
@@ -112,8 +68,9 @@ describe('migration plan --config naming a file in a subdirectory', () => {
                     load: async () => contractJson('unused'),
                   },
                   output: './output/contract.json',
+                  typesModule: '@acme/orm-db/contract-types',
                 },
-                migrations: { dir: './migrations' },
+                migrations: { dir: './migrations', module: OFFLINE_MIGRATION_MODULE },
               },
             },
           },
@@ -546,9 +503,8 @@ describe('migration plan', () => {
               },
             }),
             baseDir: project.dir,
-          } as unknown as PrismaNextConfig,
+          } as unknown as PrismaConfig,
           cwd: project.dir,
-          projectDir: project.dir,
           statements,
           answerQuestions,
           client: { renderContractDts: renderContractDtsMock },
@@ -617,9 +573,8 @@ describe('migration plan', () => {
               },
             }),
             baseDir: project.dir,
-          } as unknown as PrismaNextConfig,
+          } as unknown as PrismaConfig,
           cwd: project.dir,
-          projectDir: project.dir,
           statements: [{ verb: 'delete', text: 'audit_log' }],
           answerQuestions: async (questions) =>
             questions.map(() => ({ verb: 'rename', text: 'Legacy:Archive' })),
@@ -1024,7 +979,7 @@ describe('migration plan', () => {
           .nextActions,
       );
       expect(actions).toContain('--delete User.nickname');
-      expect(actions).toContain("--rename 'User.nickname:User.<new name>'");
+      expect(actions).toContain('--rename User.nickname:User.handle');
 
       const deleted = await harness(project, { script }).run(
         ['migration', 'plan', '--rename', 'Profile:User', '--delete', 'User.nickname', '--json'],
@@ -1116,7 +1071,7 @@ describe('migration plan', () => {
 
     const run = await harness(project, {
       overrides: {
-        migrations: { dir: 'db-migrations' },
+        migrations: { dir: 'db-migrations', module: OFFLINE_MIGRATION_MODULE },
         extensions: [
           {
             kind: 'extension',
@@ -1215,6 +1170,7 @@ describe('migration plan', () => {
         contract: {
           source: { format: 'typescript', inputs: [], load: async () => ({}) },
           output: join(project.dir, 'output', 'missing.json'),
+          typesModule: '@acme/orm-db/contract-types',
         },
       },
     }).run(['migration', 'plan', '--json'], { cwd: project.dir });
@@ -1390,7 +1346,7 @@ describe('migration plan destination snapshot', () => {
     expect(run.exitCode).toBe(0);
     expect(renderContractDtsMock).toHaveBeenCalledWith({
       contract: contractJson(HASH_TO),
-      resolveImportSpecifier: expect.any(Function),
+      typesModule: '@acme/orm-db/contract-types',
     });
     const storeDir = contractSnapshotDir(project.migrationsDir, HASH_TO);
     expect(JSON.parse(await readFile(join(storeDir, 'contract.json'), 'utf-8'))).toEqual(

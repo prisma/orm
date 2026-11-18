@@ -14,7 +14,7 @@ Given an arktype `Type`, `arktypeJson(schema)` produces a column descriptor that
 
 ## Why a per-library extension
 
-The unified `CodecDescriptor` model routes JSON-with-schema through per-library extension packages: arktype-json now, future zod / valibot extensions when each has a clean serialize / rehydrate story. The Postgres adapter retains only the storage-level `jsonColumn` / `jsonbColumn` descriptors (untyped raw JSON). See [ADR 208 — Higher-order codecs for parameterized types](../../../docs/architecture%20docs/adrs/ADR%20208%20-%20Higher-order%20codecs%20for%20parameterized%20types.md).
+The unified `CodecDescriptor` model routes JSON-with-schema through per-library extension packages: arktype-json now, future zod / valibot extensions when each has a clean serialize / rehydrate story. The Postgres adapter retains only the storage-level `plainJsonColumn` / `jsonbColumn` descriptors (untyped raw JSON). See [ADR 208 — Higher-order codecs for parameterized types](../../../docs/architecture%20docs/adrs/ADR%20208%20-%20Higher-order%20codecs%20for%20parameterized%20types.md).
 
 ## Usage
 
@@ -73,7 +73,7 @@ The runtime enforces the invariant defensively: the codec's factory runs at exec
 
 - The codec is library-bound (`arktype/json@1`), not target-bound. Other schema libraries ship as parallel extensions (`zod/json@1`, `valibot/json@1`) when their serialize/rehydrate stories materialize.
 - `fromWire` validates internally and throws on rejection. JSON-Schema validation lives uniformly inside the resolved codec's `fromWire` and `fromDataTypeValue`; the framework no longer maintains a parallel validator registry. Validation rejections surface as `RUNTIME.JSON_SCHEMA_VALIDATION_FAILED`.
-- For untyped raw JSON columns, use `jsonColumn` / `jsonbColumn` from `@internal/adapter-postgres/column-types` instead.
+- For untyped raw JSON columns, use `plainJsonColumn` / `jsonbColumn` from `@internal/adapter-postgres/column-types` instead.
 
 ## Data integrity: validate on read, not on write
 

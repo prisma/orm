@@ -165,7 +165,7 @@ const LISTED_LIMIT = 20;
 const CHECK_NAMES_FIX =
   'The old name must exist in the origin contract and not in the destination contract, and the new name the other way round. Names match exactly, including case.';
 const STORED_NAME_ONLY =
-  'If only the stored name changed (@map or @@map), a statement cannot state that in this release, and a plan without it drops and creates what the model or field is stored in, with its data. With migration plan, edit the planned migration.ts to rename the stored name instead of dropping and creating it. With db update, rename it in the database yourself first, then run db update, which then finds nothing that loses data.';
+  'If only the stored name changed (@map or @@map), a statement cannot state that in this release, and a plan without it drops and creates what the model or field is stored in, with its data. With migration plan, edit the planned migration.ts to rename the stored name instead of dropping and creating it. With db update, rename it in the database yourself first, then run db update.';
 const REPEATED_NAME_FIX =
   'Give each model, field or enum value at most one statement, and each new name to one model, field or enum value only.';
 
@@ -973,7 +973,7 @@ function resolveFieldRename(
       errorStatementUnresolved(
         statement,
         `The field "${to.coordinate.field}" already exists on the origin model "${qualifiedModel(from.coordinate)}", so it cannot be the new name of a field.`,
-        CHECK_NAMES_FIX,
+        newNameTakenFix(statement, from.coordinate.field, to.coordinate.field),
       ),
     );
   }
@@ -982,7 +982,7 @@ function resolveFieldRename(
       errorStatementUnresolved(
         statement,
         `The field "${from.coordinate.field}" still exists on the destination model "${toModel}", so it was not renamed.`,
-        CHECK_NAMES_FIX,
+        oldNameReusedFix(statement, from.coordinate.field, to.coordinate.field),
       ),
     );
   }
@@ -1153,7 +1153,7 @@ function resolveValueObjectFieldRename(
       errorStatementUnresolved(
         statement,
         `The field "${newField}" already exists in the origin value object "${oldValueObject}", so it cannot be the new name of a field.`,
-        CHECK_NAMES_FIX,
+        newNameTakenFix(statement, oldField, newField),
       ),
     );
   }
@@ -1162,7 +1162,7 @@ function resolveValueObjectFieldRename(
       errorStatementUnresolved(
         statement,
         `The field "${oldField}" still exists in the destination value object "${newValueObject}", so it was not renamed.`,
-        CHECK_NAMES_FIX,
+        oldNameReusedFix(statement, oldField, newField),
       ),
     );
   }
@@ -1178,6 +1178,16 @@ function resolveValueObjectFieldRename(
     from: from.coordinate,
     to: to.coordinate,
   });
+}
+
+/** How to rename a field onto a name another field of the origin holds: free the name in one migration, then rename. */
+function newNameTakenFix(statement: ParsedRename, oldName: string, newName: string): string {
+  return `${CHECK_NAMES_FIX} If another field holds the name "${newName}" in the origin and this change renames or removes it, make the change in two migrations: first change the contract so that field has its new name or is gone, and plan only that; then give "${oldName}" the name "${newName}" and plan it with ${statementFlag(statement)}.`;
+}
+
+/** How to give a renamed field's old name to another field: rename in one migration, then add or rename the other. */
+function oldNameReusedFix(statement: ParsedRename, oldName: string, newName: string): string {
+  return `${CHECK_NAMES_FIX} If "${oldName}" in the destination is another field that takes the name, make the change in two migrations: first change the contract so that "${oldName}" is renamed to "${newName}" and no field has the name "${oldName}", and plan it with ${statementFlag(statement)}; then add or rename the field that takes the name "${oldName}" and plan that.`;
 }
 
 /**

@@ -498,12 +498,12 @@ describe('mongo contract builder', () => {
     });
   });
 
-  it('supports the int64, int64Number, decimal128, binary, json and bson scalar helpers', () => {
+  it('supports the Int64BigInt, Int64Number, Decimal128, Binary, Json and Bson type helpers', () => {
     const Post = model('Post', {
       collection: 'posts',
       fields: {
         _id: field.scalar(type.ObjectId()),
-        views: field.scalar(type.Int64()),
+        views: field.scalar(type.Int64BigInt()),
         hits: field.scalar(type.Int64Number()),
         price: field.scalar(type.Decimal128()),
         thumbnail: field.scalar(type.Binary()),
