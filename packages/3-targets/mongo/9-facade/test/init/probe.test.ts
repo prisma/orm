@@ -35,7 +35,9 @@ describe('probeMongo', () => {
 
     await probeMongo('mongodb://localhost:27017/db', load);
 
-    expect(constructed).toEqual([['mongodb://localhost:27017/db', { timeoutMS: 20_000 }]]);
+    expect(constructed).toEqual([
+      ['mongodb://localhost:27017/db', { timeoutMS: 20_000, serverSelectionTimeoutMS: 20_000 }],
+    ]);
   });
 
   it('says the version could not be read when buildInfo has none', async () => {
