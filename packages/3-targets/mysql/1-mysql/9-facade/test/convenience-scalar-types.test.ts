@@ -178,16 +178,21 @@ describe('a MySQL scalar convenience type', () => {
     });
   });
 
+  const scaleOf30Message =
+    'scale must be at most the precision: a scale of 30 is more than a precision of 10. A Decimal written without `scale` has a scale of 30, so a Decimal with a precision of 10 needs `scale` written too, at most the precision, as in Decimal(precision: 10, scale: 2).';
+
   it('says what to write for a Decimal with a precision of fewer than 30 digits and no scale', () => {
     expect(JSON.parse(failure(model('v Decimal(precision: 10)')))).toMatchObject({
-      diagnostics: [
-        {
-          message: expect.stringContaining(
-            'Decimal holds 30 digits after the point unless `scale` is written, which a precision of 10 cannot hold. Write `scale` too, at most the precision, as in Decimal(precision: 10, scale: 2).',
-          ),
-        },
-      ],
+      diagnostics: [{ message: expect.stringContaining(scaleOf30Message) }],
     });
+  });
+
+  it('gives a written scale of 30 the same message, which does not say the scale was left out', () => {
+    for (const written of ['NumericString(10, 30)', 'Decimal(precision: 10, scale: 30)']) {
+      expect(JSON.parse(failure(model(`v ${written}`)))).toMatchObject({
+        diagnostics: [{ message: expect.stringContaining(scaleOf30Message) }],
+      });
+    }
   });
 
   it.each([

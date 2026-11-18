@@ -92,7 +92,7 @@ export const mysqlDecimalParams = arktype({
   if (params.scale <= params.precision) return true;
   const unwrittenScale =
     params.scale === MYSQL_DECIMAL_DEFAULTS.scale
-      ? ` Decimal holds ${MYSQL_DECIMAL_DEFAULTS.scale} digits after the point unless \`scale\` is written, which a precision of ${params.precision} cannot hold. Write \`scale\` too, at most the precision, as in Decimal(precision: ${params.precision}, scale: 2).`
+      ? ` A Decimal written without \`scale\` has a scale of ${MYSQL_DECIMAL_DEFAULTS.scale}, so a Decimal with a precision of ${params.precision} needs \`scale\` written too, at most the precision, as in Decimal(precision: ${params.precision}, scale: 2).`
       : '';
   return ctx.reject({
     path: ['scale'],
