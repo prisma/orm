@@ -31,6 +31,11 @@ describe('integration/Boolean on sqlite', () => {
         active integer not null default 1,
         admin integer
       );
+      create table membership (
+        id integer primary key,
+        account_id integer not null references account(id),
+        owner integer not null
+      );
     `);
 
     client = sqlite({
@@ -165,5 +170,56 @@ describe('integration/Boolean on sqlite', () => {
     });
 
     database!.exec('delete from account where id = 10');
+  });
+
+  it('carries a Boolean column through an include, and names the column of a stored value that is not 0 or 1', async () => {
+    await accounts().create({ id: 20, active: true, admin: null });
+    await db![UNBOUND_NAMESPACE_ID].Membership.create({ id: 1, accountId: 20, owner: true });
+    await db![UNBOUND_NAMESPACE_ID].Membership.create({ id: 2, accountId: 20, owner: false });
+    const included = () =>
+      accounts()
+        .select('id')
+        .where((account) => account.id.eq(20))
+        .include('memberships', (membership) =>
+          membership.select('id', 'owner').orderBy((m) => m.id.asc()),
+        )
+        .all();
+
+    const read = await included();
+    database!.exec('insert into membership (id, account_id, owner) values (3, 20, 2)');
+    const refused = await rejectionShape(included());
+
+    expect({ read, refused }).toEqual({
+      read: [
+        {
+          id: 20,
+          memberships: [
+            { id: 1, owner: true },
+            { id: 2, owner: false },
+          ],
+        },
+      ],
+      refused: {
+        name: 'RuntimeError',
+        message:
+          'Failed to decode column membership.owner with codec \'sqlite/boolean@1\': Column "membership"."owner" holds 2, which is not 0 or 1. sqlite/boolean@1 reads 0 as false and 1 as true.',
+        code: 'RUNTIME.DECODE_FAILED',
+        category: 'RUNTIME',
+        severity: 'error',
+        details: { table: 'membership', column: 'owner', codec: 'sqlite/boolean@1' },
+        cause: {
+          name: 'StructuredError',
+          message:
+            'Column "membership"."owner" holds 2, which is not 0 or 1. sqlite/boolean@1 reads 0 as false and 1 as true.',
+          code: 'RUNTIME.DECODE_FAILED',
+          meta: {
+            codecId: 'sqlite/boolean@1',
+            table: 'membership',
+            column: 'owner',
+            received: '2',
+          },
+        },
+      },
+    });
   });
 });

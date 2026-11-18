@@ -7,5 +7,17 @@ model Account {
   active Boolean  @default(true)
   admin  Boolean?
 
+  memberships Membership[]
+
   @@map("account")
+}
+
+model Membership {
+  id        Int     @id
+  accountId Int     @map("account_id")
+  owner     Boolean
+
+  account Account @relation(fields: [accountId], references: [id])
+
+  @@map("membership")
 }

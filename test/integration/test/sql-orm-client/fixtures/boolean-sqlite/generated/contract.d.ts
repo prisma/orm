@@ -19,7 +19,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'d8b0deec6b51198aa2082cb2965e3dd3070e5f86b688b68a551d37709cde76ae'>;
+  StorageHashBase<'d0fbe8f17cb0f4f5cff6a34e9f0698591e4f87b58d0146c530008599e3657d10'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53'>;
@@ -219,12 +219,21 @@ export namespace Models {
     active: FieldOutputTypes['__unbound__']['Account']['active'];
     admin: FieldOutputTypes['__unbound__']['Account']['admin'];
     id: FieldOutputTypes['__unbound__']['Account']['id'];
-    readonly [RelationKeys]?: never;
+    memberships: Membership[];
+    readonly [RelationKeys]?: 'memberships';
+  };
+  export type Membership = {
+    accountId: FieldOutputTypes['__unbound__']['Membership']['accountId'];
+    id: FieldOutputTypes['__unbound__']['Membership']['id'];
+    owner: FieldOutputTypes['__unbound__']['Membership']['owner'];
+    account: Account;
+    readonly [RelationKeys]?: 'account';
   };
 }
 
 export declare const models: {
   Account: Models.Account;
+  Membership: Models.Membership;
 };
 
 export type TypeMaps = TypeMapsType<
@@ -275,6 +284,52 @@ type ContractBase = Omit<
               indexes: readonly [];
               foreignKeys: readonly [];
             };
+            readonly membership: {
+              columns: {
+                readonly account_id: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly id: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly owner: {
+                  readonly dataType: 'sqlite/boolean';
+                  readonly codecId: 'sqlite/boolean@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [
+                {
+                  readonly name: 'membership_account_id_idx_3b48271c';
+                  readonly prefix: 'membership_account_id_idx';
+                  readonly columns: readonly ['account_id'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'membership';
+                    readonly columns: readonly ['account_id'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'account';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+              ];
+            };
           };
         };
       };
@@ -289,6 +344,10 @@ type ContractBase = Omit<
     readonly account: {
       readonly namespace: '__unbound__' & NamespaceId;
       readonly model: 'Account';
+    };
+    readonly membership: {
+      readonly namespace: '__unbound__' & NamespaceId;
+      readonly model: 'Membership';
     };
   };
   readonly domain: {
@@ -310,7 +369,19 @@ type ContractBase = Omit<
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
               };
             };
-            readonly relations: Record<string, never>;
+            readonly relations: {
+              readonly memberships: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'Membership';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['accountId'];
+                };
+              };
+            };
             readonly storage: {
               readonly table: 'account';
               readonly namespaceId: '__unbound__';
@@ -318,6 +389,45 @@ type ContractBase = Omit<
                 readonly active: { readonly column: 'active' };
                 readonly admin: { readonly column: 'admin' };
                 readonly id: { readonly column: 'id' };
+              };
+            };
+          };
+          readonly Membership: {
+            readonly fields: {
+              readonly accountId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly owner: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/boolean@1' };
+              };
+            };
+            readonly relations: {
+              readonly account: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'Account';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['accountId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'membership';
+              readonly namespaceId: '__unbound__';
+              readonly fields: {
+                readonly accountId: { readonly column: 'account_id' };
+                readonly id: { readonly column: 'id' };
+                readonly owner: { readonly column: 'owner' };
               };
             };
           };
