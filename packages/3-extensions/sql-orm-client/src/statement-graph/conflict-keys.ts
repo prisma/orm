@@ -114,7 +114,7 @@ export function requireRowsThatCanConflict(
   if (keys.length === 0) {
     throw ormError(
       'ORM.ARGUMENT_INVALID',
-      `${call.action} on model "${call.modelName}" has nothing to skip on: table "${tableName}" has no primary key, unique constraint or unique index, so onConflict "skip" cannot skip any row`,
+      `${call.action} on model "${call.modelName}" has nothing to skip on: table "${tableName}" has no primary key, unique constraint or unique index over columns, so onConflict "skip" cannot skip any row`,
       { meta: { ...call.meta, problem: 'no-conflict-key' } },
     );
   }

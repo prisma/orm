@@ -113,7 +113,7 @@ describe('the row check of onConflict skip on a table', () => {
       expect.objectContaining({
         code: 'ORM.ARGUMENT_INVALID',
         message:
-          'createAll() on model "Log" has nothing to skip on: table "logs" has no primary key, unique constraint or unique index, so onConflict "skip" cannot skip any row',
+          'createAll() on model "Log" has nothing to skip on: table "logs" has no primary key, unique constraint or unique index over columns, so onConflict "skip" cannot skip any row',
         meta: { method: 'createAll()', problem: 'no-conflict-key' },
       }),
     );
