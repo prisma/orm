@@ -92,7 +92,8 @@ function policyKey({ schema, table, name }: Policy): string {
  * restrictive one limits it, unless a policy the same migration creates, under the same name or
  * generated-name prefix, is still there when the migration ends. Each operation is recognised from
  * its target and the id its operation factory builds; an operation with neither, such as raw SQL,
- * is not read.
+ * is not read. A rename to the old name followed by `.rename` is recorded exactly as creating a
+ * policy of that name is, and is read as the rename, so a later drop of it is listed.
  */
 export function accessChangesOfIdentities(
   identities: readonly (UncheckedIdentity | undefined)[],
@@ -108,18 +109,18 @@ export function accessChangesOfIdentities(
       disabled.push({ index, ...table, widens: true });
       return;
     }
-    const created = policyOf(identity, createRlsPolicyIdentity);
-    if (created !== undefined) {
-      const key = policyKey(created);
-      createdAndKept.set(key, (createdAndKept.get(key) ?? new Set()).add(created.name));
-      return;
-    }
     const renamed = renamedPolicy(identity);
     if (renamed !== undefined) {
       if (createdAndKept.get(policyKey(renamed.from))?.delete(renamed.from.name)) {
         const key = policyKey(renamed.to);
         createdAndKept.set(key, (createdAndKept.get(key) ?? new Set()).add(renamed.to.name));
       }
+      return;
+    }
+    const created = policyOf(identity, createRlsPolicyIdentity);
+    if (created !== undefined) {
+      const key = policyKey(created);
+      createdAndKept.set(key, (createdAndKept.get(key) ?? new Set()).add(created.name));
       return;
     }
     const dropped = policyOf(identity, dropRlsPolicyIdentity);

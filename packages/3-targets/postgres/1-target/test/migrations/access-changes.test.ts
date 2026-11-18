@@ -124,6 +124,17 @@ describe('recordedAccessChangesOf', () => {
     expect(recordedAccessChangesOf(operations)).toEqual([]);
   });
 
+  it('lists the drop of a policy renamed to a name recorded like a create', async () => {
+    const operations = recorded([
+      await renameRlsPolicy('public', 'profiles', 'read_own', 'read_own.rename', lowerer),
+      await dropRlsPolicy('public', 'profiles', 'read_own.rename', lowerer),
+    ]);
+
+    expect(recordedAccessChangesOf(operations)).toEqual([
+      { operationIndex: 1, subject: PROFILES, widens: false },
+    ]);
+  });
+
   it('does not list a policy the migration both creates and drops', async () => {
     const operations = recorded([
       await createRlsPolicy('public', 'profiles', policy('read_own', 'ef56ab78'), lowerer),
