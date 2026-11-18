@@ -219,10 +219,13 @@ describe('errorDataProtectionForbids', () => {
     subject: 'post',
     label: 'Disable row-level security on "post"',
   };
-  const keepData =
-    'Change the contract or the migration so it does not lose data. To keep the data, carry it first with a data transform.';
-  const keepAccess =
-    'Change the contract or the migration so it does not change who can read or write the rows.';
+  const ownerCloses =
+    'To do it anyway, whoever owns the database must first change its data protection policy.';
+  const lossForbidden =
+    'The data protection policy forbids losing data, so these operations cannot run on this database.';
+  const keepData = `${lossForbidden} Remove the operation from the migration. ${ownerCloses}`;
+  const keepAccess = `The data protection policy forbids changing who can read or write rows, so these operations cannot run on this database. Keep the contract's access rules as they are. ${ownerCloses}`;
+  const keepDataPlanned = `${lossForbidden} If a model or field was only renamed, state the rename with --rename <old>:<new>. Otherwise keep it in the contract. ${ownerCloses}`;
 
   it('refuses a migration that loses data under data-loss-forbidden the marker records', () => {
     expect(
@@ -230,6 +233,7 @@ describe('errorDataProtectionForbids', () => {
         spaceId: 'app',
         command: 'db migrate',
         refusals: [{ setting: 'dataLoss', source: { kind: 'marker' }, operations: [dropColumn] }],
+        invocation,
       }).toEnvelope(),
     ).toEqual({
       ok: false,
@@ -261,6 +265,7 @@ describe('errorDataProtectionForbids', () => {
             operations: [planned],
           },
         ],
+        invocation,
       }).toEnvelope(),
     ).toEqual({
       ok: false,
@@ -293,6 +298,7 @@ describe('errorDataProtectionForbids', () => {
             operations: [disableRls],
           },
         ],
+        invocation,
       }).toEnvelope(),
     ).toEqual({
       ok: false,
@@ -301,9 +307,9 @@ describe('errorDataProtectionForbids', () => {
       summary:
         "This database's data protection policy forbids data loss and changing who can read or write rows",
       why: 'The marker records dataLoss: data-loss-forbidden. Drop column "legacy_name" from "user" (user.legacy_name), in migration 20261118T0900_drop_legacy of contract space "app". production declares accessWidening: access-widening-forbidden. Disable row-level security on "post" (post), in migration 20261118T0900_drop_legacy of contract space "app".',
-      fix: `${keepData} ${keepAccess}`,
+      fix: `${keepDataPlanned} ${keepAccess}`,
       nextActions: [
-        { kind: 'user-choice', label: keepData },
+        { kind: 'user-choice', label: keepDataPlanned },
         { kind: 'user-choice', label: keepAccess },
       ],
       meta: {
@@ -320,4 +326,62 @@ describe('errorDataProtectionForbids', () => {
       },
     });
   });
+});
+
+describe('errorDataProtectionForbids advice', () => {
+  it('advises --convert through migration plan for a type change db update refuses', () => {
+    const envelope = errorDataProtectionForbids({
+      spaceId: 'app',
+      command: 'db update',
+      refusals: [
+        {
+          setting: 'dataLoss',
+          source: { kind: 'marker' },
+          operations: [
+            {
+              spaceId: 'app',
+              operationId: 'column.user.age.type',
+              subject: 'User.age',
+              label: 'Change the type of column "age"',
+              loss: 'typeChange',
+            },
+          ],
+        },
+      ],
+      invocation: { ...invocation, configPath: 'app.config.ts' },
+    }).toEnvelope();
+
+    expect(envelope.nextActions).toEqual([
+      {
+        kind: 'user-choice',
+        label:
+          'The data protection policy forbids losing data, so these operations cannot run on this database. If a model or field was only renamed, state the rename with --rename <old>:<new>. For a type change, write the conversion with {bin} migration plan --convert <field> --config app.config.ts. Otherwise keep it in the contract. To do it anyway, whoever owns the database must first change its data protection policy.',
+      },
+    ]);
+  });
+
+  it.each(['db migrate', 'db update', 'migration plan'] as const)(
+    'never offers --permit-policy-change, --delete or --allow from %s',
+    (command) => {
+      const { fix } = errorDataProtectionForbids({
+        spaceId: 'app',
+        command,
+        refusals: [
+          {
+            setting: 'dataLoss',
+            source: { kind: 'marker' },
+            operations: [{ spaceId: 'app', subject: 'User.age', label: 'x', loss: 'typeChange' }],
+          },
+          {
+            setting: 'accessWidening',
+            source: { kind: 'marker' },
+            operations: [{ spaceId: 'app', subject: 'User', label: 'y' }],
+          },
+        ],
+        invocation,
+      }).toEnvelope();
+
+      expect(fix).not.toMatch(/--permit-policy-change|--delete|--allow/);
+    },
+  );
 });

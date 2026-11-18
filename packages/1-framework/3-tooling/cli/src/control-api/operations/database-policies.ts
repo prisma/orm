@@ -168,6 +168,7 @@ export function refuseForbiddenChanges(args: {
   readonly forbidden: ForbiddenDataProtection;
   readonly dataLoss: readonly DataProtectionRefusedOperation[];
   readonly accessChanges: readonly DataProtectionRefusedOperation[];
+  readonly invocation: CliInvocation | undefined;
 }): CliStructuredError | undefined {
   const operationsOf = { dataLoss: args.dataLoss, accessWidening: args.accessChanges };
   const refusals = DATA_PROTECTION_SETTINGS.flatMap((setting) => {
@@ -177,5 +178,10 @@ export function refuseForbiddenChanges(args: {
   });
   return refusals.length === 0
     ? undefined
-    : errorDataProtectionForbids({ spaceId: args.appSpaceId, command: args.command, refusals });
+    : errorDataProtectionForbids({
+        spaceId: args.appSpaceId,
+        command: args.command,
+        refusals,
+        invocation: args.invocation,
+      });
 }

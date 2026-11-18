@@ -10,6 +10,7 @@ import type {
   ControlExtensionDescriptor,
   ControlFamilyInstance,
   DatabasePolicyDifference,
+  MigrationDataLossKind,
   MigrationOperationPolicy,
   MigrationOperationSubject,
   MigrationPlannerConflict,
@@ -432,7 +433,9 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
     texts: readonly StatementText[],
   ): CliStructuredError | undefined => {
     if (options.action !== 'dbUpdate' || checkedPolicies === undefined) return undefined;
-    const operations = (entries: readonly MigrationOperationSubject[]) =>
+    const operations = (
+      entries: readonly (MigrationOperationSubject & { readonly loss?: MigrationDataLossKind })[],
+    ) =>
       plannedOperations(planned.orderedResolutions, entries, {
         origin: fromContract ?? EMPTY_ORIGIN,
         destination: contract,
@@ -441,6 +444,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
     return refuseForbiddenChanges({
       appSpaceId: aggregate.app.spaceId,
       command: 'db update',
+      invocation: options.invocation,
       forbidden: forbiddenDataProtectionOfRun(checkedPolicies, options.ref),
       dataLoss: operations(planned.subjects.dataLoss),
       accessChanges: operations(planned.subjects.accessChanges),
@@ -740,13 +744,13 @@ async function readAppOrigin(input: {
  */
 function plannedOperations(
   orderedResolutions: readonly OrderedResolution[],
-  entries: readonly MigrationOperationSubject[],
+  entries: readonly (MigrationOperationSubject & { readonly loss?: MigrationDataLossKind })[],
   contracts: StatementContracts,
 ): readonly DataProtectionRefusedOperation[] {
   const placed = orderedResolutions.flatMap((resolution) =>
     resolution.entry.displayOps.map((operation) => ({ spaceId: resolution.spaceId, operation })),
   );
-  return entries.map(({ operationIndex, subject }) => {
+  return entries.map(({ operationIndex, subject, loss }) => {
     const at = placed[operationIndex];
     if (at === undefined) {
       throw new InternalError(
@@ -758,6 +762,7 @@ function plannedOperations(
       operationId: at.operation.id,
       subject: subjectText(subject, contracts),
       label: at.operation.label,
+      ...ifDefined('loss', loss),
     };
   });
 }

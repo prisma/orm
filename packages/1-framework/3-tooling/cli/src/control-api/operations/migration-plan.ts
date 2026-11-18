@@ -8,6 +8,7 @@ import type { Contract, ContractWithDomain } from '@internal/contract/types';
 import {
   createControlStack,
   hasOperationPreview,
+  type MigrationDataLossKind,
   type MigrationPlanNamespaces,
   type MigrationPlannerConflict,
   type MigrationPlanOperation,
@@ -836,7 +837,7 @@ async function executeMigrationPlanCommandInner(
   try {
     const plannedOperations = (
       leg: PlannerSuccess,
-      entries: readonly PlannedSubject[],
+      entries: readonly (PlannedSubject & { readonly loss?: MigrationDataLossKind | undefined })[],
       planned: readonly StatementText[],
     ): readonly DataProtectionRefusedOperation[] =>
       entries.map((entry) => ({
@@ -851,6 +852,7 @@ async function executeMigrationPlanCommandInner(
           statements: planned,
         }),
         label: entry.label,
+        ...ifDefined('loss', entry.loss),
       }));
     const refuseForbidden = (
       legs: readonly PlannerSuccess[],
@@ -861,6 +863,7 @@ async function executeMigrationPlanCommandInner(
         : refuseForbiddenChanges({
             appSpaceId: aggregate.app.spaceId,
             command: 'migration plan',
+            invocation: invocationOf(options),
             forbidden: forbiddenDataProtectionOfRef(toRef),
             dataLoss: legs.flatMap((leg) => plannedOperations(leg, leg.dataLoss, planned)),
             accessChanges: legs.flatMap((leg) =>

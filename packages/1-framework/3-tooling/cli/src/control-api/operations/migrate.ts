@@ -231,6 +231,7 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     checked: checkedPolicies.value,
     ref,
     outcomes: planned.value,
+    invocation: options.invocation,
   });
   if (forbidden !== undefined) {
     return notOk(forbidden);
@@ -470,6 +471,7 @@ export function refuseForbiddenMigrations(args: {
   readonly checked: CheckedDatabasePolicies;
   readonly ref: NamedRef | undefined;
   readonly outcomes: ReadonlyMap<string, PlannedSpaceOutcome>;
+  readonly invocation: CliInvocation;
 }): CliStructuredError | undefined {
   const pending = [...args.outcomes].flatMap(([spaceId, outcome]) =>
     outcome.kind === 'ok' ? [{ spaceId, entry: outcome.plan }] : [],
@@ -477,6 +479,7 @@ export function refuseForbiddenMigrations(args: {
   return refuseForbiddenChanges({
     appSpaceId: args.appSpaceId,
     command: 'db migrate',
+    invocation: args.invocation,
     forbidden: forbiddenDataProtectionOfRun(args.checked, args.ref),
     dataLoss: pending.flatMap(({ spaceId, entry }) =>
       recordedOperations(spaceId, entry, entry.dataLoss),

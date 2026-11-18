@@ -64,7 +64,7 @@ const DROP_AUDIT: MigrationPlanOperation = {
 };
 
 const KEEP_DATA =
-  'Change the contract or the migration so it does not lose data. To keep the data, carry it first with a data transform.';
+  'The data protection policy forbids losing data, so these operations cannot run on this database. Remove the operation from the migration. To do it anyway, whoever owns the database must first change its data protection policy.';
 
 const projectDirs: string[] = [];
 

@@ -267,6 +267,7 @@ export async function executeMigrateShowPlan(
         checked: permitted.value,
         ref: namedRef,
         outcomes: checked.value,
+        invocation: options.invocation,
       });
       if (forbidden !== undefined) {
         return notOk(forbidden);

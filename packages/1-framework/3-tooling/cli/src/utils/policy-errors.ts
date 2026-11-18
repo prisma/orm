@@ -3,6 +3,7 @@ import {
   type DatabasePolicies,
   type DatabasePolicyDifference,
   databasePolicyValueText,
+  type MigrationDataLossKind,
   movedDatabasePoliciesWhy,
 } from '@internal/framework-components/control';
 import { shellQuoted } from '../control-api/statements/statement-flag';
@@ -119,6 +120,8 @@ export interface DataProtectionRefusedOperation {
   readonly operationId?: string;
   readonly subject: string;
   readonly label: string;
+  /** How the operation loses data, when the plan says. */
+  readonly loss?: MigrationDataLossKind;
 }
 
 /** A data protection setting at its `forbidden` level, where it is recorded, and the operations it refuses. */
@@ -138,12 +141,42 @@ const FORBIDDEN_CHANGE = {
   accessWidening: 'changing who can read or write rows',
 } as const satisfies { readonly [S in DataProtectionSetting]: string };
 
-const KEEP_PROTECTED = {
-  dataLoss:
-    'Change the contract or the migration so it does not lose data. To keep the data, carry it first with a data transform.',
-  accessWidening:
-    'Change the contract or the migration so it does not change who can read or write the rows.',
-} as const satisfies { readonly [S in DataProtectionSetting]: string };
+const DO_IT_ANYWAY =
+  'To do it anyway, whoever owns the database must first change its data protection policy.';
+
+/** What a user can do instead of a refused change, for the command that refused it. */
+function keepProtected(
+  refusal: DataProtectionRefusal,
+  command: DataProtectionCheckedCommand,
+  invocation: CliInvocation | undefined,
+): string {
+  if (refusal.setting === 'accessWidening') {
+    const instead =
+      command === 'db migrate'
+        ? 'Remove the operation from the migration.'
+        : "Keep the contract's access rules as they are.";
+    return `The data protection policy forbids changing who can read or write rows, so these operations cannot run on this database. ${instead} ${DO_IT_ANYWAY}`;
+  }
+  const planned = command !== 'db migrate';
+  const changesType = refusal.operations.some(({ loss }) => loss === 'typeChange');
+  return [
+    'The data protection policy forbids losing data, so these operations cannot run on this database.',
+    ...(planned
+      ? ['If a model or field was only renamed, state the rename with --rename <old>:<new>.']
+      : []),
+    ...(planned && changesType
+      ? [
+          `For a type change, write the conversion with ${cliCommand(
+            invocation === undefined ? undefined : { ...invocation, dbGiven: false },
+            'migration plan',
+            ['--convert', '<field>'],
+          )}.`,
+        ]
+      : []),
+    planned ? 'Otherwise keep it in the contract.' : 'Remove the operation from the migration.',
+    DO_IT_ANYWAY,
+  ].join(' ');
+}
 
 function refusedOperationText(operation: DataProtectionRefusedOperation): string {
   const where =
@@ -158,6 +191,7 @@ export function errorDataProtectionForbids(args: {
   readonly spaceId: string;
   readonly command: DataProtectionCheckedCommand;
   readonly refusals: readonly DataProtectionRefusal[];
+  readonly invocation: CliInvocation | undefined;
 }): ActionableCliError {
   const { spaceId, command, refusals } = args;
   const refNames = new Set(
@@ -176,7 +210,7 @@ export function errorDataProtectionForbids(args: {
       ...operations.map(refusedOperationText),
     ])
     .join(' ');
-  const recoveries = refusals.map(({ setting }) => KEEP_PROTECTED[setting]);
+  const recoveries = refusals.map((refusal) => keepProtected(refusal, command, args.invocation));
   return new ActionableCliError(
     'MIGRATION.DATA_PROTECTION_FORBIDS',
     `${policyHolder} forbids ${forbidden}`,
