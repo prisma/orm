@@ -27,6 +27,7 @@ export const KNOWN_TARGET_PACKAGES = [
     packageName: '@prisma/orm-postgres',
     // biome-ignore lint/plugin/no-family-vocabulary: an entry of the list of known target packages, which holds names only
     formerPackageNames: ['@internal/postgres'],
+    // biome-ignore lint/plugin/no-family-vocabulary: an entry of the list of known target packages, which holds names only
     label: 'PostgreSQL',
     // biome-ignore lint/plugin/no-family-vocabulary: an entry of the list of known target packages, which holds names only
     provider: { name: 'postgresql', writtenBy: 7 },
@@ -41,6 +42,7 @@ export const KNOWN_TARGET_PACKAGES = [
     packageName: '@prisma/orm-mongo',
     // biome-ignore lint/plugin/no-family-vocabulary: an entry of the list of known target packages, which holds names only
     formerPackageNames: ['@internal/mongo'],
+    // biome-ignore lint/plugin/no-family-vocabulary: an entry of the list of known target packages, which holds names only
     label: 'MongoDB',
     // biome-ignore lint/plugin/no-family-vocabulary: an entry of the list of known target packages, which holds names only
     provider: { name: 'mongodb', writtenBy: 6 },

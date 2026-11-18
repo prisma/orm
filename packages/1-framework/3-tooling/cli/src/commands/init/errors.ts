@@ -583,7 +583,7 @@ export function errorInitPrisma7SchemaRefused(options: {
 }
 
 /**
- * The project's schema is a Prisma 6 MongoDB schema. Init stops before changing anything and gives
+ * The project's schema names a provider only Prisma 6 wrote, so it is a Prisma 6 schema. Init stops before changing anything and gives
  * the side-by-side setup as its next actions: set up by init, Prisma 8 would take the `prisma`
  * package name and `prisma.config.ts` from the Prisma 6 CLI the app still runs.
  */
