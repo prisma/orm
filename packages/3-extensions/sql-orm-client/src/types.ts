@@ -195,13 +195,24 @@ export interface RuntimeTransaction extends RuntimeScope {
 /** What the ORM sends its statements to. It must carry an `activitySource` member, as the SQL runtime's queryables, connections, transactions and activity handles do: every terminal method starts an `orm-call` activity through it, and a terminal method on a queryable without one fails with `ORM.ACTIVITY_SOURCE_MISSING`. The member is optional in this type only because the public runtime types do not show it. */
 export interface RuntimeQueryable extends RuntimeScope, Partial<ActivitySourceTarget> {
   connection?(): Promise<RuntimeConnection>;
-  transaction?(options?: SqlTransactionOptions): Promise<RuntimeTransaction>;
+}
+
+export interface CollectionQueryable extends RuntimeQueryable {
+  transaction?<R>(
+    fn: (tx: RuntimeScope) => PromiseLike<R>,
+    options?: SqlTransactionOptions,
+  ): Promise<R>;
 }
 
 export interface CollectionContext<TContract extends Contract<SqlStorage>> {
   readonly runtime: RuntimeQueryable;
   readonly implicitTransactionOptions?: SqlTransactionOptions | undefined;
   readonly context: ExecutionContext<TContract>;
+}
+
+export interface CallContext<TContract extends Contract<SqlStorage>>
+  extends CollectionContext<TContract> {
+  readonly runtime: CollectionQueryable;
 }
 
 type PredicateOperand<T, CodecId extends string> =

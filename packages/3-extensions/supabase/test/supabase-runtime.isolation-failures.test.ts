@@ -44,26 +44,17 @@ describe.each(['callback', 'activity'] as const)(
           route === 'activity'
             ? await startActivityOn(runtime.forRole({ role: 'anon' }), testCall)
             : undefined;
-        const run = async () => {
-          if (activity) {
-            const tx = await activity.transaction?.(undefined);
-            if (!tx) throw new Error('Expected transaction');
-            const result = await callback();
-            await tx.commit();
-            return result;
-          }
-          return withTransaction(runtime.forRole({ role: 'anon' }), callback, {
-            isolationLevel: 'Serializable',
-          });
-        };
+        const options = { isolationLevel: 'Serializable' } as const;
+        const run = () =>
+          activity
+            ? activity.transaction?.(callback, options)
+            : withTransaction(runtime.forRole({ role: 'anon' }), callback, options);
         try {
           if (point === 'reset') await expect(run()).resolves.toBe(42);
           else await expect(run()).rejects.toBe(failure);
           expect(callback).toHaveBeenCalledTimes(point === 'reset' ? 1 : 0);
           expect(connection.beginTransactionSpy.mock.calls).toEqual(
-            point === 'setup' || point === 'refusal'
-              ? []
-              : [[route === 'activity' ? undefined : { isolationLevel: 'Serializable' }]],
+            point === 'setup' || point === 'refusal' ? [] : [[options]],
           );
           expect(connection.release).toHaveBeenCalledTimes(point === 'refusal' ? 1 : 0);
           expect(connection.destroy).toHaveBeenCalledTimes(point === 'refusal' ? 0 : 1);
@@ -92,24 +83,20 @@ describe.each(['callback', 'activity'] as const)(
           ? await startActivityOn(runtime.forRole({ role: 'anon' }), testCall)
           : undefined;
       try {
-        if (activity) {
-          const tx = await activity.transaction?.(undefined);
-          await expect(tx?.rollback()).rejects.toBe(rollback);
-        } else {
-          await expect(
-            withTransaction(
-              runtime.forRole({ role: 'anon' }),
-              async () => {
-                throw failure;
-              },
-              { isolationLevel: 'Serializable' },
-            ),
-          ).rejects.toMatchObject({
-            code: 'RUNTIME.TRANSACTION_ROLLBACK_FAILED',
-            cause: failure,
-            details: { rollbackError: rollback },
-          });
-        }
+        const callback = async () => {
+          throw failure;
+        };
+        await expect(
+          activity
+            ? activity.transaction?.(callback)
+            : withTransaction(runtime.forRole({ role: 'anon' }), callback, {
+                isolationLevel: 'Serializable',
+              }),
+        ).rejects.toMatchObject({
+          code: 'RUNTIME.TRANSACTION_ROLLBACK_FAILED',
+          cause: failure,
+          details: { rollbackError: rollback },
+        });
         expect(driver.connection.release).not.toHaveBeenCalled();
         expect(driver.connection.destroy).toHaveBeenCalledTimes(1);
       } finally {

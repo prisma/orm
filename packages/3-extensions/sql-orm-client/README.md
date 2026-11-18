@@ -47,8 +47,9 @@ This package should not depend on target adapters or drivers directly; execution
 
 - `query<Row>(plan)` — streams rows; `execute(plan)` — returns statement stats. Both come from `RuntimeScope` and accept AST-level `SqlQueryPlan` and pre-lowered `SqlExecutionPlan`.
 - `connection?()` — opt-in connection acquisition for grouped multi-statement work.
-- `transaction?(options?)` — opt-in transaction acquisition for atomic mutation scopes, accepting resolved `SqlTransactionOptions`.
 - `[activitySource]` — the SQL runtime's activity source, through which the client starts an `orm-call` activity for each terminal method (see [Calls are activities](#calls-are-activities)). The runtime's queryables, connections, transactions and activity handles carry it. The type marks it optional only because the public runtime types do not show it; a runtime passed to `orm()` must carry it. A hand-built `{ query, execute }` object does not, and every terminal method on it fails with `ORM.ACTIVITY_SOURCE_MISSING`.
+
+An ORM call's activity handle also has `transaction(fn, options?)`, typed on `CollectionQueryable`: it runs `fn` in one transaction through the SQL runtime's `withTransaction`, and the client runs a write of several statements in it, with resolved `SqlTransactionOptions`. A handle opened inside a transaction has none.
 
 `connection()` and `transaction()` are SQL-specific orchestration capabilities and are intentionally absent from the cross-family `RuntimeExecutor` contract. Runtimes that don't expose them are still used for single-statement execution.
 
@@ -83,7 +84,7 @@ const audit: SqlMiddleware = {
 await db.orm.public.User.first({ id: 1 }, (meta) => meta.annotate(cacheAnnotation({ key: 'user-1' })));
 ```
 
-- **Statements go through the call.** Reads and the statements of a statement graph, including those of nested-relation mutations, are the call's children. The client's own transaction is `handle.transaction()`; inside `db.transaction(fn)` the call is a child of that transaction and opens none of its own.
+- **Statements go through the call.** Reads and the statements of a statement graph, including those of nested-relation mutations, are the call's children. The client's own transaction is `handle.transaction(fn)`, which reports a failed `COMMIT` or `ROLLBACK` with `withTransaction`'s codes; inside `db.transaction(fn)` the call is a child of that transaction and opens none of its own.
 - **Annotations live on the call.** The annotations the `configure` callback records are the call's, including for writes with relation callbacks. The statements the call sends carry only the reserved keys the client sets itself, so a middleware that reads annotations from `plan.meta.annotations` sees none from an ORM call.
 - **The call ends with the value the method returns:** the model rows, the row or `null`, the aggregate object or the count. A failed call ends `failed`. A streaming terminal such as `all()` starts its call when the caller first reads it and ends it when the caller reads to the end (`succeeded`), stops early (`stopped`) or the stream fails (`failed`); it keeps the rows for the call's result only when the call carries annotations. Read a streaming terminal with `for await` or `await`, or call `return()` on its iterator when you stop early: an iterator dropped after `next()` leaves its call open, and `close()` then waits for it for ever.
 - **Middleware can answer the call.** When an `intercept.onActivity` handler supplies a result, the client returns it without sending any statement. A value of the wrong shape for the method rejects with `ORM.INTERCEPTED_RESULT_INVALID`.

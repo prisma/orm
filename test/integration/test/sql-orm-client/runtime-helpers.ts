@@ -20,6 +20,7 @@ import {
   findActivitySource,
   type PreparedStatement,
   type RuntimeConnection,
+  type RuntimeTransactionOptions,
   type SqlMiddleware,
   type SqlRuntimeExtensionDescriptor,
   type RuntimeQueryable as SqlRuntimeQueryable,
@@ -301,6 +302,7 @@ export function withPlanRecording<T extends SqlRuntimeQueryable>(
   const transaction: unknown = Reflect.get(target, 'transaction');
   const preparedQuery: unknown = Reflect.get(target, preparedStatementQuery);
   const preparedExecute: unknown = Reflect.get(target, preparedStatementExecute);
+  const commit: unknown = Reflect.get(target, 'commit');
   const recording = {
     query<Row>(
       plan: (SqlExecutionPlan | SqlQueryPlan) & { readonly _row?: Row },
@@ -316,12 +318,24 @@ export function withPlanRecording<T extends SqlRuntimeQueryable>(
       record(plan);
       return await target.execute(plan, options);
     },
-    ...(typeof transaction === 'function'
-      ? {
-          transaction: async () =>
-            withPlanRecording((await transaction.call(target)) as SqlRuntimeQueryable, record),
-        }
-      : {}),
+    ...(typeof transaction !== 'function'
+      ? {}
+      : typeof commit === 'function'
+        ? {
+            transaction: async () =>
+              withPlanRecording((await transaction.call(target)) as SqlRuntimeQueryable, record),
+          }
+        : {
+            transaction: (
+              fn: (tx: SqlRuntimeQueryable) => PromiseLike<unknown>,
+              options?: RuntimeTransactionOptions,
+            ) =>
+              transaction.call(
+                target,
+                (tx: SqlRuntimeQueryable) => fn(withPlanRecording(tx, record)),
+                options,
+              ),
+          }),
     ...(typeof preparedQuery === 'function'
       ? {
           [preparedStatementQuery]: (
