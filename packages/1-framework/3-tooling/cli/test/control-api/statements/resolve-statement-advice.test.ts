@@ -109,13 +109,13 @@ describe('statement errors say what to type', () => {
   it('says a model renamed to itself renames nothing, and what to do when only its stored name changed', () => {
     expect(adviceOf(resolve(['Profile:Profile'], profile, profile), INVALID)).toEqual({
       why: 'The statement renames model "Profile" to itself.',
-      fix: 'Leave out --rename Profile:Profile. A model or field that keeps its name needs no statement when only its stored name changes (@map or @@map): the plan renames what it is stored in where the target can, and otherwise asks about it.',
+      fix: 'Leave out --rename Profile:Profile and plan again. A model or field that keeps its name needs no statement when only its stored name changes (@map or @@map).',
     });
   });
 
   it('says a field renamed to itself renames nothing, and what to do when only its stored name changed', () => {
     expect(adviceOf(resolve(['Profile.name:Profile.name'], profile, profile), INVALID).fix).toBe(
-      'Leave out --rename Profile.name:Profile.name. A model or field that keeps its name needs no statement when only its stored name changes (@map or @@map): the plan renames what it is stored in where the target can, and otherwise asks about it.',
+      'Leave out --rename Profile.name:Profile.name and plan again. A model or field that keeps its name needs no statement when only its stored name changes (@map or @@map).',
     );
   });
 

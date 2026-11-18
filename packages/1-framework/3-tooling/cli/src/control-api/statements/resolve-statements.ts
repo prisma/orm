@@ -165,7 +165,7 @@ const LISTED_LIMIT = 20;
 const CHECK_NAMES_FIX =
   'The old name must exist in the origin contract and not in the destination contract, and the new name the other way round. Names match exactly, including case.';
 const STORED_NAME_ONLY =
-  'A model or field that keeps its name needs no statement when only its stored name changes (@map or @@map): the plan renames what it is stored in where the target can, and otherwise asks about it.';
+  'A model or field that keeps its name needs no statement when only its stored name changes (@map or @@map).';
 const REPEATED_NAME_FIX =
   'Give each model, field or enum value at most one statement, and each new name to one model, field or enum value only.';
 
@@ -808,7 +808,7 @@ function resolveModelRename(
       errorStatementInvalid(
         statement,
         `The statement renames model "${qualifiedModel(from)}" to itself.`,
-        `Leave out --${statement.verb} ${statement.text}. ${STORED_NAME_ONLY}`,
+        `Leave out --${statement.verb} ${statement.text} and plan again. ${STORED_NAME_ONLY}`,
       ),
     );
   }
@@ -954,7 +954,7 @@ function resolveFieldRename(
       errorStatementInvalid(
         statement,
         `The statement renames field "${toModel}.${to.coordinate.field}" to itself.`,
-        `Leave out --${statement.verb} ${statement.text}. ${STORED_NAME_ONLY}`,
+        `Leave out --${statement.verb} ${statement.text} and plan again. ${STORED_NAME_ONLY}`,
       ),
     );
   }
@@ -1209,7 +1209,7 @@ function swapRefusal(
       : `${statement.to.slice(0, -1).join('.')}.<temporary name>`;
   const keptNames =
     entity === 'enumValue'
-      ? ' If the members keep their names and only their stored values trade places, leave out the statement: a member that keeps its name needs no statement, and the plan rewrites its stored value where the target can, and otherwise says how to keep the data.'
+      ? ' If the members keep their names and only their stored values trade places, leave out the statement and plan again: a member that keeps its name needs no statement.'
       : '';
   return errorStatementInvalid(
     statement,
