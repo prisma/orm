@@ -4569,6 +4569,9 @@ importers:
       '@internal/sql-contract':
         specifier: workspace:8.0.0-rc.24
         version: link:../../../../2-sql-family/1-core/contract
+      '@internal/sql-contract-ts':
+        specifier: workspace:8.0.0-rc.24
+        version: link:../../../../2-sql-family/2-authoring/contract-ts
       '@internal/sql-orm-client':
         specifier: workspace:8.0.0-rc.24
         version: link:../../../../3-extensions/sql-orm-client

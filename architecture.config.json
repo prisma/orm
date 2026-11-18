@@ -1585,6 +1585,12 @@
       "plane": "migration"
     },
     {
+      "glob": "packages/3-targets/mysql/2-mariadb/2-adapter/src/exports/adapter.ts",
+      "domain": "targets",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-targets/mysql/2-mariadb/2-adapter/src/exports/codec-types.ts",
       "domain": "targets",
       "layer": "adapters",
@@ -1667,6 +1673,18 @@
       "domain": "extensions",
       "layer": "adapters",
       "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/9-facade/src/exports/contract-builder.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/9-facade/src/contract/**",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
     },
     {
       "glob": "packages/3-targets/mysql/2-mariadb/9-facade/src/config/**",

@@ -48,23 +48,29 @@ describe('defineConfig for MariaDB', () => {
     });
   });
 
-  it.each([
-    './prisma/contract.ts',
-    './prisma/contract.mts',
-    './prisma/contract.cts',
-    './prisma/contract.tsx',
-  ])('refuses the TypeScript contract %s', (contract) => {
-    expect(() => defineConfig({ contract })).toThrow(
-      expect.objectContaining({
-        name: 'StructuredError',
-        code: 'CONFIG.VALIDATION_FAILED',
-        message: `defineConfig for target "mariadb" cannot build a contract from "${contract}", which is a TypeScript contract.`,
-        why: 'Target "mariadb" builds contracts from Prisma schemas and does not support TypeScript contracts.',
-        fix: 'Point `contract` at a Prisma schema: a .prisma file, a folder of them, or a glob.',
-        meta: { contract },
-      }),
-    );
+  it('reads a TypeScript contract with the TypeScript provider', () => {
+    const config = defineConfig({ contract: './prisma/contract.ts', output: 'generated' });
+    expect({ output: config.contract?.output, inputs: config.contract?.source.inputs }).toEqual({
+      output: 'generated/contract.json',
+      inputs: ['./prisma/contract.ts'],
+    });
   });
+
+  it.each(['./prisma/contract.mts', './prisma/contract.cts', './prisma/contract.tsx'])(
+    'refuses the TypeScript contract %s, which is not a .ts file',
+    (contract) => {
+      expect(() => defineConfig({ contract })).toThrow(
+        expect.objectContaining({
+          name: 'StructuredError',
+          code: 'CONFIG.VALIDATION_FAILED',
+          message: `defineConfig for target "mariadb" cannot build a contract from "${contract}".`,
+          why: 'A TypeScript contract must be a .ts file.',
+          fix: 'Rename the contract to a .ts file, or point `contract` at a Prisma schema: a .prisma file, a folder of them, or a glob.',
+          meta: { contract },
+        }),
+      );
+    },
+  );
 
   it('emits a PSL contract for target mariadb, with no returning or one-query include capability and typed by its contract-types module', async () => {
     const { contract, contractDts } = await emitFixture('example');

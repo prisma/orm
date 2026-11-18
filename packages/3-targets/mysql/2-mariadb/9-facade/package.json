@@ -25,6 +25,7 @@
     "@internal/family-sql": "workspace:8.0.0-rc.24",
     "@internal/mysql": "workspace:8.0.0-rc.24",
     "@internal/sql-contract": "workspace:8.0.0-rc.24",
+    "@internal/sql-contract-ts": "workspace:8.0.0-rc.24",
     "@internal/sql-orm-client": "workspace:8.0.0-rc.24",
     "@internal/sql-runtime": "workspace:8.0.0-rc.24",
     "@internal/target-mariadb": "workspace:8.0.0-rc.24",
@@ -62,6 +63,7 @@
   ],
   "exports": {
     "./config": "./dist/config.mjs",
+    "./contract-builder": "./dist/contract-builder.mjs",
     "./contract-types": "./dist/contract-types.mjs",
     "./control": "./dist/control.mjs",
     "./migration": "./dist/migration.mjs",
