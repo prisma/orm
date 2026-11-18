@@ -1,0 +1,11 @@
+// use prisma-8
+
+// Real emitted fixture for SQLite's Boolean fields.
+
+model Account {
+  id     Int      @id
+  active Boolean  @default(true)
+  admin  Boolean?
+
+  @@map("account")
+}
