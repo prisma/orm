@@ -11,10 +11,16 @@ async function emitFailure(
   client: ReturnType<typeof createMariadbControlClient>,
   contract: ReturnType<typeof defineConfig>['contract'],
 ): Promise<unknown> {
-  if (contract === undefined) throw new Error('defineConfig set no contract');
+  if (contract?.typesModule === undefined) {
+    throw new Error('defineConfig set no contract or no contract types module');
+  }
   try {
     const result = await client.emit({
-      contractConfig: { source: contract.source, output: contract.output ?? 'contract.json' },
+      contractConfig: {
+        source: contract.source,
+        output: contract.output ?? 'contract.json',
+        typesModule: contract.typesModule,
+      },
     });
     return result.ok ? 'emitted' : result.failure;
   } finally {
