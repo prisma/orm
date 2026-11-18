@@ -57,7 +57,7 @@ Two names change the contract. A `Decimal` field gets its own codec, `sqlite/dec
 
 `Int` and every other field on the codec `sqlite/integer@1` now checks that a value is an integer within the safe integer range, as `BigIntNumber` did; see `sqlite-integer-safe-range`.
 
-A `BigInt` field now reads every stored 64-bit integer. Before, reading a row that held an integer outside ±(2^53 − 1) failed in `node:sqlite` with a `RangeError` whose code is `ERR_OUT_OF_RANGE`, so only a read through an `include()` or a `sumBigInt` gave the value. Nothing in the schema changes for it.
+A `BigInt` field now reads every stored 64-bit integer. Before, reading a row that held an integer outside ±(2^53 − 1) failed in `node:sqlite` with a `RangeError` whose code is `ERR_OUT_OF_RANGE`, so only a read through an `include()` or a `sumBigInt` gave the value. Nothing in the schema changes for it. A value read without an integer codec, such as a column of a raw SQL query, is now a `number` within the safe integer range and an exact `bigint` outside it, where the read threw before. `JSON.stringify` throws on a `bigint`, so code that serializes such a row prints the value with `String(value)`. A `BigInt` field also refuses to write a `bigint` outside the signed 64-bit range with `RUNTIME.ENCODE_FAILED`, where `node:sqlite` threw a `TypeError` before.
 
 The column helpers of the TypeScript contract builder are renamed after the explicit type each gives, and `decimalStringColumn` and `integerBooleanColumn` are new.
 

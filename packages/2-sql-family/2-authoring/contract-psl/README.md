@@ -120,7 +120,7 @@ model Post {
 Integer representation authoring surface:
 
 - `BigInt` keeps the lossless `bigint` codec (`pg/int8@1` / `sqlite/bigint@1`): values read and write as JS `bigint`, and 64-bit integers travel through database-produced JSON as decimal text.
-- `BigInt(as: number)` on PostgreSQL (the explicit type `Int8Number`) and bare `BigIntNumber` on SQLite opt an `int8`/INTEGER column into JS `number` reads and writes. Both directions throw structured errors outside ±(2^53 − 1) or on non-integral values: `RUNTIME.ENCODE_FAILED` on write, `RUNTIME.DECODE_FAILED` on read.
+- `BigInt(as: number)`, the explicit type `Int8Number` on PostgreSQL and `IntegerNumber` on SQLite, opts an `int8`/INTEGER column into JS `number` reads and writes. Both directions throw structured errors outside ±(2^53 − 1) or on non-integral values: `RUNTIME.ENCODE_FAILED` on write, `RUNTIME.DECODE_FAILED` on read.
 - `BigInt(storage: numeric)` (PostgreSQL only, the explicit type `NumericBigInt`) reads and writes an unconstrained `numeric` as a JS `bigint`, exact at any magnitude; decode rejects non-integral values. SQLite declares no equivalent because it has no lossless unbounded integer storage.
 - These are ordinary target-scoped types, so ordinary scalar modifiers apply subject to the target's capabilities.
 - Selection guidance, canonical JSON forms, the safe-range soundness argument, and aggregate behavior: [Integer representation types](../../../../docs/reference/integer-representation-types.md).

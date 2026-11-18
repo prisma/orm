@@ -1,6 +1,6 @@
 # Integer representation types
 
-Prisma 8 SQL contracts can choose how integer columns appear in application code. Use the default `BigInt` type when the database's integer range is sufficient and the application can work with `bigint`; opt into a JavaScript `number` guarded by the safe-integer range, written `BigInt(as: number)` on PostgreSQL and `BigIntNumber` on SQLite; on PostgreSQL, write `BigInt(storage: numeric)` when values must remain exact beyond 64-bit storage. On PostgreSQL, `BigInt` is a convenience type ([ADR 316](../architecture%20docs/adrs/ADR%20316%20-%20PostgreSQL%20scalars%20get%20convenience%20types.md)) whose calls choose the explicit types `Int8BigInt`, `Int8Number` and `NumericBigInt`.
+Prisma 8 SQL contracts can choose how integer columns appear in application code. Use the default `BigInt` type when the database's integer range is sufficient and the application can work with `bigint`; opt into a JavaScript `number` guarded by the safe-integer range, written `BigInt(as: number)`; on PostgreSQL, write `BigInt(storage: numeric)` when values must remain exact beyond 64-bit storage. On PostgreSQL, `BigInt` is a convenience type ([ADR 316](../architecture%20docs/adrs/ADR%20316%20-%20PostgreSQL%20scalars%20get%20convenience%20types.md)) whose calls choose the explicit types `Int8BigInt`, `Int8Number` and `NumericBigInt`.
 
 ## Choose a representation
 
