@@ -176,7 +176,7 @@ describe('SQLite codecs read the value an include carries', () => {
       message: `A sqlite/integer@1 value is "${'a'.repeat(100)}", which is not an integer within the safe integer range. sqlite/integer@1 reads integers from -9007199254740991 to 9007199254740991.`,
       meta: { received: 'a'.repeat(100) },
     });
-    await expect(integer.fromWire(new Uint8Array(80), ctx)).rejects.toMatchObject({
+    await expect(integer.fromWire(new Uint8Array(80) as never, ctx)).rejects.toMatchObject({
       meta: { received: `x'${'0'.repeat(100)}'` },
     });
   });
