@@ -274,7 +274,7 @@ describe('resolveStatements, enum value statements typed wrong', () => {
     expect(
       expectFailure(resolve(['Status.OPEN:Status.ARCHIVED'], swapped, swapped), INVALID).fix,
     ).toContain(
-      'If the members keep their names and only their stored values trade places, leave out the statement: the plan asks about each value and names the edits that keep its data.',
+      'If the members keep their names and only their stored values trade places, leave out the statement: a member that keeps its name needs no statement, and the plan rewrites its stored value where the target can, and otherwise says how to keep the data.',
     );
   });
 });
