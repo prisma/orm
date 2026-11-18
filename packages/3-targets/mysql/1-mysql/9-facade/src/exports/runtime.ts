@@ -1,17 +1,21 @@
 export type { MysqlPoolOptions } from '@internal/driver-mysql/runtime';
 export { mysqlIsolationLevels as IsolationLevel } from '@internal/target-mysql/runtime';
 export type { MysqlBindingInput } from '../runtime/binding';
-export type {
-  MysqlClient,
-  MysqlOptions,
-  MysqlOptionsBase,
-  MysqlOrm,
-  MysqlQueryMembers,
-  MysqlStaticMembers,
-  MysqlTargetId,
-  MysqlTransactionContext,
+export {
+  createMysqlClient,
+  default,
+  type MysqlClient,
+  type MysqlClientComponents,
+  type MysqlClientFactory,
+  type MysqlOptions,
+  type MysqlOptionsBase,
+  type MysqlOrm,
+  type MysqlQueryMembers,
+  type MysqlStaticMembers,
+  type MysqlTargetId,
+  type MysqlTransactionContext,
+  mysqlUrlSchemes,
 } from '../runtime/mysql';
-export { default } from '../runtime/mysql';
 export type { MysqlTransactionOptions } from '../runtime/mysql-options';
 export type { MysqlRuntime } from '../runtime/mysql-runtime';
 export { MysqlRuntimeImpl } from '../runtime/mysql-runtime';

@@ -43,7 +43,7 @@ export function mysqlMigrationStackMissing(operation: string) {
     `MysqlMigration.${operation} requires a control adapter`,
     {
       why: `MysqlMigration.${operation} was invoked on an instance constructed without a ControlStack, so it cannot render its DDL.`,
-      fix: 'Construct the migration via the migration CLI entrypoint, which assembles a ControlStack from prisma.config.ts, or pass a ControlStack with a MySQL adapter to the migration constructor in test fixtures.',
+      fix: 'Construct the migration via the migration CLI entrypoint, which assembles a ControlStack from prisma.config.ts, or pass a ControlStack with a MySQL or MariaDB adapter to the migration constructor in test fixtures.',
       meta: { operation },
     },
   );
@@ -115,7 +115,7 @@ function renderConstraint(constraint: DdlTableConstraint): string {
     case 'check-expression':
       throw mysqlError(
         'CONTRACT.CONSTRAINT_INVALID',
-        `The MySQL createTable call writes primary keys and unique constraints only; add ${constraint.kind === 'foreign-key' ? 'a foreign key with addForeignKey' : 'no CHECK constraint'} (constraint "${constraint.name ?? ''}").`,
+        `The createTable call of MySQL and MariaDB migrations writes primary keys and unique constraints only; add ${constraint.kind === 'foreign-key' ? 'a foreign key with addForeignKey' : 'no CHECK constraint'} (constraint "${constraint.name ?? ''}").`,
         { meta: { constraintKind: constraint.kind } },
       );
   }

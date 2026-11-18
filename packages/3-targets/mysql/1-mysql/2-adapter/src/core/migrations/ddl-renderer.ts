@@ -29,7 +29,7 @@ const FRACTIONAL_SECONDS = /^(?:datetime|timestamp|time)\((\d)\)$/i;
 function refusedDefault(where: LiteralDefaultColumn, why: string): never {
   throw structuredError(
     'CONTRACT.DEFAULT_INVALID',
-    `Column "${where.table}"."${where.column}" has a default MySQL cannot store: ${why}`,
+    `Column "${where.table}"."${where.column}" has a default MySQL and MariaDB cannot store: ${why}`,
     { meta: { table: where.table, column: where.column } },
   );
 }
@@ -180,7 +180,7 @@ function renderConstraint(constraint: DdlTableConstraint): string {
     case 'check-expression':
       throw structuredError(
         'CONTRACT.CONSTRAINT_INVALID',
-        `The MySQL target does not write CHECK constraints yet (constraint "${constraint.name}").`,
+        `The MySQL and MariaDB targets do not write CHECK constraints yet (constraint "${constraint.name}").`,
         { meta: { constraintName: constraint.name } },
       );
   }

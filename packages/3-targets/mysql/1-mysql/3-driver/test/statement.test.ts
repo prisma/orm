@@ -12,11 +12,11 @@ const connection = connectionReading(utf8mb4);
 describe('statementFor', () => {
   it('hands over a statement without values exactly as written, with no values, so the package sends it without searching it for placeholders', () => {
     const sql = "SELECT 1 AS a /*/ ? */ , 'x?' -- ?\n";
-    expect(statementFor(connection, sql, [])).toEqual({ sql, values: undefined });
+    expect(statementFor(connection, sql, [], 'MySQL')).toEqual({ sql, values: undefined });
   });
 
   it('writes each placeholder of a statement with values as ? and orders its values', () => {
-    expect(statementFor(connection, 'SELECT ?2, ?1', ['a', 'b'])).toEqual({
+    expect(statementFor(connection, 'SELECT ?2, ?1', ['a', 'b'], 'MySQL')).toEqual({
       sql: 'SELECT ?, ?',
       values: ['b', 'a'],
     });
@@ -30,13 +30,13 @@ describe('statementFor', () => {
     'refuses a statement with values while MySQL reports the character set %s, and hands over one without values',
     (characterSet, collation) => {
       const reading = connectionReading(collation);
-      expect(() => statementFor(reading, 'SELECT ?1', ['x'])).toThrow(
+      expect(() => statementFor(reading, 'SELECT ?1', ['x'], 'MySQL')).toThrow(
         expect.objectContaining({
           code: 'RUNTIME.CHARACTER_SET_UNSUPPORTED',
           meta: { characterSet, params: 1 },
         }),
       );
-      expect(statementFor(reading, 'SET NAMES utf8mb4', [])).toEqual({
+      expect(statementFor(reading, 'SET NAMES utf8mb4', [], 'MySQL')).toEqual({
         sql: 'SET NAMES utf8mb4',
         values: undefined,
       });
@@ -45,7 +45,12 @@ describe('statementFor', () => {
 
   it('says the driver could not confirm utf8mb4, and gives a fix for a changed character set and for a server that does not report it', () => {
     expect(() =>
-      statementFor(connectionReading({ charset: 'latin1', maxLength: 1 }), 'SELECT ?1', ['x']),
+      statementFor(
+        connectionReading({ charset: 'latin1', maxLength: 1 }),
+        'SELECT ?1',
+        ['x'],
+        'MySQL',
+      ),
     ).toThrow(
       expect.objectContaining({
         message: expect.stringMatching(
@@ -61,7 +66,7 @@ describe('statementFor', () => {
 
   it('refuses a statement with values when the package has recorded no character set', () => {
     expect(() =>
-      statementFor({ info: { status: 0, collation: null } } as never, 'SELECT ?1', ['x']),
+      statementFor({ info: { status: 0, collation: null } } as never, 'SELECT ?1', ['x'], 'MySQL'),
     ).toThrow(
       expect.objectContaining({
         code: 'RUNTIME.CHARACTER_SET_UNSUPPORTED',
