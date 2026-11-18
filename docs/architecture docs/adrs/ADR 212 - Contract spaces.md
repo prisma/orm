@@ -232,6 +232,8 @@ The runner's `execute({ driver, perSpaceOptions })` takes every space's plan in 
 
 Either way the failure's payload names the space that failed (`failingSpace`) and says whether the database changed (`databaseUnchanged`). The CLI's `why` names the space when it is not the application's own.
 
+A target does not declare its atomicity as a fixed property. The migrations capability has no field such as `applyAtomicity: 'all-spaces' | 'per-space'`. Each failed apply already reports what it left in `databaseUnchanged`, so code that read such a field would only repeat that report. And "per space" would wrongly suggest that each space applies all or nothing, when only its marker write is atomic and the operations that ran stay applied.
+
 **Cross-space ordering**: extension spaces alphabetical-by-spaceId first, app-space last. The convention is sufficient for v1 (a formal cross-space dependency graph is deferred), and matches the implicit dependency direction — application schema may reference extension-provided types (`Encrypted<String>` → `eql_v2_encrypted`), so extension types must exist before the app's `CREATE TABLE` runs.
 
 ### Disjoint per-space ownership: schema-prune
