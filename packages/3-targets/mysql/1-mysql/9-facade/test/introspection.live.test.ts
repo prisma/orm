@@ -218,6 +218,29 @@ describe('introspecting a MySQL database made by hand', {
     );
   });
 
+  it('reports a text default on a longblob column as unreadable, without reading the text as bytes', async (test) => {
+    const contract = contractWithScalarTypes();
+    const ddl = `CREATE TABLE \`Measure\` (
+      \`id\` int NOT NULL,
+      \`data\` longblob NOT NULL DEFAULT ('abcd'),
+      PRIMARY KEY (\`id\`)
+    )`;
+    await withMysqlDatabase(test, ({ url }) =>
+      withExampleTables(url, [ddl], async (driver) => {
+        const data = (await introspect(driver, contract)).tables['Measure']?.columns['data'];
+        expect({
+          resolvedDefault: data?.resolvedDefault,
+          unreadable: data?.defaultUnreadable,
+        }).toEqual({
+          resolvedDefault: undefined,
+          unreadable: expect.stringContaining(
+            "Write the default as one, as in DEFAULT (X'61626364')",
+          ),
+        });
+      }),
+    );
+  });
+
   it('verifies a unique constraint and a unique index the contract declares without drift', async (test) => {
     const contract = contractWithBothKindsOfUniqueness();
     const account = contract.storage.namespaces['__unbound__']?.entries.table?.['Account'];

@@ -233,6 +233,58 @@ describe('buildMysqlSchemaIR', () => {
     });
   });
 
+  it('reports a text default on a bytes column as unreadable, without reading it as bytes', async () => {
+    const read: string[] = [];
+    const recordingReadLiteral: ReadLiteralDefault = async (table, name, raw, body) => {
+      read.push(name);
+      return readLiteral(table, name, raw, body);
+    };
+    const schema = await buildMysqlSchemaIR(
+      {
+        tables: ['Blobs'],
+        columns: [
+          column('Blobs', 'mysql', 1, 'longblob', {
+            column_default: "_utf8mb4\\'abcd\\'",
+            extra: 'DEFAULT_GENERATED',
+          }),
+          column('Blobs', 'mariadb', 2, 'longblob', { column_default: 'abcd' }),
+          column('Blobs', 'hex', 3, 'longblob', {
+            column_default: '0x61626364',
+            extra: 'DEFAULT_GENERATED',
+          }),
+          column('Blobs', 'fixed', 4, 'varbinary(4)', { column_default: 'abcd' }),
+          column('Blobs', 'note', 5, 'text', {
+            column_default: "_utf8mb4\\'abcd\\'",
+            extra: 'DEFAULT_GENERATED',
+          }),
+        ],
+        indexes: [],
+        constraints: [],
+        foreignKeys: [],
+      },
+      mysqlDataTypes,
+      recordingReadLiteral,
+    );
+    const columns = schema.tables['Blobs']?.columns ?? {};
+    const textOnBytes = (type: string) =>
+      `The database reports the default 'abcd' on this ${type} column, which is text, not bytes. Prisma reads a bytes default only when it is written as a hexadecimal literal, such as X'00FF'. Write the default as one, as in DEFAULT (X'61626364'), or remove it.`;
+    expect(
+      Object.fromEntries(
+        Object.entries(columns).map(([name, c]) => [
+          name,
+          [c.resolvedDefault, c.defaultUnreadable],
+        ]),
+      ),
+    ).toEqual({
+      mysql: [undefined, textOnBytes('longblob')],
+      mariadb: [undefined, textOnBytes('longblob')],
+      hex: [{ kind: 'literal', value: '0x61626364 as 4 bytes' }, undefined],
+      fixed: [undefined, textOnBytes('varbinary(4)')],
+      note: [{ kind: 'literal', value: 'abcd' }, undefined],
+    });
+    expect(read).toEqual(['hex', 'note']);
+  });
+
   it('resolves each column’s reported type to the data type that claims it', async () => {
     const schema = await buildMysqlSchemaIR(rows, mysqlDataTypes, readLiteral);
     const email = schema.tables['User']?.columns['email'];

@@ -139,28 +139,41 @@ function byPosition<Row>(position: (row: Row) => string): (a: Row, b: Row) => nu
   return (a, b) => Number(position(a)) - Number(position(b));
 }
 
+type ReadDefault = Pick<SqlColumnIRInput, 'resolvedDefault' | 'defaultValue' | 'defaultUnreadable'>;
+
+const BYTES_COLUMN_TYPE = /^(?:(?:tiny|medium|long)?blob|(?:var)?binary\(\d+\))$/i;
+
+/** A text default on a bytes column: the column's codec would read the text as base64, so only a hexadecimal literal is read as bytes. */
+function textDefaultOnBytesColumn(columnType: string, text: string): ReadDefault {
+  const hex = Buffer.from(text, 'utf8').toString('hex').toUpperCase();
+  return {
+    defaultUnreadable: `The database reports the default '${text}' on this ${columnType} column, which is text, not bytes. Prisma reads a bytes default only when it is written as a hexadecimal literal, such as X'00FF'. Write the default as one, as in DEFAULT (X'${hex}'), or remove it.`,
+  };
+}
+
+async function readDefaultOf(
+  row: MysqlColumnRow,
+  readLiteralDefault: ReadLiteralDefault,
+): Promise<ReadDefault> {
+  const reported = readMysqlDefault(row.column_default, row.extra);
+  if (reported === undefined) return {};
+  if (reported.kind === 'function') return { resolvedDefault: reported satisfies ColumnDefault };
+  const { body } = reported.literal;
+  if (typeof body !== 'string') {
+    return readLiteralDefault(row.table_name, row.column_name, row.column_default ?? '', body);
+  }
+  if (BYTES_COLUMN_TYPE.test(row.column_type)) {
+    return textDefaultOnBytesColumn(row.column_type, body);
+  }
+  return readLiteralDefault(row.table_name, row.column_name, body, body);
+}
+
 async function columnOf(
   row: MysqlColumnRow,
   dataTypes: readonly DataType[],
   readLiteralDefault: ReadLiteralDefault,
 ): Promise<SqlColumnIRInput> {
-  const reported = readMysqlDefault(row.column_default, row.extra);
-  const readDefault: Pick<
-    SqlColumnIRInput,
-    'resolvedDefault' | 'defaultValue' | 'defaultUnreadable'
-  > =
-    reported === undefined
-      ? {}
-      : reported.kind === 'function'
-        ? { resolvedDefault: reported satisfies ColumnDefault }
-        : await readLiteralDefault(
-            row.table_name,
-            row.column_name,
-            typeof reported.literal.body === 'string'
-              ? reported.literal.body
-              : (row.column_default ?? ''),
-            reported.literal.body,
-          );
+  const readDefault = await readDefaultOf(row, readLiteralDefault);
   const reportedType = {
     text: row.column_type,
     kind: undefined,

@@ -215,6 +215,32 @@ describe('introspecting a MariaDB database made by hand', {
     );
   });
 
+  it('reports a text default on a longblob column as unreadable, without reading the text as bytes', async (test) => {
+    const { contract } = await emitFixture('scalar-types');
+    const ddl = `CREATE TABLE \`Measure\` (
+      \`id\` int NOT NULL,
+      \`data\` longblob NOT NULL DEFAULT 'abcd',
+      PRIMARY KEY (\`id\`)
+    )`;
+    await withMysqlDatabase(
+      test,
+      ({ url }) =>
+        withTables(url, [ddl], async (driver) => {
+          const data = (await introspect(driver, contract)).tables['Measure']?.columns['data'];
+          expect({
+            resolvedDefault: data?.resolvedDefault,
+            unreadable: data?.defaultUnreadable,
+          }).toEqual({
+            resolvedDefault: undefined,
+            unreadable: expect.stringContaining(
+              "Write the default as one, as in DEFAULT (X'61626364')",
+            ),
+          });
+        }),
+      SERVER,
+    );
+  });
+
   it('reads a longtext column as json only when MariaDB gave it the column check json_valid makes', async (test) => {
     const ddl = `CREATE TABLE \`Docs\` (
       \`id\` int NOT NULL,
