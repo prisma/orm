@@ -7,9 +7,6 @@
     "**/*.test-d.ts",
     "**/*.config.ts",
     "**/exports/**",
-    "src/codecs/encoding.ts",
-    "src/codecs/decoding.ts",
-    "src/codecs/validation.ts",
     "src/runtime-spi.ts",
     "src/middleware/sql-middleware.ts"
   ],
