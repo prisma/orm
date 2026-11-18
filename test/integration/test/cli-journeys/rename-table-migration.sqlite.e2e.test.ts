@@ -199,14 +199,12 @@ withTempDir(({ createTempDir }) => {
         const verify = await runDbVerify(ctx, ['--schema-only']);
         expect(verify.exitCode, `R3.10: db verify --schema-only: ${verify.stderr}`).toBe(0);
 
-        const fresh = await runMigrationPlan(ctx, [
-          '--from',
-          latestMigrationDirName(ctx),
-          '--json',
-        ]);
-        expect(fresh.exitCode, `R3.11: plan with no schema change: ${fresh.stderr}`).toBe(0);
-        expect(parseJsonOutput<{ noOp: boolean }>(fresh).noOp, 'R3.11: plan is empty').toBe(true);
-        expect(getMigrationDirs(ctx), 'R3.11: nothing written').toHaveLength(2);
+        const dryRun = await runDbUpdate(ctx, ['--dry-run', '--json']);
+        expect(dryRun.exitCode, `R3.11: db update --dry-run: ${dryRun.stderr}`).toBe(0);
+        expect(
+          parseJsonOutput<{ plan: { operations: readonly unknown[] } }>(dryRun).plan.operations,
+          'R3.11: nothing left to plan',
+        ).toEqual([]);
 
         writeFileSync(join(ctx.testDir, 'contract.prisma'), DROPPED_PSL, 'utf-8');
         const emitDropped = await runContractEmit(ctx);

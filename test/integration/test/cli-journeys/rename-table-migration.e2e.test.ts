@@ -22,6 +22,7 @@ import {
   parseJsonOutput,
   planMigrationAndSelfEmit,
   runContractEmit,
+  runDbUpdate,
   runDbVerify,
   runMigrate,
   runMigrationPlan,
@@ -172,11 +173,12 @@ async function expectLaterChangesApply(
   connectionString: string,
   label: string,
 ): Promise<void> {
-  const migrationCount = getMigrationDirs(ctx).length;
-  const fresh = await runMigrationPlan(ctx, ['--from', latestMigrationDirName(ctx), '--json']);
-  expect(fresh.exitCode, `${label}.01: plan with no schema change: ${fresh.stderr}`).toBe(0);
-  expect(parseJsonOutput<{ noOp: boolean }>(fresh).noOp, `${label}.01: plan is empty`).toBe(true);
-  expect(getMigrationDirs(ctx), `${label}.01: nothing written`).toHaveLength(migrationCount);
+  const dryRun = await runDbUpdate(ctx, ['--dry-run', '--json']);
+  expect(dryRun.exitCode, `${label}.01: db update --dry-run: ${dryRun.stderr}`).toBe(0);
+  expect(
+    parseJsonOutput<{ plan: { operations: readonly unknown[] } }>(dryRun).plan.operations,
+    `${label}.01: nothing left to plan`,
+  ).toEqual([]);
 
   swapPslContract(ctx, 'contract-rename-table-objects-dropped');
   const emitDropped = await runContractEmit(ctx);

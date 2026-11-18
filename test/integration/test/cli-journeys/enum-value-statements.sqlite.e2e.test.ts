@@ -169,11 +169,12 @@ withTempDir(({ createTempDir }) => {
           { id: 3, status: null },
         ]);
         await expectVerified(ctx, 'S1.07');
-        const count = getMigrationDirs(ctx).length;
-        const fresh = await runMigrationPlan(ctx, ['--from', dirName, '--json']);
-        expect(fresh.exitCode, `S1.08: plan with no change: ${fresh.stderr}`).toBe(0);
-        expect(parseJsonOutput<{ noOp: boolean }>(fresh).noOp, 'S1.08: plan is empty').toBe(true);
-        expect(getMigrationDirs(ctx), 'S1.08: nothing written').toHaveLength(count);
+        const dryRun = await runDbUpdate(ctx, ['--dry-run', '--json']);
+        expect(dryRun.exitCode, `S1.08: db update --dry-run: ${dryRun.stderr}`).toBe(0);
+        expect(
+          parseJsonOutput<{ plan: { operations: readonly unknown[] } }>(dryRun).plan.operations,
+          'S1.08: nothing left to plan',
+        ).toEqual([]);
       },
       timeouts.spinUpPpgDev,
     );

@@ -17,13 +17,16 @@ import {
   getMigrationDirs,
   type JourneyContext,
   latestMigrationDirName,
+  latestMigrationToHash,
   parseJsonOutput,
   planMigrationAndSelfEmit,
   runContractEmit,
   runDbUpdate,
   runDbVerify,
   runMigrate,
+  runMigrationNew,
   runMigrationPlan,
+  selfEmitMigration,
   setupJourney,
   sql,
   sqlitePslConfigFixture,
@@ -205,28 +208,51 @@ export async function refusal(
   return error;
 }
 
-/** The database matches the contract, and the journey's command finds nothing left to plan. */
+/** The database matches the contract, and `db update` finds nothing left to plan against it. */
 export async function expectSettled(journey: StoredNameJourney, label: string): Promise<void> {
   const verify = await runDbVerify(journey, ['--schema-only']);
   expect(verify.exitCode, `${label}: db verify --schema-only: ${verify.stderr}`).toBe(0);
-  if (journey.command === 'migration plan') {
-    const count = getMigrationDirs(journey).length;
-    const fresh = await runMigrationPlan(journey, [
-      '--from',
-      latestMigrationDirName(journey),
-      '--json',
-    ]);
-    expect(fresh.exitCode, `${label}: a further plan: ${fresh.stderr}`).toBe(0);
-    expect(parseJsonOutput<{ noOp: boolean }>(fresh).noOp, `${label}: it is empty`).toBe(true);
-    expect(getMigrationDirs(journey), `${label}: nothing written`).toHaveLength(count);
-    return;
-  }
   const dryRun = await runDbUpdate(journey, ['--dry-run', '--json']);
   expect(dryRun.exitCode, `${label}: db update --dry-run: ${dryRun.stderr}`).toBe(0);
   expect(
     parseJsonOutput<{ plan: { operations: readonly PlannedOperation[] } }>(dryRun).plan.operations,
     `${label}: nothing left to plan`,
   ).toEqual([]);
+}
+
+/**
+ * Writes a migration by hand, as a user does: `migration new` from the latest migration, the operations written into the `migration.ts` it scaffolds with `imports` added to its import from the target, a run of that `migration.ts`, and `db migrate`.
+ */
+export async function migrateByHand(
+  journey: StoredNameJourney,
+  imports: readonly string[],
+  operations: string,
+  label: string,
+): Promise<void> {
+  const scaffold = await runMigrationNew(journey, [
+    '--name',
+    'by-hand',
+    '--from',
+    latestMigrationToHash(journey),
+  ]);
+  expect(scaffold.exitCode, `${label}: migration new: ${scaffold.stderr}`).toBe(0);
+  const dir = join(journey.testDir, 'migrations', 'app', latestMigrationDirName(journey));
+  const file = join(dir, 'migration.ts');
+  const scaffolded = readFileSync(file, 'utf-8');
+  const written = scaffolded
+    .replace(
+      'import { Migration, MigrationCLI }',
+      () => `import { ${['Migration', 'MigrationCLI', ...imports].join(', ')} }`,
+    )
+    .replace('return [];', () => `return [\n${operations}\n    ];`);
+  expect(written, `${label}: the scaffold has an import and an empty operations list`).not.toBe(
+    scaffolded,
+  );
+  writeFileSync(file, written, 'utf-8');
+  const emitted = await selfEmitMigration(journey, ['--dir', dir]);
+  expect(emitted.exitCode, `${label}: run migration.ts: ${emitted.stderr}`).toBe(0);
+  const migrate = await runMigrate(journey);
+  expect(migrate.exitCode, `${label}: migrate: ${migrate.stderr}`).toBe(0);
 }
 
 /** The source of the `migration.ts` the last `migration plan` wrote. */
