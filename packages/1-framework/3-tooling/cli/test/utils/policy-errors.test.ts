@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { errorChangePolicyForbids, errorPolicyMismatch } from '../../src/utils/policy-errors';
+import {
+  errorChangePolicyForbids,
+  errorDataProtectionForbids,
+  errorPolicyMismatch,
+} from '../../src/utils/policy-errors';
 import type { CliInvocation } from '../../src/utils/printed-command';
 
 const TARGET = 'b'.repeat(64);
@@ -197,5 +201,123 @@ describe('errorChangePolicyForbids', () => {
         invocation,
       }).toEnvelope(),
     ).toMatchObject({ fix: recovery, nextActions: [{ kind: 'user-choice', label: recovery }] });
+  });
+});
+
+describe('errorDataProtectionForbids', () => {
+  const dropColumn = {
+    spaceId: 'app',
+    migration: '20261118T0900_drop_legacy',
+    operationId: 'column.user.legacy_name.drop',
+    subject: 'user.legacy_name',
+    label: 'Drop column "legacy_name" from "user"',
+  };
+  const disableRls = {
+    spaceId: 'app',
+    migration: '20261118T0900_drop_legacy',
+    operationId: 'rowLevelSecurity.public.post.disable',
+    subject: 'post',
+    label: 'Disable row-level security on "post"',
+  };
+  const keepData =
+    'Change the contract or the migration so it does not lose data. To keep the data, carry it first with a data transform.';
+  const keepAccess =
+    'Change the contract or the migration so it does not change who can read or write the rows.';
+
+  it('refuses a migration that loses data under data-loss-forbidden the marker records', () => {
+    expect(
+      errorDataProtectionForbids({
+        spaceId: 'app',
+        command: 'db migrate',
+        refusals: [{ setting: 'dataLoss', source: { kind: 'marker' }, operations: [dropColumn] }],
+      }).toEnvelope(),
+    ).toEqual({
+      ok: false,
+      code: 'MIGRATION.DATA_PROTECTION_FORBIDS',
+      severity: 'error',
+      summary: "This database's data protection policy forbids data loss",
+      why: 'The marker records dataLoss: data-loss-forbidden. Drop column "legacy_name" from "user" (user.legacy_name), in migration 20261118T0900_drop_legacy of contract space "app".',
+      fix: keepData,
+      nextActions: [{ kind: 'user-choice', label: keepData }],
+      meta: {
+        spaceId: 'app',
+        command: 'db migrate',
+        settings: [{ setting: 'dataLoss', level: 'data-loss-forbidden' }],
+        operations: [{ setting: 'dataLoss', ...dropColumn }],
+      },
+    });
+  });
+
+  it('refuses an access change under access-widening-forbidden the ref declares, naming the ref', () => {
+    const { migration: _migration, ...planned } = disableRls;
+    expect(
+      errorDataProtectionForbids({
+        spaceId: 'app',
+        command: 'migration plan',
+        refusals: [
+          {
+            setting: 'accessWidening',
+            source: { kind: 'ref', refName: 'production' },
+            operations: [planned],
+          },
+        ],
+      }).toEnvelope(),
+    ).toEqual({
+      ok: false,
+      code: 'MIGRATION.DATA_PROTECTION_FORBIDS',
+      severity: 'error',
+      summary:
+        'production declares a data protection policy that forbids changing who can read or write rows',
+      why: 'production declares accessWidening: access-widening-forbidden. Disable row-level security on "post" (post), in contract space "app".',
+      fix: keepAccess,
+      nextActions: [{ kind: 'user-choice', label: keepAccess }],
+      meta: {
+        spaceId: 'app',
+        command: 'migration plan',
+        settings: [{ setting: 'accessWidening', level: 'access-widening-forbidden' }],
+        operations: [{ setting: 'accessWidening', ...planned }],
+      },
+    });
+  });
+
+  it('reports both settings in one error when a run breaks both', () => {
+    expect(
+      errorDataProtectionForbids({
+        spaceId: 'app',
+        command: 'db update',
+        refusals: [
+          { setting: 'dataLoss', source: { kind: 'marker' }, operations: [dropColumn] },
+          {
+            setting: 'accessWidening',
+            source: { kind: 'ref', refName: 'production' },
+            operations: [disableRls],
+          },
+        ],
+      }).toEnvelope(),
+    ).toEqual({
+      ok: false,
+      code: 'MIGRATION.DATA_PROTECTION_FORBIDS',
+      severity: 'error',
+      summary:
+        "This database's data protection policy forbids data loss and changing who can read or write rows",
+      why: 'The marker records dataLoss: data-loss-forbidden. Drop column "legacy_name" from "user" (user.legacy_name), in migration 20261118T0900_drop_legacy of contract space "app". production declares accessWidening: access-widening-forbidden. Disable row-level security on "post" (post), in migration 20261118T0900_drop_legacy of contract space "app".',
+      fix: `${keepData} ${keepAccess}`,
+      nextActions: [
+        { kind: 'user-choice', label: keepData },
+        { kind: 'user-choice', label: keepAccess },
+      ],
+      meta: {
+        spaceId: 'app',
+        command: 'db update',
+        settings: [
+          { setting: 'dataLoss', level: 'data-loss-forbidden' },
+          { setting: 'accessWidening', level: 'access-widening-forbidden' },
+        ],
+        operations: [
+          { setting: 'dataLoss', ...dropColumn },
+          { setting: 'accessWidening', ...disableRls },
+        ],
+      },
+    });
   });
 });

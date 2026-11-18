@@ -46,7 +46,7 @@ export function errorPolicyMismatch(args: {
 
 export type PolicyCheckedCommand = 'db update' | 'db sign' | 'db migrate';
 
-/** Where the refused change policy comes from: the database's marker, or the ref a run consents to record. */
+/** Where a refused policy comes from: the database's marker, or the ref a run consents to record or a plan is made for. */
 export type ChangePolicySource =
   | { readonly kind: 'marker' }
   | { readonly kind: 'ref'; readonly refName: string };
@@ -104,6 +104,96 @@ export function errorChangePolicyForbids(args: {
     'MIGRATION.CHANGE_POLICY_FORBIDS',
     `${policyHolder} permits only migrations`,
     { why, fix: recovery, nextActions: [chooseAction(recovery)], meta },
+  );
+}
+
+/** A setting of the data protection policy. */
+export type DataProtectionSetting = keyof DatabasePolicies['dataProtection'];
+
+export type DataProtectionCheckedCommand = 'db migrate' | 'db update' | 'migration plan';
+
+/** An operation a data protection setting refuses: its subject as the user names it, and for `db migrate` the migration that holds it. */
+export interface DataProtectionRefusedOperation {
+  readonly spaceId: string;
+  readonly migration?: string;
+  readonly operationId?: string;
+  readonly subject: string;
+  readonly label: string;
+}
+
+/** A data protection setting at its `forbidden` level, where it is recorded, and the operations it refuses. */
+export interface DataProtectionRefusal {
+  readonly setting: DataProtectionSetting;
+  readonly source: ChangePolicySource;
+  readonly operations: readonly DataProtectionRefusedOperation[];
+}
+
+const FORBIDDEN_LEVEL = {
+  dataLoss: 'data-loss-forbidden',
+  accessWidening: 'access-widening-forbidden',
+} as const satisfies { readonly [S in DataProtectionSetting]: string };
+
+const FORBIDDEN_CHANGE = {
+  dataLoss: 'data loss',
+  accessWidening: 'changing who can read or write rows',
+} as const satisfies { readonly [S in DataProtectionSetting]: string };
+
+const KEEP_PROTECTED = {
+  dataLoss:
+    'Change the contract or the migration so it does not lose data. To keep the data, carry it first with a data transform.',
+  accessWidening:
+    'Change the contract or the migration so it does not change who can read or write the rows.',
+} as const satisfies { readonly [S in DataProtectionSetting]: string };
+
+function refusedOperationText(operation: DataProtectionRefusedOperation): string {
+  const where =
+    operation.migration === undefined
+      ? `in contract space "${operation.spaceId}"`
+      : `in migration ${operation.migration} of contract space "${operation.spaceId}"`;
+  return `${operation.label} (${operation.subject}), ${where}.`;
+}
+
+/** `MIGRATION.DATA_PROTECTION_FORBIDS`: a run would lose data, or change who can read or write rows, where a setting forbids it. */
+export function errorDataProtectionForbids(args: {
+  readonly spaceId: string;
+  readonly command: DataProtectionCheckedCommand;
+  readonly refusals: readonly DataProtectionRefusal[];
+}): ActionableCliError {
+  const { spaceId, command, refusals } = args;
+  const [first] = refusals;
+  const refName =
+    first?.source.kind === 'ref' &&
+    refusals.every(({ source }) => source.kind === 'ref' && source.refName === first.source.refName)
+      ? first.source.refName
+      : undefined;
+  const policyHolder =
+    refName === undefined
+      ? "This database's data protection policy"
+      : `${refName} declares a data protection policy that`;
+  const forbidden = refusals.map(({ setting }) => FORBIDDEN_CHANGE[setting]).join(' and ');
+  const why = refusals
+    .flatMap(({ setting, source, operations }) => [
+      `${source.kind === 'ref' ? `${source.refName} declares` : 'The marker records'} ${setting}: ${FORBIDDEN_LEVEL[setting]}.`,
+      ...operations.map(refusedOperationText),
+    ])
+    .join(' ');
+  const recoveries = refusals.map(({ setting }) => KEEP_PROTECTED[setting]);
+  return new ActionableCliError(
+    'MIGRATION.DATA_PROTECTION_FORBIDS',
+    `${policyHolder} forbids ${forbidden}`,
+    {
+      why,
+      fix: recoveries.join(' '),
+      nextActions: recoveries.map(chooseAction),
+      meta: {
+        spaceId,
+        command,
+        settings: refusals.map(({ setting }) => ({ setting, level: FORBIDDEN_LEVEL[setting] })),
+        operations: refusals.flatMap(({ setting, operations }) =>
+          operations.map((operation) => ({ setting, ...operation })),
+        ),
+      },
+    },
   );
 }
 
