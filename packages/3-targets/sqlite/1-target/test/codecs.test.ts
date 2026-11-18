@@ -33,7 +33,7 @@ describe('SQLite codec JSON representations', () => {
     await expect(bigintCodec.fromWire('not-a-number', {})).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
       message:
-        'A sqlite/bigint@1 value is "not-a-number", which is not an integer. sqlite/bigint@1 reads integers from -9223372036854775808 to 9223372036854775807.',
+        'A sqlite/bigint@1 value is "not-a-number", which is not stored as a 64-bit integer. sqlite/bigint@1 reads integers from -9223372036854775808 to 9223372036854775807.',
       meta: { codecId: 'sqlite/bigint@1', received: 'not-a-number' },
     });
   });
@@ -175,14 +175,32 @@ describe('SQLite codecs read the value an include carries', () => {
     });
   });
 
-  it('shows the first 100 characters of a stored value it cannot read', async () => {
-    const long = 'a'.repeat(150);
-    await expect(integer.fromWire(long, ctx)).rejects.toMatchObject({
-      message: `A sqlite/integer@1 value is "${'a'.repeat(100)}", which is not an integer within the safe integer range. sqlite/integer@1 reads integers from -9007199254740991 to 9007199254740991.`,
-      meta: { received: 'a'.repeat(100) },
-    });
-    await expect(integer.fromWire(new Uint8Array(80) as never, ctx)).rejects.toMatchObject({
-      meta: { received: `x'${'0'.repeat(100)}'` },
+  it.each([
+    ['text', 'a'.repeat(150), `"${'a'.repeat(100)}..."`, `${'a'.repeat(100)}...`],
+    ['a blob', new Uint8Array(80), `bytes x'${'0'.repeat(100)}...'`, `x'${'0'.repeat(100)}...'`],
+    [
+      'a blob as an include carries it',
+      ['0'.repeat(160)],
+      `bytes x'${'0'.repeat(100)}...'`,
+      `x'${'0'.repeat(100)}...'`,
+    ],
+  ])(
+    'shows the first 100 characters of %s it cannot read, marked as cut',
+    async (_name, wire, shown, received) => {
+      await expect(integer.fromWire(wire as never, ctx)).rejects.toMatchObject({
+        message: `A sqlite/integer@1 value is ${shown}, which is not an integer within the safe integer range. sqlite/integer@1 reads integers from -9007199254740991 to 9007199254740991.`,
+        meta: { received },
+      });
+    },
+  );
+
+  it.each([
+    ['text', 'a'.repeat(100), `"${'a'.repeat(100)}"`, 'a'.repeat(100)],
+    ['a blob', new Uint8Array(50), `bytes x'${'0'.repeat(100)}'`, `x'${'0'.repeat(100)}'`],
+  ])('shows %s of 100 characters whole', async (_name, wire, shown, received) => {
+    await expect(integer.fromWire(wire as never, ctx)).rejects.toMatchObject({
+      message: `A sqlite/integer@1 value is ${shown}, which is not an integer within the safe integer range. sqlite/integer@1 reads integers from -9007199254740991 to 9007199254740991.`,
+      meta: { received },
     });
   });
 });
@@ -198,6 +216,7 @@ describe('sqlite/json@1 reading a stored value', () => {
   it.each([
     ['text that is not JSON', 'abc', '"abc"', 'abc'],
     ['a blob', new Uint8Array([0x7b]), "bytes x'7B'", "x'7B'"],
+    ['a blob, as an include carries it', ['7B'], "bytes x'7B'", "x'7B'"],
   ])('refuses %s, naming its column', async (_name, wire, shown, received) => {
     await expect(json.fromWire(wire as never, { column })).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',

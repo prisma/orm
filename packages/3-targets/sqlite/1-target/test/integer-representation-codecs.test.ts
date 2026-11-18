@@ -40,7 +40,7 @@ describe('sqlite/bigint@1 number wire values', () => {
   ])('refuses the blob %j a row or an include carries', async (wire, received) => {
     await expect(codec.fromWire(wire as never, {})).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
-      message: `A sqlite/bigint@1 value is bytes ${received}, which is not an integer. sqlite/bigint@1 reads integers from -9223372036854775808 to 9223372036854775807.`,
+      message: `A sqlite/bigint@1 value is bytes ${received}, which is not stored as a 64-bit integer. sqlite/bigint@1 reads integers from -9223372036854775808 to 9223372036854775807.`,
       meta: { codecId: 'sqlite/bigint@1', received },
     });
   });
@@ -55,7 +55,7 @@ describe('sqlite/bigint@1 number wire values', () => {
     await expect(codec.fromWire(9007199254740992, {})).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
       message:
-        'A sqlite/bigint@1 value is 9007199254740992, which is not an integer. sqlite/bigint@1 reads integers from -9223372036854775808 to 9223372036854775807.',
+        'A sqlite/bigint@1 value is 9007199254740992, which is not stored as a 64-bit integer. sqlite/bigint@1 reads integers from -9223372036854775808 to 9223372036854775807.',
       meta: { codecId: 'sqlite/bigint@1', received: '9007199254740992' },
     });
     await expect(codec.fromWire(-9007199254740992, {})).rejects.toMatchObject({
@@ -64,11 +64,20 @@ describe('sqlite/bigint@1 number wire values', () => {
     });
   });
 
+  it('refuses a whole number past 64 bits, which SQLite stores as a REAL', async () => {
+    await expect(codec.fromWire(1e20, {})).rejects.toMatchObject({
+      code: 'RUNTIME.DECODE_FAILED',
+      message:
+        'A sqlite/bigint@1 value is 100000000000000000000, which is not stored as a 64-bit integer. sqlite/bigint@1 reads integers from -9223372036854775808 to 9223372036854775807.',
+      meta: { codecId: 'sqlite/bigint@1', received: '100000000000000000000' },
+    });
+  });
+
   it('rejects a non-integral number wire value with a structured error', async () => {
     await expect(codec.fromWire(1.5, {})).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
       message:
-        'A sqlite/bigint@1 value is 1.5, which is not an integer. sqlite/bigint@1 reads integers from -9223372036854775808 to 9223372036854775807.',
+        'A sqlite/bigint@1 value is 1.5, which is not stored as a 64-bit integer. sqlite/bigint@1 reads integers from -9223372036854775808 to 9223372036854775807.',
       meta: { codecId: 'sqlite/bigint@1', received: '1.5' },
     });
   });

@@ -61,7 +61,7 @@ const notAnInteger = (column: string, shown: string, codecId: string) =>
   `Column "mistyped_cells"."${column}" holds ${shown}, which is not an integer within the safe integer range. ${codecId} reads integers from -9007199254740991 to 9007199254740991.`;
 
 const notABigint = (shown: string) =>
-  `Column "mistyped_cells"."bigint" holds ${shown}, which is not an integer. sqlite/bigint@1 reads integers from -9223372036854775808 to 9223372036854775807.`;
+  `Column "mistyped_cells"."bigint" holds ${shown}, which is not stored as a 64-bit integer. sqlite/bigint@1 reads integers from -9223372036854775808 to 9223372036854775807.`;
 
 const notANumber = (column: string, shown: string, codecId: string) =>
   `Column "mistyped_cells"."${column}" holds ${shown}, which is not a number. ${codecId} reads a number, or the text Infinity or -Infinity.`;
@@ -97,7 +97,8 @@ describe('a SQLite column holding a value of another type, read flat and through
         json text
       );
       insert into mistyped_sheets (id) values (1), (2), (3), (4), (5), (6), (7), (8), (9), (10), (11), (12), (13), (14),
-        (15), (16), (17), (18), (20), (21), (22), (23);
+        (15), (16), (17), (18), (20), (21), (22), (23), (24), (25), (26), (27), (28), (29), (30), (31), (32), (33),
+        (34);
       insert into mistyped_cells (id, sheet_id, integer, sql_int, blob, boolean, decimal) values
         (1, 1, 7, 8, x'00ff', 1, '12.50'),
         (2, 2, 'abc', null, null, null, null),
@@ -122,7 +123,19 @@ describe('a SQLite column holding a value of another type, read flat and through
         (20, 20, 1.5, null, null, null, null, null),
         (21, 21, null, null, null, 'abc', null, null),
         (22, 22, null, null, null, null, 'abc', null),
-        (23, 23, null, null, null, null, null, 'abc');
+        (23, 23, null, null, null, null, null, 'abc'),
+        (24, 24, null, null, null, null, null, x'7B7D'),
+        (25, 25, null, '99999999999999999999', null, null, null, null),
+        (26, 26, null, null, null, null, null, '${'a'.repeat(150)}'),
+        (27, 27, null, null, null, null, null, x'${'AB'.repeat(80)}');
+      insert into mistyped_cells (id, sheet_id, json) values
+        (28, 28, '{"a":[1,"b"]}'),
+        (29, 29, '[1,{"b":null}]'),
+        (30, 30, '"abc"'),
+        (31, 31, '123'),
+        (32, 32, 'null'),
+        (33, 33, 'true'),
+        (34, 34, '1.5');
     `);
     const instance = instantiateExecutionStack(stack);
     if (instance.adapter === undefined || instance.driver === undefined) {
@@ -210,6 +223,33 @@ describe('a SQLite column holding a value of another type, read flat and through
       include: [{ id: 1, cells: flat }],
     });
   });
+
+  it.each([
+    [28, { a: [1, 'b'] }],
+    [29, [1, { b: null }]],
+    [30, 'abc'],
+    [31, 123],
+    [32, null],
+    [33, true],
+    [34, 1.5],
+  ])(
+    'reads the JSON document in cell %i the same way flat and through an include',
+    async (id, document) => {
+      const flat = await collections()
+        .cells.where((c) => c['id']!.eq(id))
+        .select('id', 'json')
+        .all();
+      const include = await collections()
+        .sheets.where((s) => s['id']!.eq(id))
+        .select('id')
+        .include('cells', (cell) => cell.select('id', 'json'))
+        .all();
+      expect({ flat, include }).toEqual({
+        flat: [{ id, json: document }],
+        include: [{ id, cells: [{ id, json: document }] }],
+      });
+    },
+  );
 
   it.each([
     [
@@ -358,6 +398,38 @@ describe('a SQLite column holding a value of another type, read flat and through
       'sqlite/json@1',
       'abc',
       `Column "mistyped_cells"."json" holds "abc", which is not JSON text. sqlite/json@1 reads JSON text as the document it holds.`,
+    ],
+    [
+      'bytes in a Json column',
+      24,
+      'json',
+      'sqlite/json@1',
+      "x'7B7D'",
+      `Column "mistyped_cells"."json" holds bytes x'7B7D', which is not JSON text. sqlite/json@1 reads JSON text as the document it holds.`,
+    ],
+    [
+      'digit text past 64 bits in a BigInt column, which SQLite stores as a REAL',
+      25,
+      'bigint',
+      'sqlite/bigint@1',
+      '100000000000000000000',
+      notABigint('100000000000000000000'),
+    ],
+    [
+      'long text, showing its first 100 characters marked as cut',
+      26,
+      'json',
+      'sqlite/json@1',
+      `${'a'.repeat(100)}...`,
+      `Column "mistyped_cells"."json" holds "${'a'.repeat(100)}...", which is not JSON text. sqlite/json@1 reads JSON text as the document it holds.`,
+    ],
+    [
+      'a long blob, showing its first 50 bytes marked as cut',
+      27,
+      'json',
+      'sqlite/json@1',
+      `x'${'AB'.repeat(50)}...'`,
+      `Column "mistyped_cells"."json" holds bytes x'${'AB'.repeat(50)}...', which is not JSON text. sqlite/json@1 reads JSON text as the document it holds.`,
     ],
   ])('refuses %s', async (_name, id, column, codecId, received, message) => {
     const refusal = {

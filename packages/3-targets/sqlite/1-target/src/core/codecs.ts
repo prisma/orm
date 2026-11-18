@@ -325,7 +325,7 @@ function errorBigintUnreadable(received: unknown, ctx: SqlCodecCallContext): nev
     codecId: SQLITE_BIGINT_CODEC_ID,
     received,
     column: ctx.column,
-    notA: 'an integer',
+    notA: 'stored as a 64-bit integer',
     reads: `integers from ${INT64_RANGE.min} to ${INT64_RANGE.max}`,
   });
 }
@@ -733,7 +733,7 @@ export class SqliteJsonCodec extends CodecImpl<
     return JSON.stringify(value);
   }
   async fromWire(wire: string | JsonValue, ctx: SqlCodecCallContext): Promise<JsonValue> {
-    if (wire instanceof Uint8Array) return errorJsonUnreadable(wire, ctx);
+    if (wire instanceof Uint8Array || Array.isArray(wire)) return errorJsonUnreadable(wire, ctx);
     if (typeof wire !== 'string') return wire;
     try {
       return blindCast<JsonValue, 'JSON.parse of stored JSON text yields a JSON value'>(
@@ -754,12 +754,11 @@ export class SqliteJsonCodec extends CodecImpl<
 }
 
 /**
- * The column stores the document's JSON text and the stored form is that text, so the stored
- * value is projected as it is: a string the enclosing JSON constructor embeds as a string.
+ * The column stores the document's JSON text and the stored form is that text, so the stored text is projected as it is: a string the enclosing JSON constructor embeds as a string. A blob is projected as the array of its hex text, which the codec refuses, because SQLite's JSON functions refuse a blob.
  */
 export class SqliteJsonDescriptor extends SqliteCodecDescriptor<void> {
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return expression;
+    return hexJsonProjection(expression);
   }
   override readonly dataType = sqliteJson.id;
   override readonly codecId = SQLITE_JSON_CODEC_ID;

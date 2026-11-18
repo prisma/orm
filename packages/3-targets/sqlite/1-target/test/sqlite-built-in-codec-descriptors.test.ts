@@ -149,7 +149,7 @@ describe('SQLite built-in codec descriptors', () => {
 
   it("projects identity where SQLite's own JSON conversion is already canonical", () => {
     const expression = ColumnRef.of('records', 'value');
-    const descriptors = [sqliteTextDescriptor, sqliteDatetimeDescriptor, sqliteJsonDescriptor];
+    const descriptors = [sqliteTextDescriptor, sqliteDatetimeDescriptor];
 
     for (const descriptor of descriptors) {
       expect(descriptor.projectJson(expression, refFor(descriptor))).toBe(expression);
@@ -179,10 +179,12 @@ describe('SQLite built-in codec descriptors', () => {
       blob: sqliteBlobDescriptor.projectJson(expression, refFor(sqliteBlobDescriptor)),
       decimal: sqliteDecimalDescriptor.projectJson(expression, refFor(sqliteDecimalDescriptor)),
       boolean: sqliteBooleanDescriptor.projectJson(expression, refFor(sqliteBooleanDescriptor)),
+      json: sqliteJsonDescriptor.projectJson(expression, refFor(sqliteJsonDescriptor)),
     }).toEqual({
       blob: blobAsHexOr(expression),
       decimal: blobAsHexOr(expression),
       boolean: blobAsHexOr(expression),
+      json: blobAsHexOr(expression),
     });
     // SQLite writes an infinity in JSON as 9.0e+999; both float codecs write the text their toDataTypeValue writes.
     const infinityAsText = CaseExpr.of(

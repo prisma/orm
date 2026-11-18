@@ -30,24 +30,32 @@ export function sqliteError(
   return structuredError(code, message, options);
 }
 
+const SHOWN_CHARACTERS = 100;
 /** The bytes an error shows, which their hex text cut to 100 characters holds. */
-const SHOWN_BYTES = 50;
+const SHOWN_BYTES = SHOWN_CHARACTERS / 2;
+
+interface StoredText {
+  readonly text: string;
+  readonly longer: boolean;
+}
+
+/** A stored value's text as an error shows it: the first 100 characters, followed by `...` when the value is longer. */
+const shownText = ({ text, longer }: StoredText): string =>
+  longer || text.length > SHOWN_CHARACTERS ? `${text.slice(0, SHOWN_CHARACTERS)}...` : text;
 
 /** The hex text of the bytes an error shows, from the row's `Uint8Array` or from the array of their hex text an include carries. */
-function blobHexText(value: unknown): string | undefined {
+function blobHexText(value: unknown): StoredText | undefined {
   if (value instanceof Uint8Array) {
     const shownBytes = value.subarray(0, SHOWN_BYTES);
-    return Buffer.from(shownBytes.buffer, shownBytes.byteOffset, shownBytes.byteLength)
+    const text = Buffer.from(shownBytes.buffer, shownBytes.byteOffset, shownBytes.byteLength)
       .toString('hex')
       .toUpperCase();
+    return { text, longer: value.byteLength > SHOWN_BYTES };
   }
   if (!Array.isArray(value) || value.length !== 1) return undefined;
   const [hex]: readonly unknown[] = value;
-  return typeof hex === 'string' ? hex : undefined;
+  return typeof hex === 'string' ? { text: hex, longer: false } : undefined;
 }
-
-/** The first 100 characters of a stored value, as an error shows it. */
-const shown = (text: string): string => text.slice(0, 100);
 
 /**
  * A stored value a codec cannot read, named by its column where the read knows it, as in `Column "account"."active" holds 2, which is not 0 or 1. sqlite/boolean@1 reads 0 as false and 1 as true.`
@@ -61,7 +69,10 @@ export function errorColumnUnreadable(options: {
 }): StructuredError {
   const { codecId, received, column, notA, reads } = options;
   const hex = blobHexText(received);
-  const receivedText = hex !== undefined ? `x'${shown(hex)}'` : shown(String(received));
+  const receivedText =
+    hex !== undefined
+      ? `x'${shownText(hex)}'`
+      : shownText({ text: String(received), longer: false });
   const shownReceived =
     hex !== undefined
       ? `bytes ${receivedText}`
