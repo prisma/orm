@@ -66,45 +66,84 @@ function endOfQuote(text: string, start: number, quote: SqlQuote): number | unde
  * only; it does not parse the SQL.
  */
 export function checkSqlExpressionText(text: string, quoting: SqlQuotingRules): string | undefined {
-  let depth = 0;
-  let index = 0;
-  let previousWord: string | undefined;
-  while (index < text.length) {
-    const character = text[index] ?? '';
-    const quote = quoteAt(text, index, quoting);
-    if (quote !== undefined) {
-      const end = endOfQuote(text, index, quote);
-      if (end === undefined) return 'a quote that is not closed';
-      index = end;
-      previousWord = undefined;
-      continue;
-    }
-    if (character === ';') return 'a semicolon outside a quoted literal';
-    if (text.startsWith('--', index) || text.startsWith('/*', index)) return 'a SQL comment';
-    DOLLAR_QUOTE.lastIndex = index;
-    if (character === '$' && DOLLAR_QUOTE.test(text)) return 'dollar quoting';
-    if (character === ',' && depth === 0) return 'a comma outside parentheses';
-    if (character === '(' || character === '[') depth += 1;
-    if (character === ')' || character === ']') {
-      depth -= 1;
-      if (depth < 0) return 'parentheses that do not match';
-    }
-    WORD.lastIndex = index;
-    const word = /[A-Za-z_]/.test(character) ? WORD.exec(text)?.[0].toUpperCase() : undefined;
-    if (word !== undefined) {
-      if (
-        depth === 0 &&
-        STATEMENT_KEYWORDS.has(word) &&
-        !(word === 'FROM' && previousWord === 'DISTINCT')
-      ) {
-        return `the keyword ${word} outside parentheses`;
-      }
-      previousWord = word;
-      index += word.length;
-      continue;
-    }
-    if (!/\s/.test(character)) previousWord = undefined;
-    index += 1;
+  const state: ScanState = { index: 0, depth: 0, previousWord: undefined };
+  while (state.index < text.length) {
+    const problem = scanNext(text, quoting, state);
+    if (problem !== undefined) return problem;
   }
-  return depth === 0 ? undefined : 'parentheses that do not match';
+  return state.depth === 0 ? undefined : 'parentheses that do not match';
+}
+
+interface ScanState {
+  index: number;
+  depth: number;
+  previousWord: string | undefined;
+}
+
+function scanNext(text: string, quoting: SqlQuotingRules, state: ScanState): string | undefined {
+  const quote = quoteAt(text, state.index, quoting);
+  if (quote !== undefined) return skipQuote(text, quote, state);
+  const character = text[state.index] ?? '';
+  const problem = punctuationProblem(text, state.index, character, state.depth);
+  if (problem !== undefined) return problem;
+  state.depth = depthAfter(character, state.depth);
+  if (state.depth < 0) return 'parentheses that do not match';
+  const word = wordAt(text, state.index, character);
+  if (word !== undefined) return consumeWord(word, state);
+  if (!/\s/.test(character)) state.previousWord = undefined;
+  state.index += 1;
+  return undefined;
+}
+
+function skipQuote(text: string, quote: SqlQuote, state: ScanState): string | undefined {
+  const end = endOfQuote(text, state.index, quote);
+  if (end === undefined) return 'a quote that is not closed';
+  state.index = end;
+  state.previousWord = undefined;
+  return undefined;
+}
+
+function punctuationProblem(
+  text: string,
+  index: number,
+  character: string,
+  depth: number,
+): string | undefined {
+  if (character === ';') return 'a semicolon outside a quoted literal';
+  if (text.startsWith('--', index) || text.startsWith('/*', index)) return 'a SQL comment';
+  if (character === '$' && matchAt(DOLLAR_QUOTE, text, index) !== undefined) {
+    return 'dollar quoting';
+  }
+  if (character === ',' && depth === 0) return 'a comma outside parentheses';
+  return undefined;
+}
+
+function depthAfter(character: string, depth: number): number {
+  if (character === '(' || character === '[') return depth + 1;
+  if (character === ')' || character === ']') return depth - 1;
+  return depth;
+}
+
+function matchAt(pattern: RegExp, text: string, index: number): string | undefined {
+  pattern.lastIndex = index;
+  return pattern.exec(text)?.[0];
+}
+
+function wordAt(text: string, index: number, character: string): string | undefined {
+  return /[A-Za-z_]/.test(character) ? matchAt(WORD, text, index)?.toUpperCase() : undefined;
+}
+
+function consumeWord(word: string, state: ScanState): string | undefined {
+  if (endsExpression(word, state)) return `the keyword ${word} outside parentheses`;
+  state.previousWord = word;
+  state.index += word.length;
+  return undefined;
+}
+
+function endsExpression(word: string, state: ScanState): boolean {
+  return (
+    state.depth === 0 &&
+    STATEMENT_KEYWORDS.has(word) &&
+    !(word === 'FROM' && state.previousWord === 'DISTINCT')
+  );
 }
