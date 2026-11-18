@@ -52,9 +52,8 @@ function probeWarning(
     // rather than failing at it, so --strict-probe does not escalate it.
     case 'below-minimum':
       return { warning: outcome.message, fatal: undefined };
-    case 'invalid-result':
-      return { warning: undefined, fatal: outcome.message };
     case 'no-database-url':
+    case 'invalid-result':
     case 'connection-failed':
     case 'driver-missing':
     case 'version-unreadable':

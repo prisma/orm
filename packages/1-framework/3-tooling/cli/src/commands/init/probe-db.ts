@@ -68,10 +68,8 @@ export interface ProbeContext {
  *   *failures*", and a successful probe that finds an old server is
  *   not a failure).
  * - `no-database-url` / `connection-failed` / `driver-missing` /
- *   `version-unreadable` / `unsupported` — warning by default, fatal under
- *   `--strict-probe`.
- * - `invalid-result` — the target package's probe answered with a value of the
- *   wrong shape, which is a defect in that package; always fatal.
+ *   `version-unreadable` / `invalid-result` / `unsupported` — warning by
+ *   default, fatal under `--strict-probe`.
  */
 export async function probeServerVersion(ctx: ProbeContext): Promise<ProbeOutcome> {
   const { databaseUrl, contribution } = ctx;
@@ -110,13 +108,13 @@ export async function probeServerVersion(ctx: ProbeContext): Promise<ProbeOutcom
 
   const result = ProbeResultSchema(answer);
   if (result instanceof type.errors) {
-    const cause = `the probe of ${ctx.packageName} answered with a value of the wrong shape: ${result.summary}`;
+    const cause = `the probe of ${ctx.packageName} gave a malformed answer: ${result.summary}`;
     return {
       kind: 'invalid-result',
       minVersion,
       meetsMinimum: null,
       cause,
-      message: `--probe-db failed: ${cause}.`,
+      message: `Skipped --probe-db: ${cause}.`,
     };
   }
   if (result.kind === 'driver-missing') {

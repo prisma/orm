@@ -408,22 +408,42 @@ describe('init takes the project from the target package', () => {
   );
 
   it(
-    'fails --probe-db when the probe answers with the wrong shape, even without --strict-probe',
+    'warns about a malformed probe answer, and fails on it only under --strict-probe',
     async () => {
       const loadInit = await postgresWith({
         probe: async () => JSON.parse('{"kind":"server-version"}'),
       });
+      const env = { DATABASE_URL: 'postgres://localhost:5432/db' };
 
-      const run = await harness(loadInit).run([...STARTER, '--skip-install', '--probe-db'], {
+      const warned = await harness(loadInit).run([...STARTER, '--skip-install', '--probe-db'], {
         cwd: projectDir,
-        env: { DATABASE_URL: 'postgres://localhost:5432/db' },
+        env,
+      });
+      expect(warned.exitCode).toBe(0);
+      expect(warned.presented?.data).toMatchObject({
+        warnings: expect.arrayContaining([
+          expect.stringContaining(
+            'Skipped --probe-db: the probe of @prisma/orm-postgres gave a malformed answer',
+          ),
+        ]),
       });
 
-      expect(envelopeOf(run)).toMatchObject({
+      const strict = await harness(loadInit).run(
+        [
+          ...STARTER,
+          '--skip-install',
+          '--probe-db',
+          '--strict-probe',
+          '--confirm',
+          basename(projectDir),
+        ],
+        { cwd: projectDir, env },
+      );
+      expect(envelopeOf(strict)).toMatchObject({
         ok: false,
         error: {
           code: 'CLI.INIT_PROBE_FAILED',
-          why: expect.stringContaining('answered with a value of the wrong shape'),
+          why: expect.stringContaining('the probe of @prisma/orm-postgres gave a malformed answer'),
         },
       });
     },

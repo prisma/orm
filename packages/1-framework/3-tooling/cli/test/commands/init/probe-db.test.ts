@@ -163,7 +163,7 @@ describe('probeServerVersion (FR8.3)', () => {
     });
   });
 
-  it('refuses a probe answer of the wrong shape', async () => {
+  it('names the package when its probe gives a malformed answer', async () => {
     const outcome = await probeServerVersion(
       probeContext('postgres://localhost:5432/db', async () =>
         // A package built without its types can answer anything.
@@ -174,7 +174,7 @@ describe('probeServerVersion (FR8.3)', () => {
     expect(outcome).toMatchObject({
       kind: 'invalid-result',
       message: expect.stringContaining(
-        '--probe-db failed: the probe of @example/target answered with a value of the wrong shape',
+        'Skipped --probe-db: the probe of @example/target gave a malformed answer',
       ),
     });
   });
