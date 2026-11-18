@@ -40,7 +40,7 @@
   },
   "peerDependencies": {
     "@types/pg": "^8.20.0",
-    "pg": "^8.20.0",
+    "pg": "^8.22.0",
     "temporal-polyfill": "^1.0.4",
     "typescript": ">=5.9"
   },

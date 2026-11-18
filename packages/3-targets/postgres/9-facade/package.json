@@ -51,6 +51,8 @@
     "@repo/test-utils": "workspace:8.0.0-rc.24",
     "@repo/tsconfig": "workspace:8.0.0-rc.24",
     "@repo/tsdown": "workspace:8.0.0-rc.24",
+    "@types/pg": "catalog:",
+    "pg": "catalog:",
     "temporal-polyfill": "^1.0.4",
     "tsdown": "catalog:",
     "typescript": "catalog:",
@@ -58,7 +60,7 @@
   },
   "peerDependencies": {
     "@types/pg": "^8.20.0",
-    "pg": "^8.20.0",
+    "pg": "^8.22.0",
     "temporal-polyfill": "^1.0.4",
     "typescript": ">=5.9"
   },

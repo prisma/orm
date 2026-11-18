@@ -3676,18 +3676,12 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 26.1.2
-      '@types/pg':
-        specifier: 'catalog:'
-        version: 8.20.4
       arktype:
         specifier: ^2.2.2
         version: 2.2.7
       jose:
         specifier: ^6
         version: 6.2.8
-      pg:
-        specifier: 'catalog:'
-        version: 8.22.0
     devDependencies:
       '@internal/cli':
         specifier: workspace:8.0.0-rc.24
@@ -3716,9 +3710,15 @@ importers:
       '@repo/tsdown':
         specifier: workspace:8.0.0-rc.24
         version: link:../../0-config/tsdown
+      '@types/pg':
+        specifier: 'catalog:'
+        version: 8.20.4
       ci-info:
         specifier: ^4.3.1
         version: 4.4.0
+      pg:
+        specifier: 'catalog:'
+        version: 8.22.0
       tsdown:
         specifier: 'catalog:'
         version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
@@ -4923,15 +4923,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 26.1.2
-      '@types/pg':
-        specifier: ^8.20.0
-        version: 8.20.4
       arktype:
         specifier: ^2.2.2
         version: 2.2.7
-      pg:
-        specifier: ^8.20.0
-        version: 8.22.0
       pg-connection-string:
         specifier: ^2.14.0
         version: 2.14.0
@@ -4954,9 +4948,15 @@ importers:
       '@repo/tsdown':
         specifier: workspace:8.0.0-rc.24
         version: link:../../../0-config/tsdown
+      '@types/pg':
+        specifier: 'catalog:'
+        version: 8.20.4
       '@types/pg-cursor':
         specifier: ^2.4.6
         version: 2.7.2
+      pg:
+        specifier: 'catalog:'
+        version: 8.22.0
       pg-mem:
         specifier: ^3.0.5
         version: 3.0.14(postgres@3.4.7)
@@ -5084,18 +5084,12 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 26.1.2
-      '@types/pg':
-        specifier: ^8.20.0
-        version: 8.20.4
       arktype:
         specifier: 'catalog:'
         version: 2.2.7
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
-      pg:
-        specifier: ^8.20.0
-        version: 8.22.0
       temporal-spec:
         specifier: 1.0.1
         version: 1.0.1
@@ -5127,6 +5121,12 @@ importers:
       '@repo/tsdown':
         specifier: workspace:8.0.0-rc.24
         version: link:../../../0-config/tsdown
+      '@types/pg':
+        specifier: 'catalog:'
+        version: 8.20.4
+      pg:
+        specifier: 'catalog:'
+        version: 8.22.0
       temporal-polyfill:
         specifier: ^1.0.4
         version: 1.0.4
@@ -5678,7 +5678,7 @@ importers:
         specifier: 'catalog:'
         version: 26.1.2
       '@types/pg':
-        specifier: 'catalog:'
+        specifier: ^8.20.0
         version: 8.20.4
       arktype:
         specifier: ^2.2.2
@@ -5687,7 +5687,7 @@ importers:
         specifier: ^6
         version: 6.2.8
       pg:
-        specifier: 'catalog:'
+        specifier: ^8.22.0
         version: 8.22.0
     devDependencies:
       '@internal/extension-supabase':
@@ -6108,7 +6108,7 @@ importers:
         specifier: ^2.0.3
         version: 2.0.3
       pg:
-        specifier: ^8.20.0
+        specifier: ^8.22.0
         version: 8.22.0
       temporal-polyfill:
         specifier: ^1.0.4
@@ -6387,7 +6387,7 @@ importers:
         specifier: ^2.0.3
         version: 2.0.3
       pg:
-        specifier: ^8.20.0
+        specifier: ^8.22.0
         version: 8.22.0
       pg-connection-string:
         specifier: ^2.14.0
