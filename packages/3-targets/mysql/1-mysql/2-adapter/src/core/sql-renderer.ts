@@ -73,6 +73,8 @@ interface RenderContext {
   readonly uses: { groupConcat: boolean };
   /** While an insert is written: its table's alias, and the name a column of the table is qualified with instead, since MySQL's `INSERT` takes no table alias. */
   readonly insertInto?: { readonly alias: string; readonly name: string };
+  /** While an update or delete is written after its target: the target's qualified name, which a subquery reads through a derived table. */
+  readonly writtenTable?: string;
 }
 
 /** The name an upsert gives the row it proposes, which its update reads as `new`.`column`; the ORM writes that row as `excluded`, as Postgres names it. */
@@ -300,17 +302,27 @@ export class MysqlSqlRenderer {
     const assignments = Object.entries(ast.set);
     if (assignments.length === 0)
       throw invalid('update', 'UPDATE requires at least one column to set');
+    const target = this.renderTableSource(ast.table, ctx);
+    const writeCtx = this.writing(ast.table, ctx);
     const set = assignments
-      .map(([column, value]) => `${quoteIdentifier(column)} = ${this.renderExpr(value, ctx)}`)
+      .map(([column, value]) => `${quoteIdentifier(column)} = ${this.renderExpr(value, writeCtx)}`)
       .join(', ');
-    const where = ast.where ? ` WHERE ${this.renderExpr(ast.where, ctx)}` : '';
-    return `UPDATE ${this.renderTableSource(ast.table, ctx)} SET ${set}${where}`;
+    const where = ast.where ? ` WHERE ${this.renderExpr(ast.where, writeCtx)}` : '';
+    return `UPDATE ${target} SET ${set}${where}`;
   }
 
   private renderDelete(ast: DeleteAst, ctx: RenderContext): string {
     this.refuseReturning(ast.returning, 'delete');
-    const where = ast.where ? ` WHERE ${this.renderExpr(ast.where, ctx)}` : '';
-    return `DELETE FROM ${this.renderTableSource(ast.table, ctx)}${where}`;
+    const target = this.renderTableSource(ast.table, ctx);
+    const where = ast.where
+      ? ` WHERE ${this.renderExpr(ast.where, this.writing(ast.table, ctx))}`
+      : '';
+    return `DELETE FROM ${target}${where}`;
+  }
+
+  /** MySQL refuses a subquery that reads the table an update or delete writes (error 1093), unless it reads it through a derived table, which MySQL materialises. The subquery's conditions stay outside the derived table, where they can see the written row. */
+  private writing(table: TableSource, ctx: RenderContext): RenderContext {
+    return { ...ctx, writtenTable: this.qualifyTable(table, ctx) };
   }
 
   private renderLimitOffset(
@@ -396,8 +408,11 @@ export class MysqlSqlRenderer {
 
   private renderSource(source: AnyFromSource, ctx: RenderContext): string {
     switch (source.kind) {
-      case 'table-source':
-        return this.renderTableSource(source, ctx);
+      case 'table-source': {
+        const qualified = this.qualifyTable(source, ctx);
+        if (qualified !== ctx.writtenTable) return this.renderTableSource(source, ctx);
+        return `(SELECT * FROM ${qualified}) AS ${quoteIdentifier(source.alias ?? source.name)}`;
+      }
       case 'derived-table-source':
         return `(${this.renderSelect(source.query, ctx)}) AS ${quoteIdentifier(source.alias)}`;
       case 'function-source':
