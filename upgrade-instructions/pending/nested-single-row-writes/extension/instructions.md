@@ -11,7 +11,7 @@ changes:
 
 # The relation mutator types take a `Writes` parameter
 
-`RelationMutator<TContract, ModelName, LinkWritesDisabled, BareDisconnectDisabled, DisconnectDisabled, Writes, ParentLinkFields, NsId>` and `VariantRelationMutator<TContract, ModelName, VariantValue, LinkWritesDisabled, BareDisconnectDisabled, DisconnectDisabled, Writes, ParentLinkFields, NsId>` used to take a boolean, `FilteredWritesDisabled`, in the place of `Writes`. `Writes` says which row writes the mutator offers:
+`RelationMutator<TContract, ModelName, LinkWritesDisabled, BareDisconnectDisabled, DisconnectDisabled, Writes, ParentLinkFields, NsId, ConflictActions>` and `VariantRelationMutator<TContract, ModelName, VariantValue, LinkWritesDisabled, BareDisconnectDisabled, DisconnectDisabled, Writes, ParentLinkFields, NsId, ConflictActions>` used to take a boolean, `FilteredWritesDisabled`, in the place of `Writes`. `Writes` says which row writes the mutator offers:
 
 | `Writes` | Relation | `where()` returns | `updateAll`, `deleteAll` | `update`, `delete` |
 | --- | --- | --- | --- | --- |
