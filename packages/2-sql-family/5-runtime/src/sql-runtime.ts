@@ -674,10 +674,10 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     const held: HeldConnection = {
       [transactionStart]: owner[transactionStart],
       transaction: (options) => {
-        const openTransaction = this.#transactions.get(connection)?.activity;
+        const openTransaction = this.#transactions.get(connection);
         if (openTransaction !== undefined) {
           owner[transactionStart].refusedBeforeBegin = true;
-          return Promise.reject(transactionAlreadyOpenError(parent, openTransaction));
+          return Promise.reject(transactionAlreadyOpenError(parent, openTransaction.activity));
         }
         return this.beginTransactionOn(connection, owner, parent, options);
       },
@@ -1495,6 +1495,12 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     owner[transactionStart].refusedBeforeBegin = false;
     const endTransactionWork = this.#openTransactionWork.begin();
     this.#transactionWorkOn.set(connection, endTransactionWork);
+    const starting: OpenTransaction = {
+      activity: undefined,
+      assertAcceptsStatements: undefined,
+      assertBeforeDeadline: undefined,
+    };
+    this.#transactionRuntime.register(connection, starting);
     let activity: TransactionActivityRun<SqlMiddlewareContext>;
     try {
       activity = await startTransactionActivity<SqlMiddlewareContext>({
@@ -1505,6 +1511,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       });
     } catch (error) {
       endTransactionWork();
+      this.#transactionRuntime.unregister(connection, starting);
       owner[transactionStart].refusedBeforeBegin = true;
       throw error;
     }
@@ -1515,6 +1522,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       );
     } catch (error) {
       endTransactionWork();
+      this.#transactionRuntime.unregister(connection, starting);
       await activity.end({ by: 'rollback', outcome: 'failed', commitAttempted: false });
       throw error;
     }
@@ -1656,7 +1664,7 @@ function activityOutsideTransactionError(
 
 function transactionAlreadyOpenError(
   parent: ActivityParent,
-  openTransaction: ActivityParent,
+  openTransaction: ActivityParent | undefined,
 ): Error {
   return runtimeError(
     'RUNTIME.TRANSACTION_ALREADY_OPEN',
@@ -1664,7 +1672,7 @@ function transactionAlreadyOpenError(
     {
       kind: parent.activity.kind,
       id: parent.activity.id,
-      transactionId: openTransaction.activity.id,
+      transactionId: openTransaction?.activity.id,
     },
   );
 }

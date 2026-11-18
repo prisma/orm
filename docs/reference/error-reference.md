@@ -1479,7 +1479,7 @@ The SQL runtime callback helper received a timeout outside integer milliseconds 
 
 ### RUNTIME.TRANSACTION_ALREADY_OPEN
 
-`transaction()` was called on an activity handle opened on a connection while a transaction it began on that connection is still open. A connection runs one transaction at a time, and transactions do not nest. Commit or roll back the open transaction first, or send the work on it. Payload: `kind`, `id`, `transactionId`.
+`transaction()` was called on an activity handle opened on a connection while a transaction it began on that connection is still starting or open. A connection runs one transaction at a time, and transactions do not nest. Commit or roll back the open transaction first, or send the work on it. Payload: `kind`, `id`, `transactionId`; `transactionId` is `undefined` while the open transaction's `activityStarted` hooks run.
 
 ### RUNTIME.TRANSACTION_CLOSED
 

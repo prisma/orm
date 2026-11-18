@@ -88,6 +88,70 @@ describe('the transaction of an activity handle', () => {
       expect(driverCalls(events)).toEqual(['begin', 'rollback', 'destroy']);
     });
 
+    it('rejects a second transaction while the first is starting, and begins a new one after the first settles', async () => {
+      let releaseStart: () => void = () => {};
+      const startHeld = new Promise<void>((resolve) => {
+        releaseStart = resolve;
+      });
+      let transactionStarts = 0;
+      const { runtime, events } = createSetup({
+        middleware: [
+          {
+            name: 'slow-start',
+            familyId: 'sql',
+            async activityStarted(activity) {
+              if (activity.kind === 'transaction' && ++transactionStarts === 1) await startHeld;
+            },
+          },
+        ],
+      });
+      const connection = await runtime.connection();
+      const call = await startActivityOn(connection, testCall);
+
+      const first = call.transaction?.(async (tx) => tx.execute(rawPlan('update t set x = 1')));
+      await expect(call.transaction?.(async () => undefined)).rejects.toMatchObject({
+        code: 'RUNTIME.TRANSACTION_ALREADY_OPEN',
+      });
+      const beforeStart = driverCalls(events);
+      releaseStart();
+      await first;
+      await call.transaction?.(async () => undefined);
+      await call.end({ outcome: 'succeeded' });
+      const beforeRelease = driverCalls(events);
+      await connection.release();
+
+      expect({ beforeStart, beforeRelease }).toEqual({
+        beforeStart: [],
+        beforeRelease: ['begin', 'commit', 'begin', 'commit'],
+      });
+    });
+
+    it('begins a new transaction after a refused start', async () => {
+      const refusal = new Error('started failed');
+      let transactionStarts = 0;
+      const { runtime, events } = createSetup({
+        middleware: [
+          {
+            name: 'refuse-first',
+            familyId: 'sql',
+            async activityStarted(activity) {
+              if (activity.kind === 'transaction' && ++transactionStarts === 1) throw refusal;
+            },
+          },
+        ],
+      });
+      const connection = await runtime.connection();
+      const call = await startActivityOn(connection, testCall);
+
+      await expect(call.transaction?.(async () => undefined)).rejects.toBe(refusal);
+      await call.transaction?.(async () => undefined);
+      await call.end({ outcome: 'succeeded' });
+      const beforeRelease = driverCalls(events);
+      await connection.release();
+
+      expect(beforeRelease).toEqual(['begin', 'commit']);
+    });
+
     it('rejects a second transaction while the first is open, leaving the connection held', async () => {
       const { runtime, events } = createSetup();
       const connection = await runtime.connection();
