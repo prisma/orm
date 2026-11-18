@@ -181,6 +181,29 @@ describe('init takes the project from the target package', () => {
   );
 
   it(
+    'says the install finished but the package cannot be found when it still does not resolve',
+    async () => {
+      const run = await harness(loadsAs({ kind: 'not-installed' })).run(STARTER, {
+        cwd: projectDir,
+      });
+
+      expect(run.exitCode).toBe(2);
+      expect(envelopeOf(run)).toMatchObject({
+        ok: false,
+        error: {
+          code: 'CLI.INIT_TARGET_PACKAGE_NOT_INSTALLED',
+          summary: '@prisma/orm-postgres cannot be found from the project',
+          why: 'init installed @prisma/orm-postgres and the install finished, but the package cannot be found from the project, so init cannot read its init contribution. Nothing else was changed.',
+          meta: { packageName: '@prisma/orm-postgres' },
+        },
+      });
+      expect(JSON.stringify(envelopeOf(run))).not.toContain('--skip-install');
+      expect(installs).toEqual([['add', '@prisma/orm-postgres', 'dotenv']]);
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
     'reports a package without an init entrypoint through the real resolver',
     async () => {
       writeProjectFile(

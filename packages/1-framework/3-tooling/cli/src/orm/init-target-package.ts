@@ -175,6 +175,7 @@ async function loadContribution(
   ctx: {
     readonly cwd: string;
     readonly packageManager: PackageManager;
+    readonly install: boolean;
     readonly importFromProject: ImportFromProject;
   },
   packageName: string,
@@ -185,6 +186,7 @@ async function loadContribution(
       throw errorInitTargetPackageNotInstalled({
         packageName,
         installCommand: installCommand(ctx.packageManager, packageName),
+        installed: ctx.install,
       });
     case 'not-exported':
       throw errorInitContributionUnavailable({

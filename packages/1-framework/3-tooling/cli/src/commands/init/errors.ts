@@ -432,19 +432,29 @@ export function errorInitPrisma7ConfigUnreadable(options: {
 }
 
 /**
- * `--skip-install` forbids installing the target package, and the project does not have it. Init
- * takes every file it writes from that package, so it stops before changing anything.
+ * The project does not have the target package: `--skip-install` forbade installing it, or init
+ * installed it and the package still cannot be found from the project. Init takes every file it
+ * writes from that package, so it stops before writing anything.
  */
 export function errorInitTargetPackageNotInstalled(options: {
   readonly packageName: string;
   readonly installCommand: string;
+  /** True when init ran the install itself, false under `--skip-install`. */
+  readonly installed: boolean;
 }): CliStructuredError {
+  const { packageName } = options;
   return new CliStructuredError(
     'CLI.INIT_TARGET_PACKAGE_NOT_INSTALLED',
-    `${options.packageName} is not installed`,
+    options.installed
+      ? `${packageName} cannot be found from the project`
+      : `${packageName} is not installed`,
     {
-      why: `init writes the project from ${options.packageName}, and \`--skip-install\` forbids installing it. Nothing was changed.`,
-      fix: `Install it with \`${options.installCommand}\`, then run \`prisma orm init\` again, or run it without \`--skip-install\`.`,
+      why: options.installed
+        ? `init installed ${packageName} and the install finished, but the package cannot be found from the project, so init cannot read its init contribution. Nothing else was changed.`
+        : `init writes the project from ${packageName}, and \`--skip-install\` forbids installing it. Nothing was changed.`,
+      fix: options.installed
+        ? `Check that \`${options.installCommand}\` makes ${packageName} resolvable from this directory (Yarn Plug'n'Play hides packages from Node), then run \`prisma orm init\` again.`
+        : `Install it with \`${options.installCommand}\`, then run \`prisma orm init\` again, or run it without \`--skip-install\`.`,
       docsUrl: docsUrlFor('CLI.INIT_TARGET_PACKAGE_NOT_INSTALLED'),
       meta: { packageName: options.packageName, installCommand: options.installCommand },
     },

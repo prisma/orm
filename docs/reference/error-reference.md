@@ -207,7 +207,7 @@ Retired. `prisma orm init` used to fetch the agent skills from GitHub with `skil
 
 ### CLI.INIT_TARGET_PACKAGE_NOT_INSTALLED
 
-`prisma orm init --skip-install` ran in a project that does not have the target package installed. Init writes every file from the package's init contribution and `--skip-install` forbids installing it, so init stops before changing anything. The next action names the install command, for example `pnpm add @prisma/orm-postgres`. Maps to init exit code 2 (PRECONDITION). Payload: `packageName`, `installCommand`.
+`prisma orm init` cannot find the target package from the project, so it cannot read the init contribution it writes every file from, and it stops before writing anything. Either `--skip-install` forbade installing the package and the project does not have it, or init ran the install, the install finished, and the package still cannot be found from the project (for example under Yarn Plug'n'Play); the summary and `why` say which. The next action names the install command, for example `pnpm add @prisma/orm-postgres`, and after an install also the command that removes what init added. Maps to init exit code 2 (PRECONDITION). Payload: `packageName`, `installCommand`, and `packagesAdded` after an install.
 
 ### CLI.INIT_USER_ABORTED
 
