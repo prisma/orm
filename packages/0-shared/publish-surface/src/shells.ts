@@ -801,12 +801,14 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
           entry: '',
         },
       ],
-      reexports: facadeContractReexports({
+      reexports: facadeReexports({
         family: '@internal/sql-contract',
         familyPack: '@internal/family-sql',
+        runtime: '@internal/sql-runtime',
         target: '@internal/target-mariadb',
         adapter: '@internal/adapter-mariadb',
         driver: '@internal/driver-mariadb',
+        queryBuilders: SQL_QUERY_REEXPORTS,
       }),
     },
   ],

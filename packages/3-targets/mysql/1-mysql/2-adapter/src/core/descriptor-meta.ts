@@ -10,6 +10,7 @@ export const mysqlAdapterDescriptorMeta = {
   version: '0.0.1',
   capabilities: mysqlAdapterContractContributions.capabilities,
   types: {
+    aggregateDescriptors: mysqlAdapterContractContributions.types.aggregateDescriptors,
     codecTypes: {
       codecDescriptors: Array.from(mysqlCodecRegistry.values()),
       import: {

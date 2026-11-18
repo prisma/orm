@@ -71,7 +71,7 @@ export function createMysqlControlTargetDescriptor<TargetId extends string = 'my
         if (!isSqlContract(contract)) {
           throw mysqlError(
             'CONTRACT.TARGET_MISMATCH',
-            'The MySQL target received a contract that is not a SQL contract.',
+            'The MySQL or MariaDB control target received a contract that is not a SQL contract.',
           );
         }
         return mysqlContractToSchema(contract, sqlTypeLookupsOf(frameworkComponents));

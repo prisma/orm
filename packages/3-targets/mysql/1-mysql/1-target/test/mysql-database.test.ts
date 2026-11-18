@@ -133,7 +133,7 @@ describe('mysqlCreateNamespace', () => {
         id: UNBOUND_NAMESPACE_ID,
         entries: { table: { User: userTable(roleColumn()) } },
       }),
-    ).toThrow(/Column "User"."role" is a MySQL enum but has no enum/);
+    ).toThrow(/Column "User"."role" is a native enum column but has no enum/);
   });
 
   it('refuses any namespace but the unbound one', () => {

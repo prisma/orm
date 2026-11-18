@@ -24,7 +24,143 @@ export type ProfileHash =
 export type CodecTypes = MariadbTypes;
 export type LaneCodecTypes = CodecTypes;
 export type QueryOperationTypes = Record<string, never>;
-export type AggregateTypes = Record<string, never>;
+export type AggregateTypes = {
+  readonly avg: {
+    readonly byCodec: {
+      readonly 'mysql/bigint@1': { readonly output: 'mysql/double@1'; readonly nullable: true };
+      readonly 'mysql/int@1': { readonly output: 'mysql/double@1'; readonly nullable: true };
+    };
+  };
+  readonly count: {
+    readonly byCodec: {};
+    readonly withoutInput: { readonly output: 'mysql/bigintnumber@1'; readonly nullable: false };
+    readonly anyInput: { readonly output: 'mysql/bigintnumber@1'; readonly nullable: false };
+  };
+  readonly countBigInt: {
+    readonly byCodec: {};
+    readonly withoutInput: { readonly output: 'mysql/bigint@1'; readonly nullable: false };
+    readonly anyInput: { readonly output: 'mysql/bigint@1'; readonly nullable: false };
+  };
+  readonly max: {
+    readonly byCodec: {
+      readonly 'mysql/bigint@1': { readonly output: 'mysql/bigint@1'; readonly nullable: true };
+      readonly 'mysql/bigintnumber@1': {
+        readonly output: 'mysql/bigintnumber@1';
+        readonly nullable: true;
+      };
+      readonly 'mysql/date-string@1': {
+        readonly output: 'mysql/date-string@1';
+        readonly nullable: true;
+      };
+      readonly 'mysql/date-temporal@1': {
+        readonly output: 'mysql/date-temporal@1';
+        readonly nullable: true;
+      };
+      readonly 'mysql/datetime-string@1': {
+        readonly output: 'mysql/datetime-string@1';
+        readonly nullable: true;
+      };
+      readonly 'mysql/datetime-temporal@1': {
+        readonly output: 'mysql/datetime-temporal@1';
+        readonly nullable: true;
+      };
+      readonly 'mysql/datetime@1': { readonly output: 'mysql/datetime@1'; readonly nullable: true };
+      readonly 'mysql/double@1': { readonly output: 'mysql/double@1'; readonly nullable: true };
+      readonly 'mysql/enum@1': { readonly output: 'mysql/enum@1'; readonly nullable: true };
+      readonly 'mysql/int@1': { readonly output: 'mysql/int@1'; readonly nullable: true };
+      readonly 'mysql/text@1': { readonly output: 'mysql/text@1'; readonly nullable: true };
+      readonly 'mysql/time-string@1': {
+        readonly output: 'mysql/time-string@1';
+        readonly nullable: true;
+      };
+      readonly 'mysql/time-temporal@1': {
+        readonly output: 'mysql/time-temporal@1';
+        readonly nullable: true;
+      };
+      readonly 'mysql/timestamp-date@1': {
+        readonly output: 'mysql/timestamp-date@1';
+        readonly nullable: true;
+      };
+      readonly 'mysql/timestamp-string@1': {
+        readonly output: 'mysql/timestamp-string@1';
+        readonly nullable: true;
+      };
+      readonly 'mysql/timestamp-temporal@1': {
+        readonly output: 'mysql/timestamp-temporal@1';
+        readonly nullable: true;
+      };
+      readonly 'sql/char@1': { readonly output: 'sql/char@1'; readonly nullable: true };
+      readonly 'sql/varchar@1': { readonly output: 'sql/varchar@1'; readonly nullable: true };
+    };
+  };
+  readonly min: {
+    readonly byCodec: {
+      readonly 'mysql/bigint@1': { readonly output: 'mysql/bigint@1'; readonly nullable: true };
+      readonly 'mysql/bigintnumber@1': {
+        readonly output: 'mysql/bigintnumber@1';
+        readonly nullable: true;
+      };
+      readonly 'mysql/date-string@1': {
+        readonly output: 'mysql/date-string@1';
+        readonly nullable: true;
+      };
+      readonly 'mysql/date-temporal@1': {
+        readonly output: 'mysql/date-temporal@1';
+        readonly nullable: true;
+      };
+      readonly 'mysql/datetime-string@1': {
+        readonly output: 'mysql/datetime-string@1';
+        readonly nullable: true;
+      };
+      readonly 'mysql/datetime-temporal@1': {
+        readonly output: 'mysql/datetime-temporal@1';
+        readonly nullable: true;
+      };
+      readonly 'mysql/datetime@1': { readonly output: 'mysql/datetime@1'; readonly nullable: true };
+      readonly 'mysql/double@1': { readonly output: 'mysql/double@1'; readonly nullable: true };
+      readonly 'mysql/enum@1': { readonly output: 'mysql/enum@1'; readonly nullable: true };
+      readonly 'mysql/int@1': { readonly output: 'mysql/int@1'; readonly nullable: true };
+      readonly 'mysql/text@1': { readonly output: 'mysql/text@1'; readonly nullable: true };
+      readonly 'mysql/time-string@1': {
+        readonly output: 'mysql/time-string@1';
+        readonly nullable: true;
+      };
+      readonly 'mysql/time-temporal@1': {
+        readonly output: 'mysql/time-temporal@1';
+        readonly nullable: true;
+      };
+      readonly 'mysql/timestamp-date@1': {
+        readonly output: 'mysql/timestamp-date@1';
+        readonly nullable: true;
+      };
+      readonly 'mysql/timestamp-string@1': {
+        readonly output: 'mysql/timestamp-string@1';
+        readonly nullable: true;
+      };
+      readonly 'mysql/timestamp-temporal@1': {
+        readonly output: 'mysql/timestamp-temporal@1';
+        readonly nullable: true;
+      };
+      readonly 'sql/char@1': { readonly output: 'sql/char@1'; readonly nullable: true };
+      readonly 'sql/varchar@1': { readonly output: 'sql/varchar@1'; readonly nullable: true };
+    };
+  };
+  readonly sum: {
+    readonly byCodec: {
+      readonly 'mysql/bigint@1': {
+        readonly output: 'mysql/bigintnumber@1';
+        readonly nullable: true;
+      };
+      readonly 'mysql/int@1': { readonly output: 'mysql/bigintnumber@1'; readonly nullable: true };
+    };
+  };
+  readonly sumBigInt: {
+    readonly byCodec: {
+      readonly 'mysql/bigint@1': { readonly output: 'mysql/bigint@1'; readonly nullable: true };
+      readonly 'mysql/int@1': { readonly output: 'mysql/bigint@1'; readonly nullable: true };
+    };
+  };
+};
 type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyof CodecTypes
   ? Encoded extends CodecTypes[CodecId]['json']
     ? Encoded
