@@ -55,6 +55,18 @@ The ORM's writes also need these:
 
 The driver does not check the database at startup or deploy time for these requirements.
 
+Three other ways to keep a value inside its literal were rejected, because each would have the driver check or write SQL around the package's substitution: a driver check that the package finds the same placeholders as the driver's lexer, the driver's own escaper, and values written as hex literals.
+
+## Why the driver works this way
+
+- **The `mariadb` package, not `mysql2`.** Prisma 7's MariaDB adapter uses `mariadb` for MySQL and MariaDB alike. A `mysql2` adapter was built for Prisma 7 and dropped: it held about 40 MB more memory for every test and never released it. `mysql2` also sends a `BigInt` as text, which MySQL compares with an expression as a double. The lowest version is 3.5.4, because earlier versions corrupt rows when a type conversion reads a column's text under prepared statements (CONJS-363) and hang without pipelining (CONJS-361).
+- **No prepared statements.** A prepared statement takes two round trips, a prepare and an execute. On a local server that measured 0.092 ms per statement, against 0.036 ms for one text-protocol statement, over 2,000 statements. The rule the driver follows is that Prisma's code never writes a value into SQL; the client library may, and the `mariadb` package does.
+- **No statement cache.** MySQL limits open prepared statements across the whole server (`max_prepared_stmt_count`), and since MySQL 8.0.22 a reused prepared statement keeps the parameter types of its first run.
+- **The driver builds its own pool.** The Postgres facade takes a `pg.Pool` the caller built; the MySQL driver cannot. It depends on `foundRows`, `multipleStatements` and `permitLocalInfile`, which are fixed when each connection signs in, and it can neither set nor check them on a pool it did not build. So `poolOptions.max`, named as `pg.Pool`'s own, sets the pool's size.
+- **No reset on release.** The package's `resetAfterUse` sends `COM_RESET_CONNECTION` only to MariaDB and is ignored on MySQL, and no other ORM or driver resets a connection by default (node-postgres, Drizzle, Kysely, Rails).
+- **Statement size.** Values are written into the statement, so no bound-parameter limit applies. The limit is the server's `max_allowed_packet`: 64 MiB by default on MySQL 8.4 and 16 MiB on MariaDB 10.11. A larger statement fails with error 2006 ("server has gone away") and the connection is lost, so code that builds large statements must keep them under the limit rather than catch the error. The ORM client keeps each statement of key values it builds under 1 MiB ([ADR 302](../../../../../docs/architecture%20docs/adrs/ADR%20302%20-%20Prisma%208%20does%20not%20split%20large%20IN%20lists.md)).
+- **Numbered placeholders, rewritten here.** The adapter writes `?N` and the driver rewrites it to `?`, so the SQL family needs no change. The alternative, a field in the shared lowered statement listing which parameter each placeholder takes, was rejected because it adds to the contract between every adapter and driver for one target.
+
 ## Transaction starts
 
 `beginTransaction(options?)` accepts a resolved `isolationLevel`, validated by the MySQL target and mapped to fixed `SET TRANSACTION ISOLATION LEVEL ...` statements. An absent level uses plain BEGIN and leaves the server/session default unchanged. The MySQL facade configures its ORM factory to request ReadCommitted for ORM-owned transactions; the driver has no implicit/explicit discriminator or ORM policy. SET and BEGIN share one connection query lock. A transaction owner must destroy the connection after uncertain setup failure, because a successful SET followed by failed BEGIN can leave a pending next-transaction setting.
