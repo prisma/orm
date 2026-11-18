@@ -15,10 +15,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
 import { type ImportFromProject, importFromProject } from '../../src/orm/init-prisma7-check';
+import { importInitEntrypoint } from '../../src/orm/init-target-package';
 import { createTestProjectDir, fixtureAppDir } from '../utils/test-project-dir';
 
 const FIXTURE = join(fixtureAppDir, 'fixtures/prisma7-project');
-const TARGET_CONFIG = '@prisma/orm-postgres/config';
+// The config module the installed target package names. The fixture app installs the workspace
+// build, which names its workspace package; the published build names @prisma/orm-postgres.
+const TARGET_CONFIG = '@internal/postgres/config';
 const VIEW_DIAGNOSTIC = {
   code: 'PSL.PRISMA7_VIEW_UNSUPPORTED',
   message: 'View "UserInfo" is not supported; Prisma 8 has no views.',
@@ -56,6 +59,7 @@ function harness(packageManager?: PackageManagerId) {
     'orm init': createInitCommand({
       emitScaffoldedContract: vi.fn().mockResolvedValue(undefined),
       importFromProject: (cwd, specifier) => loadTargetConfig(cwd, specifier),
+      importInitEntrypoint,
     }),
   };
   return createTestCli({
@@ -410,19 +414,13 @@ describe('the Prisma 7 check before init changes the project', () => {
   );
 
   it(
-    'warns and continues under --skip-install when the target package is not installed',
+    'checks the installed target package under --skip-install without installing anything',
     async () => {
       copyFixture();
-      loadTargetConfig = async () => undefined;
 
       const run = await harness().run(prisma7Argv('--skip-install'), { cwd: projectDir });
 
       expect(run.exitCode).toBe(0);
-      expect(run.presented?.data).toMatchObject({
-        warnings: expect.arrayContaining([
-          'Could not check that Prisma 8 can read prisma/schema.prisma: @prisma/orm-postgres is not installed. Install the dependencies and run `prisma contract emit` to check it.',
-        ]),
-      });
       expect(existsSync(join(projectDir, 'prisma7.config.ts'))).toBe(true);
       expect(installs).toEqual([]);
     },

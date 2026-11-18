@@ -1,28 +1,19 @@
-import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { DEFAULT_CONTRACT_SOURCE_DIR } from '@internal/config/config-types';
 import { buildLoadedConfig, requireConfigSections } from '@internal/config-loader';
 import { ifDefined } from '@internal/utils/defined';
-import type { PackageOperations } from '@prisma/cli-engine';
 import { CliStructuredError } from '@prisma/cli-engine/protocol';
 import { join } from 'pathe';
-import { buildCatalogWarnings } from '../commands/init/catalog-warnings';
-import { formatRemoveCommand, type PackageManager } from '../commands/init/detect-package-manager';
 import {
   errorInitPrisma7SchemaRefused,
   errorInitPrisma7SourceUnavailable,
   type PackagesAdded,
   packagesAddedAction,
 } from '../commands/init/errors';
-import {
-  type TargetId,
-  targetEntrypoint,
-  targetPackageName,
-} from '../commands/init/templates/code-templates';
+import type { InitContribution } from '../commands/init/init-contribution';
 import { loadContractSource } from '../control-api/operations/load-contract-source';
 import { chooseAction } from '../utils/next-actions';
-import { installProjectDependencies } from './init-packages';
 import { normalizeError } from './normalize-error';
 
 /** A module as the project itself resolves it; `undefined` when the project cannot resolve it. */
@@ -42,36 +33,24 @@ export const importFromProject: ImportFromProject = async (cwd, specifier) => {
   return module;
 };
 
-export interface Prisma7SourceCheck {
-  /**
-   * `readable`: the target package read the schema. `unchecked`: the package is not installed and
-   * `--skip-install` forbade installing it. `no-source`: the package has no Prisma 7 contract source.
-   */
-  readonly outcome: 'readable' | 'unchecked' | 'no-source';
-  readonly packageName: string;
-  /** Every package the check installed, so the install phase skips them. */
-  readonly installed: readonly string[];
-  /** The installed packages the project did not declare before; `undefined` when there are none. */
-  readonly added: PackagesAdded | undefined;
-  readonly warnings: readonly string[];
+/** What the contribution writes for a project that keeps its Prisma 7 schema. */
+export interface Prisma7Templates {
+  readonly configFile: NonNullable<InitContribution['prisma7ConfigFile']>;
+  readonly quickReference: NonNullable<InitContribution['prisma7QuickReference']>;
 }
+
+/** `readable`: the target package read the schema. `no-source`: it has no Prisma 7 contract source. */
+export type Prisma7SourceCheck =
+  | { readonly outcome: 'readable'; readonly templates: Prisma7Templates }
+  | { readonly outcome: 'no-source' };
 
 export type CheckPrisma7Source = (request: {
-  readonly target: TargetId;
+  readonly packageName: string;
+  readonly contribution: InitContribution;
   readonly schemaPath: string;
+  /** What installing the target package added to the project, for the undo instruction. */
+  readonly added: PackagesAdded | undefined;
 }) => Promise<Prisma7SourceCheck>;
-
-/** The install before the check failed; nothing else has happened yet. */
-export class Prisma7CheckInstallFailed extends Error {
-  constructor(
-    readonly failure: CliStructuredError,
-    readonly target: TargetId,
-    readonly schemaPath: string,
-  ) {
-    super(failure.message);
-    this.name = 'Prisma7CheckInstallFailed';
-  }
-}
 
 /**
  * Adds the check's undo instruction to an error raised after the check installed packages, such
@@ -93,49 +72,20 @@ export function withPackagesAddedAction(error: unknown, added: PackagesAdded): C
 }
 
 /**
- * Finds out whether the chosen target package can read the Prisma 7 schema before init changes the
- * project: installs the package and `dotenv` (the packages every init installs), loads the
- * package's config entrypoint as the project resolves it, and runs its `prisma7Schema` source
- * without writing. The CLI carries no target code, so the installed package is the only one that
- * can answer.
+ * Finds out whether the installed target package can read the Prisma 7 schema before init changes
+ * the project: loads the package's config module as the project resolves it and runs its
+ * `prisma7Schema` source without writing. The CLI carries no target code, so the installed
+ * package is the only one that can answer. A contribution with no `prisma7ConfigFile` cannot take
+ * a Prisma 7 schema.
  */
 export function createPrisma7SourceCheck(ctx: {
   readonly cwd: string;
-  readonly packages: PackageOperations;
-  readonly packageManager: PackageManager;
-  readonly install: boolean;
   readonly importFromProject: ImportFromProject;
 }): CheckPrisma7Source {
-  return async ({ target, schemaPath }) => {
-    const packageName = targetPackageName(target);
-    const warnings: string[] = [];
-    let installed: readonly string[] = [];
-    let added: PackagesAdded | undefined;
-
-    if (ctx.install) {
-      const deps = [packageName, 'dotenv'];
-      const declaredBefore = declaredPackages(ctx.cwd);
-      const installFailure = await installProjectDependencies({
-        packages: ctx.packages,
-        cwd: ctx.cwd,
-        deps,
-        devDeps: [],
-      });
-      if (installFailure !== undefined) {
-        throw new Prisma7CheckInstallFailed(installFailure, target, schemaPath);
-      }
-      if (ctx.packageManager === 'pnpm') {
-        warnings.push(...buildCatalogWarnings(ctx.cwd, deps));
-      }
-      installed = deps;
-      const newlyDeclared = deps.filter((dep) => !declaredBefore.has(dep));
-      added =
-        newlyDeclared.length === 0
-          ? undefined
-          : {
-              packages: newlyDeclared,
-              removeCommand: formatRemoveCommand(ctx.packageManager, newlyDeclared),
-            };
+  return async ({ packageName, contribution, schemaPath, added }) => {
+    const { prisma7ConfigFile, prisma7QuickReference } = contribution;
+    if (prisma7ConfigFile === undefined || prisma7QuickReference === undefined) {
+      return { outcome: 'no-source' };
     }
 
     const undoable = async <T>(step: () => T | Promise<T>): Promise<T> => {
@@ -146,16 +96,8 @@ export function createPrisma7SourceCheck(ctx: {
       }
     };
 
-    const module = await undoable(() =>
-      ctx.importFromProject(ctx.cwd, targetEntrypoint(packageName, 'config')),
-    );
+    const module = await undoable(() => ctx.importFromProject(ctx.cwd, contribution.configModule));
     if (module === undefined) {
-      if (!ctx.install) {
-        warnings.push(
-          `Could not check that Prisma 8 can read ${schemaPath}: ${packageName} is not installed. Install the dependencies and run \`prisma contract emit\` to check it.`,
-        );
-        return { outcome: 'unchecked', packageName, installed, added, warnings };
-      }
       throw errorInitPrisma7SourceUnavailable({
         schemaPath,
         packageName,
@@ -166,7 +108,7 @@ export function createPrisma7SourceCheck(ctx: {
 
     const { defineConfig, prisma7Schema } = module;
     if (typeof defineConfig !== 'function' || typeof prisma7Schema !== 'function') {
-      return { outcome: 'no-source', packageName, installed, added, warnings };
+      return { outcome: 'no-source' };
     }
 
     const config = await undoable(() => {
@@ -191,25 +133,11 @@ export function createPrisma7SourceCheck(ctx: {
         added,
       });
     }
-    return { outcome: 'readable', packageName, installed, added, warnings };
+    return {
+      outcome: 'readable',
+      templates: { configFile: prisma7ConfigFile, quickReference: prisma7QuickReference },
+    };
   };
-}
-
-function declaredPackages(cwd: string): ReadonlySet<string> {
-  let manifest: unknown;
-  try {
-    manifest = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf-8'));
-  } catch {
-    return new Set();
-  }
-  if (!isRecord(manifest)) {
-    return new Set();
-  }
-  const names = ['dependencies', 'devDependencies', 'optionalDependencies'].flatMap((field) => {
-    const section = manifest[field];
-    return isRecord(section) ? Object.keys(section) : [];
-  });
-  return new Set(names);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

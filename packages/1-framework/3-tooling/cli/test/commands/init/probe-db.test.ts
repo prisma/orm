@@ -1,10 +1,9 @@
-import { isStructuredError } from '@internal/utils/structured-error';
 import { describe, expect, it, vi } from 'vitest';
+import type { InitProbeResult } from '../../../src/commands/init/init-contribution';
 import {
   compareVersionPrefix,
+  type ProbeContext,
   type ProbeOutcome,
-  type ProbeOverrides,
-  parsePostgresVersion,
   probeServerVersion,
 } from '../../../src/commands/init/probe-db';
 
@@ -43,49 +42,35 @@ describe('compareVersionPrefix (FR8.3)', () => {
   });
 });
 
-describe('parsePostgresVersion (FR8.3)', () => {
-  it('extracts the version from a typical SELECT version() row', () => {
-    expect(
-      parsePostgresVersion('PostgreSQL 14.10 on x86_64-pc-linux-gnu, compiled by gcc 11.4.0'),
-    ).toBe('14.10');
-  });
-
-  it('falls back to the major when no minor is present', () => {
-    expect(parsePostgresVersion('PostgreSQL 16 on aarch64-apple-darwin')).toBe('16');
-  });
-
-  it('throws on a row that does not start with PostgreSQL', () => {
-    expect(() => parsePostgresVersion('NotPostgres 1.0')).toThrow(/Could not parse/);
-  });
-
-  it('raises CLI.INIT_PROBE_FAILED on an unparseable version row', () => {
-    let thrown: unknown;
-    try {
-      parsePostgresVersion('NotPostgres 1.0');
-    } catch (error) {
-      thrown = error;
-    }
-    expect(isStructuredError(thrown)).toBe(true);
-    expect(thrown).toMatchObject({ code: 'CLI.INIT_PROBE_FAILED' });
-  });
-});
-
 // ---------------------------------------------------------------------------
 // FR8.3 — probeServerVersion outcome surface
 // ---------------------------------------------------------------------------
 
+function probeContext(
+  databaseUrl: string | undefined,
+  probe: ((url: string) => Promise<InitProbeResult>) | undefined,
+  minVersion = '14',
+): ProbeContext {
+  return {
+    baseDir: '/tmp',
+    databaseUrl,
+    packageName: '@example/target',
+    contribution: {
+      serverRequirement: { minVersion, checkCommand: 'SELECT version()' },
+      ...(probe === undefined ? {} : { probe }),
+    },
+  };
+}
+
 describe('probeServerVersion (FR8.3)', () => {
   it('returns no-database-url when DATABASE_URL is unset', async () => {
+    // The probe must not even attempt to connect when DATABASE_URL is absent.
+    // A test stub here would be a regression of the offline-by-default
+    // contract (NFR9) — fail fast if it's invoked.
     const outcome = await probeServerVersion(
-      { baseDir: '/tmp', target: 'postgres', databaseUrl: undefined, minVersion: '14' },
-      // The probe must not even attempt to connect when DATABASE_URL is absent.
-      // A test stub here would be a regression of the offline-by-default
-      // contract (NFR9) — fail fast if it's invoked.
-      {
-        probePostgres: () => {
-          throw new Error('probe must not be invoked without DATABASE_URL');
-        },
-      },
+      probeContext(undefined, () => {
+        throw new Error('probe must not be invoked without DATABASE_URL');
+      }),
     );
 
     expect(outcome.kind).toBe('no-database-url');
@@ -94,26 +79,20 @@ describe('probeServerVersion (FR8.3)', () => {
 
   it('returns no-database-url for a whitespace-only DATABASE_URL', async () => {
     const outcome = await probeServerVersion(
-      { baseDir: '/tmp', target: 'postgres', databaseUrl: '   ', minVersion: '14' },
-      {
-        probePostgres: () => {
-          throw new Error('probe must not be invoked for whitespace URL');
-        },
-      },
+      probeContext('   ', () => {
+        throw new Error('probe must not be invoked for whitespace URL');
+      }),
     );
 
     expect(outcome.kind).toBe('no-database-url');
   });
 
-  it('returns ok with the parsed server version when the server meets minimum', async () => {
+  it('returns ok with the server version when the server meets minimum', async () => {
     const outcome = await probeServerVersion(
-      {
-        baseDir: '/tmp',
-        target: 'postgres',
-        databaseUrl: 'postgres://localhost:5432/db',
-        minVersion: '14',
-      },
-      { probePostgres: async () => ({ serverVersion: '15.2' }) },
+      probeContext('postgres://localhost:5432/db', async () => ({
+        kind: 'server-version',
+        serverVersion: '15.2',
+      })),
     );
 
     expect(outcome).toEqual<ProbeOutcome>({
@@ -127,36 +106,26 @@ describe('probeServerVersion (FR8.3)', () => {
 
   it('returns below-minimum when the server is older than the declared minimum', async () => {
     const outcome = await probeServerVersion(
-      {
-        baseDir: '/tmp',
-        target: 'mongo',
-        databaseUrl: 'mongodb://localhost:27017/db',
-        minVersion: '6.0',
-      },
-      { probeMongo: async () => ({ serverVersion: '5.0.10' }) },
+      probeContext(
+        'mongodb://localhost:27017/db',
+        async () => ({ kind: 'server-version', serverVersion: '5.0.10' }),
+        '6.0',
+      ),
     );
 
-    expect(outcome.kind).toBe('below-minimum');
-    if (outcome.kind === 'below-minimum') {
-      expect(outcome.serverVersion).toBe('5.0.10');
-      expect(outcome.minVersion).toBe('6.0');
-      expect(outcome.message).toContain('below the declared minimum');
-    }
+    expect(outcome).toMatchObject({
+      kind: 'below-minimum',
+      serverVersion: '5.0.10',
+      minVersion: '6.0',
+      message: expect.stringContaining('below the declared minimum'),
+    });
   });
 
-  it('returns connection-failed and redacts URL secrets when the driver throws', async () => {
+  it('returns connection-failed and redacts URL secrets when the probe rejects', async () => {
     const outcome = await probeServerVersion(
-      {
-        baseDir: '/tmp',
-        target: 'postgres',
-        databaseUrl: 'postgres://alice:hunter2@localhost:5432/db',
-        minVersion: '14',
-      },
-      {
-        probePostgres: () => {
-          throw new Error('connect ECONNREFUSED postgres://alice:hunter2@localhost:5432');
-        },
-      },
+      probeContext('postgres://alice:hunter2@localhost:5432/db', async () => {
+        throw new Error('connect ECONNREFUSED postgres://alice:hunter2@localhost:5432');
+      }),
     );
 
     expect(outcome).toMatchObject({
@@ -165,111 +134,46 @@ describe('probeServerVersion (FR8.3)', () => {
     });
   });
 
-  it('returns driver-missing when require() cannot resolve the peer driver', async () => {
+  it('returns driver-missing when the probe cannot load its driver', async () => {
     const outcome = await probeServerVersion(
-      {
-        baseDir: '/tmp/no-such-project',
-        target: 'postgres',
-        databaseUrl: 'postgres://localhost:5432/db',
-        minVersion: '14',
-      },
-      {
-        requireFromBaseDir: () => {
-          // Simulate a CJS resolution failure.
-          throw new Error("Cannot find module 'pg'");
-        },
-      },
+      probeContext('postgres://localhost:5432/db', async () => ({
+        kind: 'driver-missing',
+        driver: 'pg',
+        cause: "Cannot find module 'pg'",
+      })),
     );
 
-    expect(outcome.kind).toBe('driver-missing');
-    if (outcome.kind === 'driver-missing') {
-      expect(outcome.cause).toContain('not installed');
-    }
+    expect(outcome).toMatchObject({
+      kind: 'driver-missing',
+      cause:
+        "`pg` is not installed in this project (resolved from /tmp; cause: Cannot find module 'pg')",
+    });
   });
 
-  it('mongo path uses the mongo override when target=mongo', async () => {
-    const probePostgres = vi.fn<NonNullable<ProbeOverrides['probePostgres']>>();
-    const probeMongo = vi.fn(async () => ({ serverVersion: '7.0.1' }));
-
+  it('returns unsupported when the target package has no probe', async () => {
     const outcome = await probeServerVersion(
-      {
-        baseDir: '/tmp',
-        target: 'mongo',
-        databaseUrl: 'mongodb://localhost:27017/db',
-        minVersion: '6.0',
-      },
-      { probePostgres, probeMongo },
+      probeContext('postgres://localhost:5432/db', undefined),
     );
 
-    expect(probePostgres).not.toHaveBeenCalled();
-    expect(probeMongo).toHaveBeenCalledTimes(1);
+    expect(outcome).toMatchObject({
+      kind: 'unsupported',
+      message: 'Skipped --probe-db: @example/target cannot check the server.',
+    });
+  });
+
+  it('calls the probe once with the connection string', async () => {
+    const probe = vi.fn(
+      async (): Promise<InitProbeResult> => ({
+        kind: 'server-version',
+        serverVersion: '7.0.1',
+      }),
+    );
+
+    const outcome = await probeServerVersion(
+      probeContext('mongodb://localhost:27017/db', probe, '6.0'),
+    );
+
+    expect(probe).toHaveBeenCalledWith('mongodb://localhost:27017/db');
     expect(outcome.kind).toBe('ok');
-  });
-});
-
-describe('defaultProbePostgres idle connection errors', () => {
-  it('attaches an error listener so a dropped connection cannot crash the process', async () => {
-    const clients: FakeProbeClient[] = [];
-    class FakeProbeClient {
-      readonly listeners = new Map<string, (err: Error) => void>();
-      constructor(_cfg: { connectionString: string }) {
-        clients.push(this);
-      }
-      on(event: string, listener: (err: Error) => void): this {
-        this.listeners.set(event, listener);
-        return this;
-      }
-      async connect(): Promise<void> {}
-      async query(): Promise<{ rows: Array<{ version: string }> }> {
-        return { rows: [{ version: 'PostgreSQL 16.1 on x86_64-pc-linux-gnu' }] };
-      }
-      async end(): Promise<void> {}
-    }
-
-    const outcome = await probeServerVersion(
-      {
-        baseDir: '/tmp',
-        target: 'postgres',
-        databaseUrl: 'postgres://localhost:5432/db',
-        minVersion: '14',
-      },
-      { requireFromBaseDir: () => ({ Client: FakeProbeClient }) },
-    );
-
-    expect(outcome.kind).toBe('ok');
-    expect(clients).toHaveLength(1);
-    const errorListener = clients[0]?.listeners.get('error');
-    expect(errorListener).toBeDefined();
-    expect(() => errorListener?.(new Error('connection terminated unexpectedly'))).not.toThrow();
-  });
-
-  it('ends the client when connect() rejects', async () => {
-    const endSpy = vi.fn(async () => {});
-    class FailingConnectClient {
-      constructor(_cfg: { connectionString: string }) {}
-      on(): this {
-        return this;
-      }
-      async connect(): Promise<void> {
-        throw new Error('password authentication failed');
-      }
-      async query(): Promise<never> {
-        throw new Error('query must not be reached');
-      }
-      end = endSpy;
-    }
-
-    const outcome = await probeServerVersion(
-      {
-        baseDir: '/tmp',
-        target: 'postgres',
-        databaseUrl: 'postgres://localhost:5432/db',
-        minVersion: '14',
-      },
-      { requireFromBaseDir: () => ({ Client: FailingConnectClient }) },
-    );
-
-    expect(outcome.kind).toBe('connection-failed');
-    expect(endSpy).toHaveBeenCalledTimes(1);
   });
 });

@@ -12,10 +12,13 @@ import {
 import { createTestCli } from '@prisma/cli-engine/testing';
 import { timeouts } from '@repo/test-utils';
 import { basename, dirname, join } from 'pathe';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import type { InitContribution } from '../../src/commands/init/init-contribution';
+import { findTargetByName, type KnownTarget } from '../../src/commands/init/target-packages';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import type { ResolvedInitInputs } from '../../src/orm/init-inputs';
 import { scaffoldProject } from '../../src/orm/init-scaffold';
+import { fixtureContribution } from '../utils/fixture-contribution';
 import { createTestProjectDir, fixtureAppDir } from '../utils/test-project-dir';
 
 const FIXTURE = join(fixtureAppDir, 'fixtures/prisma7-project');
@@ -23,6 +26,12 @@ const SKIP_INSTALL = ['--skip-install'] as const;
 const FROM_PRISMA7 = ['--from-prisma7-schema', 'prisma/schema.prisma'] as const;
 
 let projectDir: string;
+let contribution: InitContribution;
+const target = findTargetByName('postgres') as KnownTarget;
+
+beforeAll(async () => {
+  contribution = await fixtureContribution(target.packageName);
+});
 
 beforeEach(() => {
   projectDir = createTestProjectDir('orm-init-prisma7-scaffold');
@@ -94,9 +103,18 @@ function hashTree(dir: string): string {
   return hash.digest('hex');
 }
 
+function prisma7Templates() {
+  const { prisma7ConfigFile, prisma7QuickReference } = contribution;
+  if (prisma7ConfigFile === undefined || prisma7QuickReference === undefined) {
+    throw new Error(`${target.packageName} cannot take a Prisma 7 schema`);
+  }
+  return { configFile: prisma7ConfigFile, quickReference: prisma7QuickReference };
+}
+
 function prisma7Inputs(overrides: Partial<ResolvedInitInputs> = {}): ResolvedInitInputs {
   return {
-    target: 'postgres',
+    target,
+    contribution,
     authoring: 'psl',
     schemaPath: 'prisma/schema.prisma',
     contractSource: {
@@ -104,6 +122,7 @@ function prisma7Inputs(overrides: Partial<ResolvedInitInputs> = {}): ResolvedIni
       schemaPath: 'prisma/schema.prisma',
       provider: 'postgresql',
       prisma7Config: 'prisma7.config.ts',
+      templates: prisma7Templates(),
     },
     sideBySide: null,
     warnings: [],
@@ -146,7 +165,7 @@ describe('the Prisma 7 scaffold', () => {
       const outcome = scaffold();
 
       expect(readProjectFile('prisma.config.ts')).toContain(
-        "import { defineConfig as ormConfig, prisma7Schema } from '@prisma/orm-postgres/config';",
+        "import { defineConfig as ormConfig, prisma7Schema } from '@internal/postgres/config';",
       );
       expect(readProjectFile('prisma.config.ts')).toContain(
         'contract: prisma7Schema("prisma/schema.prisma"),\n    output: "src/prisma",',
@@ -189,6 +208,7 @@ describe('the Prisma 7 scaffold', () => {
           schemaPath: 'prisma/schema.prisma',
           provider: 'postgresql',
           prisma7Config: 'prisma7.config.mts',
+          templates: prisma7Templates(),
         },
       });
 
@@ -209,6 +229,7 @@ describe('the Prisma 7 scaffold', () => {
           schemaPath: 'prisma/schema.prisma',
           provider: 'postgresql',
           prisma7Config: undefined,
+          templates: prisma7Templates(),
         },
       });
 

@@ -1,5 +1,10 @@
 import type { InitProbeResult } from '@internal/cli/init-contribution';
 
+/** The server answered, but not with a version this probe can read; init reports it as a failed probe. */
+class ServerVersionUnreadable extends Error {
+  override readonly name = 'ServerVersionUnreadable';
+}
+
 /**
  * Extracts the numeric prefix from a Postgres `version()` row, e.g.
  *
@@ -12,7 +17,9 @@ import type { InitProbeResult } from '@internal/cli/init-contribution';
 export function parsePostgresVersion(versionString: string): string {
   const match = versionString.match(/PostgreSQL\s+(\d+(?:\.\d+)?)/i);
   if (match === null || match[1] === undefined) {
-    throw new Error(`Could not parse PostgreSQL version from \`${versionString}\``);
+    throw new ServerVersionUnreadable(
+      `Could not parse PostgreSQL version from \`${versionString}\``,
+    );
   }
   return match[1];
 }

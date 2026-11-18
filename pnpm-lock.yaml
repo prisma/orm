@@ -1598,6 +1598,12 @@ importers:
 
   packages/1-framework/3-tooling/cli/test/fixture-app:
     dependencies:
+      '@internal/mongo':
+        specifier: workspace:8.0.0-rc.24
+        version: link:../../../../../3-targets/mongo/9-facade
+      '@internal/postgres':
+        specifier: workspace:8.0.0-rc.24
+        version: link:../../../../../3-targets/postgres/9-facade
       '@prisma/orm-mongo':
         specifier: workspace:@internal/mongo@8.0.0-rc.24
         version: link:../../../../../3-targets/mongo/9-facade

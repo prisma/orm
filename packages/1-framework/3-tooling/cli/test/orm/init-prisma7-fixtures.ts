@@ -1,8 +1,14 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import type { PromptSurface } from '@prisma/cli-engine';
 import { dirname, join } from 'pathe';
+import type { InitContribution } from '../../src/commands/init/init-contribution';
+import type { KnownTarget } from '../../src/commands/init/target-packages';
 import { type InitFlagValues, resolveInitInputs } from '../../src/orm/init-inputs';
 import type { CheckPrisma7Source, Prisma7SourceCheck } from '../../src/orm/init-prisma7-check';
+import type {
+  PreparedTargetPackage,
+  PrepareTargetPackage,
+} from '../../src/orm/init-target-package';
 
 export function flags(overrides: Partial<InitFlagValues> = {}): InitFlagValues {
   return {
@@ -100,36 +106,82 @@ export function projectFiles(projectDir: () => string) {
 
 export const STUB_PACKAGE = 'stub-target-package';
 
+/** A contribution whose text names the member that wrote it, so a test can see which one ran. */
+export const STUB_CONTRIBUTION: InitContribution = {
+  label: 'Stub DB',
+  configModule: `${STUB_PACKAGE}/config`,
+  peerPackages: [],
+  authoringModes: ['psl', 'typescript'],
+  starterContract: (mode) => `// starter contract (${mode})\n`,
+  contractSample: (mode) => `// contract sample (${mode})\n`,
+  databaseFile: () => '// db.ts\n',
+  envExample: () => 'DATABASE_URL="stub://localhost/mydb"\n',
+  quickReference: (input) => `# Quick reference for ${input.schemaPath}\n${input.requirements}\n`,
+  readme: (input) => `# ${input.projectName}\n`,
+  prisma7ConfigFile: (input) => `// Prisma 7 config for ${input.schemaPath}\n`,
+  prisma7QuickReference: (input) => `# Prisma 7 quick reference for ${input.schemaPath}\n`,
+};
+
+export function preparedTarget(
+  overrides: Partial<PreparedTargetPackage> = {},
+): PreparedTargetPackage {
+  return {
+    contribution: STUB_CONTRIBUTION,
+    installed: [],
+    added: undefined,
+    warnings: [],
+    ...overrides,
+  };
+}
+
+/** A preparation that hands back `prepared` and records each target it is asked for. */
+export function stubPrepare(
+  prepared: Partial<PreparedTargetPackage> = {},
+): PrepareTargetPackage & { readonly requests: KnownTarget[] } {
+  const requests: KnownTarget[] = [];
+  const prepare = async (target: KnownTarget) => {
+    requests.push(target);
+    return preparedTarget(prepared);
+  };
+  return Object.assign(prepare, { requests });
+}
+
+const READABLE: Prisma7SourceCheck = {
+  outcome: 'readable',
+  templates: {
+    configFile: (input) => `// Prisma 7 config for ${input.schemaPath}\n`,
+    quickReference: (input) => `# Prisma 7 quick reference for ${input.schemaPath}\n`,
+  },
+};
+
 /** A check that reports `outcome` and records each request it receives. */
 export function stubCheck(
-  outcome: Partial<Prisma7SourceCheck> = {},
+  outcome: Prisma7SourceCheck = READABLE,
 ): CheckPrisma7Source & { readonly requests: Parameters<CheckPrisma7Source>[0][] } {
   const requests: Parameters<CheckPrisma7Source>[0][] = [];
   const check = async (request: Parameters<CheckPrisma7Source>[0]) => {
     requests.push(request);
-    return {
-      outcome: 'readable' as const,
-      packageName: STUB_PACKAGE,
-      installed: [],
-      added: undefined,
-      warnings: [],
-      ...outcome,
-    };
+    return outcome;
   };
   return Object.assign(check, { requests });
 }
 
 type ResolveContext = Parameters<typeof resolveInitInputs>[0];
 
-/** Input resolution with a check that reads every schema and no warning sink, unless the test supplies its own. */
+/** Input resolution with a stub target package, a check that reads every schema and no warning sink, unless the test supplies its own. */
 export function resolveInputs(
-  ctx: Omit<ResolveContext, 'checkPrisma7Source' | 'warn' | 'packageManager'> & {
+  ctx: Omit<
+    ResolveContext,
+    'prepareTargetPackage' | 'checkPrisma7Source' | 'warn' | 'packageManager'
+  > & {
+    readonly prepareTargetPackage?: PrepareTargetPackage;
     readonly checkPrisma7Source?: CheckPrisma7Source;
     readonly warn?: ResolveContext['warn'];
     readonly packageManager?: ResolveContext['packageManager'];
   },
 ) {
   return resolveInitInputs({
+    prepareTargetPackage: stubPrepare(),
     checkPrisma7Source: stubCheck(),
     warn: () => {},
     packageManager: 'pnpm',

@@ -1,6 +1,11 @@
 import type { InitProbeResult } from '@internal/cli/init-contribution';
 import type * as MongoDriver from 'mongodb';
 
+/** The server answered, but not with a version this probe can read; init reports it as a failed probe. */
+class ServerVersionUnreadable extends Error {
+  override readonly name = 'ServerVersionUnreadable';
+}
+
 function isModuleNotFound(error: unknown): boolean {
   return error instanceof Error && Reflect.get(error, 'code') === 'ERR_MODULE_NOT_FOUND';
 }
@@ -25,7 +30,7 @@ export async function probeMongo(databaseUrl: string): Promise<InitProbeResult> 
     const buildInfo = await client.db().admin().command({ buildInfo: 1 });
     const versionString = String(buildInfo['version'] ?? '');
     if (versionString.length === 0) {
-      throw new Error('buildInfo did not include a `version` field');
+      throw new ServerVersionUnreadable('buildInfo did not include a `version` field');
     }
     return { kind: 'server-version', serverVersion: versionString };
   } finally {

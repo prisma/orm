@@ -2,6 +2,7 @@ import { docsUrlFor } from '@internal/utils/structured-error';
 import { formatSourceDiagnostic } from '../../control-api/operations/load-contract-source';
 import { CliStructuredError } from '../../utils/cli-errors';
 import type { Prisma6SideBySideSetup } from './prisma6-side-by-side';
+import { KNOWN_TARGET_PACKAGES, TARGET_SHORT_NAMES } from './target-packages';
 
 /**
  * Non-interactive mode is missing one or more required inputs. Lists every
@@ -23,7 +24,7 @@ export function errorInitMissingFlags(options: {
     .map((flag) => {
       switch (flag) {
         case 'target':
-          return '--target postgres|mongodb';
+          return `--target ${TARGET_SHORT_NAMES.join('|')}`;
         case 'authoring':
           return '--authoring psl|typescript';
         case 'schema-path':
@@ -311,8 +312,7 @@ export function errorInitFlagConflict(options: {
   });
 }
 
-// biome-ignore lint/plugin/no-family-vocabulary: names the providers on purpose — the supported list a user-facing error shows
-const PRISMA7_SUPPORTED_PROVIDERS = ['postgresql', 'mongodb'] as const;
+const PRISMA7_SUPPORTED_PROVIDERS = KNOWN_TARGET_PACKAGES.map((entry) => entry.provider.name);
 
 /**
  * The Prisma 7 schema's provider is one Prisma 8 has no target for, or is not
@@ -427,6 +427,73 @@ export function errorInitPrisma7ConfigUnreadable(options: {
       fix,
       docsUrl: docsUrlFor('CLI.INIT_PRISMA7_CONFIG_UNREADABLE'),
       meta: { path: options.path, why: options.why, prisma7ConfigPath: versioned ?? null },
+    },
+  );
+}
+
+/**
+ * `--skip-install` forbids installing the target package, and the project does not have it. Init
+ * takes every file it writes from that package, so it stops before changing anything.
+ */
+export function errorInitTargetPackageNotInstalled(options: {
+  readonly packageName: string;
+  readonly installCommand: string;
+}): CliStructuredError {
+  return new CliStructuredError(
+    'CLI.INIT_TARGET_PACKAGE_NOT_INSTALLED',
+    `${options.packageName} is not installed`,
+    {
+      why: `init writes the project from ${options.packageName}, and \`--skip-install\` forbids installing it. Nothing was changed.`,
+      fix: `Install it with \`${options.installCommand}\`, then run \`prisma orm init\` again, or run it without \`--skip-install\`.`,
+      docsUrl: docsUrlFor('CLI.INIT_TARGET_PACKAGE_NOT_INSTALLED'),
+      meta: { packageName: options.packageName, installCommand: options.installCommand },
+    },
+  );
+}
+
+/**
+ * The target package has no `init` entrypoint, or its default export is not an init contribution.
+ * The package is installed and no file was written.
+ */
+export function errorInitContributionUnavailable(options: {
+  readonly packageName: string;
+  readonly reason: 'no-entrypoint' | 'invalid-shape';
+  readonly problems: string | undefined;
+}): CliStructuredError {
+  const why =
+    options.reason === 'no-entrypoint'
+      ? `${options.packageName} has no \`${options.packageName}/init\` entrypoint, so it does not support \`prisma orm init\`.`
+      : `The default export of \`${options.packageName}/init\` is not an init contribution: ${options.problems ?? 'its shape is wrong'}.`;
+  return new CliStructuredError(
+    'CLI.INIT_CONTRIBUTION_UNAVAILABLE',
+    `${options.packageName} does not support init`,
+    {
+      why: `${why} ${options.packageName} is installed; no file was written.`,
+      fix: `Write prisma.config.ts by hand, importing defineConfig from ${options.packageName} as its README describes.`,
+      docsUrl: docsUrlFor('CLI.INIT_CONTRIBUTION_UNAVAILABLE'),
+      meta: { packageName: options.packageName, reason: options.reason },
+    },
+  );
+}
+
+/** `--authoring` names a way to write the contract the target package does not offer. */
+export function errorInitAuthoringUnsupported(options: {
+  readonly packageName: string;
+  readonly authoring: string;
+  readonly offered: readonly string[];
+}): CliStructuredError {
+  return new CliStructuredError(
+    'CLI.INIT_AUTHORING_UNSUPPORTED',
+    `${options.packageName} does not offer --authoring ${options.authoring}`,
+    {
+      why: `${options.packageName} offers: ${options.offered.join(', ')}. No file was written.`,
+      fix: `Use one of: ${options.offered.map((mode) => `--authoring ${mode}`).join(', ')}.`,
+      docsUrl: docsUrlFor('CLI.INIT_AUTHORING_UNSUPPORTED'),
+      meta: {
+        packageName: options.packageName,
+        authoring: options.authoring,
+        offered: options.offered,
+      },
     },
   );
 }

@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
 import { importFromProject } from '../../src/orm/init-prisma7-check';
+import { importInitEntrypoint } from '../../src/orm/init-target-package';
 import { createTestProjectDir } from '../utils/test-project-dir';
 
 const emit = vi.fn();
@@ -14,7 +15,11 @@ const emit = vi.fn();
 /** The production tree, with `init` rebuilt around the injected fake emit. */
 const commands: MountedTree = {
   ...BIN_COMMANDS,
-  'orm init': createInitCommand({ emitScaffoldedContract: emit, importFromProject }),
+  'orm init': createInitCommand({
+    emitScaffoldedContract: emit,
+    importFromProject,
+    importInitEntrypoint,
+  }),
 };
 const groups = BIN_GROUPS;
 
@@ -247,7 +252,7 @@ describe('init installs', () => {
   );
 
   it(
-    'installs the driver the Mongo package declares as a peer dependency',
+    'installs the target package first, then the driver its contribution names',
     async () => {
       const run = await harness().run(
         ['orm', 'init', '--target', 'mongodb', '--authoring', 'psl'],
@@ -255,10 +260,12 @@ describe('init installs', () => {
       );
 
       expect(run.exitCode).toBe(0);
-      expect(calls[0]).toEqual({
-        file: expect.any(String),
-        args: ['add', '@prisma/orm-mongo', 'dotenv', 'mongodb'],
-        cwd: projectDir,
+      expect(calls.slice(0, 2).map((call) => call.args)).toEqual([
+        ['add', '@prisma/orm-mongo', 'dotenv'],
+        ['add', 'mongodb'],
+      ]);
+      expect(run.presented?.data).toMatchObject({
+        packagesInstalled: { deps: ['@prisma/orm-mongo', 'dotenv', 'mongodb'] },
       });
     },
     timeouts.coldTransformImport,

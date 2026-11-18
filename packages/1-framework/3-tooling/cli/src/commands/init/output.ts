@@ -1,13 +1,14 @@
 import { type } from 'arktype';
+import { TARGET_SHORT_NAMES, type TargetShortName } from './target-packages';
 
 /**
  * arktype schema for the structured success document `init --json` writes
  * to stdout (FR1.5). The same shape backs the human-readable outro
  * renderer (FR10), so the two output modes carry identical information.
  *
- * `target` is normalised to the user-facing flag value (`mongodb` rather
- * than the internal `mongo`) so consumers can round-trip the document
- * straight into a follow-up `--target` invocation.
+ * `target` is the short name of the target package, the value `--target`
+ * takes, so consumers can round-trip the document straight into a
+ * follow-up `--target` invocation.
  *
  * The `ok: true` literal is the documented success/error discriminator —
  * see [Style Guide § JSON Semantics](../../../../../../../docs/CLI%20Style%20Guide.md#json-semantics).
@@ -16,7 +17,7 @@ import { type } from 'arktype';
  */
 export const InitOutputSchema = type({
   ok: 'true',
-  target: "'postgres'|'mongodb'",
+  target: type.enumerated(...TARGET_SHORT_NAMES),
   /** `prisma7` when an existing Prisma 7 schema is the contract source. */
   authoring: "'psl'|'typescript'|'prisma7'",
   /** The starter schema init wrote, or the Prisma 7 schema it points the config at. */
@@ -86,7 +87,7 @@ export function formatInitJson(output: InitOutput): string {
  * since copy may evolve.
  */
 export function buildNextSteps(options: {
-  readonly target: 'postgres' | 'mongodb';
+  readonly target: TargetShortName;
   /**
    * A project whose dependencies are not installed cannot emit or run,
    * whether the install was skipped or attempted and failed. Both states put
