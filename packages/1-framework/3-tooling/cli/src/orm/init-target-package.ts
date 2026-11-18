@@ -90,7 +90,7 @@ export function installCommand(
 /** The target package and the contribution it exports, with what installing it changed. */
 export interface PreparedTargetPackage {
   readonly contribution: InitContribution;
-  /** Every package the step installed, so the install phase skips them. */
+  /** Every package the step installed or found in place, so the install phase skips them. */
   readonly installed: readonly string[];
   /** The installed packages the project did not declare before; `undefined` when there are none. */
   readonly added: PackagesAdded | undefined;
@@ -168,7 +168,9 @@ export function createTargetPackagePreparation(ctx: {
       if (ctx.packageManager === 'pnpm') {
         warnings.push(...buildCatalogWarnings(ctx.cwd, deps));
       }
-      installed = deps;
+      // A target package already in place counts as installed, so the later install leaves it
+      // alone too and the project keeps the version it has.
+      installed = targetInPlace ? [packageName, ...deps] : deps;
       ranCommand = deps.length === 0 ? undefined : installCommand(ctx.packageManager, deps);
       added = manifestChanges(ctx.packageManager, declaredBefore, declaredPackages(ctx.cwd));
     }

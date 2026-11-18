@@ -262,6 +262,31 @@ describe('init takes the project from the target package', () => {
   );
 
   it(
+    'never asks the package manager for a declared, installed target package, through to the end',
+    async () => {
+      writeProjectFile(
+        'package.json',
+        `${JSON.stringify({ name: 'app', dependencies: { '@prisma/orm-postgres': '~8.0.0-rc.1' } })}\n`,
+      );
+
+      const run = await harness().run(STARTER, { cwd: projectDir });
+
+      expect(run.exitCode).toBe(0);
+      expect(installs.length).toBeGreaterThan(0);
+      expect(installs.filter((args) => args.includes('@prisma/orm-postgres'))).toEqual([]);
+      expect(
+        JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf-8')).dependencies[
+          '@prisma/orm-postgres'
+        ],
+      ).toBe('~8.0.0-rc.1');
+      expect(run.presented?.data).toMatchObject({
+        packagesInstalled: { status: 'installed', deps: ['@prisma/orm-postgres', 'dotenv', 'pg'] },
+      });
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
     'installs nothing before the questions when the project declares and has everything',
     async () => {
       writeProjectFile(
