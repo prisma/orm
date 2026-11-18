@@ -167,7 +167,7 @@ export class MysqlMigrationPlanner<TargetId extends string = 'mysql'>
     if (!(options.schema instanceof SqlSchemaIR)) {
       throw mysqlError(
         'CONTRACT.TARGET_MISMATCH',
-        'The MySQL planner received a schema tree that neither MySQL introspection nor contractToSchema built.',
+        'The MySQL and MariaDB planner received a schema tree that neither their introspection nor contractToSchema built.',
       );
     }
     const expected = mysqlContractToSchema(

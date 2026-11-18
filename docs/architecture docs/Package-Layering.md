@@ -39,6 +39,7 @@ packages/
     mysql/
       1-mysql/           # 1-target, 2-adapter, 3-driver, 9-facade
       2-mariadb/         # 1-target, 2-adapter, 3-driver, 9-facade
+      3-live-tests/      # one test-only package that depends on both facades
 ```
 
 The numbered prefixes serve two purposes:
@@ -151,6 +152,7 @@ The targets domain (`packages/3-targets/`) holds one folder per database, for ev
 |-- mysql
     |-- 1-mysql           (1-target, 2-adapter, 3-driver, 9-facade; @internal/mysql is the source of @prisma/orm-mysql)
     |-- 2-mariadb         (1-target, 2-adapter, 3-driver, 9-facade; @internal/mariadb is the source of @prisma/orm-mariadb)
+    |-- 3-live-tests      → @internal/mysql-live-tests (private, tests only: the ORM live suites run against MySQL and MariaDB, so it depends on both facades)
 ```
 
 ### Extensions Domain

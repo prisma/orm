@@ -75,13 +75,13 @@ MariaDB has `INSERT … RETURNING` and `DELETE … RETURNING` but not `UPDATE �
 
 MariaDB stores `JSON` as `longtext` with a `CHECK (json_valid(col))` constraint, and booleans as `tinyint(1)`. MySQL has neither data type yet, so nothing breaks today. When MySQL gets them, MariaDB needs its own data types that read these catalog forms.
 
-## MariaDB sessions set `tx_isolation`, which MariaDB 11.1 and later deprecate (slice 6a code review, 2026-11-06)
+## MariaDB sessions set `tx_isolation`, which MariaDB 11.1 and later deprecate (slice 6a code review, 2026-11-06) — resolved in slice 6b-2
 
-MariaDB's target sets the isolation level with `tx_isolation`, because MariaDB 10.11 has no `transaction_isolation`. On MariaDB 11.4, `SET SESSION tx_isolation = 'READ-COMMITTED'` works but raises warning 1287: the variable is deprecated and will be removed. From 11.1 both names exist. When the oldest supported MariaDB is 11.1 or later, switch to `transaction_isolation`; before that, a future MariaDB that removes `tx_isolation` makes every connection fail, unless the driver picks the name from the server version at connect. The example README says only that it is tested on 10.11.
+Resolved: MariaDB sessions no longer set an isolation level at all, as MySQL sessions have not since prisma/orm#30990. The ORM starts each transaction it owns at READ COMMITTED with `SET TRANSACTION ISOLATION LEVEL`, which MariaDB 10.11 accepts as MySQL does. Nothing reads or writes `tx_isolation` or `transaction_isolation`.
 
-## Errors from MySQL's shared code say `target: 'mysql'` on MariaDB (slice 6a, 2026-11-06)
+## Errors from MySQL's shared code say `target: 'mysql'` on MariaDB (slice 6a, 2026-11-06) — resolved in slice 6b-2
 
-`mysqlQueryNotYetSupported` in `packages/3-targets/mysql/1-mysql/1-target/src/core/errors.ts` puts `target: 'mysql'` in its error metadata, and its message says MySQL, also when MariaDB reaches it through MySQL's shared code. The control plane shows these errors rarely; runtime errors reach users. Slice 6b decides whether the label follows the target id, is dropped, or stays as the name of the code that raised the error.
+Resolved: errors raised by the codecs, the SQL lexer, the codec registry and the driver's parameter checks drop `meta.target`. Every error message in MySQL's target, adapter, driver and facade either takes the display name of the target it runs for (the renderer, the driver, the facade) or names both MySQL and MariaDB (the shared target and the control adapter); `1-target/test/messages-name-both-databases.test.ts` fails on an error in the target that names MySQL alone. The PSL type documentation (`type-constructors.ts`) still says, for example, "stored as MySQL int", which describes the type the column has on either server.
 
 ## A key column whose codec cannot reproduce the stored value (slice 6b-1 design review, 2026-11-14)
 
@@ -95,9 +95,17 @@ A read with includes reads every row before returning any, under both include st
 
 `lints` warns about a `SELECT` without a `LIMIT`, and `budgets`, where installed, fails it by default. Where includes load with one query per relation, each child statement is such a `SELECT`, so a read that passes on a database that runs the one-query include can fail with `BUDGET.ROWS_EXCEEDED` on MariaDB, as the ORM's read-backs after a write already can. Completing or removing the two middleware is stream 6, row 8 of the GA plan.
 
-## MySQL and MariaDB supply no ORM aggregates, so scalar includes do not run there (slice 6b-1 manual QA, 2026-11-17)
+## MySQL and MariaDB supply no ORM aggregates, so scalar includes do not run there (slice 6b-1 manual QA, 2026-11-17) — resolved in slice 6b-2
 
-The MySQL target and adapter contribute no aggregate definitions. `db.orm.User.include('posts', (p) => p.count()).all()` fails with `p.count is not a function`, and so does `combine()` with an aggregate branch. This is true under both include strategies and predates slice 6b-1. Manual QA ran the per-relation `GROUP BY` statements on MySQL 8.4 and MariaDB 10.11 with stand-in aggregate definitions, and they returned the right values. Slice 6b-2's requirement that MariaDB runs every ORM read needs MySQL to contribute its aggregates first, as Postgres does.
+Resolved: the MySQL target contributes aggregate descriptors as the Postgres target does (`packages/3-targets/mysql/1-mysql/1-target/src/core/aggregates.ts`), listed by the MySQL adapter and, through its metadata, the MariaDB adapter. `count` and `sum` over integers read as numbers through the new codec `mysql/bigintnumber@1`; `countBigInt` and `sumBigInt` as bigints; `avg` over an integer is `CAST(SUM(x) AS DOUBLE) / COUNT(x)`, read through the new codec `mysql/double@1`, because `AVG(x)` is cut to nine decimal places when the server groups through a temporary table. MySQL's live include tests cover scalar includes and `combine()`, on both servers.
+
+## `mysql/bigintnumber@1` and `mysql/double` have no authoring name (slice 6b-2, 2026-11-18)
+
+The two codecs type aggregate results only. No PSL type or `type.*` helper writes a column of them, because MySQL's explicit type names are still to be decided under ADR 322, so no aggregate takes them as input, and `mysql/double` claims no `double` column the catalog reports: introspection and `db verify` read a `double` column as they did before it existed. When ADR 322 names them, give them catalog texts and the aggregate rows over them, as Postgres's `Int8Number` and `Float8` have.
+
+## `having` compares the mean of integers as `AVG`'s rounded decimal (slice 6b-2 round 2, 2026-11-18)
+
+A projected `avg` over an integer reads `CAST(SUM(x) AS DOUBLE) / COUNT(x)`, but the ORM's `having` builds the plain `AVG(x)` and never uses an aggregate's lowering, because a lowering may be a rendering for the driver that changes comparisons. `AVG(x)` is a decimal with four more decimal places than its input, which MySQL and MariaDB round differently. So a comparison within about 1e-4 of a group's mean can disagree with the projected value, and between the two servers: over the means 1 and 5/3, `HAVING AVG(a) > 1.6666666666666667` keeps the 5/3 group on MariaDB 10.11 and drops it on MySQL 8.4, while `CAST(SUM(a) AS DOUBLE) / COUNT(a) = 1.6666666666666667` keeps it on both. A threshold away from a mean behaves the same on both (the live test uses `gt(1.5)`). The fix belongs to the SQL ORM client: use a descriptor's lowering in `having` when the descriptor says its lowering is the value itself, not a driver rendering. That is a change to shared code for every SQL target. Filed as TML-3841.
 
 ## `deleteAll()` on a table with no row identity deletes by the caller's condition after reading (slice 6b-1, 2026-11-17)
 

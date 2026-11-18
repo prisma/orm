@@ -17,23 +17,38 @@ const mongoInt32 = dataTypeId('mongo/int32');
 const scalar = <const CodecId extends string>(codecId: CodecId) =>
   ({ kind: 'typeConstructor', output: { codecId } }) as const;
 
-/** The MongoDB scalar type constructors, as the target contributes them. */
+const typeChoice = <const Storage extends string, const Type extends string>(
+  storage: Storage,
+  type: Type,
+) =>
+  ({
+    kind: 'typeChoice',
+    args: [
+      { kind: 'option', name: 'storage', values: [storage], default: storage, optional: true },
+    ],
+    choices: [{ when: { storage }, type }],
+  }) as const;
+
+/** The MongoDB scalar types, as the target contributes them: explicit types, the convenience types `Int`, `Float`, `Boolean`, `String` and `Json`, and the deprecated alias `Int64`. */
 export const mongoTestScalarTypes = {
-  String: scalar('mongo/string@1'),
+  BsonString: scalar('mongo/string@1'),
   Int32: scalar('mongo/int32@1'),
   Bool: scalar('mongo/bool@1'),
   DateTime: scalar('mongo/date@1'),
   ObjectId: scalar('mongo/objectId@1'),
   Double: scalar('mongo/double@1'),
-  Int64: scalar('mongo/int64@1'),
+  Int64BigInt: scalar('mongo/int64@1'),
   Int64Number: scalar('mongo/int64Number@1'),
   Decimal128: scalar('mongo/decimal128@1'),
   Binary: scalar('mongo/binary@1'),
-  Json: scalar('mongo/json@1'),
+  PlainJson: scalar('mongo/json@1'),
   Bson: scalar('mongo/bson@1'),
-  Int: { ...scalar('mongo/int32@1'), deprecated: { replacement: 'Int32' } },
-  Float: { ...scalar('mongo/double@1'), deprecated: { replacement: 'Double' } },
-  Boolean: { ...scalar('mongo/bool@1'), deprecated: { replacement: 'Bool' } },
+  Int: typeChoice('int', 'Int32'),
+  Float: typeChoice('double', 'Double'),
+  Boolean: typeChoice('bool', 'Bool'),
+  String: typeChoice('string', 'BsonString'),
+  Json: typeChoice('bson', 'PlainJson'),
+  Int64: { ...scalar('mongo/int64@1'), deprecated: { replacement: 'Int64BigInt' } },
   Vector: {
     kind: 'typeConstructor',
     args: [{ kind: 'value', dataType: 'mongo/int32', name: 'length', optional: true }],

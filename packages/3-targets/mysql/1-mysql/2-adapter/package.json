@@ -53,6 +53,7 @@
     "./codec-types": "./dist/codec-types.mjs",
     "./control": "./dist/control.mjs",
     "./runtime": "./dist/runtime.mjs",
+    "./sql-renderer": "./dist/sql-renderer.mjs",
     "./package.json": "./package.json"
   },
   "engines": {

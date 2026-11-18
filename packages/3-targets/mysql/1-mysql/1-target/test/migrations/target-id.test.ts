@@ -22,7 +22,7 @@ const mariadbMeta = {
   targetId: 'mariadb',
   id: 'mariadb',
   displayName: 'MariaDB',
-  sessionSettings: { time_zone: '+00:00', tx_isolation: 'READ-COMMITTED' },
+  sessionSettings: { time_zone: '+00:00' },
 } as const;
 
 class MariadbExample extends MysqlMigrationBase<'mariadb'> {
@@ -190,7 +190,7 @@ describe('a target that extends MySQL', () => {
     }).toEqual({
       instance: { familyId: 'sql', targetId: 'mariadb' },
       targetId: 'mariadb',
-      sessionSettings: { time_zone: '+00:00', tx_isolation: 'READ-COMMITTED' },
+      sessionSettings: { time_zone: '+00:00' },
       planTargetId: 'mariadb',
     });
   });

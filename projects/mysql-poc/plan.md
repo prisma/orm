@@ -13,8 +13,8 @@
 | 3 | MySQL ORM reads with includes; the example reads | 2c | [TML-3695](https://linear.app/prisma-company/issue/TML-3695) | Merged, prisma/orm#30863; drivers on `mariadb`, prisma/orm#30893 and prisma/orm#30918 |
 | 4 | ORM writes without `RETURNING`; MySQL create, update, delete, upsert; the example writes | 3 | [TML-3696](https://linear.app/prisma-company/issue/TML-3696) | Merged, prisma/orm#30927 |
 | 6a | `mariadb` target extending MySQL: control plane, public packages; `examples/prisma-8-demo-mariadb` migrates, verifies and signs | 4 | [TML-3697](https://linear.app/prisma-company/issue/TML-3697) | Merged, prisma/orm#30964 |
-| 6b-1 | The ORM loads includes with one query per relation where the database cannot run its one-query include ([design](./slices/mariadb-runtime/include-loading-design.md)) | 6a | TML-3697 | In review, prisma/orm#31058. Spec: [`slices/mariadb-runtime/`](./slices/mariadb-runtime/spec.md) |
-| 6b-2 | MariaDB runtime: `mariadb()`, upsert, errors; the MariaDB example reads and writes | 6b-1 | TML-3697 | Not started |
+| 6b-1 | The ORM loads includes with one query per relation where the database cannot run its one-query include ([design](./slices/mariadb-runtime/include-loading-design.md)) | 6a | TML-3697 | Merged 2026-11-17, prisma/orm#31058. Spec: [`slices/mariadb-runtime/`](./slices/mariadb-runtime/spec.md) |
+| 6b-2 | MariaDB runtime: `mariadb()`, upsert, errors; the MariaDB example reads and writes | 6b-1 | TML-3697 | In review, prisma/orm#31082, branch `tml-3697-mariadb-runtime`. Plan: [`slices/mariadb-runtime/plan.md`](./slices/mariadb-runtime/plan.md) |
 
 ```text
 1 → 2a → 2b → 2c → 3 → 4 → 6a → 6b-1 → 6b-2 → close-out

@@ -444,6 +444,8 @@ class ControlClientImpl implements ControlClient {
       extensions: this.options.extensions ?? [],
       ...ifDefined('acceptDataLoss', options.acceptDataLoss),
       ...ifDefined('acceptAccessChanges', options.acceptAccessChanges),
+      ...ifDefined('ref', options.ref),
+      ...ifDefined('permitPolicyChange', options.permitPolicyChange),
       ...ifDefined('statements', options.statements),
       answerQuestions: options.answerQuestions,
       ...ifDefined('verifySnapshotContent', this.snapshotVerifier),
@@ -485,6 +487,7 @@ class ControlClientImpl implements ControlClient {
       targetId: this.options.target.targetId,
       extensions: this.options.extensions ?? [],
       frameworkComponents,
+      invocation: options.invocation,
       ...ifDefined('verifySnapshotContent', this.snapshotVerifier),
       ...ifDefined('onProgress', onProgress),
     });
@@ -543,9 +546,8 @@ class ControlClientImpl implements ControlClient {
       migrationsDir: options.migrationsDir,
       extensions: this.options.extensions ?? [],
       targetId: this.options.target.targetId,
-      ...ifDefined('refHash', options.refHash),
-      ...ifDefined('refInvariants', options.refInvariants),
-      ...ifDefined('refName', options.refName),
+      ...ifDefined('target', options.target),
+      ...ifDefined('permitPolicyChange', options.permitPolicyChange),
       ...ifDefined('verifySnapshotContent', this.snapshotVerifier),
       ...ifDefined('onProgress', onProgress),
     });

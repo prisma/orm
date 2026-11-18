@@ -2,10 +2,14 @@ import { type MysqlPlaceholderToken, tokenizeMysqlSql } from '@internal/target-m
 import { structuredError } from '@internal/utils/structured-error';
 import { bindValue } from './parameter-values';
 
-function placeholderMismatch(placeholders: readonly string[], values: number): Error {
+function placeholderMismatch(
+  placeholders: readonly string[],
+  values: number,
+  displayName: string,
+): Error {
   return structuredError(
     'RUNTIME.PARAM_PLACEHOLDER_MISMATCH',
-    `The MySQL statement writes placeholders ${JSON.stringify(placeholders)} for ${values} parameter value(s); write each value as a numbered ?N, or every value as a bare ? in order, and no other placeholder.`,
+    `The ${displayName} statement writes placeholders ${JSON.stringify(placeholders)} for ${values} parameter value(s); write each value as a numbered ?N, or every value as a bare ? in order, and no other placeholder.`,
     {
       why: 'A placeholder that does not match a value binds a value to the wrong place in the statement, or leaves a value unbound.',
       fix: 'Pass values into raw SQL through interpolation rather than writing a `?` in the SQL text.',
@@ -18,16 +22,17 @@ function placeholderMismatch(placeholders: readonly string[], values: number): E
 export function valueIndexes(
   placeholders: readonly MysqlPlaceholderToken[],
   values: number,
+  displayName: string,
 ): number[] {
   const texts = placeholders.map((placeholder) => placeholder.text);
   if (texts.every((text) => text === '?')) {
-    if (placeholders.length !== values) throw placeholderMismatch(texts, values);
+    if (placeholders.length !== values) throw placeholderMismatch(texts, values, displayName);
     return placeholders.map((_, index) => index);
   }
   const indexes = placeholders.map((placeholder) => (placeholder.number ?? 0) - 1);
   const valid =
     indexes.every((index) => index >= 0 && index < values) && new Set(indexes).size === values;
-  if (!valid) throw placeholderMismatch(texts, values);
+  if (!valid) throw placeholderMismatch(texts, values, displayName);
   return indexes;
 }
 
@@ -37,14 +42,15 @@ export function valueIndexes(
 export function positionalParams(
   sql: string,
   values: readonly unknown[],
+  displayName: string,
 ): { readonly sql: string; readonly values: unknown[] } {
   const tokens = tokenizeMysqlSql(sql);
   const placeholders = tokens.filter(
     (token): token is MysqlPlaceholderToken => token.kind === 'placeholder',
   );
-  const indexes = valueIndexes(placeholders, values.length);
+  const indexes = valueIndexes(placeholders, values.length, displayName);
   return {
     sql: tokens.map((token) => (token.kind === 'placeholder' ? '?' : token.text)).join(''),
-    values: indexes.map((index) => bindValue(values[index], index)),
+    values: indexes.map((index) => bindValue(values[index], index, displayName)),
   };
 }
