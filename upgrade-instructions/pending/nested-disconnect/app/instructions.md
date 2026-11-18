@@ -2,12 +2,12 @@
 changes:
   - id: disconnect-on-required-relation-refused
     summary: |
-      In `update()` data, `r.disconnect()` on a relation whose foreign key is required (not nullable) no longer compiles, and at run time it is refused with `ORM.OPERATION_UNSUPPORTED` (`meta.reason: 'required-foreign-key'`) before any statement runs, instead of failing with the database's NOT NULL error. On a relation the record holds the key for (many-to-one), link the record to another row with `connect` or delete the record; on a relation the related rows hold the key for (one-to-many, one-to-one), connect those rows to another record or delete them. Many-to-many `disconnect` and `disconnect` on an optional relation are unchanged.
+      In `update()` data, `r.disconnect()` on a relation whose foreign key is required (not nullable) no longer compiles, and at run time it is refused with `ORM.OPERATION_UNSUPPORTED` (`meta.reason: 'required-foreign-key'`) before any statement runs, instead of failing with the database's NOT NULL error. A `disconnect` that would have changed no row, such as `disconnect(criteria)` that matches no related row, is refused too; it used to succeed. When `meta.model` is the model being updated, the record holds the key: link it to another row with `connect` or delete the record. Otherwise the related rows hold the key: connect them to another record or delete them. Many-to-many `disconnect` and `disconnect` on an optional relation are unchanged.
 ---
 
 # `disconnect` on a required relation is refused
 
-`r.disconnect()` in the data of `update()` sets the foreign key of the relation to null. On a relation the record holds the key for (many-to-one), that is the record's own key; on a relation the related rows hold the key for (one-to-many, one-to-one), it is the key of the related rows. When that key is required, the database refused the statement with a NOT NULL error, which reached the caller unwrapped.
+`r.disconnect()` in the data of `update()` sets the foreign key of the relation to null. When the record holds the key (a many-to-one relation, such as `Post.author`, which is also the side of a one-to-one that holds the key), that is the record's own key; when the related rows hold the key (one-to-many, or one-to-one from the side without the key), it is the key of the related rows. When that key is required, the database refused the statement with a NOT NULL error, which reached the caller unwrapped. When the related rows hold the key and no related row was changed, because `disconnect(criteria)` matched none of them or, without criteria, the record had no related rows, the statement changed nothing and succeeded; such a call is now refused as well, like every `disconnect` on that relation.
 
 Such a call is now a type error, on an emitted `contract.d.ts` and on a contract built with the TypeScript contract builder. Run the project's typecheck to find them. At run time, the ORM refuses it while it plans the write, before any statement runs, with:
 
@@ -17,9 +17,9 @@ ORM.OPERATION_UNSUPPORTED: disconnect() nested mutation for relation "author" ca
 
 `meta.reason` is `'required-foreign-key'`, `meta.model` names the model that holds the key and `meta.fields` its fields. Because nothing has been written, the whole `update()` is refused, including its own field changes.
 
-For each such call, decide what should become of the row that holds the key.
+For each such call, decide what should become of the row that holds the key. The refusal names it: when `meta.model` is the model being updated, the record holds the key; otherwise the related rows hold it.
 
-On a relation the record holds the key for (many-to-one), the key is on the record being updated:
+When the record holds the key (a many-to-one relation, such as `Post.author`), the key is on the record being updated:
 
 - To link the record to another row, use `connect` on the same relation instead:
 
@@ -37,7 +37,7 @@ On a relation the record holds the key for (many-to-one), the key is on the reco
 
 - To remove the record, delete it with its own collection, for example `db.Post.where({ id: 10 }).delete()`.
 
-On a relation the related rows hold the key for (one-to-many, one-to-one), the key is on the related rows:
+When the related rows hold the key (one-to-many, or one-to-one from the side without the key), the key is on the related rows:
 
 - To move them to another record, use `connect` on that record instead:
 
@@ -55,6 +55,6 @@ On a relation the related rows hold the key for (one-to-many, one-to-one), the k
 
 - To remove them, delete them, for example with `r.where(filter).deleteAll()` on a one-to-many relation, or with the related model's own `delete()`.
 
-On either layout, if the row that holds the key may exist without the row it points at, make the foreign key optional in the contract (`.optional()` on the field, or `?` in PSL), re-emit the contract and migrate the column to nullable. `disconnect` is then available.
+In both cases, if the row that holds the key may exist without the row it points at, make the foreign key optional in the contract (`.optional()` on the field, or `?` in PSL), re-emit the contract and migrate the column to nullable. `disconnect` is then available.
 
 Code that caught the database's NOT NULL error of such a call catches `ORM.OPERATION_UNSUPPORTED` with `meta.reason === 'required-foreign-key'` instead.
