@@ -57,6 +57,7 @@ function probeWarning(
     case 'connection-failed':
     case 'timed-out':
     case 'driver-missing':
+    case 'driver-failed':
     case 'version-unreadable':
     case 'unsupported':
       return strictProbe

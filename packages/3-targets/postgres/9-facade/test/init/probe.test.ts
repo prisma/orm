@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const clients: FakeClient[] = [];
 let connectError: Error | undefined;
 let versionRow = 'PostgreSQL 16.1 on x86_64-pc-linux-gnu';
+let queryError: Error | undefined;
 const endSpy = vi.fn(async () => {});
 
 class FakeClient {
@@ -22,6 +23,7 @@ class FakeClient {
   readonly queries: unknown[] = [];
   async query(config: unknown): Promise<{ rows: Array<{ version: string }> }> {
     this.queries.push(config);
+    if (queryError !== undefined) throw queryError;
     return { rows: [{ version: versionRow }] };
   }
   end = endSpy;
@@ -35,6 +37,7 @@ beforeEach(() => {
   clients.length = 0;
   connectError = undefined;
   versionRow = 'PostgreSQL 16.1 on x86_64-pc-linux-gnu';
+  queryError = undefined;
   endSpy.mockClear();
 });
 
@@ -60,6 +63,24 @@ describe('probePostgres', () => {
       kind: 'server-version',
       serverVersion: '16.1',
     });
+  });
+
+  it('says it could not read the version when the connected server refuses the query', async () => {
+    queryError = new Error('permission denied for function version');
+
+    await expect(probePostgres('postgres://localhost:5432/db')).resolves.toEqual({
+      kind: 'version-unreadable',
+      detail: 'SELECT version() failed: permission denied for function version',
+    });
+    expect(endSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a driver that is installed but fails to load, keeping the cause', async () => {
+    await expect(
+      probePostgres('postgres://localhost:5432/db', async () => {
+        throw new Error('native binding failed');
+      }),
+    ).resolves.toEqual({ kind: 'driver-failed', driver: 'pg', cause: 'native binding failed' });
   });
 
   it('reports a driver that is not installed', async () => {

@@ -15,7 +15,6 @@ async function withinDeadline<T>(probe: Promise<T>): Promise<T | typeof TIMED_OU
   let timer: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<typeof TIMED_OUT>((resolve) => {
     timer = setTimeout(() => resolve(TIMED_OUT), PROBE_DEADLINE_MILLIS);
-    timer.unref?.();
   });
   try {
     return await Promise.race([probe, deadline]);
@@ -26,7 +25,8 @@ async function withinDeadline<T>(probe: Promise<T>): Promise<T | typeof TIMED_OU
 
 const ProbeResultSchema = type({ kind: "'server-version'", serverVersion: 'string' })
   .or({ kind: "'version-unreadable'", detail: 'string' })
-  .or({ kind: "'driver-missing'", driver: 'string', cause: 'string' });
+  .or({ kind: "'driver-missing'", driver: 'string', cause: 'string' })
+  .or({ kind: "'driver-failed'", driver: 'string', cause: 'string' });
 
 /**
  * Result of an attempted database probe (FR8.3). `kind` is the
@@ -61,6 +61,7 @@ export type ProbeOutcome =
       readonly kind:
         | 'connection-failed'
         | 'driver-missing'
+        | 'driver-failed'
         | 'version-unreadable'
         | 'invalid-result';
       readonly minVersion: string | undefined;
@@ -159,6 +160,18 @@ export async function probeServerVersion(ctx: ProbeContext): Promise<ProbeOutcom
       meetsMinimum: null,
       cause,
       message: `Skipped --probe-db: ${cause}. (Run with install enabled, or install the driver yourself, then re-run \`prisma orm init --probe-db\`.)`,
+    };
+  }
+  if (result.kind === 'driver-failed') {
+    const cause = redactUrlCredentials(
+      `\`${result.driver}\` is installed but could not be loaded by ${ctx.packageName} (cause: ${result.cause})`,
+    );
+    return {
+      kind: 'driver-failed',
+      minVersion,
+      meetsMinimum: null,
+      cause,
+      message: `Skipped --probe-db: ${cause}.`,
     };
   }
   if (result.kind === 'version-unreadable') {

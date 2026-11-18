@@ -26,10 +26,11 @@ export async function probeMongo(
   try {
     mongodb = await loadDriver();
   } catch (error) {
-    if (isModuleNotFound(error)) {
-      return { kind: 'driver-missing', driver: 'mongodb', cause: causeMessage(error) };
-    }
-    throw error;
+    return {
+      kind: isModuleNotFound(error) ? 'driver-missing' : 'driver-failed',
+      driver: 'mongodb',
+      cause: causeMessage(error),
+    };
   }
   const client = new mongodb.MongoClient(databaseUrl, {
     timeoutMS: PROBE_TIMEOUT_MS,

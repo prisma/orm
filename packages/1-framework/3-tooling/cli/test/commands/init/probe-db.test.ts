@@ -241,6 +241,22 @@ describe('probeServerVersion (FR8.3)', () => {
     });
   });
 
+  it('says the driver is installed but failed to load, separately from a failed connection', async () => {
+    const outcome = await probeServerVersion(
+      probeContext('postgres://localhost:5432/db', async () => ({
+        kind: 'driver-failed',
+        driver: 'pg',
+        cause: 'native binding failed',
+      })),
+    );
+
+    expect(outcome).toMatchObject({
+      kind: 'driver-failed',
+      message:
+        'Skipped --probe-db: `pg` is installed but could not be loaded by @example/target (cause: native binding failed).',
+    });
+  });
+
   it('returns unsupported when the target package has no probe', async () => {
     const outcome = await probeServerVersion(
       probeContext('postgres://localhost:5432/db', undefined),

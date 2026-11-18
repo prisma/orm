@@ -32,11 +32,18 @@ export interface ServerRequirement {
   readonly checkCommand: string;
 }
 
+/**
+ * What a probe found. It rejects only when it cannot connect; once connected, a query that fails
+ * or an answer with no readable version is `version-unreadable`.
+ */
 export type InitProbeResult =
   | { readonly kind: 'server-version'; readonly serverVersion: string }
-  /** It connected, but the server's answer held no version the probe can read. */
+  /** It connected, but the version query failed or its answer held no version the probe can read. */
   | { readonly kind: 'version-unreadable'; readonly detail: string }
-  | { readonly kind: 'driver-missing'; readonly driver: string; readonly cause: string };
+  /** The driver is not installed where the target package can load it. */
+  | { readonly kind: 'driver-missing'; readonly driver: string; readonly cause: string }
+  /** The driver is installed but failed to load. */
+  | { readonly kind: 'driver-failed'; readonly driver: string; readonly cause: string };
 
 /**
  * What a target package tells `prisma orm init`, as the default export of its `init` entrypoint.

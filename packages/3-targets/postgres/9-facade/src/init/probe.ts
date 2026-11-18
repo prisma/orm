@@ -22,6 +22,10 @@ const PROBE_TIMEOUT_MILLIS = 20_000;
 
 type LoadDriver = () => Promise<{ readonly default: typeof pgDriver }>;
 
+function causeMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function isModuleNotFound(error: unknown): boolean {
   return error instanceof Error && Reflect.get(error, 'code') === 'ERR_MODULE_NOT_FOUND';
 }
@@ -34,14 +38,11 @@ export async function probePostgres(
   try {
     pg = await loadDriver();
   } catch (error) {
-    if (isModuleNotFound(error)) {
-      return {
-        kind: 'driver-missing',
-        driver: 'pg',
-        cause: error instanceof Error ? error.message : String(error),
-      };
-    }
-    throw error;
+    return {
+      kind: isModuleNotFound(error) ? 'driver-missing' : 'driver-failed',
+      driver: 'pg',
+      cause: causeMessage(error),
+    };
   }
   const client = new pg.default.Client({
     connectionString: databaseUrl,
@@ -56,7 +57,15 @@ export async function probePostgres(
       text: 'SELECT version() as version',
       query_timeout: PROBE_TIMEOUT_MILLIS,
     };
-    const result = await client.query<{ version: string }>(versionQuery);
+    let result: pgDriver.QueryResult<{ version: string }>;
+    try {
+      result = await client.query<{ version: string }>(versionQuery);
+    } catch (error) {
+      return {
+        kind: 'version-unreadable',
+        detail: `SELECT version() failed: ${causeMessage(error)}`,
+      };
+    }
     const versionString = String(result.rows[0]?.version ?? '');
     const serverVersion = parsePostgresVersion(versionString);
     return serverVersion === undefined

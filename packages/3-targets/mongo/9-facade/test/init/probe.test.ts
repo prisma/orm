@@ -85,11 +85,11 @@ describe('probeMongo', () => {
     });
   });
 
-  it('rejects when loading the driver fails for another reason', async () => {
+  it('reports a driver that is installed but fails to load, keeping the cause', async () => {
     await expect(
       probeMongo('mongodb://localhost:27017/db', async () => {
         throw new Error('broken driver');
       }),
-    ).rejects.toThrow('broken driver');
+    ).resolves.toEqual({ kind: 'driver-failed', driver: 'mongodb', cause: 'broken driver' });
   });
 });
