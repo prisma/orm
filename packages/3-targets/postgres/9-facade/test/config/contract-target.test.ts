@@ -4,7 +4,7 @@ import { defineConfig } from '../../src/config/define-config';
 import { createPostgresControlClient } from '../../src/exports/control';
 
 describe('a TypeScript contract built for another target', () => {
-  it("is refused at emit by PostgreSQL's defineConfig, naming both targets and PostgreSQL's import", async () => {
+  it("is refused at emit by PostgreSQL's defineConfig, naming both targets", async () => {
     const contractPath = resolve(import.meta.dirname, '../fixtures', 'mysql-target-contract.ts');
     const { contract } = defineConfig({ contract: contractPath });
     if (contract?.typesModule === undefined) {
@@ -21,7 +21,7 @@ describe('a TypeScript contract built for another target', () => {
       });
       expect(result.ok ? 'emitted' : result.failure).toMatchObject({
         code: 'CONTRACT_SOURCE_INVALID',
-        summary: `The TypeScript contract "${contractPath}" was built for target "mysql", but this defineConfig is for target "postgres". Import defineContract from @internal/postgres/contract-builder.`,
+        summary: `The TypeScript contract "${contractPath}" was built for target "mysql", but this defineConfig is for target "postgres".`,
         meta: {
           code: 'CONTRACT.TARGET_MISMATCH',
           contract: contractPath,

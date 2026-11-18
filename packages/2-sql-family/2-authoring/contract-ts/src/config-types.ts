@@ -52,15 +52,25 @@ function refuseOtherTarget(
   const actual = loaded.target;
   const configured = expected.target.targetId;
   if (typeof actual !== 'string' || actual === configured) return;
-  const fix = `Import defineContract from ${expected.contractBuilderModule}.`;
   throw contractError(
     'CONTRACT.TARGET_MISMATCH',
-    `The TypeScript contract "${contractPath}" was built for target "${actual}", but this defineConfig is for target "${configured}". ${fix}`,
+    `The TypeScript contract "${contractPath}" was built for target "${actual}", but this defineConfig is for target "${configured}".`,
     {
       why: "Its defineContract came from another target's contract-builder entry, so the contract carries that target's id and capabilities.",
-      fix,
+      fix: `Import defineContract from ${expected.contractBuilderModule}.`,
       meta: { contract: contractPath, expected: configured, actual },
     },
+  );
+}
+
+function isSqlContract(value: unknown): value is Contract {
+  if (typeof value !== 'object' || value === null) return false;
+  const { targetFamily, storage } = Object(value);
+  return (
+    targetFamily === 'sql' &&
+    typeof storage === 'object' &&
+    storage !== null &&
+    typeof Object(storage).namespaces === 'object'
   );
 }
 
@@ -141,15 +151,29 @@ export function typescriptContractFromPath(
           );
         }
         const mod = await import(pathToFileURL(absolutePath).href);
-        const contract: Contract | undefined = mod.default ?? mod.contract;
-        if (contract === undefined) {
+        const exported: unknown = mod.default ?? mod.contract;
+        if (exported === undefined) {
           throw contractError(
             'CONTRACT.MODULE_EXPORT_MISSING',
             `typescriptContractFromPath: module at "${absolutePath}" has no "default" or "contract" export.`,
             { meta: { path: absolutePath } },
           );
         }
-        refuseOtherTarget(contractPath, contract, options);
+        if (typeof exported === 'object' && exported !== null) {
+          refuseOtherTarget(contractPath, exported, options);
+        }
+        if (!isSqlContract(exported)) {
+          throw contractError(
+            'CONTRACT.EXPORT_INVALID',
+            `The TypeScript contract "${contractPath}" exports a value that is not a SQL contract.`,
+            {
+              why: 'The value has no SQL target family or no storage namespaces, so it was not built with defineContract.',
+              fix: "Export the result of the target package's defineContract as the module's default or contract export.",
+              meta: { path: absolutePath, reason: 'not-a-contract' },
+            },
+          );
+        }
+        const contract = exported;
         return ok(
           policy === undefined
             ? contract

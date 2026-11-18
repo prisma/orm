@@ -441,7 +441,7 @@ A Mongo field references an enum that is not declared in `defineContract({ enums
 
 ### CONTRACT.EXPORT_INVALID
 
-The TS contract module's export is not a plain JSON-serializable contract object: a non-object export, circular references, getters, or function-valued properties. Raised by the CLI while loading a TypeScript contract source. Payload: `path`, `reason`, `key`.
+The TS contract module's export is not a plain JSON-serializable contract object: a non-object export, circular references, getters, or function-valued properties. Raised by the CLI while loading a TypeScript contract source. Payload: `path`, `reason`, `key`. A SQL target's `defineConfig` also raises it when the module's `default` or `contract` export is not a SQL contract (it has no SQL target family or no storage namespaces, so it was not built with `defineContract`): `The TypeScript contract "<path>" exports a value that is not a SQL contract.`, with `reason: 'not-a-contract'`.
 
 ### CONTRACT.FIELD_HELPER_UNKNOWN
 
@@ -649,7 +649,7 @@ A foreign key names its target by table, and no model or table node of the contr
 
 The contract's target does not match the target configured in `prisma.config.ts` (e.g. a Postgres contract with a SQLite config). `db verify` reports it as an `error` diagnostic on a completed run that exits `4`. Payload: `expected` (the configured target), `actual` (the contract's target), and `contract` (the contract's path) when a `defineConfig` raises it.
 
-A SQL target's `defineConfig` also raises it when it loads a TypeScript contract whose `target` is another target's id, because the contract was built with another target's `defineContract`: `The TypeScript contract "<path>" was built for target "<built for>", but this defineConfig is for target "<configured for>". Import defineContract from <module>.`, where the module is the configured target package's `contract-builder` entry. `contract emit` reports it as `CONTRACT_SOURCE_INVALID`, carrying this code in its `meta`. A module whose export carries no target is not refused here; contract validation reports it.
+A SQL target's `defineConfig` also raises it when it loads a TypeScript contract whose `target` is another target's id, because the contract was built with another target's `defineContract`: `The TypeScript contract "<path>" was built for target "<actual>", but this defineConfig is for target "<expected>".`, with the fix `Import defineContract from <module>.`, where the module is the configured target package's `contract-builder` entry. `contract emit` reports it under this code, in the terminal and with `--json`; the programmatic control client's `emit` returns it as `CONTRACT_SOURCE_INVALID` with this code in `meta.code`. A module whose export is not a SQL contract is refused with `CONTRACT.EXPORT_INVALID` instead.
 
 ### CONTRACT.TYPE_PARAMS_INVALID
 

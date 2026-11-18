@@ -4,7 +4,7 @@ import { defineConfig } from '../../src/config/define-config';
 import { createSqliteControlClient } from '../../src/exports/control';
 
 describe('a TypeScript contract built for another target', () => {
-  it("is refused at emit by SQLite's defineConfig, naming both targets and SQLite's import", async () => {
+  it("is refused at emit by SQLite's defineConfig, naming both targets", async () => {
     const contractPath = resolve(import.meta.dirname, '../fixtures', 'postgres-target-contract.ts');
     const { contract } = defineConfig({ contract: contractPath });
     if (contract?.typesModule === undefined) {
@@ -21,7 +21,7 @@ describe('a TypeScript contract built for another target', () => {
       });
       expect(result.ok ? 'emitted' : result.failure).toMatchObject({
         code: 'CONTRACT_SOURCE_INVALID',
-        summary: `The TypeScript contract "${contractPath}" was built for target "postgres", but this defineConfig is for target "sqlite". Import defineContract from @internal/sqlite/contract-builder.`,
+        summary: `The TypeScript contract "${contractPath}" was built for target "postgres", but this defineConfig is for target "sqlite".`,
         meta: {
           code: 'CONTRACT.TARGET_MISMATCH',
           contract: contractPath,

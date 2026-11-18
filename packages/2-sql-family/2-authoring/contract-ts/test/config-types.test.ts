@@ -126,7 +126,7 @@ describe('typescriptContract', () => {
       try {
         await writeFile(
           contractPath,
-          `export default { targetFamily: 'sql', target: 'postgres' };\n`,
+          `export default { targetFamily: 'sql', target: 'postgres', storage: { namespaces: {} } };\n`,
           'utf-8',
         );
 
@@ -215,7 +215,7 @@ describe('typescriptContractFromPath with the target the config is for', () => {
         refused: {
           code: 'CONTRACT.TARGET_MISMATCH',
           message:
-            'The TypeScript contract "./contract.ts" was built for target "mysql", but this defineConfig is for target "postgres". Import defineContract from @prisma/orm-postgres/contract-builder.',
+            'The TypeScript contract "./contract.ts" was built for target "mysql", but this defineConfig is for target "postgres".',
           fix: 'Import defineContract from @prisma/orm-postgres/contract-builder.',
           meta: { contract: './contract.ts', expected: 'postgres', actual: 'mysql' },
         },
@@ -225,14 +225,26 @@ describe('typescriptContractFromPath with the target the config is for', () => {
   );
 
   it(
-    'loads a contract built for the target, and leaves a value with no target to contract validation',
+    'loads a contract built for the target, and refuses an export that is not a SQL contract, naming the file',
     async () => {
       expect({
-        same: await loadModule(`export default { targetFamily: 'sql', target: 'postgres' };\n`),
-        noTarget: await loadModule('export default { models: {} };\n'),
+        same: await loadModule(
+          `export default { targetFamily: 'sql', target: 'postgres', storage: { namespaces: {} } };\n`,
+        ),
+        notContract: await loadModule('export const contract = { models: {} };\n'),
       }).toEqual({
-        same: { loaded: { targetFamily: 'sql', target: 'postgres' } },
-        noTarget: { loaded: { models: {} } },
+        same: {
+          loaded: { targetFamily: 'sql', target: 'postgres', storage: { namespaces: {} } },
+        },
+        notContract: {
+          refused: {
+            code: 'CONTRACT.EXPORT_INVALID',
+            message:
+              'The TypeScript contract "./contract.ts" exports a value that is not a SQL contract.',
+            fix: "Export the result of the target package's defineContract as the module's default or contract export.",
+            meta: { path: expect.stringMatching(/contract\.ts$/), reason: 'not-a-contract' },
+          },
+        },
       });
     },
     timeouts.typeScriptCompilation,
@@ -305,7 +317,7 @@ describe('defaultControlPolicy specifier precedence', () => {
       try {
         await writeFile(
           contractPath,
-          `export default { targetFamily: 'sql', target: 'postgres', defaultControlPolicy: 'managed' };\n`,
+          `export default { targetFamily: 'sql', target: 'postgres', storage: { namespaces: {} }, defaultControlPolicy: 'managed' };\n`,
           'utf-8',
         );
 
@@ -338,7 +350,7 @@ describe('defaultControlPolicy specifier precedence', () => {
       try {
         await writeFile(
           contractPath,
-          `export default { targetFamily: 'sql', target: 'postgres' };\n`,
+          `export default { targetFamily: 'sql', target: 'postgres', storage: { namespaces: {} } };\n`,
           'utf-8',
         );
 
@@ -371,7 +383,7 @@ describe('defaultControlPolicy specifier precedence', () => {
       try {
         await writeFile(
           contractPath,
-          `export default { targetFamily: 'sql', target: 'postgres' };\n`,
+          `export default { targetFamily: 'sql', target: 'postgres', storage: { namespaces: {} } };\n`,
           'utf-8',
         );
 

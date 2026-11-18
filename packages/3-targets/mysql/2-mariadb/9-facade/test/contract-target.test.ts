@@ -29,13 +29,13 @@ async function emitFailure(
 }
 
 describe('a TypeScript contract built for another target', () => {
-  it("is refused by MariaDB's defineConfig when it was built with MySQL's defineContract, naming both targets and MariaDB's import", async () => {
+  it("is refused by MariaDB's defineConfig when it was built with MySQL's defineContract, naming both targets", async () => {
     const contract = fixture('mysql-contract.ts');
     expect(
       await emitFailure(createMariadbControlClient(), defineConfig({ contract }).contract),
     ).toMatchObject({
       code: 'CONTRACT_SOURCE_INVALID',
-      summary: `The TypeScript contract "${contract}" was built for target "mysql", but this defineConfig is for target "mariadb". Import defineContract from @internal/mariadb/contract-builder.`,
+      summary: `The TypeScript contract "${contract}" was built for target "mysql", but this defineConfig is for target "mariadb".`,
       why: "Its defineContract came from another target's contract-builder entry, so the contract carries that target's id and capabilities.",
       meta: {
         code: 'CONTRACT.TARGET_MISMATCH',
@@ -46,13 +46,13 @@ describe('a TypeScript contract built for another target', () => {
     });
   });
 
-  it("is refused by MySQL's defineConfig when it was built with MariaDB's defineContract, naming both targets and MySQL's import", async () => {
+  it("is refused by MySQL's defineConfig when it was built with MariaDB's defineContract, naming both targets", async () => {
     const contract = fixture('example-contract.ts');
     expect(
       await emitFailure(createMysqlControlClient(), mysqlDefineConfig({ contract }).contract),
     ).toMatchObject({
       code: 'CONTRACT_SOURCE_INVALID',
-      summary: `The TypeScript contract "${contract}" was built for target "mariadb", but this defineConfig is for target "mysql". Import defineContract from @internal/mysql/contract-builder.`,
+      summary: `The TypeScript contract "${contract}" was built for target "mariadb", but this defineConfig is for target "mysql".`,
       why: "Its defineContract came from another target's contract-builder entry, so the contract carries that target's id and capabilities.",
       meta: {
         code: 'CONTRACT.TARGET_MISMATCH',
