@@ -451,7 +451,7 @@ export function main(scopes = CONSUMER_SCOPES) {
     return 1;
   }
   console.log(
-    `No consumer project under ${scopes.join(', ')}, and no prose in the shipped skill or upgrade instructions, names an @internal/* package or an unpublished entry.`,
+    `No consumer project under ${scopes.join(', ')}, and no prose in the shipped skill or upgrade instructions, names an @internal/* package. The skill names no entry its package does not export.`,
   );
   return 0;
 }
