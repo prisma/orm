@@ -82,7 +82,7 @@ A pair with the same coordinate plans what a rename statement for the same two s
 - **A stored name and something else change together.** The rename is applied to the planner's working copy of the start schema first, and the diff then sees the renamed object. A changed column type becomes an alteration of the renamed column, which asks a question only when the type change can lose data, as it would on its own.
 - **A model's `@@map` changes and a field rename statement is given.** The table is renamed first, then the column on the renamed table.
 - **A field is removed in the same change.** Its question names it by its origin model and field, `User.nick`, as after a statement rename, and `--delete User.nick` answers it.
-- **Enum members.** A member that keeps its name and changes its stored value has the value replaced in every column the enum types. Values that shift along a chain (`ACTIVE` takes `archived` while `ARCHIVED` takes `old`) are rewritten last value first. A new member may take a value an existing member gives up.
+- **Enum members.** A member that keeps its name and changes its stored value has the value replaced in every column the enum types in a table whose control policy is `managed`. A column in a table the contract does not manage keeps the old value; the plan does not write to that table, so the user rewrites its values. Values that shift along a chain (`ACTIVE` takes `archived` while `ARCHIVED` takes `old`) are rewritten last value first. A new member may take a value an existing member gives up.
 - **Reporting.** No statement was given, so the rename is not listed under `Statements applied` or in `appliedStatements`. It is in the operation list.
 
 Operations run in this order:
