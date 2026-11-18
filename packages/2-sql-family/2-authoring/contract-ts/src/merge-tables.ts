@@ -1,7 +1,16 @@
-import type { ForeignKeyAuthoringInput } from '@internal/sql-contract/foreign-key-materialization';
-import type { IndexNode, TableProperties } from './contract-definition';
+import {
+  derivedBackingIndexNode,
+  type ForeignKeyAuthoringInput,
+  identicalIndexes,
+  indexNodeOf,
+} from '@internal/sql-contract/foreign-key-materialization';
+import { lowerAuthoredIndex } from '@internal/sql-contract/index-naming';
+import { isArrayEqual } from '@internal/utils/array-equal';
+import { canonicalStringify } from '@internal/utils/canonical-stringify';
+import type { IndexNode, TableProperties, UniqueConstraintNode } from './contract-definition';
 import { contractError } from './contract-errors';
 import type { ColumnSite } from './declaration-sites';
+import { authoredIndexInput } from './lower-table';
 import {
   type ColumnDescription,
   type ModelStorage,
@@ -14,6 +23,7 @@ type VariantStorage = Extract<ModelStorage, { kind: 'baseTable' }>;
 /** A foreign key of a shared table, with the model that declares it. */
 interface OwnedForeignKey {
   readonly owner: string;
+  readonly declaredByBase: boolean;
   readonly foreignKey: ForeignKeyAuthoringInput;
 }
 
@@ -95,11 +105,12 @@ export function mergeTables(
     const table = tables.get(key);
     if (table === undefined) continue;
     assertVariantColumnsOnBaseTable(variant, table);
-    assertVariantIndexesScoped(variant);
+    assertVariantIndexesScoped(variant, table);
     const foreignKeys = withVariantForeignKeys(
       ownedForeignKeys.get(key) ??
         table.foreignKeys.map((foreignKey) => ({
           owner: modelOfTable.get(key) ?? table.tableName,
+          declaredByBase: true,
           foreignKey,
         })),
       variant,
@@ -107,7 +118,8 @@ export function mergeTables(
     ownedForeignKeys.set(key, foreignKeys);
     tables.set(key, {
       ...table,
-      indexes: [...table.indexes, ...variant.indexes],
+      uniques: withDistinct(table.uniques, variant.uniques),
+      indexes: withDistinct(table.indexes, variant.indexes),
       foreignKeys: foreignKeys.map(({ foreignKey }) => foreignKey),
     });
   }
@@ -206,23 +218,51 @@ function assertVariantColumnsOnBaseTable(variant: VariantStorage, table: TableDe
   );
 }
 
-/** A variant shares its base's table, so a unique constraint or an index without a `where` condition would also cover the rows of the base and the other variants. An index the author scoped with a condition is accepted, and so is a plain index over exactly the columns of one of the variant's foreign keys, the index the foreign key derives anyway. */
-function assertVariantIndexesScoped(variant: VariantStorage): void {
-  const backsOwnForeignKey = (index: IndexNode) =>
-    index.unique !== true &&
-    index.columns !== undefined &&
-    variant.foreignKeys.some((foreignKey) =>
-      sameColumnList(foreignKey.source.columns, index.columns ?? []),
+/**
+ * A variant shares its base's table, so a unique constraint or an index without a `where` condition would also cover the rows of the base and the other variants. An index the author scoped with a condition is accepted. So are two forms over exactly the columns of one of the variant's own foreign keys: the index identical to the backing index that foreign key derives, and a unique constraint, which constrains only the variant's rows because the other rows hold NULL in those columns, and which a one-to-one relation needs. Either is refused when the table already has it under another name, so that it is not stored twice.
+ */
+function assertVariantIndexesScoped(variant: VariantStorage, table: TableDescription): void {
+  const ownForeignKeyColumns = variant.foreignKeys.map((foreignKey) => foreignKey.source.columns);
+  const isBackingIndex = (index: IndexNode) => {
+    if (index.columns === undefined || index.type !== undefined || index.options !== undefined) {
+      return false;
+    }
+    const { columns } = index;
+    const derived = variant.foreignKeys.some(
+      (foreignKey) =>
+        foreignKey.constraint &&
+        foreignKey.index === true &&
+        isArrayEqual(foreignKey.source.columns, columns),
+    );
+    return (
+      derived &&
+      identicalIndexes(
+        indexNodeOf(lowerAuthoredIndex(variant.tableName, authoredIndexInput(index))),
+        derivedBackingIndexNode(columns),
+      ) &&
+      !table.indexes.some(
+        (other) =>
+          other.where === undefined &&
+          other.columns !== undefined &&
+          isArrayEqual(other.columns, columns) &&
+          (other.name !== index.name || other.map !== index.map),
+      )
+    );
+  };
+  const isForeignKeyUnique = (unique: UniqueConstraintNode) =>
+    ownForeignKeyColumns.some((columns) => isArrayEqual(columns, unique.columns)) &&
+    !table.uniques.some(
+      (other) => isArrayEqual(other.columns, unique.columns) && other.name !== unique.name,
     );
   const unscoped = [
-    ...variant.uniques,
-    ...variant.indexes.filter((index) => index.where === undefined && !backsOwnForeignKey(index)),
+    ...variant.uniques.filter((unique) => !isForeignKeyUnique(unique)),
+    ...variant.indexes.filter((index) => index.where === undefined && !isBackingIndex(index)),
   ].map((constraint) => constraint.columns ?? []);
   if (unscoped.length === 0) return;
   const listed = unscoped.map((columns) => `(${columns.join(', ')})`).join(', ');
   throw contractError(
     'CONTRACT.UNSCOPED_INDEX_ON_STI_VARIANT',
-    `Model "${variant.modelName}" shares table "${variant.tableName}" with its base model (single-table inheritance), so its unique constraints and indexes on ${listed} would also cover the rows of other variants. Without a condition, only a plain index over exactly the columns of one of its foreign keys is accepted. Declare each as an index with a \`where\` condition that selects this variant's discriminator value.`,
+    `Model "${variant.modelName}" shares table "${variant.tableName}" with its base model (single-table inheritance), so its unique constraints and indexes on ${listed} would also cover the rows of other variants. Without a condition, only a plain index or a unique constraint over exactly the columns of one of its own foreign keys is accepted. Declare each as an index with a \`where\` condition that selects this variant's discriminator value.`,
     {
       meta: {
         modelName: variant.modelName,
@@ -244,17 +284,20 @@ function withVariantForeignKeys(
   const merged = [...foreignKeys];
   for (const foreignKey of variant.foreignKeys) {
     const sameColumns = merged.find((existing) =>
-      sameColumnList(existing.foreignKey.source.columns, foreignKey.source.columns),
+      isArrayEqual(existing.foreignKey.source.columns, foreignKey.source.columns),
     );
     if (sameColumns === undefined) {
-      merged.push({ owner: variant.modelName, foreignKey });
+      merged.push({ owner: variant.modelName, declaredByBase: false, foreignKey });
       continue;
     }
-    if (JSON.stringify(sameColumns.foreignKey) === JSON.stringify(foreignKey)) continue;
+    if (canonicalStringify(sameColumns.foreignKey) === canonicalStringify(foreignKey)) continue;
     const { columns } = foreignKey.source;
+    const listed = columns.join(', ');
     throw contractError(
       'CONTRACT.FOREIGN_KEY_CONFLICT_ON_STI_VARIANT',
-      `Models "${variant.modelName}" and "${sameColumns.owner}" share table "${variant.tableName}" (single-table inheritance) and declare different foreign keys on (${columns.join(', ')}). Every row would have to satisfy both; give each variant its own column.`,
+      sameColumns.declaredByBase
+        ? `Model "${variant.modelName}" shares table "${variant.tableName}" with its base model "${sameColumns.owner}" (single-table inheritance) and declares a foreign key on (${listed}) that differs from the one "${sameColumns.owner}" declares there. Every row would have to satisfy both; keep only one of the two.`
+        : `Models "${variant.modelName}" and "${sameColumns.owner}" share table "${variant.tableName}" (single-table inheritance) and declare different foreign keys on (${listed}). Every row would have to satisfy both; give each variant its own column.`,
       {
         meta: {
           modelName: variant.modelName,
@@ -269,6 +312,13 @@ function withVariantForeignKeys(
   return merged;
 }
 
-function sameColumnList(left: readonly string[], right: readonly string[]): boolean {
-  return left.length === right.length && left.every((column, index) => column === right[index]);
+/** `existing` followed by each of `added` that is not already there; two variants may declare the same index or unique constraint. */
+function withDistinct<T>(existing: readonly T[], added: readonly T[]): readonly T[] {
+  const merged = [...existing];
+  for (const entry of added) {
+    if (!merged.some((other) => canonicalStringify(other) === canonicalStringify(entry))) {
+      merged.push(entry);
+    }
+  }
+  return merged;
 }

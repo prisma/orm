@@ -186,7 +186,12 @@ model HumanActor {
   });
 
   it('refuses every unique and every index without a condition, each at its attribute', () => {
-    const attributes = ['@@unique([email])', '@@index([email])', '@@index([email], unique: true)'];
+    const attributes = [
+      '@@unique([email])',
+      '@@unique([contactId, email])',
+      '@@index([email])',
+      '@@index([email], unique: true)',
+    ];
     const schema = [
       contact,
       actor,
@@ -222,9 +227,153 @@ model HumanActor {
       diagnosticsOf([contact, actor, humanWithContact(`  ${attribute}`)].join('\n\n')),
     ).toEqual([
       expect.objectContaining({
-        message: `Model "HumanActor" shares the table of its base model "Actor" (single-table inheritance), so "${attribute.split('(')[0]}" would also cover the rows of other variants. Without a condition, only a plain @@index over exactly the fields of one of its relations is accepted. Scope it to this variant instead: ${advice}`,
+        message: `Model "HumanActor" shares the table of its base model "Actor" (single-table inheritance), so "${attribute.split('(')[0]}" would also cover the rows of other variants. Without a condition, only a plain @@index, @unique or @@unique over exactly the fields of one of its own relations is accepted. Scope it to this variant instead: ${advice}`,
       }),
     ]);
+  });
+
+  it.each([
+    { form: '@unique', field: 'contactId Int? @unique', attribute: '' },
+    { form: '@@unique', field: 'contactId Int?', attribute: '  @@unique([contactId])' },
+  ])(
+    "accepts $form over the variant's own one-to-one relation, as a unique constraint on the base table",
+    ({ field, attribute }) => {
+      const tables = tablesOf(`model Contact {
+  id    Int         @id
+  human HumanActor? @relation("Human")
+
+  @@map("contact")
+}
+
+${actor}
+
+model HumanActor {
+  contact   Contact? @relation("Human", fields: [contactId], references: [id])
+  ${field}
+${attribute}
+  @@base(Actor, "human")
+}`);
+
+      expect(tables['actor']).toMatchObject({
+        uniques: [{ columns: ['contactId'] }],
+        foreignKeys: [{ source: { columns: ['contactId'] }, target: { tableName: 'contact' } }],
+      });
+    },
+  );
+
+  it.each([
+    {
+      case: 'an index type other than the derived one',
+      relation: '',
+      attribute: '@@index([contactId], type: "hash", options: {})',
+    },
+    {
+      case: 'a relation that derives no index',
+      relation: ', index: false',
+      attribute: '@@index([contactId])',
+    },
+  ])(
+    "refuses a plain index on the variant's foreign key columns with $case",
+    ({ relation, attribute }) => {
+      const schema = [
+        contact,
+        actor,
+        humanWithContact(`  ${attribute}`).replace(
+          'onDelete: Cascade)',
+          `onDelete: Cascade${relation})`,
+        ),
+      ].join('\n\n');
+
+      expect(diagnosticsOf(schema)).toContainEqual(
+        expect.objectContaining({
+          code: 'PSL_UNSCOPED_INDEX_ON_STI_VARIANT',
+          span: expect.objectContaining({
+            start: expect.objectContaining({ offset: schema.indexOf(attribute) }),
+          }),
+        }),
+      );
+    },
+  );
+
+  const twoVariantsIndexing = (humanMap: string, botMap: string) =>
+    [
+      contactOf('  bots BotActor[] @relation("Bot")'),
+      actor,
+      humanWithContact(`  @@index([contactId], map: "${humanMap}")`),
+      botWithOwner('Contact').replace(
+        '\n\n  @@base',
+        `\n  @@index([contactId], map: "${botMap}")\n  @@base`,
+      ),
+    ].join('\n\n');
+
+  it('keeps one index when two variants write the same backing index', () => {
+    const tables = tablesOf(twoVariantsIndexing('actor_contact', 'actor_contact'));
+
+    expect(tables['actor']?.indexes).toMatchObject([
+      { columns: ['contactId'], name: 'actor_contact' },
+    ]);
+  });
+
+  it('refuses a second variant that names the same backing index differently', () => {
+    const schema = twoVariantsIndexing('actor_contact', 'actor_owner');
+
+    expect(diagnosticsOf(schema)).toEqual([
+      expect.objectContaining({
+        code: 'PSL_UNSCOPED_INDEX_ON_STI_VARIANT',
+        span: expect.objectContaining({
+          start: expect.objectContaining({
+            offset: schema.indexOf('@@index([contactId], map: "actor_owner")'),
+          }),
+        }),
+      }),
+    ]);
+  });
+
+  it('words a conflict with the base model without calling the base a variant', () => {
+    const schema = `${contact}
+
+${team}
+
+model Actor {
+  id        Int    @id
+  kind      String
+  team      Team?  @relation("Bot", fields: [contactId], references: [id])
+  contactId Int?
+
+  @@discriminator(kind)
+  @@map("actor")
+}
+
+${humanWithContact('')}`.replace(
+      'bots BotActor[] @relation("Bot")',
+      'actors Actor[] @relation("Bot")',
+    );
+
+    expect(diagnosticsOf(schema)).toEqual([
+      expect.objectContaining({
+        code: 'PSL_FOREIGN_KEY_CONFLICT_ON_STI_VARIANT',
+        message:
+          'Model "HumanActor" shares the table of its base model "Actor" (single-table inheritance) and declares a foreign key on (contactId) that differs from the one "Actor" declares there. Every row would have to satisfy both; keep only one of the two relations.',
+      }),
+    ]);
+  });
+
+  it('reports only the missing discriminator when the base has none', () => {
+    const diagnostics = diagnosticsOf(`model Actor {
+  id   Int    @id
+  kind String
+
+  @@map("actor")
+}
+
+model HumanActor {
+  email String?
+
+  @@unique([email])
+  @@base(Actor, "human")
+}`);
+
+    expect(diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['PSL_ORPHANED_BASE']);
   });
 
   it('keeps a unique on a multi-table variant, which has its own table', () => {
