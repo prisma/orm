@@ -20,6 +20,8 @@ describe('a SQLite Decimal field', () => {
     invoices.where((invoice) => invoice.total.gt('12.50'));
     // @ts-expect-error text compares by its characters, so a Decimal is not ordered
     invoices.orderBy((invoice) => invoice.total.asc());
+    // @ts-expect-error a Decimal is a number written as text, so it offers no text filter
+    invoices.where((invoice) => invoice.total.like('12%'));
   });
 
   test('offers no aggregate over its values', () => {

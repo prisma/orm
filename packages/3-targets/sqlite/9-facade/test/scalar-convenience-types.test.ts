@@ -212,6 +212,13 @@ model Owner {
     );
   });
 
+  it('refuses a Decimal default written as a number with a fraction, which is read as a real', () => {
+    const { result } = interpret(model('price Decimal @default(1.5)'));
+    expect(result.ok ? '' : JSON.stringify(result.failure)).toContain(
+      'Expected a quoted string or a number that sqlite/decimal can hold; got sqlite/real',
+    );
+  });
+
   it('gives Boolean its own codec, sqlite/boolean@1, on an integer column, and stores a default as a boolean', () => {
     const { contract, warnings } = emit(
       model('active Boolean @default(true)', 'hidden Boolean @default(false)', 'flag Boolean?'),
