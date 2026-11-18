@@ -71,6 +71,10 @@ updates:
       # catalog, so a major moves every package at once.
       - dependency-name: "vite"
         update-types: ["version-update:semver-major"]
+      # The postgres driver's tests read pg-types internals to check that the
+      # driver lists the same array type ids as pg does. The devDependency must
+      # be the version pg itself depends on, so it moves only when pg does.
+      - dependency-name: "pg-types"
       # apps/lsp-playground is a private dev tool: a Monaco editor wired to the
       # language server, started by hand when working on PSL diagnostics. It
       # ships to nobody, and its dependency churn is pure noise — the

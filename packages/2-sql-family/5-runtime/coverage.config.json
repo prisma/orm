@@ -7,8 +7,6 @@
     "**/*.test-d.ts",
     "**/*.config.ts",
     "**/exports/**",
-    "src/lower-sql-plan.ts",
-    "src/guardrails/raw.ts",
     "src/runtime-spi.ts",
     "src/middleware/sql-middleware.ts"
   ],
