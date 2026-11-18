@@ -553,6 +553,32 @@ model Other {
       });
     });
 
+    it('reports only the read failure when the file carrying the directive is not valid UTF-8', async () => {
+      const tempDir = await mkdtemp(join(tmpdir(), 'psl-provider-utf8-'));
+      tempDirs.push(tempDir);
+      const schemaPath = join(tempDir, 'schema.prisma');
+      const draftPath = join(tempDir, 'draft.prisma');
+      await writeFile(
+        schemaPath,
+        Buffer.concat([
+          Buffer.from('// use prisma-8\nmodel User {\n  id Int @id // ', 'utf-8'),
+          Buffer.from([0x97]),
+          Buffer.from('\n}\n', 'utf-8'),
+        ]),
+      );
+      await writeFile(draftPath, 'model Draft {\n  id Int @id\n}\n', 'utf-8');
+
+      process.chdir(tempDir);
+      const contract = prismaContract('./*.prisma', baseOptions);
+      const result = await contract.source.load(
+        createPostgresTestContext({ resolvedInputs: [schemaPath, draftPath] }),
+      );
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.diagnostics.map((d) => d.code)).toEqual(['PSL_SCHEMA_READ_FAILED']);
+    });
+
     it('loads the opted-in file when a file without the directive has an invalid byte', async () => {
       const tempDir = await mkdtemp(join(tmpdir(), 'psl-provider-utf8-'));
       tempDirs.push(tempDir);

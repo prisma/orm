@@ -256,6 +256,30 @@ model User {
     });
   });
 
+  it('reports only the read failure when the file carrying the directive is not valid UTF-8', async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'mongo-psl-provider-utf8-'));
+    tempDirs.push(tempDir);
+    const schemaPath = join(tempDir, 'schema.prisma');
+    const draftPath = join(tempDir, 'draft.prisma');
+    await writeFile(
+      schemaPath,
+      Buffer.concat([
+        Buffer.from('// use prisma-8\nmodel User {\n  id ObjectId @id @map("_id") // ', 'utf-8'),
+        Buffer.from([0x97]),
+        Buffer.from('\n}\n', 'utf-8'),
+      ]),
+    );
+    await writeFile(draftPath, 'model Draft {\n  id ObjectId @id @map("_id")\n}\n', 'utf-8');
+    const contract = mongoContract('./*.prisma', mongoTestStack);
+    const result = await contract.source.load(
+      createMongoTestContext({ resolvedInputs: [schemaPath, draftPath] }),
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics.map((d) => d.code)).toEqual(['PSL_SCHEMA_READ_FAILED']);
+  });
+
   it('loads the opted-in file when a file without the directive has an invalid byte', async () => {
     const tempDir = await mkdtemp(join(tmpdir(), 'mongo-psl-provider-utf8-'));
     tempDirs.push(tempDir);

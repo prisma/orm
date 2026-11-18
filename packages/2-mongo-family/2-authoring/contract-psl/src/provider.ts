@@ -82,10 +82,12 @@ export function mongoContract(schemaPath: string, options: MongoContractOptions)
       const readDiagnostics: ContractSourceDiagnostic[] = [];
       const members: { readonly path: string; readonly text: string }[] = [];
       const undirected: string[] = [];
+      let anyFileOptedIn = false;
       for (const path of candidates) {
         try {
           const bytes = await readFile(path);
           if (isPrisma8Schema(bytes.toString('utf-8'))) {
+            anyFileOptedIn = true;
             members.push({ path, text: strictUtf8.decode(bytes) });
           } else {
             undirected.push(path);
@@ -101,7 +103,7 @@ export function mongoContract(schemaPath: string, options: MongoContractOptions)
       }
 
       if (members.length === 0) {
-        if (undirected.length === 0) {
+        if (anyFileOptedIn || undirected.length === 0) {
           return notOk({
             summary: 'Failed to read Prisma schema files',
             diagnostics: readDiagnostics,
