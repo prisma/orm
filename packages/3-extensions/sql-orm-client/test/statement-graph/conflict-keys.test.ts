@@ -1,9 +1,16 @@
+import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
+import { autoincrement } from '@internal/sql-contract-ts/contract-builder';
 import { describe, expect, it } from 'vitest';
 import type { DescribeCollectionRowsOptions } from '../../src/collection-dispatch';
 import { createCollectionTables } from '../../src/collection-tables';
-import { conflictKeysOf, rowThatCannotConflict } from '../../src/statement-graph/conflict-keys';
+import {
+  conflictKeysOf,
+  requireRowsThatCanConflict,
+  rowThatCannotConflict,
+} from '../../src/statement-graph/conflict-keys';
 import { createRowsOf } from '../../src/statement-graph/storage-rows';
 import { emptyState } from '../../src/types';
+import { defineContract, field, model } from '../contract-builder';
 import { getTestContext } from '../helpers';
 import { generatedContext } from './generated-keys-contract';
 
@@ -60,5 +67,55 @@ describe('rowThatCannotConflict', () => {
     );
 
     expect(rowThatCannotConflict(storageRows, keys, new Set(parentLink))).toBe(expected);
+  });
+});
+
+describe('the row check of onConflict skip on a table', () => {
+  const Badge = model('Badge', {
+    fields: {
+      id: field.column(int4Column).default(autoincrement()).id(),
+      code: field.column(textColumn),
+    },
+  }).sql(({ cols, constraints }) => ({
+    table: 'badges',
+    indexes: [constraints.index([cols.code], { unique: true })],
+  }));
+  const Log = model('Log', { fields: { message: field.column(textColumn) } }).sql({
+    table: 'logs',
+  });
+  const contract = defineContract({ models: { Badge, Log } });
+  const call = { action: 'createAll()', modelName: 'Badge', meta: { method: 'createAll()' } };
+
+  it('accepts a row that gives only the column of a unique index next to a generated key', () => {
+    expect(
+      requireRowsThatCanConflict(
+        contract,
+        call,
+        { namespaceId: 'public', tableName: 'badges' },
+        { columns: [] },
+        [{ code: 'gold' }],
+        () => [],
+      ),
+    ).toBeUndefined();
+  });
+
+  it('refuses a table with no primary key, unique constraint or unique index', () => {
+    expect(() =>
+      requireRowsThatCanConflict(
+        contract,
+        { ...call, modelName: 'Log' },
+        { namespaceId: 'public', tableName: 'logs' },
+        { columns: [] },
+        [{ message: 'hello' }],
+        () => [],
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'ORM.ARGUMENT_INVALID',
+        message:
+          'createAll() on model "Log" has nothing to skip on: table "logs" has no primary key, unique constraint or unique index, so onConflict "skip" cannot skip any row',
+        meta: { method: 'createAll()', problem: 'no-conflict-key' },
+      }),
+    );
   });
 });

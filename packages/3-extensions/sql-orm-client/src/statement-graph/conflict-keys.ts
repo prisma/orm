@@ -7,6 +7,7 @@ import {
   resolveUniqueKeyColumnSets,
 } from '../collection-contract';
 import { ormError } from '../orm-errors';
+import { storageTableForContract } from '../storage-resolution';
 
 export type ConflictKeys = readonly (readonly string[])[];
 
@@ -16,9 +17,13 @@ export function conflictKeysOf(
   tableName: string,
   conflictColumns: readonly string[],
 ): ConflictKeys {
-  return conflictColumns.length > 0
-    ? [conflictColumns]
-    : resolveUniqueKeyColumnSets(contract, namespaceId, tableName);
+  if (conflictColumns.length > 0) {
+    return [conflictColumns];
+  }
+  const uniqueIndexes = storageTableForContract(contract, namespaceId, tableName).indexes.flatMap(
+    (index) => (index.unique && index.columns !== undefined ? [index.columns] : []),
+  );
+  return [...resolveUniqueKeyColumnSets(contract, namespaceId, tableName), ...uniqueIndexes];
 }
 
 export function rowThatCannotConflict(
@@ -106,6 +111,13 @@ export function requireRowsThatCanConflict(
   filledColumns: (index: number) => Iterable<string>,
 ): void {
   const keys = conflictKeysOf(contract, namespaceId, tableName, columns);
+  if (keys.length === 0) {
+    throw ormError(
+      'ORM.ARGUMENT_INVALID',
+      `${call.action} on model "${call.modelName}" has nothing to skip on: table "${tableName}" has no primary key, unique constraint or unique index, so onConflict "skip" cannot skip any row`,
+      { meta: { ...call.meta, problem: 'no-conflict-key' } },
+    );
+  }
   const index = rows.findIndex(
     (row, at) => rowThatCannotConflict([row], keys, new Set(filledColumns(at))) !== undefined,
   );
