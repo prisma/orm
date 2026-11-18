@@ -160,6 +160,16 @@ describe('SQLite codecs read the value an include carries', () => {
     },
   );
 
+  it.each([
+    ['sqlite/integer@1', integer],
+    ['sql/int@1', sqlInt],
+  ])('%s refuses a stored real in a row', async (codecId, codec) => {
+    await expect(codec.fromWire(1.5, ctx)).rejects.toMatchObject({
+      code: 'RUNTIME.DECODE_FAILED',
+      message: `A ${codecId} value is 1.5, which is not an integer within the safe integer range. ${codecId} reads integers from -9007199254740991 to 9007199254740991.`,
+    });
+  });
+
   it('shows the first 100 characters of a stored value it cannot read', async () => {
     const long = 'a'.repeat(150);
     await expect(integer.fromWire(long, ctx)).rejects.toMatchObject({

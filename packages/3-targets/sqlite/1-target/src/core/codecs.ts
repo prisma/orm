@@ -364,15 +364,6 @@ function safeIntegerFromExact(codecId: string, wire: unknown, ctx: SqlCodecCallC
   return Number(value);
 }
 
-/** Reads an INTEGER's wire value: the number the driver returns for a row as it is, or an integer outside the safe range or the decimal text an include carries, checked against the range. */
-function integerWire(
-  codecId: string,
-  wire: number | bigint | string,
-  ctx: SqlCodecCallContext,
-): number {
-  return typeof wire === 'number' ? wire : safeIntegerFromExact(codecId, wire, ctx);
-}
-
 /** Reads an INTEGER's wire value into a `number` within the safe integer range. A stored REAL, such as 1.5, is refused too. */
 function safeIntegerWire(
   codecId: string,
@@ -467,7 +458,7 @@ export class SqliteSqlIntCodec extends SqlIntCodec {
     wire: number | bigint | string,
     ctx: SqlCodecCallContext,
   ): Promise<number> {
-    return integerWire(this.id, wire, ctx);
+    return safeIntegerWire(this.id, wire, ctx);
   }
   override fromDataTypeValue(value: DataTypeValue): number {
     return safeIntegerFromDigitText(this.id, value.value);
