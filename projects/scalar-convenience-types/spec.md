@@ -33,8 +33,8 @@ The mechanism is the type choice of ADR 279. It lives in the framework domain an
 | PostgreSQL `Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean`, `Bytes` | Merged, prisma/orm#30942. Recorded in ADR 316. |
 | PostgreSQL `Json`, and `sql.Varchar` | Merged, prisma/orm#31065. Recorded in ADR 316. |
 | MongoDB | Merged, prisma/orm#31067. Recorded in ADR 322. |
-| SQLite | Built, not merged. Recorded in ADR 322. |
-| MySQL | To build. This spec. |
+| SQLite | Merged, prisma/orm#31086. Recorded in ADR 322. |
+| MySQL | Built, not merged. Recorded in ADR 322. |
 
 ## Rules that hold on every target
 
@@ -268,7 +268,7 @@ Each recommendation above is taken. Where it needed a choice of mechanism:
 2. **`Float(storage: float)` and `Float4` are left out.** `Float` takes `storage: double` only. A `float` column cannot be read exactly from a row without a per-codec wrapper around a selected column, which no target has, and that is a change to how every select is rendered, not to this slice. A ticket records it. The table above keeps the row, marked deferred.
 3. **`Bool` refuses a stored value other than 0 or 1** with a decode error that names the column, using the shared boolean code SQLite uses.
 4. **`PlainJson` has no equality or ordering.**
-5. **MariaDB reads `information_schema.check_constraints`** and reports a `longtext` column with a column-level `json_valid` check as its `json` data type. MariaDB gets its own data type entries for `json` and `tinyint(1)` where its catalog text differs, as `projects/mysql-poc/deferred.md` records.
+5. **MariaDB reads `information_schema.check_constraints`** and reports a `longtext` column with a column-level `json_valid` check as its `json` data type. MariaDB needs no data type entries of its own: its catalog reader reports a `longtext` with that check as `json`, and already reported a signed `tinyint(1)` as MySQL does, so MySQL's `mysql/json` and `mysql/boolean` claim both.
 6. **Defaults on `text`, `longblob` and `json` are written as `DEFAULT (literal)`** on both servers, and all four reported forms read back as the literal.
 7. **A `Decimal` reads as the server prints it,** padded to the column's scale. The codec refuses to write text with more than 35 integer digits or 30 fraction digits, so the cast never rounds or clamps silently; a value with more fraction digits than a narrower column's scale is rounded by the server, as on PostgreSQL.
 8. **`Longblob` is projected into an include as `TO_BASE64(v)`.**
