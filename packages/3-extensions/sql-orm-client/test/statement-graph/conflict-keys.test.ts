@@ -12,14 +12,10 @@ const ada = { id: 1, name: 'Ada', email: 'ada@example.com' };
 
 describe('conflictKeysOf', () => {
   it.each([
-    ['skip without conflictOn', 'skip', [], [['id'], ['email']]],
-    ['connect without conflictOn', 'connect', [], [['id']]],
-    ['skip with conflictOn', 'skip', ['email', 'name'], [['email', 'name']]],
-    ['connect with conflictOn', 'connect', ['email'], [['email']]],
-  ] as const)('gives the keys of %s', (_, onConflict, conflictColumns, keys) => {
-    expect(
-      conflictKeysOf(context.contract, 'public', 'users', onConflict, conflictColumns),
-    ).toEqual(keys);
+    ['without conflictOn: every primary key and unique constraint', [], [['id'], ['email']]],
+    ['with conflictOn: the named columns', ['email', 'name'], [['email', 'name']]],
+  ] as const)('gives the keys %s', (_, conflictColumns, keys) => {
+    expect(conflictKeysOf(context.contract, 'public', 'users', conflictColumns)).toEqual(keys);
   });
 });
 

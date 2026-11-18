@@ -1940,7 +1940,7 @@ type RelationConnectCriterion<
   ? Record<string, unknown>
   : UniqueConstraintCriterion<TContract, ModelName, NsId>;
 
-export type NestedCreateConflictAction = 'skip' | 'connect';
+export type NestedCreateConflictAction = 'skip';
 
 export interface NestedCreateOptions<
   TContract extends Contract<SqlStorage>,

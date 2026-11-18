@@ -49,6 +49,7 @@ import {
   requireRowsThatCanConflict,
   resolveConflict,
   type VariantInOwnTable,
+  variantInOwnTableOf,
 } from './conflict-keys';
 import type { ColumnMapping, NodeId } from './edge';
 import {
@@ -656,59 +657,41 @@ function nestedConflictOf(
     nestedCall(name, relation.to),
     relation.toNamespace,
     options,
-    ['skip', 'connect'],
-    variantInOwnTableOf(contract, relation, variant),
+    variantTargetOf(contract, relation, variant),
   );
-  if (resolved.onConflict === 'skip') {
-    const reason = hasThrough(relation)
-      ? 'many-to-many-relation'
-      : relation.cardinality === 'N:1' || relation.cardinality === '1:1'
-        ? 'to-one-relation'
-        : undefined;
-    if (reason !== undefined) {
-      throw ormError(
-        'ORM.OPERATION_UNSUPPORTED',
-        `create() nested mutation for relation "${name}" supports onConflict "skip" only on one-to-many relations`,
-        { meta: { kind: 'create', relation: name, reason } },
-      );
-    }
-    return resolved;
+  const reason = hasThrough(relation)
+    ? 'many-to-many-relation'
+    : relation.cardinality === 'N:1' || relation.cardinality === '1:1'
+      ? 'to-one-relation'
+      : undefined;
+  if (reason !== undefined) {
+    throw ormError(
+      'ORM.OPERATION_UNSUPPORTED',
+      `create() nested mutation for relation "${name}" supports onConflict "skip" only on one-to-many relations`,
+      { meta: { kind: 'create', relation: name, reason } },
+    );
   }
-  throw ormError(
-    'ORM.OPERATION_UNSUPPORTED',
-    `create() nested mutation for relation "${name}" does not support onConflict "connect"`,
-    { meta: { kind: 'create', relation: name, reason: 'on-conflict-connect' } },
-  );
+  return resolved;
 }
 
-function variantInOwnTableOf(
+function variantTargetOf(
   contract: Contract<SqlStorage>,
   relation: ResolvedRelation,
   variantValue: string | undefined,
 ): VariantInOwnTable | undefined {
   if (variantValue !== undefined) {
-    const variant = resolvePolymorphismInfo(
-      contract,
-      relation.toNamespace,
-      relation.to,
-    )?.variants.get(variantValue);
-    return variant?.strategy === 'mti'
-      ? { variant: variant.modelName, model: relation.to }
-      : undefined;
+    return variantInOwnTableOf(contract, relation.toNamespace, relation.to, variantValue);
   }
   const base = contractModelOf(contract, relation.toNamespace, relation.to)?.base;
   if (base === undefined) {
     return undefined;
   }
-  const variants = resolvePolymorphismInfo(contract, base.namespace, base.model)?.variants;
-  return [...(variants?.values() ?? [])].some(
-    (variant) =>
-      variant.modelName === relation.to &&
-      variant.namespaceId === relation.toNamespace &&
-      variant.strategy === 'mti',
-  )
-    ? { variant: relation.to, model: base.model }
-    : undefined;
+  const value = [
+    ...(resolvePolymorphismInfo(contract, base.namespace, base.model)?.variants.values() ?? []),
+  ].find(
+    (variant) => variant.modelName === relation.to && variant.namespaceId === relation.toNamespace,
+  )?.value;
+  return variantInOwnTableOf(contract, base.namespace, base.model, value);
 }
 
 function conflictSkipOf(

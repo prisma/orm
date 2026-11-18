@@ -250,7 +250,7 @@ export function createAllGraph(
       collection.context.contract,
       { action: method, modelName, meta: { method, model: modelName } },
       state.tables.root.storage,
-      { onConflict: 'skip', columns: conflict.columns },
+      { columns: conflict.columns },
       rows,
       () => [],
     );

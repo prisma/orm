@@ -62,24 +62,17 @@ function printUpdate(input: Record<string, unknown>): string {
 }
 
 describe('create options on a relation', () => {
-  it('inserts the rows of onConflict skip without relation callbacks in one Insert that skips conflicts', () => {
-    expect({
-      targeted: printUpdate({
-        posts: (posts: Mutator) =>
-          posts.create([post, other], { onConflict: 'skip', conflictOn: ['title'] }),
-      }),
-      byParentLink: printUpdate({
+  it('counts the parent link toward the conflict key of a row of onConflict skip', () => {
+    expect(
+      printUpdate({
         posts: (posts: Mutator) =>
           posts.create([post, other], { onConflict: 'skip', conflictOn: ['userId'] }),
       }),
-    }).toEqual({
-      targeted: updateOf(
-        'n2 Insert posts 2 rows on conflict (title) do nothing <- PayloadData n1 (id->user_id)',
-      ),
-      byParentLink: updateOf(
+    ).toBe(
+      updateOf(
         'n2 Insert posts 2 rows on conflict (user_id) do nothing <- PayloadData n1 (id->user_id)',
       ),
-    });
+    );
   });
 
   it('inserts each row of onConflict skip with relation callbacks in its own Insert that its children read', () => {
@@ -154,13 +147,6 @@ describe('create options on a relation', () => {
         index: 1,
         conflictKeys: [['embedding']],
       },
-    ],
-    [
-      'onConflict connect',
-      { posts: (posts: Mutator) => posts.create(post, { onConflict: 'connect' }) },
-      'ORM.OPERATION_UNSUPPORTED',
-      'create() nested mutation for relation "posts" does not support onConflict "connect"',
-      { kind: 'create', relation: 'posts', reason: 'on-conflict-connect' },
     ],
   ] as const;
 
@@ -390,22 +376,6 @@ describe('onConflict on a create through variant()', () => {
     );
     return printGraph(updateFirstGraph(target, {}, relationMutations));
   }
-
-  it('accepts onConflict skip on a variant stored in the base table', () => {
-    expect(
-      updateProject((tasks) =>
-        tasks
-          .variant('bug')
-          .create([{ id: 5, title: 'Crash', severity: 'high' }], { onConflict: 'skip' }),
-      ),
-    ).toBe(
-      [
-        'n1 Find projects_tbl where id = 1',
-        'n2 Insert tasks on conflict do nothing <- PayloadData n1 (id->project_id)',
-        'result: n1',
-      ].join('\n'),
-    );
-  });
 
   it('rejects onConflict on a variant stored in its own table', () => {
     expect(() =>

@@ -155,7 +155,7 @@ import {
   updateFirstGraph,
   upsertGraph,
 } from './statement-graph/collection-graphs';
-import { resolveConflict } from './statement-graph/conflict-keys';
+import { resolveConflict, variantInOwnTableOf } from './statement-graph/conflict-keys';
 import { Graph } from './statement-graph/graph';
 import { describeCollectionRead } from './statement-graph/read-graph';
 import { executeGraph, queryGraph } from './statement-graph/run-graph';
@@ -2139,9 +2139,13 @@ export class CollectionBase<
       { action: method, modelName: this.modelName, meta: { method, model: this.modelName } },
       this.namespaceId,
       options,
-      ['skip'],
-      createAll && mtiCreateContextOf(this.#descriptionOptions()) !== undefined
-        ? { variant: this.#variantModelName(), model: this.modelName }
+      createAll
+        ? variantInOwnTableOf(
+            this.contract,
+            this.namespaceId,
+            this.modelName,
+            this.state.variantValue,
+          )
         : undefined,
     );
     return { columns };

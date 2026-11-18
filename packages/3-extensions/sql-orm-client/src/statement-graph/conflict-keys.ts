@@ -3,11 +3,10 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   assertInsertConflictSkipCapability,
   resolveInsertConflictColumns,
+  resolvePolymorphismInfo,
   resolveUniqueKeyColumnSets,
 } from '../collection-contract';
 import { ormError } from '../orm-errors';
-import { storageTableForContract } from '../storage-resolution';
-import type { NestedCreateConflictAction } from '../types';
 
 export type ConflictKeys = readonly (readonly string[])[];
 
@@ -15,17 +14,11 @@ export function conflictKeysOf(
   contract: Contract<SqlStorage>,
   namespaceId: string,
   tableName: string,
-  onConflict: NestedCreateConflictAction,
   conflictColumns: readonly string[],
 ): ConflictKeys {
-  if (conflictColumns.length > 0) {
-    return [conflictColumns];
-  }
-  if (onConflict === 'skip') {
-    return resolveUniqueKeyColumnSets(contract, namespaceId, tableName);
-  }
-  const primaryKey = storageTableForContract(contract, namespaceId, tableName).primaryKey?.columns;
-  return primaryKey === undefined || primaryKey.length === 0 ? [] : [primaryKey];
+  return conflictColumns.length > 0
+    ? [conflictColumns]
+    : resolveUniqueKeyColumnSets(contract, namespaceId, tableName);
 }
 
 export function rowThatCannotConflict(
@@ -62,8 +55,20 @@ export interface VariantInOwnTable {
 }
 
 export interface ResolvedConflict {
-  readonly onConflict: NestedCreateConflictAction;
   readonly columns: readonly string[];
+}
+
+export function variantInOwnTableOf(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  modelName: string,
+  variantValue: string | undefined,
+): VariantInOwnTable | undefined {
+  const variant =
+    variantValue === undefined
+      ? undefined
+      : resolvePolymorphismInfo(contract, namespaceId, modelName)?.variants.get(variantValue);
+  return variant?.strategy === 'mti' ? { variant: variant.modelName, model: modelName } : undefined;
 }
 
 export function resolveConflict(
@@ -71,14 +76,12 @@ export function resolveConflict(
   call: ConflictCall,
   namespaceId: string,
   { onConflict, conflictOn }: ConflictOption,
-  accepted: readonly NestedCreateConflictAction[],
   variantInOwnTable: VariantInOwnTable | undefined,
 ): ResolvedConflict {
-  const action = accepted.find((value) => value === onConflict);
-  if (action === undefined) {
+  if (onConflict !== 'skip') {
     throw ormError(
       'ORM.ARGUMENT_INVALID',
-      `${call.action} takes onConflict ${accepted.map((value) => `"${value}"`).join(' or ')}; received ${JSON.stringify(onConflict)}`,
+      `${call.action} takes onConflict "skip"; received ${JSON.stringify(onConflict)}`,
       { meta: { ...call.meta, problem: 'invalid-on-conflict' } },
     );
   }
@@ -90,24 +93,19 @@ export function resolveConflict(
     );
   }
   const fields = conflictOn ?? [];
-  if (action === 'skip') {
-    assertInsertConflictSkipCapability(contract, call.action, fields.length > 0);
-  }
-  return {
-    onConflict: action,
-    columns: resolveInsertConflictColumns(contract, namespaceId, call.modelName, fields),
-  };
+  assertInsertConflictSkipCapability(contract, call.action, fields.length > 0);
+  return { columns: resolveInsertConflictColumns(contract, namespaceId, call.modelName, fields) };
 }
 
 export function requireRowsThatCanConflict(
   contract: Contract<SqlStorage>,
   call: ConflictCall,
   { namespaceId, tableName }: { readonly namespaceId: string; readonly tableName: string },
-  { onConflict, columns }: ResolvedConflict,
+  { columns }: ResolvedConflict,
   rows: readonly Readonly<Record<string, unknown>>[],
   filledColumns: (index: number) => Iterable<string>,
-): ConflictKeys {
-  const keys = conflictKeysOf(contract, namespaceId, tableName, onConflict, columns);
+): void {
+  const keys = conflictKeysOf(contract, namespaceId, tableName, columns);
   const index = rows.findIndex(
     (row, at) => rowThatCannotConflict([row], keys, new Set(filledColumns(at))) !== undefined,
   );
@@ -118,5 +116,4 @@ export function requireRowsThatCanConflict(
       { meta: { ...call.meta, problem: 'row-cannot-conflict', index, conflictKeys: keys } },
     );
   }
-  return keys;
 }
