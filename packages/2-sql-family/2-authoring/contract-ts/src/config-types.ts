@@ -1,5 +1,5 @@
 import { pathToFileURL } from 'node:url';
-import type { ContractConfig, ContractSourceFormat } from '@internal/config/config-types';
+import type { ContractConfig, ContractSourceProvider } from '@internal/config/config-types';
 import type { Contract, ControlPolicy } from '@internal/contract/types';
 import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
 import type { TargetPackRef } from '@internal/framework-components/components';
@@ -34,52 +34,52 @@ export interface TypeScriptContractSpecifierOptions {
   readonly createNamespace: SqlNamespaceFactory;
 }
 
-/** The target a config is for, which a contract loaded from a TypeScript module must be built for, and the module that target's `defineContract` comes from. */
-export interface TypeScriptContractTarget {
+/** The target a config is for, and the module that target's `defineContract` comes from. */
+export interface ConfigTarget {
   readonly target: TargetPackRef<'sql', string>;
   readonly contractBuilderModule: string;
 }
 
 export type TypeScriptContractFromPathOptions =
-  | (TypeScriptContractTarget & {
+  | (ConfigTarget & {
       readonly defaultControlPolicy?: never;
       readonly createNamespace?: never;
     })
-  | (TypeScriptContractTarget & TypeScriptContractSpecifierOptions);
+  | (ConfigTarget & TypeScriptContractSpecifierOptions);
 
-/** Where a loaded contract came from: how its source is written, and the file it names, if any. */
-interface ContractOrigin {
-  readonly format: ContractSourceFormat;
-  readonly path: string | undefined;
-}
+type ContractOrigin = Pick<ContractSourceProvider, 'format' | 'inputs'>;
 
-function describeContract({ format, path }: ContractOrigin): string {
+function describeContract({ format, inputs }: ContractOrigin): string {
   const kind = format === 'typescript' ? 'The TypeScript contract' : 'The contract';
+  const path = inputs?.[0];
   return path === undefined ? `${kind} passed to defineConfig` : `${kind} "${path}"`;
 }
 
 function otherTargetGuidance(
-  origin: ContractOrigin,
-  expected: TypeScriptContractTarget,
+  { format, inputs }: ContractOrigin,
+  expected: ConfigTarget,
 ): { readonly why: string; readonly fix: string } {
-  if (origin.format === 'typescript') {
+  const configured = expected.target.targetId;
+  if (format === 'psl') {
     return {
-      why: "Its defineContract came from another target's contract-builder entry, so the contract carries that target's id and capabilities.",
-      fix: `Import defineContract from ${expected.contractBuilderModule}.`,
+      why: "Its contract config was made with another target's components, so the contract carries that target's id and capabilities.",
+      fix: `Make the contract config with ${configured}'s components, or pass the schema's path as \`contract\`.`,
+    };
+  }
+  if (inputs?.[0] === undefined) {
+    return {
+      why: "The contract carries another target's id and capabilities, so it was built or emitted for that target.",
+      fix: `Pass a contract built for ${configured}, such as one made with the defineContract from ${expected.contractBuilderModule}.`,
     };
   }
   return {
-    why: "Its contract config was made with another target's components, so the contract carries that target's id and capabilities.",
-    fix: `Make the contract config with ${expected.target.targetId}'s components, or pass the schema's path as \`contract\`.`,
+    why: "Its defineContract came from another target's contract-builder entry, so the contract carries that target's id and capabilities.",
+    fix: `Import defineContract from ${expected.contractBuilderModule}.`,
   };
 }
 
-function refuseOtherTarget(
-  origin: ContractOrigin,
-  loaded: Contract,
-  expected: TypeScriptContractTarget,
-): void {
-  const actual = loaded.target;
+function refuseOtherTarget(origin: ContractOrigin, loaded: object, expected: ConfigTarget): void {
+  const actual: unknown = Object(loaded).target;
   const configured = expected.target.targetId;
   if (typeof actual !== 'string' || actual === configured) return;
   throw contractError(
@@ -87,25 +87,26 @@ function refuseOtherTarget(
     `${describeContract(origin)} was built for target "${actual}", but this defineConfig is for target "${configured}".`,
     {
       ...otherTargetGuidance(origin, expected),
-      meta: { ...ifDefined('contract', origin.path), expected: configured, actual },
+      meta: { ...ifDefined('contract', origin.inputs?.[0]), expected: configured, actual },
     },
   );
 }
 
-/** A ready contract config whose loaded contract is refused when it was built for another target than the config's. A failed load passes through unchanged. */
+/** A ready contract config whose loaded contract is refused when it was built for another target than the config's. Any other result passes through unchanged. */
 export function refuseOtherTargetOnLoad(
   config: ContractConfig,
-  expected: TypeScriptContractTarget,
+  expected: ConfigTarget,
 ): ContractConfig {
   const { source } = config;
-  const origin = { format: source.format, path: source.inputs?.[0] };
   return {
     ...config,
     source: {
       ...source,
       load: async (context) => {
         const result = await source.load(context);
-        if (result.ok) refuseOtherTarget(origin, result.value, expected);
+        const loaded: unknown =
+          isRecord(result) && result.ok === true ? Object(result).value : undefined;
+        if (isRecord(loaded)) refuseOtherTarget(source, loaded, expected);
         return result;
       },
     },
@@ -114,6 +115,12 @@ export function refuseOtherTargetOnLoad(
 
 function isRecord(value: unknown): value is object {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isOtherFamilyContract(value: unknown): value is object {
+  if (!isRecord(value)) return false;
+  const { targetFamily, target } = Object(value);
+  return typeof targetFamily === 'string' && targetFamily !== 'sql' && typeof target === 'string';
 }
 
 function isSqlContract(value: unknown): value is Contract {
@@ -207,6 +214,8 @@ export function typescriptContractFromPath(
           );
         }
         const exported: unknown = mod.default ?? mod.contract;
+        const origin = { format: 'typescript', inputs: [contractPath] } as const;
+        if (isOtherFamilyContract(exported)) refuseOtherTarget(origin, exported, options);
         if (!isSqlContract(exported)) {
           throw contractError(
             'CONTRACT.EXPORT_INVALID',
@@ -219,7 +228,7 @@ export function typescriptContractFromPath(
           );
         }
         const contract = exported;
-        refuseOtherTarget({ format: 'typescript', path: contractPath }, contract, options);
+        refuseOtherTarget(origin, contract, options);
         return ok(
           policy === undefined
             ? contract

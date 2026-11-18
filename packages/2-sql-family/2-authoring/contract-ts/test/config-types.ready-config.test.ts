@@ -1,11 +1,10 @@
-import type { ContractConfig, ContractSourceContext } from '@internal/config/config-types';
+import type { ContractConfig } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
-import { createDataTypeLookup } from '@internal/framework-components/codec';
 import type { TargetPackRef } from '@internal/framework-components/components';
-import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import { notOk, ok } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
 import { refuseOtherTargetOnLoad, typescriptContract } from '../src/config-types';
+import { stubContext as context } from './contract-source-context';
 
 const forPostgres = {
   target: {
@@ -17,30 +16,6 @@ const forPostgres = {
     defaultNamespaceId: 'public',
   } satisfies TargetPackRef<'sql', 'postgres'>,
   contractBuilderModule: '@prisma/orm-postgres/contract-builder',
-};
-
-const context: ContractSourceContext = {
-  composedExtensions: [],
-  defaultNamespaceId: 'public',
-  composedExtensionContracts: new Map(),
-  authoringContributions: {
-    dataTypes: {},
-    type: {},
-    entityTypes: {},
-    pslBlockDescriptors: {},
-    modelAttributes: {},
-    attributeSpecs: { model: {}, field: {} },
-  },
-  dataTypes: { entries: {}, lookup: createDataTypeLookup([]), dataTypeOfCodec: () => undefined },
-  codecLookup: {
-    get: () => undefined,
-    renderOutputTypeFor: () => undefined,
-    descriptorFor: () => undefined,
-  },
-  controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-  generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
-  resolvedInputs: [],
-  capabilities: {},
 };
 
 const contractFor = (target: string) =>
@@ -76,8 +51,8 @@ describe('refuseOtherTargetOnLoad', () => {
       code: 'CONTRACT.TARGET_MISMATCH',
       message:
         'The TypeScript contract passed to defineConfig was built for target "mysql", but this defineConfig is for target "postgres".',
-      why: "Its defineContract came from another target's contract-builder entry, so the contract carries that target's id and capabilities.",
-      fix: 'Import defineContract from @prisma/orm-postgres/contract-builder.',
+      why: "The contract carries another target's id and capabilities, so it was built or emitted for that target.",
+      fix: 'Pass a contract built for postgres, such as one made with the defineContract from @prisma/orm-postgres/contract-builder.',
       meta: { expected: 'postgres', actual: 'mysql' },
     });
   });
@@ -110,6 +85,19 @@ describe('refuseOtherTargetOnLoad', () => {
       parserOptions: { grammar: 'prisma-7' },
       output: './prisma/contract.json',
     });
+  });
+
+  it('passes a result that is not a well-formed success through unchanged, for the CLI to report', async () => {
+    const malformed = [undefined, null, { ok: true }, { ok: true, value: null }, { ok: 'yes' }];
+    const passedThrough = await Promise.all(
+      malformed.map((result) =>
+        refuseOtherTargetOnLoad(
+          { source: { format: 'typescript', load: async () => result as never } },
+          forPostgres,
+        ).source.load(context),
+      ),
+    );
+    expect(passedThrough).toEqual(malformed);
   });
 
   it('passes a failed load through unchanged', async () => {
