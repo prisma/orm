@@ -15,6 +15,7 @@ import {
   modelOf as contractModelOf,
   getModelFields,
   hasContractCapability,
+  isToOneCardinality,
   type ResolvedRelation,
   resolveModelTableName,
   resolvePolymorphismInfo,
@@ -285,6 +286,17 @@ export function addBeforeWrite(
   }
   for (const relationMutation of parentOwned) {
     for (const mutation of relationMutation.mutations) {
+      if (mutation.kind === 'delete') {
+        rejectNullOnRequiredKey(
+          t.context.contract,
+          mutation.kind,
+          relationMutation.name,
+          model,
+          relationMutation.relation.on.localFields,
+        );
+        unlinksAfterWrite = true;
+        continue;
+      }
       if (isFilteredWrite(mutation)) {
         continue;
       }
@@ -329,6 +341,10 @@ export function addAfterWrite(
         isConditionalUnlink(mutation)
       ) {
         addConditionalUnlink(t, model, parent, relationMutation, mutation);
+      } else if (mutation.kind === 'update') {
+        addLinkedRowWrite(t, model, parent, relationMutation, mutation);
+      } else if (mutation.kind === 'delete') {
+        addLinkedRowWrite(t, model, parent, relationMutation, mutation);
       }
     }
   }
@@ -470,23 +486,98 @@ function rejectSingleRowWrite({
 }: ParsedRelationMutation): void {
   for (const mutation of mutations.filter(isSingleRowWrite)) {
     const { kind } = mutation;
-    if (relation.cardinality === 'N:1' || relation.through !== undefined) {
-      throw ormError(
-        'ORM.OPERATION_UNSUPPORTED',
-        `${kind}() nested mutation for relation "${name}" is not supported yet on this relation`,
-        { meta: { kind, relation: name, reason: 'single-row-layout' } },
-      );
-    }
     const { filters, variantValue } = mutation.state;
     const related = relatedCollection(relation);
     const unfiltered = variantValue === undefined ? related : related.variant(variantValue);
-    if (relation.cardinality !== '1:1' && filters.length <= unfiltered.state.filters.length) {
+    if (
+      !isToOneCardinality(relation.cardinality) &&
+      filters.length <= unfiltered.state.filters.length
+    ) {
       throw ormError(
         'ORM.ARGUMENT_INVALID',
         `${kind}() nested mutation for relation "${name}" requires where() on a to-many relation`,
         { meta: { kind, relation: name, problem: 'missing-where' } },
       );
     }
+  }
+}
+
+function addLinkedRowWrite(
+  t: Translation,
+  model: Model,
+  parent: NodeId,
+  { relation }: ParsedRelationMutation,
+  mutation: SingleRowWrite,
+): void {
+  const { context } = t;
+  const { contract } = context;
+  const related = {
+    context,
+    state: mutation.state,
+    modelName: relation.to,
+    namespaceId: relation.toNamespace,
+  };
+  const localColumns = localColumnsOf(contract, model, relation);
+  const targetColumns = resolveRelationTargetColumns(contract, relation);
+  const target = mutation.state.tables.root;
+  if (mutation.kind === 'delete') {
+    const linked = t.parentRow ?? parent;
+    const toTarget = columnMappings(
+      contract,
+      model.tables.root,
+      localColumns,
+      target,
+      targetColumns,
+    );
+    addDeleteFirst(
+      t,
+      related,
+      { filters: [{ from: linked, columns: toTarget }], links: [] },
+      (found) => {
+        const nulls = Object.fromEntries(localColumns.map((column) => [column, null]));
+        updateRows(
+          t,
+          model,
+          { ...nulls, ...updateDefaultsOf(context, model, nulls) },
+          {
+            where: undefined,
+            filters: [
+              { from: parent, columns: sameRowColumnsOf(contract, model.tables.root) },
+              {
+                from: found,
+                columns: columnMappings(
+                  contract,
+                  target,
+                  targetColumns,
+                  model.tables.root,
+                  localColumns,
+                ),
+              },
+            ],
+            links: [],
+            payloads: [],
+            owner: { operation: 'update', modelName: model.modelName },
+            returns: 'count',
+            shape: allColumns,
+            afterWrite: undefined,
+          },
+        );
+      },
+    );
+    return;
+  }
+  const sources = {
+    filters: [
+      {
+        from: parent,
+        columns: columnMappings(contract, model.tables.root, localColumns, target, targetColumns),
+      },
+    ],
+    links: [],
+  };
+  const set = updateValuesOf(related, mutation.data);
+  if (Object.keys(set).length > 0) {
+    addUpdateFirst(t, related, set, sources);
   }
 }
 
@@ -797,7 +888,7 @@ function addFilteredWrite(
     return;
   }
   if (mutation.kind === 'delete') {
-    addDeleteFirst(t, related, sources.filters);
+    addDeleteFirst(t, related, sources);
     return;
   }
   const set = updateValuesOf(related, mutation.data);
@@ -826,7 +917,7 @@ function addFilteredWrite(
     return;
   }
   if (mutation.kind === 'update') {
-    addUpdateFirst(t, related, set, sources.filters);
+    addUpdateFirst(t, related, set, sources);
     return;
   }
   addUpdateAll(t, related, set, sources, 'count');

@@ -1,10 +1,10 @@
 import type { ProjectionItem, SelectAst } from '@internal/sql-relational-core/ast';
-import { executeFiltered, type Filtered, filteredSlots, withColumns } from './filtered-statement';
+import { executeFiltered, type Linked, linkedSlots, withColumns } from './filtered-statement';
 import type { Executed, OutputsOf, Run, StatementAst } from './node';
 import { StatementNode } from './statement-node';
 
-export class Find extends StatementNode<Filtered> {
-  readonly slots = filteredSlots;
+export class Find extends StatementNode<Linked> {
+  readonly slots = linkedSlots;
   readonly ast: SelectAst;
 
   constructor(ast: SelectAst) {
@@ -21,7 +21,7 @@ export class Find extends StatementNode<Filtered> {
     return this.ast.projection;
   }
 
-  override execute(inputs: OutputsOf<Filtered>, run: Run): Executed {
+  override execute(inputs: OutputsOf<Linked>, run: Run): Executed {
     return executeFiltered(this.ast, inputs, run);
   }
 

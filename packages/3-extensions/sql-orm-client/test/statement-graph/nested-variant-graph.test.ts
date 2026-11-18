@@ -730,6 +730,42 @@ describe('update and delete on a variant', () => {
     );
   });
 
+  it('update the linked row of a relation the parent holds the key for only when it is of the variant', () => {
+    expect(
+      printGraph(
+        updateOf('TaskComment', {
+          task: (task: VariantMutator) => task.variant('bug').update({ title: 'Seen' }),
+        }),
+      ),
+    ).toBe(
+      [
+        'n1 Find task_comments where id = 1',
+        "n2 Find tasks where type = 'bug' limit 1 <- FilterData n1 (task_id->id)",
+        "n3 Update tasks set title = 'Seen' where type = 'bug' <- FilterData n2 (id->id), FilterData n1 (task_id->id)",
+        'result: n1',
+      ].join('\n'),
+    );
+  });
+
+  it('delete the linked row of a relation the parent holds the key for only when it is of the variant', () => {
+    expect(
+      printGraph(
+        updateOf('TaskComment', {
+          task: (task: VariantMutator) => task.variant('feature').delete(),
+        }),
+      ),
+    ).toBe(
+      [
+        'n1 Find task_comments where id = 1',
+        "n2 Find tasks where type = 'feature' limit 1 <- FilterData n1 (task_id->id)",
+        'n3 Update task_comments set task_id = null <- FilterData n1 (id->id), FilterData n2 (id->task_id)',
+        `n4 Delete tasks where ${featureExists('')} <- FilterData n2 (id->id), FilterData n1 (task_id->id)`,
+        'n5 Find task_comments <- FilterData n1 (id->id)',
+        'result: n5',
+      ].join('\n'),
+    );
+  });
+
   it('refuses update() without where() on a to-many relation', () => {
     expect(
       thrownBy(() =>

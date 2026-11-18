@@ -380,6 +380,8 @@ await db.User.where({ id: 1 }).update({
 | `r.disconnect(criteria?)` | `update()` | all |
 | `r.where(w).updateAll(data)`, `r.updateAll(data)` | `update()` | to-many |
 | `r.where(w).deleteAll()`, `r.deleteAll()` | `update()` | to-many |
+| `r.where(w).update(data)`, `r.where(w).delete()` | `update()` | all |
+| `r.update(data)`, `r.delete()` | `update()` | to-one |
 
 An operation used where the table does not list it is refused with `ORM.OPERATION_UNSUPPORTED`; with an emitted `contract.d.ts` it is also a type error.
 
@@ -409,7 +411,7 @@ A to-one relation takes at most one operation: an array of two or more is refuse
 
 ### Nested writes on a polymorphic model
 
-On a relation whose target is a polymorphic base model, the mutator has `variant(value)`, which takes a discriminator value the model declares. `r.variant(value)` has `create`, `connect`, `disconnect`, `where`, `updateAll` and `deleteAll`, available where the same operation is available on `r`, and each acts only on rows of that variant: for a variant stored in the base table, the rows whose discriminator is the variant's value; for a variant stored in its own table, the base rows with that discriminator value that have a row in the variant table.
+On a relation whose target is a polymorphic base model, the mutator has `variant(value)`, which takes a discriminator value the model declares. `r.variant(value)` has `create`, `connect`, `disconnect`, `where`, `updateAll`, `deleteAll`, `update` and `delete`, available where the same operation is available on `r`, and each acts only on rows of that variant: for a variant stored in the base table, the rows whose discriminator is the variant's value; for a variant stored in its own table, the base rows with that discriminator value that have a row in the variant table.
 
 #### Creating rows
 
@@ -480,6 +482,27 @@ await db.User.where({ id: 1 }).update({
 Both operations are available only in `update()` and only on a to-many relation. Inside `create()`, or on a to-one relation, they are refused with `ORM.OPERATION_UNSUPPORTED` and are type errors.
 
 On a many-to-many relation, `deleteAll` deletes the related rows and does not delete or change junction rows itself. What happens to the junction rows that link them is decided by the foreign-key action in your schema: with a cascading foreign key they are removed, and with a restricting one the database refuses the delete and the whole `update()` is rolled back. When the junction table has no foreign key to the related table, the junction rows remain and hold keys of rows that no longer exist; declare a foreign key with a cascading delete on the junction table to remove them with the rows they refer to.
+
+### Updating or deleting one related row
+
+`r.where(w).update(data)` and `r.where(w).delete()` change or delete the first related row the filter matches; on a to-one relation, `r.update(data)` and `r.delete()` change or delete the linked row, and `where` narrows it. Which row among several matching rows is first is unspecified, as for a collection's `update` and `delete` without `orderBy`. A row is related as for `updateAll` and `deleteAll`; on a relation the record holds the key for, the related row is the one its foreign key points at.
+
+```ts
+await db.User.where({ id: 1 }).update({
+  profile: (profile) => profile.update({ bio: 'New' }),
+  posts: (posts) => [
+    posts.where({ id: 3 }).update({ title: 'Renamed' }),
+    posts.where({ published: false }).delete(),
+  ],
+});
+```
+
+- When no related row matches, or a to-one relation links no row, nothing changes and no error is raised.
+- On a to-many relation, `update` and `delete` need a `where` that filters: without one, or with an empty filter such as `where({})`, they are a type error and are refused with `ORM.ARGUMENT_INVALID` (`problem: 'missing-where'`). A collection's own `where({}).update()` is not refused.
+- `update` data is the related model's own fields, with its update defaults, and on a one-to-many and one-to-one relation the same `parent-link-column` refusal as `updateAll`.
+- On a relation the record holds the key for, `delete` sets the record's foreign key to null and then deletes the row it pointed at; when that key is required, `delete` is a type error and is refused with `ORM.OPERATION_UNSUPPORTED` (`reason: 'required-foreign-key'`).
+- On a many-to-many relation, `delete` deletes the related row and leaves the junction rows that link it to the database's foreign-key action, as `deleteAll` does.
+- `r.variant(value).where(w).update(data)` and `.delete()` act only on a row of the variant. For a variant stored in its own table, `delete` deletes the base row and leaves the variant row to the database's foreign-key action.
 
 ## Prepared row descriptions
 

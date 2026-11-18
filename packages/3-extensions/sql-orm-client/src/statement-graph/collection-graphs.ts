@@ -166,13 +166,13 @@ export function addUpdateFirst(
   b: Builder,
   collection: DescribeCollectionRowsOptions,
   set: Readonly<Record<string, unknown>>,
-  filters: readonly KeySource[],
+  sources: Sources,
 ): void {
-  const find = addFindOfFirstRelated(b, collection, 'update()', filters);
+  const find = addFindOfFirstRelated(b, collection, 'update()', sources);
   updateRows(b, modelOf(collection), set, {
     where: whereOf(collection),
-    filters: [{ from: find, columns: sameRowColumns(collection) }, ...filters],
-    links: [],
+    filters: [{ from: find, columns: sameRowColumns(collection) }, ...sources.filters],
+    links: sources.links,
     payloads: [],
     owner: { operation: 'update', modelName: collection.modelName },
     returns: 'count',
@@ -184,13 +184,15 @@ export function addUpdateFirst(
 export function addDeleteFirst(
   b: Builder,
   collection: DescribeCollectionRowsOptions,
-  filters: readonly KeySource[],
+  sources: Sources,
+  beforeDelete: (found: NodeId) => void = () => undefined,
 ): void {
-  const find = addFindOfFirstRelated(b, collection, 'delete()', filters);
+  const find = addFindOfFirstRelated(b, collection, 'delete()', sources);
+  beforeDelete(find);
   deleteRows(b, collection.state.tables, {
     where: whereOf(collection),
-    filters: [{ from: find, columns: sameRowColumns(collection) }, ...filters],
-    links: [],
+    filters: [{ from: find, columns: sameRowColumns(collection) }, ...sources.filters],
+    links: sources.links,
   });
 }
 
@@ -198,12 +200,13 @@ function addFindOfFirstRelated(
   b: Builder,
   collection: DescribeCollectionRowsOptions,
   method: string,
-  filters: readonly KeySource[],
+  { filters, links }: Sources,
 ): NodeId {
   requireIdentityColumns(collection, method);
   return findRows(b, selectIdentityAst(collection, { ...collection.state, limit: 1 }), {
     filter: filters.map(({ from, columns }) => new FilterData(from, columns)),
     requires: [],
+    links,
   });
 }
 

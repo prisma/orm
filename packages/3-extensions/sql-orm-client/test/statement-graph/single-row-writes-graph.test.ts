@@ -123,6 +123,63 @@ describe('update() and delete() on a relation the child holds the key for', () =
   });
 });
 
+describe('update() and delete() on a many-to-many relation', () => {
+  it('finds the first related row the filter matches through the junction, then writes it by key', () => {
+    expect(
+      printUpdate({
+        tags: (tags: SingleRowMutator) => [
+          tags.where({ name: 'SQL' }).update({ name: 'Postgres' }),
+          tags.where({ name: 'Go' }).delete(),
+        ],
+      }),
+    ).toBe(
+      [
+        'n1 Find users where id = 1',
+        "n2 Find tags where name = 'SQL' limit 1 <- JunctionFilterData n1 (id->user_id; user_tags tag_id->id)",
+        "n3 Update tags set name = 'Postgres' where name = 'SQL' <- FilterData n2 (id->id), JunctionFilterData n1 (id->user_id; user_tags tag_id->id)",
+        "n4 Find tags where name = 'Go' limit 1 <- JunctionFilterData n1 (id->user_id; user_tags tag_id->id)",
+        "n5 Delete tags where name = 'Go' <- FilterData n4 (id->id), JunctionFilterData n1 (id->user_id; user_tags tag_id->id)",
+        'result: n1',
+      ].join('\n'),
+    );
+  });
+});
+
+describe('update() and delete() on a relation the parent holds the key for', () => {
+  it('updates the linked row, found by the key the parent holds', () => {
+    expect(
+      printUpdate({
+        invitedBy: (inviter: SingleRowMutator) =>
+          inviter.where({ name: 'Grace' }).update({ name: 'Grace H.' }),
+      }),
+    ).toBe(
+      [
+        'n1 Find users where id = 1',
+        "n2 Find users where name = 'Grace' limit 1 <- FilterData n1 (invited_by_id->id)",
+        "n3 Update users set name = 'Grace H.' where name = 'Grace' <- FilterData n2 (id->id), FilterData n1 (invited_by_id->id)",
+        'result: n1',
+      ].join('\n'),
+    );
+  });
+
+  it('finds the linked row, sets the key of the parent to null only if it found one, then deletes it', () => {
+    expect(
+      printUpdate({
+        invitedBy: (inviter: SingleRowMutator) => inviter.where({ name: 'Grace' }).delete(),
+      }),
+    ).toBe(
+      [
+        'n1 Find users where id = 1',
+        "n2 Find users where name = 'Grace' limit 1 <- FilterData n1 (invited_by_id->id)",
+        'n3 Update users set invited_by_id = null <- FilterData n1 (id->id), FilterData n2 (id->invited_by_id)',
+        "n4 Delete users where name = 'Grace' <- FilterData n2 (id->id), FilterData n1 (invited_by_id->id)",
+        'n5 Find users <- FilterData n1 (id->id)',
+        'result: n5',
+      ].join('\n'),
+    );
+  });
+});
+
 describe('rejections of update() and delete() on a relation', () => {
   it.each([
     [
@@ -158,20 +215,26 @@ describe('rejections of update() and delete() on a relation', () => {
       { kind: 'update', relation: 'posts', problem: 'parent-link-column', fields: ['userId'] },
     ],
     [
-      'update() on a relation the parent holds the key for',
-      'Post',
-      { author: (author: SingleRowMutator) => author.update({ name: 'Ada' }) },
-      'ORM.OPERATION_UNSUPPORTED',
-      'update() nested mutation for relation "author" is not supported yet on this relation',
-      { kind: 'update', relation: 'author', reason: 'single-row-layout' },
+      'delete() without where() on a many-to-many relation',
+      'User',
+      { tags: (tags: SingleRowMutator) => tags.delete() },
+      'ORM.ARGUMENT_INVALID',
+      'delete() nested mutation for relation "tags" requires where() on a to-many relation',
+      { kind: 'delete', relation: 'tags', problem: 'missing-where' },
     ],
     [
-      'delete() on a many-to-many relation',
-      'User',
-      { tags: (tags: SingleRowMutator) => tags.where({ name: 'SQL' }).delete() },
+      'delete() on a relation the parent holds a required key for',
+      'Post',
+      { author: (author: SingleRowMutator) => author.delete() },
       'ORM.OPERATION_UNSUPPORTED',
-      'delete() nested mutation for relation "tags" is not supported yet on this relation',
-      { kind: 'delete', relation: 'tags', reason: 'single-row-layout' },
+      'delete() nested mutation for relation "author" cannot set "userId" of model "Post" to null, because the foreign key is required',
+      {
+        kind: 'delete',
+        relation: 'author',
+        reason: 'required-foreign-key',
+        model: 'Post',
+        fields: ['userId'],
+      },
     ],
   ] as const)('rejects %s while the graph is built', (_, modelName, input, code, message, meta) => {
     expect(() => printUpdate(input, modelName)).toThrow(

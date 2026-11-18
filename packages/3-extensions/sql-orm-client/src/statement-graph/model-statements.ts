@@ -181,10 +181,19 @@ function linkEdge({ from, columns, junction, targets }: LinkSource): JunctionFil
 export function findRows(
   { graph }: Builder,
   ast: SelectAst,
-  { filter, requires }: { readonly filter: FilterData[]; readonly requires: Requires[] },
+  {
+    filter,
+    requires,
+    links = [],
+  }: {
+    readonly filter: FilterData[];
+    readonly requires: Requires[];
+    readonly links?: readonly LinkSource[];
+  },
 ): NodeId {
   const find = new Find(ast);
-  return graph.add(find, { filter, state: graph.stateEdgesFor(find), requires });
+  const link = links.map(linkEdge);
+  return graph.add(find, { filter, link, state: graph.stateEdgesFor(find, link), requires });
 }
 
 export interface ReadBack {
