@@ -3,7 +3,8 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import type { AuthoringMode, InitContribution } from '@internal/cli/init-contribution';
+import type { InitContribution } from '@internal/cli/init-contribution';
+import type { ContractSourceFormat } from '@internal/config/config-types';
 import mongoContribution from '@internal/mongo/init';
 import postgresContribution from '@internal/postgres/init';
 import { timeouts } from '@repo/test-utils';
@@ -20,7 +21,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const execFileAsync = promisify(execFile);
 
 type TargetId = 'postgres' | 'mongo';
-type AuthoringId = AuthoringMode;
+type AuthoringId = ContractSourceFormat;
 
 const CONTRIBUTIONS: Record<TargetId, InitContribution> = {
   postgres: postgresContribution,

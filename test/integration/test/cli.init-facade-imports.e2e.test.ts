@@ -2,7 +2,8 @@ import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from '
 import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { AuthoringMode, InitContribution } from '@internal/cli/init-contribution';
+import type { InitContribution } from '@internal/cli/init-contribution';
+import type { ContractSourceFormat } from '@internal/config/config-types';
 import mongoContribution from '@internal/mongo/init';
 import postgresContribution from '@internal/postgres/init';
 import ts from 'typescript';
@@ -10,7 +11,7 @@ import { describe, expect, it } from 'vitest';
 import { configFile } from '../../../packages/1-framework/3-tooling/cli/src/commands/init/templates/code-templates';
 
 type TargetId = 'postgres' | 'mongo';
-type AuthoringId = AuthoringMode;
+type AuthoringId = ContractSourceFormat;
 
 const CONTRIBUTIONS: Record<TargetId, InitContribution> = {
   postgres: postgresContribution,
