@@ -35,6 +35,6 @@ export default {
 ```
 
 - `db.ts` and `.env.example` read the connection string from `DATABASE_URL`, and `dotenv` is installed with your package, so `db.ts` may import `dotenv/config`. `--probe-db` reads `DATABASE_URL` from the shell's environment, not from `.env`.
-- `peerPackages` names the drivers your package requires as peers. `init` reads it only after your package is installed, so it cannot help a package manager that refuses to install your package without its peers. For a package Prisma lists, the list names the drivers so they go into that first install; a probe must settle within the 60 seconds `init` gives it.
-- `readme`, `serverRequirement`, `probe` and `prisma7QuickReference` are optional. Give `prisma7QuickReference` when your `configModule` exports `prisma7Schema`.
+- `peerPackages` names the drivers your package requires as peers. `init` reads it only after your package is installed, so it cannot help a package manager that refuses to install your package without its peers. For a package Prisma lists, the list names the drivers so they go into that first install.
+- `readme`, `serverRequirement`, `probe` and `prisma7QuickReference` are optional. A `probe` must settle within the 60 seconds `init` gives it. Give `prisma7QuickReference` when your `configModule` exports `prisma7Schema`.
 - The entrypoint may import types from the framework, and no framework code that runs. The CLI that loads it can be a different installed copy of the framework from the one your package depends on.
