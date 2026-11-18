@@ -32,5 +32,6 @@ export const mariadbLiveServer: LiveServer = {
     upsertStatement:
       'INSERT INTO `User` (`email`, `role`) VALUES (?1, ?2) ON DUPLICATE KEY UPDATE `role` = ?3',
     oversizedOrderedInclude: 'returns every row',
+    havingAboveExactMean: 'keeps the group',
   },
 };
