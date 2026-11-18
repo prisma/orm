@@ -20,7 +20,7 @@ import type {
 import type { QueryOperationTypes as PgTargetQueryOps } from '@internal/target-postgres/operation-types';
 
 export type StorageHash =
-  StorageHashBase<'1376354380b2b293896ec99d3b1805587e86f558eec845c8b875881df449d0ce'>;
+  StorageHashBase<'5e1e59007251086853ee4ed0aafbb7c0a1153034d8c68e9d58c19e7c693cdbf9'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -871,6 +871,12 @@ type ContractBase = Omit<
               uniques: readonly [{ readonly columns: readonly ['pinned_by_id'] }];
               indexes: readonly [
                 {
+                  readonly name: 'tasks_bug_assignee_person_id_idx_ce44cebc';
+                  readonly prefix: 'tasks_bug_assignee_person_id_idx';
+                  readonly columns: readonly ['bug_assignee_person_id'];
+                  readonly unique: false;
+                },
+                {
                   readonly name: 'tasks_project_id_idx_6ad92603';
                   readonly prefix: 'tasks_project_id_idx';
                   readonly columns: readonly ['project_id'];
@@ -913,6 +919,18 @@ type ContractBase = Omit<
                     readonly namespaceId: 'public' & NamespaceId;
                     readonly tableName: 'tasks';
                     readonly columns: readonly ['pinned_by_id'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'people';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+                {
+                  readonly source: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'tasks';
+                    readonly columns: readonly ['bug_assignee_person_id'];
                   };
                   readonly target: {
                     readonly namespaceId: 'public' & NamespaceId;

@@ -294,6 +294,8 @@ model Feature {
 }
 ```
 
+An STI variant's relations put their foreign keys on the base table. Its `@@unique`, `@unique` and `@@index` without `where:` are refused, because on the shared table they would also cover the other variants' rows; scope the index to the variant instead, as in ``@@index([severity], unique: true, where: sql`type = 'bug'`)``. Two variants that declare different foreign keys on the same column are refused too. `@@check` on an STI variant is refused; declare it on the base.
+
 A variant's base can be in another namespace: write `@@base(ns.Model, "value")`. Such a variant must set `@@map(...)`, because a variant that shares its base's table has to be in the base's namespace.
 
 Verify the polymorphism syntax against the interpreter tests if in doubt: `packages/2-sql-family/2-authoring/contract-psl/test/interpreter.polymorphism.test.ts`.

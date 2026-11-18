@@ -451,6 +451,10 @@ A TypeScript contract read a field preset Prisma 8 removed from the SQL or Mongo
 
 An index or column mapping references a field the model does not declare (unknown field in the contract definition, or a Mongo model index over an undeclared field). Raised while lowering/building the contract. Payload: `modelName`, `fieldName`, `indexSignature`. The Mongo contract builder also raises it for a discriminator that names a field its model does not declare (`reason: 'discriminator-field-unknown'`).
 
+### CONTRACT.FOREIGN_KEY_CONFLICT_ON_STI_VARIANT
+
+Two models that share a single-table-inheritance table declare different foreign keys on the same columns, so every row would have to satisfy both. A variant's foreign keys go on its base's table; the same foreign key declared twice is kept once. Raised while building a SQL contract, as a backstop for the TS authoring path; the PSL surface reports it at the variant's relation as `PSL_FOREIGN_KEY_CONFLICT_ON_STI_VARIANT`. The fix is to give each variant its own column. Payload: `modelName`, `otherModelName`, `namespaceId`, `tableName`, `columns`.
+
 ### CONTRACT.FOREIGN_KEY_INVALID
 
 A foreign key's target refs are empty or inconsistent: no target ref given, refs point at different models, or compound refs disagree on `spaceId`, `namespaceId`, or `tableName`. Raised by the SQL contract DSL while declaring the FK. Payload: `mismatch`, `first`, `second`.
@@ -666,6 +670,10 @@ A SQL TypeScript contract has a `types` key, on the `defineContract` definition 
 ### CONTRACT.UNREADABLE
 
 The emitted contract file could not be read or parsed while computing `migration status`; reported as a warn-severity diagnostic on the status result rather than a thrown error, with the hint to re-run `prisma contract emit`. Payload: none (diagnostic carries `message` and `hints`).
+
+### CONTRACT.UNSCOPED_INDEX_ON_STI_VARIANT
+
+A single-table-inheritance variant declares a unique constraint, or an index without a `where` condition. The variant shares its base's table, so either would also cover the rows of the base and the other variants. Raised while building a SQL contract, as a backstop for the TS authoring path; the PSL surface refuses each `@unique`, `@@unique` and `@@index` without `where:` at the attribute, as `PSL_UNSCOPED_INDEX_ON_STI_VARIANT`, and writes out the partial index scoped to the variant. The fix is an index whose `where` condition selects the variant's discriminator value, with `unique: true` for a unique one. Payload: `modelName`, `namespaceId`, `tableName`, `unscoped` (the columns of each refused unique or index).
 
 ### CONTRACT.TYPES_RENDER_FAILED
 
