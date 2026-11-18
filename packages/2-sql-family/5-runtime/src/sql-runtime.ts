@@ -682,15 +682,20 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     if (openTransaction !== undefined || this.#startingTransactions.has(connection)) {
       throw transactionAlreadyOpenError(parent, openTransaction?.activity);
     }
-    return runTransactionOn(
-      {
-        [transactionStart]: owner[transactionStart],
-        transaction: (start) => this.beginTransactionOn(connection, owner, parent, start),
-      },
-      fn,
-      options,
-      { clean: async () => {}, unclean: (reason) => connection.destroy(reason) },
-    );
+    const state: ConnectionState = { clean: true, reason: undefined };
+    try {
+      return await runTransactionOn(
+        {
+          [transactionStart]: owner[transactionStart],
+          transaction: (start) => this.beginTransactionOn(connection, owner, parent, start),
+        },
+        fn,
+        options,
+        state,
+      );
+    } finally {
+      if (!state.clean) await connection.destroy(state.reason).catch(() => undefined);
+    }
   }
 
   /** The `activitySource` member of a held connection that `owner()` wraps. */
@@ -1758,9 +1763,9 @@ export interface ConnectionProvider {
   >;
 }
 
-interface ConnectionSettled {
-  clean(): Promise<void>;
-  unclean(reason: unknown): Promise<void>;
+interface ConnectionState {
+  clean: boolean;
+  reason: unknown;
 }
 
 /**
@@ -1783,17 +1788,25 @@ export async function withTransaction<R>(
   const connection = await runtime.connection(
     parent === undefined ? undefined : { activityParent: parent },
   );
-  return runTransactionOn(connection, fn, options, {
-    clean: () => connection.release(),
-    unclean: (reason) => connection.destroy(reason),
-  });
+  const state: ConnectionState = { clean: true, reason: undefined };
+  try {
+    return await runTransactionOn(connection, fn, options, state);
+  } finally {
+    if (!state.clean) {
+      await connection.destroy(state.reason).catch(() => undefined);
+    } else if (wasRefusedBeforeBegin(connection)) {
+      await connection.release().catch(() => undefined);
+    } else {
+      await connection.release();
+    }
+  }
 }
 
 async function runTransactionOn<R>(
   connection: Pick<RuntimeConnection, 'transaction'> & Partial<TransactionStartTarget>,
   fn: (tx: TransactionContext) => PromiseLike<R>,
   options: RuntimeTransactionOptions | undefined,
-  settled: ConnectionSettled,
+  state: ConnectionState,
 ): Promise<R> {
   validateTransactionTimeout(options?.timeout);
   let invalidated = false;
@@ -1801,11 +1814,9 @@ async function runTransactionOn<R>(
   try {
     transaction = await connection.transaction(options);
   } catch (error) {
-    // A teardown error would mask the start error.
-    if (wasRefusedBeforeBegin(connection)) {
-      await settled.clean().catch(() => undefined);
-    } else {
-      await settled.unclean(error).catch(() => undefined);
+    if (!wasRefusedBeforeBegin(connection)) {
+      state.clean = false;
+      state.reason = error;
     }
     throw error;
   }
@@ -1918,12 +1929,10 @@ async function runTransactionOn<R>(
     [activitySource]: guardedSource(transaction),
   };
 
-  let connectionDisposed = false;
-  const destroyConnection = async (reason: unknown): Promise<void> => {
-    if (connectionDisposed) return;
-    connectionDisposed = true;
-    // SqlConnection.destroy() propagates teardown errors so callers can decide what to do with them. Here, we're already about to throw a more informative error describing why we're evicting the connection (rollback/commit failure), so swallowing the teardown error is the right call — surfacing it would mask the original cause.
-    await settled.unclean(reason).catch(() => undefined);
+  const markUnclean = (reason: unknown): void => {
+    if (!state.clean) return;
+    state.clean = false;
+    state.reason = reason;
   };
 
   let commitRequested = false;
@@ -1936,7 +1945,7 @@ async function runTransactionOn<R>(
     return result;
   } catch (error) {
     if (signal.aborted) {
-      await destroyConnection(signal.reason);
+      markUnclean(signal.reason);
       throw signal.reason;
     }
     if (!commitRequested) {
@@ -1950,7 +1959,7 @@ async function runTransactionOn<R>(
           settlement.logDroppedError(rollbackError);
           throw selected;
         }
-        await destroyConnection(rollbackError);
+        markUnclean(rollbackError);
         const wrapped = runtimeError(
           'RUNTIME.TRANSACTION_ROLLBACK_FAILED',
           'Transaction rollback failed after callback error',
@@ -1967,7 +1976,7 @@ async function runTransactionOn<R>(
     } catch (rollbackError) {
       const settlement = settlementOf(transaction);
       if (settlement?.rolledBack === true) settlement.logDroppedError(rollbackError);
-      else await destroyConnection(error);
+      else markUnclean(error);
     }
     const wrapped = runtimeError('RUNTIME.TRANSACTION_COMMIT_FAILED', 'Transaction commit failed', {
       commitError: error,
@@ -1977,8 +1986,5 @@ async function runTransactionOn<R>(
   } finally {
     invalidated = true;
     signal.removeEventListener('abort', onAbort);
-    if (!connectionDisposed) {
-      await settled.clean();
-    }
   }
 }
