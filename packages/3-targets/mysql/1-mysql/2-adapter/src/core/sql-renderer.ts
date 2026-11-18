@@ -196,7 +196,7 @@ export class MysqlSqlRenderer {
     return undefined;
   }
 
-  /** Why an update or delete whose `SET` or `WHERE` reads `table`, the table it writes, is refused, or `undefined` where the database runs it. MySQL refuses it with error 1093. The only form MySQL accepts reads the table through a derived table, which copies the table and locks every row it copies, so concurrent writes deadlock; the renderer does not write it. */
+  /** Why an update or delete whose `SET` or `WHERE` reads `table`, the table it writes, is refused, or `undefined` where the database runs it. MySQL refuses it with error 1093. The only form MySQL accepts reads the table through a derived table, which copies the table and locks every row it copies, so concurrent writes can deadlock; the renderer does not write it. */
   protected writtenTableReadRefusal(table: string): string | undefined {
     return `${this.target.displayName} cannot run an UPDATE or DELETE whose filter or values read the table being written, ${table}`;
   }
@@ -423,8 +423,8 @@ export class MysqlSqlRenderer {
           qualified === ctx.writtenTable ? this.writtenTableReadRefusal(qualified) : undefined;
         if (refusal !== undefined) {
           throw this.unsupported('write-reads-written-table', refusal, {
-            why: `${this.target.displayName} refuses such a statement with its error 1093. The only form it accepts reads the table through a derived table, which copies the table and locks every row it copies, so concurrent writes deadlock.`,
-            fix: "Read the keys of the rows, and any values the write takes from this table, with a query first. Then update or delete those rows by key, writing those values (for a variant, through the base model's collection). The filter is not checked again when the rows are written.",
+            why: `${this.target.displayName} refuses such a statement with its error 1093. The only form it accepts reads the table through a derived table, which copies the table and locks every row it copies, so concurrent writes can deadlock.`,
+            fix: 'Read the keys of the rows, and any values the write takes from this table, with a query first. Then update or delete those rows by key, writing those values; for a variant, one row at a time with update or delete. The filter is not checked again when the rows are written.',
           });
         }
         return this.renderTableSource(source, ctx);
