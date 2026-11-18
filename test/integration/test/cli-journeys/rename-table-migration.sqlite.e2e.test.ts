@@ -23,7 +23,6 @@ import {
   runDbUpdate,
   runDbVerify,
   runMigrate,
-  runMigrationPlan,
   sqlitePslConfigFixture,
   timeouts,
 } from '../utils/journey-test-helpers';

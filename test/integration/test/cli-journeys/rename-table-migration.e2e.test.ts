@@ -15,7 +15,6 @@ import { withTempDir } from '../utils/cli-test-helpers';
 import {
   authorMigration,
   engineError,
-  getMigrationDirs,
   type JourneyContext,
   latestMigrationDirName,
   latestMigrationToHash,
@@ -25,7 +24,6 @@ import {
   runDbUpdate,
   runDbVerify,
   runMigrate,
-  runMigrationPlan,
   setupJourney,
   sql,
   swapPslContract,

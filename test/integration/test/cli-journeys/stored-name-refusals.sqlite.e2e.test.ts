@@ -8,88 +8,21 @@
  * The swapped models and fields differ in shape, so that the destination's storage differs from the origin's.
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
 import { timeouts } from '../utils/journey-test-helpers';
+import { COMMANDS, sqliteJourney } from '../utils/stored-name-journeys';
 import {
-  COMMANDS,
-  type ExpectedConflict,
-  emit,
-  expectSettled,
-  type PlannedOperation,
-  planAndApply,
-  planningFailure,
-  refusal,
-  rows,
-  sqliteJourney,
-  start,
-  tableNames,
-} from '../utils/stored-name-journeys';
+  ACCOUNT_ROW,
+  expectAdviceKeepsRows,
+  fields,
+  MODELS_SEED,
+  models,
+  type RefusalScenario,
+  USER_ROW,
+} from '../utils/stored-name-refusal-scenarios';
 
-function models(user: string, account: string | undefined, member?: string): string {
-  return `// use prisma-8
-
-model User {
-  id    Int    @id
-  email String
-  @@map("${user}")
-}
-${
-  account === undefined
-    ? ''
-    : `
-model Account {
-  id   Int    @id
-  plan String
-  @@map("${account}")
-}
-`
-}${
-  member === undefined
-    ? ''
-    : `
-model Member {
-  id   Int    @id
-  plan String
-  @@map("${member}")
-}
-`
-}`;
-}
-
-function fields(lines: string): string {
-  return `// use prisma-8
-
-model User {
-  id Int @id
-${lines}
-  @@map("users")
-}
-`;
-}
-
-const MODELS_SEED = `INSERT INTO "users" (id, email) VALUES (1, 'alice@example.com'); INSERT INTO "accounts" (id, plan) VALUES (2, 'pro')`;
-const USER_ROW = { id: 1, email: 'alice@example.com' };
-const ACCOUNT_ROW = { id: 2, plan: 'pro' };
-
-interface Step {
-  readonly psl: string;
-  readonly args: readonly string[];
-  readonly operations: readonly PlannedOperation[];
-}
-
-interface Scenario {
-  readonly name: string;
-  readonly from: string;
-  readonly seed: string;
-  readonly to: string;
-  readonly args: readonly string[];
-  readonly conflict: ExpectedConflict;
-  readonly steps: readonly [Step, Step];
-  readonly tables: Readonly<Record<string, readonly Record<string, unknown>[]>>;
-}
-
-const SCENARIOS: readonly Scenario[] = [
+const SCENARIOS: readonly RefusalScenario[] = [
   {
     name: 'two models swap tables',
     from: models('users', 'accounts'),
@@ -352,34 +285,7 @@ withTempDir(({ createTempDir }) => {
       'is refused with no statement named, and the advice, followed, keeps every row under the right name',
       async () => {
         const journey = sqliteJourney(createTempDir, command);
-        await start(journey, scenario.from, scenario.seed, '01');
-        await emit(journey, scenario.to, '02');
-
-        const refused = await refusal(journey, scenario.args, '03');
-        expect(refused, '03: the refusal').toEqual(planningFailure(scenario.conflict));
-        expect(JSON.stringify(refused), '03: the JSON error names no statement').not.toMatch(
-          /refusedStatement|this statement/,
-        );
-
-        for (const [index, step] of scenario.steps.entries()) {
-          const label = `0${4 + index}`;
-          await emit(journey, step.psl, label);
-          const planned = await planAndApply(journey, step.args, label);
-          expect
-            .soft(planned, `${label}: plan ${index + 1} of the advice`)
-            .toEqual(step.operations);
-        }
-
-        expect(await tableNames(journey), '06: the tables').toEqual(
-          Object.keys(scenario.tables).sort(),
-        );
-        for (const [table, expected] of Object.entries(scenario.tables)) {
-          expect(
-            await rows(journey, `SELECT * FROM "${table}" ORDER BY id`),
-            `06: the rows of ${table}`,
-          ).toEqual(expected);
-        }
-        await expectSettled(journey, '07');
+        await expectAdviceKeepsRows(journey, scenario);
       },
       timeouts.spinUpPpgDev,
     );

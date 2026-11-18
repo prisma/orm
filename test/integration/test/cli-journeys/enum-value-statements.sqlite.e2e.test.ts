@@ -19,7 +19,6 @@ import { describe, expect, it } from 'vitest';
 import { withTempDir, writeProjectManifest } from '../utils/cli-test-helpers';
 import {
   engineError,
-  getMigrationDirs,
   type JourneyContext,
   latestMigrationDirName,
   parseJsonOutput,
