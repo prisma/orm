@@ -16,7 +16,7 @@ import type {
 } from '@prisma/orm-mariadb/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'a79b2f48d08a4ba5bd11c7307b331a418e1f63f4e922bd68fe767b90f28c16c2'>;
+  StorageHashBase<'8a090b49a6a45e10bb29d909e12cb460ddee912d908102948b32b8a636a7d41c'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'c3165876e6069b3fd8cde4fadadb0b534082345d678b2c81c8c83e9225ce21d8'>;
@@ -249,6 +249,18 @@ export namespace Models {
     author: User;
     readonly [RelationKeys]?: 'author';
   };
+  export type Product = {
+    details: FieldOutputTypes['__unbound__']['Product']['details'];
+    id: FieldOutputTypes['__unbound__']['Product']['id'];
+    inStock: FieldOutputTypes['__unbound__']['Product']['inStock'];
+    name: FieldOutputTypes['__unbound__']['Product']['name'];
+    notes: FieldOutputTypes['__unbound__']['Product']['notes'];
+    price: FieldOutputTypes['__unbound__']['Product']['price'];
+    rating: FieldOutputTypes['__unbound__']['Product']['rating'];
+    sold: FieldOutputTypes['__unbound__']['Product']['sold'];
+    thumbnail: FieldOutputTypes['__unbound__']['Product']['thumbnail'];
+    readonly [RelationKeys]?: never;
+  };
   export type User = {
     email: FieldOutputTypes['__unbound__']['User']['email'];
     id: FieldOutputTypes['__unbound__']['User']['id'];
@@ -261,6 +273,7 @@ export namespace Models {
 export declare const models: {
   Event: Models.Event;
   Post: Models.Post;
+  Product: Models.Product;
   User: Models.User;
 };
 
@@ -386,6 +399,82 @@ type ContractBase = Omit<
                 },
               ];
             };
+            readonly Product: {
+              columns: {
+                readonly details: {
+                  readonly dataType: 'mysql/json';
+                  readonly codecId: 'mysql/json@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly id: {
+                  readonly dataType: 'mysql/int';
+                  readonly codecId: 'mysql/int@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'function';
+                    readonly expression: 'autoincrement()';
+                  };
+                  readonly many: false;
+                };
+                readonly inStock: {
+                  readonly dataType: 'mysql/boolean';
+                  readonly codecId: 'mysql/boolean@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'mysql/boolean@1', true>;
+                  };
+                  readonly many: false;
+                };
+                readonly name: {
+                  readonly dataType: 'mysql/varchar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly length: 191 };
+                  readonly many: false;
+                };
+                readonly notes: {
+                  readonly dataType: 'mysql/text';
+                  readonly codecId: 'mysql/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly price: {
+                  readonly dataType: 'mysql/decimal';
+                  readonly codecId: 'mysql/decimal@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly precision: 10; readonly scale: 2 };
+                  readonly many: false;
+                };
+                readonly rating: {
+                  readonly dataType: 'mysql/double';
+                  readonly codecId: 'mysql/double@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly sold: {
+                  readonly dataType: 'mysql/bigint';
+                  readonly codecId: 'mysql/bigintnumber@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'mysql/bigintnumber@1', '0'>;
+                  };
+                  readonly many: false;
+                };
+                readonly thumbnail: {
+                  readonly dataType: 'mysql/longblob';
+                  readonly codecId: 'mysql/longblob@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [];
+              foreignKeys: readonly [];
+            };
             readonly User: {
               columns: {
                 readonly email: {
@@ -437,6 +526,10 @@ type ContractBase = Omit<
   readonly roots: {
     readonly Event: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Event' };
     readonly Post: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Post' };
+    readonly Product: {
+      readonly namespace: '__unbound__' & NamespaceId;
+      readonly model: 'Product';
+    };
     readonly User: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'User' };
   };
   readonly domain: {
@@ -540,6 +633,73 @@ type ContractBase = Omit<
                 readonly authorId: { readonly column: 'authorId' };
                 readonly id: { readonly column: 'id' };
                 readonly title: { readonly column: 'title' };
+              };
+            };
+          };
+          readonly Product: {
+            readonly fields: {
+              readonly details: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mysql/json@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mysql/int@1' };
+              };
+              readonly inStock: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mysql/boolean@1' };
+              };
+              readonly name: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 191 };
+                };
+              };
+              readonly notes: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mysql/text@1' };
+              };
+              readonly price: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'mysql/decimal@1';
+                  readonly typeParams: { readonly precision: 10; readonly scale: 2 };
+                };
+              };
+              readonly rating: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mysql/double@1' };
+              };
+              readonly sold: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'mysql/bigintnumber@1';
+                };
+              };
+              readonly thumbnail: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mysql/longblob@1' };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly table: 'Product';
+              readonly namespaceId: '__unbound__';
+              readonly fields: {
+                readonly details: { readonly column: 'details' };
+                readonly id: { readonly column: 'id' };
+                readonly inStock: { readonly column: 'inStock' };
+                readonly name: { readonly column: 'name' };
+                readonly notes: { readonly column: 'notes' };
+                readonly price: { readonly column: 'price' };
+                readonly rating: { readonly column: 'rating' };
+                readonly sold: { readonly column: 'sold' };
+                readonly thumbnail: { readonly column: 'thumbnail' };
               };
             };
           };
