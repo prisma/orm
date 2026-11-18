@@ -424,7 +424,7 @@ export class MysqlSqlRenderer {
         if (refusal !== undefined) {
           throw this.unsupported('write-reads-written-table', refusal, {
             why: `${this.target.displayName} refuses such a statement with its error 1093. The only form it accepts reads the table through a derived table, which copies the table and locks every row it copies, so concurrent writes deadlock.`,
-            fix: "Read the keys of the rows with a query first, then update or delete them by key through the base model's collection.",
+            fix: "Read the keys of the rows with a query first, then update or delete those rows by key (for a variant, through the base model's collection).",
           });
         }
         return this.renderTableSource(source, ctx);
