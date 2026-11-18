@@ -78,10 +78,10 @@ describe('planStatements, field renames', () => {
       calls: ['column app.User.name -> fullName'],
       tableRenames: [],
       columnRenames: [{ namespaceId: 'app', table: 'User', from: 'name', to: 'fullName' }],
-      appliedStatements: [
+      plannedStatements: [
         {
           statement,
-          operationIndexes: [0, 1],
+          operations: { kind: 'planned', operationIndexes: [0, 1] },
         },
       ],
     });
@@ -122,7 +122,7 @@ describe('planStatements, field renames', () => {
     ).toMatchObject({
       calls: [],
       columnRenames: [],
-      appliedStatements: [{ operationIndexes: [] }],
+      plannedStatements: [{ operations: { kind: 'planned', operationIndexes: [] } }],
     });
   });
 

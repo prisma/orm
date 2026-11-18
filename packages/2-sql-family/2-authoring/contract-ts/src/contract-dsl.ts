@@ -1,17 +1,10 @@
-import type {
-  ColumnDefault,
-  ControlPolicy,
-  ExecutionMutationDefaultPhases,
-  ExecutionMutationDefaultValue,
-} from '@internal/contract/types';
+import type { ColumnDefault, ControlPolicy } from '@internal/contract/types';
 import { isColumnDefault } from '@internal/contract/types';
 import type {
   CodecInput,
   CodecTypeMap,
   ForeignKeyDefaultsState,
 } from '@internal/contract-authoring';
-import type { AuthoringFieldPresetDescriptor } from '@internal/framework-components/authoring';
-import { instantiateAuthoringFieldPreset } from '@internal/framework-components/authoring';
 import type {
   CodecLookupWithDescriptors,
   ColumnTypeDescriptor,
@@ -68,7 +61,6 @@ export type ScalarFieldState<
   readonly nullable: Nullable;
   readonly columnName?: ColumnName | undefined;
   readonly default?: AuthoredColumnDefault | undefined;
-  readonly executionDefaults?: ExecutionMutationDefaultPhases | undefined;
   readonly generatorCalls?: FieldGeneratorCalls | undefined;
   readonly many: Many;
 } & (IdSpec extends NamedConstraintSpec ? { readonly id: IdSpec } : { readonly id?: undefined }) &
@@ -121,13 +113,10 @@ function withGeneratorCall<State extends AnyScalarFieldState>(
   phase: GeneratorPhase,
   call: GeneratorFunctionCall,
 ): State {
-  if (
-    state.generatorCalls?.[phase] !== undefined ||
-    state.executionDefaults?.[phase] !== undefined
-  ) {
+  if (state.generatorCalls?.[phase] !== undefined) {
     throw contractError(
       'CONTRACT.DEFAULT_INVALID',
-      `.${phase}() is called on a field that already generates a value ${phase === 'onCreate' ? 'on create' : 'on update'}. Set each phase once, and do not combine .${phase}() with a field preset, type alias or alias constant that sets it.`,
+      `.${phase}() is called on a field that already generates a value ${phase === 'onCreate' ? 'on create' : 'on update'}. Set each phase once, and do not combine .${phase}() with a type alias or alias constant that sets it.`,
       { meta: { reason: 'generator-phase-set-twice', phase } },
     );
   }
@@ -141,7 +130,7 @@ function withColumnDefault<State extends AnyScalarFieldState>(
   if (state.default !== undefined) {
     throw contractError(
       'CONTRACT.DEFAULT_INVALID',
-      '.default() is called on a field that already has a default. Set the default once, and do not combine .default() with a field preset or alias constant that sets one.',
+      '.default() is called on a field that already has a default. Set the default once, and do not combine .default() with an alias constant that sets one.',
       { meta: { reason: 'default-set-twice' } },
     );
   }
@@ -182,7 +171,6 @@ type AnyScalarFieldState = {
   readonly nullable: boolean;
   readonly columnName?: string | undefined;
   readonly default?: AuthoredColumnDefault | undefined;
-  readonly executionDefaults?: ExecutionMutationDefaultPhases | undefined;
   readonly generatorCalls?: FieldGeneratorCalls | undefined;
   readonly many: false | { readonly elementNullable: boolean };
   readonly id?: NamedConstraintSpec | undefined;
@@ -261,12 +249,6 @@ type ApplyFieldSqlSpec<
         Defaults
       >
     : AnyScalarFieldState;
-
-export type GeneratedFieldSpec = {
-  readonly type: ColumnTypeDescriptor;
-  readonly typeParams?: Record<string, unknown>;
-  readonly generated: ExecutionMutationDefaultValue;
-};
 
 export type CarriesCodecInput<Input> = {
   /** Exists only in types: carries the input type of the column's codec, which `.default()` takes. */
@@ -799,43 +781,6 @@ const columnField: ColumnFieldHelper = (descriptor) => {
   });
 };
 
-type WithGeneratedTypeParams<Descriptor, TypeParams> =
-  TypeParams extends Record<string, unknown>
-    ? Descriptor & { readonly typeParams: TypeParams }
-    : Descriptor;
-
-function generatedField<
-  Descriptor extends ColumnTypeDescriptor,
-  TypeParams extends Record<string, unknown> | undefined = undefined,
->(
-  spec: GeneratedFieldSpec & { readonly type: Descriptor; readonly typeParams?: TypeParams },
-): ScalarFieldBuilder<
-  ScalarFieldState<
-    WithGeneratedTypeParams<Descriptor, TypeParams>,
-    undefined,
-    false,
-    undefined,
-    undefined,
-    undefined,
-    false,
-    { readonly column: false; readonly onCreate: true; readonly onUpdate: false }
-  >
-> {
-  return new ScalarFieldBuilder({
-    kind: 'scalar',
-    descriptor: blindCast<
-      WithGeneratedTypeParams<Descriptor, TypeParams>,
-      'the spread adds typeParams exactly when the spec has them'
-    >({
-      ...spec.type,
-      ...(spec.typeParams ? { typeParams: spec.typeParams } : {}),
-    }),
-    nullable: false,
-    many: false,
-    executionDefaults: { onCreate: spec.generated },
-  });
-}
-
 const namedTypeField: NamedTypeFieldHelper = (handle) =>
   new EnumScalarFieldBuilder(
     blindCast<
@@ -849,33 +794,6 @@ const namedTypeField: NamedTypeFieldHelper = (handle) =>
     }),
     handle,
   );
-
-export function buildFieldPreset(
-  descriptor: AuthoringFieldPresetDescriptor,
-  args: readonly unknown[],
-  namedConstraintOptions?: NamedConstraintSpec,
-): ScalarFieldBuilder {
-  const preset = instantiateAuthoringFieldPreset(descriptor, args);
-
-  return new ScalarFieldBuilder({
-    kind: 'scalar',
-    descriptor: preset.descriptor,
-    nullable: preset.nullable,
-    many: false,
-    ...ifDefined('default', preset.default),
-    ...ifDefined('executionDefaults', preset.executionDefaults),
-    ...(preset.id
-      ? {
-          id: namedConstraintOptions?.name ? { name: namedConstraintOptions.name } : {},
-        }
-      : {}),
-    ...(preset.unique
-      ? {
-          unique: namedConstraintOptions?.name ? { name: namedConstraintOptions.name } : {},
-        }
-      : {}),
-  });
-}
 
 type RelationModelRefSource = 'string' | 'token' | 'lazyToken';
 type TargetFieldRefSource = 'string' | 'token';
@@ -2666,7 +2584,6 @@ export const rel = {
 
 export const field = {
   column: columnField,
-  generated: generatedField,
   namedType: namedTypeField,
 };
 

@@ -308,7 +308,6 @@ model Doc { declared pgvector.Vector\n contributed postgis.Geometry\n model Doc.
       sources,
       symbolTable,
       authoringContributions: {
-        field: {},
         type: {
           pgvector: { Vector: typeConstructor },
           postgis: { Geometry: typeConstructor },

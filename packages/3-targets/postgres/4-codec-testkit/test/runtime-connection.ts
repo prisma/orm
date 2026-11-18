@@ -1,11 +1,15 @@
 import postgresRuntimeDriverDescriptor from '@internal/driver-postgres/runtime';
+import postgresRuntimeTargetDescriptor from '@internal/target-postgres/runtime';
 import type { ConformanceConnection } from '../src/index';
 
-/** A connection through the runtime driver, whose rows carry the wire values `fromWire` reads. */
+/** A connection through the runtime driver with the session settings the PostgreSQL target declares, as a runtime stack creates it, whose rows carry the wire values `fromWire` reads. */
 export async function connectRuntimeDriver(
   url: string,
 ): Promise<{ readonly connection: ConformanceConnection; close(): Promise<void> }> {
-  const driver = postgresRuntimeDriverDescriptor.create();
+  const driver = postgresRuntimeDriverDescriptor.create(
+    undefined,
+    postgresRuntimeTargetDescriptor.sessionSettings,
+  );
   await driver.connect({ kind: 'url', url });
   return {
     connection: {

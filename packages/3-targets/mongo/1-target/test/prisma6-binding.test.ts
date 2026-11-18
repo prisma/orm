@@ -1,14 +1,15 @@
 import { createDataTypeLookup } from '@internal/framework-components/codec';
+import { assembleMongoCodecRegistry } from '@internal/mongo-codec';
 import { bsonTypesOfCodec } from '@internal/mongo-contract/data-type';
 import { Long } from 'bson';
 import { describe, expect, it } from 'vitest';
-import {
-  buildStandardCodecRegistry,
-  mongoCodecDescriptors,
-  mongoDescriptorById,
-} from '../src/core/codecs';
+import { mongoCodecDescriptors, mongoDescriptorById } from '../src/core/codecs';
 import { mongoDataTypes } from '../src/core/data-types';
 import { prisma6MongoBinding } from '../src/core/prisma6-binding';
+
+const standardCodecs = assembleMongoCodecRegistry([
+  { id: 'mongo', types: { codecTypes: { codecDescriptors: mongoCodecDescriptors } } },
+]);
 
 /**
  * The BSON type the Prisma 6.19.3 client stored for each scalar type and each native type it accepts on MongoDB, read back with `$type`. `prisma validate` accepts no other native type on MongoDB.
@@ -102,11 +103,22 @@ describe('prisma6MongoBinding', () => {
     'reads $field as the $type the Prisma 6 client presents',
     async ({ typeName, nativeType, wire, type }) => {
       const codecId = codecFor(typeName, nativeType);
-      const codec = codecId === undefined ? undefined : buildStandardCodecRegistry().get(codecId);
+      const codec = codecId === undefined ? undefined : standardCodecs.get(codecId);
 
       expect(typeof (await codec?.fromWire(wire, {}))).toBe(type);
     },
   );
+
+  it('reads DateTime and DateTime @db.Date as the JavaScript Date of the instant Prisma 6 stored, time of day included', async () => {
+    const stored = new Date('2024-02-29T10:00:00.123Z');
+    const read = (codecId: string | undefined) =>
+      codecId === undefined ? undefined : standardCodecs.get(codecId)?.fromWire(stored, {});
+
+    expect({
+      dateTime: await read(codecFor('DateTime', '')),
+      date: await read(codecFor('DateTime', 'db.Date')),
+    }).toEqual({ dateTime: stored, date: stored });
+  });
 
   it('gives an @id the codec for the ObjectId Prisma 6 stores in _id', () => {
     expect(bsonTypesOf(prisma6MongoBinding.objectIdCodecId)).toContain('objectId');

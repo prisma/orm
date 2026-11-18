@@ -3,6 +3,7 @@ import type { ControlDriverDescriptor } from '@internal/framework-components/con
 import type { MongoControlDriverInstance } from '@internal/mongo-lowering';
 import { redactDatabaseUrl } from '@internal/utils/redact-db-url';
 import { type Db, MongoClient } from 'mongodb';
+import { mongoDriverDescriptorMeta } from '../core/descriptor-meta';
 import { DRIVER_INFO } from '../core/driver-info';
 import { MongoDriverImpl } from '../mongo-driver';
 
@@ -23,12 +24,7 @@ export class MongoControlDriver extends MongoDriverImpl implements MongoControlD
 
 const mongoControlDriverDescriptor: ControlDriverDescriptor<'mongo', 'mongo', MongoControlDriver> =
   {
-    kind: 'driver',
-    familyId: 'mongo',
-    targetId: 'mongo',
-    id: 'mongo',
-    version: DRIVER_INFO.version,
-    capabilities: {},
+    ...mongoDriverDescriptorMeta,
     async create(url: string): Promise<MongoControlDriver> {
       const client = new MongoClient(url, {
         serverSelectionTimeoutMS: 5000,

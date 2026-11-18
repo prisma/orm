@@ -2,7 +2,6 @@
  * Storage no model maps stays out of every ORM read and write: `users.legacy_key` and `posts.internal_note` are columns the contract's tables hold but no field maps. They come from table nodes in the contract definition, so the database built from the contract has them.
  */
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
-import postgresAdapter from '@internal/adapter-postgres/runtime';
 import type { Contract } from '@internal/contract/types';
 import sqlFamilyPack from '@internal/family-sql/pack';
 import { assembleDataTypes } from '@internal/framework-components/codec';
@@ -21,6 +20,7 @@ import postgresPack from '@internal/target-postgres/pack';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { describe, expect, it } from 'vitest';
+import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
 import { timeouts, withPushedContractRuntime } from './integration-helpers';
 import type { PgIntegrationRuntime } from './runtime-helpers';
 
@@ -67,10 +67,15 @@ const contract = defineContractWithTables({ User, Post }, [
   { tableName: 'unmapped_users', columns: [{ columnName: 'legacy_key', ...extraText }] },
   { tableName: 'unmapped_posts', columns: [{ columnName: 'internal_note', ...extraText }] },
 ]);
-const context = createExecutionContext({
-  contract,
-  stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),
-});
+function contextOf(strategy: IncludeStrategy) {
+  return createExecutionContext({
+    contract,
+    stack: createSqlExecutionStack({
+      target: postgresTarget,
+      adapter: postgresAdapterFor(strategy),
+    }),
+  });
+}
 
 interface LooseCollection {
   where(filter: unknown): LooseCollection;
@@ -81,8 +86,12 @@ interface LooseCollection {
   create(data: Record<string, unknown>): Promise<unknown>;
 }
 
-function collection(runtime: PgIntegrationRuntime, modelName: 'User' | 'Post'): LooseCollection {
-  return new Collection({ runtime, context } as never, modelName, {
+function collection(
+  runtime: PgIntegrationRuntime,
+  modelName: 'User' | 'Post',
+  strategy: IncludeStrategy,
+): LooseCollection {
+  return new Collection({ runtime, context: contextOf(strategy) } as never, modelName, {
     namespaceId: 'public',
   }) as unknown as LooseCollection;
 }
@@ -101,17 +110,17 @@ function unmappedColumnPassed(model: string, table: string, column: string) {
   });
 }
 
-describe('storage no model maps', () => {
+describe.each(includeStrategies)('storage no model maps (%s)', (strategy) => {
   it(
     'is not read by a query with no select, an include or a create',
     async () => {
       await withPushedContractRuntime(contract, async (runtime) => {
         await seed(runtime);
 
-        expect(await collection(runtime, 'User').all()).toEqual([
+        expect(await collection(runtime, 'User', strategy).all()).toEqual([
           { id: 1, email: 'alice@example.com' },
         ]);
-        expect(await collection(runtime, 'User').include('posts').all()).toEqual([
+        expect(await collection(runtime, 'User', strategy).include('posts').all()).toEqual([
           {
             id: 1,
             email: 'alice@example.com',
@@ -119,7 +128,7 @@ describe('storage no model maps', () => {
           },
         ]);
         expect(
-          await collection(runtime, 'Post').create({ id: 11, title: 'Next', userId: 1 }),
+          await collection(runtime, 'Post', strategy).create({ id: 11, title: 'Next', userId: 1 }),
         ).toEqual({ id: 11, title: 'Next', userId: 1 });
 
         expect(await runtime.query('select legacy_key from unmapped_users where id = 1')).toEqual([
@@ -135,7 +144,7 @@ describe('storage no model maps', () => {
     async () => {
       await withPushedContractRuntime(contract, async (runtime) => {
         await seed(runtime);
-        const users = () => collection(runtime, 'User');
+        const users = () => collection(runtime, 'User', strategy);
 
         await expect(
           (async () => users().create({ id: 2, email: 'b@example.com', legacy_key: 'x' }))(),

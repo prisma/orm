@@ -45,7 +45,7 @@ import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { builtinModules } from 'node:module';
 import { join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { init as initLexer, parse as parseModule } from 'es-module-lexer';
+import { init as initLexer, parse as parseModule } from 'es-module-lexer/minimal';
 
 const ENGINE_PACKAGE = '@prisma/cli-engine';
 const TOOLCHAIN_PACKAGE = '@prisma/orm-toolchain';

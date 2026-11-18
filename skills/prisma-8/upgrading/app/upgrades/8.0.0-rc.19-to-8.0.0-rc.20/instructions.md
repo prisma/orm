@@ -226,7 +226,7 @@ prisma db sign --contract <the last migration it applied> --db "$DATABASE_URL"
 prisma db migrate --db "$DATABASE_URL"
 ```
 
-`--contract` takes the migration's directory name, such as `20260917T0818_add_post_expires_at`, or the new hash that migration goes to. To find it, run `prisma migration status` against the database. It prints the start of the old hash the marker holds: `Database marker <hash> is not in the on-disk migration graph`. The error of `prisma db migrate` prints the whole hash: `DB marker is <hash>`. Find the line of the script's `<old> -> <new>` list whose old hash is that one. The new hash on that line is the one to sign with, and the migration that goes to it is the last one the database applied.
+`--contract` takes the migration's directory name, such as `20260917T0818_add_post_expires_at`, or the new hash that migration goes to. To find it, run `prisma migration status` against the database. It prints the start of the old hash the marker holds: `Database marker <hash> is not in the on-disk migration graph`. The error of `prisma db migrate` prints the whole hash: `The database's marker names <hash>`, or `DB marker is <hash>` before 8.0.0-rc.21. Recover with `db sign --contract` as this section says, not with the error's next actions: the marker is outside the migration graph only because the upgrade gave the migrations new hashes. Find the line of the script's `<old> -> <new>` list whose old hash is that one. The new hash on that line is the one to sign with, and the migration that goes to it is the last one the database applied.
 
 The script has already written the new hash into each ref, so when `db sign` advances a ref, such as `migrations/app/refs/db.json`, it prints the new hash twice: `Advanced ref "db" → <new hash> (was <new hash>)`. This is expected, and the database is signed.
 
@@ -251,7 +251,7 @@ model Post {
 ```
 
 - An alias may carry `@default`, `@onCreate` and `@onUpdate`. Each field typed by it gets them. A field may add an attribute its alias does not set, but writing one the alias already sets is the error `PSL_DUPLICATE_ATTRIBUTE`. `@id` and `@unique` belong on the field, not the alias.
-- Postgres, SQLite and MongoDB contribute `temporal.CreatedAt` and `temporal.UpdatedAt`, written bare as a field type. Each stores exactly what `temporal.createdAt()` and `temporal.updatedAt()` store. Postgres also has `temporal.CreatedAtString`, `temporal.UpdatedAtString`, `temporal.CreatedAtJsDate` and `temporal.UpdatedAtJsDate`.
+- Postgres, SQLite and MongoDB contribute `temporal.CreatedAt` and `temporal.UpdatedAt`, written bare as a field type. Each stores exactly what the field presets `temporal.createdAt()` and `temporal.updatedAt()` stored. 8.0.0-rc.21 removes field presets, and its upgrade guide gives the replacement of every preset. Postgres also has `temporal.CreatedAtString`, `temporal.UpdatedAtString`, `temporal.CreatedAtJsDate` and `temporal.UpdatedAtJsDate`.
 
 ### `ts-types-key-removed`
 

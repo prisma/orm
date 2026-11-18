@@ -1,9 +1,14 @@
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
-import type { Activity, ActivityFinalizedResult } from '@internal/framework-components/runtime';
+import type {
+  Activity,
+  ActivityFinalizedResult,
+  RuntimeMode,
+} from '@internal/framework-components/runtime';
 import {
   type MarkerReadResult,
   RawQueryAst,
   type SqlDriver,
+  type SqlTransaction,
 } from '@internal/sql-relational-core/ast';
 import {
   planFromAst,
@@ -59,6 +64,9 @@ export interface DriverFailures {
   readonly rollbackHeldUntil?: Promise<void>;
   readonly release?: Error;
   readonly destroy?: Error;
+  readonly savepoint?: Error;
+  readonly releaseSavepoint?: Error;
+  readonly rollbackToSavepoint?: Error;
 }
 
 function createDriver(events: HookEvent[], failures: DriverFailures): SqlDriver {
@@ -79,12 +87,27 @@ function createDriver(events: HookEvent[], failures: DriverFailures): SqlDriver 
       events.push({ name });
       if (failure) throw failure;
     };
+  const openSavepoint = async (name: string): Promise<SqlTransaction> => {
+    events.push({ name: `SAVEPOINT ${name}` });
+    if (failures.savepoint) throw failures.savepoint;
+    return {
+      ...queryable,
+      commit: vi
+        .fn()
+        .mockImplementation(settle(`RELEASE SAVEPOINT ${name}`, failures.releaseSavepoint)),
+      rollback: vi
+        .fn()
+        .mockImplementation(settle(`ROLLBACK TO SAVEPOINT ${name}`, failures.rollbackToSavepoint)),
+      savepoint: vi.fn().mockImplementation(openSavepoint),
+    };
+  };
   const transaction = {
     ...queryable,
     commit: vi.fn().mockImplementation(settle('commit', failures.commit, failures.commitHeldUntil)),
     rollback: vi
       .fn()
       .mockImplementation(settle('rollback', failures.rollback, failures.rollbackHeldUntil)),
+    savepoint: vi.fn().mockImplementation(openSavepoint),
   };
   const connection = {
     ...queryable,
@@ -144,7 +167,7 @@ export interface SetupOptions {
   readonly beforeHookFailure?: Error;
   readonly readMarker?: () => Promise<MarkerReadResult>;
   readonly log?: Log;
-  readonly mode?: 'strict' | 'permissive';
+  readonly mode?: RuntimeMode;
   /** Middleware registered after the recorder. */
   readonly middleware?: readonly SqlMiddleware[];
   /** When false, the recorder implements no `activityFinalized`. */

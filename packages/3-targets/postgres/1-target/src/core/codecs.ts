@@ -94,7 +94,9 @@ import {
   PG_INTERVAL_CODEC_ID,
   PG_JSON_CODEC_ID,
   PG_JSONB_CODEC_ID,
+  PG_MONEY_CODEC_ID,
   PG_NUMERIC_CODEC_ID,
+  PG_OID_CODEC_ID,
   PG_TEXT_ARRAY_CODEC_ID,
   PG_TEXT_CODEC_ID,
   PG_TIMETZ_CODEC_ID,
@@ -103,9 +105,11 @@ import {
   PG_UUID_CODEC_ID,
   PG_VARBIT_CODEC_ID,
   PG_VARCHAR_CODEC_ID,
+  PG_XML_CODEC_ID,
 } from './codec-ids';
 import type { PgInterval } from './data-type-values';
 import {
+  isPgOid,
   pgBit,
   pgBitLengthParams,
   pgBool,
@@ -124,8 +128,11 @@ import {
   pgJson,
   pgJsonb,
   pgJsonbEnumRefusal,
+  pgMoney,
+  pgMoneyStoredText,
   pgNumeric,
   pgNumericParams,
+  pgOid,
   pgPrecisionParams,
   pgText,
   pgTextArray,
@@ -134,10 +141,11 @@ import {
   pgUuid,
   pgVarbit,
   pgVarchar,
+  pgXml,
 } from './data-types';
 import { pgTimestampDateDescriptor, pgTimestamptzDateDescriptor } from './date-codecs';
 import { type DateTimeWireReading, storedTextFromWire } from './date-time-wire-text';
-import { postgresError } from './errors';
+import { errorLcMonetaryNotC, postgresError } from './errors';
 import { pgIntervalStringDescriptor } from './interval-string-codec';
 import { parsePostgresListText } from './list-decoder';
 import { DEFAULT_NAMESPACE_ID } from './namespace-ids';
@@ -302,6 +310,7 @@ export class PgTextCodec extends CodecImpl<
 }
 
 export class PgTextDescriptor extends PostgresCodecDescriptor<void> {
+  override readonly jsonType = 'string' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
@@ -381,6 +390,7 @@ export function isPgEnumParams(value: unknown): value is PgEnumParams {
 }
 
 export class PgEnumDescriptor extends PostgresCodecDescriptor<PgEnumParams> {
+  override readonly jsonType = 'string' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
@@ -506,6 +516,7 @@ export class PgTextArrayCodec extends CodecImpl<
 }
 
 export class PgTextArrayDescriptor extends PostgresCodecDescriptor<void> {
+  override readonly jsonType = 'array' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return printedTextJsonProjection(expression);
   }
@@ -541,6 +552,7 @@ export class PgInt4Codec extends CodecImpl<
 }
 
 export class PgInt4Descriptor extends PostgresCodecDescriptor<void> {
+  override readonly jsonType = 'number' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
@@ -585,6 +597,7 @@ export class PgInt2Codec extends CodecImpl<
 }
 
 export class PgInt2Descriptor extends PostgresCodecDescriptor<void> {
+  override readonly jsonType = 'number' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
@@ -635,6 +648,7 @@ export class PgInt8Codec extends CodecImpl<
 }
 
 export class PgInt8Descriptor extends PostgresCodecDescriptor<void> {
+  override readonly jsonType = 'number' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return decimalTextJsonProjection(expression);
   }
@@ -687,6 +701,7 @@ export class PgInt8NumberCodec extends CodecImpl<
 }
 
 export class PgInt8NumberDescriptor extends PostgresCodecDescriptor<void> {
+  override readonly jsonType = 'number' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return decimalTextJsonProjection(expression);
   }
@@ -731,6 +746,7 @@ export class PgFloat4Codec extends CodecImpl<
 }
 
 export class PgFloat4Descriptor extends PostgresCodecDescriptor<void> {
+  override readonly jsonType = 'number' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
@@ -775,6 +791,7 @@ export class PgFloat8Codec extends CodecImpl<
 }
 
 export class PgFloat8Descriptor extends PostgresCodecDescriptor<void> {
+  override readonly jsonType = 'number' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
@@ -819,6 +836,7 @@ export class PgBoolCodec extends CodecImpl<
 }
 
 export class PgBoolDescriptor extends PostgresCodecDescriptor<void> {
+  override readonly jsonType = 'boolean' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
@@ -863,6 +881,7 @@ export class PgNumericCodec extends CodecImpl<
 }
 
 export class PgNumericDescriptor extends PostgresCodecDescriptor<NumericParams> {
+  override readonly jsonType = 'string' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return decimalTextJsonProjection(expression);
   }
@@ -912,6 +931,7 @@ export class PgUnboundedIntCodec extends CodecImpl<
 }
 
 export class PgUnboundedIntDescriptor extends PostgresCodecDescriptor<NumericParams> {
+  override readonly jsonType = 'number' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return decimalTextJsonProjection(expression);
   }
@@ -962,6 +982,7 @@ export class PgTimetzCodec extends CodecImpl<
 }
 
 export class PgTimetzDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
+  override readonly jsonType = 'string' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
@@ -1006,6 +1027,7 @@ export class PgBitCodec extends CodecImpl<
 }
 
 export class PgBitDescriptor extends PostgresCodecDescriptor<LengthParams> {
+  override readonly jsonType = 'string' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
@@ -1050,6 +1072,7 @@ export class PgVarbitCodec extends CodecImpl<
 }
 
 export class PgVarbitDescriptor extends PostgresCodecDescriptor<LengthParams> {
+  override readonly jsonType = 'string' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
@@ -1073,6 +1096,174 @@ export const pgVarbitColumn = (params: LengthParams = {}) =>
 pgVarbitColumn satisfies ColumnHelperFor<PgVarbitDescriptor>;
 pgVarbitColumn satisfies ColumnHelperForStrict<PgVarbitDescriptor>;
 
+export class PgXmlCodec extends CodecImpl<typeof PG_XML_CODEC_ID, readonly [], string, string> {
+  async toWire(value: string, _ctx: CodecCallContext): Promise<string> {
+    return value;
+  }
+  async fromWire(wire: string, _ctx: CodecCallContext): Promise<string> {
+    return wire;
+  }
+  fromDataTypeValue(value: DataTypeValue<string>): string {
+    return value.value;
+  }
+  toDataTypeValue(input: string): DataTypeValue {
+    return this.dataTypeValueOf(input);
+  }
+}
+
+export class PgXmlDescriptor extends PostgresCodecDescriptor<void> {
+  override readonly jsonType = 'string' as const;
+  protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
+    return expression;
+  }
+  override readonly dataType = pgXml.id;
+  override readonly codecId = PG_XML_CODEC_ID;
+  override readonly traits = [] as const;
+  override readonly enumRefusal =
+    'The xml type has no equality operator, so no CHECK can compare a value with the members. No enum can use an xml codec; use a text enum instead.';
+  override readonly paramsSchema = undefined;
+  override factory(): (ctx: CodecInstanceContext) => PgXmlCodec {
+    return () => new PgXmlCodec(this, pgXml);
+  }
+}
+
+export const pgXmlDescriptor = new PgXmlDescriptor();
+
+export const pgXmlColumn = () =>
+  column(pgXmlDescriptor.factory(), pgXmlDescriptor.codecId, undefined);
+
+pgXmlColumn satisfies ColumnHelperFor<PgXmlDescriptor>;
+pgXmlColumn satisfies ColumnHelperForStrict<PgXmlDescriptor>;
+
+export class PgOidCodec extends CodecImpl<
+  typeof PG_OID_CODEC_ID,
+  readonly ['equality', 'order'],
+  string | number,
+  number
+> {
+  async toWire(value: number, _ctx: CodecCallContext): Promise<number> {
+    if (isPgOid(value)) return value;
+    throw postgresError(
+      'RUNTIME.ENCODE_FAILED',
+      'pg/oid@1 application value must be a whole number from 0 to 4294967295',
+      { meta: { codecId: PG_OID_CODEC_ID, received: value } },
+    );
+  }
+  async fromWire(wire: string | number, _ctx: CodecCallContext): Promise<number> {
+    return decodePostgresNumberWire(wire);
+  }
+  fromDataTypeValue(value: DataTypeValue<number>): number {
+    return value.value;
+  }
+  toDataTypeValue(input: number): DataTypeValue {
+    return this.dataTypeValueOf(input);
+  }
+}
+
+export class PgOidDescriptor extends PostgresCodecDescriptor<void> {
+  override readonly jsonType = 'number' as const;
+  protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
+    return expression;
+  }
+  override readonly dataType = pgOid.id;
+  override readonly codecId = PG_OID_CODEC_ID;
+  override readonly traits = ['equality', 'order'] as const;
+  override readonly paramsSchema = undefined;
+  override renderValueLiteral(value: JsonValue): string | undefined {
+    return renderTsLiteral(value);
+  }
+  override factory(): (ctx: CodecInstanceContext) => PgOidCodec {
+    return () => new PgOidCodec(this, pgOid);
+  }
+}
+
+export const pgOidDescriptor = new PgOidDescriptor();
+
+export const pgOidColumn = () =>
+  column(pgOidDescriptor.factory(), pgOidDescriptor.codecId, undefined);
+
+pgOidColumn satisfies ColumnHelperFor<PgOidDescriptor>;
+pgOidColumn satisfies ColumnHelperForStrict<PgOidDescriptor>;
+
+/** Money as PostgreSQL prints it under `lc_monetary` C: a dollar sign, a comma between each group of three digits, and a minus sign before the dollar sign. */
+const C_LOCALE_MONEY_TEXT = /^(-?)\$(\d{1,3}(?:,\d{3})*)\.(\d{2})$/;
+
+/**
+ * Reads the money text PostgreSQL prints under `lc_monetary` C into the stored form, and a numeral, which is how PostgreSQL reports a default written as a number. Any other text was printed under another locale, whose currency symbol and separators the codec does not guess at.
+ */
+function pgMoneyDecode(wire: string): string {
+  const printed = C_LOCALE_MONEY_TEXT.exec(wire);
+  if (printed !== null) {
+    const [, sign = '', whole = '', fraction = ''] = printed;
+    const stored = pgMoneyStoredText(`${sign}${whole.replaceAll(',', '')}.${fraction}`);
+    if (stored !== undefined) return stored;
+  }
+  if (DECIMAL_NUMERAL_TEXT.test(wire)) {
+    const stored = pgMoneyStoredText(wire);
+    if (stored !== undefined) return stored;
+    throw postgresError(
+      'RUNTIME.DECODE_FAILED',
+      'pg/money@1 wire value must be an amount money holds: at most two fraction digits, from -92233720368547758.08 to 92233720368547758.07',
+      { meta: { codecId: PG_MONEY_CODEC_ID, received: wire } },
+    );
+  }
+  throw errorLcMonetaryNotC(PG_MONEY_CODEC_ID, wire);
+}
+
+export class PgMoneyCodec extends CodecImpl<
+  typeof PG_MONEY_CODEC_ID,
+  readonly ['equality', 'order'],
+  string,
+  string
+> {
+  async toWire(value: string, _ctx: CodecCallContext): Promise<string> {
+    const stored = typeof value === 'string' ? pgMoneyStoredText(value) : undefined;
+    if (stored !== undefined) return stored;
+    throw postgresError(
+      'RUNTIME.ENCODE_FAILED',
+      'pg/money@1 application value must be decimal text with at most two fraction digits, from -92233720368547758.08 to 92233720368547758.07',
+      { meta: { codecId: PG_MONEY_CODEC_ID, received: value } },
+    );
+  }
+  async fromWire(wire: string, _ctx: CodecCallContext): Promise<string> {
+    return pgMoneyDecode(wire);
+  }
+  fromDataTypeValue(value: DataTypeValue<string>): string {
+    return value.value;
+  }
+  toDataTypeValue(input: string): DataTypeValue {
+    return this.dataTypeValueOf(input);
+  }
+}
+
+/**
+ * A `money` column. The application value is decimal text with two fraction digits, as `pg/numeric@1` gives a decimal: `"12.50"`, `"-1234.56"`. PostgreSQL prints money in the session's `lc_monetary`, which the PostgreSQL target sets to C on every connection, so a row and an included row both read `$1,234.56`.
+ */
+export class PgMoneyDescriptor extends PostgresCodecDescriptor<void> {
+  override readonly jsonType = 'string' as const;
+  protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
+    return expression;
+  }
+  override readonly dataType = pgMoney.id;
+  override readonly codecId = PG_MONEY_CODEC_ID;
+  override readonly traits = ['equality', 'order'] as const;
+  override readonly paramsSchema = undefined;
+  override renderValueLiteral(value: JsonValue): string | undefined {
+    return renderTsLiteral(value);
+  }
+  override factory(): (ctx: CodecInstanceContext) => PgMoneyCodec {
+    return () => new PgMoneyCodec(this, pgMoney);
+  }
+}
+
+export const pgMoneyDescriptor = new PgMoneyDescriptor();
+
+export const pgMoneyColumn = () =>
+  column(pgMoneyDescriptor.factory(), pgMoneyDescriptor.codecId, undefined);
+
+pgMoneyColumn satisfies ColumnHelperFor<PgMoneyDescriptor>;
+pgMoneyColumn satisfies ColumnHelperForStrict<PgMoneyDescriptor>;
+
 export class PgByteaCodec extends CodecImpl<
   typeof PG_BYTEA_CODEC_ID,
   readonly ['equality'],
@@ -1094,6 +1285,7 @@ export class PgByteaCodec extends CodecImpl<
 }
 
 export class PgByteaDescriptor extends PostgresCodecDescriptor<void> {
+  override readonly jsonType = 'object' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return printedTextJsonProjection(expression);
   }
@@ -1137,6 +1329,7 @@ export class PgUuidCodec extends CodecImpl<
 }
 
 export class PgUuidDescriptor extends PostgresCodecDescriptor<void> {
+  override readonly jsonType = 'string' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
@@ -1181,6 +1374,7 @@ export class PgInetCodec extends CodecImpl<
 }
 
 export class PgInetDescriptor extends PostgresCodecDescriptor<void> {
+  override readonly jsonType = 'string' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
@@ -1241,6 +1435,7 @@ export class PgTsqueryCodec extends CodecImpl<
  * column, and no traits, because comparing or ordering queries means nothing to an application.
  */
 export class PgTsqueryDescriptor extends PostgresCodecDescriptor<void> {
+  override readonly jsonType = 'string' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
@@ -1300,6 +1495,7 @@ export class PgIntervalCodec extends CodecImpl<
 }
 
 export class PgIntervalDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
+  override readonly jsonType = 'object' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return printedTextJsonProjection(expression);
   }
@@ -1342,6 +1538,7 @@ export class PgJsonCodec extends CodecImpl<
 }
 
 export class PgJsonDescriptor extends PostgresCodecDescriptor<void> {
+  override readonly jsonType = 'any' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return printedTextJsonProjection(expression);
   }
@@ -1385,6 +1582,7 @@ export class PgJsonbCodec extends CodecImpl<
 }
 
 export class PgJsonbDescriptor extends PostgresCodecDescriptor<void> {
+  override readonly jsonType = 'any' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return printedTextJsonProjection(expression);
   }
@@ -1426,6 +1624,7 @@ export class PgFloatCodec extends SqlFloatCodec {
 }
 
 export class PgCharDescriptor extends PostgresCodecDescriptor<LengthParams> {
+  override readonly jsonType = 'string' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return unpaddedCharJsonProjection(expression);
   }
@@ -1449,6 +1648,7 @@ export const pgCharColumn = (params: LengthParams = {}) =>
 pgCharColumn satisfies ColumnHelperFor<PgCharDescriptor>;
 
 export class PgVarcharDescriptor extends PostgresCodecDescriptor<LengthParams> {
+  override readonly jsonType = 'string' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
@@ -1472,6 +1672,7 @@ export const pgVarcharColumn = (params: LengthParams = {}) =>
 pgVarcharColumn satisfies ColumnHelperFor<PgVarcharDescriptor>;
 
 export class PgIntDescriptor extends PostgresCodecDescriptor<void> {
+  override readonly jsonType = 'number' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
@@ -1495,6 +1696,7 @@ export const pgIntColumn = () =>
 pgIntColumn satisfies ColumnHelperFor<PgIntDescriptor>;
 
 export class PgFloatDescriptor extends PostgresCodecDescriptor<void> {
+  override readonly jsonType = 'number' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
@@ -1556,6 +1758,9 @@ export const codecDescriptors = definePostgresCodecs([
   pgBoolDescriptor,
   pgBitDescriptor,
   pgVarbitDescriptor,
+  pgXmlDescriptor,
+  pgOidDescriptor,
+  pgMoneyDescriptor,
   pgByteaDescriptor,
   pgUuidDescriptor,
   pgInetDescriptor,

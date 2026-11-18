@@ -66,6 +66,10 @@ flowchart TD
     AST --> ORM
 ```
 
+## Transaction start SPI
+
+`SqlTransactionOptions` carries only `{ readonly isolationLevel?: string | undefined }` to `SqlConnection.beginTransaction(options?)`. Callers resolve policy before invoking the driver; target validators and drivers decide supported levels and SQL. An omitted level preserves database/session defaults. Drivers do not distinguish ORM-owned transactions from callback or manual transactions. See [ownership and forwarding requirements](../../5-runtime/README.md#resolved-transaction-options).
+
 ## Components
 
 ### Schema Builder (`schema.ts`)
@@ -120,6 +124,7 @@ class PgTextCodec extends CodecImpl<'pg/text@1', readonly ['equality'], string, 
 
 class PgTextDescriptor extends PostgresCodecDescriptor<void> {
   override readonly dataType = pgText.id;
+  override readonly jsonType = 'string' as const;
   override readonly codecId = 'pg/text@1';
   override readonly traits = ['equality'] as const;
   override readonly paramsSchema = undefined;
@@ -198,4 +203,4 @@ This enables subpath imports like `@internal/sql-relational-core/schema`, `@inte
 ## Related ADRs
 
 - [ADR 140 - Package Layering & Target-Family Namespacing](../../../../docs/architecture%20docs/adrs/ADR%20140%20-%20Package%20Layering%20&%20Target-Family%20Namespacing.md)
-- [ADR 005 - Thin Core, Fat Targets](../../../../docs/architecture%20docs/adrs/ADR%20005%20-%20Thin%20Core,%20Fat%20Targets.md)
+- [ADR 005 - Thin Core, Fat Targets](../../../../docs/architecture%20docs/adrs/ADR%20005%20-%20Thin%20Core%20Fat%20Targets.md)

@@ -3,7 +3,7 @@
  *
  * Dropping a collection loses its documents, so `migration plan` and `db update` ask what the drop means; `--delete <Model>` answers. The MongoDB planner refuses rename statements in this release.
  *
- * Journey S1 removes `Event` through `migration plan`: refused without `--delete Event`, planned with it, and applied by `migrate`. Journey S2 does the same through `db update`, where `--confirm <database>` no longer consents. Journey S3 adds a required field with no refusal. Journey S4 gives a rename, which renames the collection and keeps its documents. Journey S5 follows, as printed, the refusal of a field rename whose model keeps its name while its collection changes. Journey S6 follows, through `db update`, the question about a collection whose model keeps its name, and keeps its documents.
+ * Journey S1 removes `Event` through `migration plan`: refused without `--delete Event`, planned with it, and applied by `migrate`. Journey S2 does the same through `db update`, where `--confirm <database>` no longer consents. Journey S3 adds a required field with no refusal; the existing document gets a temporary value. Journey S4 gives a rename, which renames the collection and keeps its documents. Journey S5 follows, as printed, the refusal of a field rename whose model keeps its name while its collection changes. Journey S6 follows, through `db update`, the question about a collection whose model keeps its name, and keeps its documents.
  */
 
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -13,7 +13,7 @@ import { timeouts } from '@repo/test-utils';
 import { MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { fixtureAppDir } from '../utils/cli-test-helpers';
+import { fixtureAppDir, writeProjectManifest } from '../utils/cli-test-helpers';
 import {
   engineError,
   followRenameCollectionAdvice,
@@ -26,6 +26,7 @@ import {
   runMigrationPlan,
   runPrintedSelfEmit,
 } from '../utils/journey-test-helpers';
+import { writeMongoPslConfig } from '../utils/journey-workspace-helpers';
 
 const FIXTURES_DIR = join(fixtureAppDir, 'fixtures/mongo-cli-journeys');
 
@@ -47,16 +48,7 @@ function setupProject(connectionString: string): JourneyContext {
   const outputDir = join(testDir, 'output');
   mkdirSync(outputDir, { recursive: true });
   mkdirSync(join(testDir, 'migrations'), { recursive: true });
-  writeFileSync(
-    join(testDir, 'package.json'),
-    JSON.stringify({
-      name: 'mongo-delete-journey',
-      private: true,
-      type: 'module',
-      dependencies: { '@prisma/orm-mongo': 'workspace:0.16.0' },
-    }),
-    'utf-8',
-  );
+  writeProjectManifest(testDir);
   copyFileSync(join(FIXTURES_DIR, 'contract-with-events.ts'), join(testDir, 'contract.ts'));
   const config = readFileSync(join(FIXTURES_DIR, 'prisma.config.with-db.ts'), 'utf-8').replace(
     /\{\{DB_URL\}\}/g,
@@ -91,34 +83,9 @@ function setupPslProject(connectionString: string): JourneyContext {
   );
   const outputDir = join(testDir, 'output');
   mkdirSync(outputDir, { recursive: true });
-  writeFileSync(
-    join(testDir, 'package.json'),
-    JSON.stringify({
-      name: 'mongo-delete-psl-journey',
-      private: true,
-      type: 'module',
-      dependencies: { '@prisma/orm-mongo': 'workspace:0.16.0' },
-    }),
-    'utf-8',
-  );
+  writeProjectManifest(testDir);
   writeFileSync(join(testDir, 'contract.prisma'), USERS_PSL, 'utf-8');
-  const configPath = join(testDir, 'prisma.config.ts');
-  writeFileSync(
-    configPath,
-    [
-      "import { defineConfig as ormConfig } from '@prisma/orm-mongo/config';",
-      "import { definePrismaConfig } from '@prisma/cli-engine';",
-      '',
-      'export default definePrismaConfig({',
-      '  orm: ormConfig({',
-      "    contract: './contract.prisma',",
-      "    output: 'output',",
-      `    db: { connection: ${JSON.stringify(connectionString)} },`,
-      '  }),',
-      '});',
-      '',
-    ].join('\n'),
-  );
+  const configPath = writeMongoPslConfig(testDir, connectionString);
   return { testDir, configPath, outputDir };
 }
 
@@ -261,6 +228,10 @@ describe('Journeys (MongoDB): statements that consent to data loss', {
 
     const update = await runDbUpdate(ctx, ['--no-interactive', '--json']);
     expect(update.exitCode, `S3.04: db update adds the field: ${update.stdout}`).toBe(0);
+    expect(
+      parseJsonOutput<{ temporaryValues?: unknown }>(update).temporaryValues,
+      'S3.04: db update reports the temporary value it wrote',
+    ).toEqual([{ field: 'User.nickname', value: '""' }]);
     const [users] = await client
       .db(dbName)
       .listCollections({ name: 'users' }, { nameOnly: false })
@@ -275,8 +246,8 @@ describe('Journeys (MongoDB): statements that consent to data loss', {
       .collection('users')
       .find({}, { projection: { _id: 0 } })
       .toArray();
-    expect(documents, 'S3.05: the existing document is kept').toEqual([
-      { email: 'a@example.com', name: 'a' },
+    expect(documents, 'S3.05: the existing document is kept, with the temporary value').toEqual([
+      { email: 'a@example.com', name: 'a', nickname: '' },
     ]);
   });
 

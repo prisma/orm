@@ -159,7 +159,7 @@ function discriminatorFieldError(
       const { dataType } = refusal.refusal;
       return contractError(
         'CONTRACT.ARGUMENT_INVALID',
-        `${field} must be text, such as field.string(), but its data type is ${dataType === undefined ? 'not a scalar' : `"${dataType}"`}.`,
+        `${field} must be text, such as field.scalar(type.String()), but its data type is ${dataType === undefined ? 'not a scalar' : `"${dataType}"`}.`,
         { meta: { ...meta, dataType, reason: 'discriminator-not-text' } },
       );
     }
@@ -361,6 +361,21 @@ export function refusalError(refusal: BuildRefusal): StructuredError {
           },
         },
       );
+    case 'indexNameDuplicate':
+      return contractError(
+        'CONTRACT.NAME_DUPLICATE',
+        `Collection "${refusal.collection}" has two indexes named "${refusal.name}": index ${refusal.firstPosition} of model "${refusal.firstModel}" and index ${refusal.key.position} of model "${refusal.key.model}". An index without a name is named after its keys and directions. Give one of them another name with the index option name.`,
+        {
+          meta: {
+            kind: 'index',
+            name: refusal.name,
+            collection: refusal.collection,
+            first: refusal.firstModel,
+            second: refusal.key.model,
+            reason: 'index-name-duplicate',
+          },
+        },
+      );
     case 'generatedOnValueObject':
       return defaultError(
         refusal.key,
@@ -405,7 +420,7 @@ export function refusalError(refusal: BuildRefusal): StructuredError {
     case 'generatorPhaseSetTwice':
       return contractError(
         'CONTRACT.DEFAULT_INVALID',
-        `.${refusal.phase}() is called on a field that already generates a value ${refusal.phase === 'onCreate' ? 'on create' : 'on update'}. Set each phase once, and do not combine .${refusal.phase}() with a field preset, type alias or alias constant that sets it.`,
+        `.${refusal.phase}() is called on a field that already generates a value ${refusal.phase === 'onCreate' ? 'on create' : 'on update'}. Set each phase once, and do not combine .${refusal.phase}() with a type alias or alias constant that sets it.`,
         {
           meta: {
             modelName: refusal.key.owner.name,
@@ -585,14 +600,7 @@ export function refusalError(refusal: BuildRefusal): StructuredError {
 
 /** A builder warning as `defineContract` reports it. */
 export function authoringWarningOf(warning: BuildWarning): AuthoringWarning {
-  if (warning.kind === 'source') return warning.warning;
-  const item = `field "${warning.key.owner.name}.${warning.key.field}"`;
-  return {
-    code: 'PN_PRESET_WITHOUT_EFFECT',
-    message: `Field "${warning.key.owner.name}.${warning.key.field}" uses ${warning.preset}(), which generates no value, so the field is stored like any field of codec "${warning.codecId}".`,
-    item,
-    summary: 'fields use a preset that generates no value',
-  };
+  return warning.warning;
 }
 
 function differenceWording(difference: RestatedFieldDifference): string {

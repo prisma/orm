@@ -8,18 +8,20 @@
 | --- | --- | --- | --- | --- |
 | 1 | Every target in one folder per database; `2-sql` becomes `2-sql-family` | — | [TML-3693](https://linear.app/prisma-company/issue/TML-3693) | Merged, prisma/orm#30829 |
 | 2a | MySQL target: codecs, driver, contract emit, schema introspection | 1 | [TML-3694](https://linear.app/prisma-company/issue/TML-3694) | Merged, prisma/orm#30836 |
-| 2b | MySQL migrations, `db verify`, `db sign`; migration atomicity stated by the target | 2a | [TML-3704](https://linear.app/prisma-company/issue/TML-3704) | In review, prisma/orm#30841 |
-| 2c | `examples/prisma-8-demo-mysql` and the public `@prisma/orm-mysql` packages; the example migrates, verifies and signs | 2b | [TML-3723](https://linear.app/prisma-company/issue/TML-3723) | Spec: [`slices/mysql-example/`](./slices/mysql-example/spec.md) |
-| 3 | MySQL ORM reads with includes; the example reads | 2c | [TML-3695](https://linear.app/prisma-company/issue/TML-3695) | Not started |
-| 4 | ORM writes without `RETURNING`; MySQL create, update, delete, upsert; the example writes | 3 | [TML-3696](https://linear.app/prisma-company/issue/TML-3696) | Not started |
-| 6 | `mariadb` target extending MySQL; the example also runs against MariaDB | 4 | [TML-3697](https://linear.app/prisma-company/issue/TML-3697) | Not started |
+| 2b | MySQL migrations, `db verify`, `db sign`; migration atomicity stated by the target | 2a | [TML-3704](https://linear.app/prisma-company/issue/TML-3704) | Merged, prisma/orm#30841 |
+| 2c | `examples/prisma-8-demo-mysql` and the public `@prisma/orm-mysql` packages; the example migrates, verifies and signs | 2b | [TML-3723](https://linear.app/prisma-company/issue/TML-3723) | Merged, prisma/orm#30856 |
+| 3 | MySQL ORM reads with includes; the example reads | 2c | [TML-3695](https://linear.app/prisma-company/issue/TML-3695) | Merged, prisma/orm#30863; drivers on `mariadb`, prisma/orm#30893 and prisma/orm#30918 |
+| 4 | ORM writes without `RETURNING`; MySQL create, update, delete, upsert; the example writes | 3 | [TML-3696](https://linear.app/prisma-company/issue/TML-3696) | Merged, prisma/orm#30927 |
+| 6a | `mariadb` target extending MySQL: control plane, public packages; `examples/prisma-8-demo-mariadb` migrates, verifies and signs | 4 | [TML-3697](https://linear.app/prisma-company/issue/TML-3697) | Merged, prisma/orm#30964 |
+| 6b-1 | The ORM loads includes with one query per relation where the database cannot run its one-query include ([design](./slices/mariadb-runtime/include-loading-design.md)) | 6a | TML-3697 | Merged 2026-11-17, prisma/orm#31058. Spec: [`slices/mariadb-runtime/`](./slices/mariadb-runtime/spec.md) |
+| 6b-2 | MariaDB runtime: `mariadb()`, upsert, errors; the MariaDB example reads and writes | 6b-1 | TML-3697 | In review, prisma/orm#31082, branch `tml-3697-mariadb-runtime`. Plan: [`slices/mariadb-runtime/plan.md`](./slices/mariadb-runtime/plan.md) |
 
 ```text
-1 → 2a → 2b → 2c → 3 → 4 → 6 → close-out
+1 → 2a → 2b → 2c → 3 → 4 → 6a → 6b-1 → 6b-2 → close-out
 ```
 
 - Each slice is one pull request against `main`.
-- Six slices is more than the usual limit of four. Slice 1 is a pure move with no MySQL code, kept apart so its diff is reviewable as renames and the MySQL slices only add files. Slice 2 was split into 2a and 2b on 2026-10-22, after research sized it at 10–13k lines, too large to review in one sitting. The example app was added on 2026-10-23 and moved to the front the same day (Will): it is built in slice 2c, and every later slice is done only when the example runs what it delivered, in CI, as the Postgres, SQLite and Mongo examples grew. There is no slice 5.
+- Eight slices is more than the usual limit of four. Slice 1 is a pure move with no MySQL code, kept apart so its diff is reviewable as renames and the MySQL slices only add files. Slice 2 was split into 2a and 2b on 2026-10-22, after research sized it at 10–13k lines, too large to review in one sitting. The example app was added on 2026-10-23 and moved to the front the same day (Will): it is built in slice 2c, and every later slice is done only when the example runs what it delivered, in CI, as the Postgres, SQLite and Mongo examples grew. There is no slice 5. Slice 6 was split into 6a and 6b on 2026-11-06, after research sized MariaDB at 3.8k–5.5k lines.
 - The slices are a stack because each tests against the previous one: reads need tables that slice 2 creates, writes read rows back through slice 3's reads, the example grows with each slice, and MariaDB subclasses the finished MySQL target and runs the example.
 
 ## Slices
@@ -34,7 +36,7 @@
 
 ### 2a — MySQL target: codecs, driver, emit, introspection
 
-- Target, adapter, driver and facade in `packages/3-targets/mysql/`.
+- Target, adapter, driver and facade in `packages/3-targets/mysql/1-mysql/`.
 - The spec's contract emits; a MySQL database introspects into the family schema IR.
 - Namespace refusal reads the target's `supportsNamespaces` (coupling row 9).
 - MySQL 8.4 and MariaDB 10.11 service containers in CI and `docker-compose.yaml` (approved by Will, 2026-10-22).
@@ -66,15 +68,24 @@
 ### 4 — ORM writes without `RETURNING`
 
 - Writes find the written rows' identity without `RETURNING` and read them back.
-- The `returning` capability splits by statement; the SQL driver reports the last insert id.
-- Upsert's conflict model admits a target that cannot name the conflict.
+- The SQL driver's write result reports `insertId` for a one-row write; the ORM reads rows back by identity when `returning` is off (ADR 164).
+- A new capability, `sql.insertOnConflictTarget`, says whether a conflict clause applies only to the columns it names. Splitting `returning` by statement kind moves to slice 6, where MariaDB needs it.
 
 **Hands to 6:** a complete MySQL target to subclass, and an example that reads and writes.
 
-### 6 — MariaDB
+### 6a — MariaDB control plane
 
-- `packages/3-targets/mariadb/` subclasses MySQL and overrides JSON, defaults, relation loading and upsert rendering.
-- Every MySQL test, and the example app, passes against MariaDB 10.11.
+- `packages/3-targets/mysql/2-mariadb/{1-target,2-adapter,9-facade}` extend MySQL; MySQL takes the target id and the differing parts as parameters.
+- MariaDB's session setting, introspection, column defaults and marker upsert.
+- Public `@prisma/orm-mariadb` and `@prisma/orm-target-mariadb`; `examples/prisma-8-demo-mariadb` migrates, verifies and signs against MariaDB 10.11 in CI.
+- MariaDB reports `returning: false`; splitting it by statement kind is filed.
+
+**Hands to 6b:** a MariaDB target the CLI serves, its public packages, and an example to add reads and writes to.
+
+### 6b — MariaDB runtime
+
+- **6b-1:** the ORM client loads includes with one query per relation where the database lacks `jsonAgg`, `outerReferencesInDerivedTables` or `jsonAggWithoutTruncation`. Reads and writes with includes run as a statement graph (`Find` per relation, then `NestJoin`). No MariaDB runtime code; tested on Postgres with the two new capabilities switched off.
+- **6b-2:** the SQL renderer becomes a class that MariaDB subclasses to write `VALUES()` upserts; `mariadb()` in the facade; the ORM live tests and the example's reads and writes run against MariaDB 10.11.
 
 **Hands to close-out:** both targets proven, and the coupling register complete.
 

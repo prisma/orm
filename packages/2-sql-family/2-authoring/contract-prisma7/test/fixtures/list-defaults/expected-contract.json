@@ -74,7 +74,7 @@
               "dl": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "typeParams": {
                     "precision": 3
                   }
@@ -87,7 +87,7 @@
               "dlEmpty": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "typeParams": {
                     "precision": 3
                   }
@@ -100,7 +100,7 @@
               "tzl": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamptz-string@1",
+                  "codecId": "pg/timestamptz-date@1",
                   "typeParams": {
                     "precision": 6
                   }
@@ -149,7 +149,7 @@
               "ts6l": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "typeParams": {
                     "precision": 6
                   }
@@ -177,7 +177,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "f1cdd79e91d6fdd6e05ca7cc6078d30664a13a3fec4c10cad4947bb2dc2616b4",
+    "storageHash": "5eb58269a5271620ca1beb81f4e851671e4f6c10dedb97290eb185fac02f6f70",
     "namespaces": {
       "public": {
         "id": "public",
@@ -218,7 +218,7 @@
                 },
                 "dl": {
                   "dataType": "pg/timestamp",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "nullable": true,
                   "many": {
                     "elementNullable": true
@@ -233,7 +233,7 @@
                 },
                 "dlEmpty": {
                   "dataType": "pg/timestamp",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "nullable": true,
                   "many": {
                     "elementNullable": true
@@ -248,7 +248,7 @@
                 },
                 "tzl": {
                   "dataType": "pg/timestamptz",
-                  "codecId": "pg/timestamptz-string@1",
+                  "codecId": "pg/timestamptz-date@1",
                   "nullable": true,
                   "many": {
                     "elementNullable": true
@@ -305,7 +305,7 @@
                 },
                 "ts6l": {
                   "dataType": "pg/timestamp",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "nullable": true,
                   "many": {
                     "elementNullable": true
@@ -314,8 +314,8 @@
                     "precision": 6
                   },
                   "default": {
-                    "kind": "literal",
-                    "value": ["2024-01-02T03:04:05.123456"]
+                    "kind": "function",
+                    "expression": "ARRAY['2024-01-02T03:04:05.123456']::timestamp(6)[]"
                   }
                 }
               },

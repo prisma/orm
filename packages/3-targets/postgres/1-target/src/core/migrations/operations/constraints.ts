@@ -343,6 +343,10 @@ export async function renameConstraint(
   };
 }
 
+export function dropCheckConstraintId(tableName: string, constraintName: string): string {
+  return `dropCheckConstraint.${tableName}.${constraintName}`;
+}
+
 export async function dropCheckConstraint(
   schemaName: string,
   tableName: string,
@@ -356,7 +360,7 @@ export async function dropCheckConstraint(
     table: tableName,
   });
   return {
-    id: `dropCheckConstraint.${tableName}.${constraintName}`,
+    id: dropCheckConstraintId(tableName, constraintName),
     label: `Drop check constraint "${constraintName}" on "${tableName}"`,
     operationClass: 'widening',
     target: targetDetails('checkConstraint', constraintName, schemaName, tableName),

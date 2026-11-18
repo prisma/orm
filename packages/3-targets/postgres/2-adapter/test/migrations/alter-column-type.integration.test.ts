@@ -15,7 +15,7 @@ import {
   postgresCreateNamespace,
   postgresRenderCheckExpressions,
 } from '@internal/target-postgres/types';
-import { applicationDomainOf } from '@repo/test-utils';
+import { applicationDomainOf, workspaceMigrationModule } from '@repo/test-utils';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   controlAdapter,
@@ -51,6 +51,7 @@ function elementChecks(): CheckConstraint[] {
     columnName: 'tags',
     many: { elementNullable: false },
     memberValues: undefined,
+    valueObject: undefined,
   }).map(
     (candidate) =>
       new CheckConstraint({
@@ -269,7 +270,7 @@ describe('a Postgres column type change', { concurrent: false }, () => {
       texts,
       postgresTargetDescriptor.migrations.contractToSchema(ints, frameworkComponents),
       [convert],
-    ).renderTypeScript((specifier) => specifier);
+    ).renderTypeScript(workspaceMigrationModule.postgres);
     const order = ['this.dropCheckConstraint', 'this.alterColumnType', 'this.addCheckConstraint'];
     expect(order.map((call) => rendered.indexOf(call))).toEqual(
       [...order.map((call) => rendered.indexOf(call))].sort((a, b) => a - b),

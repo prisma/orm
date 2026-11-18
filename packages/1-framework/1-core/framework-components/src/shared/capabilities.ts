@@ -7,6 +7,7 @@
  * byte-for-byte consistent without one depending on the other.
  */
 
+import { compareCodeUnits } from '@internal/contract/hashing-utils';
 import { blindCast } from '@internal/utils/casts';
 
 export type CapabilityMatrix = Record<string, Record<string, boolean>>;
@@ -22,7 +23,7 @@ function sortDeep(value: unknown): unknown {
   if (!isPlainObject(value)) {
     return value;
   }
-  const entries = Object.entries(value).sort(([a], [b]) => a.localeCompare(b));
+  const entries = Object.entries(value).sort(([a], [b]) => compareCodeUnits(a, b));
   const next: Record<string, unknown> = {};
   for (const [key, child] of entries) {
     next[key] = sortDeep(child);

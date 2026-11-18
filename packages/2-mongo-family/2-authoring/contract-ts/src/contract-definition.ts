@@ -23,13 +23,6 @@ export interface GeneratorCallsNode {
   readonly onUpdate?: GeneratorFunctionCall;
 }
 
-/** What a field preset contributed to a field. */
-export interface PresetContributionNode {
-  /** The preset's helper path, as in `temporal.createdAt`. */
-  readonly preset: string;
-  readonly executionDefaults: ExecutionMutationDefaultPhases | undefined;
-}
-
 export interface FieldNode {
   readonly fieldName: string;
   /** The name documents store the field under, when the source gives one other than the field's own. */
@@ -39,13 +32,11 @@ export interface FieldNode {
   readonly many: NonNullable<ContractField['many']>;
   /** The name of the enum that types the field. */
   readonly enumName?: string;
-  /** Defaults the field generates, already resolved from presets and type aliases. */
+  /** Defaults the field generates, already resolved from type aliases. */
   readonly executionDefaults?: ExecutionMutationDefaultPhases;
   readonly generatorCalls?: GeneratorCallsNode;
   /** Generators the field's own attributes set, which the source has already resolved for the field's codec. */
   readonly generatedValues?: ExecutionMutationDefaultPhases;
-  /** Present when a field preset made the field. */
-  readonly presetContribution?: PresetContributionNode;
 }
 
 /** An index as the source wrote it. */

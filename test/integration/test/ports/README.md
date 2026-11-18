@@ -46,6 +46,10 @@ Commit the generated `contract.json` + `contract.d.ts`. `pnpm fixtures:emit` (vi
 
 Notes: Prisma 8 PSL lowercases table names (model `User` → table `user`) but keeps column names verbatim; scalar lists (`String[]`, `Int[]`) are supported and emit native pg arrays. MongoDB suites port against Prisma 8's dedicated mongo ORM (`mongoOrm()`) with a `mongodb-memory-server` harness — not marked non-ported.
 
+## Exceptions
+
+- `relation_link_test` matrices of `writes/nested_mutations/already_converted/nested_update_many_inside_update.rs` and `nested_delete_many_inside_update.rs`: by owner decision (2026-11-12), an exception to the matrix rule in [`projects/port-all-tests/spec.md`](../../../../projects/port-all-tests/spec.md), each test is ported against one representative variant of its relation shape (parent id simple, child id simple, child references the parent's id; the junction for many-to-many), with the parent found by its id. Nested filtered writes do not depend on the key's shape, and composite keys are covered by the many-to-many integration tests in `test/sql-orm-client/`. The other variants are listed in the suites' `non-ported/` files. The four representative schemas live in `engines/writes/nested_mutations/_fixture/` and are shared by the suites under `nested_mutations/`.
+
 ## Roll-up
 
 _Totals are finalised at project close-out. Live progress is tracked in the checklist corpus._

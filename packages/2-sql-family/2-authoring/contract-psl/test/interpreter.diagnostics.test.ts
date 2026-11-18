@@ -10,10 +10,10 @@ import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
+  fixturePostgresTypeNamespace,
   interpretSqlContract,
   modelsOf,
   postgresNativeScalarTypeDescriptors,
-  postgresScalarAuthoringTypes,
   postgresScalarTypeDescriptors,
   postgresTarget,
   sqliteScalarColumnDescriptors,
@@ -26,7 +26,7 @@ const baseInput = {
   target: postgresTarget,
   scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
   authoringContributions: {
-    type: postgresScalarAuthoringTypes,
+    type: fixturePostgresTypeNamespace,
     dataTypes: fixtureDataTypeSupport.entries,
   },
   ...fixtureInterpreterTypes,
@@ -819,7 +819,7 @@ model User {
     const incompleteCallResult = interpretSqlContract(
       `model User {
   id Int @id
-  name sql.String(
+  name sql.Varchar(
 }
 `,
       {
@@ -836,7 +836,7 @@ model User {
       expect.arrayContaining([
         expect.objectContaining({
           code: 'PSL_UNRESOLVED_REFERENCE',
-          message: 'Cannot find type "sql.String"',
+          message: 'Cannot find type "sql.Varchar"',
         }),
       ]),
     );

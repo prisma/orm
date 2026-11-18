@@ -2,6 +2,7 @@
 
 **Status:** Accepted
 **Builds on:** [ADR 241 — Scalar types use the authoring type-constructor channel](ADR%20241%20-%20Scalar%20types%20use%20the%20authoring%20type-constructor%20channel.md), [ADR 254 — Data types and casts](ADR%20254%20-%20Data%20types%20and%20casts.md), [ADR 257 — Scalar types are named after the target on every surface](ADR%20257%20-%20Scalar%20types%20are%20named%20after%20the%20target%20on%20every%20surface.md)
+**Amended by:** [ADR 316 — PostgreSQL scalars get convenience types](ADR%20316%20-%20PostgreSQL%20scalars%20get%20convenience%20types.md)
 **Amends:** [ADR 275 — Client generators are field attributes, and a type alias is expanded into each column](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md)
 
 ## At a glance
@@ -113,7 +114,7 @@ Each place that needs a field's codec resolves the field's call first, including
 ### What the tools write
 
 `contract infer` reads a database and `contract print` reads a contract, and neither knows which kind of type the user wrote. Both write a convenience call wherever one gives the column's explicit type, and the explicit type otherwise:
-1. For each database type, one explicit type is marked `inferred`: the one its convenience default gives. Infer and the Prisma 7 schema reader pick that type for a column.
+1. For each database type, one explicit type is marked `inferred`: the one its convenience default gives. Infer and the Prisma 7 schema reader pick that type for a column. If that type cannot read the column's own default, such as `infinity` for a `Date`, infer picks the first row, in the order the convenience type declares its rows, with the same storage whose type can, so it does not write a field whose default fails to read where some row reads it. The rows' order is therefore infer's order of preference. Infer reads only the default, not the rows, so a column whose rows hold such a value is still written with the default type.
 2. To write the call for an explicit type, the tools find the row that names it, build the arguments from the row, and drop those equal to the defaults.
 3. They resolve the call again and keep it only if it gives the same codec and parameters.
 
@@ -186,12 +187,12 @@ The PostgreSQL target ships two type aliases (ADR 275), in the namespace `tempor
 - A type constructor still names exactly one codec (ADR 254). A type choice is a second kind of type declaration, which resolves to a type constructor.
 - Every explicit type of a database type with several codecs carries a suffix for its value (ADR 257); bare concept names belong to convenience types.
 - The `temporal.*` aliases (ADR 275) are built on `DateTime` and need no variants for other values.
-- The editor's hover lists a convenience type's options and the explicit type each combination gives.
+- The editor's hover on a convenience call names the explicit type that call is, such as `DateTime(as: temporal)` is exactly `TimestamptzTemporal`, and lists the explicit type each combination gives.
 
 ## Not decided here
 
-- **Other targets.** A convenience name must mean the same thing on every target. SQLite, MySQL and MongoDB each already use one of these names for an explicit type (SQLite's and MySQL's `DateTime`, MongoDB's `Date`, which is a moment in time), so each needs its own decision.
-- **Other scalars,** for example an `Int` whose `storage:` picks `Int2`, `Int4` or `Int8`.
+- **Other targets.** [ADR 315](ADR%20315%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md) (2026-10-30) decides that a convenience name is the same concept on every target, not the same representation, and that each target declares its tables over its own explicit types. It records the tables of SQLite, MySQL and MongoDB. MongoDB's `Date`, which named an instant, became the calendar date there.
+- **Other scalars.** Decided for PostgreSQL by [ADR 316 — PostgreSQL scalars get convenience types](ADR%20316%20-%20PostgreSQL%20scalars%20get%20convenience%20types.md) (2026-11-02, amended 2026-11-17): `Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean`, `Bytes` and `Json` are convenience types over explicit types named after the database type, such as `Int2`, `Int8BigInt` and `Varchar`. `Json` defaults to `PlainJson`, a `json` column, and `Json(storage: jsonb)` is `Jsonb`. Where an explicit type would take a convenience name, ADR 316 gives the order in which it is named instead, and records `PlainJson` as an exception. [ADR 322 — Each target declares the scalar convenience types over its own explicit types](ADR%20322%20-%20Each%20target%20declares%20the%20scalar%20convenience%20types%20over%20its%20own%20explicit%20types.md) gives MongoDB the same convenience types and will hold SQLite's and MySQL's tables.
 
 ## Alternatives considered
 
@@ -213,4 +214,4 @@ The PostgreSQL target ships two type aliases (ADR 275), in the namespace `tempor
 
 **A Prisma-owned value for calendar dates, times and durations, or a branded string.** A class is one more date API, does not survive JSON, and duplicates Temporal. A branded string forces every write through a helper or a cast and catches nothing the codec doesn't.
 
-**Infer the string types for columns a `Date` cannot hold exactly.** Nothing is lost, but the schema would differ from what a user would write for the same model; infer takes the default.
+**Infer the string types for columns whose values have more digits than a `Date` holds.** Nothing is lost, but the schema would differ from what a user would write for the same model; infer takes the default, which reads those values with the extra digits dropped. A default the type cannot read at all is different: the row would fail to read, so infer picks a type that reads it.

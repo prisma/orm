@@ -1,8 +1,8 @@
 import type { Contract, ContractModelBase, JsonValue } from '@internal/contract/types';
+import type { ImportRequirement } from '@internal/ts-render';
 import type { AggregateDescriptor } from '../shared/aggregate-descriptor';
 import type { AnyCodecDescriptor } from '../shared/codec-descriptor';
 import type { CodecLookup } from '../shared/codec-types';
-import type { ImportSpecifierResolver } from '../shared/import-specifier-resolver';
 import type { TypesImportSpec } from '../shared/types-import-spec';
 
 export interface GenerateContractTypesOptions {
@@ -27,12 +27,8 @@ export interface EmissionSpi {
 
   generateModelStorageType(modelName: string, model: ContractModelBase): string;
 
-  /**
-   * The import lines the family's own contract surface needs, with every
-   * specifier passed through `resolveImportSpecifier` so the emitted file
-   * names packages the consuming application actually depends on.
-   */
-  getFamilyImports(resolveImportSpecifier: ImportSpecifierResolver): string[];
+  /** The family's own contract types a generated file imports, each from `typesModule`, the config's `contract.typesModule`. */
+  getFamilyImports(typesModule: string): ReadonlyArray<ImportRequirement>;
 
   getFamilyTypeAliases(options?: GenerateContractTypesOptions): string;
 

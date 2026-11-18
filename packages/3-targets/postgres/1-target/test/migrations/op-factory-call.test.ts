@@ -21,6 +21,7 @@ import {
   CreateTableCall,
   DropCheckConstraintCall,
   DropConstraintCall,
+  MIGRATION_MODULE,
 } from '../../src/core/migrations/op-factory-call';
 
 function recordingCheckLowerer(): { lowerer: ExecuteRequestLowerer; received: unknown[] } {
@@ -81,7 +82,7 @@ describe('CreateTableCall', () => {
       'this.createTable({ schema: "public", table: "user", columns: [col("kind", "text", { default: fn(sql`concat("prefix", \'user\')`) })], constraints: [checkExpression("user_kind_check", sql`"kind" IN (\'admin\', \'user\')`)] })',
     );
     expect(call.importRequirements()).toContainEqual({
-      moduleSpecifier: '@internal/postgres/migration',
+      moduleSpecifier: MIGRATION_MODULE,
       symbol: 'sql',
     });
   });
@@ -263,7 +264,7 @@ describe('AddCheckConstraintCall', () => {
       'this.addCheckConstraint({ schema: "public", table: "post", constraint: "post_priority_check", expression: sql`"priority" IN (\'low\', \'high\')` })',
     );
     expect(call.importRequirements()).toEqual([
-      { moduleSpecifier: '@internal/postgres/migration', symbol: 'sql' },
+      { moduleSpecifier: MIGRATION_MODULE, symbol: 'sql' },
     ]);
   });
 });

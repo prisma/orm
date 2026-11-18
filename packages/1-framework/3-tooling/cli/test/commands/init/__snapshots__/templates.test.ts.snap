@@ -97,7 +97,7 @@ exports[`templates > per-cell snapshots (FR5.4) > mongo + psl > dbFile is stable
 "import 'dotenv/config';
 import mongo from '@internal/mongo/runtime';
 import { contractFromJson } from '@internal/mongo/static';
-import type { Contract } from './contract.d';
+import type { Contract } from './contract.d.js';
 import contractJson from './contract.json' with { type: 'json' };
 
 export const contract = contractFromJson<Contract>(contractJson);
@@ -237,7 +237,6 @@ If this project lives inside a pnpm workspace, a few things are worth knowing:
 
 - **Catalogs.** When the workspace's \`pnpm-workspace.yaml\` defines a \`catalogs\` entry for \`prisma\` or \`@internal/mongo\`, pnpm uses the catalog version everywhere — \`init\` does too. If you wanted the published \`latest\` instead, update or remove the catalog entry, then re-run \`pnpm install\`.
 - **\`pnpm dlx\`.** \`pnpm dlx prisma@latest orm init …\` works in any directory. Inside a workspace, pnpm still resolves dependencies through the workspace's catalog/overrides rather than the registry; expect the installed Prisma ORM packages to reflect the workspace's catalog rather than \`latest\`.
-- **\`pnpm\` → \`npm\` fallback.** If \`pnpm\` ever fails to install Prisma ORM with a \`workspace:*\` or \`catalog:\` resolution error (a leak in a published artefact), \`init\` falls back to \`npm install\` and surfaces a warning. Once the offending package republishes a clean version you can switch back with \`pnpm install\`.
 "
 `;
 
@@ -284,7 +283,7 @@ exports[`templates > per-cell snapshots (FR5.4) > mongo + typescript > dbFile is
 "import 'dotenv/config';
 import mongo from '@internal/mongo/runtime';
 import { contractFromJson } from '@internal/mongo/static';
-import type { Contract } from './contract.d';
+import type { Contract } from './contract.d.js';
 import contractJson from './contract.json' with { type: 'json' };
 
 export const contract = contractFromJson<Contract>(contractJson);
@@ -317,15 +316,15 @@ import { defineContract } from '@internal/mongo/contract-builder';
 
 export const contract = defineContract(
   {},
-  ({ field, model }) => ({
+  ({ field, model, type }) => ({
     models: {
       User: model('User', {
         collection: 'users',
         fields: {
-          id: field.objectId().mongo({ field: '_id' }),
-          email: field.string(),
-          username: field.string().optional(),
-          name: field.string().optional(),
+          id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
+          email: field.scalar(type.String()),
+          username: field.scalar(type.String()).optional(),
+          name: field.scalar(type.String()).optional(),
         },
       }),
     },
@@ -435,7 +434,6 @@ If this project lives inside a pnpm workspace, a few things are worth knowing:
 
 - **Catalogs.** When the workspace's \`pnpm-workspace.yaml\` defines a \`catalogs\` entry for \`prisma\` or \`@internal/mongo\`, pnpm uses the catalog version everywhere — \`init\` does too. If you wanted the published \`latest\` instead, update or remove the catalog entry, then re-run \`pnpm install\`.
 - **\`pnpm dlx\`.** \`pnpm dlx prisma@latest orm init …\` works in any directory. Inside a workspace, pnpm still resolves dependencies through the workspace's catalog/overrides rather than the registry; expect the installed Prisma ORM packages to reflect the workspace's catalog rather than \`latest\`.
-- **\`pnpm\` → \`npm\` fallback.** If \`pnpm\` ever fails to install Prisma ORM with a \`workspace:*\` or \`catalog:\` resolution error (a leak in a published artefact), \`init\` falls back to \`npm install\` and surfaces a warning. Once the offending package republishes a clean version you can switch back with \`pnpm install\`.
 "
 `;
 
@@ -444,15 +442,15 @@ exports[`templates > per-cell snapshots (FR5.4) > mongo + typescript > starterSc
 
 export const contract = defineContract(
   {},
-  ({ field, model, rel }) => ({
+  ({ field, model, rel, type }) => ({
     models: {
       User: model('User', {
         collection: 'users',
         fields: {
-          id: field.objectId().mongo({ field: '_id' }),
-          email: field.string(),
-          username: field.string().optional(),
-          name: field.string().optional(),
+          id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
+          email: field.scalar(type.String()),
+          username: field.scalar(type.String()).optional(),
+          name: field.scalar(type.String()).optional(),
         },
         relations: {
           posts: rel.hasMany('Post', { from: 'id', to: 'authorId' }),
@@ -462,10 +460,10 @@ export const contract = defineContract(
       Post: model('Post', {
         collection: 'posts',
         fields: {
-          id: field.objectId().mongo({ field: '_id' }),
-          title: field.string(),
-          content: field.string().optional(),
-          authorId: field.objectId(),
+          id: field.scalar(type.ObjectId()).mongo({ field: '_id' }),
+          title: field.scalar(type.String()),
+          content: field.scalar(type.String()).optional(),
+          authorId: field.scalar(type.ObjectId()),
         },
         relations: {
           author: rel.belongsTo('User', { from: 'authorId', to: 'id' }),
@@ -497,7 +495,7 @@ exports[`templates > per-cell snapshots (FR5.4) > postgres + psl > dbFile is sta
 "import 'dotenv/config';
 import postgres from '@internal/postgres/runtime';
 import { contractFromJson } from '@internal/postgres/static';
-import type { Contract } from './contract.d';
+import type { Contract } from './contract.d.js';
 import contractJson from './contract.json' with { type: 'json' };
 
 export const contract = contractFromJson<Contract>(contractJson);
@@ -615,7 +613,6 @@ If this project lives inside a pnpm workspace, a few things are worth knowing:
 
 - **Catalogs.** When the workspace's \`pnpm-workspace.yaml\` defines a \`catalogs\` entry for \`prisma\` or \`@internal/postgres\`, pnpm uses the catalog version everywhere — \`init\` does too. If you wanted the published \`latest\` instead, update or remove the catalog entry, then re-run \`pnpm install\`.
 - **\`pnpm dlx\`.** \`pnpm dlx prisma@latest orm init …\` works in any directory. Inside a workspace, pnpm still resolves dependencies through the workspace's catalog/overrides rather than the registry; expect the installed Prisma ORM packages to reflect the workspace's catalog rather than \`latest\`.
-- **\`pnpm\` → \`npm\` fallback.** If \`pnpm\` ever fails to install Prisma ORM with a \`workspace:*\` or \`catalog:\` resolution error (a leak in a published artefact), \`init\` falls back to \`npm install\` and surfaces a warning. Once the offending package republishes a clean version you can switch back with \`pnpm install\`.
 "
 `;
 
@@ -623,23 +620,23 @@ exports[`templates > per-cell snapshots (FR5.4) > postgres + psl > starterSchema
 "// use prisma-8
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
+  id        Int                @id @default(autoincrement())
+  email     String             @unique
   username  String?
   name      String?
   posts     Post[]
-  createdAt TimestamptzString @default(now())
-  updatedAt temporal.updatedAtString()
+  createdAt DateTime           @default(now()) @onCreate(now())
+  updatedAt temporal.UpdatedAt
 }
 
 model Post {
-  id        Int      @id @default(autoincrement())
+  id        Int                @id @default(autoincrement())
   title     String
   content   String?
-  author    User     @relation(fields: [authorId], references: [id])
+  author    User               @relation(fields: [authorId], references: [id])
   authorId  Int
-  createdAt TimestamptzString @default(now())
-  updatedAt temporal.updatedAtString()
+  createdAt DateTime           @default(now()) @onCreate(now())
+  updatedAt temporal.UpdatedAt
 }
 "
 `;
@@ -664,7 +661,7 @@ exports[`templates > per-cell snapshots (FR5.4) > postgres + typescript > dbFile
 "import 'dotenv/config';
 import postgres from '@internal/postgres/runtime';
 import { contractFromJson } from '@internal/postgres/static';
-import type { Contract } from './contract.d';
+import type { Contract } from './contract.d.js';
 import contractJson from './contract.json' with { type: 'json' };
 
 export const contract = contractFromJson<Contract>(contractJson);
@@ -697,14 +694,14 @@ import { defineContract } from '@internal/postgres/contract-builder';
 
 export const contract = defineContract(
   {},
-  ({ field, model }) => ({
+  ({ field, model, gen, type }) => ({
     models: {
       User: model('User', {
         fields: {
-          id: field.id.uuidv7String(),
-          email: field.text().unique(),
-          username: field.text().optional(),
-          name: field.text().optional(),
+          id: field.column(type.Uuid()).id().onCreate(gen.uuid(7)),
+          email: field.column(type.String()).unique(),
+          username: field.column(type.String()).optional(),
+          name: field.column(type.String()).optional(),
         },
       }),
     },
@@ -793,33 +790,32 @@ If this project lives inside a pnpm workspace, a few things are worth knowing:
 
 - **Catalogs.** When the workspace's \`pnpm-workspace.yaml\` defines a \`catalogs\` entry for \`prisma\` or \`@internal/postgres\`, pnpm uses the catalog version everywhere — \`init\` does too. If you wanted the published \`latest\` instead, update or remove the catalog entry, then re-run \`pnpm install\`.
 - **\`pnpm dlx\`.** \`pnpm dlx prisma@latest orm init …\` works in any directory. Inside a workspace, pnpm still resolves dependencies through the workspace's catalog/overrides rather than the registry; expect the installed Prisma ORM packages to reflect the workspace's catalog rather than \`latest\`.
-- **\`pnpm\` → \`npm\` fallback.** If \`pnpm\` ever fails to install Prisma ORM with a \`workspace:*\` or \`catalog:\` resolution error (a leak in a published artefact), \`init\` falls back to \`npm install\` and surfaces a warning. Once the offending package republishes a clean version you can switch back with \`pnpm install\`.
 "
 `;
 
 exports[`templates > per-cell snapshots (FR5.4) > postgres + typescript > starterSchema is stable 1`] = `
-"import { defineContract } from '@internal/postgres/contract-builder';
+"import { defineContract, now } from '@internal/postgres/contract-builder';
 
-export const contract = defineContract({}, ({ field, model, rel }) => {
+export const contract = defineContract({}, ({ field, model, rel, gen, type }) => {
   const User = model('User', {
     fields: {
-      id: field.id.uuidv7String(),
-      email: field.text().unique(),
-      username: field.text().optional(),
-      name: field.text().optional(),
-      createdAt: field.temporal.createdAtString(),
-      updatedAt: field.temporal.updatedAtString(),
+      id: field.column(type.Uuid()).id().onCreate(gen.uuid(7)),
+      email: field.column(type.String()).unique(),
+      username: field.column(type.String()).optional(),
+      name: field.column(type.String()).optional(),
+      createdAt: field.column(type.DateTime()).default(now()).onCreate(gen.now()),
+      updatedAt: field.column(type.temporal.UpdatedAt()),
     },
   });
 
   const Post = model('Post', {
     fields: {
-      id: field.id.uuidv7String(),
-      title: field.text(),
-      content: field.text().optional(),
-      authorId: field.uuidString(),
-      createdAt: field.temporal.createdAtString(),
-      updatedAt: field.temporal.updatedAtString(),
+      id: field.column(type.Uuid()).id().onCreate(gen.uuid(7)),
+      title: field.column(type.String()),
+      content: field.column(type.String()).optional(),
+      authorId: field.column(type.Uuid()),
+      createdAt: field.column(type.DateTime()).default(now()).onCreate(gen.now()),
+      updatedAt: field.column(type.temporal.UpdatedAt()),
     },
   });
 

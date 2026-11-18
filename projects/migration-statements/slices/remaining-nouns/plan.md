@@ -6,7 +6,7 @@ Four pull requests, in the order the spec gives. This plan covers PR 1. Each lat
 
 ## PR 1 — namespaces, and the access question (merged, prisma/orm#30823)
 
-**Branch:** `tml-3537-namespaces`, from `tml-3537-remaining-nouns-spec` (the spec and ADR 278 ride in this PR). Postgres only for the namespace work; the access rename touches every target.
+**Branch:** `tml-3537-namespaces`, from `tml-3537-remaining-nouns-spec` (the spec and ADR 309 ride in this PR). Postgres only for the namespace work; the access rename touches every target.
 
 ### Gate for every dispatch
 
@@ -36,7 +36,7 @@ Four pull requests, in the order the spec gives. This plan covers PR 1. Each lat
 
 - **Renaming the target's default namespace (`public`).** The spec allows it when no other contract space declares it. Dispatch 4 checks whether Postgres lets an ordinary database owner run `ALTER SCHEMA public RENAME` on PGlite and on a managed Postgres; if not, the planner refuses it with advice, and the spec's edge case row is corrected.
 - **Names of the three facade methods.** Named after the SQL they run, as `createSchema` and `renameTable` are. The reviewer checks them against the existing facade.
-- **For PR 3: three points on ADR 278 from PR 1's system-design review.** (1) The storage value object keeps domain field names; state that value object fields have no mapped names, or store the stored key. (2) The discriminator value set is keyed `<Base>.<field>` and relies on enum names never containing a dot; use a key the column's coordinate determines, or state the rule where entity names are validated. (3) The ADR has no **Status** or **Date** header, unlike its neighbours.
+- **For PR 3: three points on ADR 309 from PR 1's system-design review.** (1) The storage value object keeps domain field names; state that value object fields have no mapped names, or store the stored key. (2) The discriminator value set is keyed `<Base>.<field>` and relies on enum names never containing a dot; use a key the column's coordinate determines, or state the rule where entity names are validated. (3) The ADR has no **Status** or **Date** header, unlike its neighbours.
 
 ## PR 2 — enum values
 

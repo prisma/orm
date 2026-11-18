@@ -1,0 +1,210 @@
+[
+  {
+    "id": "index.posts.create(authorId:1)",
+    "label": "Create index on posts (authorId:1)",
+    "operationClass": "additive",
+    "precheck": [
+      {
+        "description": "index does not already exist on posts",
+        "source": {
+          "kind": "listIndexes",
+          "collection": "posts"
+        },
+        "filter": {
+          "kind": "field",
+          "field": "key",
+          "op": "$eq",
+          "value": {
+            "authorId": 1
+          }
+        },
+        "expect": "notExists",
+        "object": "an index on { authorId: 1 } in \"posts\""
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index on posts",
+        "command": {
+          "kind": "createIndex",
+          "collection": "posts",
+          "keys": [
+            {
+              "direction": 1,
+              "field": "authorId"
+            }
+          ],
+          "name": "authorId_1"
+        }
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "index exists on posts",
+        "source": {
+          "kind": "listIndexes",
+          "collection": "posts"
+        },
+        "filter": {
+          "kind": "and",
+          "exprs": [
+            {
+              "kind": "field",
+              "field": "key",
+              "op": "$eq",
+              "value": {
+                "authorId": 1
+              }
+            },
+            {
+              "kind": "not",
+              "expr": {
+                "kind": "field",
+                "field": "unique",
+                "op": "$eq",
+                "value": true
+              }
+            },
+            {
+              "kind": "not",
+              "expr": {
+                "kind": "field",
+                "field": "sparse",
+                "op": "$eq",
+                "value": true
+              }
+            },
+            {
+              "kind": "exists",
+              "field": "expireAfterSeconds",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "partialFilterExpression",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "wildcardProjection",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "collation",
+              "exists": false
+            }
+          ]
+        },
+        "expect": "exists"
+      }
+    ]
+  },
+  {
+    "id": "index.posts.create(createdAt:-1,authorId:1)",
+    "label": "Create index on posts (createdAt:-1, authorId:1)",
+    "operationClass": "additive",
+    "precheck": [
+      {
+        "description": "index does not already exist on posts",
+        "source": {
+          "kind": "listIndexes",
+          "collection": "posts"
+        },
+        "filter": {
+          "kind": "field",
+          "field": "key",
+          "op": "$eq",
+          "value": {
+            "createdAt": -1,
+            "authorId": 1
+          }
+        },
+        "expect": "notExists",
+        "object": "an index on { createdAt: -1, authorId: 1 } in \"posts\""
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index on posts",
+        "command": {
+          "kind": "createIndex",
+          "collection": "posts",
+          "keys": [
+            {
+              "direction": -1,
+              "field": "createdAt"
+            },
+            {
+              "direction": 1,
+              "field": "authorId"
+            }
+          ],
+          "name": "createdAt_-1_authorId_1"
+        }
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "index exists on posts",
+        "source": {
+          "kind": "listIndexes",
+          "collection": "posts"
+        },
+        "filter": {
+          "kind": "and",
+          "exprs": [
+            {
+              "kind": "field",
+              "field": "key",
+              "op": "$eq",
+              "value": {
+                "createdAt": -1,
+                "authorId": 1
+              }
+            },
+            {
+              "kind": "not",
+              "expr": {
+                "kind": "field",
+                "field": "unique",
+                "op": "$eq",
+                "value": true
+              }
+            },
+            {
+              "kind": "not",
+              "expr": {
+                "kind": "field",
+                "field": "sparse",
+                "op": "$eq",
+                "value": true
+              }
+            },
+            {
+              "kind": "exists",
+              "field": "expireAfterSeconds",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "partialFilterExpression",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "wildcardProjection",
+              "exists": false
+            },
+            {
+              "kind": "exists",
+              "field": "collation",
+              "exists": false
+            }
+          ]
+        },
+        "expect": "exists"
+      }
+    ]
+  }
+]

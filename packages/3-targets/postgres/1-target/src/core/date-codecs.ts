@@ -9,6 +9,7 @@ import {
   refuseJsonValue,
 } from '@internal/framework-components/codec';
 import { CastExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
+import { hasDigitsBelowAMillisecond, isValidDate } from '@internal/type-implementations/date';
 import { isStructuredError } from '@internal/utils/structured-error';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { PostgresCodecDescriptor } from './codec-descriptor';
@@ -38,6 +39,8 @@ interface DateCodecIdentity {
   readonly codecId: string;
   readonly typeDescription: string;
   readonly stringType: string;
+  /** The explicit types that hold digits below a millisecond, which a `Date` does not. */
+  readonly finerTypes: string;
   readonly textCodecId: string;
   /** The instant, in the stored spelling of `pg/timestamptz`, that text of the codec's data type names. */
   readonly instantText: (text: string) => string;
@@ -47,6 +50,7 @@ const TIMESTAMPTZ_DATE: DateCodecIdentity = {
   codecId: PG_TIMESTAMPTZ_DATE_CODEC_ID,
   typeDescription: 'timestamp with time zone',
   stringType: 'TimestamptzString',
+  finerTypes: 'TimestamptzString and TimestamptzTemporal',
   textCodecId: PG_TIMESTAMPTZ_STRING_CODEC_ID,
   instantText: pgTimestamptzStoredText,
 };
@@ -55,6 +59,7 @@ const TIMESTAMP_DATE: DateCodecIdentity = {
   codecId: PG_TIMESTAMP_DATE_CODEC_ID,
   typeDescription: 'timestamp, read as UTC',
   stringType: 'TimestampString',
+  finerTypes: 'TimestampString and TimestampInstant',
   textCodecId: PG_TIMESTAMP_STRING_CODEC_ID,
   instantText: (text) => pgTimestamptzStoredText(`${pgTimestampStoredText(text)}Z`),
 };
@@ -66,11 +71,7 @@ function invalidDate(identity: DateCodecIdentity): RangeError {
 }
 
 function isRepresentable(value: Date): boolean {
-  return (
-    value instanceof Date &&
-    Number.isFinite(value.getTime()) &&
-    value.getTime() >= EARLIEST_POSTGRES_TIMESTAMP_MILLISECONDS
-  );
+  return isValidDate(value) && value.getTime() >= EARLIEST_POSTGRES_TIMESTAMP_MILLISECONDS;
 }
 
 function validateDate(identity: DateCodecIdentity, value: Date): Date {
@@ -99,8 +100,15 @@ function decodeDate(identity: DateCodecIdentity, wire: unknown): Date {
   return date;
 }
 
-/** The `Date` a stored value names. A `Date` holds neither `infinity` nor an instant before 4714-11-24 BC or after +275760-09-13, so those are refused. */
+/** The `Date` a stored value names. A `Date` holds neither `infinity`, nor an instant before 4714-11-24 BC or after +275760-09-13, nor digits below a millisecond, so those are refused. */
 function dateOfStoredText(identity: DateCodecIdentity, text: string): Date {
+  if (hasDigitsBelowAMillisecond(text)) {
+    return refuseJsonValue(
+      identity.codecId,
+      `an instant with no digits below a millisecond, which a Date drops: ${JSON.stringify(text)} has them, and ${identity.finerTypes} hold it`,
+      text,
+    );
+  }
   const instant = storedInstant(identity, text);
   const date = instant === undefined ? undefined : new Date(instant);
   if (date === undefined || !isRepresentable(date)) {
@@ -134,6 +142,7 @@ export class PgTimestamptzDateCodec extends CodecImpl<
 }
 
 export class PgTimestamptzDateDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
+  override readonly jsonType = 'string' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return CastExpr.as(expression, 'text');
   }
@@ -178,6 +187,7 @@ export class PgTimestampDateCodec extends CodecImpl<
 }
 
 export class PgTimestampDateDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
+  override readonly jsonType = 'string' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return CastExpr.as(expression, 'text');
   }

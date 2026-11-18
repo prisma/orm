@@ -1,6 +1,12 @@
 # @internal/postgres
 
-One-package Postgres setup for Prisma 8. Install this single package to get config, runtime, and all transitive type dependencies.
+One-package Postgres setup for Prisma 8. Install this package and the `pg` driver to get config, runtime, and all transitive type dependencies. `pg` and `@types/pg` are peer dependencies, so the application declares them itself.
+
+Callback isolation is configured with factory `transactionOptions` and `transaction(fn, options?)`, using `PostgresTransactionOptions`. Import `{ IsolationLevel }` from `@prisma/orm-postgres/runtime` or `@prisma/orm-postgres/serverless` and use `IsolationLevel.Serializable` in either option position. Both entries share the same const object; string literals remain accepted. Pooled and serverless clients share all four isolation literals; PostgreSQL treats ReadUncommitted as ReadCommitted. See [transaction isolation](../../../../docs/reference/transaction-options.md) for precedence, validation and explicit-only defaults.
+
+Native callback timeout integration cases run with `POSTGRES_TIMEOUT_TEST_URL` through this package's normal test script; without it they skip.
+
+Both entries also accept callback `timeout` defaults and overrides. Local `undefined` inherits; `null` disables an inherited deadline independently of isolation. See [callback timeouts](../../../../docs/reference/transaction-options.md#timeout) for bounds, cleanup and timing limitations.
 
 Two runtime entry points create three kinds of object:
 
@@ -73,7 +79,7 @@ Inside a request, `db` does everything the `db` from `postgres()` does: `db.orm`
 
 ### `@internal/postgres/config`
 
-Simplified `defineConfig` that pre-wires all Postgres internals (family, target, adapter, driver, contract providers). Pass a contract path (`.prisma` or `.ts`) or a ready `ContractConfig`, and optional db/migrations/extensions config.
+Simplified `defineConfig` that pre-wires all Postgres internals (family, target, adapter, driver, contract providers). Pass a contract path (`.prisma` or `.ts`) or a ready `ContractConfig`, and optional `db`, `extensions`, `migrations.dir`, and `formatter` (the indent and line endings `contract format` and the language server use for PSL files).
 
 #### A PSL source with a default control policy
 
@@ -126,7 +132,7 @@ export default definePrismaConfig({
 
 What the project needs around that file:
 
-- A `package.json` that depends on `@prisma/orm-postgres` and `prisma` (the Prisma 8 CLI, which also provides `prisma/config`). `@prisma/cli-engine` is not a direct dependency of the project: `prisma/config` re-exports `definePrismaConfig` from it, and the generated `contract.d.ts` imports only `@prisma/orm-postgres/...`. `contract emit` reads the nearest manifest to decide which package names `contract.d.ts` imports; without one it imports workspace-internal names that are not published.
+- A `package.json` that depends on `@prisma/orm-postgres`, `pg` and `prisma` (the Prisma 8 CLI, which also provides `prisma/config`). `@prisma/cli-engine` is not a direct dependency of the project: `prisma/config` re-exports `definePrismaConfig` from it, and the generated `contract.d.ts` imports only `@prisma/orm-postgres/...`. `contract emit` reads the nearest manifest to decide which package names `contract.d.ts` imports; without one it imports workspace-internal names that are not published.
 - `db.connection` is the same database URL Prisma 7 has in its own `prisma.config.ts` (`datasource.url`). Prisma 8 does not read Prisma 7's config, so pass it here too, usually from the same `DATABASE_URL` variable.
 - The Prisma 7 schema stays as Prisma 7 wants it: the `datasource` block carries `provider` only. Prisma 7 rejects `url` in the schema (it moved to `prisma.config.ts`), and this source ignores it.
 - The commands print prose to the terminal. When stdout is a pipe or a file, it receives only the command's plain data lines, such as one line per migration. Pass `--json` to get JSON.
@@ -135,7 +141,11 @@ During the transition Prisma 7 keeps owning the database and its migrations. Pri
 
 When the project is ready to stop reading the Prisma 7 file, `prisma contract print --output <path>` writes the Prisma 8 PSL that produces the same contract, with a header naming the schema it came from; without `--output` it prints the PSL instead. Point `contract` at the written file, run `prisma contract emit`, then take migration ownership: `prisma migration plan --name baseline`, `prisma db sign`, and `prisma migration ref set db <timestamp>_baseline`. Without an explicit `output`, `defineConfig` names the emitted files after the contract path it is given, so a written file with another name than the emitted files (for example `contract: './prisma/app.prisma'` where `contract emit` wrote `prisma/contract.json`) moves them to `prisma/app.json` and `prisma/app.d.ts` and leaves the old files on disk; `contract print` names both pairs in its next step when that happens. The command needs no database connection, and refuses rather than approximating, so the contract before and after the switch is the same one. Not every Prisma 7 schema prints yet: a schema that declares one model name in two `@@schema` namespaces exits `2` with `CONTRACT.PRINT_UNSUPPORTED` and prints and writes nothing.
 
-A construct is either described exactly or refused. There is no approximate lowering and no silent change. The source reads scalars and `@db.*` native types, `@map` and `@@map`, `@@schema`, enums as native enum types (with member `@map`), `@ignore` and `@@ignore`, `Unsupported("...")` fields, defaults and ORM-side generators, `@updatedAt`, `@id`, `@@id`, `@unique`, `@@unique`, `@@index`, and explicit and implicit relations. Everything else is a hard error naming the file, the line, and what to change: views, `@db.*` types Prisma 8 has no codec for, `relationMode = "prisma"`, and the handful of shapes in the table below that Prisma 8 cannot yet express. Prisma 7 still owns the database, so every edit below is a Prisma 7 schema change that Prisma 7's next migration applies; the table says what that migration does where it does anything.
+A construct is either described exactly or refused. There is no approximate lowering and no silent change. The source reads scalars and `@db.*` native types, `@map` and `@@map`, `@@schema`, enums as native enum types (with member `@map`), `@ignore` and `@@ignore`, `Unsupported("...")` fields, defaults and ORM-side generators, `@updatedAt`, `@id`, `@@id`, `@unique`, `@@unique`, `@@index`, explicit and implicit relations, and the datasource `extensions` list. Everything else is a hard error naming the file, the line, and what to change: views, `@db.Citext` without the citext pack, `relationMode = "prisma"`, and the handful of shapes in the table below that Prisma 8 cannot yet express. Prisma 7 still owns the database, so every edit below is a Prisma 7 schema change that Prisma 7's next migration applies; the table says what that migration does where it does anything.
+
+The datasource `extensions` list (with the `postgresqlExtensions` preview feature, as Prisma 7 requires) declares the extensions the database must have. `vector`, `postgis`, `pg_search` and `citext` are declared by the pgvector, PostGIS, ParadeDB and citext extension packs: compose the pack in `prisma.config.ts` and the extension adds nothing to the application's contract, because the pack's contract declares it, in the schema the pack's contract names; an entry that puts it in another schema is refused. Every other extension, such as `pg_trgm`, becomes an `extension` entry in the contract, in `public` or in the schema its `schema:` argument names.
+
+Every `@db.*` type Prisma 7 accepts on Postgres is read. `@db.Citext` is a column type of the citext extension, which the citext pack provides, so the source reads it as `citext.Citext` only when `extensions` in `prisma.config.ts` holds `citext` from `@prisma/orm-postgres-contrib/citext/control`. The pack's contract declares the extension, so the application's contract needs no `extension citext {}`, and `db sign` adopts a database Prisma 7 built.
 
 An `Unsupported("X")` field becomes a raw column (ADR 273): its type is the text `X` as written, and the model has no field for it, as the Prisma 7 client had none. When the schema loads, the reader checks that `X` is one type name; it compares `X` with the database's catalog text only at `db verify`. Postgres stores the type under its catalog name, so `Unsupported("int4")` loads, and `db verify` then reports the column with the text the database prints, here `integer`. Write that text in the Prisma 7 schema; Prisma 7 plans nothing for the edit. A required `Unsupported` field with no default warns `PN_COLUMN_REQUIRED_UNMAPPED`, because no ORM insert into its table can succeed: make it optional, or give it `@default(dbgenerated("..."))`. `contract print` cannot write a column with no field yet, so a schema with `Unsupported` fields stays on `prisma7Schema(...)` for now.
 
@@ -147,7 +157,10 @@ An `Unsupported("X")` field becomes a raw column (ADR 273): its type is the text
 | `PSL.PRISMA7_RELATION_MODE_UNSUPPORTED` | `relationMode = "prisma"`, or the older `referentialIntegrity = "prisma"`. | Remove it or set `relationMode = "foreignKeys"`. Prisma 7's next migration then adds the foreign keys, and fails if any existing row breaks one. |
 | `PSL.PRISMA7_VIEW_UNSUPPORTED` | A `view` block. | Remove the view; Prisma 8 has no views. |
 | `PSL.PRISMA7_UNSUPPORTED_TYPE` | An unknown type, a type constructor other than `Unsupported(...)`, or an `Unsupported(...)` that is not one string holding one type name. | Correct the type name. Write `Unsupported("<type>")` with the type as the database prints it, such as `Unsupported("tsvector")`. |
-| `PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED` | A `@db.*` type with no Prisma 8 codec (`Citext`, `Bit`, `VarBit`, `Xml`, `Oid`, `Money`). | Prisma 8 cannot read the schema until it supports the column type. `@ignore` and `@@ignore` do not help, because Prisma 8 keeps the columns of ignored fields and models in the contract. Changing the field's type to one Prisma 8 supports changes the column type on Prisma 7's next migration. |
+| `PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED` | A `@db.*` spelling the Postgres target does not know; Prisma 7 refuses it too. | Correct the spelling. |
+| `PSL.PRISMA7_EXTENSIONS_PREVIEW_FEATURE_MISSING` | The datasource lists `extensions` without the `postgresqlExtensions` preview feature; Prisma 7 refuses the schema too. | Add `"postgresqlExtensions"` to `previewFeatures` in the generator block. |
+| `PSL.PRISMA7_EXTENSION_PACK_MISSING` | A listed extension (`vector`, `postgis`, `pg_search` or `citext`), or `@db.Citext`, belongs to an extension pack the config does not compose. | Add the pack to `extensions` in `prisma.config.ts`, as the message says: `import pgvector from '@prisma/orm-extension-pgvector/control'`, then `extensions: [pgvector]`, or `import citext from '@prisma/orm-postgres-contrib/citext/control'`, then `extensions: [citext]`. Nothing changes in the Prisma 7 schema. For `@db.Citext`, `@ignore` and `@@ignore` do not help, because Prisma 8 keeps the columns of ignored fields and models in the contract. |
+| `PSL.PRISMA7_EXTENSION_ARGUMENT_UNSUPPORTED` | A `version:` or `map:` argument on a listed extension, which the contract cannot describe, or an argument Prisma 7 refuses too. | Remove `version:`; Prisma 7's next migration is empty. Replace `name(map: "db_name")` with `db_name`; Prisma 7's next migration is empty. |
 | `PSL.PRISMA7_ENUM_NAMESPACE_MISMATCH` | A field uses an enum declared under a different `@@schema`. | Declare the enum in the model's schema, or move the model. |
 | `PSL.PRISMA7_RELATION_UNRESOLVED` | A relation field that cannot be paired, is ambiguous, or is required over an optional foreign key field. | Name both sides with `@relation("name")`, add the missing `fields`/`references`, or add `?` to a relation field one of whose fields is optional. |
 | `PSL.PRISMA7_REFERENTIAL_ACTION_UNSUPPORTED` | `SetNull` over a required foreign key field, or `SetDefault` over a required field with no column default (a client-side generator such as `uuid()` gives none). | Make the fields optional, which drops `NOT NULL` on Prisma 7's next migration and makes them nullable in the Prisma 7 client. Or give them a column default such as a literal or `dbgenerated("<expression>")` (in Prisma 7; in Prisma 8 the same default is written `` sql`<expression>` ``), which Prisma 7's next migration sets: a field without a `@default` then becomes optional when creating records with the Prisma 7 client, and a field with a client-side generator such as `@default(uuid())` must have that `@default` replaced, because a field takes only one, after which the Prisma 7 client stops generating its value. Or choose another action, which replaces the foreign key on Prisma 7's next migration and leaves the Prisma 7 client unchanged. |
@@ -185,6 +198,7 @@ These changes are not specific to a Prisma 7 schema. They apply to any Postgres 
 
 Creating a client has no side effects. The pool is created on the first query, `db.runtime()` or `db.connect(...)`.
 Connection binding can be provided up front (`url`, `pg`, `binding`) or deferred via `db.connect(...)`.
+`postgres()` checks the database input when it is called and fails with `RUNTIME.BINDING_INVALID` if it is wrong: `null` or a value of the wrong type as `url`, `pg` or `binding`; more than one of them; a `url` that is empty, cannot be parsed or is not `postgres://` or `postgresql://`; a `binding` whose `kind` is not `'url'`, `'pgPool'` or `'pgClient'`; and a `binding` whose `url` is not such a string, or whose `pool` or `client` is not an object. The error never contains the value, so a connection string passed by mistake never puts its password in an error.
 
 Pass `collections` to give models custom collection classes: `postgres({ contract, url, collections: { Post: PostCollection } })`, where `PostCollection` extends `Collection<Contract, 'Post'>` from `@prisma/orm-postgres/orm-client`. `db.orm.public.Post` and `tx.orm.public.Post` inside `db.transaction(...)` are then a `PostCollection`. The client's type carries the classes as its second type parameter, `PostgresClient<Contract, { Post: typeof PostCollection }>`, which defaults to no classes; a parameter typed `PostgresClient<Contract>` accepts a client with classes. `postgresServerless()` accepts the same option, and every connection it opens uses the classes.
 
@@ -196,6 +210,8 @@ When URL binding is used, pool timeouts are configurable via `poolOptions`:
 - `poolOptions.idleTimeoutMillis` (default `30_000`)
 
 Reads are buffered by default. Pass `cursor` (typed `PostgresCursorOptions`, `{ batchSize?: number | undefined }`) to read through a server-side cursor (`pg-cursor`): `{ batchSize: 50 }` streams in batches of 50; `{}` or `{ batchSize: undefined }` in batches of 100; a `batchSize` that is not a positive integer fails the factory call. There is no flag that turns cursors off; leaving the option out does that. A `cursor` value with any other key, or a `batchSize` that is not a positive integer, fails the factory call with `RUNTIME.ARGUMENT_INVALID`. `postgresServerless()` accepts the same option.
+
+`supabase()` from `@internal/extension-supabase/runtime` takes the same options, `cursor` and `poolOptions` included, and the `url`, `pg` and `binding` inputs except a `pg.Client`.
 
 Pass `log` (an object with `info`, `warn`, `error` and an optional `debug` method, each taking one event object; `console` works, and the type is `Log` from `@prisma/orm-postgres/family-runtime`) to receive what the runtime logs: the marker-verification warnings `CONTRACT.MARKER_MISSING` and `CONTRACT.MARKER_MISMATCH` from the first query, the warnings `lints()` emits for rules whose severity is `warn`, and the errors a middleware's `activityEnded` or `activityFinalized` hook throws, which the runtime logs and swallows. It also receives the warning `runtime.close.waiting-for-activities` when `close()` is waiting only for activities whose handles were never ended or for transactions still open, with the counts `openActivities` and `openTransactions`; `close()` waits for each such transaction until it commits or rolls back, and the error `runtime.connection.release.error` when the connection taken for an activity's own transaction fails to release after the transaction settles. If `log` has a `debug` method, it also receives debug events, for example when a middleware intercepts a statement. `budgets()` violations reach `log` only in `mode: 'permissive'` (see *Running plans and rendering SQL*). Without `log`, the runtime drops these events. `postgresServerless()` accepts the same option.
 
@@ -259,9 +275,9 @@ import { defineContract, field, model } from '@internal/postgres/contract-builde
 
 export const contract = defineContract(
   { extensions: {} },
-  ({ field: f, model: m }) => ({
+  ({ field: f, model: m, gen, type }) => ({
     models: {
-      User: m('User', { fields: { id: f.id.uuidv4String() } }),
+      User: m('User', { fields: { id: f.column(type.Uuid()).id().onCreate(gen.uuid()) } }),
     },
   }),
 );
@@ -281,6 +297,12 @@ export default class M extends Migration {
 }
 MigrationCLI.run(import.meta.url, M);
 ```
+
+`defineConfig` names this module in `migrations.module`, the module rendered migration files import from.
+
+### `@internal/postgres/contract-types`
+
+Re-exports, as types only, the framework contract types, the SQL family contract types and the Postgres codec and operation types: everything a generated `contract.d.ts` imports. `defineConfig` names this module in `contract.typesModule`. Published as `@prisma/orm-postgres/contract-types`.
 
 ### `@internal/postgres/family`
 
@@ -326,11 +348,11 @@ flowchart TD
     Client --> Bound[Runtime-bound members: orm runtime() transaction prepare]
     Bound --> Lazy[runtime() on first use]
 
-    Lazy --> Instantiate[instantiateExecutionStack]
+    Lazy --> Instantiate[stack.adapter.create and stack.driver.create]
     Lazy --> Bind[Resolve binding: url or pg]
     Bind --> Pool[pg.Pool for url binding]
     Bind --> Reuse[Reuse Pool or Client for pg binding]
-    Lazy --> Runtime[createRuntime]
+    Lazy --> Runtime[new PostgresRuntimeImpl]
 
     Runtime --> Target[@internal/target-postgres]
     Runtime --> Adapter[@internal/adapter-postgres]

@@ -1,8 +1,10 @@
 import type {
+  DatabasePolicyDifference,
   MigrationPlannerConflict,
   MigrationSubjectJson,
   OperationPreview,
 } from '@internal/framework-components/control';
+import type { ChangedStorageEntity } from '../../control-api/operations/changed-storage-entities';
 import type { AppliedStatementReport } from '../../control-api/statements/report-applied-statements';
 import type { TemporaryValueReport } from '../../control-api/statements/temporary-values';
 import type { PerSpaceExecutionEntry } from '../../control-api/types';
@@ -96,6 +98,8 @@ export interface MigrationCommandResult {
     readonly storageHash: string;
     readonly profileHash?: string;
   };
+  /** The settings the run recorded as the database's policies, with the values they replaced. */
+  readonly databasePoliciesUpdated?: readonly DatabasePolicyDifference[];
   /**
    * Per-space execution breakdown in canonical schedule order
    * (extensions alphabetically, then app). Surfaces per-space markers
@@ -104,6 +108,8 @@ export interface MigrationCommandResult {
    * into a single ambiguous list. See {@link PerSpaceExecutionEntry}.
    */
   readonly perSpace?: ReadonlyArray<PerSpaceExecutionEntry>;
+  /** `db update` only: the storage entities that changed, when it signed the database with a changed contract and ran no operation. */
+  readonly changedStorageEntities?: readonly ChangedStorageEntity[];
   /** `db update` only: the statements the plan applied, in order; empty when none were given. */
   readonly appliedStatements?: readonly AppliedStatementReport[];
   /** `db update` only: the new required fields whose existing rows get a temporary value. */
@@ -119,7 +125,8 @@ export interface MigrationCommandResult {
   readonly advancedRef?: { readonly name: string; readonly hash: string } | null;
   readonly plannedAdvanceRef?: { readonly name: string; readonly hash: string } | null;
   readonly summary: string;
-  readonly warnings?: readonly MigrationPlannerConflict[];
+  /** What the planner flagged without refusing to plan it. */
+  readonly plannerWarnings?: readonly MigrationPlannerConflict[];
   readonly timings: {
     readonly total: number;
   };

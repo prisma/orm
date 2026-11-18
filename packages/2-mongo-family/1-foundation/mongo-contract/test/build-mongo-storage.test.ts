@@ -6,7 +6,11 @@ import { mongoContractCanonicalizationHooks } from '../src/canonicalization-hook
 import { MongoIndex } from '../src/ir/mongo-index';
 import { MongoStorage } from '../src/ir/mongo-storage';
 
-const userIndex = new MongoIndex({ keys: [{ field: 'email', direction: 1 }], unique: true });
+const userIndex = new MongoIndex({
+  name: 'email_1',
+  keys: [{ field: 'email', direction: 1 }],
+  unique: true,
+});
 
 describe('buildMongoStorage', () => {
   it('builds the unbound namespace from collections and value sets', () => {

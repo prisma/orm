@@ -188,7 +188,7 @@
               "timestamp": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "typeParams": {
                     "precision": 6
                   }
@@ -199,7 +199,7 @@
               "timestamptz": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamptz-string@1",
+                  "codecId": "pg/timestamptz-date@1",
                   "typeParams": {
                     "precision": 6
                   }
@@ -277,7 +277,7 @@
               "timestamptzOpt": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamptz-string@1",
+                  "codecId": "pg/timestamptz-date@1",
                   "typeParams": {
                     "precision": 3
                   }
@@ -303,7 +303,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "149d8890e723d0b02331ea679cf5b6bc01db44215c8a0c87fb9df29f5a983f35",
+    "storageHash": "8838cef0f08f8f027e855e594f549c3f55e8fdc5723c6338f5151cc7e903e932",
     "namespaces": {
       "public": {
         "id": "public",
@@ -396,7 +396,7 @@
                 },
                 "timestamp": {
                   "dataType": "pg/timestamp",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "nullable": false,
                   "many": false,
                   "typeParams": {
@@ -405,7 +405,7 @@
                 },
                 "timestamptz": {
                   "dataType": "pg/timestamptz",
-                  "codecId": "pg/timestamptz-string@1",
+                  "codecId": "pg/timestamptz-date@1",
                   "nullable": false,
                   "many": false,
                   "typeParams": {
@@ -467,7 +467,7 @@
                 },
                 "timestamptzOpt": {
                   "dataType": "pg/timestamptz",
-                  "codecId": "pg/timestamptz-string@1",
+                  "codecId": "pg/timestamptz-date@1",
                   "nullable": true,
                   "many": false,
                   "typeParams": {

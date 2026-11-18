@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
 import {
   createControlStack,
@@ -43,7 +43,7 @@ export interface EmittedContract {
  * in this CLI crosses into family types.
  */
 export async function readEmittedContract(inputs: {
-  readonly config: PrismaNextConfig;
+  readonly config: PrismaConfig;
   readonly cwd: string;
   readonly commandName: string;
 }): Promise<Result<EmittedContract, CliStructuredError>> {
@@ -103,7 +103,7 @@ export async function readEmittedContract(inputs: {
  * resolved connection or the precondition failure that stopped the run.
  */
 export function requireVerifyConnection(inputs: {
-  readonly config: PrismaNextConfig;
+  readonly config: PrismaConfig;
   readonly db: string | undefined;
   readonly commandLine: string;
 }): Result<string, CliStructuredError> {

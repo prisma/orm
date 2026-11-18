@@ -1,11 +1,9 @@
 import type { PostgresDriverCreateOptions } from '@internal/driver-postgres/runtime';
-import type {
-  Log,
-  RuntimeMode,
-  SqlMiddleware,
-  SqlRuntimeExtensionDescriptor,
-  VerifyMarkerOption,
-} from '@internal/sql-runtime';
+import type { SqlExecutionOptions } from '@internal/sql-runtime';
+import {
+  type PostgresIsolationLevel,
+  postgresIsolationLevelSchema,
+} from '@internal/target-postgres/runtime';
 import { ifDefined } from '@internal/utils/defined';
 import { type } from 'arktype';
 import { postgresError } from '../errors';
@@ -18,6 +16,12 @@ type PostgresDriverCursorOptions = NonNullable<PostgresDriverCreateOptions['curs
  * connection's `pg.Client`.
  */
 export const DEFAULT_CONNECT_TIMEOUT_MILLIS = 20_000;
+
+/** Timeouts for the pool a client creates from a url. */
+export interface PostgresPoolOptions {
+  readonly connectionTimeoutMillis?: number;
+  readonly idleTimeoutMillis?: number;
+}
 
 /**
  * Server-side cursor for reads. Unset reads the whole result before the first row; set streams
@@ -32,13 +36,34 @@ export interface PostgresCursorOptions {
  * The options `postgres()` and `postgresServerless()` share: how queries run, not where the
  * database is.
  */
-export interface PostgresExecutionOptions {
-  readonly extensions?: readonly SqlRuntimeExtensionDescriptor<PostgresTargetId>[];
-  readonly middleware?: readonly SqlMiddleware[];
-  readonly verifyMarker?: VerifyMarkerOption;
-  readonly log?: Log;
+export interface PostgresExecutionOptions extends SqlExecutionOptions<PostgresTargetId> {
   readonly cursor?: PostgresCursorOptions;
-  readonly mode?: RuntimeMode;
+  readonly transactionOptions?: PostgresTransactionOptions | undefined;
+}
+
+export interface PostgresTransactionOptions {
+  readonly isolationLevel?: PostgresIsolationLevel | undefined;
+  readonly timeout?: number | null | undefined;
+}
+
+const transactionOptionsSchema = type({
+  'isolationLevel?': postgresIsolationLevelSchema.or('undefined'),
+  'timeout?': '1 <= number.integer <= 2147483647 | null | undefined',
+}).onUndeclaredKey('reject');
+
+export function validateTransactionOptions(
+  options: PostgresTransactionOptions | undefined,
+): PostgresTransactionOptions | undefined {
+  if (options === undefined) return undefined;
+  const result = transactionOptionsSchema(options);
+  if (result instanceof type.errors) {
+    throw postgresError('RUNTIME.ARGUMENT_INVALID', 'Invalid transaction options', {
+      why: result.summary,
+      fix: 'Pass an isolationLevel of ReadUncommitted, ReadCommitted, RepeatableRead, or Serializable, or leave it unset. Timeout must be an integer from 1 to 2147483647 milliseconds; null disables it.',
+      meta: { extension: 'postgres', argument: 'transactionOptions', received: options },
+    });
+  }
+  return result;
 }
 
 const cursorOptionsSchema = type({
@@ -47,7 +72,7 @@ const cursorOptionsSchema = type({
 
 export function validateCursorOptions(
   cursor: PostgresCursorOptions | undefined,
-  helper: 'postgres' | 'postgresServerless',
+  helper: string,
 ): PostgresCursorOptions | undefined {
   if (cursor === undefined) {
     return undefined;
@@ -67,13 +92,4 @@ export function toDriverCursorOptions(
   cursor: PostgresCursorOptions | undefined,
 ): PostgresDriverCursorOptions {
   return cursor === undefined ? { disabled: true } : ifDefined('batchSize', cursor.batchSize);
-}
-
-export function toRuntimeOptions(options: PostgresExecutionOptions) {
-  return {
-    ...ifDefined('verifyMarker', options.verifyMarker),
-    ...ifDefined('middleware', options.middleware),
-    ...ifDefined('log', options.log),
-    ...ifDefined('mode', options.mode),
-  };
 }

@@ -5,21 +5,32 @@ import {
   renderTsLiteral,
 } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { assembleMongoCodecRegistry } from '@internal/mongo-codec';
 import {
   deriveCollectionValidators,
   type ExtractMongoFieldOutputTypes,
   type FieldValueSets,
 } from '@internal/mongo-contract';
 import { mongoEmission } from '@internal/mongo-emitter';
-import { mongoDescriptorById, mongoStandardCodecs } from '@internal/target-mongo/codecs';
+import { mongoDescriptorById } from '@internal/target-mongo/codecs';
 import { mongoDataTypes } from '@internal/target-mongo/data-types';
+import mongoRuntimeTarget from '@internal/target-mongo/runtime';
 import { blindCast } from '@internal/utils/casts';
 import { timeouts } from '@repo/test-utils';
 import { MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, describe, expect, expectTypeOf, it } from 'vitest';
-import { defineContract, enumType, field, member, model } from '../src/exports/contract-builder';
+import {
+  defineContract,
+  enumType,
+  field,
+  member,
+  model,
+  type,
+} from '../src/exports/contract-builder';
 import mongo, { type MongoClient as MongoFacadeClient } from '../src/runtime/mongo';
+
+const TYPES_MODULE = '@internal/mongo/contract-types';
 
 const Role = enumType(
   'Role',
@@ -41,7 +52,7 @@ const Status = enumType(
 const Account = model('Account', {
   collection: 'accounts',
   fields: {
-    _id: field.objectId(),
+    _id: field.scalar(type.ObjectId()),
     role: field.namedType(Role),
     mood: field.namedType(Role).optional(),
     tags: field.namedType(Role).many(),
@@ -53,11 +64,12 @@ const contract = defineContract({
   models: { Account },
 });
 
+const standardCodecs = assembleMongoCodecRegistry([mongoRuntimeTarget]);
+
 const knownCodecIds = new Set(['mongo/string@1', 'mongo/objectId@1']);
 
 const codecLookup: CodecLookupWithDescriptors = {
-  get: (id: string) =>
-    knownCodecIds.has(id) ? mongoStandardCodecs.find((codec) => codec.id === id) : undefined,
+  get: (id: string) => (knownCodecIds.has(id) ? standardCodecs.get(id) : undefined),
   descriptorFor: (id: string) => (knownCodecIds.has(id) ? mongoDescriptorById(id) : undefined),
   renderOutputTypeFor: () => undefined,
   // Enum field types are produced through the codec seam (TML-2952): the emitter
@@ -80,7 +92,7 @@ const storageValueSets = blindCast<
 const ACCOUNT_VALIDATOR = deriveCollectionValidators({
   models: ns?.models ?? {},
   lookups: { codecLookup, dataTypeLookup: createDataTypeLookup(mongoDataTypes) },
-  valueObjects: {},
+  storage: { namespaces: {} },
   valueSets: storageValueSets,
   controlPolicies: { collections: {}, defaultControlPolicy: undefined },
 })['accounts'];
@@ -302,6 +314,7 @@ describe('the field type overrides the emitter writes for enum fields', () => {
       mongoEmission,
       mongoCodecImports,
       testHashes,
+      TYPES_MODULE,
       undefined,
       codecLookup,
     );
@@ -333,6 +346,7 @@ describe('the field type overrides the emitter writes for enum fields', () => {
       mongoEmission,
       mongoCodecImports,
       testHashes,
+      TYPES_MODULE,
       undefined,
       codecLookup,
     );

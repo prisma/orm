@@ -1,5 +1,6 @@
 export { type SqlExpression, sql } from '@internal/sql-contract/sql-expression';
 export { createComposedAuthoringHelpers } from '../composed-authoring-helpers';
+export { composedExtensionPackRefs } from '../composed-extension-pack-refs';
 export type {
   ComposedAuthoringHelpers,
   ContractInput,
@@ -67,3 +68,13 @@ export type {
   EnumTypeHandle,
 } from '../enum-type';
 export { bindEnumType, enumType, member } from '../enum-type';
+export {
+  columnsPhrase,
+  mergeSharedTable,
+  type SharedForeignKeyView,
+  type SharedTableMerge,
+  type SharedTableRefusal,
+  type TableSharer,
+  type VariantTableSharer,
+} from '../shared-table-constraints';
+export { unbound } from '../unbound';

@@ -32,11 +32,11 @@ import { postgresDataTypeEntries } from '../../src/core/data-type-entries';
 import { postgresDataTypes } from '../../src/core/data-types';
 import { type PostgresSchema, postgresCreateNamespace } from '../../src/core/postgres-schema';
 import { postgresCodecRegistry } from '../../src/core/registry';
-import { postgresScalarAndNativeTypeConstructors } from '../../src/core/type-constructors';
+import { postgresScalarTypes } from '../../src/core/type-constructors';
 import { printPslFromFlat } from './fixtures';
 
 /** The type constructors the printed schema names, as the target contributes them. */
-const authoringTypes = postgresScalarAndNativeTypeConstructors;
+const authoringTypes = postgresScalarTypes;
 
 const assembled = assembleAuthoringContributions([
   {
@@ -199,11 +199,6 @@ two lines é'::text`,
     ],
     ['timestamptz', "'2024-01-01 01:00:00+00'::timestamp with time zone", '2024-01-01T01:00:00Z'],
     [
-      'timestamptz(6)',
-      "'2024-01-01 01:00:00.123456+00'::timestamp(6) with time zone",
-      '2024-01-01T01:00:00.123456Z',
-    ],
-    [
       'timestamptz',
       "'0044-03-15 00:00:00+00 BC'::timestamp with time zone",
       '-000043-03-15T00:00:00Z',
@@ -213,8 +208,6 @@ two lines é'::text`,
     ['time', "'12:34:56.5'::time without time zone", '12:34:56.5'],
     ['time(3)', "'12:34:56.123'::time(3) without time zone", '12:34:56.123'],
     ['timetz', "'12:34:56+02'::time with time zone", '12:34:56+02:00'],
-    ['timestamp', "'infinity'::timestamp without time zone", 'infinity'],
-    ['timestamptz', "'-infinity'::timestamp with time zone", '-infinity'],
     ['date', "'infinity'::date", 'infinity'],
   ])('round-trips a %s default of %s', async (typeText, rawDefault, value) => {
     expect(await roundTrippedDefaults([introspected('stamp', typeText, rawDefault)])).toEqual({

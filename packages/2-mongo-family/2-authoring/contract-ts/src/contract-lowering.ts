@@ -114,7 +114,6 @@ function fieldNodes(fields: Record<string, AnyFieldBuilder>): FieldNode[] {
     ...ifDefined('enumName', builder.__enumHandle?.enumName),
     ...ifDefined('executionDefaults', builder.__executionDefaults),
     ...ifDefined('generatorCalls', builder.__generatorCalls),
-    ...ifDefined('presetContribution', builder.__presetContribution),
   }));
 }
 

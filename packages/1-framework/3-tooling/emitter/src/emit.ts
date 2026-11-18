@@ -1,6 +1,6 @@
 import { canonicalizeContractToObject } from '@internal/contract/hashing';
 import type { Contract } from '@internal/contract/types';
-import { type EmissionSpi, keepInternalSpecifiers } from '@internal/framework-components/emission';
+import type { EmissionSpi } from '@internal/framework-components/emission';
 import { ifDefined } from '@internal/utils/defined';
 import { format } from 'prettier';
 import { getEmittedArtifactPaths } from './artifact-paths';
@@ -70,9 +70,9 @@ export async function emit(
     targetFamily,
     codecTypeImports ?? [],
     contractTypeHashes,
+    options.typesModule,
     generateOptions,
     stack.codecLookup,
-    options.resolveImportSpecifier ?? keepInternalSpecifiers,
   );
   const contractDts = await format(contractDtsRaw, {
     parser: 'typescript',

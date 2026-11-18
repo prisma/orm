@@ -3,6 +3,8 @@ import { defineConfig } from '@repo/tsdown';
 export default defineConfig({
   entry: [
     'src/exports/authored-check-naming.ts',
+    'src/exports/check-expressions.ts',
+    'src/exports/codec-json-type.ts',
     'src/exports/contract-view.ts',
     'src/exports/data-type.ts',
     'src/exports/data-type-support.ts',
@@ -20,5 +22,6 @@ export default defineConfig({
     'src/exports/entity-handle-lowering-hook.ts',
     'src/exports/value-set-derivation-hook.ts',
     'src/exports/sql-expression.ts',
+    'src/exports/generated-id-column-aliases.ts',
   ],
 });

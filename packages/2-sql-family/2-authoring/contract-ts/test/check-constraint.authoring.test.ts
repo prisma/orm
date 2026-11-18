@@ -2,6 +2,7 @@ import { applySpecifierDefaultControlPolicy } from '@internal/contract/apply-spe
 import type { Contract, ControlPolicy } from '@internal/contract/types';
 import { emptyCodecLookup } from '@internal/framework-components/codec';
 import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
+import type { CheckExpressionInput } from '@internal/sql-contract/check-expressions';
 import { sql } from '@internal/sql-contract/sql-expression';
 import {
   CheckConstraint,
@@ -34,23 +35,9 @@ const sqlFamilyPack = {
   id: 'sql',
   familyId: 'sql',
   version: '0.0.1',
-  authoring: {
-    field: {
-      text: {
-        kind: 'fieldPreset',
-        output: { codecId: 'pg/text@1' },
-      },
-    },
-  },
 } as const satisfies FamilyPackRef<'sql'>;
 
-interface RenderInput {
-  readonly tableName: string;
-  readonly columnName: string;
-  readonly many: boolean;
-  readonly elementNullable: boolean;
-  readonly memberValues: readonly (string | number)[] | undefined;
-}
+type RenderInput = CheckExpressionInput;
 
 /**
  * Stands in for the Postgres pack's `renderCheckExpressions`, reproducing the
@@ -87,7 +74,7 @@ function renderCheckExpressions(input: RenderInput): ReadonlyArray<{
         : `${column} IN (${members})`,
     });
   }
-  if (input.many && !input.elementNullable) {
+  if (input.many !== false && !input.many.elementNullable) {
     candidates.push({
       kind: 'elementNotNull',
       columnName: input.columnName,
@@ -107,9 +94,9 @@ const postgresTargetPack = {
   targetId: 'postgres',
   version: '0.0.1',
   defaultNamespaceId: 'public',
-  // `field: {}` is what makes this a real `AuthoringContributions` rather
-  // than a weak-type mismatch; the production pack carries presets here.
-  authoring: { field: {}, renderCheckExpressions },
+  // `type: {}` is what makes this a real `AuthoringContributions` rather
+  // than a weak-type mismatch; the production pack carries its type constructors here.
+  authoring: { type: {}, renderCheckExpressions },
 } as const;
 
 const bareTargetPack = {
@@ -162,7 +149,9 @@ describe('check emission — scalar domain enum', () => {
       },
       ({ field: f, model: m }) =>
         ({
-          models: { User: m('User', { fields: { id: f.text().id(), role: f.namedType(Role) } }) },
+          models: {
+            User: m('User', { fields: { id: f.column(pgText).id(), role: f.namedType(Role) } }),
+          },
         }) as const,
     ) as Contract<SqlStorage>;
 
@@ -184,7 +173,11 @@ describe('check emission — scalar domain enum', () => {
         ({
           models: {
             User: m('User', {
-              fields: { id: f.text().id(), role: f.namedType(Role), status: f.namedType(Status) },
+              fields: {
+                id: f.column(pgText).id(),
+                role: f.namedType(Role),
+                status: f.namedType(Status),
+              },
             }),
           },
         }) as const,
@@ -210,7 +203,9 @@ describe('check emission — array domain enum', () => {
       ({ field: f, model: m }) =>
         ({
           models: {
-            User: m('User', { fields: { id: f.text().id(), roles: f.namedType(Role).many() } }),
+            User: m('User', {
+              fields: { id: f.column(pgText).id(), roles: f.namedType(Role).many() },
+            }),
           },
         }) as const,
     ) as Contract<SqlStorage>;
@@ -233,7 +228,11 @@ describe('check emission — plain list column', () => {
       },
       ({ field: f, model: m }) =>
         ({
-          models: { User: m('User', { fields: { id: f.text().id(), tags: f.text().many() } }) },
+          models: {
+            User: m('User', {
+              fields: { id: f.column(pgText).id(), tags: f.column(pgText).many() },
+            }),
+          },
         }) as const,
     ) as Contract<SqlStorage>;
 
@@ -256,7 +255,7 @@ describe('check emission — entity-ref-resolved value set (native enum shape)',
         ({
           models: {
             User: m('User', {
-              fields: { id: f.text().id(), role: f.column(nativeRoleDescriptor) },
+              fields: { id: f.column(pgText).id(), role: f.column(nativeRoleDescriptor) },
             }),
           },
         }) as const,
@@ -277,7 +276,7 @@ describe('check emission — entity-ref-resolved value set (native enum shape)',
         ({
           models: {
             User: m('User', {
-              fields: { id: f.text().id(), roles: f.column(nativeRoleDescriptor).many() },
+              fields: { id: f.column(pgText).id(), roles: f.column(nativeRoleDescriptor).many() },
             }),
           },
         }) as const,
@@ -301,7 +300,7 @@ describe('check emission — entity-ref-resolved value set (native enum shape)',
         ({
           models: {
             User: m('User', {
-              fields: { id: f.text().id(), role: f.column(nativeRoleDescriptor) },
+              fields: { id: f.column(pgText).id(), role: f.column(nativeRoleDescriptor) },
             }),
           },
         }) as const,
@@ -311,8 +310,8 @@ describe('check emission — entity-ref-resolved value set (native enum shape)',
       tableName: 'User',
       columnName: 'role',
       many: false,
-      elementNullable: false,
       memberValues: undefined,
+      valueObject: undefined,
     });
   });
 });
@@ -335,7 +334,9 @@ describe('check emission — domain enum on a non-pg codec', () => {
       ({ field: f, model: m }) =>
         ({
           models: {
-            User: m('User', { fields: { id: f.text().id(), role: f.namedType(NativeRole) } }),
+            User: m('User', {
+              fields: { id: f.column(pgText).id(), role: f.namedType(NativeRole) },
+            }),
           },
         }) as const,
     ) as Contract<SqlStorage>;
@@ -356,7 +357,9 @@ describe('check emission — a target with no hook writes no checks', () => {
       },
       ({ field: f, model: m }) =>
         ({
-          models: { User: m('User', { fields: { id: f.text().id(), role: f.namedType(Role) } }) },
+          models: {
+            User: m('User', { fields: { id: f.column(pgText).id(), role: f.namedType(Role) } }),
+          },
         }) as const,
     ) as Contract<SqlStorage>;
 
@@ -383,7 +386,9 @@ describe('check emission — guards', () => {
       ({ field: f, model: m }) =>
         ({
           models: {
-            User: m('User', { fields: { id: f.text().id(), [longColumn]: f.namedType(Role) } }),
+            User: m('User', {
+              fields: { id: f.column(pgText).id(), [longColumn]: f.namedType(Role) },
+            }),
           },
         }) as const,
     ) as Contract<SqlStorage>;
@@ -409,7 +414,9 @@ describe('check emission — guards', () => {
       ({ field: f, model: m }) =>
         ({
           models: {
-            User: m('User', { fields: { id: f.text().id(), [longColumn]: f.namedType(Role) } }),
+            User: m('User', {
+              fields: { id: f.column(pgText).id(), [longColumn]: f.namedType(Role) },
+            }),
           },
         }) as const,
     ) as Contract<SqlStorage>;
@@ -441,7 +448,7 @@ describe('check emission — guards', () => {
           models: {
             User: m('User', {
               fields: {
-                id: f.text().id(),
+                id: f.column(pgText).id(),
                 [`${shared}a`]: f.namedType(Role),
                 [`${shared}b`]: f.namedType(Role),
               },
@@ -472,7 +479,9 @@ describe('check emission — guards', () => {
             enums: { Flag },
           },
           ({ field: f, model: m }) => ({
-            models: { User: m('User', { fields: { id: f.text().id(), flag: f.namedType(Flag) } }) },
+            models: {
+              User: m('User', { fields: { id: f.column(pgText).id(), flag: f.namedType(Flag) } }),
+            },
           }),
         ),
       ).toThrow(/CHECK constraint members must encode to strings or finite numbers/);
@@ -501,7 +510,7 @@ describe('check emission — guards', () => {
           models: {
             User: m('User', {
               fields: {
-                id: f.text().id(),
+                id: f.column(pgText).id(),
                 special: many ? f.namedType(Special).many() : f.namedType(Special),
               },
             }),
@@ -512,9 +521,9 @@ describe('check emission — guards', () => {
       expect(hookCalls.at(-1)).toEqual({
         tableName: 'User',
         columnName: 'special',
-        many,
-        elementNullable: false,
+        many: many ? { elementNullable: false } : false,
         memberValues: [1.5, 'NaN'],
+        valueObject: undefined,
       });
     },
   );
@@ -544,7 +553,7 @@ describe('check emission — guards', () => {
             models: {
               User: m('User', {
                 fields: {
-                  id: f.text().id(),
+                  id: f.column(pgText).id(),
                   normalized: many ? f.namedType(Normalized).many() : f.namedType(Normalized),
                 },
               }),
@@ -591,7 +600,7 @@ describe('check emission — guards', () => {
           models: {
             User: m('User', {
               fields: {
-                id: f.text().id(),
+                id: f.column(pgText).id(),
                 level: many ? f.namedType(Level).many() : f.namedType(Level),
               },
             }),
@@ -627,7 +636,7 @@ describe('check emission — guards', () => {
       },
       ({ field: f, model: m }) => ({
         models: {
-          User: m('User', { fields: { id: f.text().id(), level: f.namedType(Level) } }),
+          User: m('User', { fields: { id: f.column(pgText).id(), level: f.namedType(Level) } }),
         },
       }),
     ) as Contract<SqlStorage>;
@@ -650,7 +659,11 @@ describe('check emission — JSON round-trip', () => {
         ({
           models: {
             User: m('User', {
-              fields: { id: f.text().id(), role: f.namedType(Role), tags: f.text().many() },
+              fields: {
+                id: f.column(pgText).id(),
+                role: f.namedType(Role),
+                tags: f.column(pgText).many(),
+              },
             }),
           },
         }) as const,
@@ -701,11 +714,11 @@ describe('check emission — list element enforcement', () => {
           models: {
             User: m('User', {
               fields: {
-                id: f.text().id(),
-                tags: f.text().many(),
-                labels: f.text().many({ elementsNullable: false }),
-                aliases: f.text().many({ elementsNullable: true }),
-                optionalAliases: f.text().many({ elementsNullable: true }).optional(),
+                id: f.column(pgText).id(),
+                tags: f.column(pgText).many(),
+                labels: f.column(pgText).many({ elementsNullable: false }),
+                aliases: f.column(pgText).many({ elementsNullable: true }),
+                optionalAliases: f.column(pgText).many({ elementsNullable: true }).optional(),
               },
             }),
           },
@@ -745,12 +758,12 @@ describe('check emission — list element enforcement', () => {
         createNamespace: createTestSqlNamespace,
       },
       ({ field: f, model: m }) => {
-        const nullableElements = f.text().many({ elementsNullable: true });
+        const nullableElements = f.column(pgText).many({ elementsNullable: true });
         return {
           models: {
             User: m('User', {
               fields: {
-                id: f.text().id(),
+                id: f.column(pgText).id(),
                 nullableElements,
                 omittedResets: nullableElements.many(),
                 falseResets: nullableElements.many({ elementsNullable: false }),
@@ -798,7 +811,11 @@ describe('check emission — derivation is scoped to managed tables', () => {
         ({
           models: {
             User: m('User', {
-              fields: { id: f.text().id(), role: f.namedType(Role), tags: f.text().many() },
+              fields: {
+                id: f.column(pgText).id(),
+                role: f.namedType(Role),
+                tags: f.column(pgText).many(),
+              },
             }).sql(options.control === undefined ? {} : { control: options.control }),
           },
         }) as const,
@@ -853,7 +870,11 @@ describe('check emission — a specifier-applied policy strips derived checks', 
         ({
           models: {
             User: m('User', {
-              fields: { id: f.text().id(), role: f.namedType(Role), tags: f.text().many() },
+              fields: {
+                id: f.column(pgText).id(),
+                role: f.namedType(Role),
+                tags: f.column(pgText).many(),
+              },
             }),
           },
         }) as const,
@@ -1008,7 +1029,9 @@ describe('check() — Validation table', () => {
         ({ field: f, model: m }) =>
           ({
             models: {
-              User: m('User', { fields: { id: f.text().id(), total: f.text() } }).sql({
+              User: m('User', {
+                fields: { id: f.column(pgText).id(), total: f.column(pgText) },
+              }).sql({
                 checks: [check({ expression: sql`total > 0` })],
               }),
             },
@@ -1029,7 +1052,9 @@ describe('check() — Validation table', () => {
         ({ field: f, model: m }) =>
           ({
             models: {
-              User: m('User', { fields: { id: f.text().id(), total: f.text() } }).sql({
+              User: m('User', {
+                fields: { id: f.column(pgText).id(), total: f.column(pgText) },
+              }).sql({
                 checks: [check({ expression: sql`total > 0`, name: 'a', map: 'b' })],
               }),
             },
@@ -1050,7 +1075,9 @@ describe('check() — Validation table', () => {
         ({ field: f, model: m }) =>
           ({
             models: {
-              User: m('User', { fields: { id: f.text().id(), total: f.text() } }).sql({
+              User: m('User', {
+                fields: { id: f.column(pgText).id(), total: f.column(pgText) },
+              }).sql({
                 checks: [check({ expression: sql``, name: 'user_total_positive' })],
               }),
             },
@@ -1072,7 +1099,9 @@ describe('check() — Validation table', () => {
         ({ field: f, model: m }) =>
           ({
             models: {
-              User: m('User', { fields: { id: f.text().id(), total: f.text() } }).sql({
+              User: m('User', {
+                fields: { id: f.column(pgText).id(), total: f.column(pgText) },
+              }).sql({
                 checks: [check({ expression: sql`total > 0`, name: overBudget })],
               }),
             },
@@ -1094,7 +1123,9 @@ describe('check() — Validation table', () => {
         ({ field: f, model: m }) =>
           ({
             models: {
-              User: m('User', { fields: { id: f.text().id(), total: f.text() } }).sql({
+              User: m('User', {
+                fields: { id: f.column(pgText).id(), total: f.column(pgText) },
+              }).sql({
                 checks: [check({ expression: sql`total > 0`, map: 'legacy_total_check' })],
               }),
             },
@@ -1125,7 +1156,9 @@ describe('check() — Validation table', () => {
         ({ field: f, model: m }) =>
           ({
             models: {
-              User: m('User', { fields: { id: f.text().id(), total: f.text() } }).sql({
+              User: m('User', {
+                fields: { id: f.column(pgText).id(), total: f.column(pgText) },
+              }).sql({
                 checks: [
                   check({ expression: sql`total > 0`, map: 'dup' }),
                   check({ expression: sql`total < 1000`, map: 'dup' }),
@@ -1149,7 +1182,9 @@ describe('check() — Validation table', () => {
         ({ field: f, model: m }) =>
           ({
             models: {
-              User: m('User', { fields: { id: f.text().id(), tags: f.text().many() } }).sql({
+              User: m('User', {
+                fields: { id: f.column(pgText).id(), tags: f.column(pgText).many() },
+              }).sql({
                 checks: [check({ expression: sql`true`, name: 'User_tags_elem_not_null' })],
               }),
             },
@@ -1180,9 +1215,11 @@ describe('check() — authored checks are emitted regardless of control policy',
       ({ field: f, model: m }) =>
         ({
           models: {
-            User: m('User', { fields: { id: f.text().id(), total: f.text() } }).sql({
-              checks: [check({ expression: sql`total > 0`, name: 'user_total_positive' })],
-            }),
+            User: m('User', { fields: { id: f.column(pgText).id(), total: f.column(pgText) } }).sql(
+              {
+                checks: [check({ expression: sql`total > 0`, name: 'user_total_positive' })],
+              },
+            ),
           },
         }) as const,
     ) as Contract<SqlStorage>;
@@ -1201,10 +1238,12 @@ describe('check() — authored checks are emitted regardless of control policy',
       ({ field: f, model: m }) =>
         ({
           models: {
-            User: m('User', { fields: { id: f.text().id(), total: f.text() } }).sql({
-              control: 'external',
-              checks: [check({ expression: sql`total > 0`, name: 'user_total_positive' })],
-            }),
+            User: m('User', { fields: { id: f.column(pgText).id(), total: f.column(pgText) } }).sql(
+              {
+                control: 'external',
+                checks: [check({ expression: sql`total > 0`, name: 'user_total_positive' })],
+              },
+            ),
           },
         }) as const,
     ) as Contract<SqlStorage>;
@@ -1224,9 +1263,11 @@ describe('check() — authored checks are emitted regardless of control policy',
       ({ field: f, model: m }) =>
         ({
           models: {
-            User: m('User', { fields: { id: f.text().id(), role: f.namedType(Role) } }).sql({
-              checks: [check({ expression: sql`true`, name: 'user_extra_rule' })],
-            }),
+            User: m('User', { fields: { id: f.column(pgText).id(), role: f.namedType(Role) } }).sql(
+              {
+                checks: [check({ expression: sql`true`, name: 'user_extra_rule' })],
+              },
+            ),
           },
         }) as const,
     ) as Contract<SqlStorage>;
@@ -1260,9 +1301,11 @@ describe('check() — coexists with derived checks on the same table', () => {
       ({ field: f, model: m }) =>
         ({
           models: {
-            User: m('User', { fields: { id: f.text().id(), role: f.namedType(Role) } }).sql({
-              checks: [check({ expression: sql`true`, name: 'user_extra_rule' })],
-            }),
+            User: m('User', { fields: { id: f.column(pgText).id(), role: f.namedType(Role) } }).sql(
+              {
+                checks: [check({ expression: sql`true`, name: 'user_extra_rule' })],
+              },
+            ),
           },
         }) as const,
     ) as Contract<SqlStorage>;
@@ -1311,7 +1354,9 @@ describe('check() — wire vs exact naming, through the built contract', () => {
         ({ field: f, model: m }) =>
           ({
             models: {
-              User: m('User', { fields: { id: f.text().id(), total: f.text() } }).sql({
+              User: m('User', {
+                fields: { id: f.column(pgText).id(), total: f.column(pgText) },
+              }).sql({
                 checks: [check({ expression: sql`(total > (0)::numeric)`, map: 'positive_total' })],
               }),
             },

@@ -20,6 +20,7 @@ import type {
 /** How a transaction's `commit()` or `rollback()` settled. */
 export type TransactionSettlement =
   | { readonly by: 'commit'; readonly outcome: 'succeeded' | 'failed' }
+  | { readonly by: 'release'; readonly outcome: 'succeeded' | 'failed' }
   | {
       readonly by: 'rollback';
       readonly outcome: 'succeeded' | 'failed';
@@ -73,6 +74,7 @@ class TransactionActivityRunImpl<TContext extends ActivityContext>
   readonly #record: ActivityRecord<TContext>;
   readonly #children: ActivityChildren;
   readonly #slot: ActivityChildSlot | undefined;
+  readonly #isSavepoint: boolean;
   #aStatementFailed = false;
   #ended = false;
   #acceptingChildren = true;
@@ -90,6 +92,7 @@ class TransactionActivityRunImpl<TContext extends ActivityContext>
       options.parent,
     );
     this.ctx = this.#record.ctx;
+    this.#isSavepoint = this.ctx.inTransaction();
     this.#children = new ActivityChildren({
       inTransaction: true,
       holdFinishedChildren: options.holdFinishedChildren,
@@ -123,13 +126,16 @@ class TransactionActivityRunImpl<TContext extends ActivityContext>
     if (this.#ended) return;
     this.#ended = true;
     this.#acceptingChildren = false;
-    await endActivity(
-      this.#record,
-      { kind: 'transaction', outcome: settlement.outcome },
-      this.#finalizedResult(settlement),
-      this.#slot,
-      (result) => this.finalize(result),
-    );
+    const ended = { kind: 'transaction', outcome: settlement.outcome } as const;
+    const own = this.#finalizedResult(settlement);
+    if (this.#isSavepoint && settlement.by === 'rollback') {
+      await endActivity(this.#record, ended, own, undefined, (result) =>
+        this.#finalizeThenReportEnd(result),
+      );
+      return;
+    }
+    if (this.#isSavepoint && this.#aStatementFailed) this.#slot?.statementFailed();
+    await endActivity(this.#record, ended, own, this.#slot, (result) => this.finalize(result));
   }
 
   async finalize(result: ActivityFinalizedResult): Promise<void> {
@@ -137,9 +143,16 @@ class TransactionActivityRunImpl<TContext extends ActivityContext>
     await this.#record.finalize(result);
   }
 
+  async #finalizeThenReportEnd(result: ActivityFinalizedResult): Promise<void> {
+    await this.finalize(result);
+    await this.#slot?.ended(result);
+  }
+
   #finalizedResult(settlement: TransactionSettlement): ActivityFinalizedResult {
     if (settlement.by === 'rollback') {
-      return { outcome: settlement.commitAttempted ? 'unknown' : 'rolled-back' };
+      return {
+        outcome: settlement.commitAttempted && !this.#isSavepoint ? 'unknown' : 'rolled-back',
+      };
     }
     return {
       outcome:

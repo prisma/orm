@@ -211,8 +211,11 @@
               "address": {
                 "nullable": true,
                 "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "Address",
                   "kind": "valueObject",
-                  "name": "Address"
+                  "namespaceId": "__unbound__",
+                  "plane": "storage"
                 }
               },
               "bio": {
@@ -294,26 +297,6 @@
                 },
                 "role": {
                   "field": "role"
-                }
-              }
-            }
-          }
-        },
-        "valueObjects": {
-          "Address": {
-            "fields": {
-              "street": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              },
-              "zip": {
-                "nullable": true,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
                 }
               }
             }
@@ -502,6 +485,26 @@
               }
             }
           },
+          "valueObject": {
+            "Address": {
+              "fields": {
+                "street": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                },
+                "zip": {
+                  "nullable": true,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                }
+              }
+            }
+          },
           "valueSet": {
             "Role": {
               "kind": "valueSet",
@@ -516,7 +519,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "9d0d8d271546a3ca3180095b1adaf549c22edf1cc8f8d2b63f92fe219df7d677"
+    "storageHash": "70cb520a3df87e0fd81be63d8801438a417be178c7bd6635a96830cbb62cc0ba"
   },
   "capabilities": {},
   "extensions": {},

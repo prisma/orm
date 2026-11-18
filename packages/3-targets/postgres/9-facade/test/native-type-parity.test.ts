@@ -108,21 +108,21 @@ const parityCases: readonly ParityCase[] = [
     };
   }),
   {
-    title: 'VarChar(191)',
-    bare: 'VarChar(191)',
-    alias: 'VarChar(191)',
+    title: 'Varchar(191)',
+    bare: 'Varchar(191)',
+    alias: 'Varchar(191)',
     expected: { ...varcharOut, typeParams: { length: 191 } },
   },
   {
-    title: 'VarChar() — arg omitted',
-    bare: 'VarChar()',
-    alias: 'VarChar',
+    title: 'Varchar() — arg omitted',
+    bare: 'Varchar()',
+    alias: 'Varchar',
     expected: { ...varcharOut, typeParams: {} },
   },
   {
-    title: 'VarChar — bare',
-    bare: 'VarChar',
-    alias: 'VarChar',
+    title: 'Varchar — bare',
+    bare: 'Varchar',
+    alias: 'Varchar',
     expected: { ...varcharOut, typeParams: {} },
   },
   {
@@ -138,21 +138,21 @@ const parityCases: readonly ParityCase[] = [
     expected: { ...charOut, typeParams: {} },
   },
   {
-    title: 'Numeric(10, 2)',
-    bare: 'Numeric(10, 2)',
-    alias: 'Numeric(10, 2)',
+    title: 'NumericString(10, 2)',
+    bare: 'NumericString(10, 2)',
+    alias: 'NumericString(10, 2)',
     expected: { ...numericOut, typeParams: { precision: 10, scale: 2 } },
   },
   {
-    title: 'Numeric(10) — one arg',
-    bare: 'Numeric(10)',
-    alias: 'Numeric(10)',
+    title: 'NumericString(10) — one arg',
+    bare: 'NumericString(10)',
+    alias: 'NumericString(10)',
     expected: { ...numericOut, typeParams: { precision: 10 } },
   },
   {
-    title: 'Numeric — bare',
-    bare: 'Numeric',
-    alias: 'Numeric',
+    title: 'NumericString — bare',
+    bare: 'NumericString',
+    alias: 'NumericString',
     expected: { ...numericOut, typeParams: {} },
   },
   {
@@ -188,15 +188,15 @@ const parityCases: readonly ParityCase[] = [
     expected: { dataType: 'pg/timestamptz', codecId: 'pg/timestamptz-temporal@1', typeParams: {} },
   },
   {
-    title: 'Time(3)',
-    bare: 'Time(3)',
-    alias: 'Time(3)',
+    title: 'TimeTemporal(3)',
+    bare: 'TimeTemporal(3)',
+    alias: 'TimeTemporal(3)',
     expected: { dataType: 'pg/time', codecId: 'pg/time-temporal@1', typeParams: { precision: 3 } },
   },
   {
-    title: 'Time — bare',
-    bare: 'Time',
-    alias: 'Time',
+    title: 'TimeTemporal — bare',
+    bare: 'TimeTemporal',
+    alias: 'TimeTemporal',
     expected: { dataType: 'pg/time', codecId: 'pg/time-temporal@1', typeParams: {} },
   },
   // The representation-explicit spellings, which must carry precision exactly as their unsuffixed
@@ -282,21 +282,39 @@ const parityCases: readonly ParityCase[] = [
     expected: { dataType: 'pg/inet', codecId: 'pg/inet@1', typeParams: {} },
   },
   {
-    title: 'SmallInt — bare',
-    bare: 'SmallInt',
-    alias: 'SmallInt',
+    title: 'Xml — bare',
+    bare: 'Xml',
+    alias: 'Xml',
+    expected: { dataType: 'pg/xml', codecId: 'pg/xml@1', typeParams: {} },
+  },
+  {
+    title: 'Oid — bare',
+    bare: 'Oid',
+    alias: 'Oid',
+    expected: { dataType: 'pg/oid', codecId: 'pg/oid@1', typeParams: {} },
+  },
+  {
+    title: 'Money — bare',
+    bare: 'Money',
+    alias: 'Money',
+    expected: { dataType: 'pg/money', codecId: 'pg/money@1', typeParams: {} },
+  },
+  {
+    title: 'Int2 — bare',
+    bare: 'Int2',
+    alias: 'Int2',
     expected: { dataType: 'pg/int2', codecId: 'pg/int2@1', typeParams: {} },
   },
   {
-    title: 'Real — bare',
-    bare: 'Real',
-    alias: 'Real',
+    title: 'Float4 — bare',
+    bare: 'Float4',
+    alias: 'Float4',
     expected: { dataType: 'pg/float4', codecId: 'pg/float4@1', typeParams: {} },
   },
   {
-    title: 'Date — bare',
-    bare: 'Date',
-    alias: 'Date',
+    title: 'DateTemporal — bare',
+    bare: 'DateTemporal',
+    alias: 'DateTemporal',
     expected: { dataType: 'pg/date', codecId: 'pg/date-temporal@1', typeParams: {} },
   },
 ];
@@ -304,13 +322,13 @@ const parityCases: readonly ParityCase[] = [
 const bitAndIntervalCases = [
   ['Bit', 'pg/bit', 'pg/bit@1', {}],
   ['Bit(8)', 'pg/bit', 'pg/bit@1', { length: 8 }],
-  ['VarBit', 'pg/varbit', 'pg/varbit@1', {}],
-  ['VarBit(16)', 'pg/varbit', 'pg/varbit@1', { length: 16 }],
+  ['Varbit', 'pg/varbit', 'pg/varbit@1', {}],
+  ['Varbit(16)', 'pg/varbit', 'pg/varbit@1', { length: 16 }],
   ['IntervalParts', 'pg/interval', 'pg/interval@1', {}],
   ['IntervalParts(3)', 'pg/interval', 'pg/interval@1', { precision: 3 }],
 ] as const;
 
-describe('Bit, VarBit and IntervalParts', () => {
+describe('Bit, Varbit and IntervalParts', () => {
   it.each(bitAndIntervalCases)(
     '%s gives its codec and parameters as a scalar and as a list',
     (spelling, dataType, codecId, typeParams) => {
@@ -359,14 +377,14 @@ describe('native types as bare scalar types — parity with the live bare-type p
     }).toEqual({ types: undefined, viaAlias: expected, viaNamed: expected, direct: expected });
   });
 
-  it('lowers the Date updatedAt shorthand identically to explicit Date clock phases', () => {
+  it('lowers the UpdatedAt alias identically to explicit Date clock phases', () => {
     const shorthand = emit(`model sample {
       id Int @id
-      at temporal.updatedAtJsDate()
+      at temporal.UpdatedAt
     }`);
     const explicit = emit(`model sample {
       id Int @id
-      at temporal.timestamptzJsDate(onCreate: now, onUpdate: now)
+      at TimestamptzJsDate(3) @onCreate(now()) @onUpdate(now())
     }`);
     expect(shorthand.ok).toBe(true);
     expect(explicit.ok).toBe(true);
@@ -379,14 +397,14 @@ describe('native types as bare scalar types — parity with the live bare-type p
     });
   });
 
-  it('lowers the Date createdAt shorthand identically to an explicit create clock phase', () => {
+  it('lowers the CreatedAt alias identically to an explicit create clock phase', () => {
     const result = emit(`model sample {
       id Int @id
-      at temporal.createdAtJsDate()
+      at temporal.CreatedAt
     }`);
     const explicit = emit(`model sample {
       id Int @id
-      at temporal.timestamptzJsDate(onCreate: now)
+      at TimestamptzJsDate(3) @onCreate(now())
     }`);
     expect(result.ok).toBe(true);
     expect(explicit.ok).toBe(true);
@@ -399,6 +417,23 @@ describe('native types as bare scalar types — parity with the live bare-type p
       codecId: 'pg/timestamptz-date@1',
     });
     expect(column).not.toHaveProperty('default');
+  });
+
+  it('names the rewrite of a removed field preset through the SQL family', () => {
+    const result = emit(`model sample {
+  id Int @id
+  at temporal.timestamptzJsDate(3, onCreate: now)
+}
+`);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      {
+        code: 'PSL_UNRESOLVED_REFERENCE',
+        message:
+          'temporal.timestamptzJsDate(3, onCreate: now) was a field preset, and Prisma 8 removed field presets. Write DateTime @onCreate(now()).',
+      },
+    ]);
   });
 
   it('names Unsupported("x") as no Prisma 8 type through the SQL family', () => {
@@ -418,10 +453,10 @@ describe('native types as bare scalar types — parity with the live bare-type p
     ]);
   });
 
-  it('rejects VarChar(0) in field position via its data type’s bound', () => {
+  it('rejects Varchar(0) in field position via its data type’s bound', () => {
     const result = emit(`model sample {
   id Int @id
-  name VarChar(0)
+  name Varchar(0)
 }
 `);
     expect(result.ok).toBe(false);
@@ -436,9 +471,9 @@ describe('native types as bare scalar types — parity with the live bare-type p
     );
   });
 
-  it('rejects VarChar(0) in named-type position via its data type’s bound', () => {
+  it('rejects Varchar(0) in named-type position via its data type’s bound', () => {
     const result = emit(`types {
-  Bad = VarChar(0)
+  Bad = Varchar(0)
 }
 
 model sample {
@@ -458,10 +493,10 @@ model sample {
     );
   });
 
-  it('rejects Numeric(0) in field position, matching Numeric\u2019s positive-precision rule', () => {
+  it('rejects NumericString(0) in field position, matching NumericString\u2019s positive-precision rule', () => {
     const result = emit(`model sample {
   id Int @id
-  amount Numeric(0)
+  amount NumericString(0)
 }
 `);
     expect(result.ok).toBe(false);
@@ -476,9 +511,9 @@ model sample {
     );
   });
 
-  it('rejects Numeric(0) in named-type position, matching Numeric\u2019s positive-precision rule', () => {
+  it('rejects NumericString(0) in named-type position, matching NumericString\u2019s positive-precision rule', () => {
     const result = emit(`types {
-  Bad = Numeric(0)
+  Bad = NumericString(0)
 }
 
 model sample {

@@ -147,11 +147,11 @@ model Host {
     ]);
   });
 
-  it('a VarChar default longer than its length is refused', async () => {
+  it('a Varchar default longer than its length is refused', async () => {
     const authored = await authorSqlContractFromPsl(`
 model Token {
   id Int            @id
-  s  VarChar(3) @default("toolong")
+  s  Varchar(3) @default("toolong")
 }
 `);
 
@@ -163,12 +163,12 @@ model Token {
     ]);
   });
 
-  it('a Numeric default the type would round is refused', async () => {
+  it('a NumericString default the type would round is refused', async () => {
     expect(
       await diagnosticsOf(`
 model Price {
   id Int            @id
-  n  Numeric(5, 2) @default(1.555)
+  n  NumericString(5, 2) @default(1.555)
 }
 `),
     ).toEqual([

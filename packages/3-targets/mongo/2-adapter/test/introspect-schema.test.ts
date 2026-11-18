@@ -1,5 +1,5 @@
+import { indexLookupKey } from '@internal/mongo-contract';
 import {
-  indexLookupKey,
   MongoSchemaCollection,
   MongoSchemaCollectionOptions,
   MongoSchemaIndex,
@@ -57,6 +57,22 @@ describe('introspectSchema', () => {
     expect(users).toBeInstanceOf(MongoSchemaCollection);
     expect(users.name).toBe('users');
     expect(users.indexes).toEqual([]);
+  });
+
+  it('reads each index under the name MongoDB holds it by, two indexes on the same keys apart', async () => {
+    await db
+      .collection('users')
+      .createIndex({ email: 1 }, { unique: true, name: 'User_email_key' });
+    await db.collection('users').createIndex({ email: 1 }, { name: 'User_email_idx' });
+
+    const ir = await introspectSchema(db);
+    const users = ir.collection('users')!;
+
+    expect(ir.fromDatabase).toBe(true);
+    expect(users.indexes.map(({ id, name, unique }) => ({ id, name, unique }))).toEqual([
+      { id: 'User_email_key', name: 'User_email_key', unique: true },
+      { id: 'User_email_idx', name: 'User_email_idx', unique: false },
+    ]);
   });
 
   it('introspects indexes with various key types', async () => {
@@ -211,23 +227,28 @@ describe('introspectSchema', () => {
 
   describe('round-trip with contractToMongoSchemaIR', () => {
     it('produces equivalent IR through contract -> apply -> introspect', async () => {
-      const contractIR = new MongoSchemaIR([
-        new MongoSchemaCollection({
-          name: 'users',
-          indexes: [
-            new MongoSchemaIndex({
-              keys: [{ field: 'email', direction: 1 }],
-              unique: true,
-            }),
-            new MongoSchemaIndex({
-              keys: [
-                { field: 'lastName', direction: 1 },
-                { field: 'firstName', direction: 1 },
-              ],
-            }),
-          ],
-        }),
-      ]);
+      const contractIR = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'users',
+            indexes: [
+              new MongoSchemaIndex({
+                name: 'email_1',
+                keys: [{ field: 'email', direction: 1 }],
+                unique: true,
+              }),
+              new MongoSchemaIndex({
+                name: 'lastName_1_firstName_1',
+                keys: [
+                  { field: 'lastName', direction: 1 },
+                  { field: 'firstName', direction: 1 },
+                ],
+              }),
+            ],
+          }),
+        ],
+        { fromDatabase: false },
+      );
 
       await db.createCollection('users');
       await db.collection('users').createIndex({ email: 1 }, { unique: true });

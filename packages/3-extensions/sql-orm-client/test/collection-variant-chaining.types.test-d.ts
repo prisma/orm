@@ -48,6 +48,7 @@ describe('variant', () => {
       title: string;
       projectId: number | null;
       reporterId: number | null;
+      pinnedById: number | null;
       severity: string;
       assigneeId: number | null;
       type: 'bug';

@@ -2,7 +2,7 @@ import type {
   ContractSourceDiagnostic,
   ContractSourceDiagnostics,
   ContractSourceProvider,
-  PrismaNextConfig,
+  PrismaConfig,
 } from '@internal/config/config-types';
 import type { Contract, ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
@@ -14,6 +14,7 @@ import type {
   ControlFamilyDescriptor,
   ControlTargetDescriptor,
   CoreSchemaView,
+  DatabasePolicyDifference,
   FailedCast,
   FailedConversion,
   FailedTypeChange,
@@ -26,14 +27,17 @@ import type {
   MigrationPlanOperation,
   MigrationPlanSubjects,
   OperationPreview,
+  RowsFailingCheck,
   VerifyDatabaseResult,
   VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
 import type { PslDocumentAst } from '@internal/framework-components/psl-ast';
 import type { AggregateMigrationEdgeRef } from '@internal/migration-tools/aggregate';
+import type { NamedRef } from '@internal/migration-tools/refs';
 import type { Result } from '@internal/utils/result';
 import type { CliStructuredError } from '../utils/cli-errors';
 import type { CliInvocation } from '../utils/printed-command';
+import type { ChangedStorageEntity } from './operations/changed-storage-entities';
 import type { ExecuteDbSignResult } from './operations/db-sign';
 import type { ExecuteDbVerifyResult } from './operations/db-verify';
 import type { RenderContractDtsOptions, RenderContractDtsResult } from './render-contract-dts';
@@ -240,6 +244,13 @@ export interface DbUpdateOptions extends PlannerWarningsListener {
   /** Consents to every operation that would change who can read or write data, without asking. */
   readonly acceptAccessChanges?: boolean;
   /**
+   * The ref `--to` named, whose declared policies the run checks and, with consent, records. The
+   * database moves to `contract`, so the ref's hash must be that contract's storage hash.
+   */
+  readonly ref?: NamedRef;
+  /** Consents to writing the ref's declared policies into the database when they differ from those in force. */
+  readonly permitPolicyChange?: boolean;
+  /**
    * On-disk migrations directory. Always required — every `db update`
    * routes through the per-space flow, which reads on-disk
    * `refs/head.json` and extension destination contracts from this
@@ -301,6 +312,8 @@ export interface DbVerifyOptions {
 export interface DbSignOptions {
   /** The app space's contract, already deserialized through the family seam. */
   readonly contract: Contract;
+  /** The command line the advice of a refusal repeats: its directory, `--config` and whether `--db` was given. */
+  readonly invocation: CliInvocation;
   readonly migrationsDir: string;
   readonly connection?: unknown;
   readonly onProgress?: OnControlProgress;
@@ -337,6 +350,8 @@ export interface EmitContractConfig {
    * The .d.ts types file will be colocated (e.g., contract.json → contract.d.ts).
    */
   readonly output: string;
+  /** The module the generated `contract.d.ts` imports the framework and family contract types from. */
+  readonly typesModule: string;
 }
 
 /**
@@ -497,7 +512,11 @@ export interface DbUpdateSuccess
    * graph ends at it: the origin a `migration plan` for this database starts from.
    */
   readonly databaseStorageHash?: string;
+  /** The storage entities that changed, when the run signed the database with a changed contract and ran no operation. */
+  readonly changedStorageEntities?: readonly ChangedStorageEntity[];
   readonly summary: string;
+  /** The settings the run recorded as the database's policies, with the values they replaced. Present only when it recorded some. */
+  readonly databasePoliciesUpdated?: readonly DatabasePolicyDifference[];
 }
 
 /**
@@ -527,11 +546,16 @@ export interface RunnerFailureFacts {
   readonly rowsWithoutValue?: readonly RowsWithoutValueReport[];
   /** The check that failed before its operation ran. */
   readonly failedPrecheck?: FailedPrecheckReport;
-  /** The data that still holds a stored enum value whose removal its storage cannot take. */
-  readonly rowsHoldingValue?: RowsHoldingValueReport;
+  /** The data that still holds stored enum values whose removal its storage cannot take; the failed one first. */
+  readonly rowsHoldingValue?: readonly RowsHoldingValueReport[];
+  /** The existing rows that a check the failed operation adds refuses. */
+  readonly rowsFailingCheck?: RowsFailingCheckReport;
   /** The written migration of the failed operation, when the runner named the operation, or the last one applied when the schema check after apply failed. */
   readonly failedMigration?: { readonly spaceId: string; readonly edge: AggregateMigrationEdgeRef };
 }
+
+/** The existing rows that a check the failed operation adds refuses, as the advice names them. */
+export type RowsFailingCheckReport = Omit<RowsFailingCheck, 'operationIndex'>;
 
 /** The data that still holds the stored value of an enum value the plan removes from storage that cannot do without it. */
 export interface RowsHoldingValueReport {
@@ -558,6 +582,8 @@ export interface RowsWithoutValueReport {
   readonly reason: 'nullValues' | 'newField' | 'backfillMissedRows';
   /** How many rows have no value. */
   readonly rows: number;
+  /** Whether the field is its model's discriminator, which the contract cannot make optional. */
+  readonly discriminator: boolean;
 }
 
 /** The result of `db update`: a failure is the structured error the command reports. */
@@ -615,6 +641,15 @@ export type EmitResult = Result<EmitSuccess, EmitFailure>;
 // ============================================================================
 
 /**
+ * What `migrate` moves the application space to: the ref `--to` named, which it walks to by a path
+ * that provides the ref's invariants, checking and, with consent, recording the policies it
+ * declares; or a contract `--to` named by its hash (`@db` and `@empty` resolve to one).
+ */
+export type MigrateTarget =
+  | { readonly kind: 'ref'; readonly ref: NamedRef }
+  | { readonly kind: 'hash'; readonly hash: string };
+
+/**
  * Options for the aggregate-walking `migrate` operation.
  *
  * The control-api operation is responsible for: loading the
@@ -633,24 +668,12 @@ export interface MigrateOptions {
   /** Migrations root directory (`migrations/` under the project). */
   readonly migrationsDir: string;
   /**
-   * Optional app-space ref override. When provided, the app space's
-   * graph-walk targets this hash instead of `contract.storage.storageHash`.
-   * Extension spaces always walk to their own `headRef.hash`.
+   * What the application space walks to. Without it the application space walks to the emitted
+   * contract. Extension spaces always walk to their own head.
    */
-  readonly refHash?: string;
-  /**
-   * Required invariants on the user-supplied app-space ref. Threaded
-   * into the graph-walk's `required` calculation so the planner picks
-   * an invariant-bearing path. Ignored when `refHash` is absent.
-   */
-  readonly refInvariants?: readonly string[];
-  /**
-   * Resolved name of the user-supplied app-space ref (the literal the
-   * user passed to `--ref`). Decorates `pathDecision.refName` and any
-   * `MIGRATION.NO_INVARIANT_PATH` envelope raised during graph-walk.
-   * Ignored when `refHash` is absent.
-   */
-  readonly refName?: string;
+  readonly target?: MigrateTarget;
+  /** Consents to writing the ref's declared policies into the database when they differ from those in force. */
+  readonly permitPolicyChange?: boolean;
   /**
    * Database connection. If provided, migrate will connect before executing.
    * If omitted, the client must already be connected.
@@ -755,6 +778,8 @@ export interface MigrateSuccess {
    * "Already up to date" early return when the app has no plan.
    */
   readonly pathDecision?: MigratePathDecision;
+  /** The settings the run recorded as the database's policies, with the values they replaced. Present only when it recorded some. */
+  readonly databasePoliciesUpdated?: readonly DatabasePolicyDifference[];
 }
 
 /** The result of `db migrate`: a failure is the structured error the command reports. */
@@ -778,17 +803,9 @@ export type MigrateResult = Result<MigrateSuccess, CliStructuredError>;
  */
 export interface ContractEmitOptions {
   /** The already-loaded config. Callers own loading; this operation never reads it from disk. */
-  readonly config: PrismaNextConfig;
+  readonly config: PrismaConfig;
   /** Directory the caller was invoked from. */
   readonly cwd: string;
-  /**
-   * The project's directory, normally the validated config's `baseDir`. Used
-   * to find the project manifest whose dependencies decide the import
-   * specifiers in emitted files. Omit it and the manifest is looked up from
-   * the directory the artifacts are written to, which is the package that
-   * will import them.
-   */
-  readonly projectDir?: string;
   /**
    * Directory to write contract artifacts into. When set, `contract.json` and
    * `contract.d.ts` are written inside this directory, taking precedence over
@@ -823,6 +840,8 @@ export interface ContractEmitResult {
     /** Path to the emitted contract.d.ts file */
     readonly dts: string;
   };
+  /** Each file or directory written under the migrations directory for a composed extension pack's space, with that space's id. Empty when nothing there changed or the contract went to an output path of its own. */
+  readonly pinnedFiles: readonly { readonly spaceId: string; readonly path: string }[];
   /**
    * Warning surfaced by `validateContractDeps` after a successful publication.
    * Callers (CLI, Vite plugin) decide how to render this; the operation does
@@ -968,9 +987,8 @@ export interface ControlClient {
    *
    * @param options.contract - The target contract to migrate to
    * @param options.migrationsDir - Root migrations directory (`migrations/` under the project)
-   * @param options.refHash - Optional app-space ref override hash
-   * @param options.refInvariants - Required invariants on the user-supplied ref
-   * @param options.refName - Resolved name of the user-supplied app-space ref
+   * @param options.ref - The application space's target, when `--to` named one
+   * @param options.permitPolicyChange - Consents to writing the ref's declared policies
    * @returns Result pattern: Ok with migration details, NotOk with failure details
    * @throws If not connected, target doesn't support migrations, or infrastructure failure
    */

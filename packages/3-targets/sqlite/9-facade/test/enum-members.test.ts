@@ -18,11 +18,11 @@ const When = enumType(
   member('Sunset', new Date(sunset)),
 );
 
-const contract = defineContract({ enums: { Level, When } }, ({ field, model }) => ({
+const contract = defineContract({ enums: { Level, When } }, ({ field, model, gen, type }) => ({
   models: {
     Reading: model('Reading', {
       fields: {
-        id: field.id.uuidv4String(),
+        id: field.column(type.sql.Char(36)).id().onCreate(gen.uuid()),
         level: field.namedType(Level),
         when: field.namedType(When),
       },

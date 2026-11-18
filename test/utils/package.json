@@ -1,6 +1,6 @@
 {
   "name": "@repo/test-utils",
-  "version": "8.0.0-rc.20",
+  "version": "8.0.0-rc.24",
   "private": true,
   "type": "module",
   "sideEffects": false,
@@ -13,19 +13,19 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/contract": "workspace:8.0.0-rc.20",
-    "@internal/utils": "workspace:8.0.0-rc.20"
+    "@internal/contract": "workspace:8.0.0-rc.24",
+    "@internal/utils": "workspace:8.0.0-rc.24"
   },
   "devDependencies": {
-    "@repo/tsconfig": "workspace:8.0.0-rc.20",
+    "@repo/tsconfig": "workspace:8.0.0-rc.24",
     "@prisma/dev": "catalog:",
     "@types/pg": "catalog:",
     "pg": "catalog:",
-    "@repo/tsdown": "workspace:8.0.0-rc.20",
+    "@repo/tsdown": "workspace:8.0.0-rc.24",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
-    "mysql2": "3.15.3"
+    "mariadb": "3.5.4"
   },
   "exports": {
     ".": {
@@ -51,6 +51,10 @@
     "./semantic-lines": {
       "types": "./dist/exports/semantic-lines.d.mts",
       "import": "./dist/exports/semantic-lines.mjs"
+    },
+    "./temporal-fallback-entries": {
+      "types": "./dist/exports/temporal-fallback-entries.d.mts",
+      "import": "./dist/exports/temporal-fallback-entries.mjs"
     },
     "./timeouts": {
       "types": "./dist/exports/timeouts.d.mts",

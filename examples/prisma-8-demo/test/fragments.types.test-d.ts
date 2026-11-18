@@ -1,4 +1,4 @@
-import { field } from '@prisma/orm-postgres/contract-builder';
+import { field, type } from '@prisma/orm-postgres/contract-builder';
 import {
   type CodecField,
   type CollectionRowOf,
@@ -86,12 +86,13 @@ describe('db.orm.fragment', () => {
     db.Task.with(ownedBy('u'));
     // @ts-expect-error User has no userId
     db.User.with(ownedBy('u'));
-    const titled = dbFacade.orm.fragment({ title: field.text() }, (rows) =>
+    const titled = dbFacade.orm.fragment({ title: field.column(type.String()) }, (rows) =>
       rows.where((r) => r.title.eq('x')),
     );
     db.Post.with(titled);
-    const nullableTitle = dbFacade.orm.fragment({ title: field.text().optional() }, (rows) =>
-      rows.limit(1),
+    const nullableTitle = dbFacade.orm.fragment(
+      { title: field.column(type.String()).optional() },
+      (rows) => rows.limit(1),
     );
     // @ts-expect-error Post.title is not nullable
     db.Post.with(nullableTitle);

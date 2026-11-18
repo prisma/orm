@@ -276,7 +276,7 @@ model Gadget {
         code: 'PSL_UNSUPPORTED_MODEL_ATTRIBUTE',
         message: 'Model "Widget" uses unsupported attribute "@@stamp"',
       },
-      { entityTypes: {}, field: {}, pslBlockDescriptors: {}, type: {} },
+      { entityTypes: {}, pslBlockDescriptors: {}, type: {} },
     );
   });
 

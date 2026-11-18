@@ -36,7 +36,11 @@ function contractWithModel(storageHash: string, model: string): Contract {
     },
     domain: {
       namespaces: {
-        app: { models: { [model]: { fields: {}, relations: {}, storage: { fields: {} } } } },
+        app: {
+          models: {
+            [model]: { fields: {}, relations: {}, storage: { collection: model, fields: {} } },
+          },
+        },
       },
     },
   } as unknown as Contract;
@@ -59,7 +63,8 @@ const marker: ContractMarkerRecord = {
 const family = {
   familyId: 'mongo',
   readAllMarkers: async () => new Map([['app', marker]]),
-  introspect: async () => new MongoSchemaIR([new MongoSchemaCollection({ name: 'Profile' })]),
+  introspect: async () =>
+    new MongoSchemaIR([new MongoSchemaCollection({ name: 'Profile' })], { fromDatabase: false }),
   deserializeContract: (json: unknown) => json as Contract,
   toOperationPreview: () => ({ statements: [] }),
 } as unknown as ControlFamilyInstance<'mongo', unknown>;

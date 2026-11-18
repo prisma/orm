@@ -12,6 +12,7 @@ This package provides TypeScript type definitions, Arktype validators, and facto
 - **Contract Validation**: Provides Arktype-based structural validators that the per-target `contractSerializer` SPI consumes for runtime-safe contract validation
 - **IR Factories**: Provides pure factory functions for constructing contract IR structures in tests and authoring
 - **Shared Plane Access**: Enables both migration-plane and runtime-plane packages to import SQL contract types without violating plane boundaries
+- **Shared Authoring Definitions**: Holds authoring definitions that both the SQL family pack and the PSL and TypeScript authoring packages read: `@internal/sql-contract/generated-id-column-aliases` defines the generated id column aliases (`UuidString`, `Ulid`, `Nanoid`, `Cuid2`, `Ksuid`) and the order a rewrite looks them up in (ADR 310)
 
 ## StorageColumn Structure
 
@@ -57,7 +58,7 @@ type ForeignKeyIndex =
   | { readonly unique: readonly string[] }; // a unique constraint, by its columns, whose first columns are the foreign key's
 ```
 
-The field is absent when the relation says `index: false`. `materializeForeignKeysAndIndexes` sets it while building a contract, after a pass that removes indexes identical to another (`index-deduplication.ts`, using the planner's equality from `index-equivalence.ts`). It refuses a relation's `index: "<name>"` that names an index of a type whose body is rendered from its options, such as Postgres's `fullText`, because such an index's columns are not its key. Contract validation refuses an `index` its table does not have. See [ADR 161](../../../docs/architecture%20docs/adrs/ADR%20161%20-%20Explicit%20foreign%20key%20constraint%20and%20index%20configuration.md).
+The field is absent when the relation says `index: false`. `materializeForeignKeysAndIndexes` sets it while building a contract, after a pass that removes indexes identical to another (`index-deduplication.ts`, using the planner's equality from `index-equivalence.ts`). It refuses a relation's `index: "<name>"` that names an index of a type whose body is rendered from its options, such as Postgres's `fullText`, because such an index's columns are not its key. Contract validation refuses an `index` its table does not have. See [ADR 161](../../../../docs/architecture%20docs/adrs/ADR%20161%20-%20Explicit%20foreign%20key%20constraint%20and%20index%20configuration.md).
 
 ### Referential Actions
 
@@ -75,7 +76,7 @@ type ForeignKey = {
 };
 ```
 
-When omitted, the database applies its default behavior (Postgres: `NO ACTION`). See [ADR 166](../../../docs/architecture%20docs/adrs/ADR%20166%20-%20Referential%20actions%20for%20foreign%20keys.md) for design rationale.
+When omitted, the database applies its default behavior (Postgres: `NO ACTION`). See [ADR 166](../../../../docs/architecture%20docs/adrs/ADR%20166%20-%20Referential%20actions%20for%20foreign%20keys.md) for design rationale.
 
 The `fk()` factory accepts referential actions via an options object:
 
@@ -215,6 +216,6 @@ flowchart TD
 
 ## Related Subsystems
 
-- **[Data Contract](../../../docs/architecture%20docs/subsystems/1.%20Data%20Contract.md)**: Detailed subsystem specification
-- **[Contract Emitter & Types](../../../docs/architecture%20docs/subsystems/2.%20Contract%20Emitter%20&%20Types.md)**: Contract emission
+- **[Data Contract](../../../../docs/architecture%20docs/subsystems/1.%20Data%20Contract.md)**: Detailed subsystem specification
+- **[Contract Emitter & Types](../../../../docs/architecture%20docs/subsystems/2.%20Contract%20Emitter%20&%20Types.md)**: Contract emission
 

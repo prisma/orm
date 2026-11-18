@@ -1,4 +1,5 @@
 import type { ControlPolicy } from '@internal/contract/types';
+import type { ResolvedMigrationStatement } from '@internal/framework-components/control';
 import { describe, expect, it } from 'vitest';
 import {
   contract,
@@ -137,9 +138,9 @@ describe('MongoMigrationPlanner, field statements', () => {
       ),
     ).toEqual({
       labels: [
-        'Drop index on profiles (name:1)',
+        'Drop index name_1 on profiles (name:1)',
         'Rename field name to fullName in collection profiles',
-        'Create index on profiles (fullName:1)',
+        'Create index fullName_1 on profiles (fullName:1)',
         'Update validator on profiles (added: fullName; removed: name)',
       ],
       classes: ['widening', 'widening', 'additive', 'widening'],
@@ -169,9 +170,9 @@ describe('MongoMigrationPlanner, field statements', () => {
     ).toMatchObject({
       labels: [
         'Rename collection profiles to users',
-        'Drop index on users (name:1)',
+        'Drop index name_1 on users (name:1)',
         'Rename field name to fullName in collection users',
-        'Create index on users (fullName:1)',
+        'Create index fullName_1 on users (fullName:1)',
         'Update validator on users (added: fullName; removed: name)',
       ],
       applied: [[0], [2]],
@@ -432,7 +433,78 @@ describe('MongoMigrationPlanner, removed fields', () => {
     });
   });
 
-  it('keeps a variant field its base now stores', () => {
+  it('renames the discriminator first when a base field rename filters on its new name, in either order of the statements', () => {
+    const renamed = contract(
+      'to',
+      {
+        Task: {
+          collection: 'tasks',
+          fields: ['_id', 'kind', 'remark'],
+          discriminator: 'kind',
+          variants: { Bug: 'bug', Feature: 'feature' },
+        },
+        Bug: { collection: 'tasks', fields: ['note'], base: 'Task' },
+        Feature: { collection: 'tasks', fields: [], base: 'Task' },
+      },
+      { tasks: {} },
+    );
+    const renameNote = renameField('Task', 'note', 'Task', 'remark');
+    const renameType = renameField('Task', 'type', 'Task', 'kind');
+    const labels = (statements: readonly ResolvedMigrationStatement[]) =>
+      planned(
+        plan({
+          from: tasks('from', ['note'], [], []),
+          to: renamed,
+          schema: [schemaCollection('tasks')],
+          statements,
+        }),
+      ).labels;
+    const expected = [
+      'Rename field type to kind in collection tasks',
+      'Rename field note to remark in collection tasks in documents whose kind is not "bug"',
+    ];
+    expect({
+      noteFirst: labels([renameNote, renameType]),
+      typeFirst: labels([renameType, renameNote]),
+    }).toEqual({ noteFirst: expected, typeFirst: expected });
+  });
+
+  it('renames a base field filtered on a converted discriminator value after the replacement, past operations of other fields', () => {
+    const converted = contract(
+      'to',
+      {
+        Task: {
+          collection: 'tasks',
+          fields: ['_id', 'type', 'remark', 'y'],
+          discriminator: 'type',
+          variants: { Bug: 'defect' },
+        },
+        Bug: { collection: 'tasks', fields: ['note'], base: 'Task' },
+      },
+      { tasks: {} },
+    );
+    expect(
+      planned(
+        plan({
+          from: tasks('from', ['note', 'x'], [], []),
+          to: converted,
+          schema: [schemaCollection('tasks')],
+          statements: [
+            renameField('Task', 'note', 'Task', 'remark'),
+            renameField('Task', 'x', 'Task', 'y'),
+            { kind: 'convert', entity: 'model', model: { namespaceId: NS, model: 'Bug' } },
+          ],
+        }),
+      ).labels,
+    ).toEqual([
+      'Rename field x to y in collection tasks',
+      'Delete the documents of collection tasks whose type is "feature"',
+      'Replace value "bug" with "defect" in field type of collection tasks',
+      'Rename field note to remark in collection tasks in documents whose type is not "defect"',
+    ]);
+  });
+
+  it('keeps a variant field its base now stores, and fills it in the documents of the other variants', () => {
     expect(
       planned(
         plan({
@@ -441,7 +513,7 @@ describe('MongoMigrationPlanner, removed fields', () => {
           schema: [schemaCollection('tasks')],
         }),
       ).labels,
-    ).toEqual([]);
+    ).toEqual(['Fill field note in collection tasks where it is missing or null']);
   });
 
   it('unsets nothing without an origin contract when the destination collection has no validator', () => {

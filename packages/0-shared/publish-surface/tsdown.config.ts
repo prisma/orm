@@ -6,7 +6,7 @@
 import { defineConfig } from 'tsdown';
 
 export default defineConfig({
-  entry: ['src/shells.ts', 'src/import-roots.ts'],
+  entry: ['src/shells.ts', 'src/platform-entrypoints.ts'],
   dts: { enabled: true, sourcemap: true },
   exports: { enabled: 'local-only' },
   skipNodeModulesBundle: true,

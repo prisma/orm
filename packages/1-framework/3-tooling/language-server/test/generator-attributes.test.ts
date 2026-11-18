@@ -38,7 +38,7 @@ const types: AuthoringTypeNamespace = {
   String: { kind: 'typeConstructor', output: { codecId: 'pg/text@1' } },
   Time: {
     kind: 'typeConstructor',
-    args: [{ kind: 'number', name: 'precision', integer: true, optional: true }],
+    args: [{ kind: 'value', dataType: 'fixture/int', name: 'precision', optional: true }],
     output: { codecId: 'pg/time-temporal@1', typeParams: { precision: { kind: 'arg', index: 0 } } },
   },
 };
@@ -102,7 +102,7 @@ function prepare(markedSource: string, stack: Stack) {
   });
   const controlMutationDefaults = { defaultFunctionRegistry: new Map(), generatorDescriptors: [] };
   const binder = testBinder({ ...stack, controlMutationDefaults, sources, symbolTable });
-  return { document, sourceFile, symbolTable, binder, offset, controlMutationDefaults };
+  return { document, sourceFile, symbolTable, binder, offset, controlMutationDefaults, sources };
 }
 
 function complete(markedSource: string, stack: Stack, clientSupportsSnippets = false) {
@@ -158,7 +158,7 @@ describe('generator attributes in the language server', {
 
   it('show the signature of a generator function on hover', async () => {
     const stack = await actualPostgresStack();
-    const { document, sourceFile, binder, offset } = prepare(
+    const { document, sourceFile, binder, offset, sources } = prepare(
       'model Post {\n  id String @onCreate(uu|id(7))\n}',
       stack,
     );
@@ -170,6 +170,7 @@ describe('generator attributes in the language server', {
         binder,
         pslBlockDescriptors: stack.pslBlockDescriptors,
         dataTypes: EMPTY_DATA_TYPES,
+        sources,
       })?.contents,
     ).toEqual({
       kind: 'markdown',

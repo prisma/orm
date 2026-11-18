@@ -42,7 +42,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "8e7bd87d3410fa8c14b9861bc31aaa1f572c78a30e045d315c3c436fd5b90f94",
+    "storageHash": "5e7f6b214527aec54879d1123e2e50bf622b4750aa0e5b3d4a6f7803691436f3",
     "namespaces": {
       "public": {
         "id": "public",
@@ -69,7 +69,7 @@
                 },
                 "createdAt": {
                   "dataType": "pg/timestamp",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "nullable": false,
                   "many": false,
                   "typeParams": {
@@ -94,7 +94,7 @@
                 },
                 "touchedAt": {
                   "dataType": "pg/timestamp",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "nullable": false,
                   "many": false,
                   "typeParams": {
@@ -103,7 +103,7 @@
                 },
                 "seenAt": {
                   "dataType": "pg/timestamp",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "nullable": true,
                   "many": false,
                   "typeParams": {
@@ -126,7 +126,7 @@
                 },
                 "stamp": {
                   "dataType": "pg/timestamp",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "nullable": false,
                   "many": false,
                   "typeParams": {

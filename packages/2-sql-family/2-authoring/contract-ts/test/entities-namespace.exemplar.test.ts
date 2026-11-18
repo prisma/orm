@@ -54,15 +54,9 @@ const sqlFamilyPack = {
   id: 'sql',
   familyId: 'sql',
   version: '0.0.1',
-  authoring: {
-    field: {
-      text: {
-        kind: 'fieldPreset',
-        output: { codecId: 'sql/text@1' },
-      },
-    },
-  },
 } as const satisfies FamilyPackRef<'sql'>;
+
+const sqlText = { codecId: 'sql/text@1' } as const;
 
 const postgresTargetPack = {
   kind: 'target',
@@ -113,7 +107,7 @@ describe('entities namespace — synthetic pack exemplar', () => {
         return {
           models: {
             Marker: model('Marker', {
-              fields: { id: field.text() },
+              fields: { id: field.column(sqlText) },
             }),
           },
         };
@@ -135,7 +129,7 @@ describe('entities namespace — synthetic pack exemplar', () => {
         constructed = demoEntity({ name: 'orders', columns: ['id', 'total'] });
         return {
           models: {
-            Marker: model('Marker', { fields: { id: field.text() } }),
+            Marker: model('Marker', { fields: { id: field.column(sqlText) } }),
           },
         };
       },
@@ -176,7 +170,7 @@ describe('entities namespace — synthetic pack exemplar', () => {
         },
         (helpers) => ({
           models: {
-            Marker: helpers.model('Marker', { fields: { id: helpers.field.text() } }),
+            Marker: helpers.model('Marker', { fields: { id: helpers.field.column(sqlText) } }),
           },
         }),
       ),
@@ -205,7 +199,7 @@ describe('entities namespace — synthetic pack exemplar', () => {
         helpers.demoEntity;
         return {
           models: {
-            Marker: helpers.model('Marker', { fields: { id: helpers.field.text() } }),
+            Marker: helpers.model('Marker', { fields: { id: helpers.field.column(sqlText) } }),
           },
         };
       },

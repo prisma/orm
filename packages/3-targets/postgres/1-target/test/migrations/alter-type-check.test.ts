@@ -31,6 +31,20 @@ describe('alterTypeCheck', () => {
     ]);
   });
 
+  it('compares a date or time type by the text format_type prints for its precision as written', () => {
+    expect(
+      ['timestamptz', 'timestamptz(6)', 'time', 'timetz(6)', 'interval'].map((type) =>
+        alterTypeCheck(type, postgresDataTypes, where),
+      ),
+    ).toEqual([
+      catalogText('timestamp with time zone'),
+      catalogText('timestamp(6) with time zone'),
+      catalogText('time without time zone'),
+      catalogText('time(6) with time zone'),
+      catalogText('interval'),
+    ]);
+  });
+
   it('compares an enum by identity, by the name its data type renders, whatever schema it is in', () => {
     expect(
       ['"Mood"', '"app"."status"', '"app"."Status"', '"public"."Mood"', '"Mood"[]'].map((type) =>
@@ -77,7 +91,7 @@ describe('alterTypeCheck', () => {
     );
   });
 
-  it('gives the catalog text of the parameters in normal form for every written text of every Postgres data type', () => {
+  it('gives the catalog text of the parameters as written for every written text of every Postgres data type', () => {
     const sqlTypes = postgresDataTypes.filter(
       (type): type is SqlDataType => isSqlDataType(type) && type.sql.claimsKind === undefined,
     );

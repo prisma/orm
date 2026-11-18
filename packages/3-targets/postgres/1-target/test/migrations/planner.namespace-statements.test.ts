@@ -10,8 +10,8 @@ import {
   type ResolvedNamespaceRenameStatement,
   type SchemaOwnership,
 } from '@internal/framework-components/control';
-import { keepInternalSpecifiers } from '@internal/framework-components/emission';
 import type { SqlStorage } from '@internal/sql-contract/types';
+import { workspaceMigrationModule } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { createPostgresMigrationPlanner } from '../../src/core/migrations/planner';
 import { postgresContractToSchema } from '../../src/core/migrations/postgres-contract-to-schema';
@@ -76,7 +76,7 @@ describe('Postgres planner, a namespace statement', () => {
     expect(result.appliedStatements).toEqual([
       { statement: billingToFinance, operationIndexes: [0] },
     ]);
-    expect(result.plan.renderTypeScript(keepInternalSpecifiers)).toContain(
+    expect(result.plan.renderTypeScript(workspaceMigrationModule.postgres)).toContain(
       'this.renameSchema({ schema: "billing", to: "finance" })',
     );
   });
@@ -151,6 +151,7 @@ describe('Postgres planner, a namespace statement', () => {
   it('renames into a name the database lacks although the read schema lists it with no tables', async () => {
     const schema = postgresContractToSchema(inBilling, postgresTypeComponents);
     const withPlaceholder = new PostgresDatabaseSchemaNode({
+      extensions: undefined,
       namespaces: {
         ...schema.namespaces,
         finance: new PostgresNamespaceSchemaNode({ schemaName: 'finance', tables: {} }),

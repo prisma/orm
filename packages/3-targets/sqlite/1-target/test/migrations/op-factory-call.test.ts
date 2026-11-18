@@ -12,6 +12,7 @@ import {
   DropColumnCall,
   DropIndexCall,
   DropTableCall,
+  MIGRATION_MODULE,
   RecreateTableCall,
 } from '../../src/core/migrations/op-factory-call';
 import type {
@@ -116,7 +117,7 @@ describe('CreateTableCall', () => {
     const call = new CreateTableCall('user', [col('id', 'INTEGER')]);
     const reqs = call.importRequirements();
     expect(reqs).toContainEqual({
-      moduleSpecifier: '@internal/sqlite/migration',
+      moduleSpecifier: MIGRATION_MODULE,
       symbol: 'col',
     });
   });
@@ -128,7 +129,7 @@ describe('DropTableCall', () => {
     const call = new DropTableCall('orphan');
     expect(call.factoryName).toBe('dropTable');
     expect(call.operationClass).toBe('destructive');
-    expect(call.label).toBe('Drop table orphan');
+    expect(call.label).toBe('Drop table "orphan"');
 
     const op = await call.toOp(lowerer);
     expect(op.id).toBe('dropTable.orphan');
@@ -266,7 +267,7 @@ describe('AddColumnCall', () => {
       ].join('\n'),
     );
     expect(call.importRequirements()).toEqual([
-      { moduleSpecifier: '@internal/sqlite/migration', symbol: 'sql' },
+      { moduleSpecifier: MIGRATION_MODULE, symbol: 'sql' },
     ]);
   });
 
@@ -665,7 +666,7 @@ describe('RecreateTableCall', () => {
       ].join('\n'),
     );
     expect(call.importRequirements()).toEqual([
-      { moduleSpecifier: '@internal/sqlite/migration', symbol: 'sql' },
+      { moduleSpecifier: MIGRATION_MODULE, symbol: 'sql' },
     ]);
   });
 });
@@ -719,8 +720,8 @@ describe('DataTransformCall', () => {
   it('importRequirements() pulls dataTransform + placeholder from the migration module', () => {
     const reqs = makeCall().importRequirements();
     expect(reqs).toEqual([
-      { moduleSpecifier: '@internal/sqlite/migration', symbol: 'dataTransform' },
-      { moduleSpecifier: '@internal/sqlite/migration', symbol: 'placeholder' },
+      { moduleSpecifier: MIGRATION_MODULE, symbol: 'dataTransform' },
+      { moduleSpecifier: MIGRATION_MODULE, symbol: 'placeholder' },
     ]);
   });
 });

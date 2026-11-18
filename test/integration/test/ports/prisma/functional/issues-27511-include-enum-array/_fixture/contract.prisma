@@ -21,13 +21,13 @@ enum workspace_permission {
 }
 
 model workspace_member {
-  id    VarChar(30)               @id
+  id    Varchar(30)               @id
   roles workspace_member_role[]
   @@map("workspace_member")
 }
 
 model workspace_role {
-  id          VarChar(30)               @id
+  id          Varchar(30)               @id
   name        String
   permissions workspace_permission[]
   members     workspace_member_role[]

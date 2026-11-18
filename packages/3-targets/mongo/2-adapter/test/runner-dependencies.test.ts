@@ -73,7 +73,7 @@ describe('MongoControlAdapterImpl.createRunnerDependencies', () => {
 
   it('routes introspection through the control adapter with the control driver', async () => {
     const adapter = new MongoControlAdapterImpl();
-    const schema = new MongoSchemaIR([]);
+    const schema = new MongoSchemaIR([], { fromDatabase: false });
     const introspectSchema = vi.spyOn(adapter, 'introspectSchema').mockResolvedValue(schema);
     const driver = fakeControlDriver();
 

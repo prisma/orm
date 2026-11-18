@@ -199,14 +199,31 @@
               "address": {
                 "nullable": true,
                 "type": {
+                  "entityKind": "valueObject",
+                  "entityName": "Address",
                   "kind": "valueObject",
-                  "name": "Address"
+                  "namespaceId": "__unbound__",
+                  "plane": "storage"
+                }
+              },
+              "availableFrom": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mongo/time-string@1",
+                  "kind": "scalar"
                 }
               },
               "bio": {
                 "nullable": true,
                 "type": {
                   "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              },
+              "birthday": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mongo/date-string@1",
                   "kind": "scalar"
                 }
               },
@@ -268,8 +285,14 @@
                 "address": {
                   "field": "address"
                 },
+                "availableFrom": {
+                  "field": "availableFrom"
+                },
                 "bio": {
                   "field": "bio"
+                },
+                "birthday": {
+                  "field": "birthday"
                 },
                 "email": {
                   "field": "email"
@@ -282,40 +305,6 @@
                 },
                 "role": {
                   "field": "role"
-                }
-              }
-            }
-          }
-        },
-        "valueObjects": {
-          "Address": {
-            "fields": {
-              "city": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              },
-              "country": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              },
-              "street": {
-                "nullable": false,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
-                }
-              },
-              "zip": {
-                "nullable": true,
-                "type": {
-                  "codecId": "mongo/string@1",
-                  "kind": "scalar"
                 }
               }
             }
@@ -338,7 +327,8 @@
                       "field": "authorId"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "authorId_1"
                 },
                 {
                   "keys": [
@@ -351,7 +341,8 @@
                       "field": "authorId"
                     }
                   ],
-                  "kind": "mongo-index"
+                  "kind": "mongo-index",
+                  "name": "createdAt_-1_authorId_1"
                 },
                 {
                   "keys": [
@@ -361,6 +352,7 @@
                     }
                   ],
                   "kind": "mongo-index",
+                  "name": "summary_1",
                   "partialFilterExpression": {
                     "kind": "article"
                   },
@@ -518,10 +510,22 @@
                         }
                       ]
                     },
+                    "availableFrom": {
+                      "bsonType": [
+                        "null",
+                        "string"
+                      ]
+                    },
                     "bio": {
                       "bsonType": [
                         "null",
                         "string"
+                      ]
+                    },
+                    "birthday": {
+                      "bsonType": [
+                        "null",
+                        "date"
                       ]
                     },
                     "email": {
@@ -552,6 +556,40 @@
               }
             }
           },
+          "valueObject": {
+            "Address": {
+              "fields": {
+                "city": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                },
+                "country": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                },
+                "street": {
+                  "nullable": false,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                },
+                "zip": {
+                  "nullable": true,
+                  "type": {
+                    "codecId": "mongo/string@1",
+                    "kind": "scalar"
+                  }
+                }
+              }
+            }
+          },
           "valueSet": {
             "UserRole": {
               "kind": "valueSet",
@@ -567,7 +605,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "d264cabd6a02546054a776ed3c04438b9a22989f406c49f5590f7f2101156eb0"
+    "storageHash": "4a982736e89b99615c530abbd19d92cf955a27063db9ec4dcf0bddcc2dcc6595"
   },
   "capabilities": {},
   "extensions": {},

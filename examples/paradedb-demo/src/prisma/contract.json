@@ -148,11 +148,15 @@
       "forShare": true,
       "forUpdate": true,
       "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
       "insertOnConflictWithoutTarget": true,
+      "jsonAgg": true,
+      "jsonAggWithoutTruncation": true,
       "lateral": true,
       "lockNowait": true,
       "lockOf": true,
       "lockSkipLocked": true,
+      "outerReferencesInDerivedTables": true,
       "returning": true,
       "scalarList": true
     }
@@ -168,15 +172,6 @@
       "id": "paradedb",
       "kind": "extension",
       "targetId": "postgres",
-      "types": {
-        "queryOperationTypes": {
-          "import": {
-            "alias": "ParadeDbQueryOperationTypes",
-            "named": "QueryOperationTypes",
-            "package": "@internal/extension-paradedb/operation-types"
-          }
-        }
-      },
       "version": "0.0.1"
     }
   },

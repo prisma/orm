@@ -115,6 +115,7 @@ function rootOf(
   namespaces: Readonly<Record<string, PostgresNamespaceSchemaNode>>,
 ): PostgresDatabaseSchemaNode {
   return new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces,
     roles: [],
     existingSchemas: Object.keys(namespaces),

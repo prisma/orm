@@ -10,7 +10,8 @@
  * A projection conforms when the codec's `fromWire` reads the projected value to
  * the same application value it reads the ordinary row's value to (ADR 254,
  * "Rows the database returns as JSON"), and that value is the one the case
- * started from.
+ * started from. The row is compared with the case's value by the case's `valueEquality` when it has
+ * one, and the projection with the row by its `projectionEquality`, or exactly.
  *
  * For every case the harness also checks that `toDataTypeValue(fromDataTypeValue(v))`
  * equals `v`, where `v` is the value `toDataTypeValue` gives for the case.
@@ -134,6 +135,10 @@ export interface SqliteCodecConformanceCase {
   readonly notYetCanonical?: ExpectedProjectionFailure;
   /** The codec's data type has no literal values (a raw column), so `toDataTypeValue` refuses every value and the harness does not check it. */
   readonly literalValuesAbsent?: true;
+  /** Compares the application value the row reads to with the case's value, for a value that is not deep-equal to its copy. */
+  readonly valueEquality?: (left: unknown, right: unknown) => boolean;
+  /** Compares the application value the projection reads to with the row's, for a value that is not deep-equal to its copy. The comparison is otherwise exact. */
+  readonly projectionEquality?: (left: unknown, right: unknown) => boolean;
 }
 
 export interface CodecProjectionOutcome {
@@ -184,6 +189,14 @@ function buildConformanceContract(): SqliteContract {
 const conformanceContract: SqliteContract = buildConformanceContract();
 
 const CALL_CONTEXT: SqlCodecCallContext = { column: { table: STORAGE_TABLE, name: VALUE_COLUMN } };
+
+function valuesAgree(
+  equality: ((left: unknown, right: unknown) => boolean) | undefined,
+  left: unknown,
+  right: unknown,
+): boolean {
+  return equality === undefined ? isDeepStrictEqual(left, right) : equality(left, right);
+}
 
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -260,7 +273,7 @@ async function rowExecutionFailure(
       detail: `fromWire rejects the projected ${inspect(projected)}: ${describeError(error)}`,
     };
   }
-  if (!isDeepStrictEqual(fromProjection, conformanceCase.value)) {
+  if (!valuesAgree(conformanceCase.valueEquality, fromProjection, conformanceCase.value)) {
     return {
       kind: 'mismatch',
       detail: `fromWire read the projected ${inspect(projected)} as ${inspect(fromProjection)} for an application value of ${inspect(conformanceCase.value)}`,
@@ -384,7 +397,7 @@ export async function runSqliteCodecProjection(
       },
     };
   }
-  if (!isDeepStrictEqual(fromRow, conformanceCase.value)) {
+  if (!valuesAgree(conformanceCase.valueEquality, fromRow, conformanceCase.value)) {
     return {
       ...base,
       failure: {
@@ -406,7 +419,7 @@ export async function runSqliteCodecProjection(
       },
     };
   }
-  if (!isDeepStrictEqual(fromProjection, fromRow)) {
+  if (!valuesAgree(conformanceCase.projectionEquality, fromProjection, fromRow)) {
     return {
       ...base,
       failure: {

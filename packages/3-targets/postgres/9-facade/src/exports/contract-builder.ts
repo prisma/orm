@@ -25,6 +25,7 @@ export {
   now,
   rel,
   sql,
+  unbound,
 } from '@internal/sql-contract-ts/contract-builder';
 // The output types a contract's inferred type names for columns with type parameters, so an application's declaration output can name them through this entry.
 export type {
@@ -40,7 +41,8 @@ export type {
 } from '@internal/target-postgres/codec-types';
 export { defineContract } from '../contract/define-contract';
 export { enumType } from '../contract/enum-type';
-export { field, gen } from '../contract/field';
+export { type ExtensionHandle, extension } from '../contract/extension';
+export { field, gen, type } from '../contract/field';
 export { fullTextIndex } from '../contract/full-text-index';
 export { type NativeEnumHandle, nativeEnum, pg } from '../contract/native-enum';
 export {

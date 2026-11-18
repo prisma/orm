@@ -2,6 +2,7 @@ import type { StructuredError, StructuredErrorOptions } from '@internal/utils/st
 import { structuredError } from '@internal/utils/structured-error';
 
 export type PostgresErrorCode =
+  | 'CONTRACT.ARGUMENT_INVALID'
   | 'CONTRACT.ENUM_INVALID'
   | 'CONTRACT.INDEX_INVALID'
   | 'CONTRACT.POLICY_INVALID'

@@ -1,4 +1,4 @@
-import type { ContractValueObjectDefinitions } from '@internal/contract/types';
+import type { ContractValueObjectAt, ValueObjectReference } from '@internal/contract/types';
 import type { MongoContract, MongoModelsMap, OwnStoredNameOf } from '@internal/mongo-contract';
 import type { DocField } from './types';
 
@@ -48,7 +48,7 @@ export interface ModelArrayField<ModelName extends string> extends DocField {
  * Phantom-symbol brand placed on `ModelToDocShape`'s output (and inherited
  * through shape-extending stages like `addFields`, `match`, `lookup`) so
  * `ResolveRow` can route value-object resolution through `InferModelRow`
- * — which walks the contract's `valueObjects` registry and resolves
+ * — which reads the storage value objects fields refer to and resolves
  * nested types — instead of falling through the codec-lookup branch to
  * `unknown`.
  *
@@ -122,48 +122,57 @@ type FieldToLeaf<F> = F extends {
  * `ModelNestedShape` hover output and `keyof`/indexed-access resolution
  * concrete instead of collapsing to `{ [x: string]: … }`.
  */
-type TranslateField<TContract extends MongoContract, F> = F extends {
+type TranslateField<TContract extends MongoContract, F, Entered extends string> = F extends {
   readonly many: { readonly elementNullable: boolean };
 }
   ? FieldToLeaf<F>
   : F extends {
-        readonly type: {
-          readonly kind: 'valueObject';
-          readonly name: infer VOName extends string;
-        };
+        readonly type: infer Reference extends ValueObjectReference;
         readonly nullable: infer Null extends boolean;
       }
-    ? ObjectField<VONestedShape<TContract, VOName>> & { readonly nullable: Null }
+    ? ValueObjectKey<Reference> extends Entered
+      ? DocField & { readonly nullable: Null }
+      : ObjectField<VONestedShape<TContract, Reference, Entered | ValueObjectKey<Reference>>> & {
+          readonly nullable: Null;
+        }
     : F extends {
           readonly type: { readonly kind: 'scalar'; readonly codecId: string };
         }
       ? FieldToLeaf<F>
       : DocField;
 
+/** A value object's storage coordinate as one string, so the value objects a path has entered form a union. */
+type ValueObjectKey<Reference extends ValueObjectReference> =
+  `${Reference['namespaceId']}.${Reference['entityName']}`;
+
 /**
- * Resolve a named value object from the contract into its own
- * `NestedDocShape`. The mapped iteration is inlined here (not delegated
- * to a generic helper) so that the homomorphism over
- * `VOs[VOName]['fields']` is preserved and the hover / indexed-access
- * surface stays concrete at instantiation time.
+ * Resolve the storage value object a field's reference names into its own
+ * `NestedDocShape`. A field that refers to a value object the path has already
+ * entered is an opaque leaf, so a value object that contains itself ends there. The mapped iteration is inlined here (not delegated
+ * to a generic helper) so that the homomorphism over the value object's
+ * `fields` is preserved and the hover / indexed-access surface stays
+ * concrete at instantiation time.
  */
-type VONestedShape<TContract extends MongoContract, VOName extends string> = [
-  ContractValueObjectDefinitions<TContract>,
-] extends [infer VOs extends Record<string, { readonly fields: Record<string, unknown> }>]
-  ? VOName extends keyof VOs & string
-    ? {
-        readonly [K in keyof VOs[VOName]['fields'] & string]: TranslateField<
-          TContract,
-          VOs[VOName]['fields'][K]
-        >;
-      }
-    : never
+type VONestedShape<
+  TContract extends MongoContract,
+  Reference extends ValueObjectReference,
+  Entered extends string,
+> = [ContractValueObjectAt<TContract['storage'], Reference>] extends [
+  infer VO extends { readonly fields: Record<string, unknown> },
+]
+  ? {
+      readonly [K in keyof VO['fields'] & string]: TranslateField<
+        TContract,
+        VO['fields'][K],
+        Entered
+      >;
+    }
   : never;
 
 /**
  * Build the `NestedDocShape` for a model, keyed by stored name. Scalar leaves resolve to their
- * concrete codec id; value-object fields recurse into the referenced
- * `valueObjects[VOName].fields` table, producing a tree that
+ * concrete codec id; value-object fields recurse into the fields of the
+ * storage value object their reference names, producing a tree that
  * `ResolvePath` / `ValidPaths` can walk.
  *
  * The mapped iteration is inlined (not hidden behind a helper type that
@@ -182,7 +191,7 @@ export type ModelNestedShape<
     TContract,
     ModelName,
     K
-  >]: TranslateField<TContract, MongoModelsMap<TContract>[ModelName]['fields'][K]>;
+  >]: TranslateField<TContract, MongoModelsMap<TContract>[ModelName]['fields'][K], never>;
 };
 
 // ── Path walking ─────────────────────────────────────────────────────────

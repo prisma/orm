@@ -197,6 +197,10 @@ it('narrows optional properties', () => {
 
 **Important**: This utility must be imported from the separate `./typed-expectations` export path, not from the main export. See "Vitest Import Pattern" below for details.
 
+### Temporal Fallback Entries
+
+`describeTemporalFallbackEntries(target)` checks one target's published packages: no application entry loads `temporal-polyfill`, the packages that ship the control entry declare it as a required peer dependency, the fallback `Temporal` is built once in `@prisma/orm-framework`, and a process with no `Temporal` decodes the given codec only after it loads the control entry. Each published target package's `test/temporal-fallback-entries.test.ts` calls it with its package names, entries and a codec to decode. Import it from `@repo/test-utils/temporal-fallback-entries`; it registers Vitest suites.
+
 ## Vitest Import Pattern
 
 **CRITICAL**: Test utilities that import `vitest` directly (e.g., `typed-expectations`) must be exported via a separate path in `package.json` and must NOT be re-exported from `src/exports/index.ts`.
@@ -306,5 +310,6 @@ import { loadContractFromDisk, emitAndVerifyContract } from './utils';
 - `.`: All test utilities (database helpers, async iterable helpers, column descriptors, operation descriptors, timeouts). **Note**: Does not include utilities that import `vitest` directly - see separate export paths below.
 - `./column-descriptors`: Adapter-agnostic column type descriptors for test fixtures
 - `./operation-descriptors`: Adapter-agnostic operation type descriptors for type-level test fixtures
+- `./temporal-fallback-entries`: The published-entry check for `temporal-polyfill` each target package runs
 - `./timeouts`: Centralized timeout values (also available from main export)
 - `./typed-expectations`: Type-safe assertion helpers that wrap Vitest's `expect` API. **Must be imported from this path, not from the main export** (see "Vitest Import Pattern" above)

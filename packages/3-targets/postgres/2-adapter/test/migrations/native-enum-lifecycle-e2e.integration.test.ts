@@ -20,8 +20,6 @@ import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/compon
 
 import type { Contract, ControlPolicy } from '@internal/contract/types';
 import { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
-import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
-import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import {
   APP_SPACE_ID,
@@ -40,7 +38,6 @@ import {
 import { sqlContextInput } from '@internal/sql-contract-psl/test';
 import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
-import { postgresScalarAuthoringTypes } from '@internal/target-postgres/control';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import {
   PostgresDatabaseSchemaNode,
@@ -211,21 +208,8 @@ namespace public {
 // PSL → contract helpers (mirrors rls-lifecycle-e2e.integration.test.ts)
 // ============================================================================
 
-function buildScalarTypeDescriptors(): ReadonlyMap<string, { codecId: string }> {
-  return collectScalarTypeConstructors(postgresScalarAuthoringTypes);
-}
-
 function buildContractFromPsl(psl: string, control: ControlPolicy): Contract<SqlStorage> {
   const assembled = assembleAuthoringContributions([postgresTargetDescriptor]);
-  const scalarTypeDescriptors = buildScalarTypeDescriptors();
-  const scalarTypeConstructors: Record<string, AuthoringTypeConstructorDescriptor> =
-    Object.fromEntries(
-      [...scalarTypeDescriptors].map(([name, output]) => [
-        name,
-        { kind: 'typeConstructor' as const, output },
-      ]),
-    );
-
   const bound = bindPslSchema(psl, {
     sourceId: 'native-enum-lifecycle-e2e.integration.test.psl',
     context: {
@@ -234,7 +218,6 @@ function buildContractFromPsl(psl: string, control: ControlPolicy): Contract<Sql
       composedExtensionContracts: new Map(),
       authoringContributions: {
         ...assembled,
-        type: { ...scalarTypeConstructors, ...assembled.type },
         attributeSpecs: sqlAttributeSpecs,
       },
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },

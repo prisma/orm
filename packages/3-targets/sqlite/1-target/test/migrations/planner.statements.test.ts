@@ -84,7 +84,7 @@ describe('SQLite planner, model statements', () => {
   it('drops and creates the table without a statement', async () => {
     const labels = await labelsOf(plan(from, to, []));
     expect(labels).toContain('Create table User');
-    expect(labels).toContain('Drop table Profile');
+    expect(labels).toContain('Drop table "Profile"');
   });
 
   it('reports each statement with the positions of the operations it accounts for', () => {

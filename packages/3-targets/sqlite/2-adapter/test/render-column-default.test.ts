@@ -45,6 +45,39 @@ describe('the DEFAULT clause the SQLite adapter writes in every DDL statement', 
       "DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
     ],
     [
+      'now() on a date, as the text sqlite/date stores',
+      col('c', 'TEXT', { default: fn('now()'), codecRef: { codecId: 'sqlite/date-string@1' } }),
+      "DEFAULT (date('now'))",
+    ],
+    [
+      'now() on a Temporal date, as the text sqlite/date stores',
+      col('c', 'TEXT', { default: fn('now()'), codecRef: { codecId: 'sqlite/date-temporal@1' } }),
+      "DEFAULT (date('now'))",
+    ],
+    [
+      'now() on a time of day, as the text sqlite/time stores',
+      col('c', 'TEXT', { default: fn('now()'), codecRef: { codecId: 'sqlite/time-string@1' } }),
+      "DEFAULT (strftime('%H:%M:%f','now'))",
+    ],
+    [
+      'now() on an instant read as text, as the text sqlite/datetime stores',
+      col('c', 'TEXT', {
+        default: fn('now()'),
+        codecRef: { codecId: 'sqlite/datetime-string@1' },
+      }),
+      "DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+    ],
+    [
+      'now() on text, as the text sqlite/datetime stores',
+      col('c', 'TEXT', { default: fn('now()'), codecRef: { codecId: 'sqlite/text@1' } }),
+      "DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+    ],
+    [
+      'now() on a raw column, as the text sqlite/datetime stores, since Prisma does not read raw values',
+      col('c', 'DATETIME', { default: fn('now()'), codecRef: { codecId: 'sql/raw@1' } }),
+      "DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+    ],
+    [
       'autoincrement(), which the type writes',
       col('c', 'INTEGER', { default: fn('autoincrement()') }),
       '',
@@ -65,6 +98,25 @@ describe('the DEFAULT clause the SQLite adapter writes in every DDL statement', 
       await expect(render(col('c', 'TEXT', { default: fn(expression) }))).rejects.toMatchObject({
         code: 'CONTRACT.DEFAULT_INVALID',
         meta: { expression },
+      });
+    },
+  );
+
+  it.each([
+    ['sqlite/duration-string@1', 'sqlite/duration', 'TEXT'],
+    ['sqlite/integer@1', 'sqlite/integer', 'INTEGER'],
+    ['sqlite/real@1', 'sqlite/real', 'REAL'],
+    ['sqlite/json@1', 'sqlite/json', 'TEXT'],
+    ['sqlite/blob@1', 'sqlite/blob', 'BLOB'],
+  ])(
+    'refuses now() on %s, whose data type stores no date or time, with CONTRACT.DEFAULT_INVALID',
+    async (codecId, dataType, typeSql) => {
+      await expect(
+        render(col('c', typeSql, { default: fn('now()'), codecRef: { codecId } })),
+      ).rejects.toMatchObject({
+        code: 'CONTRACT.DEFAULT_INVALID',
+        message: `The column "t"."c" has a now() default, but its data type ${dataType} stores no date or time, so there is no current value to write. Remove the default, or give the field a date or time type.`,
+        meta: { table: 't', column: 'c', dataType, reason: 'now-default-not-date-or-time' },
       });
     },
   );

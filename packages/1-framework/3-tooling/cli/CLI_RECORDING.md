@@ -128,7 +128,7 @@ Two layers of caching avoid redundant VHS runs:
 
 ### Layer 1: turbo (coarse, task-level)
 
-Turbo hashes the recording infrastructure (`scripts/record.ts`, `recordings/config.ts`, `recordings/fixtures/**`) plus the CLI's `dist/**` (transitively via `dependsOn: ["build"]`). If nothing changed, turbo replays cached `svgs/` and `ascii/` instantly — no VHS, no PostgreSQL.
+Turbo hashes the recording infrastructure (`scripts/record.ts`, `recordings/config.ts`, `recordings/fixtures/**`, and the workspace's `prisma.config.ts` template in `test/integration/test/fixtures/cli/cli-e2e-test-app/fixtures/recordings/`) plus the CLI's `dist/**` (transitively via `dependsOn: ["build"]`). If nothing changed, turbo replays cached `svgs/` and `ascii/` instantly — no VHS, no PostgreSQL.
 
 ### Layer 2: per-recording probe (fine-grained, per-command only)
 

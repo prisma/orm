@@ -1,5 +1,5 @@
 import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
-import type { NamespacedEnums } from '@internal/contract/enum-accessor';
+import { buildNamespacedEnums, type NamespacedEnums } from '@internal/contract/enum-accessor';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type {
   AnyMongoTypeMaps,
@@ -10,15 +10,16 @@ import type { MongoRawClient } from '@internal/mongo-orm';
 import { mongoRaw } from '@internal/mongo-orm';
 import { mongoQuery } from '@internal/mongo-query-builder';
 import {
-  buildMongoEnums,
   createMongoExecutionContext,
   createMongoExecutionStack,
-  type MongoEnumAccessors,
+  enumMemberCodecFor,
   type MongoExecutionContext,
+  type MongoExecutionStack,
+  type MongoRuntimeExtensionDescriptor,
 } from '@internal/mongo-runtime';
 import mongoRuntimeTarget from '@internal/target-mongo/runtime';
 import { assertDefined } from '@internal/utils/assertions';
-import { blindCast } from '@internal/utils/casts';
+import type { MongoTargetId } from '../runtime/mongo-target-id';
 import { validateMongoContract } from './contract-from-json';
 
 type UnboundEnums<TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>> =
@@ -34,31 +35,17 @@ export interface MongoStaticContext<
   readonly raw: MongoRawClient<TContract>;
 }
 
-/** A {@link MongoStaticContext} with the enum accessors of every namespace, which `mongo()` hands its ORM. */
-export interface MongoClientStaticContext<
-  TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
-> extends MongoStaticContext<TContract> {
-  readonly enumsByNamespace: MongoEnumAccessors;
-}
-
 export function buildMongoStaticContext<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
->(contract: TContract): MongoClientStaticContext<TContract> {
-  const stack = createMongoExecutionStack({
-    target: mongoRuntimeTarget,
-    adapter: mongoRuntimeAdapter,
-  });
+>(contract: TContract, stack: MongoExecutionStack): MongoStaticContext<TContract> {
   const context = createMongoExecutionContext<TContract>({ contract, stack });
-  const enumsByNamespace = buildMongoEnums(contract, context.codecs);
-  const unbound = enumsByNamespace[UNBOUND_NAMESPACE_ID];
-  assertDefined(unbound, 'the unbound namespace always exists on a mongo builder output');
-  const enums = blindCast<
-    UnboundEnums<TContract>,
-    'built from this contract domain; the mapped-type shape cannot be proven statically'
-  >(unbound);
-  const query = mongoQuery({ contract });
-  const raw = mongoRaw<TContract>({ contract });
-  return { context, contract, enums, enumsByNamespace, query, raw };
+  const enums = Object.freeze(
+    buildNamespacedEnums<TContract>(context.contract.domain, enumMemberCodecFor(context.codecs)),
+  )[UNBOUND_NAMESPACE_ID];
+  assertDefined(enums, 'the unbound namespace always exists on a mongo builder output');
+  const query = mongoQuery({ context });
+  const raw = mongoRaw({ context });
+  return { context, contract, enums, query, raw };
 }
 
 /**
@@ -72,6 +59,14 @@ export function buildMongoStaticContext<
  */
 export default function mongoStatic<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
->(options: { readonly contract: TContract }): MongoStaticContext<TContract> {
-  return buildMongoStaticContext(validateMongoContract(options.contract));
+>(options: {
+  readonly contract: TContract;
+  readonly extensions?: readonly MongoRuntimeExtensionDescriptor<MongoTargetId>[];
+}): MongoStaticContext<TContract> {
+  const stack = createMongoExecutionStack({
+    target: mongoRuntimeTarget,
+    adapter: mongoRuntimeAdapter,
+    extensions: options.extensions ?? [],
+  });
+  return buildMongoStaticContext(validateMongoContract(options.contract), stack);
 }

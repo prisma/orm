@@ -1,41 +1,13 @@
-import type { CheckKind } from '@internal/sql-schema-ir/naming';
+import type {
+  CheckExpressionCandidate,
+  CheckExpressionInput,
+  ResolvedColumnValueObject,
+  ResolvedValueObject,
+  ResolvedValueObjectField,
+  ResolvedValueObjectFieldType,
+} from '@internal/sql-contract/check-expressions';
 import { invariant } from '@internal/utils/assertions';
 import { escapeLiteral, quoteIdentifier } from './sql-utils';
-
-/**
- * What a rendered check enforces. The contract builder turns this into the
- * wire-name prefix's trailing segment, so the kind stays readable in the
- * physical constraint name. The vocabulary is the family's, so this names
- * `CheckKind` rather than restating its members.
- */
-export type PostgresCheckKind = CheckKind;
-
-/**
- * One column's shape, as the contract builder knows it. `memberValues` is
- * present only for a domain enum authored through an `enumType()` handle —
- * a column bound to a native enum type carries its enforcement in the type
- * itself and arrives here with `memberValues` undefined.
- */
-export interface PostgresCheckExpressionInput {
-  readonly tableName: string;
-  readonly columnName: string;
-  readonly many: boolean | { readonly elementNullable: boolean };
-  readonly memberValues: readonly (string | number)[] | undefined;
-}
-
-/**
- * A check the target wants written. The target contributes only what it
- * uniquely knows — which predicate, spelled how — while the family owns the
- * naming: it composes the prefix from the table, the column, and the kind,
- * caps it, and appends the content hash. Nothing here is a name.
- */
-export interface PostgresCheckExpressionCandidate {
-  readonly kind: PostgresCheckKind;
-  /** The column this predicate constrains; the family names the check after it. */
-  readonly columnName: string;
-  /** Opaque SQL: the predicate body, without the surrounding `CHECK (…)`. */
-  readonly expression: string;
-}
 
 /**
  * Renders the checks a Postgres column needs, as opaque predicate text.
@@ -52,14 +24,12 @@ export interface PostgresCheckExpressionCandidate {
  * output instead, which for `inet` always carries the prefix length.
  */
 export function postgresRenderCheckExpressions(
-  input: PostgresCheckExpressionInput,
-): readonly PostgresCheckExpressionCandidate[] {
-  const candidates: PostgresCheckExpressionCandidate[] = [];
+  input: CheckExpressionInput,
+): readonly CheckExpressionCandidate[] {
+  const candidates: CheckExpressionCandidate[] = [];
   const column = quoteIdentifier(input.columnName);
   const isMany = input.many !== false;
-  const elementNullable =
-    (typeof input.many === 'object' && input.many.elementNullable) ||
-    ('elementNullable' in input && input.elementNullable === true);
+  const elementNullable = input.many !== false && input.many.elementNullable;
 
   if (input.memberValues !== undefined) {
     invariant(
@@ -89,7 +59,107 @@ export function postgresRenderCheckExpressions(
     });
   }
 
+  if (input.valueObject !== undefined) {
+    candidates.push({
+      kind: 'shape',
+      columnName: input.columnName,
+      expression: valueObjectCheck(column, input.valueObject),
+    });
+  }
+
   return candidates;
+}
+
+/**
+ * One strict `jsonpath` predicate over the whole column value. Strict mode keeps a comparison from unwrapping an array, and `IS TRUE` makes a predicate that evaluates to unknown fail the check, as a CHECK would otherwise pass on NULL. Member values are read through `keyvalue()`, so an absent member is never an error.
+ */
+function valueObjectCheck(column: string, columnValueObject: ResolvedColumnValueObject): string {
+  const field: ResolvedValueObjectField = {
+    nullable: columnValueObject.nullable,
+    many: columnValueObject.many,
+    type: { kind: 'valueObject', valueObject: columnValueObject.valueObject },
+  };
+  const predicate = fieldPredicate(field, '$');
+  invariant(predicate !== undefined, 'a column that holds a value object always has a predicate');
+  const match = (path: string) =>
+    `jsonb_path_match(${column}, '${escapeLiteral(`strict ${path}`)}') IS TRUE`;
+  return field.nullable
+    ? `${column} IS NULL OR ${match(`$.type() == "null" || (${predicate})`)}`
+    : match(predicate);
+}
+
+/** What the value at `path` must satisfy, or `undefined` when any value is accepted. */
+function fieldPredicate(field: ResolvedValueObjectField, path: string): string | undefined {
+  if (field.many === false) return valuePredicate(field.type, path);
+  const element = valuePredicate(field.type, '@');
+  const { elementNullable } = field.many;
+  const invalidElement =
+    element === undefined
+      ? elementNullable
+        ? undefined
+        : '@.type() == "null"'
+      : elementNullable
+        ? `!(@.type() == "null" || (${element}))`
+        : `!((${element}))`;
+  const isArray = `${path}.type() == "array"`;
+  return invalidElement === undefined
+    ? isArray
+    : `${isArray} && !exists(${path}[*] ? (${invalidElement}))`;
+}
+
+/** A member of any JSON type accepts every value, JSON `null` included; a member of any other JSON type is of that type, so never JSON `null`. */
+function valuePredicate(type: ResolvedValueObjectFieldType, path: string): string | undefined {
+  switch (type.kind) {
+    case 'valueObject':
+      return objectPredicate(type.valueObject, path);
+    case 'anyObject':
+      return `${path}.type() == "object"`;
+    case 'scalar':
+      if (type.values !== undefined) return valueSetPredicate(type.values, path);
+      return type.jsonType === 'any' ? undefined : `${path}.type() == "${type.jsonType}"`;
+  }
+}
+
+function valueSetPredicate(values: readonly (string | number)[], path: string): string {
+  const alternatives = (jsonType: 'string' | 'number', members: readonly (string | number)[]) =>
+    `${path}.type() == "${jsonType}" && (${members.map((value) => `${path} == ${jsonPathLiteral(value)}`).join(' || ')})`;
+  const strings = values.filter((value) => typeof value === 'string');
+  const numbers = values.filter((value) => typeof value === 'number');
+  invariant(values.length > 0, 'a value set restricting a value object member has no values');
+  if (numbers.length === 0) return alternatives('string', strings);
+  if (strings.length === 0) return alternatives('number', numbers);
+  return `(${alternatives('string', strings)}) || (${alternatives('number', numbers)})`;
+}
+
+function objectPredicate(valueObject: ResolvedValueObject, path: string): string {
+  const names = Object.keys(valueObject.fields).sort();
+  const members = names.flatMap((name) => {
+    const field = valueObject.fields[name];
+    invariant(field !== undefined, `value object member "${name}" is missing`);
+    const isMember = `@.key == ${jsonPathLiteral(name)}`;
+    const predicate = fieldPredicate(field, '@.value');
+    if (!field.nullable) {
+      return [
+        predicate === undefined
+          ? `exists(${path}.keyvalue() ? (${isMember}))`
+          : `exists(${path}.keyvalue() ? (${isMember} && (${predicate})))`,
+      ];
+    }
+    return predicate === undefined
+      ? []
+      : [
+          `!exists(${path}.keyvalue() ? (${isMember} && !(@.value.type() == "null" || (${predicate}))))`,
+        ];
+  });
+  const otherKey =
+    names.length === 0
+      ? `!exists(${path}.keyvalue())`
+      : `!exists(${path}.keyvalue() ? (${names.map((name) => `@.key != ${jsonPathLiteral(name)}`).join(' && ')}))`;
+  return [`${path}.type() == "object"`, ...members, otherKey].join(' && ');
+}
+
+function jsonPathLiteral(value: string | number): string {
+  return typeof value === 'string' ? JSON.stringify(value) : String(value);
 }
 
 function sqlLiteral(value: string | number): string {

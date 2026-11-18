@@ -239,7 +239,7 @@ The escape hatch is deliberately narrow. Its existence is not a license to drift
 
 **Examples of invalid escape-hatch use:**
 - Reading the source of a package to understand its API before writing a dispatch brief — this is reconnaissance that degrades the Orchestrator's broad view. The brief can reference the package; the Executor reads the source.
-- Running `pnpm test:packages` to confirm the baseline before dispatching an Implementer — this is a validation gate that belongs in the Implementer's brief.
+- Running tests to confirm the baseline before dispatching an Implementer — this is a validation gate that belongs in the Implementer's brief, scoped to the packages it touches.
 - Searching for all usages of a function across the codebase — this is an analytical task with a bounded deliverable. Dispatch a Specialist for it.
 
 The pattern that distinguishes valid from invalid: valid escape-hatch use is **navigational** (finding a path, confirming existence, routing based on a known value). Invalid use is **investigative** (learning something new about the codebase's content or state).

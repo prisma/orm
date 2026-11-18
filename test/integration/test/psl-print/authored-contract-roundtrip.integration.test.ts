@@ -51,6 +51,43 @@ function loadContract(relativePath: string): Contract<SqlStorage> {
  */
 const pslCases: ReadonlyArray<{ readonly name: string; readonly schema: string }> = [
   {
+    name: 'value objects with nested, list, enum and self-referring members, and a discriminator, each with its derived check',
+    schema: readFileSync(
+      join(
+        repoRoot,
+        'test/integration/test/sql-orm-client/fixtures/value-object-checks/contract.prisma',
+      ),
+      'utf-8',
+    ).replace('// use prisma-8\n', ''),
+  },
+  {
+    name: 'a value object field of a variant that shares the base table, whose column is nullable',
+    schema: `type Geo {
+  lat Float
+  lng Float
+}
+
+model Shape {
+  id   Int    @id
+  kind String
+
+  @@discriminator(kind)
+}
+
+model Circle {
+  center Geo
+
+  @@base(Shape, "circle")
+}
+
+model Square {
+  side Int
+
+  @@base(Shape, "square")
+}
+`,
+  },
+  {
     name: 'a model control policy',
     schema: `model Ledger {
   id Int @id
@@ -127,8 +164,8 @@ model Pair {
   zoned TimestamptzString(3)
   js    TimestamptzJsDate(3)
   time  TimeString(3)
-  big   BigIntNumber
-  huge  UnboundedInt
+  big   Int8Number
+  huge  NumericBigInt
 }
 `,
   },
@@ -212,6 +249,33 @@ policy_select p_read {
 `,
   },
   {
+    name: 'a value object nested in another, a list of nested value objects, and an enum member',
+    schema: `enum Country {
+  @@type("pg/text@1")
+  DE = "DE"
+  FR = "FR"
+}
+
+type Geo {
+  lat Float
+  lng Float
+}
+
+type Address {
+  street  String
+  country Country
+  geo     Geo
+  stops   Geo[]
+}
+
+model Person {
+  id    Int       @id
+  home  Address
+  homes Address[]
+}
+`,
+  },
+  {
     name: 'a list of value objects',
     schema: `type Address {
   street String
@@ -243,8 +307,8 @@ model Person {
   {
     name: 'value-object members with type parameters, single and list',
     schema: `type Price {
-  amount  Numeric(65, 30)
-  history Numeric(65, 30)[]
+  amount  NumericString(65, 30)
+  history NumericString(65, 30)[]
 }
 
 model Product {
@@ -462,7 +526,7 @@ describe('a value-object member typed by a named type', () => {
     async () => {
       const authored = await readPsl(`// use prisma-8
 types {
-  Short = VarChar(10)
+  Short = Varchar(10)
 }
 
 type Label {
@@ -479,7 +543,7 @@ model Product {
       const printed = await printAndReadBack(authored);
 
       expect(printContract(authored).text).toMatch(
-        /type Label \{\s+code\s+VarChar\(10\)\s+codes\s+VarChar\(10\)\[\]/,
+        /type Label \{\s+code\s+String\(storage: varchar, length: 10\)\s+codes\s+String\(storage: varchar, length: 10\)\[\]/,
       );
       expect(serializedWithoutCapabilities(printed)).toEqual(
         serializedWithoutCapabilities(authored),

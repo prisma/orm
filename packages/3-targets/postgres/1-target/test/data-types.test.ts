@@ -17,7 +17,9 @@ import {
   pgInterval,
   pgJson,
   pgJsonb,
+  pgMoney,
   pgNumeric,
+  pgOid,
   pgText,
   pgTextArray,
   pgTime,
@@ -28,6 +30,7 @@ import {
   pgUuid,
   pgVarbit,
   pgVarchar,
+  pgXml,
   postgresDataTypes,
 } from '../src/core/data-types';
 
@@ -52,7 +55,9 @@ describe('the data types this target registers', () => {
       'pg/interval',
       'pg/json',
       'pg/jsonb',
+      'pg/money',
       'pg/numeric',
+      'pg/oid',
       'pg/text',
       'pg/text-array',
       'pg/time',
@@ -63,6 +68,7 @@ describe('the data types this target registers', () => {
       'pg/uuid',
       'pg/varbit',
       'pg/varchar',
+      'pg/xml',
       'sql/raw',
     ]);
   });
@@ -86,6 +92,9 @@ describe('the data types this target registers', () => {
     ['pg/inet', pgInet, ['pg/text']],
     ['pg/bit', pgBit, ['pg/text']],
     ['pg/varbit', pgVarbit, ['pg/text']],
+    ['pg/xml', pgXml, ['pg/text']],
+    ['pg/oid', pgOid, ['pg/int2', 'pg/int4', 'pg/int8']],
+    ['pg/money', pgMoney, ['pg/int2', 'pg/int4', 'pg/int8', 'pg/numeric']],
     ['pg/timetz', pgTimetz, []],
     ['pg/interval', pgInterval, []],
     ['pg/bytea', pgBytea, []],

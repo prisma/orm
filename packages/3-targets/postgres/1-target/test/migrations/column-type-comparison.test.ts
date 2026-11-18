@@ -118,6 +118,29 @@ describe('the planner compares a live column with the contract by data type', ()
     ]).toEqual([0, 0, 0, 0, 0]);
   });
 
+  it('plans no type change between an omitted precision and precision 6 on a date or time column', () => {
+    const timestamptz = (typeParams?: { precision: number }) => ({
+      dataType: 'pg/timestamptz',
+      codecId: 'pg/timestamptz-date@1',
+      nullable: true,
+      ...(typeParams === undefined ? {} : { typeParams }),
+    });
+    expect([
+      typeChangesPlanned(timestamptz(), {
+        typeText: 'timestamp(6) with time zone',
+        nullable: true,
+      }),
+      typeChangesPlanned(timestamptz({ precision: 6 }), {
+        typeText: 'timestamp with time zone',
+        nullable: true,
+      }),
+      typeChangesPlanned(timestamptz({ precision: 3 }), {
+        typeText: 'timestamp with time zone',
+        nullable: true,
+      }),
+    ]).toEqual([0, 0, 1]);
+  });
+
   it('plans a type change for a live column no data type claims, whatever its text', () => {
     expect(
       typeChangesPlanned(

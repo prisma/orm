@@ -18,13 +18,15 @@ import type { MongoContract } from '@internal/mongo-contract';
 import type {
   MongoAdapter,
   MongoDdlPlan,
-  MongoDriver,
   MongoLoweredDraft,
+  MongoQueryable,
 } from '@internal/mongo-lowering';
-import type {
-  AnyMongoInspectionCommand,
-  AnyMongoMigrationOperation,
-  MongoInspectionCommandVisitor,
+import {
+  type AnyMongoInspectionCommand,
+  type AnyMongoMigrationOperation,
+  CollModCommand,
+  MongoExistsExpr,
+  type MongoInspectionCommandVisitor,
 } from '@internal/mongo-query-ast/control';
 import {
   AggregateCommand,
@@ -32,6 +34,7 @@ import {
   MongoLimitStage,
   MongoMatchStage,
   type MongoQueryPlan,
+  RawAggregateCommand,
   RawUpdateManyCommand,
 } from '@internal/mongo-query-ast/execution';
 import { MongoSchemaCollection, MongoSchemaIR } from '@internal/mongo-schema-ir';
@@ -41,12 +44,15 @@ import type {
   AnyMongoWireCommand,
 } from '@internal/mongo-wire';
 import { isStructuredError } from '@internal/utils/structured-error';
+import { ObjectId, UUID } from 'bson';
 import { MongoServerError } from 'mongodb';
 import { describe, expect, it } from 'vitest';
 import {
+  castField,
   createCollection,
   createIndex,
   dataTransform,
+  rawUpdateMany,
   renameCollection,
   renameField,
   unsetField,
@@ -62,6 +68,7 @@ const ALL_POLICY: MigrationOperationPolicy = {
 };
 
 const NOOP_MARKER_OPS: MarkerOperations = {
+  markerLocation: '_prisma_migrations',
   readMarker: async () => null,
   initMarker: async () => {},
   updateMarker: async () => true,
@@ -75,7 +82,7 @@ class EventLog {
   }
 }
 
-class StubMongoDriver implements MongoDriver {
+class StubMongoDriver implements MongoQueryable {
   readonly executeCalls: WireCommand[] = [];
   private readonly responses: Row[][] = [];
   private failure: unknown;
@@ -251,7 +258,7 @@ function makeHarness(): Harness {
       log.record(`ddl:${command.kind}:${command.collection}`);
     },
     markerOps: NOOP_MARKER_OPS,
-    introspectSchema: async () => new MongoSchemaIR([]),
+    introspectSchema: async () => new MongoSchemaIR([], { fromDatabase: false }),
   };
   return {
     runner: new MongoMigrationRunner(deps),
@@ -450,6 +457,30 @@ describe('MongoMigrationRunner.executeDmlOperation', () => {
     expect(harness.driver.executeCalls).toEqual([]);
   });
 
+  it.each(['$out', '$merge'])(
+    'rejects a check whose aggregate writes with %s before invoking driver.execute',
+    async (stage) => {
+      const harness = makeHarness();
+      const op = dataTransform('backfill-status', {
+        check: {
+          source: () => ({
+            collection: RUN_COLLECTION,
+            command: new RawAggregateCommand(RUN_COLLECTION, [{ $match: {} }, { [stage]: 'copy' }]),
+            meta: PLAN_META,
+          }),
+        },
+        run: () => makeRunPlan(),
+      });
+
+      await expect(execute(harness, [op], { idempotencyChecks: false })).rejects.toMatchObject({
+        code: 'MIGRATION.DATA_TRANSFORM_CHECK_NOT_READ_ONLY',
+        message: `Migration check rejected: stage "${stage}" is not read-only`,
+        meta: { stage, collection: RUN_COLLECTION },
+      });
+      expect(harness.driver.executeCalls).toEqual([]);
+    },
+  );
+
   it('dispatches DDL ops through executeDdl seam and data ops through adapter.lower + driver.execute, in plan order', async () => {
     const harness = makeHarness();
     const ddlOp = createCollection('orders');
@@ -489,6 +520,7 @@ describe('MongoMigrationRunner schema verification', () => {
   function makeTrackingMarkerOps(): { ops: MarkerOperations; calls: MarkerCallLog } {
     const calls = { initMarker: 0, updateMarker: 0, writeLedgerEntry: 0 };
     const ops: MarkerOperations = {
+      markerLocation: '_prisma_migrations',
       readMarker: async () => null,
       initMarker: async () => {
         calls.initMarker++;
@@ -512,7 +544,9 @@ describe('MongoMigrationRunner schema verification', () => {
     const driver = new StubMongoDriver();
     const adapter = new StubMongoAdapter();
     const inspectionExecutor = new StubInspectionExecutor();
-    const driftIR = new MongoSchemaIR([new MongoSchemaCollection({ name: 'rogue' })]);
+    const driftIR = new MongoSchemaIR([new MongoSchemaCollection({ name: 'rogue' })], {
+      fromDatabase: false,
+    });
     const deps: MongoRunnerDependencies = {
       inspectionExecutor,
       adapter,
@@ -569,7 +603,9 @@ describe('MongoMigrationRunner schema verification', () => {
     const driver = new StubMongoDriver();
     const adapter = new StubMongoAdapter();
     const inspectionExecutor = new StubInspectionExecutor();
-    const driftIR = new MongoSchemaIR([new MongoSchemaCollection({ name: 'rogue' })]);
+    const driftIR = new MongoSchemaIR([new MongoSchemaCollection({ name: 'rogue' })], {
+      fromDatabase: false,
+    });
     const deps: MongoRunnerDependencies = {
       inspectionExecutor,
       adapter,
@@ -641,6 +677,7 @@ function makeLedgerHarness(): {
 } {
   const ledgerEntries: LedgerEntryPayload[] = [];
   const markerOps: MarkerOperations = {
+    markerLocation: '_prisma_migrations',
     readMarker: async () => null,
     initMarker: async () => {},
     updateMarker: async () => true,
@@ -654,7 +691,7 @@ function makeLedgerHarness(): {
     driver: new StubMongoDriver(),
     executeDdl: async () => {},
     markerOps,
-    introspectSchema: async () => new MongoSchemaIR([]),
+    introspectSchema: async () => new MongoSchemaIR([], { fromDatabase: false }),
   };
   return { runner: new MongoMigrationRunner(deps), ledgerEntries };
 }
@@ -894,7 +931,7 @@ describe('MongoMigrationRunner, a document rewrite without the privilege to skip
       code: 'MIGRATION.EXECUTION_FAILED',
       message:
         'Operation field.users.nickname.unset failed: the database user may not skip document validation',
-      why: 'Renaming or removing a field rewrites documents with bypassDocumentValidation, because the old validator requires the old field. MongoDB refused it with error 13 (Unauthorized). Grant the user the bypassDocumentValidation action on the database, for example with the dbAdmin or restore role, then run the command again; operations that already ran are skipped. The failed apply changed nothing.',
+      why: 'Rewriting documents to fit the new schema skips document validation, because the old validator rejects the new shape. MongoDB refused it with error 13 (Unauthorized). Grant the user the bypassDocumentValidation action on the database, for example with the dbAdmin or restore role, then run the command again; operations that already ran are skipped. The failed apply changed nothing.',
       meta: {
         operationId: 'field.users.nickname.unset',
         mongoCode: 13,
@@ -904,13 +941,102 @@ describe('MongoMigrationRunner, a document rewrite without the privilege to skip
     });
   });
 
-  it('lets any other failure of a data transform through unchanged', async () => {
+  it('fails a rewrite that MongoDB stops partway on a duplicate key, naming the index to resolve', async () => {
+    const harness = makeHarness();
+    harness.driver.queueResponse([{ _id: 1 }]);
+    harness.driver.failUpdateManyWith(
+      new MongoServerError({
+        ok: 0,
+        code: 11000,
+        codeName: 'DuplicateKey',
+        errmsg:
+          'Plan executor error during update :: caused by :: E11000 duplicate key error collection: app.users index: code_1 dup key: { code: 1 }',
+      }),
+    );
+
+    const result = await execute(harness, [
+      castField({ collection: 'users', field: 'code', from: ['string'], to: 'int' }),
+    ]);
+
+    expect(failureFields(result.assertNotOk())).toEqual({
+      code: 'MIGRATION.EXECUTION_FAILED',
+      message:
+        'Operation field.users.code.cast(int) failed: MongoDB error 11000 (DuplicateKey): E11000 duplicate key error collection: app.users index: code_1 dup key: { code: 1 }',
+      why: 'Documents the rewrite changed before the error stay changed. The rewrite would give two documents the same value under unique index "code_1". Change or remove the documents that would collide, then run the command again; operations that already ran are skipped. The operations that ran before the failure stay applied.',
+      meta: {
+        operationId: 'field.users.code.cast(int)',
+        mongoCode: 11000,
+        codeName: 'DuplicateKey',
+        databaseUnchanged: false,
+      },
+    });
+  });
+
+  it('fails a rewrite that MongoDB stops partway for another reason, without claiming a re-run finishes it', async () => {
+    const harness = makeHarness();
+    harness.driver.queueResponse([{ _id: 1 }]);
+    harness.driver.failUpdateManyWith(
+      new MongoServerError({
+        ok: 0,
+        code: 50,
+        codeName: 'MaxTimeMSExpired',
+        errmsg: 'operation exceeded time limit',
+      }),
+    );
+
+    const result = await execute(harness, [
+      castField({ collection: 'users', field: 'code', from: ['string'], to: 'int' }),
+    ]);
+
+    expect(failureFields(result.assertNotOk())).toEqual({
+      code: 'MIGRATION.EXECUTION_FAILED',
+      message:
+        'Operation field.users.code.cast(int) failed: MongoDB error 50 (MaxTimeMSExpired): operation exceeded time limit',
+      why: 'Documents the rewrite changed before the error stay changed. The operations that ran before the failure stay applied.',
+      meta: {
+        operationId: 'field.users.code.cast(int)',
+        mongoCode: 50,
+        codeName: 'MaxTimeMSExpired',
+        databaseUnchanged: false,
+      },
+    });
+  });
+
+  it('gives a data transform whose run skips validation the same advice', async () => {
     const harness = makeHarness();
     harness.driver.failUpdateManyWith(unauthorized());
 
-    await expect(
-      execute(harness, [dataTransform('backfill-status', { run: () => makeRunPlan() })]),
-    ).rejects.toBeInstanceOf(MongoServerError);
+    const result = await execute(harness, [
+      dataTransform('User.age', {
+        run: () =>
+          rawUpdateMany('users', { age: null }, [{ $set: { age: 0 } }], {
+            bypassDocumentValidation: true,
+          }),
+      }),
+    ]);
+
+    expect(result.assertNotOk().message).toBe(
+      'Operation data_transform.User.age failed: the database user may not skip document validation',
+    );
+  });
+
+  it("names any other failure of a data transform's update, with the user's update as the place to fix it", async () => {
+    const harness = makeHarness();
+    harness.driver.failUpdateManyWith(unauthorized());
+
+    const result = await execute(harness, [
+      dataTransform('backfill-status', { run: () => makeRunPlan() }),
+    ]);
+
+    expect(failureFields(result.assertNotOk())).toMatchObject({
+      code: 'MIGRATION.EXECUTION_FAILED',
+      why: expect.stringContaining("change the update in the migration's migration.ts"),
+      meta: {
+        operationId: 'data_transform.backfill-status',
+        mongoCode: 13,
+        codeName: 'Unauthorized',
+      },
+    });
   });
 });
 
@@ -928,7 +1054,7 @@ describe('MongoMigrationRunner, a field rename stopped because documents already
       code: 'MIGRATION.PRECHECK_FAILED',
       message:
         'Operation field.posts.title.rename(headline).where({"type":"bug"}) stopped: some documents in collection posts already hold headline as well as title',
-      why: 'Renaming title to headline would overwrite their headline. Find them with db.getCollection("posts").find({"$and":[{"type":"bug"},{"title":{"$exists":true}},{"headline":{"$exists":true}}]}) in mongosh, and move or remove one of the two values in each. Nothing was renamed. Once the documents are fixed, run the command again; operations that already ran are skipped. The failed apply changed nothing.',
+      why: 'Renaming title to headline would overwrite their headline. Find them with db.getCollection("posts").find({"$and":[{"type":"bug"},{"title":{"$exists":true}},{"headline":{"$exists":true}}]}) in mongosh, and move or remove one of the two values in each. Once the documents are fixed, run the command again; operations that already ran are skipped. The failed apply changed nothing.',
       meta: {
         databaseUnchanged: true,
         operationId: 'field.posts.title.rename(headline).where({"type":"bug"})',
@@ -939,7 +1065,7 @@ describe('MongoMigrationRunner, a field rename stopped because documents already
 });
 
 describe('MongoMigrationRunner, a collection rename stopped because the new collection exists', () => {
-  it('says that the new collection exists, names both collections, and that nothing was renamed', async () => {
+  it('says that the new collection exists, names both collections, and once that the failed apply changed nothing', async () => {
     const harness = makeHarness();
     harness.inspectionExecutor.collections = [{ name: 'events' }, { name: 'occasions' }];
 
@@ -950,7 +1076,7 @@ describe('MongoMigrationRunner, a collection rename stopped because the new coll
       code: 'MIGRATION.PRECHECK_FAILED',
       message:
         'Operation collection.events.rename(occasions) stopped: collection occasions already exists, so collection events cannot be renamed to it',
-      why: 'Nothing was renamed. If occasions holds nothing you need, drop it, then run the command again; operations that already ran are skipped. If an earlier operation of the same migration created occasions, as a createIndex on occasions does, make renameCollection("events", "occasions") the first operation of its migration.ts, run node on that migration.ts, and then drop occasions and run the command again. The failed apply changed nothing.',
+      why: 'If occasions holds nothing you need, drop it, then run the command again; operations that already ran are skipped. If an earlier operation of the same migration created occasions, as a createIndex on occasions does, make renameCollection("events", "occasions") the first operation of its migration.ts, run node on that migration.ts, and then drop occasions and run the command again. The failed apply changed nothing.',
       meta: { operationId: 'collection.events.rename(occasions)', databaseUnchanged: true },
     });
   });
@@ -981,6 +1107,102 @@ describe('MongoMigrationRunner, a DDL precheck that does not hold', () => {
           expectation: { expects: 'absent', object: 'collection "orders"' },
         },
       },
+    });
+  });
+});
+
+describe('MongoMigrationRunner, a DDL precheck that reads documents', () => {
+  function validatorWithDocumentCheck(): AnyMongoMigrationOperation {
+    return {
+      id: 'validator.users.update',
+      label: 'Update validator on users',
+      operationClass: 'widening',
+      precheck: [
+        {
+          description: 'no document in users matches',
+          source: makeCheckPlan(),
+          filter: MongoExistsExpr.exists('_id'),
+          expect: 'notExists',
+        },
+      ],
+      execute: [
+        {
+          description: 'update validator on users',
+          command: new CollModCommand(RUN_COLLECTION, { validator: { $jsonSchema: {} } }),
+        },
+      ],
+      postcheck: [],
+    };
+  }
+
+  it('reads the documents through the adapter and the driver, and runs the operation when none match', async () => {
+    const harness = makeHarness();
+
+    const result = await execute(harness, [validatorWithDocumentCheck()]);
+
+    expect(result.ok).toBe(true);
+    expect(harness.log.entries).toEqual([
+      `dml:aggregate:${RUN_COLLECTION}`,
+      `ddl:collMod:${RUN_COLLECTION}`,
+    ]);
+    expect(harness.inspectionExecutor.calls).toEqual([]);
+  });
+
+  it('fails the precheck when a document matches, and runs nothing', async () => {
+    const harness = makeHarness();
+    harness.driver.queueResponse([{ _id: 'u1' }]);
+
+    const result = await execute(harness, [validatorWithDocumentCheck()]);
+
+    expect(result.assertNotOk().code).toBe('MIGRATION.PRECHECK_FAILED');
+    expect(harness.ddlCalls).toEqual([]);
+  });
+
+  it('rejects a document check that writes, in words for any migration check', async () => {
+    const harness = makeHarness();
+    const op = validatorWithDocumentCheck();
+
+    await expect(
+      execute(harness, [
+        { ...op, precheck: [{ ...op.precheck[0]!, source: makeWriteCheckPlan() }] },
+      ] as AnyMongoMigrationOperation[]),
+    ).rejects.toMatchObject({
+      code: 'MIGRATION.DATA_TRANSFORM_CHECK_NOT_READ_ONLY',
+      message: 'Migration check rejected: command kind "rawUpdateMany" is not read-only',
+      why: 'A migration check must read with an aggregate or rawAggregate command, so that running it cannot change the database.',
+    });
+  });
+
+  it('gives the plain precheck failure when the documents were fixed before they were counted', async () => {
+    const harness = makeHarness();
+    harness.driver.queueResponse([{ _id: 'u1' }]);
+    harness.driver.queueResponse([]);
+
+    const result = await execute(harness, [validatorWithDocumentCheck()]);
+
+    expect(result.assertNotOk().message).toBe(
+      'Operation validator.users.update failed during precheck: no document in users matches',
+    );
+  });
+
+  it.each([
+    [new Date('2024-05-01T10:00:00.000Z'), 'ISODate("2024-05-01T10:00:00.000Z")'],
+    [
+      new UUID('3f2a8c1e-4b5d-4e6f-8a9b-0c1d2e3f4a5b'),
+      'UUID("3f2a8c1e-4b5d-4e6f-8a9b-0c1d2e3f4a5b")',
+    ],
+    [new ObjectId('64b7f0c2a1b2c3d4e5f60718'), 'ObjectId("64b7f0c2a1b2c3d4e5f60718")'],
+    ['ada', '"ada"'],
+    [42, '42'],
+  ])('writes the _id %s as mongosh does', async (documentId, written) => {
+    const harness = makeHarness();
+    harness.driver.queueResponse([{ _id: documentId }]);
+    harness.driver.queueResponse([{ _id: null, documents: 1, documentId }]);
+
+    const result = await execute(harness, [validatorWithDocumentCheck()]);
+
+    expect(result.assertNotOk().meta['documentsFailingValidator']).toMatchObject({
+      documentId: written,
     });
   });
 });
@@ -1043,7 +1265,7 @@ describe('MongoMigrationRunner, a failure after an earlier space changed the dat
 });
 
 describe('MongoMigrationRunner, an index check that finds an index of the same keys', () => {
-  it('names the keys it matched, not a name the check does not test', async () => {
+  it('names the keys it matched when another index holds the same keys and options', async () => {
     const harness = makeHarness();
     harness.inspectionExecutor.indexes = [{ name: 'by_email', key: { email: 1 } }];
 
@@ -1058,7 +1280,58 @@ describe('MongoMigrationRunner, an index check that finds an index of the same k
     );
 
     expect(result.assertNotOk().why).toBe(
-      'Before operation index.users.create(email:1) runs, it checks: index does not already exist on users. That check failed: the database already has an index on { email: 1 } in "users". The failed apply changed nothing.',
+      'Before operation index.users.create(email_1) runs, it checks: no index with the same keys and options exists on users. That check failed: the database already has an index on { email: 1 } in "users". The failed apply changed nothing.',
     );
+  });
+
+  it('names the index name it matched when another index holds the name', async () => {
+    const harness = makeHarness();
+    harness.inspectionExecutor.indexes = [{ name: 'email_1', key: { name: 1 } }];
+
+    const result = await execute(
+      harness,
+      [createIndex('users', [{ field: 'email', direction: 1 }], { name: 'email_1' })],
+      {
+        prechecks: true,
+        postchecks: false,
+        idempotencyChecks: false,
+      },
+    );
+
+    expect(result.assertNotOk().why).toBe(
+      'Before operation index.users.create(email_1) runs, it checks: no index named email_1 exists on users. That check failed: the database already has an index named "email_1" in "users". The failed apply changed nothing.',
+    );
+  });
+});
+
+describe('MongoMigrationRunner, a DDL command that fails for a reason other than a unique index build', () => {
+  it('surfaces its own error without reading the collection', async () => {
+    const ddlError = new Error('collection create refused');
+    const inspectionExecutor = new StubInspectionExecutor();
+    inspectionExecutor.listCollections = async () => {
+      throw new Error('listCollections failed');
+    };
+    const runner = new MongoMigrationRunner({
+      inspectionExecutor,
+      adapter: new StubMongoAdapter(),
+      driver: new StubMongoDriver(),
+      executeDdl: async () => {
+        throw ddlError;
+      },
+      markerOps: NOOP_MARKER_OPS,
+      introspectSchema: async () => new MongoSchemaIR([], { fromDatabase: false }),
+    });
+    const plan = makePlan([createCollection('orders')]);
+
+    await expect(
+      runner.execute({
+        plan,
+        migrationEdges: synthEdges(plan),
+        destinationContract: makeContract('dest'),
+        policy: ALL_POLICY,
+        frameworkComponents: [],
+        executionChecks: { prechecks: false, postchecks: false, idempotencyChecks: false },
+      }),
+    ).rejects.toBe(ddlError);
   });
 });

@@ -30,7 +30,7 @@
               "updatedAtNow": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "typeParams": {
                     "precision": 3
                   }
@@ -52,7 +52,7 @@
     }
   },
   "execution": {
-    "executionHash": "7a7d1cf6cde9c00b1c57375b140d9c74dd354caedbbb7c0e201c8bd51cfc9e1e",
+    "executionHash": "761c21afb0a2f13f4614a430fa13d19469afa51b650d39e6f27b74969eeec340",
     "mutations": {
       "defaults": [
         {
@@ -63,14 +63,14 @@
           },
           "onCreate": {
             "kind": "generator",
-            "id": "timestampStringNow",
+            "id": "timestampNow",
             "params": {
               "precision": 3
             }
           },
           "onUpdate": {
             "kind": "generator",
-            "id": "timestampStringNow",
+            "id": "timestampNow",
             "params": {
               "precision": 3
             }
@@ -84,7 +84,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "46ca87631e23000ebc3f972b217ed1c5ca71e70935080266337c0388aed2d13b",
+    "storageHash": "f47affdbe95aea63ee9609e5958360707a670a88f55ce8d5b93d56a9c6a16d8f",
     "namespaces": {
       "public": {
         "id": "public",
@@ -101,7 +101,7 @@
                 },
                 "updatedAtNow": {
                   "dataType": "pg/timestamp",
-                  "codecId": "pg/timestamp-string@1",
+                  "codecId": "pg/timestamp-date@1",
                   "nullable": false,
                   "many": false,
                   "typeParams": {

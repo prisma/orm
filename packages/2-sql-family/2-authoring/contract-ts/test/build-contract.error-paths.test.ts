@@ -4,16 +4,13 @@ import { createTestSqlNamespace } from '../../../1-core/contract/test/test-suppo
 import { testTypeLookups } from '../../../1-core/contract/test/test-type-lookups';
 import { defineContract, type field, type model, type rel } from '../src/contract-builder';
 
+const pgText = { codecId: 'pg/text@1' } as const;
+
 const sqlFamilyPack = {
   kind: 'family',
   id: 'sql',
   familyId: 'sql',
   version: '0.0.1',
-  authoring: {
-    field: {
-      text: { kind: 'fieldPreset', output: { codecId: 'pg/text@1' } },
-    },
-  },
 } as const satisfies FamilyPackRef<'sql'>;
 
 const postgresTargetPack = {
@@ -26,7 +23,7 @@ const postgresTargetPack = {
 } as const satisfies TargetPackRef<'sql', 'postgres'>;
 
 type Helpers = {
-  readonly field: { text: () => ReturnType<typeof field.column> };
+  readonly field: Pick<typeof field, 'column'>;
   readonly model: typeof model;
   readonly rel: typeof rel;
 };
@@ -51,7 +48,7 @@ describe('relation targets', () => {
       build((helpers) => ({
         models: {
           Post: helpers.model('Post', {
-            fields: { id: helpers.field.text(), authorId: helpers.field.text() },
+            fields: { id: helpers.field.column(pgText), authorId: helpers.field.column(pgText) },
             relations: { author: helpers.rel.belongsTo('Author', { from: 'authorId', to: 'id' }) },
           }),
         },
@@ -68,9 +65,9 @@ describe('relation targets', () => {
     expect(() =>
       build((helpers) => ({
         models: {
-          Post: helpers.model('Post', { fields: { id: helpers.field.text() } }),
+          Post: helpers.model('Post', { fields: { id: helpers.field.column(pgText) } }),
           Tag: helpers.model('Tag', {
-            fields: { id: helpers.field.text() },
+            fields: { id: helpers.field.column(pgText) },
             relations: {
               posts: helpers.rel.manyToMany('Post', {
                 through: 'PostTag',
@@ -94,7 +91,7 @@ describe('relation targets', () => {
       build((helpers) => ({
         models: {
           Post: helpers.model('Post', {
-            fields: { id: helpers.field.text(), authorId: helpers.field.text() },
+            fields: { id: helpers.field.column(pgText), authorId: helpers.field.column(pgText) },
             relations: {
               author: helpers.rel.belongsTo('other.Author', { from: 'authorId', to: 'id' }),
             },

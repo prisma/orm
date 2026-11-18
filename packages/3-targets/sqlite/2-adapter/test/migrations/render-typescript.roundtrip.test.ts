@@ -15,7 +15,6 @@ import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { APP_SPACE_ID, storageHashHex } from '@internal/framework-components/control';
-import { keepInternalSpecifiers } from '@internal/framework-components/emission';
 import { formatMigrationTs } from '@internal/migration-tools/migration-ts';
 import { col, fn, primaryKey } from '@internal/sql-relational-core/contract-free';
 import { createSqliteBuiltinCodecLookup } from '@internal/target-sqlite/codecs';
@@ -23,15 +22,19 @@ import {
   AddColumnCall,
   CreateIndexCall,
   CreateTableCall,
+  DeleteRowsCall,
   DropTableCall,
+  FillStoredKeyCall,
   RawSqlCall,
   RecreateTableCall,
+  RemoveStoredKeyCall,
   RemoveStoredValueCall,
+  RenameStoredKeyCall,
   ReplaceStoredValueCall,
 } from '@internal/target-sqlite/op-factory-call';
 import { TypeScriptRenderableSqliteMigration } from '@internal/target-sqlite/planner-produced-sqlite-migration';
 import { renderOps } from '@internal/target-sqlite/render-ops';
-import { timeouts } from '@repo/test-utils';
+import { timeouts, workspaceMigrationModule } from '@repo/test-utils';
 import { join, resolve } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTestSqliteControlAdapter } from '../helpers/test-control-adapter';
@@ -184,6 +187,12 @@ describe('TypeScriptRenderableSqliteMigration round-trip', () => {
       new DropTableCall('stale'),
       new ReplaceStoredValueCall('user', 'email', "it's", 'it"s'),
       new RemoveStoredValueCall('user', 'rank', 3),
+      new RenameStoredKeyCall('user', 'profile', "$['a b'][*].lat", 'latitude'),
+      new RemoveStoredKeyCall('user', 'profile', '$.trace'),
+      new FillStoredKeyCall('user', 'profile', '$.country', { code: "it's", n: [1, null] }),
+      new DeleteRowsCall('user', 'email', 'gone'),
+      new ReplaceStoredValueCall('user', 'profile', 'a', 'b', undefined, "$['it\\'s'][*]"),
+      new RemoveStoredValueCall('user', 'profile', 1, undefined, undefined, '$.rank', true),
       new ReplaceStoredValueCall('user', 'rank', '7', '8', {
         codecRef: { codecId: 'sqlite/integer@1' },
         codecs: createSqliteBuiltinCodecLookup(),
@@ -196,7 +205,7 @@ describe('TypeScriptRenderableSqliteMigration round-trip', () => {
       SNAPSHOTS_IMPORT_PATH,
     );
 
-    const tsSource = rewriteImports(migration.renderTypeScript(keepInternalSpecifiers));
+    const tsSource = rewriteImports(migration.renderTypeScript(workspaceMigrationModule.sqlite));
     expect(tsSource).toContain('default: fn(sql`printf("%s", \'user\')`)');
     expect(tsSource).toContain('default: fn(sql`\n');
     expect(tsSource).toContain('default: fn("  \'x\'")');
@@ -237,7 +246,9 @@ describe('TypeScriptRenderableSqliteMigration round-trip', () => {
       SNAPSHOTS_IMPORT_PATH,
     );
 
-    const written = await formatMigrationTs(migration.renderTypeScript(keepInternalSpecifiers));
+    const written = await formatMigrationTs(
+      migration.renderTypeScript(workspaceMigrationModule.sqlite),
+    );
     expect(written).toContain('sql`\n');
     await writeFile(join(tmpDir, 'migration.ts'), rewriteImports(written));
 
@@ -261,7 +272,7 @@ describe('TypeScriptRenderableSqliteMigration round-trip', () => {
       SNAPSHOTS_IMPORT_PATH,
     );
 
-    const tsSource = rewriteImports(migration.renderTypeScript(keepInternalSpecifiers));
+    const tsSource = rewriteImports(migration.renderTypeScript(workspaceMigrationModule.sqlite));
     await writeFile(join(tmpDir, 'migration.ts'), tsSource);
 
     const { stderr } = await execFileAsync(tsxPath, [join(tmpDir, 'migration.ts')], {
@@ -294,7 +305,7 @@ describe('TypeScriptRenderableSqliteMigration round-trip', () => {
       SNAPSHOTS_IMPORT_PATH,
     );
 
-    const tsSource = rewriteImports(migration.renderTypeScript(keepInternalSpecifiers));
+    const tsSource = rewriteImports(migration.renderTypeScript(workspaceMigrationModule.sqlite));
     await writeFile(join(tmpDir, 'migration.ts'), tsSource);
 
     await execFileAsync(tsxPath, [join(tmpDir, 'migration.ts')], {
@@ -354,7 +365,7 @@ describe('TypeScriptRenderableSqliteMigration round-trip', () => {
       SNAPSHOTS_IMPORT_PATH,
     );
 
-    const tsSource = rewriteImports(migration.renderTypeScript(keepInternalSpecifiers));
+    const tsSource = rewriteImports(migration.renderTypeScript(workspaceMigrationModule.sqlite));
     expect(tsSource).toContain('default: { kind: "function", expression: sql`\'{"a": 1}\'` }');
     expect(tsSource).toContain(
       "sql: `SELECT COUNT(*) > 0 FROM pragma_table_info('user') WHERE name = 'email' AND \"notnull\" = 0`",
@@ -403,7 +414,7 @@ describe('TypeScriptRenderableSqliteMigration round-trip', () => {
       SNAPSHOTS_IMPORT_PATH,
     );
 
-    const tsSource = rewriteImports(migration.renderTypeScript(keepInternalSpecifiers));
+    const tsSource = rewriteImports(migration.renderTypeScript(workspaceMigrationModule.sqlite));
     expect(tsSource).toContain(
       'copyExpressions: { "age": sql`CAST("age" AS INTEGER)`, "name": sql`\'\'` }',
     );
@@ -465,7 +476,7 @@ function handWrittenMigration(write: (text: string) => string): string {
     META,
     APP_SPACE_ID,
     SNAPSHOTS_IMPORT_PATH,
-  ).renderTypeScript(keepInternalSpecifiers);
+  ).renderTypeScript(workspaceMigrationModule.sqlite);
   const source = scaffold
     .replace(
       'import { Migration, MigrationCLI }',

@@ -85,6 +85,11 @@ An activity inside a transaction is finalized when the nearest enclosing transac
 
 The nearest transaction finalizes its whole subtree when it ends, in post-order: children in start order, depth first, then the parent; the transaction itself comes last. An activity still open when its transaction ends, such as a row stream the caller is still reading, is finalized when it ends, with the outcome the transaction recorded, and keeps its `ctx.state` until then; the transaction does not wait for it. So every activity is started, then ended, then finalized. An activity's own end cannot stand in for its finalization: inside a transaction it ends before the `COMMIT`, and acting then lets a concurrent read store rows the transaction is about to replace.
 
+A nested transaction is a savepoint, a transaction activity beneath a transaction. A middleware recognizes it with `activity.kind === 'transaction' && ctx.inTransaction()`. Its finalization depends on how it settled:
+
+- **Released:** it and the activities beneath it are finalized with the outermost transaction's outcome, when that transaction ends. A failed statement beneath it counts as a failure of the enclosing transaction, so a `COMMIT` that resolves afterwards is `unknown`.
+- **Rolled back:** it and the activities beneath it are finalized `rolled-back` at once. Its failed statements do not count against the enclosing transaction, because `ROLLBACK TO` recovered it and a later `COMMIT` really commits.
+
 ### Interceptors
 
 The runtime executes statements and nothing else, so three of the four interceptors exist only on statement activities. In the order the runtime runs them:
@@ -278,7 +283,7 @@ Rewriting the query tree before it becomes SQL is the standard home for soft del
 - The deferred transaction begin and end hooks are `activityStarted` and `activityEnded` on a transaction activity.
 - Middleware state moves from `WeakMap`s keyed by plan to `ctx.state(key)`. This also removes the case ADR 260 documents, where the hook before encoding and the hooks after it receive different plan objects.
 - A runtime decides once, when it is created, whether any of its middleware implements `activityFinalized`. If one does, a transaction holds its finished child activities until it ends, to finalize them then; a transaction that never ends holds them. If none does, a transaction holds no finished child: it keeps only whether one failed, which decides its own `unknown` outcome.
-- Nested transactions, when built, are a transaction activity under a transaction activity, and finalization waits for the outermost.
+- A nested transaction is a savepoint, a transaction activity under a transaction activity. A released savepoint is finalized when the outermost transaction ends; a rolled-back one is finalized `rolled-back` at once, and its failed statements do not count against the enclosing transaction. Without this split, writes undone by a savepoint would be finalized `committed`, and one recovered failure would make every statement in the outer transaction `unknown`.
 - Mongo has no transactions; every Mongo activity is finalized right after it ends.
 - The direct single-client Postgres driver runs a runtime-scope statement sent while a transaction is open inside that transaction, and the runtime cannot see it. That limit is unchanged.
 - Touches: `RuntimeMiddleware` and `ActivityContext` in `framework-components`; the runners in `run-with-middleware.ts`; the SQL runtime's transaction bookkeeping and queryables; the Mongo runtime; the Supabase role session; the Postgres, SQLite and Supabase facades; `withMutationScope` and every terminal method in `sql-orm-client`; the ORM's structural `RuntimeQueryable` type, which carries the `activitySource` member; the cache, budgets and lints middleware.

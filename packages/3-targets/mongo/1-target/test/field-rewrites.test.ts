@@ -6,7 +6,11 @@ import {
   deserializeMongoOps,
   serializeMongoOps,
 } from '../src/core/migrations/mongo-ops-serializer';
-import { RenameFieldCall, UnsetFieldCall } from '../src/core/migrations/op-factory-call';
+import {
+  MIGRATION_MODULE,
+  RenameFieldCall,
+  UnsetFieldCall,
+} from '../src/core/migrations/op-factory-call';
 
 const meta = { target: 'mongo', storageHash: '', lane: 'mongo-raw' };
 
@@ -203,7 +207,7 @@ describe('field rewrite calls', () => {
       label: 'Rename field name to fullName in collection users',
       plain: 'renameField("users", "name", "fullName")',
       filtered: 'renameField("posts", "title", "headline", { filter: { type: "bug" } })',
-      imports: [{ moduleSpecifier: '@internal/target-mongo/migration', symbol: 'renameField' }],
+      imports: [{ moduleSpecifier: MIGRATION_MODULE, symbol: 'renameField' }],
     });
     expect(filtered.toOp()).toEqual(
       renameField('posts', 'title', 'headline', { filter: { type: 'bug' } }),
@@ -227,7 +231,7 @@ describe('field rewrite calls', () => {
       label: 'Remove field nickname from collection users',
       plain: 'unsetField("users", "nickname")',
       filtered: 'unsetField("posts", "score", { filter: { type: "bug" } })',
-      imports: [{ moduleSpecifier: '@internal/target-mongo/migration', symbol: 'unsetField' }],
+      imports: [{ moduleSpecifier: MIGRATION_MODULE, symbol: 'unsetField' }],
     });
     expect(filtered.toOp()).toEqual(unsetField('posts', 'score', { filter: { type: 'bug' } }));
   });

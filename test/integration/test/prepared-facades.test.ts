@@ -625,9 +625,11 @@ for (const [name, setup] of [
           expect(await sql.query(target.runtime, { id: 99 })).toEqual([]);
           expect(sqlCallback).toHaveBeenCalledOnce();
           expect(lowerings[name].mock.calls.length - beforeSql).toBe(1);
-          expect(await (await authoring.stats()).execute(target.runtime, {})).toEqual({
-            affectedRows: 1,
-          });
+          expect(await (await authoring.stats()).execute(target.runtime, {})).toEqual(
+            name === 'sqlite'
+              ? { affectedRows: 1, insertId: expect.any(String) }
+              : { affectedRows: 1 },
+          );
           expect(await (await authoring.shapedRows()).query(target.runtime, {})).toEqual([
             { affectedRows: 7 },
           ]);

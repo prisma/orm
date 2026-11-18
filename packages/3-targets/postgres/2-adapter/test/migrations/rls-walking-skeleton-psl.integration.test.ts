@@ -1,7 +1,5 @@
 import type { Contract } from '@internal/contract/types';
 import { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
-import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
-import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
 import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import {
   APP_SPACE_ID,
@@ -17,7 +15,6 @@ import {
 } from '@internal/sql-contract-psl/attribute-specs';
 import { sqlContextInput } from '@internal/sql-contract-psl/test';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
-import { postgresScalarAuthoringTypes } from '@internal/target-postgres/control';
 import {
   PostgresRlsPolicy,
   PostgresSchema,
@@ -64,21 +61,8 @@ namespace public {
 // PSL → contract
 // ============================================================================
 
-function buildScalarTypeDescriptors(): ReadonlyMap<string, { codecId: string }> {
-  return collectScalarTypeConstructors(postgresScalarAuthoringTypes);
-}
-
 function buildPslContract() {
   const assembled = assembleAuthoringContributions([postgresTargetDescriptor]);
-  const scalarColumnDescriptors = buildScalarTypeDescriptors();
-  const scalarTypeConstructors: Record<string, AuthoringTypeConstructorDescriptor> =
-    Object.fromEntries(
-      [...scalarColumnDescriptors].map(([name, output]) => [
-        name,
-        { kind: 'typeConstructor' as const, output },
-      ]),
-    );
-
   const bound = bindPslSchema(PSL, {
     sourceId: 'rls-walking-skeleton-psl.integration.test.psl',
     context: {
@@ -87,7 +71,6 @@ function buildPslContract() {
       composedExtensionContracts: new Map(),
       authoringContributions: {
         ...assembled,
-        type: { ...scalarTypeConstructors, ...assembled.type },
         attributeSpecs: sqlAttributeSpecs,
       },
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },

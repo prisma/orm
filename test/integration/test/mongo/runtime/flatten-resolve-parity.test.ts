@@ -1,5 +1,6 @@
 import { createMongoAdapter } from '@internal/adapter-mongo';
-import type { MongoLoweredDraft } from '@internal/mongo-lowering';
+import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
+import type { MongoAdapter, MongoDriver, MongoLoweredDraft } from '@internal/mongo-lowering';
 import type { AnyMongoCommand } from '@internal/mongo-query-ast/execution';
 import {
   AggregateCommand,
@@ -7,13 +8,22 @@ import {
   InsertManyCommand,
   InsertOneCommand,
   MongoFieldFilter,
+  MongoLimitStage,
+  MongoLookupStage,
   MongoMatchStage,
   UpdateManyCommand,
   UpdateOneCommand,
 } from '@internal/mongo-query-ast/execution';
-import { flattenMongoParamRefs } from '@internal/mongo-runtime';
-import { MongoParamRef } from '@internal/mongo-value';
-import { describe, expect, it } from 'vitest';
+import {
+  createMongoExecutionContext,
+  createMongoExecutionStack,
+  createMongoRuntime,
+  flattenMongoParamRefs,
+} from '@internal/mongo-runtime';
+import { MongoParamRef, MongoPreparedParamRef } from '@internal/mongo-value';
+import mongoRuntimeTarget from '@internal/target-mongo/runtime';
+import { describe, expect, it, vi } from 'vitest';
+import { fixtureContract } from '../setup';
 
 const stubMeta = { target: 'mongo', storageHash: 'test-hash', lane: 'mongo-orm' };
 
@@ -21,12 +31,14 @@ function plan(collection: string, command: AnyMongoCommand) {
   return { collection, command, meta: stubMeta };
 }
 
+type DraftLeaf = MongoParamRef | MongoPreparedParamRef;
+
 /**
  * Mirrors {@link resolveDraftSlot} in `adapter-mongo/resolve-value.ts` — collects
- * every `MongoParamRef` the resolve walk would visit (without invoking codecs).
+ * every `MongoParamRef` and placeholder the resolve walk would visit (without invoking codecs).
  */
-function collectRefsResolveWalk(value: unknown): MongoParamRef[] {
-  if (value instanceof MongoParamRef) {
+function collectRefsResolveWalk(value: unknown): DraftLeaf[] {
+  if (value instanceof MongoParamRef || value instanceof MongoPreparedParamRef) {
     return [value];
   }
   if (value === null || typeof value !== 'object') {
@@ -41,7 +53,7 @@ function collectRefsResolveWalk(value: unknown): MongoParamRef[] {
   return Object.values(value).flatMap((v) => collectRefsResolveWalk(v));
 }
 
-function collectRefsFromDraft(draft: MongoLoweredDraft): MongoParamRef[] {
+function collectRefsFromDraft(draft: MongoLoweredDraft): DraftLeaf[] {
   switch (draft.kind) {
     case 'insertOne':
     case 'rawInsertOne':
@@ -70,9 +82,7 @@ function collectRefsFromDraft(draft: MongoLoweredDraft): MongoParamRef[] {
 }
 
 function expectFlattenMatchesResolve(draft: MongoLoweredDraft): void {
-  const fromFlatten = [...flattenMongoParamRefs(draft)];
-  const fromResolveWalk = collectRefsFromDraft(draft);
-  expect(fromFlatten).toEqual(fromResolveWalk);
+  expect([...flattenMongoParamRefs(draft)]).toEqual(collectRefsFromDraft(draft));
 }
 
 describe('flattenMongoParamRefs / resolveParams walk parity', () => {
@@ -149,6 +159,59 @@ describe('flattenMongoParamRefs / resolveParams walk parity', () => {
         ]),
       ),
     );
+    expectFlattenMatchesResolve(draft);
+  });
+
+  it('matches resolve traversal for a prepared run, whose placeholders are bound in a filter and a sub-pipeline $limit', async () => {
+    const stack = createMongoExecutionStack({
+      target: mongoRuntimeTarget,
+      adapter: mongoRuntimeAdapter,
+    });
+    const realAdapter = stack.adapter.create(stack);
+    const resolvedDrafts: MongoLoweredDraft[] = [];
+    const recordingAdapter: MongoAdapter = {
+      lower: realAdapter.lower.bind(realAdapter),
+      structuralLower: realAdapter.structuralLower.bind(realAdapter),
+      resolveParams: (draft, ctx) => {
+        resolvedDrafts.push(draft);
+        return realAdapter.resolveParams(draft, ctx);
+      },
+    };
+    const driver = {
+      execute: vi.fn(async function* () {}),
+      close: vi.fn(async () => {}),
+    } as unknown as MongoDriver;
+    const runtime = createMongoRuntime({
+      context: createMongoExecutionContext({ contract: fixtureContract, stack }),
+      adapter: recordingAdapter,
+      driver,
+    });
+
+    const statement = await runtime.prepare(
+      { email: 'mongo/string@1', take: 'mongo/int32@1' },
+      (p) =>
+        plan(
+          'users',
+          new AggregateCommand('users', [
+            new MongoMatchStage(MongoFieldFilter.eq('email', p.email)),
+            new MongoLookupStage({
+              from: 'posts',
+              as: 'posts',
+              pipeline: [new MongoLimitStage(p.take)],
+            }),
+            new MongoLimitStage(p.take),
+          ]),
+        ),
+    );
+    await statement.query(runtime, { email: 'a@example.com', take: 2 }).toArray();
+
+    const [draft] = resolvedDrafts;
+    if (draft === undefined) throw new Error('expected a resolved draft');
+    expect([...flattenMongoParamRefs(draft)].map((ref) => ref.value)).toEqual([
+      'a@example.com',
+      2,
+      2,
+    ]);
     expectFlattenMatchesResolve(draft);
   });
 });

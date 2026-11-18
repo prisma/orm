@@ -9,7 +9,7 @@ Model points, lines, and polygons as first-class columns, query them with a type
 - **`Geometry` column type** — store Points, LineStrings, Polygons, and their Multi-\* variants as a single `geometry` column. Optional SRID parameter (e.g. `Geometry(4326)` for WGS84 lng/lat) flows through to `contract.d.ts` and DDL.
 - **GeoJSON-shaped runtime values** — read and write geometries as plain `{ type, coordinates }` objects. No PostGIS-specific client APIs to learn.
 - **Seven query operations** on geometry columns: `distance`, `distanceSphere`, `dwithin`, `contains`, `within`, `intersects`, `intersectsBbox`.
-- **Automatic `CREATE EXTENSION`** — the control descriptor declares `postgis` as a database dependency, so `prisma db init` ensures the server has it enabled before the first migration runs.
+- **Automatic `CREATE EXTENSION`** — the pack's contract declares the `postgis` extension, so `prisma db init` and `prisma db migrate` create it if it is missing, and `prisma db sign` adopts a database that already has it in any schema on the connection's search path, such as a Supabase project's `extensions` schema.
 - **Both authoring paths** — works with PSL schemas and the TypeScript contract builder.
 
 ## Prerequisites
@@ -29,16 +29,11 @@ A complete five-step example — see [`examples/prisma-8-postgis-demo`](../../..
 **1. Register the extension in `prisma.config.ts`:**
 
 ```typescript
-import { defineConfig } from '@internal/cli/config-types';
-import postgresAdapter from '@internal/adapter-postgres/control';
-import sql from '@internal/family-sql/control';
-import postgres from '@internal/target-postgres/control';
+import { defineConfig } from '@internal/postgres/config';
 import postgis from '@internal/extension-postgis/control';
 
 export default defineConfig({
-  family: sql,
-  target: postgres,
-  adapter: postgresAdapter,
+  contract: './prisma/schema.prisma',
   extensions: [postgis],
 });
 ```
@@ -53,7 +48,7 @@ types {
 }
 
 model Cafe {
-  id       Char(36)    @id @onCreate(uuid())
+  id       Uuid        @id @onCreate(uuid())
   name     String
   location WgsGeometry
   @@map("cafe")
@@ -117,7 +112,7 @@ types {
 }
 
 model Route {
-  id   Char(36)    @id @onCreate(uuid())
+  id   Uuid        @id @onCreate(uuid())
   name String
   path WgsGeometry        // LineStrings, polygons, points — all valid runtime values
   @@map("route")

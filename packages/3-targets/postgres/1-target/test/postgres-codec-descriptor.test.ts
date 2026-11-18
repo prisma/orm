@@ -98,6 +98,7 @@ class VectorCodec<N extends number> extends CodecImpl<
 }
 
 class GenericVectorDescriptor extends CodecDescriptorImpl<VectorParams> {
+  readonly jsonType = 'array' as const;
   override readonly dataType = dataTypeId('demo/fixture');
   override readonly codecId = 'demo/vector@1' as const;
   override readonly traits = ['equality'] as const;
@@ -130,6 +131,7 @@ class RenderingVectorDescriptor extends GenericVectorDescriptor {
 }
 
 class DirectVectorDescriptor extends PostgresCodecDescriptor<VectorParams> {
+  override readonly jsonType = 'any' as const;
   override readonly dataType = dataTypeId('demo/fixture');
   override readonly codecId = 'demo/direct-vector@1' as const;
   override readonly traits = ['equality'] as const;
@@ -311,6 +313,7 @@ describe('postgresCodec', () => {
     expect(descriptor.descriptorKind).toBe('postgres-codec');
     expect(descriptor.codecId).toBe(genericVectorDescriptor.codecId);
     expect(descriptor.traits).toBe(genericVectorDescriptor.traits);
+    expect(descriptor.jsonType).toBe('array');
     expect(descriptor.dataType).toBe(fixtureVectorType.id);
     expect(descriptor.isParameterized).toBe(genericVectorDescriptor.isParameterized);
     expect(descriptor.renderOutputType?.({ length: 6 })).toBe('Vector<6>');
@@ -410,6 +413,7 @@ describe('Postgres codec descriptor registry', () => {
       isParameterized: descriptor.isParameterized,
       factory: descriptor.factory.bind(descriptor),
       projectJson: descriptor.projectJson.bind(descriptor),
+      jsonType: descriptor.jsonType,
     };
 
     expect(structuralDescriptor).not.toBeInstanceOf(PostgresCodecDescriptor);
@@ -431,6 +435,7 @@ describe('Postgres codec descriptor registry', () => {
       isParameterized: descriptor.isParameterized,
       factory: descriptor.factory.bind(descriptor),
       projectJson: descriptor.projectJson.bind(descriptor),
+      jsonType: descriptor.jsonType,
     };
 
     expect(() => buildPostgresCodecDescriptorRegistry([genericVectorDescriptor])).toThrow(

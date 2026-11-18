@@ -6,9 +6,11 @@ import { defineContract } from '../src/exports/contract-builder';
 import sqlite from '../src/exports/runtime';
 import { contractFromJson } from '../src/exports/static';
 
-const withFragmentModel = defineContract({}, ({ field, model }) => ({
+const withFragmentModel = defineContract({}, ({ field, model, gen, type }) => ({
   models: {
-    fragment: model('fragment', { fields: { id: field.id.uuidv4String() } }),
+    fragment: model('fragment', {
+      fields: { id: field.column(type.sql.Char(36)).id().onCreate(gen.uuid()) },
+    }),
   },
 }));
 

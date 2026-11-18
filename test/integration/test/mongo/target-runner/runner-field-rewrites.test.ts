@@ -91,7 +91,7 @@ function contractWith(collections: Record<string, MongoCollection>): MongoContra
 
 const usersWithFullName = contractWith({
   users: new MongoCollection({
-    indexes: [{ keys: [{ field: 'fullName', direction: 1 }], unique: true }],
+    indexes: [{ name: 'fullName_1', keys: [{ field: 'fullName', direction: 1 }], unique: true }],
     validator: {
       jsonSchema: closedSchema('fullName'),
       validationLevel: 'strict',

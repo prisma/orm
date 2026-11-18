@@ -9,6 +9,8 @@ const GUIDES = [
   'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.18-to-8.0.0-rc.19/instructions.md',
   'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.19-to-8.0.0-rc.20/instructions.md',
   'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.19-to-8.0.0-rc.20/instructions.md',
+  'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.20-to-8.0.0-rc.21/instructions.md',
+  'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.20-to-8.0.0-rc.21/instructions.md',
 ];
 
 function detects(id: string, content: string): boolean {
@@ -21,7 +23,7 @@ const allPatterns = GUIDES.flatMap((guide) =>
   ),
 );
 
-describe('the detection patterns of the rc.18 to rc.20 guides', () => {
+describe('the detection patterns of the rc.18 to rc.21 guides', () => {
   it('include patterns from every guide', () => {
     expect(new Set(allPatterns.map(({ guide }) => guide))).toEqual(new Set(GUIDES));
   });

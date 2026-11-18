@@ -3,8 +3,6 @@
  */
 import { spawnSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { computeStorageHash } from '@prisma/orm-postgres/contract/hashing';
-import { PostgresContractSerializer } from '@prisma/orm-postgres/target/runtime';
 import { withClient } from '@repo/test-utils';
 import { join } from 'pathe';
 import stripAnsi from 'strip-ansi';
@@ -19,6 +17,7 @@ import {
   timeouts,
   useDevDatabase,
 } from '../utils/journey-test-helpers';
+import { postgresStorageHash } from '../utils/journey-workspace-helpers';
 
 const PRISMA7_FIXTURES = join(__dirname, '../fixtures/prisma7-source');
 const JOURNEY_FIXTURES = join(__dirname, '../fixtures/cli/cli-e2e-test-app/fixtures/cli-journeys');
@@ -52,11 +51,10 @@ function previousReleaseContract(json: JsonRecord): {
         if (typeof field['many'] === 'object' && field['many'] !== null)
           field['many'] = { elementNullable: false };
   const { storageHash: _new, ...withoutHash } = storage;
-  const hash = computeStorageHash({
+  const hash = postgresStorageHash({
     target: String(contract['target']),
     targetFamily: String(contract['targetFamily']),
     storage: withoutHash,
-    ...new PostgresContractSerializer().hashCanonicalizationHooks,
   });
   storage['storageHash'] = hash;
   return { json: contract, hash };

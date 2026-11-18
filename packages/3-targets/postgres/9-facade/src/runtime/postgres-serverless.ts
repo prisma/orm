@@ -7,7 +7,11 @@ import postgresDriver, {
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { CollectionClasses, NoCollectionClasses } from '@internal/sql-orm-client';
 import type { Runtime } from '@internal/sql-runtime';
-import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
+import {
+  createExecutionContext,
+  createSqlExecutionStack,
+  toRuntimeOptions,
+} from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { InternalError } from '@internal/utils/internal-error';
 import { redactDatabaseUrl } from '@internal/utils/redact-db-url';
@@ -26,8 +30,8 @@ import {
   DEFAULT_CONNECT_TIMEOUT_MILLIS,
   type PostgresExecutionOptions,
   toDriverCursorOptions,
-  toRuntimeOptions,
   validateCursorOptions,
+  validateTransactionOptions,
 } from './postgres-options';
 import { PostgresRuntimeImpl } from './postgres-runtime';
 import type { PostgresTargetId } from './postgres-target-id';
@@ -109,6 +113,7 @@ export default function postgresServerless<
   options: PostgresServerlessOptions<TContract, TCollections>,
 ): PostgresServerlessClient<TContract, TCollections> {
   const cursor = validateCursorOptions(options.cursor, 'postgresServerless');
+  const transactionOptions = validateTransactionOptions(options.transactionOptions);
   const contract = validatePostgresContract(options.contract);
   const stack = createSqlExecutionStack({
     target: postgresTarget,
@@ -139,6 +144,7 @@ export default function postgresServerless<
       toSql,
       getRuntime,
       getRuntimeForWork,
+      transactionOptions,
     });
 
   // The ORM checks the execution context when it is built. Building the members once here makes
@@ -195,9 +201,6 @@ export default function postgresServerless<
       const url = validatePostgresUrl(binding.url);
 
       const driverDescriptor = stack.driver;
-      if (!driverDescriptor) {
-        throw new InternalError('Driver descriptor missing from execution stack');
-      }
 
       const adapter = stack.adapter.create(stack);
       const driver = driverDescriptor.create({

@@ -15,7 +15,6 @@ import { createTestSqlNamespace } from '../../1-core/contract/test/test-support'
 import {
   encodeStoredValue,
   planEnumValueRewrites,
-  withEnumValueOperations,
 } from '../src/core/migrations/enum-value-planning';
 import type { SchemaTables } from '../src/core/migrations/schema-tables';
 import {
@@ -642,29 +641,5 @@ describe('encodeStoredValue', () => {
       message:
         'Codec test/blob@1 writes the stored value "x" as neither a string nor a number, which a migration cannot compare',
     });
-  });
-});
-
-describe('withEnumValueOperations', () => {
-  it('gives each enum value rename the operations its rewrites lowered to, and keeps the others', () => {
-    const statement = rename('ARCHIVED', 'RETIRED');
-    const other = {
-      kind: 'rename' as const,
-      entity: 'namespace' as const,
-      from: asNamespaceId('app'),
-      to: asNamespaceId('crm'),
-    };
-    expect(
-      withEnumValueOperations(
-        [
-          { statement: other, operationIndexes: [0] },
-          { statement, operationIndexes: [] },
-        ],
-        () => [3, 4],
-      ),
-    ).toEqual([
-      { statement: other, operationIndexes: [0] },
-      { statement, operationIndexes: [3, 4] },
-    ]);
   });
 });

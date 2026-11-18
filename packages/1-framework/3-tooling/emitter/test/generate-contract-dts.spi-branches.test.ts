@@ -4,7 +4,7 @@ import type { EmissionSpi } from '@internal/framework-components/emission';
 import { describe, expect, it } from 'vitest';
 import { generateContractDts } from '../src/generate-contract-dts';
 import { createMockSpi } from './mock-spi';
-import { createTestContract } from './utils';
+import { createTestContract, TEST_TYPES_MODULE } from './utils';
 
 const HASHES = {
   storageHash: '0000000000000000000000000000000000000000000000000000000000000001',
@@ -60,10 +60,23 @@ function makeEnumContract(opts: {
   return createTestContract({ namespaces: { public: publicNs } });
 }
 
+describe('generateContractDts contract type', () => {
+  it('writes profileHash on the line after meta, with no blank line between them', () => {
+    const dts = generateContractDts(
+      createTestContract(),
+      createMockSpi(),
+      [],
+      HASHES,
+      TEST_TYPES_MODULE,
+    );
+    expect(dts).toMatch(/readonly meta: [^\n]*;\n {2}readonly profileHash: ProfileHash;/);
+  });
+});
+
 describe('generateContractDts SPI hook plumbing', () => {
   it('omits extra storage exports when the SPI has no getStorageTypeExports hook', () => {
     const spi: EmissionSpi = createMockSpi();
-    const dts = generateContractDts(createTestContract(), spi, [], HASHES);
+    const dts = generateContractDts(createTestContract(), spi, [], HASHES, TEST_TYPES_MODULE);
     expect(dts).not.toContain('export type StorageColumnTypes');
     expect(dts).not.toContain('export type StorageColumnInputTypes');
   });
@@ -75,14 +88,14 @@ describe('generateContractDts SPI hook plumbing', () => {
           '\n',
         ),
     });
-    const dts = generateContractDts(createTestContract(), spi, [], HASHES);
+    const dts = generateContractDts(createTestContract(), spi, [], HASHES, TEST_TYPES_MODULE);
     expect(dts).toContain('export type StorageColumnTypes = {};');
     expect(dts).toContain('export type StorageColumnInputTypes = {};');
   });
 
   it('omits extra exports when getStorageTypeExports returns undefined', () => {
     const spi: EmissionSpi = createMockSpi({ getStorageTypeExports: () => undefined });
-    const dts = generateContractDts(createTestContract(), spi, [], HASHES);
+    const dts = generateContractDts(createTestContract(), spi, [], HASHES, TEST_TYPES_MODULE);
     expect(dts).not.toContain('export type StorageColumnTypes');
   });
 });
@@ -112,6 +125,7 @@ describe('generateContractDts resolveStorageValueSet wiring', () => {
       createMockSpi({ resolveStorageValueSet: priorityResolver }),
       [],
       HASHES,
+      TEST_TYPES_MODULE,
       undefined,
       literalCodecLookup(),
     );
@@ -133,6 +147,7 @@ describe('generateContractDts resolveStorageValueSet wiring', () => {
       createMockSpi({ resolveStorageValueSet: () => undefined }),
       [],
       HASHES,
+      TEST_TYPES_MODULE,
       undefined,
       literalCodecLookup(),
     );
@@ -154,6 +169,7 @@ describe('generateContractDts resolveStorageValueSet wiring', () => {
       createMockSpi(),
       [],
       HASHES,
+      TEST_TYPES_MODULE,
       undefined,
       literalCodecLookup(),
     );
@@ -175,6 +191,7 @@ describe('generateContractDts resolveStorageValueSet wiring', () => {
       createMockSpi({ resolveStorageValueSet: () => undefined }),
       [],
       HASHES,
+      TEST_TYPES_MODULE,
       undefined,
       literalCodecLookup(),
     );
@@ -196,6 +213,7 @@ describe('generateContractDts resolveStorageValueSet wiring', () => {
       createMockSpi({ resolveStorageValueSet: priorityResolver }),
       [],
       HASHES,
+      TEST_TYPES_MODULE,
     );
     expect(dts).toContain(NO_OVERRIDES);
   });

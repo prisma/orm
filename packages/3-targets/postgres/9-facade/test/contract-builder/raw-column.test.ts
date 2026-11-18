@@ -7,10 +7,13 @@ type Helpers = Parameters<NonNullable<Parameters<typeof defineContract>[1]>>[0];
 function shapeColumn(
   build: (field: Helpers['field'], type: Helpers['type']) => ScalarFieldBuilder,
 ) {
-  const contract = defineContract({}, ({ field, model, type }) => ({
+  const contract = defineContract({}, ({ field, model, type, gen }) => ({
     models: {
       Shape: model('Shape', {
-        fields: { id: field.id.uuidv4String(), area: build(field, type) },
+        fields: {
+          id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+          area: build(field, type),
+        },
       }),
     },
   }));

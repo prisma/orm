@@ -10,14 +10,18 @@ import {
   type DataTypeSupport,
   instantiateAuthoringTypeAlias,
   instantiateAuthoringTypeConstructor,
+  instantiateAuthoringTypeConstructorFromValues,
   resolveTypeAliasGenerators,
+  validateAuthoringHelperArguments,
 } from '@internal/framework-components/authoring';
+import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import type { GeneratorFunctionRegistry } from '@internal/framework-components/components';
 import type { ControlMutationDefaultRegistry } from '@internal/framework-components/control';
 import {
   type Binder,
   type ContributedTypeAlias,
   contributedTypeAliasOf,
+  type DiagnosticSource,
   diagnosticSource,
   interpretAttribute,
   type NamedTypeSymbol,
@@ -33,19 +37,79 @@ import {
   typeAttributeSubjectLabel,
   typeGeneratorAttributeSpec,
 } from '@internal/psl-parser';
+import {
+  argumentIndexOf,
+  argumentSpan,
+  instantiatePslTypeChoice,
+  mapPslHelperArgs,
+} from '@internal/psl-parser/interpret';
 import type { FieldAttributeAst, PslSources } from '@internal/psl-parser/syntax';
 import { ifDefined } from '@internal/utils/defined';
+import { isInternalError } from '@internal/utils/internal-error';
+import type { DeprecatedTypeNameWarner } from './deprecated-type-names';
 import { unloweredAttributeHint } from './mongo-attribute-specs';
 
 type ScalarFieldType = Extract<ContractField['type'], { readonly kind: 'scalar' }>;
 
-/** The field type a type constructor gives, keeping a bare constructor's fixed type params. */
-export function scalarTypeOfConstructor(
-  descriptor: AuthoringTypeConstructorDescriptor,
-  call: ResolvedTypeConstructorCall | undefined,
-): ScalarFieldType {
-  if (call !== undefined) return { kind: 'scalar', codecId: descriptor.output.codecId };
-  const { codecId, typeParams } = instantiateAuthoringTypeConstructor(descriptor, []);
+/** The field type a use of a type choice gives: the column of the constructor its call chooses, read and refused as a SQL column's is. `undefined`, with a diagnostic pushed, when the call is refused. */
+export function scalarTypeOfChoice(
+  input: Parameters<typeof instantiatePslTypeChoice>[0],
+): ScalarFieldType | undefined {
+  const output = instantiatePslTypeChoice(input);
+  return output === undefined
+    ? undefined
+    : { kind: 'scalar', codecId: output.codecId, ...ifDefined('typeParams', output.typeParams) };
+}
+
+/** The field type a use of a type constructor gives: a bare use keeps the constructor's fixed type params, and a call's arguments are read as the constructor declares them and checked by its codec. `undefined`, with a diagnostic pushed, when the call is refused. */
+export function scalarTypeOfConstructor(input: {
+  readonly descriptor: AuthoringTypeConstructorDescriptor;
+  readonly call: ResolvedTypeConstructorCall | undefined;
+  readonly codecLookup: Pick<CodecLookupWithDescriptors, 'descriptorFor'>;
+  readonly diagnostics: PslDiagnosticCollector;
+  readonly source: DiagnosticSource;
+  readonly entityLabel: string;
+  readonly dataTypes: DataTypeSupport;
+}): ScalarFieldType | undefined {
+  const { descriptor, call } = input;
+  if (call === undefined) {
+    const { codecId, typeParams } = instantiateAuthoringTypeConstructor(descriptor, []);
+    return { kind: 'scalar', codecId, ...ifDefined('typeParams', typeParams) };
+  }
+  const helperPath = call.path.join('.');
+  const subject = `${input.entityLabel} type "${helperPath}"`;
+  const refuse = (message: string, argumentIndex: number | undefined): undefined => {
+    input.diagnostics.push({
+      code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
+      message: `${subject}: ${message}`,
+      ...input.source.at(argumentSpan(call, descriptor.args, argumentIndex)),
+    });
+    return undefined;
+  };
+  const args = mapPslHelperArgs({
+    args: call.args,
+    descriptors: descriptor.args ?? [],
+    helperLabel: `type "${helperPath}"`,
+    span: call.span,
+    diagnostics: input.diagnostics,
+    source: input.source,
+    entityLabel: input.entityLabel,
+    dataTypes: input.dataTypes,
+  });
+  if (!args) return undefined;
+  try {
+    validateAuthoringHelperArguments(helperPath, descriptor.args, args);
+  } catch (error) {
+    if (isInternalError(error)) throw error;
+    return refuse(error instanceof Error ? error.message : String(error), argumentIndexOf(error));
+  }
+  const output = instantiateAuthoringTypeConstructorFromValues(
+    descriptor,
+    args,
+    input.codecLookup.descriptorFor(descriptor.output.codecId)?.paramsSchema,
+  );
+  if (!output.ok) return refuse(output.failure.message, output.failure.argumentIndex);
+  const { codecId, typeParams } = output.value;
   return { kind: 'scalar', codecId, ...ifDefined('typeParams', typeParams) };
 }
 
@@ -75,7 +139,9 @@ interface ResolveMongoTypeAliasesInput {
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
   readonly generatorFunctions: GeneratorFunctionRegistry;
   readonly dataTypes: DataTypeSupport;
+  readonly codecLookup: CodecLookupWithDescriptors;
   readonly authoringTypes: AuthoringTypeNamespace | undefined;
+  readonly warnDeprecated: DeprecatedTypeNameWarner;
 }
 
 const GENERATOR_PHASES = ['onCreate', 'onUpdate'] as const;
@@ -143,7 +209,30 @@ function aliasType(
 ): Pick<ResolvedTypeAlias, 'type' | 'valueSet'> | undefined {
   const { base, symbol } = alias;
   if (base.kind === 'typeConstructor') {
-    return { type: scalarTypeOfConstructor(base.descriptor, base.call), valueSet: undefined };
+    input.warnDeprecated(symbol, alias.baseName, base.descriptor);
+    const type = scalarTypeOfConstructor({
+      descriptor: base.descriptor,
+      call: base.call,
+      codecLookup: input.codecLookup,
+      diagnostics: input.diagnostics,
+      source: diagnosticSource(input.sources, symbol.node.syntax),
+      entityLabel: `Type alias "${symbol.name}"`,
+      dataTypes: input.dataTypes,
+    });
+    return type === undefined ? undefined : { type, valueSet: undefined };
+  }
+  if (base.kind === 'typeChoice') {
+    const type = scalarTypeOfChoice({
+      symbol: base.symbol,
+      call: base.call,
+      span: symbol.span,
+      codecLookup: input.codecLookup,
+      diagnostics: input.diagnostics,
+      source: diagnosticSource(input.sources, symbol.node.syntax),
+      entityLabel: `Type alias "${symbol.name}"`,
+      dataTypes: input.dataTypes,
+    });
+    return type === undefined ? undefined : { type, valueSet: undefined };
   }
   if (base.symbol.keyword !== 'enum') {
     input.diagnostics.push({

@@ -5,13 +5,15 @@ import type {
   ContractRelation,
   ContractValueObject,
   JsonValue,
+  StorageBase,
 } from '@internal/contract/types';
+import { valueObjectAt } from '@internal/contract/types';
 import type { TypeLookups } from '@internal/framework-components/codec';
 import { assertDefined } from '@internal/utils/assertions';
 import type { MongoModelStorage } from './contract-types';
 import { MongoValidator } from './ir/mongo-validator';
 import { bsonTypesOfCodec } from './mongo-data-type';
-import { recursiveGroupsOf, typeKey } from './recursive-groups';
+import { modelKey, recursiveGroupsOf, valueObjectKey } from './recursive-groups';
 import { isEmbedRelation } from './relation-fields';
 import {
   DOCUMENT_ID,
@@ -46,7 +48,7 @@ interface SchemaSources extends ModelValidatorSources {
 const OPEN_OBJECT: Record<string, unknown> = { bsonType: 'object' };
 
 function sourcesFor(input: ModelValidatorSources, rootKey: string): SchemaSources {
-  const groups = recursiveGroupsOf(input.valueObjects, input.models);
+  const groups = recursiveGroupsOf(input.storage, input.models);
   const rootGroup = groups.get(rootKey);
   return {
     ...input,
@@ -56,12 +58,10 @@ function sourcesFor(input: ModelValidatorSources, rootKey: string): SchemaSource
 }
 
 function objectSchemaOf(
-  kind: 'valueObject' | 'model',
-  name: string,
+  key: string,
   shape: StoredShape,
   sources: SchemaSources,
 ): Record<string, unknown> {
-  const key = typeKey(kind, name);
   const group = sources.groups.get(key);
   if (group !== undefined && sources.enteredGroups.has(group)) return OPEN_OBJECT;
   return deriveObjectSchema(shape, entering(key, sources));
@@ -131,7 +131,7 @@ function fieldToBsonSchema(
   field: ContractField,
   sources: SchemaSources,
 ): Record<string, unknown> | undefined {
-  const { lookups, valueObjects, valueSets } = sources;
+  const { lookups, storage, valueSets } = sources;
   if (field.type.kind === 'scalar') {
     const bsonTypes = bsonTypesOfCodec(field.type.codecId, lookups);
     assertDefined(
@@ -166,9 +166,9 @@ function fieldToBsonSchema(
   }
 
   if (field.type.kind === 'valueObject') {
-    const vo = valueObjects[field.type.name];
+    const vo = valueObjectAt(storage, field.type);
     if (!vo) return undefined;
-    const voSchema = objectSchemaOf('valueObject', field.type.name, valueObjectShape(vo), sources);
+    const voSchema = objectSchemaOf(valueObjectKey(field.type), valueObjectShape(vo), sources);
     if (field.many) {
       return {
         bsonType: field.nullable ? ['null', 'array'] : 'array',
@@ -194,7 +194,7 @@ function embedToBsonSchema(
   const embeddedName = relation.to.model;
   const embedded = sources.models[embeddedName];
   assertDefined(embedded, `Embedded model "${embeddedName}" is missing`);
-  const schema = objectSchemaOf('model', embeddedName, modelShape(embedded), sources);
+  const schema = objectSchemaOf(modelKey(embeddedName), modelShape(embedded), sources);
   return relation.cardinality === '1:N' ? { bsonType: 'array', items: schema } : schema;
 }
 
@@ -284,7 +284,7 @@ function polymorphicSchema(
   for (const variant of variants) {
     const { properties: variantProperties, required } = propertiesOf(
       variant,
-      entering(typeKey('model', variant.modelName), sources),
+      entering(modelKey(variant.modelName), sources),
       base,
     );
 
@@ -310,7 +310,8 @@ function polymorphicSchema(
 export interface ModelValidatorSources {
   readonly models: Record<string, ValidatorModel>;
   readonly lookups: TypeLookups;
-  readonly valueObjects: Record<string, ContractValueObject>;
+  /** The storage the value objects are read from, at the coordinate each field names. */
+  readonly storage: Pick<StorageBase, 'namespaces'>;
   readonly valueSets: FieldValueSets;
 }
 
@@ -322,7 +323,7 @@ export function deriveModelJsonSchema(
   model: ValidatorModel,
   sources: ModelValidatorSources,
 ): Record<string, unknown> {
-  const schemaSources = sourcesFor(sources, typeKey('model', modelName));
+  const schemaSources = sourcesFor(sources, modelKey(modelName));
   if (!model.discriminator || !model.variants) {
     return deriveObjectSchema(modelShape(model), schemaSources, { isDocument: true });
   }

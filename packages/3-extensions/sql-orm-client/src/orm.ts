@@ -35,6 +35,7 @@ export interface OrmOptions<
 > {
   readonly runtime: RuntimeQueryable;
   readonly collections?: TCollections;
+  readonly implicitTransactionOptions?: CollectionContext<TContract>['implicitTransactionOptions'];
   readonly context: ExecutionContext<TContract>;
 }
 
@@ -111,7 +112,7 @@ export interface OrmClientRootMembers<TContract extends Contract<SqlStorage>> {
    *
    * ```ts
    * const notDeleted = db.orm.fragment(
-   *   { deletedAt: field.temporal.timestamptz().optional() },
+   *   { deletedAt: field.column(type.TimestamptzTemporal()).optional() },
    *   (rows) => rows.where((r) => r.deletedAt.isNull()),
    * );
    * db.orm.public.Post.with(notDeleted).deleteAll();
@@ -179,7 +180,11 @@ export function orm<
   assertAggregateOperationsNotReserved(context.aggregateDescriptors);
   collectionMethodTables(context);
   const contract = context.contract;
-  const ctx: CollectionContext<TContract> = { runtime, context };
+  const ctx: CollectionContext<TContract> = {
+    runtime,
+    context,
+    implicitTransactionOptions: options.implicitTransactionOptions,
+  };
   const collectionRegistry = checkCollectionClasses(contract, collections);
 
   type AnyCollection = Collection<TContract, string, unknown, CollectionTypeState>;

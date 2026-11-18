@@ -102,11 +102,11 @@ const ROUND_TRIPS: ReadonlyArray<
   [pgBit, { length: 8 }, 'bit(8)', 'bit(8)', { length: 8 }],
   [pgVarbit, {}, 'bit varying', 'bit varying', {}],
   [pgVarbit, { length: 8 }, 'bit varying(8)', 'bit varying(8)', { length: 8 }],
-  [pgTime, {}, 'time', 'time without time zone', {}],
+  [pgTime, {}, 'time', 'time without time zone', { precision: 6 }],
   [pgTime, { precision: 3 }, 'time(3)', 'time(3) without time zone', { precision: 3 }],
-  [pgTimetz, {}, 'timetz', 'time with time zone', {}],
+  [pgTimetz, {}, 'timetz', 'time with time zone', { precision: 6 }],
   [pgTimetz, { precision: 3 }, 'timetz(3)', 'time(3) with time zone', { precision: 3 }],
-  [pgTimestamp, {}, 'timestamp', 'timestamp without time zone', {}],
+  [pgTimestamp, {}, 'timestamp', 'timestamp without time zone', { precision: 6 }],
   [
     pgTimestamp,
     { precision: 3 },
@@ -121,7 +121,7 @@ const ROUND_TRIPS: ReadonlyArray<
     'timestamp(0) without time zone',
     { precision: 0 },
   ],
-  [pgTimestamptz, {}, 'timestamptz', 'timestamp with time zone', {}],
+  [pgTimestamptz, {}, 'timestamptz', 'timestamp with time zone', { precision: 6 }],
   [
     pgTimestamptz,
     { precision: 3 },
@@ -129,7 +129,7 @@ const ROUND_TRIPS: ReadonlyArray<
     'timestamp(3) with time zone',
     { precision: 3 },
   ],
-  [pgInterval, {}, 'interval', 'interval', {}],
+  [pgInterval, {}, 'interval', 'interval', { precision: 6 }],
   [pgInterval, { precision: 3 }, 'interval(3)', 'interval(3)', { precision: 3 }],
 ];
 
@@ -279,15 +279,15 @@ const CLAIMING_TEXTS: ReadonlyArray<readonly [string, string, SqlTypeParams]> = 
   ['bit varying(8)', 'pg/varbit', { length: 8 }],
   ['varbit', 'pg/varbit', {}],
   ['varbit(8)', 'pg/varbit', { length: 8 }],
-  ['time without time zone', 'pg/time', {}],
+  ['time without time zone', 'pg/time', { precision: 6 }],
   ['time(3) without time zone', 'pg/time', { precision: 3 }],
-  ['time with time zone', 'pg/timetz', {}],
+  ['time with time zone', 'pg/timetz', { precision: 6 }],
   ['time(3) with time zone', 'pg/timetz', { precision: 3 }],
-  ['timestamp without time zone', 'pg/timestamp', {}],
+  ['timestamp without time zone', 'pg/timestamp', { precision: 6 }],
   ['timestamp(3) without time zone', 'pg/timestamp', { precision: 3 }],
-  ['timestamp with time zone', 'pg/timestamptz', {}],
+  ['timestamp with time zone', 'pg/timestamptz', { precision: 6 }],
   ['timestamp(3) with time zone', 'pg/timestamptz', { precision: 3 }],
-  ['interval', 'pg/interval', {}],
+  ['interval', 'pg/interval', { precision: 6 }],
   ['interval(3)', 'pg/interval', { precision: 3 }],
 ];
 

@@ -4,7 +4,7 @@ import {
   type BinderResult,
   buildSymbolTable,
   createBinder,
-  isPrismaNextSchema,
+  isPrisma8Schema,
   type PslDiagnostic,
   type SymbolTable,
   type SymbolTableResult,
@@ -210,7 +210,7 @@ export class ProjectArtifacts {
       return [
         {
           range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
-          code: 'PRISMA_NEXT_INTERPRETATION_FAILED',
+          code: 'PRISMA_INTERPRETATION_FAILED',
           message:
             'Semantic diagnostics are unavailable because of an internal error. A subsequent diagnostic request or edit will retry.',
           severity: ParseDiagnosticSeverity.Error,
@@ -229,7 +229,7 @@ export class ProjectArtifacts {
     const identity = canonicalFileIdentity(uri);
     const readSnapshot = this.#readSnapshot;
     const stored = readSnapshot(uri);
-    if (stored === undefined || !this.#inputs.includes(uri) || !isPrismaNextSchema(stored.text)) {
+    if (stored === undefined || !this.#inputs.includes(uri) || !isPrisma8Schema(stored.text)) {
       if (this.#documents.delete(identity)) {
         this.#refreshSources();
       }

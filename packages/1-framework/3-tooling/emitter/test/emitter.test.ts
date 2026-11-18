@@ -7,7 +7,7 @@ import type { EmitStackInput } from '../src/exports';
 import { getEmittedArtifactPaths } from '../src/exports';
 import { generateContractDts } from '../src/generate-contract-dts';
 import { createMockSpi } from './mock-spi';
-import { createTestContract, emit } from './utils';
+import { createTestContract, emit, TEST_TYPES_MODULE } from './utils';
 
 const mockSqlHook = createMockSpi();
 
@@ -298,7 +298,7 @@ describe('emitter', () => {
     expect(result.contractDts).toContain("from '@ext/query'");
   });
 
-  it('emits value object clauses when the domain namespace declares value objects', async () => {
+  it('emits value object clauses when storage declares value objects', async () => {
     const ir = createTestContract({
       storage: emptySqlStorage,
       valueObjects: {
@@ -320,45 +320,10 @@ describe('emitter', () => {
     };
 
     const result = await emit(ir, options, mockSqlHook);
-    expect(result.contractDts).toContain('readonly valueObjects:');
-    expect(result.contractDts).toContain('export type AddressOutput');
-  });
-
-  it('emits per-namespace valueObjects block when a single namespace declares value objects', () => {
-    const addressModel = {
-      fields: {
-        street: {
-          type: { kind: 'scalar' as const, codecId: 'pg/text@1' },
-          nullable: false,
-          many: false as const,
-        },
-      },
-    };
-    const contract = {
-      ...createTestContract(),
-      domain: {
-        namespaces: {
-          public: {
-            models: {},
-            valueObjects: { Address: addressModel },
-          },
-        },
-      },
-    };
-    const dts = generateContractDts(contract, mockSqlHook, [], {
-      storageHash: '0000000000000000000000000000000000000000000000000000000000000001',
-      profileHash: '0000000000000000000000000000000000000000000000000000000000000002',
-    });
-    // The per-namespace valueObjects block must appear inside the namespace block.
-    // A positive match on the nested structure proves it is inside domain.namespaces.public.
-    expect(dts).toContain('readonly public:');
-    const publicNsIndex = dts.indexOf('readonly public:');
-    const afterPublic = dts.slice(publicNsIndex);
-    // valueObjects must appear before the closing of the namespace block
-    expect(afterPublic.indexOf('readonly valueObjects:')).toBeGreaterThan(0);
-    expect(afterPublic.indexOf('readonly valueObjects:')).toBeLessThan(
-      afterPublic.indexOf('readonly capabilities:'),
+    expect(result.contractDts).toContain(
+      "export type AddressOutput = ValueObjectOutputTypes['__unbound__']['Address'];",
     );
+    expect(result.contractDts).not.toContain('readonly valueObjects:');
   });
 
   it('emits successfully when domain has more than one namespace', () => {
@@ -371,10 +336,16 @@ describe('emitter', () => {
         },
       },
     };
-    const dts = generateContractDts(contract, mockSqlHook, [], {
-      storageHash: '0000000000000000000000000000000000000000000000000000000000000001',
-      profileHash: '0000000000000000000000000000000000000000000000000000000000000002',
-    });
+    const dts = generateContractDts(
+      contract,
+      mockSqlHook,
+      [],
+      {
+        storageHash: '0000000000000000000000000000000000000000000000000000000000000001',
+        profileHash: '0000000000000000000000000000000000000000000000000000000000000002',
+      },
+      TEST_TYPES_MODULE,
+    );
     expect(dts).toContain('readonly auth:');
     expect(dts).toContain('readonly public:');
   });
@@ -382,10 +353,16 @@ describe('emitter', () => {
   it('throws when the sole namespace id has no namespace payload on the contract', () => {
     const contract = createTestContract({ namespaces: { public: undefined } });
     expect(() =>
-      generateContractDts(contract, mockSqlHook, [], {
-        storageHash: '0000000000000000000000000000000000000000000000000000000000000001',
-        profileHash: '0000000000000000000000000000000000000000000000000000000000000002',
-      }),
+      generateContractDts(
+        contract,
+        mockSqlHook,
+        [],
+        {
+          storageHash: '0000000000000000000000000000000000000000000000000000000000000001',
+          profileHash: '0000000000000000000000000000000000000000000000000000000000000002',
+        },
+        TEST_TYPES_MODULE,
+      ),
     ).toThrow('domain namespace "public" is not present on the contract');
   });
 

@@ -138,9 +138,11 @@ describe('integer representation type helpers', () => {
       typeParams: {},
     });
     expect(sqliteHelpers.type).not.toHaveProperty('UnboundedInt');
-    expect(postgresHelpers.field).not.toHaveProperty('bigIntNumber');
-    expect(postgresHelpers.field).not.toHaveProperty('unboundedInt');
-    expect(sqliteHelpers.field).not.toHaveProperty('bigIntNumber');
+    expect([
+      'bigIntNumber' in postgresHelpers.field,
+      'unboundedInt' in postgresHelpers.field,
+      'bigIntNumber' in sqliteHelpers.field,
+    ]).toEqual([false, false, false]);
   });
 
   it('lowers PostgreSQL type helpers with number and bigint application types', () => {

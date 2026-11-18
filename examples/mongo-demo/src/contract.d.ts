@@ -3,27 +3,22 @@
 // To regenerate, run: prisma contract emit
 import type {
   CodecTypes as MongoCodecTypes,
-  ParameterizedOutputTypesForTypeParams as MongoParameterizedOutputTypes,
-} from '@prisma/orm-mongo/target/codec-types';
-
-import type {
-  MongoCollection,
-  MongoContractWithTypeMaps,
-  MongoTypeMaps,
-  RelationKeys,
-} from '@prisma/orm-mongo/family-contract';
-import type {
   Contract as ContractType,
   ExecutionHashBase,
   FieldTypesFromDomain,
+  MongoCollection,
+  MongoContractWithTypeMaps,
+  MongoTypeMaps,
   NamespaceId,
+  ParameterizedOutputTypesForTypeParams as MongoParameterizedOutputTypes,
   ProfileHashBase,
+  RelationKeys,
   StorageHashBase,
-  ValueObjectTypesFromDomain,
-} from '@prisma/orm-mongo/contract/types';
+  ValueObjectTypesFromStorage,
+} from '@prisma/orm-mongo/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'d264cabd6a02546054a776ed3c04438b9a22989f406c49f5590f7f2101156eb0'>;
+  StorageHashBase<'4a982736e89b99615c530abbd19d92cf955a27063db9ec4dcf0bddcc2dcc6595'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3'>;
@@ -31,15 +26,15 @@ export type ProfileHash =
 export type CodecTypes = MongoCodecTypes;
 
 type ParameterizedOutputTypeFunctions = MongoParameterizedOutputTypes;
-type ValueObjectOutputTypes = ValueObjectTypesFromDomain<
-  ContractBase['domain']['namespaces'],
+type ValueObjectOutputTypes = ValueObjectTypesFromStorage<
+  ContractBase['storage']['namespaces'],
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
   'output'
 >;
-type ValueObjectInputTypes = ValueObjectTypesFromDomain<
-  ContractBase['domain']['namespaces'],
+type ValueObjectInputTypes = ValueObjectTypesFromStorage<
+  ContractBase['storage']['namespaces'],
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
@@ -64,14 +59,16 @@ export type FieldOutputTypes = FieldTypesFromDomain<
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
-  'output'
+  'output',
+  ContractBase['storage']['namespaces']
 >;
 export type FieldInputTypes = FieldTypesFromDomain<
   ContractBase['domain']['namespaces'],
   CodecTypes,
   ParameterizedOutputTypeFunctions,
   FieldTypeOverrides,
-  'input'
+  'input',
+  ContractBase['storage']['namespaces']
 >;
 
 export namespace Models {
@@ -110,7 +107,9 @@ export namespace Models {
   };
   export type unbound_User = {
     address: FieldOutputTypes['__unbound__']['User']['address'];
+    availableFrom: FieldOutputTypes['__unbound__']['User']['availableFrom'];
     bio: FieldOutputTypes['__unbound__']['User']['bio'];
+    birthday: FieldOutputTypes['__unbound__']['User']['birthday'];
     email: FieldOutputTypes['__unbound__']['User']['email'];
     id: FieldOutputTypes['__unbound__']['User']['id'];
     name: FieldOutputTypes['__unbound__']['User']['name'];
@@ -146,6 +145,7 @@ type ContractBase = Omit<
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'authorId' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'authorId_1';
                 },
                 {
                   readonly keys: readonly [
@@ -153,10 +153,12 @@ type ContractBase = Omit<
                     { readonly direction: 1; readonly field: 'authorId' },
                   ];
                   readonly kind: 'mongo-index';
+                  readonly name: 'createdAt_-1_authorId_1';
                 },
                 {
                   readonly keys: readonly [{ readonly direction: 1; readonly field: 'summary' }];
                   readonly kind: 'mongo-index';
+                  readonly name: 'summary_1';
                   readonly partialFilterExpression: { readonly kind: 'article' };
                   readonly unique: true;
                 },
@@ -240,7 +242,9 @@ type ContractBase = Omit<
                         },
                       ];
                     };
+                    readonly availableFrom: { readonly bsonType: readonly ['null', 'string'] };
                     readonly bio: { readonly bsonType: readonly ['null', 'string'] };
+                    readonly birthday: { readonly bsonType: readonly ['null', 'date'] };
                     readonly email: { readonly bsonType: 'string' };
                     readonly name: { readonly bsonType: 'string' };
                     readonly role: {
@@ -253,6 +257,28 @@ type ContractBase = Omit<
                 readonly kind: 'mongo-validator';
                 readonly validationAction: 'error';
                 readonly validationLevel: 'strict';
+              };
+            };
+          };
+          readonly valueObject: {
+            readonly Address: {
+              readonly fields: {
+                readonly city: {
+                  readonly nullable: false;
+                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+                };
+                readonly country: {
+                  readonly nullable: false;
+                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+                };
+                readonly street: {
+                  readonly nullable: false;
+                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+                };
+                readonly zip: {
+                  readonly nullable: true;
+                  readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+                };
               };
             };
           };
@@ -382,11 +408,25 @@ type ContractBase = Omit<
             readonly fields: {
               readonly address: {
                 readonly nullable: true;
-                readonly type: { readonly kind: 'valueObject'; readonly name: 'Address' };
+                readonly type: {
+                  readonly kind: 'valueObject';
+                  readonly plane: 'storage';
+                  readonly namespaceId: '__unbound__';
+                  readonly entityKind: 'valueObject';
+                  readonly entityName: 'Address';
+                };
+              };
+              readonly availableFrom: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/time-string@1' };
               };
               readonly bio: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+              };
+              readonly birthday: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/date-string@1' };
               };
               readonly email: {
                 readonly nullable: false;
@@ -422,33 +462,13 @@ type ContractBase = Omit<
               readonly collection: 'users';
               readonly fields: {
                 readonly address: { readonly field: 'address' };
+                readonly availableFrom: { readonly field: 'availableFrom' };
                 readonly bio: { readonly field: 'bio' };
+                readonly birthday: { readonly field: 'birthday' };
                 readonly email: { readonly field: 'email' };
                 readonly id: { readonly field: '_id' };
                 readonly name: { readonly field: 'name' };
                 readonly role: { readonly field: 'role' };
-              };
-            };
-          };
-        };
-        readonly valueObjects: {
-          readonly Address: {
-            readonly fields: {
-              readonly city: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-              };
-              readonly country: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-              };
-              readonly street: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-              };
-              readonly zip: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
               };
             };
           };
@@ -476,28 +496,6 @@ type ContractBase = Omit<
   readonly capabilities: {};
   readonly extensions: {};
   readonly meta: {};
-  readonly valueObjects: {
-    readonly Address: {
-      readonly fields: {
-        readonly city: {
-          readonly nullable: false;
-          readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-        };
-        readonly country: {
-          readonly nullable: false;
-          readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-        };
-        readonly street: {
-          readonly nullable: false;
-          readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-        };
-        readonly zip: {
-          readonly nullable: true;
-          readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-        };
-      };
-    };
-  };
   readonly profileHash: ProfileHash;
 };
 

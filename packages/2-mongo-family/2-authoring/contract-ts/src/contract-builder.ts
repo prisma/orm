@@ -7,6 +7,7 @@ import type {
   ExecutionHashBase,
   ExecutionMutationDefault,
   ExecutionMutationDefaultPhases,
+  ExecutionMutationDefaultValue,
   FieldTypesFromDomain,
   JsonValue,
   ProfileHashBase,
@@ -15,27 +16,18 @@ import type {
 import {
   composePackAuthoringNamespace,
   createEntityHelpersFromNamespace,
-  createFieldHelpersFromNamespace,
   type EntityHelpersFromNamespace,
   type ExtractAuthoringNamespaceFromPack,
   type ExtractParameterizedOutputTypesFromPack,
   type MergeExtensionAuthoringNamespaces,
-  type ResolveTemplateValue,
-  type TupleFromArgumentDescriptors,
 } from '@internal/contract-authoring';
-import type {
-  AuthoringArgumentDescriptor,
-  AuthoringFieldNamespace,
-  AuthoringFieldPresetDescriptor,
-} from '@internal/framework-components/authoring';
 import {
   assembleDataTypeSupport,
   assertNoCrossRegistryCollisions,
   assertTypeAliasesValid,
+  assertTypeChoicesValid,
   type DataTypeSupport,
   flushAuthoringWarnings,
-  instantiateAuthoringFieldPreset,
-  validateAuthoringHelperArguments,
 } from '@internal/framework-components/authoring';
 import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import {
@@ -50,7 +42,7 @@ import {
   type TargetPackRef,
 } from '@internal/framework-components/components';
 import { extractCodecLookup } from '@internal/framework-components/control';
-import type { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type {
   MongoCollection,
   MongoCollectionOptionsAuthoringInput,
@@ -65,8 +57,9 @@ import type { BsonInputValue, BsonValue } from '@internal/mongo-value';
 import { assertDefined } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
+import type { Temporal } from 'temporal-spec';
+import { createTypeHelpersFromNamespace } from './authoring-helper-runtime';
 import { buildMongoContractFromDefinition } from './build-contract';
-import type { PresetContributionNode } from './contract-definition';
 import {
   type AnyFieldBuilder,
   type AnyFieldReference,
@@ -91,7 +84,11 @@ import {
 import { contractError } from './contract-errors';
 import { buildContractDefinition, type DslContractInput } from './contract-lowering';
 import type { EnumTypeHandle } from './enum-type';
+import { mergeRedundantIndexes, refusalAtWrittenPositions } from './merge-redundant-indexes';
+import { nameIndexes } from './name-indexes';
 import { authoringWarningOf, refusalError } from './refusal-errors';
+import { refuseScalarArgument, refusingRemovedFieldHelpers } from './removed-field-presets';
+import type { MongoTypeInstance, ScalarFieldType, TypeHelpersOfPacks } from './type-helpers';
 
 type StringListInput = string | readonly string[];
 type Present<T> = Exclude<T, undefined>;
@@ -116,6 +113,7 @@ export type ExtractCodecTypesFromPack<P> = P extends { __codecTypes?: infer Code
 
 // This mirrors @internal/target-mongo/codec-types because authoring must stay decoupled from
 // the target layer while still exposing the built-in Mongo codec registry to type inference.
+// packages/3-targets/mongo/9-facade/test/codec-types.types.test-d.ts checks that the two are equal.
 type MongoCodecTypes = {
   readonly 'mongo/objectId@1': {
     readonly input: string;
@@ -182,6 +180,41 @@ type MongoCodecTypes = {
     readonly input: BsonInputValue;
     readonly output: BsonValue;
     readonly traits: never;
+  };
+  readonly 'mongo/date-instant@1': {
+    readonly input: Temporal.Instant;
+    readonly output: Temporal.Instant;
+    readonly traits: 'equality' | 'order';
+  };
+  readonly 'mongo/date-instant-string@1': {
+    readonly input: string;
+    readonly output: string;
+    readonly traits: 'equality' | 'order';
+  };
+  readonly 'mongo/date-string@1': {
+    readonly input: string;
+    readonly output: string;
+    readonly traits: 'equality' | 'order';
+  };
+  readonly 'mongo/date-temporal@1': {
+    readonly input: Temporal.PlainDate;
+    readonly output: Temporal.PlainDate;
+    readonly traits: 'equality' | 'order';
+  };
+  readonly 'mongo/time-string@1': {
+    readonly input: string;
+    readonly output: string;
+    readonly traits: 'equality' | 'order';
+  };
+  readonly 'mongo/time-temporal@1': {
+    readonly input: Temporal.PlainTime;
+    readonly output: Temporal.PlainTime;
+    readonly traits: 'equality' | 'order';
+  };
+  readonly 'mongo/duration-string@1': {
+    readonly input: string;
+    readonly output: string;
+    readonly traits: 'equality';
   };
 };
 
@@ -534,19 +567,29 @@ type DefinitionTargetId<Definition> = Definition extends {
   ? TargetId
   : string;
 
+type StorageValueObjectNamespaces<ValueObjects extends Record<string, AnyValueObjectBuilder>> = {
+  readonly [K in typeof UNBOUND_NAMESPACE_ID]: {
+    readonly entries: { readonly valueObject: ContractValueObjectsFromRecord<ValueObjects> };
+  };
+};
+
+type MaybeStorageValueObjectsSection<ValueObjects extends Record<string, AnyValueObjectBuilder>> =
+  keyof ValueObjects extends never
+    ? EmptyObject
+    : {
+        readonly namespaces: {
+          readonly [K in typeof UNBOUND_NAMESPACE_ID]: MongoStorageShape['namespaces'][string] &
+            StorageValueObjectNamespaces<ValueObjects>[K];
+        };
+      };
+
 type DefinitionStorage<Definition> = Simplify<
   MongoStorageShape & {
     readonly collections: StorageCollectionsFromModels<DefinitionModels<Definition>>;
     readonly storageHash: StorageHashBase<string>;
   }
->;
-
-type MaybeValueObjectsSection<ValueObjects extends Record<string, AnyValueObjectBuilder>> =
-  keyof ValueObjects extends never
-    ? EmptyObject
-    : {
-        readonly valueObjects: ContractValueObjectsFromRecord<ValueObjects>;
-      };
+> &
+  MaybeStorageValueObjectsSection<DefinitionValueObjects<Definition>>;
 
 type HandleName<Handle> = Handle extends EnumTypeHandle<infer Name> ? Name : never;
 
@@ -602,8 +645,7 @@ type MaybeEnumsSection<
 type MongoDomainNamespaceFromDefinition<Definition> = Simplify<
   {
     readonly models: ContractModelsFromRecord<DefinitionModels<Definition>>;
-  } & MaybeValueObjectsSection<DefinitionValueObjects<Definition>> &
-    MaybeEnumsSection<DefinitionEnums<Definition>, CodecTypesFromDefinition<Definition>>
+  } & MaybeEnumsSection<DefinitionEnums<Definition>, CodecTypesFromDefinition<Definition>>
 >;
 
 type MongoContractBaseFromDefinition<Definition> = Simplify<{
@@ -744,7 +786,8 @@ type FieldTypesFromDefinition<Definition, Side extends 'output' | 'input'> = Fie
   CodecTypesFromDefinition<Definition>,
   ParameterizedOutputTypesFromDefinition<Definition>,
   FieldTypeOverridesFromDefinition<Definition>,
-  Side
+  Side,
+  StorageValueObjectNamespaces<DefinitionValueObjects<Definition>>
 >;
 
 export type MongoContractResult<Definition> = MongoContractWithTypeMaps<
@@ -767,89 +810,6 @@ type MergeExtensionEntityNamespaces<Extensions> = MergeExtensionAuthoringNamespa
   'entityTypes'
 >;
 
-type ExtractFieldNamespaceFromPack<Pack> = ExtractAuthoringNamespaceFromPack<
-  Pack,
-  'field',
-  Record<never, never>
->;
-
-type MergeExtensionFieldNamespaces<Extensions> = MergeExtensionAuthoringNamespaces<
-  Extensions,
-  'field'
->;
-
-export type FieldBuilderFromPresetDescriptor<
-  Descriptor extends AuthoringFieldPresetDescriptor,
-  Args extends readonly unknown[],
-> = FieldBuilder<
-  {
-    readonly kind: 'scalar';
-    readonly codecId: ResolveTemplateValue<Descriptor['output']['codecId'], Args> extends string
-      ? ResolveTemplateValue<Descriptor['output']['codecId'], Args>
-      : string;
-  },
-  ResolveTemplateValue<Descriptor['output']['nullable'], Args> extends true ? true : false,
-  false,
-  EnumTypeHandle | undefined,
-  PresetExecutionDefaults<Descriptor, Args>
->;
-
-/**
- * A phase template is either a generator value or a `select` over one option argument, which yields no phase when the argument is absent or names no case. An argument typed "the option or undefined", such as a variable of type `'now' | undefined`, gives "the phase or undefined"; such a phase becomes an optional key.
- */
-type ResolvePhaseTemplate<Template, Args extends readonly unknown[]> = Template extends {
-  readonly kind: 'select';
-  readonly index: infer Index extends number;
-  readonly cases: infer Cases;
-}
-  ? Args[Index] extends infer Arg
-    ? Arg extends keyof Cases
-      ? Cases[Arg]
-      : undefined
-    : never
-  : Template;
-
-type PresetExecutionDefaults<
-  Descriptor extends AuthoringFieldPresetDescriptor,
-  Args extends readonly unknown[],
-> = Descriptor['output'] extends { readonly executionDefaults: infer Phases }
-  ? Flatten<
-      {
-        readonly [Phase in keyof Phases as undefined extends ResolvePhaseTemplate<
-          Phases[Phase],
-          Args
-        >
-          ? never
-          : Phase]: ResolvePhaseTemplate<Phases[Phase], Args>;
-      } & {
-        readonly [Phase in keyof Phases as ResolvePhaseTemplate<
-          Phases[Phase],
-          Args
-        > extends undefined
-          ? never
-          : undefined extends ResolvePhaseTemplate<Phases[Phase], Args>
-            ? Phase
-            : never]?: Exclude<ResolvePhaseTemplate<Phases[Phase], Args>, undefined>;
-      }
-    >
-  : undefined;
-
-type FieldPresetHelper<Descriptor extends AuthoringFieldPresetDescriptor> = Descriptor extends {
-  readonly args: infer Args extends readonly AuthoringArgumentDescriptor[];
-}
-  ? <const Params extends TupleFromArgumentDescriptors<Args>>(
-      ...args: Params
-    ) => FieldBuilderFromPresetDescriptor<Descriptor, Params>
-  : () => FieldBuilderFromPresetDescriptor<Descriptor, readonly []>;
-
-type FieldPresetHelpersFromNamespace<Namespace> = {
-  readonly [K in keyof Namespace]: Namespace[K] extends AuthoringFieldPresetDescriptor
-    ? FieldPresetHelper<Namespace[K]>
-    : Namespace[K] extends Record<string, unknown>
-      ? FieldPresetHelpersFromNamespace<Namespace[K]>
-      : never;
-};
-
 export type ContractAuthoringHelpers<
   Family extends FamilyPackRef<string> = FamilyPackRef<string>,
   Target extends TargetPackRef<string, string> = TargetPackRef<string, string>,
@@ -859,16 +819,12 @@ export type ContractAuthoringHelpers<
     ExtractEntitiesNamespaceFromPack<Target> &
     MergeExtensionEntityNamespaces<Extensions>
 > & {
-  readonly field: typeof field &
-    FieldPresetHelpersFromNamespace<
-      ExtractFieldNamespaceFromPack<Family> &
-        ExtractFieldNamespaceFromPack<Target> &
-        MergeExtensionFieldNamespaces<Extensions>
-    >;
+  readonly field: typeof field;
   readonly index: typeof index;
   readonly model: typeof model;
   readonly rel: typeof rel;
   readonly valueObject: typeof valueObject;
+  readonly type: TypeHelpersOfPacks<Family, Target, Extensions>;
   readonly gen: GeneratorHelpersOf<Family | Target | ExtensionPackValues<Extensions>>;
 };
 
@@ -878,67 +834,9 @@ const MONGO_RESERVED_HELPER_KEYS: readonly string[] = [
   'index',
   'model',
   'rel',
+  'type',
   'valueObject',
 ];
-
-function buildFieldPreset(
-  helperPath: string,
-  descriptor: AuthoringFieldPresetDescriptor,
-  args: readonly unknown[],
-): AnyFieldBuilder {
-  validateAuthoringHelperArguments(helperPath, descriptor.args, args);
-  const preset = instantiateAuthoringFieldPreset(descriptor, args);
-  const unsupported = [
-    ...(preset.default !== undefined ? ['default'] : []),
-    ...(preset.id ? ['id'] : []),
-    ...(preset.unique ? ['unique'] : []),
-  ];
-  if (unsupported.length > 0) {
-    throw contractError(
-      'CONTRACT.PACK_CONTRIBUTION_INVALID',
-      `Field preset "${helperPath}" contributes ${unsupported.join(', ')}, which Mongo does not support. Mongo supports presets that set a codec and execution defaults only.`,
-      {
-        meta: { helperPath, reason: 'preset-contribution-unsupported', contribution: unsupported },
-      },
-    );
-  }
-  return createFieldBuilder(
-    {
-      type: {
-        kind: 'scalar',
-        codecId: preset.descriptor.codecId,
-        ...normalizeOptionalTypeParams(preset.descriptor.typeParams),
-      },
-      nullable: preset.nullable,
-      many: false,
-    },
-    undefined,
-    preset.executionDefaults,
-    undefined,
-    undefined,
-    { preset: helperPath, executionDefaults: preset.executionDefaults },
-  );
-}
-
-function composeMongoFieldHelpers(
-  fieldNamespace: AuthoringFieldNamespace,
-): Record<string, unknown> {
-  const presetHelpers = createFieldHelpersFromNamespace(
-    fieldNamespace,
-    ({ helperPath, descriptor }) =>
-      (...args: readonly unknown[]) =>
-        buildFieldPreset(helperPath, descriptor, args),
-  );
-  const collisions = Object.keys(presetHelpers).filter((name) => Object.hasOwn(field, name));
-  if (collisions.length > 0) {
-    throw contractError(
-      'CONTRACT.PACK_CONTRIBUTION_INVALID',
-      `Pack-contributed field preset(s) ${collisions.map((c) => `"${c}"`).join(', ')} collide with the built-in Mongo field helper(s) of the same name.`,
-      { meta: { reason: 'core-field-helper-collision', contribution: collisions } },
-    );
-  }
-  return { ...field, ...presetHelpers };
-}
 
 interface StackLookups {
   readonly codecLookup: CodecLookupWithDescriptors;
@@ -977,12 +875,11 @@ function composeMongoAuthoringHelpers<
   const extensionPacks: Record<string, ExtensionPackRef<string, string>> = extensions ?? {};
   const components = [family, target, ...Object.values(extensionPacks)];
   const entityNamespace = composePackAuthoringNamespace(components, 'entityTypes');
-  const fieldNamespace = composePackAuthoringNamespace(components, 'field');
-  assertNoCrossRegistryCollisions({}, fieldNamespace, entityNamespace);
-  // Pack-contributed entity types flatten onto the same top-level shape
-  // as the built-in helpers (`model`, `rel`, `field`, `index`,
-  // `valueObject`). Detect collisions explicitly so a contributed name
-  // can't silently overwrite a built-in at runtime.
+  const typeNamespace = composePackAuthoringNamespace(components, 'type');
+  assertNoCrossRegistryCollisions(typeNamespace, entityNamespace);
+  for (const component of components) {
+    assertTypeChoicesValid(component.authoring?.type ?? {}, component.id);
+  }
   const collisions = Object.keys(entityNamespace).filter((name) =>
     MONGO_RESERVED_HELPER_KEYS.includes(name),
   );
@@ -995,7 +892,7 @@ function composeMongoAuthoringHelpers<
   }
   return blindCast<
     ContractAuthoringHelpers<Family, Target, Extensions>,
-    'entity and field preset helpers are built by a runtime walk of the pack namespaces, which returns Record<string, unknown>; their static shape comes from the pack type parameters'
+    'entity helpers are built by a runtime walk of the pack namespaces, which returns Record<string, unknown>; their static shape comes from the pack type parameters'
   >({
     ...createEntityHelpersFromNamespace(entityNamespace, {
       ctx: {
@@ -1005,13 +902,36 @@ function composeMongoAuthoringHelpers<
         dataTypes: lookups.dataTypes,
       },
     }),
-    field: composeMongoFieldHelpers(fieldNamespace),
+    field,
     gen: createGeneratorHelpers(components),
     index,
     model,
     rel,
+    type: createTypeHelpersFromNamespace(typeNamespace, lookups),
     valueObject,
   });
+}
+
+/**
+ * The helpers the `defineContract` callback receives for a stack of `family`, `target` and `extensions`: `field`, `model`, `rel`, `index`, `valueObject`, `gen`, `type` and the packs' entity types. A facade builds its standalone `field`, `gen` and `type` from them.
+ */
+export function createContractAuthoringHelpers<
+  Family extends FamilyPackRef<string>,
+  Target extends TargetPackRef<string, string>,
+  Extensions extends Record<string, ExtensionPackRef<string, string>> | undefined = undefined,
+>(options: {
+  readonly family: Family;
+  readonly target: Target;
+  readonly extensions?: Extensions;
+}): ContractAuthoringHelpers<Family, Target, Extensions> {
+  const { family, target, extensions } = options;
+  const extensionPacks: Record<string, ExtensionPackRef<string, string>> = extensions ?? {};
+  return composeMongoAuthoringHelpers(
+    family,
+    target,
+    extensions,
+    stackLookupsOf([family, target, ...Object.values(extensionPacks)]),
+  );
 }
 
 export type ContractScaffold<
@@ -1076,7 +996,6 @@ function createFieldBuilder<
   executionDefaults?: ExecutionDefaults,
   storedName?: StoredName,
   generatorCalls?: FieldGeneratorCalls,
-  presetContribution?: PresetContributionNode,
 ): FieldBuilder<Type, Nullable, Many, Handle, ExecutionDefaults, StoredName> {
   function many(): FieldBuilder<
     Type,
@@ -1117,7 +1036,6 @@ function createFieldBuilder<
       executionDefaults,
       storedName,
       generatorCalls,
-      presetContribution,
     );
   }
 
@@ -1128,7 +1046,7 @@ function createFieldBuilder<
     if (generatorCalls?.[phase] !== undefined || executionDefaults?.[phase] !== undefined) {
       throw contractError(
         'CONTRACT.DEFAULT_INVALID',
-        `.${phase}() is called on a field that already generates a value ${phase === 'onCreate' ? 'on create' : 'on update'}. Set each phase once, and do not combine .${phase}() with a field preset, type alias or alias constant that sets it.`,
+        `.${phase}() is called on a field that already generates a value ${phase === 'onCreate' ? 'on create' : 'on update'}. Set each phase once, and do not combine .${phase}() with a type alias or alias constant that sets it.`,
         { meta: { reason: 'generator-phase-set-twice', phase } },
       );
     }
@@ -1141,7 +1059,6 @@ function createFieldBuilder<
       >(executionDefaults),
       storedName,
       { ...generatorCalls, [phase]: call },
-      presetContribution,
     );
   }
 
@@ -1149,7 +1066,6 @@ function createFieldBuilder<
     __kind: 'field',
     ...ifDefined('__executionDefaults', executionDefaults),
     ...ifDefined('__generatorCalls', generatorCalls),
-    ...ifDefined('__presetContribution', presetContribution),
     onCreate: (call) => withGeneratorCall('onCreate', call),
     onUpdate: (call) => withGeneratorCall('onUpdate', call),
     __type: spec.type,
@@ -1174,11 +1090,10 @@ function createFieldBuilder<
         executionDefaults,
         storedName,
         generatorCalls,
-        presetContribution,
       ),
     many: blindCast<
       FieldBuilder<Type, Nullable, Many, Handle, ExecutionDefaults, StoredName>['many'],
-      'every builder has the method at runtime, for a JavaScript caller the type does not stop; the type refuses it on a field a preset fills'
+      'every builder has the method at runtime, for a JavaScript caller the type does not stop; the type refuses it on a field a generator fills'
     >(many),
     mongo: <const Field extends string>({ field }: { readonly field: Field }) =>
       createFieldBuilder<Type, Nullable, Many, Handle, ExecutionDefaults, Field>(
@@ -1187,112 +1102,90 @@ function createFieldBuilder<
         executionDefaults,
         field,
         generatorCalls,
-        presetContribution,
       ),
   };
 }
 
-function normalizeOptionalTypeParams(
-  typeParams: Record<string, unknown> | undefined,
-): { readonly typeParams: Record<string, unknown> } | Record<never, never> {
-  if (!typeParams) {
-    return {};
-  }
+/** The field type a `type.*` helper's result stands for, without a type alias's generator calls. */
+type FieldTypeOfInstance<Instance extends MongoTypeInstance> = ScalarFieldType<
+  Instance['codecId'],
+  Instance extends { readonly typeParams: infer TypeParams extends Record<string, unknown> }
+    ? TypeParams
+    : Record<never, never>
+>;
 
-  return { typeParams };
+/** The generated phases a type alias gives every field typed by it, or none. */
+type AliasExecutionDefaults<Instance> = Instance extends {
+  readonly generatorCalls: infer Calls;
+}
+  ? (Calls extends { readonly onCreate: GeneratorFunctionCall }
+      ? { readonly onCreate: ExecutionMutationDefaultValue }
+      : unknown) &
+      (Calls extends { readonly onUpdate: GeneratorFunctionCall }
+        ? { readonly onUpdate: ExecutionMutationDefaultValue }
+        : unknown)
+  : undefined;
+
+function isTypeInstance(value: unknown): value is MongoTypeInstance {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'kind' in value &&
+    value.kind === 'scalar' &&
+    'codecId' in value &&
+    typeof value.codecId === 'string'
+  );
 }
 
-function createScalarFieldBuilder<
-  CodecId extends string,
-  TypeParams extends Record<string, unknown> | undefined = undefined,
->(
-  codecId: CodecId,
-  options?: { readonly typeParams?: TypeParams },
+function scalarField<const Instance extends MongoTypeInstance>(
+  type: Instance,
 ): FieldBuilder<
-  {
-    readonly kind: 'scalar';
-    readonly codecId: CodecId;
-  } & ([TypeParams] extends [undefined] ? EmptyObject : { readonly typeParams: TypeParams }),
+  FieldTypeOfInstance<Instance>,
   false,
-  false
+  false,
+  undefined,
+  AliasExecutionDefaults<Instance>
 > {
-  return createFieldBuilder({
-    type: blindCast<
-      {
-        readonly kind: 'scalar';
-        readonly codecId: CodecId;
-      } & ([TypeParams] extends [undefined] ? EmptyObject : { readonly typeParams: TypeParams }),
-      'normalizeOptionalTypeParams adds typeParams exactly when TypeParams is not undefined'
-    >({
-      kind: 'scalar',
-      codecId,
-      ...normalizeOptionalTypeParams(options?.typeParams),
-    }),
-    nullable: false,
-    many: false,
-  });
+  if (!isTypeInstance(type)) refuseScalarArgument(type);
+  const { generatorCalls, ...fieldType } = type;
+  return createFieldBuilder(
+    {
+      type: blindCast<
+        FieldTypeOfInstance<Instance>,
+        'the type helpers give the field type with its typeParams only when it has some; the generator calls are removed'
+      >(fieldType),
+      nullable: false,
+      many: false,
+    },
+    undefined,
+    blindCast<
+      AliasExecutionDefaults<Instance>,
+      'the phases are resolved from the generator calls when the contract is built; the type records that they will be set'
+    >(undefined),
+    undefined,
+    generatorCalls,
+  );
 }
 
-type VectorFieldType = { readonly kind: 'scalar'; readonly codecId: 'mongo/vector@1' };
-
-function vectorField(): FieldBuilder<VectorFieldType, false, false>;
-function vectorField<const TypeParams extends Record<string, unknown>>(options: {
-  readonly typeParams: TypeParams;
-}): FieldBuilder<VectorFieldType & { readonly typeParams: TypeParams }, false, false>;
-function vectorField(options?: { readonly typeParams: Record<string, unknown> }) {
-  return createScalarFieldBuilder('mongo/vector@1', options);
-}
-
-export const field = {
-  scalar: createScalarFieldBuilder,
-  objectId() {
-    return createScalarFieldBuilder('mongo/objectId@1');
-  },
-  string() {
-    return createScalarFieldBuilder('mongo/string@1');
-  },
-  double() {
-    return createScalarFieldBuilder('mongo/double@1');
-  },
-  int32() {
-    return createScalarFieldBuilder('mongo/int32@1');
-  },
-  bool() {
-    return createScalarFieldBuilder('mongo/bool@1');
-  },
-  date() {
-    return createScalarFieldBuilder('mongo/date@1');
-  },
-  int64() {
-    return createScalarFieldBuilder('mongo/int64@1');
-  },
-  int64Number() {
-    return createScalarFieldBuilder('mongo/int64Number@1');
-  },
-  decimal128() {
-    return createScalarFieldBuilder('mongo/decimal128@1');
-  },
-  binary() {
-    return createScalarFieldBuilder('mongo/binary@1');
-  },
-  json() {
-    return createScalarFieldBuilder('mongo/json@1');
-  },
-  bson() {
-    return createScalarFieldBuilder('mongo/bson@1');
-  },
-  vector: vectorField,
+export const field = refusingRemovedFieldHelpers({
+  scalar: scalarField,
   valueObject<const ValueObject extends ValueObjectNameInput>(valueObjectName: ValueObject) {
     return createFieldBuilder({
       type: blindCast<
         {
           readonly kind: 'valueObject';
-          readonly name: NormalizeValueObjectName<ValueObject>;
+          readonly plane: 'storage';
+          readonly namespaceId: typeof UNBOUND_NAMESPACE_ID;
+          readonly entityKind: 'valueObject';
+          readonly entityName: NormalizeValueObjectName<ValueObject>;
         },
         'resolveValueObjectName returns the normalized name the type computes'
       >({
         kind: 'valueObject',
-        name: resolveValueObjectName(valueObjectName),
+        plane: 'storage',
+        namespaceId: UNBOUND_NAMESPACE_ID,
+        entityKind: 'valueObject',
+        entityName: resolveValueObjectName(valueObjectName),
       }),
       nullable: false,
       many: false,
@@ -1314,7 +1207,7 @@ export const field = {
       handle,
     );
   },
-} as const;
+} as const);
 
 export function index<const Fields extends MongoIndexFields>(
   fields: Fields,
@@ -1744,14 +1637,15 @@ function buildContractFromDsl<const Input extends DslContractInput>(
   const { codecLookup, dataTypes } =
     lookups ??
     stackLookupsOf([input.family, input.target, ...Object.values(input.extensions ?? {})]);
-  const built = buildMongoContractFromDefinition(definition, codecLookup, dataTypes);
+  const merged = mergeRedundantIndexes(nameIndexes(definition), codecLookup, dataTypes);
+  const built = buildMongoContractFromDefinition(merged.definition, codecLookup, dataTypes);
   flushAuthoringWarnings(
     (built.ok ? built.value.warnings : built.failure.warnings).map(authoringWarningOf),
   );
   if (!built.ok) {
     const [first] = built.failure.refusals;
     assertDefined(first, 'a refused build has at least one refusal');
-    throw refusalError(first);
+    throw refusalError(refusalAtWrittenPositions(first, merged.removedIndexes));
   }
   return blindCast<
     MongoContractResult<Input>,

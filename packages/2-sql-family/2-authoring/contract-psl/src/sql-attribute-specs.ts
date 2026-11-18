@@ -296,12 +296,13 @@ export function defaultFunctionCall(
   });
 }
 
-/** The data type of the column a field declares, when its type, or the named type it is declared with, is a constructor or preset the stack knows. */
+/** The data type of the column a field declares, when its type, or the named type it is declared with, is a constructor the stack knows. */
 function receivingDataType(ctx: TypeAttributeSpecContext): string | undefined {
-  const typeConstructor = ctx.typeConstructor;
-  return typeConstructor === undefined
-    ? undefined
-    : ctx.dataTypes.dataTypeOfCodec(contributedTypeCodecId(typeConstructor.descriptor));
+  const codecId =
+    ctx.contributedType === undefined
+      ? undefined
+      : contributedTypeCodecId(ctx.contributedType, ctx.dataTypes);
+  return codecId === undefined ? undefined : ctx.dataTypes.dataTypeOfCodec(codecId);
 }
 
 /** Whether a value of `type` can be written for a column of `receiving`: it is that type, or the column's type casts from it. An unknown column takes every type. */
@@ -640,6 +641,12 @@ export const PSL_CHECK_EXPRESSION_EMPTY: ContributedPslDiagnosticCode =
  * declaration, which a single attribute's `refine` cannot see.
  */
 export const PSL_CHECK_ON_STI_VARIANT: ContributedPslDiagnosticCode = 'PSL_CHECK_ON_STI_VARIANT';
+/** A unique constraint or an index without a `where` condition on a single-table-inheritance variant, which would also cover the rows of the other variants. */
+export const PSL_UNSCOPED_INDEX_ON_STI_VARIANT: ContributedPslDiagnosticCode =
+  'PSL_UNSCOPED_INDEX_ON_STI_VARIANT';
+/** Two models sharing a single-table-inheritance table that declare different foreign keys on the same columns. */
+export const PSL_FOREIGN_KEY_CONFLICT_ON_STI_VARIANT: ContributedPslDiagnosticCode =
+  'PSL_FOREIGN_KEY_CONFLICT_ON_STI_VARIANT';
 
 function checkModelSpec(ctx: AttributeSpecContext) {
   return modelAttribute('check', {
@@ -876,7 +883,7 @@ export function fieldSpecContext(input: {
     model: input.model,
     field: input.field,
     typeResolution,
-    typeConstructor: contributedTypeOf(typeResolution, input.binder),
+    contributedType: contributedTypeOf(typeResolution, input.binder, input.field.typeConstructor),
     defaultFunctionRegistry: input.defaultFunctionRegistry,
     generatorFunctions: input.generatorFunctions,
     dataTypes: input.dataTypes,

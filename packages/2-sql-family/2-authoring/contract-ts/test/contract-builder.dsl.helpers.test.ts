@@ -1,10 +1,9 @@
-import type { AuthoringFieldNamespace } from '@internal/framework-components/authoring';
 import type {
   ExtensionPackRef,
   FamilyPackRef,
   TargetPackRef,
 } from '@internal/framework-components/components';
-import { describe, expect, expectTypeOf, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import {
   testSqlTypeLookups,
@@ -15,17 +14,12 @@ import {
   fixtureDataTypes,
 } from '../../contract-psl/test/fixture-data-types';
 import { defineContract, rel } from '../src/contract-builder';
-import { modelsOf } from './contract-test-helpers';
 import { documentScopedTypes } from './cross-ref-helpers';
-import { nanoidIdPresetMirror, nanoidPresetMirror } from './nanoid-preset-mirror';
-import { sqlTimestampPresetMirror } from './temporal-preset-mirror';
 import { unboundTables } from './unbound-tables';
 
 type PortableSqlCodecTypes = {
   readonly 'app/test-enum@1': { output: string };
   readonly 'sql/char@1': { output: string };
-  readonly 'sql/text@1': { output: string };
-  readonly 'test/timestamp@1': { output: string };
 };
 
 const sqlFamilyPackBase = {
@@ -36,75 +30,6 @@ const sqlFamilyPackBase = {
   dataTypes: fixtureDataTypes,
   authoring: {
     dataTypes: fixtureDataTypeEntries,
-    field: {
-      text: {
-        kind: 'fieldPreset',
-        output: { codecId: 'sql/text@1' },
-      },
-      portableTimestamp: {
-        kind: 'fieldPreset',
-        output: { codecId: 'test/timestamp@1' },
-      },
-      temporal: {
-        // createdAt/updatedAt here are independent portable fixtures, NOT
-        // mirrors of family-sql's `temporalAuthoringPresets` — that factory
-        // hardcodes `now()` over a target codec, while these use the invented
-        // portable `test/timestamp@1` with `CURRENT_TIMESTAMP`. There is nothing
-        // to anchor them to, by design. Only `timestamp` below mirrors a real
-        // factory, and it is anchored.
-        createdAt: {
-          kind: 'fieldPreset',
-          output: {
-            codecId: 'test/timestamp@1',
-            default: { kind: 'function', expression: 'CURRENT_TIMESTAMP' },
-          },
-        },
-        updatedAt: {
-          kind: 'fieldPreset',
-          output: {
-            codecId: 'test/timestamp@1',
-            executionDefaults: {
-              onCreate: { kind: 'generator', id: 'timestampNow' },
-              onUpdate: { kind: 'generator', id: 'timestampNow' },
-            },
-          },
-        },
-        // From test/temporal-preset-mirror.ts, which family-sql's
-        // temporal-codec-presets.test.ts asserts deep-equals the real factory
-        // output — so a factory change cannot leave these tests passing
-        // against a preset that no longer ships.
-        timestamp: sqlTimestampPresetMirror,
-      },
-      uuidString: {
-        kind: 'fieldPreset',
-        output: {
-          codecId: 'sql/char@1',
-          typeParams: { length: 36 },
-        },
-      },
-      nanoid: nanoidPresetMirror,
-      id: {
-        uuidv4String: {
-          kind: 'fieldPreset',
-          output: {
-            codecId: 'sql/char@1',
-            typeParams: { length: 36 },
-            executionDefaults: { onCreate: { kind: 'generator', id: 'uuidv4' } },
-            id: true,
-          },
-        },
-        uuidv7String: {
-          kind: 'fieldPreset',
-          output: {
-            codecId: 'sql/char@1',
-            typeParams: { length: 36 },
-            executionDefaults: { onCreate: { kind: 'generator', id: 'uuidv7' } },
-            id: true,
-          },
-        },
-        nanoid: nanoidIdPresetMirror,
-      },
-    },
   },
 } as const satisfies FamilyPackRef<'sql'>;
 
@@ -165,6 +90,12 @@ const pgvectorExtensionPack = {
   },
 } as const satisfies ExtensionPackRef<'sql', 'postgres'>;
 
+const char36 = {
+  kind: 'codec-instance',
+  codecId: 'sql/char@1',
+  typeParams: { length: 36 },
+} as const;
+
 const roleTypes = {
   Role: {
     kind: 'codec-instance',
@@ -193,189 +124,6 @@ function expectTypedFallbackWarnings(run: () => void, expectedFragments: readonl
 }
 
 describe('contract DSL helper vocabulary', () => {
-  it('lowers portable scalar helpers and explicit uuidv4 primary keys via factory callback', () => {
-    const contract = defineContract(
-      {
-        ...testTypeLookups,
-        family: sqlFamilyPack,
-        target: postgresTargetPack,
-        createNamespace: createTestSqlNamespace,
-      },
-      ({ field, model }) => ({
-        models: {
-          AuditEntry: model('AuditEntry', {
-            fields: {
-              id: field.id.uuidv4String({ name: 'audit_entry_pkey' }),
-              actorId: field.uuidString().column('actor_id'),
-              shortCode: field.nanoid({ size: 16 }).column('short_code'),
-              email: field.text().unique({ name: 'audit_entry_email_key' }),
-              createdAt: field.temporal.createdAt().column('created_at'),
-              updatedAt: field.temporal.updatedAt().column('updated_at'),
-              reviewedAt: field.portableTimestamp().optional().column('reviewed_at'),
-            },
-          }).sql({
-            table: 'audit_entry',
-          }),
-        },
-      }),
-    );
-
-    expect(unboundTables(contract.storage)['audit_entry']!.primaryKey).toEqual({
-      columns: ['id'],
-      name: 'audit_entry_pkey',
-    });
-    expect(unboundTables(contract.storage)['audit_entry']!.uniques).toEqual([
-      {
-        columns: ['email'],
-        name: 'audit_entry_email_key',
-      },
-    ]);
-    expect(unboundTables(contract.storage)['audit_entry']!.columns['id']).toMatchObject({
-      codecId: 'sql/char@1',
-      dataType: 'pg/char',
-      nullable: false,
-      typeParams: { length: 36 },
-    });
-    expect(unboundTables(contract.storage)['audit_entry']!.columns['email']).toMatchObject({
-      codecId: 'sql/text@1',
-      dataType: 'pg/text',
-      nullable: false,
-    });
-    expect(unboundTables(contract.storage)['audit_entry']!.columns['short_code']).toMatchObject({
-      codecId: 'sql/char@1',
-      dataType: 'pg/char',
-      nullable: false,
-      typeParams: { length: 16 },
-    });
-    expect(unboundTables(contract.storage)['audit_entry']!.columns['created_at']).toMatchObject({
-      codecId: 'test/timestamp@1',
-      dataType: 'test/timestamp',
-      nullable: false,
-      default: {
-        kind: 'function',
-        expression: 'CURRENT_TIMESTAMP',
-      },
-    });
-    expect(unboundTables(contract.storage)['audit_entry']!.columns['reviewed_at']).toMatchObject({
-      codecId: 'test/timestamp@1',
-      dataType: 'test/timestamp',
-      nullable: true,
-    });
-    expect(contract.execution?.mutations.defaults).toEqual([
-      {
-        ref: { namespace: 'public', entry: 'audit_entry', field: 'id' },
-        onCreate: { kind: 'generator', id: 'uuidv4' },
-      },
-      {
-        ref: { namespace: 'public', entry: 'audit_entry', field: 'updated_at' },
-        onCreate: { kind: 'generator', id: 'timestampNow' },
-        onUpdate: { kind: 'generator', id: 'timestampNow' },
-      },
-    ]);
-    expect(
-      (modelsOf(contract) as Record<string, { storage: { fields: Record<string, unknown> } }>)[
-        'AuditEntry'
-      ]!.storage.fields['actorId'],
-    ).toEqual({ column: 'actor_id' });
-  });
-
-  it('preserves literal codec ids for composed field helpers', () => {
-    defineContract(
-      {
-        ...testTypeLookups,
-        family: sqlFamilyPack,
-        target: postgresTargetPack,
-        createNamespace: createTestSqlNamespace,
-      },
-      ({ field }) => {
-        const textState = field.text().build();
-        const timestampState = field.portableTimestamp().build();
-        const updatedAtState = field.temporal.updatedAt().build();
-        const uuidState = field.uuidString().build();
-        const nanoidState = field.nanoid({ size: 16 }).build();
-        const uuidV4IdState = field.id.uuidv4String().build();
-        const uuidV7IdState = field.id.uuidv7String().build();
-        const nanoidIdState = field.id.nanoid({ size: 16 }).build();
-
-        expectTypeOf(textState.descriptor?.codecId).toEqualTypeOf<'sql/text@1' | undefined>();
-        expectTypeOf(timestampState.descriptor?.codecId).toEqualTypeOf<
-          'test/timestamp@1' | undefined
-        >();
-        expectTypeOf(updatedAtState.descriptor?.codecId).toEqualTypeOf<
-          'test/timestamp@1' | undefined
-        >();
-        expectTypeOf(uuidState.descriptor?.codecId).toEqualTypeOf<'sql/char@1' | undefined>();
-        expectTypeOf(nanoidState.descriptor?.codecId).toEqualTypeOf<'sql/char@1' | undefined>();
-        expectTypeOf(uuidV4IdState.descriptor?.codecId).toEqualTypeOf<'sql/char@1' | undefined>();
-        expectTypeOf(uuidV7IdState.descriptor?.codecId).toEqualTypeOf<'sql/char@1' | undefined>();
-        expectTypeOf(nanoidIdState.descriptor?.codecId).toEqualTypeOf<'sql/char@1' | undefined>();
-
-        expect(uuidState.descriptor?.typeParams).toEqual({ length: 36 });
-        expect(nanoidState.descriptor?.typeParams).toEqual({ length: 16 });
-        expect(updatedAtState.executionDefaults).toEqual({
-          onCreate: { kind: 'generator', id: 'timestampNow' },
-          onUpdate: { kind: 'generator', id: 'timestampNow' },
-        });
-        expect(uuidV4IdState.executionDefaults).toEqual({
-          onCreate: { kind: 'generator', id: 'uuidv4' },
-        });
-        expect(uuidV7IdState.executionDefaults).toEqual({
-          onCreate: { kind: 'generator', id: 'uuidv7' },
-        });
-        expect(nanoidIdState.executionDefaults).toEqual({
-          onCreate: {
-            kind: 'generator',
-            id: 'nanoid',
-            params: { size: 16 },
-          },
-        });
-        expect(uuidV4IdState.id).toEqual({});
-        expect(uuidV7IdState.id).toEqual({});
-        expect(nanoidIdState.id).toEqual({});
-
-        return { models: {} };
-      },
-    );
-  });
-
-  it('supports trailing inline primary-key names on generated id helpers', () => {
-    const contract = defineContract(
-      {
-        ...testTypeLookups,
-        family: sqlFamilyPack,
-        target: postgresTargetPack,
-        createNamespace: createTestSqlNamespace,
-      },
-      ({ field, model }) => ({
-        models: {
-          ShortLink: model('ShortLink', {
-            fields: {
-              id: field.id.nanoid({ size: 16 }, { name: 'short_link_pkey' }),
-              destination: field.text(),
-            },
-          }).sql({
-            table: 'short_link',
-          }),
-        },
-      }),
-    );
-
-    expect(unboundTables(contract.storage)['short_link']!.primaryKey).toEqual({
-      columns: ['id'],
-      name: 'short_link_pkey',
-    });
-    expect(unboundTables(contract.storage)['short_link']!.columns['id']).toMatchObject({
-      codecId: 'sql/char@1',
-      typeParams: { length: 16 },
-    });
-    expect(contract.execution?.mutations.defaults).toEqual([
-      {
-        ref: { namespace: 'public', entry: 'short_link', field: 'id' },
-        onCreate: { kind: 'generator', id: 'nanoid', params: { size: 16 } },
-      },
-    ]);
-  });
-
   it('lowers a codec instance constant inline', () => {
     const contract = defineContract(
       {
@@ -426,7 +174,7 @@ describe('contract DSL helper vocabulary', () => {
           ({ field, model }) => {
             const User = model('User', {
               fields: {
-                id: field.id.uuidv7String(),
+                id: field.column(char36).id(),
               },
             }).sql({
               table: 'app_user',
@@ -437,8 +185,8 @@ describe('contract DSL helper vocabulary', () => {
                 User,
                 Post: model('Post', {
                   fields: {
-                    id: field.id.uuidv7String(),
-                    userId: field.uuidString(),
+                    id: field.column(char36).id(),
+                    userId: field.column(char36),
                   },
                   relations: {
                     user: rel.belongsTo('User', { from: 'userId', to: 'id' }),
@@ -468,7 +216,7 @@ describe('contract DSL helper vocabulary', () => {
           ({ field, model }) => {
             const User = model('User', {
               fields: {
-                id: field.id.uuidv7String(),
+                id: field.column(char36).id(),
               },
             }).sql({
               table: 'app_user',
@@ -479,8 +227,8 @@ describe('contract DSL helper vocabulary', () => {
                 User,
                 Post: model('Post', {
                   fields: {
-                    id: field.id.uuidv7String(),
-                    userId: field.uuidString(),
+                    id: field.column(char36).id(),
+                    userId: field.column(char36),
                   },
                 }).sql(({ cols, constraints }) => ({
                   table: 'blog_post',
@@ -525,53 +273,6 @@ describe('contract DSL helper vocabulary', () => {
     expect(unboundTables(contract.storage)['app_user']!.columns['role']).toMatchObject({
       codecId: 'app/test-enum@1',
       typeParams: { name: 'role', values: ['USER', 'ADMIN'] },
-    });
-  });
-
-  it('supports integrated contract callbacks with family-owned field presets', () => {
-    const contract = defineContract(
-      {
-        ...testTypeLookups,
-        family: sqlFamilyPack,
-        target: postgresTargetPack,
-        createNamespace: createTestSqlNamespace,
-      },
-      ({ field, model }) => ({
-        models: {
-          AuditEntry: model('AuditEntry', {
-            fields: {
-              id: field.id.uuidv7String().sql({ id: { name: 'audit_entry_pkey' } }),
-              actorId: field.uuidString().sql({ column: 'actor_id' }),
-              email: field
-                .text()
-                .unique()
-                .sql({ unique: { name: 'audit_entry_email_key' } }),
-              createdAt: field.temporal.createdAt().sql({ column: 'created_at' }),
-            },
-          }).sql({
-            table: 'audit_entry',
-          }),
-        },
-      }),
-    );
-
-    expect(unboundTables(contract.storage)['audit_entry']!.primaryKey).toEqual({
-      columns: ['id'],
-      name: 'audit_entry_pkey',
-    });
-    expect(unboundTables(contract.storage)['audit_entry']!.uniques).toEqual([
-      {
-        columns: ['email'],
-        name: 'audit_entry_email_key',
-      },
-    ]);
-    expect(unboundTables(contract.storage)['audit_entry']!.columns['actor_id']).toMatchObject({
-      codecId: 'sql/char@1',
-      typeParams: { length: 36 },
-    });
-    expect(unboundTables(contract.storage)['audit_entry']!.columns['created_at']!.default).toEqual({
-      kind: 'function',
-      expression: 'CURRENT_TIMESTAMP',
     });
   });
 
@@ -623,40 +324,16 @@ describe('contract DSL helper vocabulary', () => {
           type: {
             enum: {
               kind: 'typeConstructor',
-              args: [{ kind: 'option', values: ['role'] }],
+              args: [{ kind: 'value', dataType: 'pg/text' }],
               output: {
                 codecId: 'conflict/enum@1',
-                typeParams: {
-                  name: { kind: 'arg', index: 0 },
-                  values: { kind: 'arg', index: 1 },
-                },
+                typeParams: { name: { kind: 'arg', index: 0 } },
               },
             },
           },
         },
       } as const satisfies ExtensionPackRef<'sql', 'postgres'>,
       error: /Duplicate authoring type helper "enum"/,
-    },
-    {
-      name: 'field helper names',
-      conflictingPack: {
-        kind: 'extension',
-        id: 'conflicting-pack',
-        familyId: 'sql',
-        targetId: 'postgres',
-        version: '0.0.1',
-        authoring: {
-          field: {
-            text: {
-              kind: 'fieldPreset',
-              output: {
-                codecId: 'conflict/text@1',
-              },
-            },
-          },
-        },
-      } as const satisfies ExtensionPackRef<'sql', 'postgres'>,
-      error: /Duplicate authoring field helper "text"/,
     },
   ])('rejects duplicate authoring $name across composed packs', ({ conflictingPack, error }) => {
     expect(() =>
@@ -675,156 +352,5 @@ describe('contract DSL helper vocabulary', () => {
         }),
       ),
     ).toThrow(error);
-  });
-
-  it('rejects dangerous authoring field helper path segments across composed packs', () => {
-    const maliciousFieldNamespace = JSON.parse(`
-      {
-        "__proto__": {
-          "polluted": {
-            "kind": "fieldPreset",
-            "output": {
-              "codecId": "conflict/text@1"
-            }
-          }
-        }
-      }
-    `) as AuthoringFieldNamespace;
-
-    const maliciousPack = {
-      kind: 'extension',
-      id: 'malicious-pack',
-      familyId: 'sql',
-      targetId: 'postgres',
-      version: '0.0.1',
-      authoring: {
-        field: maliciousFieldNamespace,
-      },
-    } as const satisfies ExtensionPackRef<'sql', 'postgres'>;
-
-    try {
-      expect(() =>
-        defineContract(
-          {
-            ...testTypeLookups,
-            family: sqlFamilyPack,
-            target: postgresTargetPack,
-            createNamespace: createTestSqlNamespace,
-            extensions: {
-              maliciousPack,
-            },
-          },
-          () => ({
-            models: {},
-          }),
-        ),
-      ).toThrow(/Invalid authoring field helper "__proto__"/);
-    } finally {
-      delete (Object.prototype as Record<string, unknown>)['polluted'];
-    }
-  });
-
-  it('resolves temporal.timestamp precision and phase tokens, incl. zero-arg and undefined-hole calls', () => {
-    defineContract(
-      {
-        ...testTypeLookups,
-        family: sqlFamilyPack,
-        target: postgresTargetPack,
-        createNamespace: createTestSqlNamespace,
-      },
-      ({ field }) => {
-        const nowPhase = { kind: 'generator', id: 'timestampNow' };
-        const fullState = field.temporal.timestamp(3, 'now', 'now').build();
-        const zeroArgState = field.temporal.timestamp().build();
-        const holeState = field.temporal.timestamp(undefined, undefined, 'now').build();
-
-        expectTypeOf(fullState.descriptor?.codecId).toEqualTypeOf<'test/timestamp@1' | undefined>();
-
-        expect(fullState.descriptor).toEqual({
-          codecId: 'test/timestamp@1',
-          typeParams: { precision: 3 },
-        });
-        expect(fullState.executionDefaults).toEqual({ onCreate: nowPhase, onUpdate: nowPhase });
-
-        expect(zeroArgState.descriptor).toEqual({ codecId: 'test/timestamp@1' });
-        expect(zeroArgState.descriptor).not.toHaveProperty('typeParams');
-        expect(zeroArgState.executionDefaults).toBeUndefined();
-
-        expect(holeState.descriptor).not.toHaveProperty('typeParams');
-        expect(holeState.executionDefaults).toEqual({ onUpdate: nowPhase });
-
-        return { models: {} };
-      },
-    );
-  });
-
-  // A column with precision but deliberately no execution defaults — the
-  // documented spelling for "timestamp column, no auto-update behavior".
-  it('resolves temporal.timestamp(3) to a precision column with no execution defaults', () => {
-    defineContract(
-      {
-        ...testTypeLookups,
-        family: sqlFamilyPack,
-        target: postgresTargetPack,
-        createNamespace: createTestSqlNamespace,
-      },
-      ({ field }) => {
-        const state = field.temporal.timestamp(3).build();
-
-        expect(state.descriptor).toEqual({
-          codecId: 'test/timestamp@1',
-          typeParams: { precision: 3 },
-        });
-        expect(state.executionDefaults).toBeUndefined();
-
-        return { models: {} };
-      },
-    );
-  });
-
-  it('regression: field.nanoid() is legal with zero args, resolving size to its declared default', () => {
-    defineContract(
-      {
-        ...testTypeLookups,
-        family: sqlFamilyPack,
-        target: postgresTargetPack,
-        createNamespace: createTestSqlNamespace,
-      },
-      ({ field }) => {
-        const state = field.nanoid().build();
-        expect(state.descriptor?.typeParams).toEqual({ length: 21 });
-        return { models: {} };
-      },
-    );
-  });
-
-  it('regression: field.id.nanoid({size}, {name}) still resolves via the named-constraint overload', () => {
-    const contract = defineContract(
-      {
-        ...testTypeLookups,
-        family: sqlFamilyPack,
-        target: postgresTargetPack,
-        createNamespace: createTestSqlNamespace,
-      },
-      ({ field, model }) => ({
-        models: {
-          ShortLink: model('ShortLink', {
-            fields: {
-              id: field.id.nanoid({ size: 16 }, { name: 'short_link_pkey' }),
-            },
-          }).sql({
-            table: 'short_link',
-          }),
-        },
-      }),
-    );
-
-    expect(unboundTables(contract.storage)['short_link']!.primaryKey).toEqual({
-      columns: ['id'],
-      name: 'short_link_pkey',
-    });
-    expect(unboundTables(contract.storage)['short_link']!.columns['id']).toMatchObject({
-      typeParams: { length: 16 },
-    });
   });
 });

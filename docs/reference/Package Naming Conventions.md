@@ -16,15 +16,15 @@ One thing intentionally falls outside the scopes: the private example/app/test p
 
 ## The published surface
 
-18 packages publish, all in lockstep at the workspace version:
+The published packages all release in lockstep at the workspace version:
 
-- **4 database facades** — `@prisma/orm-postgres`, `@prisma/orm-sqlite`, `@prisma/orm-mysql`, `@prisma/orm-mongo`. An application depends on exactly one; everything else arrives as its exact-pinned dependencies.
-- **6 extension packs** — `@prisma/orm-extension-{postgis,pgvector,paradedb,supabase,arktype-json,middleware-cache}`, peer-depending on their target package.
-- **8 platform packages** — `@prisma/orm-framework`, `@prisma/orm-toolchain`, `@prisma/orm-family-sql`, `@prisma/orm-family-mongo`, `@prisma/orm-target-{postgres,sqlite,mysql,mongo}`. These are shells: each bundles a set of `@internal/*` packages and re-exposes them as subpath entrypoints (e.g. `packages/2-sql-family/5-runtime` → `@prisma/orm-family-sql/runtime`).
+- **Database facades** — `@prisma/orm-postgres`, `@prisma/orm-sqlite`, `@prisma/orm-mysql`, `@prisma/orm-mariadb`, `@prisma/orm-mongo`. An application depends on exactly one; everything else arrives as its exact-pinned dependencies.
+- **Extension packages** — `@prisma/orm-extension-{postgis,pgvector,paradedb,supabase,arktype-json,middleware-cache}` and `@prisma/orm-postgres-contrib`, peer-depending on their target package. A third-party Postgres extension gets a package of its own; the trusted PostgreSQL contrib modules share `@prisma/orm-postgres-contrib`, one entrypoint group per module (`/citext/control`, …), which is why that name has no `orm-extension-` prefix ([ADR 313](../architecture%20docs/adrs/ADR%20313%20-%20Postgres%20extension%20packs%20are%20published%20by%20tier.md)).
+- **Platform packages** — `@prisma/orm-framework`, `@prisma/orm-toolchain`, `@prisma/orm-family-sql`, `@prisma/orm-family-mongo`, `@prisma/orm-target-{postgres,sqlite,mysql,mariadb,mongo}`. These are shells: each bundles a set of `@internal/*` packages and re-exposes them as subpath entrypoints (e.g. `packages/2-sql-family/5-runtime` → `@prisma/orm-family-sql/runtime`).
 
 **Publishability is a directory property.** Everything under `packages/9-public/` is publishable and nothing else is; `pnpm lint:publishability` enforces both directions. One module lives in exactly one published package — shells re-export, never copy — so `instanceof` and shared-registry identity hold across package boundaries.
 
-The canonical internal-package → shell-entrypoint mapping is code, not prose: [`packages/0-shared/publish-surface/src/shells.ts`](../../packages/0-shared/publish-surface/src/shells.ts). Emitters and generators resolve published import specifiers through it; do not hand-maintain a copy of that table here or anywhere else.
+The canonical internal-package → shell-entrypoint mapping is code, not prose: [`packages/0-shared/publish-surface/src/shells.ts`](../../packages/0-shared/publish-surface/src/shells.ts). The build of the published packages and the publish checks read it; do not hand-maintain a copy of that table here or anywhere else. Nothing that emits or scaffolds a file reads it: a generated file imports from the modules its config names, and `prisma orm init` names the target package it installs.
 
 ## Directory structure
 
@@ -50,7 +50,7 @@ packages/
       4-codec-testkit/   # Codec test harness (SQL databases)
       9-facade/          # Facade: the database's one-package client
   9-public/              # The published surface — every publishable package, nothing else
-    @prisma/*            # The 18 @prisma packages (18 dirs) …
+    @prisma/*            # The 19 @prisma packages (19 dirs) …
 ```
 
 The numbered prefixes serve two purposes:
@@ -87,6 +87,7 @@ A representative sample (the source of truth is each directory's `package.json`;
 | `packages/2-mongo-family/5-query-builders/orm/` | `@internal/mongo-orm` |
 | `packages/3-targets/postgres/9-facade/` | `@internal/postgres` (source of the `@prisma/orm-postgres` facade) |
 | `packages/3-extensions/pgvector/` | `@internal/extension-pgvector` (source of `@prisma/orm-extension-pgvector`) |
+| `packages/3-extensions/citext/` | `@internal/extension-citext` (source of `@prisma/orm-postgres-contrib/citext/*`) |
 | `packages/3-targets/postgres/2-adapter/` | `@internal/adapter-postgres` |
 | `packages/9-public/@prisma/orm-postgres/` | `@prisma/orm-postgres` |
 

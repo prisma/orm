@@ -10,6 +10,8 @@ import {
   nonIdentityCodecLookup,
 } from './value-set-codec-lookups';
 
+const TYPES_MODULE = '@acme/orm-db/contract-types';
+
 const testHashes = { storageHash: 'test-core-hash', profileHash: 'test-profile-hash' };
 
 /** The one-line declaration of a type overrides map, or `''` when the file has none. */
@@ -114,6 +116,7 @@ describe('StorageColumnTypes', () => {
       sqlEmission,
       [],
       testHashes,
+      TYPES_MODULE,
       undefined,
       identityCodecLookup,
     );
@@ -173,7 +176,7 @@ describe('StorageColumnTypes', () => {
       },
     });
 
-    const dts = generateContractDts(contract, sqlEmission, [], testHashes);
+    const dts = generateContractDts(contract, sqlEmission, [], testHashes, TYPES_MODULE);
 
     expect(dts).toContain('export type StorageColumnTypes = ColumnTypesFromStorage<');
     expect(typeOverrides(dts, 'ColumnTypeOverrides')).toBe('{  }');
@@ -259,6 +262,7 @@ describe('StorageColumnTypes', () => {
       sqlEmission,
       [],
       testHashes,
+      TYPES_MODULE,
       undefined,
       identityCodecLookup,
     );
@@ -314,7 +318,7 @@ describe('StorageColumnTypes', () => {
       },
     });
 
-    const dts = generateContractDts(contract, sqlEmission, [], testHashes);
+    const dts = generateContractDts(contract, sqlEmission, [], testHashes, TYPES_MODULE);
 
     expect(dts).toContain('export type StorageColumnTypes =');
     // __unbound__ is a valid identifier so serializeObjectKey does not quote it.
@@ -386,6 +390,7 @@ describe('StorageColumnTypes', () => {
       sqlEmission,
       [],
       testHashes,
+      TYPES_MODULE,
       undefined,
       identityCodecLookup,
     );
@@ -462,6 +467,7 @@ describe('StorageColumnTypes', () => {
       sqlEmission,
       [],
       testHashes,
+      TYPES_MODULE,
       undefined,
       identityCodecLookup,
     );
@@ -551,6 +557,7 @@ describe('StorageColumnTypes', () => {
       sqlEmission,
       [],
       testHashes,
+      TYPES_MODULE,
       undefined,
       identityCodecLookup,
     );
@@ -617,6 +624,7 @@ describe('StorageColumnTypes', () => {
       sqlEmission,
       [],
       testHashes,
+      TYPES_MODULE,
       undefined,
       vectorCodecLookup(),
     );
@@ -688,6 +696,7 @@ describe('StorageColumnTypes', () => {
       sqlEmission,
       [],
       testHashes,
+      TYPES_MODULE,
       undefined,
       vectorCodecLookup(),
     );
@@ -771,6 +780,7 @@ describe('StorageColumnTypes', () => {
       sqlEmission,
       [],
       testHashes,
+      TYPES_MODULE,
       undefined,
       identityCodecLookup,
     );
@@ -813,10 +823,10 @@ describe('StorageColumnTypes', () => {
       },
     });
 
-    const dts = generateContractDts(contract, sqlEmission, [], testHashes);
+    const dts = generateContractDts(contract, sqlEmission, [], testHashes, TYPES_MODULE);
 
     expect(dts).toContain(
-      "export type FieldOutputTypes = FieldTypesFromDomain<ContractBase['domain']['namespaces'], CodecTypes, ParameterizedOutputTypeFunctions, FieldTypeOverrides, \"output\">;",
+      "export type FieldOutputTypes = FieldTypesFromDomain<ContractBase['domain']['namespaces'], CodecTypes, ParameterizedOutputTypeFunctions, FieldTypeOverrides, \"output\", ContractBase['storage']['namespaces']>;",
     );
     expect(dts).toContain(
       'readonly tags: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "pg/text@1" }; readonly many: { readonly elementNullable: false } }',
@@ -892,6 +902,7 @@ describe('StorageColumnTypes', () => {
       sqlEmission,
       [],
       testHashes,
+      TYPES_MODULE,
       undefined,
       nonIdentityCodecLookup,
     );
@@ -916,6 +927,7 @@ describe('StorageColumnTypes', () => {
       sqlEmission,
       [],
       testHashes,
+      TYPES_MODULE,
       undefined,
       fallbackLookup,
     );
@@ -924,7 +936,13 @@ describe('StorageColumnTypes', () => {
   });
 
   it('falls back to the codec output type when no codec lookup is supplied', () => {
-    const dts = generateContractDts(nonIdentityEnumColumnContract(), sqlEmission, [], testHashes);
+    const dts = generateContractDts(
+      nonIdentityEnumColumnContract(),
+      sqlEmission,
+      [],
+      testHashes,
+      TYPES_MODULE,
+    );
 
     expect(typeOverrides(dts, 'ColumnTypeOverrides')).toBe('{  }');
   });
@@ -935,6 +953,7 @@ describe('StorageColumnTypes', () => {
       sqlEmission,
       [],
       testHashes,
+      TYPES_MODULE,
       undefined,
       nonIdentityCodecLookup,
     );
@@ -1028,6 +1047,7 @@ describe('StorageColumnTypes', () => {
         sqlEmission,
         [],
         testHashes,
+        TYPES_MODULE,
         undefined,
         pgEnumCodecLookup(),
       );
@@ -1043,6 +1063,7 @@ describe('StorageColumnTypes', () => {
         sqlEmission,
         [],
         testHashes,
+        TYPES_MODULE,
         undefined,
         pgEnumCodecLookup(),
       );
@@ -1053,7 +1074,13 @@ describe('StorageColumnTypes', () => {
     });
 
     it('falls back to the codec output type when no codec lookup is supplied (no renderValueLiteral)', () => {
-      const dts = generateContractDts(nativeEnumColumnContract(), sqlEmission, [], testHashes);
+      const dts = generateContractDts(
+        nativeEnumColumnContract(),
+        sqlEmission,
+        [],
+        testHashes,
+        TYPES_MODULE,
+      );
 
       expect(typeOverrides(dts, 'ColumnTypeOverrides')).toBe('{  }');
     });
@@ -1070,6 +1097,7 @@ describe('StorageColumnTypes', () => {
         sqlEmission,
         [],
         testHashes,
+        TYPES_MODULE,
         undefined,
         pgEnumCodecLookup(),
       );
@@ -1129,7 +1157,7 @@ describe('StorageColumnTypes', () => {
       },
     });
 
-    const dts = generateContractDts(contract, sqlEmission, [], testHashes);
+    const dts = generateContractDts(contract, sqlEmission, [], testHashes, TYPES_MODULE);
 
     expect(storageColumn(dts, 'tags')).toContain(
       'readonly nullable: false; readonly many: { readonly elementNullable: false }',
@@ -1236,6 +1264,7 @@ describe('StorageColumnTypes', () => {
       sqlEmission,
       [],
       testHashes,
+      TYPES_MODULE,
       undefined,
       vectorCodecLookup(),
     );

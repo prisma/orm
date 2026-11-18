@@ -39,6 +39,16 @@ const plainDateTimesEqual = (roundTripped: unknown, value: unknown): boolean =>
   value instanceof Temporal.PlainDateTime &&
   roundTripped.equals(value);
 
+const plainDatesEqual = (roundTripped: unknown, value: unknown): boolean =>
+  roundTripped instanceof Temporal.PlainDate &&
+  value instanceof Temporal.PlainDate &&
+  roundTripped.equals(value);
+
+const plainTimesEqual = (roundTripped: unknown, value: unknown): boolean =>
+  roundTripped instanceof Temporal.PlainTime &&
+  value instanceof Temporal.PlainTime &&
+  roundTripped.equals(value);
+
 const ENUM_TYPE = 'codec_conformance_mood';
 
 /**
@@ -248,6 +258,8 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     codecId: 'pg/date-temporal@1',
     label: 'calendar date',
     value: Temporal.PlainDate.from('2026-01-02'),
+    valueEquality: plainDatesEqual,
+    projectionEquality: plainDatesEqual,
   },
   {
     codecId: 'pg/timestamp-temporal@1',
@@ -270,6 +282,8 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     label: 'microsecond precision',
     value: Temporal.PlainTime.from('03:04:05.123456'),
     typeParams: { precision: 6 },
+    valueEquality: plainTimesEqual,
+    projectionEquality: plainTimesEqual,
   },
   {
     codecId: 'pg/timestamptz-date@1',
@@ -486,6 +500,16 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     value: '123e4567-e89b-12d3-a456-426614174000',
   },
   { codecId: 'pg/inet@1', label: 'ipv4 address', value: '192.168.0.1' },
+  { codecId: 'pg/xml@1', label: 'xml element', value: '<a href="x">b &amp; c</a>' },
+  { codecId: 'pg/xml@1', label: 'xml content fragment', value: 'text<b/>more' },
+  { codecId: 'pg/oid@1', label: 'oid lower bound', value: 0 },
+  { codecId: 'pg/oid@1', label: 'oid upper bound', value: 4294967295 },
+  { codecId: 'pg/money@1', label: 'money under 1000', value: '12.50' },
+  { codecId: 'pg/money@1', label: 'money of 1000 or more', value: '1234567.89' },
+  { codecId: 'pg/money@1', label: 'negative money', value: '-1234.56' },
+  { codecId: 'pg/money@1', label: 'negative money under one', value: '-0.05' },
+  { codecId: 'pg/money@1', label: 'money upper bound', value: '92233720368547758.07' },
+  { codecId: 'pg/money@1', label: 'money lower bound', value: '-92233720368547758.08' },
   { codecId: 'pg/tsquery@1', label: 'tsquery in its canonical form', value: "'zebra' & !'graze'" },
   {
     codecId: 'sql/raw@1',
@@ -616,6 +640,24 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
   },
   {
     codecId: 'pg/tsquery@1',
+    label: 'null',
+    value: undefined,
+    nullValue: true,
+  },
+  {
+    codecId: 'pg/xml@1',
+    label: 'null',
+    value: undefined,
+    nullValue: true,
+  },
+  {
+    codecId: 'pg/oid@1',
+    label: 'null',
+    value: undefined,
+    nullValue: true,
+  },
+  {
+    codecId: 'pg/money@1',
     label: 'null',
     value: undefined,
     nullValue: true,

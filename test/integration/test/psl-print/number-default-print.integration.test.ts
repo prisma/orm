@@ -4,14 +4,14 @@ import { printAndReadBack, printContract, readPsl } from './print-and-read-back'
 const SCHEMA = `// use prisma-8
 
 types {
-  Money = Numeric(10, 2)
+  Money = NumericString(10, 2)
 }
 
 model Order {
   id      Int            @id
   total   Money          @default(1.50)
-  scaled  Numeric(10, 2) @default(1.50)
-  precise Numeric(65, 30) @default(-0.5)
+  scaled  NumericString(10, 2) @default(1.50)
+  precise NumericString(65, 30) @default(-0.5)
   count   Int            @default(10)
 }
 `;

@@ -11,7 +11,7 @@ import { timeouts } from '@repo/test-utils';
 import { MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { fixtureAppDir } from '../utils/cli-test-helpers';
+import { fixtureAppDir, writeProjectManifest } from '../utils/cli-test-helpers';
 import {
   engineError,
   followRenameCollectionAdvice,
@@ -36,16 +36,7 @@ function setupProject(connectionString: string): JourneyContext {
   const outputDir = join(testDir, 'output');
   mkdirSync(outputDir, { recursive: true });
   mkdirSync(join(testDir, 'migrations'), { recursive: true });
-  writeFileSync(
-    join(testDir, 'package.json'),
-    JSON.stringify({
-      name: 'mongo-keep-documents-journey',
-      private: true,
-      type: 'module',
-      dependencies: { '@prisma/orm-mongo': 'workspace:0.16.0' },
-    }),
-    'utf-8',
-  );
+  writeProjectManifest(testDir);
   const config = readFileSync(join(FIXTURES_DIR, 'prisma.config.with-db.ts'), 'utf-8').replace(
     /\{\{DB_URL\}\}/g,
     () => connectionString,

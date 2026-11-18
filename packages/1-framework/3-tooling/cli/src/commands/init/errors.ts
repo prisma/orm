@@ -134,11 +134,9 @@ export function errorInitStrictProbeWithoutProbe(): CliStructuredError {
 }
 
 /**
- * Dependency installation failed and the pnpm → npm fallback (FR7.2)
- * either did not apply (pm ≠ pnpm or stderr did not match a recognised
- * leak) or also failed. Files scaffolded before the install step are
- * already on disk; `meta.filesWritten` carries the list so a follow-up
- * agent can resume manually. Maps to exit code `4 = INSTALL_FAILED`.
+ * Dependency installation failed. Files scaffolded before the install step are already on disk;
+ * `meta.filesWritten` carries the list so a follow-up agent can resume manually. Maps to exit code
+ * `4 = INSTALL_FAILED`.
  */
 export function errorInitInstallFailed(options: {
   readonly addCommand: string;
@@ -150,7 +148,7 @@ export function errorInitInstallFailed(options: {
   const trimmed = options.stderrLines.map((s) => s.trim()).filter(Boolean);
   const why =
     trimmed.length === 0
-      ? 'The package manager exited with an error and no recoverable fallback applied.'
+      ? 'The package manager exited with an error.'
       : `The package manager exited with: ${trimmed[0]}`;
   return new CliStructuredError('CLI.INIT_INSTALL_FAILED', 'Failed to install dependencies', {
     why,

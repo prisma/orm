@@ -9,6 +9,7 @@ import {
   contractSnapshotJsonSpecifier,
   contractSnapshotTypesSpecifier,
 } from '@internal/framework-components/control';
+import { singleLineDeclarations } from '@internal/migration-tools/contract-snapshot-store';
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 
 import {
@@ -233,7 +234,7 @@ describe('migrateMigrationsRoots — happy path', () => {
         // canonicalizeJson output is a single line; exactly one trailing newline.
         assert.equal(contractJsonText.endsWith('\n'), true);
         assert.equal(contractJsonText.trimEnd().includes('\n'), false);
-        assert.equal(contractDtsText, CONTRACT_DTS);
+        assert.equal(contractDtsText, singleLineDeclarations(CONTRACT_DTS));
       }
 
       for (const [dir, names] of [
@@ -392,7 +393,10 @@ describe('migrateMigrationsRoots — ref-paired snapshot folding', () => {
         JSON.parse(await readFile(join(storeDir, 'contract.json'), 'utf8')),
         fakeContractJson(hashD),
       );
-      assert.equal(await readFile(join(storeDir, 'contract.d.ts'), 'utf8'), CONTRACT_DTS);
+      assert.equal(
+        await readFile(join(storeDir, 'contract.d.ts'), 'utf8'),
+        singleLineDeclarations(CONTRACT_DTS),
+      );
 
       // Second run: no ref pairs remain, so nothing to fold.
       const [summary2] = await migrateMigrationsRoots([root]);

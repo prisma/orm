@@ -2,7 +2,6 @@ import type { CodecTypes, ParameterizedOutputTypesForTypeParams } from '../expor
 import type { QueryOperationTypesForCodecs } from '../types/operation-types';
 import {
   postgresAuthoringEntityTypes,
-  postgresAuthoringFieldPresets,
   postgresAuthoringModelAttributes,
   postgresAuthoringPslBlockDescriptors,
   postgresAuthoringTypes,
@@ -15,9 +14,11 @@ import { postgresTextDataTypes } from './data-types';
 import { postgresTargetDescriptorMetaRuntime } from './descriptor-meta-runtime';
 import { postgresGeneratorDescriptors, postgresGeneratorFunctions } from './generator-functions';
 import { postgresIndexTypes } from './index-types';
+import { moduleBase } from './module-base';
 import { DEFAULT_NAMESPACE_ID } from './namespace-ids';
 import { postgresCreateNamespace } from './postgres-schema';
-import { postgresScalarAndNativeTypeConstructors } from './type-constructors';
+import { prisma7PostgresRenamedNativeTypes } from './prisma7-type-map';
+import { postgresScalarTypes } from './type-constructors';
 
 const postgresTargetDescriptorMetaBase = {
   ...postgresTargetDescriptorMetaRuntime,
@@ -26,10 +27,10 @@ const postgresTargetDescriptorMetaBase = {
   displayName: 'Postgres',
   indexTypes: postgresIndexTypes,
   authoring: {
-    type: { ...postgresScalarAndNativeTypeConstructors, ...postgresAuthoringTypes },
-    field: postgresAuthoringFieldPresets,
+    type: { ...postgresScalarTypes, ...postgresAuthoringTypes },
     dataTypes: postgresDataTypeEntries(),
     textDataTypes: postgresTextDataTypes,
+    renamedTypeConstructors: prisma7PostgresRenamedNativeTypes,
     entityTypes: postgresAuthoringEntityTypes,
     pslBlockDescriptors: postgresAuthoringPslBlockDescriptors,
     modelAttributes: postgresAuthoringModelAttributes,
@@ -46,7 +47,7 @@ const postgresTargetDescriptorMetaBase = {
   types: {
     queryOperationTypes: {
       import: {
-        package: '@internal/target-postgres/operation-types',
+        package: `${moduleBase}/operation-types`,
         named: 'QueryOperationTypes',
         alias: 'PgTargetQueryOps',
       },

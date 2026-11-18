@@ -1,11 +1,13 @@
 import { randomBytes } from 'node:crypto';
-import { createConnection } from 'mysql2/promise';
+import { readFileSync } from 'node:fs';
+import { ifDefined } from '@internal/utils/defined';
+import { type ConnectionConfig, createConnection } from 'mariadb';
 
 /** A MySQL database created for one test. */
 export interface MysqlTestDatabase {
   /** The database's name, unique to this test. */
   readonly name: string;
-  /** `MYSQL_URL` with this database as its path. */
+  /** The server's URL with this database as its path. */
   readonly url: string;
 }
 
@@ -14,10 +16,49 @@ interface SkippableTest {
   skip(note?: string): void;
 }
 
-/** The URL of the MySQL server tests run against, from `MYSQL_URL`, or `undefined` when it is not set. */
-export function mysqlServerUrl(): string | undefined {
-  const url = process.env['MYSQL_URL'];
+/** The URL of the MySQL or MariaDB server tests run against, from the environment variable `variable`, `MYSQL_URL` unless given, or `undefined` when it is not set. */
+export function mysqlServerUrl(variable = 'MYSQL_URL'): string | undefined {
+  const url = process.env[variable];
   return url === undefined || url.length === 0 ? undefined : url;
+}
+
+/**
+ * The TLS settings of the URL, read as the MySQL driver reads them, which is as `pg-connection-string` reads them for Postgres: `ssl` turns TLS on or off; `sslmode`, `sslcert`, `sslkey` or `sslrootcert` turn it on, the last three naming PEM files; `sslmode=disable` turns it off and `no-verify` accepts any certificate.
+ */
+function tlsOptions(url: URL): ConnectionConfig['ssl'] {
+  const parameter = (name: string) => url.searchParams.get(name) ?? undefined;
+  const sslmode = parameter('sslmode');
+  const files = {
+    cert: parameter('sslcert'),
+    key: parameter('sslkey'),
+    ca: parameter('sslrootcert'),
+  };
+  if (sslmode === undefined && Object.values(files).every((path) => path === undefined)) {
+    const ssl = parameter('ssl');
+    return ssl === undefined ? undefined : ssl === 'true' || ssl === '1';
+  }
+  if (sslmode === 'disable') return false;
+  return {
+    ...ifDefined('cert', files.cert === undefined ? undefined : readFileSync(files.cert, 'utf8')),
+    ...ifDefined('key', files.key === undefined ? undefined : readFileSync(files.key, 'utf8')),
+    ...ifDefined('ca', files.ca === undefined ? undefined : readFileSync(files.ca, 'utf8')),
+    ...(sslmode === 'no-verify' ? { rejectUnauthorized: false } : {}),
+  };
+}
+
+/**
+ * Connection options for the server a `mysql://` URL names, with its TLS and `allowPublicKeyRetrieval` parameters; the `mariadb` package reads only `mariadb://` URLs. The MySQL control driver reads the URL the same way, but this package cannot depend on it: the driver's tests depend on this package.
+ */
+function serverOptions(serverUrl: string): ConnectionConfig {
+  const url = new URL(serverUrl);
+  return {
+    host: url.hostname.replace(/^\[(.*)\]$/, '$1'),
+    ...(url.port === '' ? {} : { port: Number(url.port) }),
+    user: decodeURIComponent(url.username),
+    password: decodeURIComponent(url.password),
+    ...ifDefined('ssl', tlsOptions(url)),
+    allowPublicKeyRetrieval: url.searchParams.get('allowPublicKeyRetrieval') === 'true',
+  };
 }
 
 function uniqueDatabaseName(): string {
@@ -25,21 +66,22 @@ function uniqueDatabaseName(): string {
 }
 
 /**
- * Runs `fn` with a database of its own on the MySQL server `MYSQL_URL` names, and drops the database afterwards. Skips the test when `MYSQL_URL` is not set. Each call creates a database with a unique name, so tests that share a server, as CI shards do, never see each other's tables. When the test fails, a failure to drop the database does not replace the test's error.
+ * Runs `fn` with a database of its own on the server the environment variable `variable` names, `MYSQL_URL` unless given, and drops the database afterwards. Skips the test when the variable is not set. Each call creates a database with a unique name, so tests that share a server, as CI shards do, never see each other's tables. When the test fails, a failure to drop the database does not replace the test's error.
  */
 export async function withMysqlDatabase<T>(
   test: SkippableTest,
   fn: (database: MysqlTestDatabase) => Promise<T>,
+  variable = 'MYSQL_URL',
 ): Promise<T | undefined> {
-  const serverUrl = mysqlServerUrl();
+  const serverUrl = mysqlServerUrl(variable);
   if (serverUrl === undefined) {
-    test.skip('MYSQL_URL is not set');
+    test.skip(`${variable} is not set`);
     return undefined;
   }
   const name = uniqueDatabaseName();
   const url = new URL(serverUrl);
   url.pathname = `/${name}`;
-  const admin = await createConnection({ uri: serverUrl });
+  const admin = await createConnection(serverOptions(serverUrl));
   try {
     await admin.query(`CREATE DATABASE \`${name}\``);
     let testFailed = false;
@@ -57,3 +99,19 @@ export async function withMysqlDatabase<T>(
     await admin.end();
   }
 }
+
+/** Runs `sql` on the MySQL database `url` names, on a connection of its own. */
+export async function queryMysqlDatabase(url: string, sql: string): Promise<void> {
+  const connection = await createConnection({
+    ...serverOptions(url),
+    database: decodeURIComponent(new URL(url).pathname.slice(1)),
+  });
+  try {
+    await connection.query(sql);
+  } finally {
+    await connection.end();
+  }
+}
+
+/** Whether the tests run in CI, where every live-test server the job configures must be present. */
+export const inCi = process.env['CI'] !== undefined;

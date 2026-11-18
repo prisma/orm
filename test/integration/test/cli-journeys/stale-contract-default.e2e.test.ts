@@ -71,7 +71,7 @@ const LENGTH_SCHEMA = `// use prisma-8
 
 model Label {
   id   Int         @id
-  name VarChar(10) @default("abc")
+  name Varchar(10) @default("abc")
 }
 `;
 

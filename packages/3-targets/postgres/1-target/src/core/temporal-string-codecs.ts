@@ -10,6 +10,7 @@ import {
   renderTsLiteral,
 } from '@internal/framework-components/codec';
 import { CastExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
+import { describeValue } from '@internal/type-implementations/temporal-text';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { PostgresCodecDescriptor } from './codec-descriptor';
 import type { PrecisionParams } from './codec-helpers';
@@ -50,6 +51,7 @@ export class PgDateStringCodec extends CodecImpl<
 }
 
 export class PgDateStringDescriptor extends PostgresCodecDescriptor<void> {
+  override readonly jsonType = 'string' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return CastExpr.as(expression, 'text');
   }
@@ -78,12 +80,6 @@ function requireText(codecId: string, value: unknown): string {
   throw errorTimestampTextWrongType(codecId, describeValue(value));
 }
 
-function describeValue(value: unknown): string {
-  if (value === null) return 'null';
-  if (value instanceof Date) return 'a Date';
-  return `a ${typeof value}`;
-}
-
 export class PgTimestampStringCodec extends CodecImpl<
   typeof PG_TIMESTAMP_STRING_CODEC_ID,
   readonly ['equality', 'order'],
@@ -105,6 +101,7 @@ export class PgTimestampStringCodec extends CodecImpl<
 }
 
 export class PgTimestampStringDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
+  override readonly jsonType = 'string' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return CastExpr.as(expression, 'text');
   }
@@ -149,6 +146,7 @@ export class PgTimestamptzStringCodec extends CodecImpl<
 }
 
 export class PgTimestamptzStringDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
+  override readonly jsonType = 'string' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return CastExpr.as(expression, 'text');
   }
@@ -199,6 +197,7 @@ export class PgTimeStringCodec extends CodecImpl<
 }
 
 export class PgTimeStringDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
+  override readonly jsonType = 'string' as const;
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return CastExpr.as(expression, 'text');
   }

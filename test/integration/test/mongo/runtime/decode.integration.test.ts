@@ -1,6 +1,7 @@
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
 import { type DataTypeValue, dataType, readJsonString } from '@internal/framework-components/codec';
 import { isRuntimeError } from '@internal/framework-components/runtime';
+import mongoStatic from '@internal/mongo/static';
 import { mongoCodec } from '@internal/mongo-codec';
 import type { MongoResultShape } from '@internal/mongo-query-ast/execution';
 import {
@@ -9,7 +10,6 @@ import {
   MongoMatchStage,
   RawAggregateCommand,
 } from '@internal/mongo-query-ast/execution';
-import { mongoQuery } from '@internal/mongo-query-builder';
 import { MongoParamRef } from '@internal/mongo-value';
 import { timeouts } from '@repo/test-utils';
 import { ObjectId } from 'mongodb';
@@ -38,8 +38,8 @@ describe('Mongo runtime decode integration', { timeout: timeouts.spinUpMongoMemo
       });
 
       // User-facing path: build the plan through the query-builder so the Row type is contract-derived (no explicit annotation on execute).
-      const plan = mongoQuery({ contract })
-        .from('users')
+      const plan = mongoStatic({ contract })
+        .query.from('users')
         .match((f) =>
           f['_id']!.eq(MongoParamRef.of(insert.insertedId, { codecId: 'mongo/objectId@1' })),
         )

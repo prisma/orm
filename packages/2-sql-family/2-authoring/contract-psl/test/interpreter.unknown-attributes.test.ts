@@ -5,9 +5,9 @@ import { fixtureInterpreterTypes } from './fixture-codec-descriptors';
 import { fixtureGeneratorFunctions } from './fixture-generator-functions';
 import {
   createBuiltinLikeControlMutationDefaults,
+  fixturePostgresTypeNamespace,
   interpretSqlContract,
   postgresNativeScalarTypeDescriptors,
-  postgresScalarAuthoringTypes,
   postgresTarget,
 } from './fixtures';
 
@@ -15,7 +15,7 @@ function interpret(schema: string) {
   return interpretSqlContract(schema, {
     target: postgresTarget,
     scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
-    authoringContributions: { type: postgresScalarAuthoringTypes },
+    authoringContributions: { type: fixturePostgresTypeNamespace },
     composedExtensionContracts: new Map(),
     createNamespace: createTestSqlNamespace,
     ...fixtureInterpreterTypes,
@@ -97,5 +97,34 @@ describe('unknown attribute diagnostics derive from the registered SQL namespace
     );
     expect([...used('@@')].sort()).toEqual(modelNames.sort());
     expect([...used('(?<!@)@')].sort()).toEqual(Object.keys(sqlAttributeSpecs.field).sort());
+  });
+});
+
+describe('a field attribute Prisma 8 removed', () => {
+  it('names what to write instead of @updatedAt', () => {
+    expect(
+      unsupportedAttributeDiagnostics(
+        'model Stale {\n  id Int @id\n  updatedAt DateTime @updatedAt\n}\n',
+      ),
+    ).toEqual([
+      {
+        code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
+        message:
+          'Field "Stale.updatedAt" uses unsupported attribute "@updatedAt". Use @onCreate(now()) @onUpdate(now()), or type the field temporal.UpdatedAt.',
+      },
+    ]);
+  });
+
+  it('leaves out the hint when the field already writes @onUpdate', () => {
+    expect(
+      unsupportedAttributeDiagnostics(
+        'model Migrated {\n  id Int @id\n  updatedAt DateTime @onUpdate(now()) @updatedAt\n}\n',
+      ),
+    ).toEqual([
+      {
+        code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
+        message: 'Field "Migrated.updatedAt" uses unsupported attribute "@updatedAt"',
+      },
+    ]);
   });
 });

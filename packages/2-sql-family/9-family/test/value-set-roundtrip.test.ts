@@ -17,14 +17,6 @@ const sqlFamilyPack = {
   id: 'sql',
   familyId: 'sql',
   version: '0.0.1',
-  authoring: {
-    field: {
-      text: {
-        kind: 'fieldPreset',
-        output: { codecId: 'pg/text@1' },
-      },
-    },
-  },
 } as const satisfies FamilyPackRef<'sql'>;
 
 const postgresTargetPack = {
@@ -58,7 +50,7 @@ describe('value-set serializer hydration + round-trip', () => {
         models: {
           Post: m('Post', {
             fields: {
-              id: f.text().id(),
+              id: f.column(pgText).id(),
               role: f.namedType(Role),
             },
           }),
@@ -164,7 +156,7 @@ describe('validators — value-set and enum', () => {
         models: {
           Post: m('Post', {
             fields: {
-              id: f.text().id(),
+              id: f.column(pgText).id(),
               role: f.namedType(Role),
             },
           }),

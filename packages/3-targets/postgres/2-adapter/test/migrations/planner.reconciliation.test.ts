@@ -61,6 +61,7 @@ describe('PostgresMigrationPlanner - reconciliation planning', () => {
     });
 
     const schema = new PostgresDatabaseSchemaNode({
+      extensions: undefined,
       namespaces: {
         public: new PostgresNamespaceSchemaNode({
           schemaName: 'public',
@@ -132,6 +133,7 @@ describe('PostgresMigrationPlanner - reconciliation planning', () => {
     });
 
     const schema = new PostgresDatabaseSchemaNode({
+      extensions: undefined,
       namespaces: {
         public: new PostgresNamespaceSchemaNode({
           schemaName: 'public',
@@ -197,6 +199,7 @@ describe('PostgresMigrationPlanner - reconciliation planning', () => {
     });
 
     const schema = new PostgresDatabaseSchemaNode({
+      extensions: undefined,
       namespaces: {
         public: new PostgresNamespaceSchemaNode({
           schemaName: 'public',

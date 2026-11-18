@@ -1,20 +1,24 @@
 import { assertSafeAuthoringHelperKey } from '@internal/contract-authoring';
 import type {
   AuthoringArgumentDescriptor,
-  AuthoringFieldPresetDescriptor,
+  AuthoringTypeChoiceOption,
   AuthoringTypeNamespace,
   DataTypeSupport,
   WrittenScalar,
 } from '@internal/framework-components/authoring';
 import {
   describeAdmittedForms,
-  instantiateAuthoringFieldPreset,
   instantiateAuthoringTypeAlias,
   instantiateAuthoringTypeConstructor,
   isAuthoringTypeAliasDescriptor,
+  isAuthoringTypeChoiceDescriptor,
   isAuthoringTypeConstructorDescriptor,
   readWrittenValueAs,
+  resolveAuthoringTypeChoice,
+  typeChoiceArgumentsFromObject,
+  typeConstructorLookup,
   validateAuthoringHelperArguments,
+  validateAuthoringTypeChoiceParams,
   validateAuthoringTypeParams,
 } from '@internal/framework-components/authoring';
 import {
@@ -32,7 +36,7 @@ import { ifDefined } from '@internal/utils/defined';
 import type { TypeAliasColumnType } from './contract-dsl';
 import { contractError } from './contract-errors';
 
-/** What the type and field helpers read their arguments with: the stack's codecs, and its data types with their authoring entries. */
+/** What the type helpers read their arguments with: the stack's codecs, and its data types with their authoring entries. */
 export interface AuthoringHelperLookups {
   readonly codecLookup: CodecLookupWithDescriptors;
   readonly dataTypes: DataTypeSupport;
@@ -69,11 +73,11 @@ function readValueArgument(
 }
 
 /**
- * The arguments of a type constructor or field preset call as the constructor receives them: each `value` argument read as a value of its data type, through the same read and cast as a PSL argument, so both give the same parameters. ADR 129, ADR 254.
+ * The arguments of a type constructor or type choice call as the constructor receives them: each `value` argument read as a value of its data type, through the same read and cast as a PSL argument, so both give the same parameters. ADR 129, ADR 254.
  */
 export function readValueArguments(
   helperPath: string,
-  descriptors: readonly AuthoringArgumentDescriptor[] | undefined,
+  descriptors: readonly (AuthoringArgumentDescriptor | AuthoringTypeChoiceOption)[] | undefined,
   args: readonly unknown[],
   dataTypes: DataTypeSupport,
 ): readonly unknown[] {
@@ -86,24 +90,6 @@ export function readValueArguments(
         : `Argument "${descriptor.name}" of ${helperPath}`;
     return readValueArgument(label, value, dataTypeId(descriptor.dataType), dataTypes);
   });
-}
-
-export type RuntimeNamedConstraintSpec = {
-  readonly name?: string;
-};
-
-export function isNamedConstraintOptionsLike(value: unknown): value is RuntimeNamedConstraintSpec {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return false;
-  }
-
-  const keys = Object.keys(value as Record<string, unknown>);
-  if (keys.some((key) => key !== 'name')) {
-    return false;
-  }
-
-  const name = (value as { readonly name?: unknown }).name;
-  return name === undefined || typeof name === 'string';
 }
 
 export function createTypeHelpersFromNamespace(
@@ -126,6 +112,35 @@ export function createTypeHelpersFromNamespace(
         validateAuthoringTypeParams(
           helperPath,
           value.output,
+          output.typeParams,
+          lookups.codecLookup.descriptorFor(output.codecId)?.paramsSchema,
+        );
+        return {
+          kind: CODEC_INSTANCE_KIND,
+          codecId: output.codecId,
+          typeParams: output.typeParams ?? {},
+        };
+      };
+      continue;
+    }
+
+    if (isAuthoringTypeChoiceDescriptor(value)) {
+      const helperPath = currentPath.join('.');
+      const constructorNamed = typeConstructorLookup(namespace);
+      helpers[key] = (...written: readonly unknown[]): AuthoredStorageTypeInstance => {
+        const args = typeChoiceArgumentsFromObject(helperPath, value, written);
+        validateAuthoringHelperArguments(helperPath, value.args, args);
+        const chosen = resolveAuthoringTypeChoice({
+          helperPath,
+          descriptor: value,
+          args: readValueArguments(helperPath, value.args, args, lookups.dataTypes),
+          constructorNamed,
+        });
+        const output = instantiateAuthoringTypeConstructor(chosen.descriptor, chosen.args);
+        validateAuthoringTypeChoiceParams(
+          helperPath,
+          value,
+          chosen.descriptor,
           output.typeParams,
           lookups.codecLookup.descriptorFor(output.codecId)?.paramsSchema,
         );
@@ -161,71 +176,4 @@ export function createTypeHelpersFromNamespace(
   }
 
   return helpers;
-}
-
-export function createFieldPresetHelper<Result>(options: {
-  readonly helperPath: string;
-  readonly descriptor: AuthoringFieldPresetDescriptor;
-  readonly codecLookup: CodecLookupWithDescriptors;
-  readonly dataTypes: DataTypeSupport;
-  readonly build: (options: {
-    readonly args: readonly unknown[];
-    readonly namedConstraintOptions?: RuntimeNamedConstraintSpec;
-  }) => Result;
-}): (...rawArgs: readonly unknown[]) => Result {
-  return (...rawArgs: readonly unknown[]) => {
-    const acceptsNamedConstraintOptions =
-      options.descriptor.output.id === true || options.descriptor.output.unique === true;
-    const declaredArguments = options.descriptor.args ?? [];
-
-    if (acceptsNamedConstraintOptions && rawArgs.length > declaredArguments.length + 1) {
-      throw contractError(
-        'CONTRACT.ARGUMENT_INVALID',
-        `${options.helperPath} expects at most ${declaredArguments.length + 1} argument(s), received ${rawArgs.length}`,
-        {
-          meta: {
-            helperPath: options.helperPath,
-            expected: declaredArguments.length + 1,
-            received: rawArgs.length,
-          },
-        },
-      );
-    }
-
-    let args = rawArgs;
-    let namedConstraintOptions: RuntimeNamedConstraintSpec | undefined;
-
-    if (acceptsNamedConstraintOptions && rawArgs.length === declaredArguments.length + 1) {
-      const maybeNamedConstraintOptions = rawArgs.at(-1);
-      if (!isNamedConstraintOptionsLike(maybeNamedConstraintOptions)) {
-        throw contractError(
-          'CONTRACT.ARGUMENT_INVALID',
-          `${options.helperPath} accepts an optional trailing { name?: string } constraint options object`,
-          { meta: { helperPath: options.helperPath } },
-        );
-      }
-      namedConstraintOptions = maybeNamedConstraintOptions;
-      args = rawArgs.slice(0, -1);
-    }
-
-    validateAuthoringHelperArguments(options.helperPath, options.descriptor.args, args);
-    const values = readValueArguments(
-      options.helperPath,
-      options.descriptor.args,
-      args,
-      options.dataTypes,
-    );
-    const output = options.descriptor.output;
-    validateAuthoringTypeParams(
-      options.helperPath,
-      output,
-      instantiateAuthoringFieldPreset(options.descriptor, values).descriptor.typeParams,
-      options.codecLookup.descriptorFor(output.codecId)?.paramsSchema,
-    );
-
-    return options.build({
-      args: values,
-      ...(namedConstraintOptions ? { namedConstraintOptions } : {}),
-    });
-  };
 }

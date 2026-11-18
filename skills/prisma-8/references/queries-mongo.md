@@ -208,6 +208,39 @@ Update callbacks return arrays of field operations (`.set`, `.inc`, `.push`, `.p
 
 **Plans vs ORM.** The ORM's `.create` / `.update` / `.all` issue queries directly. Don't pass ORM collections to `runtime.query` / `runtime.execute` — those entry points are for `db.query` plans (and migration/runtime internals).
 
+## Workflow — Prepared statements (`db.prepare`)
+
+The concept: `db.prepare(declaration, (p) => plan)` builds a query-builder plan or an ORM read once and runs it many times with different values. The declaration names each parameter's codec (`{ email: 'mongo/string@1' }`, or `{ codecId: 'mongo/string@1', nullable: true }` to allow `null`); unknown codec ids fail to compile. The callback receives one placeholder per name and puts it where a value goes: filter operators (`eq`, `in`, …), update operators (`set`, `push`, …), insert documents, `fn.literal(p.x)`, and `limit` / `skip` (with a codec whose input is a number, such as `mongo/int32@1`). Each run encodes the value with the declared codec. Preparing opens no connection; run the handle against `await db.runtime()`:
+
+```typescript
+const byAuthor = await db.prepare(
+  { authorId: 'mongo/objectId@1', take: 'mongo/int32@1' },
+  (p) =>
+    db.query
+      .from('posts')
+      .match((f) => f.authorId.eq(p.authorId))
+      .sort({ createdAt: -1 })
+      .limit(p.take)
+      .build(),
+);
+
+const runtime = await db.runtime();
+const recent = await byAuthor.query(runtime, { authorId: someHexId, take: 10 }).toArray();
+```
+
+An `updateOne`, `updateMany`, `deleteOne` or `deleteMany` plan gives a handle with `execute(runtime, params)` as well as `query`, resolving `{ affectedRows }`. `runtime.prepare(...)` on a `MongoRuntime` takes query-builder and raw plans only, not ORM reads. A declared name the plan never uses throws `RUNTIME.PREPARE_UNUSED_PARAM`; a placeholder in a `db.raw` command throws `RUNTIME.PREPARE_RAW_PLACEHOLDER`; a placeholder whose name, codec id or nullability the declaration does not give throws `RUNTIME.PREPARE_UNDECLARED_PARAM`; a missing value at run time throws `RUNTIME.PREPARE_MISSING_PARAM`. A `db.raw` command with no placeholders can be prepared and is sent as written on each run.
+
+ORM reads are prepared through `.prepared.all()`, `.prepared.first()` and `.prepared.firstOrThrow()`. The handle's `query(runtime, params)` returns what the ad-hoc read returns: a row stream, `Row | null`, or `Row` (rejecting with `RUNTIME.NO_ROWS` when nothing matches). It has no `execute`.
+
+```typescript
+const byEmail = await db.prepare({ email: 'mongo/string@1', take: 'mongo/int32@1' }, (p) =>
+  db.orm.users.where({ email: p.email }).include('posts').limit(p.take).prepared.all(),
+);
+const users = await byEmail.query(await db.runtime(), { email: 'alice@example.com', take: 5 }).toArray();
+```
+
+In an ORM read, a placeholder goes in `limit`, `offset`, a scalar field's value in an object-form `where`, or the operand of a comparison (`$eq`, `$ne`, `$gt`, …) or an item of `$in` / `$nin` on a scalar field in a filter-expression `where`. Its codec must be the field's codec (the element codec on a list field, where it matches one item), and it may be nullable only on a nullable field that is not a list. Anything else (another operator, `$expr`, a value object, a whole list) throws `ORM.ARGUMENT_INVALID` when the `where` is built. ORM writes cannot be prepared; a write on a collection whose `where` holds a placeholder throws `ORM.ARGUMENT_INVALID`. `first()` and `firstOrThrow()` set the limit to 1, so a declared `limit` placeholder there throws `RUNTIME.PREPARE_UNUSED_PARAM`. Design: [ADR 318](../../../docs/architecture%20docs/adrs/ADR%20318%20-%20MongoDB%20prepared%20statements.md).
+
 ## Common Pitfalls (Mongo)
 
 1. **Reaching for the lower-level lane when the ORM would have done.** Default to the ORM; drop to `db.query` only for shapes the ORM can't express.
@@ -233,6 +266,7 @@ Update callbacks return arrays of field operations (`.set`, `.inc`, `.push`, `.p
 - [ ] Chose the right lane (ORM by default; `db.query` for shapes the ORM doesn't express).
 - [ ] Used `.where({ ... }).first()` for single-row reads — not `.all()`.
 - [ ] Ran query-builder plans via `(await db.runtime()).query(plan)`; used `execute(plan)` only for an affected count on a write.
+- [ ] For a query run many times with different values, used `db.prepare(...)` and ran the handle against `await db.runtime()`.
 - [ ] For aggregations, used `db.query.from(...).group(...)` rather than a non-existent ORM `.aggregate(...)`.
 - [ ] Did NOT confabulate `db.transaction`, `db.sql`, or ORM `.aggregate(...)` — routed to *What Prisma 8 doesn't do yet* / `references/feedback.md` instead.
 - [ ] Did NOT use the lower-level builder for something the ORM cleanly expresses.

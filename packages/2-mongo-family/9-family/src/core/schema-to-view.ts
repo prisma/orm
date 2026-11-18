@@ -39,7 +39,7 @@ function collectionToSchemaNode(name: string, collection: MongoSchemaCollection)
     children.push(
       new SchemaTreeNode({
         kind: 'index',
-        id: `index-${name}-${index.keys.map((k) => `${k.field}_${k.direction}`).join('_')}`,
+        id: `index-${name}-${index.name}`,
         labelParts: [
           { text: prefix, role: 'keyword' },
           { text: ' (' },
@@ -50,6 +50,7 @@ function collectionToSchemaNode(name: string, collection: MongoSchemaCollection)
             : []),
         ],
         meta: {
+          name: index.name,
           keys: index.keys,
           unique: index.unique,
           ...ifDefined('sparse', index.sparse || undefined),
@@ -73,7 +74,7 @@ function collectionToSchemaNode(name: string, collection: MongoSchemaCollection)
     }
 
     for (const [propName, types] of fields) {
-      const bsonType = types.has('any') ? 'any' : [...types].join(',');
+      const bsonType = types.has('any') ? 'any' : [...types].join(' | ');
       const required = roots.every(
         (root) => !Object.hasOwn(root.properties, propName) || root.required.includes(propName),
       );
