@@ -18,12 +18,16 @@ export interface SharedForeignKeyView {
   readonly rest: unknown;
   readonly constraint: boolean;
   readonly derivesIndex: boolean;
+  /** The name of the declared index the foreign key names as its backing index, if it names one. */
+  readonly namedIndex: string | undefined;
 }
 
 /** A model whose rows are stored in a shared single-table-inheritance table, with what it declares there. */
 export interface TableSharer<ForeignKey> {
   readonly modelName: string;
   readonly columns: ReadonlySet<string>;
+  /** Columns this model gives a stored default, which a row of any model of the table then gets when it leaves the column out. */
+  readonly defaultedColumns: ReadonlySet<string>;
   readonly foreignKeys: readonly ForeignKey[];
   readonly uniques: readonly UniqueConstraintNode[];
   readonly indexes: readonly IndexNode[];
@@ -39,6 +43,13 @@ export type SharedTableRefusal<ForeignKey> =
       readonly otherIsBase: boolean;
       /** The other model declares a different foreign key on those columns, rather than none. */
       readonly otherDeclaresOne: boolean;
+    }
+  | {
+      readonly kind: 'defaultedForeignKey';
+      readonly variant: string;
+      readonly foreignKey: ForeignKey;
+      /** The foreign key's columns that have a stored default. */
+      readonly columns: readonly string[];
     }
   | {
       readonly kind: 'unique';
@@ -62,21 +73,22 @@ export interface SharedTableMerge<ForeignKey> {
   readonly refusals: readonly SharedTableRefusal<ForeignKey>[];
 }
 
-/**
- * The uniques, indexes and foreign keys of a table that single-table-inheritance variants share with their base, and what of the variants' declarations is refused.
- *
- * Another model whose rows are in the table may write the same columns, so a variant's declaration is checked against every other model that maps one of its columns:
- * - A variant's foreign key is refused unless each such model declares the same foreign key, compared by its source-to-target column pairs; otherwise that model's rows would have to satisfy it. A foreign key that creates no constraint is not checked.
- * - A variant's unique is accepted only over exactly the columns of one of its own foreign keys, and only when each such model declares the same foreign key and the same unique. Its columns then hold NULL in every other row, so it constrains only the rows that relate.
- * - A variant's index without a `where` condition is accepted only when it is identical in content to the backing index one of its own foreign keys derives. The same index already on the table under the same name is kept once; under another name, whether the base or another variant declares it, it is refused.
- * - Identical declarations are kept once, in the order first declared.
- */
 /** How a message names columns: `column "a"` or `columns "a", "b"`. */
 export function columnsPhrase(columns: readonly string[]): string {
   const quoted = columns.map((column) => `"${column}"`).join(', ');
   return columns.length === 1 ? `column ${quoted}` : `columns ${quoted}`;
 }
 
+/**
+ * The uniques, indexes and foreign keys of a table that single-table-inheritance variants share with their base, and what of the variants' declarations is refused.
+ *
+ * Another model whose rows are in the table may write the same columns, so a variant's declaration is checked against every other model that maps one of its columns:
+ * - A variant's foreign key is refused unless each such model declares the same foreign key, compared by its source-to-target column pairs; otherwise that model's rows would have to satisfy it. It is refused too when one of its columns has a stored default, which every row of the table would get. A foreign key that creates no constraint is not checked.
+ * - A variant's unique is accepted only over exactly the columns of one of its own foreign keys, and only when each such model declares the same foreign key and the same unique. Its columns then hold NULL in every other row, so it constrains only the rows that relate.
+ * - A variant's index without a `where` condition is accepted only when it backs one of its own foreign keys: it is identical in content to the backing index the foreign key derives, or it is the plain index the foreign key names as its backing index and starts with the foreign key's columns.
+ * - A unique or backing index over a column with a stored default is not accepted, since every row of the table gets the default. The same index already on the table under the same name is kept once; under another name, whether the base or another variant declares it, it is refused.
+ * - Identical declarations are kept once, in the order first declared.
+ */
 export function mergeSharedTable<ForeignKey>(input: {
   readonly tableName: string;
   readonly base: TableSharer<ForeignKey>;
@@ -121,9 +133,20 @@ export function mergeSharedTable<ForeignKey>(input: {
   const indexDeclarers = new Map<IndexNode, string>();
 
   for (const [position, variant] of variants.entries()) {
+    const defaulted = (columns: readonly string[]) =>
+      columns.filter((column) => variant.defaultedColumns.has(column));
     for (const foreignKey of variant.foreignKeys) {
       const view = viewOf(foreignKey);
       const identity = foreignKeyIdentity(view);
+      if (view.constraint && defaulted(view.columns).length > 0) {
+        refusals.push({
+          kind: 'defaultedForeignKey',
+          variant: variant.modelName,
+          foreignKey,
+          columns: defaulted(view.columns),
+        });
+        continue;
+      }
       const other = view.constraint
         ? othersMapping(variant, view.columns).find((sharer) => {
             if (declaresForeignKey(sharer, identity)) return false;
@@ -152,7 +175,7 @@ export function mergeSharedTable<ForeignKey>(input: {
       const own = variant.foreignKeys.find((foreignKey) =>
         sameColumnSet(viewOf(foreignKey).columns, unique.columns),
       );
-      if (own === undefined) {
+      if (own === undefined || defaulted(unique.columns).length > 0) {
         refusals.push({
           kind: 'unique',
           variant: variant.modelName,
@@ -187,11 +210,22 @@ export function mergeSharedTable<ForeignKey>(input: {
       const { columns } = index;
       const backing =
         columns !== undefined &&
+        defaulted(columns).length === 0 &&
         variant.foreignKeys.some((foreignKey) => {
           const view = viewOf(foreignKey);
-          return view.derivesIndex && isArrayEqual(view.columns, columns);
-        }) &&
-        identicalIndexes(indexNodeOf(loweredOf(index)), derivedBackingIndexNode(columns));
+          if (view.namedIndex !== undefined) {
+            return (
+              (index.name === view.namedIndex || index.map === view.namedIndex) &&
+              index.unique !== true &&
+              isArrayEqual(columns.slice(0, view.columns.length), view.columns)
+            );
+          }
+          return (
+            view.derivesIndex &&
+            isArrayEqual(view.columns, columns) &&
+            identicalIndexes(indexNodeOf(loweredOf(index)), derivedBackingIndexNode(columns))
+          );
+        });
       if (!backing) {
         refusals.push({
           kind: 'index',

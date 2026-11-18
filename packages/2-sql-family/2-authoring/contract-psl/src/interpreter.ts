@@ -2208,6 +2208,9 @@ function tableSharerOf(node: ModelNode): TableSharer<ForeignKeyNode> {
   return {
     modelName: node.modelName,
     columns: new Set(node.fields.map((field) => field.columnName)),
+    defaultedColumns: new Set(
+      node.fields.filter((field) => field.default !== undefined).map((field) => field.columnName),
+    ),
     foreignKeys: node.foreignKeys ?? [],
     uniques: node.uniques ?? [],
     indexes: node.indexes ?? [],
@@ -2220,9 +2223,10 @@ function foreignKeyNodeView(foreignKey: ForeignKeyNode): SharedForeignKeyView {
   return {
     columns,
     targetColumns,
-    rest: { ...rest, target, constraint, index },
+    rest: { ...rest, target, constraint: constraint ?? true, index: index ?? true },
     constraint: constraint !== false,
     derivesIndex: index === undefined || index === true,
+    namedIndex: typeof index === 'string' ? index : undefined,
   };
 }
 
@@ -2336,6 +2340,13 @@ function stiRefusalDiagnostic(
   const variant = baseDecl.model.name;
   const base = baseDecl.base.model.name;
   const at = site?.location ?? baseDecl.source.at(baseDecl.span);
+  if (refusal.kind === 'defaultedForeignKey') {
+    return {
+      code: PSL_FOREIGN_KEY_CONFLICT_ON_STI_VARIANT,
+      message: `Model "${variant}" declares a foreign key on (${refusal.foreignKey.columns.join(', ')}), but ${columnsPhrase(refusal.columns)} has a default, which the rows of the other variants of "${base}" get too (single-table inheritance). Remove the default.`,
+      ...at,
+    };
+  }
   if (refusal.kind === 'foreignKey') {
     const columns = refusal.columns.join(', ');
     const declared = refusal.foreignKey.columns.join(', ');
@@ -3017,6 +3028,22 @@ export function interpretPslDocumentToSqlContract(
     stiVariantKeys,
     defaultNamespaceId,
   );
+  const stiBaseTables = new Map<string, string>();
+  for (const variantKey of stiVariantKeys) {
+    const baseDecl = baseDeclarations.get(variantKey);
+    const nodeOf = (key: string | undefined) =>
+      mtiLinkedModelNodes.find(
+        (node) =>
+          modelCoordinateKey(node.namespaceId ?? defaultNamespaceId, node.modelName) === key,
+      );
+    const variantNode = nodeOf(variantKey);
+    const baseNode = nodeOf(baseDecl?.base.key);
+    if (variantNode === undefined || baseNode === undefined) continue;
+    stiBaseTables.set(
+      `${variantNode.namespaceId ?? defaultNamespaceId}\0${variantNode.tableName}`,
+      baseNode.tableName,
+    );
+  }
   const oneToOneRelations = [...modelRelations.values()]
     .flat()
     .filter((relation) => relation.cardinality === '1:1');
@@ -3030,7 +3057,7 @@ export function interpretPslDocumentToSqlContract(
     const baseDecl = variantKey === undefined ? undefined : baseDeclarations.get(variantKey);
     invariant(baseDecl !== undefined, "a shared-table refusal names one of the base's variants");
     const node =
-      refusal.kind === 'foreignKey'
+      refusal.kind === 'foreignKey' || refusal.kind === 'defaultedForeignKey'
         ? refusal.foreignKey
         : refusal.kind === 'unique'
           ? refusal.unique
@@ -3156,7 +3183,14 @@ export function interpretPslDocumentToSqlContract(
       input.dataTypes.lookup,
     );
   } catch (error) {
-    const refusal = relationIndexRefusal(error, relationIndexLocations);
+    const refusal = relationIndexRefusal(
+      error,
+      relationIndexLocations.map((location) => ({
+        ...location,
+        tableName:
+          stiBaseTables.get(`${location.namespaceId}\0${location.tableName}`) ?? location.tableName,
+      })),
+    );
     if (refusal === undefined) throw error;
     diagnostics.push({
       code: 'PSL_INVALID_RELATION_ATTRIBUTE',

@@ -221,6 +221,12 @@ function withVariantConstraints(
           .map((column) => column.columnName)
           .filter((columnName) => !variantColumns.has(columnName)),
       ),
+      defaultedColumns: new Set(
+        table.columns
+          .filter((column) => column.default !== undefined)
+          .map((column) => column.columnName)
+          .filter((columnName) => !variantColumns.has(columnName)),
+      ),
       foreignKeys: table.foreignKeys,
       uniques: table.uniques,
       indexes: table.indexes,
@@ -229,6 +235,12 @@ function withVariantConstraints(
       (variant): TableSharer<ForeignKeyAuthoringInput> => ({
         modelName: variant.modelName,
         columns: new Set(variant.columns.map((column) => column.columnName)),
+        defaultedColumns: new Set(
+          [...variant.columns, ...table.columns]
+            .filter((column) => column.default !== undefined)
+            .map((column) => column.columnName)
+            .filter((columnName) => variant.columns.some((own) => own.columnName === columnName)),
+        ),
         foreignKeys: variant.foreignKeys,
         uniques: variant.uniques,
         indexes: variant.indexes,
@@ -256,6 +268,7 @@ function foreignKeyView(foreignKey: ForeignKeyAuthoringInput): SharedForeignKeyV
     rest: { ...rest, sourceTable, targetTable, constraint, index },
     constraint,
     derivesIndex: index === true,
+    namedIndex: typeof index === 'string' ? index : undefined,
   };
 }
 
@@ -265,6 +278,20 @@ function refusalError(
   first: SharedTableRefusal<ForeignKeyAuthoringInput>,
 ) {
   const { namespaceId, tableName } = table;
+  if (first.kind === 'defaultedForeignKey') {
+    return contractError(
+      'CONTRACT.FOREIGN_KEY_CONFLICT_ON_STI_VARIANT',
+      `Model "${first.variant}" declares a foreign key on (${first.foreignKey.source.columns.join(', ')}) of table "${tableName}", but ${columnsPhrase(first.columns)} has a default, which the rows of every model sharing the table get too (single-table inheritance). Remove the default.`,
+      {
+        meta: {
+          modelName: first.variant,
+          namespaceId,
+          tableName,
+          columns: first.columns,
+        },
+      },
+    );
+  }
   if (first.kind === 'foreignKey') {
     const listed = first.columns.join(', ');
     const message = first.otherDeclaresOne
@@ -285,7 +312,11 @@ function refusalError(
     });
   }
   const unscoped = refusals
-    .filter((refusal) => refusal.kind !== 'foreignKey' && refusal.variant === first.variant)
+    .filter(
+      (refusal) =>
+        (refusal.kind === 'unique' || refusal.kind === 'index') &&
+        refusal.variant === first.variant,
+    )
     .map((refusal) =>
       refusal.kind === 'unique'
         ? refusal.unique.columns

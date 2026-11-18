@@ -412,4 +412,45 @@ describe('mergeTables on a table single-table variants share', () => {
       }),
     );
   });
+
+  it('refuses a variant foreign key on a column with a stored default', () => {
+    const defaulted = {
+      ...column('Bug', 'ownerId'),
+      default: { kind: 'literal', value: 1 },
+    } as const;
+
+    expect(() =>
+      mergeTables(
+        [
+          ownTable(ownerTable),
+          baseTable('Bug', 'task', [defaulted], { foreignKeys: [foreignKey('ownerId', 'user')] }),
+        ],
+        [],
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.FOREIGN_KEY_CONFLICT_ON_STI_VARIANT',
+        message:
+          'Model "Bug" declares a foreign key on (ownerId) of table "task", but column "ownerId" has a default, which the rows of every model sharing the table get too (single-table inheritance). Remove the default.',
+      }),
+    );
+  });
+
+  it('accepts the index a variant foreign key names as its backing index', () => {
+    const named = { ...foreignKey('ownerId', 'user'), index: 'bug_owner' };
+    const indexes = [namedBackingIndex('bug_owner')];
+
+    expect(
+      mergeTables(
+        [
+          ownTable(ownerTable),
+          baseTable('Bug', 'task', [column('Bug', 'ownerId')], {
+            foreignKeys: [named],
+            indexes,
+          }),
+        ],
+        [],
+      ),
+    ).toEqual([{ ...ownerTable, indexes, foreignKeys: [named] }]);
+  });
 });
