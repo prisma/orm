@@ -63,7 +63,17 @@ const model = (...fields: readonly string[]) =>
   ].join('\n');
 
 const withColumns = (
-  columns: Readonly<Record<string, { readonly codecId: string; readonly default?: unknown }>>,
+  columns: Readonly<
+    Record<
+      string,
+      {
+        readonly codecId: string;
+        readonly dataType?: string;
+        readonly nullable?: boolean;
+        readonly default?: unknown;
+      }
+    >
+  >,
 ) => ({
   storage: { namespaces: { __unbound__: { entries: { table: { event: { columns } } } } } },
 });
