@@ -131,10 +131,12 @@ export async function createRlsPolicy(
       roles: catalogPolicyRoles(validatedRoles),
     }),
   );
+  const { id, target } = createRlsPolicyIdentity(schemaName, tableName, policy.name);
   return {
-    ...createRlsPolicyIdentity(schemaName, tableName, policy.name),
+    id,
     label: `Create RLS policy "${policy.name}" on "${tableName}"`,
     operationClass: 'additive',
+    target,
     precheck: [
       step(
         `ensure RLS policy "${policy.name}" does not exist`,
@@ -165,10 +167,12 @@ export async function dropRlsPolicy(
   const present = await lowerer.lowerToExecuteRequest(checks.policyPresent());
   const execute = await lowerer.lowerToExecuteRequest(ddlNode);
   const absent = await lowerer.lowerToExecuteRequest(checks.policyAbsent());
+  const { id, target } = dropRlsPolicyIdentity(schemaName, tableName, policyName);
   return {
-    ...dropRlsPolicyIdentity(schemaName, tableName, policyName),
+    id,
     label: `Drop RLS policy "${policyName}" on "${tableName}"`,
     operationClass: 'widening',
+    target,
     precheck: [
       step(
         `ensure RLS policy "${policyName}" exists`,
@@ -197,10 +201,12 @@ export async function enableRowLevelSecurity(
   const checks = rlsEnabledAst(schemaName, tableName);
   const disabled = await lowerer.lowerToExecuteRequest(checks.rlsDisabled());
   const enabled = await lowerer.lowerToExecuteRequest(checks.rlsEnabled());
+  const { id, target } = enableRowLevelSecurityIdentity(schemaName, tableName);
   return {
-    ...enableRowLevelSecurityIdentity(schemaName, tableName),
+    id,
     label: `Enable row-level security on "${tableName}"`,
     operationClass: 'additive',
+    target,
     precheck: [
       step(`check RLS is not already enabled on "${tableName}"`, disabled.sql, disabled.params),
     ],
@@ -226,10 +232,12 @@ export async function disableRowLevelSecurity(
   const enabled = await lowerer.lowerToExecuteRequest(checks.rlsEnabled());
   const execute = await lowerer.lowerToExecuteRequest(ddlNode);
   const disabled = await lowerer.lowerToExecuteRequest(checks.rlsDisabled());
+  const { id, target } = disableRowLevelSecurityIdentity(schemaName, tableName);
   return {
-    ...disableRowLevelSecurityIdentity(schemaName, tableName),
+    id,
     label: `Disable row-level security on "${tableName}"`,
     operationClass: 'widening',
+    target,
     precheck: [
       step(`check RLS is currently enabled on "${tableName}"`, enabled.sql, enabled.params),
     ],
@@ -272,10 +280,17 @@ export async function renameRlsPolicy(
   const newPresent = await lowerer.lowerToExecuteRequest(newChecks.policyPresent());
   const newAbsent = await lowerer.lowerToExecuteRequest(newChecks.policyAbsent());
   const oldAbsent = await lowerer.lowerToExecuteRequest(oldChecks.policyAbsent());
+  const { id, target } = renameRlsPolicyIdentity(
+    schemaName,
+    tableName,
+    oldPolicyName,
+    newPolicyName,
+  );
   return {
-    ...renameRlsPolicyIdentity(schemaName, tableName, oldPolicyName, newPolicyName),
+    id,
     label: `Rename RLS policy "${oldPolicyName}" to "${newPolicyName}" on "${tableName}"`,
     operationClass: 'widening',
+    target,
     precheck: [
       step(
         `ensure RLS policy "${oldPolicyName}" exists`,
