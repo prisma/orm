@@ -36,6 +36,7 @@ Nothing below starts until the two design records are approved.
 - **Outcome:** `prisma orm init --target <any package>` works. Prisma's SQLite and MySQL packages export an init contribution and are scaffolded by package name, as the first real test of the mechanism. The guide for authors of target packages exists.
 - **Builds on:** pull requests 1 and 2. Its end-to-end test needs both: `init` on an unlisted package, then an emit that compiles.
 - **Hands on:** the project's definition of done.
+- **To decide first:** how `init` learns an unlisted package's required driver peers before its first install. A listed package's drivers come from the list; a target package declares its driver as a required peer (ADR 219), so it must go into the same install.
 
 ## Order
 

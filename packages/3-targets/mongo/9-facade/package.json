@@ -75,6 +75,7 @@
     "./contract-types": "./dist/contract-types.mjs",
     "./control": "./dist/control.mjs",
     "./family": "./dist/family.mjs",
+    "./init": "./dist/init.mjs",
     "./migration": "./dist/migration.mjs",
     "./runtime": "./dist/runtime.mjs",
     "./static": "./dist/static.mjs",

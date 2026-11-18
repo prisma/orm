@@ -1,4 +1,4 @@
-# ADR 323 — Generated files import from the module the target package names
+# ADR 324 — Generated files import from the module the target package names
 
 **Status:** Accepted
 **Date:** 2026-11-18

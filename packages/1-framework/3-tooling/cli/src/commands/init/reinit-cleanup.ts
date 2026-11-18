@@ -52,9 +52,9 @@ export function findStaleArtifacts(baseDir: string, schemaDir: string): readonly
  * the caller can skip the write to keep re-init idempotent (FR9.3).
  *
  * Used by `runInit` for the FR9.2 target-switch path: when the user
- * re-inits a project from `--target postgres` to `--target mongodb` (or
- * vice versa), the previous facade is removed from `dependencies` so the
- * resulting project depends only on the chosen target's facade.
+ * re-inits a project with a different `--target`, the previous facade is
+ * removed from `dependencies` so the resulting project depends only on the
+ * chosen target's facade.
  *
  * Devs/peers/optional dep groups are intentionally *not* touched — the
  * facades are only ever in `dependencies` (FR4 / FR7), and broadening
