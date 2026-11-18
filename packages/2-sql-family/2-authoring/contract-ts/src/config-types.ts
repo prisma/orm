@@ -1,5 +1,5 @@
 import { pathToFileURL } from 'node:url';
-import type { ContractConfig } from '@internal/config/config-types';
+import type { ContractConfig, ContractSourceFormat } from '@internal/config/config-types';
 import type { Contract, ControlPolicy } from '@internal/contract/types';
 import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
 import type { TargetPackRef } from '@internal/framework-components/components';
@@ -47,8 +47,35 @@ export type TypeScriptContractFromPathOptions =
     })
   | (TypeScriptContractTarget & TypeScriptContractSpecifierOptions);
 
+/** Where a loaded contract came from: how its source is written, and the file it names, if any. */
+interface ContractOrigin {
+  readonly format: ContractSourceFormat;
+  readonly path: string | undefined;
+}
+
+function describeContract({ format, path }: ContractOrigin): string {
+  const kind = format === 'typescript' ? 'The TypeScript contract' : 'The contract';
+  return path === undefined ? `${kind} passed to defineConfig` : `${kind} "${path}"`;
+}
+
+function otherTargetGuidance(
+  origin: ContractOrigin,
+  expected: TypeScriptContractTarget,
+): { readonly why: string; readonly fix: string } {
+  if (origin.format === 'typescript') {
+    return {
+      why: "Its defineContract came from another target's contract-builder entry, so the contract carries that target's id and capabilities.",
+      fix: `Import defineContract from ${expected.contractBuilderModule}.`,
+    };
+  }
+  return {
+    why: "Its contract config was made with another target's components, so the contract carries that target's id and capabilities.",
+    fix: `Make the contract config with ${expected.target.targetId}'s components, or pass the schema's path as \`contract\`.`,
+  };
+}
+
 function refuseOtherTarget(
-  contractPath: string,
+  origin: ContractOrigin,
   loaded: Contract,
   expected: TypeScriptContractTarget,
 ): void {
@@ -57,13 +84,32 @@ function refuseOtherTarget(
   if (typeof actual !== 'string' || actual === configured) return;
   throw contractError(
     'CONTRACT.TARGET_MISMATCH',
-    `The TypeScript contract "${contractPath}" was built for target "${actual}", but this defineConfig is for target "${configured}".`,
+    `${describeContract(origin)} was built for target "${actual}", but this defineConfig is for target "${configured}".`,
     {
-      why: "Its defineContract came from another target's contract-builder entry, so the contract carries that target's id and capabilities.",
-      fix: `Import defineContract from ${expected.contractBuilderModule}.`,
-      meta: { contract: contractPath, expected: configured, actual },
+      ...otherTargetGuidance(origin, expected),
+      meta: { ...ifDefined('contract', origin.path), expected: configured, actual },
     },
   );
+}
+
+/** A ready contract config whose loaded contract is refused when it was built for another target than the config's. A failed load passes through unchanged. */
+export function refuseOtherTargetOnLoad(
+  config: ContractConfig,
+  expected: TypeScriptContractTarget,
+): ContractConfig {
+  const { source } = config;
+  const origin = { format: source.format, path: source.inputs?.[0] };
+  return {
+    ...config,
+    source: {
+      ...source,
+      load: async (context) => {
+        const result = await source.load(context);
+        if (result.ok) refuseOtherTarget(origin, result.value, expected);
+        return result;
+      },
+    },
+  };
 }
 
 function isRecord(value: unknown): value is object {
@@ -173,7 +219,7 @@ export function typescriptContractFromPath(
           );
         }
         const contract = exported;
-        refuseOtherTarget(contractPath, contract, options);
+        refuseOtherTarget({ format: 'typescript', path: contractPath }, contract, options);
         return ok(
           policy === undefined
             ? contract

@@ -5,7 +5,10 @@ import {
 } from '@internal/config/config-types';
 import type { ControlExtensionDescriptor } from '@internal/framework-components/control';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
-import { typescriptContractFromPath } from '@internal/sql-contract-ts/config-types';
+import {
+  refuseOtherTargetOnLoad,
+  typescriptContractFromPath,
+} from '@internal/sql-contract-ts/config-types';
 import { PG_INT_CODEC_ID, PG_TEXT_CODEC_ID } from '@internal/target-postgres/codec-ids';
 import postgresPackRef from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
@@ -28,12 +31,11 @@ export interface PostgresConfigOptions {
   readonly formatter?: FormatterConfig;
 }
 
+const postgresContractTarget = { target: postgresPackRef, contractBuilderModule };
+
 function contractConfigFromPath(contractPath: string, output: string): ContractConfig {
   return extname(contractPath) === '.ts'
-    ? typescriptContractFromPath(contractPath, output, {
-        target: postgresPackRef,
-        contractBuilderModule,
-      })
+    ? typescriptContractFromPath(contractPath, output, postgresContractTarget)
     : prismaContract(contractPath, {
         output,
         target: postgresPackRef,
@@ -56,7 +58,10 @@ function resolveContractConfig(options: PostgresConfigOptions): ContractConfig {
     explicitOutput ??
     options.contract.output ??
     (firstInput !== undefined ? defaultContractOutputPath(firstInput) : undefined);
-  return { ...options.contract, ...ifDefined('output', output) };
+  return {
+    ...refuseOtherTargetOnLoad(options.contract, postgresContractTarget),
+    ...ifDefined('output', output),
+  };
 }
 
 export function defineConfig(options: PostgresConfigOptions): PrismaConfig<'sql', 'postgres'> {

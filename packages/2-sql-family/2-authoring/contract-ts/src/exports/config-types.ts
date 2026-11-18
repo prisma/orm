@@ -6,6 +6,7 @@ export type {
 } from '../config-types';
 export {
   emptyContract,
+  refuseOtherTargetOnLoad,
   typescriptContract,
   typescriptContractFromPath,
 } from '../config-types';

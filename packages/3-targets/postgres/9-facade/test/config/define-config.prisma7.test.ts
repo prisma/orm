@@ -3,14 +3,17 @@ import { defineConfig } from '../../src/config/define-config';
 import { prisma7Schema } from '../../src/config/prisma7-schema';
 
 describe('defineConfig with a ContractConfig', () => {
-  it('uses a prisma7Schema config as-is and keeps its colocated output', () => {
+  it('keeps the source fields of a prisma7Schema config, its colocated output, and wraps only its load', () => {
     const contract = prisma7Schema('prisma/schema.prisma');
     const config = defineConfig({ contract });
+    const { load: _wrapped, ...kept } = config.contract?.source ?? contract.source;
+    const { load: _original, ...given } = contract.source;
 
-    expect(config.contract?.source).toBe(contract.source);
-    expect(config.contract?.source.format).toBe('psl');
-    expect(config.contract?.source.inputs).toEqual(['prisma/schema.prisma']);
-    expect(config.contract?.output).toBe('prisma/contract.json');
+    expect({ kept, output: config.contract?.output }).toEqual({
+      kept: given,
+      output: 'prisma/contract.json',
+    });
+    expect(given).toMatchObject({ format: 'psl', inputs: ['prisma/schema.prisma'] });
   });
 
   it('lets the output directory option override the ContractConfig output', () => {
