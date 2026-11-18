@@ -43,6 +43,8 @@ const storedMembers: Readonly<Record<string, JsonValue>> = {
   'sqlite/time': '09:30:00.500',
   'sqlite/duration': 'PT1H30M',
   'sqlite/json': '"low"',
+  'sqlite/decimal': '12.50',
+  'sqlite/boolean': true,
 };
 
 type EnumTypeHandle = ReturnType<typeof enumType>;
