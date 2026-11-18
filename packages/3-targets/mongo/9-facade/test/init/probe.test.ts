@@ -46,7 +46,10 @@ describe('probeMongo', () => {
     await probeMongo('mongodb://localhost:27017/db', load);
 
     expect(constructed).toEqual([
-      ['mongodb://localhost:27017/db', { timeoutMS: 20_000, serverSelectionTimeoutMS: 20_000 }],
+      [
+        'mongodb://localhost:27017/db',
+        { serverSelectionTimeoutMS: 20_000, connectTimeoutMS: 20_000, socketTimeoutMS: 20_000 },
+      ],
     ]);
   });
 

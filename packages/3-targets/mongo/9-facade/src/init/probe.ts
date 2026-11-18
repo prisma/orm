@@ -2,9 +2,10 @@ import type { InitProbeResult } from '@internal/cli/init-contribution';
 import type * as MongoDriver from 'mongodb';
 
 /**
- * The driver's own deadlines: `timeoutMS` for each operation, connecting and `buildInfo` included,
- * and `serverSelectionTimeoutMS` for finding a server, so an unreachable server or a stalled
- * `buildInfo` rejects instead of hanging.
+ * The driver's own deadlines, which every 7.x driver honours: `serverSelectionTimeoutMS` for finding
+ * a server, `connectTimeoutMS` for opening the connection and its handshake, and `socketTimeoutMS`
+ * for a reply, so an unreachable server or a stalled `buildInfo` rejects instead of hanging. Not
+ * `timeoutMS`: the driver ignores it from 7.8 on.
  */
 const PROBE_TIMEOUT_MS = 20_000;
 
@@ -33,8 +34,9 @@ export async function probeMongo(
     };
   }
   const client = new mongodb.MongoClient(databaseUrl, {
-    timeoutMS: PROBE_TIMEOUT_MS,
     serverSelectionTimeoutMS: PROBE_TIMEOUT_MS,
+    connectTimeoutMS: PROBE_TIMEOUT_MS,
+    socketTimeoutMS: PROBE_TIMEOUT_MS,
   });
   await client.connect();
   try {
