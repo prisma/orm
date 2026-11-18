@@ -9,14 +9,20 @@ const exportsOf = (packageDir: string): Record<string, unknown> =>
   JSON.parse(readFileSync(resolve(packageDir, 'package.json'), 'utf8')).exports;
 
 describe('the module the refusal of a contract built for another target names', () => {
-  it('is a subpath of the module base that the package and its published package both export', () => {
+  it('is a subpath of the module base that the package and its published package both map to its built entry', () => {
     const subpath = contractBuilderModule.slice(moduleBase.length);
     expect({
       subpath,
       base: contractBuilderModule.startsWith(`${moduleBase}/`),
-      internal: `.${subpath}` in exportsOf(facadeDir),
-      published:
-        `.${subpath}` in exportsOf(resolve(facadeDir, '../../..', '9-public/@prisma/orm-postgres')),
-    }).toEqual({ subpath: '/contract-builder', base: true, internal: true, published: true });
+      internal: exportsOf(facadeDir)[`.${subpath}`],
+      published: exportsOf(resolve(facadeDir, '../../..', '9-public/@prisma/orm-postgres'))[
+        `.${subpath}`
+      ],
+    }).toEqual({
+      subpath: '/contract-builder',
+      base: true,
+      internal: './dist/contract-builder.mjs',
+      published: './dist/contract-builder.mjs',
+    });
   });
 });
