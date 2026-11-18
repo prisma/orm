@@ -1014,4 +1014,3 @@ Per-repo stop conditions beyond the canonical ones:
 **Mitigation.** Every implementer and reviewer brief for a dispatch that adds or changes a user-facing message says: read each message as a user who has never seen our source; it must say what the user has, what is wrong with it, and what to change. Naming an API inside an instruction ("Import defineContract from X") is fine. If no user action reaches a message, it is an internal error and needs no rewording.
 
 **Reference incident.** MySQL proof of concept, 2026-11: after the operator rejected one message on prisma/orm#31091, a scan found the same fault in fourteen more, five from that pull request and nine from the project's earlier ones.
-
