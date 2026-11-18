@@ -174,7 +174,7 @@ sequenceDiagram
 - Extensions: Concrete target and ecosystem packs (e.g., Postgres adapter/driver, codec packs, compat layers). Extensions implement Framework/Family SPIs and are dynamically composed.
 
 Notes
-- Family vs Target: “Target‑family” (SQL) applies to any SQL dialect; “target” is a concrete dialect (Postgres, MySQL). Family code lives in the SQL domain; dialect code lives in Extensions.
+- Family vs Target: “Target‑family” (SQL) applies to any SQL dialect; “target” is a concrete dialect (Postgres, MySQL). Family code lives in the SQL domain; dialect code lives in `packages/3-targets/<db>/`. A target can extend another: MariaDB is its own target, built from MySQL's packages (ADR 325).
 - Repository layout: each database's target, adapter, driver and facade live together in `packages/3-targets/<db>/` (ADR 278). Adapters commonly expose multiple entrypoints from a single package — `./adapter` (shared core), `./control` (migration), `./runtime` (runtime) — mapped to planes via subpath globs in `architecture.config.json`.
 - Plane boundaries: Shared plane hosts type‑only code and validators safe for both planes. Migration and Runtime must not import code across planes; runtime consumes artifacts and shared‑plane types only.
 ## Execution Plane — Runtime Assertions
@@ -327,6 +327,10 @@ packages/
       9-facade/          # Postgres facade, the source of @prisma/orm-postgres
     sqlite/              # the same shape
     mongo/               # 1-target, 2-adapter, 3-driver, 9-facade
+    mysql/
+      1-mysql/           # MySQL: 1-target, 2-adapter, 3-driver, 9-facade
+      2-mariadb/         # MariaDB, built from MySQL's packages: 1-target, 2-adapter, 3-driver, 9-facade
+      3-live-tests/      # ORM live suites run against MySQL and MariaDB
   3-extensions/          # Domain 3: Extensions
     pgvector/            # pgvector extension pack
 ```
