@@ -60,7 +60,7 @@ export function statementFor(
     if ((info.status & NO_BACKSLASH_ESCAPES) !== 0) {
       throw noBackslashEscapesRefusal(params.length);
     }
-    const characterSet = reportedCharacterSet(info.collation);
+    const characterSet = reportedCharacterSet('collation' in info ? info.collation : undefined);
     if (characterSet !== 'utf8mb4') {
       throw characterSetRefusal(characterSet, params.length);
     }

@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@prisma/orm-framework": "workspace:8.0.0-rc.24",
-    "@vercel/detect-agent": "^1.2.7",
+    "@vercel/detect-agent": "^1.2.4",
     "arktype": "catalog:",
     "c12": "^3.3.4",
     "ci-info": "^4.3.1",

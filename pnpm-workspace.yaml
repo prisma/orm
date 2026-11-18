@@ -35,8 +35,8 @@ catalog:
   tsdown: 0.22.14
   tsx: ^4.23.15
   typescript: 5.9.3
-  vite: 6.4.6
-  vitest: 4.1.12
+  vite: 8.1.4
+  vitest: 5.0.0-rc.2
   vscode-languageserver: 10.1.2
   vscode-languageserver-textdocument: 1.0.16
 
