@@ -19,7 +19,9 @@ Builds MySQL's control adapter ([`@internal/adapter-mysql`](../../1-mysql/2-adap
   - a default MariaDB reports as the text `NULL` is no default;
   - a quoted literal default is unquoted, with `''` and backslash escapes read as MariaDB reads them, so `'it''s'` is `it's`;
   - an unquoted number, such as `0` or `1.50`, stays a literal;
-  - any other default, such as `current_timestamp(3)` or `curdate()`, is a function, marked `DEFAULT_GENERATED` as MySQL marks it.
+  - a bytes default, `X'00ff'`, is MySQL's generated `0x00ff`;
+  - any other default, such as `current_timestamp(3)` or `curdate()`, is a function, marked `DEFAULT_GENERATED` as MySQL marks it;
+  - a `longtext` column with a column-level check `json_valid(col)` named after the column, which is what MariaDB makes of a `json` column, reads as `json`, the type MySQL reports for it. The reader finds those checks in `information_schema.CHECK_CONSTRAINTS`.
 - **Capabilities** (`src/core/capabilities.ts`): MySQL's, with `returning` off. MariaDB 10.11 has `INSERT … RETURNING` and `DELETE … RETURNING` but no `UPDATE … RETURNING`, and the capability covers every statement kind.
 - **SQL renderer** (`src/core/sql-renderer.ts`): `MariadbSqlRenderer` subclasses MySQL's `MysqlSqlRenderer` and overrides its three protected methods. MariaDB takes no row alias on an insert, so `proposedRow()` writes none and reads the proposed row's column as `VALUES(column)` where MySQL writes `` `new`.`column` ``. MariaDB has `INSERT … RETURNING` and `DELETE … RETURNING`, so `returningRefusal()` says the adapter does not use them, not that MariaDB lacks them. MySQL builds an ordered array with a `SET_VAR` hint and `CAST(… AS JSON)`, and MariaDB 10.11 has neither, so `orderedJsonArrayRefusal()` refuses an ordered to-many include with a message saying the ORM loads includes on MariaDB with one query per relation.
 - **Runtime adapter** (`src/core/runtime/runtime-adapter.ts`, `./runtime`): MySQL's `createMysqlRuntimeAdapterDescriptor` applied to MariaDB's runtime metadata and `MariadbSqlRenderer`. The target id comes from the target's metadata, and the profile id `mariadb/default@1` is derived from it.
