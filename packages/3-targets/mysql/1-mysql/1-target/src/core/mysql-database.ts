@@ -85,9 +85,9 @@ function enumMembersOf(
   if (!Array.isArray(values) || !values.every((value) => typeof value === 'string')) {
     throw mysqlError(
       'CONTRACT.TYPE_PARAMS_INVALID',
-      `${subject} is a MySQL enum but has no enum whose text members it can list.`,
+      `${subject} is a native enum column but has no enum whose text members it can list.`,
       {
-        why: 'A native MySQL enum column is written with its members, which come from the enum that types the column.',
+        why: 'A native enum column on MySQL and MariaDB is written with its members, which come from the enum that types the column.',
         fix: 'Type the column with a PSL enum or an enumType() whose members are text.',
         meta: { table: tableName, column: columnName },
       },
@@ -118,7 +118,7 @@ function enumColumnWithMembers(
       'CONTRACT.TYPE_PARAMS_INVALID',
       `Column "${tableName}"."${columnName}" lists enum members that differ from the members of the enum that types it.`,
       {
-        why: 'A MySQL enum column takes its members from its enum, in the order the enum declares them, so the database and the contract enforce the same members.',
+        why: 'An enum column on MySQL and MariaDB takes its members from its enum, in the order the enum declares them, so the database and the contract enforce the same members.',
         fix: 'Remove the column’s own members, or make them equal the enum’s members in the same order.',
         meta: {
           table: tableName,
@@ -209,7 +209,7 @@ function rejectSqlBodyIndexes(input: SqlNamespaceInput): void {
       if (index['expression'] !== undefined || index['where'] !== undefined) {
         throw mysqlError(
           'CONTRACT.ARGUMENT_INVALID',
-          `MySQL does not support expression or partial indexes yet: index "${String(index['name'] ?? '<unnamed>')}" on table "${tableName}" declares ${index['expression'] !== undefined ? 'an expression' : 'a where predicate'}. Use a fields-only index.`,
+          `The MySQL and MariaDB targets do not support expression or partial indexes yet: index "${String(index['name'] ?? '<unnamed>')}" on table "${tableName}" declares ${index['expression'] !== undefined ? 'an expression' : 'a where predicate'}. Use a fields-only index.`,
           { meta: { table: tableName } },
         );
       }
@@ -224,7 +224,7 @@ export function mysqlCreateNamespace(input: SqlNamespaceInput): MysqlDatabase {
   if (input.id !== UNBOUND_NAMESPACE_ID) {
     throw mysqlError(
       'CONTRACT.NAMESPACE_INVALID',
-      `The MySQL target has one namespace, "${UNBOUND_NAMESPACE_ID}"; it received "${input.id}".`,
+      `The MySQL and MariaDB targets have one namespace, "${UNBOUND_NAMESPACE_ID}"; it received "${input.id}".`,
       { meta: { received: input.id } },
     );
   }

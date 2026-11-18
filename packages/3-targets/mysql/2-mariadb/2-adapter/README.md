@@ -6,7 +6,7 @@ MariaDB control adapter for Prisma 8.
 
 - **Domain**: targets
 - **Layer**: adapters
-- **Plane**: multi-plane (shared, migration)
+- **Plane**: multi-plane (shared, migration, runtime)
 
 ## Purpose
 
@@ -21,9 +21,11 @@ Builds MySQL's control adapter ([`@internal/adapter-mysql`](../../1-mysql/2-adap
   - an unquoted number, such as `0` or `1.50`, stays a literal;
   - any other default, such as `current_timestamp(3)` or `curdate()`, is a function, marked `DEFAULT_GENERATED` as MySQL marks it.
 - **Capabilities** (`src/core/capabilities.ts`): MySQL's, with `returning` off. MariaDB 10.11 has `INSERT … RETURNING` and `DELETE … RETURNING` but no `UPDATE … RETURNING`, and the capability covers every statement kind.
+- **SQL renderer** (`src/core/sql-renderer.ts`): `MariadbSqlRenderer` subclasses MySQL's `MysqlSqlRenderer` and overrides its three protected methods. MariaDB takes no row alias on an insert, so `proposedRow()` writes none and reads the proposed row's column as `VALUES(column)` where MySQL writes `` `new`.`column` ``. MariaDB has `INSERT … RETURNING` and `DELETE … RETURNING`, so `returningRefusal()` says the adapter does not use them, not that MariaDB lacks them. MySQL builds an ordered array with a `SET_VAR` hint and `CAST(… AS JSON)`, and MariaDB 10.11 has neither, so `orderedJsonArrayRefusal()` refuses an ordered to-many include with a message saying the ORM loads includes on MariaDB with one query per relation.
+- **Runtime adapter** (`src/core/runtime/runtime-adapter.ts`, `./runtime`): MySQL's `createMysqlRuntimeAdapterDescriptor` applied to MariaDB's runtime metadata and `MariadbSqlRenderer`. The target id comes from the target's metadata, and the profile id `mariadb/default@1` is derived from it.
 - **Codec types**: `contract.d.ts` imports `CodecTypes` from `@internal/adapter-mariadb/codec-types`, which is MySQL's.
 
-The marker upsert binds its values twice instead of naming a row alias, which MariaDB does not accept, so it is MySQL's statement unchanged. There is no runtime adapter yet.
+The marker upsert binds its values twice instead of naming a row alias, which MariaDB does not accept, so it is MySQL's statement unchanged.
 
 ## Testing
 
@@ -31,5 +33,6 @@ The live tests need `MARIADB_URL` and are skipped without it, except in CI, wher
 
 ## Exports
 
+- `./runtime`: the runtime adapter descriptor
 - `./control`: the control adapter descriptor
 - `./codec-types`: `CodecTypes`

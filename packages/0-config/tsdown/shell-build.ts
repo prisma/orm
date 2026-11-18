@@ -7,7 +7,7 @@ import {
   type ShellDefinition,
   type ShellName,
 } from '@internal/publish-surface/shells';
-import { init as initLexer, parse as parseModule } from 'es-module-lexer';
+import { init as initLexer, parse as parseModule } from 'es-module-lexer/minimal';
 import type { UserConfig } from 'tsdown';
 import { defineConfig } from './base.ts';
 

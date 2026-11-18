@@ -11,7 +11,6 @@ const mysqlTargetDescriptorMetaBase = {
   ...mysqlTargetDescriptorMetaRuntime,
   defaultNamespaceId: UNBOUND_NAMESPACE_ID,
   supportsNamespaces: false,
-  displayName: 'MySQL',
   authoring: {
     type: { ...mysqlScalarTypeConstructors, ...mysqlAuthoringTypes },
     dataTypes: mysqlDataTypeEntries(),

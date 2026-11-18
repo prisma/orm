@@ -55,7 +55,7 @@ export interface MysqlControlAdapterOptions {
 function unsupportedDdl(ast: DdlNode): Error {
   return structuredError(
     'RUNTIME.DDL_UNSUPPORTED',
-    `The MySQL control adapter cannot lower the DDL node "${ast.kind}".`,
+    `The MySQL and MariaDB control adapter cannot lower the DDL node "${ast.kind}".`,
     { meta: { surface: 'control-adapter', kind: ast.kind } },
   );
 }
