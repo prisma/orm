@@ -7,7 +7,6 @@
     "**/*.test-d.ts",
     "**/*.config.ts",
     "**/exports/**",
-    "src/lower-sql-plan.ts",
     "src/codecs/encoding.ts",
     "src/codecs/decoding.ts",
     "src/codecs/validation.ts",
